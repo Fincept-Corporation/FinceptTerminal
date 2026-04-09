@@ -1,6 +1,8 @@
 // src/screens/equity_research/EquityResearchScreen.cpp
 #include "screens/equity_research/EquityResearchScreen.h"
 
+#include "core/events/EventBus.h"
+#include "core/session/ScreenStateManager.h"
 #include "screens/equity_research/EquityAnalysisTab.h"
 #include "screens/equity_research/EquityFinancialsTab.h"
 #include "screens/equity_research/EquityNewsTab.h"
@@ -8,8 +10,6 @@
 #include "screens/equity_research/EquityPeersTab.h"
 #include "screens/equity_research/EquityTalippTab.h"
 #include "screens/equity_research/EquityTechnicalsTab.h"
-#include "core/events/EventBus.h"
-#include "core/session/ScreenStateManager.h"
 #include "services/equity/EquityResearchService.h"
 #include "ui/theme/Theme.h"
 
@@ -106,7 +106,7 @@ void EquityResearchScreen::build_ui() {
 }
 
 QWidget* EquityResearchScreen::build_title_bar() {
-    auto* container = new QWidget;
+    auto* container = new QWidget(this);
     container->setFixedHeight(48);
     container->setStyleSheet(
         QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
@@ -121,15 +121,13 @@ QWidget* EquityResearchScreen::build_title_bar() {
     hl->addWidget(title);
 
     symbol_label_ = new QLabel;
-    symbol_label_->setStyleSheet(
-        QString("color:%1; font-size:14px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY()));
+    symbol_label_->setStyleSheet(QString("color:%1; font-size:14px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY()));
     hl->addWidget(symbol_label_);
 
     hl->addStretch();
 
     auto* hint = new QLabel("Use /stock, /fund, /index... in command bar to search");
-    hint->setStyleSheet(
-        QString("color:%1; font-size:12px;").arg(ui::colors::TEXT_TERTIARY()));
+    hint->setStyleSheet(QString("color:%1; font-size:12px;").arg(ui::colors::TEXT_TERTIARY()));
     hl->addWidget(hint);
 
     return container;
@@ -271,10 +269,7 @@ void EquityResearchScreen::update_quote_bar(const services::equity::QuoteData& q
 }
 
 QVariantMap EquityResearchScreen::save_state() const {
-    return {
-        {"symbol",    current_symbol_},
-        {"tab_index", tab_widget_ ? tab_widget_->currentIndex() : 0}
-    };
+    return {{"symbol", current_symbol_}, {"tab_index", tab_widget_ ? tab_widget_->currentIndex() : 0}};
 }
 
 void EquityResearchScreen::restore_state(const QVariantMap& state) {

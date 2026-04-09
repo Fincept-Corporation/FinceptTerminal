@@ -137,9 +137,8 @@ void GovDataService::execute(const QString& script, const QString& command, cons
 
         // Cache the result
         fincept::CacheManager::instance().put(
-            key,
-            QVariant(QString::fromUtf8(QJsonDocument(result.data).toJson(QJsonDocument::Compact))),
-            kCacheTtlSec, "govdata");
+            key, QVariant(QString::fromUtf8(QJsonDocument(result.data).toJson(QJsonDocument::Compact))), kCacheTtlSec,
+            "govdata");
 
         LOG_INFO("GovDataService", QString("Result ready: %1").arg(request_id));
         emit self->result_ready(request_id, result);

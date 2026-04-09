@@ -82,7 +82,7 @@ static void clear_layout(QLayout* layout) {
 
 BacktestingScreen::BacktestingScreen(QWidget* parent) : QWidget(parent) {
     providers_ = all_providers();
-    commands_  = all_commands();
+    commands_ = all_commands();
     // strategies_ starts empty — populated dynamically per provider via load_strategies()
     build_ui();
     connect_service();
@@ -104,28 +104,26 @@ void BacktestingScreen::hideEvent(QHideEvent* e) {
 
 void BacktestingScreen::connect_service() {
     auto& svc = BacktestingService::instance();
-    connect(&svc, &BacktestingService::result_ready,           this, &BacktestingScreen::on_result);
-    connect(&svc, &BacktestingService::error_occurred,         this, &BacktestingScreen::on_error);
+    connect(&svc, &BacktestingService::result_ready, this, &BacktestingScreen::on_result);
+    connect(&svc, &BacktestingService::error_occurred, this, &BacktestingScreen::on_error);
     connect(&svc, &BacktestingService::command_options_loaded, this, &BacktestingScreen::on_command_options_loaded);
 }
 
 void BacktestingScreen::set_status_state(const QString& text, const QString& color, const QString& bg_rgba) {
     status_label_->setText(text);
-    status_label_->setStyleSheet(
-        QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
-            .arg(color)
-            .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY));
+    status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
+                                     .arg(color)
+                                     .arg(ui::fonts::TINY)
+                                     .arg(ui::fonts::DATA_FAMILY));
     status_dot_->setText(text);
-    status_dot_->setStyleSheet(
-        QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                "padding:3px 8px; background:%4;"
-                "border:1px solid %5;")
-            .arg(color)
-            .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(bg_rgba)
-            .arg(bg_rgba.isEmpty() ? QString("transparent") : color));
+    status_dot_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
+                                       "padding:3px 8px; background:%4;"
+                                       "border:1px solid %5;")
+                                   .arg(color)
+                                   .arg(ui::fonts::TINY)
+                                   .arg(ui::fonts::DATA_FAMILY)
+                                   .arg(bg_rgba)
+                                   .arg(bg_rgba.isEmpty() ? QString("transparent") : color));
 }
 
 void BacktestingScreen::build_ui() {
@@ -137,8 +135,7 @@ void BacktestingScreen::build_ui() {
 
     auto* splitter = new QSplitter(Qt::Horizontal, this);
     splitter->setHandleWidth(1);
-    splitter->setStyleSheet(
-        QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM));
+    splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM));
     splitter->addWidget(build_left_panel());
     splitter->addWidget(build_center_panel());
     splitter->addWidget(build_right_panel());
@@ -217,13 +214,12 @@ QWidget* BacktestingScreen::build_top_bar() {
 
     // Status dot
     status_dot_ = new QLabel("READY", bar);
-    status_dot_->setStyleSheet(
-        QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                "padding:3px 8px; background:rgba(22,163,74,0.08);"
-                "border:1px solid rgba(22,163,74,0.25);")
-            .arg(ui::colors::POSITIVE)
-            .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY));
+    status_dot_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
+                                       "padding:3px 8px; background:rgba(22,163,74,0.08);"
+                                       "border:1px solid rgba(22,163,74,0.25);")
+                                   .arg(ui::colors::POSITIVE)
+                                   .arg(ui::fonts::TINY)
+                                   .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(status_dot_);
 
     return bar;
@@ -240,14 +236,13 @@ QWidget* BacktestingScreen::build_left_panel() {
 
     auto* scroll = new QScrollArea(panel);
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(
-        QString("QScrollArea { border:none; background:transparent; }"
-                "QScrollBar:vertical { width:5px; background:transparent; }"
-                "QScrollBar::handle:vertical { background:%1; }"
-                "QScrollBar::handle:vertical:hover { background:%2; }"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
-            .arg(ui::colors::BORDER_MED)
-            .arg(ui::colors::BORDER_BRIGHT));
+    scroll->setStyleSheet(QString("QScrollArea { border:none; background:transparent; }"
+                                  "QScrollBar:vertical { width:5px; background:transparent; }"
+                                  "QScrollBar::handle:vertical { background:%1; }"
+                                  "QScrollBar::handle:vertical:hover { background:%2; }"
+                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
+                              .arg(ui::colors::BORDER_MED)
+                              .arg(ui::colors::BORDER_BRIGHT));
 
     auto* content = new QWidget(scroll);
     auto* vl = new QVBoxLayout(content);
@@ -364,22 +359,22 @@ QWidget* BacktestingScreen::build_center_panel() {
     auto* export_btn = new QPushButton("EXPORT JSON", header);
     export_btn->setCursor(Qt::PointingHandCursor);
     export_btn->setFixedHeight(22);
-    export_btn->setStyleSheet(
-        QString("QPushButton { background:transparent; color:%1; border:1px solid %2; "
-                "padding:0 10px; font-size:%3px; font-family:%4; }"
-                "QPushButton:hover { color:%5; border-color:%5; }")
-            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM)
-            .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::colors::AMBER));
+    export_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2; "
+                                      "padding:0 10px; font-size:%3px; font-family:%4; }"
+                                      "QPushButton:hover { color:%5; border-color:%5; }")
+                                  .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM)
+                                  .arg(ui::fonts::TINY)
+                                  .arg(ui::fonts::DATA_FAMILY)
+                                  .arg(ui::colors::AMBER));
     connect(export_btn, &QPushButton::clicked, this, [this]() {
         QString text = raw_json_edit_ ? raw_json_edit_->toPlainText() : QString();
-        if (text.trimmed().isEmpty()) return;
+        if (text.trimmed().isEmpty())
+            return;
 
-        QString path = QFileDialog::getSaveFileName(
-            this, "Export Backtest Results", "backtest_results.json",
-            "JSON Files (*.json);;All Files (*)");
-        if (path.isEmpty()) return;
+        QString path = QFileDialog::getSaveFileName(this, "Export Backtest Results", "backtest_results.json",
+                                                    "JSON Files (*.json);;All Files (*)");
+        if (path.isEmpty())
+            return;
 
         QFile f(path);
         if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -414,7 +409,7 @@ QWidget* BacktestingScreen::build_center_panel() {
     auto* summary_scroll = new QScrollArea;
     summary_scroll->setWidgetResizable(true);
     summary_scroll->setStyleSheet("QScrollArea { border:none; background:transparent; }");
-    summary_container_ = new QWidget;
+    summary_container_ = new QWidget(this);
     summary_layout_ = new QVBoxLayout(summary_container_);
     summary_layout_->setContentsMargins(16, 16, 16, 16);
     summary_layout_->setSpacing(12);
@@ -491,14 +486,13 @@ QWidget* BacktestingScreen::build_right_panel() {
 
     auto* scroll = new QScrollArea(panel);
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(
-        QString("QScrollArea { border:none; background:transparent; }"
-                "QScrollBar:vertical { width:5px; background:transparent; }"
-                "QScrollBar::handle:vertical { background:%1; }"
-                "QScrollBar::handle:vertical:hover { background:%2; }"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
-            .arg(ui::colors::BORDER_MED)
-            .arg(ui::colors::BORDER_BRIGHT));
+    scroll->setStyleSheet(QString("QScrollArea { border:none; background:transparent; }"
+                                  "QScrollBar:vertical { width:5px; background:transparent; }"
+                                  "QScrollBar::handle:vertical { background:%1; }"
+                                  "QScrollBar::handle:vertical:hover { background:%2; }"
+                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
+                              .arg(ui::colors::BORDER_MED)
+                              .arg(ui::colors::BORDER_BRIGHT));
 
     auto* content = new QWidget(scroll);
     auto* vl = new QVBoxLayout(content);
@@ -687,7 +681,7 @@ QWidget* BacktestingScreen::build_right_panel() {
 
     // Page 1: optimize
     {
-        auto* page = new QWidget;
+        auto* page = new QWidget(this);
         auto* pl = new QVBoxLayout(page);
         pl->setContentsMargins(0, 0, 0, 0);
         pl->setSpacing(4);
@@ -728,7 +722,7 @@ QWidget* BacktestingScreen::build_right_panel() {
 
     // Page 2: walk_forward
     {
-        auto* page = new QWidget;
+        auto* page = new QWidget(this);
         auto* pl = new QVBoxLayout(page);
         pl->setContentsMargins(0, 0, 0, 0);
         pl->setSpacing(4);
@@ -762,7 +756,7 @@ QWidget* BacktestingScreen::build_right_panel() {
 
     // Page 3: indicator
     {
-        auto* page = new QWidget;
+        auto* page = new QWidget(this);
         auto* pl = new QVBoxLayout(page);
         pl->setContentsMargins(0, 0, 0, 0);
         pl->setSpacing(4);
@@ -784,7 +778,7 @@ QWidget* BacktestingScreen::build_right_panel() {
 
     // Page 4: indicator_signals
     {
-        auto* page = new QWidget;
+        auto* page = new QWidget(this);
         auto* pl = new QVBoxLayout(page);
         pl->setContentsMargins(0, 0, 0, 0);
         pl->setSpacing(4);
@@ -815,7 +809,7 @@ QWidget* BacktestingScreen::build_right_panel() {
 
     // Page 5: labels
     {
-        auto* page = new QWidget;
+        auto* page = new QWidget(this);
         auto* pl = new QVBoxLayout(page);
         pl->setContentsMargins(0, 0, 0, 0);
         pl->setSpacing(4);
@@ -858,7 +852,7 @@ QWidget* BacktestingScreen::build_right_panel() {
 
     // Page 6: splits
     {
-        auto* page = new QWidget;
+        auto* page = new QWidget(this);
         auto* pl = new QVBoxLayout(page);
         pl->setContentsMargins(0, 0, 0, 0);
         pl->setSpacing(4);
@@ -899,7 +893,7 @@ QWidget* BacktestingScreen::build_right_panel() {
 
     // Page 7: returns
     {
-        auto* page = new QWidget;
+        auto* page = new QWidget(this);
         auto* pl = new QVBoxLayout(page);
         pl->setContentsMargins(0, 0, 0, 0);
         pl->setSpacing(4);
@@ -931,7 +925,7 @@ QWidget* BacktestingScreen::build_right_panel() {
 
     // Page 8: signals
     {
-        auto* page = new QWidget;
+        auto* page = new QWidget(this);
         auto* pl = new QVBoxLayout(page);
         pl->setContentsMargins(0, 0, 0, 0);
         pl->setSpacing(4);
@@ -1214,10 +1208,10 @@ QJsonObject BacktestingScreen::gather_args() {
 
         // Strategy — type = ID (used by Python), name = display name
         QJsonObject strategy;
-        strategy["type"]     = strategy_combo_->currentData().toString();  // strategy ID
-        strategy["name"]     = strategy_combo_->currentText();             // display name
+        strategy["type"] = strategy_combo_->currentData().toString(); // strategy ID
+        strategy["name"] = strategy_combo_->currentText();            // display name
         strategy["category"] = strategy_category_combo_->currentText();
-        strategy["params"]   = gather_strategy_params();
+        strategy["params"] = gather_strategy_params();
         args["strategy"] = strategy;
     }
 
@@ -1381,9 +1375,8 @@ void BacktestingScreen::display_result(const QJsonObject& data) {
         display_label.replace(QRegularExpression("([a-z])([A-Z])"), "\\1 \\2");
 
         auto* card = new QWidget(cards);
-        card->setStyleSheet(QString("background:%1; border:1px solid %2;")
-                                .arg(ui::colors::BG_RAISED)
-                                .arg(ui::colors::BORDER_DIM));
+        card->setStyleSheet(
+            QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED).arg(ui::colors::BORDER_DIM));
         auto* cvl = new QVBoxLayout(card);
         cvl->setContentsMargins(10, 8, 10, 8);
         cvl->setSpacing(2);
@@ -1530,7 +1523,7 @@ void BacktestingScreen::on_result(const QString& provider, const QString& comman
         for (const auto& cat : ind_obj.keys()) {
             for (const auto& iv : ind_obj.value(cat).toArray()) {
                 auto o = iv.toObject();
-                auto id   = o.value("id").toString();
+                auto id = o.value("id").toString();
                 auto name = o.value("name").toString(id);
                 indicator_combo_->addItem(name, id);
                 ind_signal_indicator_combo_->addItem(name, id);
@@ -1552,21 +1545,22 @@ void BacktestingScreen::on_command_options_loaded(const QString& provider, const
         return;
 
     auto repopulate = [](QComboBox* combo, const QJsonArray& arr) {
-        if (arr.isEmpty()) return;
+        if (arr.isEmpty())
+            return;
         combo->clear();
         for (const auto& v : arr)
             combo->addItem(v.toString());
         combo->setCurrentIndex(0);
     };
 
-    repopulate(pos_sizing_combo_,      options.value("position_sizing_methods").toArray());
-    repopulate(opt_objective_combo_,   options.value("optimize_objectives").toArray());
-    repopulate(opt_method_combo_,      options.value("optimize_methods").toArray());
-    repopulate(labels_type_combo_,     options.value("label_types").toArray());
-    repopulate(splitter_type_combo_,   options.value("splitter_types").toArray());
-    repopulate(signal_gen_combo_,      options.value("signal_generators").toArray());
+    repopulate(pos_sizing_combo_, options.value("position_sizing_methods").toArray());
+    repopulate(opt_objective_combo_, options.value("optimize_objectives").toArray());
+    repopulate(opt_method_combo_, options.value("optimize_methods").toArray());
+    repopulate(labels_type_combo_, options.value("label_types").toArray());
+    repopulate(splitter_type_combo_, options.value("splitter_types").toArray());
+    repopulate(signal_gen_combo_, options.value("signal_generators").toArray());
     repopulate(ind_signal_mode_combo_, options.value("indicator_signal_modes").toArray());
-    repopulate(returns_type_combo_,    options.value("returns_analysis_types").toArray());
+    repopulate(returns_type_combo_, options.value("returns_analysis_types").toArray());
 
     LOG_INFO("Backtesting", QString("[%1] Command options loaded").arg(provider));
 }
@@ -1583,13 +1577,13 @@ void BacktestingScreen::on_error(const QString& context, const QString& message)
 QVariantMap BacktestingScreen::save_state() const {
     return {
         {"provider", active_provider_},
-        {"command",  active_command_},
+        {"command", active_command_},
     };
 }
 
 void BacktestingScreen::restore_state(const QVariantMap& state) {
     const int prov = state.value("provider", 0).toInt();
-    const int cmd  = state.value("command", 0).toInt();
+    const int cmd = state.value("command", 0).toInt();
     if (prov != active_provider_)
         on_provider_changed(prov);
     if (cmd != active_command_)

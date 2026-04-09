@@ -33,8 +33,8 @@ PlannerViewPanel::PlannerViewPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("PlannerViewPanel");
     build_ui();
     setup_connections();
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { update(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { update(); });
 }
 
 void PlannerViewPanel::build_ui() {
@@ -60,7 +60,7 @@ void PlannerViewPanel::build_ui() {
 // ── Left ─────────────────────────────────────────────────────────────────────
 
 QWidget* PlannerViewPanel::build_templates_panel() {
-    auto* p = new QWidget;
+    auto* p = new QWidget(this);
     p->setMinimumWidth(200);
     p->setMaximumWidth(300);
     p->setStyleSheet(
@@ -87,7 +87,7 @@ QWidget* PlannerViewPanel::build_templates_panel() {
             .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED));
     llm_profile_combo_->addItem("Default (Global)", QString{});
     {
-        const auto pr       = fincept::LlmProfileRepository::instance().list_profiles();
+        const auto pr = fincept::LlmProfileRepository::instance().list_profiles();
         const auto profiles = pr.is_ok() ? pr.value() : QVector<fincept::LlmProfile>{};
         for (const auto& p : profiles)
             llm_profile_combo_->addItem(p.is_default ? p.name + " [default]" : p.name, p.id);
@@ -176,7 +176,7 @@ QWidget* PlannerViewPanel::build_templates_panel() {
 // ── Center ───────────────────────────────────────────────────────────────────
 
 QWidget* PlannerViewPanel::build_plan_editor() {
-    auto* p = new QWidget;
+    auto* p = new QWidget(this);
     p->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(12, 8, 12, 8);
@@ -267,7 +267,7 @@ QWidget* PlannerViewPanel::build_plan_editor() {
 // ── Right ────────────────────────────────────────────────────────────────────
 
 QWidget* PlannerViewPanel::build_results_panel() {
-    auto* p = new QWidget;
+    auto* p = new QWidget(this);
     p->setMinimumWidth(260);
     p->setMaximumWidth(450);
     p->setStyleSheet(
@@ -315,7 +315,8 @@ void PlannerViewPanel::setup_connections() {
     connect(copy_btn_, &QPushButton::clicked, this, &PlannerViewPanel::copy_result);
 
     connect(&svc, &services::AgentService::plan_created, this, [this](services::ExecutionPlan plan) {
-        if (plan.request_id != pending_request_id_) return;
+        if (plan.request_id != pending_request_id_)
+            return;
         generating_ = false;
         pending_request_id_.clear();
         loading_overlay_->hide_loading();
@@ -331,7 +332,8 @@ void PlannerViewPanel::setup_connections() {
     });
 
     connect(&svc, &services::AgentService::plan_executed, this, [this](services::ExecutionPlan plan) {
-        if (plan.request_id != pending_request_id_) return;
+        if (plan.request_id != pending_request_id_)
+            return;
         executing_ = false;
         pending_request_id_.clear();
         loading_overlay_->hide_loading();
@@ -349,8 +351,7 @@ void PlannerViewPanel::setup_connections() {
             if (plan.steps[i].status == "completed")
                 ++completed;
             if (!plan.steps[i].result.isEmpty() || !plan.steps[i].error.isEmpty()) {
-                const QString txt = plan.steps[i].result.isEmpty() ? plan.steps[i].error
-                                                                    : plan.steps[i].result;
+                const QString txt = plan.steps[i].result.isEmpty() ? plan.steps[i].error : plan.steps[i].result;
                 result_display_->setHtml(ui::MarkdownRenderer::render(txt));
                 result_header_->setText(QString("STEP %1: %2").arg(i + 1).arg(plan.steps[i].name.toUpper()));
             }
@@ -417,10 +418,10 @@ void PlannerViewPanel::generate_plan() {
         q = item ? item->text() : "Create a comprehensive stock analysis plan";
     }
     // Append portfolio context to query if selected
-    if (portfolio_combo_ && portfolio_combo_->currentData().isValid()
-            && !portfolio_combo_->currentData().toString().isEmpty()) {
+    if (portfolio_combo_ && portfolio_combo_->currentData().isValid() &&
+        !portfolio_combo_->currentData().toString().isEmpty()) {
         const QString pf_name = portfolio_combo_->currentText();
-        const QString pf_id   = portfolio_combo_->currentData().toString();
+        const QString pf_id = portfolio_combo_->currentData().toString();
         q = QString("[Portfolio: %1 (id: %2)]\n\n%3").arg(pf_name, pf_id, q);
     }
 

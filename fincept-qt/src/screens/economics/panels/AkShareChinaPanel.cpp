@@ -17,9 +17,9 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kAkShareChinaScript   = "akshare_economics_china.py";
+static constexpr const char* kAkShareChinaScript = "akshare_economics_china.py";
 static constexpr const char* kAkShareChinaSourceId = "akshare_cn";
-static constexpr const char* kAkShareChinaColor    = "#DC2626";  // China red
+static constexpr const char* kAkShareChinaColor = "#DC2626"; // China red
 } // namespace
 
 struct AkCnSeries {
@@ -29,18 +29,17 @@ struct AkCnSeries {
 };
 
 static const QList<AkCnSeries> kAkShareSeries = {
-    { "CPI (Consumer Price Index)",      "cpi", "Monthly CPI year-on-year & month-on-month"  },
-    { "PPI (Producer Price Index)",      "ppi", "Monthly PPI change rates"                   },
-    { "GDP (Gross Domestic Product)",    "gdp", "Quarterly GDP by expenditure approach"       },
-    { "PMI (Manufacturing & Services)",  "pmi", "Monthly PMI — official NBS data"            },
+    {"CPI (Consumer Price Index)", "cpi", "Monthly CPI year-on-year & month-on-month"},
+    {"PPI (Producer Price Index)", "ppi", "Monthly PPI change rates"},
+    {"GDP (Gross Domestic Product)", "gdp", "Quarterly GDP by expenditure approach"},
+    {"PMI (Manufacturing & Services)", "pmi", "Monthly PMI — official NBS data"},
 };
 
 AkShareChinaPanel::AkShareChinaPanel(QWidget* parent)
     : EconPanelBase(kAkShareChinaSourceId, kAkShareChinaColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &AkShareChinaPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &AkShareChinaPanel::on_result);
 }
 
 void AkShareChinaPanel::activate() {
@@ -65,20 +64,23 @@ void AkShareChinaPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void AkShareChinaPanel::on_fetch() {
-    const int   idx    = series_combo_->currentIndex();
+    const int idx = series_combo_->currentIndex();
     const auto& series = kAkShareSeries[idx];
 
     show_loading("Fetching AkShare China: " + series.label + "…");
-    services::EconomicsService::instance().execute(
-        kAkShareChinaSourceId, kAkShareChinaScript, series.command, {},
-        "akcn_" + series.command);
+    services::EconomicsService::instance().execute(kAkShareChinaSourceId, kAkShareChinaScript, series.command, {},
+                                                   "akcn_" + series.command);
 }
 
-void AkShareChinaPanel::on_result(const QString& request_id,
-                                   const services::EconomicsResult& result) {
-    if (result.source_id != kAkShareChinaSourceId) return;
-    if (!request_id.startsWith("akcn_")) return;
-    if (!result.success) { show_error(result.error); return; }
+void AkShareChinaPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kAkShareChinaSourceId)
+        return;
+    if (!request_id.startsWith("akcn_"))
+        return;
+    if (!result.success) {
+        show_error(result.error);
+        return;
+    }
 
     // Response: {success, data:[{...}], count}
     QJsonArray rows = result.data["data"].toArray();
@@ -90,12 +92,11 @@ void AkShareChinaPanel::on_result(const QString& request_id,
     }
 
     const int idx = series_combo_->currentIndex();
-    const QString title = "AkShare China: "
-        + (idx >= 0 && idx < kAkShareSeries.size() ? kAkShareSeries[idx].label : request_id.mid(6));
+    const QString title =
+        "AkShare China: " + (idx >= 0 && idx < kAkShareSeries.size() ? kAkShareSeries[idx].label : request_id.mid(6));
 
     display(rows, title);
-    LOG_INFO("AkShareChinaPanel", QString("Displayed %1 rows: %2")
-                                      .arg(rows.size()).arg(title));
+    LOG_INFO("AkShareChinaPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }
 
 } // namespace fincept::screens

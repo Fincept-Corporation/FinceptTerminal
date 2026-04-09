@@ -186,8 +186,8 @@ QString threat_level_string(ThreatLevel t);
 QString threat_level_color(ThreatLevel t);
 
 // Round-trip helpers (string → enum)
-Priority  priority_from_string(const QString& s);
+Priority priority_from_string(const QString& s);
 Sentiment sentiment_from_string(const QString& s);
-Impact    impact_from_string(const QString& s);
+Impact impact_from_string(const QString& s);
 
 } // namespace fincept::services

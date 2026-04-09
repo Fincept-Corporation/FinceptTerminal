@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QString>
 #include <QVector>
+
 #include <functional>
 #include <memory>
 #include <vector>
@@ -17,18 +18,18 @@ enum class NotifTrigger { Manual, PriceAlert, OrderFill, NewsAlert, WorkflowNode
 // ── Data structures ───────────────────────────────────────────────────────────
 
 struct NotificationRequest {
-    QString      title;
-    QString      message;
-    NotifLevel   level   = NotifLevel::Info;
+    QString title;
+    QString message;
+    NotifLevel level = NotifLevel::Info;
     NotifTrigger trigger = NotifTrigger::Manual;
-    QDateTime    timestamp{QDateTime::currentDateTime()};
+    QDateTime timestamp{QDateTime::currentDateTime()};
 };
 
 struct NotificationRecord {
-    int                 id{0};
+    int id{0};
     NotificationRequest request;
-    bool                read{false};
-    QDateTime           received_at{QDateTime::currentDateTime()};
+    bool read{false};
+    QDateTime received_at{QDateTime::currentDateTime()};
 };
 
 // ── Provider interface ────────────────────────────────────────────────────────
@@ -56,8 +57,7 @@ class INotificationProvider {
     virtual bool is_enabled() const = 0;
 
     /// Perform the HTTP call to deliver req. Invoke cb with (ok, error_string).
-    virtual void send(const NotificationRequest& req,
-                      std::function<void(bool ok, QString error)> cb) = 0;
+    virtual void send(const NotificationRequest& req, std::function<void(bool ok, QString error)> cb) = 0;
 
     /// Reload credentials from SettingsRepository.
     virtual void load_config() = 0;
@@ -81,19 +81,18 @@ class NotificationService : public QObject {
     void send(const NotificationRequest& req);
 
     /// Deliver to a single named provider — used for Settings "Test Send" button.
-    void send_to(const QString& provider_id,
-                 const NotificationRequest& req,
+    void send_to(const QString& provider_id, const NotificationRequest& req,
                  std::function<void(bool ok, QString error)> cb);
 
     // ── History ───────────────────────────────────────────────────────────────
     const QVector<NotificationRecord>& history() const;
-    int  unread_count() const;
+    int unread_count() const;
     void mark_read(int id);
     void mark_all_read();
 
     // ── Provider access (for settings page) ──────────────────────────────────
     QVector<INotificationProvider*> providers() const;
-    INotificationProvider*          provider(const QString& id) const;
+    INotificationProvider* provider(const QString& id) const;
 
     /// Call after settings are saved to reload all provider configs.
     void reload_all_configs();
@@ -107,7 +106,7 @@ class NotificationService : public QObject {
     void register_providers();
 
     std::vector<std::unique_ptr<INotificationProvider>> providers_;
-    QVector<NotificationRecord>                          history_;
+    QVector<NotificationRecord> history_;
     int next_id_{1};
     int unread_{0};
 };

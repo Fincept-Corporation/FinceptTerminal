@@ -35,21 +35,20 @@ class NotifToast : public QWidget {
     void reposition();
     void dismiss();
 
-    QLabel*             level_dot_   = nullptr;
-    QLabel*             title_lbl_   = nullptr;
-    QLabel*             msg_lbl_     = nullptr;
-    QLabel*             time_lbl_    = nullptr;
-    QTimer*             auto_dismiss_= nullptr;
-    QPropertyAnimation* slide_anim_  = nullptr;
+    QLabel* level_dot_ = nullptr;
+    QLabel* title_lbl_ = nullptr;
+    QLabel* msg_lbl_ = nullptr;
+    QLabel* time_lbl_ = nullptr;
+    QTimer* auto_dismiss_ = nullptr;
+    QPropertyAnimation* slide_anim_ = nullptr;
 
-    fincept::notifications::NotifLevel current_level_{
-        fincept::notifications::NotifLevel::Info};
+    fincept::notifications::NotifLevel current_level_{fincept::notifications::NotifLevel::Info};
 
-    static constexpr int TOAST_W        = 320;
-    static constexpr int TOAST_H        = 72;
-    static constexpr int MARGIN         = 12;
-    static constexpr int AUTO_DISMISS_MS= 4000;
-    static constexpr int ANIM_MS        = 250;
+    static constexpr int TOAST_W = 320;
+    static constexpr int TOAST_H = 72;
+    static constexpr int MARGIN = 12;
+    static constexpr int AUTO_DISMISS_MS = 4000;
+    static constexpr int ANIM_MS = 250;
 };
 
 } // namespace fincept::ui

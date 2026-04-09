@@ -1,4 +1,5 @@
 #include "core/config/AppPaths.h"
+
 #include "core/config/ProfileManager.h"
 
 #include <QDir>

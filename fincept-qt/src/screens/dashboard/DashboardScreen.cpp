@@ -1,26 +1,46 @@
 #include "screens/dashboard/DashboardScreen.h"
 
-#include "services/notifications/NotificationService.h"
-#include "ui/widgets/NotifToast.h"
 #include "screens/dashboard/canvas/AddWidgetDialog.h"
 #include "screens/dashboard/canvas/DashboardTemplates.h"
 #include "screens/dashboard/canvas/TemplatePicker.h"
 #include "screens/dashboard/canvas/WidgetRegistry.h"
+#include "services/notifications/NotificationService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/NotifToast.h"
 
 #include <QDataStream>
 #include <QEvent>
 #include <QHideEvent>
+#include <QPalette>
 #include <QPointer>
 #include <QShowEvent>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 
+namespace {
+
+void apply_solid_background(QWidget* widget, const QColor& color) {
+    if (!widget)
+        return;
+
+    widget->setAttribute(Qt::WA_StyledBackground, true);
+    widget->setAutoFillBackground(true);
+
+    QPalette pal = widget->palette();
+    pal.setColor(QPalette::Window, color);
+    pal.setColor(QPalette::Base, color);
+    pal.setColor(QPalette::Button, color);
+    widget->setPalette(pal);
+}
+
+} // namespace
+
 namespace fincept::screens {
 
 DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
+    apply_solid_background(this, QColor(ui::colors::BG_BASE()));
     refresh_theme();
 
     auto* vl = new QVBoxLayout(this);
@@ -38,9 +58,8 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
     // ── Main Content: Canvas (in scroll) + Market Pulse ──
     content_split_ = new QSplitter(Qt::Horizontal);
     content_split_->setHandleWidth(1);
-    content_split_->setStyleSheet(
-        QString("QSplitter::handle{background:%1;}QSplitter::handle:hover{background:%2;}")
-        .arg(ui::colors::BORDER_DIM(), ui::colors::BORDER_MED()));
+    content_split_->setStyleSheet(QString("QSplitter::handle{background:%1;}QSplitter::handle:hover{background:%2;}")
+                                      .arg(ui::colors::BORDER_DIM(), ui::colors::BORDER_MED()));
 
     canvas_ = new DashboardCanvas;
 
@@ -49,12 +68,13 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
     scroll_area_->setWidgetResizable(false); // canvas controls its own size
     scroll_area_->setMinimumWidth(0);        // allow ADS to shrink this panel freely
     scroll_area_->setWidget(canvas_);
-    scroll_area_->setStyleSheet(
-        QString("QScrollArea{border:none;background:transparent;}"
-                "QScrollBar:vertical{width:6px;background:transparent;}"
-                "QScrollBar::handle:vertical{background:%1;border-radius:3px;min-height:20px;}"
-                "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-        .arg(ui::colors::BORDER_MED()));
+    scroll_area_->setStyleSheet(QString("QScrollArea{border:none;background:%1;}"
+                                        "QScrollBar:vertical{width:6px;background:transparent;}"
+                                        "QScrollBar::handle:vertical{background:%2;border-radius:3px;min-height:20px;}"
+                                        "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+                                    .arg(ui::colors::BG_BASE(), ui::colors::BORDER_MED()));
+    scroll_area_->viewport()->setStyleSheet(
+        QString("background:%1;").arg(ui::colors::BG_BASE()));
 
     // Sync canvas width to scroll viewport via event filter
     scroll_area_->viewport()->installEventFilter(this);
@@ -78,8 +98,8 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
     // ── In-app notification toast (overlay, not in layout) ────────────────────
     notif_toast_ = new fincept::ui::NotifToast(this);
     connect(&fincept::notifications::NotificationService::instance(),
-            &fincept::notifications::NotificationService::notification_received,
-            notif_toast_, &fincept::ui::NotifToast::show_notification);
+            &fincept::notifications::NotificationService::notification_received, notif_toast_,
+            &fincept::ui::NotifToast::show_notification);
 
     // ── Debounced save timer (P3: not started in constructor) ──
     save_timer_ = new QTimer(this);
@@ -124,31 +144,43 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
         canvas_->set_row_height(compact ? 40 : 60);
     });
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { refresh_theme(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { refresh_theme(); });
 }
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
 void DashboardScreen::refresh_theme() {
+    const QColor bg(ui::colors::BG_BASE());
+    apply_solid_background(this, bg);
+
     setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
-    if (content_split_)
+    if (content_split_) {
+        apply_solid_background(content_split_, bg);
         content_split_->setStyleSheet(
-            QString("QSplitter::handle{background:%1;}QSplitter::handle:hover{background:%2;}")
-            .arg(ui::colors::BORDER_DIM(), ui::colors::BORDER_MED()));
-    if (scroll_area_)
+            QString("QSplitter{background:%1;}QSplitter::handle{background:%2;}QSplitter::handle:hover{background:%3;}")
+                .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::BORDER_MED()));
+    }
+    if (scroll_area_) {
+        apply_solid_background(scroll_area_, bg);
         scroll_area_->setStyleSheet(
-            QString("QScrollArea{border:none;background:transparent;}"
+            QString("QScrollArea{border:none;background:%1;}"
                     "QScrollBar:vertical{width:6px;background:transparent;}"
-                    "QScrollBar::handle:vertical{background:%1;border-radius:3px;min-height:20px;}"
+                    "QScrollBar::handle:vertical{background:%2;border-radius:3px;min-height:20px;}"
                     "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-            .arg(ui::colors::BORDER_MED()));
+                .arg(ui::colors::BG_BASE(), ui::colors::BORDER_MED()));
+        // Ensure viewport doesn't paint its own opaque background over the canvas
+        apply_solid_background(scroll_area_->viewport(), bg);
+        scroll_area_->viewport()->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
+    }
 }
 
 // ── Show/Hide ─────────────────────────────────────────────────────────────────
 
 void DashboardScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
+    refresh_theme();
+
     if (ticker_bar_)
         ticker_bar_->resume();
 

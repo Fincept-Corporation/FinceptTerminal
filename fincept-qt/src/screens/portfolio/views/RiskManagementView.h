@@ -37,7 +37,7 @@ class RiskManagementView : public QWidget {
     QTableWidget* contrib_table_ = nullptr;
 
     portfolio::PortfolioSummary summary_;
-    portfolio::ComputedMetrics  metrics_;
+    portfolio::ComputedMetrics metrics_;
     QString currency_;
 };
 

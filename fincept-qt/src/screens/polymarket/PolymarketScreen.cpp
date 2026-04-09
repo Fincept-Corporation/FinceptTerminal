@@ -380,13 +380,13 @@ void PolymarketScreen::on_ws_status_changed(bool connected) {
 QVariantMap PolymarketScreen::save_state() const {
     return {
         {"category", active_category_},
-        {"view",     active_view_},
-        {"sort",     active_sort_},
+        {"view", active_view_},
+        {"sort", active_sort_},
     };
 }
 
 void PolymarketScreen::restore_state(const QVariantMap& state) {
-    const QString cat  = state.value("category", "ALL").toString();
+    const QString cat = state.value("category", "ALL").toString();
     const QString view = state.value("view", "MARKETS").toString();
     const QString sort = state.value("sort", "volume").toString();
 

@@ -52,7 +52,7 @@ void PortfolioCommandBar::build_ui() {
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setStyleSheet("QScrollArea { background:transparent; border:none; }");
 
-    auto* inner = new QWidget;
+    auto* inner = new QWidget(this);
     inner->setStyleSheet("background:transparent;");
     auto* layout = new QHBoxLayout(inner);
     layout->setContentsMargins(6, 0, 6, 0);
@@ -61,7 +61,7 @@ void PortfolioCommandBar::build_ui() {
     build_portfolio_selector(layout);
 
     // Inline stats (wrapped in container for show/hide)
-    stats_container_ = new QWidget;
+    stats_container_ = new QWidget(this);
     stats_container_->setStyleSheet("background:transparent;");
     auto* stats_layout = new QHBoxLayout(stats_container_);
     stats_layout->setContentsMargins(0, 0, 0, 0);
@@ -73,7 +73,7 @@ void PortfolioCommandBar::build_ui() {
     layout->addWidget(stats_container_);
 
     // Action buttons (wrapped for show/hide)
-    actions_container_ = new QWidget;
+    actions_container_ = new QWidget(this);
     actions_container_->setStyleSheet("background:transparent;");
     auto* actions_layout = new QHBoxLayout(actions_container_);
     actions_layout->setContentsMargins(0, 0, 0, 0);
@@ -82,13 +82,13 @@ void PortfolioCommandBar::build_ui() {
     layout->addWidget(actions_container_);
 
     // Separator
-    auto* sep = new QWidget;
+    auto* sep = new QWidget(this);
     sep->setFixedSize(1, 18);
     sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_MED));
     layout->addWidget(sep);
 
     // Detail buttons + AI/Agent (wrapped for show/hide)
-    details_container_ = new QWidget;
+    details_container_ = new QWidget(this);
     details_container_->setStyleSheet("background:transparent;");
     auto* details_layout = new QHBoxLayout(details_container_);
     details_layout->setContentsMargins(0, 0, 0, 0);
@@ -254,9 +254,9 @@ void PortfolioCommandBar::build_action_buttons(QHBoxLayout* layout) {
     sell_btn_ = make_btn("SELL", ui::colors::NEGATIVE, ui::colors::TEXT_PRIMARY);
     auto* div_btn = make_btn("DIV", ui::colors::CYAN, ui::colors::BG_BASE);
 
-    connect(buy_btn_,  &QPushButton::clicked, this, &PortfolioCommandBar::buy_requested);
+    connect(buy_btn_, &QPushButton::clicked, this, &PortfolioCommandBar::buy_requested);
     connect(sell_btn_, &QPushButton::clicked, this, &PortfolioCommandBar::sell_requested);
-    connect(div_btn,   &QPushButton::clicked, this, &PortfolioCommandBar::dividend_requested);
+    connect(div_btn, &QPushButton::clicked, this, &PortfolioCommandBar::dividend_requested);
 
     // Refresh
     refresh_btn_ = new QPushButton("\u21BB");
@@ -305,11 +305,12 @@ void PortfolioCommandBar::build_action_buttons(QHBoxLayout* layout) {
     ffn_btn_->setFixedHeight(20);
     ffn_btn_->setCheckable(true);
     ffn_btn_->setCursor(Qt::PointingHandCursor);
-    ffn_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                                    "  padding:0 8px; font-size:9px; font-weight:700; }"
-                                    "QPushButton:checked { background:%3; color:%4; border-color:%3; }"
-                                    "QPushButton:hover { border-color:%3; }")
-                                .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::AMBER, ui::colors::BG_BASE));
+    ffn_btn_->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                "  padding:0 8px; font-size:9px; font-weight:700; }"
+                "QPushButton:checked { background:%3; color:%4; border-color:%3; }"
+                "QPushButton:hover { border-color:%3; }")
+            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::AMBER, ui::colors::BG_BASE));
     connect(ffn_btn_, &QPushButton::clicked, this, &PortfolioCommandBar::ffn_toggled);
     layout->addWidget(ffn_btn_);
 }
@@ -322,12 +323,16 @@ void PortfolioCommandBar::build_detail_buttons(QHBoxLayout* layout) {
         btn->setProperty("detailView", static_cast<int>(def.view));
 
         QString color = def.color;
-        QString rgb_str = [&]() { QColor c(color); return QString("%1,%2,%3").arg(c.red()).arg(c.green()).arg(c.blue()); }();
-        btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                                   "  padding:0 6px; font-size:8px; font-weight:700; letter-spacing:0.3px; }"
-                                   "QPushButton:hover { background:rgba(%5,0.12); color:%3; border-color:%3; }"
-                                   "QPushButton[active=\"true\"] { background:rgba(%5,0.15); color:%3; border-color:%3; }")
-                               .arg(color, ui::colors::BORDER_DIM, color, ui::colors::BG_BASE, rgb_str));
+        QString rgb_str = [&]() {
+            QColor c(color);
+            return QString("%1,%2,%3").arg(c.red()).arg(c.green()).arg(c.blue());
+        }();
+        btn->setStyleSheet(
+            QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                    "  padding:0 6px; font-size:8px; font-weight:700; letter-spacing:0.3px; }"
+                    "QPushButton:hover { background:rgba(%5,0.12); color:%3; border-color:%3; }"
+                    "QPushButton[active=\"true\"] { background:rgba(%5,0.15); color:%3; border-color:%3; }")
+                .arg(color, ui::colors::BORDER_DIM, color, ui::colors::BG_BASE, rgb_str));
 
         connect(btn, &QPushButton::clicked, this, [this, view = def.view]() { emit detail_view_selected(view); });
 

@@ -9,11 +9,11 @@ namespace fincept {
 
 /// Per-category storage statistics.
 struct StorageCategoryInfo {
-    QString id;          // e.g. "chat_history"
-    QString label;       // e.g. "Chat History"
-    QString group;       // e.g. "AI & LLM", "Trading", "Data"
-    int     count = 0;   // number of rows / entries
-    bool    clearable = true;
+    QString id;    // e.g. "chat_history"
+    QString label; // e.g. "Chat History"
+    QString group; // e.g. "AI & LLM", "Trading", "Data"
+    int count = 0; // number of rows / entries
+    bool clearable = true;
 };
 
 /// Centralized manager for querying and clearing all persistent data stores.

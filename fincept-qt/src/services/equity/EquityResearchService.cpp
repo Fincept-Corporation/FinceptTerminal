@@ -84,13 +84,17 @@ void EquityResearchService::load_symbol(const QString& symbol, const QString& pe
             emit quote_loaded(parse_quote(QJsonDocument::fromJson(qcv.toString().toUtf8()).object()));
         } else {
             run_python("yfinance_data.py", {"quote", symbol}, [this, symbol](bool ok, const QString& out) {
-                if (!ok) { emit error_occurred("Quote", "Failed to fetch quote for " + symbol); return; }
+                if (!ok) {
+                    emit error_occurred("Quote", "Failed to fetch quote for " + symbol);
+                    return;
+                }
                 auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
-                if (obj.contains("error")) return;
+                if (obj.contains("error"))
+                    return;
                 fincept::CacheManager::instance().put(
                     "equity:quote:" + symbol,
-                    QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
-                    kQuoteTtlSec, "equity");
+                    QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), kQuoteTtlSec,
+                    "equity");
                 emit quote_loaded(parse_quote(obj));
             });
         }
@@ -103,13 +107,17 @@ void EquityResearchService::load_symbol(const QString& symbol, const QString& pe
             emit info_loaded(parse_info(QJsonDocument::fromJson(icv.toString().toUtf8()).object()));
         } else {
             run_python("yfinance_data.py", {"info", symbol}, [this, symbol](bool ok, const QString& out) {
-                if (!ok) { emit error_occurred("Info", "Failed to fetch info for " + symbol); return; }
+                if (!ok) {
+                    emit error_occurred("Info", "Failed to fetch info for " + symbol);
+                    return;
+                }
                 auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
-                if (obj.contains("error")) return;
+                if (obj.contains("error"))
+                    return;
                 fincept::CacheManager::instance().put(
                     "equity:info:" + symbol,
-                    QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
-                    kInfoTtlSec, "equity");
+                    QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), kInfoTtlSec,
+                    "equity");
                 emit info_loaded(parse_info(obj));
             });
         }
@@ -119,8 +127,7 @@ void EquityResearchService::load_symbol(const QString& symbol, const QString& pe
     {
         const QVariant hcv = fincept::CacheManager::instance().get("equity:candles:" + symbol);
         if (!hcv.isNull()) {
-            emit historical_loaded(symbol,
-                parse_candles(QJsonDocument::fromJson(hcv.toString().toUtf8()).array()));
+            emit historical_loaded(symbol, parse_candles(QJsonDocument::fromJson(hcv.toString().toUtf8()).array()));
         } else {
             run_python("yfinance_data.py", {"historical_period", symbol, period, "1d"},
                        [this, symbol](bool ok, const QString& out) {
@@ -190,9 +197,8 @@ void EquityResearchService::fetch_technicals(const QString& symbol, const QStrin
                            return;
                        }
                        auto raw = python::extract_json(out);
-                       fincept::CacheManager::instance().put(
-                           "equity:candles:" + symbol,
-                           QVariant(raw), kHistoricalTtlSec, "equity");
+                       fincept::CacheManager::instance().put("equity:candles:" + symbol, QVariant(raw),
+                                                             kHistoricalTtlSec, "equity");
                        run_compute(raw);
                    });
     }
@@ -225,20 +231,19 @@ void EquityResearchService::fetch_news(const QString& symbol, int count) {
             return;
         }
     }
-    run_python("yfinance_data.py", {"news", symbol, QString::number(count)},
-               [this, symbol](bool ok, const QString& out) {
-                   if (!ok) {
-                       emit error_occurred("News", "Failed to fetch news for " + symbol);
-                       return;
-                   }
-                   auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
-                   auto arr = obj["articles"].toArray();
-                   fincept::CacheManager::instance().put(
-                       "equity:news:" + symbol,
-                       QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
-                       kNewsTtlSec, "equity");
-                   emit news_loaded(symbol, parse_news(arr));
-               });
+    run_python(
+        "yfinance_data.py", {"news", symbol, QString::number(count)}, [this, symbol](bool ok, const QString& out) {
+            if (!ok) {
+                emit error_occurred("News", "Failed to fetch news for " + symbol);
+                return;
+            }
+            auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
+            auto arr = obj["articles"].toArray();
+            fincept::CacheManager::instance().put(
+                "equity:news:" + symbol, QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                kNewsTtlSec, "equity");
+            emit news_loaded(symbol, parse_news(arr));
+        });
 }
 
 // ── TALIpp ────────────────────────────────────────────────────────────────────
@@ -279,9 +284,8 @@ void EquityResearchService::compute_talipp(const QString& symbol, const QString&
                            return;
                        }
                        auto raw = python::extract_json(out);
-                       fincept::CacheManager::instance().put(
-                           "equity:candles:" + symbol,
-                           QVariant(raw), kHistoricalTtlSec, "equity");
+                       fincept::CacheManager::instance().put("equity:candles:" + symbol, QVariant(raw),
+                                                             kHistoricalTtlSec, "equity");
                        run_talipp(raw);
                    });
     }

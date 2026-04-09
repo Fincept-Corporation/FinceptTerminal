@@ -9,46 +9,65 @@
 namespace fincept::screens {
 
 NewsSidePanel::NewsSidePanel(QWidget* parent) : QWidget(parent) {
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) {
-                setStyleSheet(QString("background:%1;color:%2;")
-                    .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
-            });
-    setObjectName("newsSidePanel");
-    setFixedWidth(240);
+    setObjectName("newsDrawerPanel");
+    setFixedWidth(280);
+    hide(); // start hidden — toggled by INTEL button
 
     auto* outer = new QVBoxLayout(this);
     outer->setContentsMargins(0, 0, 0, 0);
     outer->setSpacing(0);
 
+    // Drawer header with close button
+    auto* header = new QWidget(this);
+    header->setObjectName("newsDrawerHeader");
+    header->setFixedHeight(30);
+    auto* header_layout = new QHBoxLayout(header);
+    header_layout->setContentsMargins(10, 0, 6, 0);
+    header_layout->setSpacing(0);
+
+    auto* title = new QLabel("INTELLIGENCE", header);
+    title->setObjectName("newsDrawerTitle");
+    header_layout->addWidget(title);
+    header_layout->addStretch();
+
+    auto* close_btn = new QPushButton("x", header);
+    close_btn->setObjectName("newsDrawerCloseBtn");
+    close_btn->setFixedSize(22, 22);
+    close_btn->setCursor(Qt::PointingHandCursor);
+    connect(close_btn, &QPushButton::clicked, this, [this]() {
+        toggle_drawer();
+        emit close_requested();
+    });
+    header_layout->addWidget(close_btn);
+    outer->addWidget(header);
+
+    // Scrollable content area
     auto* scroll = new QScrollArea(this);
-    scroll->setObjectName("newsSidePanelScroll");
+    scroll->setObjectName("newsDrawerScroll");
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setFrameShape(QFrame::NoFrame);
 
     auto* content = new QWidget(scroll);
-    content->setObjectName("newsSidePanelContent");
+    content->setObjectName("newsDrawerContent");
     auto* layout = new QVBoxLayout(content);
-    layout->setContentsMargins(8, 6, 8, 6);
+    layout->setContentsMargins(10, 8, 10, 8);
     layout->setSpacing(10);
 
-    build_stats_section(layout);
-    build_sentiment_section(layout);
     build_top_stories_section(layout);
     build_categories_section(layout);
     build_monitors_section(layout);
     build_deviations_section(layout);
 
-    // ── New sections for 20-feature integration ──
-    auto build_hidden_section = [&](const QString& title, QVBoxLayout*& out_layout) -> QWidget* {
+    // Hidden intelligence sections
+    auto build_hidden_section = [&](const QString& section_title, QVBoxLayout*& out_layout) -> QWidget* {
         auto* section = new QWidget(this);
         section->hide();
         auto* inner = new QVBoxLayout(section);
         inner->setContentsMargins(0, 0, 0, 0);
         inner->setSpacing(2);
-        auto* lbl = new QLabel(title, section);
-        lbl->setObjectName("newsSidePanelTitle");
+        auto* lbl = new QLabel(section_title, section);
+        lbl->setObjectName("newsDrawerSectionTitle");
         inner->addWidget(lbl);
         auto* container = new QWidget(section);
         out_layout = new QVBoxLayout(container);
@@ -71,75 +90,14 @@ NewsSidePanel::NewsSidePanel(QWidget* parent) : QWidget(parent) {
     outer->addWidget(scroll);
 }
 
-void NewsSidePanel::build_stats_section(QVBoxLayout* parent) {
-    auto* title = new QLabel("FEED STATUS", this);
-    title->setObjectName("newsSidePanelTitle");
-    parent->addWidget(title);
-
-    auto* grid = new QWidget(this);
-    auto* gl = new QHBoxLayout(grid);
-    gl->setContentsMargins(0, 0, 0, 0);
-    gl->setSpacing(4);
-
-    auto make_stat = [&](const QString& label_text) -> QLabel* {
-        auto* box = new QWidget(grid);
-        box->setObjectName("newsSidePanelStatBox");
-        auto* vl = new QVBoxLayout(box);
-        vl->setContentsMargins(4, 4, 4, 4);
-        vl->setSpacing(1);
-        auto* val = new QLabel("0", box);
-        val->setObjectName("newsSidePanelStatValue");
-        val->setAlignment(Qt::AlignCenter);
-        auto* lbl = new QLabel(label_text, box);
-        lbl->setObjectName("newsSidePanelStatLabel");
-        lbl->setAlignment(Qt::AlignCenter);
-        vl->addWidget(val);
-        vl->addWidget(lbl);
-        gl->addWidget(box);
-        return val;
-    };
-
-    feeds_value_ = make_stat("FEEDS");
-    articles_value_ = make_stat("ARTS");
-    clusters_value_ = make_stat("CLUST");
-    sources_value_ = make_stat("SRCS");
-
-    parent->addWidget(grid);
-}
-
-void NewsSidePanel::build_sentiment_section(QVBoxLayout* parent) {
-    auto* title = new QLabel("SENTIMENT", this);
-    title->setObjectName("newsSidePanelTitle");
-    parent->addWidget(title);
-
-    // Horizontal bar
-    auto* bar_container = new QWidget(this);
-    bar_container->setFixedHeight(8);
-    auto* bar_layout = new QHBoxLayout(bar_container);
-    bar_layout->setContentsMargins(0, 0, 0, 0);
-    bar_layout->setSpacing(1);
-
-    bull_bar_ = new QWidget(bar_container);
-    bull_bar_->setObjectName("newsSentimentBull");
-    neut_bar_ = new QWidget(bar_container);
-    neut_bar_->setObjectName("newsSentimentNeut");
-    bear_bar_ = new QWidget(bar_container);
-    bear_bar_->setObjectName("newsSentimentBear");
-
-    bar_layout->addWidget(bull_bar_, 1);
-    bar_layout->addWidget(neut_bar_, 1);
-    bar_layout->addWidget(bear_bar_, 1);
-
-    parent->addWidget(bar_container);
-
-    sentiment_score_ = new QLabel("0.00", this);
-    sentiment_score_->setObjectName("newsSentimentScore");
-    parent->addWidget(sentiment_score_);
+void NewsSidePanel::toggle_drawer() {
+    drawer_open_ = !drawer_open_;
+    setVisible(drawer_open_);
 }
 
 void NewsSidePanel::build_top_stories_section(QVBoxLayout* parent) {
     auto* title = new QLabel("TOP STORIES", this);
-    title->setObjectName("newsSidePanelTitle");
+    title->setObjectName("newsDrawerSectionTitle");
     parent->addWidget(title);
 
     auto* container = new QWidget(this);
@@ -151,7 +109,7 @@ void NewsSidePanel::build_top_stories_section(QVBoxLayout* parent) {
 
 void NewsSidePanel::build_categories_section(QVBoxLayout* parent) {
     auto* title = new QLabel("CATEGORIES", this);
-    title->setObjectName("newsSidePanelTitle");
+    title->setObjectName("newsDrawerSectionTitle");
     parent->addWidget(title);
 
     auto* container = new QWidget(this);
@@ -162,8 +120,8 @@ void NewsSidePanel::build_categories_section(QVBoxLayout* parent) {
 }
 
 void NewsSidePanel::build_monitors_section(QVBoxLayout* parent) {
-    auto* title = new QLabel("MONITORS", this);
-    title->setObjectName("newsSidePanelTitle");
+    auto* title = new QLabel("KEYWORD MONITORS", this);
+    title->setObjectName("newsDrawerSectionTitle");
     parent->addWidget(title);
 
     auto* container = new QWidget(this);
@@ -223,7 +181,7 @@ void NewsSidePanel::build_deviations_section(QVBoxLayout* parent) {
     inner->setSpacing(2);
 
     auto* title = new QLabel("DEVIATIONS", deviations_section_);
-    title->setObjectName("newsSidePanelTitle");
+    title->setObjectName("newsDrawerSectionTitle");
     inner->addWidget(title);
 
     auto* container = new QWidget(deviations_section_);
@@ -237,31 +195,13 @@ void NewsSidePanel::build_deviations_section(QVBoxLayout* parent) {
 
 // ── Update methods ──────────────────────────────────────────────────────────
 
-void NewsSidePanel::update_stats(int feed_count, int article_count, int cluster_count, int source_count) {
-    feeds_value_->setText(QString::number(feed_count));
-    articles_value_->setText(QString::number(article_count));
-    clusters_value_->setText(QString::number(cluster_count));
-    sources_value_->setText(QString::number(source_count));
+void NewsSidePanel::update_stats(int /*feed_count*/, int /*article_count*/, int /*cluster_count*/,
+                                 int /*source_count*/) {
+    // Stats now shown in intel strip — no-op here for backward compat
 }
 
-void NewsSidePanel::update_sentiment(int bullish, int bearish, int neutral) {
-    int total = bullish + bearish + neutral;
-    if (total == 0)
-        total = 1;
-
-    int bull_w = std::max(1, bullish * 100 / total);
-    int bear_w = std::max(1, bearish * 100 / total);
-    int neut_w = 100 - bull_w - bear_w;
-
-    auto* bar_layout = bull_bar_->parentWidget()->layout();
-    if (auto* hl = qobject_cast<QHBoxLayout*>(bar_layout)) {
-        hl->setStretch(0, bull_w);
-        hl->setStretch(1, neut_w);
-        hl->setStretch(2, bear_w);
-    }
-
-    double score = total > 0 ? static_cast<double>(bullish - bearish) / total : 0.0;
-    sentiment_score_->setText(QString("%1%2").arg(score >= 0 ? "+" : "").arg(score, 0, 'f', 2));
+void NewsSidePanel::update_sentiment(int /*bullish*/, int /*bearish*/, int /*neutral*/) {
+    // Sentiment now shown in intel strip — no-op here for backward compat
 }
 
 void NewsSidePanel::update_top_stories(const QVector<services::NewsArticle>& top) {
@@ -280,7 +220,7 @@ void NewsSidePanel::update_top_stories(const QVector<services::NewsArticle>& top
         btn->setCursor(Qt::PointingHandCursor);
 
         QString pcolor = services::priority_color(article.priority);
-        QString label = QString("%1. %2").arg(i + 1).arg(article.headline.left(45));
+        QString label = QString("%1. %2").arg(i + 1).arg(article.headline.left(50));
         btn->setText(label);
         btn->setToolTip(article.headline);
 
@@ -398,7 +338,7 @@ void NewsSidePanel::update_deviations(const QVector<QPair<QString, double>>& dev
     }
 }
 
-// ── New feature update methods ──────────────────────────────────────────────
+// ── Intelligence section update methods ────────────────────────────────────
 
 void NewsSidePanel::update_entities(const services::NerResult& ner) {
     while (entities_layout_->count() > 0) {
@@ -409,21 +349,18 @@ void NewsSidePanel::update_entities(const services::NerResult& ner) {
     }
     bool has_data = false;
 
-    // Top countries
     for (const auto& c : ner.top_countries) {
         auto* lbl = new QLabel(QString("%1  %2").arg(c.name, -6).arg(c.count), this);
         lbl->setObjectName("newsCategoryBtn");
         entities_layout_->addWidget(lbl);
         has_data = true;
     }
-    // Top organizations
     for (const auto& o : ner.top_organizations) {
         auto* lbl = new QLabel(QString("%1  %2").arg(o.name.left(16), -16).arg(o.count), this);
         lbl->setObjectName("newsMonitorLabel");
         entities_layout_->addWidget(lbl);
         has_data = true;
     }
-    // Top people
     for (const auto& p : ner.top_people) {
         auto* lbl = new QLabel(QString("%1  %2").arg(p.name.left(16), -16).arg(p.count), this);
         lbl->setObjectName("newsMonitorLabel");
@@ -448,7 +385,6 @@ void NewsSidePanel::update_locations(const QVector<services::ArticleGeo>& geo) {
     }
     locations_section_->show();
 
-    // Show unique locations
     QMap<QString, int> loc_counts;
     for (const auto& g : geo) {
         for (const auto& l : g.locations)
@@ -482,8 +418,11 @@ void NewsSidePanel::update_signals(const QVector<services::CorrelationSignal>& s
 
     for (int i = 0; i < std::min(8, static_cast<int>(sigs.size())); ++i) {
         const auto& sig = sigs[i];
-        QString color = sig.severity == "critical" ? "" + QString(ui::colors::NEGATIVE()) + "" : (sig.severity == "high" ? "" + QString(ui::colors::WARNING()) + "" : "" + QString(ui::colors::WARNING()) + "");
-        auto* lbl = new QLabel(sig.detail.left(35), this);
+        QString color = sig.severity == "critical"
+                            ? "" + QString(ui::colors::NEGATIVE()) + ""
+                            : (sig.severity == "high" ? "" + QString(ui::colors::WARNING()) + ""
+                                                      : "" + QString(ui::colors::WARNING()) + "");
+        auto* lbl = new QLabel(sig.detail.left(40), this);
         lbl->setObjectName("newsDeviationCategory");
         lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(color));
         lbl->setToolTip(sig.detail);
@@ -492,7 +431,6 @@ void NewsSidePanel::update_signals(const QVector<services::CorrelationSignal>& s
 }
 
 void NewsSidePanel::update_instability(const QString& country, const services::InstabilityScore& score) {
-    // Add or update CII entry
     cii_section_->show();
 
     // Check if already exists
@@ -501,22 +439,26 @@ void NewsSidePanel::update_instability(const QString& country, const services::I
         if (w && w->property("country").toString() == country) {
             auto* lbl = qobject_cast<QLabel*>(w);
             if (lbl) {
-                QString color =
-                    score.level == "CRITICAL"
-                        ? "" + QString(ui::colors::NEGATIVE()) + ""
-                        : (score.level == "HIGH" ? "" + QString(ui::colors::WARNING()) + "" : (score.level == "ELEVATED" ? "" + QString(ui::colors::WARNING()) + "" : "" + QString(ui::colors::POSITIVE()) + ""));
+                QString color = score.level == "CRITICAL"
+                                    ? "" + QString(ui::colors::NEGATIVE()) + ""
+                                    : (score.level == "HIGH"
+                                           ? "" + QString(ui::colors::WARNING()) + ""
+                                           : (score.level == "ELEVATED" ? "" + QString(ui::colors::WARNING()) + ""
+                                                                        : "" + QString(ui::colors::POSITIVE()) + ""));
                 lbl->setText(QString("%1  %2  %3").arg(country, -4).arg(score.cii_score, 3).arg(score.level));
-                lbl->setStyleSheet(
-                    QString("color: %1; font-weight: 700; background: transparent;").arg(color));
+                lbl->setStyleSheet(QString("color: %1; font-weight: 700; background: transparent;").arg(color));
             }
             return;
         }
     }
 
     // New entry
-    QString color = score.level == "CRITICAL"
-                        ? "" + QString(ui::colors::NEGATIVE()) + ""
-                        : (score.level == "HIGH" ? "" + QString(ui::colors::WARNING()) + "" : (score.level == "ELEVATED" ? "" + QString(ui::colors::WARNING()) + "" : "" + QString(ui::colors::POSITIVE()) + ""));
+    QString color =
+        score.level == "CRITICAL"
+            ? "" + QString(ui::colors::NEGATIVE()) + ""
+            : (score.level == "HIGH" ? "" + QString(ui::colors::WARNING()) + ""
+                                     : (score.level == "ELEVATED" ? "" + QString(ui::colors::WARNING()) + ""
+                                                                  : "" + QString(ui::colors::POSITIVE()) + ""));
     auto* lbl = new QLabel(QString("%1  %2  %3").arg(country, -4).arg(score.cii_score, 3).arg(score.level), this);
     lbl->setObjectName("newsDeviationScore");
     lbl->setProperty("country", country);
@@ -541,17 +483,15 @@ void NewsSidePanel::update_predictions(const QVector<services::PredictionMarket>
     for (int i = 0; i < std::min(6, static_cast<int>(predictions.size())); ++i) {
         const auto& pm = predictions[i];
         int pct = static_cast<int>(pm.yes_price * 100);
-        QString color = pct >= 70 ? "" + QString(ui::colors::POSITIVE()) + "" : (pct <= 30 ? "" + QString(ui::colors::NEGATIVE()) + "" : "" + QString(ui::colors::WARNING()) + "");
-        auto* lbl = new QLabel(QString("%1%  %2").arg(pct).arg(pm.question.left(28)), this);
+        QString color = pct >= 70 ? "" + QString(ui::colors::POSITIVE()) + ""
+                                  : (pct <= 30 ? "" + QString(ui::colors::NEGATIVE()) + ""
+                                               : "" + QString(ui::colors::WARNING()) + "");
+        auto* lbl = new QLabel(QString("%1%  %2").arg(pct).arg(pm.question.left(32)), this);
         lbl->setObjectName("newsMonitorLabel");
         lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(color));
         lbl->setToolTip(pm.question);
         predictions_layout_->addWidget(lbl);
     }
-}
-
-void NewsSidePanel::build_saved_section(QVBoxLayout* /*parent*/) {
-    // Section is built via build_hidden_section in constructor — nothing extra needed.
 }
 
 void NewsSidePanel::update_saved(const QVector<services::NewsArticle>& saved) {
@@ -570,16 +510,13 @@ void NewsSidePanel::update_saved(const QVector<services::NewsArticle>& saved) {
 
     for (int i = 0; i < std::min(10, static_cast<int>(saved.size())); ++i) {
         const auto& a = saved[i];
-        QString title = a.headline.left(36) + (a.headline.size() > 36 ? "…" : "");
+        QString title = a.headline.left(40) + (a.headline.size() > 40 ? "..." : "");
         auto* btn = new QPushButton(title, this);
-        btn->setObjectName("newsTopStoryLabel");
+        btn->setObjectName("newsTopStoryBtn");
         btn->setToolTip(a.headline + "\n" + a.source);
         btn->setFlat(true);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet("text-align:left;");
-        connect(btn, &QPushButton::clicked, this, [this, a]() {
-            emit article_clicked(a);
-        });
+        connect(btn, &QPushButton::clicked, this, [this, a]() { emit article_clicked(a); });
         saved_layout_->addWidget(btn);
     }
 }

@@ -562,8 +562,7 @@ void ExchangeService::start_ws_stream(const QString& primary_symbol, const QStri
             return;
         }
 
-        args << "-u" << "-B" << script_path
-             << exchange_id_ << creds.api_key << creds.access_token << user_id;
+        args << "-u" << "-B" << script_path << exchange_id_ << creds.api_key << creds.access_token << user_id;
         if (!feed_token.isEmpty())
             args << "--feed-token" << feed_token;
         args << "--symbols";
@@ -765,13 +764,13 @@ void ExchangeService::handle_ws_line(const QString& line) {
 
     if (type == "trade") {
         TradeData td;
-        td.symbol    = msg.value("symbol").toString();
-        td.side      = msg.value("side").toString();
-        td.price     = msg.value("price").toDouble();
-        td.amount    = msg.value("amount").toDouble();
+        td.symbol = msg.value("symbol").toString();
+        td.side = msg.value("side").toString();
+        td.price = msg.value("price").toDouble();
+        td.amount = msg.value("amount").toDouble();
         td.timestamp = msg.value("timestamp").toVariant().toLongLong();
 
-        QVector<TradeCallback>  trade_cbs;
+        QVector<TradeCallback> trade_cbs;
         QVector<PriceUpdateCallback> price_cbs;
         TickerData fast_ticker;
         bool emit_price = false;
@@ -783,11 +782,13 @@ void ExchangeService::handle_ws_line(const QString& line) {
             if (!td.symbol.isEmpty() && td.price > 0.0) {
                 auto& cached = price_cache_[td.symbol];
                 cached.symbol = td.symbol;
-                cached.last   = td.price;
-                if (cached.bid <= 0.0) cached.bid = td.price;
-                if (cached.ask <= 0.0) cached.ask = td.price;
+                cached.last = td.price;
+                if (cached.bid <= 0.0)
+                    cached.bid = td.price;
+                if (cached.ask <= 0.0)
+                    cached.ask = td.price;
                 fast_ticker = cached;
-                emit_price  = true;
+                emit_price = true;
             }
             trade_cbs.reserve(trade_callbacks_.size());
             for (auto it = trade_callbacks_.constBegin(); it != trade_callbacks_.constEnd(); ++it)
@@ -800,15 +801,20 @@ void ExchangeService::handle_ws_line(const QString& line) {
         }
 
         for (const auto& cb : trade_cbs) {
-            try { cb(td.symbol, td); } catch (...) {
+            try {
+                cb(td.symbol, td);
+            } catch (...) {
                 LOG_WARN("ExchangeService", "Trade callback threw an exception for " + td.symbol);
             }
         }
         // Fire price callbacks so the ticker bar and order entry update on every trade
         if (emit_price) {
             for (const auto& cb : price_cbs) {
-                try { cb(fast_ticker.symbol, fast_ticker); } catch (...) {
-                    LOG_WARN("ExchangeService", "Price callback (from trade) threw an exception for " + fast_ticker.symbol);
+                try {
+                    cb(fast_ticker.symbol, fast_ticker);
+                } catch (...) {
+                    LOG_WARN("ExchangeService",
+                             "Price callback (from trade) threw an exception for " + fast_ticker.symbol);
                 }
             }
         }
@@ -1331,9 +1337,9 @@ MarkPriceData ExchangeService::fetch_mark_price(const QString& symbol) {
     if (j.isEmpty())
         j = call_script("exchange/fetch_mark_price.py", {symbol});
     if (!j.isEmpty()) {
-        mp.mark_price  = j.value("mark_price").toDouble();
+        mp.mark_price = j.value("mark_price").toDouble();
         mp.index_price = j.value("index_price").toDouble();
-        mp.timestamp   = j.value("timestamp").toVariant().toLongLong();
+        mp.timestamp = j.value("timestamp").toVariant().toLongLong();
     }
     return mp;
 }
@@ -1345,8 +1351,7 @@ QJsonObject ExchangeService::fetch_my_trades(const QString& symbol, int limit) {
             return j;
         LOG_WARN(TAG, "Daemon fetch_my_trades failed, falling back to script");
     }
-    return call_script_with_credentials("exchange/fetch_my_trades.py",
-                                        {symbol, QString::number(limit)});
+    return call_script_with_credentials("exchange/fetch_my_trades.py", {symbol, QString::number(limit)});
 }
 
 QJsonObject ExchangeService::fetch_trading_fees(const QString& symbol) {
@@ -1372,8 +1377,7 @@ QJsonObject ExchangeService::set_leverage(const QString& symbol, int leverage) {
             return j;
         LOG_WARN(TAG, "Daemon set_leverage failed, falling back to script");
     }
-    return call_script_with_credentials("exchange/set_leverage.py",
-                                        {symbol, QString::number(leverage)});
+    return call_script_with_credentials("exchange/set_leverage.py", {symbol, QString::number(leverage)});
 }
 
 QJsonObject ExchangeService::set_margin_mode(const QString& symbol, const QString& mode) {

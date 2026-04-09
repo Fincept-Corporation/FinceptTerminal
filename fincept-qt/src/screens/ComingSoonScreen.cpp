@@ -1,4 +1,5 @@
 #include "screens/ComingSoonScreen.h"
+
 #include "ui/theme/Theme.h"
 
 #include <QVBoxLayout>
@@ -19,13 +20,15 @@ ComingSoonScreen::ComingSoonScreen(const QString& tab_name, QWidget* parent) : Q
     auto* title = new QLabel(tab_name.toUpper());
     title->setAlignment(Qt::AlignCenter);
     title->setStyleSheet(QString("color:%1;font-size:20px;font-weight:700;background:transparent;"
-                         "letter-spacing:2px;").arg(ui::colors::AMBER));
+                                 "letter-spacing:2px;")
+                             .arg(ui::colors::AMBER));
     vl->addWidget(title);
 
     auto* sub = new QLabel("COMING SOON");
     sub->setAlignment(Qt::AlignCenter);
     sub->setStyleSheet(QString("color:%1;font-size:14px;font-weight:700;background:transparent;"
-                       "letter-spacing:3px;").arg(ui::colors::TEXT_TERTIARY));
+                               "letter-spacing:3px;")
+                           .arg(ui::colors::TEXT_TERTIARY));
     vl->addWidget(sub);
 
     auto* desc = new QLabel("This module is under active development.\nIt will be available in a future update.");

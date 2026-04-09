@@ -43,24 +43,22 @@ void RelationshipMapService::fetch(const QString& ticker) {
 
     emit progress_changed(5, "Starting data fetch for " + current_ticker_ + "...");
 
-    python::PythonRunner::instance().run("relationship_map.py", {current_ticker_}, [this, cache_key](python::PythonResult result) {
-        loading_ = false;
+    python::PythonRunner::instance().run(
+        "relationship_map.py", {current_ticker_}, [this, cache_key](python::PythonResult result) {
+            loading_ = false;
 
-        if (!result.success || result.output.trimmed().isEmpty()) {
-            LOG_ERROR("RelMapService", "Python script failed: exit=" + QString::number(result.exit_code));
-            emit fetch_failed("Failed to fetch data for " + current_ticker_);
-            return;
-        }
+            if (!result.success || result.output.trimmed().isEmpty()) {
+                LOG_ERROR("RelMapService", "Python script failed: exit=" + QString::number(result.exit_code));
+                emit fetch_failed("Failed to fetch data for " + current_ticker_);
+                return;
+            }
 
-        // Cache raw JSON output
-        fincept::CacheManager::instance().put(
-            cache_key,
-            QVariant(result.output),
-            kRelMapTtlSec, "relmap");
+            // Cache raw JSON output
+            fincept::CacheManager::instance().put(cache_key, QVariant(result.output), kRelMapTtlSec, "relmap");
 
-        emit progress_changed(70, "Parsing results...");
-        parse_result(result.output);
-    });
+            emit progress_changed(70, "Parsing results...");
+            parse_result(result.output);
+        });
 }
 
 void RelationshipMapService::clear() {

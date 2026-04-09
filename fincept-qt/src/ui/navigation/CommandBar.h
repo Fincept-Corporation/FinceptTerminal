@@ -40,9 +40,7 @@ class CommandBar : public QWidget {
     //   "markets add settings"   → action="add",     primary="markets", secondary="settings"
     //   "markets replace news"   → action="replace",  primary="markets", secondary="news"
     //   "markets remove"         → action="remove",   primary="markets", secondary=""
-    void dock_command(const QString& action,
-                      const QString& primary,
-                      const QString& secondary);
+    void dock_command(const QString& action, const QString& primary, const QString& secondary);
 
   protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
@@ -74,7 +72,7 @@ class CommandBar : public QWidget {
     Mode mode_ = Mode::Screen;
 
     QVector<AssetType> asset_types_;
-    QString active_asset_type_;   // e.g. "stock" — set after user picks /stock
+    QString active_asset_type_; // e.g. "stock" — set after user picks /stock
     QTimer* search_debounce_ = nullptr;
     QString pending_query_;
 
@@ -92,8 +90,8 @@ class CommandBar : public QWidget {
     void show_dock_verb_suggestions(const QString& primary_id);
     void show_dock_secondary_suggestions(const QString& verb, const QString& partial);
 
-    QString dock_primary_id_;  // screen id locked in after user types "<screen> "
-    QString dock_verb_;        // "add" or "replace" — locked in after user picks verb
+    QString dock_primary_id_; // screen id locked in after user types "<screen> "
+    QString dock_verb_;       // "add" or "replace" — locked in after user picks verb
 
     // ── Theme ─────────────────────────────────────────────────────────────────
     void refresh_theme();

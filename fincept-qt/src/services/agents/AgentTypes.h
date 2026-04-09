@@ -36,7 +36,7 @@ struct AgentExecutionResult {
     QString response;
     QString error;
     int execution_time_ms = 0;
-    QString request_id;   // set by AgentService; panels guard on this to avoid cross-contamination
+    QString request_id; // set by AgentService; panels guard on this to avoid cross-contamination
 };
 
 // ── Routing ─────────────────────────────────────────────────────────────────
@@ -48,7 +48,7 @@ struct RoutingResult {
     double confidence = 0.0;
     QStringList matched_keywords;
     QJsonObject config;
-    QString request_id;   // matches the run_agent call that triggered this routing
+    QString request_id; // matches the run_agent call that triggered this routing
 };
 
 // ── System info ─────────────────────────────────────────────────────────────
@@ -114,8 +114,8 @@ struct ExecutionPlan {
     QString description;
     QVector<PlanStep> steps;
     QString status;
-    bool    is_complete = false;
-    bool    has_failed  = false;
+    bool is_complete = false;
+    bool has_failed = false;
     QString request_id;
 };
 

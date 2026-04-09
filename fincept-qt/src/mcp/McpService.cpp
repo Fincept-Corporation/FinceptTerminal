@@ -251,9 +251,9 @@ void McpService::refresh_cache() {
     cached_generation_ = McpProvider::instance().generation();
 
     LOG_INFO(TAG, QString("Refreshed tool cache: %1 total (%2 internal, %3 external)")
-                       .arg(cached_tools_.size())
-                       .arg(internal.size())
-                       .arg(external.size()));
+                      .arg(cached_tools_.size())
+                      .arg(internal.size())
+                      .arg(external.size()));
 }
 
 } // namespace fincept::mcp

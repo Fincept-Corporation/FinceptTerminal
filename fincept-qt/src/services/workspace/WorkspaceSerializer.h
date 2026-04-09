@@ -1,6 +1,6 @@
 #pragma once
-#include "services/workspace/WorkspaceTypes.h"
 #include "core/result/Result.h"
+#include "services/workspace/WorkspaceTypes.h"
 
 #include <QJsonDocument>
 #include <QString>
@@ -25,7 +25,7 @@ class WorkspaceSerializer {
   private:
     WorkspaceSerializer() = delete;
 
-    static QJsonObject  serialize_layout(const screens::GridLayout& layout);
+    static QJsonObject serialize_layout(const screens::GridLayout& layout);
     static screens::GridLayout deserialize_layout(const QJsonObject& obj);
 };
 

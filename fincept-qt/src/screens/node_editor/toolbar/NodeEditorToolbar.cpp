@@ -5,6 +5,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPalette>
 
 namespace fincept::workflow {
 
@@ -16,8 +17,7 @@ static QString btn_style() {
                    "}"
                    "QPushButton:hover { color: %4; background: %5; }"
                    "QPushButton:disabled { color: %6; }")
-        .arg(ui::colors::BG_HOVER, ui::colors::TEXT_SECONDARY,
-             ui::colors::BORDER_MED, ui::colors::TEXT_PRIMARY,
+        .arg(ui::colors::BG_HOVER, ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::TEXT_PRIMARY,
              ui::colors::BG_HOVER, ui::colors::TEXT_DIM);
 }
 
@@ -28,14 +28,28 @@ static QString accent_btn_style() {
                    "  font-size: 11px; font-weight: bold; padding: 0 12px; min-height: 22px;"
                    "}"
                    "QPushButton:hover { background: %2; color: %4; }")
-        .arg(ui::colors::ACCENT_BG, ui::colors::AMBER,
-             ui::colors::AMBER_DIM, ui::colors::BG_BASE);
+        .arg(ui::colors::ACCENT_BG, ui::colors::AMBER, ui::colors::AMBER_DIM, ui::colors::BG_BASE);
 }
 
 NodeEditorToolbar::NodeEditorToolbar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(34);
     setObjectName("nodeEditorToolbar");
+    setAutoFillBackground(true);
+    QPalette pal = palette();
+    pal.setColor(QPalette::Window, QColor(ui::colors::BG_HOVER()));
+    setPalette(pal);
     build_ui();
+}
+
+void NodeEditorToolbar::apply_background() {
+    QPalette pal = palette();
+    pal.setColor(QPalette::Window, QColor(ui::colors::BG_HOVER()));
+    setPalette(pal);
+}
+
+void NodeEditorToolbar::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    apply_background();
 }
 
 void NodeEditorToolbar::set_workflow_name(const QString& name) {
@@ -55,19 +69,19 @@ void NodeEditorToolbar::set_can_redo(bool can) {
 
 void NodeEditorToolbar::set_executing(bool running) {
     QString stop_style = QString("QPushButton {"
-                                   "  background: %1; color: %2;"
-                                   "  border: 1px solid rgba(220,38,38,0.4); font-family: Consolas;"
-                                   "  font-size: 11px; font-weight: bold; padding: 0 12px; min-height: 22px;"
-                                   "}"
-                                   "QPushButton:hover { background: %2; color: %3; }")
-                              .arg(ui::colors::NEGATIVE_BG, ui::colors::NEGATIVE, ui::colors::TEXT_PRIMARY);
+                                 "  background: %1; color: %2;"
+                                 "  border: 1px solid rgba(220,38,38,0.4); font-family: Consolas;"
+                                 "  font-size: 11px; font-weight: bold; padding: 0 12px; min-height: 22px;"
+                                 "}"
+                                 "QPushButton:hover { background: %2; color: %3; }")
+                             .arg(ui::colors::NEGATIVE_BG, ui::colors::NEGATIVE, ui::colors::TEXT_PRIMARY);
 
     execute_btn_->setText(running ? "STOP" : "EXECUTE");
     execute_btn_->setStyleSheet(running ? stop_style : accent_btn_style());
 }
 
 void NodeEditorToolbar::build_ui() {
-    setStyleSheet(QString("background: %1;").arg(ui::colors::BG_HOVER));
+    setStyleSheet(QString("QWidget#nodeEditorToolbar { background: %1; }").arg(ui::colors::BG_HOVER));
 
     auto* layout = new QHBoxLayout(this);
     layout->setContentsMargins(10, 0, 10, 0);
@@ -76,14 +90,13 @@ void NodeEditorToolbar::build_ui() {
     // ── Workflow name ──────────────────────────────────────────────
     name_edit_ = new QLineEdit("Untitled Workflow");
     name_edit_->setFixedWidth(200);
-    name_edit_->setStyleSheet(
-        QString("QLineEdit {"
-                "  background: transparent; color: %1; border: none;"
-                "  border-bottom: 1px solid %2; font-family: Consolas;"
-                "  font-size: 13px; font-weight: bold; padding: 2px 4px;"
-                "}"
-                "QLineEdit:focus { border-bottom: 1px solid %3; }")
-            .arg(ui::colors::TEXT_PRIMARY, ui::colors::TEXT_DIM, ui::colors::AMBER));
+    name_edit_->setStyleSheet(QString("QLineEdit {"
+                                      "  background: transparent; color: %1; border: none;"
+                                      "  border-bottom: 1px solid %2; font-family: Consolas;"
+                                      "  font-size: 13px; font-weight: bold; padding: 2px 4px;"
+                                      "}"
+                                      "QLineEdit:focus { border-bottom: 1px solid %3; }")
+                                  .arg(ui::colors::TEXT_PRIMARY, ui::colors::TEXT_DIM, ui::colors::AMBER));
     layout->addWidget(name_edit_);
 
     connect(name_edit_, &QLineEdit::textChanged, this, &NodeEditorToolbar::name_changed);
@@ -91,7 +104,7 @@ void NodeEditorToolbar::build_ui() {
     // ── Status badge ───────────────────────────────────────────────
     auto* status = new QLabel("DRAFT");
     status->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;"
-                                 "font-weight: bold; letter-spacing: 0.5px; padding: 0 6px;")
+                                  "font-weight: bold; letter-spacing: 0.5px; padding: 0 6px;")
                               .arg(ui::colors::TEXT_TERTIARY));
     layout->addWidget(status);
 

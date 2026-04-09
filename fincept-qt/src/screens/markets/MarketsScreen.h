@@ -38,7 +38,7 @@ class MarketsScreen : public QWidget {
     void refresh_all();
     void refresh_theme();
 
-    QWidget* header_widget_   = nullptr;
+    QWidget* header_widget_ = nullptr;
     QWidget* controls_widget_ = nullptr;
 
     QLabel* last_update_label_ = nullptr;

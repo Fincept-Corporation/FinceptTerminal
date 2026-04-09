@@ -14,7 +14,9 @@
 #include "services/workflow/NodeRegistry.h"
 #include "services/workflow/WorkflowService.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
+#include <QApplication>
 #include <QFileDialog>
 #include <QFrame>
 #include <QInputDialog>
@@ -44,6 +46,12 @@ NodeEditorScreen::NodeEditorScreen(QWidget* parent)
 
 void NodeEditorScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
+
+    // Force the global stylesheet to re-polish this widget tree.
+    // Without this, ADS internal container widgets created after qApp->setStyleSheet()
+    // don't get the theme applied and fall back to Windows system grey.
+    QApplication::style()->polish(this);
+
     auto_save_timer_->start();
     if (minimap_)
         minimap_->start_tracking();
@@ -180,11 +188,11 @@ void NodeEditorScreen::build_ui() {
     root->setSpacing(0);
 
     // ── Toolbar ────────────────────────────────────────────────────
-    toolbar_ = new NodeEditorToolbar;
+    toolbar_ = new NodeEditorToolbar(this);
     root->addWidget(toolbar_);
 
     // ── Separator ──────────────────────────────────────────────────
-    auto* sep = new QFrame;
+    auto* sep = new QFrame(this);
     sep->setFixedHeight(1);
     sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED));
     root->addWidget(sep);
@@ -197,7 +205,7 @@ void NodeEditorScreen::build_ui() {
                                 .arg(ui::colors::BORDER_MED, ui::colors::TEXT_DIM));
 
     // Left: Node palette
-    palette_ = new NodePalette;
+    palette_ = new NodePalette(this);
     splitter->addWidget(palette_);
 
     // Center: Canvas
@@ -206,7 +214,7 @@ void NodeEditorScreen::build_ui() {
     splitter->addWidget(canvas_);
 
     // Right: Properties panel
-    properties_ = new NodePropertiesPanel;
+    properties_ = new NodePropertiesPanel(this);
     splitter->addWidget(properties_);
 
     splitter->setSizes({240, 700, 280});
@@ -217,7 +225,7 @@ void NodeEditorScreen::build_ui() {
     root->addWidget(splitter, 1);
 
     // ── Execution results panel (bottom drawer) ────────────────────
-    results_panel_ = new ExecutionResultsPanel;
+    results_panel_ = new ExecutionResultsPanel(this);
     root->addWidget(results_panel_);
 
     // ── MiniMap (bottom-right corner of canvas) ────────────────────
@@ -1053,7 +1061,8 @@ QVariantMap NodeEditorScreen::save_state() const {
 
 void NodeEditorScreen::restore_state(const QVariantMap& state) {
     const QString wf_id = state.value("workflow_id").toString();
-    if (wf_id.isEmpty()) return;
+    if (wf_id.isEmpty())
+        return;
 
     // wire_signals() already connected workflow_loaded → scene_->deserialize().
     // Just trigger the load — the existing handler in wire_signals() does the rest.

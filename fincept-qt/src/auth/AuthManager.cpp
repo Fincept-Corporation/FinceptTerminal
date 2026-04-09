@@ -439,7 +439,8 @@ void AuthManager::logout() {
 
 void AuthManager::attempt_session_recovery(std::function<void(bool)> cb) {
     if (session_.api_key.isEmpty()) {
-        if (cb) cb(false);
+        if (cb)
+            cb(false);
         return;
     }
 
@@ -462,17 +463,20 @@ void AuthManager::attempt_session_recovery(std::function<void(bool)> cb) {
             save_session();
 
             // Don't restore session_token — operate with api_key only
-            if (cb) cb(true);
+            if (cb)
+                cb(true);
         } else if (r.status_code == 401 || r.status_code == 403) {
             LOG_WARN("Auth", "Session recovery failed — api_key is invalid");
-            if (cb) cb(false);
+            if (cb)
+                cb(false);
         } else {
             // Network error — don't force logout, assume transient
             LOG_WARN("Auth", "Session recovery: network error — keeping session alive");
             // Restore session_token since we can't determine if it's stale
             if (!session_.session_token.isEmpty())
                 fincept::HttpClient::instance().set_session_token(session_.session_token);
-            if (cb) cb(true);
+            if (cb)
+                cb(true);
         }
     });
 }

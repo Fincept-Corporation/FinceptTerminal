@@ -16,9 +16,9 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kIlostatScript   = "ilostat_data.py";
+static constexpr const char* kIlostatScript = "ilostat_data.py";
 static constexpr const char* kIlostatSourceId = "ilostat";
-static constexpr const char* kIlostatColor    = "#3B82F6";  // ILO blue
+static constexpr const char* kIlostatColor = "#3B82F6"; // ILO blue
 } // namespace
 
 struct IloSeries {
@@ -28,17 +28,15 @@ struct IloSeries {
 };
 
 static const QList<IloSeries> kIlostatSeries = {
-    { "Unemployment Rate",               "unemployment", "UNE_DEAP_SEX_AGE_RT — annual, total, 15+"  },
-    { "Labour Force Participation Rate", "lfpr",         "EAP_DWAP_SEX_AGE_RT — annual, total, 15+" },
-    { "Employment-to-Population Ratio",  "emp_to_pop",   "EMP_DWAP_SEX_AGE_RT — annual, total, 15+" },
+    {"Unemployment Rate", "unemployment", "UNE_DEAP_SEX_AGE_RT — annual, total, 15+"},
+    {"Labour Force Participation Rate", "lfpr", "EAP_DWAP_SEX_AGE_RT — annual, total, 15+"},
+    {"Employment-to-Population Ratio", "emp_to_pop", "EMP_DWAP_SEX_AGE_RT — annual, total, 15+"},
 };
 
-IlostatPanel::IlostatPanel(QWidget* parent)
-    : EconPanelBase(kIlostatSourceId, kIlostatColor, parent) {
+IlostatPanel::IlostatPanel(QWidget* parent) : EconPanelBase(kIlostatSourceId, kIlostatColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &IlostatPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &IlostatPanel::on_result);
 }
 
 void IlostatPanel::activate() {
@@ -68,8 +66,8 @@ void IlostatPanel::build_controls(QHBoxLayout* thl) {
     country_edit_->setFixedWidth(120);
     country_edit_->setPlaceholderText("ISO-2 code…");
     country_edit_->setToolTip("ISO-2 country code, e.g. USA, GBR, DEU\n"
-                               "Multiple: CAN+USA+GBR\n"
-                               "All countries: ALL");
+                              "Multiple: CAN+USA+GBR\n"
+                              "All countries: ALL");
 
     start_edit_ = new QLineEdit("2010");
     start_edit_->setFixedHeight(26);
@@ -92,31 +90,40 @@ void IlostatPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void IlostatPanel::on_fetch() {
-    const int   idx    = series_combo_->currentIndex();
+    const int idx = series_combo_->currentIndex();
     const auto& series = kIlostatSeries[idx];
 
     const QString country = country_edit_->text().trimmed().toUpper();
-    const QString start   = start_edit_->text().trimmed();
-    const QString end     = end_edit_->text().trimmed();
+    const QString start = start_edit_->text().trimmed();
+    const QString end = end_edit_->text().trimmed();
 
-    if (country.isEmpty()) { show_error("Please enter a country code (e.g. USA)"); return; }
+    if (country.isEmpty()) {
+        show_error("Please enter a country code (e.g. USA)");
+        return;
+    }
 
     show_loading("Fetching ILO: " + series.label + " — " + country + "…");
 
-    services::EconomicsService::instance().execute(
-        kIlostatSourceId, kIlostatScript, series.command,
-        { country, "A", "SEX_T", "AGE_YTHADULT_YGE15", start, end },
-        "ilostat_" + series.command);
+    services::EconomicsService::instance().execute(kIlostatSourceId, kIlostatScript, series.command,
+                                                   {country, "A", "SEX_T", "AGE_YTHADULT_YGE15", start, end},
+                                                   "ilostat_" + series.command);
 }
 
-void IlostatPanel::on_result(const QString& request_id,
-                              const services::EconomicsResult& result) {
-    if (result.source_id != kIlostatSourceId) return;
-    if (!request_id.startsWith("ilostat_")) return;
-    if (!result.success) { show_error(result.error); return; }
+void IlostatPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kIlostatSourceId)
+        return;
+    if (!request_id.startsWith("ilostat_"))
+        return;
+    if (!result.success) {
+        show_error(result.error);
+        return;
+    }
 
     const QString inline_err = result.data["error"].toString();
-    if (!inline_err.isEmpty()) { show_error(inline_err); return; }
+    if (!inline_err.isEmpty()) {
+        show_error(inline_err);
+        return;
+    }
 
     // Response: { success, indicator, dataflow, key, data:[{TIME_PERIOD, OBS_VALUE, REF_AREA, ...}] }
     QJsonArray rows = result.data["data"].toArray();
@@ -127,18 +134,19 @@ void IlostatPanel::on_result(const QString& request_id,
     }
 
     // Build title
-    const QString cmd = request_id.mid(8);  // strip "ilostat_"
+    const QString cmd = request_id.mid(8); // strip "ilostat_"
     QString label;
     for (const auto& s : kIlostatSeries) {
-        if (s.command == cmd) { label = s.label; break; }
+        if (s.command == cmd) {
+            label = s.label;
+            break;
+        }
     }
-    const QString country  = country_edit_->text().trimmed().toUpper();
-    const QString title    = "ILO: " + (label.isEmpty() ? cmd : label)
-                             + (country.isEmpty() ? "" : " — " + country);
+    const QString country = country_edit_->text().trimmed().toUpper();
+    const QString title = "ILO: " + (label.isEmpty() ? cmd : label) + (country.isEmpty() ? "" : " — " + country);
 
     display(rows, title);
-    LOG_INFO("IlostatPanel",
-             QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+    LOG_INFO("IlostatPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }
 
 } // namespace fincept::screens

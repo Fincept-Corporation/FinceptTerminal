@@ -19,9 +19,9 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kAdbScript   = "adb_data.py";
+static constexpr const char* kAdbScript = "adb_data.py";
 static constexpr const char* kAdbSourceId = "adb";
-static constexpr const char* kAdbColor    = "#0072BC";  // ADB blue
+static constexpr const char* kAdbColor = "#0072BC"; // ADB blue
 } // namespace
 
 struct AdbCategory {
@@ -29,54 +29,37 @@ struct AdbCategory {
     QString command;
     QString default_indicator;
     QString indicator_hint;
-    bool    uses_indicator;
+    bool uses_indicator;
 };
 
 static const QList<AdbCategory> kAdbCategories = {
-    {"GDP / National Accounts",   "get_gdp",        "NGDP_XDC",       "e.g. NGDP_XDC, NGDPPC_XDC", true},
-    {"Population",                "get_population", "LP_PE_NUM_MOP",   "e.g. LP_PE_NUM_MOP",          true},
-    {"Financial Indicators",      "get_financial",  "",                "(all indicators)",             false},
-    {"Trade Data",                "get_trade",      "",                "(all indicators)",             false},
+    {"GDP / National Accounts", "get_gdp", "NGDP_XDC", "e.g. NGDP_XDC, NGDPPC_XDC", true},
+    {"Population", "get_population", "LP_PE_NUM_MOP", "e.g. LP_PE_NUM_MOP", true},
+    {"Financial Indicators", "get_financial", "", "(all indicators)", false},
+    {"Trade Data", "get_trade", "", "(all indicators)", false},
 };
 
-static const QList<QPair<QString,QString>> kEconomies = {
-    {"Philippines (PHI)", "PHI"},
-    {"Singapore (SGP)",   "SGP"},
-    {"Japan (JPN)",       "JPN"},
-    {"China (CHN)",       "CHN"},
-    {"India (IND)",       "IND"},
-    {"Korea (KOR)",       "KOR"},
-    {"Thailand (THA)",    "THA"},
-    {"Malaysia (MYS)",    "MYS"},
-    {"Indonesia (IDN)",   "IDN"},
-    {"Vietnam (VNM)",     "VNM"},
-    {"Hong Kong (HKG)",   "HKG"},
-    {"Taiwan (TWN)",      "TWN"},
-    {"Australia (AUS)",   "AUS"},
-    {"New Zealand (NZL)", "NZL"},
-    {"All Economies",     "all"},
+static const QList<QPair<QString, QString>> kEconomies = {
+    {"Philippines (PHI)", "PHI"}, {"Singapore (SGP)", "SGP"},   {"Japan (JPN)", "JPN"},     {"China (CHN)", "CHN"},
+    {"India (IND)", "IND"},       {"Korea (KOR)", "KOR"},       {"Thailand (THA)", "THA"},  {"Malaysia (MYS)", "MYS"},
+    {"Indonesia (IDN)", "IDN"},   {"Vietnam (VNM)", "VNM"},     {"Hong Kong (HKG)", "HKG"}, {"Taiwan (TWN)", "TWN"},
+    {"Australia (AUS)", "AUS"},   {"New Zealand (NZL)", "NZL"}, {"All Economies", "all"},
 };
 
 // Common GDP/National Accounts indicators
-static const QList<QPair<QString,QString>> kGdpIndicators = {
-    {"GDP, current prices (NGDP_XDC)",            "NGDP_XDC"},
-    {"GDP per capita (NGDPPC_XDC)",               "NGDPPC_XDC"},
-    {"GDP growth rate (NGDP_R_YOY_PT)",           "NGDP_R_YOY_PT"},
-    {"Gross national income (GNI_XDC)",           "GNI_XDC"},
-    {"Gross fixed capital formation (GFCF_XDC)",  "GFCF_XDC"},
-    {"Exports of goods & services (EXG_XDC)",     "EXG_XDC"},
-    {"Imports of goods & services (IMG_XDC)",     "IMG_XDC"},
-    {"Government final consumption (GGFC_XDC)",   "GGFC_XDC"},
+static const QList<QPair<QString, QString>> kGdpIndicators = {
+    {"GDP, current prices (NGDP_XDC)", "NGDP_XDC"},           {"GDP per capita (NGDPPC_XDC)", "NGDPPC_XDC"},
+    {"GDP growth rate (NGDP_R_YOY_PT)", "NGDP_R_YOY_PT"},     {"Gross national income (GNI_XDC)", "GNI_XDC"},
+    {"Gross fixed capital formation (GFCF_XDC)", "GFCF_XDC"}, {"Exports of goods & services (EXG_XDC)", "EXG_XDC"},
+    {"Imports of goods & services (IMG_XDC)", "IMG_XDC"},     {"Government final consumption (GGFC_XDC)", "GGFC_XDC"},
 };
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
-AdbPanel::AdbPanel(QWidget* parent)
-    : EconPanelBase(kAdbSourceId, kAdbColor, parent) {
+AdbPanel::AdbPanel(QWidget* parent) : EconPanelBase(kAdbSourceId, kAdbColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &AdbPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &AdbPanel::on_result);
 }
 
 void AdbPanel::activate() {
@@ -104,8 +87,7 @@ void AdbPanel::build_controls(QHBoxLayout* thl) {
         category_combo_->addItem(c.label);
     category_combo_->setFixedHeight(26);
     category_combo_->setMinimumWidth(185);
-    connect(category_combo_, &QComboBox::currentIndexChanged,
-            this, &AdbPanel::on_category_changed);
+    connect(category_combo_, &QComboBox::currentIndexChanged, this, &AdbPanel::on_category_changed);
 
     indicator_input_ = new QLineEdit;
     indicator_input_->setPlaceholderText(kAdbCategories[0].indicator_hint);
@@ -136,7 +118,8 @@ void AdbPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void AdbPanel::on_category_changed(int index) {
-    if (index < 0 || index >= kAdbCategories.size()) return;
+    if (index < 0 || index >= kAdbCategories.size())
+        return;
     const auto& cat = kAdbCategories[index];
     indicator_input_->setPlaceholderText(cat.indicator_hint);
     indicator_input_->setText(cat.default_indicator);
@@ -147,13 +130,14 @@ void AdbPanel::on_category_changed(int index) {
 
 void AdbPanel::on_fetch() {
     const int cat_idx = category_combo_->currentIndex();
-    if (cat_idx < 0 || cat_idx >= kAdbCategories.size()) return;
+    if (cat_idx < 0 || cat_idx >= kAdbCategories.size())
+        return;
     const auto& cat = kAdbCategories[cat_idx];
 
-    const QString economy   = economy_combo_->currentData().toString();
+    const QString economy = economy_combo_->currentData().toString();
     const QString indicator = indicator_input_->text().trimmed().toUpper();
-    const QString start     = start_input_->text().trimmed();
-    const QString end       = end_input_->text().trimmed();
+    const QString start = start_input_->text().trimmed();
+    const QString end = end_input_->text().trimmed();
 
     if (economy.isEmpty()) {
         show_empty("Select an economy");
@@ -166,27 +150,27 @@ void AdbPanel::on_fetch() {
 
     QStringList args;
     args << economy;
-    if (cat.uses_indicator) args << indicator;
-    if (!start.isEmpty()) args << start;
-    if (!start.isEmpty() && !end.isEmpty()) args << end;
+    if (cat.uses_indicator)
+        args << indicator;
+    if (!start.isEmpty())
+        args << start;
+    if (!start.isEmpty() && !end.isEmpty())
+        args << end;
 
     show_loading("Fetching ADB " + cat.label + " for " + economy + "…");
-    services::EconomicsService::instance().execute(
-        kAdbSourceId, kAdbScript, cat.command, args,
-        "adb_" + cat.command + "_" + economy + "_" + indicator);
+    services::EconomicsService::instance().execute(kAdbSourceId, kAdbScript, cat.command, args,
+                                                   "adb_" + cat.command + "_" + economy + "_" + indicator);
 }
 
 // ── Result ────────────────────────────────────────────────────────────────────
 
-void AdbPanel::on_result(const QString& request_id,
-                         const services::EconomicsResult& result) {
-    if (result.source_id != kAdbSourceId) return;
+void AdbPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kAdbSourceId)
+        return;
 
     if (!result.success) {
         // ADB uses "error" key at top level
-        const QString err = result.error.isEmpty()
-                          ? result.data["error"].toString()
-                          : result.error;
+        const QString err = result.error.isEmpty() ? result.data["error"].toString() : result.error;
         show_error(err.isEmpty() ? "Unknown error from ADB API" : err);
         return;
     }
@@ -198,18 +182,20 @@ void AdbPanel::on_result(const QString& request_id,
     if (rows.isEmpty()) {
         // Check for error embedded in data field
         const QString emb_err = result.data["error"].toString();
-        if (!emb_err.isEmpty()) { show_error(emb_err); return; }
+        if (!emb_err.isEmpty()) {
+            show_error(emb_err);
+            return;
+        }
         show_empty("No data returned — try a different economy, indicator or date range");
         return;
     }
 
     const QString economy_label = economy_combo_->currentText();
-    const QString cat_label     = category_combo_->currentText();
+    const QString cat_label = category_combo_->currentText();
     const QString title = "ADB: " + cat_label + " — " + economy_label;
 
     display(rows, title);
-    LOG_INFO("AdbPanel", QString("Displayed %1 rows for %2")
-             .arg(rows.size()).arg(request_id));
+    LOG_INFO("AdbPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(request_id));
 }
 
 } // namespace fincept::screens

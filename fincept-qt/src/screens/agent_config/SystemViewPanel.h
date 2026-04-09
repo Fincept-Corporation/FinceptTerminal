@@ -39,19 +39,19 @@ class SystemViewPanel : public QWidget {
 
     // Stats labels
     QLabel* agents_count_ = nullptr;
-    QLabel* tools_count_  = nullptr;
-    QLabel* llms_count_   = nullptr;
-    QLabel* cache_count_  = nullptr;
+    QLabel* tools_count_ = nullptr;
+    QLabel* llms_count_ = nullptr;
+    QLabel* cache_count_ = nullptr;
 
     // LLM section
-    QVBoxLayout* llm_list_layout_   = nullptr;
+    QVBoxLayout* llm_list_layout_ = nullptr;
 
     // Tools section
     QVBoxLayout* tools_list_layout_ = nullptr;
 
     // System info
-    QLabel*      version_label_   = nullptr;
-    QLabel*      framework_label_ = nullptr;
+    QLabel* version_label_ = nullptr;
+    QLabel* framework_label_ = nullptr;
     QVBoxLayout* features_layout_ = nullptr;
 
     bool data_loaded_ = false;

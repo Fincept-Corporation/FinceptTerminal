@@ -11,10 +11,10 @@
 namespace fincept::services {
 
 struct EconomicsResult {
-    bool        success = false;
+    bool success = false;
     QJsonObject data;
-    QString     error;
-    QString     source_id;  // which provider produced this
+    QString error;
+    QString source_id; // which provider produced this
 };
 
 class EconomicsService : public QObject {
@@ -28,10 +28,7 @@ class EconomicsService : public QObject {
     /// @param command    first CLI argument
     /// @param args       additional arguments
     /// @param request_id unique id to correlate response
-    void execute(const QString& source_id,
-                 const QString& script,
-                 const QString& command,
-                 const QStringList& args,
+    void execute(const QString& source_id, const QString& script, const QString& command, const QStringList& args,
                  const QString& request_id);
 
     /// Invalidate cache for a given request key (force re-fetch).
@@ -46,9 +43,7 @@ class EconomicsService : public QObject {
 
     static constexpr int kCacheTtlSec = 10 * 60; // 10 min — passed to CacheManager
 
-    QString cache_key(const QString& script,
-                      const QString& command,
-                      const QStringList& args) const;
+    QString cache_key(const QString& script, const QString& command, const QStringList& args) const;
 };
 
 } // namespace fincept::services

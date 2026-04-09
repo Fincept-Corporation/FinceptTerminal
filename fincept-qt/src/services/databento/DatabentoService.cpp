@@ -148,8 +148,7 @@ void DatabentoService::fetch_ohlcv(const QStringList& symbols, int days) {
     LOG_INFO("Databento", "fetch_ohlcv symbols=" + symbols.join(",") + " days=" + QString::number(days));
 
     QPointer<DatabentoService> self = this;
-    QStringList args = {"historical_ohlcv", "symbols", symbols.join(","),
-                        "days", QString::number(days)};
+    QStringList args = {"historical_ohlcv", "symbols", symbols.join(","), "days", QString::number(days)};
 
     run_script(args, [self, symbols](bool ok, const QJsonObject& j) {
         if (!self)
@@ -218,8 +217,8 @@ void DatabentoService::fetch_futures_term_structure(const QStringList& commoditi
     LOG_INFO("Databento", "fetch_futures_term_structure");
 
     QPointer<DatabentoService> self = this;
-    QStringList args = {"futures_term_structure", "root_symbol", commodities.join(","),
-                        "num_contracts", QString::number(6)};
+    QStringList args = {"futures_term_structure", "root_symbol", commodities.join(","), "num_contracts",
+                        QString::number(6)};
 
     run_script(args, [self](bool ok, const QJsonObject& j) {
         if (!self)
@@ -250,26 +249,30 @@ void DatabentoService::fetch_local_vol(const QString& symbol, float spot) {
     QPointer<DatabentoService> self = this;
     run_script({"local_vol", "symbol", symbol, "spot", QString::number((double)spot, 'f', 2)},
                [self](bool ok, const QJsonObject& j) {
-        if (!self) return;
-        DatabentoSurfaceResult res;
-        res.type = "local_vol";
-        if (!ok || j["error"].toBool(false)) {
-            res.success = false;
-            res.error = ok ? j["message"].toString("Unknown error") : j["error"].toString();
-            emit self->fetch_failed(res.error);
-        } else {
-            res.success = true;
-            for (const auto& v : j["strikes"].toArray()) res.x_axis.push_back((float)v.toDouble());
-            for (const auto& v : j["expirations"].toArray()) res.y_axis.push_back(v.toInt());
-            for (const auto& row : j["z"].toArray()) {
-                std::vector<float> r;
-                for (const auto& v : row.toArray()) r.push_back((float)v.toDouble());
-                res.z.push_back(r);
-            }
-            self->last_fetch_time_ = QDateTime::currentDateTime();
-        }
-        emit self->surface_ready(res);
-    });
+                   if (!self)
+                       return;
+                   DatabentoSurfaceResult res;
+                   res.type = "local_vol";
+                   if (!ok || j["error"].toBool(false)) {
+                       res.success = false;
+                       res.error = ok ? j["message"].toString("Unknown error") : j["error"].toString();
+                       emit self->fetch_failed(res.error);
+                   } else {
+                       res.success = true;
+                       for (const auto& v : j["strikes"].toArray())
+                           res.x_axis.push_back((float)v.toDouble());
+                       for (const auto& v : j["expirations"].toArray())
+                           res.y_axis.push_back(v.toInt());
+                       for (const auto& row : j["z"].toArray()) {
+                           std::vector<float> r;
+                           for (const auto& v : row.toArray())
+                               r.push_back((float)v.toDouble());
+                           res.z.push_back(r);
+                       }
+                       self->last_fetch_time_ = QDateTime::currentDateTime();
+                   }
+                   emit self->surface_ready(res);
+               });
 }
 
 void DatabentoService::fetch_implied_dividend(const QString& symbol, float spot) {
@@ -277,26 +280,30 @@ void DatabentoService::fetch_implied_dividend(const QString& symbol, float spot)
     QPointer<DatabentoService> self = this;
     run_script({"implied_dividend", "symbol", symbol, "spot", QString::number((double)spot, 'f', 2)},
                [self](bool ok, const QJsonObject& j) {
-        if (!self) return;
-        DatabentoSurfaceResult res;
-        res.type = "implied_dividend";
-        if (!ok || j["error"].toBool(false)) {
-            res.success = false;
-            res.error = ok ? j["message"].toString("Unknown error") : j["error"].toString();
-            emit self->fetch_failed(res.error);
-        } else {
-            res.success = true;
-            for (const auto& v : j["strikes"].toArray()) res.x_axis.push_back((float)v.toDouble());
-            for (const auto& v : j["expirations"].toArray()) res.y_axis.push_back(v.toInt());
-            for (const auto& row : j["z"].toArray()) {
-                std::vector<float> r;
-                for (const auto& v : row.toArray()) r.push_back((float)v.toDouble());
-                res.z.push_back(r);
-            }
-            self->last_fetch_time_ = QDateTime::currentDateTime();
-        }
-        emit self->surface_ready(res);
-    });
+                   if (!self)
+                       return;
+                   DatabentoSurfaceResult res;
+                   res.type = "implied_dividend";
+                   if (!ok || j["error"].toBool(false)) {
+                       res.success = false;
+                       res.error = ok ? j["message"].toString("Unknown error") : j["error"].toString();
+                       emit self->fetch_failed(res.error);
+                   } else {
+                       res.success = true;
+                       for (const auto& v : j["strikes"].toArray())
+                           res.x_axis.push_back((float)v.toDouble());
+                       for (const auto& v : j["expirations"].toArray())
+                           res.y_axis.push_back(v.toInt());
+                       for (const auto& row : j["z"].toArray()) {
+                           std::vector<float> r;
+                           for (const auto& v : row.toArray())
+                               r.push_back((float)v.toDouble());
+                           res.z.push_back(r);
+                       }
+                       self->last_fetch_time_ = QDateTime::currentDateTime();
+                   }
+                   emit self->surface_ready(res);
+               });
 }
 
 void DatabentoService::fetch_liquidity(const QString& symbol, float spot) {
@@ -304,34 +311,38 @@ void DatabentoService::fetch_liquidity(const QString& symbol, float spot) {
     QPointer<DatabentoService> self = this;
     run_script({"liquidity_heatmap", "symbol", symbol, "spot", QString::number((double)spot, 'f', 2)},
                [self](bool ok, const QJsonObject& j) {
-        if (!self) return;
-        DatabentoSurfaceResult res;
-        res.type = "liquidity";
-        if (!ok || j["error"].toBool(false)) {
-            res.success = false;
-            res.error = ok ? j["message"].toString("Unknown error") : j["error"].toString();
-            emit self->fetch_failed(res.error);
-        } else {
-            res.success = true;
-            for (const auto& v : j["strikes"].toArray()) res.x_axis.push_back((float)v.toDouble());
-            for (const auto& v : j["expirations"].toArray()) res.y_axis.push_back(v.toInt());
-            for (const auto& row : j["z"].toArray()) {
-                std::vector<float> r;
-                for (const auto& v : row.toArray()) r.push_back((float)v.toDouble());
-                res.z.push_back(r);
-            }
-            self->last_fetch_time_ = QDateTime::currentDateTime();
-        }
-        emit self->surface_ready(res);
-    });
+                   if (!self)
+                       return;
+                   DatabentoSurfaceResult res;
+                   res.type = "liquidity";
+                   if (!ok || j["error"].toBool(false)) {
+                       res.success = false;
+                       res.error = ok ? j["message"].toString("Unknown error") : j["error"].toString();
+                       emit self->fetch_failed(res.error);
+                   } else {
+                       res.success = true;
+                       for (const auto& v : j["strikes"].toArray())
+                           res.x_axis.push_back((float)v.toDouble());
+                       for (const auto& v : j["expirations"].toArray())
+                           res.y_axis.push_back(v.toInt());
+                       for (const auto& row : j["z"].toArray()) {
+                           std::vector<float> r;
+                           for (const auto& v : row.toArray())
+                               r.push_back((float)v.toDouble());
+                           res.z.push_back(r);
+                       }
+                       self->last_fetch_time_ = QDateTime::currentDateTime();
+                   }
+                   emit self->surface_ready(res);
+               });
 }
 
 void DatabentoService::fetch_commodity_vol(const QString& root_symbol) {
     emit fetch_started("Computing commodity vol for " + root_symbol + "...");
     QPointer<DatabentoService> self = this;
-    run_script({"commodity_vol", "root_symbol", root_symbol},
-               [self](bool ok, const QJsonObject& j) {
-        if (!self) return;
+    run_script({"commodity_vol", "root_symbol", root_symbol}, [self](bool ok, const QJsonObject& j) {
+        if (!self)
+            return;
         DatabentoSurfaceResult res;
         res.type = "commodity_vol";
         if (!ok || j["error"].toBool(false)) {
@@ -340,11 +351,14 @@ void DatabentoService::fetch_commodity_vol(const QString& root_symbol) {
             emit self->fetch_failed(res.error);
         } else {
             res.success = true;
-            for (const auto& v : j["strikes"].toArray()) res.x_axis.push_back((float)v.toDouble());
-            for (const auto& v : j["expirations"].toArray()) res.y_axis.push_back(v.toInt());
+            for (const auto& v : j["strikes"].toArray())
+                res.x_axis.push_back((float)v.toDouble());
+            for (const auto& v : j["expirations"].toArray())
+                res.y_axis.push_back(v.toInt());
             for (const auto& row : j["z"].toArray()) {
                 std::vector<float> r;
-                for (const auto& v : row.toArray()) r.push_back((float)v.toDouble());
+                for (const auto& v : row.toArray())
+                    r.push_back((float)v.toDouble());
                 res.z.push_back(r);
             }
             self->last_fetch_time_ = QDateTime::currentDateTime();
@@ -356,9 +370,9 @@ void DatabentoService::fetch_commodity_vol(const QString& root_symbol) {
 void DatabentoService::fetch_crack_spread() {
     emit fetch_started("Computing crack spreads...");
     QPointer<DatabentoService> self = this;
-    run_script({"crack_spread"},
-               [self](bool ok, const QJsonObject& j) {
-        if (!self) return;
+    run_script({"crack_spread"}, [self](bool ok, const QJsonObject& j) {
+        if (!self)
+            return;
         DatabentoSurfaceResult res;
         res.type = "crack_spread";
         if (!ok || j["error"].toBool(false)) {
@@ -367,11 +381,14 @@ void DatabentoService::fetch_crack_spread() {
             emit self->fetch_failed(res.error);
         } else {
             res.success = true;
-            for (const auto& v : j["spread_types"].toArray()) res.x_labels.push_back(v.toString().toStdString());
-            for (const auto& v : j["contract_months"].toArray()) res.y_axis.push_back(v.toInt());
+            for (const auto& v : j["spread_types"].toArray())
+                res.x_labels.push_back(v.toString().toStdString());
+            for (const auto& v : j["contract_months"].toArray())
+                res.y_axis.push_back(v.toInt());
             for (const auto& row : j["z"].toArray()) {
                 std::vector<float> r;
-                for (const auto& v : row.toArray()) r.push_back((float)v.toDouble());
+                for (const auto& v : row.toArray())
+                    r.push_back((float)v.toDouble());
                 res.z.push_back(r);
             }
             self->last_fetch_time_ = QDateTime::currentDateTime();
@@ -383,9 +400,9 @@ void DatabentoService::fetch_crack_spread() {
 void DatabentoService::fetch_stress_test(const QStringList& symbols) {
     emit fetch_started("Running stress test scenarios...");
     QPointer<DatabentoService> self = this;
-    run_script({"stress_test", "symbols", symbols.join(",")},
-               [self](bool ok, const QJsonObject& j) {
-        if (!self) return;
+    run_script({"stress_test", "symbols", symbols.join(",")}, [self](bool ok, const QJsonObject& j) {
+        if (!self)
+            return;
         DatabentoSurfaceResult res;
         res.type = "stress_test";
         if (!ok || j["error"].toBool(false)) {
@@ -394,11 +411,14 @@ void DatabentoService::fetch_stress_test(const QStringList& symbols) {
             emit self->fetch_failed(res.error);
         } else {
             res.success = true;
-            for (const auto& v : j["scenarios"].toArray()) res.x_labels.push_back(v.toString().toStdString());
-            for (const auto& v : j["portfolios"].toArray()) res.y_labels.push_back(v.toString().toStdString());
+            for (const auto& v : j["scenarios"].toArray())
+                res.x_labels.push_back(v.toString().toStdString());
+            for (const auto& v : j["portfolios"].toArray())
+                res.y_labels.push_back(v.toString().toStdString());
             for (const auto& row : j["z"].toArray()) {
                 std::vector<float> r;
-                for (const auto& v : row.toArray()) r.push_back((float)v.toDouble());
+                for (const auto& v : row.toArray())
+                    r.push_back((float)v.toDouble());
                 res.z.push_back(r);
             }
             self->last_fetch_time_ = QDateTime::currentDateTime();
@@ -410,9 +430,9 @@ void DatabentoService::fetch_stress_test(const QStringList& symbols) {
 void DatabentoService::fetch_yield_curve() {
     emit fetch_started("Building yield curve from treasury futures...");
     QPointer<DatabentoService> self = this;
-    run_script({"yield_curve"},
-               [self](bool ok, const QJsonObject& j) {
-        if (!self) return;
+    run_script({"yield_curve"}, [self](bool ok, const QJsonObject& j) {
+        if (!self)
+            return;
         DatabentoSurfaceResult res;
         res.type = "yield_curve";
         if (!ok || j["error"].toBool(false)) {
@@ -421,11 +441,14 @@ void DatabentoService::fetch_yield_curve() {
             emit self->fetch_failed(res.error);
         } else {
             res.success = true;
-            for (const auto& v : j["time_points"].toArray()) res.y_axis.push_back(v.toInt());
-            for (const auto& v : j["maturities"].toArray()) res.x_axis.push_back((float)v.toInt());
+            for (const auto& v : j["time_points"].toArray())
+                res.y_axis.push_back(v.toInt());
+            for (const auto& v : j["maturities"].toArray())
+                res.x_axis.push_back((float)v.toInt());
             for (const auto& row : j["z"].toArray()) {
                 std::vector<float> r;
-                for (const auto& v : row.toArray()) r.push_back((float)v.toDouble());
+                for (const auto& v : row.toArray())
+                    r.push_back((float)v.toDouble());
                 res.z.push_back(r);
             }
             self->last_fetch_time_ = QDateTime::currentDateTime();
@@ -437,9 +460,9 @@ void DatabentoService::fetch_yield_curve() {
 void DatabentoService::fetch_forward_rate() {
     emit fetch_started("Building forward rate surface...");
     QPointer<DatabentoService> self = this;
-    run_script({"forward_rate"},
-               [self](bool ok, const QJsonObject& j) {
-        if (!self) return;
+    run_script({"forward_rate"}, [self](bool ok, const QJsonObject& j) {
+        if (!self)
+            return;
         DatabentoSurfaceResult res;
         res.type = "forward_rate";
         if (!ok || j["error"].toBool(false)) {
@@ -448,11 +471,14 @@ void DatabentoService::fetch_forward_rate() {
             emit self->fetch_failed(res.error);
         } else {
             res.success = true;
-            for (const auto& v : j["start_tenors"].toArray()) res.x_axis.push_back((float)v.toInt());
-            for (const auto& v : j["forward_periods"].toArray()) res.y_axis.push_back(v.toInt());
+            for (const auto& v : j["start_tenors"].toArray())
+                res.x_axis.push_back((float)v.toInt());
+            for (const auto& v : j["forward_periods"].toArray())
+                res.y_axis.push_back(v.toInt());
             for (const auto& row : j["z"].toArray()) {
                 std::vector<float> r;
-                for (const auto& v : row.toArray()) r.push_back((float)v.toDouble());
+                for (const auto& v : row.toArray())
+                    r.push_back((float)v.toDouble());
                 res.z.push_back(r);
             }
             self->last_fetch_time_ = QDateTime::currentDateTime();
@@ -464,9 +490,9 @@ void DatabentoService::fetch_forward_rate() {
 void DatabentoService::fetch_rate_path() {
     emit fetch_started("Building monetary policy rate path...");
     QPointer<DatabentoService> self = this;
-    run_script({"rate_path"},
-               [self](bool ok, const QJsonObject& j) {
-        if (!self) return;
+    run_script({"rate_path"}, [self](bool ok, const QJsonObject& j) {
+        if (!self)
+            return;
         DatabentoSurfaceResult res;
         res.type = "rate_path";
         if (!ok || j["error"].toBool(false)) {
@@ -475,11 +501,14 @@ void DatabentoService::fetch_rate_path() {
             emit self->fetch_failed(res.error);
         } else {
             res.success = true;
-            for (const auto& v : j["central_banks"].toArray()) res.x_labels.push_back(v.toString().toStdString());
-            for (const auto& v : j["meetings_ahead"].toArray()) res.y_axis.push_back(v.toInt());
+            for (const auto& v : j["central_banks"].toArray())
+                res.x_labels.push_back(v.toString().toStdString());
+            for (const auto& v : j["meetings_ahead"].toArray())
+                res.y_axis.push_back(v.toInt());
             for (const auto& row : j["z"].toArray()) {
                 std::vector<float> r;
-                for (const auto& v : row.toArray()) r.push_back((float)v.toDouble());
+                for (const auto& v : row.toArray())
+                    r.push_back((float)v.toDouble());
                 res.z.push_back(r);
             }
             self->last_fetch_time_ = QDateTime::currentDateTime();
@@ -491,9 +520,9 @@ void DatabentoService::fetch_rate_path() {
 void DatabentoService::fetch_fx_forward_points() {
     emit fetch_started("Building FX forward points...");
     QPointer<DatabentoService> self = this;
-    run_script({"fx_forward_points"},
-               [self](bool ok, const QJsonObject& j) {
-        if (!self) return;
+    run_script({"fx_forward_points"}, [self](bool ok, const QJsonObject& j) {
+        if (!self)
+            return;
         DatabentoSurfaceResult res;
         res.type = "fx_forward_points";
         if (!ok || j["error"].toBool(false)) {
@@ -502,11 +531,14 @@ void DatabentoService::fetch_fx_forward_points() {
             emit self->fetch_failed(res.error);
         } else {
             res.success = true;
-            for (const auto& v : j["pairs"].toArray()) res.x_labels.push_back(v.toString().toStdString());
-            for (const auto& v : j["tenors"].toArray()) res.y_axis.push_back(v.toInt());
+            for (const auto& v : j["pairs"].toArray())
+                res.x_labels.push_back(v.toString().toStdString());
+            for (const auto& v : j["tenors"].toArray())
+                res.y_axis.push_back(v.toInt());
             for (const auto& row : j["z"].toArray()) {
                 std::vector<float> r;
-                for (const auto& v : row.toArray()) r.push_back((float)v.toDouble());
+                for (const auto& v : row.toArray())
+                    r.push_back((float)v.toDouble());
                 res.z.push_back(r);
             }
             self->last_fetch_time_ = QDateTime::currentDateTime();

@@ -17,8 +17,10 @@ using namespace fincept::services::polymarket;
 PolymarketOrderBook::PolymarketOrderBook(QWidget* parent) : QWidget(parent) {
     setMinimumHeight(200);
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { cache_dirty_ = true; update(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        cache_dirty_ = true;
+        update();
+    });
 
     repaint_timer_ = new QTimer(this);
     repaint_timer_->setInterval(50); // 20fps max

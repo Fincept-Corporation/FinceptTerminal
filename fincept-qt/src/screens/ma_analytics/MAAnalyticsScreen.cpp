@@ -19,8 +19,8 @@ using namespace fincept::services::ma;
 MAAnalyticsScreen::MAAnalyticsScreen(QWidget* parent) : QWidget(parent) {
     modules_ = all_modules();
     build_ui();
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { refresh_theme(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { refresh_theme(); });
     refresh_theme();
     LOG_INFO("MAAnalytics", "Screen constructed");
 }
@@ -325,21 +325,20 @@ void MAAnalyticsScreen::update_sidebar_selection() {
         const auto& mod = modules_[i];
         bool active = (i == active_index_);
         auto rgb = QString("%1,%2,%3").arg(mod.color.red()).arg(mod.color.green()).arg(mod.color.blue());
-        module_buttons_[i]->setStyleSheet(
-            QString("QPushButton { text-align:left; padding:8px 12px; border:none;"
-                    "border-left:2px solid %1; color:%2;"
-                    "font-size:%3px; font-family:%4; font-weight:%5;"
-                    "background:%6; }"
-                    "QPushButton:hover { background:rgba(%7,0.1); color:%8;"
-                    "border-left:2px solid %8; }")
-                .arg(active ? mod.color.name() : "transparent")
-                .arg(active ? mod.color.name() : ui::colors::TEXT_SECONDARY)
-                .arg(ui::fonts::SMALL)
-                .arg(ui::fonts::DATA_FAMILY)
-                .arg(active ? "700" : "400")
-                .arg(active ? QString("rgba(%1,0.08)").arg(rgb) : "transparent")
-                .arg(rgb)
-                .arg(mod.color.name()));
+        module_buttons_[i]->setStyleSheet(QString("QPushButton { text-align:left; padding:8px 12px; border:none;"
+                                                  "border-left:2px solid %1; color:%2;"
+                                                  "font-size:%3px; font-family:%4; font-weight:%5;"
+                                                  "background:%6; }"
+                                                  "QPushButton:hover { background:rgba(%7,0.1); color:%8;"
+                                                  "border-left:2px solid %8; }")
+                                              .arg(active ? mod.color.name() : "transparent")
+                                              .arg(active ? mod.color.name() : ui::colors::TEXT_SECONDARY)
+                                              .arg(ui::fonts::SMALL)
+                                              .arg(ui::fonts::DATA_FAMILY)
+                                              .arg(active ? "700" : "400")
+                                              .arg(active ? QString("rgba(%1,0.08)").arg(rgb) : "transparent")
+                                              .arg(rgb)
+                                              .arg(mod.color.name()));
     }
 
     // Update quick buttons
@@ -347,19 +346,18 @@ void MAAnalyticsScreen::update_sidebar_selection() {
         const auto& mod = modules_[i];
         bool active = (i == active_index_);
         auto rgb = QString("%1,%2,%3").arg(mod.color.red()).arg(mod.color.green()).arg(mod.color.blue());
-        quick_buttons_[i]->setStyleSheet(
-            QString("QPushButton { color:%1; font-size:%2px; font-family:%3;"
-                    "padding:4px 8px; border:1px solid %4;"
-                    "background:%5; font-weight:%6; }"
-                    "QPushButton:hover { background:rgba(%7,0.1); color:%8; }")
-                .arg(active ? mod.color.name() : ui::colors::TEXT_TERTIARY)
-                .arg(ui::fonts::TINY)
-                .arg(ui::fonts::DATA_FAMILY)
-                .arg(active ? QString("rgba(%1,0.3)").arg(rgb) : "transparent")
-                .arg(active ? QString("rgba(%1,0.12)").arg(rgb) : "transparent")
-                .arg(active ? "700" : "400")
-                .arg(rgb)
-                .arg(mod.color.name()));
+        quick_buttons_[i]->setStyleSheet(QString("QPushButton { color:%1; font-size:%2px; font-family:%3;"
+                                                 "padding:4px 8px; border:1px solid %4;"
+                                                 "background:%5; font-weight:%6; }"
+                                                 "QPushButton:hover { background:rgba(%7,0.1); color:%8; }")
+                                             .arg(active ? mod.color.name() : ui::colors::TEXT_TERTIARY)
+                                             .arg(ui::fonts::TINY)
+                                             .arg(ui::fonts::DATA_FAMILY)
+                                             .arg(active ? QString("rgba(%1,0.3)").arg(rgb) : "transparent")
+                                             .arg(active ? QString("rgba(%1,0.12)").arg(rgb) : "transparent")
+                                             .arg(active ? "700" : "400")
+                                             .arg(rgb)
+                                             .arg(mod.color.name()));
     }
 }
 
@@ -412,22 +410,21 @@ void MAAnalyticsScreen::refresh_theme() {
 
     // Top bar
     if (top_bar_)
-        top_bar_->setStyleSheet(
-            QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        top_bar_->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
+                                    .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
 
     // Brand badge — uses theme accent
     if (brand_label_)
-        brand_label_->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                    "padding:2px 6px; background:rgba(%4,0.08);"
-                    "border:1px solid rgba(%4,0.25);")
-                .arg(ui::colors::AMBER())
-                .arg(ui::fonts::TINY)
-                .arg(ui::fonts::DATA_FAMILY())
-                .arg([]() {
-                    QColor c(ui::colors::AMBER());
-                    return QString("%1,%2,%3").arg(c.red()).arg(c.green()).arg(c.blue());
-                }()));
+        brand_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
+                                            "padding:2px 6px; background:rgba(%4,0.08);"
+                                            "border:1px solid rgba(%4,0.25);")
+                                        .arg(ui::colors::AMBER())
+                                        .arg(ui::fonts::TINY)
+                                        .arg(ui::fonts::DATA_FAMILY())
+                                        .arg([]() {
+                                            QColor c(ui::colors::AMBER());
+                                            return QString("%1,%2,%3").arg(c.red()).arg(c.green()).arg(c.blue());
+                                        }()));
 
     // Top bar divider
     auto* div = top_bar_ ? top_bar_->findChild<QWidget*>("maTopDivider") : nullptr;
@@ -437,27 +434,25 @@ void MAAnalyticsScreen::refresh_theme() {
     // Ready badge
     if (ready_label_) {
         QColor pos(ui::colors::POSITIVE());
-        ready_label_->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-family:%3; padding:2px 6px;"
-                    "background:rgba(%4,0.08); border:1px solid rgba(%4,0.25);")
-                .arg(ui::colors::POSITIVE())
-                .arg(ui::fonts::TINY)
-                .arg(ui::fonts::DATA_FAMILY())
-                .arg(QString("%1,%2,%3").arg(pos.red()).arg(pos.green()).arg(pos.blue())));
+        ready_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:2px 6px;"
+                                            "background:rgba(%4,0.08); border:1px solid rgba(%4,0.25);")
+                                        .arg(ui::colors::POSITIVE())
+                                        .arg(ui::fonts::TINY)
+                                        .arg(ui::fonts::DATA_FAMILY())
+                                        .arg(QString("%1,%2,%3").arg(pos.red()).arg(pos.green()).arg(pos.blue())));
     }
 
     // Subtitle
     if (subtitle_label_)
-        subtitle_label_->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-family:%3; letter-spacing:1px;")
-                .arg(ui::colors::TEXT_TERTIARY())
-                .arg(ui::fonts::TINY)
-                .arg(ui::fonts::DATA_FAMILY()));
+        subtitle_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; letter-spacing:1px;")
+                                           .arg(ui::colors::TEXT_TERTIARY())
+                                           .arg(ui::fonts::TINY)
+                                           .arg(ui::fonts::DATA_FAMILY()));
 
     // Left panel
     if (left_panel_)
-        left_panel_->setStyleSheet(
-            QString("background:%1; border-right:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+        left_panel_->setStyleSheet(QString("background:%1; border-right:1px solid %2;")
+                                       .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     // Left header
     auto* left_hdr = left_panel_ ? left_panel_->findChild<QWidget*>("maLeftHeader") : nullptr;
@@ -476,18 +471,17 @@ void MAAnalyticsScreen::refresh_theme() {
     if (left_panel_) {
         auto cat_labels = left_panel_->findChildren<QLabel*>("maCategoryLabel");
         for (auto* cat : cat_labels)
-            cat->setStyleSheet(
-                QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                        "padding:8px 12px 4px 12px; letter-spacing:1px;")
-                    .arg(ui::colors::TEXT_TERTIARY())
-                    .arg(ui::fonts::TINY)
-                    .arg(ui::fonts::DATA_FAMILY()));
+            cat->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
+                                       "padding:8px 12px 4px 12px; letter-spacing:1px;")
+                                   .arg(ui::colors::TEXT_TERTIARY())
+                                   .arg(ui::fonts::TINY)
+                                   .arg(ui::fonts::DATA_FAMILY()));
     }
 
     // Right panel
     if (right_panel_)
-        right_panel_->setStyleSheet(
-            QString("background:%1; border-left:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+        right_panel_->setStyleSheet(QString("background:%1; border-left:1px solid %2;")
+                                        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     // Right header
     auto* right_hdr = right_panel_ ? right_panel_->findChild<QWidget*>("maRightHeader") : nullptr;
@@ -512,10 +506,9 @@ void MAAnalyticsScreen::refresh_theme() {
 
     // Stats card
     if (stats_card_)
-        stats_card_->setStyleSheet(
-            QString("background:%1; border:1px solid %2; padding:8px;")
-                .arg(ui::colors::BG_RAISED())
-                .arg(ui::colors::BORDER_DIM()));
+        stats_card_->setStyleSheet(QString("background:%1; border:1px solid %2; padding:8px;")
+                                       .arg(ui::colors::BG_RAISED())
+                                       .arg(ui::colors::BORDER_DIM()));
 
     // Stats title
     if (stats_title_)
@@ -543,14 +536,13 @@ void MAAnalyticsScreen::refresh_theme() {
 
     // Tips label
     if (tips_label_)
-        tips_label_->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-family:%3; line-height:1.4;"
-                    "background:%4; border:1px solid %5; padding:8px;")
-                .arg(ui::colors::TEXT_TERTIARY())
-                .arg(ui::fonts::TINY)
-                .arg(ui::fonts::DATA_FAMILY())
-                .arg(ui::colors::BG_RAISED())
-                .arg(ui::colors::BORDER_DIM()));
+        tips_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; line-height:1.4;"
+                                           "background:%4; border:1px solid %5; padding:8px;")
+                                       .arg(ui::colors::TEXT_TERTIARY())
+                                       .arg(ui::fonts::TINY)
+                                       .arg(ui::fonts::DATA_FAMILY())
+                                       .arg(ui::colors::BG_RAISED())
+                                       .arg(ui::colors::BORDER_DIM()));
 
     // Status bar
     if (status_bar_)

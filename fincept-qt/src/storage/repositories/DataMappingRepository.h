@@ -6,16 +6,16 @@ namespace fincept {
 struct DataMapping {
     QString id;
     QString name;
-    QString source_id;        // FK to data_sources.id (may be empty)
-    QString schema_name;      // OHLCV | QUOTE | TICK | ORDER | POSITION | PORTFOLIO | INSTRUMENT
+    QString source_id;   // FK to data_sources.id (may be empty)
+    QString schema_name; // OHLCV | QUOTE | TICK | ORDER | POSITION | PORTFOLIO | INSTRUMENT
     QString base_url;
     QString endpoint;
-    QString method;           // GET | POST
-    QString auth_type;        // None | API Key | Bearer Token | Basic Auth
+    QString method;    // GET | POST
+    QString auth_type; // None | API Key | Bearer Token | Basic Auth
     QString auth_token;
     QString headers;
     QString body;
-    QString parser;           // JSONPath
+    QString parser; // JSONPath
     bool cache_enabled = true;
     int cache_ttl = 300;
     QString field_mappings_json; // JSON array of {target, expression, transform, default_val}

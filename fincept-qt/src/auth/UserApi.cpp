@@ -173,20 +173,19 @@ void UserApi::get_support_categories(Callback cb) {
     request("GET", "/support/categories", {}, cb);
 }
 
-void UserApi::submit_feedback(int rating, const QString& feedback_text,
-                               const QString& category, Callback cb) {
+void UserApi::submit_feedback(int rating, const QString& feedback_text, const QString& category, Callback cb) {
     QJsonObject body;
-    body["rating"]        = rating;
+    body["rating"] = rating;
     body["feedback_text"] = feedback_text;
-    body["category"]      = category;
+    body["category"] = category;
     request("POST", "/support/feedback", body, cb);
 }
 
-void UserApi::submit_contact_form(const QString& name, const QString& email,
-                                   const QString& subject, const QString& message, Callback cb) {
+void UserApi::submit_contact_form(const QString& name, const QString& email, const QString& subject,
+                                  const QString& message, Callback cb) {
     QJsonObject body;
-    body["name"]    = name;
-    body["email"]   = email;
+    body["name"] = name;
+    body["email"] = email;
     body["subject"] = subject;
     body["message"] = message;
     request("POST", "/support/contact", body, cb);

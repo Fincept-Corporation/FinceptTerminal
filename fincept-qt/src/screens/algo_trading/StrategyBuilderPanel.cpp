@@ -236,7 +236,7 @@ void StrategyBuilderPanel::build_ui() {
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
                               .arg(fincept::ui::colors::BG_BASE, fincept::ui::colors::BORDER_MED));
 
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     content->setStyleSheet(QString("background: %1;").arg(fincept::ui::colors::BG_BASE));
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(16, 12, 16, 12);
@@ -570,39 +570,38 @@ void StrategyBuilderPanel::on_save() {
     // Serialize strategy to JSON and register with File Manager
     {
         QJsonObject json;
-        json["id"]               = strategy.id;
-        json["name"]             = strategy.name;
-        json["description"]      = strategy.description;
-        json["timeframe"]        = strategy.timeframe;
-        json["entry_logic"]      = strategy.entry_logic;
-        json["exit_logic"]       = strategy.exit_logic;
-        json["stop_loss"]        = strategy.stop_loss;
-        json["take_profit"]      = strategy.take_profit;
-        json["trailing_stop"]    = strategy.trailing_stop;
+        json["id"] = strategy.id;
+        json["name"] = strategy.name;
+        json["description"] = strategy.description;
+        json["timeframe"] = strategy.timeframe;
+        json["entry_logic"] = strategy.entry_logic;
+        json["exit_logic"] = strategy.exit_logic;
+        json["stop_loss"] = strategy.stop_loss;
+        json["take_profit"] = strategy.take_profit;
+        json["trailing_stop"] = strategy.trailing_stop;
 
         QJsonArray entry_arr;
-        for (const auto& c : strategy.entry_conditions) entry_arr.append(c);
+        for (const auto& c : strategy.entry_conditions)
+            entry_arr.append(c);
         json["entry_conditions"] = entry_arr;
 
         QJsonArray exit_arr;
-        for (const auto& c : strategy.exit_conditions) exit_arr.append(c);
-        json["exit_conditions"]  = exit_arr;
+        for (const auto& c : strategy.exit_conditions)
+            exit_arr.append(c);
+        json["exit_conditions"] = exit_arr;
 
         QString safe_name = strategy.name;
         safe_name.replace(QRegularExpression("[^a-zA-Z0-9_\\-]"), "_");
-        QString dest = services::FileManagerService::instance().storage_dir()
-                       + "/" + safe_name + "_" + strategy.id.left(8) + ".json";
+        QString dest = services::FileManagerService::instance().storage_dir() + "/" + safe_name + "_" +
+                       strategy.id.left(8) + ".json";
 
         QFile f(dest);
         if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
             f.write(QJsonDocument(json).toJson(QJsonDocument::Indented));
             f.close();
-            services::FileManagerService::instance().register_file(
-                safe_name + "_" + strategy.id.left(8) + ".json",
-                strategy.name + ".json",
-                QFileInfo(dest).size(),
-                "application/json",
-                "algo_trading");
+            services::FileManagerService::instance().register_file(safe_name + "_" + strategy.id.left(8) + ".json",
+                                                                   strategy.name + ".json", QFileInfo(dest).size(),
+                                                                   "application/json", "algo_trading");
         }
     }
 }
@@ -656,7 +655,7 @@ void StrategyBuilderPanel::on_backtest_result(const QJsonObject& data) {
 
     // Build result cards
     auto add_metric = [this](const QString& label, const QString& value, const QString& color) {
-        auto* row = new QWidget;
+        auto* row = new QWidget(this);
         row->setStyleSheet(QString("background: %1; border: 1px solid %2;")
                                .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_DIM));
         auto* hl = new QHBoxLayout(row);

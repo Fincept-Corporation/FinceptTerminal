@@ -196,9 +196,7 @@ struct SessionData {
     // Subscription API is the most up-to-date; user_info is the fallback
     // populated at login before the subscription endpoint is called.
     const QString& account_type() const {
-        return subscription.account_type.isEmpty()
-                   ? user_info.account_type
-                   : subscription.account_type;
+        return subscription.account_type.isEmpty() ? user_info.account_type : subscription.account_type;
     }
 
     bool has_paid_plan() const {

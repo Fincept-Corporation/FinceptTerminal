@@ -29,27 +29,27 @@ struct InfoData {
     QString industry;
     QString country;
     QString currency;
-    double market_cap    = 0;
-    double pe_ratio      = 0;
-    double forward_pe    = 0;
+    double market_cap = 0;
+    double pe_ratio = 0;
+    double forward_pe = 0;
     double price_to_book = 0;
-    double dividend_yield= 0;
-    double beta          = 0;
-    double week52_high   = 0;
-    double week52_low    = 0;
-    double avg_volume    = 0;
-    double eps           = 0;   // revenuePerShare as proxy
-    double roe           = 0;
+    double dividend_yield = 0;
+    double beta = 0;
+    double week52_high = 0;
+    double week52_low = 0;
+    double avg_volume = 0;
+    double eps = 0; // revenuePerShare as proxy
+    double roe = 0;
     double profit_margin = 0;
-    double debt_to_equity= 0;
+    double debt_to_equity = 0;
     double current_ratio = 0;
 };
 
 struct HistoryPoint {
-    qint64 timestamp = 0;  // seconds since epoch
-    double open  = 0;
-    double high  = 0;
-    double low   = 0;
+    qint64 timestamp = 0; // seconds since epoch
+    double open = 0;
+    double high = 0;
+    double low = 0;
     double close = 0;
     qint64 volume = 0;
 };
@@ -93,14 +93,12 @@ class MarketDataService : public QObject {
     /// Fetch historical OHLCV data. period: "1mo","3mo","6mo","1y","2y","5y"
     /// interval: "1d","1wk","1mo"
     using HistoryCallback = std::function<void(bool, QVector<HistoryPoint>)>;
-    void fetch_history(const QString& symbol, const QString& period,
-                       const QString& interval, HistoryCallback cb);
+    void fetch_history(const QString& symbol, const QString& period, const QString& interval, HistoryCallback cb);
 
     /// Fetch 5-day hourly sparkline data for multiple symbols in one Python call.
     /// Callback: map of symbol -> list of close prices (chronological).
     using SparklineCallback = std::function<void(bool, QHash<QString, QVector<double>>)>;
     void fetch_sparklines(const QStringList& symbols, SparklineCallback cb);
-
 
     static QVector<MarketCategory> default_global_markets();
     static QVector<RegionalMarket> default_regional_markets();

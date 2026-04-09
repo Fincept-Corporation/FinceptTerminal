@@ -163,12 +163,12 @@ std::vector<ToolDef> get_portfolio_management_tools() {
         t.name = "add_portfolio_asset";
         t.description = "Add a new asset/holding to a portfolio.";
         t.category = "portfolio";
-        t.input_schema.properties =
-            QJsonObject{{"portfolio_id", QJsonObject{{"type", "string"}, {"description", "Portfolio ID"}}},
-                        {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol (e.g. AAPL)"}}},
-                        {"quantity", QJsonObject{{"type", "number"}, {"description", "Number of shares/units"}}},
-                        {"price", QJsonObject{{"type", "number"}, {"description", "Purchase price per unit"}}},
-                        {"date", QJsonObject{{"type", "string"}, {"description", "Purchase date YYYY-MM-DD (optional)"}}}};
+        t.input_schema.properties = QJsonObject{
+            {"portfolio_id", QJsonObject{{"type", "string"}, {"description", "Portfolio ID"}}},
+            {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol (e.g. AAPL)"}}},
+            {"quantity", QJsonObject{{"type", "number"}, {"description", "Number of shares/units"}}},
+            {"price", QJsonObject{{"type", "number"}, {"description", "Purchase price per unit"}}},
+            {"date", QJsonObject{{"type", "string"}, {"description", "Purchase date YYYY-MM-DD (optional)"}}}};
         t.input_schema.required = {"portfolio_id", "symbol", "quantity", "price"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString portfolio_id = args["portfolio_id"].toString().trimmed();
@@ -291,7 +291,9 @@ std::vector<ToolDef> get_portfolio_management_tools() {
             if (r.is_err())
                 return ToolResult::fail("Failed to add transaction: " + QString::fromStdString(r.error()));
 
-            LOG_INFO(TAG, QString("Transaction %1 %2 x%3 in portfolio %4").arg(type, symbol).arg(quantity).arg(portfolio_id));
+            LOG_INFO(
+                TAG,
+                QString("Transaction %1 %2 x%3 in portfolio %4").arg(type, symbol).arg(quantity).arg(portfolio_id));
             return ToolResult::ok("Transaction recorded",
                                   QJsonObject{{"id", r.value()}, {"symbol", symbol}, {"type", type}});
         };

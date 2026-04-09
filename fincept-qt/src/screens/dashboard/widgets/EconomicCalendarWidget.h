@@ -29,6 +29,7 @@ class EconomicCalendarWidget : public BaseWidget {
     QVBoxLayout* list_layout_ = nullptr;
     QLabel* status_label_ = nullptr;
     QVector<QLabel*> header_labels_;
+    QJsonArray last_events_; // cached for theme-change re-populate
 };
 
 } // namespace fincept::screens::widgets

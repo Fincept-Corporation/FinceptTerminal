@@ -37,7 +37,7 @@ class GovDataAustraliaPanel : public QWidget {
 
   private:
     // UI construction
-    void     build_ui();
+    void build_ui();
     QWidget* build_toolbar();
 
     // Table population
@@ -59,7 +59,7 @@ class GovDataAustraliaPanel : public QWidget {
 
     // ── Constants ────────────────────────────────────────────────────────────
     static constexpr const char* kScript = "datagov_au_api.py";
-    static constexpr const char* kColor  = "#0EA5E9";
+    static constexpr const char* kColor = "#0EA5E9";
 
     // Enum order matches content_stack_ page indices
     enum View { Agencies = 0, Datasets, Resources, Status };
@@ -69,33 +69,33 @@ class GovDataAustraliaPanel : public QWidget {
     bool showing_recent_ = false;
 
     // ── Toolbar widgets ───────────────────────────────────────────────────────
-    QPushButton* back_btn_     = nullptr;
+    QPushButton* back_btn_ = nullptr;
     QPushButton* agencies_btn_ = nullptr;
     QPushButton* datasets_btn_ = nullptr;
-    QPushButton* recent_btn_   = nullptr;
-    QLineEdit*   search_input_ = nullptr;
-    QPushButton* fetch_btn_    = nullptr;
-    QPushButton* export_btn_   = nullptr;
+    QPushButton* recent_btn_ = nullptr;
+    QLineEdit* search_input_ = nullptr;
+    QPushButton* fetch_btn_ = nullptr;
+    QPushButton* export_btn_ = nullptr;
 
     // ── Breadcrumb bar ────────────────────────────────────────────────────────
-    QWidget* breadcrumb_       = nullptr;
-    QLabel*  breadcrumb_label_ = nullptr;
-    QLabel*  row_count_label_  = nullptr;
+    QWidget* breadcrumb_ = nullptr;
+    QLabel* breadcrumb_label_ = nullptr;
+    QLabel* row_count_label_ = nullptr;
 
     // ── Content stack (index matches View enum) ───────────────────────────────
-    QStackedWidget* content_stack_   = nullptr;
-    QTableWidget*   agencies_table_  = nullptr;
-    QTableWidget*   datasets_table_  = nullptr;
-    QTableWidget*   resources_table_ = nullptr;
-    QLabel*         status_label_    = nullptr;
+    QStackedWidget* content_stack_ = nullptr;
+    QTableWidget* agencies_table_ = nullptr;
+    QTableWidget* datasets_table_ = nullptr;
+    QTableWidget* resources_table_ = nullptr;
+    QLabel* status_label_ = nullptr;
 
     // ── Navigation state ──────────────────────────────────────────────────────
-    QString    selected_agency_;      // display name for breadcrumb
-    QString    selected_agency_id_;   // id/name used in API call
-    QString    selected_dataset_title_;
+    QString selected_agency_;    // display name for breadcrumb
+    QString selected_agency_id_; // id/name used in API call
+    QString selected_dataset_title_;
 
     QJsonArray current_agencies_;
-    QJsonArray current_datasets_;  // stored so resources can be extracted without re-fetch
+    QJsonArray current_datasets_; // stored so resources can be extracted without re-fetch
 };
 
 } // namespace fincept::screens

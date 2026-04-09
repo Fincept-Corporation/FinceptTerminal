@@ -37,7 +37,7 @@ class GovDataHKPanel : public QWidget {
   private:
     enum View { Categories = 0, Datasets, Resources, Status };
 
-    void     build_ui();
+    void build_ui();
     QWidget* build_toolbar();
 
     void populate_categories(const QJsonArray& data);
@@ -55,9 +55,9 @@ class GovDataHKPanel : public QWidget {
     void update_breadcrumb(const QString& text);
 
     static constexpr const char* kScript = "data_gov_hk_api.py";
-    static constexpr const char* kColor  = "#F43F5E";
+    static constexpr const char* kColor = "#F43F5E";
 
-    View    current_view_   = Categories;
+    View current_view_ = Categories;
     QString selected_category_id_;
     QString selected_category_name_;
     QString selected_dataset_id_;
@@ -66,24 +66,24 @@ class GovDataHKPanel : public QWidget {
     QJsonArray all_dataset_names_;
 
     // Toolbar widgets
-    QPushButton* back_btn_       = nullptr;
+    QPushButton* back_btn_ = nullptr;
     QPushButton* categories_btn_ = nullptr;
-    QPushButton* datasets_btn_   = nullptr;
-    QLineEdit*   search_input_   = nullptr;
-    QPushButton* fetch_btn_      = nullptr;
-    QPushButton* export_btn_     = nullptr;
+    QPushButton* datasets_btn_ = nullptr;
+    QLineEdit* search_input_ = nullptr;
+    QPushButton* fetch_btn_ = nullptr;
+    QPushButton* export_btn_ = nullptr;
 
     // Breadcrumb
-    QWidget* breadcrumb_       = nullptr;
-    QLabel*  breadcrumb_label_ = nullptr;
-    QLabel*  row_count_label_  = nullptr;
+    QWidget* breadcrumb_ = nullptr;
+    QLabel* breadcrumb_label_ = nullptr;
+    QLabel* row_count_label_ = nullptr;
 
     // Content pages
-    QStackedWidget* content_stack_   = nullptr;
-    QTableWidget*   categories_table_ = nullptr;  // page 0
-    QTableWidget*   datasets_table_   = nullptr;  // page 1
-    QTableWidget*   resources_table_  = nullptr;  // page 2
-    QLabel*         status_label_     = nullptr;  // page 3
+    QStackedWidget* content_stack_ = nullptr;
+    QTableWidget* categories_table_ = nullptr; // page 0
+    QTableWidget* datasets_table_ = nullptr;   // page 1
+    QTableWidget* resources_table_ = nullptr;  // page 2
+    QLabel* status_label_ = nullptr;           // page 3
 
     // Cached for CSV
     QJsonArray current_categories_;

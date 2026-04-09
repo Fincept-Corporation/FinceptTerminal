@@ -17,9 +17,9 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kCensusScript   = "census_data.py";
+static constexpr const char* kCensusScript = "census_data.py";
 static constexpr const char* kCensusSourceId = "census";
-static constexpr const char* kCensusColor    = "#7C3AED";  // purple
+static constexpr const char* kCensusColor = "#7C3AED"; // purple
 } // namespace
 
 struct CensusDataset {
@@ -29,25 +29,25 @@ struct CensusDataset {
 };
 
 static const QList<CensusDataset> kCensusDatasets = {
-    { "Population by State (ACS)",      "acs",     "Total population estimate by US state" },
-    { "Housing by State (ACS)",         "housing", "Housing units, occupancy & tenure by state" },
+    {"Population by State (ACS)", "acs", "Total population estimate by US state"},
+    {"Housing by State (ACS)", "housing", "Housing units, occupancy & tenure by state"},
 };
 
 // Rename Census variable codes to human-readable labels
 static const QMap<QString, QString> kVarNames = {
-    { "NAME",          "State"           },
-    { "B01003_001E",   "Total Population"},
-    { "state",         "State FIPS"      },
-    { "B25001_001E",   "Total Housing Units"   },
-    { "B25002_002E",   "Occupied Units"        },
-    { "B25002_003E",   "Vacant Units"          },
-    { "B25003_002E",   "Owner Occupied"        },
-    { "B25003_003E",   "Renter Occupied"       },
+    {"NAME", "State"},
+    {"B01003_001E", "Total Population"},
+    {"state", "State FIPS"},
+    {"B25001_001E", "Total Housing Units"},
+    {"B25002_002E", "Occupied Units"},
+    {"B25002_003E", "Vacant Units"},
+    {"B25003_002E", "Owner Occupied"},
+    {"B25003_003E", "Renter Occupied"},
 };
 
 QJsonArray CensusPanel::flatten_census(const QJsonObject& response) {
     const QJsonArray headers = response["headers"].toArray();
-    const QJsonArray data    = response["data"].toArray();
+    const QJsonArray data = response["data"].toArray();
 
     if (headers.isEmpty() || data.isEmpty())
         return {};
@@ -66,12 +66,10 @@ QJsonArray CensusPanel::flatten_census(const QJsonObject& response) {
     return rows;
 }
 
-CensusPanel::CensusPanel(QWidget* parent)
-    : EconPanelBase(kCensusSourceId, kCensusColor, parent) {
+CensusPanel::CensusPanel(QWidget* parent) : EconPanelBase(kCensusSourceId, kCensusColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &CensusPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &CensusPanel::on_result);
 }
 
 void CensusPanel::activate() {
@@ -95,20 +93,23 @@ void CensusPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void CensusPanel::on_fetch() {
-    const int     idx     = dataset_combo_->currentIndex();
-    const auto&   dataset = kCensusDatasets[idx];
+    const int idx = dataset_combo_->currentIndex();
+    const auto& dataset = kCensusDatasets[idx];
 
     show_loading("Fetching Census: " + dataset.label + "…");
-    services::EconomicsService::instance().execute(
-        kCensusSourceId, kCensusScript, dataset.command, {},
-        "census_" + dataset.command);
+    services::EconomicsService::instance().execute(kCensusSourceId, kCensusScript, dataset.command, {},
+                                                   "census_" + dataset.command);
 }
 
-void CensusPanel::on_result(const QString& request_id,
-                             const services::EconomicsResult& result) {
-    if (result.source_id != kCensusSourceId) return;
-    if (!request_id.startsWith("census_")) return;
-    if (!result.success) { show_error(result.error); return; }
+void CensusPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kCensusSourceId)
+        return;
+    if (!request_id.startsWith("census_"))
+        return;
+    if (!result.success) {
+        show_error(result.error);
+        return;
+    }
 
     // Try Census-specific flatten first
     QJsonArray rows = flatten_census(result.data);
@@ -124,9 +125,8 @@ void CensusPanel::on_result(const QString& request_id,
     }
 
     const int idx = dataset_combo_->currentIndex();
-    const QString title = "Census: " + (idx >= 0 && idx < kCensusDatasets.size()
-                                            ? kCensusDatasets[idx].label
-                                            : request_id.mid(7));
+    const QString title =
+        "Census: " + (idx >= 0 && idx < kCensusDatasets.size() ? kCensusDatasets[idx].label : request_id.mid(7));
     display(rows, title);
     LOG_INFO("CensusPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(title));
 }

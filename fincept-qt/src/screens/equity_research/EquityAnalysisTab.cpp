@@ -25,7 +25,7 @@ QFrame* make_panel(const QString& title, const QString& accent_color) {
     vl->setSpacing(14);
 
     // Header row: accent bar + title
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(nullptr);
     hdr->setStyleSheet(QString("background:transparent; border:0; border-bottom:2px solid %1;").arg(accent_color));
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(0, 0, 0, 8);
@@ -49,7 +49,7 @@ QFrame* make_panel(const QString& title, const QString& accent_color) {
 
 // Creates a 2-column metric card: small gray label on top, big colored value below
 QWidget* make_card(const QString& label, QLabel*& val_out, const QString& val_color) {
-    auto* w = new QWidget;
+    auto* w = new QWidget(nullptr);
     w->setStyleSheet("background:transparent;");
     auto* vl = new QVBoxLayout(w);
     vl->setContentsMargins(0, 0, 0, 0);
@@ -95,7 +95,7 @@ void EquityAnalysisTab::build_ui() {
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setStyleSheet("background:transparent; border:0;");
 
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     auto* grid = new QGridLayout(content);
     grid->setContentsMargins(12, 12, 12, 12);
     grid->setSpacing(10);

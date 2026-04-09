@@ -13,8 +13,10 @@
 
 namespace fincept::screens {
 
-/// Left sidebar panel (240px): live stats, sentiment gauge, top stories,
-/// categories, keyword monitors CRUD, and deviation alerts.
+/// Intelligence drawer — slides in from the left over the feed panel.
+/// Contains all advanced intelligence sections: monitors, top stories,
+/// categories, entities, signals, instability, predictions, bookmarks.
+/// Toggled via the INTEL button in the command bar.
 class NewsSidePanel : public QWidget {
     Q_OBJECT
   public:
@@ -34,33 +36,25 @@ class NewsSidePanel : public QWidget {
     void update_predictions(const QVector<services::PredictionMarket>& predictions);
     void update_saved(const QVector<services::NewsArticle>& saved);
 
+    /// Toggle drawer visibility with animation
+    void toggle_drawer();
+    bool is_drawer_open() const { return drawer_open_; }
+
   signals:
     void category_clicked(const QString& category);
     void article_clicked(const services::NewsArticle& article);
     void monitor_added(const QString& label, const QStringList& keywords);
     void monitor_toggled(const QString& id);
     void monitor_deleted(const QString& id);
+    void close_requested();
 
   private:
-    void build_stats_section(QVBoxLayout* parent);
-    void build_sentiment_section(QVBoxLayout* parent);
     void build_top_stories_section(QVBoxLayout* parent);
     void build_categories_section(QVBoxLayout* parent);
     void build_monitors_section(QVBoxLayout* parent);
     void build_deviations_section(QVBoxLayout* parent);
-    void build_saved_section(QVBoxLayout* parent);
 
-    // Stats
-    QLabel* feeds_value_ = nullptr;
-    QLabel* articles_value_ = nullptr;
-    QLabel* clusters_value_ = nullptr;
-    QLabel* sources_value_ = nullptr;
-
-    // Sentiment
-    QWidget* bull_bar_ = nullptr;
-    QWidget* bear_bar_ = nullptr;
-    QWidget* neut_bar_ = nullptr;
-    QLabel* sentiment_score_ = nullptr;
+    bool drawer_open_ = false;
 
     // Top stories
     QVBoxLayout* top_stories_layout_ = nullptr;

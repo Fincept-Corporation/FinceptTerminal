@@ -1,8 +1,8 @@
 #pragma once
 #include "core/result/Result.h"
 
-#include <QObject>
 #include <QDateTime>
+#include <QObject>
 #include <QString>
 
 #include <array>

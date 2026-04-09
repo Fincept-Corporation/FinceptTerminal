@@ -24,16 +24,16 @@ static QLabel* heading(const QString& num, const QString& title) {
 static QLabel* body(const QString& text) {
     auto* lbl = new QLabel(text);
     lbl->setWordWrap(true);
-    lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2")
-                           .arg(colors::TEXT_PRIMARY, MF));
+    lbl->setStyleSheet(
+        QString("color: %1; font-size: 12px; background: transparent; %2").arg(colors::TEXT_PRIMARY, MF));
     return lbl;
 }
 
 static QLabel* bullet(const QString& text) {
     auto* lbl = new QLabel(QString("  > %1").arg(text));
     lbl->setWordWrap(true);
-    lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2")
-                           .arg(colors::TEXT_SECONDARY, MF));
+    lbl->setStyleSheet(
+        QString("color: %1; font-size: 12px; background: transparent; %2").arg(colors::TEXT_SECONDARY, MF));
     return lbl;
 }
 
@@ -48,7 +48,7 @@ TrademarksScreen::TrademarksScreen(QWidget* parent) : QWidget(parent) {
     scroll->setWidgetResizable(true);
     scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }");
 
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     page->setStyleSheet(QString("background: %1;").arg(colors::BG_BASE));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
@@ -76,7 +76,7 @@ TrademarksScreen::TrademarksScreen(QWidget* parent) : QWidget(parent) {
     vl->addSpacing(12);
 
     // Panel
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 2px;")
                              .arg(colors::BG_SURFACE, colors::BORDER_DIM));
     auto* pvl = new QVBoxLayout(panel);

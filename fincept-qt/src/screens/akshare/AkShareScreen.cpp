@@ -184,7 +184,7 @@ void AkShareScreen::setup_ui() {
     splitter->setHandleWidth(1);
 
     // Left: endpoint panel
-    auto* left = new QWidget;
+    auto* left = new QWidget(this);
     auto* left_vl = new QVBoxLayout(left);
     left_vl->setContentsMargins(0, 0, 0, 0);
     left_vl->setSpacing(0);
@@ -193,7 +193,7 @@ void AkShareScreen::setup_ui() {
     left->setMaximumWidth(350);
 
     // Right: params + data
-    auto* right = new QWidget;
+    auto* right = new QWidget(this);
     auto* right_vl = new QVBoxLayout(right);
     right_vl->setContentsMargins(0, 0, 0, 0);
     right_vl->setSpacing(0);
@@ -213,7 +213,7 @@ void AkShareScreen::setup_ui() {
 }
 
 QWidget* AkShareScreen::create_header() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("akHeader");
     bar->setFixedHeight(42);
 
@@ -239,7 +239,7 @@ QWidget* AkShareScreen::create_header() {
 }
 
 QWidget* AkShareScreen::create_source_grid() {
-    auto* container = new QWidget;
+    auto* container = new QWidget(this);
     container->setObjectName("akSourceGrid");
 
     auto* scroll = new QScrollArea;
@@ -248,7 +248,7 @@ QWidget* AkShareScreen::create_source_grid() {
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
-    auto* inner = new QWidget;
+    auto* inner = new QWidget(this);
     auto* grid = new QGridLayout(inner);
     grid->setContentsMargins(8, 6, 8, 6);
     grid->setSpacing(4);
@@ -274,7 +274,7 @@ QWidget* AkShareScreen::create_source_grid() {
 }
 
 QWidget* AkShareScreen::create_endpoint_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("akEndpointPanel");
 
     auto* vl = new QVBoxLayout(panel);
@@ -282,7 +282,7 @@ QWidget* AkShareScreen::create_endpoint_panel() {
     vl->setSpacing(0);
 
     // Search bar
-    auto* search_bar = new QWidget;
+    auto* search_bar = new QWidget(this);
     auto* sbl = new QHBoxLayout(search_bar);
     sbl->setContentsMargins(8, 6, 8, 6);
     sbl->setSpacing(6);
@@ -316,7 +316,7 @@ QWidget* AkShareScreen::create_endpoint_panel() {
 }
 
 QWidget* AkShareScreen::create_params_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("akParamsPanel");
     panel->setFixedHeight(38);
 
@@ -379,7 +379,7 @@ QWidget* AkShareScreen::create_params_panel() {
 }
 
 QWidget* AkShareScreen::create_data_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("akDataPanel");
 
     auto* vl = new QVBoxLayout(panel);
@@ -387,7 +387,7 @@ QWidget* AkShareScreen::create_data_panel() {
     vl->setSpacing(0);
 
     // Toolbar row
-    auto* toolbar = new QWidget;
+    auto* toolbar = new QWidget(this);
     toolbar->setFixedHeight(30);
     auto* tbl = new QHBoxLayout(toolbar);
     tbl->setContentsMargins(12, 0, 12, 0);
@@ -445,7 +445,7 @@ QWidget* AkShareScreen::create_data_panel() {
 }
 
 QWidget* AkShareScreen::create_status_bar() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("akStatusBar");
     bar->setFixedHeight(26);
 
@@ -568,40 +568,40 @@ void AkShareScreen::load_endpoints(const AkShareSource& source) {
 
     QPointer<AkShareScreen> self = this;
 
-    python::PythonRunner::instance().run(source.script, {"get_all_endpoints"},
-                                         [self, script = source.script, cache_key](const python::PythonResult& result) {
-                                             if (!self)
-                                                 return;
+    python::PythonRunner::instance().run(
+        source.script, {"get_all_endpoints"},
+        [self, script = source.script, cache_key](const python::PythonResult& result) {
+            if (!self)
+                return;
 
-                                             self->set_loading(false);
+            self->set_loading(false);
 
-                                             if (!result.success) {
-                                                 self->data_status_->setText("Failed to load endpoints");
-                                                 LOG_ERROR("AkShare", "Endpoint load failed: " + result.error);
-                                                 return;
-                                             }
+            if (!result.success) {
+                self->data_status_->setText("Failed to load endpoints");
+                LOG_ERROR("AkShare", "Endpoint load failed: " + result.error);
+                return;
+            }
 
-                                             QString json_str = python::extract_json(result.output);
-                                             if (json_str.isEmpty()) {
-                                                 self->data_status_->setText("No endpoint data returned");
-                                                 return;
-                                             }
+            QString json_str = python::extract_json(result.output);
+            if (json_str.isEmpty()) {
+                self->data_status_->setText("No endpoint data returned");
+                return;
+            }
 
-                                             QJsonParseError err;
-                                             auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
-                                             if (doc.isNull() || !doc.isObject()) {
-                                                 self->data_status_->setText("Invalid endpoint data");
-                                                 return;
-                                             }
+            QJsonParseError err;
+            auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
+            if (doc.isNull() || !doc.isObject()) {
+                self->data_status_->setText("Invalid endpoint data");
+                return;
+            }
 
-                                             auto obj = doc.object();
-                                             fincept::CacheManager::instance().put(
-                                                 cache_key,
-                                                 QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
-                                                 60 * 60, "akshare");
-                                             self->endpoint_cache_[script] = obj;
-                                             self->populate_endpoint_list(obj);
-                                         });
+            auto obj = doc.object();
+            fincept::CacheManager::instance().put(
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), 60 * 60,
+                "akshare");
+            self->endpoint_cache_[script] = obj;
+            self->populate_endpoint_list(obj);
+        });
 }
 
 void AkShareScreen::populate_endpoint_list(const QJsonObject& result) {
@@ -682,80 +682,80 @@ void AkShareScreen::execute_query(const QString& script, const QString& endpoint
 
     QPointer<AkShareScreen> self = this;
 
-    python::PythonRunner::instance().run(script, full_args, [self, endpoint, cache_key](const python::PythonResult& result) {
-        if (!self)
-            return;
+    python::PythonRunner::instance().run(
+        script, full_args, [self, endpoint, cache_key](const python::PythonResult& result) {
+            if (!self)
+                return;
 
-        self->set_loading(false);
+            self->set_loading(false);
 
-        if (!result.success) {
-            self->display_error(result.error.isEmpty() ? "Query failed" : result.error);
-            return;
-        }
-
-        QString json_str = python::extract_json(result.output);
-        if (json_str.isEmpty()) {
-            self->display_error("No data returned from " + endpoint);
-            return;
-        }
-
-        QJsonParseError err;
-        auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
-        if (doc.isNull()) {
-            self->display_error("JSON parse error: " + err.errorString());
-            return;
-        }
-
-        auto obj = doc.isObject() ? doc.object() : QJsonObject();
-
-        // Check for error in response
-        if (obj.contains("error")) {
-            self->display_error(obj["error"].toString());
-            return;
-        }
-        if (obj.contains("success") && !obj["success"].toBool()) {
-            self->display_error(obj.value("error").toString("Query returned failure"));
-            return;
-        }
-
-        // Extract data array
-        QJsonArray data_array;
-        if (obj.contains("data")) {
-            if (obj["data"].isArray()) {
-                data_array = obj["data"].toArray();
-            } else if (obj["data"].isObject()) {
-                // Single object result — wrap in array
-                data_array.append(obj["data"]);
-            } else {
-                // Scalar value
-                QJsonObject wrapper;
-                wrapper["value"] = obj["data"];
-                data_array.append(wrapper);
+            if (!result.success) {
+                self->display_error(result.error.isEmpty() ? "Query failed" : result.error);
+                return;
             }
-        } else if (doc.isArray()) {
-            data_array = doc.array();
-        } else {
-            // Treat entire response as single-row data
-            data_array.append(obj);
-        }
 
-        int count = data_array.size();
-        self->record_count_->setText(QString::number(count) + " records");
-        self->record_count_->show();
-        self->data_status_->setText(endpoint);
+            QString json_str = python::extract_json(result.output);
+            if (json_str.isEmpty()) {
+                self->display_error("No data returned from " + endpoint);
+                return;
+            }
 
-        if (!data_array.isEmpty()) {
-            fincept::CacheManager::instance().put(
-                cache_key,
-                QVariant(QString::fromUtf8(QJsonDocument(data_array).toJson(QJsonDocument::Compact))),
-                2 * 60, "akshare");
-        }
+            QJsonParseError err;
+            auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
+            if (doc.isNull()) {
+                self->display_error("JSON parse error: " + err.errorString());
+                return;
+            }
 
-        self->display_table_data(data_array);
-        self->display_json_data(data_array);
+            auto obj = doc.isObject() ? doc.object() : QJsonObject();
 
-        LOG_INFO("AkShare", "Query " + endpoint + ": " + QString::number(count) + " records");
-    });
+            // Check for error in response
+            if (obj.contains("error")) {
+                self->display_error(obj["error"].toString());
+                return;
+            }
+            if (obj.contains("success") && !obj["success"].toBool()) {
+                self->display_error(obj.value("error").toString("Query returned failure"));
+                return;
+            }
+
+            // Extract data array
+            QJsonArray data_array;
+            if (obj.contains("data")) {
+                if (obj["data"].isArray()) {
+                    data_array = obj["data"].toArray();
+                } else if (obj["data"].isObject()) {
+                    // Single object result — wrap in array
+                    data_array.append(obj["data"]);
+                } else {
+                    // Scalar value
+                    QJsonObject wrapper;
+                    wrapper["value"] = obj["data"];
+                    data_array.append(wrapper);
+                }
+            } else if (doc.isArray()) {
+                data_array = doc.array();
+            } else {
+                // Treat entire response as single-row data
+                data_array.append(obj);
+            }
+
+            int count = data_array.size();
+            self->record_count_->setText(QString::number(count) + " records");
+            self->record_count_->show();
+            self->data_status_->setText(endpoint);
+
+            if (!data_array.isEmpty()) {
+                fincept::CacheManager::instance().put(
+                    cache_key, QVariant(QString::fromUtf8(QJsonDocument(data_array).toJson(QJsonDocument::Compact))),
+                    2 * 60, "akshare");
+            }
+
+            self->display_table_data(data_array);
+            self->display_json_data(data_array);
+
+            LOG_INFO("AkShare", "Query " + endpoint + ": " + QString::number(count) + " records");
+        });
 }
 
 // ── Display ─────────────────────────────────────────────────────────────────

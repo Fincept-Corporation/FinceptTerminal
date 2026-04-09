@@ -33,15 +33,13 @@ NodeCanvas::NodeCanvas(NodeScene* scene, QWidget* parent) : QGraphicsView(scene,
     setAcceptDrops(true);
     setTransformationAnchor(AnchorUnderMouse);
 
-    setStyleSheet(QString("QGraphicsView { background: %1; border: none; }")
-                      .arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("QGraphicsView { background: %1; border: none; }").arg(ui::colors::BG_BASE));
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) {
-                resetCachedContent(); // invalidate drawBackground cache
-                if (this->scene())
-                    this->scene()->update();
-            });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        resetCachedContent(); // invalidate drawBackground cache
+        if (this->scene())
+            this->scene()->update();
+    });
 }
 
 // ── Zoom ───────────────────────────────────────────────────────────────
@@ -230,13 +228,12 @@ void NodeCanvas::contextMenuEvent(QContextMenuEvent* event) {
 
     const auto& tm = ui::ThemeManager::instance().tokens();
     QMenu menu;
-    menu.setStyleSheet(
-        QString("QMenu { background: %1; color: %2; border: 1px solid %3;"
-                "  font-family: Consolas; font-size: 12px; }"
-                "QMenu::item { padding: 4px 16px; }"
-                "QMenu::item:selected { background: %4; color: %5; }"
-                "QMenu::separator { background: %3; height: 1px; margin: 2px 6px; }")
-        .arg(tm.bg_raised, tm.text_primary, tm.border_dim, tm.accent, tm.bg_base));
+    menu.setStyleSheet(QString("QMenu { background: %1; color: %2; border: 1px solid %3;"
+                               "  font-family: Consolas; font-size: 12px; }"
+                               "QMenu::item { padding: 4px 16px; }"
+                               "QMenu::item:selected { background: %4; color: %5; }"
+                               "QMenu::separator { background: %3; height: 1px; margin: 2px 6px; }")
+                           .arg(tm.bg_raised, tm.text_primary, tm.border_dim, tm.accent, tm.bg_base));
 
     auto& registry = NodeRegistry::instance();
     QStringList cats = registry.categories();

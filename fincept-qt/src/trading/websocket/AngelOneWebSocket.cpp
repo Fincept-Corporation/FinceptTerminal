@@ -34,26 +34,14 @@ static constexpr const char* TAG_AO_WS = "AngelOneWS";
 // ─────────────────────────────────────────────────────────────────────────────
 
 qint64 AngelOneWebSocket::read_i64_le(const uchar* p) {
-    quint64 v = quint64(p[0])
-              | (quint64(p[1]) << 8)
-              | (quint64(p[2]) << 16)
-              | (quint64(p[3]) << 24)
-              | (quint64(p[4]) << 32)
-              | (quint64(p[5]) << 40)
-              | (quint64(p[6]) << 48)
-              | (quint64(p[7]) << 56);
+    quint64 v = quint64(p[0]) | (quint64(p[1]) << 8) | (quint64(p[2]) << 16) | (quint64(p[3]) << 24) |
+                (quint64(p[4]) << 32) | (quint64(p[5]) << 40) | (quint64(p[6]) << 48) | (quint64(p[7]) << 56);
     return static_cast<qint64>(v);
 }
 
 double AngelOneWebSocket::read_d64_le(const uchar* p) {
-    quint64 raw = quint64(p[0])
-                | (quint64(p[1]) << 8)
-                | (quint64(p[2]) << 16)
-                | (quint64(p[3]) << 24)
-                | (quint64(p[4]) << 32)
-                | (quint64(p[5]) << 40)
-                | (quint64(p[6]) << 48)
-                | (quint64(p[7]) << 56);
+    quint64 raw = quint64(p[0]) | (quint64(p[1]) << 8) | (quint64(p[2]) << 16) | (quint64(p[3]) << 24) |
+                  (quint64(p[4]) << 32) | (quint64(p[5]) << 40) | (quint64(p[6]) << 48) | (quint64(p[7]) << 56);
     double d;
     memcpy(&d, &raw, 8);
     return d;
@@ -70,7 +58,8 @@ double AngelOneWebSocket::paise_to_rupees(qint64 paise) {
 QString AngelOneWebSocket::parse_token_string(const uchar* p, int max_len) {
     QString token;
     for (int i = 0; i < max_len; ++i) {
-        if (p[i] == '\0') break;
+        if (p[i] == '\0')
+            break;
         token += QChar(p[i]);
     }
     return token;
@@ -84,21 +73,15 @@ quint8 AngelOneWebSocket::exchange_type_to_int(AoExchangeType t) {
 // Constructor
 // ─────────────────────────────────────────────────────────────────────────────
 
-AngelOneWebSocket::AngelOneWebSocket(const QString& api_key,
-                                     const QString& client_code,
-                                     const QString& feed_token,
+AngelOneWebSocket::AngelOneWebSocket(const QString& api_key, const QString& client_code, const QString& feed_token,
                                      QObject* parent)
-    : QObject(parent)
-    , api_key_(api_key)
-    , client_code_(client_code)
-    , feed_token_(feed_token)
-{
+    : QObject(parent), api_key_(api_key), client_code_(client_code), feed_token_(feed_token) {
     ws_ = new WebSocketClient(this);
-    connect(ws_, &WebSocketClient::connected,              this, &AngelOneWebSocket::on_connected);
-    connect(ws_, &WebSocketClient::disconnected,           this, &AngelOneWebSocket::on_disconnected);
-    connect(ws_, &WebSocketClient::binary_message_received,this, &AngelOneWebSocket::on_binary_message);
-    connect(ws_, &WebSocketClient::message_received,       this, &AngelOneWebSocket::on_text_message);
-    connect(ws_, &WebSocketClient::error_occurred,         this, &AngelOneWebSocket::error_occurred);
+    connect(ws_, &WebSocketClient::connected, this, &AngelOneWebSocket::on_connected);
+    connect(ws_, &WebSocketClient::disconnected, this, &AngelOneWebSocket::on_disconnected);
+    connect(ws_, &WebSocketClient::binary_message_received, this, &AngelOneWebSocket::on_binary_message);
+    connect(ws_, &WebSocketClient::message_received, this, &AngelOneWebSocket::on_text_message);
+    connect(ws_, &WebSocketClient::error_occurred, this, &AngelOneWebSocket::error_occurred);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -138,9 +121,8 @@ void AngelOneWebSocket::unsubscribe(const QVector<Subscription>& subs, AoSubMode
     for (const auto& s : subs) {
         QString key = QString::number(exchange_type_to_int(s.exchange_type)) + ":" + s.token;
         if (subscribed_keys_.remove(key)) {
-            subscriptions_.removeIf([&](const Subscription& x) {
-                return x.token == s.token && x.exchange_type == s.exchange_type;
-            });
+            subscriptions_.removeIf(
+                [&](const Subscription& x) { return x.token == s.token && x.exchange_type == s.exchange_type; });
             to_remove.append(s);
         }
     }
@@ -224,7 +206,7 @@ void AngelOneWebSocket::on_binary_message(const QByteArray& data) {
     if (ok) {
         auto inst = svc.find_by_token(token_int, "angelone");
         if (inst.has_value()) {
-            tick.symbol   = inst->symbol;
+            tick.symbol = inst->symbol;
             tick.exchange = inst->exchange;
         }
     }
@@ -241,19 +223,20 @@ void AngelOneWebSocket::on_binary_message(const QByteArray& data) {
 void AngelOneWebSocket::send_auth() {
     // Connect/auth message — must be sent immediately after WebSocket opens
     QJsonObject params;
-    params["userID"]    = client_code_;
+    params["userID"] = client_code_;
     params["feedToken"] = feed_token_;
 
     QJsonObject msg;
     msg["correlationID"] = "fincept_auth";
-    msg["action"]        = 2;  // 2 = connect/auth
-    msg["params"]        = params;
+    msg["action"] = 2; // 2 = connect/auth
+    msg["params"] = params;
 
     ws_->send(QJsonDocument(msg).toJson(QJsonDocument::Compact));
 }
 
 void AngelOneWebSocket::send_subscribe(const QVector<Subscription>& subs, AoSubMode mode) {
-    if (subs.isEmpty()) return;
+    if (subs.isEmpty())
+        return;
 
     // Group tokens by exchange type
     QMap<quint8, QJsonArray> by_exchange;
@@ -264,26 +247,26 @@ void AngelOneWebSocket::send_subscribe(const QVector<Subscription>& subs, AoSubM
     for (auto it = by_exchange.constBegin(); it != by_exchange.constEnd(); ++it) {
         QJsonObject entry;
         entry["exchangeType"] = int(it.key());
-        entry["tokens"]       = it.value();
+        entry["tokens"] = it.value();
         token_list.append(entry);
     }
 
     QJsonObject params;
-    params["mode"]      = static_cast<int>(mode);
+    params["mode"] = static_cast<int>(mode);
     params["tokenList"] = token_list;
 
     QJsonObject msg;
     msg["correlationID"] = "fincept_sub";
-    msg["action"]        = 1;  // 1 = subscribe
-    msg["params"]        = params;
+    msg["action"] = 1; // 1 = subscribe
+    msg["params"] = params;
 
     ws_->send(QJsonDocument(msg).toJson(QJsonDocument::Compact));
-    LOG_INFO(TAG_AO_WS, QString("Subscribed %1 tokens (mode %2)")
-                 .arg(subs.size()).arg(static_cast<int>(mode)));
+    LOG_INFO(TAG_AO_WS, QString("Subscribed %1 tokens (mode %2)").arg(subs.size()).arg(static_cast<int>(mode)));
 }
 
 void AngelOneWebSocket::send_unsubscribe(const QVector<Subscription>& subs, AoSubMode mode) {
-    if (subs.isEmpty()) return;
+    if (subs.isEmpty())
+        return;
 
     QMap<quint8, QJsonArray> by_exchange;
     for (const auto& s : subs)
@@ -293,24 +276,25 @@ void AngelOneWebSocket::send_unsubscribe(const QVector<Subscription>& subs, AoSu
     for (auto it = by_exchange.constBegin(); it != by_exchange.constEnd(); ++it) {
         QJsonObject entry;
         entry["exchangeType"] = int(it.key());
-        entry["tokens"]       = it.value();
+        entry["tokens"] = it.value();
         token_list.append(entry);
     }
 
     QJsonObject params;
-    params["mode"]      = static_cast<int>(mode);
+    params["mode"] = static_cast<int>(mode);
     params["tokenList"] = token_list;
 
     QJsonObject msg;
     msg["correlationID"] = "fincept_unsub";
-    msg["action"]        = 0;  // 0 = unsubscribe
-    msg["params"]        = params;
+    msg["action"] = 0; // 0 = unsubscribe
+    msg["params"] = params;
 
     ws_->send(QJsonDocument(msg).toJson(QJsonDocument::Compact));
 }
 
 void AngelOneWebSocket::resubscribe_all() {
-    if (subscriptions_.isEmpty()) return;
+    if (subscriptions_.isEmpty())
+        return;
     send_subscribe(subscriptions_, mode_);
 }
 
@@ -353,44 +337,47 @@ void AngelOneWebSocket::resubscribe_all() {
 
 AoTick AngelOneWebSocket::parse_tick(const QByteArray& data) const {
     const uchar* buf = reinterpret_cast<const uchar*>(data.constData());
-    const int    sz  = data.size();
+    const int sz = data.size();
 
     AoTick tick;
 
     // ── Header (all modes) ─────────────────────────────────────
-    tick.mode          = static_cast<AoSubMode>(buf[0]);
+    tick.mode = static_cast<AoSubMode>(buf[0]);
     tick.exchange_type = static_cast<AoExchangeType>(buf[1]);
-    tick.token         = parse_token_string(buf + 2, 25);
+    tick.token = parse_token_string(buf + 2, 25);
 
-    if (sz < 51) return tick; // need at least to LTP
+    if (sz < 51)
+        return tick; // need at least to LTP
 
-    tick.sequence_number   = read_i64_le(buf + 27);
+    tick.sequence_number = read_i64_le(buf + 27);
     tick.exchange_timestamp = QDateTime::fromMSecsSinceEpoch(read_i64_le(buf + 35), Qt::UTC);
-    tick.ltp               = paise_to_rupees(read_i64_le(buf + 43));
+    tick.ltp = paise_to_rupees(read_i64_le(buf + 43));
 
     if (tick.mode == AoSubMode::LTP)
         return tick;
 
     // ── Quote fields (mode 2 & 3) ──────────────────────────────
-    if (sz < 123) return tick;
+    if (sz < 123)
+        return tick;
 
-    tick.ltq       = read_i64_le(buf + 51);
-    tick.atp       = paise_to_rupees(read_i64_le(buf + 59));
-    tick.volume    = read_i64_le(buf + 67);
-    tick.buy_qty   = read_d64_le(buf + 75);
-    tick.sell_qty  = read_d64_le(buf + 83);
-    tick.open      = paise_to_rupees(read_i64_le(buf + 91));
-    tick.high      = paise_to_rupees(read_i64_le(buf + 99));
-    tick.low       = paise_to_rupees(read_i64_le(buf + 107));
-    tick.close     = paise_to_rupees(read_i64_le(buf + 115));
+    tick.ltq = read_i64_le(buf + 51);
+    tick.atp = paise_to_rupees(read_i64_le(buf + 59));
+    tick.volume = read_i64_le(buf + 67);
+    tick.buy_qty = read_d64_le(buf + 75);
+    tick.sell_qty = read_d64_le(buf + 83);
+    tick.open = paise_to_rupees(read_i64_le(buf + 91));
+    tick.high = paise_to_rupees(read_i64_le(buf + 99));
+    tick.low = paise_to_rupees(read_i64_le(buf + 107));
+    tick.close = paise_to_rupees(read_i64_le(buf + 115));
 
     if (tick.mode == AoSubMode::Quote)
         return tick;
 
     // ── SnapQuote extra (mode 3) ───────────────────────────────
-    if (sz < 379) return tick;
+    if (sz < 379)
+        return tick;
 
-    tick.oi            = read_i64_le(buf + 131);
+    tick.oi = read_i64_le(buf + 131);
     tick.oi_change_pct = read_i64_le(buf + 139);
 
     // Best-5 depth: 10 × 20-byte entries at offset 147
@@ -399,28 +386,28 @@ AoTick AngelOneWebSocket::parse_tick(const QByteArray& data) const {
     int buy_idx = 0, sell_idx = 0;
     for (int i = 0; i < 10 && buy_idx < 5 && sell_idx < 5; ++i) {
         const uchar* entry = buf + 147 + i * 20;
-        quint16  flag   = read_u16_le(entry);
-        qint64   qty    = read_i64_le(entry + 2);
-        qint64   price  = read_i64_le(entry + 10);
-        quint16  orders = read_u16_le(entry + 18);
+        quint16 flag = read_u16_le(entry);
+        qint64 qty = read_i64_le(entry + 2);
+        qint64 price = read_i64_le(entry + 10);
+        quint16 orders = read_u16_le(entry + 18);
 
         if (flag == 0 && buy_idx < 5) {
             tick.bids[buy_idx].quantity = qty;
-            tick.bids[buy_idx].price    = price;
-            tick.bids[buy_idx].orders   = orders;
+            tick.bids[buy_idx].price = price;
+            tick.bids[buy_idx].orders = orders;
             ++buy_idx;
         } else if (flag != 0 && sell_idx < 5) {
             tick.asks[sell_idx].quantity = qty;
-            tick.asks[sell_idx].price    = price;
-            tick.asks[sell_idx].orders   = orders;
+            tick.asks[sell_idx].price = price;
+            tick.asks[sell_idx].orders = orders;
             ++sell_idx;
         }
     }
 
     tick.upper_circuit = paise_to_rupees(read_i64_le(buf + 347));
     tick.lower_circuit = paise_to_rupees(read_i64_le(buf + 355));
-    tick.week52_high   = paise_to_rupees(read_i64_le(buf + 363));
-    tick.week52_low    = paise_to_rupees(read_i64_le(buf + 371));
+    tick.week52_high = paise_to_rupees(read_i64_le(buf + 363));
+    tick.week52_low = paise_to_rupees(read_i64_le(buf + 371));
 
     return tick;
 }

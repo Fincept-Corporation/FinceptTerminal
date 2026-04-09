@@ -1,29 +1,29 @@
 #include "ui/workspace/WorkspaceSaveAsDialog.h"
+
 #include "core/config/AppPaths.h"
 #include "services/workspace/WorkspaceManager.h"
 
 #include <QFileDialog>
 #include <QHBoxLayout>
-#include <QRegularExpression>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QVBoxLayout>
 
 namespace fincept::ui {
 
-static const char* SAVEAS_DLG_SS =
-    "QDialog{background:#0a0a0a;color:#e5e5e5;}"
-    "QLabel{color:#e5e5e5;}"
-    "QLineEdit{background:#111;color:#e5e5e5;border:1px solid #2a2a2a;"
-        "border-radius:3px;padding:4px;}"
-    "QLineEdit:focus{border:1px solid #d97706;}"
-    "QPushButton{background:#1a1a1a;color:#e5e5e5;border:1px solid #2a2a2a;"
-        "border-radius:3px;padding:6px 16px;}"
-    "QPushButton:hover{background:#222;border-color:#d97706;}"
-    "QPushButton#saveBtn{background:#d97706;color:#000;font-weight:700;border:none;}"
-    "QPushButton#saveBtn:hover{background:#b45309;}"
-    "QPushButton#saveBtn:disabled{background:#4a3000;color:#666;}";
+static const char* SAVEAS_DLG_SS = "QDialog{background:#0a0a0a;color:#e5e5e5;}"
+                                   "QLabel{color:#e5e5e5;}"
+                                   "QLineEdit{background:#111;color:#e5e5e5;border:1px solid #2a2a2a;"
+                                   "border-radius:3px;padding:4px;}"
+                                   "QLineEdit:focus{border:1px solid #d97706;}"
+                                   "QPushButton{background:#1a1a1a;color:#e5e5e5;border:1px solid #2a2a2a;"
+                                   "border-radius:3px;padding:6px 16px;}"
+                                   "QPushButton:hover{background:#222;border-color:#d97706;}"
+                                   "QPushButton#saveBtn{background:#d97706;color:#000;font-weight:700;border:none;}"
+                                   "QPushButton#saveBtn:hover{background:#b45309;}"
+                                   "QPushButton#saveBtn:disabled{background:#4a3000;color:#666;}";
 
 WorkspaceSaveAsDialog::WorkspaceSaveAsDialog(QWidget* parent) : QDialog(parent) {
     setWindowTitle("Save Workspace As");
@@ -67,16 +67,15 @@ void WorkspaceSaveAsDialog::setup_ui() {
     auto* btn_row = new QHBoxLayout;
     btn_row->addStretch();
     auto* cancel_btn = new QPushButton("Cancel");
-    auto* save_btn   = new QPushButton("Save");
+    auto* save_btn = new QPushButton("Save");
     save_btn->setObjectName("saveBtn");
     save_btn->setEnabled(!name_edit_->text().trimmed().isEmpty());
     btn_row->addWidget(cancel_btn);
     btn_row->addWidget(save_btn);
     vl->addLayout(btn_row);
 
-    connect(name_edit_, &QLineEdit::textChanged, save_btn, [save_btn](const QString& t) {
-        save_btn->setEnabled(!t.trimmed().isEmpty());
-    });
+    connect(name_edit_, &QLineEdit::textChanged, save_btn,
+            [save_btn](const QString& t) { save_btn->setEnabled(!t.trimmed().isEmpty()); });
 
     connect(change_btn, &QPushButton::clicked, this, [this, path_label]() {
         QString dir = QFileDialog::getExistingDirectory(this, "Choose Save Location", chosen_path_);
@@ -87,7 +86,7 @@ void WorkspaceSaveAsDialog::setup_ui() {
     });
 
     connect(cancel_btn, &QPushButton::clicked, this, &QDialog::reject);
-    connect(save_btn,   &QPushButton::clicked, this, &QDialog::accept);
+    connect(save_btn, &QPushButton::clicked, this, &QDialog::accept);
 }
 
 QString WorkspaceSaveAsDialog::new_name() const {
@@ -97,7 +96,8 @@ QString WorkspaceSaveAsDialog::new_name() const {
 QString WorkspaceSaveAsDialog::chosen_path() const {
     // Return full file path including filename
     QString name = new_name();
-    if (name.isEmpty()) return {};
+    if (name.isEmpty())
+        return {};
     // Sanitise for filename
     QString filename = name;
     filename.replace(QRegularExpression("[^a-zA-Z0-9_\\- ]"), "_");

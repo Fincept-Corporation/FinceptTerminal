@@ -36,7 +36,7 @@ class GovDataFrancePanel : public QWidget {
     // View indices in content_stack_
     enum View { Services = 0, Datasets, Geo, Resources, Status };
 
-    void     build_ui();
+    void build_ui();
     QWidget* build_toolbar();
 
     void populate_services(const QJsonArray& data);
@@ -52,33 +52,33 @@ class GovDataFrancePanel : public QWidget {
     void update_breadcrumb(const QString& text);
 
     static constexpr const char* kScript = "french_gov_api.py";
-    static constexpr const char* kColor  = "#2563EB";
+    static constexpr const char* kColor = "#2563EB";
 
     View current_view_ = Services;
-    QString selected_dataset_id_;   // for resources drill-down
-    QString search_query_;          // last geo / dataset search
+    QString selected_dataset_id_; // for resources drill-down
+    QString search_query_;        // last geo / dataset search
 
     // Toolbar widgets
-    QPushButton* back_btn_      = nullptr;
-    QPushButton* services_btn_  = nullptr;
-    QPushButton* datasets_btn_  = nullptr;
-    QPushButton* geo_btn_       = nullptr;
-    QLineEdit*   search_input_  = nullptr;
-    QPushButton* fetch_btn_     = nullptr;
-    QPushButton* export_btn_    = nullptr;
+    QPushButton* back_btn_ = nullptr;
+    QPushButton* services_btn_ = nullptr;
+    QPushButton* datasets_btn_ = nullptr;
+    QPushButton* geo_btn_ = nullptr;
+    QLineEdit* search_input_ = nullptr;
+    QPushButton* fetch_btn_ = nullptr;
+    QPushButton* export_btn_ = nullptr;
 
     // Breadcrumb
-    QWidget* breadcrumb_       = nullptr;
-    QLabel*  breadcrumb_label_ = nullptr;
-    QLabel*  row_count_label_  = nullptr;
+    QWidget* breadcrumb_ = nullptr;
+    QLabel* breadcrumb_label_ = nullptr;
+    QLabel* row_count_label_ = nullptr;
 
     // Content pages
-    QStackedWidget* content_stack_    = nullptr;
-    QTableWidget*   services_table_   = nullptr;  // page 0
-    QTableWidget*   datasets_table_   = nullptr;  // page 1
-    QTableWidget*   geo_table_        = nullptr;  // page 2
-    QTableWidget*   resources_table_  = nullptr;  // page 3 (column schema)
-    QLabel*         status_label_     = nullptr;  // page 4
+    QStackedWidget* content_stack_ = nullptr;
+    QTableWidget* services_table_ = nullptr;  // page 0
+    QTableWidget* datasets_table_ = nullptr;  // page 1
+    QTableWidget* geo_table_ = nullptr;       // page 2
+    QTableWidget* resources_table_ = nullptr; // page 3 (column schema)
+    QLabel* status_label_ = nullptr;          // page 4
 
     // Cached data for CSV export
     QJsonArray current_services_;

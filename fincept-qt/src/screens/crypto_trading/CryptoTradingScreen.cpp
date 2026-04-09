@@ -111,7 +111,7 @@ void CryptoTradingScreen::setup_ui() {
     main_layout->setSpacing(0);
 
     // ── COMMAND BAR (34px) ────────────────────────────────────────────────────
-    auto* cmd_bar = new QWidget;
+    auto* cmd_bar = new QWidget(this);
     cmd_bar->setObjectName("cryptoCommandBar");
     cmd_bar->setFixedHeight(34);
     auto* cmd_layout = new QHBoxLayout(cmd_bar);
@@ -848,11 +848,14 @@ void CryptoTradingScreen::async_fetch_my_trades() {
         if (!self)
             return;
         auto result = ExchangeService::instance().fetch_my_trades(self->selected_symbol_);
-        QMetaObject::invokeMethod(self, [self, result]() {
-            if (!self)
-                return;
-            self->bottom_panel_->update_my_trades(result);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, result]() {
+                if (!self)
+                    return;
+                self->bottom_panel_->update_my_trades(result);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -862,11 +865,14 @@ void CryptoTradingScreen::async_fetch_trading_fees() {
         if (!self)
             return;
         auto result = ExchangeService::instance().fetch_trading_fees(self->selected_symbol_);
-        QMetaObject::invokeMethod(self, [self, result]() {
-            if (!self)
-                return;
-            self->bottom_panel_->update_fees(result);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, result]() {
+                if (!self)
+                    return;
+                self->bottom_panel_->update_fees(result);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -876,41 +882,40 @@ void CryptoTradingScreen::async_fetch_mark_price() {
         if (!self)
             return;
         auto mp = ExchangeService::instance().fetch_mark_price(self->selected_symbol_);
-        QMetaObject::invokeMethod(self, [self, mp]() {
-            if (!self)
-                return;
-            self->ticker_bar_->update_mark_price(mp.mark_price, mp.index_price);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, mp]() {
+                if (!self)
+                    return;
+                self->ticker_bar_->update_mark_price(mp.mark_price, mp.index_price);
+            },
+            Qt::QueuedConnection);
     });
 }
 
 void CryptoTradingScreen::async_set_leverage(int leverage) {
     const QString symbol = selected_symbol_;
-    QtConcurrent::run([symbol, leverage]() {
-        ExchangeService::instance().set_leverage(symbol, leverage);
-    });
+    QtConcurrent::run([symbol, leverage]() { ExchangeService::instance().set_leverage(symbol, leverage); });
 }
 
 void CryptoTradingScreen::async_set_margin_mode(const QString& mode) {
     const QString symbol = selected_symbol_;
     const QString m = mode;
-    QtConcurrent::run([symbol, m]() {
-        ExchangeService::instance().set_margin_mode(symbol, m);
-    });
+    QtConcurrent::run([symbol, m]() { ExchangeService::instance().set_margin_mode(symbol, m); });
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap CryptoTradingScreen::save_state() const {
     return {
-        {"exchange_id",      exchange_id_},
-        {"selected_symbol",  selected_symbol_},
+        {"exchange_id", exchange_id_},
+        {"selected_symbol", selected_symbol_},
     };
 }
 
 void CryptoTradingScreen::restore_state(const QVariantMap& state) {
     const QString exch = state.value("exchange_id", "kraken").toString();
-    const QString sym  = state.value("selected_symbol", "BTC/USDT").toString();
+    const QString sym = state.value("selected_symbol", "BTC/USDT").toString();
 
     if (exch != exchange_id_)
         on_exchange_changed(exch);

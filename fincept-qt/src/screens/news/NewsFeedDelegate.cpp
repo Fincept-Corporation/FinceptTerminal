@@ -122,10 +122,10 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
     x += 12;
 
     // Pre-formatted strings from model — zero allocation in paint path
-    const QString source       = index.data(FormattedSourceRole).toString();
-    const QString lang_badge   = index.data(FormattedLangRole).toString();
+    const QString source = index.data(FormattedSourceRole).toString();
+    const QString lang_badge = index.data(FormattedLangRole).toString();
     const QString threat_label = index.data(FormattedThreatRole).toString();
-    const QString tickers_str  = index.data(FormattedTickersRole).toString();
+    const QString tickers_str = index.data(FormattedTickersRole).toString();
     const QString threat_color = index.data(ThreatColorRole).toString();
 
     // Source name
@@ -171,7 +171,7 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
         painter->setFont(tiny_font_);
         QString flag_label = services::NewsService::source_flag_label(article.source_flag);
         if (article.source_flag == services::SourceFlag::STATE_MEDIA) {
-            painter->setPen(QColor("#f97316"));                                      // orange warning
+            painter->setPen(QColor(ui::colors::WARNING()));                          // orange warning
             painter->drawText(QPoint(x, text_y), QString::fromUtf8("\xe2\x9a\xa0")); // ⚠
             x += 12;
         } else {

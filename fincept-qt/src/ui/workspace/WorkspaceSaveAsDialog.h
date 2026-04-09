@@ -18,8 +18,8 @@ class WorkspaceSaveAsDialog : public QDialog {
   private:
     void setup_ui();
 
-    QLineEdit* name_edit_  = nullptr;
-    QString    chosen_path_;
+    QLineEdit* name_edit_ = nullptr;
+    QString chosen_path_;
 };
 
 } // namespace fincept::ui

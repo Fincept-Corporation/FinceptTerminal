@@ -17,22 +17,32 @@ class IIFLBroker : public IBroker {
 
     BrokerProfile profile() const override {
         return BrokerProfile{
-            .id = "iifl", .display_name = "IIFL", .region = "IN", .currency = "INR",
-            .credential_fields = {
-                {CredentialField::ApiKey,    "TRADE KEY (app:::secret)",  "trade_app_key:::trade_secret",   false},
-                {CredentialField::ApiSecret, "MARKET KEY (app:::secret)", "market_app_key:::market_secret", true},
-            },
+            .id = "iifl",
+            .display_name = "IIFL",
+            .region = "IN",
+            .currency = "INR",
+            .credential_fields =
+                {
+                    {CredentialField::ApiKey, "TRADE KEY (app:::secret)", "trade_app_key:::trade_secret", false},
+                    {CredentialField::ApiSecret, "MARKET KEY (app:::secret)", "market_app_key:::market_secret", true},
+                },
             .exchanges = {"NSE", "BSE", "NFO", "BFO", "MCX", "CDS"},
-            .product_types = {
-                {"Intraday (MIS)",  ProductType::Intraday},
-                {"Delivery (CNC)", ProductType::Delivery},
-                {"Margin (NRML)",  ProductType::Margin},
-            },
-            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
-            .has_native_paper=false, .default_paper_balance=1000000.0,
-            .default_watchlist={"HDFCBANK","ICICIBANK","SBIN","TCS","INFY","RELIANCE","TATAMOTORS","BAJFINANCE","HINDUNILVR","ITC"},
-            .default_symbol="RELIANCE", .default_exchange="NSE",
-            .brokerage_info="\u20B920/order flat",
+            .product_types =
+                {
+                    {"Intraday (MIS)", ProductType::Intraday},
+                    {"Delivery (CNC)", ProductType::Delivery},
+                    {"Margin (NRML)", ProductType::Margin},
+                },
+            .supports_intraday = true,
+            .supports_bracket_order = false,
+            .supports_cover_order = false,
+            .has_native_paper = false,
+            .default_paper_balance = 1000000.0,
+            .default_watchlist = {"HDFCBANK", "ICICIBANK", "SBIN", "TCS", "INFY", "RELIANCE", "TATAMOTORS",
+                                  "BAJFINANCE", "HINDUNILVR", "ITC"},
+            .default_symbol = "RELIANCE",
+            .default_exchange = "NSE",
+            .brokerage_info = "\u20B920/order flat",
         };
     }
 
@@ -53,7 +63,7 @@ class IIFLBroker : public IBroker {
                                                    const QString& resolution, const QString& from_date,
                                                    const QString& to_date) override;
 
-    static bool    is_token_expired(const BrokerHttpResponse& resp);
+    static bool is_token_expired(const BrokerHttpResponse& resp);
     static QString checked_error(const BrokerHttpResponse& resp, const QString& fallback);
 
   protected:
@@ -61,17 +71,21 @@ class IIFLBroker : public IBroker {
 
   private:
     // Unpack "trade_token:::feed_token" → {trade, feed}
-    struct TokenParts { QString trade, feed; };
+    struct TokenParts {
+        QString trade, feed;
+    };
     static TokenParts unpack_token(const QString& packed);
 
     // Unpack "app_key:::secret" → {app_key, secret}
-    struct KeyParts { QString app_key, secret; };
+    struct KeyParts {
+        QString app_key, secret;
+    };
     static KeyParts unpack_key(const QString& packed);
 
     // Exchange segment string for order API (e.g. NSE → "NSECM")
     static QString iifl_exchange(const QString& exchange);
     // Exchange segment numeric ID for market data API (e.g. NSE → 1)
-    static int     iifl_exchange_id(const QString& exchange);
+    static int iifl_exchange_id(const QString& exchange);
     // Order type mapping
     static QString iifl_order_type(OrderType t);
     // Product type pass-through

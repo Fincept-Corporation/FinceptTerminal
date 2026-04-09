@@ -283,12 +283,12 @@ std::vector<ToolDef> get_portfolio_tools() {
         t.name = "add_portfolio_asset";
         t.description = "Add a new asset/holding to a named portfolio.";
         t.category = "portfolio";
-        t.input_schema.properties =
-            QJsonObject{{"portfolio_id", QJsonObject{{"type", "string"}, {"description", "Portfolio ID"}}},
-                        {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol (e.g. AAPL)"}}},
-                        {"quantity", QJsonObject{{"type", "number"}, {"description", "Number of shares/units"}}},
-                        {"price", QJsonObject{{"type", "number"}, {"description", "Purchase price per unit"}}},
-                        {"date", QJsonObject{{"type", "string"}, {"description", "Purchase date YYYY-MM-DD (optional)"}}}};
+        t.input_schema.properties = QJsonObject{
+            {"portfolio_id", QJsonObject{{"type", "string"}, {"description", "Portfolio ID"}}},
+            {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol (e.g. AAPL)"}}},
+            {"quantity", QJsonObject{{"type", "number"}, {"description", "Number of shares/units"}}},
+            {"price", QJsonObject{{"type", "number"}, {"description", "Purchase price per unit"}}},
+            {"date", QJsonObject{{"type", "string"}, {"description", "Purchase date YYYY-MM-DD (optional)"}}}};
         t.input_schema.required = {"portfolio_id", "symbol", "quantity", "price"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString portfolio_id = args["portfolio_id"].toString().trimmed();
@@ -406,8 +406,8 @@ std::vector<ToolDef> get_portfolio_tools() {
             if (!valid_types.contains(type))
                 return ToolResult::fail("Invalid type. Must be BUY, SELL, DIVIDEND, or SPLIT");
 
-            auto r = PortfolioRepository::instance().add_transaction(portfolio_id, symbol, type, quantity, price,
-                                                                     date, notes);
+            auto r = PortfolioRepository::instance().add_transaction(portfolio_id, symbol, type, quantity, price, date,
+                                                                     notes);
             if (r.is_err())
                 return ToolResult::fail("Failed to add transaction: " + QString::fromStdString(r.error()));
 

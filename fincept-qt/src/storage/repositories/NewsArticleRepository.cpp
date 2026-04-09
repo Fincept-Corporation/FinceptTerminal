@@ -28,63 +28,89 @@ NewsArticleRepository& NewsArticleRepository::instance() {
 
 static QString priority_str(Priority p) {
     switch (p) {
-    case Priority::FLASH:    return "FLASH";
-    case Priority::URGENT:   return "URGENT";
-    case Priority::BREAKING: return "BREAKING";
-    default:                 return "ROUTINE";
+        case Priority::FLASH:
+            return "FLASH";
+        case Priority::URGENT:
+            return "URGENT";
+        case Priority::BREAKING:
+            return "BREAKING";
+        default:
+            return "ROUTINE";
     }
 }
 
 static Priority priority_from(const QString& s) {
-    if (s == "FLASH")    return Priority::FLASH;
-    if (s == "URGENT")   return Priority::URGENT;
-    if (s == "BREAKING") return Priority::BREAKING;
+    if (s == "FLASH")
+        return Priority::FLASH;
+    if (s == "URGENT")
+        return Priority::URGENT;
+    if (s == "BREAKING")
+        return Priority::BREAKING;
     return Priority::ROUTINE;
 }
 
 static QString sentiment_str(Sentiment s) {
     switch (s) {
-    case Sentiment::BULLISH: return "BULLISH";
-    case Sentiment::BEARISH: return "BEARISH";
-    default:                 return "NEUTRAL";
+        case Sentiment::BULLISH:
+            return "BULLISH";
+        case Sentiment::BEARISH:
+            return "BEARISH";
+        default:
+            return "NEUTRAL";
     }
 }
 
 static Sentiment sentiment_from(const QString& s) {
-    if (s == "BULLISH") return Sentiment::BULLISH;
-    if (s == "BEARISH") return Sentiment::BEARISH;
+    if (s == "BULLISH")
+        return Sentiment::BULLISH;
+    if (s == "BEARISH")
+        return Sentiment::BEARISH;
     return Sentiment::NEUTRAL;
 }
 
 static QString impact_str(Impact i) {
     switch (i) {
-    case Impact::HIGH:   return "HIGH";
-    case Impact::MEDIUM: return "MEDIUM";
-    default:             return "LOW";
+        case Impact::HIGH:
+            return "HIGH";
+        case Impact::MEDIUM:
+            return "MEDIUM";
+        default:
+            return "LOW";
     }
 }
 
 static Impact impact_from(const QString& s) {
-    if (s == "HIGH")   return Impact::HIGH;
-    if (s == "MEDIUM") return Impact::MEDIUM;
+    if (s == "HIGH")
+        return Impact::HIGH;
+    if (s == "MEDIUM")
+        return Impact::MEDIUM;
     return Impact::LOW;
 }
 
 static QString threat_level_str(ThreatLevel l) {
     switch (l) {
-    case ThreatLevel::CRITICAL: return "CRITICAL";
-    case ThreatLevel::HIGH:     return "HIGH";
-    case ThreatLevel::MEDIUM:   return "MEDIUM";
-    case ThreatLevel::LOW:      return "LOW";
-    default:                    return "INFO";
+        case ThreatLevel::CRITICAL:
+            return "CRITICAL";
+        case ThreatLevel::HIGH:
+            return "HIGH";
+        case ThreatLevel::MEDIUM:
+            return "MEDIUM";
+        case ThreatLevel::LOW:
+            return "LOW";
+        default:
+            return "INFO";
     }
 }
 
 static ThreatLevel threat_level_from(const QString& s) {
-    if (s == "CRITICAL") return ThreatLevel::CRITICAL;
-    if (s == "HIGH")     return ThreatLevel::HIGH;
-    if (s == "MEDIUM")   return ThreatLevel::MEDIUM;
-    if (s == "LOW")      return ThreatLevel::LOW;
+    if (s == "CRITICAL")
+        return ThreatLevel::CRITICAL;
+    if (s == "HIGH")
+        return ThreatLevel::HIGH;
+    if (s == "MEDIUM")
+        return ThreatLevel::MEDIUM;
+    if (s == "LOW")
+        return ThreatLevel::LOW;
     return ThreatLevel::INFO;
 }
 
@@ -92,23 +118,23 @@ static ThreatLevel threat_level_from(const QString& s) {
 
 NewsArticle NewsArticleRepository::map_row(QSqlQuery& q) {
     NewsArticle a;
-    a.id         = q.value(0).toString();
-    a.headline   = q.value(1).toString();
-    a.summary    = q.value(2).toString();
-    a.source     = q.value(3).toString();
-    a.region     = q.value(4).toString();
-    a.category   = q.value(5).toString();
-    a.link       = q.value(6).toString();
-    a.sort_ts    = q.value(7).toLongLong();
-    a.priority   = priority_from(q.value(8).toString());
-    a.sentiment  = sentiment_from(q.value(9).toString());
-    a.impact     = impact_from(q.value(10).toString());
-    a.tier       = q.value(12).toInt();
-    a.lang       = q.value(13).toString();
-    a.threat.level      = threat_level_from(q.value(14).toString());
-    a.threat.category   = q.value(15).toString();
+    a.id = q.value(0).toString();
+    a.headline = q.value(1).toString();
+    a.summary = q.value(2).toString();
+    a.source = q.value(3).toString();
+    a.region = q.value(4).toString();
+    a.category = q.value(5).toString();
+    a.link = q.value(6).toString();
+    a.sort_ts = q.value(7).toLongLong();
+    a.priority = priority_from(q.value(8).toString());
+    a.sentiment = sentiment_from(q.value(9).toString());
+    a.impact = impact_from(q.value(10).toString());
+    a.tier = q.value(12).toInt();
+    a.lang = q.value(13).toString();
+    a.threat.level = threat_level_from(q.value(14).toString());
+    a.threat.category = q.value(15).toString();
     a.threat.confidence = q.value(16).toDouble();
-    a.source_flag       = static_cast<SourceFlag>(q.value(17).toInt());
+    a.source_flag = static_cast<SourceFlag>(q.value(17).toInt());
 
     // tickers: stored as JSON array string
     const QString tickers_json = q.value(11).toString();
@@ -131,41 +157,23 @@ Result<void> NewsArticleRepository::upsert_batch(const QVector<NewsArticle>& art
     if (bt.is_err())
         return bt;
 
-    const QString sql =
-        "INSERT OR IGNORE INTO news_articles "
-        "(id, headline, summary, source, region, category, link, sort_ts, "
-        " priority, sentiment, impact, tickers, tier, lang, "
-        " threat_level, threat_cat, threat_conf, source_flag) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+    const QString sql = "INSERT OR IGNORE INTO news_articles "
+                        "(id, headline, summary, source, region, category, link, sort_ts, "
+                        " priority, sentiment, impact, tickers, tier, lang, "
+                        " threat_level, threat_cat, threat_conf, source_flag) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
     int inserted = 0;
     for (const auto& a : articles) {
         QJsonArray tickers_arr;
         for (const auto& t : a.tickers)
             tickers_arr.append(t);
-        const QString tickers_json = QString::fromUtf8(
-            QJsonDocument(tickers_arr).toJson(QJsonDocument::Compact));
+        const QString tickers_json = QString::fromUtf8(QJsonDocument(tickers_arr).toJson(QJsonDocument::Compact));
 
-        auto r = exec_write(sql, {
-            a.id,
-            a.headline,
-            a.summary,
-            a.source,
-            a.region,
-            a.category,
-            a.link,
-            static_cast<qint64>(a.sort_ts),
-            priority_str(a.priority),
-            sentiment_str(a.sentiment),
-            impact_str(a.impact),
-            tickers_json,
-            a.tier,
-            a.lang,
-            threat_level_str(a.threat.level),
-            a.threat.category,
-            a.threat.confidence,
-            static_cast<int>(a.source_flag)
-        });
+        auto r = exec_write(sql, {a.id, a.headline, a.summary, a.source, a.region, a.category, a.link,
+                                  static_cast<qint64>(a.sort_ts), priority_str(a.priority), sentiment_str(a.sentiment),
+                                  impact_str(a.impact), tickers_json, a.tier, a.lang, threat_level_str(a.threat.level),
+                                  a.threat.category, a.threat.confidence, static_cast<int>(a.source_flag)});
         if (r.is_ok())
             ++inserted;
     }
@@ -176,32 +184,26 @@ Result<void> NewsArticleRepository::upsert_batch(const QVector<NewsArticle>& art
         return ct;
     }
 
-    LOG_DEBUG("NewsArticleRepo",
-              QString("upsert_batch: %1 new / %2 total").arg(inserted).arg(articles.size()));
+    LOG_DEBUG("NewsArticleRepo", QString("upsert_batch: %1 new / %2 total").arg(inserted).arg(articles.size()));
     return Result<void>::ok();
 }
 
 // ── load_recent ──────────────────────────────────────────────────────────────
 
-Result<QVector<NewsArticle>> NewsArticleRepository::load_recent(int64_t since_ts,
-                                                                  const QString& category,
-                                                                  int limit) const {
+Result<QVector<NewsArticle>> NewsArticleRepository::load_recent(int64_t since_ts, const QString& category,
+                                                                int limit) const {
     if (category.isEmpty()) {
-        return query_list(
-            "SELECT id, headline, summary, source, region, category, link, sort_ts, "
-            "       priority, sentiment, impact, tickers, tier, lang, "
-            "       threat_level, threat_cat, threat_conf, source_flag "
-            "FROM news_articles WHERE sort_ts >= ? ORDER BY sort_ts DESC LIMIT ?",
-            {static_cast<qint64>(since_ts), limit},
-            map_row);
+        return query_list("SELECT id, headline, summary, source, region, category, link, sort_ts, "
+                          "       priority, sentiment, impact, tickers, tier, lang, "
+                          "       threat_level, threat_cat, threat_conf, source_flag "
+                          "FROM news_articles WHERE sort_ts >= ? ORDER BY sort_ts DESC LIMIT ?",
+                          {static_cast<qint64>(since_ts), limit}, map_row);
     }
-    return query_list(
-        "SELECT id, headline, summary, source, region, category, link, sort_ts, "
-        "       priority, sentiment, impact, tickers, tier, lang, "
-        "       threat_level, threat_cat, threat_conf, source_flag "
-        "FROM news_articles WHERE sort_ts >= ? AND category = ? ORDER BY sort_ts DESC LIMIT ?",
-        {static_cast<qint64>(since_ts), category, limit},
-        map_row);
+    return query_list("SELECT id, headline, summary, source, region, category, link, sort_ts, "
+                      "       priority, sentiment, impact, tickers, tier, lang, "
+                      "       threat_level, threat_cat, threat_conf, source_flag "
+                      "FROM news_articles WHERE sort_ts >= ? AND category = ? ORDER BY sort_ts DESC LIMIT ?",
+                      {static_cast<qint64>(since_ts), category, limit}, map_row);
 }
 
 // ── count ────────────────────────────────────────────────────────────────────
@@ -217,8 +219,7 @@ int NewsArticleRepository::count() const {
 // ── prune_older_than ─────────────────────────────────────────────────────────
 
 Result<void> NewsArticleRepository::prune_older_than(int64_t cutoff_ts) {
-    return exec_write("DELETE FROM news_articles WHERE sort_ts < ?",
-                      {static_cast<qint64>(cutoff_ts)});
+    return exec_write("DELETE FROM news_articles WHERE sort_ts < ?", {static_cast<qint64>(cutoff_ts)});
 }
 
 // ── ensure_seen_column ───────────────────────────────────────────────────────
@@ -244,9 +245,8 @@ void NewsArticleRepository::ensure_seen_column() {
 // ── mark_seen ────────────────────────────────────────────────────────────────
 
 Result<void> NewsArticleRepository::mark_seen(const QString& id) {
-    return exec_write(
-        "UPDATE news_articles SET seen_at = ? WHERE id = ? AND seen_at IS NULL",
-        {static_cast<qint64>(QDateTime::currentSecsSinceEpoch()), id});
+    return exec_write("UPDATE news_articles SET seen_at = ? WHERE id = ? AND seen_at IS NULL",
+                      {static_cast<qint64>(QDateTime::currentSecsSinceEpoch()), id});
 }
 
 // ── ensure_saved_column ───────────────────────────────────────────────────────
@@ -279,8 +279,7 @@ Result<bool> NewsArticleRepository::toggle_saved(const QString& id) {
         return Result<bool>::err("Article not found");
     bool currently_saved = q.value(0).toInt() != 0;
     bool new_state = !currently_saved;
-    auto wr = exec_write("UPDATE news_articles SET saved = ? WHERE id = ?",
-                         {new_state ? 1 : 0, id});
+    auto wr = exec_write("UPDATE news_articles SET saved = ? WHERE id = ?", {new_state ? 1 : 0, id});
     if (wr.is_err())
         return Result<bool>::err(wr.error());
     return Result<bool>::ok(new_state);
@@ -289,19 +288,17 @@ Result<bool> NewsArticleRepository::toggle_saved(const QString& id) {
 // ── load_saved ────────────────────────────────────────────────────────────────
 
 Result<QVector<fincept::services::NewsArticle>> NewsArticleRepository::load_saved() const {
-    return query_list(
-        "SELECT id, headline, summary, source, region, category, link, sort_ts, "
-        "       priority, sentiment, impact, tickers, tier, lang, "
-        "       threat_level, threat_cat, threat_conf, source_flag "
-        "FROM news_articles WHERE saved = 1 ORDER BY sort_ts DESC",
-        {},
-        map_row);
+    return query_list("SELECT id, headline, summary, source, region, category, link, sort_ts, "
+                      "       priority, sentiment, impact, tickers, tier, lang, "
+                      "       threat_level, threat_cat, threat_conf, source_flag "
+                      "FROM news_articles WHERE saved = 1 ORDER BY sort_ts DESC",
+                      {}, map_row);
 }
 
 // ── search_fts ────────────────────────────────────────────────────────────────
 
-Result<QVector<fincept::services::NewsArticle>> NewsArticleRepository::search_fts(
-    const QString& query, int64_t since_ts, int limit) const {
+Result<QVector<fincept::services::NewsArticle>> NewsArticleRepository::search_fts(const QString& query,
+                                                                                  int64_t since_ts, int limit) const {
 
     // Escape FTS special characters to prevent query parse errors
     QString safe = query;
@@ -309,21 +306,20 @@ Result<QVector<fincept::services::NewsArticle>> NewsArticleRepository::search_ft
 
     // Try FTS5 path first
     const QString fts_sql =
-        since_ts > 0
-        ? "SELECT a.id, a.headline, a.summary, a.source, a.region, a.category, a.link, a.sort_ts,"
-          "       a.priority, a.sentiment, a.impact, a.tickers, a.tier, a.lang,"
-          "       a.threat_level, a.threat_cat, a.threat_conf, a.source_flag"
-          " FROM news_fts f"
-          " JOIN news_articles a ON a.id = f.id"
-          " WHERE news_fts MATCH ? AND a.sort_ts >= ?"
-          " ORDER BY rank LIMIT ?"
-        : "SELECT a.id, a.headline, a.summary, a.source, a.region, a.category, a.link, a.sort_ts,"
-          "       a.priority, a.sentiment, a.impact, a.tickers, a.tier, a.lang,"
-          "       a.threat_level, a.threat_cat, a.threat_conf, a.source_flag"
-          " FROM news_fts f"
-          " JOIN news_articles a ON a.id = f.id"
-          " WHERE news_fts MATCH ?"
-          " ORDER BY rank LIMIT ?";
+        since_ts > 0 ? "SELECT a.id, a.headline, a.summary, a.source, a.region, a.category, a.link, a.sort_ts,"
+                       "       a.priority, a.sentiment, a.impact, a.tickers, a.tier, a.lang,"
+                       "       a.threat_level, a.threat_cat, a.threat_conf, a.source_flag"
+                       " FROM news_fts f"
+                       " JOIN news_articles a ON a.id = f.id"
+                       " WHERE news_fts MATCH ? AND a.sort_ts >= ?"
+                       " ORDER BY rank LIMIT ?"
+                     : "SELECT a.id, a.headline, a.summary, a.source, a.region, a.category, a.link, a.sort_ts,"
+                       "       a.priority, a.sentiment, a.impact, a.tickers, a.tier, a.lang,"
+                       "       a.threat_level, a.threat_cat, a.threat_conf, a.source_flag"
+                       " FROM news_fts f"
+                       " JOIN news_articles a ON a.id = f.id"
+                       " WHERE news_fts MATCH ?"
+                       " ORDER BY rank LIMIT ?";
 
     QVariantList params;
     params << safe;
@@ -343,20 +339,18 @@ Result<QVector<fincept::services::NewsArticle>> NewsArticleRepository::search_ft
     // Fallback: LIKE scan (FTS table may not exist on old DB)
     LOG_WARN("NewsArticleRepo", "FTS5 unavailable, falling back to LIKE scan");
     const QString like = "%" + query + "%";
-    const QString like_sql =
-        since_ts > 0
-        ? "SELECT id, headline, summary, source, region, category, link, sort_ts,"
-          "       priority, sentiment, impact, tickers, tier, lang,"
-          "       threat_level, threat_cat, threat_conf, source_flag"
-          " FROM news_articles"
-          " WHERE (headline LIKE ? OR summary LIKE ?) AND sort_ts >= ?"
-          " ORDER BY sort_ts DESC LIMIT ?"
-        : "SELECT id, headline, summary, source, region, category, link, sort_ts,"
-          "       priority, sentiment, impact, tickers, tier, lang,"
-          "       threat_level, threat_cat, threat_conf, source_flag"
-          " FROM news_articles"
-          " WHERE headline LIKE ? OR summary LIKE ?"
-          " ORDER BY sort_ts DESC LIMIT ?";
+    const QString like_sql = since_ts > 0 ? "SELECT id, headline, summary, source, region, category, link, sort_ts,"
+                                            "       priority, sentiment, impact, tickers, tier, lang,"
+                                            "       threat_level, threat_cat, threat_conf, source_flag"
+                                            " FROM news_articles"
+                                            " WHERE (headline LIKE ? OR summary LIKE ?) AND sort_ts >= ?"
+                                            " ORDER BY sort_ts DESC LIMIT ?"
+                                          : "SELECT id, headline, summary, source, region, category, link, sort_ts,"
+                                            "       priority, sentiment, impact, tickers, tier, lang,"
+                                            "       threat_level, threat_cat, threat_conf, source_flag"
+                                            " FROM news_articles"
+                                            " WHERE headline LIKE ? OR summary LIKE ?"
+                                            " ORDER BY sort_ts DESC LIMIT ?";
 
     QVariantList like_params;
     like_params << like << like;
@@ -370,11 +364,9 @@ Result<QVector<fincept::services::NewsArticle>> NewsArticleRepository::search_ft
 // ── load_seen_ids ─────────────────────────────────────────────────────────────
 
 Result<QSet<QString>> NewsArticleRepository::load_seen_ids(int64_t since_ts) const {
-    auto r = db().execute(
-        since_ts > 0
-            ? "SELECT id FROM news_articles WHERE seen_at IS NOT NULL AND sort_ts >= ?"
-            : "SELECT id FROM news_articles WHERE seen_at IS NOT NULL",
-        since_ts > 0 ? QVariantList{static_cast<qint64>(since_ts)} : QVariantList{});
+    auto r = db().execute(since_ts > 0 ? "SELECT id FROM news_articles WHERE seen_at IS NOT NULL AND sort_ts >= ?"
+                                       : "SELECT id FROM news_articles WHERE seen_at IS NOT NULL",
+                          since_ts > 0 ? QVariantList{static_cast<qint64>(since_ts)} : QVariantList{});
     if (r.is_err())
         return Result<QSet<QString>>::err(r.error());
     QSet<QString> ids;

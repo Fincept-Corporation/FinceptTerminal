@@ -24,9 +24,9 @@ class WorkspaceOpenDialog : public QDialog {
     void update_preview(int row);
 
     QListWidget* workspace_list_ = nullptr;
-    QLabel*      preview_label_  = nullptr;
-    QPushButton* open_btn_       = nullptr;
-    QString      selected_path_;
+    QLabel* preview_label_ = nullptr;
+    QPushButton* open_btn_ = nullptr;
+    QString selected_path_;
 };
 
 } // namespace fincept::ui

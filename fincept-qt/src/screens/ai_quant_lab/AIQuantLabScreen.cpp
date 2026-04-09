@@ -20,8 +20,8 @@ using namespace fincept::services::quant;
 AIQuantLabScreen::AIQuantLabScreen(QWidget* parent) : QWidget(parent) {
     modules_ = all_quant_modules();
     build_ui();
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { refresh_theme(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { refresh_theme(); });
     LOG_INFO("AIQuantLab", "Screen constructed");
 }
 
@@ -98,7 +98,7 @@ QWidget* AIQuantLabScreen::build_top_bar() {
     badge_scroll_->setWidgetResizable(true);
     badge_scroll_->setFixedHeight(34);
 
-    badge_bar_ = new QWidget;
+    badge_bar_ = new QWidget(this);
     auto* bhl = new QHBoxLayout(badge_bar_);
     bhl->setContentsMargins(0, 3, 0, 3);
     bhl->setSpacing(3);
@@ -233,7 +233,7 @@ QWidget* AIQuantLabScreen::build_right_sidebar() {
 
     auto add_stat = [&](const QString& label, const QString& value) {
         auto* row = new QWidget(stats_card_);
-        auto* rl  = new QHBoxLayout(row);
+        auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(0, 0, 0, 0);
         auto* lbl = new QLabel(label, row);
         lbl->setObjectName("aqStatLabel");
@@ -244,10 +244,10 @@ QWidget* AIQuantLabScreen::build_right_sidebar() {
         rl->addWidget(val);
         svl->addWidget(row);
     };
-    add_stat("Modules",       QString::number(modules_.size()));
-    add_stat("ML Models",     "30+");
+    add_stat("Modules", QString::number(modules_.size()));
+    add_stat("ML Models", "30+");
     add_stat("RL Algorithms", "5");
-    add_stat("Python Scripts","25+");
+    add_stat("Python Scripts", "25+");
     vl->addWidget(stats_card_);
 
     vl->addStretch();
@@ -289,106 +289,85 @@ void AIQuantLabScreen::refresh_theme() {
     setStyleSheet(QString("background:%1;").arg(BG_BASE()));
 
     // Top bar
-    top_bar_->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(BG_RAISED(), BORDER_DIM()));
+    top_bar_->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;").arg(BG_RAISED(), BORDER_DIM()));
 
     // Brand chip
     // findChild is safe here — it's a named child of top_bar_
     if (auto* brand = top_bar_->findChild<QLabel*>("aqBrand"))
-        brand->setStyleSheet(
-            QString("color:%1; font-weight:700; font-size:%2px;"
-                    "padding:3px 10px; background:rgba(157,78,221,0.10);"
-                    "border:1px solid rgba(157,78,221,0.28); border-radius:2px;")
-                .arg(INFO(), TINY));
+        brand->setStyleSheet(QString("color:%1; font-weight:700; font-size:%2px;"
+                                     "padding:3px 10px; background:rgba(157,78,221,0.10);"
+                                     "border:1px solid rgba(157,78,221,0.28); border-radius:2px;")
+                                 .arg(INFO(), TINY));
 
     if (auto* div = top_bar_->findChild<QWidget*>("aqTopDiv"))
         div->setStyleSheet(QString("background:%1;").arg(BORDER_DIM()));
 
     // Badge scroll area + bar
-    badge_scroll_->setStyleSheet(
-        QString("QScrollArea { background:%1; border:none; }"
-                "QScrollBar:horizontal { height:0px; }").arg(BG_RAISED()));
-    badge_bar_->setStyleSheet(
-        QString("background:%1;").arg(BG_RAISED()));
+    badge_scroll_->setStyleSheet(QString("QScrollArea { background:%1; border:none; }"
+                                         "QScrollBar:horizontal { height:0px; }")
+                                     .arg(BG_RAISED()));
+    badge_bar_->setStyleSheet(QString("background:%1;").arg(BG_RAISED()));
 
     if (auto* lbl = top_bar_->findChild<QLabel*>("aqModuleCount"))
-        lbl->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-weight:700;"
-                    "padding:3px 8px; background:rgba(22,163,74,0.08);"
-                    "border:1px solid rgba(22,163,74,0.25); border-radius:2px;")
-                .arg(POSITIVE(), TINY));
+        lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700;"
+                                   "padding:3px 8px; background:rgba(22,163,74,0.08);"
+                                   "border:1px solid rgba(22,163,74,0.25); border-radius:2px;")
+                               .arg(POSITIVE(), TINY));
 
     // Left sidebar
-    left_panel_->setStyleSheet(
-        QString("background:%1; border-right:1px solid %2;").arg(BG_SURFACE(), BORDER_DIM()));
+    left_panel_->setStyleSheet(QString("background:%1; border-right:1px solid %2;").arg(BG_SURFACE(), BORDER_DIM()));
 
     if (auto* hdr = left_panel_->findChild<QWidget*>("aqSidebarHeader"))
-        hdr->setStyleSheet(
-            QString("background:%1; border-bottom:1px solid %2;").arg(BG_SURFACE(), BORDER_DIM()));
+        hdr->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;").arg(BG_SURFACE(), BORDER_DIM()));
 
     sidebar_title_->setStyleSheet(
-        QString("color:%1; font-weight:700; font-size:%2px; letter-spacing:1px;")
-            .arg(CYAN(), TINY));
+        QString("color:%1; font-weight:700; font-size:%2px; letter-spacing:1px;").arg(CYAN(), TINY));
 
     // Category labels
     for (auto* lbl : left_panel_->findChildren<QLabel*>("aqCatLabel"))
-        lbl->setStyleSheet(
-            QString("color:%1; font-weight:700; font-size:%2px;"
-                    "padding:8px 12px 4px 12px; letter-spacing:1px; background:transparent;")
-                .arg(TEXT_TERTIARY(), TINY));
+        lbl->setStyleSheet(QString("color:%1; font-weight:700; font-size:%2px;"
+                                   "padding:8px 12px 4px 12px; letter-spacing:1px; background:transparent;")
+                               .arg(TEXT_TERTIARY(), TINY));
 
     // Right sidebar
-    right_panel_->setStyleSheet(
-        QString("background:%1; border-left:1px solid %2;").arg(BG_SURFACE(), BORDER_DIM()));
+    right_panel_->setStyleSheet(QString("background:%1; border-left:1px solid %2;").arg(BG_SURFACE(), BORDER_DIM()));
 
     if (auto* t = right_panel_->findChild<QLabel*>("aqInfoTitle"))
-        t->setStyleSheet(
-            QString("color:%1; font-weight:700; font-size:%2px; letter-spacing:1px;")
-                .arg(CYAN(), TINY));
+        t->setStyleSheet(QString("color:%1; font-weight:700; font-size:%2px; letter-spacing:1px;").arg(CYAN(), TINY));
 
     right_category_->setStyleSheet(
         QString("color:%1; font-size:%2px; background:transparent;").arg(TEXT_SECONDARY(), TINY));
 
-    right_desc_->setStyleSheet(
-        QString("color:%1; font-size:%2px; background:transparent;").arg(TEXT_PRIMARY(), TINY));
+    right_desc_->setStyleSheet(QString("color:%1; font-size:%2px; background:transparent;").arg(TEXT_PRIMARY(), TINY));
 
-    right_script_->setStyleSheet(
-        QString("color:%1; font-size:%2px; padding:6px;"
-                "background:%3; border:1px solid %4; border-radius:2px;")
-            .arg(TEXT_TERTIARY(), QString::number(TINY), BG_RAISED(), BORDER_DIM()));
+    right_script_->setStyleSheet(QString("color:%1; font-size:%2px; padding:6px;"
+                                         "background:%3; border:1px solid %4; border-radius:2px;")
+                                     .arg(TEXT_TERTIARY(), QString::number(TINY), BG_RAISED(), BORDER_DIM()));
 
     stats_card_->setStyleSheet(
-        QString("background:%1; border:1px solid %2; border-radius:3px;")
-            .arg(BG_RAISED(), BORDER_DIM()));
+        QString("background:%1; border:1px solid %2; border-radius:3px;").arg(BG_RAISED(), BORDER_DIM()));
 
     stats_title_->setStyleSheet(
-        QString("color:%1; font-weight:700; font-size:%2px; letter-spacing:0.5px;")
-            .arg(CYAN(), TINY));
+        QString("color:%1; font-weight:700; font-size:%2px; letter-spacing:0.5px;").arg(CYAN(), TINY));
 
     for (auto* lbl : stats_card_->findChildren<QLabel*>("aqStatLabel"))
-        lbl->setStyleSheet(
-            QString("color:%1; font-size:%2px; background:transparent;").arg(TEXT_TERTIARY(), TINY));
+        lbl->setStyleSheet(QString("color:%1; font-size:%2px; background:transparent;").arg(TEXT_TERTIARY(), TINY));
 
     for (auto* val : stats_card_->findChildren<QLabel*>("aqStatValue"))
         val->setStyleSheet(
-            QString("color:%1; font-weight:700; font-size:%2px; background:transparent;")
-                .arg(TEXT_PRIMARY(), TINY));
+            QString("color:%1; font-weight:700; font-size:%2px; background:transparent;").arg(TEXT_PRIMARY(), TINY));
 
     // Status bar
-    status_bar_->setStyleSheet(
-        QString("background:%1; border-top:1px solid %2;").arg(BG_RAISED(), BORDER_DIM()));
+    status_bar_->setStyleSheet(QString("background:%1; border-top:1px solid %2;").arg(BG_RAISED(), BORDER_DIM()));
 
     for (auto* lbl : status_bar_->findChildren<QLabel*>("aqStatusLabel"))
-        lbl->setStyleSheet(
-            QString("color:%1; font-size:%2px; background:transparent;").arg(TEXT_TERTIARY(), TINY));
+        lbl->setStyleSheet(QString("color:%1; font-size:%2px; background:transparent;").arg(TEXT_TERTIARY(), TINY));
 
     status_engine_val_->setStyleSheet(
-        QString("color:%1; font-weight:700; font-size:%2px; background:transparent;")
-            .arg(POSITIVE(), TINY));
+        QString("color:%1; font-weight:700; font-size:%2px; background:transparent;").arg(POSITIVE(), TINY));
 
     status_ready_lbl_->setStyleSheet(
-        QString("color:%1; font-weight:700; font-size:%2px; background:transparent;")
-            .arg(POSITIVE(), TINY));
+        QString("color:%1; font-weight:700; font-size:%2px; background:transparent;").arg(POSITIVE(), TINY));
 
     // Re-apply selection styles so active module stays highlighted after theme switch
     update_sidebar_selection();
@@ -428,26 +407,23 @@ void AIQuantLabScreen::update_sidebar_selection() {
     for (int i = 0; i < module_buttons_.size(); ++i) {
         const auto& mod = modules_[i];
         const bool active = (i == active_index_);
-        const QString rgb = QString("%1,%2,%3")
-            .arg(mod.color.red()).arg(mod.color.green()).arg(mod.color.blue());
+        const QString rgb = QString("%1,%2,%3").arg(mod.color.red()).arg(mod.color.green()).arg(mod.color.blue());
 
-        module_buttons_[i]->setStyleSheet(
-            QString("QPushButton { text-align:left; padding:6px 12px; border:none;"
-                    "border-left:2px solid %1; color:%2; font-size:10px;"
-                    "font-weight:%3; background:%4; }"
-                    "QPushButton:hover { background:rgba(%5,0.08); color:%6; }")
-                .arg(active ? mod.color.name() : "transparent")
-                .arg(active ? mod.color.name() : QString(TEXT_SECONDARY()))
-                .arg(active ? "700" : "400")
-                .arg(active ? QString("rgba(%1,0.08)").arg(rgb) : "transparent")
-                .arg(rgb, mod.color.name()));
+        module_buttons_[i]->setStyleSheet(QString("QPushButton { text-align:left; padding:6px 12px; border:none;"
+                                                  "border-left:2px solid %1; color:%2; font-size:10px;"
+                                                  "font-weight:%3; background:%4; }"
+                                                  "QPushButton:hover { background:rgba(%5,0.08); color:%6; }")
+                                              .arg(active ? mod.color.name() : "transparent")
+                                              .arg(active ? mod.color.name() : QString(TEXT_SECONDARY()))
+                                              .arg(active ? "700" : "400")
+                                              .arg(active ? QString("rgba(%1,0.08)").arg(rgb) : "transparent")
+                                              .arg(rgb, mod.color.name()));
     }
 
     for (int i = 0; i < badge_buttons_.size(); ++i) {
         const auto& mod = modules_[i];
         const bool active = (i == active_index_);
-        const QString rgb = QString("%1,%2,%3")
-            .arg(mod.color.red()).arg(mod.color.green()).arg(mod.color.blue());
+        const QString rgb = QString("%1,%2,%3").arg(mod.color.red()).arg(mod.color.green()).arg(mod.color.blue());
 
         badge_buttons_[i]->setStyleSheet(
             QString("QPushButton { color:%1; font-size:9px; font-weight:%2;"
@@ -466,8 +442,7 @@ void AIQuantLabScreen::update_right_panel() {
     const auto& mod = modules_[active_index_];
     right_title_->setText(mod.label.toUpper());
     right_title_->setStyleSheet(
-        QString("color:%1; font-weight:700; font-size:11px; background:transparent;")
-            .arg(mod.color.name()));
+        QString("color:%1; font-weight:700; font-size:11px; background:transparent;").arg(mod.color.name()));
     right_category_->setText(QString(mod.category).replace('_', '/') + " module");
     right_desc_->setText(mod.description);
     right_script_->setText("Script: " + mod.script);

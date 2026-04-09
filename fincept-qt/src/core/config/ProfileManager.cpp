@@ -1,4 +1,5 @@
 #include "core/config/ProfileManager.h"
+
 #include "core/config/AppPaths.h"
 #include "core/logging/Logger.h"
 

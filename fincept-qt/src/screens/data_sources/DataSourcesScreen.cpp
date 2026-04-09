@@ -11,9 +11,9 @@
 #include <QComboBox>
 #include <QDateTime>
 #include <QDialog>
-#include <QFileDialog>
 #include <QEvent>
 #include <QFile>
+#include <QFileDialog>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -23,9 +23,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
-#include <QMessageBox>
 #include <QListWidgetItem>
 #include <QMap>
+#include <QMessageBox>
 #include <QPointer>
 #include <QScrollArea>
 #include <QSet>
@@ -51,10 +51,8 @@ namespace {
 static const QString TAG = "DataSources";
 
 static const QStringList kCategoryLabels = {
-    "All Connectors", "Databases", "APIs", "Files", "Streaming",
-    "Cloud", "Time Series", "Market Data", "Search", "Warehouses",
-    "Alternative Data", "Open Banking"
-};
+    "All Connectors", "Databases",   "APIs",   "Files",      "Streaming",        "Cloud",
+    "Time Series",    "Market Data", "Search", "Warehouses", "Alternative Data", "Open Banking"};
 
 const ConnectorConfig* find_connector_config(const QString& key) {
     if (const auto* cfg = ConnectorRegistry::instance().get(key))
@@ -77,7 +75,8 @@ bool connection_matches_connector(const DataSource& ds, const QString& connector
 }
 
 bool connector_matches_text(const ConnectorConfig& cfg, const QString& filter) {
-    if (filter.isEmpty()) return true;
+    if (filter.isEmpty())
+        return true;
     const QString haystack =
         QString("%1 %2 %3 %4 %5").arg(cfg.name, cfg.id, cfg.type, cfg.description, category_label(cfg.category));
     return haystack.toLower().contains(filter);
@@ -85,23 +84,35 @@ bool connector_matches_text(const ConnectorConfig& cfg, const QString& filter) {
 
 QString connector_code(const ConnectorConfig& cfg) {
     const QString icon = cfg.icon.trimmed().toUpper();
-    if (!icon.isEmpty()) return icon.left(2);
+    if (!icon.isEmpty())
+        return icon.left(2);
     return cfg.name.left(2).toUpper();
 }
 
 QString connector_transport(const ConnectorConfig& cfg) {
     switch (cfg.category) {
-        case Category::Database:        return "SQL";
-        case Category::Api:             return "REST";
-        case Category::File:            return "FILE";
-        case Category::Streaming:       return "WS";
-        case Category::Cloud:           return "CLOUD";
-        case Category::TimeSeries:      return "TSDB";
-        case Category::MarketData:      return "MKT";
-        case Category::SearchAnalytics: return "SRCH";
-        case Category::DataWarehouse:   return "DW";
-        case Category::AlternativeData: return "ALT";
-        case Category::OpenBanking:     return "OB";
+        case Category::Database:
+            return "SQL";
+        case Category::Api:
+            return "REST";
+        case Category::File:
+            return "FILE";
+        case Category::Streaming:
+            return "WS";
+        case Category::Cloud:
+            return "CLOUD";
+        case Category::TimeSeries:
+            return "TSDB";
+        case Category::MarketData:
+            return "MKT";
+        case Category::SearchAnalytics:
+            return "SRCH";
+        case Category::DataWarehouse:
+            return "DW";
+        case Category::AlternativeData:
+            return "ALT";
+        case Category::OpenBanking:
+            return "OB";
     }
     return "API";
 }
@@ -112,40 +123,50 @@ QString persistence_type(const ConnectorConfig& cfg) {
 
 QString field_type_label(FieldType type) {
     switch (type) {
-        case FieldType::Text:     return "Text";
-        case FieldType::Password: return "Secret";
-        case FieldType::Number:   return "Number";
-        case FieldType::Url:      return "URL";
-        case FieldType::Select:   return "Select";
-        case FieldType::Textarea: return "Textarea";
-        case FieldType::Checkbox: return "Bool";
-        case FieldType::File:     return "File";
+        case FieldType::Text:
+            return "Text";
+        case FieldType::Password:
+            return "Secret";
+        case FieldType::Number:
+            return "Number";
+        case FieldType::Url:
+            return "URL";
+        case FieldType::Select:
+            return "Select";
+        case FieldType::Textarea:
+            return "Textarea";
+        case FieldType::Checkbox:
+            return "Bool";
+        case FieldType::File:
+            return "File";
     }
     return "Text";
 }
 
 QString compact_value(const QString& value, int max_len = 22) {
     const QString trimmed = value.trimmed();
-    if (trimmed.size() <= max_len) return trimmed;
+    if (trimmed.size() <= max_len)
+        return trimmed;
     return trimmed.left(max_len - 3) + "...";
 }
 
 int total_connections_for_provider(const QVector<DataSource>& rows, const QString& connector_id) {
     int count = 0;
     for (const auto& ds : rows)
-        if (connection_matches_connector(ds, connector_id)) ++count;
+        if (connection_matches_connector(ds, connector_id))
+            ++count;
     return count;
 }
 
 int enabled_connections_for_provider(const QVector<DataSource>& rows, const QString& connector_id) {
     int count = 0;
     for (const auto& ds : rows)
-        if (ds.enabled && connection_matches_connector(ds, connector_id)) ++count;
+        if (ds.enabled && connection_matches_connector(ds, connector_id))
+            ++count;
     return count;
 }
 
-QTableWidgetItem* make_item(const QString& text,
-                            const QColor& color = QColor(col::TEXT_PRIMARY.get()),
+QTableWidgetItem* make_item(const QString& text, const QColor& color = QColor(col::TEXT_PRIMARY.get()),
                             Qt::Alignment alignment = Qt::AlignLeft | Qt::AlignVCenter) {
     auto* item = new QTableWidgetItem(text);
     item->setForeground(color);
@@ -429,15 +450,21 @@ DataSourcesScreen::DataSourcesScreen(QWidget* parent) : QWidget(parent) {
 
 void DataSourcesScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    if (clock_timer_) { update_clock(); clock_timer_->start(); }
-    if (poll_timer_)  poll_timer_->start();
+    if (clock_timer_) {
+        update_clock();
+        clock_timer_->start();
+    }
+    if (poll_timer_)
+        poll_timer_->start();
     refresh_connections();
 }
 
 void DataSourcesScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
-    if (clock_timer_) clock_timer_->stop();
-    if (poll_timer_)  poll_timer_->stop();
+    if (clock_timer_)
+        clock_timer_->stop();
+    if (poll_timer_)
+        poll_timer_->stop();
 }
 
 void DataSourcesScreen::resizeEvent(QResizeEvent* event) {
@@ -465,22 +492,22 @@ void DataSourcesScreen::setup_ui() {
 
     // Apply stylesheet
     const QString style = kScreenStylesheet
-        .arg(col::BG_BASE)           // %1
-        .arg(col::BG_SURFACE)        // %2
-        .arg(col::BG_RAISED)         // %3
-        .arg(col::BORDER_DIM)        // %4
-        .arg(col::AMBER)             // %5
-        .arg(col::TEXT_SECONDARY)    // %6
-        .arg(col::BORDER_MED)        // %7
-        .arg(col::TEXT_TERTIARY)     // %8
-        .arg(col::BG_HOVER)          // %9
-        .arg(col::TEXT_PRIMARY)      // %10
-        .arg(col::BORDER_BRIGHT)     // %11
-        .arg(col::AMBER_DIM)         // %12
-        .arg(col::POSITIVE)          // %13
-        .arg(col::NEGATIVE)          // %14
-        .arg(col::NEGATIVE_DIM)      // %15
-        .arg(col::POSITIVE_DIM);     // %16
+                              .arg(col::BG_BASE)        // %1
+                              .arg(col::BG_SURFACE)     // %2
+                              .arg(col::BG_RAISED)      // %3
+                              .arg(col::BORDER_DIM)     // %4
+                              .arg(col::AMBER)          // %5
+                              .arg(col::TEXT_SECONDARY) // %6
+                              .arg(col::BORDER_MED)     // %7
+                              .arg(col::TEXT_TERTIARY)  // %8
+                              .arg(col::BG_HOVER)       // %9
+                              .arg(col::TEXT_PRIMARY)   // %10
+                              .arg(col::BORDER_BRIGHT)  // %11
+                              .arg(col::AMBER_DIM)      // %12
+                              .arg(col::POSITIVE)       // %13
+                              .arg(col::NEGATIVE)       // %14
+                              .arg(col::NEGATIVE_DIM)   // %15
+                              .arg(col::POSITIVE_DIM);  // %16
     setStyleSheet(style);
 
     auto* root = new QVBoxLayout(this);
@@ -498,8 +525,8 @@ void DataSourcesScreen::setup_ui() {
 
     // 4. Page stack (Browse | Connections)
     page_stack_ = new QStackedWidget;
-    page_stack_->addWidget(build_browse_page());       // index 0
-    page_stack_->addWidget(build_connections_page());  // index 1
+    page_stack_->addWidget(build_browse_page());      // index 0
+    page_stack_->addWidget(build_connections_page()); // index 1
     root->addWidget(page_stack_, 1);
 
     // Timers
@@ -517,7 +544,7 @@ void DataSourcesScreen::setup_ui() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 QWidget* DataSourcesScreen::build_screen_header() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("dsScreenHeader");
     bar->setFixedHeight(38);
 
@@ -536,8 +563,7 @@ QWidget* DataSourcesScreen::build_screen_header() {
     sep->setStyleSheet(QString("background:%1;margin:8px 12px;").arg(col::BORDER_DIM));
     hl->addWidget(sep);
 
-    auto* subtitle = new QLabel(
-        QString("%1 CONNECTORS").arg(ConnectorRegistry::instance().count()));
+    auto* subtitle = new QLabel(QString("%1 CONNECTORS").arg(ConnectorRegistry::instance().count()));
     subtitle->setObjectName("dsScreenSubtitle");
     hl->addWidget(subtitle);
 
@@ -599,7 +625,7 @@ QWidget* DataSourcesScreen::build_screen_header() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 QWidget* DataSourcesScreen::build_stats_strip() {
-    auto* strip = new QWidget;
+    auto* strip = new QWidget(this);
     strip->setObjectName("dsStatRow");
     strip->setFixedHeight(58);
 
@@ -634,10 +660,10 @@ QWidget* DataSourcesScreen::build_stats_strip() {
         return box;
     };
 
-    hl->addWidget(make_stat("UNIVERSE",   &universe_stat_value_,   0));
+    hl->addWidget(make_stat("UNIVERSE", &universe_stat_value_, 0));
     hl->addWidget(make_stat("CONFIGURED", &configured_stat_value_, 1));
-    hl->addWidget(make_stat("ACTIVE",     &active_stat_value_,     2));
-    hl->addWidget(make_stat("AUTH REQ",   &auth_stat_value_,       3));
+    hl->addWidget(make_stat("ACTIVE", &active_stat_value_, 2));
+    hl->addWidget(make_stat("AUTH REQ", &auth_stat_value_, 3));
 
     return strip;
 }
@@ -647,7 +673,7 @@ QWidget* DataSourcesScreen::build_stats_strip() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 QWidget* DataSourcesScreen::build_tab_bar() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("dsTabBar");
     bar->setFixedHeight(32);
 
@@ -678,7 +704,7 @@ QWidget* DataSourcesScreen::build_tab_bar() {
     };
 
     auto* browse_tab = make_tab("BROWSE", 0);
-    auto* conns_tab  = make_tab("CONNECTIONS", 1);
+    auto* conns_tab = make_tab("CONNECTIONS", 1);
 
     hl->addWidget(browse_tab);
     hl->addWidget(conns_tab);
@@ -697,7 +723,7 @@ QWidget* DataSourcesScreen::build_tab_bar() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 QWidget* DataSourcesScreen::build_browse_page() {
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     auto* hl = new QHBoxLayout(page);
     hl->setContentsMargins(0, 0, 0, 0);
     hl->setSpacing(0);
@@ -726,7 +752,7 @@ QWidget* DataSourcesScreen::build_browse_page() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 QWidget* DataSourcesScreen::build_category_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("dsSidebar");
     panel->setMinimumWidth(150);
     panel->setMaximumWidth(220);
@@ -736,7 +762,7 @@ QWidget* DataSourcesScreen::build_category_panel() {
     vl->setSpacing(0);
 
     // Header
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("dsSidebarHeader");
     hdr->setFixedHeight(30);
     auto* hdr_hl = new QHBoxLayout(hdr);
@@ -750,12 +776,11 @@ QWidget* DataSourcesScreen::build_category_panel() {
     category_list_ = new QListWidget;
     category_list_->setObjectName("dsCategoryList");
     category_list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    connect(category_list_, &QListWidget::currentRowChanged,
-            this, &DataSourcesScreen::on_category_selection_changed);
+    connect(category_list_, &QListWidget::currentRowChanged, this, &DataSourcesScreen::on_category_selection_changed);
     vl->addWidget(category_list_, 1);
 
     // Provider ladder section
-    auto* prov_hdr = new QWidget;
+    auto* prov_hdr = new QWidget(this);
     prov_hdr->setObjectName("dsProviderHeader");
     prov_hdr->setFixedHeight(28);
     auto* prov_hl = new QHBoxLayout(prov_hdr);
@@ -769,8 +794,7 @@ QWidget* DataSourcesScreen::build_category_panel() {
     provider_ladder_->setObjectName("dsProviderLadder");
     provider_ladder_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     provider_ladder_->setFixedHeight(120);
-    connect(provider_ladder_, &QListWidget::itemClicked,
-            this, &DataSourcesScreen::on_provider_ladder_activated);
+    connect(provider_ladder_, &QListWidget::itemClicked, this, &DataSourcesScreen::on_provider_ladder_activated);
     vl->addWidget(provider_ladder_);
 
     return panel;
@@ -781,7 +805,7 @@ QWidget* DataSourcesScreen::build_category_panel() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 QWidget* DataSourcesScreen::build_connector_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("dsConnPanel");
 
     auto* vl = new QVBoxLayout(panel);
@@ -789,7 +813,7 @@ QWidget* DataSourcesScreen::build_connector_panel() {
     vl->setSpacing(0);
 
     // Panel header
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("dsConnHeader");
     hdr->setFixedHeight(30);
     auto* hdr_hl = new QHBoxLayout(hdr);
@@ -802,7 +826,7 @@ QWidget* DataSourcesScreen::build_connector_panel() {
 
     hdr_hl->addStretch();
 
-    count_label_ = new QLabel;   // reuse for connector count display
+    count_label_ = new QLabel; // reuse for connector count display
     count_label_->setObjectName("dsConnCount");
     hdr_hl->addWidget(count_label_);
 
@@ -833,15 +857,14 @@ QWidget* DataSourcesScreen::build_connector_panel() {
     connector_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     connector_table_->horizontalHeader()->setHighlightSections(false);
     connector_table_->setAlternatingRowColors(true);
-    connector_table_->setStyleSheet(
-        connector_table_->styleSheet() +
-        QString("QTableWidget { alternate-background-color: %1; }").arg(col::ROW_ALT));
-    connect(connector_table_, &QTableWidget::itemSelectionChanged,
-            this, &DataSourcesScreen::on_connector_selection_changed);
-    connect(connector_table_, &QTableWidget::cellDoubleClicked,
-            this, [this](int row, int) {
+    connector_table_->setStyleSheet(connector_table_->styleSheet() +
+                                    QString("QTableWidget { alternate-background-color: %1; }").arg(col::ROW_ALT));
+    connect(connector_table_, &QTableWidget::itemSelectionChanged, this,
+            &DataSourcesScreen::on_connector_selection_changed);
+    connect(connector_table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
         auto* item = connector_table_->item(row, 1);
-        if (item) on_connector_clicked(item->data(Qt::UserRole).toString());
+        if (item)
+            on_connector_clicked(item->data(Qt::UserRole).toString());
     });
 
     vl->addWidget(connector_table_, 1);
@@ -853,7 +876,7 @@ QWidget* DataSourcesScreen::build_connector_panel() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 QWidget* DataSourcesScreen::build_detail_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("dsDetail");
     panel->setMinimumWidth(240);
 
@@ -862,7 +885,7 @@ QWidget* DataSourcesScreen::build_detail_panel() {
     vl->setSpacing(0);
 
     // Panel header
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("dsDetailHeader");
     hdr->setFixedHeight(30);
     auto* hdr_hl = new QHBoxLayout(hdr);
@@ -877,17 +900,16 @@ QWidget* DataSourcesScreen::build_detail_panel() {
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setStyleSheet(
-        QString("QScrollArea { background:%1; border:none; }").arg(col::BG_SURFACE));
+    scroll->setStyleSheet(QString("QScrollArea { background:%1; border:none; }").arg(col::BG_SURFACE));
 
-    auto* body = new QWidget;
+    auto* body = new QWidget(this);
     body->setStyleSheet(QString("background:%1;").arg(col::BG_SURFACE));
     auto* body_vl = new QVBoxLayout(body);
     body_vl->setContentsMargins(0, 0, 0, 0);
     body_vl->setSpacing(0);
 
     // Identity block (symbol + name + description)
-    auto* id_block = new QWidget;
+    auto* id_block = new QWidget(this);
     id_block->setObjectName("dsInfoRow");
     id_block->setFixedHeight(64);
     auto* id_hl = new QHBoxLayout(id_block);
@@ -914,7 +936,7 @@ QWidget* DataSourcesScreen::build_detail_panel() {
 
     // ── Metadata rows ────────────────────────────────────────────────────────
     auto make_info_row = [&](const QString& label, QLabel** value_out) -> QWidget* {
-        auto* row = new QWidget;
+        auto* row = new QWidget(this);
         row->setObjectName("dsInfoRow");
         row->setFixedHeight(28);
         auto* hl = new QHBoxLayout(row);
@@ -931,17 +953,17 @@ QWidget* DataSourcesScreen::build_detail_panel() {
         return row;
     };
 
-    body_vl->addWidget(make_info_row("CATEGORY",   &detail_category_value_));
-    body_vl->addWidget(make_info_row("TYPE",        &detail_transport_value_));
-    body_vl->addWidget(make_info_row("AUTH",        &detail_auth_value_));
-    body_vl->addWidget(make_info_row("TESTABLE",    &detail_test_value_));
-    body_vl->addWidget(make_info_row("FIELDS",      &detail_fields_value_));
-    body_vl->addWidget(make_info_row("CONFIGURED",  &detail_configured_value_));
-    body_vl->addWidget(make_info_row("ACTIVE",      &detail_enabled_value_));
+    body_vl->addWidget(make_info_row("CATEGORY", &detail_category_value_));
+    body_vl->addWidget(make_info_row("TYPE", &detail_transport_value_));
+    body_vl->addWidget(make_info_row("AUTH", &detail_auth_value_));
+    body_vl->addWidget(make_info_row("TESTABLE", &detail_test_value_));
+    body_vl->addWidget(make_info_row("FIELDS", &detail_fields_value_));
+    body_vl->addWidget(make_info_row("CONFIGURED", &detail_configured_value_));
+    body_vl->addWidget(make_info_row("ACTIVE", &detail_enabled_value_));
     body_vl->addWidget(make_info_row("LAST STATUS", &detail_last_status_value_));
 
     // ── Fields section label ─────────────────────────────────────────────────
-    auto* fields_hdr = new QWidget;
+    auto* fields_hdr = new QWidget(this);
     fields_hdr->setObjectName("dsConnHeader");
     fields_hdr->setFixedHeight(26);
     auto* fh_hl = new QHBoxLayout(fields_hdr);
@@ -970,7 +992,7 @@ QWidget* DataSourcesScreen::build_detail_panel() {
     body_vl->addWidget(field_table_);
 
     // ── Saved connections section ────────────────────────────────────────────
-    auto* conns_hdr = new QWidget;
+    auto* conns_hdr = new QWidget(this);
     conns_hdr->setObjectName("dsConnHeader");
     conns_hdr->setFixedHeight(26);
     auto* ch_hl = new QHBoxLayout(conns_hdr);
@@ -984,12 +1006,12 @@ QWidget* DataSourcesScreen::build_detail_panel() {
     detail_connections_list_->setObjectName("dsDetailConnList");
     detail_connections_list_->setMaximumHeight(110);
     detail_connections_list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    connect(detail_connections_list_, &QListWidget::itemClicked,
-            this, &DataSourcesScreen::on_detail_connection_activated);
+    connect(detail_connections_list_, &QListWidget::itemClicked, this,
+            &DataSourcesScreen::on_detail_connection_activated);
     body_vl->addWidget(detail_connections_list_);
 
     // ── Action buttons ───────────────────────────────────────────────────────
-    auto* actions = new QWidget;
+    auto* actions = new QWidget(this);
     actions->setObjectName("dsConnHeader");
     auto* act_vl = new QVBoxLayout(actions);
     act_vl->setContentsMargins(12, 10, 12, 10);
@@ -1011,9 +1033,8 @@ QWidget* DataSourcesScreen::build_detail_panel() {
     edit_connection_btn_->setFixedHeight(26);
     edit_connection_btn_->setCursor(Qt::PointingHandCursor);
     edit_connection_btn_->setEnabled(false);
-    connect(edit_connection_btn_, &QPushButton::clicked, this, [this]() {
-        on_connection_edit(effective_detail_connection_id());
-    });
+    connect(edit_connection_btn_, &QPushButton::clicked, this,
+            [this]() { on_connection_edit(effective_detail_connection_id()); });
     edit_test_hl->addWidget(edit_connection_btn_);
 
     test_connection_btn_ = new QPushButton("TEST");
@@ -1021,9 +1042,8 @@ QWidget* DataSourcesScreen::build_detail_panel() {
     test_connection_btn_->setFixedHeight(26);
     test_connection_btn_->setCursor(Qt::PointingHandCursor);
     test_connection_btn_->setEnabled(false);
-    connect(test_connection_btn_, &QPushButton::clicked, this, [this]() {
-        on_connection_test(effective_detail_connection_id());
-    });
+    connect(test_connection_btn_, &QPushButton::clicked, this,
+            [this]() { on_connection_test(effective_detail_connection_id()); });
     edit_test_hl->addWidget(test_connection_btn_);
 
     act_vl->addLayout(edit_test_hl);
@@ -1041,7 +1061,7 @@ QWidget* DataSourcesScreen::build_detail_panel() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 QWidget* DataSourcesScreen::build_connections_page() {
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     page->setObjectName("dsConnsPanel");
 
     auto* vl = new QVBoxLayout(page);
@@ -1049,7 +1069,7 @@ QWidget* DataSourcesScreen::build_connections_page() {
     vl->setSpacing(0);
 
     // Panel header
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("dsConnsHeader");
     hdr->setFixedHeight(30);
     auto* hdr_hl = new QHBoxLayout(hdr);
@@ -1071,7 +1091,7 @@ QWidget* DataSourcesScreen::build_connections_page() {
     vl->addWidget(hdr);
 
     // Toolbar
-    auto* toolbar = new QWidget;
+    auto* toolbar = new QWidget(this);
     toolbar->setObjectName("dsConnsToolbar");
     toolbar->setFixedHeight(32);
     auto* tb_hl = new QHBoxLayout(toolbar);
@@ -1083,8 +1103,7 @@ QWidget* DataSourcesScreen::build_connections_page() {
     conn_search_edit_->setObjectName("dsSearchConn");
     conn_search_edit_->setPlaceholderText("filter connections...");
     conn_search_edit_->setFixedSize(220, 22);
-    connect(conn_search_edit_, &QLineEdit::textChanged,
-            this, &DataSourcesScreen::on_connections_search_changed);
+    connect(conn_search_edit_, &QLineEdit::textChanged, this, &DataSourcesScreen::on_connections_search_changed);
     tb_hl->addWidget(conn_search_edit_);
 
     tb_hl->addStretch();
@@ -1117,9 +1136,8 @@ QWidget* DataSourcesScreen::build_connections_page() {
     connections_table_ = new QTableWidget;
     connections_table_->setObjectName("dsConnectionsTable");
     connections_table_->setColumnCount(8);
-    connections_table_->setHorizontalHeaderLabels({
-        "", "NAME", "PROVIDER", "CATEGORY", "TYPE", "STATUS", "TAGS", "UPDATED"
-    });
+    connections_table_->setHorizontalHeaderLabels(
+        {"", "NAME", "PROVIDER", "CATEGORY", "TYPE", "STATUS", "TAGS", "UPDATED"});
     connections_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
     connections_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     connections_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
@@ -1140,11 +1158,10 @@ QWidget* DataSourcesScreen::build_connections_page() {
     connections_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     connections_table_->horizontalHeader()->setHighlightSections(false);
     connections_table_->setAlternatingRowColors(true);
-    connections_table_->setStyleSheet(
-        connections_table_->styleSheet() +
-        QString("QTableWidget { alternate-background-color: %1; }").arg(col::ROW_ALT));
-    connect(connections_table_, &QTableWidget::itemSelectionChanged,
-            this, &DataSourcesScreen::on_connection_selection_changed);
+    connections_table_->setStyleSheet(connections_table_->styleSheet() +
+                                      QString("QTableWidget { alternate-background-color: %1; }").arg(col::ROW_ALT));
+    connect(connections_table_, &QTableWidget::itemSelectionChanged, this,
+            &DataSourcesScreen::on_connection_selection_changed);
 
     vl->addWidget(connections_table_, 1);
     return page;
@@ -1155,7 +1172,7 @@ QWidget* DataSourcesScreen::build_connections_page() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 QWidget* DataSourcesScreen::build_command_bar() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     w->setFixedHeight(0);
     return w;
 }
@@ -1170,9 +1187,7 @@ void DataSourcesScreen::apply_screen_styles() {}
 // Config dialog
 // ─────────────────────────────────────────────────────────────────────────────
 
-void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config,
-                                           const QString& edit_id,
-                                           bool           duplicate) {
+void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config, const QString& edit_id, bool duplicate) {
     const bool editing = !edit_id.isEmpty() && !duplicate;
 
     DataSource existing;
@@ -1191,32 +1206,31 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config,
     QString saved_id;
 
     QDialog dlg(this);
-    dlg.setWindowTitle(editing    ? QString("Edit — %1").arg(config.name)
-                      : duplicate ? QString("Clone — %1").arg(config.name)
-                                  : QString("Configure — %1").arg(config.name));
+    dlg.setWindowTitle(editing     ? QString("Edit — %1").arg(config.name)
+                       : duplicate ? QString("Clone — %1").arg(config.name)
+                                   : QString("Configure — %1").arg(config.name));
     dlg.resize(560, 620);
     dlg.setModal(true);
-    dlg.setStyleSheet(QString(
-        "QDialog { background:%1; color:%2; }"
-        "QLabel { color:%3; font-size:12px; background:transparent; font-family:'Consolas','Courier New',monospace; }"
-        "QLineEdit, QTextEdit, QComboBox { background:%4; border:1px solid %5; color:%2;"
-        "  padding:6px 10px; font-size:13px; font-family:'Consolas','Courier New',monospace; }"
-        "QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border-color:%6; }"
-        "QCheckBox { color:%2; font-size:13px; font-family:'Consolas','Courier New',monospace; }"
-        "QPushButton { padding:7px 18px; font-size:12px; font-weight:700;"
-        "  font-family:'Consolas','Courier New',monospace; }")
-        .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::TEXT_SECONDARY,
-             col::BG_BASE, col::BORDER_DIM, col::AMBER));
+    dlg.setStyleSheet(
+        QString("QDialog { background:%1; color:%2; }"
+                "QLabel { color:%3; font-size:12px; background:transparent; font-family:'Consolas','Courier "
+                "New',monospace; }"
+                "QLineEdit, QTextEdit, QComboBox { background:%4; border:1px solid %5; color:%2;"
+                "  padding:6px 10px; font-size:13px; font-family:'Consolas','Courier New',monospace; }"
+                "QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border-color:%6; }"
+                "QCheckBox { color:%2; font-size:13px; font-family:'Consolas','Courier New',monospace; }"
+                "QPushButton { padding:7px 18px; font-size:12px; font-weight:700;"
+                "  font-family:'Consolas','Courier New',monospace; }")
+            .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::TEXT_SECONDARY, col::BG_BASE, col::BORDER_DIM, col::AMBER));
 
     auto* root_vl = new QVBoxLayout(&dlg);
     root_vl->setContentsMargins(0, 0, 0, 0);
     root_vl->setSpacing(0);
 
     // Dialog header
-    auto* dlg_hdr = new QWidget;
+    auto* dlg_hdr = new QWidget(this);
     dlg_hdr->setFixedHeight(56);
-    dlg_hdr->setStyleSheet(
-        QString("background:%1;border-bottom:1px solid %2;").arg(col::BG_RAISED, col::BORDER_DIM));
+    dlg_hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(col::BG_RAISED, col::BORDER_DIM));
     auto* dlg_hdr_hl = new QHBoxLayout(dlg_hdr);
     dlg_hdr_hl->setContentsMargins(16, 0, 16, 0);
     dlg_hdr_hl->setSpacing(12);
@@ -1224,27 +1238,25 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config,
     auto* code_lbl = new QLabel(connector_code(config));
     code_lbl->setAlignment(Qt::AlignCenter);
     code_lbl->setFixedSize(36, 36);
-    code_lbl->setStyleSheet(
-        QString("background:%1;color:%2;border:1px solid %3;font-size:14px;"
-                "font-weight:700;")
-            .arg(config.color, col::TEXT_PRIMARY, col::BORDER_DIM));
+    code_lbl->setStyleSheet(QString("background:%1;color:%2;border:1px solid %3;font-size:14px;"
+                                    "font-weight:700;")
+                                .arg(config.color, col::TEXT_PRIMARY, col::BORDER_DIM));
     dlg_hdr_hl->addWidget(code_lbl);
 
     auto* title_vl = new QVBoxLayout;
     title_vl->setContentsMargins(0, 0, 0, 0);
     title_vl->setSpacing(2);
 
-    auto* dlg_title = new QLabel(editing    ? QString("Edit  %1").arg(config.name)
-                                : duplicate ? QString("Clone  %1").arg(config.name)
-                                            : config.name);
+    auto* dlg_title = new QLabel(editing     ? QString("Edit  %1").arg(config.name)
+                                 : duplicate ? QString("Clone  %1").arg(config.name)
+                                             : config.name);
     dlg_title->setStyleSheet(
         QString("color:%1;font-size:14px;font-weight:700;background:transparent;").arg(col::AMBER));
     title_vl->addWidget(dlg_title);
 
     auto* dlg_sub = new QLabel(config.description);
     dlg_sub->setWordWrap(true);
-    dlg_sub->setStyleSheet(
-        QString("color:%1;font-size:11px;background:transparent;").arg(col::TEXT_SECONDARY));
+    dlg_sub->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;").arg(col::TEXT_SECONDARY));
     title_vl->addWidget(dlg_sub);
 
     dlg_hdr_hl->addLayout(title_vl, 1);
@@ -1254,10 +1266,9 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config,
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setStyleSheet(
-        QString("QScrollArea { background:%1; border:none; }").arg(col::BG_SURFACE));
+    scroll->setStyleSheet(QString("QScrollArea { background:%1; border:none; }").arg(col::BG_SURFACE));
 
-    auto* body = new QWidget;
+    auto* body = new QWidget(this);
     auto* body_vl = new QVBoxLayout(body);
     body_vl->setContentsMargins(20, 20, 20, 20);
     body_vl->setSpacing(16);
@@ -1276,9 +1287,8 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config,
 
     auto* name_edit = new QLineEdit;
     name_edit->setPlaceholderText(config.name + " Connection");
-    name_edit->setText(existing_loaded
-        ? (duplicate ? QString("Copy of %1").arg(existing.display_name) : existing.display_name)
-        : "");
+    name_edit->setText(
+        existing_loaded ? (duplicate ? QString("Copy of %1").arg(existing.display_name) : existing.display_name) : "");
     name_edit->setFixedHeight(34);
     form->addWidget(name_edit, row, 1);
     ++row;
@@ -1302,28 +1312,26 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config,
         QWidget* input = nullptr;
         if (field.type == FieldType::Checkbox) {
             auto* check = new QCheckBox(field.required ? "Required" : "Optional");
-            const bool value = existing_cfg.contains(field.name)
-                ? existing_cfg.value(field.name).toBool()
-                : (field.default_value == "true");
+            const bool value = existing_cfg.contains(field.name) ? existing_cfg.value(field.name).toBool()
+                                                                 : (field.default_value == "true");
             check->setChecked(value);
             input = check;
         } else if (field.type == FieldType::Select) {
             auto* combo = new QComboBox;
             for (const auto& option : field.options)
                 combo->addItem(option.label, option.value);
-            const QString current = existing_cfg.contains(field.name)
-                ? existing_cfg.value(field.name).toString()
-                : field.default_value;
+            const QString current =
+                existing_cfg.contains(field.name) ? existing_cfg.value(field.name).toString() : field.default_value;
             const int index = combo->findData(current);
-            if (index >= 0) combo->setCurrentIndex(index);
+            if (index >= 0)
+                combo->setCurrentIndex(index);
             input = combo;
         } else if (field.type == FieldType::Textarea) {
             auto* edit = new QTextEdit;
             edit->setMaximumHeight(90);
             edit->setPlaceholderText(field.placeholder);
-            edit->setPlainText(existing_cfg.contains(field.name)
-                ? existing_cfg.value(field.name).toString()
-                : field.default_value);
+            edit->setPlainText(existing_cfg.contains(field.name) ? existing_cfg.value(field.name).toString()
+                                                                 : field.default_value);
             input = edit;
         } else {
             auto* edit = new QLineEdit;
@@ -1334,8 +1342,8 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config,
             if (field.type == FieldType::Number)
                 edit->setValidator(new QIntValidator(0, 999999999, edit));
             const QString text = existing_cfg.contains(field.name)
-                ? existing_cfg.value(field.name).toVariant().toString()
-                : field.default_value;
+                                     ? existing_cfg.value(field.name).toVariant().toString()
+                                     : field.default_value;
             edit->setText(text);
             input = edit;
         }
@@ -1362,8 +1370,7 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config,
     auto* note = new QLabel("Fields marked with * are required.");
     note->setWordWrap(true);
     note->setStyleSheet(
-        QString("color:%1;font-size:11px;font-style:italic;background:transparent;")
-            .arg(col::TEXT_TERTIARY));
+        QString("color:%1;font-size:11px;font-style:italic;background:transparent;").arg(col::TEXT_TERTIARY));
     body_vl->addWidget(note);
     body_vl->addStretch();
 
@@ -1371,35 +1378,31 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config,
     root_vl->addWidget(scroll, 1);
 
     // Dialog footer
-    auto* footer = new QWidget;
+    auto* footer = new QWidget(this);
     footer->setFixedHeight(54);
-    footer->setStyleSheet(
-        QString("background:%1;border-top:1px solid %2;").arg(col::BG_RAISED, col::BORDER_DIM));
+    footer->setStyleSheet(QString("background:%1;border-top:1px solid %2;").arg(col::BG_RAISED, col::BORDER_DIM));
     auto* footer_hl = new QHBoxLayout(footer);
     footer_hl->setContentsMargins(16, 0, 16, 0);
     footer_hl->setSpacing(8);
 
     auto* status = new QLabel;
-    status->setStyleSheet(
-        QString("color:%1;font-size:12px;background:transparent;").arg(col::TEXT_SECONDARY));
+    status->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(col::TEXT_SECONDARY));
     footer_hl->addWidget(status, 1);
 
     auto* cancel = new QPushButton("Cancel");
     cancel->setCursor(Qt::PointingHandCursor);
-    cancel->setStyleSheet(
-        QString("QPushButton{background:%1;color:%2;border:1px solid %3;}"
-                "QPushButton:hover{background:%3;color:%4;}")
-            .arg(col::BG_BASE, col::TEXT_SECONDARY, col::BORDER_MED, col::TEXT_PRIMARY));
+    cancel->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;}"
+                                  "QPushButton:hover{background:%3;color:%4;}")
+                              .arg(col::BG_BASE, col::TEXT_SECONDARY, col::BORDER_MED, col::TEXT_PRIMARY));
     footer_hl->addWidget(cancel);
 
     auto* save = new QPushButton(editing ? "Update Connection" : "Save Connection");
     save->setCursor(Qt::PointingHandCursor);
     save->setDefault(true);
     save->setAutoDefault(true);
-    save->setStyleSheet(
-        QString("QPushButton{background:rgba(217,119,6,0.12);color:%1;border:1px solid %2;}"
-                "QPushButton:hover{background:%1;color:%3;}")
-            .arg(col::AMBER, col::AMBER_DIM, col::BG_BASE));
+    save->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.12);color:%1;border:1px solid %2;}"
+                                "QPushButton:hover{background:%1;color:%3;}")
+                            .arg(col::AMBER, col::AMBER_DIM, col::BG_BASE));
     footer_hl->addWidget(save);
 
     root_vl->addWidget(footer);
@@ -1433,33 +1436,29 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config,
             if (field.required && field.type != FieldType::Checkbox && text_value.isEmpty()) {
                 status->setText("Missing required field: " + field.label);
                 status->setStyleSheet(
-                    QString("color:%1;font-size:12px;font-weight:700;background:transparent;")
-                        .arg(col::NEGATIVE));
+                    QString("color:%1;font-size:12px;font-weight:700;background:transparent;").arg(col::NEGATIVE));
                 return;
             }
         }
 
         DataSource ds = (existing_loaded && !duplicate) ? existing : DataSource{};
-        ds.id = (existing_loaded && !duplicate)
-            ? existing.id : QUuid::createUuid().toString(QUuid::WithoutBraces);
-        ds.alias = (existing_loaded && !duplicate) && !existing.alias.isEmpty()
-            ? existing.alias : (config.id + "_" + ds.id.left(8));
-        ds.display_name = name_edit->text().trimmed().isEmpty()
-            ? config.name : name_edit->text().trimmed();
-        ds.description  = config.description;
-        ds.type         = persistence_type(config);
-        ds.provider     = config.id;
-        ds.category     = category_str(config.category);
-        ds.config       = QJsonDocument(cfg_json).toJson(QJsonDocument::Compact);
-        ds.enabled      = enabled_check->isChecked();
-        ds.tags         = tags_edit->text().trimmed();
+        ds.id = (existing_loaded && !duplicate) ? existing.id : QUuid::createUuid().toString(QUuid::WithoutBraces);
+        ds.alias = (existing_loaded && !duplicate) && !existing.alias.isEmpty() ? existing.alias
+                                                                                : (config.id + "_" + ds.id.left(8));
+        ds.display_name = name_edit->text().trimmed().isEmpty() ? config.name : name_edit->text().trimmed();
+        ds.description = config.description;
+        ds.type = persistence_type(config);
+        ds.provider = config.id;
+        ds.category = category_str(config.category);
+        ds.config = QJsonDocument(cfg_json).toJson(QJsonDocument::Compact);
+        ds.enabled = enabled_check->isChecked();
+        ds.tags = tags_edit->text().trimmed();
 
         const auto result = DataSourceRepository::instance().save(ds);
         if (result.is_err()) {
             status->setText("Failed to save: " + QString::fromStdString(result.error()));
             status->setStyleSheet(
-                QString("color:%1;font-size:12px;font-weight:700;background:transparent;")
-                    .arg(col::NEGATIVE));
+                QString("color:%1;font-size:12px;font-weight:700;background:transparent;").arg(col::NEGATIVE));
             return;
         }
 
@@ -1486,29 +1485,37 @@ QVector<ConnectorConfig> DataSourcesScreen::filtered_connectors() const {
     if (stat_filter_ == 1 || stat_filter_ == 2) {
         for (const auto& ds : connections_cache_) {
             configured_ids.insert(normalized_provider_key(ds));
-            if (ds.enabled) active_ids.insert(normalized_provider_key(ds));
+            if (ds.enabled)
+                active_ids.insert(normalized_provider_key(ds));
         }
     }
 
     for (const auto& cfg : ConnectorRegistry::instance().all()) {
-        if (!show_all_categories_ && cfg.category != active_category_) continue;
-        if (!connector_matches_text(cfg, filter)) continue;
-        if (stat_filter_ == 1 && !configured_ids.contains(cfg.id)) continue;
-        if (stat_filter_ == 2 && !active_ids.contains(cfg.id)) continue;
-        if (stat_filter_ == 3 && !cfg.requires_auth) continue;
+        if (!show_all_categories_ && cfg.category != active_category_)
+            continue;
+        if (!connector_matches_text(cfg, filter))
+            continue;
+        if (stat_filter_ == 1 && !configured_ids.contains(cfg.id))
+            continue;
+        if (stat_filter_ == 2 && !active_ids.contains(cfg.id))
+            continue;
+        if (stat_filter_ == 3 && !cfg.requires_auth)
+            continue;
         filtered.append(cfg);
     }
     return filtered;
 }
 
 void DataSourcesScreen::build_category_ladder() {
-    if (!category_list_) return;
+    if (!category_list_)
+        return;
 
     QVector<int> counts(12, 0);
     const QString filter = search_edit_ ? search_edit_->text().trimmed().toLower() : "";
 
     for (const auto& cfg : ConnectorRegistry::instance().all()) {
-        if (!connector_matches_text(cfg, filter)) continue;
+        if (!connector_matches_text(cfg, filter))
+            continue;
         ++counts[0];
         ++counts[static_cast<int>(cfg.category) + 1];
     }
@@ -1530,7 +1537,8 @@ void DataSourcesScreen::build_category_ladder() {
 }
 
 void DataSourcesScreen::build_connector_table() {
-    if (!connector_table_) return;
+    if (!connector_table_)
+        return;
 
     const auto filtered = filtered_connectors();
     int preferred_row = -1;
@@ -1542,7 +1550,7 @@ void DataSourcesScreen::build_connector_table() {
         for (int row = 0; row < filtered.size(); ++row) {
             const auto& cfg = filtered[row];
             const int total_saved = total_connections_for_provider(connections_cache_, cfg.id);
-            const int live_saved  = enabled_connections_for_provider(connections_cache_, cfg.id);
+            const int live_saved = enabled_connections_for_provider(connections_cache_, cfg.id);
 
             // Col 0: code badge
             auto* code_item = make_item(connector_code(cfg), QColor(cfg.color), Qt::AlignCenter);
@@ -1554,39 +1562,38 @@ void DataSourcesScreen::build_connector_table() {
             connector_table_->setItem(row, 1, name_item);
 
             // Col 2: category
-            connector_table_->setItem(row, 2,
-                make_item(category_label(cfg.category), QColor(col::TEXT_SECONDARY())));
+            connector_table_->setItem(row, 2, make_item(category_label(cfg.category), QColor(col::TEXT_SECONDARY())));
 
             // Col 3: auth
             connector_table_->setItem(row, 3,
-                make_item(cfg.requires_auth ? "KEY" : "OPEN",
-                    cfg.requires_auth ? QColor(col::WARNING()) : QColor(col::POSITIVE()),
-                    Qt::AlignCenter));
+                                      make_item(cfg.requires_auth ? "KEY" : "OPEN",
+                                                cfg.requires_auth ? QColor(col::WARNING()) : QColor(col::POSITIVE()),
+                                                Qt::AlignCenter));
 
             // Col 4: transport type
-            connector_table_->setItem(row, 4,
-                make_item(connector_transport(cfg), QColor(col::TEXT_TERTIARY()), Qt::AlignCenter));
+            connector_table_->setItem(
+                row, 4, make_item(connector_transport(cfg), QColor(col::TEXT_TERTIARY()), Qt::AlignCenter));
 
             // Col 5: active connections
             connector_table_->setItem(row, 5,
-                make_item(live_saved > 0 ? QString::number(live_saved) : "-",
-                    live_saved > 0 ? QColor(col::POSITIVE()) : QColor(col::TEXT_TERTIARY()),
-                    Qt::AlignCenter));
+                                      make_item(live_saved > 0 ? QString::number(live_saved) : "-",
+                                                live_saved > 0 ? QColor(col::POSITIVE()) : QColor(col::TEXT_TERTIARY()),
+                                                Qt::AlignCenter));
 
             // Col 6: total connections
-            connector_table_->setItem(row, 6,
+            connector_table_->setItem(
+                row, 6,
                 make_item(total_saved > 0 ? QString::number(total_saved) : "-",
-                    total_saved > 0 ? QColor(col::TEXT_PRIMARY()) : QColor(col::TEXT_TERTIARY()),
-                    Qt::AlignCenter));
+                          total_saved > 0 ? QColor(col::TEXT_PRIMARY()) : QColor(col::TEXT_TERTIARY()),
+                          Qt::AlignCenter));
 
-            if (cfg.id == selected_connector_id_) preferred_row = row;
+            if (cfg.id == selected_connector_id_)
+                preferred_row = row;
         }
     }
 
     if (count_label_)
-        count_label_->setText(QString("%1 / %2")
-            .arg(filtered.size())
-            .arg(ConnectorRegistry::instance().count()));
+        count_label_->setText(QString("%1 / %2").arg(filtered.size()).arg(ConnectorRegistry::instance().count()));
 
     if (preferred_row >= 0) {
         connector_table_->selectRow(preferred_row);
@@ -1598,7 +1605,8 @@ void DataSourcesScreen::build_connector_table() {
 }
 
 void DataSourcesScreen::build_connections_table() {
-    if (!connections_table_) return;
+    if (!connections_table_)
+        return;
 
     const auto rows = filtered_connection_rows();
 
@@ -1615,9 +1623,8 @@ void DataSourcesScreen::build_connections_table() {
         toggle->setChecked(ds.enabled);
         toggle->setProperty("conn_id", ds.id);
         toggle->setCursor(Qt::PointingHandCursor);
-        connect(toggle, &QCheckBox::toggled, this, [this, id = ds.id](bool checked) {
-            on_connection_enabled_changed(id, checked);
-        });
+        connect(toggle, &QCheckBox::toggled, this,
+                [this, id = ds.id](bool checked) { on_connection_enabled_changed(id, checked); });
         connections_table_->setCellWidget(r, 0, toggle);
 
         // Col 1: name (carries conn ID in UserRole)
@@ -1627,17 +1634,14 @@ void DataSourcesScreen::build_connections_table() {
 
         // Col 2: provider
         const QString prov_color = cfg ? cfg->color : col::TEXT_SECONDARY();
-        connections_table_->setItem(r, 2,
-            make_item(cfg ? cfg->name : ds.provider, QColor(prov_color)));
+        connections_table_->setItem(r, 2, make_item(cfg ? cfg->name : ds.provider, QColor(prov_color)));
 
         // Col 3: category
-        connections_table_->setItem(r, 3,
-            make_item(ds.category, QColor(col::TEXT_SECONDARY())));
+        connections_table_->setItem(r, 3, make_item(ds.category, QColor(col::TEXT_SECONDARY())));
 
         // Col 4: type
-        connections_table_->setItem(r, 4,
-            make_item(cfg ? connector_transport(*cfg) : ds.type,
-                QColor(col::TEXT_TERTIARY()), Qt::AlignCenter));
+        connections_table_->setItem(
+            r, 4, make_item(cfg ? connector_transport(*cfg) : ds.type, QColor(col::TEXT_TERTIARY()), Qt::AlignCenter));
 
         // Col 5: live status
         const bool has_status = live_status_cache_.contains(ds.id);
@@ -1645,26 +1649,25 @@ void DataSourcesScreen::build_connections_table() {
         auto* status_lbl = new QLabel(has_status ? (ok ? "OK" : "ERR") : "--");
         status_lbl->setAlignment(Qt::AlignCenter);
         status_lbl->setObjectName("dsStatusDot");
-        status_lbl->setStyleSheet(
-            QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
-                .arg(!has_status ? col::TEXT_TERTIARY()
-                    : ok ? col::POSITIVE() : col::NEGATIVE()));
+        status_lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
+                                      .arg(!has_status ? col::TEXT_TERTIARY()
+                                           : ok        ? col::POSITIVE()
+                                                       : col::NEGATIVE()));
         if (has_status)
             status_lbl->setToolTip(live_status_cache_[ds.id].second);
         connections_table_->setCellWidget(r, 5, status_lbl);
 
         // Col 6: tags
-        connections_table_->setItem(r, 6,
-            make_item(ds.tags, QColor(col::TEXT_TERTIARY())));
+        connections_table_->setItem(r, 6, make_item(ds.tags, QColor(col::TEXT_TERTIARY())));
 
         // Col 7: updated_at
-        connections_table_->setItem(r, 7,
-            make_item(ds.updated_at.left(16), QColor(col::TEXT_TERTIARY())));
+        connections_table_->setItem(r, 7, make_item(ds.updated_at.left(16), QColor(col::TEXT_TERTIARY())));
     }
 }
 
 void DataSourcesScreen::update_stats_strip() {
-    if (!universe_stat_value_) return;
+    if (!universe_stat_value_)
+        return;
 
     const auto& all = ConnectorRegistry::instance().all();
     const int universe = all.size();
@@ -1673,10 +1676,12 @@ void DataSourcesScreen::update_stats_strip() {
     int active_count = 0, auth_count = 0;
     for (const auto& ds : connections_cache_) {
         configured_providers.insert(normalized_provider_key(ds));
-        if (ds.enabled) ++active_count;
+        if (ds.enabled)
+            ++active_count;
     }
     for (const auto& cfg : all) {
-        if (cfg.requires_auth) ++auth_count;
+        if (cfg.requires_auth)
+            ++auth_count;
     }
 
     universe_stat_value_->setText(QString::number(universe));
@@ -1687,13 +1692,10 @@ void DataSourcesScreen::update_stats_strip() {
     // Highlight active stat filter
     auto reset_color = [](QLabel* v) {
         v->setStyleSheet(
-            QString("color:%1;font-size:22px;font-weight:700;background:transparent;")
-                .arg(col::TEXT_PRIMARY));
+            QString("color:%1;font-size:22px;font-weight:700;background:transparent;").arg(col::TEXT_PRIMARY));
     };
     auto set_amber = [](QLabel* v) {
-        v->setStyleSheet(
-            QString("color:%1;font-size:22px;font-weight:700;background:transparent;")
-                .arg(col::AMBER));
+        v->setStyleSheet(QString("color:%1;font-size:22px;font-weight:700;background:transparent;").arg(col::AMBER));
     };
 
     reset_color(universe_stat_value_);
@@ -1702,16 +1704,26 @@ void DataSourcesScreen::update_stats_strip() {
     reset_color(auth_stat_value_);
 
     switch (stat_filter_) {
-        case 0: set_amber(universe_stat_value_);   break;
-        case 1: set_amber(configured_stat_value_); break;
-        case 2: set_amber(active_stat_value_);     break;
-        case 3: set_amber(auth_stat_value_);       break;
-        default: break;
+        case 0:
+            set_amber(universe_stat_value_);
+            break;
+        case 1:
+            set_amber(configured_stat_value_);
+            break;
+        case 2:
+            set_amber(active_stat_value_);
+            break;
+        case 3:
+            set_amber(auth_stat_value_);
+            break;
+        default:
+            break;
     }
 }
 
 void DataSourcesScreen::update_provider_ladder() {
-    if (!provider_ladder_) return;
+    if (!provider_ladder_)
+        return;
 
     // Build connector -> total_connections map
     QMap<QString, int> conn_counts;
@@ -1724,9 +1736,7 @@ void DataSourcesScreen::update_provider_ladder() {
     QVector<QPair<int, QString>> ranked;
     for (auto it = conn_counts.begin(); it != conn_counts.end(); ++it)
         ranked.append({it.value(), it.key()});
-    std::sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) {
-        return a.first > b.first;
-    });
+    std::sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
     ranked = ranked.mid(0, 8);
 
     QSignalBlocker blocker(provider_ladder_);
@@ -1750,16 +1760,17 @@ void DataSourcesScreen::update_provider_ladder() {
 }
 
 void DataSourcesScreen::update_detail_panel() {
-    if (!detail_title_) return;
+    if (!detail_title_)
+        return;
 
     const auto* cfg = find_connector_config(selected_connector_id_);
 
     if (!cfg) {
         detail_symbol_->setText("--");
-        detail_symbol_->setStyleSheet(
-            QString("min-width:38px;max-width:38px;min-height:38px;max-height:38px;"
-                    "font-size:13px;font-weight:700;color:%1;background:%2;"
-                    "border:1px solid %1;").arg(col::AMBER, col::BG_BASE));
+        detail_symbol_->setStyleSheet(QString("min-width:38px;max-width:38px;min-height:38px;max-height:38px;"
+                                              "font-size:13px;font-weight:700;color:%1;background:%2;"
+                                              "border:1px solid %1;")
+                                          .arg(col::AMBER, col::BG_BASE));
         detail_title_->setText("Select a connector");
         detail_description_->setText("Double-click any row to configure");
         detail_category_value_->setText("--");
@@ -1770,20 +1781,24 @@ void DataSourcesScreen::update_detail_panel() {
         detail_configured_value_->setText("--");
         detail_enabled_value_->setText("--");
         detail_last_status_value_->setText("--");
-        if (field_table_) field_table_->setRowCount(0);
-        if (detail_connections_list_) detail_connections_list_->clear();
-        if (new_connection_btn_) new_connection_btn_->setEnabled(false);
-        if (edit_connection_btn_) edit_connection_btn_->setEnabled(false);
-        if (test_connection_btn_) test_connection_btn_->setEnabled(false);
+        if (field_table_)
+            field_table_->setRowCount(0);
+        if (detail_connections_list_)
+            detail_connections_list_->clear();
+        if (new_connection_btn_)
+            new_connection_btn_->setEnabled(false);
+        if (edit_connection_btn_)
+            edit_connection_btn_->setEnabled(false);
+        if (test_connection_btn_)
+            test_connection_btn_->setEnabled(false);
         return;
     }
 
     // Identity
     detail_symbol_->setText(connector_code(*cfg));
-    detail_symbol_->setStyleSheet(
-        QString("min-width:38px;max-width:38px;min-height:38px;max-height:38px;"
-                "font-size:13px;font-weight:700;color:%1;background:%2;border:1px solid %1;")
-            .arg(cfg->color, col::BG_BASE));
+    detail_symbol_->setStyleSheet(QString("min-width:38px;max-width:38px;min-height:38px;max-height:38px;"
+                                          "font-size:13px;font-weight:700;color:%1;background:%2;border:1px solid %1;")
+                                      .arg(cfg->color, col::BG_BASE));
     detail_title_->setText(cfg->name);
     detail_description_->setText(cfg->description);
 
@@ -1791,9 +1806,8 @@ void DataSourcesScreen::update_detail_panel() {
     detail_category_value_->setText(category_label(cfg->category));
     detail_transport_value_->setText(connector_transport(*cfg));
     detail_auth_value_->setText(cfg->requires_auth ? "Required" : "None");
-    detail_auth_value_->setStyleSheet(
-        QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
-            .arg(cfg->requires_auth ? col::WARNING() : col::POSITIVE()));
+    detail_auth_value_->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
+                                          .arg(cfg->requires_auth ? col::WARNING() : col::POSITIVE()));
     detail_test_value_->setText(cfg->testable ? "Yes" : "No");
 
     const int total = total_connections_for_provider(connections_cache_, cfg->id);
@@ -1801,9 +1815,8 @@ void DataSourcesScreen::update_detail_panel() {
     detail_fields_value_->setText(QString::number(cfg->fields.size()));
     detail_configured_value_->setText(QString::number(total));
     detail_enabled_value_->setText(QString::number(active));
-    detail_enabled_value_->setStyleSheet(
-        QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
-            .arg(active > 0 ? col::POSITIVE() : col::TEXT_TERTIARY()));
+    detail_enabled_value_->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
+                                             .arg(active > 0 ? col::POSITIVE() : col::TEXT_TERTIARY()));
 
     // Last test status
     const QString conn_id = effective_detail_connection_id();
@@ -1816,8 +1829,7 @@ void DataSourcesScreen::update_detail_panel() {
     } else {
         detail_last_status_value_->setText("--");
         detail_last_status_value_->setStyleSheet(
-            QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
-                .arg(col::TEXT_TERTIARY()));
+            QString("color:%1;font-size:11px;font-weight:700;background:transparent;").arg(col::TEXT_TERTIARY()));
     }
 
     // Fields table
@@ -1828,17 +1840,16 @@ void DataSourcesScreen::update_detail_panel() {
             const auto& f = cfg->fields[i];
             field_table_->setItem(i, 0, make_item(f.label));
             field_table_->setItem(i, 1,
-                make_item(field_type_label(f.type), QColor(col::TEXT_SECONDARY()), Qt::AlignCenter));
+                                  make_item(field_type_label(f.type), QColor(col::TEXT_SECONDARY()), Qt::AlignCenter));
             field_table_->setItem(i, 2,
-                make_item(f.required ? "Y" : "N",
-                    f.required ? QColor(col::WARNING()) : QColor(col::TEXT_TERTIARY()),
-                    Qt::AlignCenter));
+                                  make_item(f.required ? "Y" : "N",
+                                            f.required ? QColor(col::WARNING()) : QColor(col::TEXT_TERTIARY()),
+                                            Qt::AlignCenter));
         }
         // Shrink to content (max 120px = ~5 rows)
         const int row_h = 24;
         const int hdr_h = 24;
-        field_table_->setFixedHeight(
-            std::min(hdr_h + static_cast<int>(cfg->fields.size()) * row_h, 120));
+        field_table_->setFixedHeight(std::min(hdr_h + static_cast<int>(cfg->fields.size()) * row_h, 120));
     }
 
     // Saved connections list
@@ -1846,7 +1857,8 @@ void DataSourcesScreen::update_detail_panel() {
         QSignalBlocker lb(detail_connections_list_);
         detail_connections_list_->clear();
         for (const auto& ds : connections_cache_) {
-            if (!connection_matches_connector(ds, cfg->id)) continue;
+            if (!connection_matches_connector(ds, cfg->id))
+                continue;
             const QString status_str = ds.enabled ? "ACTIVE" : "OFF";
             const QString label = QString("%1  [%2]").arg(ds.display_name).arg(status_str);
             auto* item = new QListWidgetItem(label);
@@ -1873,9 +1885,12 @@ void DataSourcesScreen::update_action_states() {
     const QString conn_id = effective_detail_connection_id();
     const bool has_conn = !conn_id.isEmpty();
 
-    if (new_connection_btn_) new_connection_btn_->setEnabled(has_connector);
-    if (edit_connection_btn_) edit_connection_btn_->setEnabled(has_conn);
-    if (test_connection_btn_) test_connection_btn_->setEnabled(has_conn);
+    if (new_connection_btn_)
+        new_connection_btn_->setEnabled(has_connector);
+    if (edit_connection_btn_)
+        edit_connection_btn_->setEnabled(has_conn);
+    if (test_connection_btn_)
+        test_connection_btn_->setEnabled(has_conn);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1883,25 +1898,31 @@ void DataSourcesScreen::update_action_states() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 QString DataSourcesScreen::effective_detail_connection_id() const {
-    if (!selected_connection_id_.isEmpty()) return selected_connection_id_;
+    if (!selected_connection_id_.isEmpty())
+        return selected_connection_id_;
     return preferred_connection_for_connector(selected_connector_id_);
 }
 
 QString DataSourcesScreen::preferred_connection_for_connector(const QString& connector_id) const {
     QString first_match;
     for (const auto& ds : connections_cache_) {
-        if (!connection_matches_connector(ds, connector_id)) continue;
-        if (ds.enabled) return ds.id;
-        if (first_match.isEmpty()) first_match = ds.id;
+        if (!connection_matches_connector(ds, connector_id))
+            continue;
+        if (ds.enabled)
+            return ds.id;
+        if (first_match.isEmpty())
+            first_match = ds.id;
     }
     return first_match;
 }
 
 void DataSourcesScreen::select_connector_by_id(const QString& connector_id) {
     const auto* cfg = find_connector_config(connector_id);
-    if (!cfg) return;
+    if (!cfg)
+        return;
     selected_connector_id_ = cfg->id;
-    if (!connector_table_) return;
+    if (!connector_table_)
+        return;
     for (int row = 0; row < connector_table_->rowCount(); ++row) {
         auto* item = connector_table_->item(row, 1);
         if (item && item->data(Qt::UserRole).toString() == selected_connector_id_) {
@@ -1917,7 +1938,8 @@ void DataSourcesScreen::select_connector_by_id(const QString& connector_id) {
 
 void DataSourcesScreen::on_category_filter(int idx) {
     show_all_categories_ = (idx == 0);
-    if (idx > 0) active_category_ = static_cast<Category>(idx - 1);
+    if (idx > 0)
+        active_category_ = static_cast<Category>(idx - 1);
     build_connector_table();
     build_connections_table();
     update_provider_ladder();
@@ -1946,7 +1968,8 @@ void DataSourcesScreen::on_connector_clicked(const QString& connector_id) {
 void DataSourcesScreen::on_connection_add() {
     if (selected_connector_id_.isEmpty()) {
         const auto filtered = filtered_connectors();
-        if (filtered.isEmpty()) return;
+        if (filtered.isEmpty())
+            return;
         selected_connector_id_ = filtered.first().id;
     }
     if (const auto* cfg = find_connector_config(selected_connector_id_))
@@ -1955,7 +1978,8 @@ void DataSourcesScreen::on_connection_add() {
 
 void DataSourcesScreen::on_connection_edit(const QString& conn_id) {
     const auto result = DataSourceRepository::instance().get(conn_id);
-    if (result.is_err()) return;
+    if (result.is_err())
+        return;
     const auto ds = result.value();
     if (const auto* cfg = find_connector_config(ds.provider)) {
         selected_connector_id_ = cfg->id;
@@ -1970,7 +1994,8 @@ void DataSourcesScreen::on_connection_delete(const QString& conn_id) {
         LOG_ERROR(TAG, QString("Failed to remove connection %1").arg(conn_id));
         return;
     }
-    if (selected_connection_id_ == conn_id) selected_connection_id_.clear();
+    if (selected_connection_id_ == conn_id)
+        selected_connection_id_.clear();
     refresh_connections();
 }
 
@@ -1997,7 +2022,8 @@ static QString provider_probe_url(const QString& provider_id, const QJsonObject&
     if (provider_id == "alpha-vantage") {
         const QString key = cfg.value("apiKey").toString().trimmed();
         return QString("https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY"
-                       "&symbol=IBM&interval=5min&apikey=%1").arg(key.isEmpty() ? "demo" : key);
+                       "&symbol=IBM&interval=5min&apikey=%1")
+            .arg(key.isEmpty() ? "demo" : key);
     }
     if (provider_id == "finnhub") {
         const QString key = cfg.value("apiKey").toString().trimmed();
@@ -2011,7 +2037,8 @@ static QString provider_probe_url(const QString& provider_id, const QJsonObject&
     }
     if (provider_id == "twelve-data") {
         const QString key = cfg.value("apiKey").toString().trimmed();
-        return QString("https://api.twelvedata.com/time_series?symbol=AAPL&interval=1min&outputsize=1&apikey=%1").arg(key);
+        return QString("https://api.twelvedata.com/time_series?symbol=AAPL&interval=1min&outputsize=1&apikey=%1")
+            .arg(key);
     }
     if (provider_id == "quandl") {
         const QString key = cfg.value("apiKey").toString().trimmed();
@@ -2041,7 +2068,8 @@ static QString provider_probe_url(const QString& provider_id, const QJsonObject&
         return "https://api.kraken.com/0/public/Time";
     if (provider_id == "coinmarketcap") {
         const QString key = cfg.value("apiKey").toString().trimmed();
-        return QString("https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest?limit=1&CMC_PRO_API_KEY=%1").arg(key);
+        return QString("https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest?limit=1&CMC_PRO_API_KEY=%1")
+            .arg(key);
     }
     if (provider_id == "coingecko")
         return "https://api.coingecko.com/api/v3/ping";
@@ -2068,8 +2096,7 @@ static QString provider_probe_url(const QString& provider_id, const QJsonObject&
     if (provider_id == "marketstack") {
         const QString key = cfg.value("apiKey").toString().trimmed();
         const bool use_https = cfg.value("https").toBool();
-        return QString("%1://api.marketstack.com/v1/tickers/AAPL?access_key=%2")
-            .arg(use_https ? "https" : "http", key);
+        return QString("%1://api.marketstack.com/v1/tickers/AAPL?access_key=%2").arg(use_https ? "https" : "http", key);
     }
     if (provider_id == "finage") {
         const QString key = cfg.value("apiKey").toString().trimmed();
@@ -2077,8 +2104,7 @@ static QString provider_probe_url(const QString& provider_id, const QJsonObject&
     }
     if (provider_id == "tradier") {
         const bool sandbox = cfg.value("sandbox").toBool();
-        return sandbox ? "https://sandbox.tradier.com/v1/markets/clock"
-                       : "https://api.tradier.com/v1/markets/clock";
+        return sandbox ? "https://sandbox.tradier.com/v1/markets/clock" : "https://api.tradier.com/v1/markets/clock";
     }
 
     // ── Alternative data ─────────────────────────────────────────────────────
@@ -2110,7 +2136,8 @@ static QString provider_probe_url(const QString& provider_id, const QJsonObject&
         return "https://auth.truelayer.com/";
     if (provider_id == "fdx-api") {
         const QString base = cfg.value("baseUrl").toString().trimmed();
-        if (!base.isEmpty()) return base;
+        if (!base.isEmpty())
+            return base;
         return "https://api.financial-data-exchange.org/";
     }
 
@@ -2118,19 +2145,22 @@ static QString provider_probe_url(const QString& provider_id, const QJsonObject&
     // REST API: probe baseUrl directly (any non-refused response = reachable)
     if (provider_id == "rest-api") {
         const QString base = cfg.value("baseUrl").toString().trimmed();
-        if (!base.isEmpty()) return base;
+        if (!base.isEmpty())
+            return base;
         return {};
     }
     // GraphQL: probe the endpoint (TCP connect suffices; POST introspection would need QNetworkAccessManager)
     if (provider_id == "graphql") {
         const QString ep = cfg.value("endpoint").toString().trimmed();
-        if (!ep.isEmpty()) return ep;
+        if (!ep.isEmpty())
+            return ep;
         return {};
     }
     // WebSocket: extract host:port from ws:// or wss:// URL for TCP probe
     if (provider_id == "websocket") {
         const QString url = cfg.value("url").toString().trimmed();
-        if (!url.isEmpty()) return url;  // QUrl parser in test code handles ws/wss → port 80/443
+        if (!url.isEmpty())
+            return url; // QUrl parser in test code handles ws/wss → port 80/443
         return {};
     }
     // gRPC: host+port TCP probe handled by fallback (host/port fields present)
@@ -2139,7 +2169,8 @@ static QString provider_probe_url(const QString& provider_id, const QJsonObject&
     // SOAP: probe WSDL URL
     if (provider_id == "soap") {
         const QString wsdl = cfg.value("wsdlUrl").toString().trimmed();
-        if (!wsdl.isEmpty()) return wsdl;
+        if (!wsdl.isEmpty())
+            return wsdl;
         return {};
     }
     // OData: probe mandatory $metadata endpoint
@@ -2166,7 +2197,7 @@ static QString provider_probe_url(const QString& provider_id, const QJsonObject&
         const QString uri = cfg.value("catalogUri").toString().trimmed();
         if (catalog == "rest" && !uri.isEmpty())
             return (uri.endsWith('/') ? uri : uri + "/") + "v1/config";
-        return {};  // non-REST catalogs (Hive, Glue, JDBC) have no HTTP endpoint
+        return {}; // non-REST catalogs (Hive, Glue, JDBC) have no HTTP endpoint
     }
 
     // ── Streaming / messaging (host+port via TCP fallback) ────────────────────
@@ -2198,7 +2229,8 @@ static QString provider_probe_url(const QString& provider_id, const QJsonObject&
     }
     if (provider_id == "ibm-cloud-storage") {
         const QString ep = cfg.value("endpoint").toString().trimmed();
-        if (!ep.isEmpty()) return ep;
+        if (!ep.isEmpty())
+            return ep;
         return "https://s3.us.cloud-object-storage.appdomain.cloud/";
     }
 
@@ -2268,12 +2300,14 @@ static QString provider_probe_url(const QString& provider_id, const QJsonObject&
         return "https://firestore.googleapis.com/";
     if (provider_id == "databricks") {
         const QString h = cfg.value("serverHostname").toString().trimmed();
-        if (!h.isEmpty()) return QString("https://%1/api/2.0/clusters/list").arg(h);
+        if (!h.isEmpty())
+            return QString("https://%1/api/2.0/clusters/list").arg(h);
         return {};
     }
     if (provider_id == "synapse") {
         const QString server = cfg.value("server").toString().trimmed();
-        if (!server.isEmpty()) return QString("https://%1").arg(server);
+        if (!server.isEmpty())
+            return QString("https://%1").arg(server);
         return {};
     }
     // redshift, snowflake: host+port TCP fallback
@@ -2283,7 +2317,8 @@ static QString provider_probe_url(const QString& provider_id, const QJsonObject&
 
 void DataSourcesScreen::on_connection_test(const QString& conn_id) {
     const auto get_result = DataSourceRepository::instance().get(conn_id);
-    if (get_result.is_err()) return;
+    if (get_result.is_err())
+        return;
 
     const auto ds = get_result.value();
     const auto cfg_doc = QJsonDocument::fromJson(ds.config.toUtf8());
@@ -2297,28 +2332,32 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
         result_dlg.setModal(true);
         result_dlg.setStyleSheet(
             QString("QDialog{background:%1;color:%2;font-family:'Consolas','Courier New',monospace;}"
-            "QLabel{font-size:13px;background:transparent;}"
-            "QPushButton{background:%3;color:%2;border:1px solid %4;"
-            "padding:6px 18px;font-size:12px;font-weight:700;}"
-            "QPushButton:hover{background:%4;}")
+                    "QLabel{font-size:13px;background:transparent;}"
+                    "QPushButton{background:%3;color:%2;border:1px solid %4;"
+                    "padding:6px 18px;font-size:12px;font-weight:700;}"
+                    "QPushButton:hover{background:%4;}")
                 .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::BG_RAISED, col::BORDER_DIM));
         auto* vl = new QVBoxLayout(&result_dlg);
-        vl->setContentsMargins(24, 20, 24, 16); vl->setSpacing(10);
+        vl->setContentsMargins(24, 20, 24, 16);
+        vl->setSpacing(10);
         auto* lbl = new QLabel("This connector does not support connectivity testing.");
         lbl->setWordWrap(true);
         lbl->setStyleSheet(QString("color:%1;font-size:13px;background:transparent;").arg(col::TEXT_SECONDARY));
-        vl->addWidget(lbl); vl->addStretch();
+        vl->addWidget(lbl);
+        vl->addStretch();
         auto* btn = new QPushButton("Close");
         btn->setCursor(Qt::PointingHandCursor);
         QObject::connect(btn, &QPushButton::clicked, &result_dlg, &QDialog::accept);
-        auto* row = new QHBoxLayout; row->addStretch(); row->addWidget(btn);
+        auto* row = new QHBoxLayout;
+        row->addStretch();
+        row->addWidget(btn);
         vl->addLayout(row);
         result_dlg.exec();
         return;
     }
 
     QPointer<DataSourcesScreen> self = this;
-    const QString display  = ds.display_name;
+    const QString display = ds.display_name;
     const QString provider = ds.provider;
 
     const QString probe_url = provider_probe_url(provider, cfg_obj);
@@ -2328,40 +2367,55 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
         const QStringList url_keys = {"url", "baseUrl", "endpoint", "wsdlUrl", "serviceRoot"};
         for (const auto& key : url_keys) {
             const QString v = cfg_obj.value(key).toString().trimmed();
-            if (!v.isEmpty()) { explicit_url = v; break; }
+            if (!v.isEmpty()) {
+                explicit_url = v;
+                break;
+            }
         }
     }
 
     const QString test_url = probe_url.isEmpty() ? explicit_url : probe_url;
 
     QString host = cfg_obj.value("host").toString().trimmed();
-    int port     = cfg_obj.value("port").toVariant().toInt();
-    if (port <= 0) port = cfg_obj.value("port").toString().trimmed().toInt();
+    int port = cfg_obj.value("port").toVariant().toInt();
+    if (port <= 0)
+        port = cfg_obj.value("port").toString().trimmed().toInt();
 
     if (host.isEmpty()) {
         const QString brokers = cfg_obj.value("brokers").toString().trimmed();
         if (!brokers.isEmpty()) {
             const QString first = brokers.split(',', Qt::SkipEmptyParts).value(0).trimmed();
             const int idx = first.lastIndexOf(':');
-            if (idx > 0) { host = first.left(idx); port = first.mid(idx + 1).toInt(); }
-            else          { host = first; }
+            if (idx > 0) {
+                host = first.left(idx);
+                port = first.mid(idx + 1).toInt();
+            } else {
+                host = first;
+            }
         }
     }
     if (host.isEmpty()) {
         for (const auto& key : {"servers", "hosts"}) {
             const QString val = cfg_obj.value(key).toString().trimmed();
-            if (val.isEmpty()) continue;
+            if (val.isEmpty())
+                continue;
             const QString first = val.split(',', Qt::SkipEmptyParts).value(0).trimmed();
             const QUrl u(first);
             if (u.isValid() && !u.host().isEmpty()) {
                 host = u.host();
-                if (port <= 0) port = u.port();
+                if (port <= 0)
+                    port = u.port();
             } else {
                 const int idx = first.lastIndexOf(':');
-                if (idx > 0) { host = first.left(idx); port = first.mid(idx + 1).toInt(); }
-                else          { host = first; }
+                if (idx > 0) {
+                    host = first.left(idx);
+                    port = first.mid(idx + 1).toInt();
+                } else {
+                    host = first;
+                }
             }
-            if (!host.isEmpty()) break;
+            if (!host.isEmpty())
+                break;
         }
     }
     if (host.isEmpty()) {
@@ -2370,7 +2424,8 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
             const QUrl u(cs);
             if (u.isValid() && !u.host().isEmpty()) {
                 host = u.host();
-                if (port <= 0) port = u.port(27017);
+                if (port <= 0)
+                    port = u.port(27017);
             }
         }
     }
@@ -2380,7 +2435,8 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
             const QUrl u(uri);
             if (u.isValid() && !u.host().isEmpty()) {
                 host = u.host();
-                if (port <= 0) port = u.port(7687);
+                if (port <= 0)
+                    port = u.port(7687);
             }
         }
     }
@@ -2389,10 +2445,16 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
         if (!cp.isEmpty()) {
             const QString first = cp.split(',', Qt::SkipEmptyParts).value(0).trimmed();
             const int idx = first.lastIndexOf(':');
-            if (idx > 0) { host = first.left(idx); port = first.mid(idx + 1).toInt(); }
-            else          { host = first; }
-            if (port <= 0) port = cfg_obj.value("port").toVariant().toInt();
-            if (port <= 0) port = 9042;
+            if (idx > 0) {
+                host = first.left(idx);
+                port = first.mid(idx + 1).toInt();
+            } else {
+                host = first;
+            }
+            if (port <= 0)
+                port = cfg_obj.value("port").toVariant().toInt();
+            if (port <= 0)
+                port = 9042;
         }
     }
     if (host.isEmpty()) {
@@ -2400,14 +2462,22 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
         if (!zk.isEmpty()) {
             const QString first = zk.split(',', Qt::SkipEmptyParts).value(0).trimmed();
             const int idx = first.lastIndexOf(':');
-            if (idx > 0) { host = first.left(idx); port = first.mid(idx + 1).toInt(); }
-            else          { host = first; port = 2181; }
+            if (idx > 0) {
+                host = first.left(idx);
+                port = first.mid(idx + 1).toInt();
+            } else {
+                host = first;
+                port = 2181;
+            }
         }
     }
     if (host.isEmpty()) {
         for (const auto& key : {"serverHostname", "server", "account"}) {
             const QString val = cfg_obj.value(key).toString().trimmed();
-            if (!val.isEmpty()) { host = val; break; }
+            if (!val.isEmpty()) {
+                host = val;
+                break;
+            }
         }
     }
     if (host.isEmpty() && !test_url.isEmpty()) {
@@ -2428,143 +2498,159 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
         result_dlg.setModal(true);
         result_dlg.setStyleSheet(
             QString("QDialog{background:%1;color:%2;font-family:'Consolas','Courier New',monospace;}"
-            "QLabel{font-size:13px;background:transparent;}"
-            "QPushButton{background:%3;color:%2;border:1px solid %4;"
-            "padding:6px 18px;font-size:12px;font-weight:700;}"
-            "QPushButton:hover{background:%4;}")
+                    "QLabel{font-size:13px;background:transparent;}"
+                    "QPushButton{background:%3;color:%2;border:1px solid %4;"
+                    "padding:6px 18px;font-size:12px;font-weight:700;}"
+                    "QPushButton:hover{background:%4;}")
                 .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::BG_RAISED, col::BORDER_DIM));
         auto* vl = new QVBoxLayout(&result_dlg);
-        vl->setContentsMargins(24, 20, 24, 16); vl->setSpacing(10);
+        vl->setContentsMargins(24, 20, 24, 16);
+        vl->setSpacing(10);
         auto* lbl = new QLabel("No testable endpoint found in the saved configuration.\n"
                                "Ensure required fields (URL, host, or API key) are filled in.");
         lbl->setWordWrap(true);
         lbl->setStyleSheet(QString("color:%1;font-size:13px;background:transparent;").arg(col::TEXT_SECONDARY));
-        vl->addWidget(lbl); vl->addStretch();
+        vl->addWidget(lbl);
+        vl->addStretch();
         auto* btn = new QPushButton("Close");
         btn->setCursor(Qt::PointingHandCursor);
         QObject::connect(btn, &QPushButton::clicked, &result_dlg, &QDialog::accept);
-        auto* row = new QHBoxLayout; row->addStretch(); row->addWidget(btn);
+        auto* row = new QHBoxLayout;
+        row->addStretch();
+        row->addWidget(btn);
         vl->addLayout(row);
         result_dlg.exec();
         return;
     }
 
     const QString captured_test_url = test_url;
-    const QString captured_host     = host;
-    const int     captured_port     = port;
+    const QString captured_host = host;
+    const int captured_port = port;
 
-    const auto test_future = QtConcurrent::run([self, conn_id, display, captured_test_url, captured_host, captured_port]() {
-        bool    success = false;
-        QString message = "No testable endpoint found";
+    const auto test_future =
+        QtConcurrent::run([self, conn_id, display, captured_test_url, captured_host, captured_port]() {
+            bool success = false;
+            QString message = "No testable endpoint found";
 
-        auto tcp_probe = [](const QString& h, int p, int timeout_ms) -> std::pair<bool, QString> {
-            QTcpSocket socket;
-            socket.connectToHost(h, static_cast<quint16>(p));
-            if (socket.waitForConnected(timeout_ms)) {
-                socket.disconnectFromHost();
-                return {true, QString("TCP connected to %1:%2").arg(h).arg(p)};
-            }
-            return {false, QString("Cannot connect to %1:%2 — %3").arg(h).arg(p).arg(socket.errorString())};
-        };
+            auto tcp_probe = [](const QString& h, int p, int timeout_ms) -> std::pair<bool, QString> {
+                QTcpSocket socket;
+                socket.connectToHost(h, static_cast<quint16>(p));
+                if (socket.waitForConnected(timeout_ms)) {
+                    socket.disconnectFromHost();
+                    return {true, QString("TCP connected to %1:%2").arg(h).arg(p)};
+                }
+                return {false, QString("Cannot connect to %1:%2 — %3").arg(h).arg(p).arg(socket.errorString())};
+            };
 
-        if (!captured_test_url.isEmpty()) {
-            const QUrl url(captured_test_url);
-            if (!url.isValid() || url.host().isEmpty()) {
-                message = QString("Invalid URL: %1").arg(captured_test_url);
-            } else {
-                const QString url_host = url.host();
-                const QString scheme = url.scheme().toLower();
-                const int default_port = (scheme == "https" || scheme == "wss") ? 443 : 80;
-                const int url_port = url.port(default_port);
-                auto [ok, msg] = tcp_probe(url_host, url_port, 5000);
+            if (!captured_test_url.isEmpty()) {
+                const QUrl url(captured_test_url);
+                if (!url.isValid() || url.host().isEmpty()) {
+                    message = QString("Invalid URL: %1").arg(captured_test_url);
+                } else {
+                    const QString url_host = url.host();
+                    const QString scheme = url.scheme().toLower();
+                    const int default_port = (scheme == "https" || scheme == "wss") ? 443 : 80;
+                    const int url_port = url.port(default_port);
+                    auto [ok, msg] = tcp_probe(url_host, url_port, 5000);
+                    success = ok;
+                    message = ok ? QString("Endpoint reachable: %1").arg(captured_test_url) : msg;
+                }
+            } else if (!captured_host.isEmpty() && captured_port > 0) {
+                auto [ok, msg] = tcp_probe(captured_host, captured_port, 3000);
                 success = ok;
-                message = ok ? QString("Endpoint reachable: %1").arg(captured_test_url) : msg;
+                message = msg;
             }
-        } else if (!captured_host.isEmpty() && captured_port > 0) {
-            auto [ok, msg] = tcp_probe(captured_host, captured_port, 3000);
-            success = ok;
-            message = msg;
-        }
 
-        QMetaObject::invokeMethod(qApp, [self, conn_id, display, success, message]() {
-            if (!self) return;
-            LOG_INFO(TAG, QString("Test %1: %2 — %3").arg(display, success ? "OK" : "FAIL", message));
-            self->live_status_cache_[conn_id] = {success, message};
-            self->update_connection_status_cell(conn_id, success, message);
-            self->update_detail_panel();
+            QMetaObject::invokeMethod(
+                qApp,
+                [self, conn_id, display, success, message]() {
+                    if (!self)
+                        return;
+                    LOG_INFO(TAG, QString("Test %1: %2 — %3").arg(display, success ? "OK" : "FAIL", message));
+                    self->live_status_cache_[conn_id] = {success, message};
+                    self->update_connection_status_cell(conn_id, success, message);
+                    self->update_detail_panel();
 
-            QDialog result_dlg(self);
-            result_dlg.setWindowTitle(QString("Test: %1").arg(display));
-            result_dlg.resize(440, 190);
-            result_dlg.setModal(true);
-            result_dlg.setStyleSheet(
-                QString("QDialog{background:%1;color:%2;font-family:'Consolas','Courier New',monospace;}"
-                "QLabel{font-size:13px;background:transparent;}"
-                "QPushButton{background:%3;color:%2;border:1px solid %4;"
-                "padding:6px 18px;font-size:12px;font-weight:700;}"
-                "QPushButton:hover{background:%4;}")
-                    .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::BG_RAISED, col::BORDER_DIM));
+                    QDialog result_dlg(self);
+                    result_dlg.setWindowTitle(QString("Test: %1").arg(display));
+                    result_dlg.resize(440, 190);
+                    result_dlg.setModal(true);
+                    result_dlg.setStyleSheet(
+                        QString("QDialog{background:%1;color:%2;font-family:'Consolas','Courier New',monospace;}"
+                                "QLabel{font-size:13px;background:transparent;}"
+                                "QPushButton{background:%3;color:%2;border:1px solid %4;"
+                                "padding:6px 18px;font-size:12px;font-weight:700;}"
+                                "QPushButton:hover{background:%4;}")
+                            .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::BG_RAISED, col::BORDER_DIM));
 
-            auto* vl = new QVBoxLayout(&result_dlg);
-            vl->setContentsMargins(24, 20, 24, 16);
-            vl->setSpacing(10);
+                    auto* vl = new QVBoxLayout(&result_dlg);
+                    vl->setContentsMargins(24, 20, 24, 16);
+                    vl->setSpacing(10);
 
-            auto* status_lbl = new QLabel(success ? "Connection successful" : "Connection failed");
-            status_lbl->setStyleSheet(
-                QString("color:%1;font-size:14px;font-weight:700;background:transparent;")
-                    .arg(success ? col::POSITIVE.operator QString() : col::NEGATIVE.operator QString()));
-            vl->addWidget(status_lbl);
+                    auto* status_lbl = new QLabel(success ? "Connection successful" : "Connection failed");
+                    status_lbl->setStyleSheet(
+                        QString("color:%1;font-size:14px;font-weight:700;background:transparent;")
+                            .arg(success ? col::POSITIVE.operator QString() : col::NEGATIVE.operator QString()));
+                    vl->addWidget(status_lbl);
 
-            auto* msg_lbl = new QLabel(message);
-            msg_lbl->setWordWrap(true);
-            msg_lbl->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(col::TEXT_SECONDARY));
-            vl->addWidget(msg_lbl);
+                    auto* msg_lbl = new QLabel(message);
+                    msg_lbl->setWordWrap(true);
+                    msg_lbl->setStyleSheet(
+                        QString("color:%1;font-size:12px;background:transparent;").arg(col::TEXT_SECONDARY));
+                    vl->addWidget(msg_lbl);
 
-            if (success) {
-                auto* note = new QLabel("Note: TCP reachability confirmed. API key validity is not verified here.");
-                note->setWordWrap(true);
-                note->setStyleSheet(QString("color:%1;font-size:11px;font-style:italic;background:transparent;").arg(col::TEXT_TERTIARY));
-                vl->addWidget(note);
-            }
-            vl->addStretch();
+                    if (success) {
+                        auto* note =
+                            new QLabel("Note: TCP reachability confirmed. API key validity is not verified here.");
+                        note->setWordWrap(true);
+                        note->setStyleSheet(QString("color:%1;font-size:11px;font-style:italic;background:transparent;")
+                                                .arg(col::TEXT_TERTIARY));
+                        vl->addWidget(note);
+                    }
+                    vl->addStretch();
 
-            auto* close_btn = new QPushButton("Close");
-            close_btn->setCursor(Qt::PointingHandCursor);
-            QObject::connect(close_btn, &QPushButton::clicked, &result_dlg, &QDialog::accept);
-            auto* btn_row = new QHBoxLayout;
-            btn_row->addStretch();
-            btn_row->addWidget(close_btn);
-            vl->addLayout(btn_row);
+                    auto* close_btn = new QPushButton("Close");
+                    close_btn->setCursor(Qt::PointingHandCursor);
+                    QObject::connect(close_btn, &QPushButton::clicked, &result_dlg, &QDialog::accept);
+                    auto* btn_row = new QHBoxLayout;
+                    btn_row->addStretch();
+                    btn_row->addWidget(close_btn);
+                    vl->addLayout(btn_row);
 
-            result_dlg.exec();
-        }, Qt::QueuedConnection);
-    });
+                    result_dlg.exec();
+                },
+                Qt::QueuedConnection);
+        });
     Q_UNUSED(test_future);
 }
 
 void DataSourcesScreen::on_connector_selection_changed() {
-    if (!connector_table_) return;
+    if (!connector_table_)
+        return;
     const auto selected = connector_table_->selectedItems();
     if (selected.isEmpty()) {
         selected_connector_id_.clear();
     } else {
         const int row = connector_table_->currentRow();
         auto* item = connector_table_->item(row, 1);
-        if (item) selected_connector_id_ = item->data(Qt::UserRole).toString();
+        if (item)
+            selected_connector_id_ = item->data(Qt::UserRole).toString();
     }
     update_detail_panel();
     update_stats_strip();
 }
 
 void DataSourcesScreen::on_connection_selection_changed() {
-    if (!connections_table_) return;
+    if (!connections_table_)
+        return;
     const auto selected = connections_table_->selectedItems();
     if (selected.isEmpty()) {
         selected_connection_id_.clear();
     } else {
         const int row = connections_table_->currentRow();
         auto* item = connections_table_->item(row, 1);
-        if (item) selected_connection_id_ = item->data(Qt::UserRole).toString();
+        if (item)
+            selected_connection_id_ = item->data(Qt::UserRole).toString();
     }
     update_action_states();
 }
@@ -2574,18 +2660,22 @@ void DataSourcesScreen::on_category_selection_changed(int row) {
 }
 
 void DataSourcesScreen::on_provider_ladder_activated(QListWidgetItem* item) {
-    if (!item || !(item->flags() & Qt::ItemIsEnabled)) return;
+    if (!item || !(item->flags() & Qt::ItemIsEnabled))
+        return;
     const QString connector_id = item->data(Qt::UserRole).toString();
-    if (connector_id.isEmpty()) return;
+    if (connector_id.isEmpty())
+        return;
     select_connector_by_id(connector_id);
     update_detail_panel();
     update_stats_strip();
 }
 
 void DataSourcesScreen::on_detail_connection_activated(QListWidgetItem* item) {
-    if (!item || !(item->flags() & Qt::ItemIsEnabled)) return;
+    if (!item || !(item->flags() & Qt::ItemIsEnabled))
+        return;
     const QString conn_id = item->data(Qt::UserRole).toString();
-    if (conn_id.isEmpty()) return;
+    if (conn_id.isEmpty())
+        return;
     selected_connection_id_ = conn_id;
     update_action_states();
 }
@@ -2594,15 +2684,18 @@ QVector<DataSource> DataSourcesScreen::filtered_connection_rows() const {
     const QString filter = conn_search_text_.trimmed().toLower();
     QVector<DataSource> result;
     for (const auto& ds : connections_cache_) {
-        if (stat_filter_ == 2 && !ds.enabled) continue;
+        if (stat_filter_ == 2 && !ds.enabled)
+            continue;
         if (stat_filter_ == 3) {
             const auto* cfg = find_connector_config(ds.provider);
-            if (!cfg || !cfg->requires_auth) continue;
+            if (!cfg || !cfg->requires_auth)
+                continue;
         }
         if (!filter.isEmpty()) {
-            const QString hay = QString("%1 %2 %3 %4")
-                .arg(ds.display_name, ds.provider, ds.category, ds.tags).toLower();
-            if (!hay.contains(filter)) continue;
+            const QString hay =
+                QString("%1 %2 %3 %4").arg(ds.display_name, ds.provider, ds.category, ds.tags).toLower();
+            if (!hay.contains(filter))
+                continue;
         }
         result.append(ds);
     }
@@ -2610,16 +2703,17 @@ QVector<DataSource> DataSourcesScreen::filtered_connection_rows() const {
 }
 
 void DataSourcesScreen::update_connection_status_cell(const QString& conn_id, bool ok, const QString& msg) {
-    if (!connections_table_) return;
+    if (!connections_table_)
+        return;
     for (int row = 0; row < connections_table_->rowCount(); ++row) {
         auto* name_item = connections_table_->item(row, 1);
-        if (!name_item || name_item->data(Qt::UserRole).toString() != conn_id) continue;
+        if (!name_item || name_item->data(Qt::UserRole).toString() != conn_id)
+            continue;
         auto* lbl = qobject_cast<QLabel*>(connections_table_->cellWidget(row, 5));
         if (lbl) {
             lbl->setText(ok ? "OK" : "ERR");
-            lbl->setStyleSheet(
-                QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
-                    .arg(ok ? col::POSITIVE() : col::NEGATIVE()));
+            lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
+                                   .arg(ok ? col::POSITIVE() : col::NEGATIVE()));
             lbl->setToolTip(msg);
         }
         break;
@@ -2652,7 +2746,8 @@ void DataSourcesScreen::apply_stat_filter(int stat_index) {
 
 void DataSourcesScreen::on_connection_duplicate(const QString& conn_id) {
     const auto result = DataSourceRepository::instance().get(conn_id);
-    if (result.is_err()) return;
+    if (result.is_err())
+        return;
     const auto ds = result.value();
     if (const auto* cfg = find_connector_config(ds.provider)) {
         selected_connector_id_ = cfg->id;
@@ -2681,7 +2776,8 @@ void DataSourcesScreen::on_bulk_disable_all() {
 }
 
 void DataSourcesScreen::on_bulk_delete_selected() {
-    if (!connections_table_) return;
+    if (!connections_table_)
+        return;
 
     QSet<QString> selected_ids;
     const auto selected_items = connections_table_->selectedItems();
@@ -2689,7 +2785,8 @@ void DataSourcesScreen::on_bulk_delete_selected() {
         if (item->column() == 1)
             selected_ids.insert(item->data(Qt::UserRole).toString());
     }
-    if (selected_ids.isEmpty()) return;
+    if (selected_ids.isEmpty())
+        return;
 
     QMessageBox confirm(this);
     confirm.setWindowTitle("Delete Connections");
@@ -2699,46 +2796,49 @@ void DataSourcesScreen::on_bulk_delete_selected() {
     confirm.setDefaultButton(QMessageBox::Cancel);
     confirm.setStyleSheet(
         QString("QMessageBox { background:%1; color:%2; font-family:'Consolas','Courier New',monospace; }"
-        "QLabel { color:%2; font-size:13px; background:transparent; }"
-        "QPushButton { background:%3; color:%2; border:1px solid %4;"
-        " padding:6px 18px; font-size:12px; font-weight:700; }"
-        "QPushButton:hover { background:%4; }")
+                "QLabel { color:%2; font-size:13px; background:transparent; }"
+                "QPushButton { background:%3; color:%2; border:1px solid %4;"
+                " padding:6px 18px; font-size:12px; font-weight:700; }"
+                "QPushButton:hover { background:%4; }")
             .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::BG_RAISED, col::BORDER_DIM));
-    if (confirm.exec() != QMessageBox::Yes) return;
+    if (confirm.exec() != QMessageBox::Yes)
+        return;
 
     for (const auto& id : selected_ids) {
         DataSourceRepository::instance().remove(id);
         live_status_cache_.remove(id);
     }
-    if (selected_ids.contains(selected_connection_id_)) selected_connection_id_.clear();
+    if (selected_ids.contains(selected_connection_id_))
+        selected_connection_id_.clear();
     refresh_connections();
     LOG_INFO(TAG, QString("Bulk-deleted %1 connections").arg(selected_ids.size()));
 }
 
 void DataSourcesScreen::on_export_connections() {
-    const QString path = QFileDialog::getSaveFileName(
-        this, "Export Connections", "fincept_connections.json",
-        "JSON Files (*.json);;All Files (*)");
-    if (path.isEmpty()) return;
+    const QString path = QFileDialog::getSaveFileName(this, "Export Connections", "fincept_connections.json",
+                                                      "JSON Files (*.json);;All Files (*)");
+    if (path.isEmpty())
+        return;
 
     const auto all = DataSourceRepository::instance().list_all();
-    if (all.is_err()) return;
+    if (all.is_err())
+        return;
 
     QJsonArray arr;
     for (const auto& ds : all.value()) {
         QJsonObject obj;
-        obj["id"]           = ds.id;
-        obj["alias"]        = ds.alias;
+        obj["id"] = ds.id;
+        obj["alias"] = ds.alias;
         obj["display_name"] = ds.display_name;
-        obj["description"]  = ds.description;
-        obj["type"]         = ds.type;
-        obj["provider"]     = ds.provider;
-        obj["category"]     = ds.category;
-        obj["config"]       = QJsonDocument::fromJson(ds.config.toUtf8()).object();
-        obj["enabled"]      = ds.enabled;
-        obj["tags"]         = ds.tags;
-        obj["created_at"]   = ds.created_at;
-        obj["updated_at"]   = ds.updated_at;
+        obj["description"] = ds.description;
+        obj["type"] = ds.type;
+        obj["provider"] = ds.provider;
+        obj["category"] = ds.category;
+        obj["config"] = QJsonDocument::fromJson(ds.config.toUtf8()).object();
+        obj["enabled"] = ds.enabled;
+        obj["tags"] = ds.tags;
+        obj["created_at"] = ds.created_at;
+        obj["updated_at"] = ds.updated_at;
         arr.append(obj);
     }
 
@@ -2755,10 +2855,10 @@ void DataSourcesScreen::on_export_connections() {
 }
 
 void DataSourcesScreen::on_import_connections() {
-    const QString path = QFileDialog::getOpenFileName(
-        this, "Import Connections", "",
-        "JSON Files (*.json);;All Files (*)");
-    if (path.isEmpty()) return;
+    const QString path =
+        QFileDialog::getOpenFileName(this, "Import Connections", "", "JSON Files (*.json);;All Files (*)");
+    if (path.isEmpty())
+        return;
 
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
@@ -2777,25 +2877,33 @@ void DataSourcesScreen::on_import_connections() {
     for (const auto& val : doc.array()) {
         const auto obj = val.toObject();
         const QString provider = obj["provider"].toString();
-        if (provider.isEmpty()) { ++skipped; continue; }
+        if (provider.isEmpty()) {
+            ++skipped;
+            continue;
+        }
 
         DataSource ds;
-        ds.id           = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        ds.alias        = obj["alias"].toString();
+        ds.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        ds.alias = obj["alias"].toString();
         ds.display_name = obj["display_name"].toString();
-        ds.description  = obj["description"].toString();
-        ds.type         = obj["type"].toString();
-        ds.provider     = provider;
-        ds.category     = obj["category"].toString();
-        ds.config       = QJsonDocument(obj["config"].toObject()).toJson(QJsonDocument::Compact);
-        ds.enabled      = obj["enabled"].toBool(false);
-        ds.tags         = obj["tags"].toString();
+        ds.description = obj["description"].toString();
+        ds.type = obj["type"].toString();
+        ds.provider = provider;
+        ds.category = obj["category"].toString();
+        ds.config = QJsonDocument(obj["config"].toObject()).toJson(QJsonDocument::Compact);
+        ds.enabled = obj["enabled"].toBool(false);
+        ds.tags = obj["tags"].toString();
 
-        if (ds.display_name.isEmpty()) ds.display_name = provider;
-        if (ds.alias.isEmpty()) ds.alias = provider + "_" + ds.id.left(8);
+        if (ds.display_name.isEmpty())
+            ds.display_name = provider;
+        if (ds.alias.isEmpty())
+            ds.alias = provider + "_" + ds.id.left(8);
 
         const auto result = DataSourceRepository::instance().save(ds);
-        if (result.is_ok()) ++imported; else ++skipped;
+        if (result.is_ok())
+            ++imported;
+        else
+            ++skipped;
     }
 
     refresh_connections();
@@ -2805,9 +2913,9 @@ void DataSourcesScreen::on_import_connections() {
 
 void DataSourcesScreen::on_download_template() {
     const QString path = QFileDialog::getSaveFileName(
-        this, "Save Connector Template", "fincept_connections_template.json",
-        "JSON Files (*.json);;All Files (*)");
-    if (path.isEmpty()) return;
+        this, "Save Connector Template", "fincept_connections_template.json", "JSON Files (*.json);;All Files (*)");
+    if (path.isEmpty())
+        return;
 
     const auto& all = ConnectorRegistry::instance().all();
 
@@ -2815,33 +2923,29 @@ void DataSourcesScreen::on_download_template() {
     for (const auto& cfg : all) {
         QJsonObject config_obj;
         for (const auto& field : cfg.fields) {
-            QString val = !field.default_value.isEmpty()
-                              ? field.default_value
-                              : (!field.placeholder.isEmpty() ? field.placeholder : "");
+            QString val = !field.default_value.isEmpty() ? field.default_value
+                                                         : (!field.placeholder.isEmpty() ? field.placeholder : "");
             config_obj[field.name] = val;
         }
 
         QJsonObject entry;
-        entry["provider"]     = cfg.id;
+        entry["provider"] = cfg.id;
         entry["display_name"] = cfg.name;
-        entry["alias"]        = cfg.id + "_1";
-        entry["description"]  = cfg.description;
-        entry["type"]         = cfg.type;
-        entry["category"]     = category_str(cfg.category);
-        entry["enabled"]      = false;
-        entry["tags"]         = "";
-        entry["config"]       = config_obj;
-        entry["_help"]        = QString("Fill in the 'config' fields and set 'enabled' to true. "
-                                        "Remove this '_help' key before importing.");
+        entry["alias"] = cfg.id + "_1";
+        entry["description"] = cfg.description;
+        entry["type"] = cfg.type;
+        entry["category"] = category_str(cfg.category);
+        entry["enabled"] = false;
+        entry["tags"] = "";
+        entry["config"] = config_obj;
+        entry["_help"] = QString("Fill in the 'config' fields and set 'enabled' to true. "
+                                 "Remove this '_help' key before importing.");
 
         by_category[category_label(cfg.category)].append(entry);
     }
 
-    QStringList cat_order = {
-        "Databases", "APIs", "Streaming", "File Sources",
-        "Cloud Storage", "Time Series", "Market Data",
-        "Search & Analytics", "Data Warehouses"
-    };
+    QStringList cat_order = {"Databases",   "APIs",        "Streaming",          "File Sources",   "Cloud Storage",
+                             "Time Series", "Market Data", "Search & Analytics", "Data Warehouses"};
     QJsonArray out;
     for (const auto& cat : cat_order) {
         if (by_category.contains(cat)) {
@@ -2868,9 +2972,11 @@ void DataSourcesScreen::on_download_template() {
 
 void DataSourcesScreen::on_poll_timer() {
     for (const auto& ds : connections_cache_) {
-        if (!ds.enabled) continue;
+        if (!ds.enabled)
+            continue;
         const auto* connector_cfg = find_connector_config(ds.provider);
-        if (!connector_cfg || !connector_cfg->testable) continue;
+        if (!connector_cfg || !connector_cfg->testable)
+            continue;
 
         const auto cfg_obj = QJsonDocument::fromJson(ds.config.toUtf8()).object();
         const QString probe_url = provider_probe_url(ds.provider, cfg_obj);
@@ -2886,29 +2992,34 @@ void DataSourcesScreen::on_poll_timer() {
                 port = u.port((s == "https" || s == "wss") ? 443 : 80);
             }
         }
-        if (host.isEmpty() || port <= 0) continue;
+        if (host.isEmpty() || port <= 0)
+            continue;
 
         QPointer<DataSourcesScreen> self = this;
-        const QString conn_id   = ds.id;
-        const QString cap_host  = host;
-        const int     cap_port  = port;
+        const QString conn_id = ds.id;
+        const QString cap_host = host;
+        const int cap_port = port;
         const QString cap_probe = probe_url;
 
         QtConcurrent::run([self, conn_id, cap_host, cap_port, cap_probe]() {
             QTcpSocket socket;
             socket.connectToHost(cap_host, static_cast<quint16>(cap_port));
             const bool ok = socket.waitForConnected(3000);
-            const QString msg = ok
-                ? QString("Reachable: %1").arg(cap_probe.isEmpty() ? cap_host : cap_probe)
-                : QString("Unreachable: %1").arg(socket.errorString());
-            if (ok) socket.disconnectFromHost();
+            const QString msg = ok ? QString("Reachable: %1").arg(cap_probe.isEmpty() ? cap_host : cap_probe)
+                                   : QString("Unreachable: %1").arg(socket.errorString());
+            if (ok)
+                socket.disconnectFromHost();
 
-            QMetaObject::invokeMethod(qApp, [self, conn_id, ok, msg]() {
-                if (!self) return;
-                self->live_status_cache_[conn_id] = {ok, msg};
-                self->update_connection_status_cell(conn_id, ok, msg);
-                self->update_detail_panel();
-            }, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(
+                qApp,
+                [self, conn_id, ok, msg]() {
+                    if (!self)
+                        return;
+                    self->live_status_cache_[conn_id] = {ok, msg};
+                    self->update_connection_status_cell(conn_id, ok, msg);
+                    self->update_detail_panel();
+                },
+                Qt::QueuedConnection);
         });
     }
 }
@@ -2933,7 +3044,7 @@ void DataSourcesScreen::update_clock() {
 QVariantMap DataSourcesScreen::save_state() const {
     return {
         {"connector_id", selected_connector_id_},
-        {"category",     static_cast<int>(active_category_)},
+        {"category", static_cast<int>(active_category_)},
     };
 }
 

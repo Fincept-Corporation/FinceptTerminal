@@ -15,36 +15,34 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kEcbScript   = "ecb_sdmx_data.py";
+static constexpr const char* kEcbScript = "ecb_sdmx_data.py";
 static constexpr const char* kEcbSourceId = "ecb";
-static constexpr const char* kEcbColor    = "#2563EB";  // ECB blue
+static constexpr const char* kEcbColor = "#2563EB"; // ECB blue
 
 // Series: display name -> {command, arg (optional currency)}
 struct EcbSeries {
     QString label;
     QString command;
-    QString arg;       // currency for exchange_rates, empty otherwise
+    QString arg;        // currency for exchange_rates, empty otherwise
     QString result_key; // top-level JSON key in response
 };
 
 static const QList<EcbSeries> kEcbSeries = {
-    { "EUR/USD Exchange Rate",   "exchange_rates", "USD",  "exchange_rates" },
-    { "EUR/GBP Exchange Rate",   "exchange_rates", "GBP",  "exchange_rates" },
-    { "EUR/JPY Exchange Rate",   "exchange_rates", "JPY",  "exchange_rates" },
-    { "EUR/CHF Exchange Rate",   "exchange_rates", "CHF",  "exchange_rates" },
-    { "EUR/CNY Exchange Rate",   "exchange_rates", "CNY",  "exchange_rates" },
-    { "Eurozone HICP Inflation", "inflation",      "",     "inflation"      },
-    { "M3 Money Supply",         "money_supply",   "",     "money_supply"   },
+    {"EUR/USD Exchange Rate", "exchange_rates", "USD", "exchange_rates"},
+    {"EUR/GBP Exchange Rate", "exchange_rates", "GBP", "exchange_rates"},
+    {"EUR/JPY Exchange Rate", "exchange_rates", "JPY", "exchange_rates"},
+    {"EUR/CHF Exchange Rate", "exchange_rates", "CHF", "exchange_rates"},
+    {"EUR/CNY Exchange Rate", "exchange_rates", "CNY", "exchange_rates"},
+    {"Eurozone HICP Inflation", "inflation", "", "inflation"},
+    {"M3 Money Supply", "money_supply", "", "money_supply"},
 };
 
 } // namespace
 
-EcbPanel::EcbPanel(QWidget* parent)
-    : EconPanelBase(kEcbSourceId, kEcbColor, parent) {
+EcbPanel::EcbPanel(QWidget* parent) : EconPanelBase(kEcbSourceId, kEcbColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &EcbPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &EcbPanel::on_result);
 }
 
 void EcbPanel::activate() {
@@ -70,33 +68,37 @@ void EcbPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void EcbPanel::on_fetch() {
-    const QString data   = series_combo_->currentData().toString();
-    const int     idx    = series_combo_->currentIndex();
-    const auto&   series = kEcbSeries[idx];
+    const QString data = series_combo_->currentData().toString();
+    const int idx = series_combo_->currentIndex();
+    const auto& series = kEcbSeries[idx];
 
     show_loading("Fetching ECB data: " + series.label + "…");
 
-    QStringList args = { series.command };
-    if (!series.arg.isEmpty()) args << series.arg;
+    QStringList args = {series.command};
+    if (!series.arg.isEmpty())
+        args << series.arg;
 
-    const QString req_id = "ecb_" + series.command
-                         + (series.arg.isEmpty() ? "" : "_" + series.arg);
+    const QString req_id = "ecb_" + series.command + (series.arg.isEmpty() ? "" : "_" + series.arg);
 
-    services::EconomicsService::instance().execute(
-        kEcbSourceId, kEcbScript, series.command, args, req_id);
+    services::EconomicsService::instance().execute(kEcbSourceId, kEcbScript, series.command, args, req_id);
 }
 
 // ECB response: {<result_key>: [{dimensions:{}, observations:[{period,value}], obs_count}], ...}
 // Flatten the first series' observations into a plain [{period, value}] array for display().
-void EcbPanel::on_result(const QString& request_id,
-                         const services::EconomicsResult& result) {
-    if (result.source_id != kEcbSourceId) return;
-    if (!result.success) { show_error(result.error); return; }
-    if (!request_id.startsWith("ecb_")) return;
+void EcbPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kEcbSourceId)
+        return;
+    if (!result.success) {
+        show_error(result.error);
+        return;
+    }
+    if (!request_id.startsWith("ecb_"))
+        return;
 
     // Find which series was fetched
     const int idx = series_combo_->currentIndex();
-    if (idx < 0 || idx >= kEcbSeries.size()) return;
+    if (idx < 0 || idx >= kEcbSeries.size())
+        return;
     const auto& series = kEcbSeries[idx];
 
     // Extract observations from first element of the result array
@@ -124,8 +126,7 @@ void EcbPanel::on_result(const QString& request_id,
     }
 
     display(obs, "ECB: " + series.label);
-    LOG_INFO("EcbPanel", QString("Displayed %1 observations for %2")
-                             .arg(obs.size()).arg(series.label));
+    LOG_INFO("EcbPanel", QString("Displayed %1 observations for %2").arg(obs.size()).arg(series.label));
 }
 
 } // namespace fincept::screens

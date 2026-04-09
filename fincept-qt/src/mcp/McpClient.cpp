@@ -35,7 +35,7 @@ Result<void> McpClient::start() {
     worker_thread_ = new QThread;
     worker_thread_->setObjectName("mcp-" + config_.id);
 
-    process_ = new QProcess;  // no parent — we'll move it to worker thread
+    process_ = new QProcess; // no parent — we'll move it to worker thread
 
     // Merge environment
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
@@ -45,15 +45,18 @@ Result<void> McpClient::start() {
 
     // Wire signals — they'll fire on worker_thread_ once process_ is moved
     connect(process_, &QProcess::readyReadStandardOutput, this, &McpClient::on_ready_read, Qt::DirectConnection);
-    connect(process_, &QProcess::readyReadStandardError, this, [this]() {
-        while (process_ && process_->canReadLine()) {
-            const QString line = QString::fromUtf8(process_->readLine()).trimmed();
-            if (!line.isEmpty())
-                append_log("[stderr] " + line);
-        }
-    }, Qt::DirectConnection);
-    connect(process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-            this, &McpClient::on_finished, Qt::DirectConnection);
+    connect(
+        process_, &QProcess::readyReadStandardError, this,
+        [this]() {
+            while (process_ && process_->canReadLine()) {
+                const QString line = QString::fromUtf8(process_->readLine()).trimmed();
+                if (!line.isEmpty())
+                    append_log("[stderr] " + line);
+            }
+        },
+        Qt::DirectConnection);
+    connect(process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, &McpClient::on_finished,
+            Qt::DirectConnection);
 
     // Route uvx through the app's bundled uv
     QString command = config_.command;
@@ -63,7 +66,7 @@ Result<void> McpClient::start() {
         if (QFileInfo::exists(uv)) {
             command = uv;
             args.prepend("run");
-            args.prepend("tool");  // becomes: uv tool run <package> <args>
+            args.prepend("tool"); // becomes: uv tool run <package> <args>
             LOG_INFO(TAG, "Routing uvx through bundled uv: " + uv);
         }
     }
@@ -81,10 +84,13 @@ Result<void> McpClient::start() {
     // BlockingQueuedConnection is safe here — start() is always called from a
     // background thread (McpService auto-start thread), never from the UI thread.
     bool started_ok = false;
-    QMetaObject::invokeMethod(process_, [this, command, args, &started_ok]() {
-        process_->start(command, args);
-        started_ok = process_->waitForStarted(60000); // 60s for first-time uv downloads
-    }, Qt::BlockingQueuedConnection);
+    QMetaObject::invokeMethod(
+        process_,
+        [this, command, args, &started_ok]() {
+            process_->start(command, args);
+            started_ok = process_->waitForStarted(60000); // 60s for first-time uv downloads
+        },
+        Qt::BlockingQueuedConnection);
 
     if (!started_ok) {
         const QString err = process_->errorString();
@@ -129,9 +135,7 @@ void McpClient::stop() {
         // We use QueuedConnection so the worker thread handles terminate() in its
         // own event loop — no BlockingQueuedConnection deadlock risk.
         // After quit(), wait() drains the thread and the process dies with it.
-        QMetaObject::invokeMethod(process_, [this]() {
-            process_->terminate();
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(process_, [this]() { process_->terminate(); }, Qt::QueuedConnection);
     }
 
     if (worker_thread_) {
@@ -245,9 +249,7 @@ Result<QJsonObject> McpClient::send_request(const QString& method, const QJsonOb
     QByteArray line = QJsonDocument(req).toJson(QJsonDocument::Compact) + "\n";
 
     // Write to process on its worker thread
-    QMetaObject::invokeMethod(process_, [this, line]() {
-        process_->write(line);
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(process_, [this, line]() { process_->write(line); }, Qt::QueuedConnection);
 
     // Wait for response via QWaitCondition. QProcess lives on its own
     // worker thread with an event loop, so readyRead signals fire there

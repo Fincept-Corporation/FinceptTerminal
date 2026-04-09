@@ -5,6 +5,7 @@
 #pragma once
 
 #include "screens/economics/panels/EconPanelBase.h"
+
 #include <QComboBox>
 
 namespace fincept::screens {
@@ -18,8 +19,7 @@ class WorldBankHealthPanel : public EconPanelBase {
   protected:
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
-    void on_result(const QString& request_id,
-                   const services::EconomicsResult& result) override;
+    void on_result(const QString& request_id, const services::EconomicsResult& result) override;
 
   private:
     /// Flatten WB records [{date, value, indicator:{value}, country:{value}}]
@@ -27,7 +27,7 @@ class WorldBankHealthPanel : public EconPanelBase {
     static QJsonArray flatten_wb(const QJsonObject& response);
 
     QComboBox* indicator_combo_ = nullptr;
-    QComboBox* country_combo_   = nullptr;
+    QComboBox* country_combo_ = nullptr;
 };
 
 } // namespace fincept::screens

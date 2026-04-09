@@ -36,7 +36,8 @@ static QByteArray base32_decode(const QString& input) {
     int buffer = 0, bits = 0;
     for (QChar c : clean) {
         int val = alphabet.indexOf(c);
-        if (val < 0) continue;
+        if (val < 0)
+            continue;
         buffer = (buffer << 5) | val;
         bits += 5;
         if (bits >= 8) {
@@ -84,10 +85,9 @@ QString AngelOneBroker::generate_totp(const QString& base32_secret) {
 
     QByteArray hash = hmac_sha1(key, msg);
     int offset = hash[hash.size() - 1] & 0x0F;
-    quint32 code = ((static_cast<quint8>(hash[offset])   & 0x7F) << 24)
-                 | ((static_cast<quint8>(hash[offset+1]) & 0xFF) << 16)
-                 | ((static_cast<quint8>(hash[offset+2]) & 0xFF) <<  8)
-                 |  (static_cast<quint8>(hash[offset+3]) & 0xFF);
+    quint32 code =
+        ((static_cast<quint8>(hash[offset]) & 0x7F) << 24) | ((static_cast<quint8>(hash[offset + 1]) & 0xFF) << 16) |
+        ((static_cast<quint8>(hash[offset + 2]) & 0xFF) << 8) | (static_cast<quint8>(hash[offset + 3]) & 0xFF);
     code %= 1000000;
     return QString("%1").arg(code, 6, 10, QChar('0'));
 }
@@ -126,30 +126,40 @@ QString AngelOneBroker::lookup_token(const QString& symbol, const QString& excha
 // Mapping helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-
 QString AngelOneBroker::ao_order_type(OrderType t) {
     switch (t) {
-        case OrderType::Market:       return "MARKET";
-        case OrderType::Limit:        return "LIMIT";
-        case OrderType::StopLoss:     return "STOPLOSS_MARKET";
-        case OrderType::StopLossLimit:return "STOPLOSS_LIMIT";
+        case OrderType::Market:
+            return "MARKET";
+        case OrderType::Limit:
+            return "LIMIT";
+        case OrderType::StopLoss:
+            return "STOPLOSS_MARKET";
+        case OrderType::StopLossLimit:
+            return "STOPLOSS_LIMIT";
     }
     return "MARKET";
 }
 
 QString AngelOneBroker::ao_variety(OrderType t, bool amo) {
-    if (amo) return "AMO";
-    if (t == OrderType::StopLoss || t == OrderType::StopLossLimit) return "STOPLOSS";
+    if (amo)
+        return "AMO";
+    if (t == OrderType::StopLoss || t == OrderType::StopLossLimit)
+        return "STOPLOSS";
     return "NORMAL";
 }
 
 QString AngelOneBroker::ao_product(ProductType p) {
     switch (p) {
-        case ProductType::Intraday:    return "INTRADAY";
-        case ProductType::Delivery:    return "DELIVERY";
-        case ProductType::Margin:      return "CARRYFORWARD";
-        case ProductType::CoverOrder:  return "INTRADAY"; // not natively supported
-        case ProductType::BracketOrder:return "INTRADAY";
+        case ProductType::Intraday:
+            return "INTRADAY";
+        case ProductType::Delivery:
+            return "DELIVERY";
+        case ProductType::Margin:
+            return "CARRYFORWARD";
+        case ProductType::CoverOrder:
+            return "INTRADAY"; // not natively supported
+        case ProductType::BracketOrder:
+            return "INTRADAY";
     }
     return "INTRADAY";
 }
@@ -165,15 +175,15 @@ QString AngelOneBroker::ao_transaction(OrderSide s) {
 
 QMap<QString, QString> AngelOneBroker::auth_headers(const BrokerCredentials& creds) const {
     return {
-        {"Authorization",    "Bearer " + creds.access_token},
-        {"X-PrivateKey",     creds.api_key},
-        {"X-UserType",       "USER"},
-        {"X-SourceID",       "WEB"},
-        {"X-ClientLocalIP",  "127.0.0.1"},
+        {"Authorization", "Bearer " + creds.access_token},
+        {"X-PrivateKey", creds.api_key},
+        {"X-UserType", "USER"},
+        {"X-SourceID", "WEB"},
+        {"X-ClientLocalIP", "127.0.0.1"},
         {"X-ClientPublicIP", "127.0.0.1"},
-        {"X-MACAddress",     "00:00:00:00:00:00"},
-        {"Content-Type",     "application/json"},
-        {"Accept",           "application/json"},
+        {"X-MACAddress", "00:00:00:00:00:00"},
+        {"Content-Type", "application/json"},
+        {"Accept", "application/json"},
     };
 }
 
@@ -182,9 +192,8 @@ QMap<QString, QString> AngelOneBroker::auth_headers(const BrokerCredentials& cre
 // auth_code = base32 TOTP secret (auto-generates 6-digit code internally)
 // ─────────────────────────────────────────────────────────────────────────────
 
-TokenExchangeResponse AngelOneBroker::exchange_token(const QString& api_key,
-                                                      const QString& api_secret,
-                                                      const QString& auth_code) {
+TokenExchangeResponse AngelOneBroker::exchange_token(const QString& api_key, const QString& api_secret,
+                                                     const QString& auth_code) {
     TokenExchangeResponse result;
 
     // auth_code is JSON: {"client_code":"R1234","totp_secret":"BASE32..."}
@@ -195,8 +204,8 @@ TokenExchangeResponse AngelOneBroker::exchange_token(const QString& api_key,
     auto doc = QJsonDocument::fromJson(auth_code.toUtf8());
     if (doc.isObject()) {
         auto obj = doc.object();
-        client_code  = obj.value("client_code").toString();
-        totp_secret  = obj.value("totp_secret").toString();
+        client_code = obj.value("client_code").toString();
+        totp_secret = obj.value("totp_secret").toString();
     }
     if (client_code.isEmpty()) {
         result.error = "Client code is required. Please enter your Angel One login ID.";
@@ -212,24 +221,24 @@ TokenExchangeResponse AngelOneBroker::exchange_token(const QString& api_key,
 
     // Login headers — X-PrivateKey = API key (from developer console)
     QMap<QString, QString> login_headers = {
-        {"X-PrivateKey",     api_key},
-        {"X-UserType",       "USER"},
-        {"X-SourceID",       "WEB"},
-        {"X-ClientLocalIP",  "127.0.0.1"},
+        {"X-PrivateKey", api_key},
+        {"X-UserType", "USER"},
+        {"X-SourceID", "WEB"},
+        {"X-ClientLocalIP", "127.0.0.1"},
         {"X-ClientPublicIP", "127.0.0.1"},
-        {"X-MACAddress",     "00:00:00:00:00:00"},
-        {"Content-Type",     "application/json"},
-        {"Accept",           "application/json"},
+        {"X-MACAddress", "00:00:00:00:00:00"},
+        {"Content-Type", "application/json"},
+        {"Accept", "application/json"},
     };
 
     QJsonObject payload{
-        {"clientcode", client_code},   // login ID
-        {"password",   api_secret},    // MPIN
-        {"totp",       totp_code},     // auto-generated 6-digit code
+        {"clientcode", client_code}, // login ID
+        {"password", api_secret},    // MPIN
+        {"totp", totp_code},         // auto-generated 6-digit code
     };
 
-    auto resp = BrokerHttp::instance().post_json(
-        BASE_AO + "/rest/auth/angelbroking/user/v1/loginByPassword", payload, login_headers);
+    auto resp = BrokerHttp::instance().post_json(BASE_AO + "/rest/auth/angelbroking/user/v1/loginByPassword", payload,
+                                                 login_headers);
 
     if (!resp.success) {
         result.error = checked_error(resp, "Login failed");
@@ -244,16 +253,16 @@ TokenExchangeResponse AngelOneBroker::exchange_token(const QString& api_key,
         return result;
     }
 
-    result.success       = true;
-    result.access_token  = data.value("jwtToken").toString();
+    result.success = true;
+    result.access_token = data.value("jwtToken").toString();
     result.refresh_token = data.value("refreshToken").toString();
-    result.user_id       = client_code; // use client_code as stable login ID (matches Rust impl)
+    result.user_id = client_code; // use client_code as stable login ID (matches Rust impl)
 
     // Pack feed_token, client_code, totp_secret into additional_data JSON
     QJsonObject extra{
-        {"feed_token",   data.value("feedToken").toString()},
-        {"client_code",  client_code},
-        {"totp_secret",  totp_secret},  // persist so UI can pre-fill & token refresh can re-login
+        {"feed_token", data.value("feedToken").toString()},
+        {"client_code", client_code},
+        {"totp_secret", totp_secret}, // persist so UI can pre-fill & token refresh can re-login
     };
     result.additional_data = QString::fromUtf8(QJsonDocument(extra).toJson(QJsonDocument::Compact));
 
@@ -265,36 +274,35 @@ TokenExchangeResponse AngelOneBroker::exchange_token(const QString& api_key,
 // Place Order
 // ─────────────────────────────────────────────────────────────────────────────
 
-OrderPlaceResponse AngelOneBroker::place_order(const BrokerCredentials& creds,
-                                                const UnifiedOrder& order) {
+OrderPlaceResponse AngelOneBroker::place_order(const BrokerCredentials& creds, const UnifiedOrder& order) {
     QString token = lookup_token(order.symbol, order.exchange);
 
     QJsonObject payload{
-        {"variety",          ao_variety(order.order_type, order.amo)},
-        {"tradingsymbol",    order.symbol},
-        {"symboltoken",      token},
-        {"transactiontype",  ao_transaction(order.side)},
-        {"exchange",         order.exchange},
-        {"ordertype",        ao_order_type(order.order_type)},
-        {"producttype",      ao_product(order.product_type)},
-        {"duration",         order.validity.isEmpty() ? "DAY" : order.validity},
-        {"price",            QString::number(order.price, 'f', 2)},
-        {"triggerprice",     QString::number(order.stop_price, 'f', 2)},
-        {"quantity",         QString::number(static_cast<int>(order.quantity))},
-        {"squareoff",        "0"},
-        {"stoploss",         order.stop_loss > 0 ? QString::number(order.stop_loss, 'f', 2) : "0"},
-        {"disclosedquantity","0"},
+        {"variety", ao_variety(order.order_type, order.amo)},
+        {"tradingsymbol", order.symbol},
+        {"symboltoken", token},
+        {"transactiontype", ao_transaction(order.side)},
+        {"exchange", order.exchange},
+        {"ordertype", ao_order_type(order.order_type)},
+        {"producttype", ao_product(order.product_type)},
+        {"duration", order.validity.isEmpty() ? "DAY" : order.validity},
+        {"price", QString::number(order.price, 'f', 2)},
+        {"triggerprice", QString::number(order.stop_price, 'f', 2)},
+        {"quantity", QString::number(static_cast<int>(order.quantity))},
+        {"squareoff", "0"},
+        {"stoploss", order.stop_loss > 0 ? QString::number(order.stop_loss, 'f', 2) : "0"},
+        {"disclosedquantity", "0"},
     };
 
-    auto resp = BrokerHttp::instance().post_json(
-        BASE_AO + "/rest/secure/angelbroking/order/v1/placeOrder", payload, auth_headers(creds));
+    auto resp = BrokerHttp::instance().post_json(BASE_AO + "/rest/secure/angelbroking/order/v1/placeOrder", payload,
+                                                 auth_headers(creds));
 
     OrderPlaceResponse result;
     if (!resp.success || !resp.json.value("status").toBool()) {
         result.error = checked_error(resp, "Order placement failed");
         return result;
     }
-    result.success  = true;
+    result.success = true;
     result.order_id = resp.json.value("data").toObject().value("orderid").toString();
     return result;
 }
@@ -303,16 +311,16 @@ OrderPlaceResponse AngelOneBroker::place_order(const BrokerCredentials& creds,
 // Modify Order
 // ─────────────────────────────────────────────────────────────────────────────
 
-ApiResponse<QJsonObject> AngelOneBroker::modify_order(const BrokerCredentials& creds,
-                                                       const QString& order_id,
-                                                       const QJsonObject& mods) {
+ApiResponse<QJsonObject> AngelOneBroker::modify_order(const BrokerCredentials& creds, const QString& order_id,
+                                                      const QJsonObject& mods) {
     int64_t ts = QDateTime::currentSecsSinceEpoch();
     QJsonObject payload = mods;
     payload["orderid"] = order_id;
-    if (!payload.contains("variety")) payload["variety"] = "NORMAL";
+    if (!payload.contains("variety"))
+        payload["variety"] = "NORMAL";
 
-    auto resp = BrokerHttp::instance().post_json(
-        BASE_AO + "/rest/secure/angelbroking/order/v1/modifyOrder", payload, auth_headers(creds));
+    auto resp = BrokerHttp::instance().post_json(BASE_AO + "/rest/secure/angelbroking/order/v1/modifyOrder", payload,
+                                                 auth_headers(creds));
 
     if (!resp.success || !resp.json.value("status").toBool())
         return {false, std::nullopt, checked_error(resp, "Modify failed"), ts};
@@ -323,13 +331,12 @@ ApiResponse<QJsonObject> AngelOneBroker::modify_order(const BrokerCredentials& c
 // Cancel Order
 // ─────────────────────────────────────────────────────────────────────────────
 
-ApiResponse<QJsonObject> AngelOneBroker::cancel_order(const BrokerCredentials& creds,
-                                                       const QString& order_id) {
+ApiResponse<QJsonObject> AngelOneBroker::cancel_order(const BrokerCredentials& creds, const QString& order_id) {
     int64_t ts = QDateTime::currentSecsSinceEpoch();
     QJsonObject payload{{"variety", "NORMAL"}, {"orderid", order_id}};
 
-    auto resp = BrokerHttp::instance().post_json(
-        BASE_AO + "/rest/secure/angelbroking/order/v1/cancelOrder", payload, auth_headers(creds));
+    auto resp = BrokerHttp::instance().post_json(BASE_AO + "/rest/secure/angelbroking/order/v1/cancelOrder", payload,
+                                                 auth_headers(creds));
 
     if (!resp.success || !resp.json.value("status").toBool())
         return {false, std::nullopt, checked_error(resp, "Cancel failed"), ts};
@@ -342,19 +349,25 @@ ApiResponse<QJsonObject> AngelOneBroker::cancel_order(const BrokerCredentials& c
 
 static QString map_ao_status(const QString& s) {
     QString ls = s.toLower();
-    if (ls == "complete")                return "filled";
-    if (ls == "open" || ls == "open pending") return "open";
-    if (ls == "cancelled")               return "cancelled";
-    if (ls == "rejected")                return "rejected";
-    if (ls == "trigger pending")         return "trigger_pending";
-    if (ls == "validation pending" || ls == "put order req received") return "pending";
+    if (ls == "complete")
+        return "filled";
+    if (ls == "open" || ls == "open pending")
+        return "open";
+    if (ls == "cancelled")
+        return "cancelled";
+    if (ls == "rejected")
+        return "rejected";
+    if (ls == "trigger pending")
+        return "trigger_pending";
+    if (ls == "validation pending" || ls == "put order req received")
+        return "pending";
     return ls;
 }
 
 ApiResponse<QVector<BrokerOrderInfo>> AngelOneBroker::get_orders(const BrokerCredentials& creds) {
     int64_t ts = QDateTime::currentSecsSinceEpoch();
-    auto resp = BrokerHttp::instance().get(
-        BASE_AO + "/rest/secure/angelbroking/order/v1/getOrderBook", auth_headers(creds));
+    auto resp =
+        BrokerHttp::instance().get(BASE_AO + "/rest/secure/angelbroking/order/v1/getOrderBook", auth_headers(creds));
 
     if (!resp.success || !resp.json.value("status").toBool())
         return {false, std::nullopt, checked_error(resp, "get_orders failed"), ts};
@@ -364,20 +377,20 @@ ApiResponse<QVector<BrokerOrderInfo>> AngelOneBroker::get_orders(const BrokerCre
     for (const auto& v : arr) {
         auto o = v.toObject();
         BrokerOrderInfo info;
-        info.order_id    = o.value("orderid").toString();
-        info.symbol      = o.value("tradingsymbol").toString();
-        info.exchange    = o.value("exchange").toString();
-        info.side        = o.value("transactiontype").toString().toLower();
-        info.order_type  = o.value("ordertype").toString();
-        info.product_type= o.value("producttype").toString();
-        info.quantity    = o.value("quantity").toString().toDouble();
-        info.price       = o.value("price").toString().toDouble();
-        info.trigger_price= o.value("triggerprice").toString().toDouble();
-        info.filled_qty  = o.value("filledshares").toString().toDouble();
-        info.avg_price   = o.value("averageprice").toString().toDouble();
-        info.status      = map_ao_status(o.value("status").toString());
-        info.timestamp   = o.value("updatetime").toString();  // OpenAlgo: updatetime not orderentryTime
-        info.message     = o.value("text").toString();
+        info.order_id = o.value("orderid").toString();
+        info.symbol = o.value("tradingsymbol").toString();
+        info.exchange = o.value("exchange").toString();
+        info.side = o.value("transactiontype").toString().toLower();
+        info.order_type = o.value("ordertype").toString();
+        info.product_type = o.value("producttype").toString();
+        info.quantity = o.value("quantity").toString().toDouble();
+        info.price = o.value("price").toString().toDouble();
+        info.trigger_price = o.value("triggerprice").toString().toDouble();
+        info.filled_qty = o.value("filledshares").toString().toDouble();
+        info.avg_price = o.value("averageprice").toString().toDouble();
+        info.status = map_ao_status(o.value("status").toString());
+        info.timestamp = o.value("updatetime").toString(); // OpenAlgo: updatetime not orderentryTime
+        info.message = o.value("text").toString();
         orders.append(info);
     }
     return {true, orders, "", ts};
@@ -389,8 +402,8 @@ ApiResponse<QVector<BrokerOrderInfo>> AngelOneBroker::get_orders(const BrokerCre
 
 ApiResponse<QJsonObject> AngelOneBroker::get_trade_book(const BrokerCredentials& creds) {
     int64_t ts = QDateTime::currentSecsSinceEpoch();
-    auto resp = BrokerHttp::instance().get(
-        BASE_AO + "/rest/secure/angelbroking/order/v1/getTradeBook", auth_headers(creds));
+    auto resp =
+        BrokerHttp::instance().get(BASE_AO + "/rest/secure/angelbroking/order/v1/getTradeBook", auth_headers(creds));
 
     if (!resp.success || !resp.json.value("status").toBool())
         return {false, std::nullopt, checked_error(resp, "get_trade_book failed"), ts};
@@ -403,8 +416,8 @@ ApiResponse<QJsonObject> AngelOneBroker::get_trade_book(const BrokerCredentials&
 
 ApiResponse<QVector<BrokerPosition>> AngelOneBroker::get_positions(const BrokerCredentials& creds) {
     int64_t ts = QDateTime::currentSecsSinceEpoch();
-    auto resp = BrokerHttp::instance().get(
-        BASE_AO + "/rest/secure/angelbroking/order/v1/getPosition", auth_headers(creds));
+    auto resp =
+        BrokerHttp::instance().get(BASE_AO + "/rest/secure/angelbroking/order/v1/getPosition", auth_headers(creds));
 
     if (!resp.success || !resp.json.value("status").toBool())
         return {false, std::nullopt, checked_error(resp, "get_positions failed"), ts};
@@ -414,18 +427,19 @@ ApiResponse<QVector<BrokerPosition>> AngelOneBroker::get_positions(const BrokerC
     for (const auto& v : arr) {
         auto p = v.toObject();
         double qty = p.value("netqty").toString().toDouble();
-        if (qty == 0) continue; // skip flat positions
+        if (qty == 0)
+            continue; // skip flat positions
 
         BrokerPosition pos;
-        pos.symbol       = p.value("tradingsymbol").toString();
-        pos.exchange     = p.value("exchange").toString();
+        pos.symbol = p.value("tradingsymbol").toString();
+        pos.exchange = p.value("exchange").toString();
         pos.product_type = p.value("producttype").toString();
-        pos.quantity     = qty;
-        pos.avg_price    = p.value("avgnetprice").toString().toDouble();  // OpenAlgo: avgnetprice
-        pos.ltp          = p.value("ltp").toString().toDouble();
-        pos.pnl          = p.value("pnl").toString().toDouble();         // OpenAlgo: pnl (not unrealised)
-        pos.day_pnl      = p.value("realised").toString().toDouble();
-        pos.side         = qty >= 0 ? "buy" : "sell";
+        pos.quantity = qty;
+        pos.avg_price = p.value("avgnetprice").toString().toDouble(); // OpenAlgo: avgnetprice
+        pos.ltp = p.value("ltp").toString().toDouble();
+        pos.pnl = p.value("pnl").toString().toDouble(); // OpenAlgo: pnl (not unrealised)
+        pos.day_pnl = p.value("realised").toString().toDouble();
+        pos.side = qty >= 0 ? "buy" : "sell";
         if (pos.avg_price > 0)
             pos.pnl_pct = (pos.ltp - pos.avg_price) / pos.avg_price * 100.0 * (qty >= 0 ? 1 : -1);
         positions.append(pos);
@@ -439,8 +453,8 @@ ApiResponse<QVector<BrokerPosition>> AngelOneBroker::get_positions(const BrokerC
 
 ApiResponse<QVector<BrokerHolding>> AngelOneBroker::get_holdings(const BrokerCredentials& creds) {
     int64_t ts = QDateTime::currentSecsSinceEpoch();
-    auto resp = BrokerHttp::instance().get(
-        BASE_AO + "/rest/secure/angelbroking/portfolio/v1/getAllHolding", auth_headers(creds));
+    auto resp = BrokerHttp::instance().get(BASE_AO + "/rest/secure/angelbroking/portfolio/v1/getAllHolding",
+                                           auth_headers(creds));
 
     if (!resp.success || !resp.json.value("status").toBool())
         return {false, std::nullopt, checked_error(resp, "get_holdings failed"), ts};
@@ -450,18 +464,18 @@ ApiResponse<QVector<BrokerHolding>> AngelOneBroker::get_holdings(const BrokerCre
     for (const auto& v : arr) {
         auto h = v.toObject();
         BrokerHolding hold;
-        hold.symbol         = h.value("tradingsymbol").toString();
-        hold.exchange       = h.value("exchange").toString();
-        hold.quantity       = h.value("quantity").toString().toDouble();
-        hold.avg_price      = h.value("averageprice").toString().toDouble();
-        hold.ltp            = h.value("ltp").toString().toDouble();
+        hold.symbol = h.value("tradingsymbol").toString();
+        hold.exchange = h.value("exchange").toString();
+        hold.quantity = h.value("quantity").toString().toDouble();
+        hold.avg_price = h.value("averageprice").toString().toDouble();
+        hold.ltp = h.value("ltp").toString().toDouble();
         hold.invested_value = hold.quantity * hold.avg_price;
-        hold.current_value  = hold.quantity * hold.ltp;
+        hold.current_value = hold.quantity * hold.ltp;
         // Use API-provided pnl fields directly (more accurate than computed)
-        hold.pnl            = h.value("profitandloss").toString().toDouble();
-        hold.pnl_pct        = h.value("pnlpercentage").toString().toDouble();
+        hold.pnl = h.value("profitandloss").toString().toDouble();
+        hold.pnl_pct = h.value("pnlpercentage").toString().toDouble();
         if (hold.pnl == 0 && hold.invested_value > 0) {
-            hold.pnl     = hold.current_value - hold.invested_value;
+            hold.pnl = hold.current_value - hold.invested_value;
             hold.pnl_pct = hold.pnl / hold.invested_value * 100.0;
         }
         holdings.append(hold);
@@ -475,8 +489,7 @@ ApiResponse<QVector<BrokerHolding>> AngelOneBroker::get_holdings(const BrokerCre
 
 ApiResponse<BrokerFunds> AngelOneBroker::get_funds(const BrokerCredentials& creds) {
     int64_t ts = QDateTime::currentSecsSinceEpoch();
-    auto resp = BrokerHttp::instance().get(
-        BASE_AO + "/rest/secure/angelbroking/user/v1/getRMS", auth_headers(creds));
+    auto resp = BrokerHttp::instance().get(BASE_AO + "/rest/secure/angelbroking/user/v1/getRMS", auth_headers(creds));
 
     if (!resp.success || !resp.json.value("status").toBool())
         return {false, std::nullopt, checked_error(resp, "get_funds failed"), ts};
@@ -485,10 +498,10 @@ ApiResponse<BrokerFunds> AngelOneBroker::get_funds(const BrokerCredentials& cred
     BrokerFunds funds;
     // OpenAlgo confirmed field names from getRMS response
     funds.available_balance = d.value("availablecash").toString().toDouble();
-    funds.used_margin       = d.value("utilisedpayout").toString().toDouble();
-    funds.total_balance     = funds.available_balance + funds.used_margin;
-    funds.collateral        = d.value("utiliseddebits").toString().toDouble();
-    funds.raw_data          = d;
+    funds.used_margin = d.value("utilisedpayout").toString().toDouble();
+    funds.total_balance = funds.available_balance + funds.used_margin;
+    funds.collateral = d.value("utiliseddebits").toString().toDouble();
+    funds.raw_data = d;
     return {true, funds, "", ts};
 }
 
@@ -499,7 +512,7 @@ ApiResponse<BrokerFunds> AngelOneBroker::get_funds(const BrokerCredentials& cred
 // ─────────────────────────────────────────────────────────────────────────────
 
 ApiResponse<QVector<BrokerQuote>> AngelOneBroker::get_quotes(const BrokerCredentials& creds,
-                                                              const QVector<QString>& symbols) {
+                                                             const QVector<QString>& symbols) {
     int64_t ts = QDateTime::currentSecsSinceEpoch();
 
     // Group by exchange (default NSE)
@@ -509,10 +522,11 @@ ApiResponse<QVector<BrokerQuote>> AngelOneBroker::get_quotes(const BrokerCredent
         QString exchange = "NSE", name = sym;
         if (sym.contains(':')) {
             exchange = sym.section(':', 0, 0);
-            name     = sym.section(':', 1);
+            name = sym.section(':', 1);
         }
         QString token = lookup_token(name, exchange);
-        if (token.isEmpty()) continue;
+        if (token.isEmpty())
+            continue;
         by_exchange[exchange].append(token);
     }
 
@@ -527,12 +541,12 @@ ApiResponse<QVector<BrokerQuote>> AngelOneBroker::get_quotes(const BrokerCredent
     }
 
     QJsonObject payload{
-        {"mode",           "FULL"},
+        {"mode", "FULL"},
         {"exchangeTokens", exchange_tokens},
     };
 
-    auto resp = BrokerHttp::instance().post_json(
-        BASE_AO + "/rest/secure/angelbroking/market/v1/quote/", payload, auth_headers(creds));
+    auto resp = BrokerHttp::instance().post_json(BASE_AO + "/rest/secure/angelbroking/market/v1/quote/", payload,
+                                                 auth_headers(creds));
 
     if (!resp.success || !resp.json.value("status").toBool())
         return {false, std::nullopt, checked_error(resp, "get_quotes failed"), ts};
@@ -546,33 +560,42 @@ ApiResponse<QVector<BrokerQuote>> AngelOneBroker::get_quotes(const BrokerCredent
         {
             QString sym = q.value("tradingSymbol").toString();
             int dash = sym.lastIndexOf('-');
-            if (dash > 0) sym = sym.left(dash);
+            if (dash > 0)
+                sym = sym.left(dash);
             quote.symbol = sym;
         }
         // All numeric fields come as JSON numbers (not strings) in FULL quote mode
-        quote.ltp    = q.value("ltp").toDouble();
-        quote.open   = q.value("open").toDouble();
-        quote.high   = q.value("high").toDouble();
-        quote.low    = q.value("low").toDouble();
-        quote.close  = q.value("close").toDouble();
+        quote.ltp = q.value("ltp").toDouble();
+        quote.open = q.value("open").toDouble();
+        quote.high = q.value("high").toDouble();
+        quote.low = q.value("low").toDouble();
+        quote.close = q.value("close").toDouble();
         quote.volume = q.value("tradeVolume").toDouble();
         // Use API-provided change fields directly
-        quote.change     = q.value("netChange").toDouble();
+        quote.change = q.value("netChange").toDouble();
         quote.change_pct = q.value("percentChange").toDouble();
         // bid/ask from depth (may be 0 after market close)
         auto depth = q.value("depth").toObject();
-        auto buy_arr  = depth.value("buy").toArray();
+        auto buy_arr = depth.value("buy").toArray();
         auto sell_arr = depth.value("sell").toArray();
         // Find first non-zero bid/ask
         for (const auto& b : buy_arr) {
             auto obj = b.toObject();
             double p = obj.value("price").toDouble();
-            if (p > 0) { quote.bid = p; quote.bid_size = obj.value("quantity").toDouble(); break; }
+            if (p > 0) {
+                quote.bid = p;
+                quote.bid_size = obj.value("quantity").toDouble();
+                break;
+            }
         }
         for (const auto& s : sell_arr) {
             auto obj = s.toObject();
             double p = obj.value("price").toDouble();
-            if (p > 0) { quote.ask = p; quote.ask_size = obj.value("quantity").toDouble(); break; }
+            if (p > 0) {
+                quote.ask = p;
+                quote.ask_size = obj.value("quantity").toDouble();
+                break;
+            }
         }
         quote.timestamp = ts;
         quotes.append(quote);
@@ -586,30 +609,37 @@ ApiResponse<QVector<BrokerQuote>> AngelOneBroker::get_quotes(const BrokerCredent
 // ─────────────────────────────────────────────────────────────────────────────
 
 static QString map_resolution(const QString& res) {
-    if (res == "1m"  || res == "1")   return "ONE_MINUTE";
-    if (res == "3m"  || res == "3")   return "THREE_MINUTE";
-    if (res == "5m"  || res == "5")   return "FIVE_MINUTE";
-    if (res == "10m" || res == "10")  return "TEN_MINUTE";
-    if (res == "15m" || res == "15")  return "FIFTEEN_MINUTE";
-    if (res == "30m" || res == "30")  return "THIRTY_MINUTE";
-    if (res == "1h"  || res == "60")  return "ONE_HOUR";
-    if (res == "1d"  || res == "D")   return "ONE_DAY";
-    if (res == "1w"  || res == "W")   return "ONE_DAY";  // AngelOne has no weekly; use daily
+    if (res == "1m" || res == "1")
+        return "ONE_MINUTE";
+    if (res == "3m" || res == "3")
+        return "THREE_MINUTE";
+    if (res == "5m" || res == "5")
+        return "FIVE_MINUTE";
+    if (res == "10m" || res == "10")
+        return "TEN_MINUTE";
+    if (res == "15m" || res == "15")
+        return "FIFTEEN_MINUTE";
+    if (res == "30m" || res == "30")
+        return "THIRTY_MINUTE";
+    if (res == "1h" || res == "60")
+        return "ONE_HOUR";
+    if (res == "1d" || res == "D")
+        return "ONE_DAY";
+    if (res == "1w" || res == "W")
+        return "ONE_DAY"; // AngelOne has no weekly; use daily
     return "ONE_DAY";
 }
 
-ApiResponse<QVector<BrokerCandle>> AngelOneBroker::get_history(const BrokerCredentials& creds,
-                                                                const QString& symbol,
-                                                                const QString& resolution,
-                                                                const QString& from_date,
-                                                                const QString& to_date) {
+ApiResponse<QVector<BrokerCandle>> AngelOneBroker::get_history(const BrokerCredentials& creds, const QString& symbol,
+                                                               const QString& resolution, const QString& from_date,
+                                                               const QString& to_date) {
     int64_t ts = QDateTime::currentSecsSinceEpoch();
 
     // symbol may be "NSE:RELIANCE" or just "RELIANCE"
     QString exchange = "NSE", name = symbol;
     if (symbol.contains(':')) {
         exchange = symbol.section(':', 0, 0);
-        name     = symbol.section(':', 1);
+        name = symbol.section(':', 1);
     }
 
     QString token = lookup_token(name, exchange);
@@ -617,15 +647,13 @@ ApiResponse<QVector<BrokerCandle>> AngelOneBroker::get_history(const BrokerCrede
         return {false, std::nullopt, "Symbol token not found for: " + symbol, ts};
 
     QJsonObject payload{
-        {"exchange",     exchange},
-        {"symboltoken",  token},
-        {"interval",     map_resolution(resolution)},
-        {"fromdate",     from_date},   // "YYYY-MM-DD HH:MM"
-        {"todate",       to_date},
+        {"exchange", exchange},  {"symboltoken", token}, {"interval", map_resolution(resolution)},
+        {"fromdate", from_date}, // "YYYY-MM-DD HH:MM"
+        {"todate", to_date},
     };
 
-    auto resp = BrokerHttp::instance().post_json(
-        BASE_AO + "/rest/secure/angelbroking/historical/v1/getCandleData", payload, auth_headers(creds));
+    auto resp = BrokerHttp::instance().post_json(BASE_AO + "/rest/secure/angelbroking/historical/v1/getCandleData",
+                                                 payload, auth_headers(creds));
 
     if (!resp.success || !resp.json.value("status").toBool())
         return {false, std::nullopt, checked_error(resp, "get_history failed"), ts};
@@ -635,19 +663,22 @@ ApiResponse<QVector<BrokerCandle>> AngelOneBroker::get_history(const BrokerCrede
     auto arr = resp.json.value("data").toArray();
     for (const auto& v : arr) {
         auto row = v.toArray();
-        if (row.size() < 6) continue;
+        if (row.size() < 6)
+            continue;
         BrokerCandle c;
         // AngelOne returns ISO 8601: "2025-03-03T00:00:00+05:30"
         QString dt_str = row[0].toString();
         QDateTime dt = QDateTime::fromString(dt_str, Qt::ISODate);
-        if (!dt.isValid()) dt = QDateTime::fromString(dt_str, "yyyy-MM-dd HH:mm");
-        if (!dt.isValid()) dt = QDateTime::fromString(dt_str, "yyyy-MM-ddTHH:mm:ss");
+        if (!dt.isValid())
+            dt = QDateTime::fromString(dt_str, "yyyy-MM-dd HH:mm");
+        if (!dt.isValid())
+            dt = QDateTime::fromString(dt_str, "yyyy-MM-ddTHH:mm:ss");
         c.timestamp = dt.toMSecsSinceEpoch();
         // AngelOne returns OHLCV as numbers (not strings)
-        c.open   = row[1].toDouble();
-        c.high   = row[2].toDouble();
-        c.low    = row[3].toDouble();
-        c.close  = row[4].toDouble();
+        c.open = row[1].toDouble();
+        c.high = row[2].toDouble();
+        c.low = row[3].toDouble();
+        c.close = row[4].toDouble();
         c.volume = row[5].toDouble();
         candles.append(c);
     }
@@ -669,8 +700,8 @@ bool AngelOneBroker::is_token_expired(const BrokerHttpResponse& resp) {
     if (resp.status_code == 401)
         return true;
     const QString msg = resp.json.value("message").toString().toLower();
-    if (msg.contains("invalid token") || msg.contains("access token is expired")
-            || msg.contains("token expired") || msg.contains("session expired"))
+    if (msg.contains("invalid token") || msg.contains("access token is expired") || msg.contains("token expired") ||
+        msg.contains("session expired"))
         return true;
     // errorCode AB1010 = invalid/expired token per Angel One Smart API docs
     const QString code = resp.json.value("errorCode").toString();
@@ -714,19 +745,19 @@ static OrderMargin parse_margin_for_order(const UnifiedOrder& o, const QJsonObje
     const auto comps = data.value("marginComponents").toObject();
 
     OrderMargin r;
-    r.symbol   = o.symbol;
+    r.symbol = o.symbol;
     r.exchange = o.exchange;
-    r.side     = (o.side == OrderSide::Buy) ? "BUY" : "SELL";
+    r.side = (o.side == OrderSide::Buy) ? "BUY" : "SELL";
     r.quantity = o.quantity;
-    r.price    = o.price;
+    r.price = o.price;
 
-    r.total      = read_num_any(data, {"totalMarginRequired", "total", "margin"});
+    r.total = read_num_any(data, {"totalMarginRequired", "total", "margin"});
     r.var_margin = read_num_any(comps, {"spanMargin", "varMargin", "var"});
-    r.elm        = read_num_any(comps, {"elmMargin", "exposureMargin", "elm"});
+    r.elm = read_num_any(comps, {"elmMargin", "exposureMargin", "elm"});
     r.additional = read_num_any(comps, {"additionalMargin", "additional"});
-    r.bo_margin  = read_num_any(comps, {"boMargin", "bo"});
-    r.cash       = read_num_any(comps, {"cash"});
-    r.pnl        = read_num_any(comps, {"pnl"});
+    r.bo_margin = read_num_any(comps, {"boMargin", "bo"});
+    r.cash = read_num_any(comps, {"cash"});
+    r.pnl = read_num_any(comps, {"pnl"});
 
     const double notional = o.price * o.quantity;
     if (notional > 0.0 && r.total > 0.0)
@@ -734,8 +765,7 @@ static OrderMargin parse_margin_for_order(const UnifiedOrder& o, const QJsonObje
     return r;
 }
 
-ApiResponse<OrderMargin> AngelOneBroker::get_order_margins(const BrokerCredentials& creds,
-                                                           const UnifiedOrder& order) {
+ApiResponse<OrderMargin> AngelOneBroker::get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) {
     const int64_t ts = QDateTime::currentSecsSinceEpoch();
 
     QString token = lookup_token(order.symbol, order.exchange);
@@ -743,18 +773,18 @@ ApiResponse<OrderMargin> AngelOneBroker::get_order_margins(const BrokerCredentia
         return {false, std::nullopt, "Symbol token not found for margin: " + order.exchange + ":" + order.symbol, ts};
 
     QJsonObject leg{
-        {"exchange",    order.exchange},
-        {"qty",         int(order.quantity)},
-        {"price",       order.price},
+        {"exchange", order.exchange},
+        {"qty", int(order.quantity)},
+        {"price", order.price},
         {"productType", ao_product(order.product_type)},
-        {"token",       token},
-        {"tradeType",   ao_transaction(order.side)},
-        {"orderType",   ao_order_type(order.order_type)},
+        {"token", token},
+        {"tradeType", ao_transaction(order.side)},
+        {"orderType", ao_order_type(order.order_type)},
     };
 
     QJsonObject payload{{"positions", QJsonArray{leg}}};
-    auto resp = BrokerHttp::instance().post_json(
-        BASE_AO + "/rest/secure/angelbroking/margin/v1/batch", payload, auth_headers(creds));
+    auto resp = BrokerHttp::instance().post_json(BASE_AO + "/rest/secure/angelbroking/margin/v1/batch", payload,
+                                                 auth_headers(creds));
 
     if (!resp.success || !resp.json.value("status").toBool())
         return {false, std::nullopt, checked_error(resp, "Margin calculation failed"), ts};
@@ -773,23 +803,22 @@ ApiResponse<BasketMargin> AngelOneBroker::get_basket_margins(const BrokerCredent
     for (const auto& o : orders) {
         QString token = lookup_token(o.symbol, o.exchange);
         if (token.isEmpty())
-            return {false, std::nullopt,
-                    "Symbol token not found for margin: " + o.exchange + ":" + o.symbol, ts};
+            return {false, std::nullopt, "Symbol token not found for margin: " + o.exchange + ":" + o.symbol, ts};
 
         legs.append(QJsonObject{
-            {"exchange",    o.exchange},
-            {"qty",         int(o.quantity)},
-            {"price",       o.price},
+            {"exchange", o.exchange},
+            {"qty", int(o.quantity)},
+            {"price", o.price},
             {"productType", ao_product(o.product_type)},
-            {"token",       token},
-            {"tradeType",   ao_transaction(o.side)},
-            {"orderType",   ao_order_type(o.order_type)},
+            {"token", token},
+            {"tradeType", ao_transaction(o.side)},
+            {"orderType", ao_order_type(o.order_type)},
         });
     }
 
     QJsonObject payload{{"positions", legs}};
-    auto resp = BrokerHttp::instance().post_json(
-        BASE_AO + "/rest/secure/angelbroking/margin/v1/batch", payload, auth_headers(creds));
+    auto resp = BrokerHttp::instance().post_json(BASE_AO + "/rest/secure/angelbroking/margin/v1/batch", payload,
+                                                 auth_headers(creds));
 
     if (!resp.success || !resp.json.value("status").toBool())
         return {false, std::nullopt, checked_error(resp, "Basket margin calculation failed"), ts};

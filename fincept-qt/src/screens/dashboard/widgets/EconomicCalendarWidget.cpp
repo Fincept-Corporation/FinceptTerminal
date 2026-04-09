@@ -16,7 +16,7 @@ EconomicCalendarWidget::EconomicCalendarWidget(QWidget* parent)
     vl->setSpacing(0);
 
     // Column headers
-    header_widget_ = new QWidget;
+    header_widget_ = new QWidget(this);
     auto* hl = new QHBoxLayout(header_widget_);
     hl->setContentsMargins(8, 4, 8, 4);
 
@@ -42,7 +42,7 @@ EconomicCalendarWidget::EconomicCalendarWidget(QWidget* parent)
     scroll_area_ = new QScrollArea;
     scroll_area_->setWidgetResizable(true);
 
-    auto* list_widget = new QWidget;
+    auto* list_widget = new QWidget(this);
     list_widget->setStyleSheet("background: transparent;");
     list_layout_ = new QVBoxLayout(list_widget);
     list_layout_->setContentsMargins(0, 0, 0, 0);
@@ -64,27 +64,25 @@ EconomicCalendarWidget::EconomicCalendarWidget(QWidget* parent)
 }
 
 void EconomicCalendarWidget::apply_styles() {
-    header_widget_->setStyleSheet(
-        QString("background: %1;").arg(ui::colors::BG_RAISED()));
+    header_widget_->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED()));
     for (auto* lbl : header_labels_)
-        lbl->setStyleSheet(
-            QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                .arg(ui::colors::TEXT_TERTIARY()));
-    header_sep_->setStyleSheet(
-        QString("background: %1;").arg(ui::colors::BORDER_DIM()));
+        lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+                               .arg(ui::colors::TEXT_TERTIARY()));
+    header_sep_->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
     scroll_area_->setStyleSheet(
         QString("QScrollArea { border: none; background: transparent; }"
                 "QScrollBar:vertical { width: 4px; background: transparent; }"
                 "QScrollBar::handle:vertical { background: %1; border-radius: 2px; min-height: 20px; }"
                 "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
             .arg(ui::colors::BORDER_MED()));
-    status_label_->setStyleSheet(
-        QString("color: %1; font-size: 10px; padding: 16px; background: transparent;")
-            .arg(ui::colors::TEXT_TERTIARY()));
+    status_label_->setStyleSheet(QString("color: %1; font-size: 10px; padding: 16px; background: transparent;")
+                                     .arg(ui::colors::TEXT_TERTIARY()));
 }
 
 void EconomicCalendarWidget::on_theme_changed() {
     apply_styles();
+    if (!last_events_.isEmpty())
+        populate(last_events_);
 }
 
 void EconomicCalendarWidget::refresh_data() {
@@ -134,6 +132,8 @@ void EconomicCalendarWidget::refresh_data() {
 }
 
 void EconomicCalendarWidget::populate(const QJsonArray& events) {
+    last_events_ = events;
+
     // Clear list
     while (list_layout_->count() > 0) {
         auto* item = list_layout_->takeAt(0);
@@ -183,7 +183,7 @@ void EconomicCalendarWidget::populate(const QJsonArray& events) {
                                            : ui::colors::TEXT_TERTIARY();
         QString imp_text = imp_int >= 3 ? "HIGH" : imp_int == 2 ? "MED" : imp_int == 1 ? "LOW" : "--";
 
-        auto* row = new QWidget;
+        auto* row = new QWidget(this);
         row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED() : "transparent"));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);

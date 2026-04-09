@@ -26,9 +26,9 @@ class NotifPanel : public QFrame {
     void showEvent(QShowEvent* e) override;
 
   private:
-    QWidget*     list_container_ = nullptr;
-    QVBoxLayout* list_layout_    = nullptr;
-    QScrollArea* scroll_         = nullptr;
+    QWidget* list_container_ = nullptr;
+    QVBoxLayout* list_layout_ = nullptr;
+    QScrollArea* scroll_ = nullptr;
 
     static constexpr int PANEL_W = 380;
     static constexpr int PANEL_H = 400;

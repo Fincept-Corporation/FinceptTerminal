@@ -89,29 +89,25 @@ void GeopoliticsService::fetch_events(const QString& country, const QString& cit
         QJsonArray cached_arr;
         for (const auto& ev : events) {
             QJsonObject o;
-            o["url"]              = ev.url;
-            o["domain"]           = ev.domain;
-            o["event_category"]   = ev.event_category;
+            o["url"] = ev.url;
+            o["domain"] = ev.domain;
+            o["event_category"] = ev.event_category;
             o["matched_keywords"] = ev.matched_keywords;
-            o["city"]             = ev.city;
-            o["country"]          = ev.country;
-            o["latitude"]         = ev.latitude;
-            o["longitude"]        = ev.longitude;
-            o["extracted_date"]   = ev.extracted_date;
-            o["created_at"]       = ev.created_at;
+            o["city"] = ev.city;
+            o["country"] = ev.country;
+            o["latitude"] = ev.latitude;
+            o["longitude"] = ev.longitude;
+            o["extracted_date"] = ev.extracted_date;
+            o["created_at"] = ev.created_at;
             cached_arr.append(o);
         }
         QJsonObject cached_root;
         cached_root["events"] = cached_arr;
-        cached_root["total"]  = total;
-        const QString cache_key = QString("geo:events:%1:%2:%3:%4")
-                                      .arg(country, city, category)
-                                      .arg(limit);
-        fincept::CacheManager::instance().put(
-            cache_key,
-            QVariant(QJsonDocument(cached_root).toJson(QJsonDocument::Compact)),
-            kEventsTtlSec,
-            "geopolitics");
+        cached_root["total"] = total;
+        const QString cache_key = QString("geo:events:%1:%2:%3:%4").arg(country, city, category).arg(limit);
+        fincept::CacheManager::instance().put(cache_key,
+                                              QVariant(QJsonDocument(cached_root).toJson(QJsonDocument::Compact)),
+                                              kEventsTtlSec, "geopolitics");
         LOG_INFO("Geopolitics", QString("Loaded %1 events").arg(events.size()));
         emit self->events_loaded(events, total);
     });
@@ -122,27 +118,26 @@ void GeopoliticsService::fetch_unique_countries() {
         return;
 
     QPointer<GeopoliticsService> self = this;
-    HttpClient::instance().get(QString(kApiBase) + "?get_unique_countries=true&limit=100",
-                               [self](Result<QJsonDocument> result) {
-                                   if (!self)
-                                       return;
-                                   if (!result.is_ok()) {
-                                       emit self->error_occurred("countries", QString::fromStdString(result.error()));
-                                       return;
-                                   }
-                                   auto root = result.value().object();
-                                   auto data = root.contains("data") ? root["data"].toObject() : root;
-                                   auto arr = data["unique_countries"].toArray();
-                                   QVector<UniqueCountry> countries;
-                                   countries.reserve(arr.size());
-                                   for (const auto& v : arr) {
-                                       auto o = v.toObject();
-                                       countries.append({o["country"].toString(), o["event_count"].toInt()});
-                                   }
-                                   fincept::CacheManager::instance().put(
-                                       "geo:countries", QVariant(true), kRefDataTtlSec, "geopolitics");
-                                   emit self->countries_loaded(countries);
-                               });
+    HttpClient::instance().get(
+        QString(kApiBase) + "?get_unique_countries=true&limit=100", [self](Result<QJsonDocument> result) {
+            if (!self)
+                return;
+            if (!result.is_ok()) {
+                emit self->error_occurred("countries", QString::fromStdString(result.error()));
+                return;
+            }
+            auto root = result.value().object();
+            auto data = root.contains("data") ? root["data"].toObject() : root;
+            auto arr = data["unique_countries"].toArray();
+            QVector<UniqueCountry> countries;
+            countries.reserve(arr.size());
+            for (const auto& v : arr) {
+                auto o = v.toObject();
+                countries.append({o["country"].toString(), o["event_count"].toInt()});
+            }
+            fincept::CacheManager::instance().put("geo:countries", QVariant(true), kRefDataTtlSec, "geopolitics");
+            emit self->countries_loaded(countries);
+        });
 }
 
 void GeopoliticsService::fetch_unique_categories() {
@@ -166,8 +161,7 @@ void GeopoliticsService::fetch_unique_categories() {
             auto o = v.toObject();
             cats.append({o["event_category"].toString(), o["event_count"].toInt()});
         }
-        fincept::CacheManager::instance().put(
-            "geo:categories", QVariant(true), kRefDataTtlSec, "geopolitics");
+        fincept::CacheManager::instance().put("geo:categories", QVariant(true), kRefDataTtlSec, "geopolitics");
         emit self->categories_loaded(cats);
     });
 }
@@ -220,11 +214,11 @@ static QVector<HDXDataset> parse_hdx_results(const QString& output) {
     for (const auto& v : arr) {
         auto o = v.toObject();
         HDXDataset d;
-        d.id           = o["id"].toString();
-        d.title        = o["title"].toString();
+        d.id = o["id"].toString();
+        d.title = o["title"].toString();
         d.organization = o["organization"].toString();
-        d.notes        = o["notes"].toString();
-        d.date         = o["dataset_date"].toString();
+        d.notes = o["notes"].toString();
+        d.date = o["dataset_date"].toString();
         d.num_resources = o["num_resources"].toInt();
         // Tags in summary are plain strings; in full detail they are objects with "name"
         for (const auto& t : o["tags"].toArray()) {
@@ -250,13 +244,14 @@ void GeopoliticsService::search_hdx_conflicts() {
 }
 
 void GeopoliticsService::search_hdx_humanitarian() {
-    run_python("hdx_data.py", {"search_humanitarian", "", "20"}, "hdx_humanitarian", [this](bool ok, const QString& out) {
-        if (!ok) {
-            emit error_occurred("hdx_humanitarian", out);
-            return;
-        }
-        emit hdx_results_loaded("humanitarian", parse_hdx_results(out));
-    });
+    run_python("hdx_data.py", {"search_humanitarian", "", "20"}, "hdx_humanitarian",
+               [this](bool ok, const QString& out) {
+                   if (!ok) {
+                       emit error_occurred("hdx_humanitarian", out);
+                       return;
+                   }
+                   emit hdx_results_loaded("humanitarian", parse_hdx_results(out));
+               });
 }
 
 void GeopoliticsService::search_hdx_by_country(const QString& country) {

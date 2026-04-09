@@ -33,7 +33,7 @@ static QLabel* make_header(const QString& icon, const QString& title, const QStr
 }
 
 static QWidget* make_contact_card(const QString& title, const QString& value, const QString& detail) {
-    auto* card = new QWidget;
+    auto* card = new QWidget(nullptr);
     card->setStyleSheet(PANEL());
     auto* vl = new QVBoxLayout(card);
     vl->setContentsMargins(14, 12, 14, 12);
@@ -51,8 +51,7 @@ static QWidget* make_contact_card(const QString& title, const QString& value, co
     vl->addWidget(v);
 
     auto* d = new QLabel(detail);
-    d->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; %2")
-                         .arg(colors::TEXT_TERTIARY, MF));
+    d->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY, MF));
     d->setWordWrap(true);
     vl->addWidget(d);
 
@@ -73,7 +72,7 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
     scroll->setWidgetResizable(true);
     scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }");
 
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     page->setStyleSheet(QString("background: %1;").arg(colors::BG_BASE));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
@@ -103,7 +102,7 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
 
     // ── Contact Information ──────────────────────────────────────────────────
     {
-        auto* panel = new QWidget;
+        auto* panel = new QWidget(this);
         panel->setStyleSheet(PANEL());
         auto* pvl = new QVBoxLayout(panel);
         pvl->setContentsMargins(0, 0, 0, 0);
@@ -111,7 +110,7 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
 
         pvl->addWidget(make_header("@", "CONTACT INFORMATION", colors::AMBER));
 
-        auto* body = new QWidget;
+        auto* body = new QWidget(this);
         body->setStyleSheet("background: transparent;");
         auto* grid = new QGridLayout(body);
         grid->setContentsMargins(14, 12, 14, 12);
@@ -128,7 +127,7 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
 
     // ── Quick Actions ────────────────────────────────────────────────────────
     {
-        auto* panel = new QWidget;
+        auto* panel = new QWidget(this);
         panel->setStyleSheet(PANEL());
         auto* pvl = new QVBoxLayout(panel);
         pvl->setContentsMargins(0, 0, 0, 0);
@@ -136,7 +135,7 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
 
         pvl->addWidget(make_header(">>", "QUICK ACTIONS", colors::CYAN));
 
-        auto* body = new QWidget;
+        auto* body = new QWidget(this);
         body->setStyleSheet("background: transparent;");
         auto* hl = new QHBoxLayout(body);
         hl->setContentsMargins(14, 12, 14, 12);
@@ -177,7 +176,7 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
 
     // ── Common Issues ────────────────────────────────────────────────────────
     {
-        auto* panel = new QWidget;
+        auto* panel = new QWidget(this);
         panel->setStyleSheet(PANEL());
         auto* pvl = new QVBoxLayout(panel);
         pvl->setContentsMargins(0, 0, 0, 0);
@@ -185,7 +184,7 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
 
         pvl->addWidget(make_header("?", "COMMON ISSUES", colors::AMBER));
 
-        auto* body = new QWidget;
+        auto* body = new QWidget(this);
         body->setStyleSheet("background: transparent;");
         auto* bvl = new QVBoxLayout(body);
         bvl->setContentsMargins(14, 10, 14, 12);
@@ -206,15 +205,14 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
 
         for (const auto& issue : issues) {
             auto* q = new QLabel(QString("> %1").arg(issue.q));
-            q->setStyleSheet(
-                QString("color: %1; font-size: 12px; font-weight: 600; background: transparent; %2")
-                    .arg(colors::TEXT_PRIMARY, MF));
+            q->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 600; background: transparent; %2")
+                                 .arg(colors::TEXT_PRIMARY, MF));
             bvl->addWidget(q);
 
             auto* a = new QLabel(QString("  %1").arg(issue.a));
             a->setWordWrap(true);
-            a->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; %2")
-                                 .arg(colors::TEXT_TERTIARY, MF));
+            a->setStyleSheet(
+                QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY, MF));
             bvl->addWidget(a);
             bvl->addSpacing(4);
         }

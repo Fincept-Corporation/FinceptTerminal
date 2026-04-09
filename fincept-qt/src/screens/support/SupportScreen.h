@@ -19,52 +19,52 @@ class SupportScreen : public QWidget {
 
   private:
     // ── Layout ────────────────────────────────────────────────────────────────
-    QSplitter*      splitter_         = nullptr;
-    QStackedWidget* content_stack_    = nullptr;  // 0=empty, 1=create, 2=detail
+    QSplitter* splitter_ = nullptr;
+    QStackedWidget* content_stack_ = nullptr; // 0=empty, 1=create, 2=detail
 
     // ── Sidebar ───────────────────────────────────────────────────────────────
-    QLineEdit*  search_input_       = nullptr;
-    QComboBox*  filter_combo_       = nullptr;
-    QWidget*    ticket_container_   = nullptr;
-    QScrollArea* list_scroll_       = nullptr;
-    QLabel*     stat_total_         = nullptr;
-    QLabel*     stat_open_          = nullptr;
-    QLabel*     stat_resolved_      = nullptr;
+    QLineEdit* search_input_ = nullptr;
+    QComboBox* filter_combo_ = nullptr;
+    QWidget* ticket_container_ = nullptr;
+    QScrollArea* list_scroll_ = nullptr;
+    QLabel* stat_total_ = nullptr;
+    QLabel* stat_open_ = nullptr;
+    QLabel* stat_resolved_ = nullptr;
 
     // ── Status bar ────────────────────────────────────────────────────────────
-    QLabel*      status_dot_  = nullptr;
-    QLabel*      status_lbl_  = nullptr;
+    QLabel* status_dot_ = nullptr;
+    QLabel* status_lbl_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;
 
     // ── Create view ───────────────────────────────────────────────────────────
-    QLineEdit*   subject_input_   = nullptr;
-    QComboBox*   category_combo_  = nullptr;
-    QComboBox*   priority_combo_  = nullptr;
-    QTextEdit*   desc_input_      = nullptr;
-    QPushButton* create_btn_      = nullptr;
-    QLabel*      char_count_lbl_  = nullptr;
+    QLineEdit* subject_input_ = nullptr;
+    QComboBox* category_combo_ = nullptr;
+    QComboBox* priority_combo_ = nullptr;
+    QTextEdit* desc_input_ = nullptr;
+    QPushButton* create_btn_ = nullptr;
+    QLabel* char_count_lbl_ = nullptr;
 
     // ── Detail view ───────────────────────────────────────────────────────────
-    QLabel*      detail_id_lbl_      = nullptr;
-    QLabel*      detail_subject_lbl_ = nullptr;
-    QLabel*      detail_status_lbl_  = nullptr;
-    QLabel*      detail_meta_lbl_    = nullptr;
-    QLabel*      detail_body_lbl_    = nullptr;
-    QWidget*     messages_container_ = nullptr;
-    QScrollArea* detail_scroll_      = nullptr;
-    QTextEdit*   msg_input_          = nullptr;
-    QPushButton* send_btn_           = nullptr;
-    QPushButton* close_btn_          = nullptr;
-    QPushButton* reopen_btn_         = nullptr;
-    QWidget*     reply_box_          = nullptr;
-    QWidget*     demo_box_           = nullptr;
-    QWidget*     closed_box_         = nullptr;
+    QLabel* detail_id_lbl_ = nullptr;
+    QLabel* detail_subject_lbl_ = nullptr;
+    QLabel* detail_status_lbl_ = nullptr;
+    QLabel* detail_meta_lbl_ = nullptr;
+    QLabel* detail_body_lbl_ = nullptr;
+    QWidget* messages_container_ = nullptr;
+    QScrollArea* detail_scroll_ = nullptr;
+    QTextEdit* msg_input_ = nullptr;
+    QPushButton* send_btn_ = nullptr;
+    QPushButton* close_btn_ = nullptr;
+    QPushButton* reopen_btn_ = nullptr;
+    QWidget* reply_box_ = nullptr;
+    QWidget* demo_box_ = nullptr;
+    QWidget* closed_box_ = nullptr;
 
     // ── State ─────────────────────────────────────────────────────────────────
-    int     selected_ticket_id_ = -1;
-    bool    selected_is_demo_   = false;
-    bool    selected_is_closed_ = false;
-    QPushButton* active_row_btn_ = nullptr;  // currently highlighted sidebar row
+    int selected_ticket_id_ = -1;
+    bool selected_is_demo_ = false;
+    bool selected_is_closed_ = false;
+    QPushButton* active_row_btn_ = nullptr; // currently highlighted sidebar row
 
     // ── Builders ─────────────────────────────────────────────────────────────
     QWidget* build_sidebar();

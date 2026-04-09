@@ -20,29 +20,23 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kEconomicCalendarScript   = "economic_calendar.py";
+static constexpr const char* kEconomicCalendarScript = "economic_calendar.py";
 static constexpr const char* kEconomicCalendarSourceId = "econ_calendar";
-static constexpr const char* kEconomicCalendarColor    = "#D97706";  // amber
+static constexpr const char* kEconomicCalendarColor = "#D97706"; // amber
 } // namespace
 
 // Convert QDate to Forex Factory date string: "mar28.2026"
 static QString to_ff_date(const QDate& d) {
-    static const char* months[] = {
-        "", "jan","feb","mar","apr","may","jun",
-        "jul","aug","sep","oct","nov","dec"
-    };
-    return QString("%1%2.%3")
-        .arg(months[d.month()])
-        .arg(d.day())
-        .arg(d.year());
+    static const char* months[] = {"",    "jan", "feb", "mar", "apr", "may", "jun",
+                                   "jul", "aug", "sep", "oct", "nov", "dec"};
+    return QString("%1%2.%3").arg(months[d.month()]).arg(d.day()).arg(d.year());
 }
 
 EconomicCalendarPanel::EconomicCalendarPanel(QWidget* parent)
     : EconPanelBase(kEconomicCalendarSourceId, kEconomicCalendarColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &EconomicCalendarPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &EconomicCalendarPanel::on_result);
 }
 
 void EconomicCalendarPanel::activate() {
@@ -68,9 +62,9 @@ void EconomicCalendarPanel::build_controls(QHBoxLayout* thl) {
     date_edit_->setFixedWidth(120);
 
     filter_combo_ = new QComboBox;
-    filter_combo_->addItem("All Events",    0);
+    filter_combo_->addItem("All Events", 0);
     filter_combo_->addItem("Medium + High", 2);
-    filter_combo_->addItem("High Only",     3);
+    filter_combo_->addItem("High Only", 3);
     filter_combo_->setFixedHeight(26);
     filter_combo_->setFixedWidth(110);
 
@@ -81,21 +75,24 @@ void EconomicCalendarPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void EconomicCalendarPanel::on_fetch() {
-    const QDate   date    = date_edit_->date();
+    const QDate date = date_edit_->date();
     const QString ff_date = to_ff_date(date);
 
     show_loading("Fetching economic calendar for " + date.toString("MMM d, yyyy") + "…");
 
-    services::EconomicsService::instance().execute(
-        kEconomicCalendarSourceId, kEconomicCalendarScript, ff_date, {},
-        "calendar_" + ff_date);
+    services::EconomicsService::instance().execute(kEconomicCalendarSourceId, kEconomicCalendarScript, ff_date, {},
+                                                   "calendar_" + ff_date);
 }
 
-void EconomicCalendarPanel::on_result(const QString& request_id,
-                                       const services::EconomicsResult& result) {
-    if (result.source_id != kEconomicCalendarSourceId) return;
-    if (!request_id.startsWith("calendar_")) return;
-    if (!result.success) { show_error(result.error); return; }
+void EconomicCalendarPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kEconomicCalendarSourceId)
+        return;
+    if (!request_id.startsWith("calendar_"))
+        return;
+    if (!result.success) {
+        show_error(result.error);
+        return;
+    }
 
     QJsonArray events = result.data["events"].toArray();
 
@@ -126,13 +123,10 @@ void EconomicCalendarPanel::on_result(const QString& request_id,
 
     const QString date_str = date_edit_->date().toString("MMM d, yyyy");
     const int total = result.data["events_count"].toInt(events.size());
-    const QString title = QString("Economic Calendar — %1  (%2 events)")
-                              .arg(date_str)
-                              .arg(total);
+    const QString title = QString("Economic Calendar — %1  (%2 events)").arg(date_str).arg(total);
 
     display(events, title);
-    LOG_INFO("EconomicCalendarPanel", QString("Displayed %1 events for %2")
-                                          .arg(events.size()).arg(date_str));
+    LOG_INFO("EconomicCalendarPanel", QString("Displayed %1 events for %2").arg(events.size()).arg(date_str));
 }
 
 } // namespace fincept::screens

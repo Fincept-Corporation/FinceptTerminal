@@ -13,7 +13,9 @@ static const char* MONO = "'Consolas','Courier New',monospace";
 
 SurfaceMetricsPanel::SurfaceMetricsPanel(QWidget* parent) : QWidget(parent) {
     setFixedWidth(190);
-    setStyleSheet(QString("QWidget { background:%1; border-right:1px solid %2; }").arg(colors::BG_SURFACE).arg(colors::BORDER_DIM));
+    setStyleSheet(QString("QWidget { background:%1; border-right:1px solid %2; }")
+                      .arg(colors::BG_SURFACE)
+                      .arg(colors::BORDER_DIM));
     layout_ = new QVBoxLayout(this);
     layout_->setContentsMargins(0, 0, 0, 0);
     layout_->setSpacing(0);
@@ -47,7 +49,8 @@ void SurfaceMetricsPanel::add_row(const QString& label, const QString& value, co
     const char* vc = value_color ? value_color : colors::TEXT_PRIMARY();
     auto* row = new QWidget(this);
     row->setFixedHeight(22);
-    row->setStyleSheet(QString("QWidget { background:transparent; border-bottom:1px solid %1; }").arg(colors::BG_RAISED));
+    row->setStyleSheet(
+        QString("QWidget { background:transparent; border-bottom:1px solid %1; }").arg(colors::BG_RAISED));
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(4);

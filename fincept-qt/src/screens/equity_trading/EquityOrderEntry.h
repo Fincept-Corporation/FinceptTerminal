@@ -10,6 +10,7 @@
 #include <QPushButton>
 #include <QTimer>
 #include <QWidget>
+
 #include <atomic>
 
 namespace fincept::screens::equity {
@@ -32,6 +33,7 @@ class EquityOrderEntry : public QWidget {
 
   signals:
     void order_submitted(const trading::UnifiedOrder& order);
+    void broadcast_requested(const trading::UnifiedOrder& order);
 
   private slots:
     void on_submit();
@@ -42,7 +44,7 @@ class EquityOrderEntry : public QWidget {
     void set_order_type(int idx);
 
     // Side tabs
-    QPushButton* buy_tab_  = nullptr;
+    QPushButton* buy_tab_ = nullptr;
     QPushButton* sell_tab_ = nullptr;
 
     // Type buttons: MKT, LMT, SL, SL-L
@@ -59,29 +61,30 @@ class EquityOrderEntry : public QWidget {
     QLabel* brokerage_label_ = nullptr;
 
     // Form
-    QLineEdit* qty_edit_        = nullptr;
-    QLineEdit* price_edit_      = nullptr;
+    QLineEdit* qty_edit_ = nullptr;
+    QLineEdit* price_edit_ = nullptr;
     QLineEdit* stop_price_edit_ = nullptr;
-    QLineEdit* sl_edit_         = nullptr;
-    QLineEdit* tp_edit_         = nullptr;
-    QPushButton* submit_btn_    = nullptr;
-    QWidget* advanced_section_  = nullptr;
+    QLineEdit* sl_edit_ = nullptr;
+    QLineEdit* tp_edit_ = nullptr;
+    QPushButton* submit_btn_ = nullptr;
+    QPushButton* broadcast_btn_ = nullptr;
+    QWidget* advanced_section_ = nullptr;
     QPushButton* advanced_toggle_ = nullptr;
 
     // Labels
-    QLabel* balance_label_      = nullptr;
+    QLabel* balance_label_ = nullptr;
     QLabel* market_price_label_ = nullptr;
-    QLabel* cost_label_         = nullptr;
-    QLabel* margin_label_       = nullptr;  // required margin from broker API
-    QLabel* status_label_       = nullptr;
-    QLabel* mode_label_         = nullptr;
+    QLabel* cost_label_ = nullptr;
+    QLabel* margin_label_ = nullptr; // required margin from broker API
+    QLabel* status_label_ = nullptr;
+    QLabel* mode_label_ = nullptr;
 
     // State
-    double balance_       = 0;
+    double balance_ = 0;
     double current_price_ = 0;
-    bool is_paper_        = true;
-    bool is_buy_side_     = true;
-    QString current_symbol_   = "RELIANCE";
+    bool is_paper_ = true;
+    bool is_buy_side_ = true;
+    QString current_symbol_ = "RELIANCE";
     QString current_exchange_ = "NSE";
     QString current_currency_ = "INR";
     QString broker_id_;

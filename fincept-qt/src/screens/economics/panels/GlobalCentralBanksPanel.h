@@ -4,6 +4,7 @@
 #pragma once
 
 #include "screens/economics/panels/EconPanelBase.h"
+
 #include <QComboBox>
 
 namespace fincept::screens {
@@ -17,11 +18,10 @@ class GlobalCentralBanksPanel : public EconPanelBase {
   protected:
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
-    void on_result(const QString& request_id,
-                   const services::EconomicsResult& result) override;
+    void on_result(const QString& request_id, const services::EconomicsResult& result) override;
 
   private:
-    QComboBox* bank_combo_   = nullptr;
+    QComboBox* bank_combo_ = nullptr;
     QComboBox* series_combo_ = nullptr;
 
     void update_series_for_bank(int bank_idx);

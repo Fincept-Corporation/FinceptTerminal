@@ -19,12 +19,24 @@ namespace fincept::screens::crypto {
 using namespace fincept::ui;
 
 namespace {
-inline QColor kRowEven() { return QColor(colors::BG_BASE()); }
-inline QColor kRowOdd()  { return QColor(colors::ROW_ALT()); }
-inline QColor kColorPos() { return QColor(colors::POSITIVE()); }
-inline QColor kColorNeg() { return QColor(colors::NEGATIVE()); }
-inline QColor kColorSec() { return QColor(colors::TEXT_SECONDARY()); }
-inline QColor kColorTert() { return QColor(colors::TEXT_TERTIARY()); }
+inline QColor kRowEven() {
+    return QColor(colors::BG_BASE());
+}
+inline QColor kRowOdd() {
+    return QColor(colors::ROW_ALT());
+}
+inline QColor kColorPos() {
+    return QColor(colors::POSITIVE());
+}
+inline QColor kColorNeg() {
+    return QColor(colors::NEGATIVE());
+}
+inline QColor kColorSec() {
+    return QColor(colors::TEXT_SECONDARY());
+}
+inline QColor kColorTert() {
+    return QColor(colors::TEXT_TERTIARY());
+}
 } // namespace
 
 // Static helper: ensure QTableWidgetItem exists at (row, col)
@@ -107,13 +119,13 @@ void CryptoBottomPanel::setup_fees_tab() {
 }
 
 void CryptoBottomPanel::setup_market_info_tab() {
-    auto* widget = new QWidget;
+    auto* widget = new QWidget(this);
     auto* grid = new QVBoxLayout(widget);
     grid->setContentsMargins(8, 4, 8, 4);
     grid->setSpacing(0);
 
     auto make_row = [&](const QString& label) -> QLabel* {
-        auto* row_widget = new QWidget;
+        auto* row_widget = new QWidget(this);
         row_widget->setObjectName("cryptoInfoRow");
         row_widget->setFixedHeight(24);
         auto* row = new QHBoxLayout(row_widget);
@@ -143,14 +155,14 @@ void CryptoBottomPanel::setup_market_info_tab() {
 }
 
 void CryptoBottomPanel::setup_stats_tab() {
-    auto* widget = new QWidget;
+    auto* widget = new QWidget(this);
     auto* grid = new QVBoxLayout(widget);
     grid->setContentsMargins(8, 4, 8, 4);
     grid->setSpacing(0);
 
     const char* labels[] = {"TOTAL P&L", "WIN RATE", "TOTAL TRADES", "BEST TRADE", "WORST TRADE"};
     for (int i = 0; i < 5; ++i) {
-        auto* row = new QWidget;
+        auto* row = new QWidget(this);
         row->setObjectName("cryptoStatRow");
         row->setFixedHeight(24);
         auto* h = new QHBoxLayout(row);
@@ -293,7 +305,8 @@ void CryptoBottomPanel::set_trades(const QVector<trading::PtTrade>& trades) {
         set(2, QString::number(t.price, 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(3, QString::number(t.quantity, 'f', 6), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(4, QString::number(t.fee, 'f', 4), kColorSec(), Qt::AlignRight | Qt::AlignVCenter);
-        set(5, QString::number(t.pnl, 'f', 2), t.pnl >= 0 ? kColorPos() : kColorNeg(), Qt::AlignRight | Qt::AlignVCenter);
+        set(5, QString::number(t.pnl, 'f', 2), t.pnl >= 0 ? kColorPos() : kColorNeg(),
+            Qt::AlignRight | Qt::AlignVCenter);
         set(6, t.timestamp, kColorTert());
     }
     trades_table_->setUpdatesEnabled(true);
@@ -434,9 +447,7 @@ void CryptoBottomPanel::update_my_trades(const QJsonObject& data) {
 
         const QString side = t.value("side").toString();
         const qint64 ts_ms = t.value("timestamp").toVariant().toLongLong();
-        const QString time_str = ts_ms > 0
-            ? QDateTime::fromMSecsSinceEpoch(ts_ms).toString("MM-dd HH:mm:ss")
-            : "--";
+        const QString time_str = ts_ms > 0 ? QDateTime::fromMSecsSinceEpoch(ts_ms).toString("MM-dd HH:mm:ss") : "--";
 
         set(0, t.value("symbol").toString());
         set(1, side.toUpper(), side == "buy" ? kColorPos() : kColorNeg());

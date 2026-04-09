@@ -3,6 +3,7 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QPalette>
 #include <QSize>
 #include <QStyle>
 
@@ -10,15 +11,24 @@ namespace fincept::screens::widgets {
 
 BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& accent_color)
     : QFrame(parent), accent_color_(accent_color.isEmpty() ? ui::colors::AMBER : accent_color) {
-    setStyleSheet(QString("BaseWidget { background: %1; border: 1px solid %2; border-radius: 2px; }")
-                      .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_BRIGHT));
+    setObjectName("dashboardBaseWidget");
+    setAttribute(Qt::WA_StyledBackground, true);
+    setAutoFillBackground(true);
+
+    QPalette pal = palette();
+    pal.setColor(QPalette::Window, QColor(ui::colors::BG_SURFACE()));
+    setPalette(pal);
+
+    setStyleSheet(
+        QString("#dashboardBaseWidget { background: %1; border: 1px solid %2; border-radius: 2px; }")
+            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_BRIGHT()));
 
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
     // ── Title bar ──
-    title_bar_ = new QWidget;
+    title_bar_ = new QWidget(this);
     title_bar_->setFixedHeight(26);
     title_bar_->setStyleSheet(
         QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
@@ -85,14 +95,13 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     vl->addWidget(title_bar_);
 
     // Auto-refresh styles on theme/font change — subclasses get this for free
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) {
-                refresh_base_theme();
-                on_theme_changed();
-            });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        refresh_base_theme();
+        on_theme_changed();
+    });
 
     // ── Content ──
-    content_ = new QWidget;
+    content_ = new QWidget(this);
     content_->setStyleSheet("background: transparent;");
     content_layout_ = new QVBoxLayout(content_);
     content_layout_->setContentsMargins(0, 0, 0, 0);
@@ -102,16 +111,19 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
 }
 
 void BaseWidget::refresh_base_theme() {
-    setStyleSheet(QString("BaseWidget{background:%1;border:1px solid %2;border-radius:2px;}")
-        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_BRIGHT()));
+    QPalette pal = palette();
+    pal.setColor(QPalette::Window, QColor(ui::colors::BG_SURFACE()));
+    setPalette(pal);
+
+    setStyleSheet(QString("#dashboardBaseWidget{background:%1;border:1px solid %2;border-radius:2px;}")
+                      .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_BRIGHT()));
     if (title_bar_)
-        title_bar_->setStyleSheet(
-            QString("background:%1;border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        title_bar_->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+                                      .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     if (title_label_)
-        title_label_->setStyleSheet(
-            QString("color:%1;font-size:9px;font-weight:bold;letter-spacing:0.5px;"
-                    "background:transparent;text-transform:uppercase;").arg(accent_color_));
+        title_label_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:bold;letter-spacing:0.5px;"
+                                            "background:transparent;text-transform:uppercase;")
+                                        .arg(accent_color_));
     if (accent_bar_)
         accent_bar_->setStyleSheet(QString("background:%1;border-radius:1px;").arg(accent_color_));
     if (loading_label_)
@@ -121,8 +133,8 @@ void BaseWidget::refresh_base_theme() {
         refresh_btn_->setStyleSheet(
             QString("QPushButton{color:%1;background:%2;border:1px solid %3;border-radius:2px;padding:0;}"
                     "QPushButton:hover{color:%4;border-color:%4;background:%5;}")
-            .arg(accent_color_, ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(),
-                 ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER()));
+                .arg(accent_color_, ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(),
+                     ui::colors::BG_HOVER()));
 }
 
 void BaseWidget::set_loading(bool loading) {
@@ -154,5 +166,3 @@ void BaseWidget::set_title(const QString& title) {
 }
 
 } // namespace fincept::screens::widgets
-
-

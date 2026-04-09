@@ -78,9 +78,8 @@ void MAAnalyticsService::run_python_json(const QString& script, const QString& c
         }
         auto obj = doc.object();
         fincept::CacheManager::instance().put(
-            cache_key,
-            QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
-            kResultTtlSec, "ma_analytics");
+            cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), kResultTtlSec,
+            "ma_analytics");
         LOG_INFO("MAAnalytics", QString("Result ready [%1]").arg(context));
         emit self->result_ready(context, obj);
     });

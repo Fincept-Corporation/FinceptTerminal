@@ -204,7 +204,7 @@ void AlphaArenaScreen::setup_ui() {
 }
 
 QWidget* AlphaArenaScreen::create_header() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("aaHeader");
     bar->setFixedHeight(42);
 
@@ -250,7 +250,7 @@ QWidget* AlphaArenaScreen::create_header() {
 }
 
 QWidget* AlphaArenaScreen::create_create_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("aaCreatePanel");
 
     auto* vl = new QVBoxLayout(panel);
@@ -258,7 +258,7 @@ QWidget* AlphaArenaScreen::create_create_panel() {
     vl->setSpacing(0);
 
     // Header
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("aaCreateHeader");
     hdr->setFixedHeight(34);
     auto* hhl = new QHBoxLayout(hdr);
@@ -270,7 +270,7 @@ QWidget* AlphaArenaScreen::create_create_panel() {
     vl->addWidget(hdr);
 
     // Body
-    auto* body = new QWidget;
+    auto* body = new QWidget(this);
     auto* bl = new QVBoxLayout(body);
     bl->setContentsMargins(12, 12, 12, 12);
     bl->setSpacing(10);
@@ -373,7 +373,7 @@ QWidget* AlphaArenaScreen::create_create_panel() {
 }
 
 QWidget* AlphaArenaScreen::create_controls_bar() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("aaControlsBar");
     bar->setFixedHeight(36);
 
@@ -429,14 +429,14 @@ QWidget* AlphaArenaScreen::create_main_content() {
 }
 
 QWidget* AlphaArenaScreen::create_leaderboard_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("aaLeaderboard");
 
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("aaLeaderboardHeader");
     hdr->setFixedHeight(34);
     auto* hhl = new QHBoxLayout(hdr);
@@ -464,7 +464,7 @@ QWidget* AlphaArenaScreen::create_leaderboard_panel() {
 }
 
 QWidget* AlphaArenaScreen::create_right_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("aaRightPanel");
     panel->setMinimumWidth(280);
     panel->setMaximumWidth(400);
@@ -474,7 +474,7 @@ QWidget* AlphaArenaScreen::create_right_panel() {
     vl->setSpacing(0);
 
     // Tab bar
-    auto* tab_bar = new QWidget;
+    auto* tab_bar = new QWidget(this);
     tab_bar->setFixedHeight(32);
     auto* tbl = new QHBoxLayout(tab_bar);
     tbl->setContentsMargins(4, 0, 4, 0);
@@ -549,7 +549,7 @@ QWidget* AlphaArenaScreen::create_right_panel() {
 }
 
 QWidget* AlphaArenaScreen::create_past_competitions_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("aaPastPanel");
     panel->setFixedHeight(200);
 
@@ -557,7 +557,7 @@ QWidget* AlphaArenaScreen::create_past_competitions_panel() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setFixedHeight(30);
     auto* hhl = new QHBoxLayout(hdr);
     hhl->setContentsMargins(12, 0, 12, 0);
@@ -576,7 +576,7 @@ QWidget* AlphaArenaScreen::create_past_competitions_panel() {
 }
 
 QWidget* AlphaArenaScreen::create_status_bar() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("aaStatusBar");
     bar->setFixedHeight(26);
 
@@ -623,11 +623,11 @@ void AlphaArenaScreen::on_create_competition() {
         if (row >= 0 && row < model_entries_.size()) {
             const auto& entry = model_entries_[row];
             QJsonObject m;
-            m["name"]         = entry.display_name; // Python reads "name"
-            m["provider"]     = entry.provider;
-            m["model_id"]     = entry.model_id;
-            m["api_key"]      = entry.api_key;
-            m["base_url"]     = entry.base_url;
+            m["name"] = entry.display_name; // Python reads "name"
+            m["provider"] = entry.provider;
+            m["model_id"] = entry.model_id;
+            m["api_key"] = entry.api_key;
+            m["base_url"] = entry.base_url;
             if (!entry.profile_id.isEmpty())
                 m["profile_id"] = entry.profile_id;
             models.append(m);
@@ -639,55 +639,61 @@ void AlphaArenaScreen::on_create_competition() {
 
     // Python reads params fields directly — inline config into params
     QJsonObject params;
-    params["competition_name"]    = comp_name_->text();
-    params["symbols"]             = QJsonArray{comp_symbol_->currentText()};
-    params["mode"]                = comp_mode_->currentText();
-    params["initial_capital"]     = comp_capital_->value();
+    params["competition_name"] = comp_name_->text();
+    params["symbols"] = QJsonArray{comp_symbol_->currentText()};
+    params["mode"] = comp_mode_->currentText();
+    params["initial_capital"] = comp_capital_->value();
     params["cycle_interval_seconds"] = comp_interval_->value();
-    params["models"]              = models;
+    params["models"] = models;
 
     QJsonObject payload;
-    payload["action"]   = "create_competition";
-    payload["params"]   = params;
+    payload["action"] = "create_competition";
+    payload["params"] = params;
     payload["api_keys"] = api_keys;
 
     QString json_arg = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
 
     QPointer<AlphaArenaScreen> self = this;
-    python::PythonRunner::instance().run(
-        "alpha_arena/main.py", {json_arg}, [self](const python::PythonResult& result) {
-            if (!self) return;
-            self->set_loading(false);
-            if (!result.success) {
-                self->status_info_->setText("Error: " + result.error.left(60));
-                LOG_ERROR("AlphaArena", QString("create_competition failed: ") + result.error);
-                return;
-            }
-            QString json_str = python::extract_json(result.output);
-            if (json_str.isEmpty()) { self->status_info_->setText("No response from engine"); return; }
-            QJsonParseError err;
-            auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
-            if (doc.isNull() || !doc.isObject()) { self->status_info_->setText("Invalid response"); return; }
-            auto obj = doc.object();
-            if (!obj.value("success").toBool(false)) {
-                self->status_info_->setText("Error: " + obj.value("error").toString().left(60));
-                return;
-            }
-            // Python returns competition_id at top level
-            self->competition_id_ = obj["competition_id"].toString();
-            self->competition_status_ = "created";
-            self->create_panel_->hide();
-            self->run_btn_->setEnabled(true);
-            self->auto_btn_->setEnabled(true);
-            self->status_badge_->setText("CREATED");
-            self->status_badge_->setStyleSheet(
-                QString("color: %1; background: rgba(22,163,74,0.15); font-size: 8px; font-weight: 700; padding: 2px 6px;")
-                    .arg(colors::POSITIVE));
-            self->status_comp_->setText("COMP: " + self->competition_id_.left(8) + "...");
-            self->status_models_->setText(QString::number(self->model_list_->selectedItems().size()) + " models");
-            self->interval_label_->setText("INTERVAL: " + QString::number(self->comp_interval_->value()) + "s");
-            LOG_INFO("AlphaArena", "Competition created: " + self->competition_id_);
-        });
+    python::PythonRunner::instance().run("alpha_arena/main.py", {json_arg}, [self](const python::PythonResult& result) {
+        if (!self)
+            return;
+        self->set_loading(false);
+        if (!result.success) {
+            self->status_info_->setText("Error: " + result.error.left(60));
+            LOG_ERROR("AlphaArena", QString("create_competition failed: ") + result.error);
+            return;
+        }
+        QString json_str = python::extract_json(result.output);
+        if (json_str.isEmpty()) {
+            self->status_info_->setText("No response from engine");
+            return;
+        }
+        QJsonParseError err;
+        auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
+        if (doc.isNull() || !doc.isObject()) {
+            self->status_info_->setText("Invalid response");
+            return;
+        }
+        auto obj = doc.object();
+        if (!obj.value("success").toBool(false)) {
+            self->status_info_->setText("Error: " + obj.value("error").toString().left(60));
+            return;
+        }
+        // Python returns competition_id at top level
+        self->competition_id_ = obj["competition_id"].toString();
+        self->competition_status_ = "created";
+        self->create_panel_->hide();
+        self->run_btn_->setEnabled(true);
+        self->auto_btn_->setEnabled(true);
+        self->status_badge_->setText("CREATED");
+        self->status_badge_->setStyleSheet(
+            QString("color: %1; background: rgba(22,163,74,0.15); font-size: 8px; font-weight: 700; padding: 2px 6px;")
+                .arg(colors::POSITIVE));
+        self->status_comp_->setText("COMP: " + self->competition_id_.left(8) + "...");
+        self->status_models_->setText(QString::number(self->model_list_->selectedItems().size()) + " models");
+        self->interval_label_->setText("INTERVAL: " + QString::number(self->comp_interval_->value()) + "s");
+        LOG_INFO("AlphaArena", "Competition created: " + self->competition_id_);
+    });
 }
 
 void AlphaArenaScreen::on_run_cycle() {
@@ -1026,11 +1032,11 @@ void AlphaArenaScreen::populate_model_list() {
                 continue;
             ArenaModelEntry entry;
             entry.display_name = p.name + " (" + p.provider + ")";
-            entry.provider     = p.provider;
-            entry.model_id     = p.model_id;
-            entry.api_key      = p.api_key;
-            entry.base_url     = p.base_url;
-            entry.profile_id   = p.id;
+            entry.provider = p.provider;
+            entry.model_id = p.model_id;
+            entry.api_key = p.api_key;
+            entry.base_url = p.base_url;
+            entry.profile_id = p.id;
             model_entries_.append(entry);
             model_list_->addItem(entry.display_name);
         }
@@ -1055,10 +1061,10 @@ void AlphaArenaScreen::populate_model_list() {
 
             ArenaModelEntry entry;
             entry.display_name = c.model + " (" + c.provider + ")";
-            entry.provider     = c.provider;
-            entry.model_id     = c.model;
-            entry.api_key      = c.api_key;
-            entry.base_url     = c.base_url;
+            entry.provider = c.provider;
+            entry.model_id = c.model;
+            entry.api_key = c.api_key;
+            entry.base_url = c.base_url;
             model_entries_.append(entry);
             model_list_->addItem(entry.display_name);
         }
@@ -1081,8 +1087,7 @@ void AlphaArenaScreen::populate_model_list() {
             item->setSelected(true);
     }
 
-    LOG_DEBUG("AlphaArena",
-              QString("Model list populated: %1 entries").arg(model_entries_.size()));
+    LOG_DEBUG("AlphaArena", QString("Model list populated: %1 entries").arg(model_entries_.size()));
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────

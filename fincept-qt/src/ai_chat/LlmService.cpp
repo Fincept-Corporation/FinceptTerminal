@@ -178,8 +178,7 @@ bool LlmService::is_configured() const {
     return true;
 }
 
-ResolvedLlmProfile LlmService::resolve_profile(const QString& context_type,
-                                                const QString& context_id) const {
+ResolvedLlmProfile LlmService::resolve_profile(const QString& context_type, const QString& context_id) const {
     return LlmProfileRepository::instance().resolve_for_context(context_type, context_id);
 }
 
@@ -189,12 +188,12 @@ QJsonObject LlmService::profile_to_json(const ResolvedLlmProfile& p) {
     // profile_id / profile_name are internal metadata — never send them to Python
     // or they land in extra_model_kwargs and fail as unexpected kwargs (e.g. Claude(profile_id=...)).
     QJsonObject obj;
-    obj["provider"]    = p.provider;
-    obj["model_id"]    = p.model_id;
-    obj["api_key"]     = p.api_key;
-    obj["base_url"]    = p.base_url;
+    obj["provider"] = p.provider;
+    obj["model_id"] = p.model_id;
+    obj["api_key"] = p.api_key;
+    obj["base_url"] = p.base_url;
     obj["temperature"] = p.temperature;
-    obj["max_tokens"]  = p.max_tokens;
+    obj["max_tokens"] = p.max_tokens;
     if (!p.system_prompt.isEmpty())
         obj["system_prompt"] = p.system_prompt;
     return obj;
@@ -383,8 +382,7 @@ QJsonObject LlmService::build_gemini_request(const QString& user_message,
                 schema["type"] = "object";
                 schema["properties"] = QJsonObject();
             }
-            fn_decls.append(QJsonObject{
-                {"name", fn_name}, {"description", tool.description}, {"parameters", schema}});
+            fn_decls.append(QJsonObject{{"name", fn_name}, {"description", tool.description}, {"parameters", schema}});
         }
         if (!fn_decls.isEmpty())
             req["tools"] = QJsonArray{QJsonObject{{"functionDeclarations", fn_decls}}};
@@ -431,7 +429,7 @@ LlmService::HttpResult LlmService::blocking_post(const QString& url, const QJson
 // ============================================================================
 
 LlmService::HttpResult LlmService::blocking_get(const QString& url, const QMap<QString, QString>& headers,
-                                                 int timeout_ms) {
+                                                int timeout_ms) {
     return eventloop_request("GET", url, {}, headers, timeout_ms);
 }
 
@@ -445,10 +443,8 @@ LlmService::HttpResult LlmService::blocking_get(const QString& url, const QMap<Q
 // because QNetworkAccessManager needs an event loop to process TLS/SSL
 // negotiation and HTTP redirects. The waitForReadyRead() approach used by
 // blocking_post() works for some servers but fails for Cloudflare-protected ones.
-LlmService::HttpResult LlmService::eventloop_request(const QString& method, const QString& url,
-                                                      const QByteArray& body,
-                                                      const QMap<QString, QString>& headers,
-                                                      int timeout_ms) {
+LlmService::HttpResult LlmService::eventloop_request(const QString& method, const QString& url, const QByteArray& body,
+                                                     const QMap<QString, QString>& headers, int timeout_ms) {
     HttpResult result;
     QNetworkAccessManager nam;
     QNetworkRequest req{QUrl(url)};
@@ -484,9 +480,8 @@ LlmService::HttpResult LlmService::eventloop_request(const QString& method, cons
             if (ej.contains("message") && ej["message"].isString())
                 server_msg = ej["message"].toString();
         }
-        result.error = server_msg.isEmpty()
-            ? QString("HTTP %1: %2").arg(result.status).arg(reply->errorString())
-            : QString("HTTP %1: %2").arg(result.status).arg(server_msg);
+        result.error = server_msg.isEmpty() ? QString("HTTP %1: %2").arg(result.status).arg(reply->errorString())
+                                            : QString("HTTP %1: %2").arg(result.status).arg(server_msg);
     }
     reply->deleteLater();
     return result;
@@ -534,7 +529,7 @@ static QString build_tool_catalog_for_prompt() {
 }
 
 LlmResponse LlmService::fincept_async_request(const QString& user_message,
-                                               const std::vector<ConversationMessage>& history) {
+                                              const std::vector<ConversationMessage>& history) {
     LlmResponse resp;
 
     // Build prompt string for the async endpoint (it takes a plain prompt, not messages)
@@ -635,9 +630,9 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
 
             QJsonObject usage = data_obj["data"].toObject()["usage"].toObject();
             if (!usage.isEmpty()) {
-                resp.prompt_tokens     = usage["input_tokens"].toInt();
+                resp.prompt_tokens = usage["input_tokens"].toInt();
                 resp.completion_tokens = usage["output_tokens"].toInt();
-                resp.total_tokens      = usage["total_tokens"].toInt();
+                resp.total_tokens = usage["total_tokens"].toInt();
             }
 
             // Check for text-based tool calls in the response.
@@ -647,8 +642,8 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
                 // Use the sync /research/chat endpoint for follow-up after tool execution
                 QString followup_url = get_endpoint_url();
                 auto followup_hdr = get_headers();
-                auto tool_result = try_extract_and_execute_text_tool_calls(
-                    resp.content, user_message, followup_url, followup_hdr);
+                auto tool_result =
+                    try_extract_and_execute_text_tool_calls(resp.content, user_message, followup_url, followup_hdr);
                 if (tool_result.has_value()) {
                     LOG_INFO(TAG, "Fincept: text tool calls detected and executed");
                     return tool_result.value();
@@ -829,11 +824,12 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     if (!tr.message.isEmpty())
                         result_content = tr.message;
                     else if (!tr.data.isNull() && !tr.data.isUndefined())
-                        result_content = QString::fromUtf8(
-                            QJsonDocument(tr.data.toObject()).toJson(QJsonDocument::Compact)).left(4000);
+                        result_content =
+                            QString::fromUtf8(QJsonDocument(tr.data.toObject()).toJson(QJsonDocument::Compact))
+                                .left(4000);
                     else
-                        result_content = QString::fromUtf8(
-                            QJsonDocument(tr.to_json()).toJson(QJsonDocument::Compact)).left(4000);
+                        result_content =
+                            QString::fromUtf8(QJsonDocument(tr.to_json()).toJson(QJsonDocument::Compact)).left(4000);
 
                     int sep = fn_name.indexOf("__");
                     QString short_name = (sep >= 0) ? fn_name.mid(sep + 2) : fn_name;
@@ -845,10 +841,11 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     QJsonArray fu_contents;
                     fu_contents.append(QJsonObject{
                         {"role", "user"},
-                        {"parts", QJsonArray{QJsonObject{{"text",
-                            "The user asked: \"" + user_message + "\"\n\n"
-                            "Tool results:\n" + tool_results +
-                            "\n\nPlease provide a clear, concise summary."}}}}});
+                        {"parts", QJsonArray{QJsonObject{
+                                      {"text", "The user asked: \"" + user_message +
+                                                   "\"\n\n"
+                                                   "Tool results:\n" +
+                                                   tool_results + "\n\nPlease provide a clear, concise summary."}}}}});
                     QJsonObject fu_body;
                     fu_body["contents"] = fu_contents;
                     QJsonObject gen_cfg;
@@ -856,8 +853,8 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     gen_cfg["maxOutputTokens"] = max_tokens_;
                     fu_body["generationConfig"] = gen_cfg;
                     if (!system_prompt_.isEmpty())
-                        fu_body["systemInstruction"] = QJsonObject{
-                            {"parts", QJsonArray{QJsonObject{{"text", system_prompt_}}}}};
+                        fu_body["systemInstruction"] =
+                            QJsonObject{{"parts", QJsonArray{QJsonObject{{"text", system_prompt_}}}}};
 
                     auto fu = blocking_post(url, fu_body, hdr);
                     if (fu.success) {
@@ -865,8 +862,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                         if (!fu_doc.isNull()) {
                             QJsonArray fu_cands = fu_doc.object()["candidates"].toArray();
                             if (!fu_cands.isEmpty()) {
-                                QJsonArray fu_parts = fu_cands[0].toObject()["content"]
-                                                          .toObject()["parts"].toArray();
+                                QJsonArray fu_parts = fu_cands[0].toObject()["content"].toObject()["parts"].toArray();
                                 if (!fu_parts.isEmpty())
                                     resp.content = fu_parts[0].toObject()["text"].toString();
                             }
@@ -950,8 +946,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
     // XML or custom markup in the text response. Detect these patterns and
     // execute the tools, then ask the LLM to summarize the results.
     if (!resp.content.isEmpty()) {
-        LOG_INFO(TAG, "Checking response for text-based tool calls, content starts with: "
-                     + resp.content.left(120));
+        LOG_INFO(TAG, "Checking response for text-based tool calls, content starts with: " + resp.content.left(120));
         auto text_tool_result = try_extract_and_execute_text_tool_calls(resp.content, user_message, url, hdr);
         if (text_tool_result.has_value()) {
             resp = text_tool_result.value();
@@ -1044,9 +1039,10 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
 // OpenRouter models) may emit tool invocations as XML/text markup in their
 // response. This method detects common patterns and executes the tools.
 
-std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(
-    const QString& content, const QString& user_message, const QString& url,
-    const QMap<QString, QString>& headers) {
+std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(const QString& content,
+                                                                               const QString& user_message,
+                                                                               const QString& url,
+                                                                               const QMap<QString, QString>& headers) {
 
     // ── Pattern 1: <tool_call>{"name":"...", "arguments":{...}}</tool_call>
     // ── Pattern 2: <invoke name="..." args='{"key":"val"}'>
@@ -1064,9 +1060,9 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(
 
     // --- Pattern 1: XML <tool_call> blocks (without namespace prefix) ---
     {
-        static const QRegularExpression rx(
-            "<tool_call>\\s*(\\{[\\s\\S]*?\\})\\s*</tool_call>",
-            QRegularExpression::MultilineOption | QRegularExpression::DotMatchesEverythingOption);
+        static const QRegularExpression rx("<tool_call>\\s*(\\{[\\s\\S]*?\\})\\s*</tool_call>",
+                                           QRegularExpression::MultilineOption |
+                                               QRegularExpression::DotMatchesEverythingOption);
         auto it = rx.globalMatch(content);
         while (it.hasNext()) {
             auto m = it.next();
@@ -1091,12 +1087,12 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(
     //   <invoke name="tool"><parameter name="key">value</parameter></invoke>
     //   <minimax:tool_call><invoke name="tool"><parameter ...>...</invoke></minimax:tool_call>
     if (calls.empty()) {
-        static const QRegularExpression rx_invoke(
-            "<invoke\\s+name=\"([^\"]+)\"[^>]*>([\\s\\S]*?)</invoke>",
-            QRegularExpression::MultilineOption | QRegularExpression::DotMatchesEverythingOption);
-        static const QRegularExpression rx_param(
-            "<parameter\\s+name=\"([^\"]+)\"[^>]*>([\\s\\S]*?)</parameter>",
-            QRegularExpression::MultilineOption | QRegularExpression::DotMatchesEverythingOption);
+        static const QRegularExpression rx_invoke("<invoke\\s+name=\"([^\"]+)\"[^>]*>([\\s\\S]*?)</invoke>",
+                                                  QRegularExpression::MultilineOption |
+                                                      QRegularExpression::DotMatchesEverythingOption);
+        static const QRegularExpression rx_param("<parameter\\s+name=\"([^\"]+)\"[^>]*>([\\s\\S]*?)</parameter>",
+                                                 QRegularExpression::MultilineOption |
+                                                     QRegularExpression::DotMatchesEverythingOption);
 
         LOG_INFO(TAG, "Pattern 2: invoke regex valid=" + QString(rx_invoke.isValid() ? "yes" : "no"));
         auto dbg_match = rx_invoke.match(content);
@@ -1148,9 +1144,8 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(
     if (calls.empty()) {
         // Match patterns like "minimax:tool_call CONTENT /minimax:tool_call"
         // or "tool_call: CONTENT /tool_call" — generic vendor-prefixed tool calls
-        static const QRegularExpression rx(
-            "(?:\\w+:)?tool_call\\s+([\\s\\S]*?)\\s*/(?:\\w+:)?tool_call",
-            QRegularExpression::MultilineOption);
+        static const QRegularExpression rx("(?:\\w+:)?tool_call\\s+([\\s\\S]*?)\\s*/(?:\\w+:)?tool_call",
+                                           QRegularExpression::MultilineOption);
         auto it = rx.globalMatch(content);
         while (it.hasNext()) {
             auto m = it.next();
@@ -1203,9 +1198,8 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(
 
     // --- Pattern 4: ```tool_call\n...\n``` code blocks ---
     if (calls.empty()) {
-        static const QRegularExpression rx(
-            "```tool_call\\s*\\n([\\s\\S]*?)\\n\\s*```",
-            QRegularExpression::MultilineOption);
+        static const QRegularExpression rx("```tool_call\\s*\\n([\\s\\S]*?)\\n\\s*```",
+                                           QRegularExpression::MultilineOption);
         auto it = rx.globalMatch(content);
         while (it.hasNext()) {
             auto m = it.next();
@@ -1237,11 +1231,10 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(
         if (!tr.message.isEmpty())
             result_content = tr.message;
         else if (!tr.data.isNull() && !tr.data.isUndefined())
-            result_content = QString::fromUtf8(
-                QJsonDocument(tr.data.toObject()).toJson(QJsonDocument::Compact)).left(4000);
+            result_content =
+                QString::fromUtf8(QJsonDocument(tr.data.toObject()).toJson(QJsonDocument::Compact)).left(4000);
         else
-            result_content = QString::fromUtf8(
-                QJsonDocument(tr.to_json()).toJson(QJsonDocument::Compact)).left(4000);
+            result_content = QString::fromUtf8(QJsonDocument(tr.to_json()).toJson(QJsonDocument::Compact)).left(4000);
 
         int sep = tc.name.indexOf("__");
         QString short_name = (sep >= 0) ? tc.name.mid(sep + 2) : tc.name;
@@ -1253,12 +1246,12 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(
 
     // Build follow-up request asking the LLM to summarize the tool results
     LlmResponse resp;
-    QString follow_prompt =
-        "The user asked: \"" + user_message + "\"\n\n"
-        "I executed the requested tool(s) and obtained these results:\n" +
-        tool_results +
-        "\n\nPlease provide a clear, concise summary of this data in natural language. "
-        "Do NOT emit any tool calls or XML markup in your response.";
+    QString follow_prompt = "The user asked: \"" + user_message +
+                            "\"\n\n"
+                            "I executed the requested tool(s) and obtained these results:\n" +
+                            tool_results +
+                            "\n\nPlease provide a clear, concise summary of this data in natural language. "
+                            "Do NOT emit any tool calls or XML markup in your response.";
 
     QJsonObject follow_body;
     if (provider_ == "anthropic") {
@@ -1433,14 +1426,14 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                     // Anthropic native SSE format
                     if (provider_ == "anthropic") {
                         const QString type = obj["type"].toString();
-                        if (type == "content_block_start"
-                            && obj["content_block"].toObject()["type"].toString() == "tool_use") {
+                        if (type == "content_block_start" &&
+                            obj["content_block"].toObject()["type"].toString() == "tool_use") {
                             tool_call_detected = true;
                             loop.quit();
                             return;
                         }
-                        if (type == "message_delta"
-                            && obj["delta"].toObject()["stop_reason"].toString() == "tool_use") {
+                        if (type == "message_delta" &&
+                            obj["delta"].toObject()["stop_reason"].toString() == "tool_use") {
                             tool_call_detected = true;
                             loop.quit();
                             return;
@@ -1468,8 +1461,8 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                     }
 
                     // Fincept may also return tool_calls at top level
-                    if (!obj["tool_calls"].isUndefined() && !obj["tool_calls"].isNull()
-                        && obj["tool_calls"].toArray().size() > 0) {
+                    if (!obj["tool_calls"].isUndefined() && !obj["tool_calls"].isNull() &&
+                        obj["tool_calls"].toArray().size() > 0) {
                         tool_call_detected = true;
                         loop.quit();
                         return;
@@ -1485,10 +1478,9 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                 // Some APIs return tool calls as text XML rather than
                 // structured JSON. Detect early, suppress output, fallback
                 // to non-streaming path which handles tool execution.
-                if (!tool_call_detected
-                    && (accumulated.contains("<tool_call>")
-                        || accumulated.contains("<invoke name=")
-                        || accumulated.contains("tool_call>"))) {
+                if (!tool_call_detected &&
+                    (accumulated.contains("<tool_call>") || accumulated.contains("<invoke name=") ||
+                     accumulated.contains("tool_call>"))) {
                     tool_call_detected = true;
                     LOG_INFO(TAG, "Tool call XML detected in streamed text — falling back to non-streaming");
                     loop.quit();
@@ -1738,7 +1730,8 @@ QStringList LlmService::parse_models_response(const QString& provider, const QBy
 void LlmService::fetch_models(const QString& provider, const QString& api_key, const QString& base_url) {
     // Fincept has no public /models listing endpoint — return known models immediately.
     if (provider.toLower() == "fincept") {
-        emit models_fetched(provider, {"MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed"}, {});
+        emit models_fetched(provider,
+                            {"MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed"}, {});
         return;
     }
 
@@ -1807,7 +1800,7 @@ void LlmService::fetch_models(const QString& provider, const QString& api_key, c
 // ============================================================================
 
 LlmResponse LlmService::chat(const QString& user_message, const std::vector<ConversationMessage>& history,
-                              bool use_tools) {
+                             bool use_tools) {
     QMutexLocker lock(&mutex_);
     ensure_config();
 
@@ -1833,7 +1826,8 @@ LlmResponse LlmService::chat(const QString& user_message, const std::vector<Conv
     max_tokens_ = mx;
 
     // Override tools_enabled_ for this request scope if caller disabled tools
-    if (!use_tools) tools_enabled_ = false;
+    if (!use_tools)
+        tools_enabled_ = false;
 
     auto resp = do_request(user_message, history);
 
@@ -1876,48 +1870,50 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
     // Guard on_chunk: if LlmService is destroyed before a chunk arrives,
     // skip the callback entirely rather than invoking into a dead context.
     StreamCallback guarded_chunk = [self, on_chunk](const QString& chunk, bool done) {
-        if (!self) return;
-        on_chunk(chunk, done);
-    };
-    QtConcurrent::run([self, p, k, b, m, sp, t, mx, user_message, history_copy, guarded_chunk,
-                       use_tools, saved_tools]() {
         if (!self)
             return;
+        on_chunk(chunk, done);
+    };
+    QtConcurrent::run(
+        [self, p, k, b, m, sp, t, mx, user_message, history_copy, guarded_chunk, use_tools, saved_tools]() {
+            if (!self)
+                return;
 
-        // Apply the config snapshot under the mutex so do_request /
-        // do_streaming_request see a consistent state and don't race with
-        // reload_config() on the UI thread.
-        {
-            QMutexLocker lock(&self->mutex_);
-            self->provider_      = p;
-            self->api_key_       = k;
-            self->base_url_      = b;
-            self->model_         = m;
-            self->system_prompt_ = sp;
-            self->temperature_   = t;
-            self->max_tokens_    = mx;
-            // Disable tools for this request if caller requested it
-            if (!use_tools) self->tools_enabled_ = false;
-        }
+            // Apply the config snapshot under the mutex so do_request /
+            // do_streaming_request see a consistent state and don't race with
+            // reload_config() on the UI thread.
+            {
+                QMutexLocker lock(&self->mutex_);
+                self->provider_ = p;
+                self->api_key_ = k;
+                self->base_url_ = b;
+                self->model_ = m;
+                self->system_prompt_ = sp;
+                self->temperature_ = t;
+                self->max_tokens_ = mx;
+                // Disable tools for this request if caller requested it
+                if (!use_tools)
+                    self->tools_enabled_ = false;
+            }
 
-        auto resp = self->do_streaming_request(user_message, history_copy, guarded_chunk);
+            auto resp = self->do_streaming_request(user_message, history_copy, guarded_chunk);
 
-        // Restore tools_enabled_ to saved value
-        {
-            QMutexLocker lock(&self->mutex_);
-            self->tools_enabled_ = saved_tools;
-        }
+            // Restore tools_enabled_ to saved value
+            {
+                QMutexLocker lock(&self->mutex_);
+                self->tools_enabled_ = saved_tools;
+            }
 
-        if (self) {
-            QMetaObject::invokeMethod(
-                self,
-                [self, resp]() {
-                    if (self)
-                        emit self->finished_streaming(resp);
-                },
-                Qt::QueuedConnection);
-        }
-    });
+            if (self) {
+                QMetaObject::invokeMethod(
+                    self,
+                    [self, resp]() {
+                        if (self)
+                            emit self->finished_streaming(resp);
+                    },
+                    Qt::QueuedConnection);
+            }
+        });
 }
 
 } // namespace fincept::ai_chat

@@ -44,7 +44,7 @@ void PolymarketDetailPanel::build_ui() {
     vl->setSpacing(0);
 
     // Tab bar
-    auto* tab_bar = new QWidget;
+    auto* tab_bar = new QWidget(this);
     tab_bar->setFixedHeight(32);
     tab_bar->setStyleSheet(
         QString("background: %1; border-bottom: 1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_DIM));
@@ -95,7 +95,7 @@ QWidget* PolymarketDetailPanel::create_overview_page() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }");
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
@@ -107,7 +107,7 @@ QWidget* PolymarketDetailPanel::create_overview_page() {
     vl->addWidget(question_label_);
 
     // Stats grid
-    auto* stats = new QWidget;
+    auto* stats = new QWidget(this);
     auto* sgl = new QHBoxLayout(stats);
     sgl->setContentsMargins(0, 0, 0, 0);
     sgl->setSpacing(16);
@@ -119,7 +119,7 @@ QWidget* PolymarketDetailPanel::create_overview_page() {
         QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;").arg(colors::CYAN);
 
     auto make_stat = [&](const QString& label, QLabel*& val_lbl) {
-        auto* box = new QWidget;
+        auto* box = new QWidget(this);
         auto* bvl = new QVBoxLayout(box);
         bvl->setContentsMargins(0, 0, 0, 0);
         bvl->setSpacing(1);
@@ -146,7 +146,7 @@ QWidget* PolymarketDetailPanel::create_overview_page() {
     vl->addWidget(stats);
 
     // Outcomes
-    outcome_container_ = new QWidget;
+    outcome_container_ = new QWidget(this);
     auto* ocl = new QVBoxLayout(outcome_container_);
     ocl->setContentsMargins(0, 0, 0, 0);
     ocl->setSpacing(2);
@@ -185,7 +185,7 @@ QWidget* PolymarketDetailPanel::create_comments_page() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }");
-    comments_container_ = new QWidget;
+    comments_container_ = new QWidget(this);
     auto* vl = new QVBoxLayout(comments_container_);
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(4);
@@ -202,7 +202,7 @@ QWidget* PolymarketDetailPanel::create_related_page() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }");
-    related_container_ = new QWidget;
+    related_container_ = new QWidget(this);
     auto* vl = new QVBoxLayout(related_container_);
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(4);
@@ -266,7 +266,7 @@ void PolymarketDetailPanel::set_market(const Market& market) {
 
     for (int i = 0; i < market.outcomes.size(); ++i) {
         const auto& outcome = market.outcomes[i];
-        auto* row = new QWidget;
+        auto* row = new QWidget(this);
         QString color = (i < OUTCOME_COLORS.size()) ? OUTCOME_COLORS[i] : colors::TEXT_SECONDARY;
         row->setStyleSheet(QString("background: %1; border-left: 3px solid %2; padding: 4px 8px; margin: 2px 0;")
                                .arg(colors::BG_RAISED, color));
@@ -352,7 +352,7 @@ void PolymarketDetailPanel::set_comments(const QVector<Comment>& comments) {
         layout->addWidget(empty);
     } else {
         for (const auto& c : comments) {
-            auto* card = new QWidget;
+            auto* card = new QWidget(this);
             card->setStyleSheet(QString("background: %1; padding: 8px; margin: 2px 0; "
                                         "border-left: 2px solid %2;")
                                     .arg(colors::BG_RAISED, colors::BORDER_MED));

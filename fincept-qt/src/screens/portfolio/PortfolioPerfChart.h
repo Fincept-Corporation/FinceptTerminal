@@ -27,10 +27,10 @@ class CrosshairChartView : public QChartView {
     void update_crosshair(const QPoint& widget_pos);
     void hide_crosshair();
 
-    QVector<QPointF>      pts_;
-    QString               currency_;
-    QGraphicsLineItem*    v_line_   = nullptr;
-    QLabel*               tooltip_  = nullptr;
+    QVector<QPointF> pts_;
+    QString currency_;
+    QGraphicsLineItem* v_line_ = nullptr;
+    QLabel* tooltip_ = nullptr;
 };
 
 /// NAV performance chart with period selector and info bar.
@@ -74,7 +74,7 @@ class PortfolioPerfChart : public QWidget {
     QString currency_ = "USD";
 
     // SPY benchmark history (real prices)
-    QStringList     spy_dates_;
+    QStringList spy_dates_;
     QVector<double> spy_closes_;
 };
 

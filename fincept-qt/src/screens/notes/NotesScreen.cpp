@@ -10,12 +10,12 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFrame>
-#include <QRegularExpression>
-#include <QTextStream>
 #include <QHBoxLayout>
 #include <QMessageBox>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QSplitter>
+#include <QTextStream>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -26,72 +26,66 @@ using namespace fincept::ui::colors;
 
 // §5.2 — List items: 26px row, alternating bg, hairline borders
 static QString kListItem() {
-    return QString(
-        "QListWidget { background: %1; border: none; font-family: 'Consolas','Courier New',monospace; font-size: 12px; }"
-        "QListWidget::item { padding: 6px 12px; color: %3; border-bottom: 1px solid %2; height: 26px; }"
-        "QListWidget::item:selected { background: %4; color: %3; }"
-        "QListWidget::item:hover { background: %4; }")
+    return QString("QListWidget { background: %1; border: none; font-family: 'Consolas','Courier New',monospace; "
+                   "font-size: 12px; }"
+                   "QListWidget::item { padding: 6px 12px; color: %3; border-bottom: 1px solid %2; height: 26px; }"
+                   "QListWidget::item:selected { background: %4; color: %3; }"
+                   "QListWidget::item:hover { background: %4; }")
         .arg(BG_SURFACE(), BORDER_DIM(), TEXT_PRIMARY(), BG_HOVER());
 }
 
 // §5.6 — Input fields
 static QString kInput() {
-    return QString(
-        "QLineEdit { background: %1; color: %2; border: 1px solid %3; "
-        "padding: 3px 6px; font-size: 13px; font-family: 'Consolas','Courier New',monospace; height: 28px; }"
-        "QLineEdit:focus { border-color: %4; }"
-        "QLineEdit::selection { background: %5; color: %6; }")
+    return QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
+                   "padding: 3px 6px; font-size: 13px; font-family: 'Consolas','Courier New',monospace; height: 28px; }"
+                   "QLineEdit:focus { border-color: %4; }"
+                   "QLineEdit::selection { background: %5; color: %6; }")
         .arg(BG_BASE(), TEXT_PRIMARY(), BORDER_DIM(), BORDER_BRIGHT(), AMBER(), BG_BASE());
 }
 
 // §5.6 — Combo: same input style
 static QString kCombo() {
-    return QString(
-        "QComboBox { background: %1; color: %2; border: 1px solid %3; "
-        "padding: 3px 6px; font-size: 12px; font-family: 'Consolas','Courier New',monospace; }"
-        "QComboBox:focus { border-color: %4; }"
-        "QComboBox QAbstractItemView { background: %1; color: %2; "
-        "selection-background-color: %3; border: 1px solid %3; }")
+    return QString("QComboBox { background: %1; color: %2; border: 1px solid %3; "
+                   "padding: 3px 6px; font-size: 12px; font-family: 'Consolas','Courier New',monospace; }"
+                   "QComboBox:focus { border-color: %4; }"
+                   "QComboBox QAbstractItemView { background: %1; color: %2; "
+                   "selection-background-color: %3; border: 1px solid %3; }")
         .arg(BG_BASE(), TEXT_PRIMARY(), BORDER_DIM(), BORDER_BRIGHT());
 }
 
 // §5.6 — Text editor: same as input
 static QString kTextEdit() {
-    return QString(
-        "QTextEdit { background: %1; color: %2; border: 1px solid %3; "
-        "padding: 6px; font-size: 14px; font-family: 'Consolas','Courier New',monospace; }"
-        "QTextEdit:focus { border-color: %4; }"
-        "QTextEdit::selection { background: %5; color: %6; }")
+    return QString("QTextEdit { background: %1; color: %2; border: 1px solid %3; "
+                   "padding: 6px; font-size: 14px; font-family: 'Consolas','Courier New',monospace; }"
+                   "QTextEdit:focus { border-color: %4; }"
+                   "QTextEdit::selection { background: %5; color: %6; }")
         .arg(BG_BASE(), TEXT_PRIMARY(), BORDER_DIM(), BORDER_BRIGHT(), AMBER(), BG_BASE());
 }
 
 // §5.5 — Accent button (amber): rgba bg + amber text + amber_dim border
 static QString kActionBtn() {
-    return QString(
-        "QPushButton { background: rgba(217,119,6,0.1); color: %1; "
-        "border: 1px solid %2; padding: 0 12px; height: 24px; "
-        "font-size: 12px; font-weight: 700; font-family: 'Consolas','Courier New',monospace; }"
-        "QPushButton:hover { background: %1; color: %3; }")
+    return QString("QPushButton { background: rgba(217,119,6,0.1); color: %1; "
+                   "border: 1px solid %2; padding: 0 12px; height: 24px; "
+                   "font-size: 12px; font-weight: 700; font-family: 'Consolas','Courier New',monospace; }"
+                   "QPushButton:hover { background: %1; color: %3; }")
         .arg(AMBER(), AMBER_DIM(), BG_BASE());
 }
 
 // §5.5 — Standard button
 static QString kSecondaryBtn() {
-    return QString(
-        "QPushButton { background: %1; color: %2; border: 1px solid %3; "
-        "padding: 0 10px; height: 24px; "
-        "font-size: 11px; font-weight: 700; font-family: 'Consolas','Courier New',monospace; }"
-        "QPushButton:hover { color: %4; background: %5; }")
+    return QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
+                   "padding: 0 10px; height: 24px; "
+                   "font-size: 11px; font-weight: 700; font-family: 'Consolas','Courier New',monospace; }"
+                   "QPushButton:hover { color: %4; background: %5; }")
         .arg(BG_RAISED(), TEXT_SECONDARY(), BORDER_DIM(), TEXT_PRIMARY(), BG_HOVER());
 }
 
 // §5.5 — Danger button (red): rgba bg + red text + dark red border
 static QString kDangerBtn() {
-    return QString(
-        "QPushButton { background: rgba(220,38,38,0.1); color: %1; "
-        "border: 1px solid #7f1d1d; padding: 0 10px; height: 24px; "
-        "font-size: 11px; font-weight: 700; font-family: 'Consolas','Courier New',monospace; }"
-        "QPushButton:hover { background: %1; color: %2; }")
+    return QString("QPushButton { background: rgba(220,38,38,0.1); color: %1; "
+                   "border: 1px solid #7f1d1d; padding: 0 10px; height: 24px; "
+                   "font-size: 11px; font-weight: 700; font-family: 'Consolas','Courier New',monospace; }"
+                   "QPushButton:hover { background: %1; color: %2; }")
         .arg(NEGATIVE(), TEXT_PRIMARY());
 }
 
@@ -155,7 +149,7 @@ void NotesScreen::build_ui() {
 // ── Category Sidebar ─────────────────────────────────────────────────────────
 
 QWidget* NotesScreen::build_category_sidebar() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setFixedWidth(200);
     panel->setStyleSheet(QString("background: %1; border-right: 1px solid %2;").arg(BG_SURFACE, BORDER_DIM));
 
@@ -197,7 +191,7 @@ QWidget* NotesScreen::build_category_sidebar() {
 // ── Notes List Panel ─────────────────────────────────────────────────────────
 
 QWidget* NotesScreen::build_notes_list_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setMinimumWidth(280);
     panel->setStyleSheet(QString("background: %1;").arg(BG_SURFACE));
 
@@ -206,7 +200,7 @@ QWidget* NotesScreen::build_notes_list_panel() {
     lay->setSpacing(0);
 
     // Header with search + new button
-    auto* toolbar = new QWidget;
+    auto* toolbar = new QWidget(this);
     toolbar->setFixedHeight(34);
     toolbar->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;").arg(BG_RAISED, BORDER_DIM));
     auto* tl = new QHBoxLayout(toolbar);
@@ -252,7 +246,7 @@ QWidget* NotesScreen::build_editor_panel() {
     right_stack_ = new QStackedWidget;
 
     // ── Page 0: Empty state ──────────────────────────────────────────────────
-    auto* empty = new QWidget;
+    auto* empty = new QWidget(this);
     empty->setStyleSheet(QString("background: %1;").arg(BG_BASE));
     auto* el = new QVBoxLayout(empty);
     el->setAlignment(Qt::AlignCenter);
@@ -263,7 +257,7 @@ QWidget* NotesScreen::build_editor_panel() {
     right_stack_->addWidget(empty); // index 0
 
     // ── Page 1: View mode ────────────────────────────────────────────────────
-    auto* view_page = new QWidget;
+    auto* view_page = new QWidget(this);
     view_page->setStyleSheet(QString("background: %1;").arg(BG_BASE));
     auto* vl = new QVBoxLayout(view_page);
     vl->setContentsMargins(14, 14, 14, 14);
@@ -329,7 +323,7 @@ QWidget* NotesScreen::build_editor_panel() {
     right_stack_->addWidget(view_page); // index 1
 
     // ── Page 2: Edit mode ────────────────────────────────────────────────────
-    auto* edit_page = new QWidget;
+    auto* edit_page = new QWidget(this);
     edit_page->setStyleSheet(QString("background: %1;").arg(BG_BASE));
     auto* edl = new QVBoxLayout(edit_page);
     edl->setContentsMargins(14, 14, 14, 14);
@@ -618,7 +612,7 @@ void NotesScreen::on_search_changed(const QString& /*text*/) {
 }
 
 void NotesScreen::on_export_note() {
-    QString title   = edit_title_->text().trimmed();
+    QString title = edit_title_->text().trimmed();
     QString content = edit_content_->toPlainText();
     if (title.isEmpty()) {
         edit_title_->setFocus();
@@ -650,8 +644,7 @@ void NotesScreen::on_export_note() {
     f.close();
 
     QFileInfo info(dest);
-    svc.register_file(stored_name, title + ".md", info.size(),
-                      "text/markdown", "notes");
+    svc.register_file(stored_name, title + ".md", info.size(), "text/markdown", "notes");
 
     LOG_INFO("Notes", "Exported note to File Manager: " + stored_name);
 }
@@ -714,14 +707,14 @@ void NotesScreen::enter_view_mode() {
 
 QVariantMap NotesScreen::save_state() const {
     return {
-        {"category",     current_category_},
-        {"note_id",      selected_note_id_},
+        {"category", current_category_},
+        {"note_id", selected_note_id_},
     };
 }
 
 void NotesScreen::restore_state(const QVariantMap& state) {
-    const QString cat     = state.value("category", "ALL").toString();
-    const int     note_id = state.value("note_id", -1).toInt();
+    const QString cat = state.value("category", "ALL").toString();
+    const int note_id = state.value("note_id", -1).toInt();
 
     // Select the matching category row
     for (int i = 0; i < kCategories.size(); ++i) {

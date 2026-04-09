@@ -223,12 +223,11 @@ void DBnomicsScreen::build_ui() {
     auto* single_splitter = new QSplitter(Qt::Vertical, single_page);
     single_splitter->setHandleWidth(5);
     single_splitter->setChildrenCollapsible(false);
-    single_splitter->setStyleSheet(
-        QString("QSplitter::handle:vertical {"
-                "  background: %1; height: 5px;"
-                "  border-top: 1px solid %2; border-bottom: 1px solid %2; }"
-                "QSplitter::handle:vertical:hover { background: %3; }")
-            .arg(ui::colors::BORDER_DIM, ui::colors::BORDER_MED, ui::colors::AMBER));
+    single_splitter->setStyleSheet(QString("QSplitter::handle:vertical {"
+                                           "  background: %1; height: 5px;"
+                                           "  border-top: 1px solid %2; border-bottom: 1px solid %2; }"
+                                           "QSplitter::handle:vertical:hover { background: %3; }")
+                                       .arg(ui::colors::BORDER_DIM, ui::colors::BORDER_MED, ui::colors::AMBER));
 
     chart_widget_ = new DBnomicsChartWidget(single_splitter);
     data_table_ = new DBnomicsDataTable(single_splitter);
@@ -818,10 +817,9 @@ void DBnomicsScreen::rebuild_comparison_view() {
         auto* card_splitter = new QSplitter(Qt::Vertical, card);
         card_splitter->setHandleWidth(4);
         card_splitter->setChildrenCollapsible(false);
-        card_splitter->setStyleSheet(
-            QString("QSplitter::handle:vertical { background:%1; height:4px; }"
-                    "QSplitter::handle:vertical:hover { background:%2; }")
-                .arg(ui::colors::BORDER_DIM, ui::colors::AMBER));
+        card_splitter->setStyleSheet(QString("QSplitter::handle:vertical { background:%1; height:4px; }"
+                                             "QSplitter::handle:vertical:hover { background:%2; }")
+                                         .arg(ui::colors::BORDER_DIM, ui::colors::AMBER));
 
         auto* chart = new DBnomicsChartWidget(card_splitter);
         chart->set_compact(true); // tighter margins + no legend for grid slots
@@ -883,17 +881,17 @@ void DBnomicsScreen::rebuild_comparison_view() {
 QVariantMap DBnomicsScreen::save_state() const {
     return {
         {"provider", selection_panel_->selected_provider()},
-        {"dataset",  selection_panel_->selected_dataset()},
-        {"series",   selection_panel_->selected_series()},
+        {"dataset", selection_panel_->selected_dataset()},
+        {"series", selection_panel_->selected_series()},
         {"view_mode", static_cast<int>(view_mode_)},
     };
 }
 
 void DBnomicsScreen::restore_state(const QVariantMap& state) {
     const QString prov = state.value("provider").toString();
-    const QString ds   = state.value("dataset").toString();
-    const QString ser  = state.value("series").toString();
-    const int mode     = state.value("view_mode", 0).toInt();
+    const QString ds = state.value("dataset").toString();
+    const QString ser = state.value("series").toString();
+    const int mode = state.value("view_mode", 0).toInt();
 
     if (mode == 1) {
         view_mode_ = services::DbnViewMode::Comparison;

@@ -1,17 +1,29 @@
 #pragma once
-#include "app/ScreenRouter.h"
 #include "ai_chat/AiChatBubble.h"
+#include "app/ScreenRouter.h"
 
 #include <QMainWindow>
 #include <QShortcut>
 #include <QStackedWidget>
 #include <QTimer>
 
-namespace ads { class CDockManager; }
-namespace fincept { class DockScreenRouter; }
-namespace fincept::ui { class DockToolBar; class DockStatusBar; class TabBar; }
-namespace fincept::chat_mode { class ChatModeScreen; }
-namespace fincept::screens { class LockScreen; }
+namespace ads {
+class CDockManager;
+}
+namespace fincept {
+class DockScreenRouter;
+}
+namespace fincept::ui {
+class DockToolBar;
+class DockStatusBar;
+class TabBar;
+} // namespace fincept::ui
+namespace fincept::chat_mode {
+class ChatModeScreen;
+}
+namespace fincept::screens {
+class LockScreen;
+}
 
 namespace fincept {
 
@@ -25,7 +37,10 @@ class MainWindow : public QMainWindow {
     int window_id() const { return window_id_; }
 
     /// Returns the next unique window ID (thread-safe via Qt UI thread only).
-    static int next_window_id() { static int s_id = 1; return s_id++; }
+    static int next_window_id() {
+        static int s_id = 1;
+        return s_id++;
+    }
 
   protected:
     void closeEvent(QCloseEvent* event) override;
@@ -38,17 +53,17 @@ class MainWindow : public QMainWindow {
     int window_id_ = 0;
 
     // ADS dock system
-    ads::CDockManager*      dock_manager_     = nullptr;
-    DockScreenRouter*       dock_router_      = nullptr;
-    ui::DockToolBar*        dock_toolbar_     = nullptr;
-    ui::DockStatusBar*      dock_status_bar_  = nullptr;
-    ui::TabBar*             tab_bar_          = nullptr;
+    ads::CDockManager* dock_manager_ = nullptr;
+    DockScreenRouter* dock_router_ = nullptr;
+    ui::DockToolBar* dock_toolbar_ = nullptr;
+    ui::DockStatusBar* dock_status_bar_ = nullptr;
+    ui::TabBar* tab_bar_ = nullptr;
 
     // View state
-    bool focus_mode_  = false;
-    bool chat_mode_   = false;
+    bool focus_mode_ = false;
+    bool chat_mode_ = false;
     bool always_on_top_ = false;
-    AiChatBubble* chat_bubble_  = nullptr;
+    AiChatBubble* chat_bubble_ = nullptr;
     QTimer* user_refresh_timer_ = nullptr;
 
     // Chat mode

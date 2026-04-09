@@ -6,14 +6,13 @@
 #include <QAreaSeries>
 #include <QChart>
 #include <QDateTimeAxis>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLineSeries>
 #include <QMouseEvent>
+#include <QScreen>
 #include <QVBoxLayout>
 #include <QValueAxis>
-
-#include <QGuiApplication>
-#include <QScreen>
 
 #include <cmath>
 #include <limits>
@@ -26,8 +25,7 @@ namespace fincept::screens {
 
 // ── CrosshairChartView ────────────────────────────────────────────────────────
 
-CrosshairChartView::CrosshairChartView(QChart* chart, QWidget* parent)
-    : QChartView(chart, parent) {
+CrosshairChartView::CrosshairChartView(QChart* chart, QWidget* parent) : QChartView(chart, parent) {
     setMouseTracking(true);
 
     // Vertical crosshair line (hidden by default)
@@ -40,15 +38,14 @@ CrosshairChartView::CrosshairChartView(QChart* chart, QWidget* parent)
     // Floating tooltip label (child of this widget, not the scene)
     tooltip_ = new QLabel(this);
     tooltip_->setWindowFlags(Qt::ToolTip);
-    tooltip_->setStyleSheet(
-        QString("QLabel { background:%1; color:%2; border:1px solid %3;"
-                " font-size:10px; font-weight:600; padding:3px 6px; border-radius:3px; }")
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED));
+    tooltip_->setStyleSheet(QString("QLabel { background:%1; color:%2; border:1px solid %3;"
+                                    " font-size:10px; font-weight:600; padding:3px 6px; border-radius:3px; }")
+                                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED));
     tooltip_->hide();
 }
 
 void CrosshairChartView::set_series_data(const QVector<QPointF>& pts, const QString& currency) {
-    pts_      = pts;
+    pts_ = pts;
     currency_ = currency;
 }
 
@@ -72,13 +69,13 @@ void CrosshairChartView::update_crosshair(const QPoint& widget_pos) {
     const QPointF chart_val = chart()->mapToValue(QPointF(widget_pos));
 
     // Snap to nearest point by x (ms timestamp)
-    int    best_idx  = 0;
+    int best_idx = 0;
     double best_dist = std::numeric_limits<double>::max();
     for (int i = 0; i < pts_.size(); ++i) {
         const double dist = std::abs(pts_[i].x() - chart_val.x());
         if (dist < best_dist) {
             best_dist = dist;
-            best_idx  = i;
+            best_idx = i;
         }
     }
 
@@ -93,15 +90,15 @@ void CrosshairChartView::update_crosshair(const QPoint& widget_pos) {
     v_line_->setVisible(true);
 
     // Format tooltip text
-    const QDateTime dt       = QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(snap_pt.x()));
-    const QString   date_str = dt.toString("dd MMM yyyy");
-    const QString   val_str  = QString("%1 %2").arg(currency_, QString::number(snap_pt.y(), 'f', 2));
+    const QDateTime dt = QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(snap_pt.x()));
+    const QString date_str = dt.toString("dd MMM yyyy");
+    const QString val_str = QString("%1 %2").arg(currency_, QString::number(snap_pt.y(), 'f', 2));
     tooltip_->setText(date_str + "\n" + val_str);
     tooltip_->adjustSize();
 
     // Position tooltip: above-right of cursor, clamped to screen bounds
     QPoint global_pos = mapToGlobal(widget_pos) + QPoint(12, -tooltip_->height() - 4);
-    const QRect scr   = QGuiApplication::primaryScreen()->geometry();
+    const QRect scr = QGuiApplication::primaryScreen()->geometry();
     if (global_pos.x() + tooltip_->width() > scr.right())
         global_pos.rx() -= tooltip_->width() + 24;
     if (global_pos.y() < scr.top())
@@ -241,7 +238,7 @@ void PortfolioPerfChart::set_currency(const QString& currency) {
 }
 
 void PortfolioPerfChart::set_spy_history(const QStringList& dates, const QVector<double>& closes) {
-    spy_dates_  = dates;
+    spy_dates_ = dates;
     spy_closes_ = closes;
     if (show_benchmark_)
         update_chart(); // refresh only if overlay is visible
@@ -278,13 +275,20 @@ void PortfolioPerfChart::update_chart() {
 
     // ── Determine cutoff date from selected period ────────────────────────────
     QDate cutoff = QDate::currentDate();
-    if (current_period_ == "1D")       cutoff = cutoff.addDays(-1);
-    else if (current_period_ == "1W")  cutoff = cutoff.addDays(-7);
-    else if (current_period_ == "1M")  cutoff = cutoff.addMonths(-1);
-    else if (current_period_ == "3M")  cutoff = cutoff.addMonths(-3);
-    else if (current_period_ == "YTD") cutoff = QDate(QDate::currentDate().year(), 1, 1);
-    else if (current_period_ == "1Y")  cutoff = cutoff.addYears(-1);
-    else                               cutoff = cutoff.addYears(-10); // ALL
+    if (current_period_ == "1D")
+        cutoff = cutoff.addDays(-1);
+    else if (current_period_ == "1W")
+        cutoff = cutoff.addDays(-7);
+    else if (current_period_ == "1M")
+        cutoff = cutoff.addMonths(-1);
+    else if (current_period_ == "3M")
+        cutoff = cutoff.addMonths(-3);
+    else if (current_period_ == "YTD")
+        cutoff = QDate(QDate::currentDate().year(), 1, 1);
+    else if (current_period_ == "1Y")
+        cutoff = cutoff.addYears(-1);
+    else
+        cutoff = cutoff.addYears(-10); // ALL
 
     // ── Filter snapshots by period ────────────────────────────────────────────
     QVector<portfolio::PortfolioSnapshot> filtered;
@@ -295,19 +299,18 @@ void PortfolioPerfChart::update_chart() {
     }
 
     // Sort ascending by date
-    std::sort(filtered.begin(), filtered.end(), [](const auto& a, const auto& b) {
-        return a.snapshot_date < b.snapshot_date;
-    });
+    std::sort(filtered.begin(), filtered.end(),
+              [](const auto& a, const auto& b) { return a.snapshot_date < b.snapshot_date; });
 
     // ── Build chart series ────────────────────────────────────────────────────
-    auto* line       = new QLineSeries;
+    auto* line = new QLineSeries;
     auto* area_upper = new QLineSeries;
     auto* area_lower = new QLineSeries;
 
     double first_val = 0;
-    double last_val  = summary_.total_market_value;
-    double min_val   = last_val;
-    double max_val   = last_val;
+    double last_val = summary_.total_market_value;
+    double min_val = last_val;
+    double max_val = last_val;
 
     if (filtered.size() >= 2) {
         // Real snapshot data
@@ -336,25 +339,24 @@ void PortfolioPerfChart::update_chart() {
         const double cost = summary_.total_cost_basis > 0 ? summary_.total_cost_basis : last_val;
         first_val = cost;
         const qint64 start_ms = QDateTime::currentDateTime().addDays(-1).toMSecsSinceEpoch();
-        const qint64 now_ms   = QDateTime::currentDateTime().toMSecsSinceEpoch();
+        const qint64 now_ms = QDateTime::currentDateTime().toMSecsSinceEpoch();
         line->append(start_ms, cost);
-        line->append(now_ms,   last_val);
+        line->append(now_ms, last_val);
         area_upper->append(start_ms, cost);
-        area_upper->append(now_ms,   last_val);
+        area_upper->append(now_ms, last_val);
         area_lower->append(start_ms, cost);
-        area_lower->append(now_ms,   cost);
+        area_lower->append(now_ms, cost);
         min_val = std::min(cost, last_val);
         max_val = std::max(cost, last_val);
 
         // Overlay a note inside the chart area
-        period_change_label_->setText(
-            QString("%1  — (no history yet, showing NAV only)").arg(current_period_));
+        period_change_label_->setText(QString("%1  — (no history yet, showing NAV only)").arg(current_period_));
         period_change_label_->setStyleSheet(
             QString("color:%1; font-size:11px; font-weight:500;").arg(ui::colors::TEXT_TERTIARY));
     }
 
     // ── Period P&L from the series endpoints ─────────────────────────────────
-    double period_pnl     = last_val - first_val;
+    double period_pnl = last_val - first_val;
     double period_pnl_pct = (first_val > 0) ? (period_pnl / first_val) * 100.0 : 0;
 
     QColor lc = period_pnl >= 0 ? QColor(ui::colors::POSITIVE()) : QColor(ui::colors::NEGATIVE());
@@ -413,21 +415,24 @@ void PortfolioPerfChart::update_chart() {
     if (show_benchmark_ && line->count() >= 2) {
         if (spy_dates_.isEmpty() || spy_closes_.isEmpty()) {
             // Real data not yet available — show a note; do NOT draw fake curve
-            nav_label_->setText(
-                nav_label_->text() + QString("  |  SPY: loading…"));
+            nav_label_->setText(nav_label_->text() + QString("  |  SPY: loading…"));
         } else {
             // Filter SPY history to the same date window as the portfolio line
             const QPointF& p0 = line->at(0);
             const QPointF& pN = line->at(line->count() - 1);
             const QDate start_date = QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(p0.x())).date();
-            const QDate end_date   = QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(pN.x())).date();
+            const QDate end_date = QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(pN.x())).date();
 
             // Find first SPY close on or after start_date to use as base
             double spy_base = 0.0;
-            int    base_idx = -1;
+            int base_idx = -1;
             for (int i = 0; i < spy_dates_.size(); ++i) {
                 const QDate d = QDate::fromString(spy_dates_[i], Qt::ISODate);
-                if (d >= start_date) { spy_base = spy_closes_[i]; base_idx = i; break; }
+                if (d >= start_date) {
+                    spy_base = spy_closes_[i];
+                    base_idx = i;
+                    break;
+                }
             }
 
             if (base_idx >= 0 && spy_base > 1e-6) {
@@ -436,8 +441,9 @@ void PortfolioPerfChart::update_chart() {
 
                 for (int i = base_idx; i < spy_dates_.size(); ++i) {
                     const QDate d = QDate::fromString(spy_dates_[i], Qt::ISODate);
-                    if (d > end_date) break;
-                    const qint64 ms  = QDateTime(d, QTime(), Qt::UTC).toMSecsSinceEpoch();
+                    if (d > end_date)
+                        break;
+                    const qint64 ms = QDateTime(d, QTime(), Qt::UTC).toMSecsSinceEpoch();
                     const double val = first_val * (spy_closes_[i] / spy_base);
                     spy_line->append(ms, val);
                     spy_min = std::min(spy_min, val);
@@ -467,25 +473,19 @@ void PortfolioPerfChart::update_chart() {
     // ── Info labels ───────────────────────────────────────────────────────────
     const char* pnl_color = period_pnl_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
 
-    period_change_label_->setText(
-        QString("%1  %2%3%")
-            .arg(current_period_)
-            .arg(period_pnl_pct >= 0 ? "+" : "")
-            .arg(QString::number(period_pnl_pct, 'f', 2)));
-    period_change_label_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:600;").arg(pnl_color));
+    period_change_label_->setText(QString("%1  %2%3%")
+                                      .arg(current_period_)
+                                      .arg(period_pnl_pct >= 0 ? "+" : "")
+                                      .arg(QString::number(period_pnl_pct, 'f', 2)));
+    period_change_label_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(pnl_color));
 
     double total_pnl_pct = summary_.total_unrealized_pnl_percent;
     const char* total_color = total_pnl_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
     total_return_label_->setText(
-        QString("TOTAL  %1%2%")
-            .arg(total_pnl_pct >= 0 ? "+" : "")
-            .arg(QString::number(total_pnl_pct, 'f', 2)));
-    total_return_label_->setStyleSheet(
-        QString("color:%1; font-size:14px; font-weight:700;").arg(total_color));
+        QString("TOTAL  %1%2%").arg(total_pnl_pct >= 0 ? "+" : "").arg(QString::number(total_pnl_pct, 'f', 2)));
+    total_return_label_->setStyleSheet(QString("color:%1; font-size:14px; font-weight:700;").arg(total_color));
 
-    nav_label_->setText(
-        QString("NAV %1 %2").arg(currency_).arg(QString::number(last_val, 'f', 2)));
+    nav_label_->setText(QString("NAV %1 %2").arg(currency_).arg(QString::number(last_val, 'f', 2)));
 }
 
 void PortfolioPerfChart::refresh_theme() {
@@ -495,7 +495,9 @@ void PortfolioPerfChart::refresh_theme() {
     // Re-style period buttons
     for (auto* btn : period_btns_) {
         btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid transparent;"
-                                   "  font-size:" + bsz + "px; font-weight:700; border-radius:2px; }"
+                                   "  font-size:" +
+                                   bsz +
+                                   "px; font-weight:700; border-radius:2px; }"
                                    "QPushButton:checked { color:%4; background:%2;"
                                    "  border:1px solid %2; }"
                                    "QPushButton:hover:!checked { color:%3; border-color:%5; }")
@@ -505,7 +507,9 @@ void PortfolioPerfChart::refresh_theme() {
     if (benchmark_btn_) {
         benchmark_btn_->setStyleSheet(
             QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
-                    "  font-size:" + bsz + "px; font-weight:700; border-radius:2px; }"
+                    "  font-size:" +
+                    bsz +
+                    "px; font-weight:700; border-radius:2px; }"
                     "QPushButton:checked { color:%4; background:%2; border:1px solid %2; }"
                     "QPushButton:hover:!checked { color:%3; border-color:%3; }")
                 .arg(ui::colors::CYAN, ui::colors::CYAN, ui::colors::TEXT_PRIMARY, ui::colors::BG_BASE));

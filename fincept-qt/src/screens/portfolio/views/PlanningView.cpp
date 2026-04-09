@@ -39,13 +39,13 @@ void PlanningView::build_ui() {
 }
 
 QWidget* PlanningView::build_retirement_tab() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* layout = new QHBoxLayout(w);
     layout->setContentsMargins(16, 12, 16, 12);
     layout->setSpacing(24);
 
     // Left: inputs
-    auto* input_panel = new QWidget;
+    auto* input_panel = new QWidget(this);
     input_panel->setFixedWidth(320);
     input_panel->setStyleSheet(
         QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
@@ -157,7 +157,7 @@ QWidget* PlanningView::build_retirement_tab() {
     layout->addWidget(input_panel);
 
     // Right: results
-    auto* results = new QWidget;
+    auto* results = new QWidget(this);
     auto* res_layout = new QVBoxLayout(results);
     res_layout->setContentsMargins(0, 0, 0, 0);
     res_layout->setSpacing(12);
@@ -171,7 +171,7 @@ QWidget* PlanningView::build_retirement_tab() {
     grid->setSpacing(8);
 
     auto add_card = [&](int r, int c, const QString& label, QLabel*& val_label, const char* color) {
-        auto* card = new QWidget;
+        auto* card = new QWidget(this);
         card->setStyleSheet(
             QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
         auto* cl = new QVBoxLayout(card);
@@ -209,7 +209,7 @@ QWidget* PlanningView::build_retirement_tab() {
 }
 
 QWidget* PlanningView::build_goals_tab() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* layout = new QVBoxLayout(w);
     layout->setContentsMargins(16, 12, 16, 12);
     layout->setAlignment(Qt::AlignCenter);
@@ -231,7 +231,7 @@ QWidget* PlanningView::build_goals_tab() {
 }
 
 QWidget* PlanningView::build_savings_tab() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* layout = new QVBoxLayout(w);
     layout->setContentsMargins(16, 12, 16, 12);
     layout->setAlignment(Qt::AlignCenter);

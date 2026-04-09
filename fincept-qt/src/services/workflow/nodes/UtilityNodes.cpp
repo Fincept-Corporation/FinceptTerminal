@@ -67,23 +67,30 @@ void register_utility_nodes(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                if (inputs.isEmpty()) { cb(true, QJsonArray{}, {}); return; }
+                if (inputs.isEmpty()) {
+                    cb(true, QJsonArray{}, {});
+                    return;
+                }
 
-                QString field    = params.value("field").toString();
-                QString op       = params.value("operator").toString("equals");
-                QString value    = params.value("value").toString();
+                QString field = params.value("field").toString();
+                QString op = params.value("operator").toString("equals");
+                QString value = params.value("value").toString();
 
                 auto matches = [&](const QJsonValue& item) -> bool {
                     QJsonValue field_val = item.isObject() ? item.toObject().value(field) : QJsonValue{};
-                    QString field_str = field_val.isString()
-                        ? field_val.toString()
-                        : QString::number(field_val.toDouble());
+                    QString field_str =
+                        field_val.isString() ? field_val.toString() : QString::number(field_val.toDouble());
 
-                    if (op == "equals")       return field_str == value;
-                    if (op == "not_equals")   return field_str != value;
-                    if (op == "contains")     return field_str.contains(value, Qt::CaseInsensitive);
-                    if (op == "greater_than") return field_val.toDouble() > value.toDouble();
-                    if (op == "less_than")    return field_val.toDouble() < value.toDouble();
+                    if (op == "equals")
+                        return field_str == value;
+                    if (op == "not_equals")
+                        return field_str != value;
+                    if (op == "contains")
+                        return field_str.contains(value, Qt::CaseInsensitive);
+                    if (op == "greater_than")
+                        return field_val.toDouble() > value.toDouble();
+                    if (op == "less_than")
+                        return field_val.toDouble() < value.toDouble();
                     return false;
                 };
 
@@ -154,36 +161,42 @@ void register_utility_nodes(NodeRegistry& registry) {
                 }
 
                 QString field = params.value("field").toString();
-                QString op    = params.value("operation").toString("sum");
+                QString op = params.value("operation").toString("sum");
                 QJsonArray arr = inputs[0].toArray();
 
-                double result  = 0.0;
+                double result = 0.0;
                 double minimum = std::numeric_limits<double>::max();
                 double maximum = std::numeric_limits<double>::lowest();
-                int    count   = 0;
+                int count = 0;
 
                 for (const QJsonValue& item : arr) {
-                    if (!item.isObject()) continue;
+                    if (!item.isObject())
+                        continue;
                     QJsonValue fv = item.toObject().value(field);
                     double v = fv.toDouble();
-                    result  += v;
-                    minimum  = std::min(minimum, v);
-                    maximum  = std::max(maximum, v);
+                    result += v;
+                    minimum = std::min(minimum, v);
+                    maximum = std::max(maximum, v);
                     ++count;
                 }
 
                 double out_val = 0.0;
-                if (op == "sum")   out_val = result;
-                else if (op == "avg")   out_val = count > 0 ? result / count : 0.0;
-                else if (op == "min")   out_val = count > 0 ? minimum : 0.0;
-                else if (op == "max")   out_val = count > 0 ? maximum : 0.0;
-                else if (op == "count") out_val = static_cast<double>(count);
+                if (op == "sum")
+                    out_val = result;
+                else if (op == "avg")
+                    out_val = count > 0 ? result / count : 0.0;
+                else if (op == "min")
+                    out_val = count > 0 ? minimum : 0.0;
+                else if (op == "max")
+                    out_val = count > 0 ? maximum : 0.0;
+                else if (op == "count")
+                    out_val = static_cast<double>(count);
 
                 QJsonObject out;
-                out["result"]    = out_val;
-                out["field"]     = field;
+                out["result"] = out_val;
+                out["field"] = field;
                 out["operation"] = op;
-                out["count"]     = count;
+                out["count"] = count;
                 cb(true, out, {});
             },
     });
@@ -213,7 +226,7 @@ void register_utility_nodes(NodeRegistry& registry) {
                 }
 
                 QString field = params.value("field").toString();
-                bool    desc  = params.value("direction").toString("asc") == "desc";
+                bool desc = params.value("direction").toString("asc") == "desc";
 
                 QJsonArray arr = inputs[0].toArray();
                 // Copy into a sortable list.
@@ -222,23 +235,21 @@ void register_utility_nodes(NodeRegistry& registry) {
                 for (const QJsonValue& v : arr)
                     items.append(v);
 
-                std::stable_sort(items.begin(), items.end(),
-                    [&](const QJsonValue& a, const QJsonValue& b) {
-                        QJsonValue av = a.isObject() ? a.toObject().value(field) : QJsonValue{};
-                        QJsonValue bv = b.isObject() ? b.toObject().value(field) : QJsonValue{};
+                std::stable_sort(items.begin(), items.end(), [&](const QJsonValue& a, const QJsonValue& b) {
+                    QJsonValue av = a.isObject() ? a.toObject().value(field) : QJsonValue{};
+                    QJsonValue bv = b.isObject() ? b.toObject().value(field) : QJsonValue{};
 
-                        // Numeric comparison if both are numbers.
-                        if ((av.isDouble() || av.isUndefined()) &&
-                            (bv.isDouble() || bv.isUndefined())) {
-                            double da = av.toDouble();
-                            double db = bv.toDouble();
-                            return desc ? da > db : da < db;
-                        }
-                        // Fall back to string comparison.
-                        QString sa = av.isString() ? av.toString() : QString::number(av.toDouble());
-                        QString sb = bv.isString() ? bv.toString() : QString::number(bv.toDouble());
-                        return desc ? sa > sb : sa < sb;
-                    });
+                    // Numeric comparison if both are numbers.
+                    if ((av.isDouble() || av.isUndefined()) && (bv.isDouble() || bv.isUndefined())) {
+                        double da = av.toDouble();
+                        double db = bv.toDouble();
+                        return desc ? da > db : da < db;
+                    }
+                    // Fall back to string comparison.
+                    QString sa = av.isString() ? av.toString() : QString::number(av.toDouble());
+                    QString sb = bv.isString() ? bv.toString() : QString::number(bv.toDouble());
+                    return desc ? sa > sb : sa < sb;
+                });
 
                 QJsonArray out;
                 for (const QJsonValue& v : items)
@@ -271,17 +282,16 @@ void register_utility_nodes(NodeRegistry& registry) {
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
                 // Expect input_a at index 0, input_b at index 1.
-                QJsonArray arr_a = (inputs.size() > 0 && inputs[0].isArray())
-                    ? inputs[0].toArray() : QJsonArray{};
-                QJsonArray arr_b = (inputs.size() > 1 && inputs[1].isArray())
-                    ? inputs[1].toArray() : QJsonArray{};
+                QJsonArray arr_a = (inputs.size() > 0 && inputs[0].isArray()) ? inputs[0].toArray() : QJsonArray{};
+                QJsonArray arr_b = (inputs.size() > 1 && inputs[1].isArray()) ? inputs[1].toArray() : QJsonArray{};
 
                 QString join_key = params.value("join_key").toString("id");
 
                 // Build a lookup map from B keyed by join_key.
                 QHash<QString, QJsonObject> b_map;
                 for (const QJsonValue& item : arr_b) {
-                    if (!item.isObject()) continue;
+                    if (!item.isObject())
+                        continue;
                     QJsonObject obj = item.toObject();
                     QString key_val = obj.value(join_key).toVariant().toString();
                     b_map.insert(key_val, obj);
@@ -290,11 +300,13 @@ void register_utility_nodes(NodeRegistry& registry) {
                 // Inner join: only emit rows where key exists in both.
                 QJsonArray out;
                 for (const QJsonValue& item : arr_a) {
-                    if (!item.isObject()) continue;
+                    if (!item.isObject())
+                        continue;
                     QJsonObject obj_a = item.toObject();
                     QString key_val = obj_a.value(join_key).toVariant().toString();
                     auto it = b_map.find(key_val);
-                    if (it == b_map.end()) continue;
+                    if (it == b_map.end())
+                        continue;
 
                     // Merge: B fields overwrite A on collision.
                     QJsonObject merged = obj_a;
@@ -330,7 +342,7 @@ void register_utility_nodes(NodeRegistry& registry) {
                     return;
                 }
 
-                QString field  = params.value("field").toString();
+                QString field = params.value("field").toString();
                 QJsonArray arr = inputs[0].toArray();
 
                 // Preserve insertion order using a list of keys alongside the map.
@@ -338,7 +350,8 @@ void register_utility_nodes(NodeRegistry& registry) {
                 QStringList key_order;
 
                 for (const QJsonValue& item : arr) {
-                    if (!item.isObject()) continue;
+                    if (!item.isObject())
+                        continue;
                     QString group_val = item.toObject().value(field).toVariant().toString();
                     if (!groups.contains(group_val)) {
                         groups.insert(group_val, QJsonArray{});
@@ -375,7 +388,7 @@ void register_utility_nodes(NodeRegistry& registry) {
                     return;
                 }
 
-                QString field  = params.value("field").toString();
+                QString field = params.value("field").toString();
                 QJsonArray arr = inputs[0].toArray();
                 QJsonArray out;
                 QSet<QString> seen;
@@ -419,11 +432,18 @@ void register_utility_nodes(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                if (inputs.isEmpty()) { cb(true, QJsonArray{}, {}); return; }
-                if (!inputs[0].isArray()) { cb(true, inputs[0], {}); return; }
+                if (inputs.isEmpty()) {
+                    cb(true, QJsonArray{}, {});
+                    return;
+                }
+                if (!inputs[0].isArray()) {
+                    cb(true, inputs[0], {});
+                    return;
+                }
 
                 int n = static_cast<int>(params.value("count").toDouble(10));
-                if (n < 0) n = 0;
+                if (n < 0)
+                    n = 0;
 
                 QJsonArray arr = inputs[0].toArray();
                 QJsonArray out;
@@ -463,11 +483,13 @@ void register_utility_nodes(NodeRegistry& registry) {
                 // split: string → array by delimiter (field param used as delimiter)
                 if (op == "split") {
                     QString delim = params.value("field").toString(",");
-                    if (delim.isEmpty()) delim = ",";
-                    QString text = data.isString() ? data.toString()
-                                 : data.isObject() ? QString::fromUtf8(
-                                       QJsonDocument(data.toObject()).toJson(QJsonDocument::Compact))
-                                 : QString{};
+                    if (delim.isEmpty())
+                        delim = ",";
+                    QString text =
+                        data.isString() ? data.toString()
+                        : data.isObject()
+                            ? QString::fromUtf8(QJsonDocument(data.toObject()).toJson(QJsonDocument::Compact))
+                            : QString{};
                     QJsonArray out;
                     for (const QString& s : text.split(delim))
                         out.append(s.trimmed());
@@ -476,47 +498,60 @@ void register_utility_nodes(NodeRegistry& registry) {
                 }
 
                 // All remaining ops work on arrays
-                if (!data.isArray()) { cb(true, data, {}); return; }
+                if (!data.isArray()) {
+                    cb(true, data, {});
+                    return;
+                }
                 QJsonArray arr = data.toArray();
 
                 if (op == "reverse") {
                     QJsonArray out;
-                    for (int i = arr.size() - 1; i >= 0; --i) out.append(arr[i]);
+                    for (int i = arr.size() - 1; i >= 0; --i)
+                        out.append(arr[i]);
                     cb(true, out, {});
                 } else if (op == "unique") {
                     QSet<QString> seen;
                     QJsonArray out;
                     for (const QJsonValue& v : arr) {
-                        QString key = v.isObject()
-                            ? QString::fromUtf8(QJsonDocument(v.toObject()).toJson(QJsonDocument::Compact))
-                            : v.toVariant().toString();
-                        if (!seen.contains(key)) { seen.insert(key); out.append(v); }
+                        QString key =
+                            v.isObject() ? QString::fromUtf8(QJsonDocument(v.toObject()).toJson(QJsonDocument::Compact))
+                                         : v.toVariant().toString();
+                        if (!seen.contains(key)) {
+                            seen.insert(key);
+                            out.append(v);
+                        }
                     }
                     cb(true, out, {});
                 } else if (op == "flatten") {
                     QJsonArray out;
                     for (const QJsonValue& v : arr) {
-                        if (v.isArray()) { for (const QJsonValue& inner : v.toArray()) out.append(inner); }
-                        else out.append(v);
+                        if (v.isArray()) {
+                            for (const QJsonValue& inner : v.toArray())
+                                out.append(inner);
+                        } else
+                            out.append(v);
                     }
                     cb(true, out, {});
                 } else if (op == "shuffle") {
                     QVector<QJsonValue> vec;
                     vec.reserve(arr.size());
-                    for (const QJsonValue& v : arr) vec.append(v);
+                    for (const QJsonValue& v : arr)
+                        vec.append(v);
                     for (int i = vec.size() - 1; i > 0; --i) {
                         int j = static_cast<int>(QRandomGenerator::global()->bounded(i + 1));
                         std::swap(vec[i], vec[j]);
                     }
                     QJsonArray out;
-                    for (const QJsonValue& v : vec) out.append(v);
+                    for (const QJsonValue& v : vec)
+                        out.append(v);
                     cb(true, out, {});
                 } else if (op == "concatenate") {
                     // Merge all sub-arrays in inputs into one
                     QJsonArray out = arr;
                     for (int i = 1; i < inputs.size(); ++i)
                         if (inputs[i].isArray())
-                            for (const QJsonValue& v : inputs[i].toArray()) out.append(v);
+                            for (const QJsonValue& v : inputs[i].toArray())
+                                out.append(v);
                     cb(true, out, {});
                 } else {
                     cb(true, arr, {});
@@ -572,9 +607,9 @@ void register_utility_nodes(NodeRegistry& registry) {
 
                 // Get text to operate on
                 QString text = data.isString() ? data.toString()
-                             : data.isObject() ? QString::fromUtf8(
-                                   QJsonDocument(data.toObject()).toJson(QJsonDocument::Compact))
-                             : QString::number(data.toDouble());
+                               : data.isObject()
+                                   ? QString::fromUtf8(QJsonDocument(data.toObject()).toJson(QJsonDocument::Compact))
+                                   : QString::number(data.toDouble());
 
                 if (op == "base64_encode") {
                     QString encoded = QString::fromLatin1(text.toUtf8().toBase64());
@@ -583,8 +618,8 @@ void register_utility_nodes(NodeRegistry& registry) {
                     QString decoded = QString::fromUtf8(QByteArray::fromBase64(text.toLatin1()));
                     cb(true, QJsonObject{{"result", decoded}, {"operation", op}}, {});
                 } else if (op == "md5") {
-                    QString hash = QString::fromLatin1(
-                        QCryptographicHash::hash(text.toUtf8(), QCryptographicHash::Md5).toHex());
+                    QString hash =
+                        QString::fromLatin1(QCryptographicHash::hash(text.toUtf8(), QCryptographicHash::Md5).toHex());
                     cb(true, QJsonObject{{"result", hash}, {"operation", op}}, {});
                 } else if (op == "hmac_sha256") {
                     // Qt doesn't have built-in HMAC — return sha256 of key+text as fallback
@@ -717,23 +752,28 @@ void register_utility_nodes(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                QString op  = params.value("operation").toString("flatten");
+                QString op = params.value("operation").toString("flatten");
                 QString key = params.value("key").toString();
                 QJsonValue data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
 
                 if (op == "flatten" && data.isArray()) {
                     QJsonArray out;
                     for (const QJsonValue& v : data.toArray()) {
-                        if (v.isArray()) for (const QJsonValue& inner : v.toArray()) out.append(inner);
-                        else out.append(v);
+                        if (v.isArray())
+                            for (const QJsonValue& inner : v.toArray())
+                                out.append(inner);
+                        else
+                            out.append(v);
                     }
-                    cb(true, out, {}); return;
+                    cb(true, out, {});
+                    return;
                 }
                 if (op == "nest" && data.isArray()) {
                     // Wrap each item under "key" if provided, else wrap all items under "items"
                     QJsonObject out;
                     out[key.isEmpty() ? "items" : key] = data.toArray();
-                    cb(true, out, {}); return;
+                    cb(true, out, {});
+                    return;
                 }
                 cb(true, data, {});
             },
@@ -758,9 +798,12 @@ void register_utility_nodes(NodeRegistry& registry) {
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
                 QString method = params.value("method").toString("min_max");
-                QString field  = params.value("field").toString();
+                QString field = params.value("field").toString();
                 QJsonValue data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
-                if (!data.isArray()) { cb(true, data, {}); return; }
+                if (!data.isArray()) {
+                    cb(true, data, {});
+                    return;
+                }
 
                 QJsonArray arr = data.toArray();
                 // Extract numeric values
@@ -769,15 +812,20 @@ void register_utility_nodes(NodeRegistry& registry) {
                 for (const QJsonValue& v : arr)
                     vals.append(v.isObject() ? v.toObject().value(field).toDouble() : v.toDouble());
 
-                if (vals.isEmpty()) { cb(true, data, {}); return; }
+                if (vals.isEmpty()) {
+                    cb(true, data, {});
+                    return;
+                }
 
                 double min_v = *std::min_element(vals.begin(), vals.end());
                 double max_v = *std::max_element(vals.begin(), vals.end());
                 double mean_v = 0;
-                for (double d : vals) mean_v += d;
+                for (double d : vals)
+                    mean_v += d;
                 mean_v /= vals.size();
                 double std_v = 0;
-                for (double d : vals) std_v += (d - mean_v) * (d - mean_v);
+                for (double d : vals)
+                    std_v += (d - mean_v) * (d - mean_v);
                 std_v = std::sqrt(std_v / vals.size());
 
                 QJsonArray out;
@@ -789,7 +837,7 @@ void register_utility_nodes(NodeRegistry& registry) {
                         norm = std_v > 0 ? (vals[i] - mean_v) / std_v : 0;
                     else if (method == "log")
                         norm = vals[i] > 0 ? std::log(vals[i]) : 0;
-                    else  // robust: (x - median) / IQR — approximate with mean/std
+                    else // robust: (x - median) / IQR — approximate with mean/std
                         norm = std_v > 0 ? (vals[i] - mean_v) / std_v : 0;
 
                     if (arr[i].isObject()) {
@@ -823,11 +871,14 @@ void register_utility_nodes(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                int    window = static_cast<int>(params.value("window").toDouble(20));
-                QString op    = params.value("operation").toString("mean");
+                int window = static_cast<int>(params.value("window").toDouble(20));
+                QString op = params.value("operation").toString("mean");
                 QString field = params.value("field").toString("close");
                 QJsonValue data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
-                if (!data.isArray() || window < 1) { cb(true, data, {}); return; }
+                if (!data.isArray() || window < 1) {
+                    cb(true, data, {});
+                    return;
+                }
 
                 QJsonArray arr = data.toArray();
                 QVector<double> vals;
@@ -841,20 +892,28 @@ void register_utility_nodes(NodeRegistry& registry) {
                     QVector<double> w = vals.mid(start, i - start + 1);
                     double result = 0;
                     if (op == "sum") {
-                        for (double d : w) result += d;
+                        for (double d : w)
+                            result += d;
                     } else if (op == "min") {
                         result = *std::min_element(w.begin(), w.end());
                     } else if (op == "max") {
                         result = *std::max_element(w.begin(), w.end());
                     } else if (op == "std") {
-                        double m = 0; for (double d : w) m += d; m /= w.size();
-                        for (double d : w) result += (d - m) * (d - m);
+                        double m = 0;
+                        for (double d : w)
+                            m += d;
+                        m /= w.size();
+                        for (double d : w)
+                            result += (d - m) * (d - m);
                         result = std::sqrt(result / w.size());
                     } else if (op == "median") {
-                        QVector<double> s = w; std::sort(s.begin(), s.end());
+                        QVector<double> s = w;
+                        std::sort(s.begin(), s.end());
                         result = s[s.size() / 2];
-                    } else {  // mean
-                        for (double d : w) result += d; result /= w.size();
+                    } else { // mean
+                        for (double d : w)
+                            result += d;
+                        result /= w.size();
                     }
                     if (arr[i].isObject()) {
                         QJsonObject obj = arr[i].toObject();
@@ -887,11 +946,14 @@ void register_utility_nodes(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                int     periods = static_cast<int>(params.value("periods").toDouble(1));
-                QString field   = params.value("field").toString();
-                QString fill    = params.value("fill").toString("null");
+                int periods = static_cast<int>(params.value("periods").toDouble(1));
+                QString field = params.value("field").toString();
+                QString fill = params.value("fill").toString("null");
                 QJsonValue data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
-                if (!data.isArray()) { cb(true, data, {}); return; }
+                if (!data.isArray()) {
+                    cb(true, data, {});
+                    return;
+                }
 
                 QJsonArray arr = data.toArray();
                 QJsonArray out;
@@ -900,13 +962,17 @@ void register_utility_nodes(NodeRegistry& registry) {
                     int src = i - periods;
                     QJsonValue lagged;
                     if (src >= 0 && src < n) {
-                        lagged = field.isEmpty() ? arr[src]
-                                                 : QJsonValue(arr[src].toObject().value(field));
+                        lagged = field.isEmpty() ? arr[src] : QJsonValue(arr[src].toObject().value(field));
                     } else {
-                        if (fill == "zero")           lagged = 0.0;
-                        else if (fill == "forward_fill" && i > 0) lagged = field.isEmpty() ? arr[i-1] : QJsonValue(arr[i-1].toObject().value(field));
-                        else if (fill == "backward_fill" && src+n >= 0) lagged = field.isEmpty() ? arr[qMax(0,src+n)] : QJsonValue(arr[qMax(0,src+n)].toObject().value(field));
-                        else lagged = QJsonValue::Null;
+                        if (fill == "zero")
+                            lagged = 0.0;
+                        else if (fill == "forward_fill" && i > 0)
+                            lagged = field.isEmpty() ? arr[i - 1] : QJsonValue(arr[i - 1].toObject().value(field));
+                        else if (fill == "backward_fill" && src + n >= 0)
+                            lagged = field.isEmpty() ? arr[qMax(0, src + n)]
+                                                     : QJsonValue(arr[qMax(0, src + n)].toObject().value(field));
+                        else
+                            lagged = QJsonValue::Null;
                     }
                     if (field.isEmpty()) {
                         out.append(lagged);
@@ -968,14 +1034,15 @@ void register_utility_nodes(NodeRegistry& registry) {
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
                 static QHash<QString, QPair<QJsonValue, qint64>> cache;
-                auto data  = inputs.isEmpty() ? QJsonValue{} : inputs[0];
-                int  ttl   = static_cast<int>(params.value("ttl_seconds").toDouble(300)) * 1000;
+                auto data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
+                int ttl = static_cast<int>(params.value("ttl_seconds").toDouble(300)) * 1000;
                 QString key = params.value("cache_key").toString();
                 if (key.isEmpty()) {
                     // Auto-key from data fingerprint
-                    key = data.isObject()
-                        ? QString::fromUtf8(QJsonDocument(data.toObject()).toJson(QJsonDocument::Compact)).left(64)
-                        : data.toVariant().toString().left(64);
+                    key =
+                        data.isObject()
+                            ? QString::fromUtf8(QJsonDocument(data.toObject()).toJson(QJsonDocument::Compact)).left(64)
+                            : data.toVariant().toString().left(64);
                 }
                 qint64 now = QDateTime::currentMSecsSinceEpoch();
                 auto it = cache.find(key);
@@ -1057,31 +1124,37 @@ void register_utility_nodes(NodeRegistry& registry) {
                std::function<void(bool, QJsonValue, QString)> cb) {
                 auto data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
                 QString condition = params.value("condition").toString();
-                QString message   = params.value("message").toString("Assertion failed");
+                QString message = params.value("message").toString("Assertion failed");
 
                 // Evaluate simple expressions: field op value
                 // Supports: {{field}} > value, {{field}} == value, {{field}} != value
                 bool passed = true;
                 if (!condition.isEmpty() && data.isObject()) {
                     QJsonObject obj = data.toObject();
-                    static const QRegularExpression expr_re(
-                        R"(\{\{(\w+)\}\}\s*(==|!=|>|<|>=|<=|contains)\s*(.+))");
+                    static const QRegularExpression expr_re(R"(\{\{(\w+)\}\}\s*(==|!=|>|<|>=|<=|contains)\s*(.+))");
                     QRegularExpressionMatch m = expr_re.match(condition.trimmed());
                     if (m.hasMatch()) {
                         QString field = m.captured(1);
-                        QString op    = m.captured(2).trimmed();
-                        QString rhs   = m.captured(3).trimmed();
+                        QString op = m.captured(2).trimmed();
+                        QString rhs = m.captured(3).trimmed();
                         QJsonValue lhsv = obj.value(field);
                         double lhsd = lhsv.toDouble();
                         double rhsd = rhs.toDouble();
                         QString lhss = lhsv.isString() ? lhsv.toString() : QString::number(lhsd);
-                        if      (op == "==")       passed = (lhss == rhs);
-                        else if (op == "!=")       passed = (lhss != rhs);
-                        else if (op == ">")        passed = (lhsd > rhsd);
-                        else if (op == "<")        passed = (lhsd < rhsd);
-                        else if (op == ">=")       passed = (lhsd >= rhsd);
-                        else if (op == "<=")       passed = (lhsd <= rhsd);
-                        else if (op == "contains") passed = lhss.contains(rhs);
+                        if (op == "==")
+                            passed = (lhss == rhs);
+                        else if (op == "!=")
+                            passed = (lhss != rhs);
+                        else if (op == ">")
+                            passed = (lhsd > rhsd);
+                        else if (op == "<")
+                            passed = (lhsd < rhsd);
+                        else if (op == ">=")
+                            passed = (lhsd >= rhsd);
+                        else if (op == "<=")
+                            passed = (lhsd <= rhsd);
+                        else if (op == "contains")
+                            passed = lhss.contains(rhs);
                     }
                 }
                 if (!passed)
@@ -1121,11 +1194,9 @@ void register_utility_nodes(NodeRegistry& registry) {
                 while (it.hasNext()) {
                     QRegularExpressionMatch m = it.next();
                     QString full_match = m.captured(0); // e.g. "{{name}}"
-                    QString key        = m.captured(1); // e.g. "name"
+                    QString key = m.captured(1);        // e.g. "name"
                     QJsonValue val = input_obj.value(key);
-                    QString replacement = val.isString()
-                        ? val.toString()
-                        : QString::number(val.toDouble());
+                    QString replacement = val.isString() ? val.toString() : QString::number(val.toDouble());
                     replacements.append({full_match, replacement});
                 }
                 for (const auto& [placeholder, value] : replacements)

@@ -18,7 +18,7 @@ class PlannerViewPanel;
 class ToolsViewPanel;
 class AgentChatPanel;
 class SystemViewPanel;
-}
+} // namespace fincept::screens
 
 namespace fincept::screens {
 
@@ -45,20 +45,20 @@ class AgentConfigScreen : public QWidget {
     QWidget* panel_widget(services::AgentViewMode mode) const;
     void wire_cross_panel_signals();
 
-    QStackedWidget* view_stack_        = nullptr;
+    QStackedWidget* view_stack_ = nullptr;
     QVector<QPushButton*> nav_buttons_;
-    QLabel* status_label_              = nullptr;
-    QLabel* agent_count_label_         = nullptr;
+    QLabel* status_label_ = nullptr;
+    QLabel* agent_count_label_ = nullptr;
 
     // Lazily constructed panels (nullptr until first navigation)
-    AgentsViewPanel*   agents_panel_    = nullptr;
-    CreateAgentPanel*  create_panel_    = nullptr;
-    TeamsViewPanel*    teams_panel_     = nullptr;
+    AgentsViewPanel* agents_panel_ = nullptr;
+    CreateAgentPanel* create_panel_ = nullptr;
+    TeamsViewPanel* teams_panel_ = nullptr;
     WorkflowsViewPanel* workflows_panel_ = nullptr;
-    PlannerViewPanel*  planner_panel_   = nullptr;
-    ToolsViewPanel*    tools_panel_     = nullptr;
-    AgentChatPanel*    chat_panel_      = nullptr;
-    SystemViewPanel*   system_panel_    = nullptr;
+    PlannerViewPanel* planner_panel_ = nullptr;
+    ToolsViewPanel* tools_panel_ = nullptr;
+    AgentChatPanel* chat_panel_ = nullptr;
+    SystemViewPanel* system_panel_ = nullptr;
 
     // Track which stack slots have been populated
     bool panel_built_[8] = {};

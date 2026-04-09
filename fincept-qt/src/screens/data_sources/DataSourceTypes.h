@@ -28,7 +28,19 @@ struct FieldDef {
 
 // ── Connector config (static definition of a data source type) ─────────────
 
-enum class Category { Database, Api, File, Streaming, Cloud, TimeSeries, MarketData, SearchAnalytics, DataWarehouse, AlternativeData, OpenBanking };
+enum class Category {
+    Database,
+    Api,
+    File,
+    Streaming,
+    Cloud,
+    TimeSeries,
+    MarketData,
+    SearchAnalytics,
+    DataWarehouse,
+    AlternativeData,
+    OpenBanking
+};
 
 inline QString category_str(Category c) {
     switch (c) {

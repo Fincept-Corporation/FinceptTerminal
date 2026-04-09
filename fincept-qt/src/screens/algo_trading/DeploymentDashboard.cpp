@@ -308,7 +308,7 @@ void DeploymentDashboard::build_ui() {
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
                               .arg(fincept::ui::colors::BG_BASE, fincept::ui::colors::BORDER_MED));
 
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     content->setStyleSheet(QString("background: %1;").arg(fincept::ui::colors::BG_BASE));
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(16, 12, 16, 12);

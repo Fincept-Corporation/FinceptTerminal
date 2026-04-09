@@ -23,10 +23,10 @@ struct LlmProfile {
     QString model_id;
     QString api_key;
     QString base_url;
-    double  temperature  = 0.7;
-    int     max_tokens   = 4096;
+    double temperature = 0.7;
+    int max_tokens = 4096;
     QString system_prompt;
-    bool    is_default   = false;
+    bool is_default = false;
     QString created_at;
     QString updated_at;
 };
@@ -40,8 +40,8 @@ struct ResolvedLlmProfile {
     QString model_id;
     QString api_key;
     QString base_url;
-    double  temperature  = 0.7;
-    int     max_tokens   = 4096;
+    double temperature = 0.7;
+    int max_tokens = 4096;
     QString system_prompt;
 };
 
@@ -74,17 +74,13 @@ class LlmProfileRepository : public BaseRepository<LlmProfile> {
     /// context_type: "ai_chat" | "agent_default" | "team_default" |
     ///               "agent" | "team" | "team_coordinator"
     /// context_id:   agent/team id, or empty string for type-level defaults.
-    Result<void> assign_profile(const QString& context_type,
-                                const QString& context_id,
-                                const QString& profile_id);
+    Result<void> assign_profile(const QString& context_type, const QString& context_id, const QString& profile_id);
 
     /// Remove assignment for a context slot (falls back to next level).
-    Result<void> remove_assignment(const QString& context_type,
-                                   const QString& context_id);
+    Result<void> remove_assignment(const QString& context_type, const QString& context_id);
 
     /// Get the profile_id currently assigned to a slot, or empty if none.
-    QString get_assignment(const QString& context_type,
-                           const QString& context_id) const;
+    QString get_assignment(const QString& context_type, const QString& context_id) const;
 
     // ── Resolution ────────────────────────────────────────────────────────────
 
@@ -92,16 +88,15 @@ class LlmProfileRepository : public BaseRepository<LlmProfile> {
     /// context_type examples: "ai_chat", "agent", "team", "team_coordinator"
     /// context_id:  agent/team id, or empty for type-level queries.
     /// Never fails — worst case returns a zero-valued ResolvedLlmProfile.
-    ResolvedLlmProfile resolve_for_context(const QString& context_type,
-                                           const QString& context_id = {}) const;
+    ResolvedLlmProfile resolve_for_context(const QString& context_type, const QString& context_id = {}) const;
 
   private:
     LlmProfileRepository() = default;
 
-    static LlmProfile    map_profile(QSqlQuery& q);
-    static QString       type_default_key(const QString& context_type);
-    ResolvedLlmProfile   profile_to_resolved(const LlmProfile& p) const;
-    ResolvedLlmProfile   legacy_fallback() const;
+    static LlmProfile map_profile(QSqlQuery& q);
+    static QString type_default_key(const QString& context_type);
+    ResolvedLlmProfile profile_to_resolved(const LlmProfile& p) const;
+    ResolvedLlmProfile legacy_fallback() const;
 };
 
 } // namespace fincept

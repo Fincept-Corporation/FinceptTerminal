@@ -37,12 +37,12 @@ class HDXDataPanel : public QWidget {
 
     // Datasets table + loading overlay
     QTableWidget* datasets_table_ = nullptr;
-    QLabel*       loading_label_  = nullptr;
+    QLabel* loading_label_ = nullptr;
 
     // Explorer filter bar (shown only on Explorer tab)
-    QWidget*  explorer_bar_  = nullptr;
+    QWidget* explorer_bar_ = nullptr;
     QComboBox* country_combo_ = nullptr;
-    QComboBox* topic_combo_   = nullptr;
+    QComboBox* topic_combo_ = nullptr;
 
     // Stats badge
     QLabel* dataset_count_ = nullptr;

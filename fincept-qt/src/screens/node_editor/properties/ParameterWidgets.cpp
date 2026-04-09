@@ -45,9 +45,8 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         auto* edit = new QLineEdit;
         edit->setText(current_value.toString(param.default_value.toString()));
         edit->setPlaceholderText(param.placeholder);
-        edit->setStyleSheet(
-            QString("QLineEdit { %1 } QLineEdit:focus { border: 1px solid %2; }")
-                .arg(input_style(), ui::colors::AMBER));
+        edit->setStyleSheet(QString("QLineEdit { %1 } QLineEdit:focus { border: 1px solid %2; }")
+                                .arg(input_style(), ui::colors::AMBER));
         layout->addWidget(edit);
 
         QObject::connect(edit, &QLineEdit::textChanged, container,
@@ -75,8 +74,7 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
                     "  width: 14px; height: 14px; background: %2; border: 1px solid %3;"
                     "}"
                     "QCheckBox::indicator:checked { background: %4; }")
-                .arg(ui::colors::TEXT_PRIMARY, ui::colors::BG_HOVER,
-                     ui::colors::BORDER_MED, ui::colors::AMBER));
+                .arg(ui::colors::TEXT_PRIMARY, ui::colors::BG_HOVER, ui::colors::BORDER_MED, ui::colors::AMBER));
         layout->addWidget(check);
 
         // Remove the label since checkbox has its own
@@ -96,9 +94,8 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
                                      "  background: %3; color: %4; border: 1px solid %2;"
                                      "  selection-background-color: %5; font-family: Consolas;"
                                      "}")
-                                 .arg(input_style(), ui::colors::BORDER_MED,
-                                      ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY,
-                                      ui::colors::AMBER));
+                                 .arg(input_style(), ui::colors::BORDER_MED, ui::colors::BG_HOVER,
+                                      ui::colors::TEXT_PRIMARY, ui::colors::AMBER));
         layout->addWidget(combo);
 
         QObject::connect(combo, &QComboBox::currentTextChanged, container,
@@ -143,8 +140,8 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
                 allowed_exts << e.trimmed().toLower();
 
         // Build dropdown from FileManagerService — filter by allowed extensions
-        auto* row = new QWidget;
-        auto* rl  = new QHBoxLayout(row);
+        auto* row = new QWidget(parent);
+        auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(0, 0, 0, 0);
         rl->setSpacing(4);
 
@@ -157,36 +154,33 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
                                      "  background: %3; color: %4; border: 1px solid %2;"
                                      "  selection-background-color: %5; font-family: Consolas;"
                                      "}")
-                                 .arg(input_style(), ui::colors::BORDER_MED,
-                                      ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY,
-                                      ui::colors::AMBER));
+                                 .arg(input_style(), ui::colors::BORDER_MED, ui::colors::BG_HOVER,
+                                      ui::colors::TEXT_PRIMARY, ui::colors::AMBER));
 
         // Build file filter string for QFileDialog e.g. "Spreadsheets (*.xlsx *.csv)"
         QString dialog_filter;
         if (!allowed_exts.isEmpty()) {
             QStringList stars;
-            for (const QString& e : allowed_exts) stars << "*." + e;
-            dialog_filter = allowed_exts.join("/").toUpper()
-                            + " Files (" + stars.join(" ") + ");;All Files (*)";
+            for (const QString& e : allowed_exts)
+                stars << "*." + e;
+            dialog_filter = allowed_exts.join("/").toUpper() + " Files (" + stars.join(" ") + ");;All Files (*)";
         } else {
             dialog_filter = "All Files (*)";
         }
 
         // Populate combo from managed files; select_path forces selection after import
         auto populate = [combo, allowed_exts](const QString& select_path = {}) {
-            QString prev = select_path.isEmpty()
-                           ? combo->currentData().toString()
-                           : select_path;
+            QString prev = select_path.isEmpty() ? combo->currentData().toString() : select_path;
             combo->clear();
             combo->addItem("— select file —", QString());
 
             auto& svc = fincept::services::FileManagerService::instance();
             for (const auto& v : svc.all_files()) {
-                QJsonObject f         = v.toObject();
-                QString stored_name   = f.value("name").toString();
+                QJsonObject f = v.toObject();
+                QString stored_name = f.value("name").toString();
                 QString original_name = f.value("originalName").toString();
-                QString full_path     = svc.full_path(stored_name);
-                QString ext           = QFileInfo(original_name).suffix().toLower();
+                QString full_path = svc.full_path(stored_name);
+                QString ext = QFileInfo(original_name).suffix().toLower();
 
                 if (!allowed_exts.isEmpty() && !allowed_exts.contains(ext))
                     continue;
@@ -205,67 +199,61 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         auto* import_btn = new QPushButton("+ Import");
         import_btn->setFixedHeight(24);
         import_btn->setToolTip("Import a file from your PC into the File Manager");
-        import_btn->setStyleSheet(
-            QString("QPushButton { background: %1; color: %2;"
-                    " border: 1px solid %3; font-family: Consolas;"
-                    " font-size: 10px; padding: 0 6px; }"
-                    "QPushButton:hover { background: %3; }")
-                .arg(ui::colors::BORDER_MED, ui::colors::AMBER, ui::colors::TEXT_DIM));
+        import_btn->setStyleSheet(QString("QPushButton { background: %1; color: %2;"
+                                          " border: 1px solid %3; font-family: Consolas;"
+                                          " font-size: 10px; padding: 0 6px; }"
+                                          "QPushButton:hover { background: %3; }")
+                                      .arg(ui::colors::BORDER_MED, ui::colors::AMBER, ui::colors::TEXT_DIM));
         rl->addWidget(import_btn);
 
         layout->addWidget(row);
 
         // Hint showing allowed extensions
         if (!allowed_exts.isEmpty()) {
-            auto* hint = new QLabel("Accepted: " + allowed_exts.join(", ").toUpper()
-                                    + "  •  Or pick an already-imported file above");
-            hint->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;")
-                                   .arg(ui::colors::TEXT_TERTIARY));
+            auto* hint = new QLabel("Accepted: " + allowed_exts.join(", ").toUpper() +
+                                    "  •  Or pick an already-imported file above");
+            hint->setStyleSheet(
+                QString("color: %1; font-family: Consolas; font-size: 10px;").arg(ui::colors::TEXT_TERTIARY));
             hint->setWordWrap(true);
             layout->addWidget(hint);
         }
 
         QObject::connect(combo, &QComboBox::currentIndexChanged, container,
-                         [key, on_change, combo](int) {
-                             on_change(key, QJsonValue(combo->currentData().toString()));
-                         });
+                         [key, on_change, combo](int) { on_change(key, QJsonValue(combo->currentData().toString())); });
 
         QObject::connect(import_btn, &QPushButton::clicked, container,
                          [populate, dialog_filter, key, on_change, combo, import_btn]() {
-                             QString path = QFileDialog::getOpenFileName(
-                                 import_btn->window(),
-                                 "Import File",
-                                 QString(),
-                                 dialog_filter);
-                             if (path.isEmpty()) return;
+                             QString path = QFileDialog::getOpenFileName(import_btn->window(), "Import File", QString(),
+                                                                         dialog_filter);
+                             if (path.isEmpty())
+                                 return;
 
-                             QString file_id = fincept::services::FileManagerService::instance()
-                                                   .import_file(path, "workflow_node");
-                             if (file_id.isEmpty()) return;
+                             QString file_id =
+                                 fincept::services::FileManagerService::instance().import_file(path, "workflow_node");
+                             if (file_id.isEmpty())
+                                 return;
 
                              // Find the full managed path for the newly imported file
-                             auto f = fincept::services::FileManagerService::instance()
-                                          .find_by_id(file_id);
-                             QString full_path = fincept::services::FileManagerService::instance()
-                                                     .full_path(f.name);
+                             auto f = fincept::services::FileManagerService::instance().find_by_id(file_id);
+                             QString full_path = fincept::services::FileManagerService::instance().full_path(f.name);
 
                              populate(full_path);
                              on_change(key, QJsonValue(full_path));
                          });
     } else if (param.type == "agent_select") {
-        auto* row   = new QWidget;
-        auto* rl    = new QHBoxLayout(row);
+        auto* row = new QWidget(parent);
+        auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(0, 0, 0, 0);
         rl->setSpacing(4);
 
         auto* combo = new QComboBox;
-        combo->setStyleSheet(QString("QComboBox { %1 }"
-                                     "QComboBox::drop-down { background:%2; border:1px solid %2; width:18px; }"
-                                     "QComboBox QAbstractItemView { background:%3; color:%4;"
-                                     "  border:1px solid %2; selection-background-color:#7c3aed;"
-                                     "  font-family:Consolas; }")
-                                 .arg(input_style(), ui::colors::BORDER_MED,
-                                      ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY));
+        combo->setStyleSheet(
+            QString("QComboBox { %1 }"
+                    "QComboBox::drop-down { background:%2; border:1px solid %2; width:18px; }"
+                    "QComboBox QAbstractItemView { background:%3; color:%4;"
+                    "  border:1px solid %2; selection-background-color:#7c3aed;"
+                    "  font-family:Consolas; }")
+                .arg(input_style(), ui::colors::BORDER_MED, ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY));
 
         // Constrain combo so it never overflows the panel
         combo->setMaximumWidth(260);
@@ -273,14 +261,16 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
 
         auto populate_agents = [combo, current_value]() {
             QString saved = current_value.toString();
-            if (combo->count() > 0) saved = combo->currentData().toString();
+            if (combo->count() > 0)
+                saved = combo->currentData().toString();
             combo->clear();
             combo->addItem("— select agent —", QString());
 
             const auto agents = fincept::services::AgentService::instance().cached_agents();
             for (const auto& a : agents) {
                 QString label = a.name;
-                if (!a.category.isEmpty()) label += "  [" + a.category + "]";
+                if (!a.category.isEmpty())
+                    label += "  [" + a.category + "]";
                 combo->addItem(label, a.id);
                 if (a.id == saved)
                     combo->setCurrentIndex(combo->count() - 1);
@@ -290,13 +280,13 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         // Helper: wire one-shot discovery → populate
         auto trigger_discovery = [populate_agents, combo]() {
             auto& svc = fincept::services::AgentService::instance();
-            QObject::connect(&svc, &fincept::services::AgentService::agents_discovered,
-                             combo, [populate_agents, combo](const QVector<fincept::services::AgentInfo>&,
-                                                             const QVector<fincept::services::AgentCategory>&) {
+            QObject::connect(&svc, &fincept::services::AgentService::agents_discovered, combo,
+                             [populate_agents, combo](const QVector<fincept::services::AgentInfo>&,
+                                                      const QVector<fincept::services::AgentCategory>&) {
                                  populate_agents();
                                  QObject::disconnect(&fincept::services::AgentService::instance(),
-                                                     &fincept::services::AgentService::agents_discovered,
-                                                     combo, nullptr);
+                                                     &fincept::services::AgentService::agents_discovered, combo,
+                                                     nullptr);
                              });
             svc.discover_agents();
         };
@@ -304,7 +294,7 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         // Always auto-discover on widget creation — don't make user navigate elsewhere
         auto& svc = fincept::services::AgentService::instance();
         if (svc.cached_agent_count() > 0) {
-            populate_agents();  // cache hot — fill immediately
+            populate_agents(); // cache hot — fill immediately
         } else {
             combo->addItem("Loading agents…", QString());
             trigger_discovery();
@@ -315,34 +305,30 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         auto* refresh_btn = new QPushButton("↻");
         refresh_btn->setFixedSize(24, 24);
         refresh_btn->setToolTip("Refresh agent list");
-        refresh_btn->setStyleSheet(
-            QString("QPushButton { background:%1; color:#7c3aed;"
-                    " border:1px solid %1; font-size:13px; }"
-                    "QPushButton:hover { background:%2; }")
-                .arg(ui::colors::BORDER_MED, ui::colors::TEXT_DIM));
+        refresh_btn->setStyleSheet(QString("QPushButton { background:%1; color:#7c3aed;"
+                                           " border:1px solid %1; font-size:13px; }"
+                                           "QPushButton:hover { background:%2; }")
+                                       .arg(ui::colors::BORDER_MED, ui::colors::TEXT_DIM));
         rl->addWidget(refresh_btn);
         layout->addWidget(row);
 
         QObject::connect(combo, &QComboBox::currentIndexChanged, container,
-                         [key, on_change, combo](int) {
-                             on_change(key, QJsonValue(combo->currentData().toString()));
-                         });
+                         [key, on_change, combo](int) { on_change(key, QJsonValue(combo->currentData().toString())); });
 
-        QObject::connect(refresh_btn, &QPushButton::clicked, container,
-                         [trigger_discovery]() { trigger_discovery(); });
+        QObject::connect(refresh_btn, &QPushButton::clicked, container, [trigger_discovery]() { trigger_discovery(); });
 
     } else if (param.type == "llm_select") {
         // Dropdown populated from LlmProfileRepository
         auto* combo = new QComboBox;
         combo->setMaximumWidth(260);
         combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        combo->setStyleSheet(QString("QComboBox { %1 }"
-                                     "QComboBox::drop-down { background:%2; border:1px solid %2; width:18px; }"
-                                     "QComboBox QAbstractItemView { background:%3; color:%4;"
-                                     "  border:1px solid %2; selection-background-color:#7c3aed;"
-                                     "  font-family:Consolas; }")
-                                 .arg(input_style(), ui::colors::BORDER_MED,
-                                      ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY));
+        combo->setStyleSheet(
+            QString("QComboBox { %1 }"
+                    "QComboBox::drop-down { background:%2; border:1px solid %2; width:18px; }"
+                    "QComboBox QAbstractItemView { background:%3; color:%4;"
+                    "  border:1px solid %2; selection-background-color:#7c3aed;"
+                    "  font-family:Consolas; }")
+                .arg(input_style(), ui::colors::BORDER_MED, ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY));
         combo->addItem("— agent default —", QString());
 
         QString saved = current_value.toString();
@@ -358,38 +344,34 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         layout->addWidget(combo);
 
         auto* hint = new QLabel("Leave blank to use the LLM assigned to the agent in Agent Config");
-        hint->setStyleSheet(QString("color:%1; font-family:Consolas; font-size:10px;")
-                                .arg(ui::colors::TEXT_TERTIARY));
+        hint->setStyleSheet(QString("color:%1; font-family:Consolas; font-size:10px;").arg(ui::colors::TEXT_TERTIARY));
         hint->setWordWrap(true);
         layout->addWidget(hint);
 
         QObject::connect(combo, &QComboBox::currentIndexChanged, container,
-                         [key, on_change, combo](int) {
-                             on_change(key, QJsonValue(combo->currentData().toString()));
-                         });
+                         [key, on_change, combo](int) { on_change(key, QJsonValue(combo->currentData().toString())); });
     } else if (param.type == "mcp_tool_select") {
         // Dropdown + refresh, populated from McpService::get_all_tools()
         // Displays: "Category / tool_name — description"
         // Value stored: bare tool_name (internal) or "serverId__toolName" (external)
-        auto* row = new QWidget;
-        auto* rl  = new QHBoxLayout(row);
+        auto* row = new QWidget(parent);
+        auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(0, 0, 0, 0);
         rl->setSpacing(4);
 
         auto* combo = new QComboBox;
         combo->setMaximumWidth(260);
         combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        combo->setStyleSheet(QString("QComboBox { %1 }"
-                                     "QComboBox::drop-down { background:%2; border:1px solid %2; width:18px; }"
-                                     "QComboBox QAbstractItemView { background:%3; color:%4;"
-                                     "  border:1px solid %2; selection-background-color:#6366f1;"
-                                     "  font-family:Consolas; }")
-                                 .arg(input_style(), ui::colors::BORDER_MED,
-                                      ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY));
+        combo->setStyleSheet(
+            QString("QComboBox { %1 }"
+                    "QComboBox::drop-down { background:%2; border:1px solid %2; width:18px; }"
+                    "QComboBox QAbstractItemView { background:%3; color:%4;"
+                    "  border:1px solid %2; selection-background-color:#6366f1;"
+                    "  font-family:Consolas; }")
+                .arg(input_style(), ui::colors::BORDER_MED, ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY));
 
         auto populate_tools = [combo, current_value]() {
-            QString saved = combo->count() > 0 ? combo->currentData().toString()
-                                               : current_value.toString();
+            QString saved = combo->count() > 0 ? combo->currentData().toString() : current_value.toString();
             combo->clear();
             combo->addItem("— select tool —", QString());
 
@@ -428,29 +410,25 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         auto* refresh_btn = new QPushButton("↻");
         refresh_btn->setFixedSize(24, 24);
         refresh_btn->setToolTip("Refresh tool list");
-        refresh_btn->setStyleSheet(
-            QString("QPushButton { background:%1; color:#6366f1;"
-                    " border:1px solid %1; font-size:13px; }"
-                    "QPushButton:hover { background:%2; }")
-                .arg(ui::colors::BORDER_MED, ui::colors::TEXT_DIM));
+        refresh_btn->setStyleSheet(QString("QPushButton { background:%1; color:#6366f1;"
+                                           " border:1px solid %1; font-size:13px; }"
+                                           "QPushButton:hover { background:%2; }")
+                                       .arg(ui::colors::BORDER_MED, ui::colors::TEXT_DIM));
         rl->addWidget(refresh_btn);
         layout->addWidget(row);
 
         auto* hint = new QLabel("All Fincept internal tools. Input JSON flows in as arguments.");
-        hint->setStyleSheet(QString("color:%1; font-family:Consolas; font-size:10px;")
-                                .arg(ui::colors::TEXT_TERTIARY));
+        hint->setStyleSheet(QString("color:%1; font-family:Consolas; font-size:10px;").arg(ui::colors::TEXT_TERTIARY));
         hint->setWordWrap(true);
         layout->addWidget(hint);
 
-        QObject::connect(combo, &QComboBox::currentIndexChanged, container,
-                         [key, on_change, combo](int) {
-                             QString val = combo->currentData().toString();
-                             if (!val.isEmpty())
-                                 on_change(key, QJsonValue(val));
-                         });
+        QObject::connect(combo, &QComboBox::currentIndexChanged, container, [key, on_change, combo](int) {
+            QString val = combo->currentData().toString();
+            if (!val.isEmpty())
+                on_change(key, QJsonValue(val));
+        });
 
-        QObject::connect(refresh_btn, &QPushButton::clicked, container,
-                         [populate_tools]() { populate_tools(); });
+        QObject::connect(refresh_btn, &QPushButton::clicked, container, [populate_tools]() { populate_tools(); });
     }
 
     return container;

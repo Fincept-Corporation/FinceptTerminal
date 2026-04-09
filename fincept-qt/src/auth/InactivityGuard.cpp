@@ -28,8 +28,7 @@ void InactivityGuard::set_enabled(bool enabled) {
     enabled_ = enabled;
     if (enabled) {
         timer_->start();
-        LOG_INFO("Auth", QString("Inactivity guard enabled (%1 min timeout)")
-                 .arg(timeout_minutes()));
+        LOG_INFO("Auth", QString("Inactivity guard enabled (%1 min timeout)").arg(timeout_minutes()));
     } else {
         timer_->stop();
         LOG_INFO("Auth", "Inactivity guard disabled");
@@ -55,17 +54,17 @@ void InactivityGuard::reset_timer() {
 bool InactivityGuard::eventFilter(QObject* obj, QEvent* event) {
     if (enabled_) {
         switch (event->type()) {
-        case QEvent::MouseMove:
-        case QEvent::MouseButtonPress:
-        case QEvent::MouseButtonRelease:
-        case QEvent::KeyPress:
-        case QEvent::KeyRelease:
-        case QEvent::Wheel:
-        case QEvent::TouchBegin:
-            timer_->start(); // reset on any user interaction
-            break;
-        default:
-            break;
+            case QEvent::MouseMove:
+            case QEvent::MouseButtonPress:
+            case QEvent::MouseButtonRelease:
+            case QEvent::KeyPress:
+            case QEvent::KeyRelease:
+            case QEvent::Wheel:
+            case QEvent::TouchBegin:
+                timer_->start(); // reset on any user interaction
+                break;
+            default:
+                break;
         }
     }
     return QObject::eventFilter(obj, event);

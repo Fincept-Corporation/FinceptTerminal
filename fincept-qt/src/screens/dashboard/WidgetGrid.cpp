@@ -24,20 +24,17 @@ namespace fincept::screens {
 WidgetGrid::WidgetGrid(QWidget* parent) : QWidget(parent) {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(
-        QString("QScrollArea{border:none;background:transparent;}"
-                "QScrollBar:vertical{width:6px;background:transparent;}"
-                "QScrollBar::handle:vertical{background:%1;border-radius:3px;min-height:20px;}"
-                "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-        .arg(ui::colors::BORDER_MED()));
+    scroll->setStyleSheet(QString("QScrollArea{border:none;background:transparent;}"
+                                  "QScrollBar:vertical{width:6px;background:transparent;}"
+                                  "QScrollBar::handle:vertical{background:%1;border-radius:3px;min-height:20px;}"
+                                  "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+                              .arg(ui::colors::BORDER_MED()));
 
     setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) {
-                setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
-            });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE())); });
 
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     grid_ = new QGridLayout(content);
     grid_->setContentsMargins(4, 4, 4, 4);
     grid_->setSpacing(4);

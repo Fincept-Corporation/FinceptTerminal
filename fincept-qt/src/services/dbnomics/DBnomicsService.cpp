@@ -4,6 +4,7 @@
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
 #include "storage/cache/CacheManager.h"
+
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QUrl>
@@ -73,10 +74,8 @@ void DBnomicsService::fetch_providers() {
             arr.append(o);
         }
         fincept::CacheManager::instance().put(
-            "dbnomics:providers",
-            QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
-            kProviderCacheSec,
-            "dbnomics");
+            "dbnomics:providers", QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+            kProviderCacheSec, "dbnomics");
         LOG_INFO("DBnomicsService", QString("Loaded %1 providers").arg(out.size()));
         emit providers_loaded(out);
     });
@@ -90,8 +89,8 @@ void DBnomicsService::fetch_datasets(const QString& provider_code, int offset) {
         if (!cached.isNull()) {
             LOG_DEBUG("DBnomicsService", "datasets: serving from cache");
             const QJsonObject root = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
-            const QJsonArray docs  = root["docs"].toArray();
-            const int total        = root["total"].toInt();
+            const QJsonArray docs = root["docs"].toArray();
+            const int total = root["total"].toInt();
             QVector<DbnDataset> out;
             out.reserve(docs.size());
             for (const auto& v : docs) {
@@ -135,12 +134,11 @@ void DBnomicsService::fetch_datasets(const QString& provider_code, int offset) {
                 arr.append(o);
             }
             QJsonObject root;
-            root["docs"]  = arr;
+            root["docs"] = arr;
             root["total"] = total;
             fincept::CacheManager::instance().put(
                 "dbnomics:datasets:" + provider_code,
-                QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))),
-                kDatasetCacheSec,
+                QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))), kDatasetCacheSec,
                 "dbnomics");
         }
         LOG_INFO("DBnomicsService", QString("Loaded %1 datasets (total=%2)").arg(out.size()).arg(total));
@@ -160,8 +158,8 @@ void DBnomicsService::fetch_series(const QString& provider_code, const QString& 
         if (!cv.isNull()) {
             LOG_DEBUG("DBnomicsService", "series: serving from cache");
             const QJsonObject root = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
-            const QJsonArray docs  = root["docs"].toArray();
-            const int total        = root["total"].toInt();
+            const QJsonArray docs = root["docs"].toArray();
+            const int total = root["total"].toInt();
             QVector<DbnSeriesInfo> out;
             out.reserve(docs.size());
             for (const auto& v : docs) {
@@ -211,12 +209,11 @@ void DBnomicsService::fetch_series(const QString& provider_code, const QString& 
                     arr.append(o);
                 }
                 QJsonObject root;
-                root["docs"]  = arr;
+                root["docs"] = arr;
                 root["total"] = total;
                 fincept::CacheManager::instance().put(
                     "dbnomics:series:" + cache_key,
-                    QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))),
-                    kSeriesCacheSec,
+                    QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))), kSeriesCacheSec,
                     "dbnomics");
             }
             LOG_INFO("DBnomicsService", QString("Loaded %1 series (total=%2)").arg(out.size()).arg(total));

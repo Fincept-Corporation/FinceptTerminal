@@ -11,22 +11,31 @@ class IBKRBroker : public IBroker {
 
     BrokerProfile profile() const override {
         return BrokerProfile{
-            .id = "ibkr", .display_name = "IBKR", .region = "US", .currency = "USD",
-            .credential_fields = {
-                {CredentialField::ApiKey,    "CLIENT ID",  "Enter Client ID (Gateway port)...", false},
-                {CredentialField::ApiSecret, "GATEWAY URL","localhost:5000 (or custom)...",     false},
-            },
-            .exchanges = {"NYSE","NASDAQ","AMEX","CBOE"},
-            .product_types = {
-                {"Day Order",  ProductType::Intraday},
-                {"GTC Order",  ProductType::Delivery},
-                {"Margin",     ProductType::Margin},
-            },
-            .supports_intraday=true, .supports_bracket_order=true, .supports_cover_order=false,
-            .has_native_paper=true, .default_paper_balance=100000.0,
-            .default_watchlist={"AAPL","MSFT","GOOGL","AMZN","NVDA","META","TSLA","JPM","V","JNJ"},
-            .default_symbol="AAPL", .default_exchange="NASDAQ",
-            .brokerage_info="$0.005/share (min $1)",
+            .id = "ibkr",
+            .display_name = "IBKR",
+            .region = "US",
+            .currency = "USD",
+            .credential_fields =
+                {
+                    {CredentialField::ApiKey, "CLIENT ID", "Enter Client ID (Gateway port)...", false},
+                    {CredentialField::ApiSecret, "GATEWAY URL", "localhost:5000 (or custom)...", false},
+                },
+            .exchanges = {"NYSE", "NASDAQ", "AMEX", "CBOE"},
+            .product_types =
+                {
+                    {"Day Order", ProductType::Intraday},
+                    {"GTC Order", ProductType::Delivery},
+                    {"Margin", ProductType::Margin},
+                },
+            .supports_intraday = true,
+            .supports_bracket_order = true,
+            .supports_cover_order = false,
+            .has_native_paper = true,
+            .default_paper_balance = 100000.0,
+            .default_watchlist = {"AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "JPM", "V", "JNJ"},
+            .default_symbol = "AAPL",
+            .default_exchange = "NASDAQ",
+            .brokerage_info = "$0.005/share (min $1)",
         };
     }
 

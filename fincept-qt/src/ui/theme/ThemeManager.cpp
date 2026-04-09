@@ -9,158 +9,75 @@ namespace fincept::ui {
 // ---------------------------------------------------------------------------
 
 const ThemeTokens THEME_OBSIDIAN = {
-    .name          = "Obsidian",
-    .bg_base       = "#080808",
-    .bg_surface    = "#0a0a0a",
-    .bg_raised     = "#111111",
-    .bg_hover      = "#161616",
-    .border_dim    = "#1a1a1a",
-    .border_med    = "#222222",
+    .name = "Obsidian",
+    .bg_base = "#080808",
+    .bg_surface = "#0a0a0a",
+    .bg_raised = "#111111",
+    .bg_hover = "#161616",
+    .border_dim = "#1a1a1a",
+    .border_med = "#222222",
     .border_bright = "#333333",
-    .text_primary  = "#e5e5e5",
-    .text_secondary= "#808080",
+    .text_primary = "#e5e5e5",
+    .text_secondary = "#808080",
     .text_tertiary = "#525252",
-    .text_dim      = "#404040",
-    .accent        = "#d97706",
-    .accent_dim    = "#78350f",
-    .text_on_accent= "#ffffff",
-    .icon_dim      = "#808080",
-    .icon_hover    = "#e5e5e5",
-    .positive      = "#16a34a",
-    .positive_dim  = "#14532d",
-    .negative      = "#dc2626",
-    .negative_dim  = "#7f1d1d",
-    .warning       = "#ca8a04",
-    .info          = "#2563eb",
-    .cyan          = "#0891b2",
-    .accent_bg     = "#1a1000",
-    .positive_bg   = "#0a1a0f",
-    .negative_bg   = "#1a0a0a",
-    .row_alt       = "#0c0c0c",
-    .font_family   = "'Consolas','Courier New',monospace",
-    .font_size_base= 14,
-    .chart_colors  = {"#d97706","#0891b2","#16a34a","#dc2626","#2563eb","#ca8a04"},
-};
-
-const ThemeTokens THEME_BLOOMBERG = {
-    .name          = "Bloomberg Dark",
-    .bg_base       = "#0a0a0a",
-    .bg_surface    = "#0f0f0f",
-    .bg_raised     = "#141414",
-    .bg_hover      = "#1a1a1a",
-    .border_dim    = "#1f1f1f",
-    .border_med    = "#282828",
-    .border_bright = "#383838",
-    .text_primary  = "#ffffff",
-    .text_secondary= "#999999",
-    .text_tertiary = "#555555",
-    .text_dim      = "#3a3a3a",
-    .accent        = "#ff6600",
-    .accent_dim    = "#7c2d00",
-    .text_on_accent= "#ffffff",
-    .icon_dim      = "#999999",
-    .icon_hover    = "#ffffff",
-    .positive      = "#16a34a",
-    .positive_dim  = "#14532d",
-    .negative      = "#ff3333",
-    .negative_dim  = "#7f1d1d",
-    .warning       = "#ca8a04",
-    .info          = "#2563eb",
-    .cyan          = "#00b4d8",
-    .accent_bg     = "#1a0d00",
-    .positive_bg   = "#0a1a0f",
-    .negative_bg   = "#1a0808",
-    .row_alt       = "#0d0d0d",
-    .font_family   = "'Consolas','Courier New',monospace",
-    .font_size_base= 14,
-    .chart_colors  = {"#ff6600","#00b4d8","#16a34a","#ff3333","#2563eb","#ca8a04"},
-};
-
-const ThemeTokens THEME_LIGHT = {
-    .name          = "Light",
-    // --- Backgrounds (lightest → slightly darker) ---
-    .bg_base       = "#ffffff",
-    .bg_surface    = "#f5f5f5",
-    .bg_raised     = "#ebebeb",
-    .bg_hover      = "#e0e0e0",
-    // --- Borders ---
-    .border_dim    = "#e5e5e5",
-    .border_med    = "#d4d4d4",
-    .border_bright = "#a3a3a3",
-    // --- Text (dark on light) ---
-    .text_primary  = "#171717",
-    .text_secondary= "#525252",
-    .text_tertiary = "#737373",
-    .text_dim      = "#a3a3a3",
-    // --- Accent (darker amber for white-bg contrast, WCAG AA compliant) ---
-    .accent        = "#b45309",
-    .accent_dim    = "#fef3c7",
-    .text_on_accent= "#ffffff",
-    .icon_dim      = "#737373",
-    .icon_hover    = "#171717",
-    // --- Functional (deepened for white-bg readability) ---
-    .positive      = "#15803d",
-    .positive_dim  = "#bbf7d0",
-    .negative      = "#dc2626",
-    .negative_dim  = "#fecaca",
-    .warning       = "#a16207",
-    .info          = "#1d4ed8",
-    .cyan          = "#0e7490",
-    .accent_bg     = "#fef3c7",
-    .positive_bg   = "#f0fdf4",
-    .negative_bg   = "#fef2f2",
-    // --- Table ---
-    .row_alt       = "#fafafa",
-    // --- Font ---
-    .font_family   = "'Consolas','Courier New',monospace",
-    .font_size_base= 14,
-    // --- Chart colors (deeper shades for white background) ---
-    .chart_colors  = {"#b45309","#0e7490","#15803d","#dc2626","#7c3aed","#a16207"},
+    .text_dim = "#404040",
+    .accent = "#d97706",
+    .accent_dim = "#78350f",
+    .text_on_accent = "#ffffff",
+    .icon_dim = "#808080",
+    .icon_hover = "#e5e5e5",
+    .positive = "#16a34a",
+    .positive_dim = "#14532d",
+    .negative = "#dc2626",
+    .negative_dim = "#7f1d1d",
+    .warning = "#ca8a04",
+    .info = "#2563eb",
+    .cyan = "#0891b2",
+    .accent_bg = "#1a1000",
+    .positive_bg = "#0a1a0f",
+    .negative_bg = "#1a0a0a",
+    .row_alt = "#0c0c0c",
+    .font_family = "'Consolas','Courier New',monospace",
+    .font_size_base = 14,
+    .chart_colors = {"#d97706", "#0891b2", "#16a34a", "#dc2626", "#2563eb", "#ca8a04"},
 };
 
 // ---------------------------------------------------------------------------
 // ThemeManager implementation
 // ---------------------------------------------------------------------------
 
-ThemeManager::ThemeManager()
-    : QObject(nullptr)
-    , current_(THEME_OBSIDIAN)
-{}
+ThemeManager::ThemeManager() : QObject(nullptr), current_(THEME_OBSIDIAN) {}
 
 ThemeManager& ThemeManager::instance() {
     static ThemeManager inst;
     return inst;
 }
 
-void ThemeManager::apply_theme(const QString& name) {
-    if (name == "Bloomberg Dark")     current_ = THEME_BLOOMBERG;
-    else if (name == "Light")         current_ = THEME_LIGHT;
-    else                              current_ = THEME_OBSIDIAN;
-
+void ThemeManager::apply_theme(const QString& /*name*/) {
+    current_ = THEME_OBSIDIAN;
     rebuild_and_apply();
 }
 
 void ThemeManager::apply_font(const QString& family, int size_px) {
-    font_family_  = family;
+    font_family_ = family;
     font_size_px_ = (size_px > 0) ? size_px : 14;
     // rebuild_and_apply() will sync qApp->setFont() and QSS together.
     rebuild_and_apply();
 }
 
 void ThemeManager::apply_density(const QString& density) {
-    if (density == "Compact")          density_pad_ = 2;
-    else if (density == "Comfortable") density_pad_ = 8;
-    else                               density_pad_ = 4;
+    if (density == "Compact")
+        density_pad_ = 2;
+    else if (density == "Comfortable")
+        density_pad_ = 8;
+    else
+        density_pad_ = 4;
 
     rebuild_and_apply();
 }
 
 QString ThemeManager::current_theme_name() const {
     return QString(current_.name);
-}
-
-QStringList ThemeManager::available_themes() {
-    return {"Obsidian", "Bloomberg Dark", "Light"};
 }
 
 QStringList ThemeManager::available_densities() {
@@ -192,9 +109,9 @@ void ThemeManager::rebuild_and_apply() {
 }
 
 QString ThemeManager::build_global_qss() const {
-    const auto& t  = current_;
-    const int   p  = density_pad_;       // padding px
-    const int   p2 = density_pad_ * 2;  // double padding
+    const auto& t = current_;
+    const int p = density_pad_;      // padding px
+    const int p2 = density_pad_ * 2; // double padding
 
     return QString(R"(
         * {
@@ -497,60 +414,60 @@ QString ThemeManager::build_global_qss() const {
         #negativeText { color: %21; }
         #warningText  { color: %22; }
     )")
-    // %1  bg_base
-    .arg(t.bg_base)
-    // %2  text_primary
-    .arg(t.text_primary)
-    // %3  border_med
-    .arg(t.border_med)
-    // %4  border_bright
-    .arg(t.border_bright)
-    // %5  bg_surface
-    .arg(t.bg_surface)
-    // %6  border_dim
-    .arg(t.border_dim)
-    // %7  padding (density)
-    .arg(p)
-    // %8  double padding
-    .arg(p2)
-    // %9  accent
-    .arg(t.accent)
-    // %10 text_secondary
-    .arg(t.text_secondary)
-    // %11 bg_hover
-    .arg(t.bg_hover)
-    // %12 bg_raised
-    .arg(t.bg_raised)
-    // %13 text_dim
-    .arg(t.text_dim)
-    // %14 row_alt
-    .arg(t.row_alt)
-    // %15 font-family
-    .arg(font_family_)
-    // %16 font-size
-    .arg(font_size_px_)
-    // %17 text_on_accent
-    .arg(t.text_on_accent)
-    // %18 icon_dim
-    .arg(t.icon_dim)
-    // %19 icon_hover
-    .arg(t.icon_hover)
-    // %20 positive
-    .arg(t.positive)
-    // %21 negative
-    .arg(t.negative)
-    // %22 warning
-    .arg(t.warning)
-    // %23 positive_dim
-    .arg(t.positive_dim)
-    // %24 negative_dim
-    .arg(t.negative_dim)
-    // %25 accent_bg
-    .arg(t.accent_bg)
-    // %26 positive_bg
-    .arg(t.positive_bg)
-    // %27 negative_bg
-    .arg(t.negative_bg);
+        // %1  bg_base
+        .arg(t.bg_base)
+        // %2  text_primary
+        .arg(t.text_primary)
+        // %3  border_med
+        .arg(t.border_med)
+        // %4  border_bright
+        .arg(t.border_bright)
+        // %5  bg_surface
+        .arg(t.bg_surface)
+        // %6  border_dim
+        .arg(t.border_dim)
+        // %7  padding (density)
+        .arg(p)
+        // %8  double padding
+        .arg(p2)
+        // %9  accent
+        .arg(t.accent)
+        // %10 text_secondary
+        .arg(t.text_secondary)
+        // %11 bg_hover
+        .arg(t.bg_hover)
+        // %12 bg_raised
+        .arg(t.bg_raised)
+        // %13 text_dim
+        .arg(t.text_dim)
+        // %14 row_alt
+        .arg(t.row_alt)
+        // %15 font-family
+        .arg(font_family_)
+        // %16 font-size
+        .arg(font_size_px_)
+        // %17 text_on_accent
+        .arg(t.text_on_accent)
+        // %18 icon_dim
+        .arg(t.icon_dim)
+        // %19 icon_hover
+        .arg(t.icon_hover)
+        // %20 positive
+        .arg(t.positive)
+        // %21 negative
+        .arg(t.negative)
+        // %22 warning
+        .arg(t.warning)
+        // %23 positive_dim
+        .arg(t.positive_dim)
+        // %24 negative_dim
+        .arg(t.negative_dim)
+        // %25 accent_bg
+        .arg(t.accent_bg)
+        // %26 positive_bg
+        .arg(t.positive_bg)
+        // %27 negative_bg
+        .arg(t.negative_bg);
 }
 
 } // namespace fincept::ui

@@ -11,22 +11,32 @@ class DhanBroker : public IBroker {
 
     BrokerProfile profile() const override {
         return BrokerProfile{
-            .id = "dhan", .display_name = "Dhan", .region = "IN", .currency = "INR",
-            .credential_fields = {
-                {CredentialField::ApiKey,    "CLIENT ID",   "Enter Client ID...",    false},
-                {CredentialField::ApiSecret, "ACCESS TOKEN","Enter Access Token...", true},
-            },
-            .exchanges = {"NSE","BSE","MCX","NCDEX"},
-            .product_types = {
-                {"Intraday (INTRADAY)", ProductType::Intraday},
-                {"Delivery (CNC)",      ProductType::Delivery},
-                {"Margin (MARGIN)",     ProductType::Margin},
-            },
-            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
-            .has_native_paper=false, .default_paper_balance=1000000.0,
-            .default_watchlist={"HDFCBANK","ICICIBANK","SBIN","TCS","INFY","RELIANCE","TATAMOTORS","BAJFINANCE","HINDUNILVR","ITC"},
-            .default_symbol="RELIANCE", .default_exchange="NSE",
-            .brokerage_info="\u20B920/order flat",
+            .id = "dhan",
+            .display_name = "Dhan",
+            .region = "IN",
+            .currency = "INR",
+            .credential_fields =
+                {
+                    {CredentialField::ApiKey, "CLIENT ID", "Enter Client ID...", false},
+                    {CredentialField::ApiSecret, "ACCESS TOKEN", "Enter Access Token...", true},
+                },
+            .exchanges = {"NSE", "BSE", "MCX", "NCDEX"},
+            .product_types =
+                {
+                    {"Intraday (INTRADAY)", ProductType::Intraday},
+                    {"Delivery (CNC)", ProductType::Delivery},
+                    {"Margin (MARGIN)", ProductType::Margin},
+                },
+            .supports_intraday = true,
+            .supports_bracket_order = false,
+            .supports_cover_order = false,
+            .has_native_paper = false,
+            .default_paper_balance = 1000000.0,
+            .default_watchlist = {"HDFCBANK", "ICICIBANK", "SBIN", "TCS", "INFY", "RELIANCE", "TATAMOTORS",
+                                  "BAJFINANCE", "HINDUNILVR", "ITC"},
+            .default_symbol = "RELIANCE",
+            .default_exchange = "NSE",
+            .brokerage_info = "\u20B920/order flat",
         };
     }
 

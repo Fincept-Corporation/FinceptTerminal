@@ -30,9 +30,7 @@ QVariant CacheManager::get(const QString& key) const {
     if (!cdb.is_open())
         return {};
 
-    auto r = cdb.execute(
-        "SELECT value FROM unified_cache WHERE key = ? AND expires_at > datetime('now')",
-        {key});
+    auto r = cdb.execute("SELECT value FROM unified_cache WHERE key = ? AND expires_at > datetime('now')", {key});
     if (r.is_err())
         return {};
 
@@ -51,9 +49,7 @@ bool CacheManager::has(const QString& key) const {
     if (!cdb.is_open())
         return false;
 
-    auto r = cdb.execute(
-        "SELECT 1 FROM unified_cache WHERE key = ? AND expires_at > datetime('now')",
-        {key});
+    auto r = cdb.execute("SELECT 1 FROM unified_cache WHERE key = ? AND expires_at > datetime('now')", {key});
     if (r.is_err())
         return false;
 
@@ -90,8 +86,7 @@ int CacheManager::entry_count() const {
     if (!cdb.is_open())
         return 0;
 
-    auto r = cdb.execute(
-        "SELECT COUNT(*) FROM unified_cache WHERE expires_at > datetime('now')", {});
+    auto r = cdb.execute("SELECT COUNT(*) FROM unified_cache WHERE expires_at > datetime('now')", {});
     if (r.is_err())
         return 0;
 

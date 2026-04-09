@@ -25,8 +25,7 @@ HDXDataPanel::HDXDataPanel(QWidget* parent) : QWidget(parent) {
 
 void HDXDataPanel::connect_service() {
     auto& svc = GeopoliticsService::instance();
-    connect(&svc, &GeopoliticsService::hdx_results_loaded,
-            this, &HDXDataPanel::on_hdx_results);
+    connect(&svc, &GeopoliticsService::hdx_results_loaded, this, &HDXDataPanel::on_hdx_results);
 }
 
 void HDXDataPanel::build_ui() {
@@ -38,18 +37,16 @@ void HDXDataPanel::build_ui() {
     auto* header = new QWidget(this);
     header->setFixedHeight(48);
     header->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(16, 0, 16, 0);
     hhl->setSpacing(8);
 
     auto* title = new QLabel("HDX HUMANITARIAN DATA", header);
-    title->setStyleSheet(
-        QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
-            .arg(ui::colors::CYAN())
-            .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY()));
+    title->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
+                             .arg(ui::colors::CYAN())
+                             .arg(ui::fonts::TINY)
+                             .arg(ui::fonts::DATA_FAMILY()));
     hhl->addWidget(title);
 
     auto* div = new QWidget(header);
@@ -62,16 +59,15 @@ void HDXDataPanel::build_ui() {
     for (int i = 0; i < views.size(); ++i) {
         auto* btn = new QPushButton(views[i].toUpper(), header);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(
-            QString("QPushButton { color:%1; font-size:%2px; font-family:%3;"
-                    "padding:4px 12px; border:none; background:transparent;"
-                    "font-weight:400; }"
-                    "QPushButton:hover { color:%4; background:rgba(%5,0.04); }")
-                .arg(ui::colors::TEXT_TERTIARY)
-                .arg(ui::fonts::TINY)
-                .arg(ui::fonts::DATA_FAMILY)
-                .arg(ui::colors::CYAN())
-                .arg(rgb));
+        btn->setStyleSheet(QString("QPushButton { color:%1; font-size:%2px; font-family:%3;"
+                                   "padding:4px 12px; border:none; background:transparent;"
+                                   "font-weight:400; }"
+                                   "QPushButton:hover { color:%4; background:rgba(%5,0.04); }")
+                               .arg(ui::colors::TEXT_TERTIARY)
+                               .arg(ui::fonts::TINY)
+                               .arg(ui::fonts::DATA_FAMILY)
+                               .arg(ui::colors::CYAN())
+                               .arg(rgb));
         connect(btn, &QPushButton::clicked, this, [this, i]() { on_view_changed(i); });
         hhl->addWidget(btn);
         view_buttons_.append(btn);
@@ -82,14 +78,13 @@ void HDXDataPanel::build_ui() {
     search_edit_ = new QLineEdit(header);
     search_edit_->setPlaceholderText("Search HDX datasets...");
     search_edit_->setFixedWidth(240);
-    search_edit_->setStyleSheet(
-        QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                "font-family:%4; font-size:%5px; padding:4px 8px; }"
-                "QLineEdit:focus { border-color:%6; }")
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::SMALL)
-            .arg(ui::colors::CYAN()));
+    search_edit_->setStyleSheet(QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
+                                        "font-family:%4; font-size:%5px; padding:4px 8px; }"
+                                        "QLineEdit:focus { border-color:%6; }")
+                                    .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                    .arg(ui::fonts::DATA_FAMILY)
+                                    .arg(ui::fonts::SMALL)
+                                    .arg(ui::colors::CYAN()));
     connect(search_edit_, &QLineEdit::returnPressed, this, [this]() {
         auto q = search_edit_->text().trimmed();
         if (!q.isEmpty()) {
@@ -101,13 +96,12 @@ void HDXDataPanel::build_ui() {
 
     dataset_count_ = new QLabel("0 datasets", header);
     dataset_count_->setFixedHeight(22);
-    dataset_count_->setStyleSheet(
-        QString("color:%1; font-size:%2px; font-family:%3; padding:2px 6px;"
-                "background:rgba(%4,0.08); border:1px solid rgba(%4,0.25); font-weight:700;")
-            .arg(ui::colors::CYAN())
-            .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY())
-            .arg(rgb));
+    dataset_count_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:2px 6px;"
+                                          "background:rgba(%4,0.08); border:1px solid rgba(%4,0.25); font-weight:700;")
+                                      .arg(ui::colors::CYAN())
+                                      .arg(ui::fonts::TINY)
+                                      .arg(ui::fonts::DATA_FAMILY())
+                                      .arg(rgb));
     hhl->addWidget(dataset_count_);
 
     root->addWidget(header);
@@ -115,8 +109,7 @@ void HDXDataPanel::build_ui() {
     // Datasets table
     datasets_table_ = new QTableWidget(this);
     datasets_table_->setColumnCount(5);
-    datasets_table_->setHorizontalHeaderLabels(
-        {"Title", "Organization", "Date", "Resources", "Tags"});
+    datasets_table_->setHorizontalHeaderLabels({"Title", "Organization", "Date", "Resources", "Tags"});
     datasets_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     datasets_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     datasets_table_->setAlternatingRowColors(true);
@@ -131,31 +124,29 @@ void HDXDataPanel::build_ui() {
 
     datasets_table_->verticalHeader()->setDefaultSectionSize(26);
 
-    datasets_table_->setStyleSheet(
-        QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
-                "font-family:%4; font-size:%5px; border:none; }"
-                "QTableWidget::item { padding:3px 8px; }"
-                "QTableWidget::item:selected { background:rgba(%6,0.15); }"
-                "QHeaderView::section { background:%7; color:%8; font-weight:700;"
-                "padding:5px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
-                "QTableWidget::item:alternate { background:%9; }")
-            .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::SMALL)
-            .arg(rgb)
-            .arg(ui::colors::BG_RAISED)
-            .arg(ui::colors::TEXT_SECONDARY)
-            .arg(ui::colors::ROW_ALT));
+    datasets_table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
+                                           "font-family:%4; font-size:%5px; border:none; }"
+                                           "QTableWidget::item { padding:3px 8px; }"
+                                           "QTableWidget::item:selected { background:rgba(%6,0.15); }"
+                                           "QHeaderView::section { background:%7; color:%8; font-weight:700;"
+                                           "padding:5px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
+                                           "QTableWidget::item:alternate { background:%9; }")
+                                       .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
+                                       .arg(ui::fonts::DATA_FAMILY)
+                                       .arg(ui::fonts::SMALL)
+                                       .arg(rgb)
+                                       .arg(ui::colors::BG_RAISED)
+                                       .arg(ui::colors::TEXT_SECONDARY)
+                                       .arg(ui::colors::ROW_ALT));
 
     // Loading overlay
     loading_label_ = new QLabel("Loading HDX data...", this);
     loading_label_->setAlignment(Qt::AlignCenter);
-    loading_label_->setStyleSheet(
-        QString("color:%1; font-size:%2px; font-family:%3; background:%4;")
-            .arg(ui::colors::CYAN())
-            .arg(ui::fonts::DATA)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::colors::BG_SURFACE));
+    loading_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; background:%4;")
+                                      .arg(ui::colors::CYAN())
+                                      .arg(ui::fonts::DATA)
+                                      .arg(ui::fonts::DATA_FAMILY)
+                                      .arg(ui::colors::BG_SURFACE));
     loading_label_->hide();
     root->addWidget(loading_label_, 1);
     root->addWidget(datasets_table_, 1);
@@ -164,24 +155,21 @@ void HDXDataPanel::build_ui() {
     explorer_bar_ = new QWidget(this);
     explorer_bar_->setFixedHeight(44);
     explorer_bar_->setStyleSheet(
-        QString("background:%1; border-top:1px solid %2;")
-            .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+        QString("background:%1; border-top:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     auto* ehl = new QHBoxLayout(explorer_bar_);
     ehl->setContentsMargins(16, 0, 16, 0);
     ehl->setSpacing(8);
 
-    auto combo_style =
-        QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                "font-family:%4; font-size:%5px; padding:4px 6px; }")
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::SMALL);
+    auto combo_style = QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                               "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                           .arg(ui::fonts::DATA_FAMILY)
+                           .arg(ui::fonts::SMALL);
 
-    auto bar_label_style =
-        QString("color:%1; font-size:%2px; font-family:%3; font-weight:700; letter-spacing:1px;")
-            .arg(ui::colors::TEXT_TERTIARY)
-            .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY);
+    auto bar_label_style = QString("color:%1; font-size:%2px; font-family:%3; font-weight:700; letter-spacing:1px;")
+                               .arg(ui::colors::TEXT_TERTIARY)
+                               .arg(ui::fonts::TINY)
+                               .arg(ui::fonts::DATA_FAMILY);
 
     auto* country_lbl = new QLabel("COUNTRY:", explorer_bar_);
     country_lbl->setStyleSheet(bar_label_style);
@@ -200,23 +188,21 @@ void HDXDataPanel::build_ui() {
     topic_combo_ = new QComboBox(explorer_bar_);
     topic_combo_->setStyleSheet(combo_style);
     topic_combo_->addItems(
-        {"conflict", "humanitarian", "displacement", "food security",
-         "health", "education", "refugees"});
+        {"conflict", "humanitarian", "displacement", "food security", "health", "education", "refugees"});
     ehl->addWidget(topic_combo_);
 
     auto* explore_btn = new QPushButton("SEARCH", explorer_bar_);
     explore_btn->setCursor(Qt::PointingHandCursor);
     {
         QColor cy(ui::colors::CYAN());
-        explore_btn->setStyleSheet(
-            QString("QPushButton { background:%1; color:%2; font-family:%3;"
-                    "font-size:%4px; font-weight:700; border:none; padding:6px 16px; }"
-                    "QPushButton:hover { background:%5; }")
-                .arg(ui::colors::CYAN())
-                .arg(ui::colors::BG_BASE())
-                .arg(ui::fonts::DATA_FAMILY())
-                .arg(ui::fonts::SMALL)
-                .arg(cy.darker(120).name()));
+        explore_btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; font-family:%3;"
+                                           "font-size:%4px; font-weight:700; border:none; padding:6px 16px; }"
+                                           "QPushButton:hover { background:%5; }")
+                                       .arg(ui::colors::CYAN())
+                                       .arg(ui::colors::BG_BASE())
+                                       .arg(ui::fonts::DATA_FAMILY())
+                                       .arg(ui::fonts::SMALL)
+                                       .arg(cy.darker(120).name()));
     }
     connect(explore_btn, &QPushButton::clicked, this, [this]() {
         auto country = country_combo_->currentText().trimmed();
@@ -255,35 +241,48 @@ void HDXDataPanel::on_view_changed(int index) {
                     .arg(ui::fonts::DATA_FAMILY)
                     .arg(rgb));
         } else {
-            view_buttons_[i]->setStyleSheet(
-                QString("QPushButton { color:%1; font-size:%2px; font-family:%3;"
-                        "padding:4px 12px; border:none; background:transparent;"
-                        "font-weight:400; }"
-                        "QPushButton:hover { color:%4; background:rgba(%5,0.04); }")
-                    .arg(ui::colors::TEXT_TERTIARY)
-                    .arg(ui::fonts::TINY)
-                    .arg(ui::fonts::DATA_FAMILY)
-                    .arg(ui::colors::CYAN())
-                    .arg(rgb));
+            view_buttons_[i]->setStyleSheet(QString("QPushButton { color:%1; font-size:%2px; font-family:%3;"
+                                                    "padding:4px 12px; border:none; background:transparent;"
+                                                    "font-weight:400; }"
+                                                    "QPushButton:hover { color:%4; background:rgba(%5,0.04); }")
+                                                .arg(ui::colors::TEXT_TERTIARY)
+                                                .arg(ui::fonts::TINY)
+                                                .arg(ui::fonts::DATA_FAMILY)
+                                                .arg(ui::colors::CYAN())
+                                                .arg(rgb));
         }
     }
 
-    if (explorer_bar_) explorer_bar_->setVisible(index == 2);
+    if (explorer_bar_)
+        explorer_bar_->setVisible(index == 2);
 
     auto& svc = GeopoliticsService::instance();
     switch (index) {
         case 0:
-            if (!cache_conflicts_.isEmpty()) populate_table(cache_conflicts_);
-            else { show_loading(true); svc.search_hdx_conflicts(); }
+            if (!cache_conflicts_.isEmpty())
+                populate_table(cache_conflicts_);
+            else {
+                show_loading(true);
+                svc.search_hdx_conflicts();
+            }
             break;
         case 1:
-            if (!cache_humanitarian_.isEmpty()) populate_table(cache_humanitarian_);
-            else { show_loading(true); svc.search_hdx_humanitarian(); }
+            if (!cache_humanitarian_.isEmpty())
+                populate_table(cache_humanitarian_);
+            else {
+                show_loading(true);
+                svc.search_hdx_humanitarian();
+            }
             break;
-        case 2: break;
+        case 2:
+            break;
         case 3:
-            if (!cache_datasets_.isEmpty()) populate_table(cache_datasets_);
-            else { show_loading(true); svc.search_hdx_advanced("humanitarian crisis conflict displacement"); }
+            if (!cache_datasets_.isEmpty())
+                populate_table(cache_datasets_);
+            else {
+                show_loading(true);
+                svc.search_hdx_advanced("humanitarian crisis conflict displacement");
+            }
             break;
     }
 }
@@ -294,16 +293,16 @@ void HDXDataPanel::show_loading(bool on) {
 }
 
 void HDXDataPanel::on_hdx_results(const QString& context, QVector<HDXDataset> datasets) {
-    if (context == "conflicts")       cache_conflicts_   = datasets;
-    else if (context == "humanitarian") cache_humanitarian_ = datasets;
+    if (context == "conflicts")
+        cache_conflicts_ = datasets;
+    else if (context == "humanitarian")
+        cache_humanitarian_ = datasets;
     else if (context == "search" || context == "topic" || context == "country")
         cache_datasets_ = datasets;
 
-    bool relevant =
-        (active_view_ == 0 && context == "conflicts") ||
-        (active_view_ == 1 && context == "humanitarian") ||
-        (active_view_ == 2 && (context == "country" || context == "topic")) ||
-        (active_view_ == 3 && context == "search");
+    bool relevant = (active_view_ == 0 && context == "conflicts") || (active_view_ == 1 && context == "humanitarian") ||
+                    (active_view_ == 2 && (context == "country" || context == "topic")) ||
+                    (active_view_ == 3 && context == "search");
     if (relevant)
         populate_table(datasets);
 }

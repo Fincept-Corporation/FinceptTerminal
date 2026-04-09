@@ -2,9 +2,9 @@
 
 #include "core/logging/Logger.h"
 
+#include <QCryptographicHash>
 #include <QSettings>
 #include <QSysInfo>
-#include <QCryptographicHash>
 
 // ── Platform-specific credential storage ──────────────────────────────────────
 //
@@ -18,8 +18,8 @@
 
 #ifdef Q_OS_WIN
 #    include <windows.h>
-#    include <wincrypt.h>
 #    include <wincred.h>
+#    include <wincrypt.h>
 #    pragma comment(lib, "Advapi32.lib")
 #endif
 
@@ -43,9 +43,7 @@ SecureStorage& SecureStorage::instance() {
 // Derive a machine-unique obfuscation key from stable system identifiers.
 // Not a secret — just prevents the file being readable at a glance.
 static QByteArray machine_key() {
-    const QString seed = QSysInfo::machineUniqueId()
-                       + QSysInfo::productType()
-                       + QLatin1String(kService);
+    const QString seed = QSysInfo::machineUniqueId() + QSysInfo::productType() + QLatin1String(kService);
     return QCryptographicHash::hash(seed.toUtf8(), QCryptographicHash::Sha256);
 }
 
@@ -54,8 +52,8 @@ static QByteArray xor_obfuscate(const QByteArray& data) {
     QByteArray out;
     out.resize(data.size());
     for (int i = 0; i < data.size(); ++i)
-        out[i] = static_cast<char>(static_cast<unsigned char>(data[i])
-                                 ^ static_cast<unsigned char>(key[i % key.size()]));
+        out[i] =
+            static_cast<char>(static_cast<unsigned char>(data[i]) ^ static_cast<unsigned char>(key[i % key.size()]));
     return out;
 }
 
@@ -70,11 +68,11 @@ Result<void> SecureStorage::store(const QString& key, const QString& value) {
     QByteArray data = value.toUtf8();
 
     CREDENTIALW cred = {};
-    cred.Type              = CRED_TYPE_GENERIC;
-    cred.TargetName        = const_cast<LPWSTR>(target.c_str());
+    cred.Type = CRED_TYPE_GENERIC;
+    cred.TargetName = const_cast<LPWSTR>(target.c_str());
     cred.CredentialBlobSize = static_cast<DWORD>(data.size());
-    cred.CredentialBlob    = reinterpret_cast<LPBYTE>(data.data());
-    cred.Persist           = CRED_PERSIST_LOCAL_MACHINE;
+    cred.CredentialBlob = reinterpret_cast<LPBYTE>(data.data());
+    cred.Persist = CRED_PERSIST_LOCAL_MACHINE;
 
     if (!CredWriteW(&cred, 0)) {
         LOG_ERROR(TAG, "CredWriteW failed for key: " + key);
@@ -84,28 +82,23 @@ Result<void> SecureStorage::store(const QString& key, const QString& value) {
 
 #elif defined(Q_OS_MAC)
     // macOS Keychain — encrypted, user-unlocked
-    const QByteArray svc  = QByteArray(kService);
+    const QByteArray svc = QByteArray(kService);
     const QByteArray acct = key.toUtf8();
     const QByteArray data = value.toUtf8();
 
     // Delete any existing item first (SecItemUpdate is more complex)
     SecKeychainItemRef existing = nullptr;
-    OSStatus del_status = SecKeychainFindGenericPassword(
-        nullptr,
-        static_cast<UInt32>(svc.size()),  svc.constData(),
-        static_cast<UInt32>(acct.size()), acct.constData(),
-        nullptr, nullptr, &existing);
+    OSStatus del_status =
+        SecKeychainFindGenericPassword(nullptr, static_cast<UInt32>(svc.size()), svc.constData(),
+                                       static_cast<UInt32>(acct.size()), acct.constData(), nullptr, nullptr, &existing);
     if (del_status == errSecSuccess && existing) {
         SecKeychainItemDelete(existing);
         CFRelease(existing);
     }
 
-    OSStatus status = SecKeychainAddGenericPassword(
-        nullptr,
-        static_cast<UInt32>(svc.size()),  svc.constData(),
-        static_cast<UInt32>(acct.size()), acct.constData(),
-        static_cast<UInt32>(data.size()), data.constData(),
-        nullptr);
+    OSStatus status = SecKeychainAddGenericPassword(nullptr, static_cast<UInt32>(svc.size()), svc.constData(),
+                                                    static_cast<UInt32>(acct.size()), acct.constData(),
+                                                    static_cast<UInt32>(data.size()), data.constData(), nullptr);
 
     if (status != errSecSuccess) {
         LOG_ERROR(TAG, QString("Keychain store failed (OSStatus %1) for key: %2").arg(status).arg(key));
@@ -129,37 +122,32 @@ Result<void> SecureStorage::store(const QString& key, const QString& value) {
 Result<QString> SecureStorage::retrieve(const QString& key) {
 #ifdef Q_OS_WIN
     std::wstring target = L"FinceptTerminal/" + key.toStdWString();
-    PCREDENTIALW cred   = nullptr;
+    PCREDENTIALW cred = nullptr;
 
     if (!CredReadW(target.c_str(), CRED_TYPE_GENERIC, 0, &cred)) {
         return Result<QString>::err("Credential not found");
     }
 
-    QString value = QString::fromUtf8(
-        reinterpret_cast<const char*>(cred->CredentialBlob),
-        static_cast<int>(cred->CredentialBlobSize));
+    QString value = QString::fromUtf8(reinterpret_cast<const char*>(cred->CredentialBlob),
+                                      static_cast<int>(cred->CredentialBlobSize));
     CredFree(cred);
     return Result<QString>::ok(value);
 
 #elif defined(Q_OS_MAC)
-    const QByteArray svc  = QByteArray(kService);
+    const QByteArray svc = QByteArray(kService);
     const QByteArray acct = key.toUtf8();
 
-    UInt32 data_len  = 0;
-    void*  data_ptr  = nullptr;
-    OSStatus status = SecKeychainFindGenericPassword(
-        nullptr,
-        static_cast<UInt32>(svc.size()),  svc.constData(),
-        static_cast<UInt32>(acct.size()), acct.constData(),
-        &data_len, &data_ptr,
-        nullptr);
+    UInt32 data_len = 0;
+    void* data_ptr = nullptr;
+    OSStatus status = SecKeychainFindGenericPassword(nullptr, static_cast<UInt32>(svc.size()), svc.constData(),
+                                                     static_cast<UInt32>(acct.size()), acct.constData(), &data_len,
+                                                     &data_ptr, nullptr);
 
     if (status != errSecSuccess) {
         return Result<QString>::err("Credential not found in Keychain");
     }
 
-    QString value = QString::fromUtf8(static_cast<const char*>(data_ptr),
-                                      static_cast<int>(data_len));
+    QString value = QString::fromUtf8(static_cast<const char*>(data_ptr), static_cast<int>(data_len));
     SecKeychainItemFreeContent(nullptr, data_ptr);
     return Result<QString>::ok(value);
 
@@ -188,15 +176,13 @@ Result<void> SecureStorage::remove(const QString& key) {
     return Result<void>::ok();
 
 #elif defined(Q_OS_MAC)
-    const QByteArray svc  = QByteArray(kService);
+    const QByteArray svc = QByteArray(kService);
     const QByteArray acct = key.toUtf8();
 
     SecKeychainItemRef item = nullptr;
-    OSStatus status = SecKeychainFindGenericPassword(
-        nullptr,
-        static_cast<UInt32>(svc.size()),  svc.constData(),
-        static_cast<UInt32>(acct.size()), acct.constData(),
-        nullptr, nullptr, &item);
+    OSStatus status =
+        SecKeychainFindGenericPassword(nullptr, static_cast<UInt32>(svc.size()), svc.constData(),
+                                       static_cast<UInt32>(acct.size()), acct.constData(), nullptr, nullptr, &item);
 
     if (status == errSecSuccess && item) {
         SecKeychainItemDelete(item);

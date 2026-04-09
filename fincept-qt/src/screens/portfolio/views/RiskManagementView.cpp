@@ -54,12 +54,12 @@ void RiskManagementView::build_ui() {
                                   ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
 
     // ── Risk Overview tab ────────────────────────────────────────────────────
-    overview_panel_ = new QWidget;
+    overview_panel_ = new QWidget(this);
     overview_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
     tabs_->addTab(overview_panel_, "RISK OVERVIEW");
 
     // ── Stress Test tab ──────────────────────────────────────────────────────
-    auto* stress_w = new QWidget;
+    auto* stress_w = new QWidget(this);
     auto* stress_layout = new QVBoxLayout(stress_w);
     stress_layout->setContentsMargins(12, 8, 12, 8);
 
@@ -95,7 +95,7 @@ void RiskManagementView::build_ui() {
     tabs_->addTab(stress_w, "STRESS TEST");
 
     // ── Risk Contribution tab ────────────────────────────────────────────────
-    auto* contrib_w = new QWidget;
+    auto* contrib_w = new QWidget(this);
     auto* contrib_layout = new QVBoxLayout(contrib_w);
     contrib_layout->setContentsMargins(12, 8, 12, 8);
 
@@ -196,7 +196,7 @@ void RiskManagementView::update_overview() {
 
     auto add_card = [&](int r, int c, const QString& label, const QString& value, const char* color,
                         const QString& sub = {}) {
-        auto* card = new QWidget;
+        auto* card = new QWidget(this);
         card->setStyleSheet(
             QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
         auto* cl = new QVBoxLayout(card);
@@ -255,22 +255,24 @@ void RiskManagementView::update_stress_test() {
     for (const auto& h : summary_.holdings) {
         const QString s = h.symbol.toUpper();
         bool is_crypto = s.endsWith("-USD") || s.endsWith("-USDT");
-        bool is_bond   = s == "TLT" || s == "AGG" || s == "BND" || s == "IEF" ||
-                         s == "SHY" || s == "LQD" || s == "HYG" || s == "EMB" ||
-                         s.contains("BOND") || s.contains("TREAS");
-        bool is_comm   = s == "GLD" || s == "IAU" || s == "SLV" || s == "USO" ||
-                         s.contains("OIL") || s.contains("GOLD");
+        bool is_bond = s == "TLT" || s == "AGG" || s == "BND" || s == "IEF" || s == "SHY" || s == "LQD" || s == "HYG" ||
+                       s == "EMB" || s.contains("BOND") || s.contains("TREAS");
+        bool is_comm = s == "GLD" || s == "IAU" || s == "SLV" || s == "USO" || s.contains("OIL") || s.contains("GOLD");
 
-        if (is_crypto)      crypto_wt    += h.weight;
-        else if (is_bond)   bond_wt      += h.weight;
-        else if (is_comm)   commodity_wt += h.weight;
-        else                equity_wt    += h.weight;
+        if (is_crypto)
+            crypto_wt += h.weight;
+        else if (is_bond)
+            bond_wt += h.weight;
+        else if (is_comm)
+            commodity_wt += h.weight;
+        else
+            equity_wt += h.weight;
     }
     // Normalise to fractions
-    equity_wt    /= 100.0;
-    bond_wt      /= 100.0;
+    equity_wt /= 100.0;
+    bond_wt /= 100.0;
     commodity_wt /= 100.0;
-    crypto_wt    /= 100.0;
+    crypto_wt /= 100.0;
 
     int n = sizeof(kScenarios) / sizeof(kScenarios[0]);
     stress_table_->setRowCount(n);
@@ -289,10 +291,8 @@ void RiskManagementView::update_stress_test() {
         };
 
         // Weighted impact using actual portfolio composition
-        double impact_pct = s.equity_shock    * equity_wt
-                          + s.bond_shock      * bond_wt
-                          + s.commodity_shock * commodity_wt
-                          + s.equity_shock * 1.5 * crypto_wt; // crypto amplified
+        double impact_pct = s.equity_shock * equity_wt + s.bond_shock * bond_wt + s.commodity_shock * commodity_wt +
+                            s.equity_shock * 1.5 * crypto_wt; // crypto amplified
 
         // Scale by portfolio beta vs SPY (if available from OLS).
         // Beta > 1 means portfolio amplifies market moves; beta < 1 dampens.
@@ -301,9 +301,8 @@ void RiskManagementView::update_stress_test() {
         if (metrics_.beta.has_value()) {
             const double beta = std::max(0.0, *metrics_.beta); // clamp negative beta to 0
             const double equity_impact = s.equity_shock * equity_wt * beta;
-            const double other_impact  = s.bond_shock      * bond_wt
-                                       + s.commodity_shock * commodity_wt
-                                       + s.equity_shock * 1.5 * crypto_wt;
+            const double other_impact =
+                s.bond_shock * bond_wt + s.commodity_shock * commodity_wt + s.equity_shock * 1.5 * crypto_wt;
             impact_pct = equity_impact + other_impact;
         }
 
@@ -312,15 +311,11 @@ void RiskManagementView::update_stress_test() {
         set_cell(0, s.name, ui::colors::TEXT_PRIMARY);
         set_cell(1, s.description, ui::colors::TEXT_SECONDARY);
         set_cell(2, QString("%1%").arg(QString::number(s.equity_shock, 'f', 1)),
-                 s.equity_shock < 0 ? ui::colors::NEGATIVE : ui::colors::POSITIVE,
+                 s.equity_shock < 0 ? ui::colors::NEGATIVE : ui::colors::POSITIVE, Qt::AlignRight | Qt::AlignVCenter);
+        set_cell(3, QString("%1%2%").arg(impact_pct < 0 ? "" : "+").arg(QString::number(impact_pct, 'f', 1)),
+                 impact_pct < 0 ? ui::colors::NEGATIVE : ui::colors::POSITIVE, Qt::AlignRight | Qt::AlignVCenter);
+        set_cell(4, QString("-%1 %2").arg(currency_, QString::number(loss, 'f', 0)), ui::colors::NEGATIVE,
                  Qt::AlignRight | Qt::AlignVCenter);
-        set_cell(3, QString("%1%2%")
-                        .arg(impact_pct < 0 ? "" : "+")
-                        .arg(QString::number(impact_pct, 'f', 1)),
-                 impact_pct < 0 ? ui::colors::NEGATIVE : ui::colors::POSITIVE,
-                 Qt::AlignRight | Qt::AlignVCenter);
-        set_cell(4, QString("-%1 %2").arg(currency_, QString::number(loss, 'f', 0)),
-                 ui::colors::NEGATIVE, Qt::AlignRight | Qt::AlignVCenter);
     }
 }
 

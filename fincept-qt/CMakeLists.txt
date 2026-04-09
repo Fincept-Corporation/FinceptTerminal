@@ -81,8 +81,15 @@ if(Qt6TextToSpeech_FOUND)
     set(HAS_TTS TRUE)
 endif()
 
-# ── QXlsx (Excel file I/O) ────────────────────────────────────────────────────
+# ── FetchContent dependencies ─────────────────────────────────────────────────
+# Guard: prevent all FetchContent subdirectories from registering install()
+# rules that would pollute CPack and cause "file not found" errors on packaging.
+# Use CACHE FORCE so the flag is visible inside FetchContent sub-scopes
+# (plain set() only propagates into add_subdirectory, not FetchContent processes).
 include(FetchContent)
+set(CMAKE_SKIP_INSTALL_RULES TRUE CACHE BOOL "" FORCE)
+
+# ── QXlsx (Excel file I/O) ────────────────────────────────────────────────────
 FetchContent_Declare(
     QXlsx
     GIT_REPOSITORY https://github.com/QtExcel/QXlsx.git
@@ -175,6 +182,21 @@ set_target_properties(md4c PROPERTIES UNITY_BUILD OFF)
 if(TARGET md4c-html)
     set_target_properties(md4c-html PROPERTIES UNITY_BUILD OFF)
 endif()
+# md4c's src/CMakeLists.txt installs from ${CMAKE_BINARY_DIR}/src/md4c.pc but
+# configure_file() writes to ${CMAKE_CURRENT_BINARY_DIR}/md4c.pc (the subbuild
+# dir). On CI these are different paths, causing CPack's "file INSTALL cannot
+# find md4c.pc: File exists" error. Copy the generated .pc files at configure
+# time to where md4c's install rules expect them.
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/src")
+foreach(_pc md4c.pc md4c-html.pc)
+    if(EXISTS "${md4c_BINARY_DIR}/src/${_pc}")
+        configure_file(
+            "${md4c_BINARY_DIR}/src/${_pc}"
+            "${CMAKE_BINARY_DIR}/src/${_pc}"
+            COPYONLY
+        )
+    endif()
+endforeach()
 
 # ── QGeoView (interactive map widget with OSM tiles) ─────────────────────────
 FetchContent_Declare(
@@ -225,6 +247,9 @@ FetchContent_MakeAvailable(QtADS)
 # ADS target name is version-stamped: qtadvanceddocking-qt6
 # Disable unity build — ADS uses anonymous namespaces internally
 set_target_properties(qtadvanceddocking-qt6 PROPERTIES UNITY_BUILD OFF)
+
+# Restore install rules for the main application targets
+set(CMAKE_SKIP_INSTALL_RULES FALSE CACHE BOOL "" FORCE)
 if(MSVC)
     target_compile_options(qtadvanceddocking-qt6 PRIVATE /W0)
 endif()
@@ -304,6 +329,7 @@ set(STORAGE_SOURCES
     src/storage/repositories/WorkflowRepository.cpp
     src/storage/repositories/CustomIndexRepository.cpp
     src/storage/repositories/DataMappingRepository.cpp
+    src/storage/repositories/AccountRepository.cpp
 
     # Workflow migration
     src/storage/sqlite/migrations/v008_workflows.cpp
@@ -328,6 +354,9 @@ set(STORAGE_SOURCES
 
     # Screen UI state — crash-safe per-screen state in cache.db
     src/storage/sqlite/migrations/v015_screen_state.cpp
+
+    # Multi-account broker support
+    src/storage/sqlite/migrations/v016_broker_accounts.cpp
 )
 
 # Python runner
@@ -380,6 +409,9 @@ set(TRADING_SOURCES
     src/trading/OrderMatcher.cpp
     src/trading/BrokerRegistry.cpp
     src/trading/UnifiedTrading.cpp
+    src/trading/AccountManager.cpp
+    src/trading/AccountDataStream.cpp
+    src/trading/DataStreamManager.cpp
     src/trading/ExchangeService.cpp
     src/trading/brokers/BrokerHttp.cpp
     # Trading WebSocket
@@ -621,6 +653,8 @@ set(SCREEN_SOURCES
     src/screens/equity_trading/EquityOrderBook.cpp
     src/screens/equity_trading/EquityBottomPanel.cpp
     src/screens/equity_trading/EquityCredentials.cpp
+    src/screens/equity_trading/AccountManagementDialog.cpp
+    src/screens/equity_trading/BroadcastOrderDialog.cpp
     src/screens/data_sources/DataSourcesScreen.cpp
     src/screens/data_sources/ConnectorRegistry.cpp
     src/screens/data_sources/connectors/RelationalDatabases.cpp
@@ -888,6 +922,8 @@ set_source_files_properties(
     src/screens/equity_trading/EquityOrderBook.cpp
     src/screens/equity_trading/EquityBottomPanel.cpp
     src/screens/equity_trading/EquityCredentials.cpp
+    src/screens/equity_trading/AccountManagementDialog.cpp
+    src/screens/equity_trading/BroadcastOrderDialog.cpp
     src/screens/data_sources/DataSourcesScreen.cpp
     src/screens/data_sources/ConnectorRegistry.cpp
     src/screens/data_sources/connectors/RelationalDatabases.cpp
@@ -1070,6 +1106,7 @@ set_source_files_properties(
     src/storage/repositories/WorkflowRepository.cpp
     src/storage/repositories/CustomIndexRepository.cpp
     src/storage/repositories/DataMappingRepository.cpp
+    src/storage/repositories/AccountRepository.cpp
     # Migration files — each defines sql() helper in anonymous namespace
     src/storage/sqlite/migrations/v001_initial.cpp
     src/storage/sqlite/migrations/v002_llm_chat.cpp
@@ -1086,6 +1123,7 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v013_news_articles.cpp
     src/storage/sqlite/migrations/v014_llm_tools_toggle.cpp
     src/storage/sqlite/migrations/v015_screen_state.cpp
+    src/storage/sqlite/migrations/v016_broker_accounts.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp

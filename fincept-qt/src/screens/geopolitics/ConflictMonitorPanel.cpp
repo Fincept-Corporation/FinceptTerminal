@@ -30,8 +30,7 @@ void ConflictMonitorPanel::build_ui() {
     // Left: map + table in a vertical splitter
     auto* left_splitter = new QSplitter(Qt::Vertical, this);
     left_splitter->setHandleWidth(2);
-    left_splitter->setStyleSheet(
-        QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM));
+    left_splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM));
 
     // ── World Map ───────────────────────────────────────────────────────────
     map_widget_ = new fincept::ui::WorldMapWidget(left_splitter);
@@ -41,8 +40,7 @@ void ConflictMonitorPanel::build_ui() {
     // ── Events Table ────────────────────────────────────────────────────────
     events_table_ = new QTableWidget(left_splitter);
     events_table_->setColumnCount(7);
-    events_table_->setHorizontalHeaderLabels(
-        {"Category", "Country", "City", "Keywords", "Date", "Lat", "Lng"});
+    events_table_->setHorizontalHeaderLabels({"Category", "Country", "City", "Keywords", "Date", "Lat", "Lng"});
     events_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     events_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     events_table_->setAlternatingRowColors(true);
@@ -62,44 +60,39 @@ void ConflictMonitorPanel::build_ui() {
     events_table_->setColumnHidden(6, true);
     events_table_->verticalHeader()->setDefaultSectionSize(26);
 
-    events_table_->setStyleSheet(
-        QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
-                "font-family:%4; font-size:%5px; border:none; }"
-                "QTableWidget::item { padding:3px 8px; }"
-                "QTableWidget::item:selected { background:rgba(255,0,0,0.15); }"
-                "QHeaderView::section { background:%6; color:%7; font-weight:700;"
-                "padding:5px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
-                "QTableWidget::item:alternate { background:%8; }")
-            .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::SMALL)
-            .arg(ui::colors::BG_RAISED)
-            .arg(ui::colors::TEXT_SECONDARY)
-            .arg(ui::colors::ROW_ALT));
+    events_table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
+                                         "font-family:%4; font-size:%5px; border:none; }"
+                                         "QTableWidget::item { padding:3px 8px; }"
+                                         "QTableWidget::item:selected { background:rgba(255,0,0,0.15); }"
+                                         "QHeaderView::section { background:%6; color:%7; font-weight:700;"
+                                         "padding:5px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
+                                         "QTableWidget::item:alternate { background:%8; }")
+                                     .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
+                                     .arg(ui::fonts::DATA_FAMILY)
+                                     .arg(ui::fonts::SMALL)
+                                     .arg(ui::colors::BG_RAISED)
+                                     .arg(ui::colors::TEXT_SECONDARY)
+                                     .arg(ui::colors::ROW_ALT));
 
-    connect(events_table_, &QTableWidget::currentCellChanged,
-            this, [this](int row, int, int, int) {
+    connect(events_table_, &QTableWidget::currentCellChanged, this, [this](int row, int, int, int) {
         if (row < 0 || !detail_panel_)
             return;
 
         auto get_text = [this, row](int col) -> QString {
-            return events_table_->item(row, col)
-                       ? events_table_->item(row, col)->text()
-                       : QString();
+            return events_table_->item(row, col) ? events_table_->item(row, col)->text() : QString();
         };
 
         detail_category_->setText(get_text(0).toUpper());
-        detail_country_ ->setText(get_text(1));
-        detail_city_    ->setText(get_text(2));
+        detail_country_->setText(get_text(1));
+        detail_city_->setText(get_text(2));
         detail_keywords_->setText(get_text(3));
-        detail_date_    ->setText(get_text(4));
+        detail_date_->setText(get_text(4));
 
         auto cat_color = category_color(get_text(0));
-        detail_category_->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
-                .arg(cat_color.name())
-                .arg(ui::fonts::SMALL)
-                .arg(ui::fonts::DATA_FAMILY));
+        detail_category_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
+                                            .arg(cat_color.name())
+                                            .arg(ui::fonts::SMALL)
+                                            .arg(ui::fonts::DATA_FAMILY));
 
         detail_panel_->setVisible(true);
     });
@@ -113,21 +106,19 @@ void ConflictMonitorPanel::build_ui() {
     auto* sidebar = new QWidget(this);
     sidebar->setFixedWidth(240);
     sidebar->setStyleSheet(
-        QString("background:%1; border-left:1px solid %2;")
-            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("background:%1; border-left:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
 
     auto* svl = new QVBoxLayout(sidebar);
     svl->setContentsMargins(12, 12, 12, 12);
     svl->setSpacing(8);
 
     auto* stats_title = new QLabel("TOP CATEGORIES", sidebar);
-    stats_title->setStyleSheet(
-        QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                "letter-spacing:1px; padding-bottom:6px; border-bottom:1px solid %4;")
-            .arg(ui::colors::NEGATIVE())
-            .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY())
-            .arg(ui::colors::BORDER_DIM()));
+    stats_title->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
+                                       "letter-spacing:1px; padding-bottom:6px; border-bottom:1px solid %4;")
+                                   .arg(ui::colors::NEGATIVE())
+                                   .arg(ui::fonts::TINY)
+                                   .arg(ui::fonts::DATA_FAMILY())
+                                   .arg(ui::colors::BORDER_DIM()));
     svl->addWidget(stats_title);
 
     auto* stats_container = new QWidget(sidebar);
@@ -137,11 +128,10 @@ void ConflictMonitorPanel::build_ui() {
     svl->addWidget(stats_container);
 
     stats_label_ = new QLabel("No data", sidebar);
-    stats_label_->setStyleSheet(
-        QString("color:%1; font-size:%2px; font-family:%3;")
-            .arg(ui::colors::TEXT_TERTIARY)
-            .arg(ui::fonts::SMALL)
-            .arg(ui::fonts::DATA_FAMILY));
+    stats_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
+                                    .arg(ui::colors::TEXT_TERTIARY)
+                                    .arg(ui::fonts::SMALL)
+                                    .arg(ui::fonts::DATA_FAMILY));
     svl->addWidget(stats_label_);
 
     svl->addSpacing(8);
@@ -152,10 +142,10 @@ void ConflictMonitorPanel::build_ui() {
     {
         QColor neg(ui::colors::NEGATIVE());
         auto neg_rgb = QString("%1,%2,%3").arg(neg.red()).arg(neg.green()).arg(neg.blue());
-        detail_panel_->setStyleSheet(
-            QString("background:rgba(%1,0.04); border:1px solid rgba(%1,0.2);"
-                    "border-left:3px solid %2;")
-                .arg(neg_rgb).arg(ui::colors::NEGATIVE()));
+        detail_panel_->setStyleSheet(QString("background:rgba(%1,0.04); border:1px solid rgba(%1,0.2);"
+                                             "border-left:3px solid %2;")
+                                         .arg(neg_rgb)
+                                         .arg(ui::colors::NEGATIVE()));
     }
 
     auto* dvl = new QVBoxLayout(detail_panel_);
@@ -177,25 +167,22 @@ void ConflictMonitorPanel::build_ui() {
     grid->setVerticalSpacing(4);
     grid->setColumnStretch(1, 1);
 
-    auto field_label_style =
-        QString("color:%1; font-size:%2px; font-family:%3;")
-            .arg(ui::colors::TEXT_TERTIARY)
-            .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY);
-    auto value_style =
-        QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
-            .arg(ui::colors::TEXT_PRIMARY)
-            .arg(ui::fonts::SMALL)
-            .arg(ui::fonts::DATA_FAMILY);
+    auto field_label_style = QString("color:%1; font-size:%2px; font-family:%3;")
+                                 .arg(ui::colors::TEXT_TERTIARY)
+                                 .arg(ui::fonts::TINY)
+                                 .arg(ui::fonts::DATA_FAMILY);
+    auto value_style = QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
+                           .arg(ui::colors::TEXT_PRIMARY)
+                           .arg(ui::fonts::SMALL)
+                           .arg(ui::fonts::DATA_FAMILY);
 
-    struct FieldDef { const char* label; QLabel** target; };
+    struct FieldDef {
+        const char* label;
+        QLabel** target;
+    };
     FieldDef fields[] = {
-        {"CATEGORY",  &detail_category_},
-        {"COUNTRY",   &detail_country_},
-        {"CITY",      &detail_city_},
-        {"KEYWORDS",  &detail_keywords_},
-        {"DATE",      &detail_date_},
-        {"SOURCE",    &detail_source_},
+        {"CATEGORY", &detail_category_}, {"COUNTRY", &detail_country_}, {"CITY", &detail_city_},
+        {"KEYWORDS", &detail_keywords_}, {"DATE", &detail_date_},       {"SOURCE", &detail_source_},
     };
 
     for (int r = 0; r < 6; ++r) {
@@ -233,7 +220,7 @@ void ConflictMonitorPanel::set_events(const QVector<NewsEvent>& events) {
         events_table_->setItem(i, 3, new QTableWidgetItem(ev.matched_keywords));
         events_table_->setItem(i, 4, new QTableWidgetItem(ev.extracted_date));
 
-        auto* lat_item = new QTableWidgetItem(QString::number(ev.latitude,  'f', 4));
+        auto* lat_item = new QTableWidgetItem(QString::number(ev.latitude, 'f', 4));
         lat_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         events_table_->setItem(i, 5, lat_item);
 
@@ -256,7 +243,10 @@ void ConflictMonitorPanel::update_map(const QVector<NewsEvent>& events) {
 
     int skipped = 0;
     for (const auto& ev : events) {
-        if (ev.latitude == 0.0 && ev.longitude == 0.0) { ++skipped; continue; }
+        if (ev.latitude == 0.0 && ev.longitude == 0.0) {
+            ++skipped;
+            continue;
+        }
 
         double lat = ev.latitude;
         double lng = ev.longitude;
@@ -266,19 +256,20 @@ void ConflictMonitorPanel::update_map(const QVector<NewsEvent>& events) {
         coord_counts[key] = count + 1;
         if (count > 0) {
             double angle = (count * 137.508) * 3.14159265 / 180.0;
-            double dist  = 0.02 + 0.005 * count;
+            double dist = 0.02 + 0.005 * count;
             lat += dist * std::cos(angle);
             lng += dist * std::sin(angle);
         }
 
-        pins.append({lat, lng,
-                     QString("%1 — %2, %3").arg(ev.event_category, ev.city, ev.country),
+        pins.append({lat, lng, QString("%1 — %2, %3").arg(ev.event_category, ev.city, ev.country),
                      category_color(ev.event_category), 5.0});
     }
 
-    LOG_INFO("Geopolitics",
-             QString("Map: %1 events → %2 pins (%3 skipped, %4 unique coords)")
-                 .arg(events.size()).arg(pins.size()).arg(skipped).arg(coord_counts.size()));
+    LOG_INFO("Geopolitics", QString("Map: %1 events → %2 pins (%3 skipped, %4 unique coords)")
+                                .arg(events.size())
+                                .arg(pins.size())
+                                .arg(skipped)
+                                .arg(coord_counts.size()));
 
     map_widget_->set_pins(pins);
     map_widget_->fit_to_pins();
@@ -287,7 +278,8 @@ void ConflictMonitorPanel::update_map(const QVector<NewsEvent>& events) {
 void ConflictMonitorPanel::update_stats(const QVector<NewsEvent>& events) {
     while (stats_layout_->count() > 0) {
         auto* item = stats_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 
@@ -298,40 +290,36 @@ void ConflictMonitorPanel::update_stats(const QVector<NewsEvent>& events) {
     QVector<QPair<QString, int>> sorted;
     for (auto it = counts.begin(); it != counts.end(); ++it)
         sorted.append({it.key(), it.value()});
-    std::sort(sorted.begin(), sorted.end(),
-              [](const auto& a, const auto& b) { return a.second > b.second; });
+    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
 
     for (int i = 0; i < qMin(sorted.size(), 10); ++i) {
         const auto& [cat, count] = sorted[i];
         const QColor cat_col = category_color(cat);
         const QString col_hex = cat_col.name();
-        const QString col_rgb =
-            QString("%1,%2,%3").arg(cat_col.red()).arg(cat_col.green()).arg(cat_col.blue());
+        const QString col_rgb = QString("%1,%2,%3").arg(cat_col.red()).arg(cat_col.green()).arg(cat_col.blue());
 
-        auto* row = new QWidget;
-        row->setStyleSheet(
-            QString("border-left:2px solid %1; padding-left:4px;"
-                    "background:rgba(%2,0.04);")
-                .arg(col_hex).arg(col_rgb));
+        auto* row = new QWidget(this);
+        row->setStyleSheet(QString("border-left:2px solid %1; padding-left:4px;"
+                                   "background:rgba(%2,0.04);")
+                               .arg(col_hex)
+                               .arg(col_rgb));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(6, 2, 4, 2);
         rl->setSpacing(6);
 
         auto* name = new QLabel(cat, row);
-        name->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-family:%3; border:none; background:transparent;")
-                .arg(ui::colors::TEXT_SECONDARY)
-                .arg(ui::fonts::SMALL)
-                .arg(ui::fonts::DATA_FAMILY));
+        name->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; border:none; background:transparent;")
+                                .arg(ui::colors::TEXT_SECONDARY)
+                                .arg(ui::fonts::SMALL)
+                                .arg(ui::fonts::DATA_FAMILY));
         rl->addWidget(name, 1);
 
         auto* cnt = new QLabel(QString::number(count), row);
-        cnt->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                    "border:none; background:transparent;")
-                .arg(ui::colors::TEXT_PRIMARY)
-                .arg(ui::fonts::SMALL)
-                .arg(ui::fonts::DATA_FAMILY));
+        cnt->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
+                                   "border:none; background:transparent;")
+                               .arg(ui::colors::TEXT_PRIMARY)
+                               .arg(ui::fonts::SMALL)
+                               .arg(ui::fonts::DATA_FAMILY));
         rl->addWidget(cnt);
 
         stats_layout_->addWidget(row);

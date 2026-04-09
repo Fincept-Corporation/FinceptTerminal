@@ -11,11 +11,21 @@
 
 namespace {
 using namespace fincept::ui;
-static QColor bg_surface()     { return colors::BG_SURFACE; }
-static QColor color_sell()     { return colors::NEGATIVE; }
-static QColor color_buy()      { return colors::POSITIVE; }
-static QColor text_secondary() { return colors::TEXT_SECONDARY; }
-static QColor border_med()     { return colors::BORDER_MED; }
+static QColor bg_surface() {
+    return colors::BG_SURFACE;
+}
+static QColor color_sell() {
+    return colors::NEGATIVE;
+}
+static QColor color_buy() {
+    return colors::POSITIVE;
+}
+static QColor text_secondary() {
+    return colors::TEXT_SECONDARY;
+}
+static QColor border_med() {
+    return colors::BORDER_MED;
+}
 } // namespace
 
 #include <algorithm>
@@ -32,7 +42,7 @@ EquityOrderBook::EquityOrderBook(QWidget* parent) : QWidget(parent) {
     layout->setSpacing(0);
 
     // Header
-    auto* header = new QWidget;
+    auto* header = new QWidget(this);
     header->setObjectName("eqObHeader");
     header->setFixedHeight(HEADER_H);
     auto* h_layout = new QHBoxLayout(header);
@@ -52,7 +62,7 @@ EquityOrderBook::EquityOrderBook(QWidget* parent) : QWidget(parent) {
     spread_label_->setAlignment(Qt::AlignCenter);
 
     // Canvas — the actual painted area
-    canvas_ = new QWidget;
+    canvas_ = new QWidget(this);
     canvas_->setMinimumHeight(100);
     layout->addWidget(canvas_, 1);
     layout->addWidget(spread_label_);
@@ -147,7 +157,8 @@ void EquityOrderBook::rebuild_cache() {
         // Depth bar
         const double ratio = qty / max_qty;
         const int bar_w = static_cast<int>(w * ratio * 0.4);
-        QColor sell_bar(color_sell()); sell_bar.setAlpha(25);
+        QColor sell_bar(color_sell());
+        sell_bar.setAlpha(25);
         p.fillRect(w - bar_w, y, bar_w, ROW_H, sell_bar);
 
         p.setPen(color_sell());
@@ -165,7 +176,8 @@ void EquityOrderBook::rebuild_cache() {
 
         const double ratio = qty / max_qty;
         const int bar_w = static_cast<int>(w * ratio * 0.4);
-        QColor buy_bar(color_buy()); buy_bar.setAlpha(25);
+        QColor buy_bar(color_buy());
+        buy_bar.setAlpha(25);
         p.fillRect(w - bar_w, y, bar_w, ROW_H, buy_bar);
 
         p.setPen(color_buy());

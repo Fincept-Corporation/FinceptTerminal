@@ -50,40 +50,40 @@ class QuantStatsView : public QWidget {
     QTabWidget* tabs_ = nullptr;
 
     // ── Header controls ───────────────────────────────────────────────────────
-    QPushButton* qs_run_btn_  = nullptr;
-    QLabel*      qs_status_  = nullptr;
+    QPushButton* qs_run_btn_ = nullptr;
+    QLabel* qs_status_ = nullptr;
 
     // ── METRICS tab ───────────────────────────────────────────────────────────
     QTableWidget* metrics_table_ = nullptr;
 
     // ── RETURNS tab ───────────────────────────────────────────────────────────
-    QStackedWidget* returns_stack_ = nullptr;   // 0 = placeholder, 1 = content widget
+    QStackedWidget* returns_stack_ = nullptr; // 0 = placeholder, 1 = content widget
 
     // ── DRAWDOWN tab ──────────────────────────────────────────────────────────
-    QStackedWidget* drawdown_stack_ = nullptr;  // 0 = placeholder, 1 = content widget
+    QStackedWidget* drawdown_stack_ = nullptr; // 0 = placeholder, 1 = content widget
 
     // ── ROLLING tab ───────────────────────────────────────────────────────────
-    QStackedWidget* rolling_stack_ = nullptr;   // 0 = placeholder, 1 = content widget
+    QStackedWidget* rolling_stack_ = nullptr; // 0 = placeholder, 1 = content widget
 
     // ── MONTE CARLO tab ───────────────────────────────────────────────────────
-    QPushButton*           mc_run_btn_  = nullptr;
-    QLabel*                mc_status_  = nullptr;
-    QWidget*               mc_results_ = nullptr;  // kept for compat
-    QStackedWidget*        mc_stack_   = nullptr;  // 0 = placeholder, 1 = live content
-    QChartView*  mc_chart_   = nullptr;
+    QPushButton* mc_run_btn_ = nullptr;
+    QLabel* mc_status_ = nullptr;
+    QWidget* mc_results_ = nullptr;      // kept for compat
+    QStackedWidget* mc_stack_ = nullptr; // 0 = placeholder, 1 = live content
+    QChartView* mc_chart_ = nullptr;
 
     // ── Unused chart members (reserved for future time-series data) ───────────
-    QChartView* returns_chart_  = nullptr;
+    QChartView* returns_chart_ = nullptr;
     QChartView* drawdown_chart_ = nullptr;
-    QChartView* rolling_chart_  = nullptr;
+    QChartView* rolling_chart_ = nullptr;
 
     // ── State ─────────────────────────────────────────────────────────────────
     portfolio::PortfolioSummary summary_;
-    QString     currency_;
-    QJsonObject qs_data_;   // parsed result from quantstats_analysis.py
-    QJsonObject mc_data_;   // parsed result from quantstats_monte_carlo.py
-    bool        qs_running_ = false;
-    bool        mc_running_ = false;
+    QString currency_;
+    QJsonObject qs_data_; // parsed result from quantstats_analysis.py
+    QJsonObject mc_data_; // parsed result from quantstats_monte_carlo.py
+    bool qs_running_ = false;
+    bool mc_running_ = false;
 };
 
 } // namespace fincept::screens

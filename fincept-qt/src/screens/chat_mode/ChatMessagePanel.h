@@ -51,43 +51,43 @@ class ChatMessagePanel : public QWidget {
     bool eventFilter(QObject* obj, QEvent* ev) override;
 
   private:
-    QLabel*      hdr_title_lbl_   = nullptr;
-    QLabel*      hdr_credits_lbl_ = nullptr;
-    QLabel*      hdr_tools_lbl_   = nullptr;
-    QLabel*      hdr_tokens_lbl_  = nullptr;
-    QPushButton* mode_btn_        = nullptr;
+    QLabel* hdr_title_lbl_ = nullptr;
+    QLabel* hdr_credits_lbl_ = nullptr;
+    QLabel* hdr_tools_lbl_ = nullptr;
+    QLabel* hdr_tokens_lbl_ = nullptr;
+    QPushButton* mode_btn_ = nullptr;
 
-    QScrollArea* scroll_area_        = nullptr;
-    QWidget*     messages_container_ = nullptr;
-    QVBoxLayout* messages_layout_    = nullptr;
-    QWidget*     welcome_panel_      = nullptr;
+    QScrollArea* scroll_area_ = nullptr;
+    QWidget* messages_container_ = nullptr;
+    QVBoxLayout* messages_layout_ = nullptr;
+    QWidget* welcome_panel_ = nullptr;
 
-    QWidget* typing_indicator_   = nullptr;
-    QLabel*  typing_dots_lbl_    = nullptr;
-    QLabel*  typing_status_lbl_  = nullptr;
-    QTimer*  typing_timer_       = nullptr;
-    int      typing_step_        = 0;
+    QWidget* typing_indicator_ = nullptr;
+    QLabel* typing_dots_lbl_ = nullptr;
+    QLabel* typing_status_lbl_ = nullptr;
+    QTimer* typing_timer_ = nullptr;
+    int typing_step_ = 0;
 
-    QPlainTextEdit* input_box_    = nullptr;
-    QPushButton*    send_btn_     = nullptr;
-    QPushButton*    stop_btn_     = nullptr;
-    QPushButton*    optimize_btn_ = nullptr;
-    QLabel*         char_lbl_     = nullptr;
+    QPlainTextEdit* input_box_ = nullptr;
+    QPushButton* send_btn_ = nullptr;
+    QPushButton* stop_btn_ = nullptr;
+    QPushButton* optimize_btn_ = nullptr;
+    QLabel* char_lbl_ = nullptr;
 
-    StreamMode          current_mode_     = StreamMode::Lite;
-    bool                streaming_        = false;
+    StreamMode current_mode_ = StreamMode::Lite;
+    bool streaming_ = false;
     QPointer<QTextEdit> streaming_bubble_;
-    QString             streaming_buffer_;
-    int                 total_tokens_     = 0;
-    bool                scroll_locked_    = false;
+    QString streaming_buffer_;
+    int total_tokens_ = 0;
+    bool scroll_locked_ = false;
 
-    QTimer*             render_timer_     = nullptr;
-    bool                render_dirty_     = false;
+    QTimer* render_timer_ = nullptr;
+    bool render_dirty_ = false;
 
     // Thinking accumulator — collapsed into one card on finish
-    QStringList       pending_thinking_;
-    QVector<QPair<QString,int>> pending_tools_;
-    QWidget*          thinking_card_ = nullptr;
+    QStringList pending_thinking_;
+    QVector<QPair<QString, int>> pending_tools_;
+    QWidget* thinking_card_ = nullptr;
 
     void build_ui();
     QWidget* build_header();
@@ -96,8 +96,7 @@ class ChatMessagePanel : public QWidget {
     QWidget* build_typing_indicator();
     QWidget* build_input_area();
 
-    void add_message_bubble(const QString& role, const QString& content,
-                            const QString& timestamp = {});
+    void add_message_bubble(const QString& role, const QString& content, const QString& timestamp = {});
     QTextEdit* add_streaming_bubble();
     void insert_collapsed_thinking_card(int before_index = -1);
     void resize_bubble(QTextEdit* bubble);

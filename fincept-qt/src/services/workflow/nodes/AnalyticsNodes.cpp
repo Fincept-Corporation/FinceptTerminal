@@ -1,7 +1,7 @@
 #include "services/workflow/nodes/AnalyticsNodes.h"
 
-#include "services/workflow/NodeRegistry.h"
 #include "python/PythonRunner.h"
+#include "services/workflow/NodeRegistry.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -12,16 +12,15 @@
 
 namespace fincept::workflow {
 
-using fincept::python::PythonRunner;
-using fincept::python::PythonResult;
 using fincept::python::extract_json;
+using fincept::python::PythonResult;
+using fincept::python::PythonRunner;
 
 namespace {
 
 // Helper: run a Python script and parse the JSON result.
 void analytics_run_python_json(const QString& script, const QStringList& args,
-                     std::function<void(bool, QJsonValue, QString)> cb)
-{
+                               std::function<void(bool, QJsonValue, QString)> cb) {
     PythonRunner::instance().run(script, args, [cb](const PythonResult& res) {
         if (!res.success) {
             cb(false, {}, res.error);
@@ -46,11 +45,10 @@ void analytics_run_python_json(const QString& script, const QStringList& args,
 }
 
 // Helper: produce a clear "not yet implemented" result object.
-QJsonValue analytics_not_implemented(const QString& type_id)
-{
+QJsonValue analytics_not_implemented(const QString& type_id) {
     QJsonObject obj;
     obj["error"] = "not_yet_implemented";
-    obj["node"]  = type_id;
+    obj["node"] = type_id;
     return obj;
 }
 
@@ -90,13 +88,12 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 else if (input_val.isObject())
                     input_doc = QJsonDocument(input_val.toObject());
 
-                QString json_data = input_doc.isNull()
-                    ? "{}"
-                    : QString::fromUtf8(input_doc.toJson(QJsonDocument::Compact));
+                QString json_data =
+                    input_doc.isNull() ? "{}" : QString::fromUtf8(input_doc.toJson(QJsonDocument::Compact));
 
                 QString indicator = params.value("indicator").toString("SMA");
-                QString period    = QString::number(static_cast<int>(params.value("period").toDouble(14)));
-                QString symbol    = params.value("symbol").toString();
+                QString period = QString::number(static_cast<int>(params.value("period").toDouble(14)));
+                QString symbol = params.value("symbol").toString();
 
                 QStringList args = {"--data", json_data, "--indicator", indicator, "--period", period};
                 if (!symbol.isEmpty())
@@ -127,17 +124,16 @@ void register_analytics_nodes(NodeRegistry& registry) {
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
                 QJsonObject args_obj;
-                args_obj["start_date"]      = params.value("start_date").toString("2023-01-01");
-                args_obj["end_date"]        = params.value("end_date").toString("2024-01-01");
+                args_obj["start_date"] = params.value("start_date").toString("2023-01-01");
+                args_obj["end_date"] = params.value("end_date").toString("2024-01-01");
                 args_obj["initial_capital"] = params.value("initial_capital").toDouble(100000);
-                args_obj["commission"]      = params.value("commission").toDouble(0.001);
+                args_obj["commission"] = params.value("commission").toDouble(0.001);
                 if (!inputs.isEmpty())
                     args_obj["strategy"] = inputs[0];
 
-                QString json_args = QString::fromUtf8(
-                    QJsonDocument(args_obj).toJson(QJsonDocument::Compact));
+                QString json_args = QString::fromUtf8(QJsonDocument(args_obj).toJson(QJsonDocument::Compact));
                 analytics_run_python_json("compute_technicals.py",
-                    {"--data", json_args, "--indicator", "BACKTEST", "--period", "0"}, cb);
+                                          {"--data", json_args, "--indicator", "BACKTEST", "--period", "0"}, cb);
             },
     });
 
@@ -166,13 +162,12 @@ void register_analytics_nodes(NodeRegistry& registry) {
                std::function<void(bool, QJsonValue, QString)> cb) {
                 // Build a JSON args object containing the input data and params.
                 QJsonObject args_obj;
-                args_obj["method"]         = params.value("method").toString("mean_variance");
+                args_obj["method"] = params.value("method").toString("mean_variance");
                 args_obj["risk_free_rate"] = params.value("risk_free_rate").toDouble(0.05);
                 if (!inputs.isEmpty())
                     args_obj["holdings"] = inputs[0];
 
-                QString json_args = QString::fromUtf8(
-                    QJsonDocument(args_obj).toJson(QJsonDocument::Compact));
+                QString json_args = QString::fromUtf8(QJsonDocument(args_obj).toJson(QJsonDocument::Compact));
 
                 analytics_run_python_json("optimize_portfolio_weights.py", {"--args", json_args}, cb);
             },
@@ -203,9 +198,9 @@ void register_analytics_nodes(NodeRegistry& registry) {
                         for (const QJsonValue& v : inputs[0].toArray()) {
                             if (v.isObject()) {
                                 double p = v.toObject().value("Close").toDouble(
-                                           v.toObject().value("close").toDouble(
-                                           v.toObject().value("price").toDouble(0)));
-                                if (p > 0) prices.append(p);
+                                    v.toObject().value("close").toDouble(v.toObject().value("price").toDouble(0)));
+                                if (p > 0)
+                                    prices.append(p);
                             } else if (v.isDouble()) {
                                 prices.append(v.toDouble());
                             }
@@ -221,7 +216,7 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 // Compute daily returns
                 QVector<double> returns;
                 for (int i = 1; i < prices.size(); ++i)
-                    returns.append((prices[i] - prices[i-1]) / prices[i-1]);
+                    returns.append((prices[i] - prices[i - 1]) / prices[i - 1]);
 
                 double sum = 0, sum_sq = 0, max_dd = 0, peak = prices[0];
                 double neg_sum_sq = 0;
@@ -229,12 +224,17 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 for (double r : returns) {
                     sum += r;
                     sum_sq += r * r;
-                    if (r < 0) { neg_sum_sq += r * r; ++neg_count; }
+                    if (r < 0) {
+                        neg_sum_sq += r * r;
+                        ++neg_count;
+                    }
                 }
                 for (double p : prices) {
-                    if (p > peak) peak = p;
+                    if (p > peak)
+                        peak = p;
                     double dd = (peak - p) / peak;
-                    if (dd > max_dd) max_dd = dd;
+                    if (dd > max_dd)
+                        max_dd = dd;
                 }
 
                 int n = returns.size();
@@ -284,10 +284,9 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 if (!inputs.isEmpty())
                     args_obj["data"] = inputs[0];
 
-                QString json_args = QString::fromUtf8(
-                    QJsonDocument(args_obj).toJson(QJsonDocument::Compact));
+                QString json_args = QString::fromUtf8(QJsonDocument(args_obj).toJson(QJsonDocument::Compact));
                 analytics_run_python_json("compute_technicals.py",
-                    {"--data", json_args, "--indicator", "CORRELATION", "--period", "0"}, cb);
+                                          {"--data", json_args, "--indicator", "CORRELATION", "--period", "0"}, cb);
             },
     });
 
@@ -320,8 +319,7 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 if (!inputs.isEmpty() && inputs[0].isArray()) {
                     for (const QJsonValue& v : inputs[0].toArray()) {
                         if (v.isObject()) {
-                            double p = v.toObject().value("return").toDouble(
-                                       v.toObject().value("Close").toDouble(0));
+                            double p = v.toObject().value("return").toDouble(v.toObject().value("Close").toDouble(0));
                             returns.append(p);
                         } else if (v.isDouble()) {
                             returns.append(v.toDouble());
@@ -338,7 +336,7 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 if (std::abs(returns[0]) > 1.0) {
                     QVector<double> price_returns;
                     for (int i = 1; i < returns.size(); ++i)
-                        price_returns.append((returns[i] - returns[i-1]) / returns[i-1]);
+                        price_returns.append((returns[i] - returns[i - 1]) / returns[i - 1]);
                     returns = price_returns;
                 }
 
@@ -350,12 +348,16 @@ void register_analytics_nodes(NodeRegistry& registry) {
 
                 // CVaR: average of returns below VaR threshold
                 double cvar_sum = 0;
-                for (int i = 0; i <= var_idx; ++i) cvar_sum += returns[i];
+                for (int i = 0; i <= var_idx; ++i)
+                    cvar_sum += returns[i];
                 double cvar = var_idx > 0 ? -(cvar_sum / (var_idx + 1)) : var_value;
 
                 // Volatility
                 double sum = 0, sum_sq = 0;
-                for (double r : returns) { sum += r; sum_sq += r * r; }
+                for (double r : returns) {
+                    sum += r;
+                    sum_sq += r * r;
+                }
                 double mean = sum / returns.size();
                 double vol = std::sqrt(sum_sq / returns.size() - mean * mean) * std::sqrt(252.0);
 
@@ -397,9 +399,9 @@ void register_analytics_nodes(NodeRegistry& registry) {
                     for (const QJsonValue& v : inputs[0].toArray()) {
                         if (v.isObject()) {
                             double p = v.toObject().value("Close").toDouble(
-                                       v.toObject().value("close").toDouble(
-                                       v.toObject().value("price").toDouble(0)));
-                            if (p > 0) prices.append(p);
+                                v.toObject().value("close").toDouble(v.toObject().value("price").toDouble(0)));
+                            if (p > 0)
+                                prices.append(p);
                         } else if (v.isDouble()) {
                             prices.append(v.toDouble());
                         }
@@ -413,7 +415,7 @@ void register_analytics_nodes(NodeRegistry& registry) {
 
                 QVector<double> returns;
                 for (int i = 1; i < prices.size(); ++i)
-                    returns.append((prices[i] - prices[i-1]) / prices[i-1]);
+                    returns.append((prices[i] - prices[i - 1]) / prices[i - 1]);
 
                 double rfr = params.value("risk_free_rate").toDouble(0.05) / 252.0;
                 double sum = 0, sum_sq = 0, neg_sum_sq = 0;
@@ -421,13 +423,19 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 int neg_count = 0;
 
                 for (double r : returns) {
-                    sum += r; sum_sq += r * r;
-                    if (r < 0) { neg_sum_sq += r * r; ++neg_count; }
+                    sum += r;
+                    sum_sq += r * r;
+                    if (r < 0) {
+                        neg_sum_sq += r * r;
+                        ++neg_count;
+                    }
                 }
                 for (double p : prices) {
-                    if (p > peak) peak = p;
+                    if (p > peak)
+                        peak = p;
                     double dd = (peak - p) / peak;
-                    if (dd > max_dd) max_dd = dd;
+                    if (dd > max_dd)
+                        max_dd = dd;
                 }
 
                 int n = returns.size();
@@ -486,9 +494,9 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 if (!inputs.isEmpty() && inputs[0].isArray()) {
                     for (const QJsonValue& v : inputs[0].toArray()) {
                         if (v.isObject()) {
-                            double p = v.toObject().value("Close").toDouble(
-                                       v.toObject().value("close").toDouble(0));
-                            if (p > 0) prices.append(p);
+                            double p = v.toObject().value("Close").toDouble(v.toObject().value("close").toDouble(0));
+                            if (p > 0)
+                                prices.append(p);
                         } else if (v.isDouble()) {
                             prices.append(v.toDouble());
                         }
@@ -499,8 +507,8 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 int slow = static_cast<int>(params.value("slow_period").toDouble(200));
 
                 if (prices.size() < slow + 1) {
-                    cb(false, {}, QString("Need at least %1 data points for %2/%3 crossover")
-                        .arg(slow + 1).arg(fast).arg(slow));
+                    cb(false, {},
+                       QString("Need at least %1 data points for %2/%3 crossover").arg(slow + 1).arg(fast).arg(slow));
                     return;
                 }
 
@@ -520,9 +528,9 @@ void register_analytics_nodes(NodeRegistry& registry) {
 
                 QString signal = "hold";
                 if (fast_prev <= slow_prev && fast_now > slow_now)
-                    signal = "golden_cross";  // bullish
+                    signal = "golden_cross"; // bullish
                 else if (fast_prev >= slow_prev && fast_now < slow_now)
-                    signal = "death_cross";   // bearish
+                    signal = "death_cross"; // bearish
                 else if (fast_now > slow_now)
                     signal = "above";
                 else
@@ -562,9 +570,9 @@ void register_analytics_nodes(NodeRegistry& registry) {
                     for (const QJsonValue& v : inputs[0].toArray()) {
                         if (v.isObject()) {
                             double p = v.toObject().value("Close").toDouble(
-                                       v.toObject().value("close").toDouble(
-                                       v.toObject().value("price").toDouble(0)));
-                            if (p > 0) prices.append(p);
+                                v.toObject().value("close").toDouble(v.toObject().value("price").toDouble(0)));
+                            if (p > 0)
+                                prices.append(p);
                         } else if (v.isDouble()) {
                             prices.append(v.toDouble());
                         }
@@ -594,8 +602,10 @@ void register_analytics_nodes(NodeRegistry& registry) {
                         dd_start = current_dd_start;
                         dd_end = i;
                     }
-                    if (dd > 0) ++current_duration;
-                    else current_duration = 0;
+                    if (dd > 0)
+                        ++current_duration;
+                    else
+                        current_duration = 0;
                     if (current_duration > max_dd_duration)
                         max_dd_duration = current_duration;
                 }
@@ -641,9 +651,9 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 if (!inputs.isEmpty() && inputs[0].isArray()) {
                     for (const QJsonValue& v : inputs[0].toArray()) {
                         if (v.isObject()) {
-                            double p = v.toObject().value("Close").toDouble(
-                                       v.toObject().value("close").toDouble(0));
-                            if (p > 0) prices.append(p);
+                            double p = v.toObject().value("Close").toDouble(v.toObject().value("close").toDouble(0));
+                            if (p > 0)
+                                prices.append(p);
                         } else if (v.isDouble()) {
                             prices.append(v.toDouble());
                         }
@@ -657,19 +667,22 @@ void register_analytics_nodes(NodeRegistry& registry) {
 
                 QVector<double> returns;
                 for (int i = 1; i < prices.size(); ++i)
-                    returns.append((prices[i] - prices[i-1]) / prices[i-1]);
+                    returns.append((prices[i] - prices[i - 1]) / prices[i - 1]);
 
                 double mean = 0, var = 0;
-                for (double r : returns) mean += r;
+                for (double r : returns)
+                    mean += r;
                 mean /= returns.size();
-                for (double r : returns) var += (r - mean) * (r - mean);
+                for (double r : returns)
+                    var += (r - mean) * (r - mean);
                 var /= returns.size();
                 double std_dev = std::sqrt(var);
 
                 int n_sims = static_cast<int>(params.value("simulations").toDouble(1000));
                 int horizon = static_cast<int>(params.value("horizon_days").toDouble(252));
                 // Cap simulations for performance
-                if (n_sims > 10000) n_sims = 10000;
+                if (n_sims > 10000)
+                    n_sims = 10000;
 
                 double start_price = prices.last();
                 QVector<double> final_prices;
@@ -682,7 +695,8 @@ void register_analytics_nodes(NodeRegistry& registry) {
                         // Box-Muller transform for normal distribution
                         double u1 = rng->generateDouble();
                         double u2 = rng->generateDouble();
-                        if (u1 < 1e-10) u1 = 1e-10;
+                        if (u1 < 1e-10)
+                            u1 = 1e-10;
                         double z = std::sqrt(-2.0 * std::log(u1)) * std::cos(2.0 * M_PI * u2);
                         double ret = mean + std_dev * z;
                         price *= (1.0 + ret);
@@ -696,7 +710,12 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 out["simulations"] = n_sims;
                 out["horizon_days"] = horizon;
                 out["start_price"] = start_price;
-                out["mean_final"] = [&]() { double s = 0; for (double p : final_prices) s += p; return s / n_sims; }();
+                out["mean_final"] = [&]() {
+                    double s = 0;
+                    for (double p : final_prices)
+                        s += p;
+                    return s / n_sims;
+                }();
                 out["median_final"] = final_prices[n_sims / 2];
                 out["p5"] = final_prices[static_cast<int>(0.05 * n_sims)];
                 out["p25"] = final_prices[static_cast<int>(0.25 * n_sims)];
@@ -704,7 +723,13 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 out["p95"] = final_prices[static_cast<int>(0.95 * n_sims)];
                 out["min"] = final_prices.first();
                 out["max"] = final_prices.last();
-                out["prob_profit"] = [&]() { int c = 0; for (double p : final_prices) if (p > start_price) ++c; return (double)c / n_sims; }();
+                out["prob_profit"] = [&]() {
+                    int c = 0;
+                    for (double p : final_prices)
+                        if (p > start_price)
+                            ++c;
+                    return (double)c / n_sims;
+                }();
                 cb(true, out, {});
             },
     });
@@ -735,10 +760,9 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 if (!inputs.isEmpty())
                     args_obj["data"] = inputs[0];
 
-                QString json_args = QString::fromUtf8(
-                    QJsonDocument(args_obj).toJson(QJsonDocument::Compact));
+                QString json_args = QString::fromUtf8(QJsonDocument(args_obj).toJson(QJsonDocument::Compact));
                 analytics_run_python_json("compute_technicals.py",
-                    {"--data", json_args, "--indicator", "FACTOR_MODEL", "--period", "0"}, cb);
+                                          {"--data", json_args, "--indicator", "FACTOR_MODEL", "--period", "0"}, cb);
             },
     });
 
@@ -778,9 +802,9 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 args_obj["lookback"] = lookback;
                 args_obj["z_threshold"] = z_thresh;
 
-                QString json_args = QString::fromUtf8(
-                    QJsonDocument(args_obj).toJson(QJsonDocument::Compact));
-                analytics_run_python_json("compute_technicals.py",
+                QString json_args = QString::fromUtf8(QJsonDocument(args_obj).toJson(QJsonDocument::Compact));
+                analytics_run_python_json(
+                    "compute_technicals.py",
                     {"--data", json_args, "--indicator", "PAIRS", "--period", QString::number(lookback)}, cb);
             },
     });
@@ -808,9 +832,9 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 if (!inputs.isEmpty() && inputs[0].isArray()) {
                     for (const QJsonValue& v : inputs[0].toArray()) {
                         if (v.isObject()) {
-                            double p = v.toObject().value("Close").toDouble(
-                                       v.toObject().value("close").toDouble(0));
-                            if (p > 0) prices.append(p);
+                            double p = v.toObject().value("Close").toDouble(v.toObject().value("close").toDouble(0));
+                            if (p > 0)
+                                prices.append(p);
                         } else if (v.isDouble()) {
                             prices.append(v.toDouble());
                         }
@@ -826,7 +850,7 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 int window = 20;
                 QVector<double> returns;
                 for (int i = 1; i < prices.size(); ++i)
-                    returns.append((prices[i] - prices[i-1]) / prices[i-1]);
+                    returns.append((prices[i] - prices[i - 1]) / prices[i - 1]);
 
                 // Latest window stats
                 int n = returns.size();
@@ -843,16 +867,22 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 int sma_short = std::min(50, static_cast<int>(prices.size()) / 3);
                 int sma_long = std::min(200, static_cast<int>(prices.size()) - 1);
                 double sma_s = 0, sma_l = 0;
-                for (int i = prices.size() - sma_short; i < prices.size(); ++i) sma_s += prices[i];
+                for (int i = prices.size() - sma_short; i < prices.size(); ++i)
+                    sma_s += prices[i];
                 sma_s /= sma_short;
-                for (int i = prices.size() - sma_long; i < prices.size(); ++i) sma_l += prices[i];
+                for (int i = prices.size() - sma_long; i < prices.size(); ++i)
+                    sma_l += prices[i];
                 sma_l /= sma_long;
 
                 QString regime;
-                if (ann_vol > 0.30) regime = "high_volatility";
-                else if (sma_s > sma_l && mean > 0) regime = "bull";
-                else if (sma_s < sma_l && mean < 0) regime = "bear";
-                else regime = "sideways";
+                if (ann_vol > 0.30)
+                    regime = "high_volatility";
+                else if (sma_s > sma_l && mean > 0)
+                    regime = "bull";
+                else if (sma_s < sma_l && mean < 0)
+                    regime = "bear";
+                else
+                    regime = "sideways";
 
                 QJsonObject out;
                 out["regime"] = regime;

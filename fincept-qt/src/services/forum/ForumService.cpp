@@ -14,8 +14,8 @@
 #include <QUrlQuery>
 
 static constexpr int kCategoriesTtlSec = 5 * 60;
-static constexpr int kStatsTtlSec      = 2 * 60;
-static constexpr int kTrendingTtlSec   = 2 * 60;
+static constexpr int kStatsTtlSec = 2 * 60;
+static constexpr int kTrendingTtlSec = 2 * 60;
 
 namespace fincept::services {
 
@@ -202,8 +202,8 @@ void ForumService::fetch_categories(CategoriesCallback cb) {
         ForumPermissions perms;
         auto po = root["permissions"].toObject();
         perms.can_create_posts = po["can_create_posts"].toBool();
-        perms.can_vote         = po["can_vote"].toBool();
-        perms.can_comment      = po["can_comment"].toBool();
+        perms.can_vote = po["can_vote"].toBool();
+        perms.can_comment = po["can_comment"].toBool();
         cb(true, cats, perms);
         return;
     }
@@ -214,8 +214,7 @@ void ForumService::fetch_categories(CategoriesCallback cb) {
             return;
         }
         fincept::CacheManager::instance().put(
-            "forum:categories",
-            QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
+            "forum:categories", QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
             kCategoriesTtlSec, "forum");
         QVector<ForumCategory> cats;
         for (const auto& v : data.value("categories").toArray())
@@ -288,8 +287,7 @@ void ForumService::fetch_stats(StatsCallback cb) {
             return;
         }
         fincept::CacheManager::instance().put(
-            "forum:stats",
-            QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
+            "forum:stats", QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
             kStatsTtlSec, "forum");
         cb(true, parse_stats(data));
     });
@@ -313,8 +311,7 @@ void ForumService::fetch_trending(PostsCallback cb) {
             return;
         }
         fincept::CacheManager::instance().put(
-            "forum:trending",
-            QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
+            "forum:trending", QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
             kTrendingTtlSec, "forum");
         ForumPostsPage result;
         for (const auto& v : data.value("trending_posts").toArray())

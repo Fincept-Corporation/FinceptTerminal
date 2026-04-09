@@ -274,8 +274,39 @@ void PythonRunner::start_next() {
         } else {
             full_args << script_path;
         }
-        if (!is_code)
-            full_args.append(req.args);
+        if (!is_code) {
+            // Spill large args to temp files to avoid Windows 32KB command-line limit.
+            // Python scripts support "@/path/to/file" — they read and delete the file.
+            static constexpr int kArgSpillThreshold = 8192; // 8 KB
+            QStringList spilled_files;
+            QStringList safe_args;
+            for (const QString& arg : req.args) {
+                if (arg.size() > kArgSpillThreshold) {
+                    QString temp_dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+                    QString temp_path = temp_dir + "/fincept_arg_" +
+                                       QString::number(QDateTime::currentMSecsSinceEpoch()) + "_" +
+                                       QString::number(reinterpret_cast<quintptr>(proc)) + ".json";
+                    QFile tf(temp_path);
+                    if (tf.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                        tf.write(arg.toUtf8());
+                        tf.close();
+                        safe_args << ("@" + temp_path);
+                        spilled_files << temp_path;
+                    } else {
+                        safe_args << arg; // fallback: pass as-is (may fail, but don't crash)
+                    }
+                } else {
+                    safe_args << arg;
+                }
+            }
+            full_args.append(safe_args);
+            // Store spilled paths so we can clean them up if the process errors out
+            // (Python scripts clean them up on success via resolve_arg)
+            if (!spilled_files.isEmpty()) {
+                // Attach to process via dynamic property for cleanup in error handler
+                proc->setProperty("spilled_files", QVariant::fromValue(spilled_files));
+            }
+        }
 
         // Set environment for clean Python execution
         QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
@@ -308,66 +339,68 @@ void PythonRunner::start_next() {
         proc_buffers_[proc] = {};
 
         // Buffer stdout/stderr incrementally instead of reading all at once on finish
-        connect(proc, &QProcess::readyReadStandardOutput, this, [this, proc]() {
-            proc_buffers_[proc].stdout_buf.append(proc->readAllStandardOutput());
-        });
-        connect(proc, &QProcess::readyReadStandardError, this, [this, proc]() {
-            proc_buffers_[proc].stderr_buf.append(proc->readAllStandardError());
-        });
+        connect(proc, &QProcess::readyReadStandardOutput, this,
+                [this, proc]() { proc_buffers_[proc].stdout_buf.append(proc->readAllStandardOutput()); });
+        connect(proc, &QProcess::readyReadStandardError, this,
+                [this, proc]() { proc_buffers_[proc].stderr_buf.append(proc->readAllStandardError()); });
 
         auto cb = std::move(req.cb);
         auto script_name = std::move(req.script);
 
-        connect(
-            proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-            [this, proc, cb = std::move(cb), script_name, is_code, temp_file](int exit_code, QProcess::ExitStatus) {
-                // Collect any remaining buffered data
-                auto& bufs = proc_buffers_[proc];
-                bufs.stdout_buf.append(proc->readAllStandardOutput());
-                bufs.stderr_buf.append(proc->readAllStandardError());
+        connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+                [this, proc, cb = std::move(cb), script_name, is_code, temp_file](int exit_code, QProcess::ExitStatus) {
+                    // Collect any remaining buffered data
+                    auto& bufs = proc_buffers_[proc];
+                    bufs.stdout_buf.append(proc->readAllStandardOutput());
+                    bufs.stderr_buf.append(proc->readAllStandardError());
 
-                QString stdout_str = QString::fromUtf8(bufs.stdout_buf);
-                QString stderr_str = QString::fromUtf8(bufs.stderr_buf);
+                    QString stdout_str = QString::fromUtf8(bufs.stdout_buf);
+                    QString stderr_str = QString::fromUtf8(bufs.stderr_buf);
 
-                proc_buffers_.remove(proc);
-                proc->deleteLater();
+                    proc_buffers_.remove(proc);
+                    proc->deleteLater();
 
-                // Clean up temp file for inline code
-                if (is_code && !temp_file.isEmpty()) {
-                    QFile::remove(temp_file);
-                }
+                    // Clean up temp file for inline code
+                    if (is_code && !temp_file.isEmpty()) {
+                        QFile::remove(temp_file);
+                    }
 
-                PythonResult result;
-                result.exit_code = exit_code;
+                    PythonResult result;
+                    result.exit_code = exit_code;
 
-                if (is_code) {
-                    // For notebook cells: return raw stdout, not JSON-extracted
-                    result.success = (exit_code == 0);
-                    result.output = std::move(stdout_str);
-                    result.error = std::move(stderr_str);
-                } else {
-                    // For scripts: extract JSON from output
-                    QString json_out = extract_json(stdout_str);
-                    result.success = (exit_code == 0 && !json_out.isEmpty());
-                    result.output = json_out.isEmpty() ? std::move(stdout_str) : std::move(json_out);
-                    result.error = std::move(stderr_str);
-                }
+                    if (is_code) {
+                        // For notebook cells: return raw stdout, not JSON-extracted
+                        result.success = (exit_code == 0);
+                        result.output = std::move(stdout_str);
+                        result.error = std::move(stderr_str);
+                    } else {
+                        // For scripts: extract JSON from output
+                        QString json_out = extract_json(stdout_str);
+                        result.success = (exit_code == 0 && !json_out.isEmpty());
+                        result.output = json_out.isEmpty() ? std::move(stdout_str) : std::move(json_out);
+                        result.error = std::move(stderr_str);
+                    }
 
-                if (!result.success && !is_code) {
-                    LOG_ERROR(
-                        "Python",
-                        QString("Script %1 failed (exit=%2): %3").arg(script_name).arg(exit_code).arg(result.error.left(200)));
-                }
+                    if (!result.success && !is_code) {
+                        LOG_ERROR("Python", QString("Script %1 failed (exit=%2): %3")
+                                                .arg(script_name)
+                                                .arg(exit_code)
+                                                .arg(result.error.left(200)));
+                    }
 
-                cb(std::move(result));
+                    cb(std::move(result));
 
-                --active_count_;
-                start_next(); // drain queue
-            });
+                    --active_count_;
+                    start_next(); // drain queue
+                });
 
         connect(proc, &QProcess::errorOccurred, this, [this, proc, cb, is_code, temp_file](QProcess::ProcessError) {
             QString error_msg = proc->errorString();
             proc_buffers_.remove(proc);
+            // Clean up any spilled arg temp files
+            auto spilled = proc->property("spilled_files").toStringList();
+            for (const QString& f : spilled)
+                QFile::remove(f);
             proc->deleteLater();
             if (is_code && !temp_file.isEmpty())
                 QFile::remove(temp_file);
@@ -392,7 +425,7 @@ void PythonRunner::start_next() {
 QString extract_json(const QString& output) {
     // Find the first '{' or '[' and return everything from that point.
     // Scripts print multi-line indented JSON, so we cannot take a single line.
-    int brace   = output.indexOf('{');
+    int brace = output.indexOf('{');
     int bracket = output.indexOf('[');
 
     int start = -1;

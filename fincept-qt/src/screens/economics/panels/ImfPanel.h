@@ -20,20 +20,18 @@ class ImfPanel : public EconPanelBase {
   protected:
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
-    void on_result(const QString& request_id,
-                   const services::EconomicsResult& result) override;
+    void on_result(const QString& request_id, const services::EconomicsResult& result) override;
 
   private:
     void load_indicators();
     void on_indicator_filter(const QString& text);
     // Flatten nested pivot: values.INDICATOR.COUNTRY.YEAR -> rows
-    QJsonArray flatten_pivot(const QJsonObject& values,
-                             const QString& indicator_code,
+    QJsonArray flatten_pivot(const QJsonObject& values, const QString& indicator_code,
                              const QString& country_filter) const;
 
-    QLineEdit*   indicator_search_ = nullptr;
-    QListWidget* indicator_list_   = nullptr;
-    QComboBox*   country_combo_    = nullptr;
+    QLineEdit* indicator_search_ = nullptr;
+    QListWidget* indicator_list_ = nullptr;
+    QComboBox* country_combo_ = nullptr;
 
     bool indicators_loaded_ = false;
 };

@@ -31,7 +31,7 @@ Result<void> apply_v013(QSqlDatabase& db) {
                      "  priority     TEXT,"
                      "  sentiment    TEXT,"
                      "  impact       TEXT,"
-                     "  tickers      TEXT,"    // JSON array ["AAPL","MSFT"]
+                     "  tickers      TEXT," // JSON array ["AAPL","MSFT"]
                      "  tier         INTEGER DEFAULT 4,"
                      "  lang         TEXT,"
                      "  threat_level TEXT,"

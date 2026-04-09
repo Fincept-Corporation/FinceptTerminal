@@ -25,12 +25,12 @@ class LoadingOverlay : public QWidget {
     void paintEvent(QPaintEvent* e) override;
 
   private:
-    QTimer*     anim_timer_ = nullptr;
-    QString     message_;
-    int         tick_    = 0;
+    QTimer* anim_timer_ = nullptr;
+    QString message_;
+    int tick_ = 0;
     ThemeTokens tokens_{};
 
-    static constexpr int BAR_COUNT       = 5;
+    static constexpr int BAR_COUNT = 5;
     static constexpr int ANIM_INTERVAL_MS = 100;
 };
 

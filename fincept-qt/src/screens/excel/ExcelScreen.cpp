@@ -22,7 +22,9 @@ namespace fincept::screens {
 
 using namespace fincept::ui;
 
-static QString kAccent() { return QString("#ea580c"); } // Orange accent matching Tauri version
+static QString kAccent() {
+    return QString("#ea580c");
+} // Orange accent matching Tauri version
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constructor
@@ -71,10 +73,9 @@ void ExcelScreen::build_ui() {
                                        "  padding:4px 14px; font-family:%1; font-size:10px; margin-right:2px; }"
                                        "QTabBar::tab:selected { background:%2; color:%8; border-color:%2; }"
                                        "QTabBar::tab:hover { background:%7; }")
-                                   .arg(fonts::DATA_FAMILY, kAccent(),
-                                        colors::BG_HOVER, colors::BORDER_MED,
-                                        colors::TEXT_DIM, colors::TEXT_SECONDARY,
-                                        colors::TEXT_TERTIARY, colors::TEXT_PRIMARY));
+                                   .arg(fonts::DATA_FAMILY, kAccent(), colors::BG_HOVER, colors::BORDER_MED,
+                                        colors::TEXT_DIM, colors::TEXT_SECONDARY, colors::TEXT_TERTIARY,
+                                        colors::TEXT_PRIMARY));
 
     // Add initial sheet
     auto* sheet1 = new SpreadsheetWidget("Sheet1", 100, 26, sheet_tabs_);
@@ -87,16 +88,16 @@ void ExcelScreen::build_ui() {
     // Status bar
     auto* status_bar = new QWidget(this);
     status_bar->setFixedHeight(24);
-    status_bar->setStyleSheet(QString("background:%1; border-top:1px solid %2;")
-                                 .arg(colors::BG_HOVER, colors::BORDER_MED));
+    status_bar->setStyleSheet(
+        QString("background:%1; border-top:1px solid %2;").arg(colors::BG_HOVER, colors::BORDER_MED));
 
     auto* status_hl = new QHBoxLayout(status_bar);
     status_hl->setContentsMargins(12, 0, 12, 0);
     status_hl->setSpacing(12);
 
     status_label_ = new QLabel(this);
-    status_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;")
-                                    .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
+    status_label_->setStyleSheet(
+        QString("color:%1; font-family:%2; font-size:9px;").arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
     status_hl->addWidget(status_label_);
     status_hl->addStretch();
 
@@ -108,8 +109,7 @@ void ExcelScreen::build_ui() {
 QWidget* ExcelScreen::build_toolbar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(40);
-    bar->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
-                           .arg(colors::BORDER_MED, colors::TEXT_DIM));
+    bar->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;").arg(colors::BORDER_MED, colors::TEXT_DIM));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(12, 0, 12, 0);
@@ -125,12 +125,12 @@ QWidget* ExcelScreen::build_toolbar() {
     auto make_btn = [&](const QString& text, const QString& tooltip = {}) -> QPushButton* {
         auto* btn = new QPushButton(text, bar);
         btn->setToolTip(tooltip);
-        btn->setStyleSheet(QString("QPushButton { background:%3; color:%4; border:none;"
-                                   " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
-                                   "QPushButton:hover { background:%5; }"
-                                   "QPushButton:pressed { background:%2; }")
-                               .arg(fonts::DATA_FAMILY, kAccent(),
-                                    colors::TEXT_DIM, colors::TEXT_PRIMARY, colors::TEXT_TERTIARY));
+        btn->setStyleSheet(
+            QString("QPushButton { background:%3; color:%4; border:none;"
+                    " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
+                    "QPushButton:hover { background:%5; }"
+                    "QPushButton:pressed { background:%2; }")
+                .arg(fonts::DATA_FAMILY, kAccent(), colors::TEXT_DIM, colors::TEXT_PRIMARY, colors::TEXT_TERTIARY));
         return btn;
     };
 
@@ -173,8 +173,8 @@ QWidget* ExcelScreen::build_toolbar() {
     // File name label
     auto* fname_label = new QLabel(file_name_, bar);
     fname_label->setObjectName("excelFileName");
-    fname_label->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px;")
-                                  .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
+    fname_label->setStyleSheet(
+        QString("color:%1; font-family:%2; font-size:10px;").arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
     hl->addWidget(fname_label);
 
     return bar;

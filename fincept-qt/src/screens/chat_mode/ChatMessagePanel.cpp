@@ -1,9 +1,9 @@
 #include "screens/chat_mode/ChatMessagePanel.h"
+
 #include "screens/chat_mode/ChatModeService.h"
 #include "ui/markdown/MarkdownRenderer.h"
 #include "ui/theme/Theme.h"
 
-#include <algorithm>
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QKeyEvent>
@@ -12,31 +12,30 @@
 #include <QScrollBar>
 #include <QSizePolicy>
 
+#include <algorithm>
+
 namespace fincept::chat_mode {
 
 static constexpr const char* FONT = "'Consolas','Courier New',monospace";
 
 static QString user_bubble_ss() {
-    return QString(
-        "background:rgba(120,53,15,0.35);color:%1;border:1px solid rgba(217,119,6,0.2);"
-        "border-radius:0px;padding:8px 12px;font-size:14px;"
-        "font-family:'Consolas','Courier New',monospace;")
+    return QString("background:rgba(120,53,15,0.35);color:%1;border:1px solid rgba(217,119,6,0.2);"
+                   "border-radius:0px;padding:8px 12px;font-size:14px;"
+                   "font-family:'Consolas','Courier New',monospace;")
         .arg(ui::colors::TEXT_PRIMARY);
 }
 
 static QString ai_bubble_ss() {
-    return QString(
-        "background:%1;color:%2;border:1px solid %3;"
-        "border-radius:0px;padding:8px 12px;font-size:14px;"
-        "font-family:'Consolas','Courier New',monospace;")
+    return QString("background:%1;color:%2;border:1px solid %3;"
+                   "border-radius:0px;padding:8px 12px;font-size:14px;"
+                   "font-family:'Consolas','Courier New',monospace;")
         .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM);
 }
 
 static QString error_bubble_ss() {
-    return QString(
-        "background:rgba(50,12,12,0.7);color:%1;border:1px solid rgba(220,38,38,0.2);"
-        "border-radius:0px;padding:8px 12px;font-size:13px;"
-        "font-family:'Consolas','Courier New',monospace;")
+    return QString("background:rgba(50,12,12,0.7);color:%1;border:1px solid rgba(220,38,38,0.2);"
+                   "border-radius:0px;padding:8px 12px;font-size:13px;"
+                   "font-family:'Consolas','Courier New',monospace;")
         .arg(ui::colors::NEGATIVE);
 }
 
@@ -58,11 +57,13 @@ ChatMessagePanel::ChatMessagePanel(QWidget* parent) : QWidget(parent) {
     render_timer_->setSingleShot(true);
     render_timer_->setInterval(120);
     connect(render_timer_, &QTimer::timeout, this, [this]() {
-        if (!streaming_bubble_ || streaming_buffer_.isEmpty()) return;
+        if (!streaming_bubble_ || streaming_buffer_.isEmpty())
+            return;
         streaming_bubble_->setHtml(ui::MarkdownRenderer::render(streaming_buffer_));
         resize_bubble(streaming_bubble_);
         render_dirty_ = false;
-        if (!scroll_locked_) scroll_to_bottom();
+        if (!scroll_locked_)
+            scroll_to_bottom();
     });
 }
 
@@ -78,33 +79,30 @@ void ChatMessagePanel::build_ui() {
 }
 
 QWidget* ChatMessagePanel::build_header() {
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setFixedHeight(34);
-    hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    hdr->setStyleSheet(
+        QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(14, 0, 14, 0);
     hl->setSpacing(10);
 
     hdr_title_lbl_ = new QLabel("New Conversation");
-    hdr_title_lbl_->setStyleSheet(
-        QString("color:%1;font-size:14px;font-weight:600;"
-                "font-family:%2;background:transparent;")
-            .arg(ui::colors::TEXT_PRIMARY, FONT));
+    hdr_title_lbl_->setStyleSheet(QString("color:%1;font-size:14px;font-weight:600;"
+                                          "font-family:%2;background:transparent;")
+                                      .arg(ui::colors::TEXT_PRIMARY, FONT));
     hl->addWidget(hdr_title_lbl_);
     hl->addStretch();
 
     hdr_credits_lbl_ = new QLabel;
-    hdr_credits_lbl_->setStyleSheet(
-        QString("color:%1;font-size:12px;font-weight:600;"
-                "font-family:%2;background:transparent;")
-            .arg(ui::colors::CYAN, FONT));
+    hdr_credits_lbl_->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;"
+                                            "font-family:%2;background:transparent;")
+                                        .arg(ui::colors::CYAN, FONT));
     hl->addWidget(hdr_credits_lbl_);
 
     hdr_tools_lbl_ = new QLabel;
     hdr_tools_lbl_->setStyleSheet(
-        QString("color:%1;font-size:12px;font-family:%2;background:transparent;")
-            .arg(ui::colors::TEXT_TERTIARY, FONT));
+        QString("color:%1;font-size:12px;font-family:%2;background:transparent;").arg(ui::colors::TEXT_TERTIARY, FONT));
     hl->addWidget(hdr_tools_lbl_);
 
     mode_btn_ = new QPushButton("LITE");
@@ -115,8 +113,7 @@ QWidget* ChatMessagePanel::build_header() {
                 "border-radius:0px;font-size:11px;font-weight:600;padding:0 10px;"
                 "font-family:%4;letter-spacing:0.5px;}"
                 "QPushButton:hover{background:%5;border-color:%2;}")
-            .arg(ui::colors::BG_RAISED, ui::colors::AMBER, ui::colors::BORDER_MED,
-                 FONT, ui::colors::BG_HOVER));
+            .arg(ui::colors::BG_RAISED, ui::colors::AMBER, ui::colors::BORDER_MED, FONT, ui::colors::BG_HOVER));
     connect(mode_btn_, &QPushButton::clicked, this, [this]() {
         current_mode_ = (current_mode_ == StreamMode::Lite) ? StreamMode::Deep : StreamMode::Lite;
         mode_btn_->setText(current_mode_ == StreamMode::Lite ? "LITE" : "DEEP");
@@ -126,8 +123,7 @@ QWidget* ChatMessagePanel::build_header() {
 
     hdr_tokens_lbl_ = new QLabel("0 tokens");
     hdr_tokens_lbl_->setStyleSheet(
-        QString("color:%1;font-size:12px;font-family:%2;background:transparent;")
-            .arg(ui::colors::TEXT_DIM, FONT));
+        QString("color:%1;font-size:12px;font-family:%2;background:transparent;").arg(ui::colors::TEXT_DIM, FONT));
     hl->addWidget(hdr_tokens_lbl_);
 
     return hdr;
@@ -137,15 +133,14 @@ QWidget* ChatMessagePanel::build_messages_area() {
     scroll_area_ = new QScrollArea;
     scroll_area_->setWidgetResizable(true);
     scroll_area_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll_area_->setStyleSheet(QString(
-        "QScrollArea{background:%1;border:none;}"
-        "QScrollBar:vertical{background:transparent;width:4px;margin:2px;}"
-        "QScrollBar::handle:vertical{background:%2;border-radius:0px;min-height:30px;}"
-        "QScrollBar::handle:vertical:hover{background:%3;}"
-        "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-        .arg(ui::colors::BG_BASE, ui::colors::BORDER_MED, ui::colors::BORDER_BRIGHT));
+    scroll_area_->setStyleSheet(QString("QScrollArea{background:%1;border:none;}"
+                                        "QScrollBar:vertical{background:transparent;width:4px;margin:2px;}"
+                                        "QScrollBar::handle:vertical{background:%2;border-radius:0px;min-height:30px;}"
+                                        "QScrollBar::handle:vertical:hover{background:%3;}"
+                                        "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+                                    .arg(ui::colors::BG_BASE, ui::colors::BORDER_MED, ui::colors::BORDER_BRIGHT));
 
-    messages_container_ = new QWidget;
+    messages_container_ = new QWidget(this);
     messages_container_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
     messages_layout_ = new QVBoxLayout(messages_container_);
     messages_layout_->setContentsMargins(14, 10, 14, 10);
@@ -160,7 +155,7 @@ QWidget* ChatMessagePanel::build_messages_area() {
 }
 
 QWidget* ChatMessagePanel::build_welcome() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* vl = new QVBoxLayout(w);
     vl->setContentsMargins(14, 40, 14, 40);
     vl->setSpacing(14);
@@ -168,10 +163,9 @@ QWidget* ChatMessagePanel::build_welcome() {
 
     auto* logo = new QLabel("FINCEPT AGENT");
     logo->setAlignment(Qt::AlignCenter);
-    logo->setStyleSheet(
-        QString("color:%1;font-size:20px;font-weight:700;letter-spacing:1px;"
-                "font-family:%2;background:transparent;")
-            .arg(ui::colors::AMBER, FONT));
+    logo->setStyleSheet(QString("color:%1;font-size:20px;font-weight:700;letter-spacing:1px;"
+                                "font-family:%2;background:transparent;")
+                            .arg(ui::colors::AMBER, FONT));
     vl->addWidget(logo);
 
     auto* sub = new QLabel("AI-powered financial intelligence.\n"
@@ -179,28 +173,24 @@ QWidget* ChatMessagePanel::build_welcome() {
     sub->setAlignment(Qt::AlignCenter);
     sub->setWordWrap(true);
     sub->setStyleSheet(
-        QString("color:%1;font-size:13px;font-family:%2;background:transparent;")
-            .arg(ui::colors::TEXT_TERTIARY, FONT));
+        QString("color:%1;font-size:13px;font-family:%2;background:transparent;").arg(ui::colors::TEXT_TERTIARY, FONT));
     vl->addWidget(sub);
 
-    const QStringList chips = {
-        "Outlook for AAPL?", "Today's market news",
-        "Portfolio risk analysis", "Key indicators this week"
-    };
-    auto* row = new QWidget;
+    const QStringList chips = {"Outlook for AAPL?", "Today's market news", "Portfolio risk analysis",
+                               "Key indicators this week"};
+    auto* row = new QWidget(this);
     auto* rl = new QHBoxLayout(row);
     rl->setContentsMargins(0, 8, 0, 0);
     rl->setSpacing(6);
     rl->setAlignment(Qt::AlignCenter);
     for (const auto& text : chips) {
         auto* btn = new QPushButton(text);
-        btn->setStyleSheet(
-            QString("QPushButton{background:%1;color:%2;border:1px solid %3;"
-                    "border-radius:0px;padding:6px 12px;font-size:12px;"
-                    "font-family:%4;}"
-                    "QPushButton:hover{background:%5;color:%6;border-color:%7;}")
-                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM,
-                     FONT, ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY, ui::colors::AMBER));
+        btn->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;"
+                                   "border-radius:0px;padding:6px 12px;font-size:12px;"
+                                   "font-family:%4;}"
+                                   "QPushButton:hover{background:%5;color:%6;border-color:%7;}")
+                               .arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, FONT,
+                                    ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY, ui::colors::AMBER));
         connect(btn, &QPushButton::clicked, this, [this, text]() {
             input_box_->setPlainText(text);
             on_send_clicked();
@@ -212,7 +202,7 @@ QWidget* ChatMessagePanel::build_welcome() {
 }
 
 QWidget* ChatMessagePanel::build_typing_indicator() {
-    typing_indicator_ = new QWidget;
+    typing_indicator_ = new QWidget(this);
     typing_indicator_->setFixedHeight(26);
     typing_indicator_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
     typing_indicator_->setVisible(false);
@@ -224,19 +214,17 @@ QWidget* ChatMessagePanel::build_typing_indicator() {
     auto* lbl = new QLabel("Agent");
     lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;"
                                "font-family:%2;background:transparent;")
-        .arg(ui::colors::AMBER, FONT));
+                           .arg(ui::colors::AMBER, FONT));
     hl->addWidget(lbl);
 
     typing_dots_lbl_ = new QLabel(".");
     typing_dots_lbl_->setStyleSheet(
-        QString("color:%1;font-size:12px;background:transparent;font-family:%2;")
-            .arg(ui::colors::AMBER, FONT));
+        QString("color:%1;font-size:12px;background:transparent;font-family:%2;").arg(ui::colors::AMBER, FONT));
     hl->addWidget(typing_dots_lbl_);
 
     typing_status_lbl_ = new QLabel;
     typing_status_lbl_->setStyleSheet(
-        QString("color:%1;font-size:11px;background:transparent;font-family:%2;")
-            .arg(ui::colors::TEXT_DIM, FONT));
+        QString("color:%1;font-size:11px;background:transparent;font-family:%2;").arg(ui::colors::TEXT_DIM, FONT));
     hl->addWidget(typing_status_lbl_);
     hl->addStretch();
 
@@ -247,9 +235,9 @@ QWidget* ChatMessagePanel::build_typing_indicator() {
 }
 
 QWidget* ChatMessagePanel::build_input_area() {
-    auto* container = new QWidget;
-    container->setStyleSheet(QString("background:%1;border-top:1px solid %2;")
-        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    auto* container = new QWidget(this);
+    container->setStyleSheet(
+        QString("background:%1;border-top:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* vl = new QVBoxLayout(container);
     vl->setContentsMargins(14, 8, 14, 10);
     vl->setSpacing(6);
@@ -258,15 +246,14 @@ QWidget* ChatMessagePanel::build_input_area() {
     input_box_->setPlaceholderText("Ask anything... (Enter to send, Shift+Enter for new line)");
     input_box_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     input_box_->setFixedHeight(36);
-    input_box_->setStyleSheet(
-        QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;"
-                "border-radius:0px;padding:6px 12px;font-size:14px;font-family:%4;}"
-                "QPlainTextEdit:focus{border:1px solid %5;}"
-                "QScrollBar:vertical{background:%1;width:4px;}"
-                "QScrollBar::handle:vertical{background:%6;}"
-                "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-                 FONT, ui::colors::BORDER_BRIGHT, ui::colors::BORDER_MED));
+    input_box_->setStyleSheet(QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;"
+                                      "border-radius:0px;padding:6px 12px;font-size:14px;font-family:%4;}"
+                                      "QPlainTextEdit:focus{border:1px solid %5;}"
+                                      "QScrollBar:vertical{background:%1;width:4px;}"
+                                      "QScrollBar::handle:vertical{background:%6;}"
+                                      "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+                                  .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, FONT,
+                                       ui::colors::BORDER_BRIGHT, ui::colors::BORDER_MED));
     input_box_->installEventFilter(this);
     vl->addWidget(input_box_);
 
@@ -275,8 +262,7 @@ QWidget* ChatMessagePanel::build_input_area() {
 
     char_lbl_ = new QLabel("0 / 4000");
     char_lbl_->setStyleSheet(
-        QString("color:%1;font-size:11px;font-family:%2;background:transparent;")
-            .arg(ui::colors::TEXT_DIM, FONT));
+        QString("color:%1;font-size:11px;font-family:%2;background:transparent;").arg(ui::colors::TEXT_DIM, FONT));
     bottom->addWidget(char_lbl_);
     bottom->addStretch();
 
@@ -298,28 +284,24 @@ QWidget* ChatMessagePanel::build_input_area() {
     optimize_btn_ = new QPushButton("Optimize");
     optimize_btn_->setFixedHeight(26);
     optimize_btn_->setToolTip("Optimize prompt with AI");
-    optimize_btn_->setStyleSheet(
-        QString("QPushButton{background:%1;color:%2;border:1px solid %3;"
-                "border-radius:0px;font-size:12px;padding:0 10px;font-family:%4;}"
-                "QPushButton:hover{background:%5;color:%6;border-color:%6;}"
-                "QPushButton:disabled{color:%7;border-color:%1;}")
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM,
-                 FONT, ui::colors::BG_HOVER, ui::colors::AMBER, ui::colors::BORDER_BRIGHT));
+    optimize_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;"
+                                         "border-radius:0px;font-size:12px;padding:0 10px;font-family:%4;}"
+                                         "QPushButton:hover{background:%5;color:%6;border-color:%6;}"
+                                         "QPushButton:disabled{color:%7;border-color:%1;}")
+                                     .arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM,
+                                          FONT, ui::colors::BG_HOVER, ui::colors::AMBER, ui::colors::BORDER_BRIGHT));
     connect(optimize_btn_, &QPushButton::clicked, this, &ChatMessagePanel::on_optimize_clicked);
     bottom->addWidget(optimize_btn_);
 
     stop_btn_ = new QPushButton("Stop");
     stop_btn_->setFixedHeight(26);
     stop_btn_->setVisible(false);
-    stop_btn_->setStyleSheet(
-        QString("QPushButton{background:rgba(50,12,12,0.7);color:%1;"
-                "border:1px solid rgba(220,38,38,0.2);border-radius:0px;"
-                "font-size:12px;padding:0 12px;font-family:%2;}"
-                "QPushButton:hover{background:rgba(60,15,15,0.8);}")
-            .arg(ui::colors::NEGATIVE, FONT));
-    connect(stop_btn_, &QPushButton::clicked, this, []() {
-        ChatModeService::instance().abort_stream();
-    });
+    stop_btn_->setStyleSheet(QString("QPushButton{background:rgba(50,12,12,0.7);color:%1;"
+                                     "border:1px solid rgba(220,38,38,0.2);border-radius:0px;"
+                                     "font-size:12px;padding:0 12px;font-family:%2;}"
+                                     "QPushButton:hover{background:rgba(60,15,15,0.8);}")
+                                 .arg(ui::colors::NEGATIVE, FONT));
+    connect(stop_btn_, &QPushButton::clicked, this, []() { ChatModeService::instance().abort_stream(); });
     bottom->addWidget(stop_btn_);
 
     send_btn_ = new QPushButton("Send");
@@ -330,8 +312,7 @@ QWidget* ChatMessagePanel::build_input_area() {
                 "font-family:%3;}"
                 "QPushButton:hover{background:#b45309;}"
                 "QPushButton:disabled{background:%4;color:%5;}")
-            .arg(ui::colors::AMBER, ui::colors::BG_BASE, FONT,
-                 ui::colors::BG_RAISED, ui::colors::TEXT_DIM));
+            .arg(ui::colors::AMBER, ui::colors::BG_BASE, FONT, ui::colors::BG_RAISED, ui::colors::TEXT_DIM));
     connect(send_btn_, &QPushButton::clicked, this, &ChatMessagePanel::on_send_clicked);
     bottom->addWidget(send_btn_);
 
@@ -386,8 +367,7 @@ void ChatMessagePanel::resize_bubble(QTextEdit* bubble) {
     bubble->setFixedHeight(static_cast<int>(doc->size().height()) + 20);
 }
 
-void ChatMessagePanel::add_message_bubble(const QString& role, const QString& content,
-                                          const QString& timestamp) {
+void ChatMessagePanel::add_message_bubble(const QString& role, const QString& content, const QString& timestamp) {
     show_welcome(false);
 
     auto* bubble = new QTextEdit;
@@ -408,7 +388,7 @@ void ChatMessagePanel::add_message_bubble(const QString& role, const QString& co
     resize_bubble(bubble);
     QTimer::singleShot(0, bubble, [this, bubble]() { resize_bubble(bubble); });
 
-    auto* row = new QWidget;
+    auto* row = new QWidget(this);
     auto* row_vl = new QVBoxLayout(row);
     row_vl->setContentsMargins(0, 0, 0, 0);
     row_vl->setSpacing(2);
@@ -425,7 +405,7 @@ void ChatMessagePanel::add_message_bubble(const QString& role, const QString& co
         auto* ts = new QLabel(timestamp.left(16));
         ts->setStyleSheet(QString("color:%1;font-size:11px;font-family:%2;"
                                   "background:transparent;")
-            .arg(ui::colors::TEXT_DIM, FONT));
+                              .arg(ui::colors::TEXT_DIM, FONT));
         meta->addWidget(ts);
     }
     meta->addStretch();
@@ -450,15 +430,14 @@ QTextEdit* ChatMessagePanel::add_streaming_bubble() {
     bubble->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     bubble->setFixedHeight(40);
 
-    auto* row = new QWidget;
+    auto* row = new QWidget(this);
     auto* row_vl = new QVBoxLayout(row);
     row_vl->setContentsMargins(0, 0, 0, 0);
     row_vl->setSpacing(2);
     auto* lbl = new QLabel("Agent");
-    lbl->setStyleSheet(
-        QString("color:%1;font-size:11px;font-weight:600;font-family:%2;"
-                "background:transparent;letter-spacing:0.5px;")
-            .arg(ui::colors::AMBER, FONT));
+    lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:600;font-family:%2;"
+                               "background:transparent;letter-spacing:0.5px;")
+                           .arg(ui::colors::AMBER, FONT));
     row_vl->addWidget(lbl);
     row_vl->addWidget(bubble);
 
@@ -471,35 +450,32 @@ void ChatMessagePanel::insert_collapsed_thinking_card(int before_index) {
     if (pending_thinking_.isEmpty() && pending_tools_.isEmpty())
         return;
 
-    auto* card = new QWidget;
+    auto* card = new QWidget(this);
     auto* vl = new QVBoxLayout(card);
     vl->setContentsMargins(8, 4, 8, 4);
     vl->setSpacing(2);
-    card->setStyleSheet(QString("background:%1;border:1px solid %2;")
-        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    card->setStyleSheet(
+        QString("background:%1;border:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
 
     QString summary;
     if (!pending_tools_.isEmpty()) {
         QStringList tool_names;
         for (const auto& [name, ms] : pending_tools_)
             tool_names.append(QString("%1 (%2ms)").arg(name).arg(ms));
-        summary = QString("> %1 thinking steps | tools: %2")
-                      .arg(pending_thinking_.size())
-                      .arg(tool_names.join(", "));
+        summary = QString("> %1 thinking steps | tools: %2").arg(pending_thinking_.size()).arg(tool_names.join(", "));
     } else {
         summary = QString("> %1 thinking steps").arg(pending_thinking_.size());
     }
 
     auto* header = new QPushButton(summary);
     header->setCursor(Qt::PointingHandCursor);
-    header->setStyleSheet(
-        QString("QPushButton{background:transparent;color:%1;border:none;"
-                "font-size:11px;font-family:%2;text-align:left;padding:2px 0;}"
-                "QPushButton:hover{color:%3;}")
-            .arg(ui::colors::TEXT_TERTIARY, FONT, ui::colors::TEXT_SECONDARY));
+    header->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:none;"
+                                  "font-size:11px;font-family:%2;text-align:left;padding:2px 0;}"
+                                  "QPushButton:hover{color:%3;}")
+                              .arg(ui::colors::TEXT_TERTIARY, FONT, ui::colors::TEXT_SECONDARY));
     vl->addWidget(header);
 
-    auto* detail = new QWidget;
+    auto* detail = new QWidget(this);
     detail->setVisible(false);
     auto* dvl = new QVBoxLayout(detail);
     dvl->setContentsMargins(4, 4, 0, 0);
@@ -509,25 +485,21 @@ void ChatMessagePanel::insert_collapsed_thinking_card(int before_index) {
     const QString merged = pending_thinking_.join(" ").left(1000);
     auto* thought = new QLabel(merged);
     thought->setWordWrap(true);
-    thought->setStyleSheet(
-        QString("color:%1;font-size:11px;font-style:italic;"
-                "font-family:%2;background:transparent;")
-            .arg(ui::colors::TEXT_DIM, FONT));
+    thought->setStyleSheet(QString("color:%1;font-size:11px;font-style:italic;"
+                                   "font-family:%2;background:transparent;")
+                               .arg(ui::colors::TEXT_DIM, FONT));
     dvl->addWidget(thought);
 
     for (const auto& [name, ms] : pending_tools_) {
         auto* line = new QLabel(QString(":: %1 %2ms").arg(name).arg(ms));
-        line->setStyleSheet(
-            QString("color:%1;font-size:11px;font-family:%2;"
-                    "background:transparent;")
-                .arg(ui::colors::AMBER, FONT));
+        line->setStyleSheet(QString("color:%1;font-size:11px;font-family:%2;"
+                                    "background:transparent;")
+                                .arg(ui::colors::AMBER, FONT));
         dvl->addWidget(line);
     }
     vl->addWidget(detail);
 
-    connect(header, &QPushButton::clicked, this, [detail]() {
-        detail->setVisible(!detail->isVisible());
-    });
+    connect(header, &QPushButton::clicked, this, [detail]() { detail->setVisible(!detail->isVisible()); });
 
     // Insert before the agent bubble (or at end if index unknown)
     const int pos = (before_index >= 0) ? before_index : (messages_layout_->count() - 1);
@@ -546,7 +518,8 @@ void ChatMessagePanel::on_stream_session_meta(const QString&, const QString& new
 }
 
 void ChatMessagePanel::on_stream_text_delta(const QString& text) {
-    if (!streaming_bubble_) return;
+    if (!streaming_bubble_)
+        return;
 
     streaming_buffer_ += text;
     render_dirty_ = true;
@@ -597,10 +570,10 @@ void ChatMessagePanel::on_stream_finish(int total_tokens) {
         insert_collapsed_thinking_card(bubble_idx);
     }
 
-    streaming_        = false;
+    streaming_ = false;
     streaming_bubble_ = nullptr;
     streaming_buffer_.clear();
-    scroll_locked_    = false;
+    scroll_locked_ = false;
     show_typing(false);
     set_input_enabled(true);
     send_btn_->setVisible(true);
@@ -611,10 +584,10 @@ void ChatMessagePanel::on_stream_finish(int total_tokens) {
 
 void ChatMessagePanel::on_stream_error(const QString& message) {
     render_timer_->stop();
-    streaming_        = false;
+    streaming_ = false;
     streaming_bubble_ = nullptr;
     streaming_buffer_.clear();
-    scroll_locked_    = false;
+    scroll_locked_ = false;
     pending_thinking_.clear();
     pending_tools_.clear();
     show_typing(false);
@@ -643,8 +616,7 @@ void ChatMessagePanel::on_tools_registered(int count) {
 
 void ChatMessagePanel::set_credits(int credits) {
     if (credits > 0)
-        hdr_credits_lbl_->setText(
-            QString("%1 credits").arg(QLocale(QLocale::English).toString(credits)));
+        hdr_credits_lbl_->setText(QString("%1 credits").arg(QLocale(QLocale::English).toString(credits)));
     else
         hdr_credits_lbl_->setText("0 credits");
 }
@@ -653,15 +625,16 @@ void ChatMessagePanel::set_credits(int credits) {
 
 void ChatMessagePanel::on_send_clicked() {
     const QString text = input_box_->toPlainText().trimmed();
-    if (text.isEmpty() || streaming_) return;
+    if (text.isEmpty() || streaming_)
+        return;
 
     input_box_->clear();
-    streaming_        = true;
+    streaming_ = true;
     streaming_buffer_.clear();
-    scroll_locked_    = false;
+    scroll_locked_ = false;
     pending_thinking_.clear();
     pending_tools_.clear();
-    thinking_card_    = nullptr;
+    thinking_card_ = nullptr;
 
     add_message_bubble("user", text);
     show_typing(true);
@@ -677,22 +650,26 @@ void ChatMessagePanel::on_send_clicked() {
 
 void ChatMessagePanel::on_optimize_clicked() {
     const QString text = input_box_->toPlainText().trimmed();
-    if (text.isEmpty() || streaming_) return;
+    if (text.isEmpty() || streaming_)
+        return;
 
     optimize_btn_->setEnabled(false);
     optimize_btn_->setText("...");
 
     QPointer<ChatMessagePanel> self = this;
-    ChatModeService::instance().optimize_prompt(
-        text, current_mode_ == StreamMode::Deep ? "deep" : "lite",
-        [self](bool ok, OptimizedPrompt result, QString err) {
-            if (!self) return;
-            self->optimize_btn_->setEnabled(true);
-            self->optimize_btn_->setText("Optimize");
-            if (!ok) { self->on_stream_error("Optimize failed: " + err); return; }
-            if (!result.optimized.isEmpty())
-                self->input_box_->setPlainText(result.optimized);
-        });
+    ChatModeService::instance().optimize_prompt(text, current_mode_ == StreamMode::Deep ? "deep" : "lite",
+                                                [self](bool ok, OptimizedPrompt result, QString err) {
+                                                    if (!self)
+                                                        return;
+                                                    self->optimize_btn_->setEnabled(true);
+                                                    self->optimize_btn_->setText("Optimize");
+                                                    if (!ok) {
+                                                        self->on_stream_error("Optimize failed: " + err);
+                                                        return;
+                                                    }
+                                                    if (!result.optimized.isEmpty())
+                                                        self->input_box_->setPlainText(result.optimized);
+                                                });
 }
 
 // ── Event filter ─────────────────────────────────────────────────────────────
@@ -713,12 +690,14 @@ bool ChatMessagePanel::eventFilter(QObject* obj, QEvent* ev) {
 void ChatMessagePanel::scroll_to_bottom() {
     QTimer::singleShot(10, this, [this]() {
         auto* bar = scroll_area_->verticalScrollBar();
-        if (bar) bar->setValue(bar->maximum());
+        if (bar)
+            bar->setValue(bar->maximum());
     });
 }
 
 void ChatMessagePanel::show_welcome(bool show) {
-    if (welcome_panel_) welcome_panel_->setVisible(show);
+    if (welcome_panel_)
+        welcome_panel_->setVisible(show);
 }
 
 void ChatMessagePanel::show_typing(bool show) {

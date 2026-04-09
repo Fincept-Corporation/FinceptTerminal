@@ -13,14 +13,14 @@ class BaseProvider : public INotificationProvider {
     bool is_enabled() const override { return enabled_; }
 
     void load_config() override {
-        auto& r      = SettingsRepository::instance();
+        auto& r = SettingsRepository::instance();
         const QString cat = category();
         enabled_ = get_bool(r, cat + ".enabled", false);
         load_fields(r, cat);
     }
 
     void save_config() override {
-        auto& r      = SettingsRepository::instance();
+        auto& r = SettingsRepository::instance();
         const QString cat = category();
         r.set(cat + ".enabled", enabled_ ? "1" : "0", cat);
         save_fields(r, cat);

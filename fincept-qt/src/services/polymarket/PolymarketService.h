@@ -90,10 +90,10 @@ class PolymarketService : public QObject {
     QNetworkAccessManager* clob_nam_ = nullptr;
     QNetworkAccessManager* data_nam_ = nullptr;
 
-    static constexpr int kTagsTtlSec       = 5 * 60;
+    static constexpr int kTagsTtlSec = 5 * 60;
     static constexpr int kLeaderboardTtlSec = 5 * 60;
-    static constexpr int kMarketsTtlSec     = 2 * 60;
-    static constexpr int kEventsTtlSec      = 2 * 60;
+    static constexpr int kMarketsTtlSec = 2 * 60;
+    static constexpr int kEventsTtlSec = 2 * 60;
 };
 
 } // namespace fincept::services::polymarket

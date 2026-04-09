@@ -1,3 +1,4 @@
+#include "ai_chat/LlmService.h"
 #include "app/MainWindow.h"
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
@@ -19,21 +20,21 @@
 #include "storage/sqlite/Database.h"
 #include "storage/sqlite/migrations/MigrationRunner.h"
 #include "trading/instruments/InstrumentService.h"
-#include "ai_chat/LlmService.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
-#include <SingleApplication.h>
 #include <QDir>
 #include <QFile>
 #include <QLockFile>
-#include <QUuid>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QStandardPaths>
+#include <QUuid>
+
+#include <singleapplication.h>
 
 #ifdef Q_OS_WIN
-#  include <Windows.h>
+#    include <Windows.h>
 #endif
 
 int main(int argc, char* argv[]) {
@@ -45,8 +46,7 @@ int main(int argc, char* argv[]) {
     {
         for (int i = 1; i < argc - 1; ++i) {
             if (qstrcmp(argv[i], "--profile") == 0) {
-                fincept::ProfileManager::instance().set_active(
-                    QString::fromUtf8(argv[i + 1]));
+                fincept::ProfileManager::instance().set_active(QString::fromUtf8(argv[i + 1]));
                 break;
             }
         }
@@ -64,11 +64,8 @@ int main(int argc, char* argv[]) {
     // "FinceptTerminal --profile work" and "FinceptTerminal --profile personal"
     // are treated as two separate primary instances and run simultaneously.
     // allowSecondary=true: secondary instances send "--new-window" and exit.
-    const QString profile_key = QString("FinceptTerminal-%1")
-                                    .arg(fincept::ProfileManager::instance().active());
-    SingleApplication app(argc, argv, /*allowSecondary=*/true,
-                          SingleApplication::Mode::User,
-                          100,
+    const QString profile_key = QString("FinceptTerminal-%1").arg(fincept::ProfileManager::instance().active());
+    SingleApplication app(argc, argv, /*allowSecondary=*/true, SingleApplication::Mode::User, 100,
                           profile_key.toUtf8());
     app.setApplicationName("FinceptTerminal");
     app.setOrganizationName("Fincept");
@@ -100,9 +97,9 @@ int main(int argc, char* argv[]) {
             if (QFile::exists(old_path) && !QFile::exists(new_path))
                 QFile::rename(old_path, new_path);
         };
-        migrate_file(old_base + "/fincept.db",   fincept::AppPaths::data() + "/fincept.db");
-        migrate_file(old_base + "/cache.db",     fincept::AppPaths::data() + "/cache.db");
-        migrate_file(old_base + "/fincept.log",  fincept::AppPaths::logs() + "/fincept.log");
+        migrate_file(old_base + "/fincept.db", fincept::AppPaths::data() + "/fincept.db");
+        migrate_file(old_base + "/cache.db", fincept::AppPaths::data() + "/cache.db");
+        migrate_file(old_base + "/fincept.log", fincept::AppPaths::logs() + "/fincept.log");
         migrate_file(old_base + "/fincept-files", fincept::AppPaths::files());
         // Remove stale WAL/SHM from old location too
         QFile::remove(old_base + "/fincept.db-wal");
@@ -129,8 +126,8 @@ int main(int argc, char* argv[]) {
     {
         const QString local_dir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
         const QString legacy1 = local_dir.section('/', 0, -3) + "/FinceptTerminal/fincept_settings.db";
-        const QString legacy2 = QString(local_dir).replace("Fincept/FinceptTerminal", "FinceptTerminal")
-                                + "/fincept_settings.db";
+        const QString legacy2 =
+            QString(local_dir).replace("Fincept/FinceptTerminal", "FinceptTerminal") + "/fincept_settings.db";
         QFile::remove(legacy1 + "-wal");
         QFile::remove(legacy1 + "-shm");
         QFile::remove(legacy2 + "-wal");
@@ -144,16 +141,16 @@ int main(int argc, char* argv[]) {
 
         // Global level
         const QString gl = cfg.get("log/global_level", "Info").toString();
-        const QHash<QString, fincept::LogLevel> lvl_map = {
-            {"Debug", fincept::LogLevel::Debug}, {"Info",  fincept::LogLevel::Info},
-            {"Warn",  fincept::LogLevel::Warn},  {"Error", fincept::LogLevel::Error}
-        };
+        const QHash<QString, fincept::LogLevel> lvl_map = {{"Debug", fincept::LogLevel::Debug},
+                                                           {"Info", fincept::LogLevel::Info},
+                                                           {"Warn", fincept::LogLevel::Warn},
+                                                           {"Error", fincept::LogLevel::Error}};
         log.set_level(lvl_map.value(gl, fincept::LogLevel::Info));
 
         // Per-tag overrides
         const int count = cfg.get("log/tag_count", 0).toInt();
         for (int i = 0; i < count; ++i) {
-            const QString tag   = cfg.get(QString("log/tag_%1_name").arg(i)).toString();
+            const QString tag = cfg.get(QString("log/tag_%1_name").arg(i)).toString();
             const QString level = cfg.get(QString("log/tag_%1_level").arg(i)).toString();
             if (!tag.isEmpty() && lvl_map.contains(level))
                 log.set_tag_level(tag, lvl_map.value(level));
@@ -185,6 +182,7 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v013();
     fincept::register_migration_v014();
     fincept::register_migration_v015();
+    fincept::register_migration_v016();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -207,26 +205,23 @@ int main(int argc, char* argv[]) {
         fincept::NewsArticleRepository::instance().prune_older_than(news_cutoff);
         LOG_INFO("App", "News articles pruned (keeping 30 days)");
 
-        // Load persisted appearance settings and apply theme+font in one shot,
-        // before any window is shown — eliminates the flash/wrong-font-on-startup issue.
+        // Load persisted font settings and apply before any window is shown
+        // — eliminates flash/wrong-font-on-startup. Theme is always Obsidian.
         {
-            auto& repo    = fincept::SettingsRepository::instance();
-            auto& tm      = fincept::ui::ThemeManager::instance();
-            auto r_theme  = repo.get("appearance.theme");
+            auto& repo = fincept::SettingsRepository::instance();
+            auto& tm = fincept::ui::ThemeManager::instance();
             auto r_family = repo.get("appearance.font_family");
-            auto r_size   = repo.get("appearance.font_size");
-            QString theme  = r_theme.is_ok()  ? r_theme.value()  : "Obsidian";
+            auto r_size = repo.get("appearance.font_size");
             QString family = r_family.is_ok() ? r_family.value() : "Consolas";
-            QString size_s = r_size.is_ok()   ? r_size.value()   : "14px";
-            int size_px    = size_s.left(size_s.indexOf("px")).toInt();
-            if (size_px <= 0) size_px = 14;
-            // Set font first so rebuild_and_apply inside apply_theme uses correct values
+            QString size_s = r_size.is_ok() ? r_size.value() : "14px";
+            int size_px = size_s.left(size_s.indexOf("px")).toInt();
+            if (size_px <= 0)
+                size_px = 14;
             tm.apply_font(family, size_px);
-            tm.apply_theme(theme);
-            LOG_INFO("App", "Theme applied: " + theme + ", font: " + family + " " + size_s);
+            tm.apply_theme("Obsidian");
+            LOG_INFO("App", "Theme: Obsidian, font: " + family + " " + size_s);
         }
     }
-
 
     // Open cache database (non-fatal if fails)
     QString cache_path = fincept::AppPaths::data() + "/cache.db";
@@ -335,19 +330,19 @@ int main(int argc, char* argv[]) {
 
             // Wire new-window handler now that the primary window exists
             QObject::connect(&app, &SingleApplication::receivedMessage,
-                [](quint32 /*instanceId*/, QByteArray /*message*/) {
-                    auto* w = new fincept::MainWindow(fincept::MainWindow::next_window_id());
-                    w->setAttribute(Qt::WA_DeleteOnClose);
-                    w->show();
-                    w->raise();
-                    w->activateWindow();
-                    LOG_INFO("App", "New window opened via secondary instance request");
-                });
-            QObject::connect(&app, &QApplication::lastWindowClosed,
-                &app, &QApplication::quit);
+                             [](quint32 /*instanceId*/, QByteArray /*message*/) {
+                                 auto* w = new fincept::MainWindow(fincept::MainWindow::next_window_id());
+                                 w->setAttribute(Qt::WA_DeleteOnClose);
+                                 w->show();
+                                 w->raise();
+                                 w->activateWindow();
+                                 LOG_INFO("App", "New window opened via secondary instance request");
+                             });
+            QObject::connect(&app, &QApplication::lastWindowClosed, &app, &QApplication::quit);
 
             if (!fincept::ai_chat::LlmService::instance().is_configured())
-                LOG_WARN("App", "LLM provider not configured — AI chat will prompt user to configure Settings → LLM Config");
+                LOG_WARN("App",
+                         "LLM provider not configured — AI chat will prompt user to configure Settings → LLM Config");
             LOG_INFO("App", "Application ready (after setup)");
         });
 
@@ -362,19 +357,17 @@ int main(int argc, char* argv[]) {
     // The secondary instance sends "--new-window" and exits. We construct a new
     // independent MainWindow in this process. WA_DeleteOnClose ensures cleanup.
     // QApplication::lastWindowClosed() → quit() handles the final exit.
-    QObject::connect(&app, &SingleApplication::receivedMessage,
-        [](quint32 /*instanceId*/, QByteArray /*message*/) {
-            auto* w = new fincept::MainWindow(fincept::MainWindow::next_window_id());
-            w->setAttribute(Qt::WA_DeleteOnClose);
-            w->show();
-            w->raise();
-            w->activateWindow();
-            LOG_INFO("App", "New window opened via secondary instance request");
-        });
+    QObject::connect(&app, &SingleApplication::receivedMessage, [](quint32 /*instanceId*/, QByteArray /*message*/) {
+        auto* w = new fincept::MainWindow(fincept::MainWindow::next_window_id());
+        w->setAttribute(Qt::WA_DeleteOnClose);
+        w->show();
+        w->raise();
+        w->activateWindow();
+        LOG_INFO("App", "New window opened via secondary instance request");
+    });
 
     // Quit when the last window is closed (standard Qt SDI behaviour).
-    QObject::connect(&app, &QApplication::lastWindowClosed,
-        &app, &QApplication::quit);
+    QObject::connect(&app, &QApplication::lastWindowClosed, &app, &QApplication::quit);
 
     // If requirements files changed (app update), sync packages in background
     // without blocking the user.

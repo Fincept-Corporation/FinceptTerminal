@@ -1,4 +1,5 @@
 #include "ui/workspace/WorkspaceNewDialog.h"
+
 #include "services/workspace/WorkspaceTemplates.h"
 
 #include <QDialogButtonBox>
@@ -16,15 +17,15 @@ static const char* DLG_SS =
     "QDialog{background:#0a0a0a;color:#e5e5e5;}"
     "QLabel{color:#e5e5e5;}"
     "QLineEdit,QPlainTextEdit{"
-        "background:#111;color:#e5e5e5;border:1px solid #2a2a2a;"
-        "border-radius:3px;padding:4px;}"
+    "background:#111;color:#e5e5e5;border:1px solid #2a2a2a;"
+    "border-radius:3px;padding:4px;}"
     "QLineEdit:focus,QPlainTextEdit:focus{border:1px solid #d97706;}"
     "QListWidget{background:#111;color:#e5e5e5;border:1px solid #2a2a2a;border-radius:3px;}"
     "QListWidget::item{padding:8px 12px;}"
     "QListWidget::item:selected{background:#1c1c1c;color:#d97706;border-left:2px solid #d97706;}"
     "QListWidget::item:hover{background:#161616;}"
     "QPushButton{background:#1a1a1a;color:#e5e5e5;border:1px solid #2a2a2a;"
-        "border-radius:3px;padding:6px 16px;}"
+    "border-radius:3px;padding:6px 16px;}"
     "QPushButton:hover{background:#222;border-color:#d97706;}"
     "QPushButton#createBtn{background:#d97706;color:#000;font-weight:700;border:none;}"
     "QPushButton#createBtn:hover{background:#b45309;}"
@@ -88,9 +89,8 @@ void WorkspaceNewDialog::setup_ui() {
 
     preview_label_ = new QLabel;
     preview_label_->setWordWrap(true);
-    preview_label_->setStyleSheet(
-        "background:#111;border:1px solid #2a2a2a;border-radius:3px;"
-        "padding:8px;color:#aaa;font-size:12px;");
+    preview_label_->setStyleSheet("background:#111;border:1px solid #2a2a2a;border-radius:3px;"
+                                  "padding:8px;color:#aaa;font-size:12px;");
     preview_label_->setFixedHeight(80);
     right->addWidget(preview_label_);
 
@@ -110,9 +110,8 @@ void WorkspaceNewDialog::setup_ui() {
     root->addLayout(right, 1);
 
     // ── Connections ───────────────────────────────────────────────────────────
-    connect(name_edit_, &QLineEdit::textChanged, this, [this](const QString& t) {
-        create_btn_->setEnabled(!t.trimmed().isEmpty());
-    });
+    connect(name_edit_, &QLineEdit::textChanged, this,
+            [this](const QString& t) { create_btn_->setEnabled(!t.trimmed().isEmpty()); });
 
     connect(template_list_, &QListWidget::currentRowChanged, this, [this](int) {
         if (auto* item = template_list_->currentItem())

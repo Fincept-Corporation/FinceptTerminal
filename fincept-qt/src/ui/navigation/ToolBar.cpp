@@ -55,7 +55,7 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     command_bar_->setMinimumWidth(80);
     command_bar_->setMaximumWidth(240);
     command_bar_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    connect(command_bar_, &CommandBar::navigate_to,  this, &ToolBar::navigate_to);
+    connect(command_bar_, &CommandBar::navigate_to, this, &ToolBar::navigate_to);
     connect(command_bar_, &CommandBar::dock_command, this, &ToolBar::dock_command);
     hl->addWidget(command_bar_);
 
@@ -135,8 +135,8 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     connect(&auth::AuthManager::instance(), &auth::AuthManager::auth_state_changed, this,
             &ToolBar::refresh_user_display);
 
-    connect(&ThemeManager::instance(), &ThemeManager::theme_changed,
-            this, [this](const ThemeTokens&) { refresh_theme(); });
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { refresh_theme(); });
 
     refresh_user_display();
     refresh_theme();
@@ -144,20 +144,21 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
 
 void ToolBar::refresh_theme() {
     // Bar background
-    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                      .arg(colors::BG_BASE).arg(colors::BORDER_DIM));
+    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_BASE).arg(colors::BORDER_DIM));
     // Menu bar + popup menus
     if (menu_bar_) {
         menu_bar_->setStyleSheet(menu_ss());
         for (auto* action : menu_bar_->actions())
-            if (action->menu()) action->menu()->setStyleSheet(popup_ss());
+            if (action->menu())
+                action->menu()->setStyleSheet(popup_ss());
     }
     // Separators
     for (auto* s : separators_)
         s->setStyleSheet(QString("color:%1;background:transparent;padding:0 3px;").arg(colors::TEXT_DIM));
     // Branding labels
     auto lbl = [](QLabel* l, const QString& c, bool b = false) {
-        if (l) l->setStyleSheet(QString("color:%1;%2background:transparent;").arg(c, b ? "font-weight:700;" : ""));
+        if (l)
+            l->setStyleSheet(QString("color:%1;%2background:transparent;").arg(c, b ? "font-weight:700;" : ""));
     };
     lbl(fincept_label_, colors::AMBER(), true);
     lbl(branding_label_, colors::TEXT_PRIMARY(), true);
@@ -171,19 +172,21 @@ void ToolBar::refresh_theme() {
     if (plan_btn_)
         plan_btn_->setStyleSheet(QString("QPushButton{color:%1;background:transparent;border:none;padding:0 2px;}"
                                          "QPushButton:hover{color:%2;}")
-                                     .arg(colors::TEXT_PRIMARY).arg(colors::AMBER));
+                                     .arg(colors::TEXT_PRIMARY)
+                                     .arg(colors::AMBER));
     if (chat_mode_btn_)
-        chat_mode_btn_->setStyleSheet(
-            QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                    "padding:0 8px;font-weight:700;}"
-                    "QPushButton:hover{background:%2;color:%3;border-color:%1;}")
-                .arg(colors::AMBER).arg(colors::AMBER_DIM).arg(colors::TEXT_PRIMARY));
+        chat_mode_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
+                                              "padding:0 8px;font-weight:700;}"
+                                              "QPushButton:hover{background:%2;color:%3;border-color:%1;}")
+                                          .arg(colors::AMBER)
+                                          .arg(colors::AMBER_DIM)
+                                          .arg(colors::TEXT_PRIMARY));
     if (logout_btn_)
-        logout_btn_->setStyleSheet(
-            QString("QPushButton{background:transparent;color:%1;border:1px solid %1;"
-                    "padding:0 8px;font-weight:700;}"
-                    "QPushButton:hover{background:%1;color:%2;border-color:%1;}")
-                .arg(colors::NEGATIVE).arg(colors::TEXT_PRIMARY));
+        logout_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %1;"
+                                           "padding:0 8px;font-weight:700;}"
+                                           "QPushButton:hover{background:%1;color:%2;border-color:%1;}")
+                                       .arg(colors::NEGATIVE)
+                                       .arg(colors::TEXT_PRIMARY));
 }
 
 void ToolBar::resizeEvent(QResizeEvent* e) {
@@ -200,17 +203,23 @@ void ToolBar::apply_responsive_layout(int w) {
     //  <  650: minimal — menus + branding + user + plan + logout
 
     bool show_subtitle = (w >= 1200);
-    bool show_clock    = (w >= 800);
-    bool show_live     = (w >= 800);
-    bool show_credits  = (w >= 650);
-    bool show_chat     = (w >= 650);
+    bool show_clock = (w >= 800);
+    bool show_live = (w >= 800);
+    bool show_credits = (w >= 650);
+    bool show_chat = (w >= 650);
 
-    if (subtitle_label_) subtitle_label_->setVisible(show_subtitle);
-    if (clock_label_)    clock_label_->setVisible(show_clock);
-    if (live_dot_)       live_dot_->setVisible(show_live);
-    if (live_label_)     live_label_->setVisible(show_live);
-    if (credits_label_)  credits_label_->setVisible(show_credits);
-    if (chat_mode_btn_)  chat_mode_btn_->setVisible(show_chat);
+    if (subtitle_label_)
+        subtitle_label_->setVisible(show_subtitle);
+    if (clock_label_)
+        clock_label_->setVisible(show_clock);
+    if (live_dot_)
+        live_dot_->setVisible(show_live);
+    if (live_label_)
+        live_label_->setVisible(show_live);
+    if (credits_label_)
+        credits_label_->setVisible(show_credits);
+    if (chat_mode_btn_)
+        chat_mode_btn_->setVisible(show_chat);
 
     // Hide separators adjacent to hidden widgets — check each separator's neighbors
     // Simple approach: hide seps 3 (after credits) and 4 (after plan/before chat)
@@ -244,10 +253,9 @@ void ToolBar::refresh_user_display() {
     // Credits — compact format
     int credits = static_cast<int>(s.user_info.credit_balance);
     credits_label_->setText(QString("%1 CR").arg(credits));
-    credits_label_->setStyleSheet(QString("color:%1;background:transparent;")
-                                      .arg(s.user_info.credit_balance > 0
-                                               ? colors::POSITIVE.get()
-                                               : colors::NEGATIVE.get()));
+    credits_label_->setStyleSheet(
+        QString("color:%1;background:transparent;")
+            .arg(s.user_info.credit_balance > 0 ? colors::POSITIVE.get() : colors::NEGATIVE.get()));
 
     QString plan_text = s.account_type().toUpper();
     plan_btn_->setText(plan_text.isEmpty() ? "FREE" : plan_text);
@@ -256,11 +264,11 @@ void ToolBar::refresh_user_display() {
 QMenu* ToolBar::build_file_menu() {
     auto* m = new QMenu("File", this);
     m->setStyleSheet(popup_ss());
-    m->addAction("New Window",        this, [this]() { emit action_triggered("new_window"); });
+    m->addAction("New Window", this, [this]() { emit action_triggered("new_window"); });
     m->addSeparator();
-    m->addAction("New Workspace",     this, [this]() { emit action_triggered("new_workspace"); });
-    m->addAction("Open Workspace",    this, [this]() { emit action_triggered("open_workspace"); });
-    m->addAction("Save Workspace",    this, [this]() { emit action_triggered("save_workspace"); });
+    m->addAction("New Workspace", this, [this]() { emit action_triggered("new_workspace"); });
+    m->addAction("Open Workspace", this, [this]() { emit action_triggered("open_workspace"); });
+    m->addAction("Save Workspace", this, [this]() { emit action_triggered("save_workspace"); });
     m->addAction("Save Workspace As", this, [this]() { emit action_triggered("save_workspace_as"); });
     m->addSeparator();
     m->addAction("Import Workspace", this, [this]() { emit action_triggered("import_data"); });
@@ -274,19 +282,18 @@ QMenu* ToolBar::build_file_menu() {
 
 QMenu* ToolBar::build_navigate_menu() {
     auto* m = new QMenu("Navigate", this);
-    m->setStyleSheet(QString(
-        "QMenu{background:%1;color:%2;border:1px solid %3;padding:2px 0;}"
-        "QMenu::item{padding:3px 20px 3px 10px;}"
-        "QMenu::item:selected{background:%4;}"
-        "QMenu::item:disabled{color:%5;font-weight:700;padding:6px 10px 2px 10px;}"
-        "QMenu::separator{background:%3;height:1px;margin:2px 6px;}"
-        "QMenu::scroller{background:%1;height:14px;}"
-        "QMenu::scroller:hover{background:%4;}")
-        .arg(colors::BG_SURFACE)
-        .arg(colors::TEXT_PRIMARY)
-        .arg(colors::BORDER_DIM)
-        .arg(colors::BG_RAISED)
-        .arg(colors::AMBER));
+    m->setStyleSheet(QString("QMenu{background:%1;color:%2;border:1px solid %3;padding:2px 0;}"
+                             "QMenu::item{padding:3px 20px 3px 10px;}"
+                             "QMenu::item:selected{background:%4;}"
+                             "QMenu::item:disabled{color:%5;font-weight:700;padding:6px 10px 2px 10px;}"
+                             "QMenu::separator{background:%3;height:1px;margin:2px 6px;}"
+                             "QMenu::scroller{background:%1;height:14px;}"
+                             "QMenu::scroller:hover{background:%4;}")
+                         .arg(colors::BG_SURFACE)
+                         .arg(colors::TEXT_PRIMARY)
+                         .arg(colors::BORDER_DIM)
+                         .arg(colors::BG_RAISED)
+                         .arg(colors::AMBER));
 
     // Use submenus for each group — cleaner and no scroll needed
     auto add_sub = [&](const QString& title) -> QMenu* {
@@ -360,20 +367,20 @@ QMenu* ToolBar::build_view_menu() {
     // Float any screen as a separate window on another monitor
     auto* panels = m->addMenu("Float Panel");
     panels->setStyleSheet(popup_ss());
-    panels->addAction("Dashboard",       this, [this]() { emit action_triggered("panel_dashboard"); });
-    panels->addAction("Watchlist",       this, [this]() { emit action_triggered("panel_watchlist"); });
-    panels->addAction("News Feed",       this, [this]() { emit action_triggered("panel_news"); });
-    panels->addAction("Portfolio",       this, [this]() { emit action_triggered("panel_portfolio"); });
-    panels->addAction("Markets",         this, [this]() { emit action_triggered("panel_markets"); });
+    panels->addAction("Dashboard", this, [this]() { emit action_triggered("panel_dashboard"); });
+    panels->addAction("Watchlist", this, [this]() { emit action_triggered("panel_watchlist"); });
+    panels->addAction("News Feed", this, [this]() { emit action_triggered("panel_news"); });
+    panels->addAction("Portfolio", this, [this]() { emit action_triggered("panel_portfolio"); });
+    panels->addAction("Markets", this, [this]() { emit action_triggered("panel_markets"); });
     panels->addSeparator();
-    panels->addAction("Crypto Trading",  this, [this]() { emit action_triggered("panel_crypto"); });
-    panels->addAction("Equity Trading",  this, [this]() { emit action_triggered("panel_equity"); });
-    panels->addAction("Algo Trading",    this, [this]() { emit action_triggered("panel_algo"); });
+    panels->addAction("Crypto Trading", this, [this]() { emit action_triggered("panel_crypto"); });
+    panels->addAction("Equity Trading", this, [this]() { emit action_triggered("panel_equity"); });
+    panels->addAction("Algo Trading", this, [this]() { emit action_triggered("panel_algo"); });
     panels->addSeparator();
     panels->addAction("Equity Research", this, [this]() { emit action_triggered("panel_research"); });
-    panels->addAction("Economics",       this, [this]() { emit action_triggered("panel_economics"); });
-    panels->addAction("Geopolitics",     this, [this]() { emit action_triggered("panel_geopolitics"); });
-    panels->addAction("AI Chat",         this, [this]() { emit action_triggered("panel_ai_chat"); });
+    panels->addAction("Economics", this, [this]() { emit action_triggered("panel_economics"); });
+    panels->addAction("Geopolitics", this, [this]() { emit action_triggered("panel_geopolitics"); });
+    panels->addAction("AI Chat", this, [this]() { emit action_triggered("panel_ai_chat"); });
     m->addSeparator();
 
     // Quick Switch — jump to a preset screen layout
@@ -385,26 +392,26 @@ QMenu* ToolBar::build_view_menu() {
     // Trading
     auto* qs_trading = persp->addMenu("Trading");
     qs_trading->setStyleSheet(popup_ss());
-    qs_trading->addAction("Crypto Trading",  this, [this]() { emit action_triggered("perspective_trading"); });
-    qs_trading->addAction("Equity Trading",  this, [this]() { emit action_triggered("perspective_equity"); });
-    qs_trading->addAction("Algo Trading",    this, [this]() { emit action_triggered("perspective_algo"); });
+    qs_trading->addAction("Crypto Trading", this, [this]() { emit action_triggered("perspective_trading"); });
+    qs_trading->addAction("Equity Trading", this, [this]() { emit action_triggered("perspective_equity"); });
+    qs_trading->addAction("Algo Trading", this, [this]() { emit action_triggered("perspective_algo"); });
 
     // Research
     auto* qs_research = persp->addMenu("Research");
     qs_research->setStyleSheet(popup_ss());
     qs_research->addAction("Equity Research", this, [this]() { emit action_triggered("perspective_research"); });
-    qs_research->addAction("Derivatives",     this, [this]() { emit action_triggered("perspective_derivatives"); });
-    qs_research->addAction("M&&A Analytics",  this, [this]() { emit action_triggered("perspective_ma"); });
+    qs_research->addAction("Derivatives", this, [this]() { emit action_triggered("perspective_derivatives"); });
+    qs_research->addAction("M&&A Analytics", this, [this]() { emit action_triggered("perspective_ma"); });
 
     // Portfolio & Markets
-    persp->addAction("Portfolio View",  this, [this]() { emit action_triggered("perspective_portfolio"); });
-    persp->addAction("Markets View",    this, [this]() { emit action_triggered("perspective_markets"); });
-    persp->addAction("News View",       this, [this]() { emit action_triggered("perspective_news"); });
+    persp->addAction("Portfolio View", this, [this]() { emit action_triggered("perspective_portfolio"); });
+    persp->addAction("Markets View", this, [this]() { emit action_triggered("perspective_markets"); });
+    persp->addAction("News View", this, [this]() { emit action_triggered("perspective_news"); });
 
     // Economics & Data
     auto* qs_econ = persp->addMenu("Economics && Data");
     qs_econ->setStyleSheet(popup_ss());
-    qs_econ->addAction("Economics",    this, [this]() { emit action_triggered("perspective_economics"); });
+    qs_econ->addAction("Economics", this, [this]() { emit action_triggered("perspective_economics"); });
     qs_econ->addAction("Data Sources", this, [this]() { emit action_triggered("perspective_data"); });
 
     // Geopolitics
@@ -413,8 +420,8 @@ QMenu* ToolBar::build_view_menu() {
     // AI & Quant
     auto* qs_ai = persp->addMenu("AI && Quant");
     qs_ai->setStyleSheet(popup_ss());
-    qs_ai->addAction("Quant Lab",  this, [this]() { emit action_triggered("perspective_quant"); });
-    qs_ai->addAction("AI Chat",    this, [this]() { emit action_triggered("perspective_ai"); });
+    qs_ai->addAction("Quant Lab", this, [this]() { emit action_triggered("perspective_quant"); });
+    qs_ai->addAction("AI Chat", this, [this]() { emit action_triggered("perspective_ai"); });
 
     // Tools
     persp->addAction("Tools View", this, [this]() { emit action_triggered("perspective_tools"); });

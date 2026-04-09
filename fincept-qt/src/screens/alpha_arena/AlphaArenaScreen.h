@@ -15,8 +15,8 @@
 #include <QTableWidget>
 #include <QTextEdit>
 #include <QTimer>
-#include <QWidget>
 #include <QVector>
+#include <QWidget>
 
 namespace fincept::screens {
 
@@ -28,7 +28,7 @@ struct ArenaModelEntry {
     QString model_id;     // e.g. "gpt-4o", "claude-sonnet-4-5-20250514"
     QString api_key;
     QString base_url;
-    QString profile_id;   // non-empty when sourced from a named profile
+    QString profile_id; // non-empty when sourced from a named profile
 };
 
 /// Alpha Arena — AI trading competition platform.

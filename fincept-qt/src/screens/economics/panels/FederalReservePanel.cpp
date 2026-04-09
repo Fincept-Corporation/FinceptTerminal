@@ -16,9 +16,9 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kFederalReserveScript   = "federal_reserve_data.py";
+static constexpr const char* kFederalReserveScript = "federal_reserve_data.py";
 static constexpr const char* kFederalReserveSourceId = "federal_reserve";
-static constexpr const char* kFederalReserveColor    = "#DC2626";  // Fed red
+static constexpr const char* kFederalReserveColor = "#DC2626"; // Fed red
 } // namespace
 
 struct FedSeries {
@@ -28,20 +28,16 @@ struct FedSeries {
 };
 
 static const QList<FedSeries> kFedReserveSeries = {
-    { "Federal Funds Rate",          "federal_funds_rate", {} },
-    { "SOFR Overnight Rate",         "sofr_rate",          {} },
-    { "Treasury Rates (Yield Curve)","treasury_rates",     {} },
-    { "Yield Curve (single date)",   "yield_curve",        {} },
-    { "Money Supply (M1/M2)",        "money_measures",     {} },
-    { "Central Bank Holdings",       "central_bank_holdings", {} },
+    {"Federal Funds Rate", "federal_funds_rate", {}},       {"SOFR Overnight Rate", "sofr_rate", {}},
+    {"Treasury Rates (Yield Curve)", "treasury_rates", {}}, {"Yield Curve (single date)", "yield_curve", {}},
+    {"Money Supply (M1/M2)", "money_measures", {}},         {"Central Bank Holdings", "central_bank_holdings", {}},
 };
 
 FederalReservePanel::FederalReservePanel(QWidget* parent)
     : EconPanelBase(kFederalReserveSourceId, kFederalReserveColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &FederalReservePanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &FederalReservePanel::on_result);
 }
 
 void FederalReservePanel::activate() {
@@ -65,23 +61,29 @@ void FederalReservePanel::build_controls(QHBoxLayout* thl) {
 }
 
 void FederalReservePanel::on_fetch() {
-    const int   idx    = series_combo_->currentIndex();
+    const int idx = series_combo_->currentIndex();
     const auto& series = kFedReserveSeries[idx];
 
     show_loading("Fetching Federal Reserve: " + series.label + "…");
-    services::EconomicsService::instance().execute(
-        kFederalReserveSourceId, kFederalReserveScript, series.command, series.args,
-        "fed_" + series.command);
+    services::EconomicsService::instance().execute(kFederalReserveSourceId, kFederalReserveScript, series.command,
+                                                   series.args, "fed_" + series.command);
 }
 
-void FederalReservePanel::on_result(const QString& request_id,
-                                     const services::EconomicsResult& result) {
-    if (result.source_id != kFederalReserveSourceId) return;
-    if (!request_id.startsWith("fed_")) return;
-    if (!result.success) { show_error(result.error); return; }
+void FederalReservePanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kFederalReserveSourceId)
+        return;
+    if (!request_id.startsWith("fed_"))
+        return;
+    if (!result.success) {
+        show_error(result.error);
+        return;
+    }
 
     const QString inline_err = result.data["error"].toString();
-    if (!inline_err.isEmpty()) { show_error(inline_err); return; }
+    if (!inline_err.isEmpty()) {
+        show_error(inline_err);
+        return;
+    }
 
     // Response: { success, endpoint, data:[{date, <value cols>}] }
     QJsonArray rows = result.data["data"].toArray();
@@ -96,13 +98,15 @@ void FederalReservePanel::on_result(const QString& request_id,
         const QJsonObject r = rv.toObject();
         bool has_val = false;
         for (auto it = r.begin(); it != r.end(); ++it) {
-            if (it.key() == "date") continue;
+            if (it.key() == "date")
+                continue;
             if (it.value().isDouble() || !it.value().toString().isEmpty()) {
                 has_val = true;
                 break;
             }
         }
-        if (has_val) clean.append(r);
+        if (has_val)
+            clean.append(r);
     }
 
     if (clean.isEmpty()) {
@@ -111,13 +115,12 @@ void FederalReservePanel::on_result(const QString& request_id,
     }
 
     const int idx = series_combo_->currentIndex();
-    const QString title = "Federal Reserve: "
-        + (idx >= 0 && idx < kFedReserveSeries.size() ? kFedReserveSeries[idx].label
-                                              : request_id.mid(4));
+    const QString title =
+        "Federal Reserve: " +
+        (idx >= 0 && idx < kFedReserveSeries.size() ? kFedReserveSeries[idx].label : request_id.mid(4));
 
     display(clean, title);
-    LOG_INFO("FederalReservePanel",
-             QString("Displayed %1 rows: %2").arg(clean.size()).arg(title));
+    LOG_INFO("FederalReservePanel", QString("Displayed %1 rows: %2").arg(clean.size()).arg(title));
 }
 
 } // namespace fincept::screens

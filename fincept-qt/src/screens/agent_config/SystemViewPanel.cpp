@@ -44,7 +44,7 @@ static QWidget* make_section_card(const QString& title, QVBoxLayout** content_la
     vl->setSpacing(0);
 
     // Header
-    auto* header = new QWidget;
+    auto* header = new QWidget(nullptr);
     header->setStyleSheet(
         QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     auto* hdr_layout = new QHBoxLayout(header);
@@ -70,7 +70,7 @@ static QWidget* make_section_card(const QString& title, QVBoxLayout** content_la
     vl->addWidget(header);
 
     // Content area
-    auto* content = new QWidget;
+    auto* content = new QWidget(nullptr);
     *content_layout = new QVBoxLayout(content);
     (*content_layout)->setContentsMargins(12, 8, 12, 8);
     (*content_layout)->setSpacing(4);
@@ -85,8 +85,8 @@ SystemViewPanel::SystemViewPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("SystemViewPanel");
     build_ui();
     setup_connections();
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { update(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { update(); });
 }
 
 // ── UI construction ──────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ void SystemViewPanel::build_ui() {
                                   "QScrollBar::handle:vertical { background:%2;min-height:30px; }")
                               .arg(ui::colors::BG_BASE, ui::colors::BORDER_BRIGHT));
 
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(16, 12, 16, 12);
     vl->setSpacing(12);
@@ -146,7 +146,7 @@ void SystemViewPanel::build_ui() {
 }
 
 QWidget* SystemViewPanel::build_stats_row() {
-    auto* row = new QWidget;
+    auto* row = new QWidget(this);
     auto* grid = new QGridLayout(row);
     grid->setContentsMargins(0, 0, 0, 0);
     grid->setSpacing(8);
@@ -268,43 +268,38 @@ void SystemViewPanel::populate_llm_list() {
     if (list.isEmpty()) {
         auto* empty = new QLabel("No LLM providers configured. Go to Settings → LLM to add one.");
         empty->setWordWrap(true);
-        empty->setStyleSheet(
-            QString("color:%1;font-size:11px;font-style:italic;").arg(ui::colors::TEXT_TERTIARY));
+        empty->setStyleSheet(QString("color:%1;font-size:11px;font-style:italic;").arg(ui::colors::TEXT_TERTIARY));
         llm_list_layout_->addWidget(empty);
         return;
     }
 
     for (const auto& p : list) {
-        auto* row = new QWidget;
-        auto* hl  = new QHBoxLayout(row);
+        auto* row = new QWidget(this);
+        auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(0, 2, 0, 2);
         hl->setSpacing(8);
 
         if (p.is_active) {
             auto* badge = new QLabel("ACTIVE");
-            badge->setStyleSheet(
-                QString("color:%1;font-size:8px;font-weight:700;background:%2;padding:1px 5px;")
-                    .arg(ui::colors::POSITIVE, ui::colors::BG_RAISED));
+            badge->setStyleSheet(QString("color:%1;font-size:8px;font-weight:700;background:%2;padding:1px 5px;")
+                                     .arg(ui::colors::POSITIVE, ui::colors::BG_RAISED));
             hl->addWidget(badge);
         }
 
         auto* name = new QLabel(p.provider.toUpper());
-        name->setStyleSheet(
-            QString("color:%1;font-size:12px;font-weight:600;").arg(ui::colors::TEXT_PRIMARY));
+        name->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;").arg(ui::colors::TEXT_PRIMARY));
         hl->addWidget(name);
 
         auto* model = new QLabel(p.model);
-        model->setStyleSheet(
-            QString("color:%1;font-size:11px;").arg(ui::colors::TEXT_SECONDARY));
+        model->setStyleSheet(QString("color:%1;font-size:11px;").arg(ui::colors::TEXT_SECONDARY));
         hl->addWidget(model);
 
         hl->addStretch();
 
         const bool has_key = !p.api_key.isEmpty();
         auto* key_status = new QLabel(has_key ? "KEY SET" : "NO KEY");
-        key_status->setStyleSheet(
-            QString("color:%1;font-size:9px;font-weight:600;")
-                .arg(has_key ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
+        key_status->setStyleSheet(QString("color:%1;font-size:9px;font-weight:600;")
+                                      .arg(has_key ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
         hl->addWidget(key_status);
 
         llm_list_layout_->addWidget(row);
@@ -319,8 +314,7 @@ void SystemViewPanel::populate_tools_list(const services::AgentToolsInfo& info) 
 
     if (info.categories.isEmpty()) {
         auto* empty = new QLabel("No tools loaded.");
-        empty->setStyleSheet(
-            QString("color:%1;font-size:11px;font-style:italic;").arg(ui::colors::TEXT_TERTIARY));
+        empty->setStyleSheet(QString("color:%1;font-size:11px;font-style:italic;").arg(ui::colors::TEXT_TERTIARY));
         tools_list_layout_->addWidget(empty);
         return;
     }
@@ -329,9 +323,8 @@ void SystemViewPanel::populate_tools_list(const services::AgentToolsInfo& info) 
         QJsonArray tools = info.tools[cat].toArray();
 
         auto* cat_lbl = new QLabel(QString("%1  (%2)").arg(cat.toUpper()).arg(tools.size()));
-        cat_lbl->setStyleSheet(
-            QString("color:%1;font-size:10px;font-weight:600;letter-spacing:1px;padding-top:4px;")
-                .arg(ui::colors::AMBER));
+        cat_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:600;letter-spacing:1px;padding-top:4px;")
+                                   .arg(ui::colors::AMBER));
         tools_list_layout_->addWidget(cat_lbl);
 
         QStringList names;
@@ -340,8 +333,7 @@ void SystemViewPanel::populate_tools_list(const services::AgentToolsInfo& info) 
 
         auto* tools_lbl = new QLabel(names.join(", "));
         tools_lbl->setWordWrap(true);
-        tools_lbl->setStyleSheet(
-            QString("color:%1;font-size:11px;padding-left:8px;").arg(ui::colors::TEXT_PRIMARY));
+        tools_lbl->setStyleSheet(QString("color:%1;font-size:11px;padding-left:8px;").arg(ui::colors::TEXT_PRIMARY));
         tools_list_layout_->addWidget(tools_lbl);
     }
 }
@@ -356,54 +348,50 @@ void SystemViewPanel::setup_connections() {
             [this](QVector<services::AgentInfo> agents, QVector<services::AgentCategory>) {
                 agents_count_->setText(QString::number(agents.size()));
                 const QJsonObject stats = services::AgentService::instance().get_cache_stats();
-                const int total = services::AgentService::instance().cached_agent_count()
-                                + stats["response_cache_size"].toInt(0);
+                const int total =
+                    services::AgentService::instance().cached_agent_count() + stats["response_cache_size"].toInt(0);
                 cache_count_->setText(QString::number(total));
             });
 
     // Tools loaded → repopulate tools section
     connect(&svc, &services::AgentService::tools_loaded, this,
-            [this](services::AgentToolsInfo info) {
-                populate_tools_list(info);
-            });
+            [this](services::AgentToolsInfo info) { populate_tools_list(info); });
 
     // System info → fill version/framework/features
-    connect(&svc, &services::AgentService::system_info_loaded, this,
-            [this](services::AgentSystemInfo info) {
-                version_label_->setText(info.version.isEmpty() ? "N/A" : info.version);
-                framework_label_->setText(info.framework.isEmpty() ? "N/A" : info.framework);
+    connect(&svc, &services::AgentService::system_info_loaded, this, [this](services::AgentSystemInfo info) {
+        version_label_->setText(info.version.isEmpty() ? "N/A" : info.version);
+        framework_label_->setText(info.framework.isEmpty() ? "N/A" : info.framework);
 
-                // Remove stale feature badges (keep the info_grid at index 0)
-                while (features_layout_->count() > 1) {
-                    auto* item = features_layout_->takeAt(1);
-                    if (auto* w = item->widget()) w->deleteLater();
-                    delete item;
-                }
+        // Remove stale feature badges (keep the info_grid at index 0)
+        while (features_layout_->count() > 1) {
+            auto* item = features_layout_->takeAt(1);
+            if (auto* w = item->widget())
+                w->deleteLater();
+            delete item;
+        }
 
-                if (!info.features.isEmpty()) {
-                    auto* feat_header = new QLabel("FEATURES");
-                    feat_header->setStyleSheet(
-                        QString("color:%1;font-size:9px;font-weight:600;"
-                                "letter-spacing:1px;padding-top:8px;")
-                            .arg(ui::colors::TEXT_TERTIARY));
-                    features_layout_->addWidget(feat_header);
+        if (!info.features.isEmpty()) {
+            auto* feat_header = new QLabel("FEATURES");
+            feat_header->setStyleSheet(QString("color:%1;font-size:9px;font-weight:600;"
+                                               "letter-spacing:1px;padding-top:8px;")
+                                           .arg(ui::colors::TEXT_TERTIARY));
+            features_layout_->addWidget(feat_header);
 
-                    auto* flow = new QWidget;
-                    auto* flow_layout = new QHBoxLayout(flow);
-                    flow_layout->setContentsMargins(0, 0, 0, 0);
-                    flow_layout->setSpacing(4);
+            auto* flow = new QWidget(this);
+            auto* flow_layout = new QHBoxLayout(flow);
+            flow_layout->setContentsMargins(0, 0, 0, 0);
+            flow_layout->setSpacing(4);
 
-                    for (const auto& feat : info.features) {
-                        auto* badge = new QLabel(feat.toUpper().replace('_', ' '));
-                        badge->setStyleSheet(
-                            QString("color:%1;font-size:9px;background:%2;padding:2px 6px;")
-                                .arg(ui::colors::TEXT_PRIMARY, ui::colors::BG_RAISED));
-                        flow_layout->addWidget(badge);
-                    }
-                    flow_layout->addStretch();
-                    features_layout_->addWidget(flow);
-                }
-            });
+            for (const auto& feat : info.features) {
+                auto* badge = new QLabel(feat.toUpper().replace('_', ' '));
+                badge->setStyleSheet(QString("color:%1;font-size:9px;background:%2;padding:2px 6px;")
+                                         .arg(ui::colors::TEXT_PRIMARY, ui::colors::BG_RAISED));
+                flow_layout->addWidget(badge);
+            }
+            flow_layout->addStretch();
+            features_layout_->addWidget(flow);
+        }
+    });
 }
 
 // ── Cross-panel public slots ──────────────────────────────────────────────────
@@ -412,8 +400,7 @@ void SystemViewPanel::on_agents_changed() {
     auto& svc = services::AgentService::instance();
     agents_count_->setText(QString::number(svc.cached_agent_count()));
     const QJsonObject stats = svc.get_cache_stats();
-    cache_count_->setText(
-        QString::number(svc.cached_agent_count() + stats["response_cache_size"].toInt(0)));
+    cache_count_->setText(QString::number(svc.cached_agent_count() + stats["response_cache_size"].toInt(0)));
 }
 
 void SystemViewPanel::on_llm_config_changed() {
@@ -438,11 +425,10 @@ void SystemViewPanel::refresh_data() {
     // Cache stats
     {
         const QJsonObject stats = svc.get_cache_stats();
-        const int agent_cached  = svc.cached_agent_count();
-        const int resp_cached   = stats["response_cache_size"].toInt(0);
+        const int agent_cached = svc.cached_agent_count();
+        const int resp_cached = stats["response_cache_size"].toInt(0);
         cache_count_->setText(QString::number(agent_cached + resp_cached));
-        cache_count_->setToolTip(
-            QString("Agents: %1  |  Responses: %2").arg(agent_cached).arg(resp_cached));
+        cache_count_->setToolTip(QString("Agents: %1  |  Responses: %2").arg(agent_cached).arg(resp_cached));
     }
 
     // Async: tools list + system info (results arrive via signals)

@@ -60,16 +60,16 @@ class AddAssetDialog : public QDialog {
     void select_result(const QString& symbol);
     void position_dropdown();
 
-    QLineEdit* symbol_edit_   = nullptr;
+    QLineEdit* symbol_edit_ = nullptr;
     QLineEdit* quantity_edit_ = nullptr;
-    QLineEdit* price_edit_    = nullptr;
+    QLineEdit* price_edit_ = nullptr;
 
     // Ticker search dropdown (parented to dialog, floats over form)
-    QFrame*      search_frame_    = nullptr;
-    QListWidget* search_list_     = nullptr;
-    QTimer*      search_debounce_ = nullptr;
-    QString      pending_query_;
-    bool         selecting_ = false;   // guard against recursive text-changed
+    QFrame* search_frame_ = nullptr;
+    QListWidget* search_list_ = nullptr;
+    QTimer* search_debounce_ = nullptr;
+    QString pending_query_;
+    bool selecting_ = false; // guard against recursive text-changed
 };
 
 /// Dialog for selling an asset.
@@ -123,15 +123,15 @@ class AddDividendDialog : public QDialog {
     explicit AddDividendDialog(const QStringList& symbols, QWidget* parent = nullptr);
 
     QString symbol() const;
-    double  amount_per_share() const;
+    double amount_per_share() const;
     QString date() const;
     QString notes() const;
 
   private:
-    QComboBox*  symbol_cb_   = nullptr;
-    QLineEdit*  amount_edit_ = nullptr;
-    QDateEdit*  date_edit_   = nullptr;
-    QLineEdit*  notes_edit_  = nullptr;
+    QComboBox* symbol_cb_ = nullptr;
+    QLineEdit* amount_edit_ = nullptr;
+    QDateEdit* date_edit_ = nullptr;
+    QLineEdit* notes_edit_ = nullptr;
 };
 
 /// Dialog for importing a portfolio from JSON file.

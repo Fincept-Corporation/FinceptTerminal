@@ -22,11 +22,10 @@ using namespace fincept::ui;
 static QString accent_btn_style() {
     QColor acc(colors::AMBER());
     auto rgb = QString("%1,%2,%3").arg(acc.red()).arg(acc.green()).arg(acc.blue());
-    return QString(
-        "QPushButton { background:rgba(%1,0.1); color:%2; "
-        "border:1px solid %3; padding:0 12px; height:24px; "
-        "font-size:%4px; font-weight:700; font-family:%5; }"
-        "QPushButton:hover { background:%2; color:%6; }")
+    return QString("QPushButton { background:rgba(%1,0.1); color:%2; "
+                   "border:1px solid %3; padding:0 12px; height:24px; "
+                   "font-size:%4px; font-weight:700; font-family:%5; }"
+                   "QPushButton:hover { background:%2; color:%6; }")
         .arg(rgb)
         .arg(colors::AMBER())
         .arg(colors::AMBER_DIM())
@@ -36,11 +35,10 @@ static QString accent_btn_style() {
 }
 
 static QString std_btn_style() {
-    return QString(
-        "QPushButton { background:%1; color:%2; border:1px solid %3; "
-        "padding:0 10px; height:24px; "
-        "font-size:%4px; font-weight:700; font-family:%5; }"
-        "QPushButton:hover { color:%6; background:%7; }")
+    return QString("QPushButton { background:%1; color:%2; border:1px solid %3; "
+                   "padding:0 10px; height:24px; "
+                   "font-size:%4px; font-weight:700; font-family:%5; }"
+                   "QPushButton:hover { color:%6; background:%7; }")
         .arg(colors::BG_RAISED())
         .arg(colors::TEXT_SECONDARY())
         .arg(colors::BORDER_DIM())
@@ -53,11 +51,10 @@ static QString std_btn_style() {
 static QString danger_btn_style() {
     QColor neg(colors::NEGATIVE());
     auto rgb = QString("%1,%2,%3").arg(neg.red()).arg(neg.green()).arg(neg.blue());
-    return QString(
-        "QPushButton { background:rgba(%1,0.1); color:%2; "
-        "border:1px solid rgba(%1,0.3); padding:0 10px; height:24px; "
-        "font-size:%3px; font-weight:700; font-family:%4; }"
-        "QPushButton:hover { background:%2; color:%5; }")
+    return QString("QPushButton { background:rgba(%1,0.1); color:%2; "
+                   "border:1px solid rgba(%1,0.3); padding:0 10px; height:24px; "
+                   "font-size:%3px; font-weight:700; font-family:%4; }"
+                   "QPushButton:hover { background:%2; color:%5; }")
         .arg(rgb)
         .arg(colors::NEGATIVE())
         .arg(fonts::TINY)
@@ -68,11 +65,10 @@ static QString danger_btn_style() {
 static QString input_style() {
     QColor acc(colors::AMBER());
     auto acc_rgb = QString("%1,%2,%3").arg(acc.red()).arg(acc.green()).arg(acc.blue());
-    return QString(
-        "QLineEdit { background:%1; color:%2; border:1px solid %3; "
-        "padding:3px 6px; font-size:%4px; font-family:%5; height:28px; }"
-        "QLineEdit:focus { border-color:%6; }"
-        "QLineEdit::selection { background:%7; color:%8; }")
+    return QString("QLineEdit { background:%1; color:%2; border:1px solid %3; "
+                   "padding:3px 6px; font-size:%4px; font-family:%5; height:28px; }"
+                   "QLineEdit:focus { border-color:%6; }"
+                   "QLineEdit::selection { background:%7; color:%8; }")
         .arg(colors::BG_BASE())
         .arg(colors::TEXT_PRIMARY())
         .arg(colors::BORDER_DIM())
@@ -84,11 +80,10 @@ static QString input_style() {
 }
 
 static QString list_style() {
-    return QString(
-        "QListWidget { background:%1; border:none; font-family:%2; font-size:%3px; }"
-        "QListWidget::item { padding:6px 12px; color:%4; border-bottom:1px solid %5; height:26px; }"
-        "QListWidget::item:selected { background:%6; }"
-        "QListWidget::item:hover { background:%6; }")
+    return QString("QListWidget { background:%1; border:none; font-family:%2; font-size:%3px; }"
+                   "QListWidget::item { padding:6px 12px; color:%4; border-bottom:1px solid %5; height:26px; }"
+                   "QListWidget::item:selected { background:%6; }"
+                   "QListWidget::item:hover { background:%6; }")
         .arg(colors::BG_SURFACE())
         .arg(fonts::DATA_FAMILY())
         .arg(fonts::TINY)
@@ -108,8 +103,8 @@ WatchlistScreen::WatchlistScreen(QWidget* parent) : QWidget(parent) {
     connect(refresh_timer_, &QTimer::timeout, this, &WatchlistScreen::on_refresh);
     refresh_timer_->setInterval(30000);
 
-    connect(&ThemeManager::instance(), &ThemeManager::theme_changed,
-            this, [this](const ThemeTokens&) { refresh_theme(); });
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { refresh_theme(); });
     refresh_theme();
 }
 
@@ -144,7 +139,7 @@ void WatchlistScreen::build_ui() {
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 
 QWidget* WatchlistScreen::build_sidebar() {
-    sidebar_ = new QWidget;
+    sidebar_ = new QWidget(this);
     sidebar_->setMinimumWidth(180);
     sidebar_->setMaximumWidth(280);
 
@@ -153,7 +148,7 @@ QWidget* WatchlistScreen::build_sidebar() {
     lay->setSpacing(0);
 
     // Panel header
-    sidebar_header_ = new QWidget;
+    sidebar_header_ = new QWidget(this);
     sidebar_header_->setFixedHeight(34);
     auto* hl = new QHBoxLayout(sidebar_header_);
     hl->setContentsMargins(12, 0, 8, 0);
@@ -187,14 +182,14 @@ QWidget* WatchlistScreen::build_sidebar() {
 // ── Main Panel ───────────────────────────────────────────────────────────────
 
 QWidget* WatchlistScreen::build_main_panel() {
-    main_panel_ = new QWidget;
+    main_panel_ = new QWidget(this);
 
     auto* lay = new QVBoxLayout(main_panel_);
     lay->setContentsMargins(0, 0, 0, 0);
     lay->setSpacing(0);
 
     // Top bar: title + controls
-    top_bar_ = new QWidget;
+    top_bar_ = new QWidget(this);
     top_bar_->setFixedHeight(34);
     auto* tl = new QHBoxLayout(top_bar_);
     tl->setContentsMargins(14, 0, 14, 0);
@@ -219,7 +214,7 @@ QWidget* WatchlistScreen::build_main_panel() {
     lay->addWidget(top_bar_);
 
     // Add stock bar
-    add_bar_ = new QWidget;
+    add_bar_ = new QWidget(this);
     add_bar_->setFixedHeight(34);
     auto* al = new QHBoxLayout(add_bar_);
     al->setContentsMargins(14, 0, 14, 0);
@@ -275,12 +270,11 @@ void WatchlistScreen::refresh_theme() {
             QString("background:%1; border-bottom:1px solid %2;").arg(colors::BG_RAISED(), colors::BORDER_DIM()));
 
     if (sidebar_title_)
-        sidebar_title_->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-weight:700; letter-spacing:0.5px; "
-                    "font-family:%3; background:transparent;")
-                .arg(colors::AMBER())
-                .arg(fonts::TINY)
-                .arg(fonts::DATA_FAMILY()));
+        sidebar_title_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; letter-spacing:0.5px; "
+                                              "font-family:%3; background:transparent;")
+                                          .arg(colors::AMBER())
+                                          .arg(fonts::TINY)
+                                          .arg(fonts::DATA_FAMILY()));
 
     if (add_wl_btn_)
         add_wl_btn_->setStyleSheet(accent_btn_style());
@@ -313,11 +307,10 @@ void WatchlistScreen::refresh_theme() {
                 .arg(fonts::DATA_FAMILY()));
 
     if (stock_count_)
-        stock_count_->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-family:%3; background:transparent;")
-                .arg(colors::TEXT_TERTIARY())
-                .arg(fonts::TINY)
-                .arg(fonts::DATA_FAMILY()));
+        stock_count_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; background:transparent;")
+                                        .arg(colors::TEXT_TERTIARY())
+                                        .arg(fonts::TINY)
+                                        .arg(fonts::DATA_FAMILY()));
 
     if (refresh_btn_)
         refresh_btn_->setStyleSheet(std_btn_style());
@@ -331,12 +324,11 @@ void WatchlistScreen::refresh_theme() {
             QString("background:%1; border-bottom:1px solid %2;").arg(colors::BG_SURFACE(), colors::BORDER_DIM()));
 
     if (add_label_)
-        add_label_->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-weight:700; letter-spacing:0.5px; "
-                    "font-family:%3; background:transparent;")
-                .arg(colors::TEXT_SECONDARY())
-                .arg(fonts::TINY)
-                .arg(fonts::DATA_FAMILY()));
+        add_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; letter-spacing:0.5px; "
+                                          "font-family:%3; background:transparent;")
+                                      .arg(colors::TEXT_SECONDARY())
+                                      .arg(fonts::TINY)
+                                      .arg(fonts::DATA_FAMILY()));
 
     if (add_input_)
         add_input_->setStyleSheet(input_style());
@@ -555,7 +547,8 @@ QVariantMap WatchlistScreen::save_state() const {
 
 void WatchlistScreen::restore_state(const QVariantMap& state) {
     const QString wl_id = state.value("watchlist_id").toString();
-    if (wl_id.isEmpty()) return;
+    if (wl_id.isEmpty())
+        return;
 
     // Find and select the matching watchlist row
     for (int i = 0; i < watchlists_.size(); ++i) {

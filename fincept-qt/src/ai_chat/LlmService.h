@@ -63,7 +63,7 @@ class LlmService : public QObject {
     // use_tools: when false, disables MCP tool execution for this request
     //            (use for the floating bubble to prevent unintended navigation)
     LlmResponse chat(const QString& user_message, const std::vector<ConversationMessage>& history,
-                      bool use_tools = true);
+                     bool use_tools = true);
 
     // Streaming — launches background thread; on_chunk called on that thread.
     // Emit finished_streaming(response) when done to get result on UI thread.
@@ -79,18 +79,17 @@ class LlmService : public QObject {
     QString active_model() const;
     QString active_api_key() const;
     QString active_base_url() const;
-    double  active_temperature() const;
-    int     active_max_tokens() const;
-    bool    tools_enabled() const;
-    bool    is_configured() const;
+    double active_temperature() const;
+    int active_max_tokens() const;
+    bool tools_enabled() const;
+    bool is_configured() const;
 
     // ── Profile-aware resolution ──────────────────────────────────────────────
     // Returns the resolved LLM profile for a given context.
     // context_type: "ai_chat" | "agent" | "agent_default" |
     //               "team" | "team_default" | "team_coordinator"
     // context_id:   agent/team id, or empty for type-level queries.
-    ResolvedLlmProfile resolve_profile(const QString& context_type,
-                                       const QString& context_id = {}) const;
+    ResolvedLlmProfile resolve_profile(const QString& context_type, const QString& context_id = {}) const;
 
     // Convenience: build a QJsonObject suitable for embedding in AgentService
     // payloads (provider, model_id, api_key, base_url, temperature, max_tokens).
@@ -149,8 +148,7 @@ class LlmService : public QObject {
     // Detect and execute tool calls embedded as text/XML in the response content.
     // Returns std::nullopt if no text-based tool calls were found.
     std::optional<LlmResponse> try_extract_and_execute_text_tool_calls(const QString& content,
-                                                                       const QString& user_message,
-                                                                       const QString& url,
+                                                                       const QString& user_message, const QString& url,
                                                                        const QMap<QString, QString>& headers);
 
     // Models-list helpers
@@ -173,17 +171,14 @@ class LlmService : public QObject {
     };
     static HttpResult blocking_post(const QString& url, const QJsonObject& body, const QMap<QString, QString>& headers,
                                     int timeout_ms = 120000);
-    static HttpResult blocking_get(const QString& url, const QMap<QString, QString>& headers,
-                                   int timeout_ms = 30000);
+    static HttpResult blocking_get(const QString& url, const QMap<QString, QString>& headers, int timeout_ms = 30000);
 
     // QEventLoop-based HTTP for Cloudflare-protected endpoints (Fincept)
-    static HttpResult eventloop_request(const QString& method, const QString& url,
-                                        const QByteArray& body, const QMap<QString, QString>& headers,
-                                        int timeout_ms = 30000);
+    static HttpResult eventloop_request(const QString& method, const QString& url, const QByteArray& body,
+                                        const QMap<QString, QString>& headers, int timeout_ms = 30000);
 
     // Fincept async path: POST /research/llm/async → poll /research/llm/status/{id}
-    LlmResponse fincept_async_request(const QString& user_message,
-                                      const std::vector<ConversationMessage>& history);
+    LlmResponse fincept_async_request(const QString& user_message, const std::vector<ConversationMessage>& history);
 };
 
 } // namespace fincept::ai_chat

@@ -33,7 +33,9 @@ jobs:
       - name: Check formatting
         working-directory: fincept-qt
         run: |
-          find src -name "*.cpp" -o -name "*.h" | sort | \
+          # Parentheses required: without them -o has lower precedence than the
+          # implicit -print, so only .h files get piped to xargs.
+          find src \( -name "*.cpp" -o -name "*.h" \) | sort | \
             xargs clang-format --style=file --dry-run --Werror
           echo "All files are correctly formatted."
 
@@ -50,9 +52,14 @@ jobs:
           sudo apt-get install -y \
             clang-18 clang-tidy-18 \
             cmake ninja-build \
-            qt6-base-dev qt6-charts-dev \
+            qt6-base-dev qt6-base-private-dev \
+            qt6-tools-dev qt6-tools-dev-tools \
+            qt6-charts-dev \
+            qt6-multimedia-dev libqt6multimediawidgets6 \
+            libqt6svg6-dev \
             libqt6sql6-dev libqt6websockets6-dev \
-            libqt6concurrent6-dev libqt6printsupport6-dev
+            libqt6concurrent6-dev libqt6printsupport6-dev \
+            libgl1-mesa-dev
           sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100
           sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100
           sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-18 100
@@ -64,7 +71,9 @@ jobs:
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DFINCEPT_BUILD_INSTALLER=OFF \
+            -DDEPLOY_QT=OFF
 
       - name: Run clang-tidy
         working-directory: fincept-qt

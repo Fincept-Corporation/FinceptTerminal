@@ -37,21 +37,25 @@ QJsonValue WorkflowCache::get(const QString& key) const {
     // Values are stored as compact JSON strings
     const QByteArray raw = cv.toString().toUtf8();
     QJsonDocument doc = QJsonDocument::fromJson(raw);
-    if (doc.isArray())   return doc.array();
-    if (doc.isObject())  return doc.object();
+    if (doc.isArray())
+        return doc.array();
+    if (doc.isObject())
+        return doc.object();
     // Scalar: stored as {"v": <value>}
     return doc.object()["v"];
 }
 
 bool WorkflowCache::has(const QString& key) const {
-    if (!enabled_) return false;
+    if (!enabled_)
+        return false;
     return fincept::CacheManager::instance().has(kPrefix + key);
 }
 
 // ── Write ─────────────────────────────────────────────────────────────────────
 
 void WorkflowCache::put(const QString& key, const QJsonValue& value, int ttl_ms) {
-    if (!enabled_) return;
+    if (!enabled_)
+        return;
 
     // Serialize the QJsonValue to a string CacheManager can store
     QString serialized;
@@ -83,7 +87,7 @@ void WorkflowCache::invalidate_prefix(const QString& prefix) {
 
 void WorkflowCache::clear() {
     fincept::CacheManager::instance().clear_category(kCategory);
-    hits_   = 0;
+    hits_ = 0;
     misses_ = 0;
     LOG_INFO("WorkflowCache", "Cleared all workflow cache entries");
 }

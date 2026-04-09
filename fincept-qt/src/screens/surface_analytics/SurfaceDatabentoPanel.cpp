@@ -25,8 +25,9 @@ void SurfaceDatabentoPanel::setup_ui() {
     // ── Section title ─────────────────────────────────────────────────────
     auto* title = new QLabel("DATABENTO DATA SOURCE", this);
     title->setStyleSheet(QString("color:%1; font-size:10px; font-weight:bold;"
-                         "border-bottom:1px solid %2; padding-bottom:4px;")
-                         .arg(colors::INFO).arg(colors::BORDER_DIM));
+                                 "border-bottom:1px solid %2; padding-bottom:4px;")
+                             .arg(colors::INFO)
+                             .arg(colors::BORDER_DIM));
     layout->addWidget(title);
 
     // ── API Key row ───────────────────────────────────────────────────────
@@ -39,27 +40,33 @@ void SurfaceDatabentoPanel::setup_ui() {
     api_key_input_->setPlaceholderText("Databento API key (db-...)");
     api_key_input_->setEchoMode(QLineEdit::Password);
     api_key_input_->setStyleSheet(QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                                  " padding:4px 8px; font-size:10px; border-radius:2px; }"
-                                  "QLineEdit:focus { border-color:%4; }")
-                                  .arg(colors::BG_HOVER).arg(colors::TEXT_PRIMARY)
-                                  .arg(colors::BORDER_MED).arg(colors::INFO));
+                                          " padding:4px 8px; font-size:10px; border-radius:2px; }"
+                                          "QLineEdit:focus { border-color:%4; }")
+                                      .arg(colors::BG_HOVER)
+                                      .arg(colors::TEXT_PRIMARY)
+                                      .arg(colors::BORDER_MED)
+                                      .arg(colors::INFO));
     key_hl->addWidget(api_key_input_, 1);
 
     save_key_btn_ = new QPushButton("SAVE", key_row);
     save_key_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:1px solid %3;"
-                                 " padding:4px 8px; font-size:10px; border-radius:2px; }"
-                                 "QPushButton:hover { background:%3; color:%4; }")
-                                 .arg(colors::BG_RAISED).arg(colors::TEXT_SECONDARY)
-                                 .arg(colors::BORDER_MED).arg(colors::TEXT_PRIMARY));
+                                         " padding:4px 8px; font-size:10px; border-radius:2px; }"
+                                         "QPushButton:hover { background:%3; color:%4; }")
+                                     .arg(colors::BG_RAISED)
+                                     .arg(colors::TEXT_SECONDARY)
+                                     .arg(colors::BORDER_MED)
+                                     .arg(colors::TEXT_PRIMARY));
     connect(save_key_btn_, &QPushButton::clicked, this, &SurfaceDatabentoPanel::on_save_key_clicked);
     key_hl->addWidget(save_key_btn_);
 
     test_btn_ = new QPushButton("TEST", key_row);
     test_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:1px solid %3;"
-                             " padding:4px 8px; font-size:10px; border-radius:2px; }"
-                             "QPushButton:hover { background:%3; color:%4; }")
-                             .arg(colors::BG_RAISED).arg(colors::TEXT_SECONDARY)
-                             .arg(colors::BORDER_MED).arg(colors::TEXT_PRIMARY));
+                                     " padding:4px 8px; font-size:10px; border-radius:2px; }"
+                                     "QPushButton:hover { background:%3; color:%4; }")
+                                 .arg(colors::BG_RAISED)
+                                 .arg(colors::TEXT_SECONDARY)
+                                 .arg(colors::BORDER_MED)
+                                 .arg(colors::TEXT_PRIMARY));
     connect(test_btn_, &QPushButton::clicked, &DatabentoService::instance(), &DatabentoService::test_connection);
     key_hl->addWidget(test_btn_);
 
@@ -79,12 +86,14 @@ void SurfaceDatabentoPanel::setup_ui() {
     // ── Fetch button ──────────────────────────────────────────────────────
     fetch_btn_ = new QPushButton("FETCH LIVE DATA", this);
     fetch_btn_->setStyleSheet(QString("QPushButton { background:rgba(31,77,153,255); color:%1;"
-                              " border:1px solid rgba(64,140,255,100); padding:6px 12px;"
-                              " font-size:10px; font-weight:bold; border-radius:2px; }"
-                              "QPushButton:hover { background:rgba(46,102,191,255); }"
-                              "QPushButton:disabled { background:%2; color:%3; border-color:%4; }")
-                              .arg(colors::INFO).arg(colors::BG_HOVER)
-                              .arg(colors::TEXT_DIM).arg(colors::BORDER_DIM));
+                                      " border:1px solid rgba(64,140,255,100); padding:6px 12px;"
+                                      " font-size:10px; font-weight:bold; border-radius:2px; }"
+                                      "QPushButton:hover { background:rgba(46,102,191,255); }"
+                                      "QPushButton:disabled { background:%2; color:%3; border-color:%4; }")
+                                  .arg(colors::INFO)
+                                  .arg(colors::BG_HOVER)
+                                  .arg(colors::TEXT_DIM)
+                                  .arg(colors::BORDER_DIM));
     connect(fetch_btn_, &QPushButton::clicked, this, &SurfaceDatabentoPanel::on_fetch_clicked);
     layout->addWidget(fetch_btn_);
 
@@ -227,7 +236,8 @@ bool SurfaceDatabentoPanel::needs_fx_forward_points() const {
 
 void SurfaceDatabentoPanel::set_status(const QString& msg, bool is_error) {
     status_lbl_->setText(msg);
-    status_lbl_->setStyleSheet(QString("font-size:9px; color:%1;").arg(is_error ? colors::NEGATIVE() : colors::TEXT_SECONDARY()));
+    status_lbl_->setStyleSheet(
+        QString("font-size:9px; color:%1;").arg(is_error ? colors::NEGATIVE() : colors::TEXT_SECONDARY()));
 }
 
 // ── Show/Hide — P3 compliance (no timers here, but connect/disconnect signals) ─

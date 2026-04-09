@@ -10,12 +10,12 @@
 #include "screens/dashboard/widgets/PerformanceWidget.h"
 #include "screens/dashboard/widgets/PortfolioSummaryWidget.h"
 #include "screens/dashboard/widgets/QuickTradeWidget.h"
+#include "screens/dashboard/widgets/RecentFilesWidget.h"
 #include "screens/dashboard/widgets/RiskMetricsWidget.h"
 #include "screens/dashboard/widgets/ScreenerWidget.h"
 #include "screens/dashboard/widgets/SectorHeatmapWidget.h"
 #include "screens/dashboard/widgets/StockQuoteWidget.h"
 #include "screens/dashboard/widgets/TopMoversWidget.h"
-#include "screens/dashboard/widgets/RecentFilesWidget.h"
 #include "screens/dashboard/widgets/VideoPlayerWidget.h"
 #include "screens/dashboard/widgets/WatchlistWidget.h"
 

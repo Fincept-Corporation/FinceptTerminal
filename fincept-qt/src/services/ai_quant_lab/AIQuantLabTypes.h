@@ -32,8 +32,8 @@ inline QVector<QuantModule> all_quant_modules() {
          "Real-time trading signal generation"},
 
         // AI/ML
-        {"deep_agent", "Deep Agent", "DAGENT", "AI_ML", QColor("#9D4EDD"),
-         "agents/rdagents/cli.py", "Autonomous AI research agent (RD-Agent)"},
+        {"deep_agent", "Deep Agent", "DAGENT", "AI_ML", QColor("#9D4EDD"), "agents/rdagents/cli.py",
+         "Autonomous AI research agent (RD-Agent)"},
         {"rl_trading", "RL Trading", "RL", "AI_ML", QColor("#FF3B8E"), "ai_quant_lab/qlib_rl.py",
          "Reinforcement learning: PPO, DQN, A2C, SAC, TD3"},
         {"online_learning", "Online Learning", "ONLINE", "AI_ML", QColor("#00BCD4"),

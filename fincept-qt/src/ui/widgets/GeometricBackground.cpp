@@ -1,4 +1,5 @@
 #include "ui/widgets/GeometricBackground.h"
+
 #include "ui/theme/ThemeManager.h"
 
 #include <QPainter>
@@ -12,13 +13,12 @@ GeometricBackground::GeometricBackground(QWidget* parent) : QWidget(parent) {
     tokens_ = ThemeManager::instance().tokens();
     setStyleSheet(QString("background: %1;").arg(QString(tokens_.bg_base)));
 
-    connect(&ThemeManager::instance(), &ThemeManager::theme_changed,
-            this, [this](const ThemeTokens& t) {
-                tokens_ = t;
-                setStyleSheet(QString("background: %1;").arg(QString(tokens_.bg_base)));
-                cache_ = QPixmap(); // invalidate cache
-                update();
-            });
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this, [this](const ThemeTokens& t) {
+        tokens_ = t;
+        setStyleSheet(QString("background: %1;").arg(QString(tokens_.bg_base)));
+        cache_ = QPixmap(); // invalidate cache
+        update();
+    });
 }
 
 void GeometricBackground::rebuild_cache() {

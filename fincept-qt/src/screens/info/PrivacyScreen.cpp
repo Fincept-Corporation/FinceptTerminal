@@ -25,21 +25,21 @@ static QLabel* section_heading(const QString& icon, const QString& title) {
 static QLabel* body_text(const QString& text) {
     auto* lbl = new QLabel(text);
     lbl->setWordWrap(true);
-    lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2")
-                           .arg(colors::TEXT_PRIMARY, MF));
+    lbl->setStyleSheet(
+        QString("color: %1; font-size: 12px; background: transparent; %2").arg(colors::TEXT_PRIMARY, MF));
     return lbl;
 }
 
 static QLabel* bullet(const QString& text) {
     auto* lbl = new QLabel(QString("  > %1").arg(text));
     lbl->setWordWrap(true);
-    lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2")
-                           .arg(colors::TEXT_SECONDARY, MF));
+    lbl->setStyleSheet(
+        QString("color: %1; font-size: 12px; background: transparent; %2").arg(colors::TEXT_SECONDARY, MF));
     return lbl;
 }
 
 static QWidget* info_card(const QString& title, const QString& desc) {
-    auto* card = new QWidget;
+    auto* card = new QWidget(nullptr);
     card->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 2px;")
                             .arg(colors::BG_SURFACE, colors::BORDER_DIM));
     auto* vl = new QVBoxLayout(card);
@@ -47,14 +47,14 @@ static QWidget* info_card(const QString& title, const QString& desc) {
     vl->setSpacing(4);
 
     auto* t = new QLabel(title);
-    t->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: 700; background: transparent; %2")
-                         .arg(colors::AMBER, MF));
+    t->setStyleSheet(
+        QString("color: %1; font-size: 11px; font-weight: 700; background: transparent; %2").arg(colors::AMBER, MF));
     vl->addWidget(t);
 
     auto* d = new QLabel(desc);
     d->setWordWrap(true);
-    d->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; %2")
-                         .arg(colors::TEXT_SECONDARY, MF));
+    d->setStyleSheet(
+        QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_SECONDARY, MF));
     vl->addWidget(d);
 
     return card;
@@ -71,7 +71,7 @@ PrivacyScreen::PrivacyScreen(QWidget* parent) : QWidget(parent) {
     scroll->setWidgetResizable(true);
     scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }");
 
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     page->setStyleSheet(QString("background: %1;").arg(colors::BG_BASE));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
@@ -99,7 +99,7 @@ PrivacyScreen::PrivacyScreen(QWidget* parent) : QWidget(parent) {
     vl->addSpacing(12);
 
     // Main panel
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 2px;")
                              .arg(colors::BG_SURFACE, colors::BORDER_DIM));
     auto* pvl = new QVBoxLayout(panel);
@@ -186,7 +186,7 @@ PrivacyScreen::PrivacyScreen(QWidget* parent) : QWidget(parent) {
     vl->addWidget(panel);
 
     // Footer navigation
-    auto* footer = new QWidget;
+    auto* footer = new QWidget(this);
     footer->setStyleSheet("background: transparent;");
     auto* fhl = new QHBoxLayout(footer);
     fhl->setContentsMargins(0, 12, 0, 0);
@@ -195,8 +195,9 @@ PrivacyScreen::PrivacyScreen(QWidget* parent) : QWidget(parent) {
         auto* btn = new QPushButton(text);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
-                           "font-size: 12px; font-family:'Consolas','Courier New',monospace; }"
-                           "QPushButton:hover { color: #38bdf8; }").arg(colors::CYAN));
+                                   "font-size: 12px; font-family:'Consolas','Courier New',monospace; }"
+                                   "QPushButton:hover { color: #38bdf8; }")
+                               .arg(colors::CYAN));
         return btn;
     };
 

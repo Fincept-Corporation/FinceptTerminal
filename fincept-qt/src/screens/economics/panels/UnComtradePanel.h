@@ -4,6 +4,7 @@
 #pragma once
 
 #include "screens/economics/panels/EconPanelBase.h"
+
 #include <QComboBox>
 #include <QLineEdit>
 
@@ -18,14 +19,13 @@ class UnComtradePanel : public EconPanelBase {
   protected:
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
-    void on_result(const QString& request_id,
-                   const services::EconomicsResult& result) override;
+    void on_result(const QString& request_id, const services::EconomicsResult& result) override;
 
   private:
     QComboBox* reporter_combo_ = nullptr;
-    QComboBox* flow_combo_     = nullptr;
-    QComboBox* period_combo_   = nullptr;
-    QComboBox* cmd_combo_      = nullptr;
+    QComboBox* flow_combo_ = nullptr;
+    QComboBox* period_combo_ = nullptr;
+    QComboBox* cmd_combo_ = nullptr;
 };
 
 } // namespace fincept::screens

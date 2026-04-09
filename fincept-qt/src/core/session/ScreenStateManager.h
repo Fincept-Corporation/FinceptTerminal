@@ -23,7 +23,7 @@ namespace fincept {
 /// so the UI thread is never stalled waiting on SQLite.
 class ScreenStateManager : public QObject {
     Q_OBJECT
-public:
+  public:
     static ScreenStateManager& instance();
 
     /// Set the session ID written alongside each state record.
@@ -55,17 +55,14 @@ public:
     /// Returns empty map if nothing stored or version mismatch.
     QVariantMap load_direct(const QString& key, int expected_version = 1);
 
-private:
+  private:
     explicit ScreenStateManager(QObject* parent = nullptr);
 
     /// Flush all screens in pending_saves_ to cache.db.
     void flush_pending();
 
     /// Perform the actual async SQLite write for one screen.
-    static void write_async(const QString& key,
-                            const QVariantMap& state,
-                            int version,
-                            const QString& session_id);
+    static void write_async(const QString& key, const QVariantMap& state, int version, const QString& session_id);
 
     QHash<QString, screens::IStatefulScreen*> pending_saves_; // key → screen ptr
     QTimer* debounce_timer_ = nullptr;

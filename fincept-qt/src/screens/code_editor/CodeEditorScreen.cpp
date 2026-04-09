@@ -9,8 +9,8 @@
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
-#include <QAction>
 #include <QAbstractTextDocumentLayout>
+#include <QAction>
 #include <QApplication>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -69,8 +69,11 @@ void CodeTextEdit::keyPressEvent(QKeyEvent* event) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 CellWidget::CellWidget(const NotebookCell& cell, int index, QWidget* parent)
-    : QWidget(parent), cell_id_(cell.id), cell_type_(cell.cell_type),
-      execution_count_(cell.execution_count), index_(index) {
+    : QWidget(parent),
+      cell_id_(cell.id),
+      cell_type_(cell.cell_type),
+      execution_count_(cell.execution_count),
+      index_(index) {
     build_ui();
     set_cell_data(cell);
 }
@@ -89,8 +92,7 @@ void CellWidget::build_ui() {
     // ── Gutter ──
     gutter_ = new QWidget(cell_row);
     gutter_->setFixedWidth(56);
-    gutter_->setStyleSheet(
-        QString("background:%1;").arg(colors::BG_RAISED));
+    gutter_->setStyleSheet(QString("background:%1;").arg(colors::BG_RAISED));
     auto* gutter_layout = new QVBoxLayout(gutter_);
     gutter_layout->setContentsMargins(0, 4, 6, 2);
     gutter_layout->setSpacing(2);
@@ -106,10 +108,9 @@ void CellWidget::build_ui() {
 
     gutter_type_ = new QLabel("PY", gutter_);
     gutter_type_->setAlignment(Qt::AlignRight);
-    gutter_type_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:10px; font-weight:600;"
-                " letter-spacing:0.5px; background:transparent;")
-            .arg(colors::TEXT_DIM, fonts::DATA_FAMILY));
+    gutter_type_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; font-weight:600;"
+                                        " letter-spacing:0.5px; background:transparent;")
+                                    .arg(colors::TEXT_DIM, fonts::DATA_FAMILY));
     gutter_layout->addWidget(gutter_type_);
     gutter_layout->addStretch();
 
@@ -124,8 +125,7 @@ void CellWidget::build_ui() {
     // Toolbar — always occupies 24px to prevent layout shift; buttons hide/show
     toolbar_ = new QWidget(editor_container_);
     toolbar_->setFixedHeight(24);
-    toolbar_->setStyleSheet(
-        QString("background:%1;").arg(colors::BG_RAISED));
+    toolbar_->setStyleSheet(QString("background:%1;").arg(colors::BG_RAISED));
     auto* tb_layout = new QHBoxLayout(toolbar_);
     tb_layout->setContentsMargins(8, 0, 8, 0);
     tb_layout->setSpacing(2);
@@ -135,14 +135,13 @@ void CellWidget::build_ui() {
         btn->setFixedHeight(20);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setVisible(false); // hidden until hover
-        btn->setStyleSheet(
-            QString("QPushButton { background:transparent; color:%1; border:none;"
-                    " font-family:%2; font-size:%3px; font-weight:600; padding:0 8px;"
-                    " letter-spacing:0.5px; }"
-                    "QPushButton:hover { background:%4; color:%5; }")
-                .arg(fg_color, fonts::DATA_FAMILY)
-                .arg(fonts::TINY)
-                .arg(colors::BG_HOVER, colors::TEXT_PRIMARY));
+        btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:none;"
+                                   " font-family:%2; font-size:%3px; font-weight:600; padding:0 8px;"
+                                   " letter-spacing:0.5px; }"
+                                   "QPushButton:hover { background:%4; color:%5; }")
+                               .arg(fg_color, fonts::DATA_FAMILY)
+                               .arg(fonts::TINY)
+                               .arg(colors::BG_HOVER, colors::TEXT_PRIMARY));
         return btn;
     };
 
@@ -177,19 +176,18 @@ void CellWidget::build_ui() {
     editor_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     editor_->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     editor_->setLineWrapMode(QTextEdit::NoWrap);
-    editor_->setStyleSheet(
-        QString("QTextEdit { background:%1; color:%2; border:none;"
-                " font-family:%3; font-size:%4px; padding:2px 6px;"
-                " selection-background-color:%5; }"
-                "QScrollBar:vertical { background:%1; width:5px; }"
-                "QScrollBar::handle:vertical { background:%6; min-height:20px; }"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }"
-                "QScrollBar:horizontal { background:%1; height:5px; }"
-                "QScrollBar::handle:horizontal { background:%6; min-width:20px; }"
-                "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width:0; }")
-            .arg(colors::BG_SURFACE, colors::TEXT_PRIMARY, fonts::DATA_FAMILY)
-            .arg(fonts::DATA)
-            .arg(colors::AMBER_DIM, colors::BORDER_BRIGHT));
+    editor_->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:none;"
+                                   " font-family:%3; font-size:%4px; padding:2px 6px;"
+                                   " selection-background-color:%5; }"
+                                   "QScrollBar:vertical { background:%1; width:5px; }"
+                                   "QScrollBar::handle:vertical { background:%6; min-height:20px; }"
+                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }"
+                                   "QScrollBar:horizontal { background:%1; height:5px; }"
+                                   "QScrollBar::handle:horizontal { background:%6; min-width:20px; }"
+                                   "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width:0; }")
+                               .arg(colors::BG_SURFACE, colors::TEXT_PRIMARY, fonts::DATA_FAMILY)
+                               .arg(fonts::DATA)
+                               .arg(colors::AMBER_DIM, colors::BORDER_BRIGHT));
     editor_->document()->setDocumentMargin(2);
 
     // Keyboard shortcuts
@@ -197,8 +195,8 @@ void CellWidget::build_ui() {
     connect(editor_, &CodeTextEdit::run_and_next, this, [this]() { emit run_and_advance(cell_id_); });
 
     // Responsive height on every content change
-    connect(editor_->document()->documentLayout(), &QAbstractTextDocumentLayout::documentSizeChanged,
-            this, [this](const QSizeF&) { adjust_editor_height(); });
+    connect(editor_->document()->documentLayout(), &QAbstractTextDocumentLayout::documentSizeChanged, this,
+            [this](const QSizeF&) { adjust_editor_height(); });
 
     editor_vbox->addWidget(editor_);
 
@@ -207,15 +205,14 @@ void CellWidget::build_ui() {
     md_preview_->setOpenExternalLinks(true);
     md_preview_->setReadOnly(true);
     md_preview_->setVisible(false);
-    md_preview_->setStyleSheet(
-        QString("QTextBrowser { background:%1; color:%2; border:none;"
-                " font-family:%3; font-size:%4px; padding:10px 12px; }"
-                "QScrollBar:vertical { background:%1; width:5px; }"
-                "QScrollBar::handle:vertical { background:%5; min-height:20px; }"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
-            .arg(colors::BG_SURFACE, colors::TEXT_PRIMARY, fonts::DATA_FAMILY)
-            .arg(fonts::DATA)
-            .arg(colors::BORDER_BRIGHT));
+    md_preview_->setStyleSheet(QString("QTextBrowser { background:%1; color:%2; border:none;"
+                                       " font-family:%3; font-size:%4px; padding:10px 12px; }"
+                                       "QScrollBar:vertical { background:%1; width:5px; }"
+                                       "QScrollBar::handle:vertical { background:%5; min-height:20px; }"
+                                       "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
+                                   .arg(colors::BG_SURFACE, colors::TEXT_PRIMARY, fonts::DATA_FAMILY)
+                                   .arg(fonts::DATA)
+                                   .arg(colors::BORDER_BRIGHT));
 
     // Click on preview to edit
     md_preview_->installEventFilter(this);
@@ -249,8 +246,7 @@ void CellWidget::build_ui() {
                 " font-family:%4; font-size:10px; font-weight:700; letter-spacing:0.5px;"
                 " padding:0 10px; text-align:left; }"
                 "QPushButton:hover { background:%5; }")
-            .arg(colors::BG_RAISED, colors::POSITIVE, colors::BORDER_DIM,
-                 fonts::DATA_FAMILY, colors::BG_HOVER));
+            .arg(colors::BG_RAISED, colors::POSITIVE, colors::BORDER_DIM, fonts::DATA_FAMILY, colors::BG_HOVER));
     output_toggle_->setVisible(false);
     connect(output_toggle_, &QPushButton::clicked, this, [this]() {
         output_collapsed_ = !output_collapsed_;
@@ -265,8 +261,7 @@ void CellWidget::build_ui() {
     output_content_layout_->setContentsMargins(12, 6, 12, 8);
     output_content_layout_->setSpacing(4);
     output_content_->setStyleSheet(
-        QString("background:%1; border-left:3px solid %2;")
-            .arg(colors::BG_BASE, colors::BORDER_DIM));
+        QString("background:%1; border-left:3px solid %2;").arg(colors::BG_BASE, colors::BORDER_DIM));
     output_content_->setVisible(false);
     output_vbox->addWidget(output_content_);
 
@@ -290,13 +285,11 @@ void CellWidget::build_ui() {
     insert_btn->setFixedSize(32, 18);
     insert_btn->setCursor(Qt::PointingHandCursor);
     insert_btn->setObjectName("insertBtn");
-    insert_btn->setStyleSheet(
-        QString("QPushButton { color:%1; font-family:%2; font-size:12px; font-weight:700;"
-                " background:%3; border:1px solid %4; }"
-                "QPushButton:hover { background:%5; color:%6; border-color:%5; }")
-            .arg(colors::TEXT_DIM, fonts::DATA_FAMILY,
-                 colors::BG_SURFACE, colors::BORDER_DIM,
-                 colors::AMBER_DIM, colors::AMBER));
+    insert_btn->setStyleSheet(QString("QPushButton { color:%1; font-family:%2; font-size:12px; font-weight:700;"
+                                      " background:%3; border:1px solid %4; }"
+                                      "QPushButton:hover { background:%5; color:%6; border-color:%5; }")
+                                  .arg(colors::TEXT_DIM, fonts::DATA_FAMILY, colors::BG_SURFACE, colors::BORDER_DIM,
+                                       colors::AMBER_DIM, colors::AMBER));
     connect(insert_btn, &QPushButton::clicked, this, [this]() { emit insert_below_requested(cell_id_); });
     insert_layout->addWidget(insert_btn);
 
@@ -425,19 +418,16 @@ void CellWidget::set_outputs(const QVector<CellOutput>& outputs, int exec_count)
 
         } else if (out.type == "error") {
             auto* err_widget = new QWidget(output_content_);
-            err_widget->setStyleSheet(
-                QString("background:#1a0808; border-left:2px solid %1;").arg(colors::NEGATIVE));
+            err_widget->setStyleSheet(QString("background:#1a0808; border-left:2px solid %1;").arg(colors::NEGATIVE));
             auto* err_layout = new QVBoxLayout(err_widget);
             err_layout->setContentsMargins(10, 6, 10, 6);
             err_layout->setSpacing(4);
 
-            auto* err_header = new QLabel(
-                QString("%1: %2").arg(out.error_name, out.error_value), err_widget);
+            auto* err_header = new QLabel(QString("%1: %2").arg(out.error_name, out.error_value), err_widget);
             err_header->setWordWrap(true);
-            err_header->setStyleSheet(
-                QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;")
-                    .arg(colors::NEGATIVE, fonts::DATA_FAMILY)
-                    .arg(fonts::DATA));
+            err_header->setStyleSheet(QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;")
+                                          .arg(colors::NEGATIVE, fonts::DATA_FAMILY)
+                                          .arg(fonts::DATA));
             err_layout->addWidget(err_header);
 
             if (!out.traceback.isEmpty()) {
@@ -472,10 +462,9 @@ void CellWidget::set_selected(bool selected) {
     // Selected: amber left accent, brighter surface. Unselected: dim border, standard surface.
     QString border = selected ? colors::AMBER : colors::BORDER_MED;
     QString bg = selected ? "#0e0e0e" : colors::BG_SURFACE();
-    editor_container_->setStyleSheet(
-        QString("background:%1; border-left:3px solid %2; border-top:1px solid %3;"
-                " border-bottom:1px solid %3; border-right:1px solid %3;")
-            .arg(bg, border, colors::BORDER_DIM));
+    editor_container_->setStyleSheet(QString("background:%1; border-left:3px solid %2; border-top:1px solid %3;"
+                                             " border-bottom:1px solid %3; border-right:1px solid %3;")
+                                         .arg(bg, border, colors::BORDER_DIM));
 
     // Gutter matches cell background
     QString gutter_bg = selected ? "#0e0e0e" : colors::BG_RAISED();
@@ -512,22 +501,19 @@ void CellWidget::set_index(int index) {
 void CellWidget::update_gutter() {
     if (running_) {
         gutter_number_->setText("[*]");
-        gutter_number_->setStyleSheet(
-            QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;")
-                .arg(colors::WARNING, fonts::DATA_FAMILY)
-                .arg(fonts::TINY));
+        gutter_number_->setStyleSheet(QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;")
+                                          .arg(colors::WARNING, fonts::DATA_FAMILY)
+                                          .arg(fonts::TINY));
     } else if (execution_count_ > 0) {
         gutter_number_->setText(QString("[%1]").arg(execution_count_));
-        gutter_number_->setStyleSheet(
-            QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;")
-                .arg(selected_ ? colors::AMBER : colors::POSITIVE, fonts::DATA_FAMILY)
-                .arg(fonts::TINY));
+        gutter_number_->setStyleSheet(QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;")
+                                          .arg(selected_ ? colors::AMBER : colors::POSITIVE, fonts::DATA_FAMILY)
+                                          .arg(fonts::TINY));
     } else {
         gutter_number_->setText(QString("[%1]").arg(index_ + 1));
-        gutter_number_->setStyleSheet(
-            QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;")
-                .arg(selected_ ? colors::AMBER : colors::TEXT_TERTIARY, fonts::DATA_FAMILY)
-                .arg(fonts::TINY));
+        gutter_number_->setStyleSheet(QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;")
+                                          .arg(selected_ ? colors::AMBER : colors::TEXT_TERTIARY, fonts::DATA_FAMILY)
+                                          .arg(fonts::TINY));
     }
 
     if (cell_type_ == "markdown") {
@@ -546,9 +532,8 @@ void CellWidget::update_gutter() {
 void CellWidget::render_markdown() {
     QString src = editor_->toPlainText();
     if (src.trimmed().isEmpty()) {
-        md_preview_->setHtml(
-            QString("<p style='color:%1; font-style:italic;'>Empty markdown cell — click to edit</p>")
-                .arg(colors::TEXT_TERTIARY));
+        md_preview_->setHtml(QString("<p style='color:%1; font-style:italic;'>Empty markdown cell — click to edit</p>")
+                                 .arg(colors::TEXT_TERTIARY));
         md_preview_->setMinimumHeight(48);
         md_preview_->setMaximumHeight(48);
         return;
@@ -559,7 +544,8 @@ void CellWidget::render_markdown() {
     QString html;
     html += QString("<style>"
                     "body { color:%1; font-family:%2; font-size:%3px; }"
-                    "h1 { color:%4; font-size:20px; font-weight:700; margin:8px 0 4px; border-bottom:1px solid %5; padding-bottom:4px; }"
+                    "h1 { color:%4; font-size:20px; font-weight:700; margin:8px 0 4px; border-bottom:1px solid %5; "
+                    "padding-bottom:4px; }"
                     "h2 { color:%4; font-size:17px; font-weight:700; margin:8px 0 4px; }"
                     "h3 { color:%4; font-size:15px; font-weight:700; margin:6px 0 3px; }"
                     "h4 { color:%6; font-size:14px; font-weight:600; margin:4px 0 2px; }"
@@ -576,8 +562,7 @@ void CellWidget::render_markdown() {
                     "</style>")
                 .arg(colors::TEXT_PRIMARY, fonts::DATA_FAMILY)
                 .arg(fonts::DATA)
-                .arg(colors::AMBER, colors::BORDER_MED, colors::TEXT_SECONDARY,
-                     colors::BG_RAISED, colors::CYAN);
+                .arg(colors::AMBER, colors::BORDER_MED, colors::TEXT_SECONDARY, colors::BG_RAISED, colors::CYAN);
 
     bool in_code_block = false;
     QString code_block;
@@ -596,7 +581,8 @@ void CellWidget::render_markdown() {
             continue;
         }
         if (in_code_block) {
-            if (!code_block.isEmpty()) code_block += "\n";
+            if (!code_block.isEmpty())
+                code_block += "\n";
             code_block += line;
             continue;
         }
@@ -609,10 +595,22 @@ void CellWidget::render_markdown() {
             continue;
         }
         // Headers
-        if (trimmed.startsWith("#### ")) { html += "<h4>" + trimmed.mid(5).toHtmlEscaped() + "</h4>"; continue; }
-        if (trimmed.startsWith("### "))  { html += "<h3>" + trimmed.mid(4).toHtmlEscaped() + "</h3>"; continue; }
-        if (trimmed.startsWith("## "))   { html += "<h2>" + trimmed.mid(3).toHtmlEscaped() + "</h2>"; continue; }
-        if (trimmed.startsWith("# "))    { html += "<h1>" + trimmed.mid(2).toHtmlEscaped() + "</h1>"; continue; }
+        if (trimmed.startsWith("#### ")) {
+            html += "<h4>" + trimmed.mid(5).toHtmlEscaped() + "</h4>";
+            continue;
+        }
+        if (trimmed.startsWith("### ")) {
+            html += "<h3>" + trimmed.mid(4).toHtmlEscaped() + "</h3>";
+            continue;
+        }
+        if (trimmed.startsWith("## ")) {
+            html += "<h2>" + trimmed.mid(3).toHtmlEscaped() + "</h2>";
+            continue;
+        }
+        if (trimmed.startsWith("# ")) {
+            html += "<h1>" + trimmed.mid(2).toHtmlEscaped() + "</h1>";
+            continue;
+        }
         // Blockquote
         if (trimmed.startsWith("> ")) {
             html += "<blockquote>" + trimmed.mid(2).toHtmlEscaped() + "</blockquote>";
@@ -669,11 +667,11 @@ void CellWidget::enterEvent(QEnterEvent* /*event*/) {
     // Show toolbar buttons
     for (int i = 0; i < toolbar_->layout()->count(); ++i) {
         auto* w = toolbar_->layout()->itemAt(i)->widget();
-        if (w) w->setVisible(true);
+        if (w)
+            w->setVisible(true);
     }
     toolbar_->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;")
-            .arg(colors::BG_RAISED, colors::BORDER_DIM));
+        QString("background:%1; border-bottom:1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_DIM));
 }
 
 void CellWidget::leaveEvent(QEvent* /*event*/) {
@@ -681,10 +679,10 @@ void CellWidget::leaveEvent(QEvent* /*event*/) {
     // Hide toolbar buttons
     for (int i = 0; i < toolbar_->layout()->count(); ++i) {
         auto* w = toolbar_->layout()->itemAt(i)->widget();
-        if (w) w->setVisible(false);
+        if (w)
+            w->setVisible(false);
     }
-    toolbar_->setStyleSheet(
-        QString("background:%1;").arg(colors::BG_RAISED));
+    toolbar_->setStyleSheet(QString("background:%1;").arg(colors::BG_RAISED));
 }
 
 void CellWidget::mousePressEvent(QMouseEvent* event) {
@@ -704,16 +702,14 @@ CellNavigator::CellNavigator(QWidget* parent) : QWidget(parent) {
     auto* header = new QWidget(this);
     header->setFixedHeight(32);
     header->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;")
-            .arg(colors::BG_RAISED, colors::BORDER_DIM));
+        QString("background:%1; border-bottom:1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_DIM));
     auto* header_layout = new QHBoxLayout(header);
     header_layout->setContentsMargins(10, 0, 10, 0);
 
     auto* title = new QLabel("CELLS", header);
-    title->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:%3px; font-weight:700; letter-spacing:1px;")
-            .arg(colors::AMBER, fonts::DATA_FAMILY)
-            .arg(fonts::TINY));
+    title->setStyleSheet(QString("color:%1; font-family:%2; font-size:%3px; font-weight:700; letter-spacing:1px;")
+                             .arg(colors::AMBER, fonts::DATA_FAMILY)
+                             .arg(fonts::TINY));
     header_layout->addWidget(title);
     layout->addWidget(header);
 
@@ -728,8 +724,7 @@ CellNavigator::CellNavigator(QWidget* parent) : QWidget(parent) {
                 "QListWidget::item:hover { background:%8; }")
             .arg(colors::BG_SURFACE, fonts::DATA_FAMILY)
             .arg(fonts::TINY)
-            .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM,
-                 colors::BG_HOVER, colors::AMBER, colors::BG_HOVER));
+            .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM, colors::BG_HOVER, colors::AMBER, colors::BG_HOVER));
     list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     list_->setTextElideMode(Qt::ElideRight);
     list_->setWordWrap(false);
@@ -792,10 +787,12 @@ void CellNavigator::rebuild(const QVector<NotebookCell>& cells, const QString& s
         item->setData(Qt::UserRole, cell.id);
         item->setToolTip(label);
 
-        if (cell.id == selected_id) selected_row = i;
+        if (cell.id == selected_id)
+            selected_row = i;
     }
 
-    if (selected_row >= 0) list_->setCurrentRow(selected_row);
+    if (selected_row >= 0)
+        list_->setCurrentRow(selected_row);
     list_->blockSignals(false);
 }
 
@@ -819,9 +816,7 @@ void CodeEditorScreen::hideEvent(QHideEvent* event) {
 }
 
 void CodeEditorScreen::build_ui() {
-    setStyleSheet(
-        QString("QWidget { background:%1; color:%2; }")
-            .arg(colors::BG_BASE, colors::TEXT_PRIMARY));
+    setStyleSheet(QString("QWidget { background:%1; color:%2; }").arg(colors::BG_BASE, colors::TEXT_PRIMARY));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -831,9 +826,8 @@ void CodeEditorScreen::build_ui() {
 
     splitter_ = new QSplitter(Qt::Horizontal, this);
     splitter_->setHandleWidth(1);
-    splitter_->setStyleSheet(
-        QString("QSplitter { background:%1; } QSplitter::handle { background:%2; }")
-            .arg(colors::BG_BASE, colors::BORDER_DIM));
+    splitter_->setStyleSheet(QString("QSplitter { background:%1; } QSplitter::handle { background:%2; }")
+                                 .arg(colors::BG_BASE, colors::BORDER_DIM));
 
     navigator_ = new CellNavigator(splitter_);
     navigator_->setMinimumWidth(180);
@@ -873,19 +867,17 @@ QWidget* CodeEditorScreen::build_toolbar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(36);
     bar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;")
-            .arg(colors::BG_RAISED, colors::BORDER_DIM));
+        QString("background:%1; border-bottom:1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_DIM));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(0);
 
     auto* title = new QLabel("PYTHON NOTEBOOK", bar);
-    title->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;"
-                " letter-spacing:1px; padding-right:16px;")
-            .arg(colors::AMBER, fonts::DATA_FAMILY)
-            .arg(fonts::SMALL));
+    title->setStyleSheet(QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;"
+                                 " letter-spacing:1px; padding-right:16px;")
+                             .arg(colors::AMBER, fonts::DATA_FAMILY)
+                             .arg(fonts::SMALL));
     hl->addWidget(title);
 
     auto add_sep = [&]() {
@@ -899,14 +891,13 @@ QWidget* CodeEditorScreen::build_toolbar() {
         auto* btn = new QPushButton(text, bar);
         btn->setCursor(Qt::PointingHandCursor);
         QString color = fg.isEmpty() ? colors::TEXT_SECONDARY : fg;
-        btn->setStyleSheet(
-            QString("QPushButton { background:transparent; color:%1; border:none;"
-                    " font-family:%2; font-size:%3px; font-weight:600; padding:0 10px;"
-                    " letter-spacing:0.5px; }"
-                    "QPushButton:hover { color:%4; background:%5; }")
-                .arg(color, fonts::DATA_FAMILY)
-                .arg(fonts::TINY)
-                .arg(colors::TEXT_PRIMARY, colors::BG_HOVER));
+        btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:none;"
+                                   " font-family:%2; font-size:%3px; font-weight:600; padding:0 10px;"
+                                   " letter-spacing:0.5px; }"
+                                   "QPushButton:hover { color:%4; background:%5; }")
+                               .arg(color, fonts::DATA_FAMILY)
+                               .arg(fonts::TINY)
+                               .arg(colors::TEXT_PRIMARY, colors::BG_HOVER));
         return btn;
     };
 
@@ -936,14 +927,13 @@ QWidget* CodeEditorScreen::build_toolbar() {
 
     auto* run_all_btn = new QPushButton("RUN ALL", bar);
     run_all_btn->setCursor(Qt::PointingHandCursor);
-    run_all_btn->setStyleSheet(
-        QString("QPushButton { background:%1; color:%2; border:none;"
-                " font-family:%3; font-size:%4px; font-weight:700; padding:4px 14px;"
-                " letter-spacing:0.5px; }"
-                "QPushButton:hover { background:%5; }")
-            .arg(colors::AMBER, colors::BG_BASE, fonts::DATA_FAMILY)
-            .arg(fonts::TINY)
-            .arg(colors::ORANGE));
+    run_all_btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
+                                       " font-family:%3; font-size:%4px; font-weight:700; padding:4px 14px;"
+                                       " letter-spacing:0.5px; }"
+                                       "QPushButton:hover { background:%5; }")
+                                   .arg(colors::AMBER, colors::BG_BASE, fonts::DATA_FAMILY)
+                                   .arg(fonts::TINY)
+                                   .arg(colors::ORANGE));
     connect(run_all_btn, &QPushButton::clicked, this, &CodeEditorScreen::on_run_all);
     hl->addWidget(run_all_btn);
 
@@ -956,16 +946,14 @@ QWidget* CodeEditorScreen::build_toolbar() {
     add_sep();
 
     kernel_label_ = new QLabel("KERNEL: IDLE", bar);
-    kernel_label_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:10px; font-weight:600;"
-                " letter-spacing:0.5px; padding:0 8px;")
-            .arg(colors::POSITIVE, fonts::DATA_FAMILY));
+    kernel_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; font-weight:600;"
+                                         " letter-spacing:0.5px; padding:0 8px;")
+                                     .arg(colors::POSITIVE, fonts::DATA_FAMILY));
     hl->addWidget(kernel_label_);
 
     auto* py_label = new QLabel("Python 3.12", bar);
-    py_label->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:10px; padding-left:8px;")
-            .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+    py_label->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; padding-left:8px;")
+                                .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
     hl->addWidget(py_label);
 
     return bar;
@@ -974,9 +962,7 @@ QWidget* CodeEditorScreen::build_toolbar() {
 QWidget* CodeEditorScreen::build_status_bar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(24);
-    bar->setStyleSheet(
-        QString("background:%1; border-top:1px solid %2;")
-            .arg(colors::BG_RAISED, colors::BORDER_DIM));
+    bar->setStyleSheet(QString("background:%1; border-top:1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_DIM));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(10, 0, 10, 0);
@@ -988,11 +974,9 @@ QWidget* CodeEditorScreen::build_status_bar() {
     hl->addWidget(status_label_);
     hl->addStretch();
 
-    auto* shortcuts = new QLabel(
-        "Ctrl+Enter: RUN  |  Shift+Enter: RUN & NEXT  |  Tab: 4 SPACES  |  Ctrl+S: SAVE", bar);
-    shortcuts->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:10px; letter-spacing:0.3px;")
-            .arg(colors::TEXT_DIM, fonts::DATA_FAMILY));
+    auto* shortcuts = new QLabel("Ctrl+Enter: RUN  |  Shift+Enter: RUN & NEXT  |  Tab: 4 SPACES  |  Ctrl+S: SAVE", bar);
+    shortcuts->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; letter-spacing:0.3px;")
+                                 .arg(colors::TEXT_DIM, fonts::DATA_FAMILY));
     hl->addWidget(shortcuts);
 
     return bar;
@@ -1010,11 +994,10 @@ void CodeEditorScreen::on_new_notebook() {
     NotebookCell cell;
     cell.id = new_cell_id();
     cell.cell_type = "code";
-    cell.source =
-        "# Fincept Python Notebook\n"
-        "# Write Python code and press Ctrl+Enter to run\n"
-        "\n"
-        "print(\"Hello from Fincept Terminal!\")";
+    cell.source = "# Fincept Python Notebook\n"
+                  "# Write Python code and press Ctrl+Enter to run\n"
+                  "\n"
+                  "print(\"Hello from Fincept Terminal!\")";
     cells_.append(cell);
 
     selected_cell_id_ = cell.id;
@@ -1052,7 +1035,8 @@ void CodeEditorScreen::add_cell_after(const QString& after_id, const QString& ty
 }
 
 void CodeEditorScreen::on_delete_cell(const QString& cell_id) {
-    if (cells_.size() <= 1) return;
+    if (cells_.size() <= 1)
+        return;
 
     int idx = find_cell_index(cell_id);
     if (idx >= 0) {
@@ -1070,10 +1054,12 @@ void CodeEditorScreen::on_delete_cell(const QString& cell_id) {
 
 void CodeEditorScreen::on_move_cell_up(const QString& cell_id) {
     int idx = find_cell_index(cell_id);
-    if (idx <= 0) return;
+    if (idx <= 0)
+        return;
 
     auto* cw = find_cell_widget(cell_id);
-    if (cw) cells_[idx] = cw->cell_data();
+    if (cw)
+        cells_[idx] = cw->cell_data();
 
     cells_.swapItemsAt(idx, idx - 1);
     rebuild_cells();
@@ -1082,10 +1068,12 @@ void CodeEditorScreen::on_move_cell_up(const QString& cell_id) {
 
 void CodeEditorScreen::on_move_cell_down(const QString& cell_id) {
     int idx = find_cell_index(cell_id);
-    if (idx < 0 || idx >= cells_.size() - 1) return;
+    if (idx < 0 || idx >= cells_.size() - 1)
+        return;
 
     auto* cw = find_cell_widget(cell_id);
-    if (cw) cells_[idx] = cw->cell_data();
+    if (cw)
+        cells_[idx] = cw->cell_data();
 
     cells_.swapItemsAt(idx, idx + 1);
     rebuild_cells();
@@ -1094,10 +1082,12 @@ void CodeEditorScreen::on_move_cell_down(const QString& cell_id) {
 
 void CodeEditorScreen::on_toggle_cell_type(const QString& cell_id) {
     int idx = find_cell_index(cell_id);
-    if (idx < 0) return;
+    if (idx < 0)
+        return;
 
     auto* cw = find_cell_widget(cell_id);
-    if (cw) cells_[idx] = cw->cell_data();
+    if (cw)
+        cells_[idx] = cw->cell_data();
 
     cells_[idx].cell_type = (cells_[idx].cell_type == "code") ? "markdown" : "code";
     cells_[idx].outputs.clear();
@@ -1108,10 +1098,12 @@ void CodeEditorScreen::on_toggle_cell_type(const QString& cell_id) {
 }
 
 void CodeEditorScreen::on_select_cell(const QString& cell_id) {
-    if (cell_id == selected_cell_id_) return;
+    if (cell_id == selected_cell_id_)
+        return;
 
     auto* old_cw = find_cell_widget(selected_cell_id_);
-    if (old_cw) old_cw->set_selected(false);
+    if (old_cw)
+        old_cw->set_selected(false);
 
     selected_cell_id_ = cell_id;
 
@@ -1136,8 +1128,8 @@ void CodeEditorScreen::on_rename_cell(const QString& cell_id) {
     }
 
     bool ok = false;
-    const QString name = QInputDialog::getText(this, "Rename Cell", "Cell name:", QLineEdit::Normal, current_name, &ok)
-                             .trimmed();
+    const QString name =
+        QInputDialog::getText(this, "Rename Cell", "Cell name:", QLineEdit::Normal, current_name, &ok).trimmed();
     if (!ok)
         return;
 
@@ -1164,7 +1156,8 @@ void CodeEditorScreen::on_toggle_sidebar() {
 
 void CodeEditorScreen::advance_to_next(const QString& current_id) {
     int idx = find_cell_index(current_id);
-    if (idx < 0) return;
+    if (idx < 0)
+        return;
 
     if (idx + 1 < cells_.size()) {
         on_select_cell(cells_[idx + 1].id);
@@ -1180,7 +1173,8 @@ void CodeEditorScreen::advance_to_next(const QString& current_id) {
 
 void CodeEditorScreen::on_run_cell(const QString& cell_id) {
     int idx = find_cell_index(cell_id);
-    if (idx < 0) return;
+    if (idx < 0)
+        return;
 
     auto* cw = find_cell_widget(cell_id);
     if (cw) {
@@ -1188,28 +1182,31 @@ void CodeEditorScreen::on_run_cell(const QString& cell_id) {
         cw->set_running(true);
     }
 
-    if (cells_[idx].cell_type != "code") return;
+    if (cells_[idx].cell_type != "code")
+        return;
 
     QString code = cells_[idx].source;
-    if (code.trimmed().isEmpty()) return;
+    if (code.trimmed().isEmpty())
+        return;
 
     ++execution_counter_;
     int exec_num = execution_counter_;
 
     kernel_label_->setText("KERNEL: BUSY");
-    kernel_label_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:10px; font-weight:600;"
-                " letter-spacing:0.5px; padding:0 8px;")
-            .arg(colors::WARNING, fonts::DATA_FAMILY));
+    kernel_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; font-weight:600;"
+                                         " letter-spacing:0.5px; padding:0 8px;")
+                                     .arg(colors::WARNING, fonts::DATA_FAMILY));
 
     QPointer<CodeEditorScreen> self = this;
     QString cid = cell_id;
 
     python::PythonRunner::instance().run_code(code, [self, cid, exec_num](python::PythonResult result) {
-        if (!self) return;
+        if (!self)
+            return;
 
         int idx = self->find_cell_index(cid);
-        if (idx < 0) return;
+        if (idx < 0)
+            return;
 
         QVector<CellOutput> outputs;
 
@@ -1225,9 +1222,8 @@ void CodeEditorScreen::on_run_cell(const QString& cell_id) {
             CellOutput out;
             out.type = "error";
             out.error_name = "ExecutionError";
-            out.error_value = result.error.isEmpty()
-                                  ? QString("Process exited with code %1").arg(result.exit_code)
-                                  : result.error.split('\n').last();
+            out.error_value = result.error.isEmpty() ? QString("Process exited with code %1").arg(result.exit_code)
+                                                     : result.error.split('\n').last();
             out.traceback = result.error.split('\n');
             out.text = result.error;
             outputs.append(out);
@@ -1252,10 +1248,9 @@ void CodeEditorScreen::on_run_cell(const QString& cell_id) {
         }
 
         self->kernel_label_->setText("KERNEL: IDLE");
-        self->kernel_label_->setStyleSheet(
-            QString("color:%1; font-family:%2; font-size:10px; font-weight:600;"
-                    " letter-spacing:0.5px; padding:0 8px;")
-                .arg(colors::POSITIVE, fonts::DATA_FAMILY));
+        self->kernel_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; font-weight:600;"
+                                                   " letter-spacing:0.5px; padding:0 8px;")
+                                               .arg(colors::POSITIVE, fonts::DATA_FAMILY));
 
         self->update_status();
         self->update_navigator();
@@ -1279,15 +1274,18 @@ void CodeEditorScreen::on_run_all() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void CodeEditorScreen::on_open_notebook() {
-    QString path = QFileDialog::getOpenFileName(
-        this, "Open Notebook", {}, "Jupyter Notebooks (*.ipynb);;All Files (*)");
-    if (path.isEmpty()) return;
+    QString path =
+        QFileDialog::getOpenFileName(this, "Open Notebook", {}, "Jupyter Notebooks (*.ipynb);;All Files (*)");
+    if (path.isEmpty())
+        return;
 
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) return;
+    if (!file.open(QIODevice::ReadOnly))
+        return;
 
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    if (doc.isNull()) return;
+    if (doc.isNull())
+        return;
 
     QJsonArray json_cells = doc.object()["cells"].toArray();
 
@@ -1335,13 +1333,15 @@ void CodeEditorScreen::on_open_notebook() {
 void CodeEditorScreen::on_save_notebook() {
     for (int i = 0; i < cells_.size(); ++i) {
         auto* cw = find_cell_widget(cells_[i].id);
-        if (cw) cells_[i] = cw->cell_data();
+        if (cw)
+            cells_[i] = cw->cell_data();
     }
 
     QString path = notebook_path_;
     if (path.isEmpty()) {
         path = QFileDialog::getSaveFileName(this, "Save Notebook", "notebook.ipynb", "Jupyter Notebooks (*.ipynb)");
-        if (path.isEmpty()) return;
+        if (path.isEmpty())
+            return;
     }
 
     QJsonArray json_cells;
@@ -1396,7 +1396,8 @@ void CodeEditorScreen::on_save_notebook() {
 void CodeEditorScreen::rebuild_cells() {
     while (cells_layout_->count() > 1) {
         auto* item = cells_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 
@@ -1419,16 +1420,19 @@ void CodeEditorScreen::rebuild_cells() {
 
 int CodeEditorScreen::find_cell_index(const QString& cell_id) const {
     for (int i = 0; i < cells_.size(); ++i)
-        if (cells_[i].id == cell_id) return i;
+        if (cells_[i].id == cell_id)
+            return i;
     return -1;
 }
 
 CellWidget* CodeEditorScreen::find_cell_widget(const QString& cell_id) const {
     for (int i = 0; i < cells_layout_->count(); ++i) {
         auto* item = cells_layout_->itemAt(i);
-        if (!item || !item->widget()) continue;
+        if (!item || !item->widget())
+            continue;
         auto* cw = qobject_cast<CellWidget*>(item->widget());
-        if (cw && cw->cell_id() == cell_id) return cw;
+        if (cw && cw->cell_id() == cell_id)
+            return cw;
     }
     return nullptr;
 }
@@ -1440,19 +1444,23 @@ QString CodeEditorScreen::new_cell_id() const {
 void CodeEditorScreen::update_status() {
     int code_count = 0, md_count = 0, executed = 0;
     for (const auto& c : cells_) {
-        if (c.cell_type == "code") ++code_count; else ++md_count;
-        if (c.execution_count > 0) ++executed;
+        if (c.cell_type == "code")
+            ++code_count;
+        else
+            ++md_count;
+        if (c.execution_count > 0)
+            ++executed;
     }
 
-    QString info = QString("CELLS: %1 CODE  %2 MD  |  EXECUTED: %3")
-                       .arg(code_count).arg(md_count).arg(executed);
+    QString info = QString("CELLS: %1 CODE  %2 MD  |  EXECUTED: %3").arg(code_count).arg(md_count).arg(executed);
     if (!notebook_path_.isEmpty())
         info += "  |  " + QFileInfo(notebook_path_).fileName();
     status_label_->setText(info);
 }
 
 void CodeEditorScreen::update_navigator() {
-    if (navigator_) navigator_->rebuild(cells_, selected_cell_id_);
+    if (navigator_)
+        navigator_->rebuild(cells_, selected_cell_id_);
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
@@ -1466,7 +1474,7 @@ void CodeEditorScreen::restore_state(const QVariantMap& state) {
     if (!path.isEmpty() && notebook_path_ != path) {
         QFile f(path);
         if (f.exists()) {
-            notebook_path_ = path;  // pre-set so on_open_notebook picks it up
+            notebook_path_ = path; // pre-set so on_open_notebook picks it up
             // simulate the open flow directly
             QFile file(path);
             if (file.open(QIODevice::ReadOnly)) {

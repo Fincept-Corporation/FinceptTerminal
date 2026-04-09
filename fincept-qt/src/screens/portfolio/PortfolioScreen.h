@@ -8,6 +8,7 @@
 #include <QStackedWidget>
 #include <QTimer>
 #include <QWidget>
+
 #include <optional>
 
 namespace fincept::screens {

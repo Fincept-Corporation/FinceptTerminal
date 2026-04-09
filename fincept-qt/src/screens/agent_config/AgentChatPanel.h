@@ -33,8 +33,8 @@ class AgentChatPanel : public QWidget {
     void setup_connections();
 
     // Portfolio context helpers
-    QString build_portfolio_context() const;   // returns enriched context string
-    void    refresh_portfolios();
+    QString build_portfolio_context() const; // returns enriched context string
+    void refresh_portfolios();
 
     // Message area
     void add_user_bubble(const QString& text);
@@ -54,39 +54,39 @@ class AgentChatPanel : public QWidget {
 
     // ── UI ─────────────────────────────────────────────────────────────────────
     // Header
-    QLabel*      hdr_model_lbl_  = nullptr;   // active model pill
-    QLabel*      hdr_status_lbl_ = nullptr;   // Ready / Streaming…
-    QLabel*      hdr_agent_lbl_  = nullptr;   // selected agent badge
-    QComboBox*   agent_selector_ = nullptr;
-    QPushButton* route_toggle_   = nullptr;
-    QPushButton* clear_btn_      = nullptr;
+    QLabel* hdr_model_lbl_ = nullptr;  // active model pill
+    QLabel* hdr_status_lbl_ = nullptr; // Ready / Streaming…
+    QLabel* hdr_agent_lbl_ = nullptr;  // selected agent badge
+    QComboBox* agent_selector_ = nullptr;
+    QPushButton* route_toggle_ = nullptr;
+    QPushButton* clear_btn_ = nullptr;
 
     // Messages
-    QScrollArea*  scroll_area_       = nullptr;
-    QWidget*      messages_container_ = nullptr;
-    QVBoxLayout*  messages_layout_   = nullptr;
-    QWidget*      welcome_panel_     = nullptr;
-    QWidget*      typing_indicator_  = nullptr;
-    QLabel*       typing_dots_lbl_   = nullptr;
+    QScrollArea* scroll_area_ = nullptr;
+    QWidget* messages_container_ = nullptr;
+    QVBoxLayout* messages_layout_ = nullptr;
+    QWidget* welcome_panel_ = nullptr;
+    QWidget* typing_indicator_ = nullptr;
+    QLabel* typing_dots_lbl_ = nullptr;
 
     // Portfolio context bar
-    QComboBox*   portfolio_combo_  = nullptr;
-    QPushButton* analyze_btn_      = nullptr;
-    QPushButton* rebalance_btn_    = nullptr;
-    QPushButton* risk_btn_         = nullptr;
+    QComboBox* portfolio_combo_ = nullptr;
+    QPushButton* analyze_btn_ = nullptr;
+    QPushButton* rebalance_btn_ = nullptr;
+    QPushButton* risk_btn_ = nullptr;
 
     // Input
-    QTextEdit*   input_edit_  = nullptr;
-    QPushButton* send_btn_    = nullptr;
+    QTextEdit* input_edit_ = nullptr;
+    QPushButton* send_btn_ = nullptr;
 
     // Status bar
     QLabel* status_label_ = nullptr;
 
     // ── State ──────────────────────────────────────────────────────────────────
-    bool    auto_routing_      = false;
-    bool    executing_         = false;
-    bool    data_loaded_       = false;
-    int     typing_step_       = 0;
+    bool auto_routing_ = false;
+    bool executing_ = false;
+    bool data_loaded_ = false;
+    int typing_step_ = 0;
     QString last_query_;
     QString pending_request_id_;
     QString streaming_text_;

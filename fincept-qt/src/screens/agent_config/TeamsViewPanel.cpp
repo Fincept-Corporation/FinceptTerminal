@@ -35,8 +35,8 @@ TeamsViewPanel::TeamsViewPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("TeamsViewPanel");
     build_ui();
     setup_connections();
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { update(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { update(); });
 
     // Seed from cache immediately — handles case where agents_discovered was
     // already emitted before this panel was lazily constructed (same as AgentsViewPanel).
@@ -65,7 +65,7 @@ void TeamsViewPanel::build_ui() {
 }
 
 QWidget* TeamsViewPanel::build_team_panel() {
-    auto* p = new QWidget;
+    auto* p = new QWidget(this);
     p->setMinimumWidth(200);
     p->setMaximumWidth(280);
     p->setStyleSheet(
@@ -138,7 +138,7 @@ QWidget* TeamsViewPanel::build_team_panel() {
 }
 
 QWidget* TeamsViewPanel::build_agents_panel() {
-    auto* p = new QWidget;
+    auto* p = new QWidget(this);
     p->setMinimumWidth(220);
     p->setMaximumWidth(320);
     p->setStyleSheet(
@@ -183,7 +183,7 @@ QWidget* TeamsViewPanel::build_agents_panel() {
 }
 
 QWidget* TeamsViewPanel::build_execution_panel() {
-    auto* p = new QWidget;
+    auto* p = new QWidget(this);
     p->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(12, 8, 12, 8);
@@ -204,8 +204,7 @@ QWidget* TeamsViewPanel::build_execution_panel() {
     vl->addWidget(team_profile_combo_);
 
     team_resolved_lbl_ = new QLabel;
-    team_resolved_lbl_->setStyleSheet(
-        QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY));
+    team_resolved_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY));
     vl->addWidget(team_resolved_lbl_);
 
     // Query
@@ -269,9 +268,8 @@ QWidget* TeamsViewPanel::build_execution_panel() {
                 "a { color: %5; } ul, ol { margin: 4px 0; padding-left: 20px; }"
                 "li { margin: 2px 0; } strong { color: %1; }"
                 "hr { border: none; border-top: 1px solid %4; }")
-            .arg(ui::colors::TEXT_PRIMARY, ui::colors::BG_BASE, ui::colors::AMBER,
-                 ui::colors::BORDER_DIM,   ui::colors::CYAN,    ui::colors::BG_RAISED,
-                 ui::colors::TEXT_PRIMARY, ui::colors::TEXT_SECONDARY));
+            .arg(ui::colors::TEXT_PRIMARY, ui::colors::BG_BASE, ui::colors::AMBER, ui::colors::BORDER_DIM,
+                 ui::colors::CYAN, ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::TEXT_SECONDARY));
     vl->addWidget(result_display_, 1);
     return p;
 }
@@ -284,7 +282,8 @@ void TeamsViewPanel::setup_connections() {
                 populate_available_agents(agents);
             });
     connect(&svc, &services::AgentService::agent_result, this, [this](services::AgentExecutionResult r) {
-        if (r.request_id != pending_request_id_) return;
+        if (r.request_id != pending_request_id_)
+            return;
         executing_ = false;
         pending_request_id_.clear();
         run_btn_->setEnabled(true);
@@ -302,22 +301,27 @@ void TeamsViewPanel::setup_connections() {
         }
     });
 
-    connect(&svc, &services::AgentService::agent_stream_thinking, this, [this](const QString& request_id, const QString& status) {
-        if (request_id != pending_request_id_) return;
-        exec_status_->setText(status);
-        log_display_->append("[THINK] " + status);
-    });
+    connect(&svc, &services::AgentService::agent_stream_thinking, this,
+            [this](const QString& request_id, const QString& status) {
+                if (request_id != pending_request_id_)
+                    return;
+                exec_status_->setText(status);
+                log_display_->append("[THINK] " + status);
+            });
 
-    connect(&svc, &services::AgentService::agent_stream_token, this, [this](const QString& request_id, const QString& token) {
-        if (request_id != pending_request_id_) return;
-        QTextCursor cursor = result_display_->textCursor();
-        cursor.movePosition(QTextCursor::End);
-        result_display_->setTextCursor(cursor);
-        result_display_->insertPlainText(token + " ");
-    });
+    connect(&svc, &services::AgentService::agent_stream_token, this,
+            [this](const QString& request_id, const QString& token) {
+                if (request_id != pending_request_id_)
+                    return;
+                QTextCursor cursor = result_display_->textCursor();
+                cursor.movePosition(QTextCursor::End);
+                result_display_->setTextCursor(cursor);
+                result_display_->insertPlainText(token + " ");
+            });
 
     connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
-        if (r.request_id != pending_request_id_) return;
+        if (r.request_id != pending_request_id_)
+            return;
         executing_ = false;
         pending_request_id_.clear();
         run_btn_->setEnabled(true);
@@ -335,25 +339,24 @@ void TeamsViewPanel::setup_connections() {
         }
     });
     // Profile combo for coordinator
-    connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::config_changed,
-            this, &TeamsViewPanel::load_team_profile_combo);
-    connect(team_profile_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &TeamsViewPanel::refresh_team_llm_label);
+    connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::config_changed, this,
+            &TeamsViewPanel::load_team_profile_combo);
+    connect(team_profile_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &TeamsViewPanel::refresh_team_llm_label);
     load_team_profile_combo();
 
     // Reset executing_ if Python crashes before emitting agent_result/stream_done
-    connect(&svc, &services::AgentService::error_occurred, this,
-            [this](const QString&, const QString& msg) {
-                if (!executing_) return;
-                executing_ = false;
-                pending_request_id_.clear();
-                run_btn_->setEnabled(true);
-                run_btn_->setText("RUN TEAM");
-                exec_status_->setText("ERROR");
-                exec_status_->setStyleSheet(
-                    QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
-                log_display_->append("[ERROR] " + msg);
-            });
+    connect(&svc, &services::AgentService::error_occurred, this, [this](const QString&, const QString& msg) {
+        if (!executing_)
+            return;
+        executing_ = false;
+        pending_request_id_.clear();
+        run_btn_->setEnabled(true);
+        run_btn_->setText("RUN TEAM");
+        exec_status_->setText("ERROR");
+        exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
+        log_display_->append("[ERROR] " + msg);
+    });
 
     connect(run_btn_, &QPushButton::clicked, this, &TeamsViewPanel::run_team);
     connect(available_list_, &QListWidget::itemDoubleClicked, this, [this]() {
@@ -417,7 +420,8 @@ void TeamsViewPanel::load_team_profile_combo() {
     const auto profiles = pr.is_ok() ? pr.value() : QVector<LlmProfile>{};
     for (const auto& p : profiles) {
         QString label = p.name;
-        if (p.is_default) label += " [default]";
+        if (p.is_default)
+            label += " [default]";
         team_profile_combo_->addItem(label, p.id);
     }
 
@@ -443,14 +447,14 @@ void TeamsViewPanel::refresh_team_llm_label() {
         const auto profiles2 = pr2.is_ok() ? pr2.value() : QVector<LlmProfile>{};
         for (const auto& p : profiles2) {
             if (p.id == profile_id) {
-                resolved.profile_id    = p.id;
-                resolved.profile_name  = p.name;
-                resolved.provider      = p.provider;
-                resolved.model_id      = p.model_id;
-                resolved.api_key       = p.api_key;
-                resolved.base_url      = p.base_url;
-                resolved.temperature   = p.temperature;
-                resolved.max_tokens    = p.max_tokens;
+                resolved.profile_id = p.id;
+                resolved.profile_name = p.name;
+                resolved.provider = p.provider;
+                resolved.model_id = p.model_id;
+                resolved.api_key = p.api_key;
+                resolved.base_url = p.base_url;
+                resolved.temperature = p.temperature;
+                resolved.max_tokens = p.max_tokens;
                 resolved.system_prompt = p.system_prompt;
                 break;
             }
@@ -461,15 +465,16 @@ void TeamsViewPanel::refresh_team_llm_label() {
 
     if (!resolved.provider.isEmpty()) {
         QString text = resolved.provider.toUpper() + " / " + resolved.model_id;
-        if (text.length() > 60) text = text.left(58) + "..";
-        if (profile_id.isEmpty()) text += " (inherited)";
+        if (text.length() > 60)
+            text = text.left(58) + "..";
+        if (profile_id.isEmpty())
+            text += " (inherited)";
         team_resolved_lbl_->setText(text);
         team_resolved_lbl_->setStyleSheet(
             QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY));
     } else {
         team_resolved_lbl_->setText("No provider — go to Settings > LLM Config");
-        team_resolved_lbl_->setStyleSheet(
-            QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
+        team_resolved_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
     }
 }
 
@@ -495,9 +500,12 @@ void TeamsViewPanel::run_team() {
         const auto profiles3 = pr3.is_ok() ? pr3.value() : QVector<LlmProfile>{};
         for (const auto& p : profiles3) {
             if (p.id == coord_profile_id) {
-                coord.profile_id = p.id; coord.provider = p.provider;
-                coord.model_id = p.model_id; coord.api_key = p.api_key;
-                coord.base_url = p.base_url; coord.temperature = p.temperature;
+                coord.profile_id = p.id;
+                coord.provider = p.provider;
+                coord.model_id = p.model_id;
+                coord.api_key = p.api_key;
+                coord.base_url = p.base_url;
+                coord.temperature = p.temperature;
                 coord.max_tokens = p.max_tokens;
                 break;
             }
@@ -531,8 +539,7 @@ void TeamsViewPanel::run_team() {
 
         // Resolve per-member LLM profile via assignment chain, then override with
         // any explicit api_key stored in the agent's saved config (takes priority).
-        const ResolvedLlmProfile member_profile =
-            ai_chat::LlmService::instance().resolve_profile("agent", m.id);
+        const ResolvedLlmProfile member_profile = ai_chat::LlmService::instance().resolve_profile("agent", m.id);
         QJsonObject mc = ai_chat::LlmService::profile_to_json(member_profile);
 
         if (fresh_config.contains("model")) {
@@ -547,7 +554,8 @@ void TeamsViewPanel::run_team() {
             member["tools"] = fresh_config["tools"];
         } else if (!selected_tools_.isEmpty()) {
             QJsonArray ta;
-            for (const auto& t : selected_tools_) ta.append(t);
+            for (const auto& t : selected_tools_)
+                ta.append(t);
             member["tools"] = ta;
         }
         if (fresh_config.contains("instructions"))

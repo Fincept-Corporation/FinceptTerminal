@@ -14,7 +14,9 @@
 #include <QStackedWidget>
 #include <QWidget>
 
-namespace fincept::ui { struct ThemeTokens; }
+namespace fincept::ui {
+struct ThemeTokens;
+}
 
 namespace fincept::screens {
 
@@ -36,23 +38,23 @@ class EconomicsScreen : public QWidget, public IStatefulScreen {
     void refresh_theme();
 
     // badge bar + stacked panels
-    QWidget*        header_      = nullptr;
-    QLabel*         title_       = nullptr;
-    QLabel*         subtitle_    = nullptr;
-    QScrollArea*    scroll_      = nullptr;
-    QWidget*        badge_bar_   = nullptr;
-    QStackedWidget* stack_       = nullptr;
+    QWidget* header_ = nullptr;
+    QLabel* title_ = nullptr;
+    QLabel* subtitle_ = nullptr;
+    QScrollArea* scroll_ = nullptr;
+    QWidget* badge_bar_ = nullptr;
+    QStackedWidget* stack_ = nullptr;
 
     // source_id → (badge widget, panel widget or nullptr if not yet built)
     struct SourceEntry {
-        QString      id;
-        QString      label;
-        QString      color;
-        QWidget*     badge   = nullptr;
+        QString id;
+        QString label;
+        QString color;
+        QWidget* badge = nullptr;
         EconPanelBase* panel = nullptr;
     };
     QList<SourceEntry> sources_;
-    QString            active_id_;
+    QString active_id_;
 
     EconPanelBase* get_or_create_panel(SourceEntry& entry);
 };

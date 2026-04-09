@@ -2,10 +2,10 @@
 
 #include "Surface3DWidget.h"
 #include "SurfaceCsvImporter.h"
-#include "core/session/ScreenStateManager.h"
 #include "SurfaceDatabentoPanel.h"
 #include "SurfaceMetricsPanel.h"
 #include "SurfaceTableWidget.h"
+#include "core/session/ScreenStateManager.h"
 #include "ui/theme/Theme.h"
 
 #include <QComboBox>
@@ -101,7 +101,10 @@ SurfaceAnalyticsScreen::SurfaceAnalyticsScreen(QWidget* parent) : QWidget(parent
 
 // ── Layout ───────────────────────────────────────────────────────────────────
 void SurfaceAnalyticsScreen::setup_ui() {
-    setStyleSheet(QString("QWidget { background:%1; color:%2; font-family:%3; }").arg(colors::BG_BASE).arg(colors::TEXT_PRIMARY).arg(MONO));
+    setStyleSheet(QString("QWidget { background:%1; color:%2; font-family:%3; }")
+                      .arg(colors::BG_BASE)
+                      .arg(colors::TEXT_PRIMARY)
+                      .arg(MONO));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -152,8 +155,9 @@ void SurfaceAnalyticsScreen::setup_ui() {
 QWidget* SurfaceAnalyticsScreen::build_category_bar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(32);
-    bar->setStyleSheet(
-        QString("QWidget { background:%1; border-bottom:1px solid %2; }").arg(colors::BG_SURFACE).arg(colors::BORDER_DIM));
+    bar->setStyleSheet(QString("QWidget { background:%1; border-bottom:1px solid %2; }")
+                           .arg(colors::BG_SURFACE)
+                           .arg(colors::BORDER_DIM));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(8, 0, 8, 0);
@@ -237,8 +241,9 @@ QWidget* SurfaceAnalyticsScreen::build_category_bar() {
 QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(26);
-    bar->setStyleSheet(
-        QString("QWidget { background:%1; border-bottom:1px solid %2; }").arg(colors::BG_SURFACE).arg(colors::BORDER_DIM));
+    bar->setStyleSheet(QString("QWidget { background:%1; border-bottom:1px solid %2; }")
+                           .arg(colors::BG_SURFACE)
+                           .arg(colors::BORDER_DIM));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(8, 0, 8, 0);
@@ -294,8 +299,9 @@ QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
     // Symbol selector — equity derivatives only
     if (active_category_ == 0) {
         auto* sym_lbl = new QLabel("SYM:", bar);
-        sym_lbl->setStyleSheet(
-            QString("color:%1; font-size:11px; background:transparent; font-family:%2;").arg(colors::TEXT_SECONDARY).arg(MONO));
+        sym_lbl->setStyleSheet(QString("color:%1; font-size:11px; background:transparent; font-family:%2;")
+                                   .arg(colors::TEXT_SECONDARY)
+                                   .arg(MONO));
         hl->addWidget(sym_lbl);
 
         symbol_combo_ = new QComboBox(bar);
@@ -1054,12 +1060,14 @@ void SurfaceAnalyticsScreen::on_surface_received(const fincept::DatabentoSurface
         stress_data_.z = r.z;
     } else if (type == "yield_curve" && !r.z.empty()) {
         yield_data_.maturities.clear();
-        for (float f : r.x_axis) yield_data_.maturities.push_back((int)f);
+        for (float f : r.x_axis)
+            yield_data_.maturities.push_back((int)f);
         yield_data_.time_points.assign(r.y_axis.begin(), r.y_axis.end());
         yield_data_.z = r.z;
     } else if (type == "forward_rate" && !r.z.empty()) {
         fwd_rate_data_.start_tenors.clear();
-        for (float f : r.x_axis) fwd_rate_data_.start_tenors.push_back((int)f);
+        for (float f : r.x_axis)
+            fwd_rate_data_.start_tenors.push_back((int)f);
         fwd_rate_data_.forward_periods.assign(r.y_axis.begin(), r.y_axis.end());
         fwd_rate_data_.z = r.z;
     } else if (type == "rate_path" && !r.z.empty()) {
@@ -1099,7 +1107,7 @@ void SurfaceAnalyticsScreen::hideEvent(QHideEvent* e) {
 QVariantMap SurfaceAnalyticsScreen::save_state() const {
     return {
         {"category", active_category_},
-        {"chart",    static_cast<int>(active_chart_)},
+        {"chart", static_cast<int>(active_chart_)},
     };
 }
 

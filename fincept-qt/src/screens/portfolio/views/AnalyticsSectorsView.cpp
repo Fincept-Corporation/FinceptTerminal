@@ -73,7 +73,7 @@ void AnalyticsSectorsView::build_ui() {
                                   ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
 
     // ── Overview tab ─────────────────────────────────────────────────────────
-    auto* overview_w = new QWidget;
+    auto* overview_w = new QWidget(this);
     auto* overview_layout = new QHBoxLayout(overview_w);
     overview_layout->setContentsMargins(12, 8, 12, 8);
     overview_layout->setSpacing(16);
@@ -110,12 +110,12 @@ void AnalyticsSectorsView::build_ui() {
     tabs_->addTab(overview_w, "OVERVIEW");
 
     // ── Analytics tab ────────────────────────────────────────────────────────
-    analytics_panel_ = new QWidget;
+    analytics_panel_ = new QWidget(this);
     analytics_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
     tabs_->addTab(analytics_panel_, "ANALYTICS");
 
     // ── Correlation tab ──────────────────────────────────────────────────────
-    corr_panel_ = new QWidget;
+    corr_panel_ = new QWidget(this);
     corr_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
     tabs_->addTab(corr_panel_, "CORRELATION");
 
@@ -222,7 +222,7 @@ void AnalyticsSectorsView::update_analytics() {
         auto* row = new QHBoxLayout;
         row->setSpacing(8);
 
-        auto* swatch = new QWidget;
+        auto* swatch = new QWidget(this);
         swatch->setFixedSize(12, 12);
         swatch->setStyleSheet(QString("background:%1;").arg(sector_color(i).name()));
         row->addWidget(swatch);
@@ -233,13 +233,13 @@ void AnalyticsSectorsView::update_analytics() {
         row->addWidget(name);
 
         // Weight bar
-        auto* bar_container = new QWidget;
+        auto* bar_container = new QWidget(this);
         bar_container->setFixedHeight(14);
         auto* bar_layout = new QHBoxLayout(bar_container);
         bar_layout->setContentsMargins(0, 0, 0, 0);
         bar_layout->setSpacing(0);
 
-        auto* bar = new QWidget;
+        auto* bar = new QWidget(this);
         int bar_width = static_cast<int>(s.weight * 3.0);
         bar->setFixedSize(std::max(bar_width, 2), 12);
         bar->setStyleSheet(QString("background:%1;").arg(sector_color(i).name()));

@@ -1,6 +1,5 @@
 #pragma once
 #include "screens/dashboard/widgets/BaseWidget.h"
-#include "ui/theme/ThemeTokens.h"
 
 #include <QPoint>
 #include <QString>
@@ -86,7 +85,6 @@ class WidgetTile : public QWidget {
     static constexpr int kGripSize = 20;
     static constexpr int kEdgeZone = 8; // px from right/bottom edge for resize
 
-    fincept::ui::ThemeTokens tokens_{};
 };
 
 } // namespace fincept::screens

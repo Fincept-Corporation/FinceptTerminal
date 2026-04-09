@@ -16,9 +16,9 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kOnsScript   = "ons_data.py";
+static constexpr const char* kOnsScript = "ons_data.py";
 static constexpr const char* kOnsSourceId = "ons";
-static constexpr const char* kOnsColor    = "#005EB8";  // ONS blue
+static constexpr const char* kOnsColor = "#005EB8"; // ONS blue
 } // namespace
 
 struct OnsSeries {
@@ -27,24 +27,17 @@ struct OnsSeries {
 };
 
 static const QList<OnsSeries> kOnsSeries = {
-    { "GDP (Chained Volume, SA)",      "gdp"           },
-    { "CPI All Items",                 "cpi"           },
-    { "CPIH (incl. Housing Costs)",    "cpih"          },
-    { "RPI",                           "rpi"           },
-    { "Unemployment Rate",             "unemployment"  },
-    { "Employment Rate",               "employment"    },
-    { "Trade Balance (BoP)",           "trade_balance" },
-    { "House Prices (HPI)",            "house_prices"  },
-    { "Average Earnings",              "avg_earnings"  },
-    { "Public Sector Net Debt",        "public_debt"   },
+    {"GDP (Chained Volume, SA)", "gdp"},      {"CPI All Items", "cpi"},
+    {"CPIH (incl. Housing Costs)", "cpih"},   {"RPI", "rpi"},
+    {"Unemployment Rate", "unemployment"},    {"Employment Rate", "employment"},
+    {"Trade Balance (BoP)", "trade_balance"}, {"House Prices (HPI)", "house_prices"},
+    {"Average Earnings", "avg_earnings"},     {"Public Sector Net Debt", "public_debt"},
 };
 
-OnsPanel::OnsPanel(QWidget* parent)
-    : EconPanelBase(kOnsSourceId, kOnsColor, parent) {
+OnsPanel::OnsPanel(QWidget* parent) : EconPanelBase(kOnsSourceId, kOnsColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &OnsPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &OnsPanel::on_result);
 }
 
 void OnsPanel::activate() {
@@ -68,24 +61,30 @@ void OnsPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void OnsPanel::on_fetch() {
-    const int   idx    = series_combo_->currentIndex();
+    const int idx = series_combo_->currentIndex();
     const auto& series = kOnsSeries[idx];
 
     show_loading("Fetching ONS: " + series.label + "…");
-    services::EconomicsService::instance().execute(
-        kOnsSourceId, kOnsScript, series.command, {},
-        "ons_" + series.command);
+    services::EconomicsService::instance().execute(kOnsSourceId, kOnsScript, series.command, {},
+                                                   "ons_" + series.command);
 }
 
-void OnsPanel::on_result(const QString& request_id,
-                          const services::EconomicsResult& result) {
-    if (result.source_id != kOnsSourceId) return;
-    if (!request_id.startsWith("ons_")) return;
-    if (!result.success) { show_error(result.error); return; }
+void OnsPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kOnsSourceId)
+        return;
+    if (!request_id.startsWith("ons_"))
+        return;
+    if (!result.success) {
+        show_error(result.error);
+        return;
+    }
 
     // Check inline error
     const QString inline_err = result.data["error"].toString();
-    if (!inline_err.isEmpty()) { show_error(inline_err); return; }
+    if (!inline_err.isEmpty()) {
+        show_error(inline_err);
+        return;
+    }
 
     // Response: { success, series, label, unit, count, data:[{date, value}] }
     QJsonArray rows = result.data["data"].toArray();
@@ -96,13 +95,13 @@ void OnsPanel::on_result(const QString& request_id,
     }
 
     const QString label = result.data["label"].toString();
-    const QString unit  = result.data["unit"].toString();
-    const QString title = "ONS: " + (label.isEmpty()
-        ? (series_combo_->currentIndex() >= 0
-               ? kOnsSeries[series_combo_->currentIndex()].label
-               : request_id.mid(4))
-        : label)
-        + (unit.isEmpty() ? "" : " (" + unit + ")");
+    const QString unit = result.data["unit"].toString();
+    const QString title =
+        "ONS: " +
+        (label.isEmpty() ? (series_combo_->currentIndex() >= 0 ? kOnsSeries[series_combo_->currentIndex()].label
+                                                               : request_id.mid(4))
+                         : label) +
+        (unit.isEmpty() ? "" : " (" + unit + ")");
 
     display(rows, title);
     LOG_INFO("OnsPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));

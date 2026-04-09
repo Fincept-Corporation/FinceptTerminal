@@ -18,10 +18,10 @@ namespace fincept::ui {
 class ThemeManager : public QObject {
     Q_OBJECT
 
-public:
+  public:
     static ThemeManager& instance();
 
-    /// Apply a named preset ("Obsidian", "Bloomberg Dark", "Light").
+    /// Apply theme (always Obsidian — single theme mode).
     /// Builds global QSS from tokens and calls qApp->setStyleSheet().
     /// Emits theme_changed(tokens) so custom painters can update.
     void apply_theme(const QString& name);
@@ -39,26 +39,25 @@ public:
     const ThemeTokens& tokens() const { return current_; }
 
     QString current_theme_name() const;
-    QFont   current_font() const;
-    static QStringList available_themes();   // single source of truth for theme names
+    QFont current_font() const;
     static QStringList available_densities(); // single source of truth for density names
 
-signals:
+  signals:
     /// Emitted after every successful apply_theme / apply_density call.
     /// Custom paintEvent widgets connect to this to invalidate caches and call update().
     void theme_changed(const fincept::ui::ThemeTokens& tokens);
 
-private:
+  private:
     ThemeManager();
 
     void rebuild_and_apply();
     QString build_global_qss() const;
 
     ThemeTokens current_;
-    QString     font_family_    = "Consolas";
-    int         font_size_px_   = 14;
-    int         density_pad_    = 4;  // px padding driven by density setting
-    mutable QString cached_qss_;     // last built QSS — skip rebuild if tokens unchanged
+    QString font_family_ = "Consolas";
+    int font_size_px_ = 14;
+    int density_pad_ = 4;        // px padding driven by density setting
+    mutable QString cached_qss_; // last built QSS — skip rebuild if tokens unchanged
 };
 
 } // namespace fincept::ui

@@ -55,7 +55,7 @@ class WhisperService : public QObject {
     static WhisperService& instance();
 
     // Delete copy/move — singleton.
-    WhisperService(const WhisperService&)            = delete;
+    WhisperService(const WhisperService&) = delete;
     WhisperService& operator=(const WhisperService&) = delete;
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -68,8 +68,8 @@ class WhisperService : public QObject {
     /// discarded — its result will not be emitted.
     void stop_listening();
 
-    [[nodiscard]] bool is_listening()        const noexcept;
-    [[nodiscard]] bool is_model_ready()      const noexcept;
+    [[nodiscard]] bool is_listening() const noexcept;
+    [[nodiscard]] bool is_model_ready() const noexcept;
 
     /// True if the model file exists on disk (downloaded during setup or previously).
     [[nodiscard]] static bool is_model_downloaded();
@@ -128,43 +128,42 @@ class WhisperService : public QObject {
     std::vector<float> drain_samples();
 
     // ── Constants ─────────────────────────────────────────────────────────────
-    static constexpr int    kMaxDownloadRetries = 3;
-    static constexpr int    kRetryBaseMs        = 2'000; // 2s, 4s, 8s backoff
-    static constexpr int    kSampleRate         = 16'000;   // Hz — whisper requirement
-    static constexpr int    kDrainIntervalMs = 1'200;    // how often to kick inference
-    static constexpr int    kWindowSeconds   = 6;        // sliding audio window
-    static constexpr int    kMaxWindowSamples = kSampleRate * kWindowSeconds;
-    static constexpr float  kVadThreshold   = 0.012f;   // RMS silence gate
-    static constexpr int    kVadTailSamples = kSampleRate / 2; // 500 ms of tail required
-    static constexpr int    kInferenceThreads = 4;       // whisper n_threads
+    static constexpr int kMaxDownloadRetries = 3;
+    static constexpr int kRetryBaseMs = 2'000;     // 2s, 4s, 8s backoff
+    static constexpr int kSampleRate = 16'000;     // Hz — whisper requirement
+    static constexpr int kDrainIntervalMs = 1'200; // how often to kick inference
+    static constexpr int kWindowSeconds = 6;       // sliding audio window
+    static constexpr int kMaxWindowSamples = kSampleRate * kWindowSeconds;
+    static constexpr float kVadThreshold = 0.012f;          // RMS silence gate
+    static constexpr int kVadTailSamples = kSampleRate / 2; // 500 ms of tail required
+    static constexpr int kInferenceThreads = 4;             // whisper n_threads
 
-    static constexpr const char* kModelFilename =
-        "ggml-base.en-q5_0.bin";
+    static constexpr const char* kModelFilename = "ggml-base.en-q5_0.bin";
     static constexpr const char* kModelUrl =
         "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en-q5_0.bin";
 
     // ── State ─────────────────────────────────────────────────────────────────
-    whisper_context*       ctx_          = nullptr;
-    QAudioSource*          audio_source_ = nullptr;
-    QNetworkAccessManager* nam_          = nullptr;
-    QTimer*                drain_timer_  = nullptr;
-    QTimer*                retry_timer_  = nullptr;  // one-shot retry delay
+    whisper_context* ctx_ = nullptr;
+    QAudioSource* audio_source_ = nullptr;
+    QNetworkAccessManager* nam_ = nullptr;
+    QTimer* drain_timer_ = nullptr;
+    QTimer* retry_timer_ = nullptr; // one-shot retry delay
 
-    int  download_attempt_ = 0;   // current attempt count (reset on success)
+    int download_attempt_ = 0; // current attempt count (reset on success)
 
-    std::atomic<bool> listening_      {false};
-    std::atomic<bool> model_loaded_   {false};
-    std::atomic<bool> inference_busy_ {false};  // prevent overlapping inferences
+    std::atomic<bool> listening_{false};
+    std::atomic<bool> model_loaded_{false};
+    std::atomic<bool> inference_busy_{false}; // prevent overlapping inferences
     std::atomic<bool> download_active_{false};
 
     // Ring buffer — written by audio thread, read by UI thread drain_timer_.
     // Protected by ring_mutex_ (audio callback does a non-blocking try-lock;
     // on contention it simply drops the frame rather than blocking realtime thread).
-    mutable QMutex      ring_mutex_;
-    std::vector<float>  ring_buffer_;
+    mutable QMutex ring_mutex_;
+    std::vector<float> ring_buffer_;
 
     // Sliding window — accumulated across drain cycles for context continuity.
-    std::vector<float>  window_buffer_;
+    std::vector<float> window_buffer_;
 };
 
 } // namespace fincept::services

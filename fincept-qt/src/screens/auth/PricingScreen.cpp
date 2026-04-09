@@ -59,13 +59,13 @@ void PricingScreen::build_ui() {
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setStyleSheet(QString("QScrollArea { background: transparent; border: none; }"
-                          "QScrollBar:vertical { background: transparent; width: 6px; }"
-                          "QScrollBar::handle:vertical { background: %1; }"
-                          "QScrollBar::handle:vertical:hover { background: %2; }"
-                          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(ui::colors::BORDER_MED, ui::colors::BORDER_BRIGHT));
+                                  "QScrollBar:vertical { background: transparent; width: 6px; }"
+                                  "QScrollBar::handle:vertical { background: %1; }"
+                                  "QScrollBar::handle:vertical:hover { background: %2; }"
+                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+                              .arg(ui::colors::BORDER_MED, ui::colors::BORDER_BRIGHT));
 
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     content->setStyleSheet("background: transparent;");
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(14, 14, 14, 14);
@@ -76,23 +76,27 @@ void PricingScreen::build_ui() {
     title->setAlignment(Qt::AlignCenter);
     title->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 700; "
                                  "letter-spacing: 1px; background: transparent; %2")
-                             .arg(ui::colors::AMBER).arg(MF));
+                             .arg(ui::colors::AMBER)
+                             .arg(MF));
     vl->addWidget(title);
 
     auto* subtitle = new QLabel("Unlock the full power of Fincept Terminal");
     subtitle->setAlignment(Qt::AlignCenter);
-    subtitle->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent; %2").arg(ui::colors::TEXT_TERTIARY).arg(MF));
+    subtitle->setStyleSheet(
+        QString("color: %1; font-size: 13px; background: transparent; %2").arg(ui::colors::TEXT_TERTIARY).arg(MF));
     vl->addWidget(subtitle);
 
     user_info_label_ = new QLabel;
     user_info_label_->setAlignment(Qt::AlignCenter);
-    user_info_label_->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_SECONDARY).arg(MF));
+    user_info_label_->setStyleSheet(
+        QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_SECONDARY).arg(MF));
     vl->addWidget(user_info_label_);
 
     // ── Loading ──────────────────────────────────────────────────────────────
     loading_label_ = new QLabel("Loading plans...");
     loading_label_->setAlignment(Qt::AlignCenter);
-    loading_label_->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent; %2").arg(ui::colors::TEXT_DIM).arg(MF));
+    loading_label_->setStyleSheet(
+        QString("color: %1; font-size: 13px; background: transparent; %2").arg(ui::colors::TEXT_DIM).arg(MF));
     loading_label_->hide();
     vl->addWidget(loading_label_);
 
@@ -102,19 +106,20 @@ void PricingScreen::build_ui() {
     error_label_->setAlignment(Qt::AlignCenter);
     error_label_->setStyleSheet(QString("color: %1; font-size: 12px; background: rgba(220,38,38,0.1); "
                                         "border: 1px solid #7f1d1d; padding: 6px 12px; %2")
-                                    .arg(ui::colors::NEGATIVE).arg(MF));
+                                    .arg(ui::colors::NEGATIVE)
+                                    .arg(MF));
     error_label_->hide();
     vl->addWidget(error_label_);
 
     // ── Cards container ──────────────────────────────────────────────────────
-    cards_container_ = new QWidget;
+    cards_container_ = new QWidget(this);
     cards_container_->setStyleSheet("background: transparent;");
     cards_layout_ = new QVBoxLayout(cards_container_);
     cards_layout_->setContentsMargins(0, 0, 0, 0);
     vl->addWidget(cards_container_);
 
     // ── Footer ───────────────────────────────────────────────────────────────
-    footer_widget_ = new QWidget;
+    footer_widget_ = new QWidget(this);
     footer_widget_->setStyleSheet("background: transparent;");
     auto* footer_vl = new QVBoxLayout(footer_widget_);
     footer_vl->setContentsMargins(0, 10, 0, 0);
@@ -264,7 +269,8 @@ void PricingScreen::render_plan_cards() {
     if (plans_.empty()) {
         auto* empty = new QLabel("No plans available.");
         empty->setAlignment(Qt::AlignCenter);
-        empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent; %2").arg(ui::colors::TEXT_DIM).arg(MF));
+        empty->setStyleSheet(
+            QString("color: %1; font-size: 13px; background: transparent; %2").arg(ui::colors::TEXT_DIM).arg(MF));
         cards_layout_->addWidget(empty);
     }
 
@@ -283,7 +289,7 @@ QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int
         is_current = (user_plan == plan.plan_id.toLower());
     }
 
-    auto* card = new QWidget;
+    auto* card = new QWidget(this);
     card->setObjectName("plan_card");
     card->setFixedWidth(260);
     card->setMinimumHeight(400);
@@ -301,7 +307,8 @@ QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int
         badge->setStyleSheet(QString("color: %1; background: rgba(217,119,6,0.1); "
                                      "border: 1px solid %2; padding: 0 8px; "
                                      "font-size: 11px; font-weight: 700; letter-spacing: 0.5px; %3")
-                                 .arg(ui::colors::AMBER, ui::colors::AMBER_DIM).arg(MF));
+                                 .arg(ui::colors::AMBER, ui::colors::AMBER_DIM)
+                                 .arg(MF));
         vl->addWidget(badge, 0, Qt::AlignCenter);
         vl->addSpacing(2);
     }
@@ -320,7 +327,8 @@ QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int
         auto* desc = new QLabel(plan.description);
         desc->setWordWrap(true);
         desc->setAlignment(Qt::AlignCenter);
-        desc->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_TERTIARY).arg(MF));
+        desc->setStyleSheet(
+            QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_TERTIARY).arg(MF));
         vl->addWidget(desc);
     }
 
@@ -332,19 +340,22 @@ QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int
         price->setAlignment(Qt::AlignCenter);
         price->setStyleSheet(QString("color: %1; font-size: 28px; font-weight: 700; "
                                      "background: transparent; %2")
-                                 .arg(ui::colors::TEXT_PRIMARY).arg(MF));
+                                 .arg(ui::colors::TEXT_PRIMARY)
+                                 .arg(MF));
         vl->addWidget(price);
     } else {
         auto* price = new QLabel(QString("$%1").arg(plan.price_usd, 0, 'f', 0));
         price->setAlignment(Qt::AlignCenter);
         price->setStyleSheet(QString("color: %1; font-size: 28px; font-weight: 700; "
                                      "background: transparent; %2")
-                                 .arg(ui::colors::AMBER).arg(MF));
+                                 .arg(ui::colors::AMBER)
+                                 .arg(MF));
         vl->addWidget(price);
 
         auto* period = new QLabel(QString("/ %1 days").arg(plan.validity_days));
         period->setAlignment(Qt::AlignCenter);
-        period->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_DIM).arg(MF));
+        period->setStyleSheet(
+            QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_DIM).arg(MF));
         vl->addWidget(period);
     }
 
@@ -355,13 +366,15 @@ QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int
     credits->setAlignment(Qt::AlignCenter);
     credits->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: 700; "
                                    "background: transparent; %2")
-                               .arg(ui::colors::CYAN).arg(MF));
+                               .arg(ui::colors::CYAN)
+                               .arg(MF));
     vl->addWidget(credits);
 
     // Support
     auto* support = new QLabel(QString("%1 support").arg(plan.support_type));
     support->setAlignment(Qt::AlignCenter);
-    support->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_TERTIARY).arg(MF));
+    support->setStyleSheet(
+        QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_TERTIARY).arg(MF));
     vl->addWidget(support);
 
     // Separator
@@ -376,7 +389,8 @@ QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int
     for (const auto& feature : plan.features) {
         auto* feat = new QLabel(QString("  %1").arg(feature));
         feat->setWordWrap(true);
-        feat->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_SECONDARY).arg(MF));
+        feat->setStyleSheet(
+            QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_SECONDARY).arg(MF));
         vl->addWidget(feat);
     }
 
@@ -393,7 +407,8 @@ QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int
         btn->setStyleSheet(QString("QPushButton { background: rgba(22,163,74,0.1); color: %1; "
                                    "border: 1px solid %1; font-size: 11px; font-weight: 700; %2 }"
                                    "QPushButton:disabled { color: %1; }")
-                               .arg(ui::colors::POSITIVE).arg(MF));
+                               .arg(ui::colors::POSITIVE)
+                               .arg(MF));
     } else if (plan.is_free) {
         bool user_has_paid = auth_mgr.is_authenticated() && auth_mgr.session().has_paid_plan();
         if (user_has_paid) {
@@ -401,7 +416,8 @@ QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int
             btn->setEnabled(false);
             btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; "
                                        "border: 1px solid %3; font-size: 11px; font-weight: 700; %4 }")
-                                   .arg(ui::colors::BG_RAISED, ui::colors::TEXT_DIM, ui::colors::BORDER_DIM).arg(MF));
+                                   .arg(ui::colors::BG_RAISED, ui::colors::TEXT_DIM, ui::colors::BORDER_DIM)
+                                   .arg(MF));
         } else {
             btn->setText("CONTINUE FREE");
             btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; "
@@ -419,7 +435,8 @@ QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int
                     "border: 1px solid %2; font-size: 11px; font-weight: 700; %3 }"
                     "QPushButton:hover { background: %1; color: %4; }"
                     "QPushButton:disabled { background: %5; color: %6; border-color: %7; }")
-                .arg(ui::colors::AMBER, ui::colors::AMBER_DIM).arg(MF)
+                .arg(ui::colors::AMBER, ui::colors::AMBER_DIM)
+                .arg(MF)
                 .arg(ui::colors::BG_BASE, ui::colors::BG_RAISED, ui::colors::TEXT_DIM, ui::colors::BORDER_DIM));
         QString pid = plan.plan_id;
         connect(btn, &QPushButton::clicked, this, [this, pid]() { on_select_plan(pid); });
@@ -467,8 +484,7 @@ void PricingScreen::on_select_plan(const QString& plan_id) {
         }
 
         QString url = QString("https://fincept.in/checkout?token=%1&plan=%2")
-                          .arg(QUrl::toPercentEncoding(token),
-                               QUrl::toPercentEncoding(plan_id));
+                          .arg(QUrl::toPercentEncoding(token), QUrl::toPercentEncoding(plan_id));
         QDesktopServices::openUrl(QUrl(url));
 
         // Store plan before payment so we can detect changes
@@ -487,11 +503,11 @@ void PricingScreen::on_select_plan(const QString& plan_id) {
         // Also check on focus return for faster detection
         if (focus_connection_)
             disconnect(focus_connection_);
-        focus_connection_ = connect(qApp, &QApplication::applicationStateChanged,
-                                    this, [this](Qt::ApplicationState state) {
-                                        if (state == Qt::ApplicationActive && awaiting_payment_)
-                                            poll_payment_status();
-                                    });
+        focus_connection_ =
+            connect(qApp, &QApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
+                if (state == Qt::ApplicationActive && awaiting_payment_)
+                    poll_payment_status();
+            });
     });
 }
 
@@ -564,12 +580,14 @@ void PricingScreen::update_footer() {
         back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
                                         "font-size: 12px; %2 }"
                                         "QPushButton:hover { color: %3; }")
-                                    .arg(ui::colors::TEXT_SECONDARY).arg(MF).arg(ui::colors::TEXT_PRIMARY));
+                                    .arg(ui::colors::TEXT_SECONDARY)
+                                    .arg(MF)
+                                    .arg(ui::colors::TEXT_PRIMARY));
         connect(back_btn, &QPushButton::clicked, this, &PricingScreen::navigate_dashboard);
         fl->addWidget(back_btn);
         static_cast<QVBoxLayout*>(fl)->setAlignment(back_btn, Qt::AlignCenter);
     } else {
-        auto* row = new QWidget;
+        auto* row = new QWidget(this);
         row->setStyleSheet("background: transparent;");
         auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(0, 0, 0, 0);
@@ -577,7 +595,8 @@ void PricingScreen::update_footer() {
         hl->setSpacing(6);
 
         auto* explore = new QLabel("Want to explore first?");
-        explore->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_DIM).arg(MF));
+        explore->setStyleSheet(
+            QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_DIM).arg(MF));
         hl->addWidget(explore);
 
         auto* free_btn = new QPushButton("Continue with Free Plan");
@@ -585,7 +604,9 @@ void PricingScreen::update_footer() {
         free_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
                                         "font-size: 12px; %2 }"
                                         "QPushButton:hover { color: %3; }")
-                                    .arg(ui::colors::TEXT_SECONDARY).arg(MF).arg(ui::colors::TEXT_PRIMARY));
+                                    .arg(ui::colors::TEXT_SECONDARY)
+                                    .arg(MF)
+                                    .arg(ui::colors::TEXT_PRIMARY));
         connect(free_btn, &QPushButton::clicked, this, &PricingScreen::navigate_dashboard);
         hl->addWidget(free_btn);
 

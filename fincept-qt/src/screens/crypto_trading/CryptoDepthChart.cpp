@@ -1,5 +1,6 @@
 // CryptoDepthChart.cpp — custom-painted cumulative bid/ask depth area chart
 #include "screens/crypto_trading/CryptoDepthChart.h"
+
 #include "ui/theme/ThemeManager.h"
 
 #include <QMutexLocker>
@@ -13,21 +14,43 @@
 namespace fincept::screens::crypto {
 
 namespace {
-inline QColor kBgBase()    { return QColor(ui::ThemeManager::instance().tokens().bg_base); }
-inline QColor kBorderDim() { return QColor(ui::ThemeManager::instance().tokens().border_dim); }
-inline QColor kTextDim()   { return QColor(ui::ThemeManager::instance().tokens().text_dim); }
-inline QColor kBidLine()   { return QColor(ui::ThemeManager::instance().tokens().positive); }
-inline QColor kAskLine()   { return QColor(ui::ThemeManager::instance().tokens().negative); }
-inline QColor kBidFill()   { auto c = kBidLine(); c.setAlpha(40); return c; }
-inline QColor kAskFill()   { auto c = kAskLine(); c.setAlpha(40); return c; }
-inline QColor kAmber()     { return QColor(ui::ThemeManager::instance().tokens().accent); }
+inline QColor kBgBase() {
+    return QColor(ui::ThemeManager::instance().tokens().bg_base);
+}
+inline QColor kBorderDim() {
+    return QColor(ui::ThemeManager::instance().tokens().border_dim);
+}
+inline QColor kTextDim() {
+    return QColor(ui::ThemeManager::instance().tokens().text_dim);
+}
+inline QColor kBidLine() {
+    return QColor(ui::ThemeManager::instance().tokens().positive);
+}
+inline QColor kAskLine() {
+    return QColor(ui::ThemeManager::instance().tokens().negative);
+}
+inline QColor kBidFill() {
+    auto c = kBidLine();
+    c.setAlpha(40);
+    return c;
+}
+inline QColor kAskFill() {
+    auto c = kAskLine();
+    c.setAlpha(40);
+    return c;
+}
+inline QColor kAmber() {
+    return QColor(ui::ThemeManager::instance().tokens().accent);
+}
 } // namespace
 
 CryptoDepthChart::CryptoDepthChart(QWidget* parent) : QWidget(parent) {
     setObjectName("cryptoDepthChart");
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { cache_dirty_ = true; update(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        cache_dirty_ = true;
+        update();
+    });
 
     repaint_timer_ = new QTimer(this);
     repaint_timer_->setSingleShot(true);

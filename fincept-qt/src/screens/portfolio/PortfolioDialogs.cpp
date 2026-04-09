@@ -176,7 +176,7 @@ ConfirmDeleteDialog::ConfirmDeleteDialog(const QString& portfolio_name, QWidget*
 // ── AddAssetDialog ───────────────────────────────────────────────────────────
 
 static constexpr int kAssetSearchDebounceMs = 300;
-static constexpr int kAssetSearchLimit      = 10;
+static constexpr int kAssetSearchLimit = 10;
 
 AddAssetDialog::AddAssetDialog(QWidget* parent) : QDialog(parent) {
     setWindowTitle("Add Asset");
@@ -263,18 +263,16 @@ AddAssetDialog::AddAssetDialog(QWidget* parent) : QDialog(parent) {
     frame_layout->setSpacing(0);
 
     search_list_ = new QListWidget(search_frame_);
-    search_list_->setStyleSheet(
-        QString("QListWidget { background:transparent; border:none; outline:none; }"
-        "QListWidget::item { padding:0; border:none; background:transparent; }"
-        "QListWidget::item:selected { background:%1; border-left:3px solid %2; }")
-            .arg(ui::colors::BORDER_DIM, ui::colors::AMBER));
+    search_list_->setStyleSheet(QString("QListWidget { background:transparent; border:none; outline:none; }"
+                                        "QListWidget::item { padding:0; border:none; background:transparent; }"
+                                        "QListWidget::item:selected { background:%1; border-left:3px solid %2; }")
+                                    .arg(ui::colors::BORDER_DIM, ui::colors::AMBER));
     search_list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     search_list_->setCursor(Qt::PointingHandCursor);
     frame_layout->addWidget(search_list_);
 
-    connect(search_list_, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
-        select_result(item->data(Qt::UserRole).toString());
-    });
+    connect(search_list_, &QListWidget::itemClicked, this,
+            [this](QListWidgetItem* item) { select_result(item->data(Qt::UserRole).toString()); });
 
     // ── Debounce timer ────────────────────────────────────────────────────────
     search_debounce_ = new QTimer(this);
@@ -306,14 +304,14 @@ void AddAssetDialog::schedule_search(const QString& query) {
 }
 
 void AddAssetDialog::fire_search(const QString& query) {
-    const QString url = QString("/market/search?q=%1&type=stock&limit=%2")
-                            .arg(query)
-                            .arg(kAssetSearchLimit);
+    const QString url = QString("/market/search?q=%1&type=stock&limit=%2").arg(query).arg(kAssetSearchLimit);
 
     QPointer<AddAssetDialog> self = this;
     fincept::HttpClient::instance().get(url, [self, query](fincept::Result<QJsonDocument> result) {
-        if (!self || self->pending_query_ != query) return;
-        if (!result.is_ok()) return;
+        if (!self || self->pending_query_ != query)
+            return;
+        if (!result.is_ok())
+            return;
 
         const auto doc = result.value();
         QJsonArray arr;
@@ -326,10 +324,13 @@ void AddAssetDialog::fire_search(const QString& query) {
             else if (obj.contains("data"))
                 arr = obj["data"].toArray();
         }
-        QMetaObject::invokeMethod(self, [self, arr]() {
-            if (self)
-                self->show_results(arr);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, arr]() {
+                if (self)
+                    self->show_results(arr);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -339,12 +340,14 @@ void AddAssetDialog::show_results(const QJsonArray& results) {
     if (results.isEmpty()) {
         auto* item = new QListWidgetItem(search_list_);
         item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
-        auto* row = new QWidget;
+        auto* row = new QWidget(this);
         row->setStyleSheet("background:transparent;");
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(10, 6, 10, 6);
         auto* lbl = new QLabel("No results found");
-        lbl->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Consolas',monospace; background:transparent;").arg(ui::colors::TEXT_TERTIARY));
+        lbl->setStyleSheet(
+            QString("color:%1; font-size:11px; font-family:'Consolas',monospace; background:transparent;")
+                .arg(ui::colors::TEXT_TERTIARY));
         rl->addWidget(lbl);
         item->setSizeHint(QSize(0, 28));
         search_list_->setItemWidget(item, row);
@@ -354,22 +357,21 @@ void AddAssetDialog::show_results(const QJsonArray& results) {
     }
 
     for (const auto& val : results) {
-        const auto obj      = val.toObject();
-        const QString sym   = obj["symbol"].toString();
-        const QString name  = obj["name"].toString();
-        const QString exch  = obj["exchange"].toString();
-        const QString type  = obj["type"].toString("stock");
+        const auto obj = val.toObject();
+        const QString sym = obj["symbol"].toString();
+        const QString name = obj["name"].toString();
+        const QString exch = obj["exchange"].toString();
+        const QString type = obj["type"].toString("stock");
         if (sym.isEmpty())
             continue;
 
         // Resolve yfinance-compatible ticker (same logic as CommandBar)
         QString yf_sym = sym;
         static const QHash<QString, QString> suffix_map = {
-            {"NSE",".NS"},{"BSE",".BO"},{"HKEX",".HK"},{"TSE",".T"},{"KRX",".KS"},
-            {"SGX",".SI"},{"ASX",".AX"},{"IDX",".JK"},{"MYX",".KL"},{"SET",".BK"},
-            {"PSE",".PS"},{"XETR",".DE"},{"FWB",".F"},{"LSE",".L"},{"BME",".MC"},
-            {"MIL",".MI"},{"SIX",".SW"},{"TSX",".TO"},{"TSXV",".V"},{"BMFBOVESPA",".SA"},
-            {"BIST",".IS"},{"EGX",".CA"},
+            {"NSE", ".NS"}, {"BSE", ".BO"},        {"HKEX", ".HK"}, {"TSE", ".T"},  {"KRX", ".KS"}, {"SGX", ".SI"},
+            {"ASX", ".AX"}, {"IDX", ".JK"},        {"MYX", ".KL"},  {"SET", ".BK"}, {"PSE", ".PS"}, {"XETR", ".DE"},
+            {"FWB", ".F"},  {"LSE", ".L"},         {"BME", ".MC"},  {"MIL", ".MI"}, {"SIX", ".SW"}, {"TSX", ".TO"},
+            {"TSXV", ".V"}, {"BMFBOVESPA", ".SA"}, {"BIST", ".IS"}, {"EGX", ".CA"},
         };
         const auto it = suffix_map.find(exch.toUpper());
         if (it != suffix_map.end())
@@ -378,7 +380,7 @@ void AddAssetDialog::show_results(const QJsonArray& results) {
         auto* item = new QListWidgetItem(search_list_);
         item->setData(Qt::UserRole, yf_sym);
 
-        auto* row = new QWidget;
+        auto* row = new QWidget(this);
         row->setStyleSheet("background:transparent;");
         auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(10, 4, 10, 4);
@@ -386,12 +388,14 @@ void AddAssetDialog::show_results(const QJsonArray& results) {
 
         auto* sym_lbl = new QLabel(yf_sym);
         sym_lbl->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700;"
-                               "font-family:'Consolas',monospace; background:transparent;").arg(ui::colors::TEXT_PRIMARY));
+                                       "font-family:'Consolas',monospace; background:transparent;")
+                                   .arg(ui::colors::TEXT_PRIMARY));
         sym_lbl->setFixedWidth(100);
 
         auto* name_lbl = new QLabel(name);
         name_lbl->setStyleSheet(QString("color:%1; font-size:11px; background:transparent;"
-                                "font-family:'Consolas',monospace;").arg(ui::colors::TEXT_SECONDARY));
+                                        "font-family:'Consolas',monospace;")
+                                    .arg(ui::colors::TEXT_SECONDARY));
         name_lbl->setMaximumWidth(180);
 
         hl->addWidget(sym_lbl);
@@ -400,14 +404,16 @@ void AddAssetDialog::show_results(const QJsonArray& results) {
         if (!exch.isEmpty()) {
             auto* exch_lbl = new QLabel(exch);
             exch_lbl->setStyleSheet(QString("color:%1; font-size:10px; font-family:'Consolas',monospace;"
-                                    "background:transparent;").arg(ui::colors::TEXT_TERTIARY));
+                                            "background:transparent;")
+                                        .arg(ui::colors::TEXT_TERTIARY));
             hl->addWidget(exch_lbl);
         }
 
         auto* type_lbl = new QLabel(type.toUpper());
         type_lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700;"
-                                "font-family:'Consolas',monospace; background:%2;"
-                                "padding:1px 4px; border-radius:2px;").arg(ui::colors::AMBER, ui::colors::BORDER_DIM));
+                                        "font-family:'Consolas',monospace; background:%2;"
+                                        "padding:1px 4px; border-radius:2px;")
+                                    .arg(ui::colors::AMBER, ui::colors::BORDER_DIM));
         hl->addWidget(type_lbl);
 
         item->setSizeHint(QSize(0, 30));
@@ -620,42 +626,47 @@ ImportPortfolioDialog::ImportPortfolioDialog(const QVector<portfolio::Portfolio>
                                        "QPushButton:hover { background:%1; color:%2; }")
                                    .arg(ui::colors::CYAN, ui::colors::BG_BASE));
     connect(demo_dl_btn, &QPushButton::clicked, this, [this]() {
-        QString path = QFileDialog::getSaveFileName(this, "Save Demo Portfolio JSON",
-                                                    "demo_portfolio.json", "JSON Files (*.json)");
+        QString path = QFileDialog::getSaveFileName(this, "Save Demo Portfolio JSON", "demo_portfolio.json",
+                                                    "JSON Files (*.json)");
         if (path.isEmpty())
             return;
 
         QJsonArray holdings;
-        struct H { const char* symbol; double qty; double price; const char* sector; };
+        struct H {
+            const char* symbol;
+            double qty;
+            double price;
+            const char* sector;
+        };
         static const H demo[] = {
-            {"AAPL",  15, 178.50, "Technology"},
-            {"MSFT",  12, 375.20, "Technology"},
-            {"GOOGL",  8, 141.80, "Technology"},
-            {"NVDA",  10, 480.00, "Technology"},
-            {"AMZN",   6, 178.25, "Consumer Discretionary"},
-            {"TSLA",   5, 245.00, "Consumer Discretionary"},
-            {"JPM",   20, 195.50, "Financials"},
-            {"JNJ",   15, 155.75, "Healthcare"},
-            {"XOM",   25, 105.30, "Energy"},
-            {"V",     10, 280.00, "Financials"},
-            {"UNH",    4, 525.60, "Healthcare"},
-            {"PG",    12, 158.90, "Consumer Staples"},
+            {"AAPL", 15, 178.50, "Technology"},
+            {"MSFT", 12, 375.20, "Technology"},
+            {"GOOGL", 8, 141.80, "Technology"},
+            {"NVDA", 10, 480.00, "Technology"},
+            {"AMZN", 6, 178.25, "Consumer Discretionary"},
+            {"TSLA", 5, 245.00, "Consumer Discretionary"},
+            {"JPM", 20, 195.50, "Financials"},
+            {"JNJ", 15, 155.75, "Healthcare"},
+            {"XOM", 25, 105.30, "Energy"},
+            {"V", 10, 280.00, "Financials"},
+            {"UNH", 4, 525.60, "Healthcare"},
+            {"PG", 12, 158.90, "Consumer Staples"},
         };
         for (const auto& h : demo) {
             QJsonObject o;
-            o["symbol"]         = h.symbol;
-            o["quantity"]       = h.qty;
-            o["avg_buy_price"]  = h.price;
-            o["sector"]         = h.sector;
+            o["symbol"] = h.symbol;
+            o["quantity"] = h.qty;
+            o["avg_buy_price"] = h.price;
+            o["sector"] = h.sector;
             holdings.append(o);
         }
 
         QJsonObject root;
-        root["name"]        = "Demo Portfolio";
-        root["owner"]       = "Fincept User";
-        root["currency"]    = "USD";
+        root["name"] = "Demo Portfolio";
+        root["owner"] = "Fincept User";
+        root["currency"] = "USD";
         root["description"] = "Sample portfolio for demonstration";
-        root["holdings"]    = holdings;
+        root["holdings"] = holdings;
 
         QFile f(path);
         if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -792,8 +803,7 @@ EditTransactionDialog::EditTransactionDialog(const portfolio::Transaction& txn, 
                 "QDateEdit:focus { border-color:%4; }"
                 "QDateEdit::drop-down { border:none; width:18px; }"
                 "QCalendarWidget { background:%1; color:%2; }")
-            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY,
-                 ui::colors::BORDER_MED, ui::colors::AMBER));
+            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED, ui::colors::AMBER));
     form->addRow("Date:", date_edit_);
 
     notes_edit_ = new QLineEdit(txn.notes);
@@ -884,10 +894,11 @@ SectorMappingDialog::SectorMappingDialog(const QVector<portfolio::HoldingWithQuo
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setStyleSheet(QString("QScrollArea { border:none; }"
-                          "QScrollBar:vertical { width:4px; background:transparent; }"
-                          "QScrollBar::handle:vertical { background:%1; }").arg(ui::colors::BORDER_BRIGHT));
+                                  "QScrollBar:vertical { width:4px; background:transparent; }"
+                                  "QScrollBar::handle:vertical { background:%1; }")
+                              .arg(ui::colors::BORDER_BRIGHT));
 
-    auto* grid_w = new QWidget;
+    auto* grid_w = new QWidget(this);
     auto* grid = new QFormLayout(grid_w);
     grid->setSpacing(6);
 
@@ -951,12 +962,11 @@ static QString kDividendStyle(const QString& accent) {
                    "QComboBox::drop-down { border:none; }"
                    "QComboBox QAbstractItemView { background:%4; color:%2;"
                    "  selection-background-color:%6; }")
-        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::TEXT_SECONDARY,
-             ui::colors::BG_BASE, ui::colors::BORDER_MED, accent);
+        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::TEXT_SECONDARY, ui::colors::BG_BASE,
+             ui::colors::BORDER_MED, accent);
 }
 
-AddDividendDialog::AddDividendDialog(const QStringList& symbols, QWidget* parent)
-    : QDialog(parent) {
+AddDividendDialog::AddDividendDialog(const QStringList& symbols, QWidget* parent) : QDialog(parent) {
     setWindowTitle("Record Dividend");
     setFixedSize(360, 300);
     setStyleSheet(kDividendStyle(ui::colors::CYAN));
@@ -967,8 +977,7 @@ AddDividendDialog::AddDividendDialog(const QStringList& symbols, QWidget* parent
 
     auto* title = new QLabel("RECORD DIVIDEND");
     title->setStyleSheet(
-        QString("color:%1; font-size:13px; font-weight:700; letter-spacing:1px;")
-            .arg(ui::colors::CYAN));
+        QString("color:%1; font-size:13px; font-weight:700; letter-spacing:1px;").arg(ui::colors::CYAN));
     layout->addWidget(title);
 
     auto* form = new QFormLayout;
@@ -1002,21 +1011,19 @@ AddDividendDialog::AddDividendDialog(const QStringList& symbols, QWidget* parent
 
     auto* cancel = new QPushButton("CANCEL");
     cancel->setFixedHeight(32);
-    cancel->setStyleSheet(
-        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                "  font-size:10px; font-weight:700; padding:0 16px; }"
-                "QPushButton:hover { background:%3; }")
-            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::BG_HOVER));
+    cancel->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                                  "  font-size:10px; font-weight:700; padding:0 16px; }"
+                                  "QPushButton:hover { background:%3; }")
+                              .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::BG_HOVER));
     connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
     btn_row->addWidget(cancel);
 
     auto* ok = new QPushButton("RECORD");
     ok->setFixedHeight(32);
-    ok->setStyleSheet(
-        QString("QPushButton { background:%1; color:%3; border:none;"
-                "  font-size:10px; font-weight:700; padding:0 16px; }"
-                "QPushButton:hover { background:%2; }")
-            .arg(ui::colors::CYAN, ui::colors::TEXT_PRIMARY, ui::colors::BG_BASE));
+    ok->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
+                              "  font-size:10px; font-weight:700; padding:0 16px; }"
+                              "QPushButton:hover { background:%2; }")
+                          .arg(ui::colors::CYAN, ui::colors::TEXT_PRIMARY, ui::colors::BG_BASE));
     connect(ok, &QPushButton::clicked, this, [this]() {
         if (amount_edit_->text().trimmed().isEmpty()) {
             amount_edit_->setPlaceholderText("Required!");

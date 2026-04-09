@@ -4,6 +4,7 @@
 #include "services/news/NewsMonitorService.h"
 #include "services/news/NewsService.h"
 
+#include <QHBoxLayout>
 #include <QHideEvent>
 #include <QSet>
 #include <QShowEvent>
@@ -19,8 +20,14 @@ class NewsFeedPanel;
 class NewsDetailPanel;
 class NewsTickerStrip;
 
-/// Main news screen orchestrator. Owns all state, connects all panels,
-/// manages the async lifecycle with generation IDs for stale result rejection.
+/// Main news screen orchestrator — redesigned 2-panel layout.
+///
+/// Layout (top to bottom):
+///   1. Command bar (32px) — search, category/time/sort/view pills, controls
+///   2. Intel strip (26px) — live stats, sentiment, monitors, deviations
+///   3. Content area — full-width feed | optional right detail overlay (420px)
+///                      optional left intel drawer (280px, toggled)
+///   4. Ticker strip (22px) — scrolling breaking headlines
 class NewsScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
@@ -56,6 +63,9 @@ class NewsScreen : public QWidget, public IStatefulScreen {
     void on_analyze_requested(const QString& url);
     void on_related_clicked(const services::NewsArticle& article);
 
+    void on_drawer_toggle();
+    void on_detail_closed();
+
   private:
     void build_ui();
     void connect_signals();
@@ -77,6 +87,9 @@ class NewsScreen : public QWidget, public IStatefulScreen {
     NewsFeedPanel* feed_panel_ = nullptr;
     NewsDetailPanel* detail_panel_ = nullptr;
     NewsTickerStrip* ticker_strip_ = nullptr;
+
+    // Content area layout — holds feed + overlays
+    QHBoxLayout* content_layout_ = nullptr;
 
     // State
     QVector<services::NewsArticle> all_articles_;
@@ -106,16 +119,16 @@ class NewsScreen : public QWidget, public IStatefulScreen {
     };
     QMap<QString, CategoryBaseline> baselines_;
 
-    // Notification dedup — track IDs already fired this session to avoid re-firing on every refresh
-    QSet<QString> notified_breaking_;   // cluster lead article IDs
-    QSet<QString> notified_monitors_;   // monitor_id + ":" + article_id pairs
-    QSet<QString> notified_deviations_; // category keys that triggered deviation alert
-    QSet<QString> notified_flash_;      // article IDs fired as FLASH/high-impact
+    // Notification dedup
+    QSet<QString> notified_breaking_;
+    QSet<QString> notified_monitors_;
+    QSet<QString> notified_deviations_;
+    QSet<QString> notified_flash_;
 
     // Pulse animation timer
     QTimer* pulse_timer_ = nullptr;
 
-    // Debounced DB seen-writes: collect IDs, flush every 1s
+    // Debounced DB seen-writes
     QTimer* seen_flush_timer_ = nullptr;
     QSet<QString> pending_seen_ids_;
 

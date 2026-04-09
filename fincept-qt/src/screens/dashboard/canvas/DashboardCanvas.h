@@ -33,6 +33,7 @@ class DashboardCanvas : public QWidget {
   protected:
     void resizeEvent(QResizeEvent* e) override;
     void paintEvent(QPaintEvent* e) override;
+    void showEvent(QShowEvent* e) override;
 
   private slots:
     void on_drag_started(WidgetTile* tile, QPoint canvas_pos);
@@ -45,6 +46,7 @@ class DashboardCanvas : public QWidget {
     void on_scroll_tick();
 
   private:
+    void apply_bg();
     void reflow_tiles(bool animate = false);
     void update_canvas_height();
     void update_placeholder(const GridCell& cell);

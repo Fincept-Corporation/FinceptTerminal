@@ -18,16 +18,16 @@
 namespace fincept::screens {
 
 // ── Accent colors without a theme token ──────────────────────────────────────
-static constexpr const char* CYAN     = "#22d3ee";
-static constexpr const char* YELLOW   = "#eab308";
-static constexpr const char* PURPLE   = "#a855f7";
-static constexpr const char* BLUE     = "#3b82f6";
-static constexpr const char* MAGENTA  = "#e879f9";
+static constexpr const char* CYAN = "#22d3ee";
+static constexpr const char* YELLOW = "#eab308";
+static constexpr const char* PURPLE = "#a855f7";
+static constexpr const char* BLUE = "#3b82f6";
+static constexpr const char* MAGENTA = "#e879f9";
 
-static constexpr int FONT_KEY   = 12;  // key labels
-static constexpr int FONT_VAL   = 13;  // value labels
-static constexpr int FONT_TITLE = 12;  // panel titles
-static constexpr int FONT_DESC  = 12;  // description text
+static constexpr int FONT_KEY = 12;   // key labels
+static constexpr int FONT_VAL = 13;   // value labels
+static constexpr int FONT_TITLE = 12; // panel titles
+static constexpr int FONT_DESC = 12;  // description text
 
 // ── Panel helpers ─────────────────────────────────────────────────────────────
 
@@ -35,7 +35,8 @@ namespace {
 
 QFrame* make_panel(const QString& title, const char* title_color) {
     auto* f = new QFrame;
-    f->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    f->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}")
+                         .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* vl = new QVBoxLayout(f);
     vl->setContentsMargins(10, 7, 10, 7);
     vl->setSpacing(4);
@@ -44,7 +45,8 @@ QFrame* make_panel(const QString& title, const char* title_color) {
         auto* lbl = new QLabel(title);
         lbl->setStyleSheet(QString("color:%1;font-size:%2px;font-weight:700;"
                                    "letter-spacing:1px;background:transparent;border:0;")
-                               .arg(title_color).arg(FONT_TITLE));
+                               .arg(title_color)
+                               .arg(FONT_TITLE));
         vl->addWidget(lbl);
         auto* sep = new QFrame;
         sep->setFrameShape(QFrame::HLine);
@@ -61,11 +63,14 @@ QLabel* add_row(QFrame* panel, const QString& key, const char* val_color) {
     hl->setContentsMargins(0, 0, 0, 0);
 
     auto* k = new QLabel(key);
-    k->setStyleSheet(QString("color:%1;font-size:%2px;background:transparent;border:0;").arg(ui::colors::TEXT_SECONDARY).arg(FONT_KEY));
+    k->setStyleSheet(QString("color:%1;font-size:%2px;background:transparent;border:0;")
+                         .arg(ui::colors::TEXT_SECONDARY)
+                         .arg(FONT_KEY));
 
     auto* v = new QLabel("\xe2\x80\x94");
     v->setStyleSheet(QString("color:%1;font-size:%2px;font-weight:600;background:transparent;border:0;")
-                         .arg(val_color).arg(FONT_VAL));
+                         .arg(val_color)
+                         .arg(FONT_VAL));
     v->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
     hl->addWidget(k);
@@ -115,7 +120,8 @@ void ResearchCandleCanvas::paintEvent(QPaintEvent*) {
 void ResearchCandleCanvas::rebuild_cache() {
     const int W = width();
     const int H = height();
-    if (W <= 0 || H <= 0) return;
+    if (W <= 0 || H <= 0)
+        return;
 
     cache_ = QPixmap(W, H);
     cache_.fill(QColor(ui::colors::BG_BASE()));
@@ -140,7 +146,8 @@ void ResearchCandleCanvas::rebuild_cache() {
         lo = std::min(lo, candles_[i].low);
         hi = std::max(hi, candles_[i].high);
     }
-    if (lo >= hi) return;
+    if (lo >= hi)
+        return;
 
     const double margin = (hi - lo) * 0.06;
     lo -= margin;
@@ -148,11 +155,10 @@ void ResearchCandleCanvas::rebuild_cache() {
 
     const int plot_w = W - PRICE_AXIS_W;
     const int plot_h = H - TIME_AXIS_H;
-    if (plot_w <= 0 || plot_h <= 0) return;
+    if (plot_w <= 0 || plot_h <= 0)
+        return;
 
-    auto py = [&](double price) -> int {
-        return static_cast<int>(plot_h - (price - lo) / (hi - lo) * plot_h);
-    };
+    auto py = [&](double price) -> int { return static_cast<int>(plot_h - (price - lo) / (hi - lo) * plot_h); };
 
     // Grid lines
     p.setPen(QPen(QColor(ui::colors::BORDER_DIM()), 1, Qt::DotLine));
@@ -178,14 +184,14 @@ void ResearchCandleCanvas::rebuild_cache() {
         const QColor& col = bull ? bull_color : bear_color;
         const QColor& wcol = bull ? wick_bull : wick_bear;
 
-        const int open_y  = py(c.open);
+        const int open_y = py(c.open);
         const int close_y = py(c.close);
-        const int high_y  = py(c.high);
-        const int low_y   = py(c.low);
+        const int high_y = py(c.high);
+        const int low_y = py(c.low);
 
         const int body_top = std::min(open_y, close_y);
         const int body_bot = std::max(open_y, close_y);
-        const int body_h   = qMax(1, body_bot - body_top);
+        const int body_h = qMax(1, body_bot - body_top);
 
         // Wick
         p.setPen(QPen(wcol, 1));
@@ -283,7 +289,7 @@ void EquityOverviewTab::build_ui() {
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     content->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(8, 8, 8, 8);
@@ -320,7 +326,7 @@ void EquityOverviewTab::build_ui() {
 // ── Column 1: Trading + Valuation + Share Stats ───────────────────────────────
 
 QWidget* EquityOverviewTab::build_col1() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* vl = new QVBoxLayout(w);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(6);
@@ -369,7 +375,8 @@ QWidget* EquityOverviewTab::build_share_stats_panel() {
 
 QWidget* EquityOverviewTab::build_chart_panel() {
     auto* p = new QFrame;
-    p->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    p->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}")
+                         .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
 
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(8, 6, 8, 6);
@@ -381,19 +388,20 @@ QWidget* EquityOverviewTab::build_chart_panel() {
     btn_row->setContentsMargins(0, 0, 0, 0);
 
     auto* period_lbl = new QLabel("PERIOD");
-    period_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;background:transparent;border:0;").arg(ui::colors::TEXT_SECONDARY));
+    period_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;background:transparent;border:0;")
+                                  .arg(ui::colors::TEXT_SECONDARY));
     btn_row->addWidget(period_lbl);
 
-    auto btn_style_inactive = QString(
-        "QPushButton{background:transparent;color:%1;border:1px solid %2;"
-        "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}"
-        "QPushButton:hover{border-color:%3;background:%4;}")
-        .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, ui::colors::AMBER, ui::colors::BG_RAISED);
+    auto btn_style_inactive =
+        QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
+                "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}"
+                "QPushButton:hover{border-color:%3;background:%4;}")
+            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, ui::colors::AMBER, ui::colors::BG_RAISED);
 
-    auto btn_style_active = QString(
-        "QPushButton{background:%1;color:%2;border:1px solid %1;"
-        "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}")
-        .arg(ui::colors::AMBER, ui::colors::BG_BASE);
+    auto btn_style_active =
+        QString("QPushButton{background:%1;color:%2;border:1px solid %1;"
+                "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}")
+            .arg(ui::colors::AMBER, ui::colors::BG_BASE);
 
     auto make_btn = [&](const QString& label, QPushButton*& out, const QString& period) {
         out = new QPushButton(label);
@@ -426,16 +434,16 @@ void EquityOverviewTab::switch_period(QPushButton* btn, const QString& period) {
     current_period_ = period;
 
     // Update button styles
-    auto inactive = QString(
-        "QPushButton{background:transparent;color:%1;border:1px solid %2;"
-        "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}"
-        "QPushButton:hover{border-color:%3;background:%4;}")
-        .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, ui::colors::AMBER, ui::colors::BG_RAISED);
+    auto inactive =
+        QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
+                "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}"
+                "QPushButton:hover{border-color:%3;background:%4;}")
+            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, ui::colors::AMBER, ui::colors::BG_RAISED);
 
-    auto active = QString(
-        "QPushButton{background:%1;color:%2;border:1px solid %1;"
-        "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}")
-        .arg(ui::colors::AMBER, ui::colors::BG_BASE);
+    auto active =
+        QString("QPushButton{background:%1;color:%2;border:1px solid %1;"
+                "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}")
+            .arg(ui::colors::AMBER, ui::colors::BG_BASE);
 
     for (auto* b : {btn_1m_, btn_3m_, btn_6m_, btn_1y_, btn_5y_})
         b->setStyleSheet(b == btn ? active : inactive);
@@ -449,7 +457,7 @@ void EquityOverviewTab::switch_period(QPushButton* btn, const QString& period) {
 // ── Column 4: Analyst + 52W + Profitability + Growth ─────────────────────────
 
 QWidget* EquityOverviewTab::build_col4() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* vl = new QVBoxLayout(w);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(6);
@@ -470,7 +478,8 @@ QWidget* EquityOverviewTab::build_analyst_panel() {
     rec_key_label_ = new QLabel("\xe2\x80\x94");
     rec_key_label_->setAlignment(Qt::AlignCenter);
     rec_key_label_->setStyleSheet(QString("background:%1;color:%2;border-radius:2px;padding:3px 8px;"
-                                          "font-size:12px;font-weight:700;").arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY));
+                                          "font-size:12px;font-weight:700;")
+                                      .arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY));
     static_cast<QVBoxLayout*>(p->layout())->addWidget(rec_key_label_);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
@@ -507,13 +516,13 @@ QWidget* EquityOverviewTab::build_growth_panel() {
 // ── Bottom Row ────────────────────────────────────────────────────────────────
 
 QWidget* EquityOverviewTab::build_bottom_row() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* hl = new QHBoxLayout(w);
     hl->setContentsMargins(0, 0, 0, 0);
     hl->setSpacing(6);
     hl->addWidget(build_company_desc_panel(), 2);
 
-    auto* right = new QWidget;
+    auto* right = new QWidget(this);
     auto* rvl = new QVBoxLayout(right);
     rvl->setContentsMargins(0, 0, 0, 0);
     rvl->setSpacing(6);
@@ -530,7 +539,9 @@ QWidget* EquityOverviewTab::build_company_desc_panel() {
     company_desc_->setWordWrap(true);
     company_desc_->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     company_desc_->setStyleSheet(QString("color:%1;font-size:%2px;line-height:1.5;"
-                                         "background:transparent;border:0;").arg(ui::colors::TEXT_PRIMARY).arg(FONT_DESC));
+                                         "background:transparent;border:0;")
+                                     .arg(ui::colors::TEXT_PRIMARY)
+                                     .arg(FONT_DESC));
     company_desc_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     static_cast<QVBoxLayout*>(p->layout())->addWidget(company_desc_);
     return p;
@@ -629,7 +640,8 @@ void EquityOverviewTab::on_info_loaded(services::equity::StockInfo info) {
         rec_color = ui::colors::AMBER;
     rec_key_label_->setText(rec.isEmpty() ? "\xe2\x80\x94" : rec);
     rec_key_label_->setStyleSheet(QString("background:%1;color:%2;border-radius:2px;padding:3px 8px;"
-                                          "font-size:12px;font-weight:700;").arg(ui::colors::BG_RAISED, rec_color));
+                                          "font-size:12px;font-weight:700;")
+                                      .arg(ui::colors::BG_RAISED, rec_color));
 
     // Profitability
     gross_margin_val_->setText(fmt_pct(info.gross_margins));
@@ -694,17 +706,49 @@ QString EquityOverviewTab::fmt_pct(double v) {
 
 QString EquityOverviewTab::currency_symbol(const QString& currency_code) {
     static const QHash<QString, QString> map = {
-        {"USD", "$"},    {"EUR", "\xe2\x82\xac"}, {"GBP", "\xc2\xa3"},    {"JPY", "\xc2\xa5"},
-        {"CNY", "\xc2\xa5"}, {"INR", "\xe2\x82\xb9"}, {"KRW", "\xe2\x82\xa9"}, {"RUB", "\xe2\x82\xbd"},
-        {"BRL", "R$"},  {"TRY", "\xe2\x82\xba"}, {"CHF", "CHF "},  {"CAD", "C$"},
-        {"AUD", "A$"},  {"NZD", "NZ$"}, {"HKD", "HK$"}, {"SGD", "S$"},
-        {"TWD", "NT$"}, {"MXN", "MX$"}, {"ZAR", "R"},   {"SEK", "kr"},
-        {"NOK", "kr"},  {"DKK", "kr"},  {"PLN", "z\xc5\x82"}, {"THB", "\xe0\xb8\xbf"},
-        {"IDR", "Rp"},  {"MYR", "RM"},  {"PHP", "\xe2\x82\xb1"}, {"CZK", "K\xc4\x8d"},
-        {"HUF", "Ft"},  {"ILS", "\xe2\x82\xaa"}, {"CLP", "CL$"}, {"COP", "COL$"},
-        {"PEN", "S/."},  {"ARS", "AR$"}, {"EGP", "E\xc2\xa3"}, {"NGN", "\xe2\x82\xa6"},
-        {"PKR", "Rs"},  {"BDT", "\xe0\xa7\xb3"}, {"VND", "\xe2\x82\xab"}, {"SAR", "SR"},
-        {"QAR", "QR"},  {"AED", "AED "}, {"KWD", "KD"},
+        {"USD", "$"},
+        {"EUR", "\xe2\x82\xac"},
+        {"GBP", "\xc2\xa3"},
+        {"JPY", "\xc2\xa5"},
+        {"CNY", "\xc2\xa5"},
+        {"INR", "\xe2\x82\xb9"},
+        {"KRW", "\xe2\x82\xa9"},
+        {"RUB", "\xe2\x82\xbd"},
+        {"BRL", "R$"},
+        {"TRY", "\xe2\x82\xba"},
+        {"CHF", "CHF "},
+        {"CAD", "C$"},
+        {"AUD", "A$"},
+        {"NZD", "NZ$"},
+        {"HKD", "HK$"},
+        {"SGD", "S$"},
+        {"TWD", "NT$"},
+        {"MXN", "MX$"},
+        {"ZAR", "R"},
+        {"SEK", "kr"},
+        {"NOK", "kr"},
+        {"DKK", "kr"},
+        {"PLN", "z\xc5\x82"},
+        {"THB", "\xe0\xb8\xbf"},
+        {"IDR", "Rp"},
+        {"MYR", "RM"},
+        {"PHP", "\xe2\x82\xb1"},
+        {"CZK", "K\xc4\x8d"},
+        {"HUF", "Ft"},
+        {"ILS", "\xe2\x82\xaa"},
+        {"CLP", "CL$"},
+        {"COP", "COL$"},
+        {"PEN", "S/."},
+        {"ARS", "AR$"},
+        {"EGP", "E\xc2\xa3"},
+        {"NGN", "\xe2\x82\xa6"},
+        {"PKR", "Rs"},
+        {"BDT", "\xe0\xa7\xb3"},
+        {"VND", "\xe2\x82\xab"},
+        {"SAR", "SR"},
+        {"QAR", "QR"},
+        {"AED", "AED "},
+        {"KWD", "KD"},
     };
     const auto it = map.find(currency_code.toUpper());
     return (it != map.end()) ? it.value() : (currency_code + " ");

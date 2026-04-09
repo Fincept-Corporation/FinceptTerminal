@@ -35,8 +35,7 @@ class MarketPulsePanel : public QWidget {
     QWidget* build_global_snapshot_section();
     QWidget* build_market_hours_section();
     QWidget* build_mover_row(const QString& symbol, double change, const QString& volume);
-    QWidget* build_stat_row(const QString& label, const QString& value, const QString& change,
-                            const QString& color);
+    QWidget* build_stat_row(const QString& label, const QString& value, const QString& change, const QString& color);
     QWidget* build_breadth_bar(const QString& label, int advancing, int declining);
 
     /// Re-apply all token-based styles so a theme switch updates every child widget.
@@ -45,10 +44,10 @@ class MarketPulsePanel : public QWidget {
     static QString market_status(const QString& region);
 
     // ── Header ──
-    QWidget* header_bar_      = nullptr;
-    QLabel*  header_icon_     = nullptr;
-    QLabel*  header_title_    = nullptr;
-    QLabel*  header_live_dot_ = nullptr;
+    QWidget* header_bar_ = nullptr;
+    QLabel* header_icon_ = nullptr;
+    QLabel* header_title_ = nullptr;
+    QLabel* header_live_dot_ = nullptr;
 
     // ── Scroll area ──
     QScrollArea* scroll_area_ = nullptr;
@@ -56,8 +55,8 @@ class MarketPulsePanel : public QWidget {
     // ── Section headers (5 total) ──
     struct SectionHeader {
         QWidget* container = nullptr;
-        QLabel*  icon      = nullptr;
-        QLabel*  title     = nullptr;
+        QLabel* icon = nullptr;
+        QLabel* title = nullptr;
     };
     SectionHeader sh_breadth_;
     SectionHeader sh_gainers_;
@@ -66,22 +65,22 @@ class MarketPulsePanel : public QWidget {
     SectionHeader sh_hours_;
 
     // ── Fear & Greed ──
-    QLabel* fg_header_label_  = nullptr;
-    QLabel* fg_gauge_icon_    = nullptr;
-    QLabel* fg_score_val_     = nullptr;
-    QLabel* fg_score_max_     = nullptr;
-    QLabel* fg_sentiment_     = nullptr;
-    QFrame* fg_gradient_bar_  = nullptr;
+    QLabel* fg_header_label_ = nullptr;
+    QLabel* fg_gauge_icon_ = nullptr;
+    QLabel* fg_score_val_ = nullptr;
+    QLabel* fg_score_max_ = nullptr;
+    QLabel* fg_sentiment_ = nullptr;
+    QFrame* fg_gradient_bar_ = nullptr;
 
     // ── Market Breadth ──
     // per-exchange: {name_label, adv_label, slash_label, dec_label, green_bar, red_bar}
     struct BreadthRow {
-        QLabel*  name  = nullptr;
-        QLabel*  adv   = nullptr;
-        QLabel*  slash = nullptr;
-        QLabel*  dec   = nullptr;
+        QLabel* name = nullptr;
+        QLabel* adv = nullptr;
+        QLabel* slash = nullptr;
+        QLabel* dec = nullptr;
         QWidget* green = nullptr;
-        QWidget* red   = nullptr;
+        QWidget* red = nullptr;
     };
     BreadthRow nyse_row_;
     BreadthRow nasdaq_row_;
@@ -89,14 +88,14 @@ class MarketPulsePanel : public QWidget {
 
     // ── Top Movers ──
     QVBoxLayout* gainers_layout_ = nullptr;
-    QVBoxLayout* losers_layout_  = nullptr;
+    QVBoxLayout* losers_layout_ = nullptr;
 
     // ── Global Snapshot ──
     struct StatRow {
         QWidget* container = nullptr;
-        QLabel*  name_lbl  = nullptr;
-        QLabel*  val       = nullptr;
-        QLabel*  chg       = nullptr;
+        QLabel* name_lbl = nullptr;
+        QLabel* val = nullptr;
+        QLabel* chg = nullptr;
     };
     StatRow vix_row_;
     StatRow us10y_row_;
@@ -108,15 +107,15 @@ class MarketPulsePanel : public QWidget {
     // ── Market Hours ──
     struct HoursRow {
         QWidget* container = nullptr;
-        QLabel*  name_lbl  = nullptr;
-        QLabel*  dot       = nullptr;
-        QLabel*  status    = nullptr;
-        QString  region;
+        QLabel* name_lbl = nullptr;
+        QLabel* dot = nullptr;
+        QLabel* status = nullptr;
+        QString region;
     };
     QVector<HoursRow> hours_rows_;
 
-    QTimer* refresh_timer_       = nullptr;
-    QTimer* hours_timer_         = nullptr;
+    QTimer* refresh_timer_ = nullptr;
+    QTimer* hours_timer_ = nullptr;
 };
 
 } // namespace fincept::screens

@@ -270,7 +270,7 @@ void ScannerPanel::build_ui() {
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
                               .arg(fincept::ui::colors::BG_BASE, fincept::ui::colors::BORDER_MED));
 
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     content->setStyleSheet(QString("background: %1;").arg(fincept::ui::colors::BG_BASE));
     auto* main_vl = new QVBoxLayout(content);
     main_vl->setContentsMargins(16, 12, 16, 12);
@@ -546,7 +546,7 @@ void ScannerPanel::on_scan_result(const QJsonObject& data) {
         QString symbol = match.value("symbol").toString();
         QJsonArray matched_conds = match.value("conditions").toArray();
 
-        auto* card = new QWidget;
+        auto* card = new QWidget(this);
         card->setStyleSheet(QString("background: %1; border: 1px solid %2;")
                                 .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_DIM));
         auto* card_hl = new QHBoxLayout(card);

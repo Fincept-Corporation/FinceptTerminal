@@ -53,13 +53,14 @@ QString news_screen_styles() {
                /* ── NewsScreen root ── */
                "#newsScreen { background: %1; }"
 
-               /* ── Command bar ── */
+               /* ── Command bar (two-row header) ── */
                "#newsCommandBar { background: %2; border-bottom: 1px solid %3; }"
+               "#newsCommandRow { background: %2; border-bottom: 1px solid %3; }"
                "#newsCommandBarSearch { background: %1; color: %4; border: 1px solid %3; "
                "  padding: 2px 8px; font-size: 12px; }"
                "#newsCommandBarSearch:focus { border-color: %5; }"
                "#newsCommandBarPill { background: transparent; color: %6; border: 1px solid %3; "
-               "  padding: 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }"
+               "  padding: 0 5px; font-size: 10px; font-weight: 600; letter-spacing: 0.3px; }"
                "#newsCommandBarPill:hover { color: %7; background: %8; }"
                "#newsCommandBarPill[active=\"true\"] { background: %9; color: %4; border-color: %10; }"
                "#newsCommandBarSep { color: %3; font-size: 12px; background: transparent; }"
@@ -73,9 +74,33 @@ QString news_screen_styles() {
                "  padding: 0 10px; font-size: 11px; font-weight: 700; }"
                "#newsCommandBarRefresh:hover { color: %4; background: %13; }"
                "#newsCommandBarRefresh:disabled { color: %6; }"
+               "#newsCommandBarCombo { background: %1; color: %7; border: 1px solid %3; "
+               "  padding: 1px 4px; font-size: 11px; }"
 
-               /* ── Splitter ── */
-               "#newsSplitter::handle { background: %3; }"
+               "#newsCommandRowScroll { background: transparent; border: none; }"
+
+               /* ── Drawer toggle button ── */
+               "#newsDrawerBtn { background: rgba(217,119,6,0.08); color: %12; "
+               "  border: 1px solid %10; padding: 0 10px; font-size: 11px; "
+               "  font-weight: 700; letter-spacing: 0.5px; }"
+               "#newsDrawerBtn:hover { background: rgba(217,119,6,0.15); }"
+               "#newsDrawerBtn:checked { background: %12; color: %1; }"
+
+               /* ── Intel strip (row 2 of header) ── */
+               "#newsIntelStrip { background: %8; border-bottom: 1px solid %3; }"
+               "#newsIntelLabel { color: %6; font-size: 10px; font-weight: 700; "
+               "  letter-spacing: 0.5px; background: transparent; }"
+               "#newsIntelValue { color: %14; font-size: 11px; font-weight: 700; background: transparent; }"
+               "#newsIntelSep { color: %3; font-size: 10px; background: transparent; }"
+               "#newsIntelScore { color: %7; font-size: 11px; font-weight: 700; background: transparent; }"
+               "#newsIntelMonitors { color: %7; font-size: 11px; background: transparent; }"
+               "#newsIntelDeviations { color: %11; font-size: 11px; font-weight: 700; background: transparent; }"
+               "#newsSentimentBull { background: %15; }"
+               "#newsSentimentNeut { background: %16; }"
+               "#newsSentimentBear { background: %11; }"
+
+               /* ── Content area ── */
+               "#newsContentArea { background: %1; }"
 
                /* ── Feed list ── */
                "#newsFeedList { background: %1; border: none; outline: none; }"
@@ -92,20 +117,19 @@ QString news_screen_styles() {
                "#newsBreakingDismiss { color: %6; background: transparent; border: none; font-size: 12px; }"
                "#newsBreakingDismiss:hover { color: %4; }"
 
-               /* ── Side panel ── */
-               "#newsSidePanel { background: %2; border-right: 1px solid %3; }"
-               "#newsSidePanelScroll { background: transparent; }"
-               "#newsSidePanelContent { background: transparent; }"
-               "#newsSidePanelTitle { color: %12; font-size: 11px; font-weight: 700; "
+               /* ── Intel drawer (left overlay) ── */
+               "#newsDrawerPanel { background: %2; border-right: 1px solid %5; }"
+               "#newsDrawerHeader { background: %8; border-bottom: 1px solid %3; }"
+               "#newsDrawerTitle { color: %12; font-size: 12px; font-weight: 700; "
+               "  letter-spacing: 1px; background: transparent; }"
+               "#newsDrawerCloseBtn { color: %6; background: transparent; border: 1px solid %3; "
+               "  font-size: 12px; font-weight: 700; }"
+               "#newsDrawerCloseBtn:hover { color: %4; background: %8; }"
+               "#newsDrawerScroll { background: transparent; }"
+               "#newsDrawerContent { background: transparent; }"
+               "#newsDrawerSectionTitle { color: %12; font-size: 11px; font-weight: 700; "
                "  letter-spacing: 0.5px; background: transparent; padding: 4px 0 2px; "
                "  border-bottom: 1px solid %3; }"
-               "#newsSidePanelStatBox { background: %8; border: 1px solid %3; }"
-               "#newsSidePanelStatValue { color: %14; font-size: 16px; font-weight: 700; background: transparent; }"
-               "#newsSidePanelStatLabel { color: %6; font-size: 9px; font-weight: 700; background: transparent; }"
-               "#newsSentimentBull { background: %15; }"
-               "#newsSentimentNeut { background: %16; }"
-               "#newsSentimentBear { background: %11; }"
-               "#newsSentimentScore { color: %7; font-size: 12px; background: transparent; }"
 
                /* ── Top stories ── */
                "#newsTopStoryBtn { background: transparent; color: %7; font-size: 11px; "
@@ -137,18 +161,24 @@ QString news_screen_styles() {
                "#newsDeviationCategory { color: %7; font-size: 11px; background: transparent; }"
                "#newsDeviationScore { color: %11; font-size: 11px; font-weight: 700; background: transparent; }"
 
-               /* ── Detail panel ── */
-               "#newsDetailPanel { background: %2; border-left: 1px solid %3; }"
+               /* ── Detail overlay (right panel) ── */
+               "#newsDetailOverlay { background: %2; border-left: 1px solid %5; }"
+               "#newsDetailHeader { background: %8; border-bottom: 1px solid %3; }"
+               "#newsDetailHeaderTitle { color: %12; font-size: 12px; font-weight: 700; "
+               "  letter-spacing: 1px; background: transparent; }"
+               "#newsDetailCloseBtn { color: %6; background: transparent; border: 1px solid %3; "
+               "  font-size: 12px; font-weight: 700; }"
+               "#newsDetailCloseBtn:hover { color: %4; background: %8; }"
                "#newsDetailContent { background: transparent; }"
                "#newsDetailEmpty { color: %6; font-size: 13px; background: transparent; }"
-               "#newsDetailHeadline { color: %4; font-size: 14px; font-weight: 700; background: transparent; }"
+               "#newsDetailHeadline { color: %4; font-size: 15px; font-weight: 700; background: transparent; }"
                "#newsDetailPriorityBadge { font-size: 10px; font-weight: 700; padding: 1px 6px; }"
                "#newsDetailSentimentBadge { font-size: 11px; background: transparent; }"
                "#newsDetailTierBadge { color: %12; font-size: 10px; font-weight: 700; background: transparent; }"
                "#newsDetailCategory { color: %7; font-size: 11px; background: transparent; }"
                "#newsDetailSource { color: %14; font-size: 12px; font-weight: 700; background: transparent; }"
                "#newsDetailTime { color: %6; font-size: 11px; background: transparent; }"
-               "#newsDetailSummary { color: %7; font-size: 12px; background: transparent; }"
+               "#newsDetailSummary { color: %7; font-size: 12px; line-height: 1.4; background: transparent; }"
                "#newsDetailImpact { color: %16; font-size: 11px; background: transparent; }"
                "#newsDetailTickers { color: %16; font-size: 11px; font-weight: 700; background: transparent; }"
                "#newsDetailSep { background: %3; }"
@@ -156,10 +186,10 @@ QString news_screen_styles() {
                "  letter-spacing: 0.5px; background: transparent; padding: 2px 0; "
                "  border-bottom: 1px solid %3; }"
                "#newsDetailSubTitle { color: %6; font-size: 10px; font-weight: 700; background: transparent; }"
-               "#newsDetailOpenBtn, #newsDetailCopyBtn { background: %8; color: %7; "
-               "  border: 1px solid %3; font-size: 11px; font-weight: 700; padding: 0 10px; }"
-               "#newsDetailOpenBtn:hover, #newsDetailCopyBtn:hover { color: %4; }"
-               "#newsDetailAnalyzeBtn { background: %16; color: %12; "
+               "#newsDetailOpenBtn, #newsDetailCopyBtn, #newsDetailSaveBtn { background: %8; color: %7; "
+               "  border: 1px solid %3; font-size: 11px; font-weight: 700; padding: 0 8px; }"
+               "#newsDetailOpenBtn:hover, #newsDetailCopyBtn:hover, #newsDetailSaveBtn:hover { color: %4; background: %13; }"
+               "#newsDetailAnalyzeBtn { background: rgba(217,119,6,0.1); color: %12; "
                "  border: 1px solid %10; font-size: 11px; font-weight: 700; padding: 0 10px; }"
                "#newsDetailAnalyzeBtn:hover { background: %12; color: %1; }"
                "#newsDetailAnalyzeBtn:disabled { color: %6; background: %8; border-color: %3; }"

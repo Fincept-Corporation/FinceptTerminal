@@ -13,24 +13,34 @@ class AngelOneBroker : public IBroker {
 
     BrokerProfile profile() const override {
         return BrokerProfile{
-            .id = "angelone", .display_name = "Angel One", .region = "IN", .currency = "INR",
-            .credential_fields = {
-                {CredentialField::ClientCode, "CLIENT CODE",  "Enter login/client ID...",    false},
-                {CredentialField::ApiKey,     "API KEY",      "Enter API key...",            false},
-                {CredentialField::ApiSecret,  "MPIN",         "Enter MPIN/PIN...",           true},
-                {CredentialField::AuthCode,   "TOTP SECRET",  "Enter base32 TOTP secret...", false},
-            },
-            .exchanges = {"NSE","BSE","NFO","MCX","NCDEX"},
-            .product_types = {
-                {"Intraday (MIS)", ProductType::Intraday},
-                {"Delivery (CNC)",ProductType::Delivery},
-                {"Margin (NRML)", ProductType::Margin},
-            },
-            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
-            .has_native_paper=false, .default_paper_balance=1000000.0,
-            .default_watchlist={"HDFCBANK","ICICIBANK","SBIN","TCS","INFY","RELIANCE","TATASTEEL","BHARTIARTL","ITC","LT"},
-            .default_symbol="RELIANCE", .default_exchange="NSE",
-            .brokerage_info="\u20B920/order flat",
+            .id = "angelone",
+            .display_name = "Angel One",
+            .region = "IN",
+            .currency = "INR",
+            .credential_fields =
+                {
+                    {CredentialField::ClientCode, "CLIENT CODE", "Enter login/client ID...", false},
+                    {CredentialField::ApiKey, "API KEY", "Enter API key...", false},
+                    {CredentialField::ApiSecret, "MPIN", "Enter MPIN/PIN...", true},
+                    {CredentialField::AuthCode, "TOTP SECRET", "Enter base32 TOTP secret...", false},
+                },
+            .exchanges = {"NSE", "BSE", "NFO", "MCX", "NCDEX"},
+            .product_types =
+                {
+                    {"Intraday (MIS)", ProductType::Intraday},
+                    {"Delivery (CNC)", ProductType::Delivery},
+                    {"Margin (NRML)", ProductType::Margin},
+                },
+            .supports_intraday = true,
+            .supports_bracket_order = false,
+            .supports_cover_order = false,
+            .has_native_paper = false,
+            .default_paper_balance = 1000000.0,
+            .default_watchlist = {"HDFCBANK", "ICICIBANK", "SBIN", "TCS", "INFY", "RELIANCE", "TATASTEEL", "BHARTIARTL",
+                                  "ITC", "LT"},
+            .default_symbol = "RELIANCE",
+            .default_exchange = "NSE",
+            .brokerage_info = "\u20B920/order flat",
         };
     }
 
@@ -50,12 +60,11 @@ class AngelOneBroker : public IBroker {
     ApiResponse<QVector<BrokerCandle>> get_history(const BrokerCredentials& creds, const QString& symbol,
                                                    const QString& resolution, const QString& from_date,
                                                    const QString& to_date) override;
-    ApiResponse<OrderMargin> get_order_margins(const BrokerCredentials& creds,
-                                               const UnifiedOrder& order) override;
+    ApiResponse<OrderMargin> get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) override;
     ApiResponse<BasketMargin> get_basket_margins(const BrokerCredentials& creds,
                                                  const QVector<UnifiedOrder>& orders) override;
 
-    static bool    is_token_expired(const BrokerHttpResponse& resp);
+    static bool is_token_expired(const BrokerHttpResponse& resp);
     static QString checked_error(const BrokerHttpResponse& resp, const QString& fallback);
 
     /// Look up the numeric instrument token for a symbol+exchange.

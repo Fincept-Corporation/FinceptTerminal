@@ -50,12 +50,10 @@ class BrokerHttp {
                                 const QMap<QString, QString>& headers = {});
 
     // Raw body POST — caller provides pre-encoded body + headers (Shoonya jData= protocol)
-    BrokerHttpResponse post_raw(const QString& url, const QByteArray& body,
-                                const QMap<QString, QString>& headers = {});
+    BrokerHttpResponse post_raw(const QString& url, const QByteArray& body, const QMap<QString, QString>& headers = {});
 
     // Raw body PUT — caller provides pre-encoded body + headers (Tradier modify_order)
-    BrokerHttpResponse put_raw(const QString& url, const QByteArray& body,
-                               const QMap<QString, QString>& headers = {});
+    BrokerHttpResponse put_raw(const QString& url, const QByteArray& body, const QMap<QString, QString>& headers = {});
 
     // Timeout in ms (default 15s)
     void set_timeout(int ms) { timeout_ms_ = ms; }

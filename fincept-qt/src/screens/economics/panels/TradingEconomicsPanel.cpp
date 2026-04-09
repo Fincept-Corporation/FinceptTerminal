@@ -17,40 +17,35 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kTradingEconomicsScript   = "trading_economics_data.py";
+static constexpr const char* kTradingEconomicsScript = "trading_economics_data.py";
 static constexpr const char* kTradingEconomicsSourceId = "trading_economics";
-static constexpr const char* kTradingEconomicsColor    = "#F59E0B";  // amber
+static constexpr const char* kTradingEconomicsColor = "#F59E0B"; // amber
 } // namespace
 
 struct TeDataset {
     QString label;
     QString command;
-    QString country_arg;  // "required", "optional", or ""
+    QString country_arg; // "required", "optional", or ""
 };
 
 static const QList<TeDataset> kTEDatasets = {
-    { "Credit Ratings (All)",           "ratings",           ""         },
-    { "Credit Ratings by Agency",       "ratings_by_agency", ""         },
-    { "US Treasuries",                  "us_treasuries",     ""         },
-    { "European Bonds",                 "european_bonds",    ""         },
-    { "Bond Yield Curve",               "yield_curve",       "required" },
-    { "Country Economic Data",          "country_data",      "required" },
-    { "Economic Calendar",              "calendar",          ""         },
+    {"Credit Ratings (All)", "ratings", ""},         {"Credit Ratings by Agency", "ratings_by_agency", ""},
+    {"US Treasuries", "us_treasuries", ""},          {"European Bonds", "european_bonds", ""},
+    {"Bond Yield Curve", "yield_curve", "required"}, {"Country Economic Data", "country_data", "required"},
+    {"Economic Calendar", "calendar", ""},
 };
 
-static const QList<QPair<QString,QString>> kTECountries = {
-    { "United States", "US" }, { "Germany",        "DE" }, { "Japan",          "JP" },
-    { "United Kingdom","GB" }, { "France",         "FR" }, { "Italy",          "IT" },
-    { "China",         "CN" }, { "Brazil",         "BR" }, { "India",          "IN" },
-    { "Australia",     "AU" }, { "Canada",         "CA" }, { "Spain",          "ES" },
+static const QList<QPair<QString, QString>> kTECountries = {
+    {"United States", "US"}, {"Germany", "DE"},   {"Japan", "JP"},  {"United Kingdom", "GB"},
+    {"France", "FR"},        {"Italy", "IT"},     {"China", "CN"},  {"Brazil", "BR"},
+    {"India", "IN"},         {"Australia", "AU"}, {"Canada", "CA"}, {"Spain", "ES"},
 };
 
 TradingEconomicsPanel::TradingEconomicsPanel(QWidget* parent)
     : EconPanelBase(kTradingEconomicsSourceId, kTradingEconomicsColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &TradingEconomicsPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &TradingEconomicsPanel::on_result);
 }
 
 void TradingEconomicsPanel::activate() {
@@ -85,57 +80,64 @@ void TradingEconomicsPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void TradingEconomicsPanel::on_fetch() {
-    const int   idx     = dataset_combo_->currentIndex();
+    const int idx = dataset_combo_->currentIndex();
     const auto& dataset = kTEDatasets[idx];
     const QString country = country_combo_->currentData().toString();
 
     show_loading("Fetching Trading Economics: " + dataset.label + "…");
 
-    QStringList args = { dataset.command };
+    QStringList args = {dataset.command};
     if (dataset.country_arg == "required" || dataset.country_arg == "optional")
         args << country;
 
-    services::EconomicsService::instance().execute(
-        kTradingEconomicsSourceId, kTradingEconomicsScript, dataset.command, args,
-        "te_" + dataset.command + (args.size() > 1 ? "_" + country : ""));
+    services::EconomicsService::instance().execute(kTradingEconomicsSourceId, kTradingEconomicsScript, dataset.command,
+                                                   args,
+                                                   "te_" + dataset.command + (args.size() > 1 ? "_" + country : ""));
 }
 
 // Normalise various Trading Economics response shapes into displayable rows.
 static QJsonArray extract_te_rows(const QJsonObject& data) {
     // Shape 1: direct array in "data" key
     QJsonArray arr = data["data"].toArray();
-    if (!arr.isEmpty()) return arr;
+    if (!arr.isEmpty())
+        return arr;
 
     // Shape 2: ratings array
     arr = data["ratings"].toArray();
-    if (!arr.isEmpty()) return arr;
+    if (!arr.isEmpty())
+        return arr;
 
     // Shape 3: bonds / treasuries / yield_curve
     arr = data["bonds"].toArray();
-    if (!arr.isEmpty()) return arr;
+    if (!arr.isEmpty())
+        return arr;
 
     arr = data["treasuries"].toArray();
-    if (!arr.isEmpty()) return arr;
+    if (!arr.isEmpty())
+        return arr;
 
     arr = data["yield_curve"].toArray();
-    if (!arr.isEmpty()) return arr;
+    if (!arr.isEmpty())
+        return arr;
 
     // Shape 4: events / calendar
     arr = data["events"].toArray();
-    if (!arr.isEmpty()) return arr;
+    if (!arr.isEmpty())
+        return arr;
 
     // Shape 5: single object with country data fields — wrap in array
     if (data.contains("country") || data.contains("gdp") || data.contains("inflation")) {
-        return QJsonArray{ data };
+        return QJsonArray{data};
     }
 
     return {};
 }
 
-void TradingEconomicsPanel::on_result(const QString& request_id,
-                                       const services::EconomicsResult& result) {
-    if (result.source_id != kTradingEconomicsSourceId) return;
-    if (!request_id.startsWith("te_")) return;
+void TradingEconomicsPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kTradingEconomicsSourceId)
+        return;
+    if (!request_id.startsWith("te_"))
+        return;
 
     if (!result.success) {
         const QString msg = result.error;
@@ -171,11 +173,10 @@ void TradingEconomicsPanel::on_result(const QString& request_id,
     }
 
     const int idx = dataset_combo_->currentIndex();
-    const QString title = "Trading Economics: "
-        + (idx >= 0 && idx < kTEDatasets.size() ? kTEDatasets[idx].label : request_id.mid(3));
+    const QString title =
+        "Trading Economics: " + (idx >= 0 && idx < kTEDatasets.size() ? kTEDatasets[idx].label : request_id.mid(3));
     display(rows, title);
-    LOG_INFO("TradingEconomicsPanel", QString("Displayed %1 rows: %2")
-                                          .arg(rows.size()).arg(title));
+    LOG_INFO("TradingEconomicsPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }
 
 } // namespace fincept::screens

@@ -9,7 +9,7 @@
 #include <QPointer>
 
 static constexpr int kStrategiesTtlSec = 10 * 60;
-static constexpr int kOptionsTtlSec    = 10 * 60;
+static constexpr int kOptionsTtlSec = 10 * 60;
 
 namespace fincept::services::backtest {
 
@@ -64,17 +64,17 @@ void BacktestingService::load_strategies(const QString& provider) {
     QPointer<BacktestingService> self = this;
     python::PythonRunner::instance().run(
         script, {"get_strategies", "{}"}, [self, provider, cache_key](python::PythonResult result) {
-            if (!self) return;
+            if (!self)
+                return;
             if (!result.success) {
                 emit self->error_occurred("load_strategies/" + provider, result.error);
                 return;
             }
             auto doc = QJsonDocument::fromJson(python::extract_json(result.output).toUtf8());
             if (!doc.isNull()) {
-                fincept::CacheManager::instance().put(
-                    cache_key,
-                    QVariant(QString::fromUtf8(doc.toJson(QJsonDocument::Compact))),
-                    kStrategiesTtlSec, "backtesting");
+                fincept::CacheManager::instance().put(cache_key,
+                                                      QVariant(QString::fromUtf8(doc.toJson(QJsonDocument::Compact))),
+                                                      kStrategiesTtlSec, "backtesting");
                 emit self->result_ready(provider, "get_strategies", doc.object());
             }
         });
@@ -95,18 +95,19 @@ void BacktestingService::load_command_options(const QString& provider) {
     QPointer<BacktestingService> self = this;
     python::PythonRunner::instance().run(
         script, {"get_command_options", "{}"}, [self, provider, cache_key](python::PythonResult result) {
-            if (!self) return;
+            if (!self)
+                return;
             if (!result.success) {
                 LOG_WARN("Backtesting", QString("get_command_options failed for %1 — using defaults").arg(provider));
                 return;
             }
             auto doc = QJsonDocument::fromJson(python::extract_json(result.output).toUtf8());
-            if (doc.isNull()) return;
-            auto obj  = doc.object();
+            if (doc.isNull())
+                return;
+            auto obj = doc.object();
             auto data = obj.contains("data") ? obj.value("data").toObject() : obj;
             fincept::CacheManager::instance().put(
-                cache_key,
-                QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
                 kOptionsTtlSec, "backtesting");
             emit self->command_options_loaded(provider, data);
         });

@@ -1,4 +1,5 @@
 #include "screens/dashboard/canvas/PlaceholderOverlay.h"
+
 #include "ui/theme/Theme.h"
 
 #include <QPainter>

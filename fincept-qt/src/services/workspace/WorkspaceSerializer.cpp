@@ -11,34 +11,34 @@ namespace fincept {
 
 static QJsonObject serialize_metadata(const WorkspaceMetadata& m) {
     QJsonObject o;
-    o["id"]          = m.id;
-    o["name"]        = m.name;
+    o["id"] = m.id;
+    o["name"] = m.name;
     o["description"] = m.description;
     o["template_id"] = m.template_id;
-    o["created_at"]  = m.created_at;
-    o["updated_at"]  = m.updated_at;
-    o["version"]     = m.version;
+    o["created_at"] = m.created_at;
+    o["updated_at"] = m.updated_at;
+    o["version"] = m.version;
     return o;
 }
 
 QJsonObject WorkspaceSerializer::serialize_layout(const screens::GridLayout& layout) {
     QJsonObject o;
-    o["cols"]   = layout.cols;
-    o["row_h"]  = layout.row_h;
+    o["cols"] = layout.cols;
+    o["row_h"] = layout.row_h;
     o["margin"] = layout.margin;
 
     QJsonArray items;
     for (const auto& item : layout.items) {
         QJsonObject it;
-        it["id"]          = item.id;
+        it["id"] = item.id;
         it["instance_id"] = item.instance_id;
-        it["x"]           = item.cell.x;
-        it["y"]           = item.cell.y;
-        it["w"]           = item.cell.w;
-        it["h"]           = item.cell.h;
-        it["min_w"]       = item.cell.min_w;
-        it["min_h"]       = item.cell.min_h;
-        it["is_static"]   = item.is_static;
+        it["x"] = item.cell.x;
+        it["y"] = item.cell.y;
+        it["w"] = item.cell.w;
+        it["h"] = item.cell.h;
+        it["min_w"] = item.cell.min_w;
+        it["min_h"] = item.cell.min_h;
+        it["is_static"] = item.is_static;
         items.append(QJsonValue(it));
     }
     o["items"] = QJsonValue(items);
@@ -47,7 +47,7 @@ QJsonObject WorkspaceSerializer::serialize_layout(const screens::GridLayout& lay
 
 QJsonDocument WorkspaceSerializer::to_json(const WorkspaceDef& ws) {
     QJsonObject root;
-    root["version"]  = 1;
+    root["version"] = 1;
     root["metadata"] = QJsonValue(serialize_metadata(ws.metadata));
 
     QJsonObject nav;
@@ -56,28 +56,31 @@ QJsonDocument WorkspaceSerializer::to_json(const WorkspaceDef& ws) {
     for (const auto& s : ws.open_screens)
         open.append(s);
     nav["open_screens"] = QJsonValue(open);
-    root["navigation"]  = QJsonValue(nav);
+    root["navigation"] = QJsonValue(nav);
 
     root["dashboard"] = QJsonValue(serialize_layout(ws.dashboard_layout));
 
     QJsonObject refs;
     QJsonArray wl, pt, wf;
-    for (const auto& id : ws.watchlist_ids) wl.append(id);
-    for (const auto& id : ws.portfolio_ids) pt.append(id);
-    for (const auto& id : ws.workflow_ids)  wf.append(id);
+    for (const auto& id : ws.watchlist_ids)
+        wl.append(id);
+    for (const auto& id : ws.portfolio_ids)
+        pt.append(id);
+    for (const auto& id : ws.workflow_ids)
+        wf.append(id);
     refs["watchlist_ids"] = QJsonValue(wl);
     refs["portfolio_ids"] = QJsonValue(pt);
-    refs["workflow_ids"]  = QJsonValue(wf);
-    root["references"]    = QJsonValue(refs);
+    refs["workflow_ids"] = QJsonValue(wf);
+    root["references"] = QJsonValue(refs);
 
     QJsonArray states;
     for (const auto& ss : ws.screen_states) {
         QJsonObject s;
         s["screen_id"] = ss.screen_id;
-        s["state"]     = QJsonValue(ss.state);
+        s["state"] = QJsonValue(ss.state);
         states.append(QJsonValue(s));
     }
-    root["screen_states"]   = QJsonValue(states);
+    root["screen_states"] = QJsonValue(states);
     root["window_geometry"] = ws.window_geometry_base64;
 
     return QJsonDocument(root);
@@ -87,22 +90,22 @@ QJsonDocument WorkspaceSerializer::to_json(const WorkspaceDef& ws) {
 
 screens::GridLayout WorkspaceSerializer::deserialize_layout(const QJsonObject& o) {
     screens::GridLayout layout;
-    layout.cols   = o["cols"].toInt(12);
-    layout.row_h  = o["row_h"].toInt(60);
+    layout.cols = o["cols"].toInt(12);
+    layout.row_h = o["row_h"].toInt(60);
     layout.margin = o["margin"].toInt(4);
 
     for (const auto& v : o["items"].toArray()) {
         QJsonObject it = v.toObject();
         screens::GridItem item;
-        item.id          = it["id"].toString();
+        item.id = it["id"].toString();
         item.instance_id = it["instance_id"].toString();
-        item.cell.x      = it["x"].toInt();
-        item.cell.y      = it["y"].toInt();
-        item.cell.w      = it["w"].toInt(4);
-        item.cell.h      = it["h"].toInt(4);
-        item.cell.min_w  = it["min_w"].toInt(2);
-        item.cell.min_h  = it["min_h"].toInt(3);
-        item.is_static   = it["is_static"].toBool(false);
+        item.cell.x = it["x"].toInt();
+        item.cell.y = it["y"].toInt();
+        item.cell.w = it["w"].toInt(4);
+        item.cell.h = it["h"].toInt(4);
+        item.cell.min_w = it["min_w"].toInt(2);
+        item.cell.min_h = it["min_h"].toInt(3);
+        item.is_static = it["is_static"].toBool(false);
         layout.items.append(item);
     }
     return layout;
@@ -116,24 +119,23 @@ Result<WorkspaceDef> WorkspaceSerializer::from_json(const QJsonDocument& doc) {
 
     int version = root["version"].toInt(0);
     if (version != 1)
-        return Result<WorkspaceDef>::err(
-            QString("Unsupported workspace version: %1").arg(version).toStdString());
+        return Result<WorkspaceDef>::err(QString("Unsupported workspace version: %1").arg(version).toStdString());
 
     WorkspaceDef ws;
 
-    QJsonObject m       = root["metadata"].toObject();
-    ws.metadata.id          = m["id"].toString();
-    ws.metadata.name        = m["name"].toString();
+    QJsonObject m = root["metadata"].toObject();
+    ws.metadata.id = m["id"].toString();
+    ws.metadata.name = m["name"].toString();
     ws.metadata.description = m["description"].toString();
     ws.metadata.template_id = m["template_id"].toString();
-    ws.metadata.created_at  = m["created_at"].toString();
-    ws.metadata.updated_at  = m["updated_at"].toString();
-    ws.metadata.version     = m["version"].toInt(1);
+    ws.metadata.created_at = m["created_at"].toString();
+    ws.metadata.updated_at = m["updated_at"].toString();
+    ws.metadata.version = m["version"].toInt(1);
 
     if (ws.metadata.id.isEmpty() || ws.metadata.name.isEmpty())
         return Result<WorkspaceDef>::err("Workspace missing required id or name");
 
-    QJsonObject nav  = root["navigation"].toObject();
+    QJsonObject nav = root["navigation"].toObject();
     ws.active_screen = nav["active_screen"].toString("dashboard");
     for (const auto& v : nav["open_screens"].toArray())
         ws.open_screens.append(v.toString());
@@ -141,15 +143,18 @@ Result<WorkspaceDef> WorkspaceSerializer::from_json(const QJsonDocument& doc) {
     ws.dashboard_layout = deserialize_layout(root["dashboard"].toObject());
 
     QJsonObject refs = root["references"].toObject();
-    for (const auto& v : refs["watchlist_ids"].toArray()) ws.watchlist_ids.append(v.toString());
-    for (const auto& v : refs["portfolio_ids"].toArray()) ws.portfolio_ids.append(v.toString());
-    for (const auto& v : refs["workflow_ids"].toArray())  ws.workflow_ids.append(v.toString());
+    for (const auto& v : refs["watchlist_ids"].toArray())
+        ws.watchlist_ids.append(v.toString());
+    for (const auto& v : refs["portfolio_ids"].toArray())
+        ws.portfolio_ids.append(v.toString());
+    for (const auto& v : refs["workflow_ids"].toArray())
+        ws.workflow_ids.append(v.toString());
 
     for (const auto& v : root["screen_states"].toArray()) {
         QJsonObject s = v.toObject();
         WorkspaceScreenState ss;
         ss.screen_id = s["screen_id"].toString();
-        ss.state     = s["state"].toObject();
+        ss.state = s["state"].toObject();
         if (!ss.screen_id.isEmpty())
             ws.screen_states.append(ss);
     }
@@ -162,8 +167,7 @@ Result<WorkspaceDef> WorkspaceSerializer::from_json(const QJsonDocument& doc) {
 Result<WorkspaceSummary> WorkspaceSerializer::summary_from_file(const QString& path) {
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly))
-        return Result<WorkspaceSummary>::err(
-            QString("Cannot open: %1").arg(path).toStdString());
+        return Result<WorkspaceSummary>::err(QString("Cannot open: %1").arg(path).toStdString());
 
     QByteArray data = f.readAll();
     f.close();
@@ -177,12 +181,12 @@ Result<WorkspaceSummary> WorkspaceSerializer::summary_from_file(const QString& p
         return Result<WorkspaceSummary>::err("Missing metadata");
 
     WorkspaceSummary s;
-    s.id          = m["id"].toString();
-    s.name        = m["name"].toString();
+    s.id = m["id"].toString();
+    s.name = m["name"].toString();
     s.description = m["description"].toString();
-    s.updated_at  = m["updated_at"].toString();
+    s.updated_at = m["updated_at"].toString();
     s.template_id = m["template_id"].toString();
-    s.file_path   = path;
+    s.file_path = path;
     return Result<WorkspaceSummary>::ok(std::move(s));
 }
 

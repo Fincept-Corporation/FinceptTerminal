@@ -26,8 +26,7 @@ namespace fincept::trading {
 class ZerodhaWebSocket : public QObject {
     Q_OBJECT
   public:
-    explicit ZerodhaWebSocket(const QString& api_key, const QString& access_token,
-                               QObject* parent = nullptr);
+    explicit ZerodhaWebSocket(const QString& api_key, const QString& access_token, QObject* parent = nullptr);
 
     /// Open the WebSocket connection.
     void open();
@@ -73,9 +72,9 @@ class ZerodhaWebSocket : public QObject {
     ZerodhaTick parse_full_packet(const uchar* data) const;
 
     static quint32 read_u32(const uchar* p);
-    static qint32  read_i32(const uchar* p);
+    static qint32 read_i32(const uchar* p);
     static quint16 read_u16(const uchar* p);
-    static double  paise_to_rupees(qint32 paise);
+    static double paise_to_rupees(qint32 paise);
 
     QString api_key_;
     QString access_token_;

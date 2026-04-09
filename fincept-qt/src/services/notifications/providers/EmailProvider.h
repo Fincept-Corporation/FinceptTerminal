@@ -8,15 +8,12 @@ namespace fincept::notifications {
 /// For production use, point smtp_host_ at an HTTP-to-SMTP bridge endpoint.
 class EmailProvider final : public BaseProvider {
   public:
-    QString provider_id()   const override { return "email"; }
-    QString display_name()  const override { return "Email"; }
-    QString icon()          const override { return "📧"; }
-    bool    is_configured() const override {
-        return !smtp_host_.isEmpty() && !to_addr_.isEmpty();
-    }
+    QString provider_id() const override { return "email"; }
+    QString display_name() const override { return "Email"; }
+    QString icon() const override { return "📧"; }
+    bool is_configured() const override { return !smtp_host_.isEmpty() && !to_addr_.isEmpty(); }
 
-    void send(const NotificationRequest& req,
-              std::function<void(bool, QString)> cb) override;
+    void send(const NotificationRequest& req, std::function<void(bool, QString)> cb) override;
 
   protected:
     void load_fields(SettingsRepository& r, const QString& cat) override;

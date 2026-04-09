@@ -38,7 +38,7 @@ void DeployDialog::build_ui(const QString& current_name) {
     // ── Title ──────────────────────────────────────────────────────
     auto* title = new QLabel("DEPLOY WORKFLOW");
     title->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 14px;"
-                                "font-weight: bold; letter-spacing: 0.5px;")
+                                 "font-weight: bold; letter-spacing: 0.5px;")
                              .arg(ui::colors::AMBER));
     root->addWidget(title);
 
@@ -55,9 +55,8 @@ void DeployDialog::build_ui(const QString& current_name) {
     root->addWidget(name_label);
 
     name_edit_ = new QLineEdit(current_name);
-    name_edit_->setStyleSheet(
-        QString("QLineEdit { %1 } QLineEdit:focus { border: 1px solid %2; }")
-            .arg(deploy_input_style(), ui::colors::AMBER));
+    name_edit_->setStyleSheet(QString("QLineEdit { %1 } QLineEdit:focus { border: 1px solid %2; }")
+                                  .arg(deploy_input_style(), ui::colors::AMBER));
     root->addWidget(name_edit_);
 
     // ── Description ────────────────────────────────────────────────
@@ -69,9 +68,8 @@ void DeployDialog::build_ui(const QString& current_name) {
     desc_edit_ = new QPlainTextEdit;
     desc_edit_->setPlaceholderText("Describe what this workflow does...");
     desc_edit_->setMaximumHeight(80);
-    desc_edit_->setStyleSheet(
-        QString("QPlainTextEdit { %1 } QPlainTextEdit:focus { border: 1px solid %2; }")
-            .arg(deploy_input_style(), ui::colors::AMBER));
+    desc_edit_->setStyleSheet(QString("QPlainTextEdit { %1 } QPlainTextEdit:focus { border: 1px solid %2; }")
+                                  .arg(deploy_input_style(), ui::colors::AMBER));
     root->addWidget(desc_edit_);
 
     root->addStretch();
@@ -82,15 +80,13 @@ void DeployDialog::build_ui(const QString& current_name) {
 
     auto* cancel_btn = new QPushButton("CANCEL");
     cancel_btn->setFixedHeight(28);
-    cancel_btn->setStyleSheet(
-        QString("QPushButton {"
-                "  background: %1; color: %2; border: 1px solid %3;"
-                "  font-family: Consolas; font-size: 11px; font-weight: bold; padding: 0 16px;"
-                "}"
-                "QPushButton:hover { color: %4; background: %5; }")
-            .arg(ui::colors::BG_HOVER, ui::colors::TEXT_SECONDARY,
-                 ui::colors::BORDER_MED, ui::colors::TEXT_PRIMARY,
-                 ui::colors::BG_HOVER));
+    cancel_btn->setStyleSheet(QString("QPushButton {"
+                                      "  background: %1; color: %2; border: 1px solid %3;"
+                                      "  font-family: Consolas; font-size: 11px; font-weight: bold; padding: 0 16px;"
+                                      "}"
+                                      "QPushButton:hover { color: %4; background: %5; }")
+                                  .arg(ui::colors::BG_HOVER, ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED,
+                                       ui::colors::TEXT_PRIMARY, ui::colors::BG_HOVER));
     connect(cancel_btn, &QPushButton::clicked, this, &QDialog::reject);
     btn_row->addWidget(cancel_btn);
 
@@ -104,8 +100,7 @@ void DeployDialog::build_ui(const QString& current_name) {
                 "  font-family: Consolas; font-size: 11px; font-weight: bold; padding: 0 16px;"
                 "}"
                 "QPushButton:hover { background: %4; }")
-            .arg(ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY,
-                 ui::colors::BORDER_MED, ui::colors::BG_HOVER));
+            .arg(ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED, ui::colors::BG_HOVER));
     connect(draft_btn, &QPushButton::clicked, this, [this]() {
         deploy_ = false;
         accept();
@@ -121,8 +116,7 @@ void DeployDialog::build_ui(const QString& current_name) {
                 "  font-size: 11px; font-weight: bold; padding: 0 16px;"
                 "}"
                 "QPushButton:hover { background: %2; color: %4; }")
-            .arg(ui::colors::ACCENT_BG, ui::colors::AMBER,
-                 ui::colors::AMBER_DIM, ui::colors::BG_BASE));
+            .arg(ui::colors::ACCENT_BG, ui::colors::AMBER, ui::colors::AMBER_DIM, ui::colors::BG_BASE));
     connect(deploy_btn, &QPushButton::clicked, this, [this]() {
         deploy_ = true;
         accept();

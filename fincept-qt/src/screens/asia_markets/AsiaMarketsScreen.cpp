@@ -186,7 +186,7 @@ void AsiaMarketsScreen::setup_ui() {
 }
 
 QWidget* AsiaMarketsScreen::create_header() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("asiaHeader");
     bar->setFixedHeight(42);
 
@@ -221,7 +221,7 @@ QWidget* AsiaMarketsScreen::create_header() {
 }
 
 QWidget* AsiaMarketsScreen::create_category_bar() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("asiaCatBar");
     bar->setFixedHeight(32);
 
@@ -244,7 +244,7 @@ QWidget* AsiaMarketsScreen::create_category_bar() {
 }
 
 QWidget* AsiaMarketsScreen::create_left_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("asiaLeftPanel");
 
     auto* vl = new QVBoxLayout(panel);
@@ -252,7 +252,7 @@ QWidget* AsiaMarketsScreen::create_left_panel() {
     vl->setSpacing(0);
 
     // Search + symbol row
-    auto* input_area = new QWidget;
+    auto* input_area = new QWidget(this);
     auto* il = new QVBoxLayout(input_area);
     il->setContentsMargins(8, 6, 8, 6);
     il->setSpacing(6);
@@ -263,7 +263,7 @@ QWidget* AsiaMarketsScreen::create_left_panel() {
     connect(search_input_, &QLineEdit::textChanged, this, &AsiaMarketsScreen::on_search_changed);
 
     // Symbol input row
-    auto* sym_row = new QWidget;
+    auto* sym_row = new QWidget(this);
     auto* srl = new QHBoxLayout(sym_row);
     srl->setContentsMargins(0, 0, 0, 0);
     srl->setSpacing(6);
@@ -294,7 +294,7 @@ QWidget* AsiaMarketsScreen::create_left_panel() {
 }
 
 QWidget* AsiaMarketsScreen::create_data_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("asiaDataPanel");
 
     auto* vl = new QVBoxLayout(panel);
@@ -302,7 +302,7 @@ QWidget* AsiaMarketsScreen::create_data_panel() {
     vl->setSpacing(0);
 
     // Toolbar
-    auto* toolbar = new QWidget;
+    auto* toolbar = new QWidget(this);
     toolbar->setObjectName("asiaToolbar");
     toolbar->setFixedHeight(32);
     auto* tbl = new QHBoxLayout(toolbar);
@@ -367,7 +367,7 @@ QWidget* AsiaMarketsScreen::create_data_panel() {
 }
 
 QWidget* AsiaMarketsScreen::create_status_bar() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("asiaStatusBar");
     bar->setFixedHeight(26);
 
@@ -507,39 +507,38 @@ void AsiaMarketsScreen::load_endpoints(int cat_index) {
 
     QPointer<AsiaMarketsScreen> self = this;
 
-    python::PythonRunner::instance().run(script, {"get_all_endpoints"},
-                                         [self, script, cache_key](const python::PythonResult& result) {
-                                             if (!self)
-                                                 return;
-                                             self->set_loading(false);
+    python::PythonRunner::instance().run(
+        script, {"get_all_endpoints"}, [self, script, cache_key](const python::PythonResult& result) {
+            if (!self)
+                return;
+            self->set_loading(false);
 
-                                             if (!result.success) {
-                                                 self->data_status_->setText("Failed to load endpoints");
-                                                 LOG_ERROR("AsiaMarkets", "Endpoint load failed: " + result.error);
-                                                 return;
-                                             }
+            if (!result.success) {
+                self->data_status_->setText("Failed to load endpoints");
+                LOG_ERROR("AsiaMarkets", "Endpoint load failed: " + result.error);
+                return;
+            }
 
-                                             QString json_str = python::extract_json(result.output);
-                                             if (json_str.isEmpty()) {
-                                                 self->data_status_->setText("No endpoint data");
-                                                 return;
-                                             }
+            QString json_str = python::extract_json(result.output);
+            if (json_str.isEmpty()) {
+                self->data_status_->setText("No endpoint data");
+                return;
+            }
 
-                                             QJsonParseError err;
-                                             auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
-                                             if (doc.isNull() || !doc.isObject()) {
-                                                 self->data_status_->setText("Invalid endpoint data");
-                                                 return;
-                                             }
+            QJsonParseError err;
+            auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
+            if (doc.isNull() || !doc.isObject()) {
+                self->data_status_->setText("Invalid endpoint data");
+                return;
+            }
 
-                                             auto obj = doc.object();
-                                             fincept::CacheManager::instance().put(
-                                                 cache_key,
-                                                 QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
-                                                 60 * 60, "asia_markets");
-                                             self->endpoint_cache_[script] = obj;
-                                             self->populate_endpoint_list(obj);
-                                         });
+            auto obj = doc.object();
+            fincept::CacheManager::instance().put(
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), 60 * 60,
+                "asia_markets");
+            self->endpoint_cache_[script] = obj;
+            self->populate_endpoint_list(obj);
+        });
 }
 
 void AsiaMarketsScreen::populate_endpoint_list(const QJsonObject& result) {
@@ -597,8 +596,10 @@ void AsiaMarketsScreen::populate_endpoint_list(const QJsonObject& result) {
     for (int i = 0; i < endpoint_list_->count(); ++i) {
         auto* item = endpoint_list_->item(i);
         QString ep = item->data(Qt::UserRole).toString();
-        if (ep.isEmpty()) continue;
-        if (!first_real) first_real = item;
+        if (ep.isEmpty())
+            continue;
+        if (!first_real)
+            first_real = item;
         if (!first_sina && ep.contains("sina", Qt::CaseInsensitive)) {
             first_sina = item;
             break;
@@ -700,8 +701,7 @@ void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList
 
         if (!data_array.isEmpty()) {
             fincept::CacheManager::instance().put(
-                cache_key,
-                QVariant(QString::fromUtf8(QJsonDocument(data_array).toJson(QJsonDocument::Compact))),
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(data_array).toJson(QJsonDocument::Compact))),
                 2 * 60, "asia_markets");
         }
 
@@ -807,7 +807,7 @@ void AsiaMarketsScreen::set_loading(bool loading) {
 QVariantMap AsiaMarketsScreen::save_state() const {
     return {
         {"category", active_category_},
-        {"region",   active_region_},
+        {"region", active_region_},
         {"endpoint", active_endpoint_},
     };
 }

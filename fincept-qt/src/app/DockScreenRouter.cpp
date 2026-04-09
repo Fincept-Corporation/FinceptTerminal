@@ -5,9 +5,6 @@
 #include "core/session/SessionManager.h"
 #include "screens/IStatefulScreen.h"
 
-#include <DockAreaWidget.h>
-#include <DockWidgetTab.h>
-
 #include <QDebug>
 #include <QEvent>
 #include <QKeyEvent>
@@ -16,65 +13,67 @@
 #include <QPalette>
 #include <QVBoxLayout>
 
+#include <DockAreaWidget.h>
+#include <DockWidgetTab.h>
+
 namespace fincept {
 
 QString DockScreenRouter::title_for_id(const QString& id) {
     static const QHash<QString, QString> titles = {
-        {"dashboard",        "Dashboard"},
-        {"markets",          "Markets"},
-        {"crypto_trading",   "Crypto Trading"},
-        {"equity_trading",   "Equity Trading"},
-        {"algo_trading",     "Algo Trading"},
-        {"backtesting",      "Backtesting"},
-        {"portfolio",        "Portfolio"},
-        {"watchlist",        "Watchlist"},
-        {"news",             "News"},
-        {"ai_chat",          "AI Chat"},
-        {"equity_research",  "Equity Research"},
-        {"economics",        "Economics"},
-        {"dbnomics",         "DBnomics"},
-        {"akshare",          "AkShare Data"},
-        {"asia_markets",     "Asia Markets"},
-        {"geopolitics",      "Geopolitics"},
-        {"gov_data",         "Gov Data"},
-        {"maritime",         "Maritime"},
-        {"polymarket",       "Polymarket"},
+        {"dashboard", "Dashboard"},
+        {"markets", "Markets"},
+        {"crypto_trading", "Crypto Trading"},
+        {"equity_trading", "Equity Trading"},
+        {"algo_trading", "Algo Trading"},
+        {"backtesting", "Backtesting"},
+        {"portfolio", "Portfolio"},
+        {"watchlist", "Watchlist"},
+        {"news", "News"},
+        {"ai_chat", "AI Chat"},
+        {"equity_research", "Equity Research"},
+        {"economics", "Economics"},
+        {"dbnomics", "DBnomics"},
+        {"akshare", "AkShare Data"},
+        {"asia_markets", "Asia Markets"},
+        {"geopolitics", "Geopolitics"},
+        {"gov_data", "Gov Data"},
+        {"maritime", "Maritime"},
+        {"polymarket", "Polymarket"},
         {"relationship_map", "Relationship Map"},
-        {"derivatives",      "Derivatives"},
-        {"alt_investments",  "Alt Investments"},
-        {"ma_analytics",     "M&A Analytics"},
-        {"surface_analytics","Surface Analytics"},
-        {"quantlib",         "QuantLib"},
-        {"ai_quant_lab",     "AI Quant Lab"},
-        {"alpha_arena",      "Alpha Arena"},
-        {"agent_config",     "Agent Config"},
-        {"mcp_servers",      "MCP Servers"},
-        {"node_editor",      "Node Editor"},
-        {"code_editor",      "Code Editor"},
-        {"excel",            "Excel"},
-        {"report_builder",   "Report Builder"},
-        {"trade_viz",        "Trade Viz"},
-        {"data_sources",     "Data Sources"},
-        {"data_mapping",     "Data Mapping"},
-        {"file_manager",     "File Manager"},
-        {"notes",            "Notes"},
-        {"forum",            "Forum"},
-        {"docs",             "Docs"},
-        {"support",          "Support"},
-        {"about",            "About"},
-        {"profile",          "Profile"},
-        {"settings",         "Settings"},
-        {"contact",          "Contact"},
-        {"terms",            "Terms"},
-        {"privacy",          "Privacy"},
-        {"trademarks",       "Trademarks"},
-        {"help",             "Help"},
+        {"derivatives", "Derivatives"},
+        {"alt_investments", "Alt Investments"},
+        {"ma_analytics", "M&A Analytics"},
+        {"surface_analytics", "Surface Analytics"},
+        {"quantlib", "QuantLib"},
+        {"ai_quant_lab", "AI Quant Lab"},
+        {"alpha_arena", "Alpha Arena"},
+        {"agent_config", "Agent Config"},
+        {"mcp_servers", "MCP Servers"},
+        {"node_editor", "Node Editor"},
+        {"code_editor", "Code Editor"},
+        {"excel", "Excel"},
+        {"report_builder", "Report Builder"},
+        {"trade_viz", "Trade Viz"},
+        {"data_sources", "Data Sources"},
+        {"data_mapping", "Data Mapping"},
+        {"file_manager", "File Manager"},
+        {"notes", "Notes"},
+        {"forum", "Forum"},
+        {"docs", "Docs"},
+        {"support", "Support"},
+        {"about", "About"},
+        {"profile", "Profile"},
+        {"settings", "Settings"},
+        {"contact", "Contact"},
+        {"terms", "Terms"},
+        {"privacy", "Privacy"},
+        {"trademarks", "Trademarks"},
+        {"help", "Help"},
     };
     return titles.value(id, id);
 }
 
-DockScreenRouter::DockScreenRouter(ads::CDockManager* manager, QObject* parent)
-    : QObject(parent), manager_(manager) {}
+DockScreenRouter::DockScreenRouter(ads::CDockManager* manager, QObject* parent) : QObject(parent), manager_(manager) {}
 
 void DockScreenRouter::register_screen(const QString& id, QWidget* screen) {
     // Store the screen widget — the CDockWidget is only created on first navigate().
@@ -88,8 +87,8 @@ void DockScreenRouter::register_factory(const QString& id, ScreenFactory factory
 }
 
 void DockScreenRouter::navigate(const QString& id, bool exclusive) {
-    LOG_INFO("DockRouter", QString(">>> navigate('%1', exclusive=%2) panel_count=%3")
-             .arg(id).arg(exclusive).arg(panel_count_));
+    LOG_INFO("DockRouter",
+             QString(">>> navigate('%1', exclusive=%2) panel_count=%3").arg(id).arg(exclusive).arg(panel_count_));
     auto* dw = find_dock_widget(id);
 
     bool needs_add = false;
@@ -111,7 +110,10 @@ void DockScreenRouter::navigate(const QString& id, bool exclusive) {
     if (screens_.contains(id) && dw->widget() != screens_[id]) {
         QWidget* old = dw->widget();
         dw->setWidget(screens_[id]);
-        if (old) { old->setParent(nullptr); old->deleteLater(); }
+        if (old) {
+            old->setParent(nullptr);
+            old->deleteLater();
+        }
     }
 
     materialize_screen(id);
@@ -140,8 +142,7 @@ void DockScreenRouter::navigate(const QString& id, bool exclusive) {
     // We check dockWidgets() (all, not just open) because ensure_all_registered
     // hides them all — openedDockWidgets() would be empty and miss the poisoning.
     auto* existing_area = dw->dockAreaWidget();
-    const bool area_is_poisoned = existing_area
-        && existing_area->dockWidgets().size() > 1;
+    const bool area_is_poisoned = existing_area && existing_area->dockWidgets().size() > 1;
     const bool must_place = needs_add || !existing_area || area_is_poisoned;
 
     // ── Helper: sync grid tracking from currently open areas ────────────────
@@ -152,25 +153,39 @@ void DockScreenRouter::navigate(const QString& id, bool exclusive) {
         panel_count_ = std::min(static_cast<int>(opened.size()), 4);
 
         // Invalidate pointers that no longer exist
-        if (grid_top_left_    && !opened.contains(grid_top_left_))    grid_top_left_    = nullptr;
-        if (grid_top_right_   && !opened.contains(grid_top_right_))   grid_top_right_   = nullptr;
-        if (grid_bottom_left_ && !opened.contains(grid_bottom_left_)) grid_bottom_left_ = nullptr;
-        if (grid_bottom_right_&& !opened.contains(grid_bottom_right_))grid_bottom_right_= nullptr;
+        if (grid_top_left_ && !opened.contains(grid_top_left_))
+            grid_top_left_ = nullptr;
+        if (grid_top_right_ && !opened.contains(grid_top_right_))
+            grid_top_right_ = nullptr;
+        if (grid_bottom_left_ && !opened.contains(grid_bottom_left_))
+            grid_bottom_left_ = nullptr;
+        if (grid_bottom_right_ && !opened.contains(grid_bottom_right_))
+            grid_bottom_right_ = nullptr;
 
         // Fill in missing pointers from opened areas
         int idx = 0;
-        if (!grid_top_left_     && idx < opened.size()) grid_top_left_     = opened.at(idx);
-        if (grid_top_left_) idx = opened.indexOf(grid_top_left_) + 1;
-        if (!grid_top_right_    && idx < opened.size()) grid_top_right_    = opened.at(idx);
-        if (grid_top_right_) idx = opened.indexOf(grid_top_right_) + 1;
-        if (!grid_bottom_left_  && idx < opened.size()) grid_bottom_left_  = opened.at(idx);
-        if (grid_bottom_left_) idx = opened.indexOf(grid_bottom_left_) + 1;
-        if (!grid_bottom_right_ && idx < opened.size()) grid_bottom_right_ = opened.at(idx);
+        if (!grid_top_left_ && idx < opened.size())
+            grid_top_left_ = opened.at(idx);
+        if (grid_top_left_)
+            idx = opened.indexOf(grid_top_left_) + 1;
+        if (!grid_top_right_ && idx < opened.size())
+            grid_top_right_ = opened.at(idx);
+        if (grid_top_right_)
+            idx = opened.indexOf(grid_top_right_) + 1;
+        if (!grid_bottom_left_ && idx < opened.size())
+            grid_bottom_left_ = opened.at(idx);
+        if (grid_bottom_left_)
+            idx = opened.indexOf(grid_bottom_left_) + 1;
+        if (!grid_bottom_right_ && idx < opened.size())
+            grid_bottom_right_ = opened.at(idx);
 
         LOG_INFO("DockRouter", QString("GRID synced: panel_count=%1 opened=%2 TL=%3 TR=%4 BL=%5 BR=%6")
-                 .arg(panel_count_).arg(opened.size())
-                 .arg(grid_top_left_ ? "ok" : "-").arg(grid_top_right_ ? "ok" : "-")
-                 .arg(grid_bottom_left_ ? "ok" : "-").arg(grid_bottom_right_ ? "ok" : "-"));
+                                   .arg(panel_count_)
+                                   .arg(opened.size())
+                                   .arg(grid_top_left_ ? "ok" : "-")
+                                   .arg(grid_top_right_ ? "ok" : "-")
+                                   .arg(grid_bottom_left_ ? "ok" : "-")
+                                   .arg(grid_bottom_right_ ? "ok" : "-"));
     };
 
     if (exclusive) {
@@ -184,8 +199,7 @@ void DockScreenRouter::navigate(const QString& id, bool exclusive) {
         // Sync grid from reality before placing
         sync_grid_from_reality();
 
-        LOG_INFO("DockRouter", QString("GRID [%1] must_place panel_count=%2")
-                 .arg(id).arg(panel_count_));
+        LOG_INFO("DockRouter", QString("GRID [%1] must_place panel_count=%2").arg(id).arg(panel_count_));
 
         if (panel_count_ == 0) {
             LOG_INFO("DockRouter", QString("GRID [%1] -> PANEL 1 (full)").arg(id));
@@ -214,9 +228,10 @@ void DockScreenRouter::navigate(const QString& id, bool exclusive) {
         } else {
             // 5th+ panel or missing grid pointer: tab into last area
             LOG_INFO("DockRouter", QString("GRID [%1] -> tab into last (panel_count=%2)").arg(id).arg(panel_count_));
-            ads::CDockAreaWidget* target = grid_bottom_right_
-                ? grid_bottom_right_
-                : (manager_->openedDockAreas().isEmpty() ? nullptr : manager_->openedDockAreas().last());
+            ads::CDockAreaWidget* target =
+                grid_bottom_right_
+                    ? grid_bottom_right_
+                    : (manager_->openedDockAreas().isEmpty() ? nullptr : manager_->openedDockAreas().last());
             if (target)
                 manager_->addDockWidget(ads::CenterDockWidgetArea, dw, target);
             else
@@ -305,11 +320,13 @@ void DockScreenRouter::add_alongside(const QString& primary, const QString& seco
     // without resetting the layout. This allows building up to a 2x2 grid
     // (4 panels) incrementally via repeated "add" commands.
     auto* primary_dw = find_dock_widget(primary);
-    bool primary_visible = primary_dw && !primary_dw->isClosed()
-                           && primary_dw->dockAreaWidget();
+    bool primary_visible = primary_dw && !primary_dw->isClosed() && primary_dw->dockAreaWidget();
 
     LOG_INFO("DockRouter", QString("add_alongside: primary=%1 visible=%2 secondary=%3 panel_count=%4")
-             .arg(primary).arg(primary_visible).arg(secondary).arg(panel_count_));
+                               .arg(primary)
+                               .arg(primary_visible)
+                               .arg(secondary)
+                               .arg(panel_count_));
 
     if (primary_visible) {
         // Primary already showing — add secondary non-exclusively
@@ -339,7 +356,8 @@ void DockScreenRouter::remove_screen(const QString& primary) {
             dw->toggleView(false);
     }
     if (keep) {
-        if (keep->isClosed()) keep->toggleView(true);
+        if (keep->isClosed())
+            keep->toggleView(true);
         keep->raise();
         keep->setAsCurrentTab();
         current_id_ = primary;
@@ -405,11 +423,13 @@ bool DockScreenRouter::eventFilter(QObject* obj, QEvent* event) {
         return QObject::eventFilter(obj, event);
 
     auto* lbl = qobject_cast<QLabel*>(obj);
-    if (!lbl) return QObject::eventFilter(obj, event);
+    if (!lbl)
+        return QObject::eventFilter(obj, event);
 
     const QString id = lbl->property("dock_id").toString();
     auto* dw = dock_widgets_.value(id, nullptr);
-    if (!dw) return QObject::eventFilter(obj, event);
+    if (!dw)
+        return QObject::eventFilter(obj, event);
 
     // Show a QLineEdit overlaid on the label for inline rename.
     // Parent it to the label's parent (the tab frame) so geometry is correct.
@@ -418,21 +438,17 @@ bool DockScreenRouter::eventFilter(QObject* obj, QEvent* event) {
     editor->setText(dw->windowTitle());
     editor->selectAll();
     editor->setFrame(false);
-    editor->setStyleSheet(
-        "QLineEdit{"
-        "  background:#1a1a1a;"
-        "  color:#ffffff;"
-        "  border:1px solid #d97706;"
-        "  padding:0 4px;"
-        "  font-size:11px;"
-        "  font-family:'Consolas',monospace;"
-        "}");
+    editor->setStyleSheet("QLineEdit{"
+                          "  background:#1a1a1a;"
+                          "  color:#ffffff;"
+                          "  border:1px solid #d97706;"
+                          "  padding:0 4px;"
+                          "  font-size:11px;"
+                          "  font-family:'Consolas',monospace;"
+                          "}");
     // Map label rect into the tab frame's coordinate space
-    editor->setGeometry(
-        tab_frame->mapFromGlobal(lbl->mapToGlobal(QPoint(0, 0))).x(),
-        2,
-        lbl->width(),
-        tab_frame->height() - 4);
+    editor->setGeometry(tab_frame->mapFromGlobal(lbl->mapToGlobal(QPoint(0, 0))).x(), 2, lbl->width(),
+                        tab_frame->height() - 4);
     editor->show();
     editor->raise();
     editor->setFocus();
@@ -455,8 +471,7 @@ bool DockScreenRouter::eventFilter(QObject* obj, QEvent* event) {
         QLineEdit* ed;
         explicit EscFilter(QLineEdit* e) : QObject(e), ed(e) {}
         bool eventFilter(QObject*, QEvent* e) override {
-            if (e->type() == QEvent::KeyPress &&
-                static_cast<QKeyEvent*>(e)->key() == Qt::Key_Escape) {
+            if (e->type() == QEvent::KeyPress && static_cast<QKeyEvent*>(e)->key() == Qt::Key_Escape) {
                 ed->deleteLater();
                 return true;
             }
@@ -478,12 +493,8 @@ ads::CDockWidget* DockScreenRouter::create_dock_widget(const QString& id) {
     // Pinnable is intentionally excluded: the auto-hide pin button converts panels
     // to collapsible sidebars, which causes them to disappear when another panel
     // is opened alongside them. Movable/Floatable/Closable/Focusable are kept.
-    dw->setFeatures(
-        ads::CDockWidget::DockWidgetMovable |
-        ads::CDockWidget::DockWidgetFloatable |
-        ads::CDockWidget::DockWidgetClosable |
-        ads::CDockWidget::DockWidgetFocusable
-    );
+    dw->setFeatures(ads::CDockWidget::DockWidgetMovable | ads::CDockWidget::DockWidgetFloatable |
+                    ads::CDockWidget::DockWidgetClosable | ads::CDockWidget::DockWidgetFocusable);
 
     // Use dock-widget minimum size (not content size) so screens with large
     // internal canvases (like DashboardCanvas) don't prevent side-by-side splits.
@@ -523,7 +534,7 @@ ads::CDockWidget* DockScreenRouter::create_dock_widget(const QString& id) {
 
     // Persist the title whenever the user renames it via the inline editor.
     connect(dw, &ads::CDockWidget::titleChanged, this, [this, id](const QString& title) {
-        if (title != title_for_id(id))  // only save if user actually changed it
+        if (title != title_for_id(id)) // only save if user actually changed it
             save_tab_title(id, title);
     });
 
@@ -568,7 +579,8 @@ void DockScreenRouter::materialize_screen(const QString& id) {
     factories_.erase(fit);
 
     auto* dw = dock_widgets_.value(id, nullptr);
-    if (!dw) return;
+    if (!dw)
+        return;
 
     QWidget* old = dw->widget();
     dw->setWidget(screen);
@@ -583,8 +595,7 @@ void DockScreenRouter::materialize_screen(const QString& id) {
 // ── Tab title persistence ─────────────────────────────────────────────────────
 
 void DockScreenRouter::save_tab_title(const QString& id, const QString& title) {
-    SessionManager::instance().save_tab_state(
-        "title/" + id, {{"title", title}});
+    SessionManager::instance().save_tab_state("title/" + id, {{"title", title}});
 }
 
 QString DockScreenRouter::load_tab_title(const QString& id) const {
@@ -596,17 +607,21 @@ QString DockScreenRouter::load_tab_title(const QString& id) const {
 
 void DockScreenRouter::save_screen_state(const QString& id) {
     auto* screen = screens_.value(id, nullptr);
-    if (!screen) return;
+    if (!screen)
+        return;
     auto* stateful = dynamic_cast<screens::IStatefulScreen*>(screen);
-    if (!stateful) return;
+    if (!stateful)
+        return;
     ScreenStateManager::instance().save_now(stateful);
 }
 
 void DockScreenRouter::restore_screen_state(const QString& id) {
     auto* screen = screens_.value(id, nullptr);
-    if (!screen) return;
+    if (!screen)
+        return;
     auto* stateful = dynamic_cast<screens::IStatefulScreen*>(screen);
-    if (!stateful) return;
+    if (!stateful)
+        return;
     ScreenStateManager::instance().restore(stateful);
 }
 

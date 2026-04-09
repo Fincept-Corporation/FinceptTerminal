@@ -16,9 +16,9 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kStatCanScript   = "statcan_data.py";
+static constexpr const char* kStatCanScript = "statcan_data.py";
 static constexpr const char* kStatCanSourceId = "statcan";
-static constexpr const char* kStatCanColor    = "#EF4444";  // Canada red
+static constexpr const char* kStatCanColor = "#EF4444"; // Canada red
 
 struct StatCanSeries {
     QString label;
@@ -27,22 +27,20 @@ struct StatCanSeries {
 };
 
 static const QList<StatCanSeries> kStatCanSeries = {
-    { "Real GDP (Chained 2017 $, SA)",  "gdp",          "Table 36-10-0104-01, v65201210, quarterly"  },
-    { "CPI All-Items, Canada",          "cpi",          "Table 18-10-0004-01, v41690973, monthly"    },
-    { "Unemployment Rate",              "unemployment", "Table 14-10-0287-01, v2062815, monthly"     },
-    { "Employment Rate",                "employment",   "Table 14-10-0287-01, v2062817, monthly"     },
-    { "Population Estimate (Canada)",   "population",   "Table 17-10-0005-01, v466668, quarterly"    },
-    { "Housing Starts (SA, SAAR)",      "housing",      "Table 34-10-0158-01, v52300157, monthly"    },
+    {"Real GDP (Chained 2017 $, SA)", "gdp", "Table 36-10-0104-01, v65201210, quarterly"},
+    {"CPI All-Items, Canada", "cpi", "Table 18-10-0004-01, v41690973, monthly"},
+    {"Unemployment Rate", "unemployment", "Table 14-10-0287-01, v2062815, monthly"},
+    {"Employment Rate", "employment", "Table 14-10-0287-01, v2062817, monthly"},
+    {"Population Estimate (Canada)", "population", "Table 17-10-0005-01, v466668, quarterly"},
+    {"Housing Starts (SA, SAAR)", "housing", "Table 34-10-0158-01, v52300157, monthly"},
 };
 
 } // namespace
 
-StatCanPanel::StatCanPanel(QWidget* parent)
-    : EconPanelBase(kStatCanSourceId, kStatCanColor, parent) {
+StatCanPanel::StatCanPanel(QWidget* parent) : EconPanelBase(kStatCanSourceId, kStatCanColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &StatCanPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &StatCanPanel::on_result);
 }
 
 void StatCanPanel::activate() {
@@ -70,23 +68,29 @@ void StatCanPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void StatCanPanel::on_fetch() {
-    const int   idx    = series_combo_->currentIndex();
+    const int idx = series_combo_->currentIndex();
     const auto& series = kStatCanSeries[idx];
 
     show_loading("Fetching StatCan: " + series.label + "…");
-    services::EconomicsService::instance().execute(
-        kStatCanSourceId, kStatCanScript, series.command, {},
-        "statcan_" + series.command);
+    services::EconomicsService::instance().execute(kStatCanSourceId, kStatCanScript, series.command, {},
+                                                   "statcan_" + series.command);
 }
 
-void StatCanPanel::on_result(const QString& request_id,
-                              const services::EconomicsResult& result) {
-    if (result.source_id != kStatCanSourceId) return;
-    if (!request_id.startsWith("statcan_")) return;
-    if (!result.success) { show_error(result.error); return; }
+void StatCanPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kStatCanSourceId)
+        return;
+    if (!request_id.startsWith("statcan_"))
+        return;
+    if (!result.success) {
+        show_error(result.error);
+        return;
+    }
 
     const QString inline_err = result.data["error"].toString();
-    if (!inline_err.isEmpty()) { show_error(inline_err); return; }
+    if (!inline_err.isEmpty()) {
+        show_error(inline_err);
+        return;
+    }
 
     // Response: { success, vector_id, label, count, data:[{date, value}], series }
     QJsonArray rows = result.data["data"].toArray();
@@ -102,14 +106,16 @@ void StatCanPanel::on_result(const QString& request_id,
     if (label.isEmpty()) {
         // Find display label from kStatCanSeries
         for (const auto& s : kStatCanSeries) {
-            if (s.command == series_key) { label = s.label; break; }
+            if (s.command == series_key) {
+                label = s.label;
+                break;
+            }
         }
     }
     const QString title = "StatCan: " + (label.isEmpty() ? request_id.mid(8) : label);
 
     display(rows, title);
-    LOG_INFO("StatCanPanel",
-             QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+    LOG_INFO("StatCanPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }
 
 } // namespace fincept::screens

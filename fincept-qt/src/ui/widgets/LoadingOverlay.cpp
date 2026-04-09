@@ -1,5 +1,6 @@
 // src/ui/widgets/LoadingOverlay.cpp
 #include "ui/widgets/LoadingOverlay.h"
+
 #include "ui/theme/ThemeManager.h"
 
 #include <QPainter>
@@ -16,11 +17,10 @@ LoadingOverlay::LoadingOverlay(QWidget* parent) : QWidget(parent) {
 
     tokens_ = ThemeManager::instance().tokens();
 
-    connect(&ThemeManager::instance(), &ThemeManager::theme_changed,
-            this, [this](const ThemeTokens& t) {
-                tokens_ = t;
-                update();
-            });
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this, [this](const ThemeTokens& t) {
+        tokens_ = t;
+        update();
+    });
 
     anim_timer_ = new QTimer(this);
     anim_timer_->setInterval(ANIM_INTERVAL_MS);
@@ -63,13 +63,13 @@ void LoadingOverlay::paintEvent(QPaintEvent*) {
     const int cy = height() / 2;
 
     // ── Pulsing bars ─────────────────────────────────────────────────────────
-    const int bar_w     = 4;
-    const int bar_gap   = 6;
+    const int bar_w = 4;
+    const int bar_gap = 6;
     const int max_bar_h = 28;
     const int min_bar_h = 8;
-    const int total_w   = BAR_COUNT * bar_w + (BAR_COUNT - 1) * bar_gap;
-    const int start_x   = cx - total_w / 2;
-    const int base_y    = cy + 4;
+    const int total_w = BAR_COUNT * bar_w + (BAR_COUNT - 1) * bar_gap;
+    const int start_x = cx - total_w / 2;
+    const int base_y = cy + 4;
 
     QColor accent_color(tokens_.accent);
 

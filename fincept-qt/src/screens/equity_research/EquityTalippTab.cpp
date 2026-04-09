@@ -250,7 +250,7 @@ void EquityTalippTab::build_ui() {
             .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::AMBER));
     cl->addWidget(indicator_combo_);
 
-    param_widget_ = new QWidget;
+    param_widget_ = new QWidget(this);
     param_widget_->setStyleSheet("background:transparent;");
     param_form_ = new QFormLayout(param_widget_);
     param_form_->setContentsMargins(0, 0, 0, 0);
@@ -260,7 +260,8 @@ void EquityTalippTab::build_ui() {
     cl->addStretch();
 
     data_points_lbl_ = new QLabel("—  data points  |  TALIpp Engine");
-    data_points_lbl_->setStyleSheet(QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY));
+    data_points_lbl_->setStyleSheet(
+        QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY));
     cl->addWidget(data_points_lbl_);
 
     compute_btn_ = new QPushButton("▶  CALCULATE");
@@ -284,26 +285,29 @@ void EquityTalippTab::build_ui() {
 
     auto* ew_icon = new QLabel("◈");
     ew_icon->setAlignment(Qt::AlignCenter);
-    ew_icon->setStyleSheet(QString("color:%1; font-size:32px; background:transparent; border:0;").arg(ui::colors::TEXT_DIM));
+    ew_icon->setStyleSheet(
+        QString("color:%1; font-size:32px; background:transparent; border:0;").arg(ui::colors::TEXT_DIM));
     status_label_ = new QLabel("Select an indicator and click CALCULATE");
     status_label_->setAlignment(Qt::AlignCenter);
-    status_label_->setStyleSheet(QString("color:%1; font-size:13px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY));
+    status_label_->setStyleSheet(
+        QString("color:%1; font-size:13px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY));
     auto* ew_sub = new QLabel("50+ indicators across 6 categories — powered by TALIpp incremental engine");
     ew_sub->setAlignment(Qt::AlignCenter);
-    ew_sub->setStyleSheet(QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_DIM));
+    ew_sub->setStyleSheet(
+        QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_DIM));
     ew_vl->addWidget(ew_icon);
     ew_vl->addWidget(status_label_);
     ew_vl->addWidget(ew_sub);
     vl->addWidget(empty_widget_, 1);
 
     // ── Results area (hidden until first compute) ─────────────────────────────
-    results_widget_ = new QWidget;
+    results_widget_ = new QWidget(this);
     results_widget_->setStyleSheet("background:transparent;");
     auto* rw_vl = new QVBoxLayout(results_widget_);
     rw_vl->setContentsMargins(0, 0, 0, 0);
     rw_vl->setSpacing(8);
 
-    last_values_area_ = new QWidget;
+    last_values_area_ = new QWidget(this);
     last_values_area_->setStyleSheet("background:transparent;");
     new QHBoxLayout(last_values_area_);
     static_cast<QHBoxLayout*>(last_values_area_->layout())->setContentsMargins(0, 0, 0, 0);
@@ -335,7 +339,8 @@ void EquityTalippTab::on_category_clicked(const QString& cat_id) {
         it.value()->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:1px solid %3; "
                                           "padding:5px 14px; font-size:10px; font-weight:700; }"
                                           "QPushButton:hover { border-color:%3; }")
-                                      .arg(active ? color : "transparent", active ? ui::colors::BG_BASE() : ui::colors::TEXT_TERTIARY(),
+                                      .arg(active ? color : "transparent",
+                                           active ? ui::colors::BG_BASE() : ui::colors::TEXT_TERTIARY(),
                                            active ? color : ui::colors::BORDER_DIM));
     }
 
@@ -383,7 +388,8 @@ void EquityTalippTab::rebuild_param_form(const QString& indicator_id) {
                                     "padding:3px 6px; font-size:11px; }")
                                 .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM));
         auto* lbl = new QLabel(name + ":");
-        lbl->setStyleSheet(QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_SECONDARY));
+        lbl->setStyleSheet(
+            QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_SECONDARY));
         param_form_->addRow(lbl, spin);
     }
 }
@@ -437,7 +443,8 @@ void EquityTalippTab::rebuild_last_values(const QString& indicator_id, const QVe
         wl->setSpacing(2);
         auto* l = new QLabel(lbl);
         l->setStyleSheet(QString("color:%1; font-size:9px; letter-spacing:0.5px; "
-                         "background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY));
+                                 "background:transparent; border:0;")
+                             .arg(ui::colors::TEXT_TERTIARY));
         auto* v = new QLabel(val);
         v->setStyleSheet(QString("color:%1; font-size:15px; font-weight:700; font-family:monospace; "
                                  "background:transparent; border:0;")

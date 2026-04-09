@@ -57,9 +57,9 @@ class TeamsViewPanel : public QWidget {
     QLabel* available_count_ = nullptr;
 
     // Right: execution + LLM profile
-    QComboBox* team_profile_combo_  = nullptr;  // coordinator profile picker
-    QLabel*    team_resolved_lbl_   = nullptr;  // shows resolved provider/model
-    QPlainTextEdit* query_input_    = nullptr;
+    QComboBox* team_profile_combo_ = nullptr; // coordinator profile picker
+    QLabel* team_resolved_lbl_ = nullptr;     // shows resolved provider/model
+    QPlainTextEdit* query_input_ = nullptr;
     QPushButton* run_btn_ = nullptr;
     QTextEdit* result_display_ = nullptr;
     QTextEdit* log_display_ = nullptr;
@@ -68,8 +68,8 @@ class TeamsViewPanel : public QWidget {
     // State
     QVector<services::AgentInfo> all_agents_;
     QVector<services::AgentInfo> team_members_;
-    QStringList selected_tools_;          // synced from TOOLS tab
-    bool    executing_          = false;
+    QStringList selected_tools_; // synced from TOOLS tab
+    bool executing_ = false;
     QString pending_request_id_;
 };
 

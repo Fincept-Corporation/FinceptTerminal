@@ -46,7 +46,7 @@ class WorkflowCache : public QObject {
 
     static constexpr int kDefaultTtlSec = 300;
     bool enabled_ = true;
-    mutable int hits_   = 0;
+    mutable int hits_ = 0;
     mutable int misses_ = 0;
 };
 

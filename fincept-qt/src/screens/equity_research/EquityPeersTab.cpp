@@ -99,7 +99,7 @@ void EquityPeersTab::build_ui() {
     vl->addWidget(peer_table_, 1);
 
     // ── Legend row ────────────────────────────────────────────────────────────
-    auto* legend = new QWidget;
+    auto* legend = new QWidget(this);
     auto* leg_hl = new QHBoxLayout(legend);
     leg_hl->setContentsMargins(0, 4, 0, 0);
     leg_hl->setSpacing(16);
@@ -208,8 +208,10 @@ void EquityPeersTab::populate_table(const QVector<services::equity::PeerData>& p
         set_cell(r, 11, fmt_pct(p.operating_margin), color_pct_pos(p.operating_margin));
         set_cell(r, 12, fmt_pct(p.revenue_growth), color_pct_pos(p.revenue_growth));
         set_cell(r, 13, fmt(p.debt_to_equity, 2), color_ratio(p.debt_to_equity, 0.5, 2.0));
-        set_cell(r, 14, fmt_pct(p.dividend_yield), p.dividend_yield > 0 ? QColor(ui::colors::POSITIVE()) : QColor("#6b7280"));
-        set_cell(r, 15, fmt(p.beta, 2), p.beta >= 0 && p.beta <= 1.5 ? QColor(ui::colors::POSITIVE()) : QColor(ui::colors::NEGATIVE()));
+        set_cell(r, 14, fmt_pct(p.dividend_yield),
+                 p.dividend_yield > 0 ? QColor(ui::colors::POSITIVE()) : QColor("#6b7280"));
+        set_cell(r, 15, fmt(p.beta, 2),
+                 p.beta >= 0 && p.beta <= 1.5 ? QColor(ui::colors::POSITIVE()) : QColor(ui::colors::NEGATIVE()));
     }
 
     peer_table_->resizeColumnsToContents();

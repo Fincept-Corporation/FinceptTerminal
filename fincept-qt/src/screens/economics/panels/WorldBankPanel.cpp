@@ -15,38 +15,37 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kWorldBankScript    = "worldbank_data.py";
-static constexpr const char* kWorldBankSourceId  = "worldbank";
-static constexpr const char* kWorldBankColor     = "#22C55E";
+static constexpr const char* kWorldBankScript = "worldbank_data.py";
+static constexpr const char* kWorldBankSourceId = "worldbank";
+static constexpr const char* kWorldBankColor = "#22C55E";
 } // namespace
 
-static const QList<QPair<QString,QString>> kWbIndicators = {
-    {"GDP (current US$)",                    "NY.GDP.MKTP.CD"},
-    {"GDP per capita (current US$)",         "NY.GDP.PCAP.CD"},
-    {"GDP growth (annual %)",                "NY.GDP.MKTP.KD.ZG"},
-    {"GNI per capita (current US$)",         "NY.GNP.PCAP.CD"},
-    {"Inflation, CPI (annual %)",            "FP.CPI.TOTL.ZG"},
-    {"Unemployment (% labor force)",         "SL.UEM.TOTL.ZS"},
-    {"Population, total",                    "SP.POP.TOTL"},
-    {"Population growth (annual %)",         "SP.POP.GROW"},
-    {"Life expectancy at birth",             "SP.DYN.LE00.IN"},
-    {"Exports of goods & services (% GDP)",  "NE.EXP.GNFS.ZS"},
-    {"Imports of goods & services (% GDP)",  "NE.IMP.GNFS.ZS"},
-    {"Current account balance (% GDP)",      "BN.CAB.XOKA.GD.ZS"},
-    {"Government debt (% GDP)",              "GC.DOD.TOTL.GD.ZS"},
-    {"FDI net inflows (% GDP)",              "BX.KLT.DINV.WD.GD.ZS"},
+static const QList<QPair<QString, QString>> kWbIndicators = {
+    {"GDP (current US$)", "NY.GDP.MKTP.CD"},
+    {"GDP per capita (current US$)", "NY.GDP.PCAP.CD"},
+    {"GDP growth (annual %)", "NY.GDP.MKTP.KD.ZG"},
+    {"GNI per capita (current US$)", "NY.GNP.PCAP.CD"},
+    {"Inflation, CPI (annual %)", "FP.CPI.TOTL.ZG"},
+    {"Unemployment (% labor force)", "SL.UEM.TOTL.ZS"},
+    {"Population, total", "SP.POP.TOTL"},
+    {"Population growth (annual %)", "SP.POP.GROW"},
+    {"Life expectancy at birth", "SP.DYN.LE00.IN"},
+    {"Exports of goods & services (% GDP)", "NE.EXP.GNFS.ZS"},
+    {"Imports of goods & services (% GDP)", "NE.IMP.GNFS.ZS"},
+    {"Current account balance (% GDP)", "BN.CAB.XOKA.GD.ZS"},
+    {"Government debt (% GDP)", "GC.DOD.TOTL.GD.ZS"},
+    {"FDI net inflows (% GDP)", "BX.KLT.DINV.WD.GD.ZS"},
     {"Electric power consumption (kWh/cap)", "EG.USE.ELEC.KH.PC"},
-    {"CO2 emissions (metric tons per cap)",  "EN.ATM.CO2E.PC"},
-    {"Internet users (% population)",        "IT.NET.USER.ZS"},
-    {"Mobile subscriptions (per 100)",       "IT.CEL.SETS.P2"},
-    {"Forest area (% land area)",            "AG.LND.FRST.ZS"},
-    {"Access to electricity (% pop)",        "EG.ELC.ACCS.ZS"},
+    {"CO2 emissions (metric tons per cap)", "EN.ATM.CO2E.PC"},
+    {"Internet users (% population)", "IT.NET.USER.ZS"},
+    {"Mobile subscriptions (per 100)", "IT.CEL.SETS.P2"},
+    {"Forest area (% land area)", "AG.LND.FRST.ZS"},
+    {"Access to electricity (% pop)", "EG.ELC.ACCS.ZS"},
 };
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
-WorldBankPanel::WorldBankPanel(QWidget* parent)
-    : EconPanelBase(kWorldBankSourceId, kWorldBankColor, parent) {
+WorldBankPanel::WorldBankPanel(QWidget* parent) : EconPanelBase(kWorldBankSourceId, kWorldBankColor, parent) {
 
     // Outer layout: left selector | right content (base UI)
     auto* main = new QHBoxLayout(this);
@@ -54,7 +53,7 @@ WorldBankPanel::WorldBankPanel(QWidget* parent)
     main->setSpacing(0);
 
     // ── Left: country + indicator selectors ──────────────────────────────────
-    auto* left = new QWidget;
+    auto* left = new QWidget(this);
     left->setFixedWidth(220);
     left->setStyleSheet(sidebar_style());
     auto* lvl = new QVBoxLayout(left);
@@ -63,8 +62,7 @@ WorldBankPanel::WorldBankPanel(QWidget* parent)
 
     auto section_header = [this](const QString& text) {
         auto* lbl = new QLabel(text);
-        lbl->setStyleSheet(section_lbl_style()
-            + section_hdr_style());
+        lbl->setStyleSheet(section_lbl_style() + section_hdr_style());
         return lbl;
     };
 
@@ -73,16 +71,15 @@ WorldBankPanel::WorldBankPanel(QWidget* parent)
     country_search_ = new QLineEdit;
     country_search_->setPlaceholderText("Filter countries…");
     country_search_->setStyleSheet(search_input_style());
-    connect(country_search_, &QLineEdit::textChanged,
-            this, &WorldBankPanel::on_country_filter);
+    connect(country_search_, &QLineEdit::textChanged, this, &WorldBankPanel::on_country_filter);
     lvl->addWidget(country_search_);
 
     country_list_ = new QListWidget;
     country_list_->setStyleSheet(list_style());
-    connect(country_list_, &QListWidget::currentItemChanged, this,
-            [this](QListWidgetItem* item) {
-                if (item) selected_country_ = item->data(Qt::UserRole).toString();
-            });
+    connect(country_list_, &QListWidget::currentItemChanged, this, [this](QListWidgetItem* item) {
+        if (item)
+            selected_country_ = item->data(Qt::UserRole).toString();
+    });
     lvl->addWidget(country_list_, 2);
 
     // Indicator
@@ -90,8 +87,7 @@ WorldBankPanel::WorldBankPanel(QWidget* parent)
     indicator_search_ = new QLineEdit;
     indicator_search_->setPlaceholderText("Filter indicators…");
     indicator_search_->setStyleSheet(search_input_style());
-    connect(indicator_search_, &QLineEdit::textChanged,
-            this, &WorldBankPanel::on_indicator_filter);
+    connect(indicator_search_, &QLineEdit::textChanged, this, &WorldBankPanel::on_indicator_filter);
     lvl->addWidget(indicator_search_);
 
     indicator_list_ = new QListWidget;
@@ -107,26 +103,26 @@ WorldBankPanel::WorldBankPanel(QWidget* parent)
     main->addWidget(left);
 
     // ── Right: base UI (toolbar + stat cards + table) ─────────────────────────
-    auto* right = new QWidget;
+    auto* right = new QWidget(this);
     main->addWidget(right, 1);
     build_base_ui(right);
 
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &WorldBankPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &WorldBankPanel::on_result);
 }
 
 // ── Activate ──────────────────────────────────────────────────────────────────
 
 void WorldBankPanel::activate() {
-    if (!countries_loaded_) load_countries();
+    if (!countries_loaded_)
+        load_countries();
 }
 
 void WorldBankPanel::load_countries() {
     countries_loaded_ = true;
     show_loading("Loading countries…");
-    services::EconomicsService::instance().execute(
-        kWorldBankSourceId, kWorldBankScript, "countries", {}, "wb_countries");
+    services::EconomicsService::instance().execute(kWorldBankSourceId, kWorldBankScript, "countries", {},
+                                                   "wb_countries");
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -135,7 +131,7 @@ void WorldBankPanel::build_controls(QHBoxLayout* thl) {
     auto* lbl = new QLabel("YEARS");
     lbl->setStyleSheet(ctrl_label_style());
     date_preset_ = new QComboBox;
-    date_preset_->addItem("5 Years",   5);
+    date_preset_->addItem("5 Years", 5);
     date_preset_->addItem("10 Years", 10);
     date_preset_->addItem("20 Years", 20);
     date_preset_->addItem("50 Years", 50);
@@ -158,34 +154,37 @@ void WorldBankPanel::on_fetch() {
         return;
     }
     selected_indicator_ = ind_item->data(Qt::UserRole).toString();
-    int years     = date_preset_->currentData().toInt();
-    int end_year  = QDate::currentDate().year();
-    QString range = QString::number(end_year - years) + ":" +
-                    QString::number(end_year);
+    int years = date_preset_->currentData().toInt();
+    int end_year = QDate::currentDate().year();
+    QString range = QString::number(end_year - years) + ":" + QString::number(end_year);
 
     show_loading("Fetching World Bank data…");
-    services::EconomicsService::instance().execute(
-        kWorldBankSourceId, kWorldBankScript, "indicators",
-        {selected_country_, selected_indicator_, range},
-        "wb_data_" + selected_country_ + "_" + selected_indicator_);
+    services::EconomicsService::instance().execute(kWorldBankSourceId, kWorldBankScript, "indicators",
+                                                   {selected_country_, selected_indicator_, range},
+                                                   "wb_data_" + selected_country_ + "_" + selected_indicator_);
 }
 
 // ── Result ────────────────────────────────────────────────────────────────────
 
-void WorldBankPanel::on_result(const QString& request_id,
-                               const services::EconomicsResult& result) {
-    if (result.source_id != kWorldBankSourceId) return;
-    if (!result.success) { show_error(result.error); return; }
+void WorldBankPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kWorldBankSourceId)
+        return;
+    if (!result.success) {
+        show_error(result.error);
+        return;
+    }
 
     if (request_id == "wb_countries") {
         const QJsonArray arr = result.data["data"].toArray();
         country_list_->clear();
         for (const auto& v : arr) {
-            const auto obj  = v.toObject();
+            const auto obj = v.toObject();
             const QString n = obj["name"].toString();
-            const QString id= obj["iso2Code"].toString();
-            if (n.isEmpty() || id.isEmpty()) continue;
-            if (obj["region"].toString().contains("Aggregates")) continue;
+            const QString id = obj["iso2Code"].toString();
+            if (n.isEmpty() || id.isEmpty())
+                continue;
+            if (obj["region"].toString().contains("Aggregates"))
+                continue;
             auto* item = new QListWidgetItem(n, country_list_);
             item->setData(Qt::UserRole, id);
         }
@@ -206,14 +205,12 @@ void WorldBankPanel::on_result(const QString& request_id,
         const QJsonArray raw = result.data["data"].toArray();
         for (int i = raw.size() - 1; i >= 0; --i) {
             const auto obj = raw[i].toObject();
-            if (!obj["value"].isNull()) clean.append(obj);
+            if (!obj["value"].isNull())
+                clean.append(obj);
         }
         auto* ind = indicator_list_->currentItem();
-        display(clean,
-                (ind ? ind->text() : selected_indicator_) +
-                " — " + selected_country_);
-        LOG_INFO("WorldBankPanel",
-                 QString("Displayed %1 data points").arg(clean.size()));
+        display(clean, (ind ? ind->text() : selected_indicator_) + " — " + selected_country_);
+        LOG_INFO("WorldBankPanel", QString("Displayed %1 data points").arg(clean.size()));
     }
 }
 

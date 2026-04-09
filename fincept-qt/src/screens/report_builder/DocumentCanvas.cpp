@@ -5,9 +5,17 @@
 
 namespace { // forward-declare default theme for constructor use
 static fincept::screens::ReportTheme default_canvas_theme() {
-    return {"Light Professional", "#1a1a1a", "#d97706", "#ffffff",
-            "#333333", "#f0f0f0", "#1a1a1a", "#f5f5f5",
-            "#f9f9f9", "#666666", "#cccccc"};
+    return {"Light Professional",
+            "#1a1a1a",
+            "#d97706",
+            "#ffffff",
+            "#333333",
+            "#f0f0f0",
+            "#1a1a1a",
+            "#f5f5f5",
+            "#f9f9f9",
+            "#666666",
+            "#cccccc"};
 }
 } // namespace
 
@@ -36,8 +44,8 @@ static fincept::screens::ReportTheme default_canvas_theme() {
 #include <QTextList>
 #include <QTextTable>
 #include <QUrl>
-#include <QValueAxis>
 #include <QVBoxLayout>
+#include <QValueAxis>
 
 namespace fincept::screens {
 
@@ -49,7 +57,8 @@ static QVector<double> parse_csv_doubles(const QString& csv) {
     for (const QString& tok : csv.split(',', Qt::SkipEmptyParts)) {
         bool ok = false;
         double v = tok.trimmed().toDouble(&ok);
-        if (ok) vals << v;
+        if (ok)
+            vals << v;
     }
     return vals;
 }
@@ -63,14 +72,12 @@ static QStringList parse_csv_labels(const QString& csv) {
 }
 
 // Render a QChart to a temp PNG file and return the file path (empty on failure)
-static QString render_chart_to_file(const QString& chart_type,
-                                    const QString& title,
-                                    const QString& data_str,
-                                    const QString& labels_str,
-                                    const ReportTheme& theme,
-                                    int width = 640, int height = 320) {
+static QString render_chart_to_file(const QString& chart_type, const QString& title, const QString& data_str,
+                                    const QString& labels_str, const ReportTheme& theme, int width = 640,
+                                    int height = 320) {
     QVector<double> values = parse_csv_doubles(data_str);
-    if (values.isEmpty()) return {};
+    if (values.isEmpty())
+        return {};
 
     QStringList labels = parse_csv_labels(labels_str);
 
@@ -99,12 +106,13 @@ static QString render_chart_to_file(const QString& chart_type,
         for (int i = 0; i < values.size(); ++i) {
             auto* slice = series->append(labels.value(i, QString::number(i + 1)), values[i]);
             slice->setLabelVisible(true);
-            QFont lf; lf.setPointSize(8);
+            QFont lf;
+            lf.setPointSize(8);
             slice->setLabelFont(lf);
         }
         // Colour slices with accent + variations
-        const QStringList palette = {"#d97706","#3b82f6","#16a34a","#dc2626",
-                                     "#7c3aed","#0891b2","#ea580c","#65a30d"};
+        const QStringList palette = {"#d97706", "#3b82f6", "#16a34a", "#dc2626",
+                                     "#7c3aed", "#0891b2", "#ea580c", "#65a30d"};
         for (int i = 0; i < series->slices().size(); ++i) {
             series->slices()[i]->setColor(QColor(palette[i % palette.size()]));
             series->slices()[i]->setLabelColor(text_col);
@@ -117,7 +125,8 @@ static QString render_chart_to_file(const QString& chart_type,
         auto* set = new QBarSet("Value");
         set->setColor(accent);
         set->setLabelColor(text_col);
-        for (double v : values) *set << v;
+        for (double v : values)
+            *set << v;
 
         auto* series = new QBarSeries();
         series->append(set);
@@ -126,7 +135,8 @@ static QString render_chart_to_file(const QString& chart_type,
         auto* axisX = new QBarCategoryAxis();
         axisX->append(labels);
         axisX->setLabelsColor(text_col);
-        QFont axf; axf.setPointSize(8);
+        QFont axf;
+        axf.setPointSize(8);
         axisX->setLabelsFont(axf);
         chart->addAxis(axisX, Qt::AlignBottom);
         series->attachAxis(axisX);
@@ -153,7 +163,8 @@ static QString render_chart_to_file(const QString& chart_type,
         auto* axisX = new QBarCategoryAxis();
         axisX->append(labels);
         axisX->setLabelsColor(text_col);
-        QFont axf; axf.setPointSize(8);
+        QFont axf;
+        axf.setPointSize(8);
         axisX->setLabelsFont(axf);
         axisX->setGridLineColor(QColor(theme.divider_color));
         chart->addAxis(axisX, Qt::AlignBottom);
@@ -181,18 +192,19 @@ static QString render_chart_to_file(const QString& chart_type,
     QPixmap pix = view.grab();
     delete chart; // view took ownership but we grabbed already
 
-    QString path = QStandardPaths::writableLocation(QStandardPaths::TempLocation)
-                   + QString("/fincept_chart_%1.png").arg(QDateTime::currentMSecsSinceEpoch());
-    if (pix.save(path, "PNG")) return path;
+    QString path = QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
+                   QString("/fincept_chart_%1.png").arg(QDateTime::currentMSecsSinceEpoch());
+    if (pix.save(path, "PNG"))
+        return path;
     return {};
 }
 
 // Render a small sparkline (mini line chart) to a temp PNG
-static QString render_sparkline_to_file(const QString& data_str,
-                                        const ReportTheme& theme,
-                                        int width = 200, int height = 60) {
+static QString render_sparkline_to_file(const QString& data_str, const ReportTheme& theme, int width = 200,
+                                        int height = 60) {
     QVector<double> values = parse_csv_doubles(data_str);
-    if (values.size() < 2) return {};
+    if (values.size() < 2)
+        return {};
 
     QChart* chart = new QChart();
     chart->setMargins(QMargins(0, 0, 0, 0));
@@ -220,9 +232,10 @@ static QString render_sparkline_to_file(const QString& data_str,
     QPixmap pix = view.grab();
     delete chart;
 
-    QString path = QStandardPaths::writableLocation(QStandardPaths::TempLocation)
-                   + QString("/fincept_spark_%1.png").arg(QDateTime::currentMSecsSinceEpoch());
-    if (pix.save(path, "PNG")) return path;
+    QString path = QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
+                   QString("/fincept_spark_%1.png").arg(QDateTime::currentMSecsSinceEpoch());
+    if (pix.save(path, "PNG"))
+        return path;
     return {};
 }
 
@@ -247,7 +260,7 @@ DocumentCanvas::DocumentCanvas(QWidget* parent) : QWidget(parent) {
                 "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }")
             .arg(ui::colors::BORDER_DIM, ui::colors::BG_RAISED, ui::colors::BORDER_BRIGHT));
 
-    container_ = new QWidget;
+    container_ = new QWidget(this);
     container_->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM));
     pages_layout_ = new QVBoxLayout(container_);
     pages_layout_->setContentsMargins(40, 40, 40, 40);
@@ -272,20 +285,19 @@ void DocumentCanvas::clear_pages() {
 QTextEdit* DocumentCanvas::new_page(const ReportTheme& theme) {
     auto* page = new QTextEdit(container_);
     page->setReadOnly(true);
-    page->setFixedWidth(794);   // A4 at 96 dpi
+    page->setFixedWidth(794);     // A4 at 96 dpi
     page->setMinimumHeight(1123); // A4 height
-    page->setStyleSheet(
-        QString("QTextEdit {"
-                "  background: %1;"
-                "  color: %2;"
-                "  border: none;"
-                "  padding: 72px 80px 72px 80px;"
-                "  font-family: 'Segoe UI', 'Arial', sans-serif;"
-                "  font-size: 12pt;"
-                "}"
-                "QScrollBar:vertical { width: 0px; }"
-                "QScrollBar:horizontal { height: 0px; }")
-            .arg(theme.page_bg, theme.text_color));
+    page->setStyleSheet(QString("QTextEdit {"
+                                "  background: %1;"
+                                "  color: %2;"
+                                "  border: none;"
+                                "  padding: 72px 80px 72px 80px;"
+                                "  font-family: 'Segoe UI', 'Arial', sans-serif;"
+                                "  font-size: 12pt;"
+                                "}"
+                                "QScrollBar:vertical { width: 0px; }"
+                                "QScrollBar:horizontal { height: 0px; }")
+                            .arg(theme.page_bg, theme.text_color));
     // Drop shadow effect via container styling — wrap in a frame
     page->setFrameShape(QFrame::NoFrame);
 
@@ -297,7 +309,8 @@ QTextEdit* DocumentCanvas::new_page(const ReportTheme& theme) {
 // ── Drag-and-drop ─────────────────────────────────────────────────────────────
 
 static bool is_image_url(const QUrl& url) {
-    if (!url.isLocalFile()) return false;
+    if (!url.isLocalFile())
+        return false;
     static const QStringList exts = {"png", "jpg", "jpeg", "bmp", "svg", "gif", "webp"};
     return exts.contains(QFileInfo(url.toLocalFile()).suffix().toLower());
 }
@@ -305,19 +318,27 @@ static bool is_image_url(const QUrl& url) {
 void DocumentCanvas::dragEnterEvent(QDragEnterEvent* e) {
     if (e->mimeData()->hasUrls()) {
         for (const auto& url : e->mimeData()->urls()) {
-            if (is_image_url(url)) { e->acceptProposedAction(); return; }
+            if (is_image_url(url)) {
+                e->acceptProposedAction();
+                return;
+            }
         }
     }
     e->ignore();
 }
 
 void DocumentCanvas::dragMoveEvent(QDragMoveEvent* e) {
-    if (e->mimeData()->hasUrls()) e->acceptProposedAction();
-    else e->ignore();
+    if (e->mimeData()->hasUrls())
+        e->acceptProposedAction();
+    else
+        e->ignore();
 }
 
 void DocumentCanvas::dropEvent(QDropEvent* e) {
-    if (!e->mimeData()->hasUrls()) { e->ignore(); return; }
+    if (!e->mimeData()->hasUrls()) {
+        e->ignore();
+        return;
+    }
     for (const auto& url : e->mimeData()->urls()) {
         if (is_image_url(url)) {
             emit image_dropped(url.toLocalFile());
@@ -345,8 +366,10 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
     meta_fmt.setFontPointSize(10);
     meta_fmt.setForeground(QColor(theme.meta_color));
     QString meta_line = metadata.author;
-    if (!metadata.company.isEmpty()) meta_line += " | " + metadata.company;
-    if (!metadata.date.isEmpty())    meta_line += " | " + metadata.date;
+    if (!metadata.company.isEmpty())
+        meta_line += " | " + metadata.company;
+    if (!metadata.date.isEmpty())
+        meta_line += " | " + metadata.date;
     cursor.insertText(meta_line + "\n\n", meta_fmt);
 
     // Divider
@@ -391,7 +414,8 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
         } else if (comp.type == "text") {
             QTextBlockFormat bf;
             bf.setLineHeight(140, QTextBlockFormat::ProportionalHeight);
-            if (i == selected_index) bf.setBackground(QColor("#fffbe6"));
+            if (i == selected_index)
+                bf.setBackground(QColor("#fffbe6"));
             cursor.setBlockFormat(bf);
             QTextCharFormat fmt;
             fmt.setFontPointSize(12);
@@ -415,7 +439,8 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             QJsonObject cell_data;
             if (comp.config.contains("data")) {
                 QJsonDocument doc = QJsonDocument::fromJson(comp.config.value("data").toUtf8());
-                if (doc.isObject()) cell_data = doc.object();
+                if (doc.isObject())
+                    cell_data = doc.object();
             }
 
             auto* table = cursor.insertTable(rows, cols, tf);
@@ -454,7 +479,8 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             bf.setBackground(QColor(theme.code_bg));
             bf.setLeftMargin(16);
             bf.setRightMargin(16);
-            if (i == selected_index) bf.setBackground(QColor("#fffbe6"));
+            if (i == selected_index)
+                bf.setBackground(QColor("#fffbe6"));
             cursor.setBlockFormat(bf);
             QTextCharFormat fmt;
             fmt.setFontFamily("Consolas");
@@ -474,7 +500,8 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             QTextBlockFormat bf;
             bf.setLeftMargin(24);
             bf.setBackground(QColor(theme.quote_bg));
-            if (i == selected_index) bf.setBackground(QColor("#fffbe6"));
+            if (i == selected_index)
+                bf.setBackground(QColor("#fffbe6"));
             cursor.setBlockFormat(bf);
             QTextCharFormat fmt;
             fmt.setFontItalic(true);
@@ -488,7 +515,8 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             lf.setStyle(QTextListFormat::ListDisc);
             lf.setIndent(1);
             QStringList items = comp.content.split("\n", Qt::SkipEmptyParts);
-            if (items.isEmpty()) items << "Item 1" << "Item 2";
+            if (items.isEmpty())
+                items << "Item 1" << "Item 2";
             QTextList* list = nullptr;
             QTextCharFormat item_fmt;
             item_fmt.setForeground(QColor(theme.text_color));
@@ -504,17 +532,18 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             cursor.setBlockFormat(QTextBlockFormat{});
 
         } else if (comp.type == "chart") {
-            QString chart_type  = comp.config.value("chart_type", "line");
+            QString chart_type = comp.config.value("chart_type", "line");
             QString chart_title = comp.config.value("title", "Chart");
-            QString data_str    = comp.config.value("data", "");
-            QString labels_str  = comp.config.value("labels", "");
-            int     chart_w     = comp.config.value("width", "640").toInt();
+            QString data_str = comp.config.value("data", "");
+            QString labels_str = comp.config.value("labels", "");
+            int chart_w = comp.config.value("width", "640").toInt();
 
             QTextBlockFormat bf;
             bf.setTopMargin(8);
             bf.setBottomMargin(8);
             bf.setAlignment(Qt::AlignHCenter);
-            if (i == selected_index) bf.setBackground(QColor("#fffbe6"));
+            if (i == selected_index)
+                bf.setBackground(QColor("#fffbe6"));
             cursor.setBlockFormat(bf);
 
             if (data_str.isEmpty()) {
@@ -523,8 +552,8 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
                 fmt.setFontPointSize(11);
                 cursor.insertText(QString("[%1 Chart — enter data in Properties panel]").arg(chart_title), fmt);
             } else {
-                QString img_path = render_chart_to_file(chart_type, chart_title,
-                                                        data_str, labels_str, theme, chart_w, chart_w / 2);
+                QString img_path =
+                    render_chart_to_file(chart_type, chart_title, data_str, labels_str, theme, chart_w, chart_w / 2);
                 if (!img_path.isEmpty()) {
                     QTextImageFormat img_fmt;
                     img_fmt.setName(img_path);
@@ -540,17 +569,21 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             cursor.insertText("\n");
 
         } else if (comp.type == "image") {
-            QString path    = comp.config.value("path", "");
-            QString align   = comp.config.value("align", "left");
+            QString path = comp.config.value("path", "");
+            QString align = comp.config.value("align", "left");
             QString caption = comp.config.value("caption", "");
-            int     width   = comp.config.value("width", "400").toInt();
+            int width = comp.config.value("width", "400").toInt();
 
             // Apply alignment to the block
             QTextBlockFormat img_bf;
-            if (i == selected_index) img_bf.setBackground(QColor("#fffbe6"));
-            if (align == "center")     img_bf.setAlignment(Qt::AlignHCenter);
-            else if (align == "right") img_bf.setAlignment(Qt::AlignRight);
-            else                       img_bf.setAlignment(Qt::AlignLeft);
+            if (i == selected_index)
+                img_bf.setBackground(QColor("#fffbe6"));
+            if (align == "center")
+                img_bf.setAlignment(Qt::AlignHCenter);
+            else if (align == "right")
+                img_bf.setAlignment(Qt::AlignRight);
+            else
+                img_bf.setAlignment(Qt::AlignLeft);
             cursor.setBlockFormat(img_bf);
 
             if (!path.isEmpty()) {
@@ -570,8 +603,9 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             if (!caption.isEmpty()) {
                 cursor.insertBlock();
                 QTextBlockFormat cap_bf;
-                cap_bf.setAlignment(align == "center" ? Qt::AlignHCenter :
-                                    align == "right"  ? Qt::AlignRight : Qt::AlignLeft);
+                cap_bf.setAlignment(align == "center"  ? Qt::AlignHCenter
+                                    : align == "right" ? Qt::AlignRight
+                                                       : Qt::AlignLeft);
                 cap_bf.setTopMargin(2);
                 cap_bf.setBottomMargin(8);
                 cursor.setBlockFormat(cap_bf);
@@ -584,22 +618,23 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             }
 
         } else if (comp.type == "market_data") {
-            QString symbol   = comp.config.value("symbol", "");
-            QString price    = comp.config.value("price", "");
-            QString change   = comp.config.value("change", "");
-            QString chg_pct  = comp.config.value("change_pct", "");
-            QString name     = comp.config.value("name", symbol);
-            QString high     = comp.config.value("high", "");
-            QString low      = comp.config.value("low", "");
-            QString volume   = comp.config.value("volume", "");
-            QString status   = comp.config.value("status", "pending");
+            QString symbol = comp.config.value("symbol", "");
+            QString price = comp.config.value("price", "");
+            QString change = comp.config.value("change", "");
+            QString chg_pct = comp.config.value("change_pct", "");
+            QString name = comp.config.value("name", symbol);
+            QString high = comp.config.value("high", "");
+            QString low = comp.config.value("low", "");
+            QString volume = comp.config.value("volume", "");
+            QString status = comp.config.value("status", "pending");
 
             QTextBlockFormat bf;
             bf.setBackground(QColor(theme.quote_bg));
             bf.setLeftMargin(12);
             bf.setTopMargin(6);
             bf.setBottomMargin(6);
-            if (i == selected_index) bf.setBackground(QColor("#fffbe6"));
+            if (i == selected_index)
+                bf.setBackground(QColor("#fffbe6"));
             cursor.setBlockFormat(bf);
 
             if (status == "loading") {
@@ -659,10 +694,14 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
                     if (!volume.isEmpty()) {
                         double vol = volume.toDouble();
                         QString vol_str;
-                        if (vol >= 1e9)      vol_str = QString::number(vol / 1e9, 'f', 2) + "B";
-                        else if (vol >= 1e6) vol_str = QString::number(vol / 1e6, 'f', 2) + "M";
-                        else if (vol >= 1e3) vol_str = QString::number(vol / 1e3, 'f', 1) + "K";
-                        else                 vol_str = volume;
+                        if (vol >= 1e9)
+                            vol_str = QString::number(vol / 1e9, 'f', 2) + "B";
+                        else if (vol >= 1e6)
+                            vol_str = QString::number(vol / 1e6, 'f', 2) + "M";
+                        else if (vol >= 1e3)
+                            vol_str = QString::number(vol / 1e3, 'f', 1) + "K";
+                        else
+                            vol_str = volume;
                         detail += "Vol: " + vol_str;
                     }
                     cursor.insertText("    " + detail, meta_fmt);
@@ -702,7 +741,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
         } else if (comp.type == "stats_block") {
             // Key-value stats grid rendered as a 2-column table
             QString block_title = comp.config.value("title", "Key Statistics");
-            QString data_str    = comp.config.value("data", "");
+            QString data_str = comp.config.value("data", "");
 
             // Title row
             QTextCharFormat title_cf;
@@ -724,22 +763,17 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
                 tf.setBorder(1);
                 tf.setCellPadding(5);
                 tf.setCellSpacing(0);
-                QVector<QTextLength> widths = {
-                    QTextLength(QTextLength::PercentageLength, 50),
-                    QTextLength(QTextLength::PercentageLength, 50)
-                };
+                QVector<QTextLength> widths = {QTextLength(QTextLength::PercentageLength, 50),
+                                               QTextLength(QTextLength::PercentageLength, 50)};
                 tf.setColumnWidthConstraints(widths);
 
-                int rows = (lines.size() + 1) / 2; // 2 stats per row
+                int rows = (lines.size() + 1) / 2;           // 2 stats per row
                 auto* tbl = cursor.insertTable(rows, 4, tf); // label|value|label|value
 
                 QTextTableFormat tf2 = tf;
-                tf2.setColumnWidthConstraints({
-                    QTextLength(QTextLength::PercentageLength, 25),
-                    QTextLength(QTextLength::PercentageLength, 25),
-                    QTextLength(QTextLength::PercentageLength, 25),
-                    QTextLength(QTextLength::PercentageLength, 25)
-                });
+                tf2.setColumnWidthConstraints(
+                    {QTextLength(QTextLength::PercentageLength, 25), QTextLength(QTextLength::PercentageLength, 25),
+                     QTextLength(QTextLength::PercentageLength, 25), QTextLength(QTextLength::PercentageLength, 25)});
                 tbl->setFormat(tf2);
 
                 for (int li = 0; li < lines.size(); ++li) {
@@ -774,27 +808,39 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
 
         } else if (comp.type == "callout") {
             // Colored callout/alert box: info (blue), success (green), warning (amber), danger (red)
-            QString style   = comp.config.value("style", "info");
+            QString style = comp.config.value("style", "info");
             QString heading = comp.config.value("heading", "");
 
             // Pick colors by style
             QString bg_col, border_col, icon;
             if (style == "success") {
-                bg_col = "#f0fdf4"; border_col = "#16a34a"; icon = "✓";
+                bg_col = "#f0fdf4";
+                border_col = "#16a34a";
+                icon = "✓";
             } else if (style == "warning") {
-                bg_col = "#fffbeb"; border_col = "#d97706"; icon = "⚠";
+                bg_col = "#fffbeb";
+                border_col = "#d97706";
+                icon = "⚠";
             } else if (style == "danger") {
-                bg_col = "#fef2f2"; border_col = "#dc2626"; icon = "✗";
+                bg_col = "#fef2f2";
+                border_col = "#dc2626";
+                icon = "✗";
             } else { // info
-                bg_col = "#eff6ff"; border_col = "#3b82f6"; icon = "ℹ";
+                bg_col = "#eff6ff";
+                border_col = "#3b82f6";
+                icon = "ℹ";
             }
             // For dark themes, darken the box bg
             bool dark_theme = QColor(theme.page_bg).lightness() < 100;
             if (dark_theme) {
-                if      (style == "success") bg_col = "#052e16";
-                else if (style == "warning") bg_col = "#1c1506";
-                else if (style == "danger")  bg_col = "#1f0505";
-                else                         bg_col = "#0c1a33";
+                if (style == "success")
+                    bg_col = "#052e16";
+                else if (style == "warning")
+                    bg_col = "#1c1506";
+                else if (style == "danger")
+                    bg_col = "#1f0505";
+                else
+                    bg_col = "#0c1a33";
             }
 
             QTextBlockFormat bf;
@@ -803,7 +849,8 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             bf.setRightMargin(8);
             bf.setTopMargin(8);
             bf.setBottomMargin(8);
-            if (i == selected_index) bf.setBackground(QColor("#fffbe6"));
+            if (i == selected_index)
+                bf.setBackground(QColor("#fffbe6"));
             cursor.setBlockFormat(bf);
 
             // Icon + optional heading
@@ -829,15 +876,16 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             cursor.insertText("\n");
 
         } else if (comp.type == "sparkline") {
-            QString spark_title  = comp.config.value("title", "");
-            QString data_str     = comp.config.value("data", "");
-            QString current_val  = comp.config.value("current", "");
-            QString change_pct   = comp.config.value("change_pct", "");
+            QString spark_title = comp.config.value("title", "");
+            QString data_str = comp.config.value("data", "");
+            QString current_val = comp.config.value("current", "");
+            QString change_pct = comp.config.value("change_pct", "");
 
             QTextBlockFormat bf;
             bf.setTopMargin(4);
             bf.setBottomMargin(4);
-            if (i == selected_index) bf.setBackground(QColor("#fffbe6"));
+            if (i == selected_index)
+                bf.setBackground(QColor("#fffbe6"));
             cursor.setBlockFormat(bf);
 
             // Title + current value inline

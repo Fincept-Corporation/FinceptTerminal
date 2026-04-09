@@ -21,7 +21,7 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     layout->setSpacing(0);
 
     // Header
-    auto* header = new QWidget;
+    auto* header = new QWidget(this);
     header->setObjectName("eqWatchlistHeader");
     header->setFixedHeight(28);
     auto* h_layout = new QHBoxLayout(header);
@@ -47,7 +47,7 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     layout->addWidget(filter_edit_);
 
     // Add-symbol row
-    auto* add_row = new QWidget;
+    auto* add_row = new QWidget(this);
     add_row->setFixedHeight(28);
     auto* add_layout = new QHBoxLayout(add_row);
     add_layout->setContentsMargins(4, 1, 4, 1);
@@ -57,8 +57,8 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     add_edit_->setObjectName("eqWatchlistAddEdit");
     add_edit_->setPlaceholderText("Add symbol...");
     add_edit_->setFixedHeight(22);
-    connect(add_edit_, &QLineEdit::textChanged,     this, &EquityWatchlist::on_add_text_changed);
-    connect(add_edit_, &QLineEdit::returnPressed,   this, &EquityWatchlist::on_add_symbol_entered);
+    connect(add_edit_, &QLineEdit::textChanged, this, &EquityWatchlist::on_add_text_changed);
+    connect(add_edit_, &QLineEdit::returnPressed, this, &EquityWatchlist::on_add_symbol_entered);
 
     // Completer backed by InstrumentService::search()
     completer_model_ = new QStringListModel(this);
@@ -141,7 +141,8 @@ void EquityWatchlist::update_quotes(const QVector<trading::BrokerQuote>& quotes)
                     ltp_item->setText(QString::number(e.ltp, 'f', 2));
                 if (chg_item) {
                     chg_item->setText(QString("%1%2%").arg(e.change_pct >= 0 ? "+" : "").arg(e.change_pct, 0, 'f', 2));
-                    chg_item->setForeground(e.change_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE()) : QColor(fincept::ui::colors::NEGATIVE()));
+                    chg_item->setForeground(e.change_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE())
+                                                              : QColor(fincept::ui::colors::NEGATIVE()));
                 }
                 break;
             }
@@ -159,7 +160,8 @@ void EquityWatchlist::set_active_symbol(const QString& symbol) {
         for (int col = 0; col < 3; ++col) {
             auto* cell = table_->item(row, col);
             if (cell) {
-                cell->setBackground(active ? QColor(fincept::ui::colors::BG_HOVER()) : QColor(fincept::ui::colors::BG_BASE()));
+                cell->setBackground(active ? QColor(fincept::ui::colors::BG_HOVER())
+                                           : QColor(fincept::ui::colors::BG_BASE()));
             }
         }
     }
@@ -205,7 +207,8 @@ void EquityWatchlist::rebuild_table() {
         auto* chg_item = new QTableWidgetItem(
             e.has_data ? QString("%1%2%").arg(e.change_pct >= 0 ? "+" : "").arg(e.change_pct, 0, 'f', 2) : "--");
         chg_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        chg_item->setForeground(e.change_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE()) : QColor(fincept::ui::colors::NEGATIVE()));
+        chg_item->setForeground(e.change_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE())
+                                                  : QColor(fincept::ui::colors::NEGATIVE()));
         table_->setItem(i, 2, chg_item);
     }
 }
@@ -221,7 +224,8 @@ void EquityWatchlist::add_symbol(const QString& symbol) {
     {
         QMutexLocker lock(&mutex_);
         for (const auto& e : entries_)
-            if (e.symbol == sym) return; // already in watchlist
+            if (e.symbol == sym)
+                return; // already in watchlist
         WatchlistEntry entry;
         entry.symbol = sym;
         entries_.append(entry);
@@ -246,9 +250,7 @@ void EquityWatchlist::on_add_symbol_entered() {
         if (results.isEmpty()) {
             // Not found — flash the edit red briefly to signal invalid
             add_edit_->setStyleSheet(QString("border: 1px solid %1;").arg(fincept::ui::colors::NEGATIVE));
-            QTimer::singleShot(800, add_edit_, [this]() {
-                add_edit_->setStyleSheet("");
-            });
+            QTimer::singleShot(800, add_edit_, [this]() { add_edit_->setStyleSheet(""); });
             return;
         }
         sym = results.first().symbol;

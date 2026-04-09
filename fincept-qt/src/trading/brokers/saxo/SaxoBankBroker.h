@@ -28,23 +28,32 @@ class SaxoBankBroker : public IBroker {
 
     BrokerProfile profile() const override {
         return BrokerProfile{
-            .id = "saxobank", .display_name = "Saxo Bank", .region = "EU", .currency = "EUR",
-            .credential_fields = {
-                {CredentialField::ApiKey,    "APP KEY",    "Enter App Key (client_id)...",    false},
-                {CredentialField::ApiSecret, "APP SECRET", "Enter App Secret (client_secret)...", true},
-                {CredentialField::AuthCode,  "AUTH CODE",  "Paste OAuth authorization code...",   false},
-            },
+            .id = "saxobank",
+            .display_name = "Saxo Bank",
+            .region = "EU",
+            .currency = "EUR",
+            .credential_fields =
+                {
+                    {CredentialField::ApiKey, "APP KEY", "Enter App Key (client_id)...", false},
+                    {CredentialField::ApiSecret, "APP SECRET", "Enter App Secret (client_secret)...", true},
+                    {CredentialField::AuthCode, "AUTH CODE", "Paste OAuth authorization code...", false},
+                },
             .exchanges = {"NYSE", "NASDAQ", "LSE", "XETRA", "EURONEXT", "XNYS", "XNAS"},
-            .product_types = {
-                {"Day Order",  ProductType::Intraday},
-                {"GTC Order",  ProductType::Delivery},
-                {"Margin",     ProductType::Margin},
-            },
-            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
-            .has_native_paper=true, .default_paper_balance=50000.0,
-            .default_watchlist={"AAPL","MSFT","GOOGL","AMZN","NVDA","VOD","ADS","ASML","SIE","AIR"},
-            .default_symbol="AAPL", .default_exchange="NYSE",
-            .brokerage_info="0.05% (min \u20AC3)",
+            .product_types =
+                {
+                    {"Day Order", ProductType::Intraday},
+                    {"GTC Order", ProductType::Delivery},
+                    {"Margin", ProductType::Margin},
+                },
+            .supports_intraday = true,
+            .supports_bracket_order = false,
+            .supports_cover_order = false,
+            .has_native_paper = true,
+            .default_paper_balance = 50000.0,
+            .default_watchlist = {"AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "VOD", "ADS", "ASML", "SIE", "AIR"},
+            .default_symbol = "AAPL",
+            .default_exchange = "NYSE",
+            .brokerage_info = "0.05% (min \u20AC3)",
         };
     }
 
@@ -65,7 +74,7 @@ class SaxoBankBroker : public IBroker {
                                                    const QString& resolution, const QString& from_date,
                                                    const QString& to_date) override;
 
-    static bool    is_token_expired(const BrokerHttpResponse& resp);
+    static bool is_token_expired(const BrokerHttpResponse& resp);
     static QString checked_error(const BrokerHttpResponse& resp, const QString& fallback);
 
   protected:
@@ -74,7 +83,7 @@ class SaxoBankBroker : public IBroker {
   private:
     static QString saxo_order_type(OrderType t);
     static QString saxo_duration(ProductType p);
-    static int     saxo_horizon(const QString& resolution);
+    static int saxo_horizon(const QString& resolution);
     // Extract Uic from symbol "NYSE:AAPL:211" → "211"
     static QString extract_uic(const QString& symbol);
 };

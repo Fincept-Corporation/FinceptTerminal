@@ -40,7 +40,7 @@ PolymarketBrowsePanel::PolymarketBrowsePanel(QWidget* parent) : QWidget(parent) 
     vl->addWidget(list_view_, 1);
 
     // Pagination
-    auto* page_bar = new QWidget;
+    auto* page_bar = new QWidget(this);
     page_bar->setFixedHeight(30);
     page_bar->setStyleSheet(
         QString("background: %1; border-top: 1px solid %2;").arg(colors::BG_SURFACE, colors::BORDER_DIM));

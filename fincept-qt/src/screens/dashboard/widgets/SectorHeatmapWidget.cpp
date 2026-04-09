@@ -22,7 +22,7 @@ QMap<QString, QString> SectorHeatmapWidget::sector_labels() {
 }
 
 SectorHeatmapWidget::SectorHeatmapWidget(QWidget* parent) : BaseWidget("SECTOR HEATMAP", parent) {
-    grid_container_ = new QWidget;
+    grid_container_ = new QWidget(this);
     grid_ = new QGridLayout(grid_container_);
     grid_->setContentsMargins(4, 4, 4, 4);
     grid_->setSpacing(3);

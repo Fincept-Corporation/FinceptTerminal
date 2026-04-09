@@ -8,11 +8,13 @@
 
 #include <QPaintEvent>
 #include <QPainter>
+#include <QPalette>
 #include <QPen>
 #include <QPropertyAnimation>
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QShowEvent>
 #include <QUuid>
 
 #include <algorithm>
@@ -21,15 +23,18 @@ namespace fincept::screens {
 
 DashboardCanvas::DashboardCanvas(QWidget* parent) : QWidget(parent) {
     tokens_ = ui::ThemeManager::instance().tokens();
-    setStyleSheet(QString("background: %1;").arg(QString(tokens_.bg_base)));
+    // Set both autoFillBackground (Qt paints bg_base before paintEvent) AND
+    // a stylesheet so the background survives hide/show cycles from tab switching.
+    setAttribute(Qt::WA_StyledBackground, true);
+    setAutoFillBackground(true);
+    apply_bg();
     setMinimumHeight(200);
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens& t) {
-                tokens_ = t;
-                setStyleSheet(QString("background: %1;").arg(QString(tokens_.bg_base)));
-                update();
-            });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens& t) {
+        tokens_ = t;
+        apply_bg();
+        update();
+    });
 
     placeholder_ = new PlaceholderOverlay(this);
 
@@ -44,13 +49,14 @@ DashboardCanvas::DashboardCanvas(QWidget* parent) : QWidget(parent) {
     resize_timer_->setInterval(150);
     connect(resize_timer_, &QTimer::timeout, this, [this]() {
         const int w = pending_resize_w_;
-        if (w <= 0) return;
+        if (w <= 0)
+            return;
 
         // Restore to canonical columns if width now permits it — user's layout
         // should snap back when they expand the panel again.
-        const int target_cols = (w >= 1000) ? canonical_cols_
-                              : (w >= 600)  ? std::min(canonical_cols_, 9)
-                                            : std::min(canonical_cols_, 6);
+        const int target_cols = (w >= 1000)  ? canonical_cols_
+                                : (w >= 600) ? std::min(canonical_cols_, 9)
+                                             : std::min(canonical_cols_, 6);
 
         if (target_cols != layout_.cols) {
             layout_.cols = target_cols;
@@ -417,6 +423,27 @@ void DashboardCanvas::on_scroll_tick() {
 }
 
 // ── Qt events ─────────────────────────────────────────────────────────────────
+
+void DashboardCanvas::apply_bg() {
+    // Set both stylesheet AND QPalette so Qt always knows the correct background,
+    // even during hide/show cycles from tab switching in ADS docking.
+    QString bg = QString(tokens_.bg_base);
+    setAttribute(Qt::WA_StyledBackground, true);
+    setStyleSheet(QString("background:%1;").arg(bg));
+    QPalette pal = palette();
+    pal.setColor(QPalette::Window, QColor(bg));
+    pal.setColor(QPalette::Base, QColor(bg));
+    pal.setColor(QPalette::Button, QColor(bg));
+    setPalette(pal);
+}
+
+void DashboardCanvas::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    // Re-apply background and force immediate repaint when tab is re-selected.
+    // Without this, the canvas shows Qt's default grey for one frame.
+    apply_bg();
+    update();
+}
 
 void DashboardCanvas::resizeEvent(QResizeEvent* e) {
     QWidget::resizeEvent(e);

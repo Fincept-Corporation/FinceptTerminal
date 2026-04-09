@@ -3,6 +3,7 @@
 #include "screens/chat_mode/ChatModeTypes.h"
 
 #include <QWidget>
+
 #include <functional>
 
 namespace fincept::chat_mode {
@@ -32,10 +33,10 @@ class ChatModeScreen : public QWidget, public fincept::screens::IStatefulScreen 
     void hideEvent(QHideEvent* e) override;
 
   private:
-    ChatSessionPanel*   session_panel_  = nullptr;
-    ChatMessagePanel*   message_panel_  = nullptr;
-    ChatAgentPanel*     agent_panel_    = nullptr;
-    TerminalToolBridge* tool_bridge_    = nullptr;
+    ChatSessionPanel* session_panel_ = nullptr;
+    ChatMessagePanel* message_panel_ = nullptr;
+    ChatAgentPanel* agent_panel_ = nullptr;
+    TerminalToolBridge* tool_bridge_ = nullptr;
 
     QString active_session_uuid_;
 

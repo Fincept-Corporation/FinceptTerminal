@@ -14,67 +14,51 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kImfScript   = "imf_datamapper_data.py";
+static constexpr const char* kImfScript = "imf_datamapper_data.py";
 static constexpr const char* kImfSourceId = "imf";
-static constexpr const char* kImfColor    = "#3B82F6";  // blue
+static constexpr const char* kImfColor = "#3B82F6"; // blue
 
 // Curated indicator list: display name → IMF DataMapper code
-static const QList<QPair<QString,QString>> kImfIndicators = {
-    {"Real GDP Growth (%)",                   "NGDP_RPCH"},
-    {"Nominal GDP (USD billions)",             "NGDPD"},
-    {"GDP per capita (USD)",                   "NGDPDPC"},
-    {"Inflation, End of Period (%)",           "PCPIE"},
-    {"Inflation, Average (%)",                 "PCPIPCH"},
-    {"Unemployment Rate (%)",                  "LUR"},
-    {"Current Account Balance (% GDP)",        "BCA_NGDPD"},
-    {"General Gov. Gross Debt (% GDP)",        "GGXWDG_NGDP"},
-    {"General Gov. Net Lending (% GDP)",       "GGXCNL_NGDP"},
-    {"General Gov. Revenue (% GDP)",           "GGR_NGDP"},
-    {"Total Investment (% GDP)",               "NID_NGDP"},
-    {"Gross National Savings (% GDP)",         "NGSD_NGDP"},
-    {"Volume of Imports of Goods (% change)",  "TM_RPCH"},
-    {"Volume of Exports of Goods (% change)",  "TX_RPCH"},
-    {"Commodity Terms of Trade",               "TT"},
-    {"Population (millions)",                  "LP"},
+static const QList<QPair<QString, QString>> kImfIndicators = {
+    {"Real GDP Growth (%)", "NGDP_RPCH"},
+    {"Nominal GDP (USD billions)", "NGDPD"},
+    {"GDP per capita (USD)", "NGDPDPC"},
+    {"Inflation, End of Period (%)", "PCPIE"},
+    {"Inflation, Average (%)", "PCPIPCH"},
+    {"Unemployment Rate (%)", "LUR"},
+    {"Current Account Balance (% GDP)", "BCA_NGDPD"},
+    {"General Gov. Gross Debt (% GDP)", "GGXWDG_NGDP"},
+    {"General Gov. Net Lending (% GDP)", "GGXCNL_NGDP"},
+    {"General Gov. Revenue (% GDP)", "GGR_NGDP"},
+    {"Total Investment (% GDP)", "NID_NGDP"},
+    {"Gross National Savings (% GDP)", "NGSD_NGDP"},
+    {"Volume of Imports of Goods (% change)", "TM_RPCH"},
+    {"Volume of Exports of Goods (% change)", "TX_RPCH"},
+    {"Commodity Terms of Trade", "TT"},
+    {"Population (millions)", "LP"},
 };
 
 // Curated country list
-static const QList<QPair<QString,QString>> kImfCountries = {
-    {"All Countries",       ""},
-    {"United States",       "USA"},
-    {"China",               "CHN"},
-    {"Japan",               "JPN"},
-    {"Germany",             "DEU"},
-    {"United Kingdom",      "GBR"},
-    {"France",              "FRA"},
-    {"India",               "IND"},
-    {"Brazil",              "BRA"},
-    {"Canada",              "CAN"},
-    {"South Korea",         "KOR"},
-    {"Australia",           "AUS"},
-    {"Russia",              "RUS"},
-    {"Mexico",              "MEX"},
-    {"Indonesia",           "IDN"},
-    {"Saudi Arabia",        "SAU"},
-    {"Turkey",              "TUR"},
-    {"Netherlands",         "NLD"},
-    {"Switzerland",         "CHE"},
-    {"Argentina",           "ARG"},
+static const QList<QPair<QString, QString>> kImfCountries = {
+    {"All Countries", ""}, {"United States", "USA"},  {"China", "CHN"},       {"Japan", "JPN"},
+    {"Germany", "DEU"},    {"United Kingdom", "GBR"}, {"France", "FRA"},      {"India", "IND"},
+    {"Brazil", "BRA"},     {"Canada", "CAN"},         {"South Korea", "KOR"}, {"Australia", "AUS"},
+    {"Russia", "RUS"},     {"Mexico", "MEX"},         {"Indonesia", "IDN"},   {"Saudi Arabia", "SAU"},
+    {"Turkey", "TUR"},     {"Netherlands", "NLD"},    {"Switzerland", "CHE"}, {"Argentina", "ARG"},
 };
 
 } // namespace
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
-ImfPanel::ImfPanel(QWidget* parent)
-    : EconPanelBase(kImfSourceId, kImfColor, parent) {
+ImfPanel::ImfPanel(QWidget* parent) : EconPanelBase(kImfSourceId, kImfColor, parent) {
 
     auto* main = new QHBoxLayout(this);
     main->setContentsMargins(0, 0, 0, 0);
     main->setSpacing(0);
 
     // Left: indicator list
-    auto* left = new QWidget;
+    auto* left = new QWidget(this);
     left->setFixedWidth(240);
     left->setStyleSheet(sidebar_style());
     auto* lvl = new QVBoxLayout(left);
@@ -88,8 +72,7 @@ ImfPanel::ImfPanel(QWidget* parent)
     indicator_search_ = new QLineEdit;
     indicator_search_->setPlaceholderText("Filter indicators…");
     indicator_search_->setStyleSheet(search_input_style());
-    connect(indicator_search_, &QLineEdit::textChanged,
-            this, &ImfPanel::on_indicator_filter);
+    connect(indicator_search_, &QLineEdit::textChanged, this, &ImfPanel::on_indicator_filter);
     lvl->addWidget(indicator_search_);
 
     indicator_list_ = new QListWidget;
@@ -103,13 +86,12 @@ ImfPanel::ImfPanel(QWidget* parent)
 
     main->addWidget(left);
 
-    auto* right = new QWidget;
+    auto* right = new QWidget(this);
     main->addWidget(right, 1);
     build_base_ui(right);
 
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &ImfPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &ImfPanel::on_result);
 }
 
 // ── Activate ──────────────────────────────────────────────────────────────────
@@ -136,55 +118,57 @@ void ImfPanel::build_controls(QHBoxLayout* thl) {
 
 void ImfPanel::on_fetch() {
     auto* ind_item = indicator_list_->currentItem();
-    if (!ind_item) { show_empty("Select an indicator"); return; }
+    if (!ind_item) {
+        show_empty("Select an indicator");
+        return;
+    }
 
-    const QString code    = ind_item->data(Qt::UserRole).toString();
+    const QString code = ind_item->data(Qt::UserRole).toString();
     const QString country = country_combo_->currentData().toString();
 
     show_loading("Fetching IMF DataMapper data…");
-    services::EconomicsService::instance().execute(
-        kImfSourceId, kImfScript, "data",
-        {code},
-        "imf_data_" + code + "_" + country);
+    services::EconomicsService::instance().execute(kImfSourceId, kImfScript, "data", {code},
+                                                   "imf_data_" + code + "_" + country);
 }
 
 // ── Result ────────────────────────────────────────────────────────────────────
 
-void ImfPanel::on_result(const QString& request_id,
-                         const services::EconomicsResult& result) {
-    if (result.source_id != kImfSourceId) return;
-    if (!result.success) { show_error(result.error); return; }
+void ImfPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kImfSourceId)
+        return;
+    if (!result.success) {
+        show_error(result.error);
+        return;
+    }
 
     if (request_id.startsWith("imf_data_")) {
         // Response: {values: {CODE: {COUNTRY: {YEAR: value}}}}
         const QJsonObject values = result.data["values"].toObject();
-        if (values.isEmpty()) { show_error("No data in response"); return; }
+        if (values.isEmpty()) {
+            show_error("No data in response");
+            return;
+        }
 
         auto* ind_item = indicator_list_->currentItem();
-        const QString code    = ind_item ? ind_item->data(Qt::UserRole).toString()
-                                         : values.keys().first();
+        const QString code = ind_item ? ind_item->data(Qt::UserRole).toString() : values.keys().first();
         const QString country = country_combo_->currentData().toString();
 
         const QJsonArray rows = flatten_pivot(values, code, country);
-        const QString title   = (ind_item ? ind_item->text() : code) +
-                                (country.isEmpty() ? " — All Countries"
-                                                   : " — " + country_combo_->currentText());
+        const QString title = (ind_item ? ind_item->text() : code) +
+                              (country.isEmpty() ? " — All Countries" : " — " + country_combo_->currentText());
         display(rows, title);
         LOG_INFO("ImfPanel", QString("Displayed %1 rows").arg(rows.size()));
     }
 }
 
-QJsonArray ImfPanel::flatten_pivot(const QJsonObject& values,
-                                   const QString& indicator_code,
+QJsonArray ImfPanel::flatten_pivot(const QJsonObject& values, const QString& indicator_code,
                                    const QString& country_filter) const {
     const QJsonObject by_country = values[indicator_code].toObject();
     QJsonArray rows;
 
     // Collect all years across all countries for sorting
     // If country_filter is set, only include that country
-    const QStringList countries = country_filter.isEmpty()
-        ? by_country.keys()
-        : QStringList{country_filter};
+    const QStringList countries = country_filter.isEmpty() ? by_country.keys() : QStringList{country_filter};
 
     // Collect all years
     QSet<QString> year_set;
@@ -213,9 +197,10 @@ QJsonArray ImfPanel::flatten_pivot(const QJsonObject& values,
         const QJsonObject y_map = by_country[country_filter].toObject();
         for (const auto& y : years) {
             const QJsonValue v = y_map[y];
-            if (v.isNull() || v.isUndefined()) continue;
+            if (v.isNull() || v.isUndefined())
+                continue;
             QJsonObject row;
-            row["year"]  = y;
+            row["year"] = y;
             row["value"] = v;
             rows.append(row);
         }

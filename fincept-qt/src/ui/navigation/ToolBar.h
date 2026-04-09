@@ -1,12 +1,12 @@
 #pragma once
+#include "ui/navigation/CommandBar.h"
+
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
 #include <QPushButton>
 #include <QTimer>
 #include <QWidget>
-
-#include "ui/navigation/CommandBar.h"
 
 namespace fincept::ui {
 

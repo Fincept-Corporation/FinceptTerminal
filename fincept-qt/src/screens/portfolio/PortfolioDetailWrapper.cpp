@@ -27,7 +27,7 @@ void PortfolioDetailWrapper::build_ui() {
     layout->setSpacing(0);
 
     // ── Header bar (36px) ────────────────────────────────────────────────────
-    auto* header = new QWidget;
+    auto* header = new QWidget(this);
     header->setFixedHeight(36);
     header->setStyleSheet(QString("background: qlineargradient(x1:0,x2:1, stop:0 %1, stop:1 %2);"
                                   "border-bottom:1px solid %3;")
@@ -49,7 +49,7 @@ void PortfolioDetailWrapper::build_ui() {
     h_layout->addWidget(back_btn_);
 
     // Vertical divider
-    auto* div = new QWidget;
+    auto* div = new QWidget(this);
     div->setFixedSize(1, 20);
     div->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_MED));
     h_layout->addWidget(div);
@@ -91,12 +91,11 @@ void PortfolioDetailWrapper::show_view(portfolio::DetailView view, const portfol
     update_data(summary, currency);
 }
 
-void PortfolioDetailWrapper::update_snapshots(
-    const QVector<portfolio::PortfolioSnapshot>& snapshots) {
+void PortfolioDetailWrapper::update_snapshots(const QVector<portfolio::PortfolioSnapshot>& snapshots) {
     current_snapshots_ = snapshots;
     // Push to any already-created PerformanceRiskView
     int key = static_cast<int>(portfolio::DetailView::PerfRisk);
-    auto it  = views_.find(key);
+    auto it = views_.find(key);
     if (it != views_.end()) {
         if (auto* v = qobject_cast<PerformanceRiskView*>(*it))
             v->set_snapshots(snapshots);

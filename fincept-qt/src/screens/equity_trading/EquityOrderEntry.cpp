@@ -28,7 +28,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     layout->setSpacing(0);
 
     // Header
-    auto* header = new QWidget;
+    auto* header = new QWidget(this);
     header->setObjectName("eqOeHeader");
     header->setFixedHeight(30);
     auto* h_layout = new QHBoxLayout(header);
@@ -47,7 +47,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     layout->addWidget(header);
 
     // Content
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     auto* form = new QVBoxLayout(content);
     form->setContentsMargins(8, 6, 8, 6);
     form->setSpacing(4);
@@ -174,7 +174,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     form->addWidget(advanced_toggle_);
 
     // SL/TP section
-    advanced_section_ = new QWidget;
+    advanced_section_ = new QWidget(this);
     advanced_section_->setVisible(false);
     auto* adv_layout = new QVBoxLayout(advanced_section_);
     adv_layout->setContentsMargins(0, 0, 0, 0);
@@ -217,13 +217,54 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     margin_label_->hide();
     form->addWidget(margin_label_);
 
-    // Submit
+    // Submit row: main submit + broadcast
+    auto* submit_row = new QHBoxLayout;
+    submit_row->setSpacing(4);
+
     submit_btn_ = new QPushButton("BUY RELIANCE");
     submit_btn_->setObjectName("eqBuySubmit");
     submit_btn_->setFixedHeight(34);
     submit_btn_->setCursor(Qt::PointingHandCursor);
     connect(submit_btn_, &QPushButton::clicked, this, &EquityOrderEntry::on_submit);
-    form->addWidget(submit_btn_);
+    submit_row->addWidget(submit_btn_, 3);
+
+    broadcast_btn_ = new QPushButton("ALL");
+    broadcast_btn_->setObjectName("eqBroadcastBtn");
+    broadcast_btn_->setFixedHeight(34);
+    broadcast_btn_->setCursor(Qt::PointingHandCursor);
+    broadcast_btn_->setToolTip("Broadcast this order to multiple accounts");
+    broadcast_btn_->setStyleSheet(
+        QString("QPushButton { background: %1; color: %2; font-weight: 700; font-size: 11px; border-radius: 2px; }"
+                "QPushButton:hover { background: %3; }")
+            .arg(colors::BG_RAISED, colors::AMBER, colors::BORDER_MED));
+    connect(broadcast_btn_, &QPushButton::clicked, this, [this]() {
+        const double qty = qty_edit_->text().toDouble();
+        if (qty <= 0) {
+            status_label_->setText("Enter a valid quantity");
+            status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE));
+            return;
+        }
+        trading::UnifiedOrder order;
+        order.symbol = current_symbol_;
+        order.exchange = exchange_combo_->currentText();
+        order.side = is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell;
+        static const trading::OrderType type_map[] = {trading::OrderType::Market, trading::OrderType::Limit,
+                                                      trading::OrderType::StopLoss, trading::OrderType::StopLossLimit};
+        order.order_type = type_map[active_type_];
+        order.quantity = qty;
+        order.price = price_edit_->text().toDouble();
+        order.stop_price = stop_price_edit_->text().toDouble();
+        order.stop_loss = sl_edit_ ? sl_edit_->text().toDouble() : 0.0;
+        order.take_profit = tp_edit_ ? tp_edit_->text().toDouble() : 0.0;
+        const int prod_idx = product_combo_->currentIndex();
+        if (!product_types_.isEmpty() && prod_idx >= 0 && prod_idx < product_types_.size())
+            order.product_type = product_types_[prod_idx].value;
+        else
+            order.product_type = trading::ProductType::Intraday;
+        emit broadcast_requested(order);
+    });
+    submit_row->addWidget(broadcast_btn_, 1);
+    form->addLayout(submit_row);
 
     // Status
     status_label_ = new QLabel("");
@@ -239,8 +280,8 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     margin_timer_->setSingleShot(true);
     margin_timer_->setInterval(600);
     connect(margin_timer_, &QTimer::timeout, this, &EquityOrderEntry::fetch_margin_async);
-    connect(qty_edit_,   &QLineEdit::textChanged, this, [this](){ margin_timer_->start(); });
-    connect(price_edit_, &QLineEdit::textChanged, this, [this](){ margin_timer_->start(); });
+    connect(qty_edit_, &QLineEdit::textChanged, this, [this]() { margin_timer_->start(); });
+    connect(price_edit_, &QLineEdit::textChanged, this, [this]() { margin_timer_->start(); });
 }
 
 void EquityOrderEntry::configure_for_broker(const trading::BrokerProfile& profile) {
@@ -267,16 +308,16 @@ void EquityOrderEntry::configure_for_broker(const trading::BrokerProfile& profil
     }
 
     // Update brokerage label
-    brokerage_label_->setText(profile.brokerage_info.isEmpty()
-                                  ? ""
-                                  : QString("Fee: %1").arg(profile.brokerage_info));
+    brokerage_label_->setText(profile.brokerage_info.isEmpty() ? "" : QString("Fee: %1").arg(profile.brokerage_info));
 
     // Reset form state
     qty_edit_->clear();
     price_edit_->clear();
     stop_price_edit_->clear();
-    if (sl_edit_) sl_edit_->clear();
-    if (tp_edit_) tp_edit_->clear();
+    if (sl_edit_)
+        sl_edit_->clear();
+    if (tp_edit_)
+        tp_edit_->clear();
     status_label_->clear();
     current_price_ = 0;
     balance_ = 0;
@@ -313,15 +354,13 @@ void EquityOrderEntry::set_order_type(int idx) {
 
 void EquityOrderEntry::set_balance(double balance) {
     balance_ = balance;
-    balance_label_->setText(
-        QString("%1%2").arg(currency_symbol(current_currency_)).arg(balance, 0, 'f', 2));
+    balance_label_->setText(QString("%1%2").arg(currency_symbol(current_currency_)).arg(balance, 0, 'f', 2));
     update_cost_preview();
 }
 
 void EquityOrderEntry::set_current_price(double price) {
     current_price_ = price;
-    market_price_label_->setText(
-        QString("MKT: %1%2").arg(currency_symbol(current_currency_)).arg(price, 0, 'f', 2));
+    market_price_label_->setText(QString("MKT: %1%2").arg(currency_symbol(current_currency_)).arg(price, 0, 'f', 2));
     update_cost_preview();
 }
 
@@ -329,7 +368,8 @@ void EquityOrderEntry::set_mode(bool is_paper) {
     is_paper_ = is_paper;
     mode_label_->setText(is_paper ? "PAPER" : "LIVE");
     mode_label_->setStyleSheet(QString("color: %1;").arg(is_paper ? colors::POSITIVE() : colors::NEGATIVE()));
-    if (is_paper) margin_label_->hide();
+    if (is_paper)
+        margin_label_->hide();
 }
 
 void EquityOrderEntry::set_symbol(const QString& symbol) {
@@ -356,18 +396,17 @@ void EquityOrderEntry::on_submit() {
     }
 
     trading::UnifiedOrder order;
-    order.symbol   = current_symbol_;
+    order.symbol = current_symbol_;
     order.exchange = exchange_combo_->currentText();
-    order.side     = is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell;
+    order.side = is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell;
 
-    static const trading::OrderType type_map[] = {
-        trading::OrderType::Market, trading::OrderType::Limit,
-        trading::OrderType::StopLoss, trading::OrderType::StopLossLimit};
-    order.order_type  = type_map[active_type_];
-    order.quantity    = qty;
-    order.price       = price_edit_->text().toDouble();
-    order.stop_price  = stop_price_edit_->text().toDouble();
-    order.stop_loss   = sl_edit_ ? sl_edit_->text().toDouble() : 0.0;
+    static const trading::OrderType type_map[] = {trading::OrderType::Market, trading::OrderType::Limit,
+                                                  trading::OrderType::StopLoss, trading::OrderType::StopLossLimit};
+    order.order_type = type_map[active_type_];
+    order.quantity = qty;
+    order.price = price_edit_->text().toDouble();
+    order.stop_price = stop_price_edit_->text().toDouble();
+    order.stop_loss = sl_edit_ ? sl_edit_->text().toDouble() : 0.0;
     order.take_profit = tp_edit_ ? tp_edit_->text().toDouble() : 0.0;
 
     // Product type from profile-driven combo
@@ -420,15 +459,14 @@ void EquityOrderEntry::fetch_margin_async() {
         return;
 
     trading::UnifiedOrder order;
-    order.symbol   = current_symbol_;
+    order.symbol = current_symbol_;
     order.exchange = exchange_combo_->currentText();
-    order.side     = is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell;
+    order.side = is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell;
     order.quantity = qty;
-    order.price    = price_edit_->text().toDouble();
+    order.price = price_edit_->text().toDouble();
     order.stop_price = stop_price_edit_->text().toDouble();
-    static const trading::OrderType type_map[] = {
-        trading::OrderType::Market, trading::OrderType::Limit,
-        trading::OrderType::StopLoss, trading::OrderType::StopLossLimit};
+    static const trading::OrderType type_map[] = {trading::OrderType::Market, trading::OrderType::Limit,
+                                                  trading::OrderType::StopLoss, trading::OrderType::StopLossLimit};
     order.order_type = type_map[active_type_];
     const int prod_idx = product_combo_->currentIndex();
     order.product_type = (!product_types_.isEmpty() && prod_idx >= 0 && prod_idx < product_types_.size())
@@ -441,29 +479,34 @@ void EquityOrderEntry::fetch_margin_async() {
     QtConcurrent::run([self, bid, order]() {
         auto* broker = trading::BrokerRegistry::instance().get(bid);
         if (!broker) {
-            if (self) self->margin_fetching_ = false;
+            if (self)
+                self->margin_fetching_ = false;
             return;
         }
         auto creds = broker->load_credentials();
         if (creds.api_key.isEmpty()) {
-            if (self) self->margin_fetching_ = false;
+            if (self)
+                self->margin_fetching_ = false;
             return;
         }
         auto result = broker->get_order_margins(creds, order);
-        QMetaObject::invokeMethod(self, [self, result]() {
-            if (!self) return;
-            self->margin_fetching_ = false;
-            if (result.success && result.data) {
-                const auto& m = *result.data;
-                const QString sym = currency_symbol(self->current_currency_);
-                self->margin_label_->setText(
-                    QString("Margin: %1%2").arg(sym).arg(m.total, 0, 'f', 2));
-                self->margin_label_->setStyleSheet(QString("color: %1; font-size: 10px;").arg(colors::AMBER));
-                self->margin_label_->show();
-            } else {
-                self->margin_label_->hide();
-            }
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, result]() {
+                if (!self)
+                    return;
+                self->margin_fetching_ = false;
+                if (result.success && result.data) {
+                    const auto& m = *result.data;
+                    const QString sym = currency_symbol(self->current_currency_);
+                    self->margin_label_->setText(QString("Margin: %1%2").arg(sym).arg(m.total, 0, 'f', 2));
+                    self->margin_label_->setStyleSheet(QString("color: %1; font-size: 10px;").arg(colors::AMBER));
+                    self->margin_label_->show();
+                } else {
+                    self->margin_label_->hide();
+                }
+            },
+            Qt::QueuedConnection);
     });
 }
 

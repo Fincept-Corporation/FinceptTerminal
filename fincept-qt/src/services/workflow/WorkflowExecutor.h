@@ -51,8 +51,8 @@ class WorkflowExecutor : public QObject {
     void launch_single_node(const QString& node_id);
 
     /// Called when a node finishes execution.
-    void on_node_done(const QString& node_id, bool success,
-                      const QJsonValue& output, const QString& error, int duration_ms = 0);
+    void on_node_done(const QString& node_id, bool success, const QJsonValue& output, const QString& error,
+                      int duration_ms = 0);
 
     /// Collect input data for a node from its upstream nodes' outputs.
     QVector<QJsonValue> collect_inputs(const QString& node_id) const;
@@ -70,15 +70,15 @@ class WorkflowExecutor : public QObject {
     QHash<QString, QVector<EdgeDef>> incoming_edges_;
 
     // Parallel execution state
-    QHash<QString, int> in_degree_;     // remaining unfinished dependencies (-1 = launched)
-    int pending_count_ = 0;             // nodes currently in-flight
-    int completed_count_ = 0;           // total completed
-    int total_count_ = 0;               // total nodes to execute
+    QHash<QString, int> in_degree_; // remaining unfinished dependencies (-1 = launched)
+    int pending_count_ = 0;         // nodes currently in-flight
+    int completed_count_ = 0;       // total completed
+    int total_count_ = 0;           // total nodes to execute
 
     // Node data
     QHash<QString, NodeExecutionResult> results_;
     QHash<QString, NodeDef> node_map_;
-    QHash<QString, const NodeTypeDef*> type_cache_;  // pre-resolved type pointers
+    QHash<QString, const NodeTypeDef*> type_cache_; // pre-resolved type pointers
 
     // Timing
     qint64 start_time_ms_ = 0;

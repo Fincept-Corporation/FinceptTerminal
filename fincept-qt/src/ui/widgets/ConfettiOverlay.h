@@ -27,10 +27,10 @@ class ConfettiOverlay : public QWidget {
         float vx, vy;
         float rotation, rotation_speed;
         float size;
-        float sway_offset;   // phase offset for sine sway
+        float sway_offset; // phase offset for sine sway
         float sway_amplitude;
         float shimmer_phase;
-        float delay_ms;      // staggered spawn delay
+        float delay_ms; // staggered spawn delay
         QColor base_color;
         QColor color;
         Shape shape;

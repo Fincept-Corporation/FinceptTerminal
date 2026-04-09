@@ -60,36 +60,36 @@ class ToolsViewPanel : public QWidget {
     void copy_tool_name(const QString& name);
 
     // ── LEFT panel widgets ───────────────────────────────────────────────────
-    QRadioButton* radio_agent_  = nullptr;
-    QRadioButton* radio_team_   = nullptr;
-    QComboBox*    target_combo_ = nullptr;
-    QLabel*       target_status_= nullptr;
-    QListWidget*  selected_list_= nullptr;
-    QLabel*       selected_count_= nullptr;
-    QPushButton*  remove_btn_   = nullptr;
-    QPushButton*  clear_btn_    = nullptr;
-    QPushButton*  assign_btn_   = nullptr;
+    QRadioButton* radio_agent_ = nullptr;
+    QRadioButton* radio_team_ = nullptr;
+    QComboBox* target_combo_ = nullptr;
+    QLabel* target_status_ = nullptr;
+    QListWidget* selected_list_ = nullptr;
+    QLabel* selected_count_ = nullptr;
+    QPushButton* remove_btn_ = nullptr;
+    QPushButton* clear_btn_ = nullptr;
+    QPushButton* assign_btn_ = nullptr;
 
     // ── CENTER panel widgets ─────────────────────────────────────────────────
-    QLineEdit*   search_edit_  = nullptr;
-    QTreeWidget* tool_tree_    = nullptr;
-    QLabel*      total_count_  = nullptr;
-    QPushButton* add_btn_      = nullptr;
-    QPushButton* copy_btn_     = nullptr;
+    QLineEdit* search_edit_ = nullptr;
+    QTreeWidget* tool_tree_ = nullptr;
+    QLabel* total_count_ = nullptr;
+    QPushButton* add_btn_ = nullptr;
+    QPushButton* copy_btn_ = nullptr;
 
     // ── RIGHT panel widgets ──────────────────────────────────────────────────
-    QLabel*    detail_name_     = nullptr;
-    QLabel*    detail_category_ = nullptr;
-    QTextEdit* detail_desc_     = nullptr;
-    QTextEdit* detail_params_   = nullptr;
-    QTextEdit* detail_used_by_  = nullptr;
+    QLabel* detail_name_ = nullptr;
+    QLabel* detail_category_ = nullptr;
+    QTextEdit* detail_desc_ = nullptr;
+    QTextEdit* detail_params_ = nullptr;
+    QTextEdit* detail_used_by_ = nullptr;
 
     // ── State ────────────────────────────────────────────────────────────────
-    QStringList          selected_tools_;
+    QStringList selected_tools_;
     services::AgentToolsInfo all_tools_;
     QVector<services::AgentInfo> agent_configs_;
-    bool                 data_loaded_ = false;
-    QString              current_tool_; // tool shown in detail panel
+    bool data_loaded_ = false;
+    QString current_tool_; // tool shown in detail panel
 };
 
 } // namespace fincept::screens

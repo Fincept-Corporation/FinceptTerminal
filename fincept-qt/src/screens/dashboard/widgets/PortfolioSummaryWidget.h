@@ -50,6 +50,10 @@ class PortfolioSummaryWidget : public BaseWidget {
     QVector<QLabel*> metric_labels_;
     QVector<QLabel*> metric_values_;
     QVector<QLabel*> header_labels_;
+
+    // Cached for theme-change re-render
+    QVector<Holding> last_holdings_;
+    QVector<services::QuoteData> last_quotes_;
 };
 
 } // namespace fincept::screens::widgets

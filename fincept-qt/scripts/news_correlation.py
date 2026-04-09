@@ -361,6 +361,24 @@ def focal_points(articles_json):
     return {"success": True, "focal_points": focal[:10], "count": len(focal)}
 
 
+def resolve_arg(arg):
+    """If arg starts with '@', read content from that file path and delete it."""
+    if arg and arg.startswith("@"):
+        path = arg[1:]
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = f.read()
+            try:
+                import os
+                os.remove(path)
+            except Exception:
+                pass
+            return data
+        except Exception:
+            return arg  # fallback: return as-is
+    return arg
+
+
 def main(args=None):
     if args is None:
         args = sys.argv[1:]
@@ -372,25 +390,25 @@ def main(args=None):
     command = args[0]
 
     if command == "detect_signals":
-        market = args[2] if len(args) > 2 else None
-        result = detect_signals(args[1], market)
+        market = resolve_arg(args[2]) if len(args) > 2 else None
+        result = detect_signals(resolve_arg(args[1]), market)
     elif command == "compute_instability":
         if len(args) < 3:
             result = {"success": False, "error": "Usage: compute_instability <country_code> <json_signals>"}
         else:
-            result = compute_instability(args[1], args[2])
+            result = compute_instability(args[1], resolve_arg(args[2]))
     elif command == "baseline_update":
         if len(args) < 3:
             result = {"success": False, "error": "Usage: baseline_update <current> <existing>"}
         else:
-            result = baseline_update(args[1], args[2])
+            result = baseline_update(resolve_arg(args[1]), resolve_arg(args[2]))
     elif command == "detect_deviations":
         if len(args) < 3:
             result = {"success": False, "error": "Usage: detect_deviations <current> <baseline>"}
         else:
-            result = detect_deviations(args[1], args[2])
+            result = detect_deviations(resolve_arg(args[1]), resolve_arg(args[2]))
     elif command == "focal_points":
-        result = focal_points(args[1])
+        result = focal_points(resolve_arg(args[1]))
     else:
         result = {"success": False, "error": f"Unknown command: {command}"}
 

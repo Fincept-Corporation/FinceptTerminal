@@ -32,11 +32,11 @@ class ComponentToolbar : public QWidget {
     void metadata_requested();
 
   private:
-    QListWidget*   structure_list_ = nullptr;
-    QFontComboBox* font_combo_     = nullptr;
-    QSpinBox*      font_size_      = nullptr;
-    QPushButton*   bold_btn_       = nullptr;
-    QPushButton*   italic_btn_     = nullptr;
+    QListWidget* structure_list_ = nullptr;
+    QFontComboBox* font_combo_ = nullptr;
+    QSpinBox* font_size_ = nullptr;
+    QPushButton* bold_btn_ = nullptr;
+    QPushButton* italic_btn_ = nullptr;
 
     void add_type_button(QVBoxLayout* layout, const QString& label, const QString& type);
 };

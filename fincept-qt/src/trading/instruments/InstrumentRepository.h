@@ -22,12 +22,10 @@ class InstrumentRepository : public fincept::BaseRepository<Instrument> {
     // ── Read ─────────────────────────────────────────────────────────────────
 
     /// Exact lookup: (symbol, exchange, broker_id) → Instrument
-    std::optional<Instrument> find(const QString& symbol, const QString& exchange,
-                                   const QString& broker_id) const;
+    std::optional<Instrument> find(const QString& symbol, const QString& exchange, const QString& broker_id) const;
 
     /// Lookup by instrument_token + broker_id
-    std::optional<Instrument> find_by_token(qint64 instrument_token,
-                                            const QString& broker_id) const;
+    std::optional<Instrument> find_by_token(qint64 instrument_token, const QString& broker_id) const;
 
     /// Lookup by brsymbol + brexchange + broker_id  (used when mapping order responses)
     std::optional<Instrument> find_by_brsymbol(const QString& brsymbol, const QString& brexchange,
@@ -35,8 +33,8 @@ class InstrumentRepository : public fincept::BaseRepository<Instrument> {
 
     /// Full-text search for symbol picker UI.
     /// Returns up to `limit` rows matching query against symbol, brsymbol, or name.
-    QVector<Instrument> search(const QString& query, const QString& exchange,
-                               const QString& broker_id, int limit = 50) const;
+    QVector<Instrument> search(const QString& query, const QString& exchange, const QString& broker_id,
+                               int limit = 50) const;
 
     /// All instruments for a broker+exchange (used for option chains etc.)
     QVector<Instrument> list(const QString& exchange, const QString& broker_id,

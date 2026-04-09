@@ -165,7 +165,8 @@ static QVector<ConnectorConfig> api_configs() {
          Category::Streaming,
          "R",
          "#E3342F",
-         "Kafka-compatible streaming platform written in C++. 3-10x lower latency than Kafka, no JVM. Growing standard in HFT and fintech.",
+         "Kafka-compatible streaming platform written in C++. 3-10x lower latency than Kafka, no JVM. Growing standard "
+         "in HFT and fintech.",
          true,
          false,
          {{"brokers", "Bootstrap Servers (comma-separated)", FieldType::Text, "localhost:9092", true, "", {}},
@@ -181,7 +182,8 @@ static QVector<ConnectorConfig> api_configs() {
          Category::Streaming,
          "F",
          "#E6522C",
-         "Stateful stream processing engine. 2025 standard for real-time P&L calculation, market surveillance, and fraud detection pipelines on top of Kafka.",
+         "Stateful stream processing engine. 2025 standard for real-time P&L calculation, market surveillance, and "
+         "fraud detection pipelines on top of Kafka.",
          true,
          false,
          {{"jobManagerUrl", "Job Manager URL", FieldType::Url, "http://localhost:8081", true, "", {}},
@@ -194,7 +196,8 @@ static QVector<ConnectorConfig> api_configs() {
          Category::Streaming,
          "F",
          "#1A1A2E",
-         "Financial Information eXchange protocol — industry standard for order management and market data delivery (FAST/FIX FAST).",
+         "Financial Information eXchange protocol — industry standard for order management and market data delivery "
+         "(FAST/FIX FAST).",
          true,
          true,
          {{"host", "Counterparty Host", FieldType::Text, "fix.broker.com", true, "", {}},

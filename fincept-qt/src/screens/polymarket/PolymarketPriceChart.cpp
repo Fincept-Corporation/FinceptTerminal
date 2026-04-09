@@ -59,7 +59,7 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
 
     vl->addLayout(toolbar);
 
-    chart_container_ = new QWidget;
+    chart_container_ = new QWidget(this);
     auto* ccl = new QVBoxLayout(chart_container_);
     ccl->setContentsMargins(0, 0, 0, 0);
     auto* empty = new QLabel("Select a market to view chart");

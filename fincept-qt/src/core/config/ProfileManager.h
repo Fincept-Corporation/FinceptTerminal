@@ -1,6 +1,6 @@
 #pragma once
-#include <QStringList>
 #include <QString>
+#include <QStringList>
 
 namespace fincept {
 

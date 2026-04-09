@@ -40,7 +40,7 @@ void EquityNewsTab::build_ui() {
     vl->setSpacing(0);
 
     // ── Header bar ────────────────────────────────────────────────────────────
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setStyleSheet(
         QString("background:%1; border-bottom:2px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::AMBER));
     auto* hl = new QHBoxLayout(hdr);
@@ -94,7 +94,7 @@ void EquityNewsTab::build_ui() {
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setStyleSheet("background:transparent; border:0;");
 
-    cards_container_ = new QWidget;
+    cards_container_ = new QWidget(this);
     cards_layout_ = new QVBoxLayout(cards_container_);
     cards_layout_->setContentsMargins(12, 12, 12, 12);
     cards_layout_->setSpacing(10);

@@ -31,12 +31,18 @@ static QString normalise_index_symbol(const QString& raw_name) {
     s.remove(' ');
     s.remove('-');
 
-    if (s == "NIFTY50") return "NIFTY";
-    if (s == "NIFTYBANK") return "BANKNIFTY";
-    if (s == "NIFTYFINSERVICE") return "FINNIFTY";
-    if (s == "NIFTYNEXT50") return "NIFTYNXT50";
-    if (s == "NIFTYMIDSELECT" || s == "NIFTYMIDCAPSELECT") return "MIDCPNIFTY";
-    if (s == "SNSX50") return "SENSEX50";
+    if (s == "NIFTY50")
+        return "NIFTY";
+    if (s == "NIFTYBANK")
+        return "BANKNIFTY";
+    if (s == "NIFTYFINSERVICE")
+        return "FINNIFTY";
+    if (s == "NIFTYNEXT50")
+        return "NIFTYNXT50";
+    if (s == "NIFTYMIDSELECT" || s == "NIFTYMIDCAPSELECT")
+        return "MIDCPNIFTY";
+    if (s == "SNSX50")
+        return "SENSEX50";
     return s;
 }
 
@@ -63,11 +69,16 @@ static InstrumentType map_angel_type(const QString& raw_type, const QString& sym
     const QString t = raw_type.toUpper();
     const QString s = symbol.toUpper();
 
-    if (s.endsWith("CE")) return InstrumentType::CE;
-    if (s.endsWith("PE")) return InstrumentType::PE;
-    if (t.startsWith("FUT")) return InstrumentType::FUT;
-    if (t == "AMXIDX" || t == "INDEX") return InstrumentType::INDEX;
-    if (t == "EQ" || s.endsWith("-EQ") || s.endsWith("-BE")) return InstrumentType::EQ;
+    if (s.endsWith("CE"))
+        return InstrumentType::CE;
+    if (s.endsWith("PE"))
+        return InstrumentType::PE;
+    if (t.startsWith("FUT"))
+        return InstrumentType::FUT;
+    if (t == "AMXIDX" || t == "INDEX")
+        return InstrumentType::INDEX;
+    if (t == "EQ" || s.endsWith("-EQ") || s.endsWith("-BE"))
+        return InstrumentType::EQ;
     return InstrumentType::UNKNOWN;
 }
 
@@ -79,8 +90,10 @@ static QString normalise_spot_symbol(const QString& symbol) {
 
 static QString option_suffix(const QString& symbol) {
     const QString s = symbol.toUpper();
-    if (s.endsWith("CE")) return "CE";
-    if (s.endsWith("PE")) return "PE";
+    if (s.endsWith("CE"))
+        return "CE";
+    if (s.endsWith("PE"))
+        return "PE";
     return {};
 }
 
@@ -172,8 +185,7 @@ InstrumentService& InstrumentService::instance() {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-void InstrumentService::refresh(const QString& broker_id, const BrokerCredentials& creds,
-                                 int max_age_hours) {
+void InstrumentService::refresh(const QString& broker_id, const BrokerCredentials& creds, int max_age_hours) {
     Q_UNUSED(max_age_hours)
     // For AngelOne we need NSE equities to be present — check specifically for NSE count.
     // A partial cache (e.g. only NFO/MCX) means a previous download was incomplete.
@@ -190,19 +202,19 @@ void InstrumentService::refresh(const QString& broker_id, const BrokerCredential
             if (nse_count > 100) {
                 LOG_INFO("InstrumentService",
                          QString("%1 instruments already loaded (%2 NSE equities), skipping refresh")
-                             .arg(broker_id).arg(nse_count));
+                             .arg(broker_id)
+                             .arg(nse_count));
                 return;
             }
-            LOG_WARN("InstrumentService",
-                     QString("%1 cache incomplete (only %2 NSE equities) — re-downloading")
-                         .arg(broker_id).arg(nse_count));
+            LOG_WARN(
+                "InstrumentService",
+                QString("%1 cache incomplete (only %2 NSE equities) — re-downloading").arg(broker_id).arg(nse_count));
         }
     }
     force_refresh(broker_id, creds);
 }
 
-void InstrumentService::force_refresh(const QString& broker_id,
-                                       const BrokerCredentials& creds) {
+void InstrumentService::force_refresh(const QString& broker_id, const BrokerCredentials& creds) {
     {
         QMutexLocker lock(&mutex_);
         if (refreshing_.contains(broker_id)) {
@@ -215,7 +227,8 @@ void InstrumentService::force_refresh(const QString& broker_id,
     emit refresh_started(broker_id);
     QPointer<InstrumentService> self = this;
     QtConcurrent::run([self, broker_id, creds]() {
-        if (!self) return;
+        if (!self)
+            return;
         self->do_refresh(broker_id, creds);
     });
 }
@@ -225,81 +238,81 @@ void InstrumentService::load_from_db(const QString& broker_id) {
     // the main thread so that the single QSqlDatabase connection is not
     // accessed concurrently (QSqlDatabase is not thread-safe).
     QVector<Instrument> all;
-    for (const QString& exch : QStringList{"NSE", "BSE", "NFO", "CDS", "MCX",
-                                           "NSE_INDEX", "BSE_INDEX", "BFO", "BCD"}) {
+    for (const QString& exch : QStringList{"NSE", "BSE", "NFO", "CDS", "MCX", "NSE_INDEX", "BSE_INDEX", "BFO", "BCD"}) {
         auto rows = InstrumentRepository::instance().list(exch, broker_id);
         all.append(rows);
     }
     if (all.isEmpty()) {
-        LOG_WARN("InstrumentService",
-                 QString("No instruments found in DB for %1 — run refresh").arg(broker_id));
+        LOG_WARN("InstrumentService", QString("No instruments found in DB for %1 — run refresh").arg(broker_id));
         return;
     }
     build_cache(broker_id, all);
-    LOG_INFO("InstrumentService",
-             QString("Loaded %1 instruments from DB for %2").arg(all.size()).arg(broker_id));
+    LOG_INFO("InstrumentService", QString("Loaded %1 instruments from DB for %2").arg(all.size()).arg(broker_id));
 }
 
 // ── Lookups ───────────────────────────────────────────────────────────────────
 
-std::optional<qint64> InstrumentService::instrument_token(const QString& symbol,
-                                                           const QString& exchange,
-                                                           const QString& broker_id) const {
-    QMutexLocker lock(&mutex_);
-    auto it = caches_.find(broker_id);
-    if (it == caches_.end()) return std::nullopt;
-    auto jt = it->by_symbol.find({symbol, exchange});
-    if (jt == it->by_symbol.end()) return std::nullopt;
-    return jt->instrument_token;
-}
-
-std::optional<QString> InstrumentService::to_brsymbol(const QString& symbol,
-                                                        const QString& exchange,
-                                                        const QString& broker_id) const {
-    QMutexLocker lock(&mutex_);
-    auto it = caches_.find(broker_id);
-    if (it == caches_.end()) return std::nullopt;
-    auto jt = it->by_symbol.find({symbol, exchange});
-    if (jt == it->by_symbol.end()) return std::nullopt;
-    return jt->brsymbol;
-}
-
-std::optional<QString> InstrumentService::from_brsymbol(const QString& brsymbol,
-                                                          const QString& brexchange,
+std::optional<qint64> InstrumentService::instrument_token(const QString& symbol, const QString& exchange,
                                                           const QString& broker_id) const {
     QMutexLocker lock(&mutex_);
     auto it = caches_.find(broker_id);
-    if (it == caches_.end()) return std::nullopt;
+    if (it == caches_.end())
+        return std::nullopt;
+    auto jt = it->by_symbol.find({symbol, exchange});
+    if (jt == it->by_symbol.end())
+        return std::nullopt;
+    return jt->instrument_token;
+}
+
+std::optional<QString> InstrumentService::to_brsymbol(const QString& symbol, const QString& exchange,
+                                                      const QString& broker_id) const {
+    QMutexLocker lock(&mutex_);
+    auto it = caches_.find(broker_id);
+    if (it == caches_.end())
+        return std::nullopt;
+    auto jt = it->by_symbol.find({symbol, exchange});
+    if (jt == it->by_symbol.end())
+        return std::nullopt;
+    return jt->brsymbol;
+}
+
+std::optional<QString> InstrumentService::from_brsymbol(const QString& brsymbol, const QString& brexchange,
+                                                        const QString& broker_id) const {
+    QMutexLocker lock(&mutex_);
+    auto it = caches_.find(broker_id);
+    if (it == caches_.end())
+        return std::nullopt;
     auto jt = it->by_brsymbol.find({brsymbol, brexchange});
-    if (jt == it->by_brsymbol.end()) return std::nullopt;
+    if (jt == it->by_brsymbol.end())
+        return std::nullopt;
     return jt->symbol;
 }
 
-std::optional<Instrument> InstrumentService::find(const QString& symbol,
-                                                   const QString& exchange,
-                                                   const QString& broker_id) const {
+std::optional<Instrument> InstrumentService::find(const QString& symbol, const QString& exchange,
+                                                  const QString& broker_id) const {
     QMutexLocker lock(&mutex_);
     auto it = caches_.find(broker_id);
-    if (it == caches_.end()) return std::nullopt;
+    if (it == caches_.end())
+        return std::nullopt;
     auto jt = it->by_symbol.find({symbol, exchange});
-    if (jt == it->by_symbol.end()) return std::nullopt;
+    if (jt == it->by_symbol.end())
+        return std::nullopt;
     return *jt;
 }
 
-std::optional<Instrument> InstrumentService::find_by_token(quint32 instrument_token,
-                                                           const QString& broker_id) const {
+std::optional<Instrument> InstrumentService::find_by_token(quint32 instrument_token, const QString& broker_id) const {
     QMutexLocker lock(&mutex_);
     auto it = caches_.find(broker_id);
-    if (it == caches_.end()) return std::nullopt;
+    if (it == caches_.end())
+        return std::nullopt;
     auto jt = it->by_token.find(qint64(instrument_token));
-    if (jt == it->by_token.end()) return std::nullopt;
+    if (jt == it->by_token.end())
+        return std::nullopt;
     return *jt;
 }
 
-QVector<Instrument> InstrumentService::search(const QString& query,
-                                               const QString& exchange,
-                                               const QString& broker_id,
-                                               int limit) const {
+QVector<Instrument> InstrumentService::search(const QString& query, const QString& exchange, const QString& broker_id,
+                                              int limit) const {
     // Delegate to DB for search (cache doesn't hold a text index)
     return InstrumentRepository::instance().search(query, exchange, broker_id, limit);
 }
@@ -307,7 +320,8 @@ QVector<Instrument> InstrumentService::search(const QString& query,
 int InstrumentService::cached_count(const QString& broker_id) const {
     QMutexLocker lock(&mutex_);
     auto it = caches_.find(broker_id);
-    if (it == caches_.end()) return 0;
+    if (it == caches_.end())
+        return 0;
     return it->by_symbol.size();
 }
 
@@ -319,8 +333,7 @@ bool InstrumentService::is_loaded(const QString& broker_id) const {
 
 // ── Private ───────────────────────────────────────────────────────────────────
 
-void InstrumentService::build_cache(const QString& broker_id,
-                                     const QVector<Instrument>& instruments) {
+void InstrumentService::build_cache(const QString& broker_id, const QVector<Instrument>& instruments) {
     QMutexLocker lock(&mutex_);
     Cache& cache = caches_[broker_id];
     cache.by_symbol.clear();
@@ -335,8 +348,7 @@ void InstrumentService::build_cache(const QString& broker_id,
     cache.loaded = true;
 }
 
-void InstrumentService::do_refresh(const QString& broker_id,
-                                    const BrokerCredentials& creds) {
+void InstrumentService::do_refresh(const QString& broker_id, const BrokerCredentials& creds) {
     LOG_INFO("InstrumentService", "Downloading instruments for " + broker_id);
 
     QByteArray payload;
@@ -345,18 +357,30 @@ void InstrumentService::do_refresh(const QString& broker_id,
     } else if (broker_id == "angelone") {
         payload = download_angel_master_json();
     } else {
-        QMetaObject::invokeMethod(this, [this, broker_id]() {
-            { QMutexLocker lock(&mutex_); refreshing_.remove(broker_id); }
-            emit refresh_failed(broker_id, "Instrument download not implemented for " + broker_id);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            this,
+            [this, broker_id]() {
+                {
+                    QMutexLocker lock(&mutex_);
+                    refreshing_.remove(broker_id);
+                }
+                emit refresh_failed(broker_id, "Instrument download not implemented for " + broker_id);
+            },
+            Qt::QueuedConnection);
         return;
     }
 
     if (payload.isEmpty()) {
-        QMetaObject::invokeMethod(this, [this, broker_id]() {
-            { QMutexLocker lock(&mutex_); refreshing_.remove(broker_id); }
-            emit refresh_failed(broker_id, "Empty instrument data received");
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            this,
+            [this, broker_id]() {
+                {
+                    QMutexLocker lock(&mutex_);
+                    refreshing_.remove(broker_id);
+                }
+                emit refresh_failed(broker_id, "Empty instrument data received");
+            },
+            Qt::QueuedConnection);
         return;
     }
 
@@ -368,10 +392,16 @@ void InstrumentService::do_refresh(const QString& broker_id,
     }
 
     if (instruments.isEmpty()) {
-        QMetaObject::invokeMethod(this, [this, broker_id]() {
-            { QMutexLocker lock(&mutex_); refreshing_.remove(broker_id); }
-            emit refresh_failed(broker_id, "Failed to parse instrument data");
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            this,
+            [this, broker_id]() {
+                {
+                    QMutexLocker lock(&mutex_);
+                    refreshing_.remove(broker_id);
+                }
+                emit refresh_failed(broker_id, "Failed to parse instrument data");
+            },
+            Qt::QueuedConnection);
         return;
     }
 
@@ -379,22 +409,30 @@ void InstrumentService::do_refresh(const QString& broker_id,
     // QSqlDatabase connections are not thread-safe (Qt docs: use only from owning thread).
     // Worker thread hands off instruments to the main thread here.
     int count = instruments.size();
-    QMetaObject::invokeMethod(this, [this, broker_id, instruments, count]() {
-        // Persist to DB (main thread — safe)
-        auto r = InstrumentRepository::instance().replace_all(broker_id, instruments);
-        if (r.is_err()) {
-            QString err = QString::fromStdString(r.error());
-            { QMutexLocker lock(&mutex_); refreshing_.remove(broker_id); }
-            emit refresh_failed(broker_id, err);
-            return;
-        }
-        // Rebuild in-memory cache
-        build_cache(broker_id, instruments);
-        { QMutexLocker lock(&mutex_); refreshing_.remove(broker_id); }
-        LOG_INFO("InstrumentService",
-                 QString("Refresh complete: %1 instruments for %2").arg(count).arg(broker_id));
-        emit refresh_done(broker_id, count);
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(
+        this,
+        [this, broker_id, instruments, count]() {
+            // Persist to DB (main thread — safe)
+            auto r = InstrumentRepository::instance().replace_all(broker_id, instruments);
+            if (r.is_err()) {
+                QString err = QString::fromStdString(r.error());
+                {
+                    QMutexLocker lock(&mutex_);
+                    refreshing_.remove(broker_id);
+                }
+                emit refresh_failed(broker_id, err);
+                return;
+            }
+            // Rebuild in-memory cache
+            build_cache(broker_id, instruments);
+            {
+                QMutexLocker lock(&mutex_);
+                refreshing_.remove(broker_id);
+            }
+            LOG_INFO("InstrumentService", QString("Refresh complete: %1 instruments for %2").arg(count).arg(broker_id));
+            emit refresh_done(broker_id, count);
+        },
+        Qt::QueuedConnection);
 }
 
 QByteArray InstrumentService::download_zerodha_csv(const BrokerCredentials& creds) {
@@ -415,14 +453,12 @@ QByteArray InstrumentService::download_zerodha_csv(const BrokerCredentials& cred
 QByteArray InstrumentService::download_angel_master_json() {
     // Public endpoint — ~8MB JSON. Uses its own QNAM to avoid blocking BrokerHttp's
     // mutex (which would starve all concurrent quote/history API calls for 10-20s).
-    static const QString kUrl =
-        "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json";
+    static const QString kUrl = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json";
 
     QNetworkAccessManager nam;
     QNetworkRequest req{QUrl(kUrl)};
     req.setRawHeader("Accept", "application/json");
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                     QNetworkRequest::NoLessSafeRedirectPolicy);
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
 
     QNetworkReply* reply = nam.get(req);
 
@@ -430,7 +466,7 @@ QByteArray InstrumentService::download_angel_master_json() {
     QTimer timer;
     timer.setSingleShot(true);
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    QObject::connect(&timer, &QTimer::timeout,        &loop, &QEventLoop::quit);
+    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
     timer.start(60000); // 60s — large file on slow connection
     loop.exec();
 
@@ -443,16 +479,14 @@ QByteArray InstrumentService::download_angel_master_json() {
     timer.stop();
 
     if (reply->error() != QNetworkReply::NoError) {
-        LOG_ERROR("InstrumentService",
-                  "Failed to download AngelOne master contract: " + reply->errorString());
+        LOG_ERROR("InstrumentService", "Failed to download AngelOne master contract: " + reply->errorString());
         reply->deleteLater();
         return {};
     }
 
     QByteArray data = reply->readAll();
     reply->deleteLater();
-    LOG_INFO("InstrumentService",
-             QString("Downloaded AngelOne master contract: %1 bytes").arg(data.size()));
+    LOG_INFO("InstrumentService", QString("Downloaded AngelOne master contract: %1 bytes").arg(data.size()));
     return data;
 }
 

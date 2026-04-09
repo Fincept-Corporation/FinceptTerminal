@@ -17,7 +17,7 @@ PerformanceWidget::PerformanceWidget(QWidget* parent)
                           "S&P 500 vs DOW Spread", "NASDAQ vs S&P Spread", "VIX Level", "Gold Daily"};
 
     for (const auto& label : labels) {
-        auto* row = new QWidget;
+        auto* row = new QWidget(this);
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
 
@@ -47,15 +47,13 @@ PerformanceWidget::PerformanceWidget(QWidget* parent)
 
 void PerformanceWidget::apply_styles() {
     for (const auto& mr : rows_) {
-        mr.row_widget->setStyleSheet(
-            QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
+        mr.row_widget->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
         mr.label->setStyleSheet(
             QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
         mr.period->setStyleSheet(
             QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
-        mr.value->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;")
-                .arg(ui::colors::TEXT_PRIMARY()));
+        mr.value->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;")
+                                    .arg(ui::colors::TEXT_PRIMARY()));
     }
 }
 
@@ -88,7 +86,9 @@ void PerformanceWidget::populate(const QVector<services::QuoteData>& quotes) {
         if (idx >= rows_.size())
             return;
         rows_[idx].value->setText(fmt_pct(val));
-        QString color = val > 0 ? ui::colors::POSITIVE() : val < 0 ? ui::colors::NEGATIVE() : ui::colors::TEXT_PRIMARY();
+        QString color = val > 0   ? ui::colors::POSITIVE()
+                        : val < 0 ? ui::colors::NEGATIVE()
+                                  : ui::colors::TEXT_PRIMARY();
         rows_[idx].value->setStyleSheet(
             QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;").arg(color));
     };
@@ -117,7 +117,9 @@ void PerformanceWidget::populate(const QVector<services::QuoteData>& quotes) {
         double vix = map["^VIX"]->price;
         if (6 < rows_.size()) {
             rows_[6].value->setText(QString::number(vix, 'f', 2));
-            QString color = vix > 25 ? ui::colors::NEGATIVE() : vix > 18 ? ui::colors::WARNING() : ui::colors::POSITIVE();
+            QString color = vix > 25   ? ui::colors::NEGATIVE()
+                            : vix > 18 ? ui::colors::WARNING()
+                                       : ui::colors::POSITIVE();
             rows_[6].value->setStyleSheet(
                 QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;").arg(color));
         }

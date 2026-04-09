@@ -1,12 +1,13 @@
 #pragma once
+#include "core/result/Result.h"
 #include "services/workspace/IWorkspaceParticipant.h"
 #include "services/workspace/WorkspaceTypes.h"
-#include "core/result/Result.h"
 
 #include <QHash>
 #include <QMainWindow>
 #include <QObject>
 #include <QTimer>
+
 #include <optional>
 
 namespace fincept {
@@ -42,8 +43,7 @@ class WorkspaceManager : public QObject {
 
     // ── Workspace operations ──────────────────────────────────────────────────
 
-    void new_workspace(const QString& name, const QString& description = {},
-                       const QString& template_id = {});
+    void new_workspace(const QString& name, const QString& description = {}, const QString& template_id = {});
 
     void open_workspace(const QString& path);
 
@@ -90,13 +90,13 @@ class WorkspaceManager : public QObject {
 
     std::optional<WorkspaceDef> current_workspace_;
     QHash<QString, IWorkspaceParticipant*> participants_;
-    QHash<QString, QJsonObject> pending_states_;  // states waiting for lazy screens
+    QHash<QString, QJsonObject> pending_states_; // states waiting for lazy screens
 
     // Multi-window aware: stores all registered windows and routers.
     // The first registered window is treated as primary for workspace operations.
-    QList<QMainWindow*>  windows_;
+    QList<QMainWindow*> windows_;
     QList<ScreenRouter*> routers_;
-    QTimer*       autosave_timer_ = nullptr;
+    QTimer* autosave_timer_ = nullptr;
 };
 
 } // namespace fincept

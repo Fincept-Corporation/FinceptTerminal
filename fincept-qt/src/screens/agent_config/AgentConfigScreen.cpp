@@ -28,14 +28,10 @@ struct ViewMeta {
 };
 
 static constexpr ViewMeta kViews[] = {
-    {services::AgentViewMode::Agents,    "AGENTS"},
-    {services::AgentViewMode::Create,    "CREATE"},
-    {services::AgentViewMode::Teams,     "TEAMS"},
-    {services::AgentViewMode::Workflows, "WORKFLOWS"},
-    {services::AgentViewMode::Planner,   "PLANNER"},
-    {services::AgentViewMode::Tools,     "TOOLS"},
-    {services::AgentViewMode::Chat,      "CHAT"},
-    {services::AgentViewMode::System,    "SYSTEM"},
+    {services::AgentViewMode::Agents, "AGENTS"},   {services::AgentViewMode::Create, "CREATE"},
+    {services::AgentViewMode::Teams, "TEAMS"},     {services::AgentViewMode::Workflows, "WORKFLOWS"},
+    {services::AgentViewMode::Planner, "PLANNER"}, {services::AgentViewMode::Tools, "TOOLS"},
+    {services::AgentViewMode::Chat, "CHAT"},       {services::AgentViewMode::System, "SYSTEM"},
 };
 
 // ── Constructor ──────────────────────────────────────────────────────────────
@@ -44,8 +40,8 @@ AgentConfigScreen::AgentConfigScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("AgentConfigScreen");
     build_ui();
     setup_service_connections();
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { update(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { update(); });
 }
 
 // ── UI construction ──────────────────────────────────────────────────────────
@@ -68,7 +64,7 @@ void AgentConfigScreen::build_ui() {
 }
 
 void AgentConfigScreen::build_nav_bar(QVBoxLayout* root) {
-    auto* nav_bar = new QWidget;
+    auto* nav_bar = new QWidget(this);
     nav_bar->setObjectName("AgentNavBar");
     nav_bar->setFixedHeight(40);
     nav_bar->setStyleSheet(QString("QWidget#AgentNavBar { background: %1; border-bottom: 1px solid %2; }")
@@ -107,7 +103,7 @@ void AgentConfigScreen::build_nav_bar(QVBoxLayout* root) {
 }
 
 void AgentConfigScreen::build_status_bar(QVBoxLayout* root) {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setFixedHeight(24);
     bar->setStyleSheet(
         QString("background:%1;border-top:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
@@ -161,38 +157,38 @@ void AgentConfigScreen::ensure_panel_built(services::AgentViewMode mode) {
 
     QWidget* panel = nullptr;
     switch (mode) {
-    case services::AgentViewMode::Agents:
-        agents_panel_ = new AgentsViewPanel;
-        panel = agents_panel_;
-        break;
-    case services::AgentViewMode::Create:
-        create_panel_ = new CreateAgentPanel;
-        panel = create_panel_;
-        break;
-    case services::AgentViewMode::Teams:
-        teams_panel_ = new TeamsViewPanel;
-        panel = teams_panel_;
-        break;
-    case services::AgentViewMode::Workflows:
-        workflows_panel_ = new WorkflowsViewPanel;
-        panel = workflows_panel_;
-        break;
-    case services::AgentViewMode::Planner:
-        planner_panel_ = new PlannerViewPanel;
-        panel = planner_panel_;
-        break;
-    case services::AgentViewMode::Tools:
-        tools_panel_ = new ToolsViewPanel;
-        panel = tools_panel_;
-        break;
-    case services::AgentViewMode::Chat:
-        chat_panel_ = new AgentChatPanel;
-        panel = chat_panel_;
-        break;
-    case services::AgentViewMode::System:
-        system_panel_ = new SystemViewPanel;
-        panel = system_panel_;
-        break;
+        case services::AgentViewMode::Agents:
+            agents_panel_ = new AgentsViewPanel;
+            panel = agents_panel_;
+            break;
+        case services::AgentViewMode::Create:
+            create_panel_ = new CreateAgentPanel;
+            panel = create_panel_;
+            break;
+        case services::AgentViewMode::Teams:
+            teams_panel_ = new TeamsViewPanel;
+            panel = teams_panel_;
+            break;
+        case services::AgentViewMode::Workflows:
+            workflows_panel_ = new WorkflowsViewPanel;
+            panel = workflows_panel_;
+            break;
+        case services::AgentViewMode::Planner:
+            planner_panel_ = new PlannerViewPanel;
+            panel = planner_panel_;
+            break;
+        case services::AgentViewMode::Tools:
+            tools_panel_ = new ToolsViewPanel;
+            panel = tools_panel_;
+            break;
+        case services::AgentViewMode::Chat:
+            chat_panel_ = new AgentChatPanel;
+            panel = chat_panel_;
+            break;
+        case services::AgentViewMode::System:
+            system_panel_ = new SystemViewPanel;
+            panel = system_panel_;
+            break;
     }
 
     // Add panel to stack — no placeholder removal needed, index tracked via pointer
@@ -206,14 +202,22 @@ void AgentConfigScreen::ensure_panel_built(services::AgentViewMode mode) {
 
 QWidget* AgentConfigScreen::panel_widget(services::AgentViewMode mode) const {
     switch (mode) {
-    case services::AgentViewMode::Agents:    return agents_panel_;
-    case services::AgentViewMode::Create:    return create_panel_;
-    case services::AgentViewMode::Teams:     return teams_panel_;
-    case services::AgentViewMode::Workflows: return workflows_panel_;
-    case services::AgentViewMode::Planner:   return planner_panel_;
-    case services::AgentViewMode::Tools:     return tools_panel_;
-    case services::AgentViewMode::Chat:      return chat_panel_;
-    case services::AgentViewMode::System:    return system_panel_;
+        case services::AgentViewMode::Agents:
+            return agents_panel_;
+        case services::AgentViewMode::Create:
+            return create_panel_;
+        case services::AgentViewMode::Teams:
+            return teams_panel_;
+        case services::AgentViewMode::Workflows:
+            return workflows_panel_;
+        case services::AgentViewMode::Planner:
+            return planner_panel_;
+        case services::AgentViewMode::Tools:
+            return tools_panel_;
+        case services::AgentViewMode::Chat:
+            return chat_panel_;
+        case services::AgentViewMode::System:
+            return system_panel_;
     }
     return nullptr;
 }
@@ -221,57 +225,52 @@ QWidget* AgentConfigScreen::panel_widget(services::AgentViewMode mode) const {
 void AgentConfigScreen::wire_cross_panel_signals() {
     // AGENTS → TEAMS: "Add to Team" button
     if (agents_panel_ && teams_panel_)
-        connect(agents_panel_, &AgentsViewPanel::add_agent_to_team,
-                teams_panel_,  &TeamsViewPanel::add_agent_from_panel,
+        connect(agents_panel_, &AgentsViewPanel::add_agent_to_team, teams_panel_, &TeamsViewPanel::add_agent_from_panel,
                 Qt::UniqueConnection);
 
     // TOOLS → AGENTS: live selection propagation
     if (tools_panel_ && agents_panel_)
-        connect(tools_panel_, &ToolsViewPanel::tools_selection_changed,
-                agents_panel_, &AgentsViewPanel::apply_tools_selection,
-                Qt::UniqueConnection);
+        connect(tools_panel_, &ToolsViewPanel::tools_selection_changed, agents_panel_,
+                &AgentsViewPanel::apply_tools_selection, Qt::UniqueConnection);
 
     // TOOLS → AGENTS: reload agent tools from DB immediately after assign
     if (tools_panel_ && agents_panel_)
-        connect(tools_panel_, &ToolsViewPanel::tool_assigned,
-                agents_panel_, [this](const QString& /*id*/, const QStringList& tools) {
-                    agents_panel_->apply_tools_selection(tools);
-                }, Qt::UniqueConnection);
+        connect(
+            tools_panel_, &ToolsViewPanel::tool_assigned, agents_panel_,
+            [this](const QString& /*id*/, const QStringList& tools) { agents_panel_->apply_tools_selection(tools); },
+            Qt::UniqueConnection);
 
     // TOOLS → CREATE: selection propagation
     if (tools_panel_ && create_panel_)
-        connect(tools_panel_, &ToolsViewPanel::tools_selection_changed,
-                create_panel_, &CreateAgentPanel::apply_tools_selection,
-                Qt::UniqueConnection);
+        connect(tools_panel_, &ToolsViewPanel::tools_selection_changed, create_panel_,
+                &CreateAgentPanel::apply_tools_selection, Qt::UniqueConnection);
 
     // TOOLS → TEAMS: selection propagation
     if (tools_panel_ && teams_panel_)
-        connect(tools_panel_, &ToolsViewPanel::tools_selection_changed,
-                teams_panel_,  &TeamsViewPanel::apply_tools_selection,
-                Qt::UniqueConnection);
+        connect(tools_panel_, &ToolsViewPanel::tools_selection_changed, teams_panel_,
+                &TeamsViewPanel::apply_tools_selection, Qt::UniqueConnection);
 
     // SERVICE → SYSTEM: refresh when agents/tools change
     if (system_panel_) {
-        connect(&services::AgentService::instance(), &services::AgentService::agents_discovered,
-                system_panel_, [this](QVector<services::AgentInfo>, QVector<services::AgentCategory>) {
-                    system_panel_->on_agents_changed();
-                }, Qt::UniqueConnection);
+        connect(
+            &services::AgentService::instance(), &services::AgentService::agents_discovered, system_panel_,
+            [this](QVector<services::AgentInfo>, QVector<services::AgentCategory>) {
+                system_panel_->on_agents_changed();
+            },
+            Qt::UniqueConnection);
 
-        connect(&services::AgentService::instance(), &services::AgentService::tools_loaded,
-                system_panel_, [this](services::AgentToolsInfo info) {
-                    system_panel_->on_tools_changed(info);
-                }, Qt::UniqueConnection);
+        connect(
+            &services::AgentService::instance(), &services::AgentService::tools_loaded, system_panel_,
+            [this](services::AgentToolsInfo info) { system_panel_->on_tools_changed(info); }, Qt::UniqueConnection);
 
         // LLM config saved/deleted → refresh LLM list in System tab
-        connect(&services::AgentService::instance(), &services::AgentService::config_saved,
-                system_panel_, [this]() {
-                    system_panel_->on_llm_config_changed();
-                }, Qt::UniqueConnection);
+        connect(
+            &services::AgentService::instance(), &services::AgentService::config_saved, system_panel_,
+            [this]() { system_panel_->on_llm_config_changed(); }, Qt::UniqueConnection);
 
-        connect(&services::AgentService::instance(), &services::AgentService::config_deleted,
-                system_panel_, [this]() {
-                    system_panel_->on_llm_config_changed();
-                }, Qt::UniqueConnection);
+        connect(
+            &services::AgentService::instance(), &services::AgentService::config_deleted, system_panel_,
+            [this]() { system_panel_->on_llm_config_changed(); }, Qt::UniqueConnection);
     }
 }
 

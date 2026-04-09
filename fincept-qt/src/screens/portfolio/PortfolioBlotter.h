@@ -46,8 +46,8 @@ class PortfolioBlotter : public QWidget {
     QVector<portfolio::HoldingWithQuote> holdings_;
     QVector<portfolio::HoldingWithQuote> sorted_;
     QString selected_symbol_;
-    QString     filter_text_;
-    QStringList sector_symbols_;  // empty = no sector filter
+    QString filter_text_;
+    QStringList sector_symbols_; // empty = no sector filter
     portfolio::SortColumn sort_col_ = portfolio::SortColumn::Weight;
     portfolio::SortDirection sort_dir_ = portfolio::SortDirection::Desc;
 

@@ -1,6 +1,6 @@
 #pragma once
-#include "trading/instruments/InstrumentTypes.h"
 #include "trading/TradingTypes.h"
+#include "trading/instruments/InstrumentTypes.h"
 
 #include <QMap>
 #include <QMutex>
@@ -8,6 +8,7 @@
 #include <QSet>
 #include <QString>
 #include <QVector>
+
 #include <optional>
 
 namespace fincept::trading {
@@ -36,8 +37,7 @@ class InstrumentService : public QObject {
     /// Download instruments from broker API, parse, store to DB, rebuild cache.
     /// Non-blocking — emits refresh_done or refresh_failed on completion.
     /// Skips download if instruments are already fresh (< max_age_hours old).
-    void refresh(const QString& broker_id, const BrokerCredentials& creds,
-                 int max_age_hours = 12);
+    void refresh(const QString& broker_id, const BrokerCredentials& creds, int max_age_hours = 12);
 
     /// Force refresh even if cache is fresh.
     void force_refresh(const QString& broker_id, const BrokerCredentials& creds);
@@ -53,24 +53,21 @@ class InstrumentService : public QObject {
                                            const QString& broker_id) const;
 
     /// symbol + exchange → brsymbol  (for order placement)
-    std::optional<QString> to_brsymbol(const QString& symbol, const QString& exchange,
-                                       const QString& broker_id) const;
+    std::optional<QString> to_brsymbol(const QString& symbol, const QString& exchange, const QString& broker_id) const;
 
     /// brsymbol + brexchange → normalised symbol  (for parsing order responses)
     std::optional<QString> from_brsymbol(const QString& brsymbol, const QString& brexchange,
                                          const QString& broker_id) const;
 
     /// Full instrument lookup by symbol + exchange
-    std::optional<Instrument> find(const QString& symbol, const QString& exchange,
-                                   const QString& broker_id) const;
+    std::optional<Instrument> find(const QString& symbol, const QString& exchange, const QString& broker_id) const;
 
     /// Full instrument lookup by numeric instrument_token (for WebSocket tick enrichment)
-    std::optional<Instrument> find_by_token(quint32 instrument_token,
-                                            const QString& broker_id) const;
+    std::optional<Instrument> find_by_token(quint32 instrument_token, const QString& broker_id) const;
 
     // ── Search (for symbol picker UI) ────────────────────────────────────────
-    QVector<Instrument> search(const QString& query, const QString& exchange,
-                               const QString& broker_id, int limit = 50) const;
+    QVector<Instrument> search(const QString& query, const QString& exchange, const QString& broker_id,
+                               int limit = 50) const;
 
     /// How many instruments are cached for this broker.
     int cached_count(const QString& broker_id) const;
@@ -98,9 +95,9 @@ class InstrumentService : public QObject {
         bool loaded = false;
     };
 
-    QMap<QString, Cache> caches_;        // keyed by broker_id
-    QSet<QString> refreshing_;           // brokers currently mid-download (prevents double-refresh)
-    mutable QMutex mutex_;               // guards caches_ + refreshing_
+    QMap<QString, Cache> caches_; // keyed by broker_id
+    QSet<QString> refreshing_;    // brokers currently mid-download (prevents double-refresh)
+    mutable QMutex mutex_;        // guards caches_ + refreshing_
 
     void build_cache(const QString& broker_id, const QVector<Instrument>& instruments);
     void do_refresh(const QString& broker_id, const BrokerCredentials& creds);

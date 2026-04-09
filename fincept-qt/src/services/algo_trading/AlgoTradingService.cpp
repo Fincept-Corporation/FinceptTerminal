@@ -12,9 +12,9 @@
 
 namespace fincept::services::algo {
 
-static constexpr int kStrategiesTtlSec  = 30;
+static constexpr int kStrategiesTtlSec = 30;
 static constexpr int kDeploymentsTtlSec = 30;
-static constexpr const char* kStrategiesCacheKey  = "algo:strategies";
+static constexpr const char* kStrategiesCacheKey = "algo:strategies";
 static constexpr const char* kDeploymentsCacheKey = "algo:deployments";
 
 // ── DB path helper ────────────────────────────────────────────────────────────
@@ -55,9 +55,7 @@ void AlgoTradingService::save_strategy(const AlgoStrategy& strategy) {
     obj["trailing_stop"] = strategy.trailing_stop;
 
     auto json = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    run_python("algo_trading/backtest_engine.py",
-               {"save_strategy", json, "--db", algo_db_path()},
-               "save_strategy",
+    run_python("algo_trading/backtest_engine.py", {"save_strategy", json, "--db", algo_db_path()}, "save_strategy",
                [this, obj](bool ok, const QString& out) {
                    if (!ok) {
                        emit error_occurred("save_strategy", out);
@@ -102,9 +100,7 @@ void AlgoTradingService::list_strategies() {
         }
     }
 
-    run_python("algo_trading/backtest_engine.py",
-               {"list_strategies", "--db", algo_db_path()},
-               "list_strategies",
+    run_python("algo_trading/backtest_engine.py", {"list_strategies", "--db", algo_db_path()}, "list_strategies",
                [this](bool ok, const QString& out) {
                    if (!ok) {
                        emit error_occurred("list_strategies", out);
@@ -121,9 +117,7 @@ void AlgoTradingService::list_strategies() {
 }
 
 void AlgoTradingService::delete_strategy(const QString& id) {
-    run_python("algo_trading/backtest_engine.py",
-               {"delete_strategy", id, "--db", algo_db_path()},
-               "delete_strategy",
+    run_python("algo_trading/backtest_engine.py", {"delete_strategy", id, "--db", algo_db_path()}, "delete_strategy",
                [this, id](bool ok, const QString& out) {
                    if (!ok) {
                        emit error_occurred("delete_strategy", out);
@@ -140,12 +134,9 @@ void AlgoTradingService::deploy_strategy(const QString& strategy_id, const QStri
     auto deploy_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     // algo_live_runner is a long-running process — start and don't wait for completion
     run_python("algo_trading/algo_live_runner.py",
-               {"--deploy-id", deploy_id, "--strategy-id", strategy_id,
-                "--symbol", symbol, "--mode", mode,
-                "--timeframe", timeframe, "--quantity", QString::number(quantity),
-                "--db", algo_db_path()},
-               "deploy",
-               [this, deploy_id](bool ok, const QString& out) {
+               {"--deploy-id", deploy_id, "--strategy-id", strategy_id, "--symbol", symbol, "--mode", mode,
+                "--timeframe", timeframe, "--quantity", QString::number(quantity), "--db", algo_db_path()},
+               "deploy", [this, deploy_id](bool ok, const QString& out) {
                    if (!ok) {
                        emit error_occurred("deploy", out);
                        return;
@@ -155,9 +146,7 @@ void AlgoTradingService::deploy_strategy(const QString& strategy_id, const QStri
 }
 
 void AlgoTradingService::stop_deployment(const QString& deployment_id) {
-    run_python("algo_trading/algo_manager.py",
-               {"stop", deployment_id, "--db", algo_db_path()},
-               "stop_deployment",
+    run_python("algo_trading/algo_manager.py", {"stop", deployment_id, "--db", algo_db_path()}, "stop_deployment",
                [this, deployment_id](bool ok, const QString& out) {
                    if (!ok) {
                        emit error_occurred("stop_deployment", out);
@@ -168,9 +157,7 @@ void AlgoTradingService::stop_deployment(const QString& deployment_id) {
 }
 
 void AlgoTradingService::stop_all_deployments() {
-    run_python("algo_trading/algo_manager.py",
-               {"stop_all", "--db", algo_db_path()},
-               "stop_all",
+    run_python("algo_trading/algo_manager.py", {"stop_all", "--db", algo_db_path()}, "stop_all",
                [this](bool ok, const QString& out) {
                    if (!ok) {
                        emit error_occurred("stop_all", out);
@@ -220,9 +207,7 @@ void AlgoTradingService::list_deployments() {
         }
     }
 
-    run_python("algo_trading/algo_manager.py",
-               {"list_deployments", "--db", algo_db_path()},
-               "list_deployments",
+    run_python("algo_trading/algo_manager.py", {"list_deployments", "--db", algo_db_path()}, "list_deployments",
                [this](bool ok, const QString& out) {
                    if (!ok) {
                        emit error_occurred("list_deployments", out);
@@ -249,9 +234,7 @@ void AlgoTradingService::run_backtest(const QString& strategy_id, const QString&
     params["initial_capital"] = capital;
     auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
 
-    run_python("algo_trading/backtest_engine.py",
-               {"run_backtest", json, "--db", algo_db_path()},
-               "backtest",
+    run_python("algo_trading/backtest_engine.py", {"run_backtest", json, "--db", algo_db_path()}, "backtest",
                [this](bool ok, const QString& out) {
                    if (!ok) {
                        emit error_occurred("backtest", out);
@@ -273,9 +256,7 @@ void AlgoTradingService::run_scan(const QJsonArray& conditions, const QStringLis
     params["logic"] = logic;
     auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
 
-    run_python("algo_trading/scanner_engine.py",
-               {"scan", json, "--db", algo_db_path()},
-               "scan",
+    run_python("algo_trading/scanner_engine.py", {"scan", json, "--db", algo_db_path()}, "scan",
                [this](bool ok, const QString& out) {
                    if (!ok) {
                        emit error_occurred("scan", out);

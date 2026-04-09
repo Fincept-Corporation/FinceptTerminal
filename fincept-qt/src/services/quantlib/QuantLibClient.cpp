@@ -25,11 +25,8 @@ const QString QuantLibClient::API_BASE = QStringLiteral("https://api.fincept.in"
 
 // Endpoints that use GET (no request body).
 static const QStringList GET_ENDPOINTS = {
-    "core/types/currencies",
-    "core/types/frequencies",
-    "scheduling/calendar/list",
-    "scheduling/daycount/conventions",
-    "scheduling/adjustment/methods",
+    "core/types/currencies",           "core/types/frequencies",        "scheduling/calendar/list",
+    "scheduling/daycount/conventions", "scheduling/adjustment/methods",
 };
 
 // Endpoints that take body fields as URL query params (POST with empty body).
@@ -148,9 +145,8 @@ void QuantLibClient::call(const QString& endpoint, const QJsonObject& body, Quan
         const QVariant cached = fincept::CacheManager::instance().get(cache_key);
         if (!cached.isNull()) {
             auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
-            mcp::ToolResult result = doc.isObject()
-                ? mcp::ToolResult::ok_data(doc.object())
-                : mcp::ToolResult::ok_data(doc.array());
+            mcp::ToolResult result =
+                doc.isObject() ? mcp::ToolResult::ok_data(doc.object()) : mcp::ToolResult::ok_data(doc.array());
             callback(result);
             return;
         }
@@ -167,7 +163,8 @@ void QuantLibClient::call(const QString& endpoint, const QJsonObject& body, Quan
         connect(reply, &QNetworkReply::finished, this, [self, reply, nam, endpoint, cache_key, callback]() {
             reply->deleteLater();
             nam->deleteLater();
-            if (!self) return;
+            if (!self)
+                return;
             if (reply->error() != QNetworkReply::NoError) {
                 LOG_ERROR(kQuantLibClientTag, "Network error on " + endpoint + ": " + reply->errorString());
                 callback(mcp::ToolResult::fail(reply->errorString()));
@@ -186,9 +183,9 @@ void QuantLibClient::call(const QString& endpoint, const QJsonObject& body, Quan
                 if (!to_cache.isEmpty())
                     fincept::CacheManager::instance().put(cache_key, QVariant(to_cache), kRefDataTtlSec, "quantlib");
             }
-            LOG_DEBUG(kQuantLibClientTag, QString("HTTP %1 — %2 — %3")
-                               .arg(http_status).arg(endpoint)
-                               .arg(result.success ? "OK" : result.error));
+            LOG_DEBUG(
+                kQuantLibClientTag,
+                QString("HTTP %1 — %2 — %3").arg(http_status).arg(endpoint).arg(result.success ? "OK" : result.error));
             callback(result);
         });
         return;
@@ -205,7 +202,8 @@ void QuantLibClient::call(const QString& endpoint, const QJsonObject& body, Quan
         reply->deleteLater();
         nam->deleteLater();
 
-        if (!self) return;
+        if (!self)
+            return;
 
         if (reply->error() != QNetworkReply::NoError) {
             LOG_ERROR(kQuantLibClientTag, "Network error on " + endpoint + ": " + reply->errorString());
@@ -217,10 +215,9 @@ void QuantLibClient::call(const QString& endpoint, const QJsonObject& body, Quan
         auto raw = reply->readAll();
         auto result = parse_response(http_status, raw);
 
-        LOG_DEBUG(kQuantLibClientTag, QString("HTTP %1 — %2 — %3")
-                           .arg(http_status)
-                           .arg(endpoint)
-                           .arg(result.success ? "OK" : result.error));
+        LOG_DEBUG(
+            kQuantLibClientTag,
+            QString("HTTP %1 — %2 — %3").arg(http_status).arg(endpoint).arg(result.success ? "OK" : result.error));
 
         callback(result);
     });

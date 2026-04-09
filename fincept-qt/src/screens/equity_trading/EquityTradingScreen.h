@@ -1,28 +1,24 @@
 #pragma once
-// Equity Trading Screen — Bloomberg-style coordinator
-// Routes to live brokers (16 supported) or paper trading engine.
+// Equity Trading Screen — Bloomberg-style multi-account coordinator.
+// Supports multiple broker accounts simultaneously via DataStreamManager.
+// Each account has its own data stream (WS/polling), portfolio, and credentials.
 
 #include "screens/IStatefulScreen.h"
 #include "screens/equity_trading/EquityTypes.h"
 #include "services/workspace/IWorkspaceParticipant.h"
+#include "trading/BrokerAccount.h"
 #include "trading/TradingTypes.h"
-#include "trading/websocket/AngelOneTickTypes.h"
 
 #include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
-#include <QMutex>
 #include <QPushButton>
 #include <QShowEvent>
 #include <QTimer>
 #include <QWidget>
 
 #include <atomic>
-
-namespace fincept::trading {
-class AngelOneWebSocket;
-} // namespace fincept::trading
 
 namespace fincept::screens::equity {
 class EquityTickerBar;
@@ -49,64 +45,55 @@ class EquityTradingScreen : public QWidget, public IWorkspaceParticipant {
     void hideEvent(QHideEvent* event) override;
 
   private slots:
-    void on_broker_changed(const QString& broker);
+    // Multi-account slots
+    void on_account_changed(const QString& account_id);
     void on_symbol_selected(const QString& symbol);
     void on_mode_toggled();
-    void on_api_clicked();
-    void handle_token_expired();
+    void on_accounts_clicked(); // opens AccountManagementDialog
+    void handle_token_expired(const QString& account_id);
     void on_order_submitted(const trading::UnifiedOrder& order);
     void on_cancel_order(const QString& order_id);
     void on_ob_price_clicked(double price);
 
-    void refresh_quote();
-    void refresh_portfolio();
-    void refresh_watchlist();
     void refresh_candles();
     void update_clock();
 
-    // WebSocket slots
-    void on_ws_tick(const trading::AoTick& tick);
-    void on_ws_connected();
-    void on_ws_disconnected();
+    // DataStreamManager signal handlers
+    void on_stream_quote_updated(const QString& account_id, const QString& symbol, const trading::BrokerQuote& quote);
+    void on_stream_watchlist_updated(const QString& account_id, const QVector<trading::BrokerQuote>& quotes);
+    void on_stream_positions_updated(const QString& account_id, const QVector<trading::BrokerPosition>& positions);
+    void on_stream_holdings_updated(const QString& account_id, const QVector<trading::BrokerHolding>& holdings);
+    void on_stream_orders_updated(const QString& account_id, const QVector<trading::BrokerOrderInfo>& orders);
+    void on_stream_funds_updated(const QString& account_id, const trading::BrokerFunds& funds);
+    void on_stream_candles_fetched(const QString& account_id, const QVector<trading::BrokerCandle>& candles);
+    void on_stream_orderbook_fetched(const QString& account_id,
+                                     const QVector<QPair<double, double>>& bids,
+                                     const QVector<QPair<double, double>>& asks,
+                                     double spread, double spread_pct);
+    void on_stream_time_sales_fetched(const QString& account_id, const QVector<trading::BrokerTrade>& trades);
+    void on_stream_latest_trade_fetched(const QString& account_id, const trading::BrokerTrade& trade);
+    void on_stream_calendar_fetched(const QString& account_id, const QVector<trading::MarketCalendarDay>& days);
+    void on_stream_clock_fetched(const QString& account_id, const trading::MarketClock& clock);
 
   private:
     void setup_ui();
     void setup_timers();
-    void init_broker();
-    void load_portfolio();
+    void connect_data_stream_signals();
+    void init_focused_account();
     void switch_symbol(const QString& symbol);
-
-    // WebSocket helpers
-    void ws_init();           // create + connect ws_ for current broker (Angel One only)
-    void ws_teardown();       // close + delete ws_
-    void ws_resubscribe();    // push current symbol + watchlist tokens to ws_
-    bool ws_active() const;   // true when ws_ is non-null and connected
-
-    void async_fetch_quote();
-    void async_fetch_candles(const QString& symbol, const QString& timeframe);
-    void async_fetch_positions();
-    void async_fetch_holdings();
-    void async_fetch_orders();
-    void async_fetch_funds();
-    void async_fetch_watchlist_quotes();
-    void async_fetch_orderbook();
-    void async_fetch_calendar();
-    void async_fetch_clock();
-    void async_fetch_time_sales();   // historical trades for current symbol
-    void async_fetch_latest_trade(); // single latest trade — appended to T&S on each poll
-    void async_fetch_auctions();
-    void async_fetch_condition_codes();
+    void update_account_menu();
+    void update_connection_status();
     void async_modify_order(const QString& order_id, double qty, double price);
 
     // ── Command bar widgets ──
-    QPushButton* broker_btn_ = nullptr;
-    QMenu* broker_menu_ = nullptr;
+    QPushButton* account_btn_ = nullptr;  // shows focused account name
+    QMenu* account_menu_ = nullptr;       // lists all active accounts
     QLineEdit* symbol_input_ = nullptr;
     QPushButton* mode_btn_ = nullptr;
-    QPushButton* api_btn_ = nullptr;
+    QPushButton* accounts_btn_ = nullptr; // opens AccountManagementDialog
     QLabel* exchange_label_ = nullptr;
     QLabel* clock_label_ = nullptr;
-    QLabel* conn_label_ = nullptr; // connection status indicator
+    QLabel* conn_label_ = nullptr;        // aggregate connection status
 
     // ── Sub-widgets ──
     equity::EquityTickerBar* ticker_bar_ = nullptr;
@@ -116,38 +103,24 @@ class EquityTradingScreen : public QWidget, public IWorkspaceParticipant {
     equity::EquityOrderBook* orderbook_ = nullptr;
     equity::EquityBottomPanel* bottom_panel_ = nullptr;
 
-    // ── WebSocket (Angel One only — null for other brokers) ──
-    trading::AngelOneWebSocket* ws_ = nullptr;
-
-    // ── Timers ──
-    QTimer* quote_timer_ = nullptr;
-    QTimer* portfolio_timer_ = nullptr;
-    QTimer* watchlist_timer_ = nullptr;
+    // ── Timers (only UI-local timers remain; data timers are in AccountDataStream) ──
     QTimer* clock_timer_ = nullptr;
     QTimer* market_clock_timer_ = nullptr;
 
-    // ── State ──
-    QString broker_id_ = "fyers";
+    // ── Multi-account state ──
+    QString focused_account_id_;          // the account targeted by order entry + chart
     QString selected_symbol_ = "RELIANCE";
     QString selected_exchange_ = "NSE";
-    equity::TradingMode trading_mode_ = equity::TradingMode::Paper;
 
-    // Paper trading
-    QString portfolio_id_;
-    trading::PtPortfolio portfolio_;
+    // Paper trading (derived from focused account)
     int fill_cb_id_ = -1; // OrderMatcher fill callback
 
     // Async guards
     std::atomic<bool> token_expired_shown_{false};
-    std::atomic<bool> quote_fetching_{false};
-    std::atomic<bool> candles_fetching_{false};
-    std::atomic<bool> portfolio_fetching_{false};
-    std::atomic<bool> time_sales_fetching_{false};
 
     QStringList watchlist_symbols_;
     double current_price_ = 0.0; // last known LTP for selected symbol
 
-    QMutex data_mutex_;
     bool initialized_ = false;
 };
 

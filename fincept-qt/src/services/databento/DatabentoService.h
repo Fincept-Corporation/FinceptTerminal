@@ -42,11 +42,11 @@ struct DatabentoFuturesResult {
 struct DatabentoSurfaceResult {
     bool success = false;
     QString error;
-    QString type; // e.g. "local_vol", "liquidity", "implied_dividend", etc.
-    std::vector<float> x_axis;              // strikes or row labels (numeric)
-    std::vector<int> y_axis;                // expirations or col labels
-    std::vector<std::string> x_labels;      // string labels (if non-numeric)
-    std::vector<std::string> y_labels;      // string labels (if non-numeric)
+    QString type;                      // e.g. "local_vol", "liquidity", "implied_dividend", etc.
+    std::vector<float> x_axis;         // strikes or row labels (numeric)
+    std::vector<int> y_axis;           // expirations or col labels
+    std::vector<std::string> x_labels; // string labels (if non-numeric)
+    std::vector<std::string> y_labels; // string labels (if non-numeric)
     std::vector<std::vector<float>> z;
 };
 

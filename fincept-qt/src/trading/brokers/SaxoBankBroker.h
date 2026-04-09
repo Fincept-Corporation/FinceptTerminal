@@ -11,23 +11,33 @@ class SaxoBankBroker : public IBroker {
 
     BrokerProfile profile() const override {
         return BrokerProfile{
-            .id = "saxobank", .display_name = "Saxo Bank", .region = "EU", .currency = "EUR",
-            .credential_fields = {
-                {CredentialField::ApiKey,    "APP KEY",    "Enter App Key...",    false},
-                {CredentialField::ApiSecret, "APP SECRET", "Enter App Secret...", true},
-                {CredentialField::AuthCode,  "AUTH CODE",  "Paste OAuth code...", false},
-            },
-            .exchanges = {"NYSE","NASDAQ","LSE","XETRA","EURONEXT"},
-            .product_types = {
-                {"Day Order",  ProductType::Intraday},
-                {"GTC Order",  ProductType::Delivery},
-                {"Margin",     ProductType::Margin},
-            },
-            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
-            .has_native_paper=true, .default_paper_balance=50000.0,
-            .default_watchlist={"AAPL","MSFT","GOOGL","AMZN","NVDA","VOD.L","ADS.XETRA","ASML.EURONEXT","SIE.XETRA","AIR.EURONEXT"},
-            .default_symbol="AAPL", .default_exchange="NYSE",
-            .brokerage_info="0.05% (min \u20AC3)",
+            .id = "saxobank",
+            .display_name = "Saxo Bank",
+            .region = "EU",
+            .currency = "EUR",
+            .credential_fields =
+                {
+                    {CredentialField::ApiKey, "APP KEY", "Enter App Key...", false},
+                    {CredentialField::ApiSecret, "APP SECRET", "Enter App Secret...", true},
+                    {CredentialField::AuthCode, "AUTH CODE", "Paste OAuth code...", false},
+                },
+            .exchanges = {"NYSE", "NASDAQ", "LSE", "XETRA", "EURONEXT"},
+            .product_types =
+                {
+                    {"Day Order", ProductType::Intraday},
+                    {"GTC Order", ProductType::Delivery},
+                    {"Margin", ProductType::Margin},
+                },
+            .supports_intraday = true,
+            .supports_bracket_order = false,
+            .supports_cover_order = false,
+            .has_native_paper = true,
+            .default_paper_balance = 50000.0,
+            .default_watchlist = {"AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "VOD.L", "ADS.XETRA", "ASML.EURONEXT",
+                                  "SIE.XETRA", "AIR.EURONEXT"},
+            .default_symbol = "AAPL",
+            .default_exchange = "NYSE",
+            .brokerage_info = "0.05% (min \u20AC3)",
         };
     }
 

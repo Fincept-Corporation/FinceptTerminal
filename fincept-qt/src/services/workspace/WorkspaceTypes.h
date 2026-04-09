@@ -12,20 +12,20 @@ namespace fincept {
 
 /// Opaque per-screen state blob saved/restored by IWorkspaceParticipant.
 struct WorkspaceScreenState {
-    QString     screen_id;
+    QString screen_id;
     QJsonObject state;
 };
 
 // ── Workspace metadata ────────────────────────────────────────────────────────
 
 struct WorkspaceMetadata {
-    QString id;           // UUID
+    QString id; // UUID
     QString name;
     QString description;
-    QString template_id;  // empty = user-created
-    QString created_at;   // ISO-8601
-    QString updated_at;   // ISO-8601
-    int     version = 1;
+    QString template_id; // empty = user-created
+    QString created_at;  // ISO-8601
+    QString updated_at;  // ISO-8601
+    int version = 1;
 };
 
 // ── Full workspace definition ─────────────────────────────────────────────────
@@ -34,8 +34,8 @@ struct WorkspaceDef {
     WorkspaceMetadata metadata;
 
     // Navigation
-    QString     active_screen;
-    QStringList open_screens;  // screens visited, in order
+    QString active_screen;
+    QStringList open_screens; // screens visited, in order
 
     // Dashboard widget grid — self-contained, not a DB reference
     screens::GridLayout dashboard_layout;

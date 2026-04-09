@@ -2,14 +2,14 @@
 
 #include "core/logging/Logger.h"
 
-#include <QSimpleUpdater.h>
 #include <QApplication>
 #include <QMessageBox>
+#include <QSimpleUpdater.h>
 #include <QStandardPaths>
 
 #ifdef Q_OS_LINUX
-#include <QProcess>
-#include <QFileInfo>
+#    include <QFileInfo>
+#    include <QProcess>
 #endif
 
 namespace fincept::services {
@@ -19,10 +19,7 @@ UpdateService& UpdateService::instance() {
     return inst;
 }
 
-UpdateService::UpdateService(QObject* parent)
-    : QObject(parent)
-    , url_(DEFAULT_MANIFEST_URL)
-{
+UpdateService::UpdateService(QObject* parent) : QObject(parent), url_(DEFAULT_MANIFEST_URL) {
     updater_ = QSimpleUpdater::getInstance();
 
     updater_->setModuleVersion(url_, QApplication::applicationVersion());
@@ -39,41 +36,35 @@ UpdateService::UpdateService(QObject* parent)
     updater_->setDownloaderEnabled(url_, true);
 #endif
 
-    connect(updater_, &QSimpleUpdater::checkingFinished,
-            this, [this](const QString& checked_url) {
-        if (checked_url != url_) return;
+    connect(updater_, &QSimpleUpdater::checkingFinished, this, [this](const QString& checked_url) {
+        if (checked_url != url_)
+            return;
 
         // If the manifest is unreachable or returns a non-200 response,
         // QSimpleUpdater sets latestVersion to empty — treat as "no update"
         // rather than surfacing an error dialog to the user.
         const QString latest = updater_->getLatestVersion(url_);
         if (latest.isEmpty()) {
-            LOG_WARN("UpdateService",
-                     "Update manifest returned empty version — server may be unreachable "
-                     "or updates.json not yet published. Skipping silently.");
+            LOG_WARN("UpdateService", "Update manifest returned empty version — server may be unreachable "
+                                      "or updates.json not yet published. Skipping silently.");
             emit check_finished(false);
             return;
         }
 
         bool found = updater_->getUpdateAvailable(url_);
-        LOG_INFO("UpdateService", QString("Check finished — update available: %1, latest: %2")
-                     .arg(found ? "yes" : "no")
-                     .arg(latest));
+        LOG_INFO("UpdateService",
+                 QString("Check finished — update available: %1, latest: %2").arg(found ? "yes" : "no").arg(latest));
 
 #ifdef Q_OS_LINUX
         if (found) {
             // Prompt the user then run AppImageUpdate in-place
-            auto btn = QMessageBox::question(
-                nullptr,
-                "Update Available",
-                QString("Fincept Terminal %1 is available.\n\n"
-                        "The update will be applied in the background.\n"
-                        "Restart when prompted to complete installation.\n\n"
-                        "Update now?")
-                    .arg(latest),
-                QMessageBox::Yes | QMessageBox::No,
-                QMessageBox::Yes
-            );
+            auto btn = QMessageBox::question(nullptr, "Update Available",
+                                             QString("Fincept Terminal %1 is available.\n\n"
+                                                     "The update will be applied in the background.\n"
+                                                     "Restart when prompted to complete installation.\n\n"
+                                                     "Update now?")
+                                                 .arg(latest),
+                                             QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
             if (btn == QMessageBox::Yes)
                 run_appimage_update();
         }
@@ -81,12 +72,13 @@ UpdateService::UpdateService(QObject* parent)
         emit check_finished(found);
     });
 
-    connect(updater_, &QSimpleUpdater::downloadFinished,
-            this, [this](const QString& checked_url, const QString& filepath) {
-        if (checked_url != url_) return;
-        LOG_INFO("UpdateService", QString("Download finished: %1").arg(filepath));
-        emit download_finished(filepath);
-    });
+    connect(updater_, &QSimpleUpdater::downloadFinished, this,
+            [this](const QString& checked_url, const QString& filepath) {
+                if (checked_url != url_)
+                    return;
+                LOG_INFO("UpdateService", QString("Download finished: %1").arg(filepath));
+                emit download_finished(filepath);
+            });
 }
 
 void UpdateService::check_for_updates(bool silent) {
@@ -156,7 +148,10 @@ void UpdateService::run_appimage_update() {
         "/usr/bin/AppImageUpdate",
     };
     for (const auto& c : candidates) {
-        if (QFileInfo::exists(c)) { tool = c; break; }
+        if (QFileInfo::exists(c)) {
+            tool = c;
+            break;
+        }
     }
 
     if (tool.isEmpty()) {
@@ -175,25 +170,19 @@ void UpdateService::run_appimage_update() {
 
     appimage_update_process_ = new QProcess(this);
 
-    connect(appimage_update_process_, &QProcess::finished,
-            this, [this](int exit_code, QProcess::ExitStatus) {
+    connect(appimage_update_process_, &QProcess::finished, this, [this](int exit_code, QProcess::ExitStatus) {
         bool ok = (exit_code == 0);
         LOG_INFO("UpdateService", QString("AppImageUpdate finished — exit code: %1").arg(exit_code));
         if (ok) {
             QMessageBox::information(
-                nullptr,
-                "Update Complete",
-                "Fincept Terminal has been updated.\nPlease restart the application to use the new version."
-            );
+                nullptr, "Update Complete",
+                "Fincept Terminal has been updated.\nPlease restart the application to use the new version.");
         } else {
             QString err = appimage_update_process_->readAllStandardError();
             LOG_ERROR("UpdateService", QString("AppImageUpdate failed: %1").arg(err));
-            QMessageBox::warning(
-                nullptr,
-                "Update Failed",
-                "The automatic update could not be applied.\n"
-                "Please download the latest version from the Fincept website."
-            );
+            QMessageBox::warning(nullptr, "Update Failed",
+                                 "The automatic update could not be applied.\n"
+                                 "Please download the latest version from the Fincept website.");
         }
         emit appimage_update_finished(ok);
         appimage_update_process_->deleteLater();

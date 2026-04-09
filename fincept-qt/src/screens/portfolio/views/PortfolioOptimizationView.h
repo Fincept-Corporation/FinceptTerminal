@@ -51,33 +51,33 @@ class PortfolioOptimizationView : public QWidget {
     QTabWidget* tabs_ = nullptr;
 
     // ── OPTIMIZE tab ──────────────────────────────────────────────────────────
-    QComboBox*    method_cb_     = nullptr;
-    QComboBox*    returns_cb_    = nullptr;
-    QComboBox*    risk_model_cb_ = nullptr;
-    QPushButton*  run_btn_       = nullptr;
-    QLabel*       status_label_  = nullptr;
-    QTableWidget* result_table_  = nullptr;
+    QComboBox* method_cb_ = nullptr;
+    QComboBox* returns_cb_ = nullptr;
+    QComboBox* risk_model_cb_ = nullptr;
+    QPushButton* run_btn_ = nullptr;
+    QLabel* status_label_ = nullptr;
+    QTableWidget* result_table_ = nullptr;
 
     // ── FRONTIER tab ──────────────────────────────────────────────────────────
-    QStackedWidget* frontier_stack_ = nullptr;  // 0=placeholder, 1=chart
-    QChartView*     frontier_chart_ = nullptr;
+    QStackedWidget* frontier_stack_ = nullptr; // 0=placeholder, 1=chart
+    QChartView* frontier_chart_ = nullptr;
 
     // ── ALLOCATION tab ────────────────────────────────────────────────────────
-    QChartView*   alloc_chart_ = nullptr;
+    QChartView* alloc_chart_ = nullptr;
     QTableWidget* alloc_table_ = nullptr;
 
     // ── STRATEGIES tab ────────────────────────────────────────────────────────
-    QStackedWidget* strategies_stack_ = nullptr;  // 0=placeholder, 1=table
-    QTableWidget*   strategies_table_ = nullptr;
+    QStackedWidget* strategies_stack_ = nullptr; // 0=placeholder, 1=table
+    QTableWidget* strategies_table_ = nullptr;
 
     // ── COMPARE tab ───────────────────────────────────────────────────────────
-    QStackedWidget* compare_stack_ = nullptr;   // 0=placeholder, 1=table
-    QTableWidget*   compare_table_ = nullptr;
+    QStackedWidget* compare_stack_ = nullptr; // 0=placeholder, 1=table
+    QTableWidget* compare_table_ = nullptr;
 
     // ── State ─────────────────────────────────────────────────────────────────
     portfolio::PortfolioSummary summary_;
-    QString  currency_;
-    bool     running_ = false;
+    QString currency_;
+    bool running_ = false;
 };
 
 } // namespace fincept::screens

@@ -20,17 +20,16 @@ class AdbPanel : public EconPanelBase {
   protected:
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
-    void on_result(const QString& request_id,
-                   const services::EconomicsResult& result) override;
+    void on_result(const QString& request_id, const services::EconomicsResult& result) override;
 
   private:
     void on_category_changed(int index);
 
-    QComboBox* economy_combo_   = nullptr;
-    QComboBox* category_combo_  = nullptr;
+    QComboBox* economy_combo_ = nullptr;
+    QComboBox* category_combo_ = nullptr;
     QLineEdit* indicator_input_ = nullptr;
-    QLineEdit* start_input_     = nullptr;
-    QLineEdit* end_input_       = nullptr;
+    QLineEdit* start_input_ = nullptr;
+    QLineEdit* end_input_ = nullptr;
 };
 
 } // namespace fincept::screens

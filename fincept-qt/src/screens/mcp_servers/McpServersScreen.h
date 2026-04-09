@@ -30,7 +30,7 @@ class McpServersScreen : public QWidget, public IStatefulScreen {
 
   private slots:
     void on_view_changed(int view);
-    void on_install_server(int index);   // from marketplace catalog
+    void on_install_server(int index); // from marketplace catalog
     void on_start_server();
     void on_stop_server();
     void on_remove_server();
@@ -59,35 +59,35 @@ class McpServersScreen : public QWidget, public IStatefulScreen {
     QWidget* build_server_card(const fincept::mcp::McpServerConfig& s);
 
     // State
-    int     active_view_       = 0;
-    bool    loaded_            = false;
+    int active_view_ = 0;
+    bool loaded_ = false;
     QString selected_server_id_;
 
     // Header
     QList<QPushButton*> view_btns_;
-    QLineEdit*   search_input_ = nullptr;
-    QPushButton* refresh_btn_  = nullptr;
+    QLineEdit* search_input_ = nullptr;
+    QPushButton* refresh_btn_ = nullptr;
 
     // View stack
     QStackedWidget* view_stack_ = nullptr;
 
     // Marketplace
-    QListWidget* mkt_cat_list_    = nullptr;  // category sidebar
-    QWidget*     mkt_cards_widget_ = nullptr;
+    QListWidget* mkt_cat_list_ = nullptr; // category sidebar
+    QWidget* mkt_cards_widget_ = nullptr;
     QVBoxLayout* mkt_cards_layout_ = nullptr;
 
     // Installed
-    QWidget*     inst_cards_widget_ = nullptr;
+    QWidget* inst_cards_widget_ = nullptr;
     QVBoxLayout* inst_cards_layout_ = nullptr;
-    QPushButton* add_server_btn_    = nullptr;
+    QPushButton* add_server_btn_ = nullptr;
 
     // Tools
     QTableWidget* tools_table_ = nullptr;
-    QLabel*       tools_count_ = nullptr;
+    QLabel* tools_count_ = nullptr;
 
     // Status bar
-    QLabel* status_view_    = nullptr;
-    QLabel* status_count_   = nullptr;
+    QLabel* status_view_ = nullptr;
+    QLabel* status_count_ = nullptr;
     QLabel* status_running_ = nullptr;
 };
 

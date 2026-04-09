@@ -44,27 +44,27 @@ class CustomIndexView : public QWidget {
     QTabWidget* tabs_ = nullptr;
 
     // ── CREATE tab ────────────────────────────────────────────────────────────
-    QLineEdit*   name_edit_  = nullptr;
-    QComboBox*   method_cb_  = nullptr;
-    QLineEdit*   base_edit_  = nullptr;
+    QLineEdit* name_edit_ = nullptr;
+    QComboBox* method_cb_ = nullptr;
+    QLineEdit* base_edit_ = nullptr;
     QTableWidget* const_table_ = nullptr;
-    QPushButton* create_btn_   = nullptr;
-    QLabel*      create_status_ = nullptr;
+    QPushButton* create_btn_ = nullptr;
+    QLabel* create_status_ = nullptr;
 
     // ── MY INDICES tab ────────────────────────────────────────────────────────
     QTableWidget* index_list_table_ = nullptr;
-    QPushButton*  delete_btn_       = nullptr;
-    QLabel*       list_empty_msg_   = nullptr;
+    QPushButton* delete_btn_ = nullptr;
+    QLabel* list_empty_msg_ = nullptr;
 
     // ── PERFORMANCE tab ───────────────────────────────────────────────────────
-    QStackedWidget* perf_stack_      = nullptr;  // 0=placeholder, 1=chart
-    QChartView*     perf_chart_view_ = nullptr;
-    QLabel*         perf_title_      = nullptr;
+    QStackedWidget* perf_stack_ = nullptr; // 0=placeholder, 1=chart
+    QChartView* perf_chart_view_ = nullptr;
+    QLabel* perf_title_ = nullptr;
 
     // ── State ─────────────────────────────────────────────────────────────────
     portfolio::PortfolioSummary summary_;
     QString currency_;
-    QVector<CustomIndex> loaded_indices_;  // cached from DB
+    QVector<CustomIndex> loaded_indices_; // cached from DB
 };
 
 } // namespace fincept::screens

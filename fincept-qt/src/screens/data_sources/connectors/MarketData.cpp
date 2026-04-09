@@ -279,7 +279,8 @@ static QVector<ConnectorConfig> market_configs() {
          Category::MarketData,
          "R",
          "#FF6200",
-         "Machine-readable news, tick data, and FX from LSEG (~20% terminal market share). Supports Eikon and RDP APIs.",
+         "Machine-readable news, tick data, and FX from LSEG (~20% terminal market share). Supports Eikon and RDP "
+         "APIs.",
          true,
          true,
          {{"appKey", "App Key", FieldType::Password, "your-app-key", true, "", {}},

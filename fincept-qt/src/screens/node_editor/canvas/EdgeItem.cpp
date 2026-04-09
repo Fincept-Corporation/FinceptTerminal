@@ -109,12 +109,11 @@ void EdgeItem::keyPressEvent(QKeyEvent* event) {
 void EdgeItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
     const auto& tm = ui::ThemeManager::instance().tokens();
     QMenu menu;
-    menu.setStyleSheet(
-        QString("QMenu { background: %1; color: %2; border: 1px solid %3;"
-                "  font-family: Consolas; font-size: 12px; }"
-                "QMenu::item { padding: 4px 20px; }"
-                "QMenu::item:selected { background: %4; color: %5; }")
-        .arg(tm.bg_raised, tm.text_primary, tm.border_dim, tm.negative, tm.text_primary));
+    menu.setStyleSheet(QString("QMenu { background: %1; color: %2; border: 1px solid %3;"
+                               "  font-family: Consolas; font-size: 12px; }"
+                               "QMenu::item { padding: 4px 20px; }"
+                               "QMenu::item:selected { background: %4; color: %5; }")
+                           .arg(tm.bg_raised, tm.text_primary, tm.border_dim, tm.negative, tm.text_primary));
     auto* del = menu.addAction("Delete Connection");
     if (menu.exec(event->screenPos()) == del)
         emit delete_requested(id_);

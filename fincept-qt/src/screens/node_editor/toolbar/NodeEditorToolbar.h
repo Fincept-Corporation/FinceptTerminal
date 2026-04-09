@@ -2,6 +2,7 @@
 
 #include <QLineEdit>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QWidget>
 
 namespace fincept::workflow {
@@ -32,8 +33,12 @@ class NodeEditorToolbar : public QWidget {
     void templates_clicked();
     void deploy_clicked();
 
+  protected:
+    void showEvent(QShowEvent* event) override;
+
   private:
     void build_ui();
+    void apply_background();
 
     QLineEdit* name_edit_ = nullptr;
     QPushButton* undo_btn_ = nullptr;

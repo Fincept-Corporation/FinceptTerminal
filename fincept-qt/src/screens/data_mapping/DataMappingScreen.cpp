@@ -7,14 +7,13 @@
 #include "storage/repositories/DataMappingRepository.h"
 #include "ui/theme/Theme.h"
 
-#include <QShowEvent>
-#include <QUuid>
-
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonDocument>
 #include <QScrollArea>
+#include <QShowEvent>
 #include <QSplitter>
+#include <QUuid>
 #include <QVBoxLayout>
 
 // ── Stylesheet ──────────────────────────────────────────────────────────────
@@ -296,7 +295,9 @@ static QList<MappingTemplate> build_templates() {
          {"crypto", "coingecko", "free", "public"},
          true,
          "https://api.coingecko.com",
-         "/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true",
+         "/api/v3/simple/"
+         "price?ids=bitcoin&vs_currencies=usd&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at="
+         "true",
          "GET",
          "None",
          "Accept: application/json",
@@ -659,7 +660,7 @@ void DataMappingScreen::setup_ui() {
 }
 
 QWidget* DataMappingScreen::create_header() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("dmHeader");
     bar->setFixedHeight(42);
 
@@ -699,7 +700,7 @@ QWidget* DataMappingScreen::create_header() {
 }
 
 QWidget* DataMappingScreen::create_step_bar() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("dmStepBar");
     bar->setFixedHeight(32);
 
@@ -733,7 +734,7 @@ QWidget* DataMappingScreen::create_main_area() {
     left->setMaximumWidth(220);
 
     // Center: view stack
-    auto* center = new QWidget;
+    auto* center = new QWidget(this);
     auto* cvl = new QVBoxLayout(center);
     cvl->setContentsMargins(0, 0, 0, 0);
     cvl->setSpacing(0);
@@ -747,7 +748,7 @@ QWidget* DataMappingScreen::create_main_area() {
     // Create view contains step stack
     auto* create_scroll = new QScrollArea;
     create_scroll->setWidgetResizable(true);
-    auto* create_content = new QWidget;
+    auto* create_content = new QWidget(this);
     auto* ccl = new QVBoxLayout(create_content);
     ccl->setContentsMargins(16, 16, 16, 16);
     ccl->setSpacing(16);
@@ -781,7 +782,7 @@ QWidget* DataMappingScreen::create_main_area() {
 }
 
 QWidget* DataMappingScreen::create_left_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("dmLeftPanel");
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);
@@ -811,7 +812,7 @@ QWidget* DataMappingScreen::create_left_panel() {
     vl->addStretch(1);
 
     // Quick stats
-    auto* stats = new QWidget;
+    auto* stats = new QWidget(this);
     auto* sl = new QVBoxLayout(stats);
     sl->setContentsMargins(10, 8, 10, 8);
     sl->setSpacing(4);
@@ -837,7 +838,7 @@ QWidget* DataMappingScreen::create_left_panel() {
 }
 
 QWidget* DataMappingScreen::create_right_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("dmRightPanel");
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);
@@ -847,7 +848,7 @@ QWidget* DataMappingScreen::create_right_panel() {
     title->setObjectName("dmPanelTitle");
     vl->addWidget(title);
 
-    auto* info = new QWidget;
+    auto* info = new QWidget(this);
     auto* il = new QVBoxLayout(info);
     il->setContentsMargins(10, 8, 10, 8);
     il->setSpacing(6);
@@ -912,14 +913,14 @@ QWidget* DataMappingScreen::create_right_panel() {
 // ── Step panels ─────────────────────────────────────────────────────────────
 
 QWidget* DataMappingScreen::create_api_config_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("dmPanel");
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
     // Header
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("dmPanelHeader");
     hdr->setFixedHeight(34);
     auto* hl = new QHBoxLayout(hdr);
@@ -934,7 +935,7 @@ QWidget* DataMappingScreen::create_api_config_panel() {
     hl->addStretch(1);
     vl->addWidget(hdr);
 
-    auto* body = new QWidget;
+    auto* body = new QWidget(this);
     auto* bl = new QVBoxLayout(body);
     bl->setContentsMargins(12, 12, 12, 12);
     bl->setSpacing(10);
@@ -979,7 +980,7 @@ QWidget* DataMappingScreen::create_api_config_panel() {
     bl->addWidget(create_form_row("TIMEOUT", api_timeout_));
 
     // Test button + status
-    auto* test_row = new QWidget;
+    auto* test_row = new QWidget(this);
     auto* trl = new QHBoxLayout(test_row);
     trl->setContentsMargins(0, 0, 0, 0);
     trl->setSpacing(8);
@@ -999,13 +1000,13 @@ QWidget* DataMappingScreen::create_api_config_panel() {
 }
 
 QWidget* DataMappingScreen::create_schema_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("dmPanel");
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("dmPanelHeader");
     hdr->setFixedHeight(34);
     auto* hl = new QHBoxLayout(hdr);
@@ -1020,7 +1021,7 @@ QWidget* DataMappingScreen::create_schema_panel() {
     hl->addStretch(1);
     vl->addWidget(hdr);
 
-    auto* body = new QWidget;
+    auto* body = new QWidget(this);
     auto* bl = new QVBoxLayout(body);
     bl->setContentsMargins(12, 12, 12, 12);
     bl->setSpacing(10);
@@ -1080,13 +1081,13 @@ QWidget* DataMappingScreen::create_schema_panel() {
 }
 
 QWidget* DataMappingScreen::create_field_mapping_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("dmPanel");
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("dmPanelHeader");
     hdr->setFixedHeight(34);
     auto* hl = new QHBoxLayout(hdr);
@@ -1136,13 +1137,13 @@ QWidget* DataMappingScreen::create_field_mapping_panel() {
 }
 
 QWidget* DataMappingScreen::create_cache_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("dmPanel");
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("dmPanelHeader");
     hdr->setFixedHeight(34);
     auto* hl = new QHBoxLayout(hdr);
@@ -1157,7 +1158,7 @@ QWidget* DataMappingScreen::create_cache_panel() {
     hl->addStretch(1);
     vl->addWidget(hdr);
 
-    auto* body = new QWidget;
+    auto* body = new QWidget(this);
     auto* bl = new QVBoxLayout(body);
     bl->setContentsMargins(12, 12, 12, 12);
     bl->setSpacing(10);
@@ -1173,7 +1174,7 @@ QWidget* DataMappingScreen::create_cache_panel() {
     bl->addWidget(create_form_row("CACHE TTL", cache_ttl_));
 
     // Security info
-    auto* sec_box = new QWidget;
+    auto* sec_box = new QWidget(this);
     sec_box->setStyleSheet(
         QString("background: rgba(22,163,74,0.05); border: 1px solid %1; padding: 8px;").arg(colors::BORDER_DIM));
     auto* sbl = new QVBoxLayout(sec_box);
@@ -1194,13 +1195,13 @@ QWidget* DataMappingScreen::create_cache_panel() {
 }
 
 QWidget* DataMappingScreen::create_test_save_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("dmPanel");
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("dmPanelHeader");
     hdr->setFixedHeight(34);
     auto* hl = new QHBoxLayout(hdr);
@@ -1215,13 +1216,13 @@ QWidget* DataMappingScreen::create_test_save_panel() {
     hl->addStretch(1);
     vl->addWidget(hdr);
 
-    auto* body = new QWidget;
+    auto* body = new QWidget(this);
     auto* bl = new QVBoxLayout(body);
     bl->setContentsMargins(12, 12, 12, 12);
     bl->setSpacing(10);
 
     // Test controls
-    auto* test_row = new QWidget;
+    auto* test_row = new QWidget(this);
     auto* trl = new QHBoxLayout(test_row);
     trl->setContentsMargins(0, 0, 0, 0);
     trl->setSpacing(8);
@@ -1266,13 +1267,13 @@ QWidget* DataMappingScreen::create_list_view() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
 
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
     // Toolbar
-    auto* toolbar = new QWidget;
+    auto* toolbar = new QWidget(this);
     auto* tbl = new QHBoxLayout(toolbar);
     tbl->setContentsMargins(0, 0, 0, 0);
     auto* list_title = new QLabel("SAVED MAPPINGS");
@@ -1315,7 +1316,7 @@ QWidget* DataMappingScreen::create_list_view() {
 }
 
 QWidget* DataMappingScreen::create_template_view() {
-    auto* outer = new QWidget;
+    auto* outer = new QWidget(this);
     auto* split = new QSplitter(Qt::Horizontal);
     split->setHandleWidth(1);
 
@@ -1333,7 +1334,7 @@ QWidget* DataMappingScreen::create_template_view() {
     // Template detail
     auto* detail_scroll = new QScrollArea;
     detail_scroll->setWidgetResizable(true);
-    auto* detail_content = new QWidget;
+    auto* detail_content = new QWidget(this);
     auto* dvl = new QVBoxLayout(detail_content);
     dvl->setContentsMargins(16, 16, 16, 16);
     dvl->setSpacing(8);
@@ -1390,7 +1391,7 @@ QWidget* DataMappingScreen::create_template_view() {
     vl->setContentsMargins(0, 0, 0, 0);
 
     // Toolbar
-    auto* toolbar = new QWidget;
+    auto* toolbar = new QWidget(this);
     auto* tbl = new QHBoxLayout(toolbar);
     tbl->setContentsMargins(16, 8, 16, 8);
     auto* tt = new QLabel("BROKER TEMPLATES");
@@ -1409,7 +1410,7 @@ QWidget* DataMappingScreen::create_template_view() {
 // ── Footer / Status ─────────────────────────────────────────────────────────
 
 QWidget* DataMappingScreen::create_nav_footer() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("dmNavFooter");
     bar->setFixedHeight(40);
 
@@ -1441,7 +1442,7 @@ QWidget* DataMappingScreen::create_nav_footer() {
 }
 
 QWidget* DataMappingScreen::create_status_bar() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("dmStatusBar");
     bar->setFixedHeight(26);
 
@@ -1468,7 +1469,7 @@ QWidget* DataMappingScreen::create_status_bar() {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 QWidget* DataMappingScreen::create_form_row(const QString& label_text, QWidget* input) {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* vl = new QVBoxLayout(w);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(4);
@@ -1480,7 +1481,7 @@ QWidget* DataMappingScreen::create_form_row(const QString& label_text, QWidget* 
 }
 
 QWidget* DataMappingScreen::create_form_two_col(QWidget* left, QWidget* right) {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* hl = new QHBoxLayout(w);
     hl->setContentsMargins(0, 0, 0, 0);
     hl->setSpacing(8);
@@ -1744,21 +1745,20 @@ void DataMappingScreen::on_save_mapping() {
     build_mapping_config(config);
 
     DataMapping dm;
-    dm.id                  = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    dm.name                = name;
-    dm.schema_name         = schema_select_->currentText();
-    dm.base_url            = api_base_url_->text().trimmed();
-    dm.endpoint            = api_endpoint_->text().trimmed();
-    dm.method              = api_method_->currentText();
-    dm.auth_type           = api_auth_type_->currentText();
-    dm.auth_token          = api_auth_value_->text().trimmed();
-    dm.headers             = api_headers_->toPlainText().trimmed();
-    dm.body                = api_body_->toPlainText().trimmed();
-    dm.parser              = parser_engine_->currentText();
-    dm.cache_enabled       = cache_enabled_->currentIndex() == 0;
-    dm.cache_ttl           = cache_ttl_->value();
-    dm.field_mappings_json =
-        QJsonDocument(config["field_mappings"].toArray()).toJson(QJsonDocument::Compact);
+    dm.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    dm.name = name;
+    dm.schema_name = schema_select_->currentText();
+    dm.base_url = api_base_url_->text().trimmed();
+    dm.endpoint = api_endpoint_->text().trimmed();
+    dm.method = api_method_->currentText();
+    dm.auth_type = api_auth_type_->currentText();
+    dm.auth_token = api_auth_value_->text().trimmed();
+    dm.headers = api_headers_->toPlainText().trimmed();
+    dm.body = api_body_->toPlainText().trimmed();
+    dm.parser = parser_engine_->currentText();
+    dm.cache_enabled = cache_enabled_->currentIndex() == 0;
+    dm.cache_ttl = cache_ttl_->value();
+    dm.field_mappings_json = QJsonDocument(config["field_mappings"].toArray()).toJson(QJsonDocument::Compact);
 
     auto r = DataMappingRepository::instance().save(dm);
     if (r.is_err()) {
@@ -1774,7 +1774,8 @@ void DataMappingScreen::on_save_mapping() {
 
 void DataMappingScreen::on_run_mapping() {
     const int row = mapping_list_->currentRow();
-    if (row < 0 || row >= saved_mappings_.size()) return;
+    if (row < 0 || row >= saved_mappings_.size())
+        return;
 
     const DataMapping& dm = saved_mappings_[row];
     LOG_INFO("DataMapping", "Running mapping: " + dm.name);
@@ -1782,13 +1783,12 @@ void DataMappingScreen::on_run_mapping() {
     QPointer<DataMappingScreen> self = this;
     fincept::services::DataNormalizationService::instance().fetch_and_normalize(
         dm, [self, dm](bool ok, fincept::services::NormalizedRecord rec) {
-            if (!self) return;
+            if (!self)
+                return;
             if (ok) {
-                const QString out =
-                    QJsonDocument(rec.normalized).toJson(QJsonDocument::Indented);
+                const QString out = QJsonDocument(rec.normalized).toJson(QJsonDocument::Indented);
                 self->test_output_->setPlainText(out);
-                self->test_status_->setText(
-                    QString("RUN OK — %1 fields extracted").arg(rec.normalized.size()));
+                self->test_status_->setText(QString("RUN OK — %1 fields extracted").arg(rec.normalized.size()));
                 LOG_INFO("DataMapping", "Run complete: " + dm.name);
             } else {
                 const QString errs = rec.errors.join(", ");
@@ -1816,11 +1816,9 @@ void DataMappingScreen::on_template_selected(int index) {
                              "FIELD MAPPINGS: %10 fields configured\n"
                              "PARSER: %11\n\n"
                              "TAGS: %12")
-                         .arg(tmpl.name, tmpl.broker, tmpl.schema,
-                              tmpl.verified ? "Yes" : "No", tmpl.description,
-                              tmpl.base_url, tmpl.endpoint, tmpl.method,
-                              tmpl.auth_type, QString::number(tmpl.field_mappings.size()),
-                              tmpl.parser, tmpl.tags.join(", "));
+                         .arg(tmpl.name, tmpl.broker, tmpl.schema, tmpl.verified ? "Yes" : "No", tmpl.description,
+                              tmpl.base_url, tmpl.endpoint, tmpl.method, tmpl.auth_type,
+                              QString::number(tmpl.field_mappings.size()), tmpl.parser, tmpl.tags.join(", "));
 
     template_detail_->setText(detail);
 }
@@ -1847,7 +1845,8 @@ void DataMappingScreen::on_new_mapping() {
 
 void DataMappingScreen::on_delete_mapping() {
     const int row = mapping_list_->currentRow();
-    if (row < 0 || row >= saved_mappings_.size()) return;
+    if (row < 0 || row >= saved_mappings_.size())
+        return;
 
     const QString id = saved_mappings_[row].id;
     auto r = DataMappingRepository::instance().remove(id);

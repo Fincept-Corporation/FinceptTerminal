@@ -530,11 +530,8 @@ bool PythonSetupManager::install_packages(const QString& venv_name, const QStrin
     emit_progress(step_key, 5, "Installing packages (bulk)...");
 
     QString bulk_stderr;
-    bool bulk_ok = run_command_capture(
-        uv_path(),
-        {"pip", "install", "--python", venv_python, "-r", req_path},
-        env,
-        bulk_stderr);
+    bool bulk_ok =
+        run_command_capture(uv_path(), {"pip", "install", "--python", venv_python, "-r", req_path}, env, bulk_stderr);
 
     if (bulk_ok) {
         LOG_INFO("PythonSetup", QString("[%1] Bulk install succeeded").arg(venv_name));
@@ -543,9 +540,8 @@ bool PythonSetupManager::install_packages(const QString& venv_name, const QStrin
     }
 
     // ── Pass 2: bulk failed — install packages one-by-one, skip failures ────
-    LOG_WARN("PythonSetup",
-             QString("[%1] Bulk install failed (stderr: %2) — falling back to per-package install")
-                 .arg(venv_name, bulk_stderr.left(300)));
+    LOG_WARN("PythonSetup", QString("[%1] Bulk install failed (stderr: %2) — falling back to per-package install")
+                                .arg(venv_name, bulk_stderr.left(300)));
     emit_progress(step_key, 10, "Bulk install failed — retrying package by package...");
 
     QStringList packages = read_packages_from_file(req_path);
@@ -560,13 +556,11 @@ bool PythonSetupManager::install_packages(const QString& venv_name, const QStrin
         LOG_INFO("PythonSetup", QString("[%1] All packages installed individually").arg(venv_name));
         emit_progress(step_key, 100, "All packages installed");
     } else {
-        LOG_WARN("PythonSetup",
-                 QString("[%1] %2 package(s) skipped: %3")
-                     .arg(venv_name)
-                     .arg(failed.size())
-                     .arg(failed.join(", ").left(300)));
-        emit_progress(step_key, 100,
-                      QString("Done — %1 package(s) skipped (see log)").arg(failed.size()));
+        LOG_WARN("PythonSetup", QString("[%1] %2 package(s) skipped: %3")
+                                    .arg(venv_name)
+                                    .arg(failed.size())
+                                    .arg(failed.join(", ").left(300)));
+        emit_progress(step_key, 100, QString("Done — %1 package(s) skipped (see log)").arg(failed.size()));
     }
 
     // Always return true from pass 2 — a partial environment is more useful
@@ -605,10 +599,8 @@ QStringList PythonSetupManager::read_packages_from_file(const QString& req_path)
 // Returns the list of packages that failed (for logging).
 // ─────────────────────────────────────────────────────────────────────────────
 
-QStringList PythonSetupManager::install_packages_individually(const QString& venv_name,
-                                                              const QStringList& packages,
-                                                              const QStringList& env_vars,
-                                                              const QString& step_key) {
+QStringList PythonSetupManager::install_packages_individually(const QString& venv_name, const QStringList& packages,
+                                                              const QStringList& env_vars, const QString& step_key) {
     QString venv_python = python_path(venv_name);
     QStringList failed;
     int total = packages.size();
@@ -616,22 +608,17 @@ QStringList PythonSetupManager::install_packages_individually(const QString& ven
     for (int i = 0; i < total; ++i) {
         const QString& pkg = packages[i];
         int pct = 10 + static_cast<int>(90.0 * i / total);
-        emit_progress(step_key, pct,
-                      QString("Installing %1/%2: %3").arg(i + 1).arg(total).arg(pkg));
+        emit_progress(step_key, pct, QString("Installing %1/%2: %3").arg(i + 1).arg(total).arg(pkg));
 
         QString pkg_stderr;
-        bool ok = run_command_capture(
-            uv_path(),
-            {"pip", "install", "--python", venv_python, pkg},
-            env_vars,
-            pkg_stderr);
+        bool ok =
+            run_command_capture(uv_path(), {"pip", "install", "--python", venv_python, pkg}, env_vars, pkg_stderr);
 
         if (ok) {
             LOG_INFO("PythonSetup", QString("[%1] Installed: %2").arg(venv_name, pkg));
         } else {
             LOG_WARN("PythonSetup",
-                     QString("[%1] Skipped (failed): %2 — %3")
-                         .arg(venv_name, pkg, pkg_stderr.left(200)));
+                     QString("[%1] Skipped (failed): %2 — %3").arg(venv_name, pkg, pkg_stderr.left(200)));
             failed << pkg;
         }
     }
@@ -789,9 +776,7 @@ QString PythonSetupManager::download_file(const QString& url, const QString& des
     QProcess proc;
     // --retry 3: automatic retry on transient network errors
     // --connect-timeout 30: fail fast if server unreachable
-    proc.start("curl", {"-L", "--fail", "--retry", "3",
-                        "--connect-timeout", "30",
-                        "-o", dest_path, url});
+    proc.start("curl", {"-L", "--fail", "--retry", "3", "--connect-timeout", "30", "-o", dest_path, url});
     if (!proc.waitForFinished(15 * 60 * 1000)) {
         proc.kill();
         return "Download timed out";

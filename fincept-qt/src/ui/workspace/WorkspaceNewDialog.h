@@ -23,11 +23,11 @@ class WorkspaceNewDialog : public QDialog {
     void setup_ui();
     void update_preview(const QString& template_id);
 
-    QLineEdit*      name_edit_        = nullptr;
+    QLineEdit* name_edit_ = nullptr;
     QPlainTextEdit* description_edit_ = nullptr;
-    QListWidget*    template_list_    = nullptr;
-    QLabel*         preview_label_    = nullptr;
-    QPushButton*    create_btn_       = nullptr;
+    QListWidget* template_list_ = nullptr;
+    QLabel* preview_label_ = nullptr;
+    QPushButton* create_btn_ = nullptr;
 };
 
 } // namespace fincept::ui

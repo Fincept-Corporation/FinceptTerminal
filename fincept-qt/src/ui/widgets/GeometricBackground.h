@@ -19,7 +19,7 @@ class GeometricBackground : public QWidget {
 
   private:
     void rebuild_cache();
-    QPixmap     cache_;
+    QPixmap cache_;
     ThemeTokens tokens_{};
 };
 

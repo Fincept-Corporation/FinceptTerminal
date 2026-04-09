@@ -11,22 +11,32 @@ class FivePaisaBroker : public IBroker {
 
     BrokerProfile profile() const override {
         return BrokerProfile{
-            .id = "fivepaisa", .display_name = "5Paisa", .region = "IN", .currency = "INR",
-            .credential_fields = {
-                {CredentialField::ApiKey,    "APP KEY",    "Enter App Key...",    false},
-                {CredentialField::ApiSecret, "APP SECRET", "Enter App Secret...", true},
-                {CredentialField::AuthCode,  "CLIENT CODE","Enter Client Code...",false},
-            },
-            .exchanges = {"NSE","BSE"},
-            .product_types = {
-                {"Intraday (INTRADAY)", ProductType::Intraday},
-                {"Delivery (DELIVERY)",ProductType::Delivery},
-            },
-            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
-            .has_native_paper=false, .default_paper_balance=1000000.0,
-            .default_watchlist={"HDFCBANK","ICICIBANK","SBIN","TCS","INFY","RELIANCE","TATAMOTORS","BAJFINANCE","HINDUNILVR","ITC"},
-            .default_symbol="RELIANCE", .default_exchange="NSE",
-            .brokerage_info="\u20B910/order flat",
+            .id = "fivepaisa",
+            .display_name = "5Paisa",
+            .region = "IN",
+            .currency = "INR",
+            .credential_fields =
+                {
+                    {CredentialField::ApiKey, "APP KEY", "Enter App Key...", false},
+                    {CredentialField::ApiSecret, "APP SECRET", "Enter App Secret...", true},
+                    {CredentialField::AuthCode, "CLIENT CODE", "Enter Client Code...", false},
+                },
+            .exchanges = {"NSE", "BSE"},
+            .product_types =
+                {
+                    {"Intraday (INTRADAY)", ProductType::Intraday},
+                    {"Delivery (DELIVERY)", ProductType::Delivery},
+                },
+            .supports_intraday = true,
+            .supports_bracket_order = false,
+            .supports_cover_order = false,
+            .has_native_paper = false,
+            .default_paper_balance = 1000000.0,
+            .default_watchlist = {"HDFCBANK", "ICICIBANK", "SBIN", "TCS", "INFY", "RELIANCE", "TATAMOTORS",
+                                  "BAJFINANCE", "HINDUNILVR", "ITC"},
+            .default_symbol = "RELIANCE",
+            .default_exchange = "NSE",
+            .brokerage_info = "\u20B910/order flat",
         };
     }
 

@@ -20,9 +20,9 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kBisScript   = "bis_data.py";
+static constexpr const char* kBisScript = "bis_data.py";
 static constexpr const char* kBisSourceId = "bis";
-static constexpr const char* kBisColor    = "#9D4EDD";  // purple
+static constexpr const char* kBisColor = "#9D4EDD"; // purple
 } // namespace
 
 // Dataset combo entries: { display label, CLI command, placeholder country hint }
@@ -34,24 +34,22 @@ struct BisDataset {
 };
 
 static const QList<BisDataset> kBisDatasets = {
-    {"Central Bank Policy Rates",        "get_central_bank_policy_rates", "e.g. US, GB, JP, DE", "US"},
-    {"Effective Exchange Rates",         "get_effective_exchange_rates",  "e.g. US, GB, JP",     "US"},
-    {"Exchange Rates vs USD",            "get_exchange_rates",            "e.g. GB, JP, DE, AU", "GB"},
-    {"Long-term Interest Rates",         "get_long_term_interest_rates",  "e.g. US, DE, JP, GB", "US"},
-    {"Short-term Interest Rates",        "get_short_term_interest_rates", "e.g. US, DE, JP, GB", "US"},
-    {"Credit to Non-Financial Sector",   "get_credit_to_non_financial_sector", "e.g. US, CN, JP", "US"},
-    {"House Prices",                     "get_house_prices",              "e.g. US, GB, DE, AU", "US"},
-    {"Economic Overview (multi-series)", "get_economic_overview",         "e.g. US",             "US"},
+    {"Central Bank Policy Rates", "get_central_bank_policy_rates", "e.g. US, GB, JP, DE", "US"},
+    {"Effective Exchange Rates", "get_effective_exchange_rates", "e.g. US, GB, JP", "US"},
+    {"Exchange Rates vs USD", "get_exchange_rates", "e.g. GB, JP, DE, AU", "GB"},
+    {"Long-term Interest Rates", "get_long_term_interest_rates", "e.g. US, DE, JP, GB", "US"},
+    {"Short-term Interest Rates", "get_short_term_interest_rates", "e.g. US, DE, JP, GB", "US"},
+    {"Credit to Non-Financial Sector", "get_credit_to_non_financial_sector", "e.g. US, CN, JP", "US"},
+    {"House Prices", "get_house_prices", "e.g. US, GB, DE, AU", "US"},
+    {"Economic Overview (multi-series)", "get_economic_overview", "e.g. US", "US"},
 };
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
-BisPanel::BisPanel(QWidget* parent)
-    : EconPanelBase(kBisSourceId, kBisColor, parent) {
+BisPanel::BisPanel(QWidget* parent) : EconPanelBase(kBisSourceId, kBisColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &BisPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &BisPanel::on_result);
 }
 
 void BisPanel::activate() {
@@ -73,8 +71,7 @@ void BisPanel::build_controls(QHBoxLayout* thl) {
         dataset_combo_->addItem(d.label);
     dataset_combo_->setFixedHeight(26);
     dataset_combo_->setMinimumWidth(230);
-    connect(dataset_combo_, &QComboBox::currentIndexChanged,
-            this, &BisPanel::on_dataset_changed);
+    connect(dataset_combo_, &QComboBox::currentIndexChanged, this, &BisPanel::on_dataset_changed);
 
     country_input_ = new QLineEdit;
     country_input_->setPlaceholderText("Country code");
@@ -103,7 +100,8 @@ void BisPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void BisPanel::on_dataset_changed(int index) {
-    if (index < 0 || index >= kBisDatasets.size()) return;
+    if (index < 0 || index >= kBisDatasets.size())
+        return;
     const auto& ds = kBisDatasets[index];
     country_input_->setPlaceholderText(ds.country_hint);
     // If user hasn't typed anything custom, fill in default
@@ -119,13 +117,14 @@ void BisPanel::on_dataset_changed(int index) {
 
 void BisPanel::on_fetch() {
     const int idx = dataset_combo_->currentIndex();
-    if (idx < 0 || idx >= kBisDatasets.size()) return;
+    if (idx < 0 || idx >= kBisDatasets.size())
+        return;
     const auto& ds = kBisDatasets[idx];
 
     QStringList args;
     const QString country = country_input_->text().trimmed().toUpper();
-    const QString start   = start_input_->text().trimmed();
-    const QString end     = end_input_->text().trimmed();
+    const QString start = start_input_->text().trimmed();
+    const QString end = end_input_->text().trimmed();
 
     // economic_overview doesn't take country/date args
     if (ds.command != "get_economic_overview") {
@@ -134,21 +133,22 @@ void BisPanel::on_fetch() {
             return;
         }
         args << country;
-        if (!start.isEmpty()) args << start;
-        if (!start.isEmpty() && !end.isEmpty()) args << end;
+        if (!start.isEmpty())
+            args << start;
+        if (!start.isEmpty() && !end.isEmpty())
+            args << end;
     }
 
     show_loading("Fetching BIS " + ds.label + "…");
-    services::EconomicsService::instance().execute(
-        kBisSourceId, kBisScript, ds.command, args,
-        "bis_" + ds.command + "_" + country);
+    services::EconomicsService::instance().execute(kBisSourceId, kBisScript, ds.command, args,
+                                                   "bis_" + ds.command + "_" + country);
 }
 
 // ── Result ────────────────────────────────────────────────────────────────────
 
-void BisPanel::on_result(const QString& request_id,
-                         const services::EconomicsResult& result) {
-    if (result.source_id != kBisSourceId) return;
+void BisPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kBisSourceId)
+        return;
 
     if (!result.success) {
         show_error(result.error);
@@ -166,7 +166,8 @@ void BisPanel::on_result(const QString& request_id,
         if (!data_obj.isEmpty()) {
             for (const auto& key : data_obj.keys()) {
                 const QJsonArray sub = data_obj[key].toArray();
-                for (const auto& v : sub) rows.append(v);
+                for (const auto& v : sub)
+                    rows.append(v);
             }
         }
     }
@@ -177,12 +178,10 @@ void BisPanel::on_result(const QString& request_id,
     }
 
     // Build title from metadata
-    const QString title = "BIS: " + dataset_combo_->currentText()
-                        + " — " + country_input_->text().trimmed().toUpper();
+    const QString title = "BIS: " + dataset_combo_->currentText() + " — " + country_input_->text().trimmed().toUpper();
 
     display(rows, title);
-    LOG_INFO("BisPanel", QString("Displayed %1 rows for %2")
-             .arg(rows.size()).arg(request_id));
+    LOG_INFO("BisPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(request_id));
 }
 
 } // namespace fincept::screens

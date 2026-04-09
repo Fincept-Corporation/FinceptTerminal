@@ -62,7 +62,7 @@ class CryptoOrderEntry : public QWidget {
     QLabel* mode_label_ = nullptr;
 
     // Futures controls
-    QWidget*  futures_section_ = nullptr;
+    QWidget* futures_section_ = nullptr;
     QSpinBox* leverage_spin_ = nullptr;
     QComboBox* margin_mode_combo_ = nullptr;
 

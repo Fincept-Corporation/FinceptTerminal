@@ -33,8 +33,7 @@ namespace fincept::trading {
 // with an env suffix: broker.{id}.live.* and broker.{id}.paper.*
 // For all other brokers: broker.{id}.*
 // The env is determined by additional_data ("live"/"paper"), defaulting to "live".
-static QString cred_prefix(const QString& broker_id, const QString& additional_data,
-                           bool has_native_paper) {
+static QString cred_prefix(const QString& broker_id, const QString& additional_data, bool has_native_paper) {
     if (!has_native_paper)
         return QString("broker.%1.").arg(broker_id);
     const QString env = (additional_data == "paper") ? "paper" : "live";
@@ -54,17 +53,22 @@ BrokerCredentials IBroker::load_credentials_for_env(const QString& env) const {
 
     auto try_load = [&](const QString& e) {
         QString prefix = cred_prefix(creds.broker_id, e, hnp);
-        auto key_r    = secure.retrieve(prefix + "api_key");
-        if (!key_r.is_ok()) return false;
-        creds.api_key        = key_r.value();
-        auto secret_r        = secure.retrieve(prefix + "api_secret");
-        auto token_r         = secure.retrieve(prefix + "access_token");
-        auto user_r          = secure.retrieve(prefix + "user_id");
-        auto extra_r         = secure.retrieve(prefix + "additional_data");
-        if (secret_r.is_ok()) creds.api_secret     = secret_r.value();
-        if (token_r.is_ok())  creds.access_token   = token_r.value();
-        if (user_r.is_ok())   creds.user_id        = user_r.value();
-        if (extra_r.is_ok())  creds.additional_data = extra_r.value();
+        auto key_r = secure.retrieve(prefix + "api_key");
+        if (!key_r.is_ok())
+            return false;
+        creds.api_key = key_r.value();
+        auto secret_r = secure.retrieve(prefix + "api_secret");
+        auto token_r = secure.retrieve(prefix + "access_token");
+        auto user_r = secure.retrieve(prefix + "user_id");
+        auto extra_r = secure.retrieve(prefix + "additional_data");
+        if (secret_r.is_ok())
+            creds.api_secret = secret_r.value();
+        if (token_r.is_ok())
+            creds.access_token = token_r.value();
+        if (user_r.is_ok())
+            creds.user_id = user_r.value();
+        if (extra_r.is_ok())
+            creds.additional_data = extra_r.value();
         return true;
     };
 
@@ -72,7 +76,8 @@ BrokerCredentials IBroker::load_credentials_for_env(const QString& env) const {
         try_load(env);
     } else if (hnp) {
         // Try live first, then paper
-        if (!try_load("live")) try_load("paper");
+        if (!try_load("live"))
+            try_load("paper");
     } else {
         try_load("");
     }
@@ -83,10 +88,10 @@ void IBroker::save_credentials(const BrokerCredentials& creds) const {
     const bool hnp = profile().has_native_paper;
     auto& secure = SecureStorage::instance();
     QString prefix = cred_prefix(creds.broker_id, creds.additional_data, hnp);
-    secure.store(prefix + "api_key",         creds.api_key);
-    secure.store(prefix + "api_secret",      creds.api_secret);
-    secure.store(prefix + "access_token",    creds.access_token);
-    secure.store(prefix + "user_id",         creds.user_id);
+    secure.store(prefix + "api_key", creds.api_key);
+    secure.store(prefix + "api_secret", creds.api_secret);
+    secure.store(prefix + "access_token", creds.access_token);
+    secure.store(prefix + "user_id", creds.user_id);
     secure.store(prefix + "additional_data", creds.additional_data);
 }
 

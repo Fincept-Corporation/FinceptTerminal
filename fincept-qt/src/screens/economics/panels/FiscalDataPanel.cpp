@@ -16,9 +16,9 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kFiscalDataScript   = "fiscal_data.py";
+static constexpr const char* kFiscalDataScript = "fiscal_data.py";
 static constexpr const char* kFiscalDataSourceId = "fiscal_data";
-static constexpr const char* kFiscalDataColor    = "#0EA5E9";  // Treasury blue
+static constexpr const char* kFiscalDataColor = "#0EA5E9"; // Treasury blue
 } // namespace
 
 struct FiscalSeries {
@@ -28,19 +28,15 @@ struct FiscalSeries {
 };
 
 static const QList<FiscalSeries> kFiscalDataSeries = {
-    { "Debt to the Penny",             "debt-to-penny",      {"--all"}      },
-    { "Avg Interest Rates",            "avg-interest-rates", {"--all"}      },
-    { "Interest Expense",              "interest-expense",   {"--all"}      },
-    { "US Treasury Exchange Rates",    "exchange-rates",     {}             },
-    { "Record-Setting Auction Debt",   "record-debt",        {}             },
+    {"Debt to the Penny", "debt-to-penny", {"--all"}},   {"Avg Interest Rates", "avg-interest-rates", {"--all"}},
+    {"Interest Expense", "interest-expense", {"--all"}}, {"US Treasury Exchange Rates", "exchange-rates", {}},
+    {"Record-Setting Auction Debt", "record-debt", {}},
 };
 
-FiscalDataPanel::FiscalDataPanel(QWidget* parent)
-    : EconPanelBase(kFiscalDataSourceId, kFiscalDataColor, parent) {
+FiscalDataPanel::FiscalDataPanel(QWidget* parent) : EconPanelBase(kFiscalDataSourceId, kFiscalDataColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &FiscalDataPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &FiscalDataPanel::on_result);
 }
 
 void FiscalDataPanel::activate() {
@@ -64,7 +60,7 @@ void FiscalDataPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void FiscalDataPanel::on_fetch() {
-    const int   idx    = series_combo_->currentIndex();
+    const int idx = series_combo_->currentIndex();
     const auto& series = kFiscalDataSeries[idx];
 
     show_loading("Fetching FiscalData: " + series.label + "…");
@@ -72,19 +68,25 @@ void FiscalDataPanel::on_fetch() {
     QStringList args = {series.command};
     args << series.args;
 
-    services::EconomicsService::instance().execute(
-        kFiscalDataSourceId, kFiscalDataScript, series.command, series.args,
-        "fiscal_" + QString(series.command).replace('-', '_'));
+    services::EconomicsService::instance().execute(kFiscalDataSourceId, kFiscalDataScript, series.command, series.args,
+                                                   "fiscal_" + QString(series.command).replace('-', '_'));
 }
 
-void FiscalDataPanel::on_result(const QString& request_id,
-                                 const services::EconomicsResult& result) {
-    if (result.source_id != kFiscalDataSourceId) return;
-    if (!request_id.startsWith("fiscal_")) return;
-    if (!result.success) { show_error(result.error); return; }
+void FiscalDataPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kFiscalDataSourceId)
+        return;
+    if (!request_id.startsWith("fiscal_"))
+        return;
+    if (!result.success) {
+        show_error(result.error);
+        return;
+    }
 
     const QString inline_err = result.data["error"].toString();
-    if (!inline_err.isEmpty()) { show_error(inline_err); return; }
+    if (!inline_err.isEmpty()) {
+        show_error(inline_err);
+        return;
+    }
 
     // Response: { data:[{record_date, ...}] }
     QJsonArray rows = result.data["data"].toArray();
@@ -95,13 +97,11 @@ void FiscalDataPanel::on_result(const QString& request_id,
     }
 
     const int idx = series_combo_->currentIndex();
-    const QString title = "FiscalData: "
-        + (idx >= 0 && idx < kFiscalDataSeries.size() ? kFiscalDataSeries[idx].label
-                                              : request_id.mid(7));
+    const QString title = "FiscalData: " + (idx >= 0 && idx < kFiscalDataSeries.size() ? kFiscalDataSeries[idx].label
+                                                                                       : request_id.mid(7));
 
     display(rows, title);
-    LOG_INFO("FiscalDataPanel",
-             QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+    LOG_INFO("FiscalDataPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }
 
 } // namespace fincept::screens

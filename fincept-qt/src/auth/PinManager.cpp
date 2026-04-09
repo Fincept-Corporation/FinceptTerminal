@@ -86,8 +86,7 @@ void PinManager::load_state() {
     auto hash_r = ss.retrieve("pin_hash");
     auto salt_r = ss.retrieve("pin_salt");
 
-    if (hash_r.is_ok() && salt_r.is_ok() &&
-        !hash_r.value().isEmpty() && !salt_r.value().isEmpty()) {
+    if (hash_r.is_ok() && salt_r.is_ok() && !hash_r.value().isEmpty() && !salt_r.value().isEmpty()) {
         stored_hash_ = QByteArray::fromHex(hash_r.value().toUtf8());
         stored_salt_ = QByteArray::fromHex(salt_r.value().toUtf8());
         has_pin_ = true;
@@ -200,8 +199,7 @@ bool PinManager::verify_pin(const QString& pin) {
 
     // Failed attempt
     failed_attempts_++;
-    LOG_WARN("Auth", QString("PIN verification failed (attempt %1/%2)")
-             .arg(failed_attempts_).arg(kMaxAttempts));
+    LOG_WARN("Auth", QString("PIN verification failed (attempt %1/%2)").arg(failed_attempts_).arg(kMaxAttempts));
 
     if (failed_attempts_ >= kMaxAttempts) {
         // Permanent lockout — require server re-auth

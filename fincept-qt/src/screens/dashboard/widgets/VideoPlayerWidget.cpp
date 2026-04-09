@@ -26,23 +26,23 @@ struct PresetChannel {
 };
 
 static const PresetChannel kPresets[] = {
-    {"Bloomberg TV",     "https://www.youtube.com/watch?v=iEpJwprxDdk", "Global business & markets", "#9D4EDD"},
-    {"CNBC Live",        "https://www.youtube.com/watch?v=rGgBsS3cm7E", "US market coverage",        "#2563eb"},
-    {"Yahoo Finance",    "https://www.youtube.com/@YahooFinance/live",   "Market analysis",           "#16a34a"},
-    {"NDTV Profit",      "https://www.youtube.com/watch?v=kf8tVmwfUHI", "India business & markets",  "#0891b2"},
-    {"Al Jazeera",       "https://www.youtube.com/watch?v=gCNeDWCI0vo", "World news & finance",      "#d97706"},
+    {"Bloomberg TV", "https://www.youtube.com/watch?v=iEpJwprxDdk", "Global business & markets", "#9D4EDD"},
+    {"CNBC Live", "https://www.youtube.com/watch?v=rGgBsS3cm7E", "US market coverage", "#2563eb"},
+    {"Yahoo Finance", "https://www.youtube.com/@YahooFinance/live", "Market analysis", "#16a34a"},
+    {"NDTV Profit", "https://www.youtube.com/watch?v=kf8tVmwfUHI", "India business & markets", "#0891b2"},
+    {"Al Jazeera", "https://www.youtube.com/watch?v=gCNeDWCI0vo", "World news & finance", "#d97706"},
 };
 
 static constexpr int kPresetCount = static_cast<int>(sizeof(kPresets) / sizeof(kPresets[0]));
 
 static bool is_youtube_url(const QString& url) {
-    return url.contains("youtube.com/watch") || url.contains("youtu.be/")
-        || url.contains("youtube.com/live")  || url.contains("youtube.com/@");
+    return url.contains("youtube.com/watch") || url.contains("youtu.be/") || url.contains("youtube.com/live") ||
+           url.contains("youtube.com/@");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-VideoPlayerWidget::VideoPlayerWidget(QWidget* parent) : BaseWidget("LIVE TV / STREAMS", parent, "#9D4EDD") {
+VideoPlayerWidget::VideoPlayerWidget(QWidget* parent) : BaseWidget("LIVE TV / STREAMS", parent, ui::colors::AMBER()) {
 
     stack_ = new QStackedWidget;
     stack_->setStyleSheet("background: transparent;");
@@ -60,11 +60,11 @@ VideoPlayerWidget::VideoPlayerWidget(QWidget* parent) : BaseWidget("LIVE TV / ST
 // ── Page 0: Channel list ─────────────────────────────────────────────────────
 
 void VideoPlayerWidget::build_channel_list() {
-    list_page_ = new QWidget;
+    list_page_ = new QWidget(this);
     scroll_ = new QScrollArea;
     scroll_->setWidgetResizable(true);
 
-    auto* container = new QWidget;
+    auto* container = new QWidget(this);
     auto* vl = new QVBoxLayout(container);
     vl->setContentsMargins(6, 6, 6, 6);
     vl->setSpacing(3);
@@ -116,7 +116,7 @@ void VideoPlayerWidget::build_channel_list() {
     custom_header_ = new QLabel("CUSTOM STREAM");
     vl->addWidget(custom_header_);
 
-    auto* input_row = new QWidget;
+    auto* input_row = new QWidget(this);
     input_row->setStyleSheet("background: transparent;");
     auto* irl = new QHBoxLayout(input_row);
     irl->setContentsMargins(0, 2, 0, 0);
@@ -151,7 +151,7 @@ void VideoPlayerWidget::build_channel_list() {
 // ── Page 1: Player view ──────────────────────────────────────────────────────
 
 void VideoPlayerWidget::build_player_view() {
-    player_page_ = new QWidget;
+    player_page_ = new QWidget(this);
     auto* vl = new QVBoxLayout(player_page_);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
@@ -166,7 +166,8 @@ void VideoPlayerWidget::build_player_view() {
     player_->setAudioOutput(audio_output_);
     player_->setVideoOutput(video_widget_);
 #else
-    status_label_placeholder_ = new QLabel("Qt Multimedia not available.\nBuild with Qt6 Multimedia for inline playback.");
+    status_label_placeholder_ =
+        new QLabel("Qt Multimedia not available.\nBuild with Qt6 Multimedia for inline playback.");
     status_label_placeholder_->setAlignment(Qt::AlignCenter);
     vl->addWidget(status_label_placeholder_, 1);
 #endif
@@ -179,7 +180,7 @@ void VideoPlayerWidget::build_player_view() {
     vl->addWidget(status_label_);
 
     // Control bar
-    controls_ = new QWidget;
+    controls_ = new QWidget(this);
     controls_->setFixedHeight(28);
 
     auto* cl = new QHBoxLayout(controls_);
@@ -376,12 +377,11 @@ void VideoPlayerWidget::set_loading(bool loading) {
 
 void VideoPlayerWidget::apply_styles() {
     // Channel list page
-    scroll_->setStyleSheet(
-        QString("QScrollArea { border: none; background: transparent; }"
-                "QScrollBar:vertical { width: 5px; background: transparent; }"
-                "QScrollBar::handle:vertical { background: %1; border-radius: 2px; }"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-            .arg(ui::colors::BORDER_MED));
+    scroll_->setStyleSheet(QString("QScrollArea { border: none; background: transparent; }"
+                                   "QScrollBar:vertical { width: 5px; background: transparent; }"
+                                   "QScrollBar::handle:vertical { background: %1; border-radius: 2px; }"
+                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+                               .arg(ui::colors::BORDER_MED));
 
     channel_header_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; "
                                            "background: transparent; padding: 2px 0;")
@@ -414,12 +414,12 @@ void VideoPlayerWidget::apply_styles() {
         QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
                 "border-radius: 2px; padding: 4px 8px; font-size: 10px; }"
                 "QLineEdit:focus { border-color: %4; }")
-            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, "#9D4EDD"));
+            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::AMBER));
 
-    play_btn_->setStyleSheet(QString("QPushButton { background: #9D4EDD; color: %1; border: none; border-radius: 2px; "
+    play_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: none; border-radius: 2px; "
                                      "font-size: 9px; font-weight: bold; padding: 5px; }"
-                                     "QPushButton:hover { background: #7C3AED; }")
-                                 .arg(ui::colors::TEXT_PRIMARY));
+                                     "QPushButton:hover { background: %3; }")
+                                 .arg(ui::colors::AMBER, ui::colors::TEXT_ON_ACCENT, ui::colors::AMBER_DIM));
 
     helper_label_->setStyleSheet(
         QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::TEXT_DIM));
@@ -429,8 +429,8 @@ void VideoPlayerWidget::apply_styles() {
     video_widget_->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
 #else
     if (status_label_placeholder_)
-        status_label_placeholder_->setStyleSheet(
-            QString("color: %1; font-size: 11px; background: %2;").arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_BASE()));
+        status_label_placeholder_->setStyleSheet(QString("color: %1; font-size: 11px; background: %2;")
+                                                     .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_BASE()));
 #endif
 
     status_label_->setStyleSheet(QString("color: %1; font-size: 9px; background: %2; padding: 0 8px;")
@@ -439,9 +439,8 @@ void VideoPlayerWidget::apply_styles() {
     controls_->setStyleSheet(
         QString("background: %1; border-top: 1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
 
-    // now_playing_ uses brand color #9D4EDD intentionally
     now_playing_->setStyleSheet(
-        QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;").arg("#9D4EDD"));
+        QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;").arg(ui::colors::AMBER));
 
     stop_btn_->setStyleSheet(QString("QPushButton { background: %1; border: 1px solid %2; color: %3; "
                                      "font-size: 9px; font-weight: bold; padding: 0 10px; border-radius: 2px; }"
@@ -455,4 +454,3 @@ void VideoPlayerWidget::on_theme_changed() {
 }
 
 } // namespace fincept::screens::widgets
-

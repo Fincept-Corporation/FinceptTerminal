@@ -6,6 +6,7 @@
 #pragma once
 
 #include "screens/economics/panels/EconPanelBase.h"
+
 #include <QComboBox>
 #include <QLineEdit>
 
@@ -20,12 +21,11 @@ class BlsPanel : public EconPanelBase {
   protected:
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
-    void on_result(const QString& request_id,
-                   const services::EconomicsResult& result) override;
+    void on_result(const QString& request_id, const services::EconomicsResult& result) override;
 
   private:
-    QComboBox* preset_combo_  = nullptr;
-    QLineEdit* series_input_  = nullptr;
+    QComboBox* preset_combo_ = nullptr;
+    QLineEdit* series_input_ = nullptr;
 };
 
 } // namespace fincept::screens

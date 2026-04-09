@@ -31,22 +31,22 @@ class GovDataScreen : public QWidget, public IStatefulScreen {
     void on_provider_selected(int row);
 
   private:
-    void     build_ui();
+    void build_ui();
     QWidget* build_sidebar();
     QWidget* build_toolbar();
     QWidget* build_status_bar();
-    void     activate_provider(int index);
+    void activate_provider(int index);
 
-    QListWidget*    provider_list_   = nullptr;
-    QStackedWidget* panel_stack_     = nullptr;
-    QLabel*         header_title_    = nullptr;
-    QLabel*         header_subtitle_ = nullptr;
-    QWidget*        header_bar_      = nullptr;
-    QLabel*         status_portal_   = nullptr;
-    QLabel*         status_country_  = nullptr;
-    QLabel*         status_datasets_ = nullptr;
+    QListWidget* provider_list_ = nullptr;
+    QStackedWidget* panel_stack_ = nullptr;
+    QLabel* header_title_ = nullptr;
+    QLabel* header_subtitle_ = nullptr;
+    QWidget* header_bar_ = nullptr;
+    QLabel* status_portal_ = nullptr;
+    QLabel* status_country_ = nullptr;
+    QLabel* status_datasets_ = nullptr;
 
-    int  active_index_      = -1;
+    int active_index_ = -1;
     bool initial_load_done_ = false;
 };
 

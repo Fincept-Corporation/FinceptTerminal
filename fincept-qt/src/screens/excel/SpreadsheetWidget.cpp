@@ -346,13 +346,13 @@ void SpreadsheetWidget::build_ui(int rows, int cols) {
                                   "  border-right:1px solid %3; border-bottom:1px solid %3;"
                                   "  font-family:%4; font-size:10px; font-weight:600; padding:3px 4px; }"
                                   "QTableCornerButton::section { background:%6; border:none; }")
-                              .arg(colors::BG_HOVER,          // %1 cell bg
-                                   colors::TEXT_PRIMARY,       // %2 cell text
-                                   colors::TEXT_DIM,           // %3 gridlines
-                                   fonts::DATA_FAMILY,         // %4
-                                   colors::BORDER_BRIGHT,      // %5 selection bg
-                                   colors::BORDER_MED,         // %6 header bg
-                                   colors::TEXT_SECONDARY));   // %7 header text
+                              .arg(colors::BG_HOVER,         // %1 cell bg
+                                   colors::TEXT_PRIMARY,     // %2 cell text
+                                   colors::TEXT_DIM,         // %3 gridlines
+                                   fonts::DATA_FAMILY,       // %4
+                                   colors::BORDER_BRIGHT,    // %5 selection bg
+                                   colors::BORDER_MED,       // %6 header bg
+                                   colors::TEXT_SECONDARY)); // %7 header text
 
     root->addWidget(table_, 1);
 }
@@ -493,13 +493,13 @@ void SpreadsheetWidget::on_formula_bar_return() {
 
 void SpreadsheetWidget::on_context_menu(const QPoint& pos) {
     QMenu menu(this);
-    menu.setStyleSheet(QString("QMenu { background:%1; color:%2; border:1px solid %3;"
-                               " font-family:%4; font-size:11px; }"
-                               "QMenu::item { padding:6px 20px; }"
-                               "QMenu::item:selected { background:%5; }"
-                               "QMenu::separator { height:1px; background:%3; margin:4px 8px; }")
-                           .arg(colors::BORDER_MED, colors::TEXT_PRIMARY, colors::TEXT_DIM,
-                                fonts::DATA_FAMILY, colors::TEXT_DIM));
+    menu.setStyleSheet(
+        QString("QMenu { background:%1; color:%2; border:1px solid %3;"
+                " font-family:%4; font-size:11px; }"
+                "QMenu::item { padding:6px 20px; }"
+                "QMenu::item:selected { background:%5; }"
+                "QMenu::separator { height:1px; background:%3; margin:4px 8px; }")
+            .arg(colors::BORDER_MED, colors::TEXT_PRIMARY, colors::TEXT_DIM, fonts::DATA_FAMILY, colors::TEXT_DIM));
 
     menu.addAction("Cut", this, [this]() {
         auto* item = table_->currentItem();

@@ -125,9 +125,9 @@ class AgentService : public QObject {
                               const QJsonObject& config = {}) const;
 
     // ── Cache TTLs — delegated to CacheManager ───────────────────────────────
-    static constexpr int kAgentCacheTtlSec   = 5 * 60;
-    static constexpr int kToolsCacheTtlSec   = 10 * 60;
-    static constexpr int kModelsCacheTtlSec  = 10 * 60;
+    static constexpr int kAgentCacheTtlSec = 5 * 60;
+    static constexpr int kToolsCacheTtlSec = 10 * 60;
+    static constexpr int kModelsCacheTtlSec = 10 * 60;
     static constexpr int kSysInfoCacheTtlSec = 10 * 60;
     static constexpr int kResponseCacheTtlSec = 2 * 60;
 

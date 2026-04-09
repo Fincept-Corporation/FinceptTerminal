@@ -27,9 +27,10 @@ void PortfolioAiPanel::build_ui() {
     layout->setSpacing(0);
 
     // ── Header ───────────────────────────────────────────────────────────────
-    auto* header = new QWidget;
+    auto* header = new QWidget(this);
     header->setFixedHeight(32);
-    header->setStyleSheet(QString("background:rgba(157,78,221,0.09); border-bottom:1px solid %1;").arg(ui::colors::BORDER_MED));
+    header->setStyleSheet(
+        QString("background:rgba(157,78,221,0.09); border-bottom:1px solid %1;").arg(ui::colors::BORDER_MED));
 
     auto* h_layout = new QHBoxLayout(header);
     h_layout->setContentsMargins(12, 0, 8, 0);
@@ -53,7 +54,8 @@ void PortfolioAiPanel::build_ui() {
     close_btn_->setFixedSize(18, 18);
     close_btn_->setCursor(Qt::PointingHandCursor);
     close_btn_->setStyleSheet(QString("QPushButton { background:none; border:none; color:%1; font-size:11px; }"
-                              "QPushButton:hover { color:%2; }").arg(ui::colors::TEXT_SECONDARY, ui::colors::TEXT_PRIMARY));
+                                      "QPushButton:hover { color:%2; }")
+                                  .arg(ui::colors::TEXT_SECONDARY, ui::colors::TEXT_PRIMARY));
     connect(close_btn_, &QPushButton::clicked, this, [this]() {
         hide();
         emit close_requested();
@@ -63,9 +65,10 @@ void PortfolioAiPanel::build_ui() {
     layout->addWidget(header);
 
     // ── Analysis type selector ───────────────────────────────────────────────
-    auto* type_bar = new QWidget;
+    auto* type_bar = new QWidget(this);
     type_bar->setFixedHeight(28);
-    type_bar->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_MED));
+    type_bar->setStyleSheet(
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_MED));
 
     auto* type_layout = new QHBoxLayout(type_bar);
     type_layout->setContentsMargins(0, 0, 0, 0);
@@ -76,11 +79,12 @@ void PortfolioAiPanel::build_ui() {
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:none;"
-                           "  border-bottom:2px solid transparent; padding:4px 8px;"
-                           "  font-size:8px; font-weight:700; letter-spacing:0.5px; }"
-                           "QPushButton:checked { color:#9D4EDD; border-bottom:2px solid #9D4EDD;"
-                           "  background:rgba(157,78,221,0.08); }"
-                           "QPushButton:hover { color:#9D4EDD; }").arg(ui::colors::TEXT_SECONDARY));
+                                   "  border-bottom:2px solid transparent; padding:4px 8px;"
+                                   "  font-size:8px; font-weight:700; letter-spacing:0.5px; }"
+                                   "QPushButton:checked { color:#9D4EDD; border-bottom:2px solid #9D4EDD;"
+                                   "  background:rgba(157,78,221,0.08); }"
+                                   "QPushButton:hover { color:#9D4EDD; }")
+                               .arg(ui::colors::TEXT_SECONDARY));
         connect(btn, &QPushButton::clicked, this, [this, type_id]() { set_analysis_type(type_id); });
         type_layout->addWidget(btn, 1);
         return btn;
@@ -99,10 +103,11 @@ void PortfolioAiPanel::build_ui() {
     run_btn_->setFixedHeight(28);
     run_btn_->setCursor(Qt::PointingHandCursor);
     run_btn_->setStyleSheet(QString("QPushButton { background:rgba(157,78,221,0.13); color:#9D4EDD;"
-                            "  border:1px solid rgba(157,78,221,0.27); font-size:9px; font-weight:700;"
-                            "  letter-spacing:0.5px; margin:6px 12px; }"
-                            "QPushButton:hover { background:rgba(157,78,221,0.22); }"
-                            "QPushButton:disabled { color:%1; }").arg(ui::colors::TEXT_TERTIARY));
+                                    "  border:1px solid rgba(157,78,221,0.27); font-size:9px; font-weight:700;"
+                                    "  letter-spacing:0.5px; margin:6px 12px; }"
+                                    "QPushButton:hover { background:rgba(157,78,221,0.22); }"
+                                    "QPushButton:disabled { color:%1; }")
+                                .arg(ui::colors::TEXT_TERTIARY));
     connect(run_btn_, &QPushButton::clicked, this, [this]() { run_analysis(true); });
     layout->addWidget(run_btn_);
 
@@ -230,7 +235,9 @@ void PortfolioAiPanel::run_analysis(bool force) {
                     html.replace("\n", "<br>");
                     static const QRegularExpression bold_re("\\*\\*(.+?)\\*\\*");
                     html.replace(bold_re, "<b>\\1</b>");
-                    html = QString("<div style='font-size:11px; line-height:1.6; color:%1;'>%2</div>").arg(ui::colors::TEXT_PRIMARY).arg(html);
+                    html = QString("<div style='font-size:11px; line-height:1.6; color:%1;'>%2</div>")
+                               .arg(ui::colors::TEXT_PRIMARY)
+                               .arg(html);
 
                     self->result_cache_[type] = html;
                     self->content_->setHtml(html);

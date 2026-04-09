@@ -1,5 +1,6 @@
 // CryptoOrderBook.cpp — custom-painted dual-column order book with depth bars
 #include "screens/crypto_trading/CryptoOrderBook.h"
+
 #include "ui/theme/ThemeManager.h"
 
 #include <QDateTime>
@@ -18,36 +19,80 @@ namespace fincept::screens::crypto {
 
 namespace {
 // Live color accessors — reflect active theme at call time
-inline QColor kBgBase()       { return QColor(ui::ThemeManager::instance().tokens().bg_base); }
-inline QColor kBgSurface()    { return QColor(ui::ThemeManager::instance().tokens().bg_surface); }
-inline QColor kBgRaised()     { return QColor(ui::ThemeManager::instance().tokens().bg_raised); }
-inline QColor kBorderDim()    { return QColor(ui::ThemeManager::instance().tokens().border_dim); }
-inline QColor kTextPrimary()  { return QColor(ui::ThemeManager::instance().tokens().text_primary); }
-inline QColor kTextSecondary(){ return QColor(ui::ThemeManager::instance().tokens().text_secondary); }
-inline QColor kTextTertiary() { return QColor(ui::ThemeManager::instance().tokens().text_tertiary); }
-inline QColor kTextDim()      { return QColor(ui::ThemeManager::instance().tokens().text_dim); }
-inline QColor kColorBid()     { return QColor(ui::ThemeManager::instance().tokens().positive); }
-inline QColor kColorAsk()     { return QColor(ui::ThemeManager::instance().tokens().negative); }
-inline QColor kColorAmber()   { return QColor(ui::ThemeManager::instance().tokens().accent); }
-inline QColor kBidBar()       { auto c = kColorBid();   c.setAlpha(35); return c; }
-inline QColor kAskBar()       { auto c = kColorAsk();   c.setAlpha(35); return c; }
-inline QColor kBidBarHot()    { auto c = kColorBid();   c.setAlpha(65); return c; }
-inline QColor kAskBarHot()    { auto c = kColorAsk();   c.setAlpha(65); return c; }
-inline QColor kRowEven()      { return QColor(ui::ThemeManager::instance().tokens().bg_base); }
-inline QColor kRowOdd()       { return QColor(ui::ThemeManager::instance().tokens().row_alt); }
+inline QColor kBgBase() {
+    return QColor(ui::ThemeManager::instance().tokens().bg_base);
+}
+inline QColor kBgSurface() {
+    return QColor(ui::ThemeManager::instance().tokens().bg_surface);
+}
+inline QColor kBgRaised() {
+    return QColor(ui::ThemeManager::instance().tokens().bg_raised);
+}
+inline QColor kBorderDim() {
+    return QColor(ui::ThemeManager::instance().tokens().border_dim);
+}
+inline QColor kTextPrimary() {
+    return QColor(ui::ThemeManager::instance().tokens().text_primary);
+}
+inline QColor kTextSecondary() {
+    return QColor(ui::ThemeManager::instance().tokens().text_secondary);
+}
+inline QColor kTextTertiary() {
+    return QColor(ui::ThemeManager::instance().tokens().text_tertiary);
+}
+inline QColor kTextDim() {
+    return QColor(ui::ThemeManager::instance().tokens().text_dim);
+}
+inline QColor kColorBid() {
+    return QColor(ui::ThemeManager::instance().tokens().positive);
+}
+inline QColor kColorAsk() {
+    return QColor(ui::ThemeManager::instance().tokens().negative);
+}
+inline QColor kColorAmber() {
+    return QColor(ui::ThemeManager::instance().tokens().accent);
+}
+inline QColor kBidBar() {
+    auto c = kColorBid();
+    c.setAlpha(35);
+    return c;
+}
+inline QColor kAskBar() {
+    auto c = kColorAsk();
+    c.setAlpha(35);
+    return c;
+}
+inline QColor kBidBarHot() {
+    auto c = kColorBid();
+    c.setAlpha(65);
+    return c;
+}
+inline QColor kAskBarHot() {
+    auto c = kColorAsk();
+    c.setAlpha(65);
+    return c;
+}
+inline QColor kRowEven() {
+    return QColor(ui::ThemeManager::instance().tokens().bg_base);
+}
+inline QColor kRowOdd() {
+    return QColor(ui::ThemeManager::instance().tokens().row_alt);
+}
 } // namespace
 
 CryptoOrderBook::CryptoOrderBook(QWidget* parent) : QWidget(parent) {
     setObjectName("cryptoOrderBook");
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { cache_dirty_ = true; update(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        cache_dirty_ = true;
+        update();
+    });
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
     // Header with mode toggle buttons
-    auto* header = new QWidget;
+    auto* header = new QWidget(this);
     header->setObjectName("cryptoObHeader");
     header->setFixedHeight(HEADER_H);
     auto* h_layout = new QHBoxLayout(header);

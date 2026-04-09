@@ -23,8 +23,8 @@ NewsTickerStrip::NewsTickerStrip(QWidget* parent)
     // Timer interval set but NOT started — parent manages via pause/resume (P3)
     scroll_timer_.setInterval(50); // 20fps
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { update(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { update(); });
 }
 
 void NewsTickerStrip::set_articles(const QVector<services::NewsArticle>& breaking_articles) {

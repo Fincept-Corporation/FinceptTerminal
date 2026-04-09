@@ -72,13 +72,13 @@ void ConfettiOverlay::show_confetti() {
     int idx = 0;
     for (auto& p : particles_) {
         if (idx < 120)
-            p.delay_ms = rng->bounded(200);        // first burst: immediate
+            p.delay_ms = rng->bounded(200); // first burst: immediate
         else if (idx < 240)
-            p.delay_ms = 300 + rng->bounded(400);   // side bursts: 0.3-0.7s
+            p.delay_ms = 300 + rng->bounded(400); // side bursts: 0.3-0.7s
         else if (idx < 340)
-            p.delay_ms = 1000 + rng->bounded(800);  // secondary: 1-1.8s
+            p.delay_ms = 1000 + rng->bounded(800); // secondary: 1-1.8s
         else
-            p.delay_ms = 2500 + rng->bounded(1500);  // rain: 2.5-4s
+            p.delay_ms = 2500 + rng->bounded(1500); // rain: 2.5-4s
         idx++;
     }
 
@@ -146,7 +146,7 @@ void ConfettiOverlay::tick() {
 
         float local_t = (elapsed_ms_ - p.delay_ms) / 1000.0f;
 
-        p.vy += 0.04f; // gravity
+        p.vy += 0.04f;  // gravity
         p.vx *= 0.997f; // air resistance
 
         // Sinusoidal sway for fluttering effect

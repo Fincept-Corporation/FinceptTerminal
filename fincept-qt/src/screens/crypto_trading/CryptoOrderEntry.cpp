@@ -19,7 +19,7 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
     layout->setSpacing(0);
 
     // Header
-    auto* header = new QWidget;
+    auto* header = new QWidget(this);
     header->setObjectName("cryptoOeHeader");
     header->setFixedHeight(30);
     auto* h_layout = new QHBoxLayout(header);
@@ -38,7 +38,7 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
     layout->addWidget(header);
 
     // Content area
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     auto* form = new QVBoxLayout(content);
     form->setContentsMargins(8, 6, 8, 6);
     form->setSpacing(4);
@@ -150,7 +150,7 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
     form->addWidget(advanced_toggle_);
 
     // Collapsible SL/TP section
-    advanced_section_ = new QWidget;
+    advanced_section_ = new QWidget(this);
     advanced_section_->setVisible(false);
     auto* adv_layout = new QVBoxLayout(advanced_section_);
     adv_layout->setContentsMargins(0, 0, 0, 0);
@@ -183,7 +183,7 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
     });
 
     // Futures controls (leverage + margin mode) — hidden for spot markets
-    futures_section_ = new QWidget;
+    futures_section_ = new QWidget(this);
     futures_section_->setVisible(false);
     auto* futures_layout = new QVBoxLayout(futures_section_);
     futures_layout->setContentsMargins(0, 0, 0, 0);
@@ -220,8 +220,7 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
 
     form->addWidget(futures_section_);
 
-    connect(leverage_spin_, &QSpinBox::valueChanged, this,
-            [this](int val) { emit leverage_changed(val); });
+    connect(leverage_spin_, &QSpinBox::valueChanged, this, [this](int val) { emit leverage_changed(val); });
     connect(margin_mode_combo_, &QComboBox::currentIndexChanged, this,
             [this](int idx) { emit margin_mode_changed(margin_mode_combo_->itemData(idx).toString()); });
 

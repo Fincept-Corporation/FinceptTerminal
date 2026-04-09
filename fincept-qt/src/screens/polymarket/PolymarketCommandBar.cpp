@@ -92,7 +92,7 @@ void PolymarketCommandBar::build_ui() {
 
     row2->addSpacing(8);
 
-    category_container_ = new QWidget;
+    category_container_ = new QWidget(this);
     auto* ccl = new QHBoxLayout(category_container_);
     ccl->setContentsMargins(0, 0, 0, 0);
     ccl->setSpacing(2);

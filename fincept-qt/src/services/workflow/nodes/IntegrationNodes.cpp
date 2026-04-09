@@ -32,7 +32,7 @@ void register_integration_nodes(NodeRegistry& registry) {
             {
                 {"tool", "Tool", "mcp_tool_select", "", {}, "", true},
             },
-        .execute = nullptr,   // wired in ServiceBridges::wire_all_bridges
+        .execute = nullptr, // wired in ServiceBridges::wire_all_bridges
     });
 
     // ── PDF Generate ───────────────────────────────────────────────
@@ -96,45 +96,45 @@ void register_integration_nodes(NodeRegistry& registry) {
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
-                {"source",           "Source",           "select", "local",  {"local", "google"}, ""},
-                {"operation",        "Operation",        "select", "read",   {"read", "write", "append", "clear"}, ""},
-                {"file_path",        "File Path",        "file_managed", "", {}, "xlsx,csv"},
-                {"spreadsheet_id",   "Spreadsheet ID",   "string",       "", {}, "Google Sheet ID from URL (source=google)"},
-                {"sheet_name",       "Sheet Name",       "string",       "Sheet1", {}, ""},
-                {"range",            "Range",            "string",       "A1:Z1000", {}, "Cell range e.g. A1:D100"},
+                {"source", "Source", "select", "local", {"local", "google"}, ""},
+                {"operation", "Operation", "select", "read", {"read", "write", "append", "clear"}, ""},
+                {"file_path", "File Path", "file_managed", "", {}, "xlsx,csv"},
+                {"spreadsheet_id", "Spreadsheet ID", "string", "", {}, "Google Sheet ID from URL (source=google)"},
+                {"sheet_name", "Sheet Name", "string", "Sheet1", {}, ""},
+                {"range", "Range", "string", "A1:Z1000", {}, "Cell range e.g. A1:D100"},
                 {"credentials_path", "Credentials JSON", "file_managed", "", {}, "json"},
             },
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-
                 // Build args for spreadsheet.py
                 QJsonObject args;
-                args["source"]           = params.value("source").toString("local");
-                args["operation"]        = params.value("operation").toString("read");
-                args["file_path"]        = params.value("file_path").toString();
-                args["spreadsheet_id"]   = params.value("spreadsheet_id").toString();
-                args["sheet_name"]       = params.value("sheet_name").toString("Sheet1");
-                args["range"]            = params.value("range").toString("A1:Z1000");
+                args["source"] = params.value("source").toString("local");
+                args["operation"] = params.value("operation").toString("read");
+                args["file_path"] = params.value("file_path").toString();
+                args["spreadsheet_id"] = params.value("spreadsheet_id").toString();
+                args["sheet_name"] = params.value("sheet_name").toString("Sheet1");
+                args["range"] = params.value("range").toString("A1:Z1000");
                 args["credentials_path"] = params.value("credentials_path").toString();
 
                 // Attach input data for write/append operations
                 if (!inputs.isEmpty())
                     args["data"] = inputs[0];
 
-                QString args_json = QString::fromUtf8(
-                    QJsonDocument(args).toJson(QJsonDocument::Compact));
+                QString args_json = QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact));
 
                 PythonRunner::instance().run(
-                    "spreadsheet.py", {"--args", args_json},
-                    [cb](const fincept::python::PythonResult& res) {
+                    "spreadsheet.py", {"--args", args_json}, [cb](const fincept::python::PythonResult& res) {
                         if (!res.success) {
                             cb(false, {}, res.error.isEmpty() ? "spreadsheet.py failed" : res.error);
                             return;
                         }
                         QString out = fincept::python::extract_json(res.output).trimmed();
                         auto doc = QJsonDocument::fromJson(out.toUtf8());
-                        if (doc.isNull()) { cb(false, {}, "Invalid JSON from spreadsheet.py: " + res.output.left(200)); return; }
+                        if (doc.isNull()) {
+                            cb(false, {}, "Invalid JSON from spreadsheet.py: " + res.output.left(200));
+                            return;
+                        }
                         if (doc.isObject() && doc.object().contains("error")) {
                             cb(false, {}, doc.object().value("error").toString());
                             return;

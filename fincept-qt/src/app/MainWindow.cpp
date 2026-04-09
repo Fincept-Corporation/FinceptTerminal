@@ -1,29 +1,16 @@
 #include "app/MainWindow.h"
 
-#include "app/DockScreenRouter.h"
-#include "ui/navigation/DockToolBar.h"
-#include "ui/navigation/DockStatusBar.h"
-#include <DockManager.h>
-#include <DockWidget.h>
-#include <DockAreaWidget.h>
-
-#include "screens/chat_mode/ChatModeScreen.h"
-#include "screens/auth/LockScreen.h"
-#include "services/updater/UpdateService.h"
 #include "ai_chat/AiChatBubble.h"
 #include "ai_chat/AiChatScreen.h"
+#include "app/DockScreenRouter.h"
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
 #include "auth/PinManager.h"
+#include "core/config/ProfileManager.h"
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/SessionManager.h"
-#include "storage/repositories/SettingsRepository.h"
 #include "screens/ComingSoonScreen.h"
-#include "services/workspace/WorkspaceManager.h"
-#include "ui/workspace/WorkspaceNewDialog.h"
-#include "ui/workspace/WorkspaceOpenDialog.h"
-#include "ui/workspace/WorkspaceSaveAsDialog.h"
 #include "screens/about/AboutScreen.h"
 #include "screens/agent_config/AgentConfigScreen.h"
 #include "screens/ai_quant_lab/AIQuantLabScreen.h"
@@ -33,10 +20,12 @@
 #include "screens/alt_investments/AltInvestmentsScreen.h"
 #include "screens/asia_markets/AsiaMarketsScreen.h"
 #include "screens/auth/ForgotPasswordScreen.h"
+#include "screens/auth/LockScreen.h"
 #include "screens/auth/LoginScreen.h"
 #include "screens/auth/PricingScreen.h"
 #include "screens/auth/RegisterScreen.h"
 #include "screens/backtesting/BacktestingScreen.h"
+#include "screens/chat_mode/ChatModeScreen.h"
 #include "screens/code_editor/CodeEditorScreen.h"
 #include "screens/crypto_trading/CryptoTradingScreen.h"
 #include "screens/dashboard/DashboardScreen.h"
@@ -76,14 +65,21 @@
 #include "screens/surface_analytics/SurfaceAnalyticsScreen.h"
 #include "screens/trade_viz/TradeVizScreen.h"
 #include "screens/watchlist/WatchlistScreen.h"
+#include "services/updater/UpdateService.h"
+#include "services/workspace/WorkspaceManager.h"
+#include "storage/repositories/SettingsRepository.h"
+#include "ui/navigation/DockStatusBar.h"
+#include "ui/navigation/DockToolBar.h"
 #include "ui/navigation/FKeyBar.h"
 #include "ui/navigation/NavigationBar.h"
 #include "ui/navigation/StatusBar.h"
 #include "ui/navigation/ToolBar.h"
 #include "ui/theme/Theme.h"
+#include "ui/workspace/WorkspaceNewDialog.h"
+#include "ui/workspace/WorkspaceOpenDialog.h"
+#include "ui/workspace/WorkspaceSaveAsDialog.h"
 
 #include <QApplication>
-#include "core/config/ProfileManager.h"
 #include <QCloseEvent>
 #include <QDateTime>
 #include <QDir>
@@ -91,21 +87,23 @@
 #include <QFileDialog>
 #include <QInputDialog>
 #include <QMessageBox>
+#include <QPalette>
 #include <QScreen>
 #include <QShortcut>
 #include <QStatusBar>
 #include <QVBoxLayout>
 #include <QWindow>
 
+#include <DockAreaWidget.h>
+#include <DockManager.h>
+#include <DockWidget.h>
+
 namespace fincept {
 
-MainWindow::MainWindow(int window_id, QWidget* parent)
-    : QMainWindow(parent), window_id_(window_id) {
+MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), window_id_(window_id) {
     // Show active profile in title bar when using a non-default profile
     const QString profile = ProfileManager::instance().active();
-    setWindowTitle(profile == "default"
-                   ? "Fincept Terminal"
-                   : QString("Fincept Terminal [%1]").arg(profile));
+    setWindowTitle(profile == "default" ? "Fincept Terminal" : QString("Fincept Terminal [%1]").arg(profile));
     // Load icon from the embedded Windows resource (IDI_ICON1 in app.rc).
     // Falls back to the .ico beside the executable on other platforms.
     QIcon app_icon;
@@ -164,11 +162,10 @@ MainWindow::MainWindow(int window_id, QWidget* parent)
 
     // ── ADS Docking mode ─────────────────────────────────────────────────────
     setup_docking_mode();
-    master_stack->addWidget(dock_manager_->parentWidget());  // index 1 — dock_wrapper
-    master_stack->addWidget(chat_mode_screen_); // index 2
-    master_stack->addWidget(lock_screen_);      // index 3 — lock/PIN screen
-    connect(chat_mode_screen_, &chat_mode::ChatModeScreen::exit_requested,
-            this, &MainWindow::toggle_chat_mode);
+    master_stack->addWidget(dock_manager_->parentWidget()); // index 1 — dock_wrapper
+    master_stack->addWidget(chat_mode_screen_);             // index 2
+    master_stack->addWidget(lock_screen_);                  // index 3 — lock/PIN screen
+    connect(chat_mode_screen_, &chat_mode::ChatModeScreen::exit_requested, this, &MainWindow::toggle_chat_mode);
 
     // Lock screen signals
     connect(lock_screen_, &screens::LockScreen::unlocked, this, &MainWindow::on_terminal_unlocked);
@@ -178,8 +175,8 @@ MainWindow::MainWindow(int window_id, QWidget* parent)
     });
 
     // Inactivity guard → lock screen
-    connect(&auth::InactivityGuard::instance(), &auth::InactivityGuard::lock_requested,
-            this, &MainWindow::show_lock_screen);
+    connect(&auth::InactivityGuard::instance(), &auth::InactivityGuard::lock_requested, this,
+            &MainWindow::show_lock_screen);
 
     setCentralWidget(master_stack);
 
@@ -194,14 +191,10 @@ MainWindow::MainWindow(int window_id, QWidget* parent)
 
     // ── Workspace + signal wiring ───────────────────────────────────────────
     WorkspaceManager::instance().set_main_window(this);
-    connect(&WorkspaceManager::instance(), &WorkspaceManager::workspace_loaded,
-            this, [this](const WorkspaceDef&) {
-                update_window_title();
-            });
-    connect(&WorkspaceManager::instance(), &WorkspaceManager::workspace_error,
-            this, [this](const QString& msg) {
-                QMessageBox::warning(this, "Workspace Error", msg);
-            });
+    connect(&WorkspaceManager::instance(), &WorkspaceManager::workspace_loaded, this,
+            [this](const WorkspaceDef&) { update_window_title(); });
+    connect(&WorkspaceManager::instance(), &WorkspaceManager::workspace_error, this,
+            [this](const QString& msg) { QMessageBox::warning(this, "Workspace Error", msg); });
 
     dock_router_ = new DockScreenRouter(dock_manager_, this);
     setup_dock_screens();
@@ -209,19 +202,13 @@ MainWindow::MainWindow(int window_id, QWidget* parent)
     // Tab bar navigation: open the selected screen exclusively — closes all other
     // panels and fills the full area. Each tab is a fresh independent screen,
     // not nested into whatever was previously open.
-    connect(tab_bar_, &ui::TabBar::tab_changed, this, [this](const QString& id) {
-        dock_router_->navigate(id, true);
-    });
+    connect(tab_bar_, &ui::TabBar::tab_changed, this, [this](const QString& id) { dock_router_->navigate(id, true); });
     connect(dock_router_, &DockScreenRouter::screen_changed, tab_bar_, &ui::TabBar::set_active);
 
     // Update the main window title bar to reflect the current screen name.
-    connect(dock_router_, &DockScreenRouter::screen_changed, this, [this](const QString&) {
-        update_window_title();
-    });
+    connect(dock_router_, &DockScreenRouter::screen_changed, this, [this](const QString&) { update_window_title(); });
 
-    connect(this, &QObject::destroyed, this, [this]() {
-        WorkspaceManager::instance().remove_window(this);
-    });
+    connect(this, &QObject::destroyed, this, [this]() { WorkspaceManager::instance().remove_window(this); });
 
     // Chat bubble — floats over dock_manager_ content area
     chat_bubble_ = new AiChatBubble(dock_manager_);
@@ -229,41 +216,43 @@ MainWindow::MainWindow(int window_id, QWidget* parent)
         auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
         bool show = !r.is_ok() || r.value() != "false";
         chat_bubble_->setVisible(show);
-        if (show) chat_bubble_->raise();
+        if (show)
+            chat_bubble_->raise();
     }
 
     // Re-raise and reposition the bubble after each navigation — dock geometry
     // shifts when panels open/close, so the bubble needs to re-anchor itself.
     connect(dock_router_, &DockScreenRouter::screen_changed, this, [this](const QString&) {
-        if (!chat_bubble_) return;
+        if (!chat_bubble_)
+            return;
         auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
         bool show = !r.is_ok() || r.value() != "false";
         chat_bubble_->setVisible(show);
-        if (show) { chat_bubble_->reposition(); chat_bubble_->raise(); }
+        if (show) {
+            chat_bubble_->reposition();
+            chat_bubble_->raise();
+        }
     });
 
     connect(toolbar, &ui::ToolBar::chat_mode_toggled, this, &MainWindow::toggle_chat_mode);
-    connect(toolbar, &ui::ToolBar::navigate_to, this, [this](const QString& id) {
-        dock_router_->navigate(id, true);
-    });
+    connect(toolbar, &ui::ToolBar::navigate_to, this, [this](const QString& id) { dock_router_->navigate(id, true); });
 
     connect(toolbar, &ui::ToolBar::dock_command, this,
             [this](const QString& action, const QString& primary, const QString& secondary) {
-        if (action == "add")
-            dock_router_->add_alongside(primary, secondary);
-        else if (action == "remove")
-            dock_router_->remove_screen(primary);
-        else if (action == "replace")
-            dock_router_->replace_screen(primary, secondary);
-    });
+                if (action == "add")
+                    dock_router_->add_alongside(primary, secondary);
+                else if (action == "remove")
+                    dock_router_->remove_screen(primary);
+                else if (action == "replace")
+                    dock_router_->replace_screen(primary, secondary);
+            });
 
     // MCP navigation tool → dock_router (cross-thread safe)
     EventBus::instance().subscribe("nav.switch_screen", [this](const QVariantMap& data) {
         QString screen_id = data["screen_id"].toString();
         if (!screen_id.isEmpty())
-            QMetaObject::invokeMethod(dock_router_, [this, screen_id]() {
-                dock_router_->navigate(screen_id);
-            }, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(
+                dock_router_, [this, screen_id]() { dock_router_->navigate(screen_id); }, Qt::QueuedConnection);
     });
 
     auto* sc_chat = new QShortcut(QKeySequence(Qt::Key_F9), this);
@@ -280,8 +269,10 @@ MainWindow::MainWindow(int window_id, QWidget* parent)
     auto* sc_focus = new QShortcut(QKeySequence(Qt::Key_F10), this);
     connect(sc_focus, &QShortcut::activated, this, [this]() {
         focus_mode_ = !focus_mode_;
-        if (dock_toolbar_)     dock_toolbar_->setVisible(!focus_mode_);
-        if (dock_status_bar_)  dock_status_bar_->setVisible(!focus_mode_);
+        if (dock_toolbar_)
+            dock_toolbar_->setVisible(!focus_mode_);
+        if (dock_status_bar_)
+            dock_status_bar_->setVisible(!focus_mode_);
     });
 
     auto* sc_refresh = new QShortcut(QKeySequence(Qt::Key_F5), this);
@@ -333,19 +324,19 @@ MainWindow::MainWindow(int window_id, QWidget* parent)
             w->activateWindow();
         } else if (action.startsWith("panel_")) {
             // Float a screen — in ADS mode, navigate dock_router; in legacy, spawn window
-            static const QMap<QString, QPair<QString,QString>> panel_map = {
-                {"panel_dashboard",  {"Dashboard",      "dashboard"}},
-                {"panel_watchlist",  {"Watchlist",      "watchlist"}},
-                {"panel_news",       {"News Feed",      "news"}},
-                {"panel_portfolio",  {"Portfolio",      "portfolio"}},
-                {"panel_markets",    {"Markets",        "markets"}},
-                {"panel_crypto",     {"Crypto Trading", "crypto_trading"}},
-                {"panel_equity",     {"Equity Trading", "equity_trading"}},
-                {"panel_algo",       {"Algo Trading",   "algo_trading"}},
-                {"panel_research",   {"Equity Research","equity_research"}},
-                {"panel_economics",  {"Economics",      "economics"}},
-                {"panel_geopolitics",{"Geopolitics",    "geopolitics"}},
-                {"panel_ai_chat",    {"AI Chat",        "ai_chat"}},
+            static const QMap<QString, QPair<QString, QString>> panel_map = {
+                {"panel_dashboard", {"Dashboard", "dashboard"}},
+                {"panel_watchlist", {"Watchlist", "watchlist"}},
+                {"panel_news", {"News Feed", "news"}},
+                {"panel_portfolio", {"Portfolio", "portfolio"}},
+                {"panel_markets", {"Markets", "markets"}},
+                {"panel_crypto", {"Crypto Trading", "crypto_trading"}},
+                {"panel_equity", {"Equity Trading", "equity_trading"}},
+                {"panel_algo", {"Algo Trading", "algo_trading"}},
+                {"panel_research", {"Equity Research", "equity_research"}},
+                {"panel_economics", {"Economics", "economics"}},
+                {"panel_geopolitics", {"Geopolitics", "geopolitics"}},
+                {"panel_ai_chat", {"AI Chat", "ai_chat"}},
             };
             if (panel_map.contains(action)) {
                 const auto [title, route] = panel_map[action];
@@ -355,9 +346,8 @@ MainWindow::MainWindow(int window_id, QWidget* parent)
         } else if (action == "perspective_save") {
             if (dock_manager_) {
                 bool ok = false;
-                const QString name = QInputDialog::getText(
-                    this, "Save Layout", "Layout name:", QLineEdit::Normal,
-                    QString(), &ok);
+                const QString name =
+                    QInputDialog::getText(this, "Save Layout", "Layout name:", QLineEdit::Normal, QString(), &ok);
                 if (ok && !name.trimmed().isEmpty()) {
                     dock_manager_->addPerspective(name.trimmed());
                     LOG_INFO("MainWindow", QString("Saved perspective: %1").arg(name.trimmed()));
@@ -368,28 +358,28 @@ MainWindow::MainWindow(int window_id, QWidget* parent)
             // 2 screens = 1:1 side-by-side, 4 screens = 2x2 grid
             static const QMap<QString, QStringList> view_screens = {
                 // Trading
-                {"perspective_trading",       {"crypto_trading", "watchlist", "markets", "news"}},
-                {"perspective_equity",        {"equity_trading", "watchlist"}},
-                {"perspective_algo",          {"algo_trading", "backtesting"}},
+                {"perspective_trading", {"crypto_trading", "watchlist", "markets", "news"}},
+                {"perspective_equity", {"equity_trading", "watchlist"}},
+                {"perspective_algo", {"algo_trading", "backtesting"}},
                 // Research
-                {"perspective_research",      {"equity_research", "markets", "screener", "news"}},
-                {"perspective_derivatives",   {"derivatives", "surface_analytics"}},
-                {"perspective_ma",            {"ma_analytics", "news"}},
+                {"perspective_research", {"equity_research", "markets", "screener", "news"}},
+                {"perspective_derivatives", {"derivatives", "surface_analytics"}},
+                {"perspective_ma", {"ma_analytics", "news"}},
                 // Portfolio
-                {"perspective_portfolio",     {"portfolio", "markets", "watchlist", "news"}},
+                {"perspective_portfolio", {"portfolio", "markets", "watchlist", "news"}},
                 // News & Markets
-                {"perspective_news",          {"news", "markets"}},
-                {"perspective_markets",       {"markets", "watchlist"}},
+                {"perspective_news", {"news", "markets"}},
+                {"perspective_markets", {"markets", "watchlist"}},
                 // Economics & Data
-                {"perspective_economics",     {"economics", "dbnomics", "gov_data", "asia_markets"}},
-                {"perspective_data",          {"data_sources", "data_mapping"}},
+                {"perspective_economics", {"economics", "dbnomics", "gov_data", "asia_markets"}},
+                {"perspective_data", {"data_sources", "data_mapping"}},
                 // Geopolitics
-                {"perspective_geopolitics",   {"geopolitics", "maritime", "relationship_map", "news"}},
+                {"perspective_geopolitics", {"geopolitics", "maritime", "relationship_map", "news"}},
                 // AI & Quant
-                {"perspective_quant",         {"ai_quant_lab", "quantlib", "backtesting", "markets"}},
-                {"perspective_ai",            {"ai_chat", "agent_config"}},
+                {"perspective_quant", {"ai_quant_lab", "quantlib", "backtesting", "markets"}},
+                {"perspective_ai", {"ai_chat", "agent_config"}},
                 // Tools
-                {"perspective_tools",         {"code_editor", "node_editor"}},
+                {"perspective_tools", {"code_editor", "node_editor"}},
             };
             const auto it = view_screens.find(action);
             if (it != view_screens.end() && dock_router_) {
@@ -397,10 +387,9 @@ MainWindow::MainWindow(int window_id, QWidget* parent)
                 if (!screens.isEmpty()) {
                     dock_router_->navigate(screens[0], true); // first exclusive
                     for (int i = 1; i < screens.size(); ++i)
-                        dock_router_->navigate(screens[i]);   // fill grid
+                        dock_router_->navigate(screens[i]); // fill grid
                 }
-                LOG_INFO("MainWindow", QString("Quick Switch: %1 (%2 panels)")
-                         .arg(action).arg(screens.size()));
+                LOG_INFO("MainWindow", QString("Quick Switch: %1 (%2 panels)").arg(action).arg(screens.size()));
             }
         } else if (action == "logout") {
             auth::AuthManager::instance().logout();
@@ -411,8 +400,10 @@ MainWindow::MainWindow(int window_id, QWidget* parent)
                 showFullScreen();
         } else if (action == "focus_mode") {
             focus_mode_ = !focus_mode_;
-            if (dock_toolbar_)    dock_toolbar_->setVisible(!focus_mode_);
-            if (dock_status_bar_) dock_status_bar_->setVisible(!focus_mode_);
+            if (dock_toolbar_)
+                dock_toolbar_->setVisible(!focus_mode_);
+            if (dock_status_bar_)
+                dock_status_bar_->setVisible(!focus_mode_);
         } else if (action == "always_on_top") {
             always_on_top_ = !always_on_top_;
             Qt::WindowFlags flags = windowFlags();
@@ -431,8 +422,8 @@ MainWindow::MainWindow(int window_id, QWidget* parent)
         } else if (action == "new_workspace") {
             auto* dlg = new ui::WorkspaceNewDialog(this);
             if (dlg->exec() == QDialog::Accepted)
-                WorkspaceManager::instance().new_workspace(
-                    dlg->workspace_name(), dlg->workspace_description(), dlg->selected_template_id());
+                WorkspaceManager::instance().new_workspace(dlg->workspace_name(), dlg->workspace_description(),
+                                                           dlg->selected_template_id());
             dlg->deleteLater();
         } else if (action == "open_workspace") {
             auto* dlg = new ui::WorkspaceOpenDialog(this);
@@ -447,13 +438,13 @@ MainWindow::MainWindow(int window_id, QWidget* parent)
                 WorkspaceManager::instance().save_workspace_as(dlg->new_name(), dlg->chosen_path());
             dlg->deleteLater();
         } else if (action == "import_data") {
-            QString path = QFileDialog::getOpenFileName(
-                this, "Import Workspace", QDir::homePath(), "Fincept Workspace (*.fwsp)");
+            QString path =
+                QFileDialog::getOpenFileName(this, "Import Workspace", QDir::homePath(), "Fincept Workspace (*.fwsp)");
             if (!path.isEmpty())
                 WorkspaceManager::instance().import_workspace(path);
         } else if (action == "export_data") {
-            QString path = QFileDialog::getSaveFileName(
-                this, "Export Workspace", QDir::homePath(), "Fincept Workspace (*.fwsp)");
+            QString path =
+                QFileDialog::getSaveFileName(this, "Export Workspace", QDir::homePath(), "Fincept Workspace (*.fwsp)");
             if (!path.isEmpty())
                 WorkspaceManager::instance().export_workspace(path);
         } else if (action == "screenshot") {
@@ -496,8 +487,10 @@ MainWindow::MainWindow(int window_id, QWidget* parent)
 
     // Always ensure toolbar and status bar are visible after state restore.
     // Focus mode and chat mode will hide them explicitly when toggled.
-    if (dock_toolbar_)    dock_toolbar_->setVisible(true);
-    if (dock_status_bar_) dock_status_bar_->setVisible(true);
+    if (dock_toolbar_)
+        dock_toolbar_->setVisible(true);
+    if (dock_status_bar_)
+        dock_status_bar_->setVisible(true);
 
     // Restore ADS dock layout — must happen after all screens are registered
     // but BEFORE the initial navigate, so we don't create a widget that
@@ -523,13 +516,14 @@ MainWindow::MainWindow(int window_id, QWidget* parent)
                 // of visible dock areas (>6), the layout is likely corrupt.
                 if (dock_restored && dock_manager_->openedDockAreas().size() > 6) {
                     LOG_WARN("MainWindow", QString("Dock layout corrupt: %1 open areas — resetting")
-                             .arg(dock_manager_->openedDockAreas().size()));
+                                               .arg(dock_manager_->openedDockAreas().size()));
                     dock_restored = false;
                 }
             }
         } else if (saved_version != 0) {
             LOG_INFO("MainWindow", QString("Dock layout version mismatch (saved %1, expected %2) — resetting")
-                     .arg(saved_version).arg(kDockLayoutVersion));
+                                       .arg(saved_version)
+                                       .arg(kDockLayoutVersion));
         }
 
         if (!dock_restored) {
@@ -604,21 +598,29 @@ void MainWindow::toggle_chat_mode() {
     chat_mode_ = !chat_mode_;
 
     if (chat_mode_) {
-        if (dock_toolbar_)     dock_toolbar_->setVisible(false);
-        if (dock_status_bar_)  dock_status_bar_->setVisible(false);
-        if (chat_bubble_)       chat_bubble_->setVisible(false);
+        if (dock_toolbar_)
+            dock_toolbar_->setVisible(false);
+        if (dock_status_bar_)
+            dock_status_bar_->setVisible(false);
+        if (chat_bubble_)
+            chat_bubble_->setVisible(false);
         stack_->setCurrentIndex(2);
         LOG_INFO("MainWindow", "Entered Chat Mode");
     } else {
         stack_->setCurrentIndex(1);
-        if (dock_toolbar_)     dock_toolbar_->setVisible(true);
-        if (dock_status_bar_)  dock_status_bar_->setVisible(true);
+        if (dock_toolbar_)
+            dock_toolbar_->setVisible(true);
+        if (dock_status_bar_)
+            dock_status_bar_->setVisible(true);
         // Restore chat bubble based on setting
         if (chat_bubble_) {
             auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
             const bool show = !r.is_ok() || r.value() != "false";
             chat_bubble_->setVisible(show);
-            if (show) { chat_bubble_->reposition(); chat_bubble_->raise(); }
+            if (show) {
+                chat_bubble_->reposition();
+                chat_bubble_->raise();
+            }
         }
         LOG_INFO("MainWindow", "Exited Chat Mode");
     }
@@ -681,27 +683,28 @@ void MainWindow::setup_docking_mode() {
     static bool s_ads_configured = false;
     if (!s_ads_configured) {
         ads::CDockManager::setConfigFlags(
-            ads::CDockManager::DefaultOpaqueConfig
-            | ads::CDockManager::FocusHighlighting
-            | ads::CDockManager::AlwaysShowTabs
-            | ads::CDockManager::DockAreaHasTabsMenuButton
-            | ads::CDockManager::DockAreaDynamicTabsMenuButtonVisibility
-            | ads::CDockManager::FloatingContainerHasWidgetTitle
-            | ads::CDockManager::FloatingContainerHasWidgetIcon
-            | ads::CDockManager::EqualSplitOnInsertion       // prevents new panels from spawning tiny slivers
-            | ads::CDockManager::DoubleClickUndocksWidget    // double-click tab to float
+            ads::CDockManager::DefaultOpaqueConfig | ads::CDockManager::FocusHighlighting |
+            ads::CDockManager::AlwaysShowTabs | ads::CDockManager::DockAreaHasTabsMenuButton |
+            ads::CDockManager::DockAreaDynamicTabsMenuButtonVisibility |
+            ads::CDockManager::FloatingContainerHasWidgetTitle | ads::CDockManager::FloatingContainerHasWidgetIcon |
+            ads::CDockManager::EqualSplitOnInsertion       // prevents new panels from spawning tiny slivers
+            | ads::CDockManager::DoubleClickUndocksWidget  // double-click tab to float
         );
         // Disable auto-hide entirely: the pin button converts panels to collapsible
         // sidebars which collapse when another panel is opened beside them.
-        ads::CDockManager::setAutoHideConfigFlags(
-            ads::CDockManager::AutoHideFlags(0)
-        );
+        ads::CDockManager::setAutoHideConfigFlags(ads::CDockManager::AutoHideFlags(0));
         s_ads_configured = true;
     }
 
     // Create CDockManager — parent is a plain QWidget wrapper (not QMainWindow)
     // so ADS does NOT call setCentralWidget(). The wrapper goes into master_stack.
     auto* dock_wrapper = new QWidget;
+    {
+        QPalette pal = dock_wrapper->palette();
+        pal.setColor(QPalette::Window, QColor(ui::colors::BG_BASE()));
+        dock_wrapper->setPalette(pal);
+        dock_wrapper->setAutoFillBackground(true);
+    }
     auto* dock_layout = new QVBoxLayout(dock_wrapper);
     dock_layout->setContentsMargins(0, 0, 0, 0);
     dock_layout->setSpacing(0);
@@ -712,9 +715,6 @@ void MainWindow::setup_docking_mode() {
     dock_manager_ = new ads::CDockManager(dock_wrapper);
     dock_layout->addWidget(dock_manager_);
 
-// ADS styling is handled by ThemeManager's global QSS — no widget-level
-    // stylesheet needed here. The global QSS has higher priority and won't be
-    // overridden by theme changes.
 }
 
 void MainWindow::setup_dock_screens() {
@@ -763,10 +763,8 @@ void MainWindow::setup_dock_screens() {
     dock_router_->register_factory("data_sources", []() { return new screens::DataSourcesScreen; });
     dock_router_->register_factory("file_manager", [this]() {
         auto* fm = new screens::FileManagerScreen;
-        connect(fm, &screens::FileManagerScreen::open_file_in_screen,
-                this, [this](const QString& route_id, const QString& /*file_path*/) {
-                    dock_router_->navigate(route_id);
-                });
+        connect(fm, &screens::FileManagerScreen::open_file_in_screen, this,
+                [this](const QString& route_id, const QString& /*file_path*/) { dock_router_->navigate(route_id); });
         return fm;
     });
     dock_router_->register_factory("excel", []() { return new screens::ExcelScreen; });
@@ -798,12 +796,13 @@ void MainWindow::on_auth_state_changed() {
         // pricing screen from the toolbar.
         if (stack_->currentIndex() == 1 || stack_->currentIndex() == 2) {
             LOG_DEBUG("MainWindow", QString("on_auth_state_changed: skipping redirect, "
-                      "stack index=%1, chat_mode=%2")
-                      .arg(stack_->currentIndex()).arg(chat_mode_));
+                                            "stack index=%1, chat_mode=%2")
+                                        .arg(stack_->currentIndex())
+                                        .arg(chat_mode_));
             return;
         }
         if (stack_->currentIndex() == 0 && auth_stack_->currentIndex() == 3)
-            return;  // user is on pricing screen — let PricingScreen handle it
+            return; // user is on pricing screen — let PricingScreen handle it
 
         // ── PIN gate: require PIN setup or PIN unlock before proceeding ──
         // On first login (no PIN configured): show mandatory PIN setup.
@@ -829,9 +828,7 @@ void MainWindow::on_auth_state_changed() {
             stack_->setCurrentIndex(1);
             WorkspaceManager::instance().load_last_workspace();
             // Trigger silent update check after login (delayed so UI settles first)
-            QTimer::singleShot(3000, this, []() {
-                services::UpdateService::instance().check_for_updates(true);
-            });
+            QTimer::singleShot(3000, this, []() { services::UpdateService::instance().check_for_updates(true); });
         } else {
             // Free/no plan → show pricing gate
             stack_->setCurrentIndex(0);
@@ -892,9 +889,12 @@ void MainWindow::show_lock_screen() {
     stack_->setCurrentIndex(3);
 
     // Hide toolbar/statusbar while locked
-    if (dock_toolbar_)    dock_toolbar_->setVisible(false);
-    if (dock_status_bar_) dock_status_bar_->setVisible(false);
-    if (chat_bubble_)     chat_bubble_->setVisible(false);
+    if (dock_toolbar_)
+        dock_toolbar_->setVisible(false);
+    if (dock_status_bar_)
+        dock_status_bar_->setVisible(false);
+    if (chat_bubble_)
+        chat_bubble_->setVisible(false);
 }
 
 void MainWindow::on_terminal_unlocked() {
@@ -915,19 +915,22 @@ void MainWindow::on_terminal_unlocked() {
     if (auth.session().has_paid_plan()) {
         stack_->setCurrentIndex(1);
         // Restore toolbar/statusbar
-        if (dock_toolbar_)    dock_toolbar_->setVisible(!focus_mode_ && !chat_mode_);
-        if (dock_status_bar_) dock_status_bar_->setVisible(!focus_mode_ && !chat_mode_);
+        if (dock_toolbar_)
+            dock_toolbar_->setVisible(!focus_mode_ && !chat_mode_);
+        if (dock_status_bar_)
+            dock_status_bar_->setVisible(!focus_mode_ && !chat_mode_);
         // Restore chat bubble based on setting
         if (chat_bubble_) {
             auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
             bool show = !r.is_ok() || r.value() != "false";
             chat_bubble_->setVisible(show);
-            if (show) { chat_bubble_->reposition(); chat_bubble_->raise(); }
+            if (show) {
+                chat_bubble_->reposition();
+                chat_bubble_->raise();
+            }
         }
         WorkspaceManager::instance().load_last_workspace();
-        QTimer::singleShot(3000, this, []() {
-            services::UpdateService::instance().check_for_updates(true);
-        });
+        QTimer::singleShot(3000, this, []() { services::UpdateService::instance().check_for_updates(true); });
     } else {
         // Free/no plan → pricing gate
         stack_->setCurrentIndex(0);

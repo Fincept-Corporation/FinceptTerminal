@@ -30,46 +30,41 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kEiaScript   = "eia_data.py";
+static constexpr const char* kEiaScript = "eia_data.py";
 static constexpr const char* kEiaSourceId = "eia";
-static constexpr const char* kEiaColor    = "#4CAF50";  // green
+static constexpr const char* kEiaColor = "#4CAF50"; // green
 } // namespace
 
 // ── WPSR categories (no API key needed, downloads public XLS)
-static const QList<QPair<QString,QString>> kWpsrCategories = {
-    {"Balance Sheet",                        "balance_sheet"},
-    {"Inputs & Production",                  "inputs_and_production"},
-    {"Crude Petroleum Stocks",               "crude_petroleum_stocks"},
-    {"Gasoline & Fuel Stocks",               "gasoline_fuel_stocks"},
-    {"Gasoline by Sub-PADD",                 "total_gasoline_by_sub_padd"},
-    {"Distillate Fuel Oil Stocks",           "distillate_fuel_oil_stocks"},
-    {"Imports",                              "imports"},
-    {"Imports by Country",                   "imports_by_country"},
-    {"Weekly Estimates",                     "weekly_estimates"},
-    {"Spot Prices (Crude/Gas/Heating Oil)",  "spot_prices_crude_gas_heating"},
-    {"Spot Prices (Diesel/Jet/Propane)",     "spot_prices_diesel_jet_fuel_propane"},
-    {"Retail Prices",                        "retail_prices"},
-    {"Refiner/Blender Net Production",       "refiner_blender_net_production"},
+static const QList<QPair<QString, QString>> kWpsrCategories = {
+    {"Balance Sheet", "balance_sheet"},
+    {"Inputs & Production", "inputs_and_production"},
+    {"Crude Petroleum Stocks", "crude_petroleum_stocks"},
+    {"Gasoline & Fuel Stocks", "gasoline_fuel_stocks"},
+    {"Gasoline by Sub-PADD", "total_gasoline_by_sub_padd"},
+    {"Distillate Fuel Oil Stocks", "distillate_fuel_oil_stocks"},
+    {"Imports", "imports"},
+    {"Imports by Country", "imports_by_country"},
+    {"Weekly Estimates", "weekly_estimates"},
+    {"Spot Prices (Crude/Gas/Heating Oil)", "spot_prices_crude_gas_heating"},
+    {"Spot Prices (Diesel/Jet/Propane)", "spot_prices_diesel_jet_fuel_propane"},
+    {"Retail Prices", "retail_prices"},
+    {"Refiner/Blender Net Production", "refiner_blender_net_production"},
 };
 
 // ── STEO tables (requires EIA_API_KEY)
-static const QList<QPair<QString,QString>> kSteoTables = {
-    {"01 — US Energy Markets Summary",           "01"},
-    {"02 — Nominal Energy Prices",               "02"},
-    {"04a — Petroleum & Liquid Fuels",           "04a"},
-    {"05a — Natural Gas Supply & Consumption",   "05a"},
-    {"07a — US Electricity Industry Overview",   "07a"},
-    {"09a — Macroeconomic Indicators & CO2",     "09a"},
+static const QList<QPair<QString, QString>> kSteoTables = {
+    {"01 — US Energy Markets Summary", "01"},          {"02 — Nominal Energy Prices", "02"},
+    {"04a — Petroleum & Liquid Fuels", "04a"},         {"05a — Natural Gas Supply & Consumption", "05a"},
+    {"07a — US Electricity Industry Overview", "07a"}, {"09a — Macroeconomic Indicators & CO2", "09a"},
 };
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
-EiaPanel::EiaPanel(QWidget* parent)
-    : EconPanelBase(kEiaSourceId, kEiaColor, parent) {
+EiaPanel::EiaPanel(QWidget* parent) : EconPanelBase(kEiaSourceId, kEiaColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &EiaPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &EiaPanel::on_result);
 }
 
 void EiaPanel::activate() {
@@ -88,12 +83,11 @@ void EiaPanel::build_controls(QHBoxLayout* thl) {
     };
 
     source_combo_ = new QComboBox;
-    source_combo_->addItem("Weekly Petroleum (WPSR)",      "wpsr");
-    source_combo_->addItem("Short-Term Outlook (STEO)",    "steo");
+    source_combo_->addItem("Weekly Petroleum (WPSR)", "wpsr");
+    source_combo_->addItem("Short-Term Outlook (STEO)", "steo");
     source_combo_->setFixedHeight(26);
     source_combo_->setMinimumWidth(200);
-    connect(source_combo_, &QComboBox::currentIndexChanged,
-            this, &EiaPanel::on_source_changed);
+    connect(source_combo_, &QComboBox::currentIndexChanged, this, &EiaPanel::on_source_changed);
 
     category_combo_ = new QComboBox;
     category_combo_->setFixedHeight(26);
@@ -105,8 +99,7 @@ void EiaPanel::build_controls(QHBoxLayout* thl) {
 
     apikey_notice_ = new QLabel("No API key needed");
     apikey_notice_->setStyleSheet(
-        QString("color:%1; font-size:9px; background:transparent;")
-            .arg(ui::colors::POSITIVE()));
+        QString("color:%1; font-size:9px; background:transparent;").arg(ui::colors::POSITIVE()));
 
     thl->addWidget(make_lbl("SOURCE"));
     thl->addWidget(source_combo_);
@@ -123,8 +116,7 @@ void EiaPanel::on_source_changed(int index) {
             category_combo_->addItem(c.first, c.second);
         apikey_notice_->setText("No API key needed");
         apikey_notice_->setStyleSheet(
-            QString("color:%1; font-size:9px; background:transparent;")
-                .arg(ui::colors::POSITIVE()));
+            QString("color:%1; font-size:9px; background:transparent;").arg(ui::colors::POSITIVE()));
     } else {
         // STEO
         for (const auto& t : kSteoTables)
@@ -137,7 +129,7 @@ void EiaPanel::on_source_changed(int index) {
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 
 void EiaPanel::on_fetch() {
-    const QString source   = source_combo_->currentData().toString();
+    const QString source = source_combo_->currentData().toString();
     const QString category = category_combo_->currentData().toString();
 
     if (category.isEmpty()) {
@@ -146,28 +138,23 @@ void EiaPanel::on_fetch() {
     }
 
     if (source == "wpsr") {
-        show_loading("Fetching EIA Petroleum Report: " +
-                     category_combo_->currentText() + "…\n"
+        show_loading("Fetching EIA Petroleum Report: " + category_combo_->currentText() +
+                     "…\n"
                      "(Downloads public XLS file — may take a few seconds)");
-        services::EconomicsService::instance().execute(
-            kEiaSourceId, kEiaScript, "get_petroleum",
-            {category},
-            "eia_wpsr_" + category);
+        services::EconomicsService::instance().execute(kEiaSourceId, kEiaScript, "get_petroleum", {category},
+                                                       "eia_wpsr_" + category);
     } else {
-        show_loading("Fetching EIA STEO Table " +
-                     category_combo_->currentText() + "…");
-        services::EconomicsService::instance().execute(
-            kEiaSourceId, kEiaScript, "get_steo",
-            {category},
-            "eia_steo_" + category);
+        show_loading("Fetching EIA STEO Table " + category_combo_->currentText() + "…");
+        services::EconomicsService::instance().execute(kEiaSourceId, kEiaScript, "get_steo", {category},
+                                                       "eia_steo_" + category);
     }
 }
 
 // ── Result ────────────────────────────────────────────────────────────────────
 
-void EiaPanel::on_result(const QString& request_id,
-                         const services::EconomicsResult& result) {
-    if (result.source_id != kEiaSourceId) return;
+void EiaPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kEiaSourceId)
+        return;
 
     if (!result.success) {
         // Detect API key error for STEO
@@ -198,8 +185,7 @@ void EiaPanel::on_result(const QString& request_id,
     const QString title = "EIA: " + category_combo_->currentText();
     display(rows, title);
 
-    LOG_INFO("EiaPanel", QString("Displayed %1 rows — %2")
-             .arg(rows.size()).arg(request_id));
+    LOG_INFO("EiaPanel", QString("Displayed %1 rows — %2").arg(rows.size()).arg(request_id));
 }
 
 } // namespace fincept::screens

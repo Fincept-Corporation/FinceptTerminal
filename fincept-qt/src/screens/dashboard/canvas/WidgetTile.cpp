@@ -25,8 +25,7 @@ void ResizeGrip::paintEvent(QPaintEvent*) {
     p.setRenderHint(QPainter::Antialiasing, false);
 
     if (hovered_ || pressed_) {
-        const auto& t = ui::ThemeManager::instance().tokens();
-        QColor dot_color(t.accent);
+        QColor dot_color(ui::colors::AMBER());
         dot_color.setAlpha(pressed_ ? 255 : 160);
         const int dot = 2, gap = 3;
         const int ox = width() - 14;
@@ -76,9 +75,8 @@ void ResizeGrip::leaveEvent(QEvent*) {
 
 WidgetTile::WidgetTile(const QString& instance_id, widgets::BaseWidget* content, QWidget* parent)
     : QWidget(parent), instance_id_(instance_id), content_(content) {
-    tokens_ = ui::ThemeManager::instance().tokens();
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens& t) { tokens_ = t; update(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { update(); });
 
     setMouseTracking(true); // track mouse for edge-resize cursor updates
 
@@ -166,7 +164,7 @@ void WidgetTile::paintEvent(QPaintEvent* e) {
     p.setRenderHint(QPainter::Antialiasing, false);
 
     // Accent glow border using theme accent color
-    QColor ac(tokens_.accent);
+    QColor ac(ui::colors::AMBER());
     p.setPen(QPen(ac, 1));
     p.drawRect(rect().adjusted(0, 0, -1, -1));
     ac.setAlpha(100);

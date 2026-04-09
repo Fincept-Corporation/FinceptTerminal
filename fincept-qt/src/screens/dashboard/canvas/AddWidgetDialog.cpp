@@ -25,7 +25,7 @@ QString AddWidgetDialog::accent_for_category(const QString& category) {
     if (category == "Trading")
         return ui::colors::NEGATIVE();
     if (category == "Tools")
-        return "#9D4EDD";
+        return ui::colors::AMBER();
     return ui::colors::TEXT_SECONDARY();
 }
 
@@ -105,7 +105,7 @@ AddWidgetDialog::AddWidgetDialog(QWidget* parent) : QDialog(parent) {
                 "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }")
             .arg(ui::colors::BORDER_BRIGHT));
 
-    card_container_ = new QWidget;
+    card_container_ = new QWidget(this);
     card_container_->setStyleSheet("background: transparent;");
     card_grid_ = new QGridLayout(card_container_);
     card_grid_->setContentsMargins(0, 0, 0, 0);
@@ -228,10 +228,10 @@ void AddWidgetDialog::card_clicked(const QString& type_id) {
             w->setStyleSheet(QString("QWidget#widgetCard { background: %1; border: 1px solid %2; border-radius: 3px; }")
                                  .arg(ui::colors::BG_HOVER(), accent));
         } else {
-            w->setStyleSheet(
-                QString("QWidget#widgetCard { background: %1; border: 1px solid %2; border-radius: 3px; }"
-                        "QWidget#widgetCard:hover { background: %3; border-color: %4; }")
-                    .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::BG_HOVER(), ui::colors::BORDER_MED()));
+            w->setStyleSheet(QString("QWidget#widgetCard { background: %1; border: 1px solid %2; border-radius: 3px; }"
+                                     "QWidget#widgetCard:hover { background: %3; border-color: %4; }")
+                                 .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::BG_HOVER(),
+                                      ui::colors::BORDER_MED()));
         }
     }
 }
@@ -273,23 +273,23 @@ void AddWidgetDialog::populate_cards(const QString& filter, const QString& categ
         QString accent = accent_for_category(meta.category);
 
         // ── Card container ──
-        auto* card = new QWidget;
+        auto* card = new QWidget(this);
         card->setObjectName("widgetCard");
         card->setProperty("wtype", meta.type_id);
         card->setProperty("wcat", meta.category);
         card->setCursor(Qt::PointingHandCursor);
         card->setFixedHeight(72);
-        card->setStyleSheet(
-            QString("QWidget#widgetCard { background: %1; border: 1px solid %2; border-radius: 3px; }"
-                    "QWidget#widgetCard:hover { background: %3; border-color: %4; }")
-                .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::BG_HOVER(), ui::colors::BORDER_MED()));
+        card->setStyleSheet(QString("QWidget#widgetCard { background: %1; border: 1px solid %2; border-radius: 3px; }"
+                                    "QWidget#widgetCard:hover { background: %3; border-color: %4; }")
+                                .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::BG_HOVER(),
+                                     ui::colors::BORDER_MED()));
 
         auto* cl = new QHBoxLayout(card);
         cl->setContentsMargins(10, 8, 10, 8);
         cl->setSpacing(10);
 
         // ── Left: icon + accent stripe ──
-        auto* icon_frame = new QWidget;
+        auto* icon_frame = new QWidget(this);
         icon_frame->setFixedSize(36, 36);
         icon_frame->setStyleSheet(
             QString("background: %1; border: 1px solid %2; border-radius: 3px;").arg(ui::colors::BG_BASE(), accent));

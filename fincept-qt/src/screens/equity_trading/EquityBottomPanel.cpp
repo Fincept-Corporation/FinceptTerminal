@@ -1,5 +1,6 @@
 // EquityBottomPanel.cpp — tabbed portfolio display
 #include "screens/equity_trading/EquityBottomPanel.h"
+
 #include "ui/theme/Theme.h"
 
 #include <QDate>
@@ -52,7 +53,8 @@ void EquityBottomPanel::setup_positions_tab() {
     positions_table_ = new QTableWidget;
     positions_table_->setObjectName("eqTable");
     positions_table_->setColumnCount(8);
-    positions_table_->setHorizontalHeaderLabels({"Symbol", "Exchange", "Side", "Qty", "Avg Price", "LTP", "P&L", "P&L %"});
+    positions_table_->setHorizontalHeaderLabels(
+        {"Symbol", "Exchange", "Side", "Qty", "Avg Price", "LTP", "P&L", "P&L %"});
     positions_table_->verticalHeader()->setVisible(false);
     positions_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     positions_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -84,7 +86,8 @@ void EquityBottomPanel::setup_orders_tab() {
     orders_table_ = new QTableWidget;
     orders_table_->setObjectName("eqTable");
     orders_table_->setColumnCount(9);
-    orders_table_->setHorizontalHeaderLabels({"Order ID", "Symbol", "Side", "Type", "Qty", "Price", "Status", "Time", "Action"});
+    orders_table_->setHorizontalHeaderLabels(
+        {"Order ID", "Symbol", "Side", "Type", "Qty", "Price", "Status", "Time", "Action"});
     orders_table_->verticalHeader()->setVisible(false);
     orders_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     orders_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -97,7 +100,7 @@ void EquityBottomPanel::setup_orders_tab() {
 // ── Funds Tab ──────────────────────────────────────────────────────────────
 
 void EquityBottomPanel::setup_funds_tab() {
-    auto* widget = new QWidget;
+    auto* widget = new QWidget(this);
     auto* layout = new QVBoxLayout(widget);
     layout->setContentsMargins(12, 12, 12, 12);
     layout->setSpacing(8);
@@ -128,7 +131,7 @@ void EquityBottomPanel::setup_funds_tab() {
 // ── Stats Tab ──────────────────────────────────────────────────────────────
 
 void EquityBottomPanel::setup_stats_tab() {
-    auto* widget = new QWidget;
+    auto* widget = new QWidget(this);
     auto* layout = new QVBoxLayout(widget);
     layout->setContentsMargins(12, 12, 12, 12);
     layout->setSpacing(8);
@@ -170,7 +173,8 @@ void EquityBottomPanel::set_paper_positions(const QVector<trading::PtPosition>& 
 
         auto* pnl_item = ensure_item(positions_table_, i, 6);
         pnl_item->setText(QString::number(p.unrealized_pnl, 'f', 2));
-        pnl_item->setForeground(p.unrealized_pnl >= 0 ? QColor(fincept::ui::colors::POSITIVE()) : QColor(fincept::ui::colors::NEGATIVE()));
+        pnl_item->setForeground(p.unrealized_pnl >= 0 ? QColor(fincept::ui::colors::POSITIVE())
+                                                      : QColor(fincept::ui::colors::NEGATIVE()));
     }
 }
 
@@ -217,7 +221,8 @@ void EquityBottomPanel::set_paper_trades(const QVector<trading::PtTrade>& trades
 
         auto* pnl_item = ensure_item(orders_table_, row, 6);
         pnl_item->setText(QString::number(t.pnl, 'f', 2));
-        pnl_item->setForeground(t.pnl >= 0 ? QColor(fincept::ui::colors::POSITIVE()) : QColor(fincept::ui::colors::NEGATIVE()));
+        pnl_item->setForeground(t.pnl >= 0 ? QColor(fincept::ui::colors::POSITIVE())
+                                           : QColor(fincept::ui::colors::NEGATIVE()));
 
         ensure_item(orders_table_, row, 7)->setText(t.timestamp);
     }
@@ -225,7 +230,9 @@ void EquityBottomPanel::set_paper_trades(const QVector<trading::PtTrade>& trades
 
 void EquityBottomPanel::set_paper_stats(const trading::PtStats& stats) {
     stat_values_[0]->setText(QString::number(stats.total_pnl, 'f', 2));
-    stat_values_[0]->setStyleSheet(QString("color: %1;").arg(stats.total_pnl >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
+    stat_values_[0]->setStyleSheet(
+        QString("color: %1;")
+            .arg(stats.total_pnl >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
     stat_values_[1]->setText(QString("%1%").arg(stats.win_rate * 100, 0, 'f', 1));
     stat_values_[2]->setText(QString::number(stats.total_trades));
     stat_values_[3]->setText(QString::number(stats.largest_win, 'f', 2));
@@ -247,11 +254,13 @@ void EquityBottomPanel::set_positions(const QVector<trading::BrokerPosition>& po
 
         auto* pnl_item = ensure_item(positions_table_, i, 6);
         pnl_item->setText(QString::number(p.pnl, 'f', 2));
-        pnl_item->setForeground(p.pnl >= 0 ? QColor(fincept::ui::colors::POSITIVE()) : QColor(fincept::ui::colors::NEGATIVE()));
+        pnl_item->setForeground(p.pnl >= 0 ? QColor(fincept::ui::colors::POSITIVE())
+                                           : QColor(fincept::ui::colors::NEGATIVE()));
 
         auto* pct_item = ensure_item(positions_table_, i, 7);
         pct_item->setText(QString("%1%").arg(p.pnl_pct, 0, 'f', 2));
-        pct_item->setForeground(p.pnl_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE()) : QColor(fincept::ui::colors::NEGATIVE()));
+        pct_item->setForeground(p.pnl_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE())
+                                               : QColor(fincept::ui::colors::NEGATIVE()));
     }
 }
 
@@ -268,7 +277,8 @@ void EquityBottomPanel::set_holdings(const QVector<trading::BrokerHolding>& hold
 
         auto* pnl_item = ensure_item(holdings_table_, i, 6);
         pnl_item->setText(QString("%1%").arg(h.pnl_pct, 0, 'f', 2));
-        pnl_item->setForeground(h.pnl_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE()) : QColor(fincept::ui::colors::NEGATIVE()));
+        pnl_item->setForeground(h.pnl_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE())
+                                               : QColor(fincept::ui::colors::NEGATIVE()));
     }
 }
 
@@ -286,34 +296,38 @@ void EquityBottomPanel::set_orders(const QVector<trading::BrokerOrderInfo>& orde
         ensure_item(orders_table_, i, 7)->setText(o.timestamp);
 
         // Action column — MODIFY button for open/pending orders
-        const bool modifiable = (o.status == "new" || o.status == "partially_filled"
-                                 || o.status == "accepted" || o.status == "pending_new");
+        const bool modifiable = (o.status == "new" || o.status == "partially_filled" || o.status == "accepted" ||
+                                 o.status == "pending_new");
         if (modifiable) {
             auto* btn = new QPushButton("EDIT");
             btn->setObjectName("eqTableBtn");
             btn->setFixedHeight(18);
             btn->setStyleSheet(QString("QPushButton#eqTableBtn { background: rgba(217,119,6,0.15); "
-                               "color: %1; border: 1px solid %2; font-size: 10px; "
-                               "padding: 0 6px; border-radius: 2px; }")
-                               .arg(fincept::ui::colors::AMBER).arg(fincept::ui::colors::AMBER_DIM));
+                                       "color: %1; border: 1px solid %2; font-size: 10px; "
+                                       "padding: 0 6px; border-radius: 2px; }")
+                                   .arg(fincept::ui::colors::AMBER)
+                                   .arg(fincept::ui::colors::AMBER_DIM));
             btn->setCursor(Qt::PointingHandCursor);
             const QString oid = o.order_id;
-            const double  qty = o.quantity;
-            const double  prc = o.price;
+            const double qty = o.quantity;
+            const double prc = o.price;
             connect(btn, &QPushButton::clicked, this, [this, oid, qty, prc]() {
                 // Show inline edit dialog
                 auto* dlg = new QDialog(this);
                 dlg->setWindowTitle("Modify Order");
                 dlg->setFixedWidth(280);
                 dlg->setStyleSheet(QString("QDialog { background: %1; color: %2; }"
-                                   "QLabel { color: %3; font-size: 11px; }"
-                                   "QLineEdit { background: %4; border: 1px solid %5; "
-                                   "  color: %2; padding: 5px; border-radius: 2px; }"
-                                   "QLineEdit:focus { border-color: %6; }"
-                                   "QPushButton { padding: 6px 14px; font-weight: 700; border-radius: 2px; }")
-                                   .arg(fincept::ui::colors::BG_SURFACE).arg(fincept::ui::colors::TEXT_PRIMARY)
-                                   .arg(fincept::ui::colors::TEXT_SECONDARY).arg(fincept::ui::colors::BG_BASE)
-                                   .arg(fincept::ui::colors::BORDER_MED).arg(fincept::ui::colors::AMBER));
+                                           "QLabel { color: %3; font-size: 11px; }"
+                                           "QLineEdit { background: %4; border: 1px solid %5; "
+                                           "  color: %2; padding: 5px; border-radius: 2px; }"
+                                           "QLineEdit:focus { border-color: %6; }"
+                                           "QPushButton { padding: 6px 14px; font-weight: 700; border-radius: 2px; }")
+                                       .arg(fincept::ui::colors::BG_SURFACE)
+                                       .arg(fincept::ui::colors::TEXT_PRIMARY)
+                                       .arg(fincept::ui::colors::TEXT_SECONDARY)
+                                       .arg(fincept::ui::colors::BG_BASE)
+                                       .arg(fincept::ui::colors::BORDER_MED)
+                                       .arg(fincept::ui::colors::AMBER));
                 auto* vlay = new QVBoxLayout(dlg);
                 vlay->setSpacing(6);
                 vlay->setContentsMargins(14, 14, 14, 14);
@@ -326,10 +340,12 @@ void EquityBottomPanel::set_orders(const QVector<trading::BrokerOrderInfo>& orde
                 auto* btn_row = new QHBoxLayout;
                 auto* ok_btn = new QPushButton("MODIFY");
                 ok_btn->setStyleSheet(QString("background: rgba(217,119,6,0.15); color: %1; border: 1px solid %2;")
-                                      .arg(fincept::ui::colors::AMBER).arg(fincept::ui::colors::AMBER_DIM));
+                                          .arg(fincept::ui::colors::AMBER)
+                                          .arg(fincept::ui::colors::AMBER_DIM));
                 auto* cancel_btn = new QPushButton("CANCEL");
                 cancel_btn->setStyleSheet(QString("background: rgba(220,38,38,0.1); color: %1; border: 1px solid %2;")
-                                          .arg(fincept::ui::colors::NEGATIVE).arg(fincept::ui::colors::NEGATIVE_DIM));
+                                              .arg(fincept::ui::colors::NEGATIVE)
+                                              .arg(fincept::ui::colors::NEGATIVE_DIM));
 
                 connect(ok_btn, &QPushButton::clicked, dlg, [dlg, this, oid, qty_edit, prc_edit]() {
                     const double new_qty = qty_edit->text().toDouble();
@@ -389,17 +405,19 @@ void EquityBottomPanel::set_auctions(const QVector<trading::BrokerAuction>& auct
             const int row = auctions_table_->rowCount();
             auctions_table_->insertRow(row);
             const bool is_open = (entry.auction_type == "O");
-            const QColor type_color = is_open ? QColor(fincept::ui::colors::AMBER()) : QColor(fincept::ui::colors::INFO());
+            const QColor type_color =
+                is_open ? QColor(fincept::ui::colors::AMBER()) : QColor(fincept::ui::colors::INFO());
 
-            auto set = [&](int col, const QString& text, const QColor& fg = QColor(fincept::ui::colors::TEXT_PRIMARY())) {
+            auto set = [&](int col, const QString& text,
+                           const QColor& fg = QColor(fincept::ui::colors::TEXT_PRIMARY())) {
                 auto* item = new QTableWidgetItem(text);
                 item->setForeground(fg);
                 item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
                 auctions_table_->setItem(row, col, item);
             };
 
-            const QString time_str = QDateTime::fromString(entry.timestamp, Qt::ISODateWithMs)
-                                         .toLocalTime().toString("hh:mm:ss");
+            const QString time_str =
+                QDateTime::fromString(entry.timestamp, Qt::ISODateWithMs).toLocalTime().toString("hh:mm:ss");
             set(0, auction.date, QColor(fincept::ui::colors::TEXT_SECONDARY()));
             set(1, is_open ? "OPEN" : "CLOSE", type_color);
             set(2, time_str, QColor(fincept::ui::colors::TEXT_SECONDARY()));
@@ -436,8 +454,8 @@ void EquityBottomPanel::setup_time_sales_tab() {
 static void fill_trade_row(QTableWidget* table, int row, const trading::BrokerTrade& t,
                            const QMap<QString, QString>& codes = {}) {
     // Parse ISO timestamp → time only
-    const QString time_str = QDateTime::fromString(t.timestamp, Qt::ISODateWithMs)
-                                 .toLocalTime().toString("hh:mm:ss.zzz");
+    const QString time_str =
+        QDateTime::fromString(t.timestamp, Qt::ISODateWithMs).toLocalTime().toString("hh:mm:ss.zzz");
 
     auto set = [&](int col, const QString& text, const QColor& fg = QColor(fincept::ui::colors::TEXT_PRIMARY())) {
         auto* item = new QTableWidgetItem(text);
@@ -480,24 +498,26 @@ void EquityBottomPanel::prepend_trade(const trading::BrokerTrade& trade) {
 // ── Calendar Tab ───────────────────────────────────────────────────────────
 
 void EquityBottomPanel::setup_calendar_tab() {
-    auto* container = new QWidget;
+    auto* container = new QWidget(this);
     auto* vlay = new QVBoxLayout(container);
     vlay->setContentsMargins(0, 0, 0, 0);
     vlay->setSpacing(0);
 
     // Clock status banner
-    auto* banner = new QWidget;
+    auto* banner = new QWidget(this);
     banner->setObjectName("calClockBanner");
     banner->setFixedHeight(28);
     banner->setStyleSheet(QString("QWidget#calClockBanner { background: %1; border-bottom: 1px solid %2; }")
-                          .arg(fincept::ui::colors::BG_BASE).arg(fincept::ui::colors::BORDER_DIM));
+                              .arg(fincept::ui::colors::BG_BASE)
+                              .arg(fincept::ui::colors::BORDER_DIM));
     auto* banner_lay = new QHBoxLayout(banner);
     banner_lay->setContentsMargins(10, 0, 10, 0);
     banner_lay->setSpacing(16);
 
     clock_status_label_ = new QLabel("● MARKET --");
     clock_status_label_->setObjectName("calClockStatus");
-    clock_status_label_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: 700;").arg(fincept::ui::colors::TEXT_TERTIARY));
+    clock_status_label_->setStyleSheet(
+        QString("color: %1; font-size: 11px; font-weight: 700;").arg(fincept::ui::colors::TEXT_TERTIARY));
 
     clock_next_label_ = new QLabel("");
     clock_next_label_->setObjectName("calClockNext");
@@ -546,41 +566,45 @@ void EquityBottomPanel::set_calendar(const QVector<trading::MarketCalendarDay>& 
         set(0, d.date);
         set(1, d.open);
         set(2, d.close);
-        set(3, d.session_open.isEmpty()  ? "--" : d.session_open);
+        set(3, d.session_open.isEmpty() ? "--" : d.session_open);
         set(4, d.session_close.isEmpty() ? "--" : d.session_close);
     }
     // Scroll to today (or nearest future day) centred in the view
     for (int i = 0; i < days.size(); ++i) {
         if (days[i].date >= today) {
-            calendar_table_->scrollToItem(calendar_table_->item(i, 0),
-                                          QAbstractItemView::PositionAtCenter);
+            calendar_table_->scrollToItem(calendar_table_->item(i, 0), QAbstractItemView::PositionAtCenter);
             break;
         }
     }
 }
 
 void EquityBottomPanel::set_clock(const trading::MarketClock& clock) {
-    if (!clock_status_label_) return;
+    if (!clock_status_label_)
+        return;
 
     if (clock.is_open) {
         clock_status_label_->setText("● MARKET OPEN");
-        clock_status_label_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: 700;").arg(fincept::ui::colors::POSITIVE));
+        clock_status_label_->setStyleSheet(
+            QString("color: %1; font-size: 11px; font-weight: 700;").arg(fincept::ui::colors::POSITIVE));
     } else {
         clock_status_label_->setText("● MARKET CLOSED");
-        clock_status_label_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: 700;").arg(fincept::ui::colors::NEGATIVE));
+        clock_status_label_->setStyleSheet(
+            QString("color: %1; font-size: 11px; font-weight: 700;").arg(fincept::ui::colors::NEGATIVE));
     }
 
     // Parse ISO timestamps and show local-friendly next event
     if (!clock.next_open.isEmpty() || !clock.next_close.isEmpty()) {
-        const QString next_event = clock.is_open
-            ? QString("Closes %1").arg(
-                QDateTime::fromString(clock.next_close, Qt::ISODateWithMs)
-                    .toLocalTime().toString("MMM d h:mm ap"))
-            : QString("Opens %1").arg(
-                QDateTime::fromString(clock.next_open, Qt::ISODateWithMs)
-                    .toLocalTime().toString("MMM d h:mm ap"));
+        const QString next_event = clock.is_open ? QString("Closes %1")
+                                                       .arg(QDateTime::fromString(clock.next_close, Qt::ISODateWithMs)
+                                                                .toLocalTime()
+                                                                .toString("MMM d h:mm ap"))
+                                                 : QString("Opens %1")
+                                                       .arg(QDateTime::fromString(clock.next_open, Qt::ISODateWithMs)
+                                                                .toLocalTime()
+                                                                .toString("MMM d h:mm ap"));
         clock_next_label_->setText(next_event);
-        clock_next_label_->setStyleSheet(QString("color: %1; font-size: 10px;").arg(fincept::ui::colors::TEXT_SECONDARY));
+        clock_next_label_->setStyleSheet(
+            QString("color: %1; font-size: 10px;").arg(fincept::ui::colors::TEXT_SECONDARY));
     }
 }
 

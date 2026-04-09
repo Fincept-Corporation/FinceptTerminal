@@ -147,7 +147,8 @@ static QVector<ConnectorConfig> file_configs() {
          Category::File,
          "I",
          "#4A90E2",
-         "Open table format winning the lakehouse format war. Used by every major bank and hedge fund. Supports S3, GCS, ADLS as object storage.",
+         "Open table format winning the lakehouse format war. Used by every major bank and hedge fund. Supports S3, "
+         "GCS, ADLS as object storage.",
          false,
          false,
          {{"catalogUri", "Catalog URI", FieldType::Url, "http://localhost:8181", false, "", {}},
@@ -168,7 +169,8 @@ static QVector<ConnectorConfig> file_configs() {
          Category::File,
          "D",
          "#FF3621",
-         "Databricks open table format with ACID transactions. UniForm feature allows reading by Iceberg clients. Standard in Databricks-centric finance shops.",
+         "Databricks open table format with ACID transactions. UniForm feature allows reading by Iceberg clients. "
+         "Standard in Databricks-centric finance shops.",
          false,
          false,
          {{"path", "Delta Table Path", FieldType::Text, "s3://my-bucket/delta/prices/", true, "", {}},
@@ -181,7 +183,8 @@ static QVector<ConnectorConfig> file_configs() {
          Category::File,
          "G",
          "#2ECC71",
-         "Geospatial Parquet format. Used by ESG and agri-finance quants with satellite imagery, geolocation, and foot traffic data.",
+         "Geospatial Parquet format. Used by ESG and agri-finance quants with satellite imagery, geolocation, and foot "
+         "traffic data.",
          false,
          false,
          {{"filepath", "File Path or S3 URI", FieldType::Text, "s3://my-bucket/geo/locations.parquet", true, "", {}},
@@ -194,7 +197,8 @@ static QVector<ConnectorConfig> file_configs() {
          Category::File,
          "A",
          "#E91E8C",
-         "In-memory columnar format and IPC protocol. Standard interchange format between DuckDB, Polars, pandas, and other modern analytics engines.",
+         "In-memory columnar format and IPC protocol. Standard interchange format between DuckDB, Polars, pandas, and "
+         "other modern analytics engines.",
          false,
          false,
          {{"filepath", "File Path (.arrow or .feather)", FieldType::Text, "/path/to/data.arrow", true, "", {}},
@@ -204,7 +208,9 @@ static QVector<ConnectorConfig> file_configs() {
            "",
            false,
            "ipc",
-           {{"IPC Stream (.arrow)", "ipc"}, {"IPC File (.arrow)", "ipc-file"}, {"Feather v2 (.feather)", "feather2"}}}}},
+           {{"IPC Stream (.arrow)", "ipc"},
+            {"IPC File (.arrow)", "ipc-file"},
+            {"Feather v2 (.feather)", "feather2"}}}}},
     };
 }
 

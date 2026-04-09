@@ -13,13 +13,27 @@ namespace fincept::screens::crypto {
 using namespace fincept::ui;
 
 namespace {
-inline QColor kBgBase()    { return QColor(colors::BG_BASE()); }
-inline QColor kRowEven()   { return QColor(colors::BG_BASE()); }
-inline QColor kRowOdd()    { return QColor(colors::ROW_ALT()); }
-inline QColor kTextDim()   { return QColor(colors::TEXT_DIM()); }
-inline QColor kTextSec()   { return QColor(colors::TEXT_SECONDARY()); }
-inline QColor kColorBuy()  { return QColor(colors::POSITIVE()); }
-inline QColor kColorSell() { return QColor(colors::NEGATIVE()); }
+inline QColor kBgBase() {
+    return QColor(colors::BG_BASE());
+}
+inline QColor kRowEven() {
+    return QColor(colors::BG_BASE());
+}
+inline QColor kRowOdd() {
+    return QColor(colors::ROW_ALT());
+}
+inline QColor kTextDim() {
+    return QColor(colors::TEXT_DIM());
+}
+inline QColor kTextSec() {
+    return QColor(colors::TEXT_SECONDARY());
+}
+inline QColor kColorBuy() {
+    return QColor(colors::POSITIVE());
+}
+inline QColor kColorSell() {
+    return QColor(colors::NEGATIVE());
+}
 } // namespace
 
 CryptoTimeSales::CryptoTimeSales(QWidget* parent) : QWidget(parent) {

@@ -1,9 +1,9 @@
 #pragma once
-#include <DockManager.h>
-#include <DockWidget.h>
-
 #include <QHash>
 #include <QObject>
+
+#include <DockManager.h>
+#include <DockWidget.h>
 #include <functional>
 
 namespace fincept {
@@ -67,20 +67,19 @@ class DockScreenRouter : public QObject {
   protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
 
-
   private:
     ads::CDockManager* manager_ = nullptr;
     QHash<QString, ads::CDockWidget*> dock_widgets_;
-    QHash<QString, QWidget*> screens_;           // materialized screen widgets
-    QHash<QString, ScreenFactory> factories_;    // pending lazy factories
+    QHash<QString, QWidget*> screens_;        // materialized screen widgets
+    QHash<QString, ScreenFactory> factories_; // pending lazy factories
     QString current_id_;
 
     // Grid layout tracking — stores the dock area for each grid position.
     // Populated as panels are opened (up to 4), used to place the next panel
     // correctly (2x2 grid default). Cleared when exclusive navigation resets.
-    ads::CDockAreaWidget* grid_top_left_     = nullptr;
-    ads::CDockAreaWidget* grid_top_right_    = nullptr;
-    ads::CDockAreaWidget* grid_bottom_left_  = nullptr;
+    ads::CDockAreaWidget* grid_top_left_ = nullptr;
+    ads::CDockAreaWidget* grid_top_right_ = nullptr;
+    ads::CDockAreaWidget* grid_bottom_left_ = nullptr;
     ads::CDockAreaWidget* grid_bottom_right_ = nullptr;
     int panel_count_ = 0; // number of currently open panels
 
@@ -92,7 +91,6 @@ class DockScreenRouter : public QObject {
     static QString title_for_id(const QString& id);
 
   private:
-
     /// Persist and restore a user-edited tab title (separate from screen state).
     void save_tab_title(const QString& id, const QString& title);
     QString load_tab_title(const QString& id) const;

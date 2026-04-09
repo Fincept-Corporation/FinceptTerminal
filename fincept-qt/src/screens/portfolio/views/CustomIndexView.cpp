@@ -20,9 +20,8 @@
 namespace fincept::screens {
 
 static const QStringList kMethods = {
-    "Price Weighted",      "Market Cap Weighted", "Equal Weighted",      "Float Adjusted",
-    "Fundamental Weighted","Modified Market Cap", "Factor Weighted",     "Risk Parity",
-    "Geometric Mean",      "Capped Weighted",
+    "Price Weighted",      "Market Cap Weighted", "Equal Weighted", "Float Adjusted", "Fundamental Weighted",
+    "Modified Market Cap", "Factor Weighted",     "Risk Parity",    "Geometric Mean", "Capped Weighted",
 };
 
 static const QStringList kMethodDescriptions = {
@@ -41,23 +40,19 @@ static const QStringList kMethodDescriptions = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 static QString table_style() {
-    return QString(
-        "QTableWidget { background:%1; color:%2; border:none; font-size:11px; }"
-        "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %3; }"
-        "QTableWidget::item:selected { background:%4; color:%5; }"
-        "QHeaderView::section { background:%6; color:%7; border:none;"
-        "  border-bottom:2px solid %8; padding:4px 8px; font-size:9px; font-weight:700; }")
-        .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-             ui::colors::AMBER_DIM, ui::colors::AMBER,
-             ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER);
+    return QString("QTableWidget { background:%1; color:%2; border:none; font-size:11px; }"
+                   "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %3; }"
+                   "QTableWidget::item:selected { background:%4; color:%5; }"
+                   "QHeaderView::section { background:%6; color:%7; border:none;"
+                   "  border-bottom:2px solid %8; padding:4px 8px; font-size:9px; font-weight:700; }")
+        .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::AMBER_DIM,
+             ui::colors::AMBER, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER);
 }
 
 static QString input_style() {
-    return QString(
-        "QLineEdit { background:%1; color:%2; border:1px solid %3; padding:0 8px; font-size:10px; }"
-        "QLineEdit:focus { border-color:%4; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY,
-             ui::colors::BORDER_DIM, ui::colors::AMBER);
+    return QString("QLineEdit { background:%1; color:%2; border:1px solid %3; padding:0 8px; font-size:10px; }"
+                   "QLineEdit:focus { border-color:%4; }")
+        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::AMBER);
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -75,33 +70,31 @@ void CustomIndexView::build_ui() {
 
     tabs_ = new QTabWidget;
     tabs_->setDocumentMode(true);
-    tabs_->setStyleSheet(
-        QString("QTabWidget::pane { border:0; background:%1; }"
-                "QTabBar::tab { background:%2; color:%3; padding:6px 14px; border:0;"
-                "  border-bottom:2px solid transparent; font-size:9px; font-weight:700;"
-                "  letter-spacing:0.5px; }"
-                "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
-                "QTabBar::tab:hover { color:%5; }")
-            .arg(ui::colors::BG_BASE, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY,
-                 ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+    tabs_->setStyleSheet(QString("QTabWidget::pane { border:0; background:%1; }"
+                                 "QTabBar::tab { background:%2; color:%3; padding:6px 14px; border:0;"
+                                 "  border-bottom:2px solid transparent; font-size:9px; font-weight:700;"
+                                 "  letter-spacing:0.5px; }"
+                                 "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
+                                 "QTabBar::tab:hover { color:%5; }")
+                             .arg(ui::colors::BG_BASE, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY,
+                                  ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
 
-    tabs_->addTab(build_create_panel(),       "CREATE INDEX");
-    tabs_->addTab(build_index_list_panel(),   "MY INDICES");
-    tabs_->addTab(build_performance_panel(),  "PERFORMANCE");
+    tabs_->addTab(build_create_panel(), "CREATE INDEX");
+    tabs_->addTab(build_index_list_panel(), "MY INDICES");
+    tabs_->addTab(build_performance_panel(), "PERFORMANCE");
 
     layout->addWidget(tabs_);
 }
 
 QWidget* CustomIndexView::build_create_panel() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* layout = new QVBoxLayout(w);
     layout->setContentsMargins(16, 12, 16, 12);
     layout->setSpacing(10);
 
     auto* title = new QLabel("CREATE CUSTOM INDEX");
     title->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;")
-            .arg(ui::colors::AMBER));
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
     layout->addWidget(title);
 
     // Config row
@@ -110,8 +103,7 @@ QWidget* CustomIndexView::build_create_panel() {
 
     auto add_field = [&](const QString& label, QWidget* widget) {
         auto* lbl = new QLabel(label);
-        lbl->setStyleSheet(
-            QString("color:%1; font-size:9px; font-weight:700;").arg(ui::colors::TEXT_TERTIARY));
+        lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700;").arg(ui::colors::TEXT_TERTIARY));
         config->addWidget(lbl);
         config->addWidget(widget);
     };
@@ -142,11 +134,10 @@ QWidget* CustomIndexView::build_create_panel() {
     create_btn_ = new QPushButton("CREATE INDEX");
     create_btn_->setFixedHeight(26);
     create_btn_->setCursor(Qt::PointingHandCursor);
-    create_btn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:%3; border:none;"
-                "  padding:0 16px; font-size:10px; font-weight:700; }"
-                "QPushButton:hover { background:%2; }")
-            .arg(ui::colors::AMBER, ui::colors::WARNING, ui::colors::BG_BASE));
+    create_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
+                                       "  padding:0 16px; font-size:10px; font-weight:700; }"
+                                       "QPushButton:hover { background:%2; }")
+                                   .arg(ui::colors::AMBER, ui::colors::WARNING, ui::colors::BG_BASE));
     connect(create_btn_, &QPushButton::clicked, this, &CustomIndexView::create_index);
     config->addWidget(create_btn_);
 
@@ -154,27 +145,23 @@ QWidget* CustomIndexView::build_create_panel() {
 
     // Method description
     auto* method_desc = new QLabel(kMethodDescriptions[0]);
-    method_desc->setStyleSheet(
-        QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
-    connect(method_cb_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            [method_desc](int idx) {
-                if (idx >= 0 && idx < kMethodDescriptions.size())
-                    method_desc->setText(kMethodDescriptions[idx]);
-            });
+    method_desc->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
+    connect(method_cb_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [method_desc](int idx) {
+        if (idx >= 0 && idx < kMethodDescriptions.size())
+            method_desc->setText(kMethodDescriptions[idx]);
+    });
     layout->addWidget(method_desc);
 
     // Status label
     create_status_ = new QLabel;
-    create_status_->setStyleSheet(
-        QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE));
+    create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE));
     create_status_->hide();
     layout->addWidget(create_status_);
 
     // Constituents table header
     auto* const_title = new QLabel("CONSTITUENTS (from portfolio holdings)");
     const_title->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px;")
-            .arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_SECONDARY));
     layout->addWidget(const_title);
 
     const_table_ = new QTableWidget;
@@ -192,7 +179,7 @@ QWidget* CustomIndexView::build_create_panel() {
 }
 
 QWidget* CustomIndexView::build_index_list_panel() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* layout = new QVBoxLayout(w);
     layout->setContentsMargins(16, 12, 16, 12);
     layout->setSpacing(8);
@@ -201,27 +188,24 @@ QWidget* CustomIndexView::build_index_list_panel() {
     auto* header_row = new QHBoxLayout;
     auto* title = new QLabel("MY CUSTOM INDICES");
     title->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;")
-            .arg(ui::colors::AMBER));
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
     header_row->addWidget(title);
     header_row->addStretch();
 
     delete_btn_ = new QPushButton("DELETE SELECTED");
     delete_btn_->setFixedHeight(26);
     delete_btn_->setCursor(Qt::PointingHandCursor);
-    delete_btn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:%2; border:none;"
-                "  padding:0 14px; font-size:9px; font-weight:700; }"
-                "QPushButton:hover { background:%1; }")
-            .arg(ui::colors::NEGATIVE, ui::colors::TEXT_PRIMARY));
+    delete_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
+                                       "  padding:0 14px; font-size:9px; font-weight:700; }"
+                                       "QPushButton:hover { background:%1; }")
+                                   .arg(ui::colors::NEGATIVE, ui::colors::TEXT_PRIMARY));
     connect(delete_btn_, &QPushButton::clicked, this, &CustomIndexView::delete_selected_index);
     header_row->addWidget(delete_btn_);
     layout->addLayout(header_row);
 
     index_list_table_ = new QTableWidget;
     index_list_table_->setColumnCount(6);
-    index_list_table_->setHorizontalHeaderLabels(
-        {"NAME", "METHOD", "BASE", "CURRENT VALUE", "CHANGE", "CREATED"});
+    index_list_table_->setHorizontalHeaderLabels({"NAME", "METHOD", "BASE", "CURRENT VALUE", "CHANGE", "CREATED"});
     index_list_table_->setSelectionMode(QAbstractItemView::SingleSelection);
     index_list_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     index_list_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -232,7 +216,8 @@ QWidget* CustomIndexView::build_index_list_panel() {
 
     // Single-click on row → show performance
     connect(index_list_table_, &QTableWidget::cellClicked, this, [this](int row, int) {
-        if (row < 0 || row >= loaded_indices_.size()) return;
+        if (row < 0 || row >= loaded_indices_.size())
+            return;
         const auto& idx = loaded_indices_[row];
         show_index_performance(idx.id, idx.name);
         tabs_->setCurrentIndex(2);
@@ -240,26 +225,24 @@ QWidget* CustomIndexView::build_index_list_panel() {
 
     layout->addWidget(index_list_table_, 1);
 
-    list_empty_msg_ = new QLabel(
-        "No custom indices created yet.\nGo to CREATE INDEX tab to build one from your portfolio.");
+    list_empty_msg_ =
+        new QLabel("No custom indices created yet.\nGo to CREATE INDEX tab to build one from your portfolio.");
     list_empty_msg_->setAlignment(Qt::AlignCenter);
-    list_empty_msg_->setStyleSheet(
-        QString("color:%1; font-size:11px; padding:40px;").arg(ui::colors::TEXT_TERTIARY));
+    list_empty_msg_->setStyleSheet(QString("color:%1; font-size:11px; padding:40px;").arg(ui::colors::TEXT_TERTIARY));
     layout->addWidget(list_empty_msg_);
 
     return w;
 }
 
 QWidget* CustomIndexView::build_performance_panel() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* layout = new QVBoxLayout(w);
     layout->setContentsMargins(16, 12, 16, 12);
     layout->setSpacing(8);
 
     perf_title_ = new QLabel("INDEX PERFORMANCE");
     perf_title_->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;")
-            .arg(ui::colors::AMBER));
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
     layout->addWidget(perf_title_);
 
     perf_stack_ = new QStackedWidget;
@@ -267,12 +250,11 @@ QWidget* CustomIndexView::build_performance_panel() {
     // Page 0 — placeholder
     auto* placeholder = new QLabel("Select an index from MY INDICES to see its performance.");
     placeholder->setAlignment(Qt::AlignCenter);
-    placeholder->setStyleSheet(
-        QString("color:%1; font-size:11px; padding:40px;").arg(ui::colors::TEXT_TERTIARY));
+    placeholder->setStyleSheet(QString("color:%1; font-size:11px; padding:40px;").arg(ui::colors::TEXT_TERTIARY));
     perf_stack_->addWidget(placeholder);
 
     // Page 1 — chart
-    auto* chart_widget = new QWidget;
+    auto* chart_widget = new QWidget(this);
     auto* chart_layout = new QVBoxLayout(chart_widget);
     chart_layout->setContentsMargins(0, 0, 0, 0);
 
@@ -297,10 +279,10 @@ QWidget* CustomIndexView::build_performance_panel() {
 // ── Data population ───────────────────────────────────────────────────────────
 
 void CustomIndexView::set_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
-    summary_  = summary;
+    summary_ = summary;
     currency_ = currency;
     update_constituents();
-    load_indices();  // refresh with latest portfolio prices
+    load_indices(); // refresh with latest portfolio prices
 }
 
 void CustomIndexView::update_constituents() {
@@ -320,10 +302,9 @@ void CustomIndexView::update_constituents() {
 
         auto set_item = [&](int col, const QString& text, const char* color = nullptr) {
             auto* item = new QTableWidgetItem(text);
-            item->setTextAlignment(col == 1
-                ? (Qt::AlignLeft | Qt::AlignVCenter)
-                : (Qt::AlignRight | Qt::AlignVCenter));
-            if (color) item->setForeground(QColor(color));
+            item->setTextAlignment(col == 1 ? (Qt::AlignLeft | Qt::AlignVCenter) : (Qt::AlignRight | Qt::AlignVCenter));
+            if (color)
+                item->setForeground(QColor(color));
             const_table_->setItem(r, col, item);
         };
 
@@ -338,13 +319,13 @@ void CustomIndexView::update_constituents() {
 
 void CustomIndexView::create_index() {
     const QString name = name_edit_->text().trimmed();
-    if (name.isEmpty()) return;
+    if (name.isEmpty())
+        return;
 
     const double base = base_edit_->text().toDouble();
     if (base <= 0.0) {
         create_status_->setText("Base value must be positive.");
-        create_status_->setStyleSheet(
-            QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
+        create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
         create_status_->show();
         return;
     }
@@ -353,19 +334,20 @@ void CustomIndexView::create_index() {
     QVector<CustomIndexConstituent> constituents;
     for (int r = 0; r < const_table_->rowCount(); ++r) {
         const auto* chk = const_table_->item(r, 0);
-        if (!chk || chk->checkState() != Qt::Checked) continue;
+        if (!chk || chk->checkState() != Qt::Checked)
+            continue;
 
-        const QString symbol = const_table_->item(r, 1)
-            ? const_table_->item(r, 1)->text() : QString();
-        if (symbol.isEmpty()) continue;
+        const QString symbol = const_table_->item(r, 1) ? const_table_->item(r, 1)->text() : QString();
+        if (symbol.isEmpty())
+            continue;
 
         // Find matching holding
         for (const auto& h : summary_.holdings) {
             if (h.symbol == symbol) {
                 CustomIndexConstituent c;
-                c.symbol           = h.symbol;
-                c.weight           = h.weight;
-                c.price_at_create  = h.current_price;
+                c.symbol = h.symbol;
+                c.weight = h.weight;
+                c.price_at_create = h.current_price;
                 constituents.append(c);
                 break;
             }
@@ -374,16 +356,15 @@ void CustomIndexView::create_index() {
 
     if (constituents.isEmpty()) {
         create_status_->setText("Select at least one constituent.");
-        create_status_->setStyleSheet(
-            QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
+        create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
         create_status_->show();
         return;
     }
 
     CustomIndex idx;
-    idx.name         = name;
-    idx.method       = method_cb_->currentText();
-    idx.base_value   = base;
+    idx.name = name;
+    idx.method = method_cb_->currentText();
+    idx.base_value = base;
     idx.portfolio_id = summary_.portfolio.id;
     idx.constituents = constituents;
 
@@ -392,16 +373,13 @@ void CustomIndexView::create_index() {
         const QString msg = QString::fromStdString(result.error());
         LOG_ERROR("CustomIndex", "Failed to create index: " + msg);
         create_status_->setText("Error: " + msg);
-        create_status_->setStyleSheet(
-            QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
+        create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
         create_status_->show();
         return;
     }
 
     LOG_INFO("CustomIndex",
-             QString("Created index '%1' (%2) with %3 constituents")
-                 .arg(name, idx.method)
-                 .arg(constituents.size()));
+             QString("Created index '%1' (%2) with %3 constituents").arg(name, idx.method).arg(constituents.size()));
 
     // Save initial value
     const QString index_id = result.value();
@@ -409,15 +387,13 @@ void CustomIndexView::create_index() {
     const QString today = QDateTime::currentDateTime().toString("yyyy-MM-dd");
     CustomIndexRepository::instance().save_value(index_id, today, current_val);
 
-    create_status_->setText(
-        QString("Index '%1' created successfully.").arg(name));
-    create_status_->setStyleSheet(
-        QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE));
+    create_status_->setText(QString("Index '%1' created successfully.").arg(name));
+    create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE));
     create_status_->show();
     name_edit_->clear();
 
     load_indices();
-    tabs_->setCurrentIndex(1);  // switch to MY INDICES
+    tabs_->setCurrentIndex(1); // switch to MY INDICES
 }
 
 // ── Index list ────────────────────────────────────────────────────────────────
@@ -425,8 +401,7 @@ void CustomIndexView::create_index() {
 void CustomIndexView::load_indices() {
     auto result = CustomIndexRepository::instance().list_all();
     if (result.is_err()) {
-        LOG_WARN("CustomIndex", "Failed to load indices: " +
-                     QString::fromStdString(result.error()));
+        LOG_WARN("CustomIndex", "Failed to load indices: " + QString::fromStdString(result.error()));
         return;
     }
     loaded_indices_ = result.value();
@@ -441,18 +416,17 @@ void CustomIndexView::load_indices() {
         const auto& idx = loaded_indices_[r];
 
         const double current_val = CustomIndexRepository::instance().latest_value(idx.id);
-        const double base        = idx.base_value;
-        const double change_pct  = base > 0.0 ? ((current_val - base) / base * 100.0) : 0.0;
-        const bool positive      = change_pct >= 0.0;
+        const double base = idx.base_value;
+        const double change_pct = base > 0.0 ? ((current_val - base) / base * 100.0) : 0.0;
+        const bool positive = change_pct >= 0.0;
 
         index_list_table_->setRowHeight(r, 30);
 
         auto set_item = [&](int col, const QString& text, const char* color = nullptr) {
             auto* item = new QTableWidgetItem(text);
-            item->setTextAlignment(col == 0
-                ? (Qt::AlignLeft | Qt::AlignVCenter)
-                : (Qt::AlignRight | Qt::AlignVCenter));
-            if (color) item->setForeground(QColor(color));
+            item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter) : (Qt::AlignRight | Qt::AlignVCenter));
+            if (color)
+                item->setForeground(QColor(color));
             item->setFlags(item->flags() & ~Qt::ItemIsEditable);
             index_list_table_->setItem(r, col, item);
         };
@@ -460,21 +434,17 @@ void CustomIndexView::load_indices() {
         set_item(0, idx.name, ui::colors::CYAN);
         set_item(1, idx.method);
         set_item(2, QString::number(base, 'f', 2));
-        set_item(3, current_val > 0.0
-            ? QString::number(current_val, 'f', 2)
-            : "--");
-        set_item(4,
-            current_val > 0.0
-                ? QString("%1%2%").arg(positive ? "+" : "").arg(change_pct, 0, 'f', 2)
-                : "--",
-            positive ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+        set_item(3, current_val > 0.0 ? QString::number(current_val, 'f', 2) : "--");
+        set_item(4, current_val > 0.0 ? QString("%1%2%").arg(positive ? "+" : "").arg(change_pct, 0, 'f', 2) : "--",
+                 positive ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
         set_item(5, idx.created_at.left(10));
     }
 }
 
 void CustomIndexView::delete_selected_index() {
     const int row = index_list_table_->currentRow();
-    if (row < 0 || row >= static_cast<int>(loaded_indices_.size())) return;
+    if (row < 0 || row >= static_cast<int>(loaded_indices_.size()))
+        return;
 
     const auto& idx = loaded_indices_[row];
 
@@ -516,7 +486,8 @@ void CustomIndexView::show_index_performance(const QString& index_id, const QStr
     auto* chart = perf_chart_view_->chart();
     chart->removeAllSeries();
     const auto old_axes = chart->axes();
-    for (auto* ax : old_axes) chart->removeAxis(ax);
+    for (auto* ax : old_axes)
+        chart->removeAxis(ax);
 
     chart->addSeries(series);
     chart->setTitle(QString());
@@ -545,7 +516,8 @@ void CustomIndexView::show_index_performance(const QString& index_id, const QStr
 // ── Index value computation ───────────────────────────────────────────────────
 
 double CustomIndexView::compute_index_value(const CustomIndex& idx) const {
-    if (idx.constituents.isEmpty()) return idx.base_value;
+    if (idx.constituents.isEmpty())
+        return idx.base_value;
 
     // Build a map from symbol → current price from live holdings
     QHash<QString, double> price_map;
@@ -558,11 +530,11 @@ double CustomIndexView::compute_index_value(const CustomIndex& idx) const {
 
     if (method == "Price Weighted") {
         // Sum of current prices / sum of creation prices * base
-        double sum_cur  = 0.0;
+        double sum_cur = 0.0;
         double sum_base = 0.0;
         for (const auto& c : idx.constituents) {
             const double cur = price_map.value(c.symbol, c.price_at_create);
-            sum_cur  += cur;
+            sum_cur += cur;
             sum_base += c.price_at_create;
         }
         return sum_base > 0.0 ? (sum_cur / sum_base * idx.base_value) : idx.base_value;
@@ -579,7 +551,7 @@ double CustomIndexView::compute_index_value(const CustomIndex& idx) const {
 
     } else if (method == "Geometric Mean") {
         double log_sum = 0.0;
-        int    valid   = 0;
+        int valid = 0;
         for (const auto& c : idx.constituents) {
             if (c.price_at_create > 0.0) {
                 const double cur = price_map.value(c.symbol, c.price_at_create);
@@ -595,17 +567,15 @@ double CustomIndexView::compute_index_value(const CustomIndex& idx) const {
         // Market Cap Weighted / Float Adjusted / Fundamental / Modified / Factor / Risk Parity / Capped
         // All fall back to weight-based: sum(weight_i * price_ratio_i) * base
         double weighted_ratio = 0.0;
-        double total_weight   = 0.0;
+        double total_weight = 0.0;
         for (const auto& c : idx.constituents) {
             if (c.price_at_create > 0.0 && c.weight > 0.0) {
                 const double cur = price_map.value(c.symbol, c.price_at_create);
                 weighted_ratio += c.weight * (cur / c.price_at_create);
-                total_weight   += c.weight;
+                total_weight += c.weight;
             }
         }
-        return total_weight > 0.0
-            ? (weighted_ratio / total_weight * idx.base_value)
-            : idx.base_value;
+        return total_weight > 0.0 ? (weighted_ratio / total_weight * idx.base_value) : idx.base_value;
     }
 }
 

@@ -37,12 +37,11 @@ class TerminalToolBridge : public QObject {
 
   private:
     void register_tools();
-    void execute_call(const QString& call_id, const QString& tool_name,
-                      const QJsonObject& arguments);
+    void execute_call(const QString& call_id, const QString& tool_name, const QJsonObject& arguments);
 
-    QTimer* poll_timer_   = nullptr;
-    bool    active_       = false;
-    quint64 last_gen_     = 0;      // last McpProvider generation we registered
+    QTimer* poll_timer_ = nullptr;
+    bool active_ = false;
+    quint64 last_gen_ = 0; // last McpProvider generation we registered
 
     // UI-only categories to exclude from registration
     static const QStringList EXCLUDED_CATEGORIES;

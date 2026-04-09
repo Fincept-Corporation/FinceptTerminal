@@ -38,16 +38,16 @@ class ChatSessionPanel : public QWidget {
     void on_search_server();
 
   private:
-    QLineEdit*   search_edit_   = nullptr;
-    QListWidget* session_list_  = nullptr;
-    QPushButton* new_btn_       = nullptr;
-    QPushButton* delete_btn_    = nullptr;
-    QPushButton* rename_btn_    = nullptr;
-    QPushButton* export_btn_    = nullptr;
-    QPushButton* exit_btn_      = nullptr;
-    QLabel*      stats_lbl_     = nullptr;
+    QLineEdit* search_edit_ = nullptr;
+    QListWidget* session_list_ = nullptr;
+    QPushButton* new_btn_ = nullptr;
+    QPushButton* delete_btn_ = nullptr;
+    QPushButton* rename_btn_ = nullptr;
+    QPushButton* export_btn_ = nullptr;
+    QPushButton* exit_btn_ = nullptr;
+    QLabel* stats_lbl_ = nullptr;
 
-    QTimer*      search_timer_  = nullptr;  // debounce server search
+    QTimer* search_timer_ = nullptr; // debounce server search
 
     QString active_uuid_;
     QVector<ChatSession> sessions_;

@@ -14,8 +14,7 @@ namespace fincept::screens {
 // ── Obsidian Styles ──────────────────────────────────────────────────────────
 
 static QString card_style() {
-    return QString("background: %1; border: 1px solid %2;")
-        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM);
+    return QString("background: %1; border: 1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM);
 }
 
 static QString input_style() {
@@ -28,9 +27,8 @@ static QString input_style() {
                    "}"
                    "QLineEdit:focus { border: 1px solid %6; }"
                    "QLineEdit::placeholder { color: %7; }")
-        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-             ui::colors::AMBER, ui::colors::BG_BASE,
-             ui::colors::BORDER_BRIGHT, ui::colors::TEXT_DIM);
+        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::AMBER,
+             ui::colors::BG_BASE, ui::colors::BORDER_BRIGHT, ui::colors::TEXT_DIM);
 }
 
 static QString btn_primary() {
@@ -42,8 +40,8 @@ static QString btn_primary() {
                    "}"
                    "QPushButton:hover { background: %1; color: %3; }"
                    "QPushButton:disabled { color: %4; background: %5; border-color: %6; }")
-        .arg(ui::colors::AMBER, ui::colors::AMBER_DIM, ui::colors::BG_BASE,
-             ui::colors::TEXT_DIM, ui::colors::BG_RAISED, ui::colors::BORDER_DIM);
+        .arg(ui::colors::AMBER, ui::colors::AMBER_DIM, ui::colors::BG_BASE, ui::colors::TEXT_DIM, ui::colors::BG_RAISED,
+             ui::colors::BORDER_DIM);
 }
 
 static QString link_style() {
@@ -149,7 +147,7 @@ void RegisterScreen::paintEvent(QPaintEvent* /*event*/) {
 // ── Form Page ────────────────────────────────────────────────────────────────
 
 void RegisterScreen::build_form_page() {
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     page->setStyleSheet(card_style());
 
     auto* vl = new QVBoxLayout(page);
@@ -157,7 +155,7 @@ void RegisterScreen::build_form_page() {
     vl->setSpacing(6);
 
     // Header bar
-    auto* header = new QWidget;
+    auto* header = new QWidget(this);
     header->setFixedHeight(38);
     header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED));
     auto* hl = new QHBoxLayout(header);
@@ -166,17 +164,17 @@ void RegisterScreen::build_form_page() {
     auto* back = new QPushButton("<");
     back->setFixedSize(24, 24);
     back->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none;"
-                        "  font-size: 16px; font-family: 'Consolas','Courier New',monospace; }"
-                        "QPushButton:hover { color: %2; }")
-        .arg(ui::colors::TEXT_SECONDARY, ui::colors::TEXT_PRIMARY));
+                                "  font-size: 16px; font-family: 'Consolas','Courier New',monospace; }"
+                                "QPushButton:hover { color: %2; }")
+                            .arg(ui::colors::TEXT_SECONDARY, ui::colors::TEXT_PRIMARY));
     connect(back, &QPushButton::clicked, this, &RegisterScreen::navigate_login);
     hl->addWidget(back);
 
     auto* title = new QLabel("CREATE ACCOUNT");
     title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                         "background: transparent; letter-spacing: 1px;"
-                         "font-family: 'Consolas','Courier New',monospace;")
-        .arg(ui::colors::AMBER));
+                                 "background: transparent; letter-spacing: 1px;"
+                                 "font-family: 'Consolas','Courier New',monospace;")
+                             .arg(ui::colors::AMBER));
     hl->addWidget(title);
     hl->addStretch();
     vl->addWidget(header);
@@ -199,7 +197,7 @@ void RegisterScreen::build_form_page() {
     };
 
     // Name row — side by side
-    auto* name_row = new QWidget;
+    auto* name_row = new QWidget(this);
     name_row->setStyleSheet("background: transparent;");
     auto* nrl = new QHBoxLayout(name_row);
     nrl->setContentsMargins(0, 0, 0, 0);
@@ -219,7 +217,7 @@ void RegisterScreen::build_form_page() {
     add_field(email_, "EMAIL", "user@domain.com", vl);
 
     // Phone + country code side by side
-    auto* ph_row = new QWidget;
+    auto* ph_row = new QWidget(this);
     ph_row->setStyleSheet("background: transparent;");
     auto* phl = new QHBoxLayout(ph_row);
     phl->setContentsMargins(0, 0, 0, 0);
@@ -242,7 +240,7 @@ void RegisterScreen::build_form_page() {
     password_->setEchoMode(QLineEdit::Password);
 
     // Password strength — compact single row hints
-    auto* pw_checks = new QWidget;
+    auto* pw_checks = new QWidget(this);
     pw_checks->setStyleSheet("background: transparent;");
     auto* pcl = new QHBoxLayout(pw_checks);
     pcl->setContentsMargins(0, 0, 0, 0);
@@ -270,10 +268,10 @@ void RegisterScreen::build_form_page() {
     error_label_ = new QLabel;
     error_label_->setWordWrap(true);
     error_label_->setStyleSheet(QString("color: %1; font-size: 12px;"
-                                "background: rgba(220,38,38,0.08);"
-                                "border: 1px solid #7f1d1d; padding: 4px 8px;"
-                                "font-family: 'Consolas','Courier New',monospace;")
-        .arg(ui::colors::NEGATIVE));
+                                        "background: rgba(220,38,38,0.08);"
+                                        "border: 1px solid #7f1d1d; padding: 4px 8px;"
+                                        "font-family: 'Consolas','Courier New',monospace;")
+                                    .arg(ui::colors::NEGATIVE));
     error_label_->hide();
     vl->addWidget(error_label_);
 
@@ -288,7 +286,7 @@ void RegisterScreen::build_form_page() {
     vl->addWidget(make_separator());
 
     // Login link
-    auto* login_row = new QWidget;
+    auto* login_row = new QWidget(this);
     login_row->setStyleSheet("background: transparent;");
     auto* lrl = new QHBoxLayout(login_row);
     lrl->setAlignment(Qt::AlignCenter);
@@ -300,10 +298,10 @@ void RegisterScreen::build_form_page() {
 
     auto* signin = new QPushButton("SIGN IN");
     signin->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none;"
-                          "  font-size: 12px; font-weight: 700;"
-                          "  font-family: 'Consolas','Courier New',monospace; }"
-                          "QPushButton:hover { color: %2; }")
-        .arg(ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+                                  "  font-size: 12px; font-weight: 700;"
+                                  "  font-family: 'Consolas','Courier New',monospace; }"
+                                  "QPushButton:hover { color: %2; }")
+                              .arg(ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
     connect(signin, &QPushButton::clicked, this, &RegisterScreen::navigate_login);
     lrl->addWidget(signin);
     vl->addWidget(login_row);
@@ -314,7 +312,7 @@ void RegisterScreen::build_form_page() {
 // ── OTP Page ─────────────────────────────────────────────────────────────────
 
 void RegisterScreen::build_otp_page() {
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     page->setStyleSheet(card_style());
 
     auto* vl = new QVBoxLayout(page);
@@ -322,7 +320,7 @@ void RegisterScreen::build_otp_page() {
     vl->setSpacing(10);
 
     // Header
-    auto* header = new QWidget;
+    auto* header = new QWidget(this);
     header->setFixedHeight(38);
     header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED));
     auto* hl = new QHBoxLayout(header);
@@ -330,9 +328,9 @@ void RegisterScreen::build_otp_page() {
 
     auto* title = new QLabel("VERIFY EMAIL");
     title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                         "background: transparent; letter-spacing: 1px;"
-                         "font-family: 'Consolas','Courier New',monospace;")
-        .arg(ui::colors::AMBER));
+                                 "background: transparent; letter-spacing: 1px;"
+                                 "font-family: 'Consolas','Courier New',monospace;")
+                             .arg(ui::colors::AMBER));
     hl->addWidget(title);
     hl->addStretch();
     vl->addWidget(header);
@@ -352,25 +350,24 @@ void RegisterScreen::build_otp_page() {
     otp_input_->setPlaceholderText("enter code from email");
     otp_input_->setFixedHeight(34);
     otp_input_->setStyleSheet(QString("QLineEdit {"
-                              "  background: %1; color: %2;"
-                              "  border: 1px solid %3;"
-                              "  padding: 6px 10px; font-size: 15px;"
-                              "  font-family: 'Consolas','Courier New',monospace;"
-                              "  selection-background-color: %4; selection-color: %5;"
-                              "}"
-                              "QLineEdit:focus { border: 1px solid %6; }")
-        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-             ui::colors::AMBER, ui::colors::BG_BASE,
-             ui::colors::BORDER_BRIGHT));
+                                      "  background: %1; color: %2;"
+                                      "  border: 1px solid %3;"
+                                      "  padding: 6px 10px; font-size: 15px;"
+                                      "  font-family: 'Consolas','Courier New',monospace;"
+                                      "  selection-background-color: %4; selection-color: %5;"
+                                      "}"
+                                      "QLineEdit:focus { border: 1px solid %6; }")
+                                  .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
+                                       ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::BORDER_BRIGHT));
     vl->addWidget(otp_input_);
 
     otp_error_ = new QLabel;
     otp_error_->setWordWrap(true);
     otp_error_->setStyleSheet(QString("color: %1; font-size: 12px;"
-                              "background: rgba(220,38,38,0.08);"
-                              "border: 1px solid #7f1d1d; padding: 4px 8px;"
-                              "font-family: 'Consolas','Courier New',monospace;")
-        .arg(ui::colors::NEGATIVE));
+                                      "background: rgba(220,38,38,0.08);"
+                                      "border: 1px solid #7f1d1d; padding: 4px 8px;"
+                                      "font-family: 'Consolas','Courier New',monospace;")
+                                  .arg(ui::colors::NEGATIVE));
     otp_error_->hide();
     vl->addWidget(otp_error_);
 
@@ -411,12 +408,12 @@ void RegisterScreen::update_password_strength() {
 void RegisterScreen::on_register() {
     error_label_->hide();
 
-    QString fn  = first_name_->text().trimmed();
-    QString ln  = last_name_->text().trimmed();
-    QString em  = email_->text().trimmed();
-    QString ph  = phone_->text().trimmed();
-    QString cc  = country_code_->text().trimmed();
-    QString pw  = password_->text();
+    QString fn = first_name_->text().trimmed();
+    QString ln = last_name_->text().trimmed();
+    QString em = email_->text().trimmed();
+    QString ph = phone_->text().trimmed();
+    QString cc = country_code_->text().trimmed();
+    QString pw = password_->text();
     QString cpw = confirm_pw_->text();
 
     if (fn.isEmpty() || ln.isEmpty() || em.isEmpty() || ph.isEmpty() || pw.isEmpty() || cpw.isEmpty()) {

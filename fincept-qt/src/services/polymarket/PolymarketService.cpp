@@ -287,7 +287,6 @@ PolymarketService::PolymarketService() : QObject(nullptr) {
     data_nam_ = new QNetworkAccessManager(this);
 }
 
-
 // ── Generic HTTP helpers ─────────────────────────────────────────────────────
 
 void PolymarketService::get_json(QNetworkAccessManager* nam, const QString& url, JsonCallback on_success,
@@ -340,11 +339,8 @@ void PolymarketService::get_data(const QString& path, JsonCallback on_success, c
 // ── Gamma API ────────────────────────────────────────────────────────────────
 
 void PolymarketService::fetch_markets(const QString& sort_by, int limit, int offset, bool closed) {
-    const QString cache_key = QString("polymarket:markets:%1:%2:%3:%4")
-                                  .arg(sort_by)
-                                  .arg(limit)
-                                  .arg(offset)
-                                  .arg(closed ? 1 : 0);
+    const QString cache_key =
+        QString("polymarket:markets:%1:%2:%3:%4").arg(sort_by).arg(limit).arg(offset).arg(closed ? 1 : 0);
     const QVariant cached = fincept::CacheManager::instance().get(cache_key);
     if (!cached.isNull()) {
         QJsonArray arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
@@ -367,8 +363,7 @@ void PolymarketService::fetch_markets(const QString& sort_by, int limit, int off
         [this, cache_key](const QJsonDocument& doc) {
             QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
             fincept::CacheManager::instance().put(
-                cache_key,
-                QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
                 kMarketsTtlSec, "polymarket");
             QVector<Market> result;
             result.reserve(arr.size());
@@ -458,11 +453,8 @@ void PolymarketService::unified_search(const QString& query) {
 }
 
 void PolymarketService::fetch_events(const QString& sort_by, int limit, int offset, bool closed) {
-    const QString cache_key = QString("polymarket:events:%1:%2:%3:%4")
-                                  .arg(sort_by)
-                                  .arg(limit)
-                                  .arg(offset)
-                                  .arg(closed ? 1 : 0);
+    const QString cache_key =
+        QString("polymarket:events:%1:%2:%3:%4").arg(sort_by).arg(limit).arg(offset).arg(closed ? 1 : 0);
     const QVariant cached = fincept::CacheManager::instance().get(cache_key);
     if (!cached.isNull()) {
         QJsonArray arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
@@ -485,8 +477,7 @@ void PolymarketService::fetch_events(const QString& sort_by, int limit, int offs
         [this, cache_key](const QJsonDocument& doc) {
             QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
             fincept::CacheManager::instance().put(
-                cache_key,
-                QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
                 kEventsTtlSec, "polymarket");
             QVector<Event> result;
             result.reserve(arr.size());
@@ -535,7 +526,7 @@ void PolymarketService::fetch_tags() {
             auto obj = v.toObject();
             Tag tag;
             tag.label = obj["label"].toString();
-            tag.slug  = obj["slug"].toString();
+            tag.slug = obj["slug"].toString();
             if (!tag.label.isEmpty())
                 result.append(tag);
         }
@@ -548,15 +539,14 @@ void PolymarketService::fetch_tags() {
         [this](const QJsonDocument& doc) {
             QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
             fincept::CacheManager::instance().put(
-                "polymarket:tags",
-                QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                "polymarket:tags", QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
                 kTagsTtlSec, "polymarket");
             QVector<Tag> result;
             for (const auto& v : arr) {
                 auto obj = v.toObject();
                 Tag tag;
                 tag.label = obj["label"].toString();
-                tag.slug  = obj["slug"].toString();
+                tag.slug = obj["slug"].toString();
                 if (!tag.label.isEmpty())
                     result.append(tag);
             }
@@ -737,8 +727,7 @@ void PolymarketService::fetch_leaderboard(int limit) {
             if (arr.isEmpty() && doc.isObject() && doc.object().contains("data"))
                 arr = doc.object()["data"].toArray();
             fincept::CacheManager::instance().put(
-                cache_key,
-                QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
                 kLeaderboardTtlSec, "polymarket");
             QVector<LeaderboardEntry> result;
             int rank = 1;

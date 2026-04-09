@@ -11,12 +11,12 @@ namespace fincept::workflow {
 namespace {
 
 // Resolve a dot-notation path (e.g. "data.price") through a QJsonObject.
-QJsonValue resolve_dot_path(const QJsonObject& root, const QString& path)
-{
+QJsonValue resolve_dot_path(const QJsonObject& root, const QString& path) {
     QStringList parts = path.split('.', Qt::SkipEmptyParts);
     QJsonValue current = root;
     for (const QString& part : parts) {
-        if (!current.isObject()) return QJsonValue{};
+        if (!current.isObject())
+            return QJsonValue{};
         current = current.toObject().value(part);
     }
     return current;
@@ -49,8 +49,10 @@ void register_data_format_nodes(NodeRegistry& registry) {
                 if (op == "stringify") {
                     // Convert the input value to a compact JSON string.
                     QJsonDocument doc;
-                    if (input.isObject())      doc = QJsonDocument(input.toObject());
-                    else if (input.isArray())  doc = QJsonDocument(input.toArray());
+                    if (input.isObject())
+                        doc = QJsonDocument(input.toObject());
+                    else if (input.isArray())
+                        doc = QJsonDocument(input.toArray());
                     else {
                         // Scalar — wrap in a one-field object.
                         QJsonObject wrapper;
@@ -95,8 +97,12 @@ void register_data_format_nodes(NodeRegistry& registry) {
                     // Dot-notation path extraction.
                     QString path = params.value("query").toString();
                     // Strip leading "$." or "$" sentinel.
-                    if (path.startsWith("$.")) path = path.mid(2);
-                    else if (path == "$")       { cb(true, input, {}); return; }
+                    if (path.startsWith("$."))
+                        path = path.mid(2);
+                    else if (path == "$") {
+                        cb(true, input, {});
+                        return;
+                    }
 
                     if (!input.isObject()) {
                         cb(false, {}, "format.json query: input must be an object");
@@ -179,24 +185,22 @@ void register_data_format_nodes(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                QJsonArray arr_a = (inputs.size() > 0 && inputs[0].isArray())
-                    ? inputs[0].toArray() : QJsonArray{};
-                QJsonArray arr_b = (inputs.size() > 1 && inputs[1].isArray())
-                    ? inputs[1].toArray() : QJsonArray{};
+                QJsonArray arr_a = (inputs.size() > 0 && inputs[0].isArray()) ? inputs[0].toArray() : QJsonArray{};
+                QJsonArray arr_b = (inputs.size() > 1 && inputs[1].isArray()) ? inputs[1].toArray() : QJsonArray{};
 
                 QString key_field = params.value("key_field").toString("id");
 
                 // Build maps keyed by key_field value.
                 QHash<QString, QJsonObject> map_a, map_b;
                 for (const QJsonValue& item : arr_a) {
-                    if (!item.isObject()) continue;
-                    map_a.insert(item.toObject().value(key_field).toVariant().toString(),
-                                 item.toObject());
+                    if (!item.isObject())
+                        continue;
+                    map_a.insert(item.toObject().value(key_field).toVariant().toString(), item.toObject());
                 }
                 for (const QJsonValue& item : arr_b) {
-                    if (!item.isObject()) continue;
-                    map_b.insert(item.toObject().value(key_field).toVariant().toString(),
-                                 item.toObject());
+                    if (!item.isObject())
+                        continue;
+                    map_b.insert(item.toObject().value(key_field).toVariant().toString(), item.toObject());
                 }
 
                 QJsonArray added, removed, changed;
@@ -214,14 +218,15 @@ void register_data_format_nodes(NodeRegistry& registry) {
                 // Items in both but with different values → changed.
                 for (auto it = map_a.cbegin(); it != map_a.cend(); ++it) {
                     auto jt = map_b.find(it.key());
-                    if (jt == map_b.end()) continue;
+                    if (jt == map_b.end())
+                        continue;
                     // Compact JSON comparison — field-order agnostic.
                     QByteArray doc_a = QJsonDocument(it.value()).toJson(QJsonDocument::Compact);
                     QByteArray doc_b = QJsonDocument(jt.value()).toJson(QJsonDocument::Compact);
                     if (doc_a != doc_b) {
                         QJsonObject diff;
                         diff["before"] = it.value();
-                        diff["after"]  = jt.value();
+                        diff["after"] = jt.value();
                         changed.append(diff);
                     }
                 }
@@ -229,7 +234,7 @@ void register_data_format_nodes(NodeRegistry& registry) {
                 // The node has three output ports; pack all results into one object
                 // so the WorkflowExecutor can fan them out to the correct ports.
                 QJsonObject out;
-                out["added"]   = added;
+                out["added"] = added;
                 out["removed"] = removed;
                 out["changed"] = changed;
                 cb(true, out, {});
@@ -257,7 +262,10 @@ void register_data_format_nodes(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                if (inputs.isEmpty()) { cb(false, {}, "format.csv_parse: no input"); return; }
+                if (inputs.isEmpty()) {
+                    cb(false, {}, "format.csv_parse: no input");
+                    return;
+                }
 
                 // Accept either a raw string or an object with a "text" field.
                 QString csv_text;
@@ -265,8 +273,7 @@ void register_data_format_nodes(NodeRegistry& registry) {
                 if (input.isString()) {
                     csv_text = input.toString();
                 } else if (input.isObject()) {
-                    csv_text = input.toObject().value("text").toString(
-                               input.toObject().value("content").toString());
+                    csv_text = input.toObject().value("text").toString(input.toObject().value("content").toString());
                 }
                 if (csv_text.isEmpty()) {
                     cb(false, {}, "format.csv_parse: empty or non-string input");
@@ -279,7 +286,10 @@ void register_data_format_nodes(NodeRegistry& registry) {
 
                 // Split into lines, handling \r\n and \n.
                 QStringList lines = csv_text.split(QRegularExpression(R"(\r?\n)"), Qt::SkipEmptyParts);
-                if (lines.isEmpty()) { cb(true, QJsonArray{}, {}); return; }
+                if (lines.isEmpty()) {
+                    cb(true, QJsonArray{}, {});
+                    return;
+                }
 
                 // Helper: split a CSV line respecting double-quoted fields.
                 auto split_csv_line = [&](const QString& line) -> QStringList {
@@ -319,8 +329,10 @@ void register_data_format_nodes(NodeRegistry& registry) {
                             // Try to parse as number; fall back to string.
                             bool ok = false;
                             double num = val.toDouble(&ok);
-                            if (ok) obj.insert(headers[col], num);
-                            else    obj.insert(headers[col], val);
+                            if (ok)
+                                obj.insert(headers[col], num);
+                            else
+                                obj.insert(headers[col], val);
                         }
                         result.append(obj);
                     }
@@ -332,8 +344,10 @@ void register_data_format_nodes(NodeRegistry& registry) {
                         for (const QString& col : cols) {
                             bool ok = false;
                             double num = col.toDouble(&ok);
-                            if (ok) row_arr.append(num);
-                            else    row_arr.append(col);
+                            if (ok)
+                                row_arr.append(num);
+                            else
+                                row_arr.append(col);
                         }
                         result.append(row_arr);
                     }
@@ -362,7 +376,10 @@ void register_data_format_nodes(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                if (inputs.isEmpty()) { cb(false, {}, "format.regex_extract: no input"); return; }
+                if (inputs.isEmpty()) {
+                    cb(false, {}, "format.regex_extract: no input");
+                    return;
+                }
 
                 QString pattern_str = params.value("pattern").toString();
                 if (pattern_str.isEmpty()) {
@@ -370,9 +387,9 @@ void register_data_format_nodes(NodeRegistry& registry) {
                     return;
                 }
 
-                QString field      = params.value("field").toString("text");
-                int     group      = static_cast<int>(params.value("group").toDouble(0));
-                bool    all_matches = params.value("all_matches").toBool(false);
+                QString field = params.value("field").toString("text");
+                int group = static_cast<int>(params.value("group").toDouble(0));
+                bool all_matches = params.value("all_matches").toBool(false);
 
                 // Extract source text from input.
                 QJsonValue input = inputs[0];
@@ -419,7 +436,7 @@ void register_data_format_nodes(NodeRegistry& registry) {
                         groups_arr.append(m.captured(i));
 
                     QJsonObject out;
-                    out["match"]  = m.captured(group <= m.lastCapturedIndex() ? group : 0);
+                    out["match"] = m.captured(group <= m.lastCapturedIndex() ? group : 0);
                     out["groups"] = groups_arr;
                     cb(true, out, {});
                 }

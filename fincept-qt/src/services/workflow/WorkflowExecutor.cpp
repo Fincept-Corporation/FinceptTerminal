@@ -191,8 +191,7 @@ void WorkflowExecutor::execute_from(const WorkflowDef& workflow, const QString& 
     ExecutionHooks::instance().emit_workflow_start(workflow_.id);
     emit execution_started(workflow_.id);
 
-    LOG_INFO("Executor",
-             QString("Partial execution from %1: %2 nodes").arg(start_node_id).arg(total_count_));
+    LOG_INFO("Executor", QString("Partial execution from %1: %2 nodes").arg(start_node_id).arg(total_count_));
 
     launch_ready_nodes();
 }
@@ -405,27 +404,24 @@ void WorkflowExecutor::launch_single_node(const QString& node_id) {
 
     // Execute asynchronously with QPointer guard (P8)
     QPointer<WorkflowExecutor> self = this;
-    type_def->execute(nd.parameters, inputs,
-                      [self, node_id, node_start](bool success, QJsonValue output, QString error) {
-                          if (!self)
-                              return;
-                          QMetaObject::invokeMethod(
-                              self,
-                              [self, node_id, success, output = std::move(output),
-                               error = std::move(error), node_start]() {
-                                  if (!self)
-                                      return;
-                                  int duration = static_cast<int>(
-                                      QDateTime::currentMSecsSinceEpoch() - node_start);
-                                  self->on_node_done(node_id, success, output, error, duration);
-                              },
-                              Qt::QueuedConnection);
-                      });
+    type_def->execute(
+        nd.parameters, inputs, [self, node_id, node_start](bool success, QJsonValue output, QString error) {
+            if (!self)
+                return;
+            QMetaObject::invokeMethod(
+                self,
+                [self, node_id, success, output = std::move(output), error = std::move(error), node_start]() {
+                    if (!self)
+                        return;
+                    int duration = static_cast<int>(QDateTime::currentMSecsSinceEpoch() - node_start);
+                    self->on_node_done(node_id, success, output, error, duration);
+                },
+                Qt::QueuedConnection);
+        });
 }
 
-void WorkflowExecutor::on_node_done(const QString& node_id, bool success,
-                                     const QJsonValue& output, const QString& error,
-                                     int duration_ms) {
+void WorkflowExecutor::on_node_done(const QString& node_id, bool success, const QJsonValue& output,
+                                    const QString& error, int duration_ms) {
     pending_count_--;
 
     NodeExecutionResult nr;
@@ -529,12 +525,10 @@ QVector<QJsonValue> WorkflowExecutor::collect_inputs(const QString& node_id) con
             // If/Else branching: _branch = "true" or "false"
             if (obj.contains("_branch")) {
                 QString branch = obj.value("_branch").toString();
-                bool is_true_port  = (edge.source_port == "output_true"
-                                      || edge.source_port == "output_pass"
-                                      || edge.source_port == "output_open");
-                bool is_false_port = (edge.source_port == "output_false"
-                                      || edge.source_port == "output_fail"
-                                      || edge.source_port == "output_closed");
+                bool is_true_port = (edge.source_port == "output_true" || edge.source_port == "output_pass" ||
+                                     edge.source_port == "output_open");
+                bool is_false_port = (edge.source_port == "output_false" || edge.source_port == "output_fail" ||
+                                      edge.source_port == "output_closed");
                 if (is_true_port && branch != "true")
                     continue;
                 if (is_false_port && branch != "false")

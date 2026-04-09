@@ -28,14 +28,14 @@ void NodePalette::build_ui() {
     root->setSpacing(0);
 
     // ── Header ─────────────────────────────────────────────────────
-    auto* header = new QWidget;
+    auto* header = new QWidget(this);
     header->setFixedHeight(34);
     header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_HOVER));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(10, 0, 10, 0);
     auto* title = new QLabel("NODES");
     title->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 12px;"
-                                "font-weight: bold; letter-spacing: 0.5px;")
+                                 "font-weight: bold; letter-spacing: 0.5px;")
                              .arg(ui::colors::AMBER));
     hl->addWidget(title);
     hl->addStretch();
@@ -48,7 +48,7 @@ void NodePalette::build_ui() {
     root->addWidget(sep);
 
     // ── Search bar ─────────────────────────────────────────────────
-    auto* search_wrap = new QWidget;
+    auto* search_wrap = new QWidget(this);
     search_wrap->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_SURFACE));
     auto* sl = new QHBoxLayout(search_wrap);
     sl->setContentsMargins(8, 6, 8, 6);
@@ -61,8 +61,7 @@ void NodePalette::build_ui() {
                 "  font-family: Consolas; font-size: 12px; padding: 4px 8px;"
                 "}"
                 "QLineEdit:focus { border: 1px solid %4; }")
-            .arg(ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY,
-                 ui::colors::BORDER_MED, ui::colors::AMBER));
+            .arg(ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED, ui::colors::AMBER));
     sl->addWidget(search_input_);
     root->addWidget(search_wrap);
 
@@ -72,20 +71,19 @@ void NodePalette::build_ui() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setStyleSheet(
-        QString("QScrollArea { background: %1; border: none; }"
-                "QScrollBar:vertical {"
-                "  background: %1; width: 6px; margin: 0;"
-                "}"
-                "QScrollBar::handle:vertical {"
-                "  background: %2; min-height: 20px;"
-                "}"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
-                "  height: 0; background: none;"
-                "}")
-            .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_DIM));
+    scroll->setStyleSheet(QString("QScrollArea { background: %1; border: none; }"
+                                  "QScrollBar:vertical {"
+                                  "  background: %1; width: 6px; margin: 0;"
+                                  "}"
+                                  "QScrollBar::handle:vertical {"
+                                  "  background: %2; min-height: 20px;"
+                                  "}"
+                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                                  "  height: 0; background: none;"
+                                  "}")
+                              .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_DIM));
 
-    categories_container_ = new QWidget;
+    categories_container_ = new QWidget(this);
     categories_layout_ = new QVBoxLayout(categories_container_);
     categories_layout_->setContentsMargins(0, 0, 0, 0);
     categories_layout_->setSpacing(0);
@@ -127,7 +125,7 @@ void NodePalette::rebuild_categories(const QString& filter) {
             continue;
 
         // Category header
-        auto* cat_header = new QWidget;
+        auto* cat_header = new QWidget(this);
         cat_header->setFixedHeight(26);
         cat_header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_HOVER));
         auto* chl = new QHBoxLayout(cat_header);
@@ -140,8 +138,8 @@ void NodePalette::rebuild_categories(const QString& filter) {
         chl->addWidget(cat_label);
 
         auto* count_label = new QLabel(QString::number(filtered.size()));
-        count_label->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;")
-                                      .arg(ui::colors::TEXT_TERTIARY));
+        count_label->setStyleSheet(
+            QString("color: %1; font-family: Consolas; font-size: 10px;").arg(ui::colors::TEXT_TERTIARY));
         chl->addStretch();
         chl->addWidget(count_label);
 
@@ -162,8 +160,7 @@ void NodePalette::rebuild_categories(const QString& filter) {
                         "QPushButton:hover {"
                         "  background: %4; color: %2;"
                         "}")
-                    .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY,
-                         ui::colors::BG_HOVER, ui::colors::BG_HOVER));
+                    .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BG_HOVER, ui::colors::BG_HOVER));
 
             btn->setToolTip(n.description);
 
@@ -181,8 +178,8 @@ void NodePalette::rebuild_categories(const QString& filter) {
             bl->addWidget(icon);
 
             auto* name = new QLabel(n.display_name);
-            name->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px;")
-                                    .arg(ui::colors::TEXT_PRIMARY));
+            name->setStyleSheet(
+                QString("color: %1; font-family: Consolas; font-size: 11px;").arg(ui::colors::TEXT_PRIMARY));
             name->setAttribute(Qt::WA_TransparentForMouseEvents);
             bl->addWidget(name, 1);
 

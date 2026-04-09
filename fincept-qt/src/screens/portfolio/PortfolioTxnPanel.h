@@ -26,8 +26,8 @@ class PortfolioTxnPanel : public QWidget {
     void build_ui();
     void populate();
 
-    QLabel*       count_label_ = nullptr;
-    QTableWidget* table_       = nullptr;
+    QLabel* count_label_ = nullptr;
+    QTableWidget* table_ = nullptr;
 
     QVector<portfolio::Transaction> txns_;
 };

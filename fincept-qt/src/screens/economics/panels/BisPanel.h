@@ -20,16 +20,15 @@ class BisPanel : public EconPanelBase {
   protected:
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
-    void on_result(const QString& request_id,
-                   const services::EconomicsResult& result) override;
+    void on_result(const QString& request_id, const services::EconomicsResult& result) override;
 
   private:
     void on_dataset_changed(int index);
 
-    QComboBox* dataset_combo_  = nullptr;
-    QLineEdit* country_input_  = nullptr;
-    QLineEdit* start_input_    = nullptr;
-    QLineEdit* end_input_      = nullptr;
+    QComboBox* dataset_combo_ = nullptr;
+    QLineEdit* country_input_ = nullptr;
+    QLineEdit* start_input_ = nullptr;
+    QLineEdit* end_input_ = nullptr;
 };
 
 } // namespace fincept::screens

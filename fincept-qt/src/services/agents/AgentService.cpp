@@ -38,17 +38,22 @@ void AgentService::clear_cache() {
 
 QVector<AgentInfo> AgentService::cached_agents() const {
     const QVariant cv = fincept::CacheManager::instance().get("agents:list");
-    if (cv.isNull()) return {};
+    if (cv.isNull())
+        return {};
     const QJsonObject root = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
     QVector<AgentInfo> agents;
     for (const auto& v : root["agents"].toArray()) {
         const QJsonObject o = v.toObject();
         AgentInfo info;
-        info.id = o["id"].toString(); info.name = o["name"].toString();
-        info.description = o["description"].toString(); info.category = o["category"].toString();
-        info.provider = o["provider"].toString(); info.version = o["version"].toString();
+        info.id = o["id"].toString();
+        info.name = o["name"].toString();
+        info.description = o["description"].toString();
+        info.category = o["category"].toString();
+        info.provider = o["provider"].toString();
+        info.version = o["version"].toString();
         info.config = o["config"].toObject();
-        for (const auto& c : o["capabilities"].toArray()) info.capabilities.append(c.toString());
+        for (const auto& c : o["capabilities"].toArray())
+            info.capabilities.append(c.toString());
         agents.append(info);
     }
     return agents;
@@ -56,7 +61,8 @@ QVector<AgentInfo> AgentService::cached_agents() const {
 
 int AgentService::cached_agent_count() const {
     const QVariant cv = fincept::CacheManager::instance().get("agents:list");
-    if (cv.isNull()) return 0;
+    if (cv.isNull())
+        return 0;
     return QJsonDocument::fromJson(cv.toString().toUtf8()).object()["agents"].toArray().size();
 }
 
@@ -66,17 +72,17 @@ QJsonObject AgentService::build_api_keys() const {
     // Python's _get_api_key() looks up keys by env-var name (e.g. "ANTHROPIC_API_KEY"),
     // not by lowercase provider name. Send both forms so the lookup always succeeds.
     static const QMap<QString, QString> kEnvVarNames = {
-        {"anthropic",         "ANTHROPIC_API_KEY"},
-        {"openai",            "OPENAI_API_KEY"},
-        {"google",            "GOOGLE_API_KEY"},
-        {"gemini",            "GOOGLE_API_KEY"},
-        {"groq",              "GROQ_API_KEY"},
-        {"deepseek",          "DEEPSEEK_API_KEY"},
-        {"financial_datasets","FINANCIAL_DATASETS_API_KEY"},
-        {"tavily",            "TAVILY_API_KEY"},
-        {"mistral",           "MISTRAL_API_KEY"},
-        {"cohere",            "COHERE_API_KEY"},
-        {"xai",               "XAI_API_KEY"},
+        {"anthropic", "ANTHROPIC_API_KEY"},
+        {"openai", "OPENAI_API_KEY"},
+        {"google", "GOOGLE_API_KEY"},
+        {"gemini", "GOOGLE_API_KEY"},
+        {"groq", "GROQ_API_KEY"},
+        {"deepseek", "DEEPSEEK_API_KEY"},
+        {"financial_datasets", "FINANCIAL_DATASETS_API_KEY"},
+        {"tavily", "TAVILY_API_KEY"},
+        {"mistral", "MISTRAL_API_KEY"},
+        {"cohere", "COHERE_API_KEY"},
+        {"xai", "XAI_API_KEY"},
     };
 
     QJsonObject keys;
@@ -86,10 +92,10 @@ QJsonObject AgentService::build_api_keys() const {
             if (p.api_key.isEmpty())
                 continue;
             const QString lower = p.provider.toLower();
-            keys[lower] = p.api_key;                          // lowercase form
+            keys[lower] = p.api_key; // lowercase form
             const QString env_name = kEnvVarNames.value(lower);
             if (!env_name.isEmpty())
-                keys[env_name] = p.api_key;                   // env-var form Python expects
+                keys[env_name] = p.api_key; // env-var form Python expects
             // Provider aliases: send canonical form so Python ModelsRegistry resolves correctly
             // e.g. "gemini" -> also set "google" so key lookup works after alias normalisation
             static const QMap<QString, QString> kProviderAliases = {
@@ -102,8 +108,8 @@ QJsonObject AgentService::build_api_keys() const {
             // Also ship base_url so super_agent/_llm_classify can use the right
             // endpoint (e.g. MiniMax OpenAI-compat behind "anthropic" provider).
             if (!p.base_url.isEmpty()) {
-                keys[lower + "_base_url"]                    = p.base_url;
-                keys[lower.toUpper() + "_BASE_URL"]          = p.base_url;
+                keys[lower + "_base_url"] = p.base_url;
+                keys[lower.toUpper() + "_BASE_URL"] = p.base_url;
             }
         }
     }
@@ -113,8 +119,8 @@ QJsonObject AgentService::build_api_keys() const {
     if (!keys.contains("fincept")) {
         const auto& session = auth::AuthManager::instance().session();
         if (!session.api_key.isEmpty()) {
-            keys["fincept"]          = session.api_key;
-            keys["FINCEPT_API_KEY"]  = session.api_key;
+            keys["fincept"] = session.api_key;
+            keys["FINCEPT_API_KEY"] = session.api_key;
         }
     }
 
@@ -142,12 +148,12 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
             auto& llm = ai_chat::LlmService::instance();
             if (llm.is_configured()) {
                 QJsonObject active_llm;
-                active_llm["provider"]    = llm.active_provider();
-                active_llm["model_id"]    = llm.active_model();
-                active_llm["api_key"]     = llm.active_api_key();
-                active_llm["base_url"]    = llm.active_base_url();
+                active_llm["provider"] = llm.active_provider();
+                active_llm["model_id"] = llm.active_model();
+                active_llm["api_key"] = llm.active_api_key();
+                active_llm["base_url"] = llm.active_base_url();
                 active_llm["temperature"] = llm.active_temperature();
-                active_llm["max_tokens"]  = llm.active_max_tokens();
+                active_llm["max_tokens"] = llm.active_max_tokens();
                 payload["active_llm"] = active_llm;
             }
         }
@@ -371,31 +377,31 @@ void AgentService::discover_agents() {
         QJsonArray agents_arr;
         for (const auto& a : agents) {
             QJsonObject o;
-            o["id"]          = a.id;
-            o["name"]        = a.name;
+            o["id"] = a.id;
+            o["name"] = a.name;
             o["description"] = a.description;
-            o["category"]    = a.category;
-            o["provider"]    = a.provider;
-            o["version"]     = a.version;
-            o["config"]      = a.config;
+            o["category"] = a.category;
+            o["provider"] = a.provider;
+            o["version"] = a.version;
+            o["config"] = a.config;
             QJsonArray caps;
-            for (const auto& c : a.capabilities) caps.append(c);
+            for (const auto& c : a.capabilities)
+                caps.append(c);
             o["capabilities"] = caps;
             agents_arr.append(o);
         }
         QJsonArray cats_arr;
         for (const auto& c : categories) {
             QJsonObject o;
-            o["name"]  = c.name;
+            o["name"] = c.name;
             o["count"] = c.count;
             cats_arr.append(o);
         }
         QJsonObject root;
-        root["agents"]     = agents_arr;
+        root["agents"] = agents_arr;
         root["categories"] = cats_arr;
         fincept::CacheManager::instance().put(
-            "agents:list",
-            QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))),
+            "agents:list", QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))),
             kAgentCacheTtlSec, "agents");
 
         LOG_INFO("AgentService",
@@ -467,111 +473,119 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
 
     auto* proc = new QProcess(this);
     QPointer<AgentService> self = this;
-    auto timer       = std::make_shared<QElapsedTimer>();
+    auto timer = std::make_shared<QElapsedTimer>();
     auto accumulated = std::make_shared<QString>();
     auto final_json_line = std::make_shared<QString>();
-    auto done_emitted    = std::make_shared<bool>(false);
+    auto done_emitted = std::make_shared<bool>(false);
     timer->start();
 
     // Read stdout line by line as process writes
-    connect(proc, &QProcess::readyReadStandardOutput, this, [self, proc, accumulated, final_json_line, done_emitted, req_id]() {
-        if (!self) return;
-        while (proc->canReadLine()) {
-            QString line = QString::fromUtf8(proc->readLine()).trimmed();
-            if (line.isEmpty()) continue;
+    connect(proc, &QProcess::readyReadStandardOutput, this,
+            [self, proc, accumulated, final_json_line, done_emitted, req_id]() {
+                if (!self)
+                    return;
+                while (proc->canReadLine()) {
+                    QString line = QString::fromUtf8(proc->readLine()).trimmed();
+                    if (line.isEmpty())
+                        continue;
 
-            // Python emits "TOKEN: {content}" (stream_print adds a space after colon)
-            auto extract = [](const QString& s, const QString& prefix) -> QString {
-                QString rest = s.mid(prefix.length());
-                // Strip one leading space if present
-                if (rest.startsWith(' ')) rest = rest.mid(1);
-                // Unescape \n -> newline
-                rest.replace("\\n", "\n").replace("\\\\", "\\");
-                return rest;
-            };
+                    // Python emits "TOKEN: {content}" (stream_print adds a space after colon)
+                    auto extract = [](const QString& s, const QString& prefix) -> QString {
+                        QString rest = s.mid(prefix.length());
+                        // Strip one leading space if present
+                        if (rest.startsWith(' '))
+                            rest = rest.mid(1);
+                        // Unescape \n -> newline
+                        rest.replace("\\n", "\n").replace("\\\\", "\\");
+                        return rest;
+                    };
 
-            if (line.startsWith('{')) {
-                // Final JSON result line — capture it for the finished handler
-                *final_json_line = line;
-            } else if (line.startsWith("TOKEN:")) {
-                QString token = extract(line, "TOKEN:");
-                *accumulated += token;
-                emit self->agent_stream_token(req_id, token);
-            } else if (line.startsWith("THINKING:")) {
-                emit self->agent_stream_thinking(req_id, extract(line, "THINKING:"));
-            } else if (line.startsWith("TOOL:")) {
-                emit self->agent_stream_thinking(req_id, "Tool: " + extract(line, "TOOL:"));
-            } else if (line.startsWith("TOOL_RESULT:")) {
-                emit self->agent_stream_thinking(req_id, "Result: " + extract(line, "TOOL_RESULT:"));
-            } else if (line.startsWith("DONE:")) {
-                // DONE carries the full cleaned response — use it if accumulated is empty
-                QString done_content = extract(line, "DONE:");
-                if (accumulated->trimmed().isEmpty() && !done_content.isEmpty())
-                    *accumulated = done_content;
-            } else if (line.startsWith("ERROR:")) {
-                if (!*done_emitted) {
-                    *done_emitted = true;
-                    AgentExecutionResult r;
-                    r.request_id = req_id;
-                    r.success = false;
-                    r.error = extract(line, "ERROR:");
-                    emit self->agent_stream_done(r);
+                    if (line.startsWith('{')) {
+                        // Final JSON result line — capture it for the finished handler
+                        *final_json_line = line;
+                    } else if (line.startsWith("TOKEN:")) {
+                        QString token = extract(line, "TOKEN:");
+                        *accumulated += token;
+                        emit self->agent_stream_token(req_id, token);
+                    } else if (line.startsWith("THINKING:")) {
+                        emit self->agent_stream_thinking(req_id, extract(line, "THINKING:"));
+                    } else if (line.startsWith("TOOL:")) {
+                        emit self->agent_stream_thinking(req_id, "Tool: " + extract(line, "TOOL:"));
+                    } else if (line.startsWith("TOOL_RESULT:")) {
+                        emit self->agent_stream_thinking(req_id, "Result: " + extract(line, "TOOL_RESULT:"));
+                    } else if (line.startsWith("DONE:")) {
+                        // DONE carries the full cleaned response — use it if accumulated is empty
+                        QString done_content = extract(line, "DONE:");
+                        if (accumulated->trimmed().isEmpty() && !done_content.isEmpty())
+                            *accumulated = done_content;
+                    } else if (line.startsWith("ERROR:")) {
+                        if (!*done_emitted) {
+                            *done_emitted = true;
+                            AgentExecutionResult r;
+                            r.request_id = req_id;
+                            r.success = false;
+                            r.error = extract(line, "ERROR:");
+                            emit self->agent_stream_done(r);
+                        }
+                    }
                 }
+            });
+
+    connect(
+        proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+        [self, proc, accumulated, final_json_line, done_emitted, timer, req_id](int exit_code, QProcess::ExitStatus) {
+            int elapsed = timer->elapsed();
+
+            // Drain any remaining stdout
+            QString remaining = QString::fromUtf8(proc->readAllStandardOutput());
+            QString stderr_str = QString::fromUtf8(proc->readAllStandardError());
+            proc->deleteLater();
+
+            if (!self || *done_emitted)
+                return;
+            *done_emitted = true;
+
+            // Scan remaining stdout for final JSON line (may not have been read yet)
+            for (const QString& line : remaining.split('\n')) {
+                QString t = line.trimmed();
+                if (t.startsWith('{'))
+                    *final_json_line = t;
             }
-        }
-    });
 
-    connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-            [self, proc, accumulated, final_json_line, done_emitted, timer, req_id](int exit_code, QProcess::ExitStatus) {
-                int elapsed = timer->elapsed();
+            AgentExecutionResult r;
+            r.request_id = req_id;
+            r.execution_time_ms = elapsed;
 
-                // Drain any remaining stdout
-                QString remaining = QString::fromUtf8(proc->readAllStandardOutput());
-                QString stderr_str = QString::fromUtf8(proc->readAllStandardError());
+            QJsonDocument doc = QJsonDocument::fromJson(final_json_line->toUtf8());
+            if (!doc.isNull() && doc.object()["success"].toBool()) {
+                QString json_response = doc.object()["response"].toString();
+                r.success = true;
+                r.response = json_response.isEmpty() ? accumulated->trimmed() : json_response;
+            } else if (!accumulated->trimmed().isEmpty()) {
+                r.success = true;
+                r.response = accumulated->trimmed();
+            } else {
+                r.success = false;
+                r.error = exit_code != 0 ? stderr_str.left(500) : "No response received";
+            }
+
+            LOG_INFO("AgentService", QString("Streaming completed in %1ms").arg(elapsed));
+            emit self->agent_stream_done(r);
+        });
+
+    connect(proc, &QProcess::errorOccurred, this,
+            [self, proc, accumulated, final_json_line, done_emitted, timer, req_id](QProcess::ProcessError) {
+                QString err = proc->errorString();
                 proc->deleteLater();
-
                 if (!self || *done_emitted)
                     return;
                 *done_emitted = true;
-
-                // Scan remaining stdout for final JSON line (may not have been read yet)
-                for (const QString& line : remaining.split('\n')) {
-                    QString t = line.trimmed();
-                    if (t.startsWith('{')) *final_json_line = t;
-                }
-
                 AgentExecutionResult r;
                 r.request_id = req_id;
-                r.execution_time_ms = elapsed;
-
-                QJsonDocument doc = QJsonDocument::fromJson(final_json_line->toUtf8());
-                if (!doc.isNull() && doc.object()["success"].toBool()) {
-                    QString json_response = doc.object()["response"].toString();
-                    r.success = true;
-                    r.response = json_response.isEmpty() ? accumulated->trimmed() : json_response;
-                } else if (!accumulated->trimmed().isEmpty()) {
-                    r.success = true;
-                    r.response = accumulated->trimmed();
-                } else {
-                    r.success = false;
-                    r.error = exit_code != 0 ? stderr_str.left(500) : "No response received";
-                }
-
-                LOG_INFO("AgentService", QString("Streaming completed in %1ms").arg(elapsed));
+                r.success = false;
+                r.error = "Process error: " + err;
                 emit self->agent_stream_done(r);
             });
-
-    connect(proc, &QProcess::errorOccurred, this, [self, proc, accumulated, final_json_line, done_emitted, timer, req_id](QProcess::ProcessError) {
-        QString err = proc->errorString();
-        proc->deleteLater();
-        if (!self || *done_emitted) return;
-        *done_emitted = true;
-        AgentExecutionResult r;
-        r.request_id = req_id;
-        r.success = false;
-        r.error = "Process error: " + err;
-        emit self->agent_stream_done(r);
-    });
 
     LOG_INFO("AgentService", QString("Starting streaming agent (%1 bytes payload)").arg(payload_bytes.size()));
     proc->start(python_path, {script_path, "--stdin", "--stream"});
@@ -643,94 +657,99 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
 
     auto* proc = new QProcess(this);
     QPointer<AgentService> self = this;
-    auto timer        = std::make_shared<QElapsedTimer>();
-    auto accumulated  = std::make_shared<QString>();
-    auto final_json   = std::make_shared<QString>();
+    auto timer = std::make_shared<QElapsedTimer>();
+    auto accumulated = std::make_shared<QString>();
+    auto final_json = std::make_shared<QString>();
     auto done_emitted = std::make_shared<bool>(false);
     timer->start();
 
     connect(proc, &QProcess::readyReadStandardOutput, this,
             [self, proc, accumulated, final_json, done_emitted, req_id]() {
-        if (!self) return;
-        while (proc->canReadLine()) {
-            QString line = QString::fromUtf8(proc->readLine()).trimmed();
-            if (line.isEmpty()) continue;
+                if (!self)
+                    return;
+                while (proc->canReadLine()) {
+                    QString line = QString::fromUtf8(proc->readLine()).trimmed();
+                    if (line.isEmpty())
+                        continue;
 
-            auto extract = [](const QString& s, const QString& prefix) -> QString {
-                QString rest = s.mid(prefix.length());
-                if (rest.startsWith(' ')) rest = rest.mid(1);
-                rest.replace("\\n", "\n").replace("\\\\", "\\");
-                return rest;
-            };
+                    auto extract = [](const QString& s, const QString& prefix) -> QString {
+                        QString rest = s.mid(prefix.length());
+                        if (rest.startsWith(' '))
+                            rest = rest.mid(1);
+                        rest.replace("\\n", "\n").replace("\\\\", "\\");
+                        return rest;
+                    };
 
-            if (line.startsWith('{')) {
-                *final_json = line;
-            } else if (line.startsWith("TOKEN:")) {
-                QString token = extract(line, "TOKEN:");
-                *accumulated += token;
-                emit self->agent_stream_token(req_id, token);
-            } else if (line.startsWith("THINKING:")) {
-                emit self->agent_stream_thinking(req_id, extract(line, "THINKING:"));
-            } else if (line.startsWith("TOOL:")) {
-                emit self->agent_stream_thinking(req_id, "Tool: " + extract(line, "TOOL:"));
-            } else if (line.startsWith("DONE:")) {
-                QString done_content = extract(line, "DONE:");
-                if (accumulated->trimmed().isEmpty() && !done_content.isEmpty())
-                    *accumulated = done_content;
-            } else if (line.startsWith("ERROR:")) {
-                if (!*done_emitted) {
-                    *done_emitted = true;
-                    AgentExecutionResult r;
-                    r.request_id = req_id;
-                    r.success = false;
-                    r.error = extract(line, "ERROR:");
-                    emit self->agent_stream_done(r);
+                    if (line.startsWith('{')) {
+                        *final_json = line;
+                    } else if (line.startsWith("TOKEN:")) {
+                        QString token = extract(line, "TOKEN:");
+                        *accumulated += token;
+                        emit self->agent_stream_token(req_id, token);
+                    } else if (line.startsWith("THINKING:")) {
+                        emit self->agent_stream_thinking(req_id, extract(line, "THINKING:"));
+                    } else if (line.startsWith("TOOL:")) {
+                        emit self->agent_stream_thinking(req_id, "Tool: " + extract(line, "TOOL:"));
+                    } else if (line.startsWith("DONE:")) {
+                        QString done_content = extract(line, "DONE:");
+                        if (accumulated->trimmed().isEmpty() && !done_content.isEmpty())
+                            *accumulated = done_content;
+                    } else if (line.startsWith("ERROR:")) {
+                        if (!*done_emitted) {
+                            *done_emitted = true;
+                            AgentExecutionResult r;
+                            r.request_id = req_id;
+                            r.success = false;
+                            r.error = extract(line, "ERROR:");
+                            emit self->agent_stream_done(r);
+                        }
+                    }
                 }
-            }
-        }
-    });
+            });
 
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
             [self, proc, accumulated, final_json, done_emitted, timer, req_id](int exit_code, QProcess::ExitStatus) {
-        int elapsed = timer->elapsed();
-        QString remaining = QString::fromUtf8(proc->readAllStandardOutput());
-        QString stderr_str = QString::fromUtf8(proc->readAllStandardError());
-        proc->deleteLater();
+                int elapsed = timer->elapsed();
+                QString remaining = QString::fromUtf8(proc->readAllStandardOutput());
+                QString stderr_str = QString::fromUtf8(proc->readAllStandardError());
+                proc->deleteLater();
 
-        if (!self || *done_emitted) return;
-        *done_emitted = true;
+                if (!self || *done_emitted)
+                    return;
+                *done_emitted = true;
 
-        for (const QString& line : remaining.split('\n')) {
-            QString t = line.trimmed();
-            if (t.startsWith('{')) *final_json = t;
-        }
+                for (const QString& line : remaining.split('\n')) {
+                    QString t = line.trimmed();
+                    if (t.startsWith('{'))
+                        *final_json = t;
+                }
 
-        AgentExecutionResult r;
-        r.request_id = req_id;
-        r.execution_time_ms = elapsed;
+                AgentExecutionResult r;
+                r.request_id = req_id;
+                r.execution_time_ms = elapsed;
 
-        QJsonDocument doc = QJsonDocument::fromJson(final_json->toUtf8());
-        if (!doc.isNull() && doc.object()["success"].toBool()) {
-            QString json_response = doc.object()["response"].toString();
-            r.success = true;
-            r.response = json_response.isEmpty() ? accumulated->trimmed() : json_response;
-        } else if (!accumulated->trimmed().isEmpty()) {
-            r.success = true;
-            r.response = accumulated->trimmed();
-        } else {
-            r.success = false;
-            r.error = exit_code != 0 ? stderr_str.left(500) : "No response from team";
-        }
+                QJsonDocument doc = QJsonDocument::fromJson(final_json->toUtf8());
+                if (!doc.isNull() && doc.object()["success"].toBool()) {
+                    QString json_response = doc.object()["response"].toString();
+                    r.success = true;
+                    r.response = json_response.isEmpty() ? accumulated->trimmed() : json_response;
+                } else if (!accumulated->trimmed().isEmpty()) {
+                    r.success = true;
+                    r.response = accumulated->trimmed();
+                } else {
+                    r.success = false;
+                    r.error = exit_code != 0 ? stderr_str.left(500) : "No response from team";
+                }
 
-        LOG_INFO("AgentService", QString("Team completed in %1ms").arg(elapsed));
-        emit self->agent_stream_done(r);
-    });
+                LOG_INFO("AgentService", QString("Team completed in %1ms").arg(elapsed));
+                emit self->agent_stream_done(r);
+            });
 
-    connect(proc, &QProcess::errorOccurred, this,
-            [self, proc, done_emitted, timer, req_id](QProcess::ProcessError) {
+    connect(proc, &QProcess::errorOccurred, this, [self, proc, done_emitted, timer, req_id](QProcess::ProcessError) {
         QString err = proc->errorString();
         proc->deleteLater();
-        if (!self || *done_emitted) return;
+        if (!self || *done_emitted)
+            return;
         *done_emitted = true;
         AgentExecutionResult r;
         r.request_id = req_id;
@@ -740,8 +759,8 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
     });
 
     LOG_INFO("AgentService", QString("Starting team stream (%1 bytes payload, %2 members)")
-                 .arg(payload_bytes.size())
-                 .arg(team_config["members"].toArray().size()));
+                                 .arg(payload_bytes.size())
+                                 .arg(team_config["members"].toArray().size()));
     proc->start(python_path, {script_path, "--stdin", "--stream"});
     proc->write(payload_bytes);
     proc->closeWriteChannel();
@@ -876,8 +895,8 @@ void AgentService::get_system_info() {
         if (!cv.isNull()) {
             const QJsonObject r = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
             AgentSystemInfo info;
-            info.version      = r["version"].toString();
-            info.framework    = r["framework"].toString();
+            info.version = r["version"].toString();
+            info.framework = r["framework"].toString();
             info.capabilities = r["capabilities"].toObject();
             for (const auto& f : r["features"].toArray())
                 info.features.append(f.toString());
@@ -888,19 +907,22 @@ void AgentService::get_system_info() {
 
     QPointer<AgentService> self = this;
     run_python_light("system_info", {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
-        if (!ok) { emit self->error_occurred("system_info", result["error"].toString()); return; }
+        if (!self)
+            return;
+        if (!ok) {
+            emit self->error_occurred("system_info", result["error"].toString());
+            return;
+        }
 
         AgentSystemInfo info;
-        info.version      = result["version"].toString();
-        info.framework    = result["framework"].toString();
+        info.version = result["version"].toString();
+        info.framework = result["framework"].toString();
         info.capabilities = result["capabilities"].toObject();
         for (const auto& f : result["features"].toArray())
             info.features.append(f.toString());
 
         fincept::CacheManager::instance().put(
-            "agents:sysinfo",
-            QVariant(QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact))),
+            "agents:sysinfo", QVariant(QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact))),
             kSysInfoCacheTtlSec, "agents");
 
         emit self->system_info_loaded(info);
@@ -913,7 +935,7 @@ void AgentService::list_tools() {
         if (!cv.isNull()) {
             const QJsonObject r = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
             AgentToolsInfo info;
-            info.tools       = r["tools"].toObject();
+            info.tools = r["tools"].toObject();
             info.total_count = r["total_count"].toInt();
             for (const auto& c : r["categories"].toArray())
                 info.categories.append(c.toString());
@@ -924,18 +946,21 @@ void AgentService::list_tools() {
 
     QPointer<AgentService> self = this;
     run_python_light("list_tools", {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
-        if (!ok) { emit self->error_occurred("list_tools", result["error"].toString()); return; }
+        if (!self)
+            return;
+        if (!ok) {
+            emit self->error_occurred("list_tools", result["error"].toString());
+            return;
+        }
 
         AgentToolsInfo info;
-        info.tools       = result["tools"].toObject();
+        info.tools = result["tools"].toObject();
         info.total_count = result["total_count"].toInt();
         for (const auto& c : result["categories"].toArray())
             info.categories.append(c.toString());
 
         fincept::CacheManager::instance().put(
-            "agents:tools",
-            QVariant(QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact))),
+            "agents:tools", QVariant(QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact))),
             kToolsCacheTtlSec, "agents");
 
         emit self->tools_loaded(info);
@@ -958,8 +983,12 @@ void AgentService::list_models() {
 
     QPointer<AgentService> self = this;
     run_python_light("list_models", {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
-        if (!ok) { emit self->error_occurred("list_models", result["error"].toString()); return; }
+        if (!self)
+            return;
+        if (!ok) {
+            emit self->error_occurred("list_models", result["error"].toString());
+            return;
+        }
 
         AgentModelsInfo info;
         info.count = result["count"].toInt();
@@ -967,8 +996,7 @@ void AgentService::list_models() {
             info.providers.append(p.toString());
 
         fincept::CacheManager::instance().put(
-            "agents:models",
-            QVariant(QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact))),
+            "agents:models", QVariant(QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact))),
             kModelsCacheTtlSec, "agents");
 
         emit self->models_loaded(info);
@@ -1008,9 +1036,11 @@ void AgentService::set_active_config(const QString& id) {
 
 // ── Structured output ────────────────────────────────────────────────────────
 
-QString AgentService::run_agent_structured(const QString& query, const QJsonObject& config, const QString& output_model) {
+QString AgentService::run_agent_structured(const QString& query, const QJsonObject& config,
+                                           const QString& output_model) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    LOG_INFO("AgentService", QString("Running structured agent [%1] (%2): %3").arg(req_id.left(8), output_model, query.left(60)));
+    LOG_INFO("AgentService",
+             QString("Running structured agent [%1] (%2): %3").arg(req_id.left(8), output_model, query.left(60)));
     QJsonObject params;
     params["query"] = query;
     params["output_model"] = output_model;
@@ -1453,8 +1483,7 @@ bool AgentService::get_cached_response(const QString& key, QJsonObject& out) con
 
 void AgentService::set_cached_response(const QString& key, const QJsonObject& data) {
     fincept::CacheManager::instance().put(
-        "agents:resp:" + key,
-        QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
+        "agents:resp:" + key, QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
         kResponseCacheTtlSec, "agents");
 }
 
@@ -1465,8 +1494,8 @@ void AgentService::clear_response_cache() {
 
 QJsonObject AgentService::get_cache_stats() const {
     QJsonObject stats;
-    stats["agents_cached"]    = cached_agent_count();
-    stats["total_entries"]    = fincept::CacheManager::instance().entry_count();
+    stats["agents_cached"] = cached_agent_count();
+    stats["total_entries"] = fincept::CacheManager::instance().entry_count();
     return stats;
 }
 

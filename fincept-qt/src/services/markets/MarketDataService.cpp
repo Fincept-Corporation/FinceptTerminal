@@ -8,6 +8,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
+
 #include <memory>
 
 namespace fincept::services {
@@ -34,9 +35,8 @@ void MarketDataService::fetch_quotes(const QStringList& symbols, QuoteCallback c
         const QVariant cv = fincept::CacheManager::instance().get("market:" + sym);
         if (!cv.isNull()) {
             const QJsonObject o = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
-            cached_results.append({o["symbol"].toString(), o["name"].toString(),
-                                   o["price"].toDouble(), o["change"].toDouble(),
-                                   o["change_pct"].toDouble(), o["high"].toDouble(),
+            cached_results.append({o["symbol"].toString(), o["name"].toString(), o["price"].toDouble(),
+                                   o["change"].toDouble(), o["change_pct"].toDouble(), o["high"].toDouble(),
                                    o["low"].toDouble(), o["volume"].toDouble()});
         } else {
             all_cached = false;
@@ -103,18 +103,17 @@ void MarketDataService::flush_batch() {
 
                 auto store_quote = [](const QuoteData& q) {
                     QJsonObject o;
-                    o["symbol"]     = q.symbol;
-                    o["name"]       = q.name;
-                    o["price"]      = q.price;
-                    o["change"]     = q.change;
+                    o["symbol"] = q.symbol;
+                    o["name"] = q.name;
+                    o["price"] = q.price;
+                    o["change"] = q.change;
                     o["change_pct"] = q.change_pct;
-                    o["high"]       = q.high;
-                    o["low"]        = q.low;
-                    o["volume"]     = q.volume;
+                    o["high"] = q.high;
+                    o["low"] = q.low;
+                    o["volume"] = q.volume;
                     fincept::CacheManager::instance().put(
                         "market:" + q.symbol,
-                        QVariant(QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact))),
-                        kQuoteCacheTtlSec,
+                        QVariant(QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact))), kQuoteCacheTtlSec,
                         "market_data");
                 };
 
@@ -150,9 +149,8 @@ void MarketDataService::flush_batch() {
                         const QVariant cv = fincept::CacheManager::instance().get("market:" + sym);
                         if (!cv.isNull()) {
                             const QJsonObject o = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
-                            stale.append({o["symbol"].toString(), o["name"].toString(),
-                                          o["price"].toDouble(), o["change"].toDouble(),
-                                          o["change_pct"].toDouble(), o["high"].toDouble(),
+                            stale.append({o["symbol"].toString(), o["name"].toString(), o["price"].toDouble(),
+                                          o["change"].toDouble(), o["change_pct"].toDouble(), o["high"].toDouble(),
                                           o["low"].toDouble(), o["volume"].toDouble()});
                         }
                     }
@@ -204,124 +202,125 @@ void MarketDataService::fetch_info(const QString& symbol, InfoCallback cb) {
 
     struct Partial {
         InfoData info;
-        bool info_done   = false;
+        bool info_done = false;
         bool ratios_done = false;
-        bool info_ok     = false;
-        bool ratios_ok   = false;
+        bool info_ok = false;
+        bool ratios_ok = false;
     };
     auto shared = std::make_shared<Partial>();
 
     auto try_complete = [cb, shared, symbol]() {
-        if (!shared->info_done || !shared->ratios_done) return;
+        if (!shared->info_done || !shared->ratios_done)
+            return;
         bool ok = shared->info_ok || shared->ratios_ok;
-        if (ok) LOG_INFO("MarketData", "Fetched info for " + symbol);
-        else    LOG_WARN("MarketData", "Both info+ratios failed for " + symbol);
+        if (ok)
+            LOG_INFO("MarketData", "Fetched info for " + symbol);
+        else
+            LOG_WARN("MarketData", "Both info+ratios failed for " + symbol);
         cb(ok, shared->info);
     };
 
     // ── Call 1: get_info ──────────────────────────────────────────────────────
-    QStringList args1; args1 << "info" << symbol;
-    python::PythonRunner::instance().run(
-        "yfinance_data.py", args1,
-        [shared, symbol, try_complete](python::PythonResult result) {
-            shared->info_done = true;
-            if (!result.success) {
-                LOG_WARN("MarketData", "get_info failed for " + symbol);
-                try_complete();
-                return;
-            }
-            auto doc = QJsonDocument::fromJson(result.output.toUtf8());
-            if (!doc.isObject() || doc.object().contains("error")) {
-                try_complete();
-                return;
-            }
-            QJsonObject o = doc.object();
-            shared->info.symbol      = o["symbol"].toString(symbol);
-            shared->info.name        = o["company_name"].toString();
-            shared->info.sector      = o["sector"].toString();
-            shared->info.industry    = o["industry"].toString();
-            shared->info.country     = o["country"].toString();
-            shared->info.currency    = o["currency"].toString("USD");
-            shared->info.market_cap  = o["market_cap"].toDouble();
-            shared->info.beta        = o["beta"].toDouble();
-            shared->info.week52_high = o["fifty_two_week_high"].toDouble();
-            shared->info.week52_low  = o["fifty_two_week_low"].toDouble();
-            shared->info.avg_volume  = o["average_volume"].toDouble();
-            shared->info.eps         = o["revenue_per_share"].toDouble();
-            shared->info_ok          = true;
-            try_complete();
-        });
+    QStringList args1;
+    args1 << "info" << symbol;
+    python::PythonRunner::instance().run("yfinance_data.py", args1,
+                                         [shared, symbol, try_complete](python::PythonResult result) {
+                                             shared->info_done = true;
+                                             if (!result.success) {
+                                                 LOG_WARN("MarketData", "get_info failed for " + symbol);
+                                                 try_complete();
+                                                 return;
+                                             }
+                                             auto doc = QJsonDocument::fromJson(result.output.toUtf8());
+                                             if (!doc.isObject() || doc.object().contains("error")) {
+                                                 try_complete();
+                                                 return;
+                                             }
+                                             QJsonObject o = doc.object();
+                                             shared->info.symbol = o["symbol"].toString(symbol);
+                                             shared->info.name = o["company_name"].toString();
+                                             shared->info.sector = o["sector"].toString();
+                                             shared->info.industry = o["industry"].toString();
+                                             shared->info.country = o["country"].toString();
+                                             shared->info.currency = o["currency"].toString("USD");
+                                             shared->info.market_cap = o["market_cap"].toDouble();
+                                             shared->info.beta = o["beta"].toDouble();
+                                             shared->info.week52_high = o["fifty_two_week_high"].toDouble();
+                                             shared->info.week52_low = o["fifty_two_week_low"].toDouble();
+                                             shared->info.avg_volume = o["average_volume"].toDouble();
+                                             shared->info.eps = o["revenue_per_share"].toDouble();
+                                             shared->info_ok = true;
+                                             try_complete();
+                                         });
 
     // ── Call 2: financial_ratios ──────────────────────────────────────────────
-    QStringList args2; args2 << "financial_ratios" << symbol;
-    python::PythonRunner::instance().run(
-        "yfinance_data.py", args2,
-        [shared, symbol, try_complete](python::PythonResult result) {
-            shared->ratios_done = true;
-            if (!result.success) {
-                LOG_WARN("MarketData", "financial_ratios failed for " + symbol);
-                try_complete();
-                return;
-            }
-            auto doc = QJsonDocument::fromJson(result.output.toUtf8());
-            if (!doc.isObject() || doc.object().contains("error")) {
-                try_complete();
-                return;
-            }
-            QJsonObject o = doc.object();
-            shared->info.pe_ratio       = o["peRatio"].toDouble();
-            shared->info.forward_pe     = o["forwardPE"].toDouble();
-            shared->info.price_to_book  = o["priceToBook"].toDouble();
-            shared->info.dividend_yield = o["dividendYield"].toDouble();
-            shared->info.roe            = o["returnOnEquity"].toDouble();
-            shared->info.profit_margin  = o["profitMargin"].toDouble();
-            shared->info.debt_to_equity = o["debtToEquity"].toDouble();
-            shared->info.current_ratio  = o["currentRatio"].toDouble();
-            shared->info.eps            = o["revenuePerShare"].toDouble();
-            shared->ratios_ok           = true;
-            try_complete();
-        });
+    QStringList args2;
+    args2 << "financial_ratios" << symbol;
+    python::PythonRunner::instance().run("yfinance_data.py", args2,
+                                         [shared, symbol, try_complete](python::PythonResult result) {
+                                             shared->ratios_done = true;
+                                             if (!result.success) {
+                                                 LOG_WARN("MarketData", "financial_ratios failed for " + symbol);
+                                                 try_complete();
+                                                 return;
+                                             }
+                                             auto doc = QJsonDocument::fromJson(result.output.toUtf8());
+                                             if (!doc.isObject() || doc.object().contains("error")) {
+                                                 try_complete();
+                                                 return;
+                                             }
+                                             QJsonObject o = doc.object();
+                                             shared->info.pe_ratio = o["peRatio"].toDouble();
+                                             shared->info.forward_pe = o["forwardPE"].toDouble();
+                                             shared->info.price_to_book = o["priceToBook"].toDouble();
+                                             shared->info.dividend_yield = o["dividendYield"].toDouble();
+                                             shared->info.roe = o["returnOnEquity"].toDouble();
+                                             shared->info.profit_margin = o["profitMargin"].toDouble();
+                                             shared->info.debt_to_equity = o["debtToEquity"].toDouble();
+                                             shared->info.current_ratio = o["currentRatio"].toDouble();
+                                             shared->info.eps = o["revenuePerShare"].toDouble();
+                                             shared->ratios_ok = true;
+                                             try_complete();
+                                         });
 }
 
 // ── History fetch (OHLCV) ────────────────────────────────────────────────────
 
-void MarketDataService::fetch_history(const QString& symbol, const QString& period,
-                                      const QString& interval, HistoryCallback cb) {
+void MarketDataService::fetch_history(const QString& symbol, const QString& period, const QString& interval,
+                                      HistoryCallback cb) {
     QStringList args;
     args << "historical_period" << symbol << period << interval;
 
-    python::PythonRunner::instance().run(
-        "yfinance_data.py", args, [cb, symbol](python::PythonResult result) {
-            if (!result.success) {
-                LOG_WARN("MarketData", "History fetch failed for " + symbol + ": " + result.error);
-                cb(false, {});
-                return;
-            }
+    python::PythonRunner::instance().run("yfinance_data.py", args, [cb, symbol](python::PythonResult result) {
+        if (!result.success) {
+            LOG_WARN("MarketData", "History fetch failed for " + symbol + ": " + result.error);
+            cb(false, {});
+            return;
+        }
 
-            auto doc = QJsonDocument::fromJson(result.output.toUtf8());
-            if (!doc.isArray()) {
-                LOG_WARN("MarketData", "History parse error for " + symbol);
-                cb(false, {});
-                return;
-            }
+        auto doc = QJsonDocument::fromJson(result.output.toUtf8());
+        if (!doc.isArray()) {
+            LOG_WARN("MarketData", "History parse error for " + symbol);
+            cb(false, {});
+            return;
+        }
 
-            QVector<HistoryPoint> history;
-            for (const auto& v : doc.array()) {
-                QJsonObject o = v.toObject();
-                HistoryPoint pt;
-                pt.timestamp = static_cast<qint64>(o["timestamp"].toDouble());
-                pt.open      = o["open"].toDouble();
-                pt.high      = o["high"].toDouble();
-                pt.low       = o["low"].toDouble();
-                pt.close     = o["close"].toDouble();
-                pt.volume    = static_cast<qint64>(o["volume"].toDouble());
-                history.append(pt);
-            }
+        QVector<HistoryPoint> history;
+        for (const auto& v : doc.array()) {
+            QJsonObject o = v.toObject();
+            HistoryPoint pt;
+            pt.timestamp = static_cast<qint64>(o["timestamp"].toDouble());
+            pt.open = o["open"].toDouble();
+            pt.high = o["high"].toDouble();
+            pt.low = o["low"].toDouble();
+            pt.close = o["close"].toDouble();
+            pt.volume = static_cast<qint64>(o["volume"].toDouble());
+            history.append(pt);
+        }
 
-            LOG_INFO("MarketData", QString("Fetched %1 history points for %2")
-                     .arg(history.size()).arg(symbol));
-            cb(true, history);
-        });
+        LOG_INFO("MarketData", QString("Fetched %1 history points for %2").arg(history.size()).arg(symbol));
+        cb(true, history);
+    });
 }
 
 // ── Static symbol lists ─────────────────────────────────────────────────────
@@ -430,30 +429,28 @@ void MarketDataService::fetch_sparklines(const QStringList& symbols, SparklineCa
     QStringList args;
     args << "batch_sparklines" << symbols;
 
-    python::PythonRunner::instance().run(
-        "yfinance_data.py", args,
-        [cb](python::PythonResult result) {
-            if (!result.success || result.output.trimmed().isEmpty()) {
-                LOG_WARN("MarketData", "Sparklines failed: " + result.error.left(200));
-                cb(false, {});
-                return;
-            }
-            auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8());
-            if (!doc.isObject()) {
-                cb(false, {});
-                return;
-            }
-            QHash<QString, QVector<double>> out;
-            const auto obj = doc.object();
-            for (auto it = obj.begin(); it != obj.end(); ++it) {
-                QVector<double> prices;
-                for (const auto& v : it.value().toArray())
-                    prices.append(v.toDouble());
-                if (!prices.isEmpty())
-                    out[it.key()] = prices;
-            }
-            cb(true, out);
-        });
+    python::PythonRunner::instance().run("yfinance_data.py", args, [cb](python::PythonResult result) {
+        if (!result.success || result.output.trimmed().isEmpty()) {
+            LOG_WARN("MarketData", "Sparklines failed: " + result.error.left(200));
+            cb(false, {});
+            return;
+        }
+        auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8());
+        if (!doc.isObject()) {
+            cb(false, {});
+            return;
+        }
+        QHash<QString, QVector<double>> out;
+        const auto obj = doc.object();
+        for (auto it = obj.begin(); it != obj.end(); ++it) {
+            QVector<double> prices;
+            for (const auto& v : it.value().toArray())
+                prices.append(v.toDouble());
+            if (!prices.isEmpty())
+                out[it.key()] = prices;
+        }
+        cb(true, out);
+    });
 }
 
 } // namespace fincept::services

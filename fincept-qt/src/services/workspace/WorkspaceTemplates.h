@@ -1,5 +1,6 @@
 #pragma once
 #include "services/workspace/WorkspaceTypes.h"
+
 #include <QVector>
 
 namespace fincept {

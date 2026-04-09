@@ -20,23 +20,33 @@ class ShoonyaBroker : public IBroker {
 
     BrokerProfile profile() const override {
         return BrokerProfile{
-            .id = "shoonya", .display_name = "Shoonya", .region = "IN", .currency = "INR",
-            .credential_fields = {
-                {CredentialField::ApiKey,    "USER ID",               "Enter User ID...",             false},
-                {CredentialField::ApiSecret, "API SECRET",            "Enter API Secret...",          true},
-                {CredentialField::AuthCode,  "VENDOR:::TOTP",         "vendor_code:::6-digit TOTP",   false},
-            },
+            .id = "shoonya",
+            .display_name = "Shoonya",
+            .region = "IN",
+            .currency = "INR",
+            .credential_fields =
+                {
+                    {CredentialField::ApiKey, "USER ID", "Enter User ID...", false},
+                    {CredentialField::ApiSecret, "API SECRET", "Enter API Secret...", true},
+                    {CredentialField::AuthCode, "VENDOR:::TOTP", "vendor_code:::6-digit TOTP", false},
+                },
             .exchanges = {"NSE", "BSE", "NFO", "BFO", "MCX", "CDS", "NCDEX"},
-            .product_types = {
-                {"Intraday (I)",  ProductType::Intraday},
-                {"Delivery (C)", ProductType::Delivery},
-                {"Margin (M)",   ProductType::Margin},
-            },
-            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
-            .has_native_paper=false, .default_paper_balance=1000000.0,
-            .default_watchlist={"HDFCBANK","ICICIBANK","SBIN","TCS","INFY","RELIANCE","TATAMOTORS","BAJFINANCE","HINDUNILVR","ITC"},
-            .default_symbol="RELIANCE", .default_exchange="NSE",
-            .brokerage_info="Zero brokerage",
+            .product_types =
+                {
+                    {"Intraday (I)", ProductType::Intraday},
+                    {"Delivery (C)", ProductType::Delivery},
+                    {"Margin (M)", ProductType::Margin},
+                },
+            .supports_intraday = true,
+            .supports_bracket_order = false,
+            .supports_cover_order = false,
+            .has_native_paper = false,
+            .default_paper_balance = 1000000.0,
+            .default_watchlist = {"HDFCBANK", "ICICIBANK", "SBIN", "TCS", "INFY", "RELIANCE", "TATAMOTORS",
+                                  "BAJFINANCE", "HINDUNILVR", "ITC"},
+            .default_symbol = "RELIANCE",
+            .default_exchange = "NSE",
+            .brokerage_info = "Zero brokerage",
         };
     }
 
@@ -57,7 +67,7 @@ class ShoonyaBroker : public IBroker {
                                                    const QString& resolution, const QString& from_date,
                                                    const QString& to_date) override;
 
-    static bool    is_token_expired(const BrokerHttpResponse& resp);
+    static bool is_token_expired(const BrokerHttpResponse& resp);
     static QString checked_error(const BrokerHttpResponse& resp, const QString& fallback);
 
   protected:

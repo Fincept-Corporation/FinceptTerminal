@@ -19,27 +19,31 @@ SurfaceTableWidget::SurfaceTableWidget(QWidget* parent) : QWidget(parent) {
     layout->setSpacing(0);
     table_ = new QTableWidget(this);
     table_->setStyleSheet(QString("QTableWidget {"
-                          "  background:%1; color:%2;"
-                          "  gridline-color:%3; border:none;"
-                          "  font-size:11px; font-family:'Consolas','Courier New',monospace; }"
-                          "QHeaderView::section {"
-                          "  background:%4; color:%5;"
-                          "  border:none; border-right:1px solid %6;"
-                          "  border-bottom:1px solid %6;"
-                          "  padding:0 6px; font-size:11px; font-weight:bold;"
-                          "  font-family:'Consolas','Courier New',monospace; }"
-                          "QTableWidget::item {"
-                          "  padding:0 6px; border-bottom:1px solid %3; }"
-                          "QScrollBar:vertical { width:5px; background:transparent; }"
-                          "QScrollBar::handle:vertical { background:%7; }"
-                          "QScrollBar::handle:vertical:hover { background:%8; }"
-                          "QScrollBar:horizontal { height:5px; background:transparent; }"
-                          "QScrollBar::handle:horizontal { background:%7; }"
-                          "QScrollBar::handle:horizontal:hover { background:%8; }")
-                          .arg(colors::BG_BASE).arg(colors::TEXT_PRIMARY)
-                          .arg(colors::BG_RAISED).arg(colors::BG_SURFACE)
-                          .arg(colors::TEXT_DIM).arg(colors::BORDER_DIM)
-                          .arg(colors::BORDER_MED).arg(colors::BORDER_BRIGHT));
+                                  "  background:%1; color:%2;"
+                                  "  gridline-color:%3; border:none;"
+                                  "  font-size:11px; font-family:'Consolas','Courier New',monospace; }"
+                                  "QHeaderView::section {"
+                                  "  background:%4; color:%5;"
+                                  "  border:none; border-right:1px solid %6;"
+                                  "  border-bottom:1px solid %6;"
+                                  "  padding:0 6px; font-size:11px; font-weight:bold;"
+                                  "  font-family:'Consolas','Courier New',monospace; }"
+                                  "QTableWidget::item {"
+                                  "  padding:0 6px; border-bottom:1px solid %3; }"
+                                  "QScrollBar:vertical { width:5px; background:transparent; }"
+                                  "QScrollBar::handle:vertical { background:%7; }"
+                                  "QScrollBar::handle:vertical:hover { background:%8; }"
+                                  "QScrollBar:horizontal { height:5px; background:transparent; }"
+                                  "QScrollBar::handle:horizontal { background:%7; }"
+                                  "QScrollBar::handle:horizontal:hover { background:%8; }")
+                              .arg(colors::BG_BASE)
+                              .arg(colors::TEXT_PRIMARY)
+                              .arg(colors::BG_RAISED)
+                              .arg(colors::BG_SURFACE)
+                              .arg(colors::TEXT_DIM)
+                              .arg(colors::BORDER_DIM)
+                              .arg(colors::BORDER_MED)
+                              .arg(colors::BORDER_BRIGHT));
     table_->horizontalHeader()->setDefaultSectionSize(72);
     table_->verticalHeader()->setDefaultSectionSize(22);
     table_->horizontalHeader()->setMinimumSectionSize(48);

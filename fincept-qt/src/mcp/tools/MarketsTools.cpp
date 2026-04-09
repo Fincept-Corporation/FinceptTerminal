@@ -42,9 +42,9 @@ std::vector<ToolDef> get_markets_tools() {
         t.name = "search_symbol";
         t.description = "Search for a ticker symbol by company name or partial symbol.";
         t.category = "markets";
-        t.input_schema.properties = QJsonObject{
-            {"query", QJsonObject{{"type", "string"},
-                                  {"description", "Search query (company name or partial symbol)"}}}};
+        t.input_schema.properties =
+            QJsonObject{{"query", QJsonObject{{"type", "string"},
+                                              {"description", "Search query (company name or partial symbol)"}}}};
         t.input_schema.required = {"query"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString query = args["query"].toString().trimmed();

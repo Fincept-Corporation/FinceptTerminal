@@ -9,15 +9,15 @@
 #include <QBarSeries>
 #include <QBarSet>
 #include <QChart>
+#include <QDateTime>
+#include <QFile>
+#include <QFileInfo>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonObject>
 #include <QLineSeries>
-#include <QDateTime>
-#include <QFile>
-#include <QFileInfo>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
@@ -182,14 +182,15 @@ void EquityFinancialsTab::build_ui() {
     vl->setSpacing(0);
 
     // ── Statement selector ────────────────────────────────────────────────────
-    auto* btn_bar = new QWidget;
+    auto* btn_bar = new QWidget(this);
     btn_bar->setStyleSheet(
         QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* btn_hl = new QHBoxLayout(btn_bar);
     btn_hl->setContentsMargins(10, 6, 10, 6);
     btn_hl->setSpacing(6);
 
-    QString btn_style = QString(R"(
+    QString btn_style =
+        QString(R"(
         QPushButton {
             background:transparent; color:%1; border:1px solid %2;
             border-radius:3px; padding:4px 14px; font-size:11px; font-weight:700;
@@ -197,7 +198,7 @@ void EquityFinancialsTab::build_ui() {
         QPushButton:checked { background:%3; color:%4; border-color:%3; }
         QPushButton:hover:!checked { border-color:%3; background:%5; }
     )")
-                            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, kAmber, ui::colors::BG_BASE, ui::colors::BG_HOVER);
+            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, kAmber, ui::colors::BG_BASE, ui::colors::BG_HOVER);
 
     auto make_btn = [&](const QString& label, QPushButton*& out) {
         out = new QPushButton(label);
@@ -218,28 +219,38 @@ void EquityFinancialsTab::build_ui() {
             border-radius:3px; padding:4px 14px; font-size:11px; font-weight:700;
         }
         QPushButton:hover { background:%1; color:#000; }
-    )").arg(kAmber));
+    )")
+                                  .arg(kAmber));
     btn_hl->addWidget(export_btn);
 
     connect(export_btn, &QPushButton::clicked, this, [this]() {
         int idx = stack_ ? stack_->currentIndex() : 0;
         QTableWidget* tbl = nullptr;
         QString label;
-        if (idx == 0) { tbl = inc_table_;  label = "income"; }
-        else if (idx == 1) { tbl = bal_table_;  label = "balance"; }
-        else                { tbl = cf_table_;   label = "cashflow"; }
-        if (!tbl) return;
+        if (idx == 0) {
+            tbl = inc_table_;
+            label = "income";
+        } else if (idx == 1) {
+            tbl = bal_table_;
+            label = "balance";
+        } else {
+            tbl = cf_table_;
+            label = "cashflow";
+        }
+        if (!tbl)
+            return;
 
         // Build sanitised ticker prefix from object name or use generic
         QString ticker = objectName().isEmpty() ? "equity" : objectName();
         ticker.remove(QRegularExpression(R"([^A-Za-z0-9_\-])"));
 
-        QString filename = QString("%1_%2_%3.csv")
-            .arg(ticker, label, QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
+        QString filename =
+            QString("%1_%2_%3.csv").arg(ticker, label, QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
         QString dest = services::FileManagerService::instance().storage_dir() + "/" + filename;
 
         QFile f(dest);
-        if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) return;
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
+            return;
         QTextStream out(&f);
 
         // Header row
@@ -264,13 +275,8 @@ void EquityFinancialsTab::build_ui() {
         }
         f.close();
 
-        services::FileManagerService::instance().register_file(
-            dest,
-            QFileInfo(dest).fileName(),
-            QFileInfo(dest).size(),
-            "text/csv",
-            "equity_research"
-        );
+        services::FileManagerService::instance().register_file(dest, QFileInfo(dest).fileName(), QFileInfo(dest).size(),
+                                                               "text/csv", "equity_research");
     });
 
     vl->addWidget(btn_bar);
@@ -301,7 +307,7 @@ QWidget* EquityFinancialsTab::build_income_view() {
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setStyleSheet("background:transparent; border:0;");
 
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(10, 10, 10, 10);
     vl->setSpacing(10);
@@ -462,7 +468,7 @@ QWidget* EquityFinancialsTab::build_balance_view() {
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setStyleSheet("background:transparent; border:0;");
 
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(10, 10, 10, 10);
     vl->setSpacing(10);
@@ -558,7 +564,7 @@ QWidget* EquityFinancialsTab::build_cashflow_view() {
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setStyleSheet("background:transparent; border:0;");
 
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(10, 10, 10, 10);
     vl->setSpacing(10);

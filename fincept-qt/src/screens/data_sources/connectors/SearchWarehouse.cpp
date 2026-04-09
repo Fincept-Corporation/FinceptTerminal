@@ -134,7 +134,8 @@ static QVector<ConnectorConfig> search_warehouse_configs() {
          Category::DataWarehouse,
          "S",
          "#29B5E8",
-         "Cloud data platform used by 57% of Fortune 500 finance firms. Supports Marketplace data sharing for ICE, FactSet, and Refinitiv datasets.",
+         "Cloud data platform used by 57% of Fortune 500 finance firms. Supports Marketplace data sharing for ICE, "
+         "FactSet, and Refinitiv datasets.",
          true,
          true,
          {{"account", "Account Identifier", FieldType::Text, "orgname-accountname", true, "", {}},

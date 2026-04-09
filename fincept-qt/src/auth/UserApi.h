@@ -53,8 +53,8 @@ class UserApi : public QObject {
     void update_ticket_status(int ticket_id, const QString& status, Callback cb);
     void get_support_categories(Callback cb);
     void submit_feedback(int rating, const QString& feedback_text, const QString& category, Callback cb);
-    void submit_contact_form(const QString& name, const QString& email,
-                             const QString& subject, const QString& message, Callback cb);
+    void submit_contact_form(const QString& name, const QString& email, const QString& subject, const QString& message,
+                             Callback cb);
 
   private:
     UserApi() = default;

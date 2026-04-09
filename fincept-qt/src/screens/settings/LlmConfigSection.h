@@ -52,43 +52,43 @@ class LlmConfigSection : public QWidget {
     QTabWidget* tab_widget_ = nullptr;
 
     // ── Provider tab widgets ──────────────────────────────────────────────────
-    QListWidget*    provider_list_ = nullptr;
-    QPushButton*    add_btn_       = nullptr;
-    QPushButton*    delete_btn_    = nullptr;
-    QStackedWidget* form_stack_    = nullptr; // 0=empty, 1=form, 2=fincept
-    QLineEdit*      provider_edit_ = nullptr;
-    QLineEdit*      api_key_edit_  = nullptr;
-    QLineEdit*      base_url_edit_ = nullptr;
-    QComboBox*      model_combo_   = nullptr;
-    QPushButton*    fetch_btn_     = nullptr;
-    QPushButton*    save_btn_      = nullptr;
-    QPushButton*    test_btn_      = nullptr;
-    QCheckBox*      tools_check_   = nullptr;
-    QLabel*         status_lbl_    = nullptr;
+    QListWidget* provider_list_ = nullptr;
+    QPushButton* add_btn_ = nullptr;
+    QPushButton* delete_btn_ = nullptr;
+    QStackedWidget* form_stack_ = nullptr; // 0=empty, 1=form, 2=fincept
+    QLineEdit* provider_edit_ = nullptr;
+    QLineEdit* api_key_edit_ = nullptr;
+    QLineEdit* base_url_edit_ = nullptr;
+    QComboBox* model_combo_ = nullptr;
+    QPushButton* fetch_btn_ = nullptr;
+    QPushButton* save_btn_ = nullptr;
+    QPushButton* test_btn_ = nullptr;
+    QCheckBox* tools_check_ = nullptr;
+    QLabel* status_lbl_ = nullptr;
 
     // Global settings (lives at bottom of provider tab)
-    QDoubleSpinBox* temp_spin_       = nullptr;
-    QSpinBox*       tokens_spin_     = nullptr;
-    QPlainTextEdit* system_prompt_   = nullptr;
-    QPushButton*    save_global_btn_ = nullptr;
+    QDoubleSpinBox* temp_spin_ = nullptr;
+    QSpinBox* tokens_spin_ = nullptr;
+    QPlainTextEdit* system_prompt_ = nullptr;
+    QPushButton* save_global_btn_ = nullptr;
 
     // ── Profiles tab widgets ──────────────────────────────────────────────────
-    QListWidget*    profile_list_         = nullptr;
-    QLineEdit*      profile_name_edit_    = nullptr;
-    QComboBox*      profile_provider_combo_ = nullptr;
-    QComboBox*      profile_model_combo_  = nullptr;
-    QLineEdit*      profile_api_key_edit_ = nullptr;
-    QLineEdit*      profile_base_url_edit_= nullptr;
-    QDoubleSpinBox* profile_temp_spin_    = nullptr;
-    QSpinBox*       profile_tokens_spin_  = nullptr;
-    QPlainTextEdit* profile_prompt_edit_  = nullptr;
-    QPushButton*    profile_save_btn_     = nullptr;
-    QPushButton*    profile_delete_btn_   = nullptr;
-    QPushButton*    profile_default_btn_  = nullptr;
-    QLabel*         profile_status_lbl_   = nullptr;
+    QListWidget* profile_list_ = nullptr;
+    QLineEdit* profile_name_edit_ = nullptr;
+    QComboBox* profile_provider_combo_ = nullptr;
+    QComboBox* profile_model_combo_ = nullptr;
+    QLineEdit* profile_api_key_edit_ = nullptr;
+    QLineEdit* profile_base_url_edit_ = nullptr;
+    QDoubleSpinBox* profile_temp_spin_ = nullptr;
+    QSpinBox* profile_tokens_spin_ = nullptr;
+    QPlainTextEdit* profile_prompt_edit_ = nullptr;
+    QPushButton* profile_save_btn_ = nullptr;
+    QPushButton* profile_delete_btn_ = nullptr;
+    QPushButton* profile_default_btn_ = nullptr;
+    QLabel* profile_status_lbl_ = nullptr;
 
     // Profile state
-    QString editing_profile_id_;  // empty = new profile
+    QString editing_profile_id_; // empty = new profile
 
     // ── Builders ──────────────────────────────────────────────────────────────
     void build_ui();
@@ -112,8 +112,8 @@ class LlmConfigSection : public QWidget {
     void show_profile_status(const QString& msg, bool error = false);
 
     static const QStringList KNOWN_PROVIDERS;
-    static QString            default_base_url(const QString& provider);
-    static QStringList        fallback_models(const QString& provider);
+    static QString default_base_url(const QString& provider);
+    static QStringList fallback_models(const QString& provider);
 };
 
 } // namespace fincept::screens

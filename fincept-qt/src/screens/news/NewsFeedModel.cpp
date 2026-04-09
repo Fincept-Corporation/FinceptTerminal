@@ -56,15 +56,15 @@ QVariant NewsFeedModel::data(const QModelIndex& index, int role) const {
                 return (!seen_ids_.contains(article.id)) ? pulse_phase_ : -1;
             // Pre-formatted display strings — no allocation in paint()
             case FormattedSourceRole:
-                return row < formatted_rows_.size() ? formatted_rows_[row].source   : QVariant{};
+                return row < formatted_rows_.size() ? formatted_rows_[row].source : QVariant{};
             case FormattedLangRole:
-                return row < formatted_rows_.size() ? formatted_rows_[row].lang     : QVariant{};
+                return row < formatted_rows_.size() ? formatted_rows_[row].lang : QVariant{};
             case FormattedThreatRole:
-                return row < formatted_rows_.size() ? formatted_rows_[row].threat   : QVariant{};
+                return row < formatted_rows_.size() ? formatted_rows_[row].threat : QVariant{};
             case FormattedTickersRole:
-                return row < formatted_rows_.size() ? formatted_rows_[row].tickers  : QVariant{};
+                return row < formatted_rows_.size() ? formatted_rows_[row].tickers : QVariant{};
             case ThreatColorRole:
-                return row < formatted_rows_.size() ? formatted_rows_[row].threat_color   : QVariant{};
+                return row < formatted_rows_.size() ? formatted_rows_[row].threat_color : QVariant{};
             case PriorityColorRole:
                 return row < formatted_rows_.size() ? formatted_rows_[row].priority_color : QVariant{};
             default:
@@ -122,11 +122,11 @@ void NewsFeedModel::set_wire_articles(const QVector<services::NewsArticle>& arti
 
         // Pre-format once — avoids allocation in paint() on every frame
         FormattedRow fr;
-        fr.source  = a.source.left(10).toUpper();
-        fr.lang    = (a.lang.isEmpty() || a.lang == "en") ? QString() : a.lang.toUpper();
-        const bool show_threat = a.threat.level != services::ThreatLevel::INFO &&
-                                 a.threat.level != services::ThreatLevel::LOW;
-        fr.threat       = show_threat ? services::threat_level_string(a.threat.level).left(4) : QString();
+        fr.source = a.source.left(10).toUpper();
+        fr.lang = (a.lang.isEmpty() || a.lang == "en") ? QString() : a.lang.toUpper();
+        const bool show_threat =
+            a.threat.level != services::ThreatLevel::INFO && a.threat.level != services::ThreatLevel::LOW;
+        fr.threat = show_threat ? services::threat_level_string(a.threat.level).left(4) : QString();
         fr.threat_color = show_threat ? services::threat_level_color(a.threat.level) : QString();
         fr.priority_color = services::priority_color(a.priority);
 

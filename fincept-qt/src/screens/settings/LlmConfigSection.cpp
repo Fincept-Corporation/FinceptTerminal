@@ -3,13 +3,13 @@
 #include "screens/settings/LlmConfigSection.h"
 
 #include "ai_chat/LlmService.h"
-#include "ui/theme/Theme.h"
-#include "ui/theme/ThemeManager.h"
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
 #include "storage/repositories/SettingsRepository.h"
+#include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QFormLayout>
 #include <QFrame>
@@ -27,8 +27,8 @@ namespace fincept::screens {
 
 static constexpr const char* TAG = "LlmConfigSection";
 
-const QStringList LlmConfigSection::KNOWN_PROVIDERS = {"openai",   "anthropic",  "gemini", "groq",
-                                                       "deepseek", "openrouter", "minimax", "ollama", "fincept"};
+const QStringList LlmConfigSection::KNOWN_PROVIDERS = {"openai",     "anthropic", "gemini", "groq",   "deepseek",
+                                                       "openrouter", "minimax",   "ollama", "fincept"};
 
 QString LlmConfigSection::default_base_url(const QString& provider) {
     const QString p = provider.toLower();
@@ -87,13 +87,10 @@ LlmConfigSection::LlmConfigSection(QWidget* parent) : QWidget(parent) {
     connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::models_fetched, this,
             &LlmConfigSection::on_models_fetched);
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) {
-                setStyleSheet(QString("background:%1;color:%2;")
-                    .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
-            });
-    setStyleSheet(QString("background:%1;color:%2;")
-        .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        setStyleSheet(QString("background:%1;color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+    });
+    setStyleSheet(QString("background:%1;color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
 
     load_providers();
     load_profiles();
@@ -110,9 +107,10 @@ void LlmConfigSection::build_ui() {
     root->setSpacing(0);
 
     // Title bar
-    auto* title_bar = new QWidget;
+    auto* title_bar = new QWidget(this);
     title_bar->setFixedHeight(44);
-    title_bar->setStyleSheet("background:" + QString(ui::colors::BG_SURFACE()) + ";border-bottom:1px solid " + QString(ui::colors::BORDER_DIM()) + ";");
+    title_bar->setStyleSheet("background:" + QString(ui::colors::BG_SURFACE()) + ";border-bottom:1px solid " +
+                             QString(ui::colors::BORDER_DIM()) + ";");
     auto* tbl = new QHBoxLayout(title_bar);
     tbl->setContentsMargins(16, 0, 16, 0);
     auto* title_lbl = new QLabel("LLM CONFIGURATION");
@@ -123,19 +121,25 @@ void LlmConfigSection::build_ui() {
 
     tab_widget_ = new QTabWidget;
     tab_widget_->setDocumentMode(true);
-    tab_widget_->setStyleSheet(
-        "QTabWidget::pane{border:none;background:" + QString(ui::colors::BG_BASE()) + ";}"
-        "QTabBar::tab{background:" + QString(ui::colors::BG_SURFACE()) + ";color:" + QString(ui::colors::TEXT_SECONDARY()) + ";padding:8px 20px;"
-        "font-weight:600;letter-spacing:1px;border-bottom:2px solid transparent;}"
-        "QTabBar::tab:selected{color:" + QString(ui::colors::AMBER()) + ";border-bottom:2px solid " + QString(ui::colors::AMBER()) + ";}"
-        "QTabBar::tab:hover{color:" + QString(ui::colors::TEXT_PRIMARY()) + ";}");
+    tab_widget_->setStyleSheet("QTabWidget::pane{border:none;background:" + QString(ui::colors::BG_BASE()) +
+                               ";}"
+                               "QTabBar::tab{background:" +
+                               QString(ui::colors::BG_SURFACE()) + ";color:" + QString(ui::colors::TEXT_SECONDARY()) +
+                               ";padding:8px 20px;"
+                               "font-weight:600;letter-spacing:1px;border-bottom:2px solid transparent;}"
+                               "QTabBar::tab:selected{color:" +
+                               QString(ui::colors::AMBER()) + ";border-bottom:2px solid " +
+                               QString(ui::colors::AMBER()) +
+                               ";}"
+                               "QTabBar::tab:hover{color:" +
+                               QString(ui::colors::TEXT_PRIMARY()) + ";}");
     tab_widget_->addTab(build_providers_tab(), "PROVIDERS");
-    tab_widget_->addTab(build_profiles_tab(),  "PROFILES");
+    tab_widget_->addTab(build_profiles_tab(), "PROFILES");
     root->addWidget(tab_widget_, 1);
 }
 
 QWidget* LlmConfigSection::build_providers_tab() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* vl = new QVBoxLayout(w);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
@@ -158,9 +162,10 @@ QWidget* LlmConfigSection::build_providers_tab() {
 }
 
 QWidget* LlmConfigSection::build_provider_list_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setFixedWidth(220);
-    panel->setStyleSheet("background:" + QString(ui::colors::BG_BASE()) + ";border-right:1px solid " + QString(ui::colors::BORDER_DIM()) + ";");
+    panel->setStyleSheet("background:" + QString(ui::colors::BG_BASE()) + ";border-right:1px solid " +
+                         QString(ui::colors::BORDER_DIM()) + ";");
 
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(8, 8, 8, 8);
@@ -171,18 +176,26 @@ QWidget* LlmConfigSection::build_provider_list_panel() {
     vl->addWidget(lbl);
 
     provider_list_ = new QListWidget;
-    provider_list_->setStyleSheet("QListWidget{background:transparent;border:none;color:" + QString(ui::colors::TEXT_PRIMARY()) + ";}"
-                                  "QListWidget::item{padding:8px 6px;border-radius:3px;}"
-                                  "QListWidget::item:selected{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::AMBER()) + ";}"
-                                  "QListWidget::item:hover{background:" + QString(ui::colors::BG_RAISED()) + ";}");
+    provider_list_->setStyleSheet(
+        "QListWidget{background:transparent;border:none;color:" + QString(ui::colors::TEXT_PRIMARY()) +
+        ";}"
+        "QListWidget::item{padding:8px 6px;border-radius:3px;}"
+        "QListWidget::item:selected{background:" +
+        QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::AMBER()) +
+        ";}"
+        "QListWidget::item:hover{background:" +
+        QString(ui::colors::BG_RAISED()) + ";}");
     connect(provider_list_, &QListWidget::currentRowChanged, this, &LlmConfigSection::on_provider_selected);
     vl->addWidget(provider_list_, 1);
 
     auto* btn_row = new QHBoxLayout;
     add_btn_ = new QPushButton("+ Add");
-    add_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::AMBER()) + ";border:1px solid " + QString(ui::colors::AMBER()) + ";"
+    add_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" +
+                            QString(ui::colors::AMBER()) + ";border:1px solid " + QString(ui::colors::AMBER()) +
+                            ";"
                             "border-radius:3px;padding:5px 10px;font-weight:600;}"
-                            "QPushButton:hover{background:" + QString(ui::colors::BG_RAISED()) + ";}");
+                            "QPushButton:hover{background:" +
+                            QString(ui::colors::BG_RAISED()) + ";}");
     connect(add_btn_, &QPushButton::clicked, this, [this]() {
         // Show input dialog to pick provider
         QStringList choices = KNOWN_PROVIDERS;
@@ -221,10 +234,16 @@ QWidget* LlmConfigSection::build_provider_list_panel() {
 
     delete_btn_ = new QPushButton("Remove");
     delete_btn_->setEnabled(false);
-    delete_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::NEGATIVE()) + ";border:1px solid " + QString(ui::colors::BG_RAISED()) + ";"
-                               "border-radius:3px;padding:5px 10px;}"
-                               "QPushButton:hover{background:" + QString(ui::colors::BG_RAISED()) + ";}"
-                               "QPushButton:disabled{color:" + QString(ui::colors::BORDER_BRIGHT()) + ";border-color:" + QString(ui::colors::BORDER_MED()) + ";}");
+    delete_btn_->setStyleSheet(
+        "QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::NEGATIVE()) +
+        ";border:1px solid " + QString(ui::colors::BG_RAISED()) +
+        ";"
+        "border-radius:3px;padding:5px 10px;}"
+        "QPushButton:hover{background:" +
+        QString(ui::colors::BG_RAISED()) +
+        ";}"
+        "QPushButton:disabled{color:" +
+        QString(ui::colors::BORDER_BRIGHT()) + ";border-color:" + QString(ui::colors::BORDER_MED()) + ";}");
     connect(delete_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_delete_provider);
 
     btn_row->addWidget(add_btn_);
@@ -238,12 +257,17 @@ QWidget* LlmConfigSection::build_form_panel() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setStyleSheet("QScrollArea{background:" + QString(ui::colors::BG_BASE()) + ";border:none;}"
-                          "QScrollBar:vertical{background:" + QString(ui::colors::BG_RAISED()) + ";width:6px;}"
-                          "QScrollBar::handle:vertical{background:" + QString(ui::colors::BORDER_BRIGHT()) + ";border-radius:3px;}"
+    scroll->setStyleSheet("QScrollArea{background:" + QString(ui::colors::BG_BASE()) +
+                          ";border:none;}"
+                          "QScrollBar:vertical{background:" +
+                          QString(ui::colors::BG_RAISED()) +
+                          ";width:6px;}"
+                          "QScrollBar::handle:vertical{background:" +
+                          QString(ui::colors::BORDER_BRIGHT()) +
+                          ";border-radius:3px;}"
                           "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}");
 
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     page->setStyleSheet("background:" + QString(ui::colors::BG_BASE()) + ";");
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 20, 24, 20);
@@ -264,9 +288,13 @@ QWidget* LlmConfigSection::build_form_panel() {
     form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
     auto field_style = [](QLineEdit* le) {
-        le->setStyleSheet("QLineEdit{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " + QString(ui::colors::BORDER_MED()) + ";"
+        le->setStyleSheet("QLineEdit{background:" + QString(ui::colors::BG_RAISED()) +
+                          ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " +
+                          QString(ui::colors::BORDER_MED()) +
+                          ";"
                           "border-radius:3px;padding:6px;}"
-                          "QLineEdit:focus{border:1px solid " + QString(ui::colors::AMBER()) + ";}");
+                          "QLineEdit:focus{border:1px solid " +
+                          QString(ui::colors::AMBER()) + ";}");
         le->setMinimumWidth(320);
     };
     auto lbl_style = [](QLabel* l) { l->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";"); };
@@ -277,7 +305,9 @@ QWidget* LlmConfigSection::build_form_panel() {
     provider_edit_->setPlaceholderText("e.g. openai");
     provider_edit_->setReadOnly(true); // set by selection
     field_style(provider_edit_);
-    provider_edit_->setStyleSheet(provider_edit_->styleSheet() + "QLineEdit{background:" + QString(ui::colors::BG_SURFACE()) + ";color:" + QString(ui::colors::TEXT_TERTIARY()) + ";}");
+    provider_edit_->setStyleSheet(provider_edit_->styleSheet() +
+                                  "QLineEdit{background:" + QString(ui::colors::BG_SURFACE()) +
+                                  ";color:" + QString(ui::colors::TEXT_TERTIARY()) + ";}");
     form->addRow(p_lbl, provider_edit_);
 
     auto* k_lbl = new QLabel("API Key");
@@ -295,24 +325,42 @@ QWidget* LlmConfigSection::build_form_panel() {
     model_combo_->setEditable(true);
     model_combo_->setMinimumWidth(260);
     model_combo_->lineEdit()->setPlaceholderText("Select or type model...");
-    model_combo_->setStyleSheet("QComboBox{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " + QString(ui::colors::BORDER_MED()) + ";"
+    model_combo_->setStyleSheet("QComboBox{background:" + QString(ui::colors::BG_RAISED()) +
+                                ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " +
+                                QString(ui::colors::BORDER_MED()) +
+                                ";"
                                 "border-radius:3px;padding:6px;}"
-                                "QComboBox:focus{border:1px solid " + QString(ui::colors::AMBER()) + ";}"
+                                "QComboBox:focus{border:1px solid " +
+                                QString(ui::colors::AMBER()) +
+                                ";}"
                                 "QComboBox::drop-down{border:none;width:20px;}"
                                 "QComboBox::down-arrow{image:none;border-left:4px solid transparent;"
-                                "border-right:4px solid transparent;border-top:5px solid " + QString(ui::colors::TEXT_SECONDARY()) + ";}"
-                                "QComboBox QAbstractItemView{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";"
-                                "selection-background-color:" + QString(ui::colors::BG_RAISED()) + ";selection-color:" + QString(ui::colors::AMBER()) + ";"
-                                "border:1px solid " + QString(ui::colors::BORDER_MED()) + ";}");
+                                "border-right:4px solid transparent;border-top:5px solid " +
+                                QString(ui::colors::TEXT_SECONDARY()) +
+                                ";}"
+                                "QComboBox QAbstractItemView{background:" +
+                                QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::TEXT_PRIMARY()) +
+                                ";"
+                                "selection-background-color:" +
+                                QString(ui::colors::BG_RAISED()) + ";selection-color:" + QString(ui::colors::AMBER()) +
+                                ";"
+                                "border:1px solid " +
+                                QString(ui::colors::BORDER_MED()) + ";}");
     model_row->addWidget(model_combo_, 1);
 
     fetch_btn_ = new QPushButton("Fetch");
     fetch_btn_->setFixedHeight(30);
     fetch_btn_->setFixedWidth(60);
-    fetch_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::AMBER()) + ";border:1px solid " + QString(ui::colors::BORDER_BRIGHT()) + ";"
-                              "border-radius:3px;font-weight:600;}"
-                              "QPushButton:hover{background:" + QString(ui::colors::BG_RAISED()) + ";}"
-                              "QPushButton:disabled{color:" + QString(ui::colors::TEXT_TERTIARY()) + ";border-color:" + QString(ui::colors::BORDER_MED()) + ";}");
+    fetch_btn_->setStyleSheet(
+        "QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::AMBER()) +
+        ";border:1px solid " + QString(ui::colors::BORDER_BRIGHT()) +
+        ";"
+        "border-radius:3px;font-weight:600;}"
+        "QPushButton:hover{background:" +
+        QString(ui::colors::BG_RAISED()) +
+        ";}"
+        "QPushButton:disabled{color:" +
+        QString(ui::colors::TEXT_TERTIARY()) + ";border-color:" + QString(ui::colors::BORDER_MED()) + ";}");
     connect(fetch_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_fetch_models);
     model_row->addWidget(fetch_btn_);
 
@@ -328,11 +376,16 @@ QWidget* LlmConfigSection::build_form_panel() {
     // Tools toggle
     tools_check_ = new QCheckBox("Enable MCP Tools (navigation, market data, portfolio, etc.)");
     tools_check_->setChecked(true);
-    tools_check_->setStyleSheet(
-        "QCheckBox{color:" + QString(ui::colors::TEXT_PRIMARY()) + ";spacing:8px;}"
-        "QCheckBox::indicator{width:16px;height:16px;border:1px solid " + QString(ui::colors::BORDER_MED()) + ";border-radius:3px;background:" + QString(ui::colors::BG_RAISED()) + ";}"
-        "QCheckBox::indicator:checked{background:" + QString(ui::colors::AMBER()) + ";border-color:" + QString(ui::colors::AMBER()) + ";}");
-    tools_check_->setToolTip("When enabled, the AI can interact with the terminal: navigate screens, fetch market data, manage watchlists, etc.");
+    tools_check_->setStyleSheet("QCheckBox{color:" + QString(ui::colors::TEXT_PRIMARY()) +
+                                ";spacing:8px;}"
+                                "QCheckBox::indicator{width:16px;height:16px;border:1px solid " +
+                                QString(ui::colors::BORDER_MED()) +
+                                ";border-radius:3px;background:" + QString(ui::colors::BG_RAISED()) +
+                                ";}"
+                                "QCheckBox::indicator:checked{background:" +
+                                QString(ui::colors::AMBER()) + ";border-color:" + QString(ui::colors::AMBER()) + ";}");
+    tools_check_->setToolTip("When enabled, the AI can interact with the terminal: navigate screens, fetch market "
+                             "data, manage watchlists, etc.");
     form->addRow(new QLabel(""), tools_check_);
 
     vl->addLayout(form);
@@ -341,17 +394,26 @@ QWidget* LlmConfigSection::build_form_panel() {
     auto* btn_row = new QHBoxLayout;
     save_btn_ = new QPushButton("Save & Set Active");
     save_btn_->setFixedHeight(34);
-    save_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::AMBER()) + ";color:" + QString(ui::colors::BG_BASE()) + ";border:none;border-radius:4px;"
-                             "font-weight:700;padding:0 16px;}"
-                             "QPushButton:hover{background:" + QString(ui::colors::AMBER_DIM()) + ";}"
-                             "QPushButton:disabled{background:" + QString(ui::colors::BORDER_BRIGHT()) + ";color:" + QString(ui::colors::TEXT_TERTIARY()) + ";}");
+    save_btn_->setStyleSheet(
+        "QPushButton{background:" + QString(ui::colors::AMBER()) + ";color:" + QString(ui::colors::BG_BASE()) +
+        ";border:none;border-radius:4px;"
+        "font-weight:700;padding:0 16px;}"
+        "QPushButton:hover{background:" +
+        QString(ui::colors::AMBER_DIM()) +
+        ";}"
+        "QPushButton:disabled{background:" +
+        QString(ui::colors::BORDER_BRIGHT()) + ";color:" + QString(ui::colors::TEXT_TERTIARY()) + ";}");
     connect(save_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_save_provider);
 
     test_btn_ = new QPushButton("Test Connection");
     test_btn_->setFixedHeight(34);
-    test_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " + QString(ui::colors::BORDER_BRIGHT()) + ";"
+    test_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) +
+                             ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " +
+                             QString(ui::colors::BORDER_BRIGHT()) +
+                             ";"
                              "border-radius:4px;padding:0 16px;}"
-                             "QPushButton:hover{background:" + QString(ui::colors::BG_HOVER()) + ";}");
+                             "QPushButton:hover{background:" +
+                             QString(ui::colors::BG_HOVER()) + ";}");
     connect(test_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_test_connection);
 
     btn_row->addWidget(save_btn_);
@@ -370,7 +432,7 @@ QWidget* LlmConfigSection::build_form_panel() {
 }
 
 QWidget* LlmConfigSection::build_global_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setStyleSheet("background:" + QString(ui::colors::BG_SURFACE()) + ";");
 
     auto* vl = new QVBoxLayout(panel);
@@ -394,7 +456,10 @@ QWidget* LlmConfigSection::build_global_panel() {
     temp_spin_->setValue(0.7);
     temp_spin_->setDecimals(2);
     temp_spin_->setFixedWidth(100);
-    temp_spin_->setStyleSheet("QDoubleSpinBox{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " + QString(ui::colors::BORDER_MED()) + ";"
+    temp_spin_->setStyleSheet("QDoubleSpinBox{background:" + QString(ui::colors::BG_RAISED()) +
+                              ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " +
+                              QString(ui::colors::BORDER_MED()) +
+                              ";"
                               "border-radius:3px;padding:4px;}");
     temp_grp->addWidget(temp_lbl);
     temp_grp->addWidget(temp_spin_);
@@ -409,7 +474,10 @@ QWidget* LlmConfigSection::build_global_panel() {
     tokens_spin_->setSingleStep(100);
     tokens_spin_->setValue(4096);
     tokens_spin_->setFixedWidth(100);
-    tokens_spin_->setStyleSheet("QSpinBox{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " + QString(ui::colors::BORDER_MED()) + ";"
+    tokens_spin_->setStyleSheet("QSpinBox{background:" + QString(ui::colors::BG_RAISED()) +
+                                ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " +
+                                QString(ui::colors::BORDER_MED()) +
+                                ";"
                                 "border-radius:3px;padding:4px;}");
     tok_grp->addWidget(tok_lbl);
     tok_grp->addWidget(tokens_spin_);
@@ -422,9 +490,13 @@ QWidget* LlmConfigSection::build_global_panel() {
     system_prompt_ = new QPlainTextEdit;
     system_prompt_->setPlaceholderText("Optional system prompt for the LLM...");
     system_prompt_->setFixedHeight(60);
-    system_prompt_->setStyleSheet("QPlainTextEdit{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " + QString(ui::colors::BORDER_MED()) + ";"
+    system_prompt_->setStyleSheet("QPlainTextEdit{background:" + QString(ui::colors::BG_RAISED()) +
+                                  ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " +
+                                  QString(ui::colors::BORDER_MED()) +
+                                  ";"
                                   "border-radius:3px;padding:4px;}"
-                                  "QPlainTextEdit:focus{border:1px solid " + QString(ui::colors::AMBER()) + ";}");
+                                  "QPlainTextEdit:focus{border:1px solid " +
+                                  QString(ui::colors::AMBER()) + ";}");
     sp_grp->addWidget(sp_lbl);
     sp_grp->addWidget(system_prompt_);
     row->addLayout(sp_grp, 1);
@@ -434,9 +506,12 @@ QWidget* LlmConfigSection::build_global_panel() {
     save_global_btn_ = new QPushButton("Save Global Settings");
     save_global_btn_->setFixedHeight(30);
     save_global_btn_->setFixedWidth(180);
-    save_global_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::AMBER()) + ";border:1px solid " + QString(ui::colors::AMBER()) + ";"
+    save_global_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" +
+                                    QString(ui::colors::AMBER()) + ";border:1px solid " + QString(ui::colors::AMBER()) +
+                                    ";"
                                     "border-radius:3px;font-weight:600;}"
-                                    "QPushButton:hover{background:" + QString(ui::colors::BG_RAISED()) + ";}");
+                                    "QPushButton:hover{background:" +
+                                    QString(ui::colors::BG_RAISED()) + ";}");
     connect(save_global_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_save_global);
     vl->addWidget(save_global_btn_);
 
@@ -785,7 +860,8 @@ void LlmConfigSection::on_models_fetched(const QString& provider, const QStringL
 
 void LlmConfigSection::show_status(const QString& msg, bool error) {
     status_lbl_->setText(msg);
-    status_lbl_->setStyleSheet(error ? "color:" + QString(ui::colors::NEGATIVE()) + ";" : "color:" + QString(ui::colors::POSITIVE()) + ";");
+    status_lbl_->setStyleSheet(error ? "color:" + QString(ui::colors::NEGATIVE()) + ";"
+                                     : "color:" + QString(ui::colors::POSITIVE()) + ";");
     status_lbl_->show();
     QTimer::singleShot(4000, status_lbl_, &QLabel::hide);
 }
@@ -795,7 +871,7 @@ void LlmConfigSection::show_status(const QString& msg, bool error) {
 // ============================================================================
 
 QWidget* LlmConfigSection::build_profiles_tab() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* hl = new QHBoxLayout(w);
     hl->setContentsMargins(0, 0, 0, 0);
     hl->setSpacing(0);
@@ -813,9 +889,10 @@ QWidget* LlmConfigSection::build_profiles_tab() {
 }
 
 QWidget* LlmConfigSection::build_profile_list_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setFixedWidth(240);
-    panel->setStyleSheet("background:" + QString(ui::colors::BG_BASE()) + ";border-right:1px solid " + QString(ui::colors::BORDER_DIM()) + ";");
+    panel->setStyleSheet("background:" + QString(ui::colors::BG_BASE()) + ";border-right:1px solid " +
+                         QString(ui::colors::BORDER_DIM()) + ";");
 
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(8, 8, 8, 8);
@@ -832,19 +909,25 @@ QWidget* LlmConfigSection::build_profile_list_panel() {
 
     profile_list_ = new QListWidget;
     profile_list_->setStyleSheet(
-        "QListWidget{background:transparent;border:none;color:" + QString(ui::colors::TEXT_PRIMARY()) + ";}"
+        "QListWidget{background:transparent;border:none;color:" + QString(ui::colors::TEXT_PRIMARY()) +
+        ";}"
         "QListWidget::item{padding:8px 6px;border-radius:3px;}"
-        "QListWidget::item:selected{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::AMBER()) + ";}"
-        "QListWidget::item:hover{background:" + QString(ui::colors::BG_RAISED()) + ";}");
+        "QListWidget::item:selected{background:" +
+        QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::AMBER()) +
+        ";}"
+        "QListWidget::item:hover{background:" +
+        QString(ui::colors::BG_RAISED()) + ";}");
     connect(profile_list_, &QListWidget::currentRowChanged, this, &LlmConfigSection::on_profile_selected);
     vl->addWidget(profile_list_, 1);
 
     auto* btn_row = new QHBoxLayout;
     auto* add_btn = new QPushButton("+ New");
-    add_btn->setStyleSheet(
-        "QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::AMBER()) + ";border:1px solid " + QString(ui::colors::AMBER()) + ";"
-        "border-radius:3px;padding:5px 10px;font-weight:600;}"
-        "QPushButton:hover{background:" + QString(ui::colors::BG_RAISED()) + ";}");
+    add_btn->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" +
+                           QString(ui::colors::AMBER()) + ";border:1px solid " + QString(ui::colors::AMBER()) +
+                           ";"
+                           "border-radius:3px;padding:5px 10px;font-weight:600;}"
+                           "QPushButton:hover{background:" +
+                           QString(ui::colors::BG_RAISED()) + ";}");
     connect(add_btn, &QPushButton::clicked, this, [this]() {
         editing_profile_id_.clear();
         clear_profile_form();
@@ -853,11 +936,16 @@ QWidget* LlmConfigSection::build_profile_list_panel() {
 
     profile_delete_btn_ = new QPushButton("Delete");
     profile_delete_btn_->setEnabled(false);
-    profile_delete_btn_->setStyleSheet(
-        "QPushButton{background:transparent;color:" + QString(ui::colors::NEGATIVE()) + ";border:1px solid " + QString(ui::colors::NEGATIVE()) + ";"
-        "border-radius:3px;padding:5px 10px;}"
-        "QPushButton:hover{background:" + QString(ui::colors::BG_RAISED()) + ";}"
-        "QPushButton:disabled{color:" + QString(ui::colors::BORDER_BRIGHT()) + ";border-color:" + QString(ui::colors::BORDER_BRIGHT()) + ";}");
+    profile_delete_btn_->setStyleSheet("QPushButton{background:transparent;color:" + QString(ui::colors::NEGATIVE()) +
+                                       ";border:1px solid " + QString(ui::colors::NEGATIVE()) +
+                                       ";"
+                                       "border-radius:3px;padding:5px 10px;}"
+                                       "QPushButton:hover{background:" +
+                                       QString(ui::colors::BG_RAISED()) +
+                                       ";}"
+                                       "QPushButton:disabled{color:" +
+                                       QString(ui::colors::BORDER_BRIGHT()) +
+                                       ";border-color:" + QString(ui::colors::BORDER_BRIGHT()) + ";}");
     connect(profile_delete_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_delete_profile);
     btn_row->addWidget(profile_delete_btn_);
     vl->addLayout(btn_row);
@@ -868,11 +956,15 @@ QWidget* LlmConfigSection::build_profile_list_panel() {
 QWidget* LlmConfigSection::build_profile_form_panel() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet("QScrollArea{border:none;background:" + QString(ui::colors::BG_BASE()) + ";}"
-                          "QScrollBar:vertical{width:6px;background:" + QString(ui::colors::BG_SURFACE()) + ";}"
-                          "QScrollBar::handle:vertical{background:" + QString(ui::colors::BORDER_BRIGHT()) + ";}");
+    scroll->setStyleSheet("QScrollArea{border:none;background:" + QString(ui::colors::BG_BASE()) +
+                          ";}"
+                          "QScrollBar:vertical{width:6px;background:" +
+                          QString(ui::colors::BG_SURFACE()) +
+                          ";}"
+                          "QScrollBar::handle:vertical{background:" +
+                          QString(ui::colors::BORDER_BRIGHT()) + ";}");
 
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setStyleSheet("background:" + QString(ui::colors::BG_BASE()) + ";");
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(20, 16, 20, 16);
@@ -884,7 +976,9 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
         return l;
     };
     static auto field_style = []() {
-        return QString("background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " + QString(ui::colors::BORDER_MED()) + ";padding:6px 10px;");
+        return QString("background:" + QString(ui::colors::BG_RAISED()) +
+                       ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " +
+                       QString(ui::colors::BORDER_MED()) + ";padding:6px 10px;");
     };
 
     vl->addWidget(lbl("PROFILE NAME"));
@@ -898,15 +992,14 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
     profile_provider_combo_->addItems(KNOWN_PROVIDERS);
     profile_provider_combo_->setStyleSheet(
         QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(field_style()));
-    connect(profile_provider_combo_, &QComboBox::currentTextChanged,
-            this, &LlmConfigSection::on_profile_provider_changed);
+    connect(profile_provider_combo_, &QComboBox::currentTextChanged, this,
+            &LlmConfigSection::on_profile_provider_changed);
     vl->addWidget(profile_provider_combo_);
 
     vl->addWidget(lbl("MODEL"));
     profile_model_combo_ = new QComboBox;
     profile_model_combo_->setEditable(true);
-    profile_model_combo_->setStyleSheet(
-        QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(field_style()));
+    profile_model_combo_->setStyleSheet(QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(field_style()));
     vl->addWidget(profile_model_combo_);
 
     vl->addWidget(lbl("API KEY"));
@@ -948,26 +1041,32 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
     profile_prompt_edit_ = new QPlainTextEdit;
     profile_prompt_edit_->setPlaceholderText("Leave blank to use global system prompt");
     profile_prompt_edit_->setMaximumHeight(80);
-    profile_prompt_edit_->setStyleSheet(
-        QString("QPlainTextEdit{%1}").arg(field_style()));
+    profile_prompt_edit_->setStyleSheet(QString("QPlainTextEdit{%1}").arg(field_style()));
     vl->addWidget(profile_prompt_edit_);
 
     auto* btn_row = new QHBoxLayout;
     profile_save_btn_ = new QPushButton("SAVE PROFILE");
-    profile_save_btn_->setStyleSheet(
-        "QPushButton{background:" + QString(ui::colors::AMBER()) + ";color:" + QString(ui::colors::BG_BASE()) + ";border:none;padding:8px 20px;"
-        "font-weight:700;letter-spacing:1px;}"
-        "QPushButton:hover{background:" + QString(ui::colors::AMBER_DIM()) + ";}");
+    profile_save_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::AMBER()) +
+                                     ";color:" + QString(ui::colors::BG_BASE()) +
+                                     ";border:none;padding:8px 20px;"
+                                     "font-weight:700;letter-spacing:1px;}"
+                                     "QPushButton:hover{background:" +
+                                     QString(ui::colors::AMBER_DIM()) + ";}");
     connect(profile_save_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_save_profile);
     btn_row->addWidget(profile_save_btn_);
 
     profile_default_btn_ = new QPushButton("SET AS DEFAULT");
     profile_default_btn_->setEnabled(false);
-    profile_default_btn_->setStyleSheet(
-        "QPushButton{background:transparent;color:" + QString(ui::colors::AMBER()) + ";border:1px solid " + QString(ui::colors::AMBER()) + ";"
-        "padding:8px 20px;font-weight:600;}"
-        "QPushButton:hover{background:" + QString(ui::colors::BG_RAISED()) + ";}"
-        "QPushButton:disabled{color:" + QString(ui::colors::BORDER_BRIGHT()) + ";border-color:" + QString(ui::colors::BORDER_BRIGHT()) + ";}");
+    profile_default_btn_->setStyleSheet("QPushButton{background:transparent;color:" + QString(ui::colors::AMBER()) +
+                                        ";border:1px solid " + QString(ui::colors::AMBER()) +
+                                        ";"
+                                        "padding:8px 20px;font-weight:600;}"
+                                        "QPushButton:hover{background:" +
+                                        QString(ui::colors::BG_RAISED()) +
+                                        ";}"
+                                        "QPushButton:disabled{color:" +
+                                        QString(ui::colors::BORDER_BRIGHT()) +
+                                        ";border-color:" + QString(ui::colors::BORDER_BRIGHT()) + ";}");
     connect(profile_default_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_set_default_profile);
     btn_row->addWidget(profile_default_btn_);
     btn_row->addStretch();
@@ -1052,7 +1151,8 @@ void LlmConfigSection::clear_profile_form() {
 
 void LlmConfigSection::show_profile_status(const QString& msg, bool error) {
     profile_status_lbl_->setText(msg);
-    profile_status_lbl_->setStyleSheet(error ? "color:" + QString(ui::colors::NEGATIVE()) + ";" : "color:" + QString(ui::colors::POSITIVE()) + ";");
+    profile_status_lbl_->setStyleSheet(error ? "color:" + QString(ui::colors::NEGATIVE()) + ";"
+                                             : "color:" + QString(ui::colors::POSITIVE()) + ";");
     profile_status_lbl_->show();
     QTimer::singleShot(4000, profile_status_lbl_, &QLabel::hide);
 }
@@ -1062,9 +1162,11 @@ void LlmConfigSection::show_profile_status(const QString& msg, bool error) {
 // ============================================================================
 
 void LlmConfigSection::on_profile_selected(int row) {
-    if (row < 0) return;
+    if (row < 0)
+        return;
     auto* item = profile_list_->item(row);
-    if (!item) return;
+    if (!item)
+        return;
     QString id = item->data(Qt::UserRole).toString();
     auto r = LlmProfileRepository::instance().get_profile(id);
     if (r.is_ok())
@@ -1097,7 +1199,7 @@ void LlmConfigSection::on_save_profile() {
         return;
     }
     QString provider = profile_provider_combo_->currentText().trimmed();
-    QString model    = profile_model_combo_->currentText().trimmed();
+    QString model = profile_model_combo_->currentText().trimmed();
     if (model.isEmpty()) {
         show_profile_status("Model is required", true);
         return;
@@ -1118,16 +1220,16 @@ void LlmConfigSection::on_save_profile() {
     }
 
     LlmProfile profile;
-    profile.id            = editing_profile_id_;  // empty = new (repo generates UUID)
-    profile.name          = name;
-    profile.provider      = provider.toLower();
-    profile.model_id      = model;
-    profile.api_key       = api_key;
-    profile.base_url      = profile_base_url_edit_->text().trimmed();
-    profile.temperature   = profile_temp_spin_->value();
-    profile.max_tokens    = profile_tokens_spin_->value();
+    profile.id = editing_profile_id_; // empty = new (repo generates UUID)
+    profile.name = name;
+    profile.provider = provider.toLower();
+    profile.model_id = model;
+    profile.api_key = api_key;
+    profile.base_url = profile_base_url_edit_->text().trimmed();
+    profile.temperature = profile_temp_spin_->value();
+    profile.max_tokens = profile_tokens_spin_->value();
     profile.system_prompt = profile_prompt_edit_->toPlainText().trimmed();
-    profile.is_default    = false;
+    profile.is_default = false;
 
     auto r = LlmProfileRepository::instance().save_profile(profile);
     if (r.is_err()) {
@@ -1142,7 +1244,8 @@ void LlmConfigSection::on_save_profile() {
 }
 
 void LlmConfigSection::on_delete_profile() {
-    if (editing_profile_id_.isEmpty()) return;
+    if (editing_profile_id_.isEmpty())
+        return;
     auto r = LlmProfileRepository::instance().delete_profile(editing_profile_id_);
     if (r.is_ok()) {
         clear_profile_form();
@@ -1155,7 +1258,8 @@ void LlmConfigSection::on_delete_profile() {
 }
 
 void LlmConfigSection::on_set_default_profile() {
-    if (editing_profile_id_.isEmpty()) return;
+    if (editing_profile_id_.isEmpty())
+        return;
     auto r = LlmProfileRepository::instance().set_default(editing_profile_id_);
     if (r.is_ok()) {
         profile_default_btn_->setEnabled(false);

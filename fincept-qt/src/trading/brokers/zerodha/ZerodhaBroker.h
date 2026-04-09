@@ -17,26 +17,28 @@ class ZerodhaBroker : public IBroker {
             .display_name = "Zerodha",
             .region = "IN",
             .currency = "INR",
-            .credential_fields = {
-                {CredentialField::ApiKey,    "API KEY",      "Enter API Key...",       false},
-                {CredentialField::ApiSecret, "API SECRET",   "Enter API Secret...",    true},
-                {CredentialField::AuthCode,  "REQUEST TOKEN","Paste request_token...", false},
-            },
+            .credential_fields =
+                {
+                    {CredentialField::ApiKey, "API KEY", "Enter API Key...", false},
+                    {CredentialField::ApiSecret, "API SECRET", "Enter API Secret...", true},
+                    {CredentialField::AuthCode, "REQUEST TOKEN", "Paste request_token...", false},
+                },
             .exchanges = {"NSE", "BSE", "NFO", "CDS"},
-            .product_types = {
-                {"Intraday (MIS)",  ProductType::Intraday},
-                {"Delivery (CNC)", ProductType::Delivery},
-                {"Margin (NRML)",  ProductType::Margin},
-                {"Cover Order",    ProductType::CoverOrder},
-                {"Bracket Order",  ProductType::BracketOrder},
-            },
+            .product_types =
+                {
+                    {"Intraday (MIS)", ProductType::Intraday},
+                    {"Delivery (CNC)", ProductType::Delivery},
+                    {"Margin (NRML)", ProductType::Margin},
+                    {"Cover Order", ProductType::CoverOrder},
+                    {"Bracket Order", ProductType::BracketOrder},
+                },
             .supports_intraday = true,
             .supports_bracket_order = true,
             .supports_cover_order = true,
             .has_native_paper = false,
             .default_paper_balance = 1000000.0,
-            .default_watchlist = {"HDFCBANK","ICICIBANK","SBIN","KOTAKBANK","AXISBANK",
-                                  "TCS","INFY","RELIANCE","TATAMOTORS","BAJFINANCE"},
+            .default_watchlist = {"HDFCBANK", "ICICIBANK", "SBIN", "KOTAKBANK", "AXISBANK", "TCS", "INFY", "RELIANCE",
+                                  "TATAMOTORS", "BAJFINANCE"},
             .default_symbol = "RELIANCE",
             .default_exchange = "NSE",
             .brokerage_info = "\u20B920/order or 0.03% intraday, 0% delivery",
@@ -61,18 +63,17 @@ class ZerodhaBroker : public IBroker {
                                                    const QString& to_date) override;
 
     // --- Margin ---
-    ApiResponse<OrderMargin>   get_order_margins(const BrokerCredentials& creds,
-                                                  const UnifiedOrder& order) override;
-    ApiResponse<BasketMargin>  get_basket_margins(const BrokerCredentials& creds,
-                                                   const QVector<UnifiedOrder>& orders) override;
+    ApiResponse<OrderMargin> get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) override;
+    ApiResponse<BasketMargin> get_basket_margins(const BrokerCredentials& creds,
+                                                 const QVector<UnifiedOrder>& orders) override;
 
     // --- GTT ---
-    GttPlaceResponse            gtt_place(const BrokerCredentials& creds, const GttOrder& order) override;
-    ApiResponse<GttOrder>       gtt_get(const BrokerCredentials& creds, const QString& gtt_id) override;
+    GttPlaceResponse gtt_place(const BrokerCredentials& creds, const GttOrder& order) override;
+    ApiResponse<GttOrder> gtt_get(const BrokerCredentials& creds, const QString& gtt_id) override;
     ApiResponse<QVector<GttOrder>> gtt_list(const BrokerCredentials& creds) override;
-    ApiResponse<GttOrder>       gtt_modify(const BrokerCredentials& creds, const QString& gtt_id,
-                                            const GttOrder& updated) override;
-    ApiResponse<QJsonObject>    gtt_cancel(const BrokerCredentials& creds, const QString& gtt_id) override;
+    ApiResponse<GttOrder> gtt_modify(const BrokerCredentials& creds, const QString& gtt_id,
+                                     const GttOrder& updated) override;
+    ApiResponse<QJsonObject> gtt_cancel(const BrokerCredentials& creds, const QString& gtt_id) override;
 
   protected:
     QMap<QString, QString> auth_headers(const BrokerCredentials& creds) const override;

@@ -29,14 +29,12 @@ class AngelOneWebSocket : public QObject {
     Q_OBJECT
   public:
     struct Subscription {
-        QString        token;
+        QString token;
         AoExchangeType exchange_type;
     };
 
-    explicit AngelOneWebSocket(const QString& api_key,
-                                const QString& client_code,
-                                const QString& feed_token,
-                                QObject* parent = nullptr);
+    explicit AngelOneWebSocket(const QString& api_key, const QString& client_code, const QString& feed_token,
+                               QObject* parent = nullptr);
 
     /// Open the WebSocket connection.
     void open();
@@ -84,12 +82,12 @@ class AngelOneWebSocket : public QObject {
     AoTick parse_tick(const QByteArray& data) const;
 
     // Little-endian read helpers
-    static qint64  read_i64_le(const uchar* p);
-    static double  read_d64_le(const uchar* p);
+    static qint64 read_i64_le(const uchar* p);
+    static double read_d64_le(const uchar* p);
     static quint16 read_u16_le(const uchar* p);
-    static double  paise_to_rupees(qint64 paise);
+    static double paise_to_rupees(qint64 paise);
     static QString parse_token_string(const uchar* p, int max_len);
-    static quint8  exchange_type_to_int(AoExchangeType t);
+    static quint8 exchange_type_to_int(AoExchangeType t);
 
     QString api_key_;
     QString client_code_;

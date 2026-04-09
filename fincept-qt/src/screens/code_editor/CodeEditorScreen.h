@@ -50,8 +50,8 @@ class CodeTextEdit : public QTextEdit {
     explicit CodeTextEdit(QWidget* parent = nullptr);
 
   signals:
-    void run_shortcut();       // Ctrl+Enter
-    void run_and_next();       // Shift+Enter
+    void run_shortcut(); // Ctrl+Enter
+    void run_and_next(); // Shift+Enter
 
   protected:
     void keyPressEvent(QKeyEvent* event) override;

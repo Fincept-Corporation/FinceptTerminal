@@ -35,14 +35,13 @@ double ZerodhaWebSocket::paise_to_rupees(qint32 paise) {
 // Constructor / destructor
 // ────────────────────────────────────────────────────────────────────────────
 
-ZerodhaWebSocket::ZerodhaWebSocket(const QString& api_key, const QString& access_token,
-                                   QObject* parent)
+ZerodhaWebSocket::ZerodhaWebSocket(const QString& api_key, const QString& access_token, QObject* parent)
     : QObject(parent), api_key_(api_key), access_token_(access_token) {
     ws_ = new WebSocketClient(this);
-    connect(ws_, &WebSocketClient::connected,              this, &ZerodhaWebSocket::on_connected);
-    connect(ws_, &WebSocketClient::disconnected,           this, &ZerodhaWebSocket::on_disconnected);
-    connect(ws_, &WebSocketClient::binary_message_received,this, &ZerodhaWebSocket::on_binary_message);
-    connect(ws_, &WebSocketClient::error_occurred,         this, &ZerodhaWebSocket::error_occurred);
+    connect(ws_, &WebSocketClient::connected, this, &ZerodhaWebSocket::on_connected);
+    connect(ws_, &WebSocketClient::disconnected, this, &ZerodhaWebSocket::on_disconnected);
+    connect(ws_, &WebSocketClient::binary_message_received, this, &ZerodhaWebSocket::on_binary_message);
+    connect(ws_, &WebSocketClient::error_occurred, this, &ZerodhaWebSocket::error_occurred);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -50,8 +49,7 @@ ZerodhaWebSocket::ZerodhaWebSocket(const QString& api_key, const QString& access
 // ────────────────────────────────────────────────────────────────────────────
 
 void ZerodhaWebSocket::open() {
-    QString url = QString("%1?api_key=%2&access_token=%3")
-                      .arg(kWsUrl, api_key_, access_token_);
+    QString url = QString("%1?api_key=%2&access_token=%3").arg(kWsUrl, api_key_, access_token_);
     LOG_INFO("ZerodhaWS", "Connecting to KiteTicker");
     ws_->connect_to(url);
 }
@@ -155,7 +153,7 @@ void ZerodhaWebSocket::on_binary_message(const QByteArray& data) {
         auto& svc = InstrumentService::instance();
         auto inst = svc.find_by_token(tick.instrument_token, "zerodha");
         if (inst.has_value()) {
-            tick.symbol   = inst->symbol;
+            tick.symbol = inst->symbol;
             tick.exchange = inst->exchange;
             tick.tradable = (inst->instrument_type != InstrumentType::INDEX);
         }
@@ -223,8 +221,8 @@ void ZerodhaWebSocket::resubscribe_all() {
 
 ZerodhaTick ZerodhaWebSocket::parse_ltp_packet(const uchar* p) const {
     ZerodhaTick t;
-    t.instrument_token = read_u32(p);          // bytes 0-3
-    t.ltp              = paise_to_rupees(read_i32(p + 4)); // bytes 4-7
+    t.instrument_token = read_u32(p);         // bytes 0-3
+    t.ltp = paise_to_rupees(read_i32(p + 4)); // bytes 4-7
     return t;
 }
 
@@ -243,16 +241,16 @@ ZerodhaTick ZerodhaWebSocket::parse_quote_packet(const uchar* p) const {
     // 40-43 close
     ZerodhaTick t;
     t.instrument_token = read_u32(p);
-    t.ltp              = paise_to_rupees(read_i32(p +  4));
-    t.last_quantity    = read_i32(p +  8);
-    t.average_price    = paise_to_rupees(read_i32(p + 12));
-    t.volume           = read_i32(p + 16);
-    t.buy_quantity     = read_i32(p + 20);
-    t.sell_quantity    = read_i32(p + 24);
-    t.open             = paise_to_rupees(read_i32(p + 28));
-    t.high             = paise_to_rupees(read_i32(p + 32));
-    t.low              = paise_to_rupees(read_i32(p + 36));
-    t.close            = paise_to_rupees(read_i32(p + 40));
+    t.ltp = paise_to_rupees(read_i32(p + 4));
+    t.last_quantity = read_i32(p + 8);
+    t.average_price = paise_to_rupees(read_i32(p + 12));
+    t.volume = read_i32(p + 16);
+    t.buy_quantity = read_i32(p + 20);
+    t.sell_quantity = read_i32(p + 24);
+    t.open = paise_to_rupees(read_i32(p + 28));
+    t.high = paise_to_rupees(read_i32(p + 32));
+    t.low = paise_to_rupees(read_i32(p + 36));
+    t.close = paise_to_rupees(read_i32(p + 40));
     return t;
 }
 
@@ -270,25 +268,25 @@ ZerodhaTick ZerodhaWebSocket::parse_full_packet(const uchar* p) const {
     ZerodhaTick t = parse_quote_packet(p); // first 44 bytes identical
 
     // last_trade_time at offset 44 — not stored, just skip
-    t.oi          = read_i32(p + 48);
+    t.oi = read_i32(p + 48);
     t.oi_day_high = read_i32(p + 52);
-    t.oi_day_low  = read_i32(p + 56);
+    t.oi_day_low = read_i32(p + 56);
 
-    qint32 ex_ts  = read_i32(p + 60);
+    qint32 ex_ts = read_i32(p + 60);
     t.exchange_timestamp = QDateTime::fromSecsSinceEpoch(ex_ts, Qt::UTC);
 
     // Depth: 5 bids then 5 asks, each 12 bytes
     for (int i = 0; i < 5; ++i) {
         int base = 64 + i * 12;
         t.bids[i].quantity = read_i32(p + base);
-        t.bids[i].price    = paise_to_rupees(read_i32(p + base + 4));
-        t.bids[i].orders   = int(read_u16(p + base + 8));
+        t.bids[i].price = paise_to_rupees(read_i32(p + base + 4));
+        t.bids[i].orders = int(read_u16(p + base + 8));
     }
     for (int i = 0; i < 5; ++i) {
         int base = 64 + (5 + i) * 12;
         t.asks[i].quantity = read_i32(p + base);
-        t.asks[i].price    = paise_to_rupees(read_i32(p + base + 4));
-        t.asks[i].orders   = int(read_u16(p + base + 8));
+        t.asks[i].price = paise_to_rupees(read_i32(p + base + 4));
+        t.asks[i].orders = int(read_u16(p + base + 8));
     }
 
     return t;

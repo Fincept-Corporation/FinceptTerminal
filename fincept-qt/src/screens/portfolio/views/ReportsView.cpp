@@ -34,12 +34,12 @@ void ReportsView::build_ui() {
                                   ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
 
     // ── Portfolio Summary Report ─────────────────────────────────────────────
-    summary_panel_ = new QWidget;
+    summary_panel_ = new QWidget(this);
     summary_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
     tabs_->addTab(summary_panel_, "SUMMARY");
 
     // ── Transaction History ──────────────────────────────────────────────────
-    auto* txn_w = new QWidget;
+    auto* txn_w = new QWidget(this);
     auto* txn_layout = new QVBoxLayout(txn_w);
     txn_layout->setContentsMargins(12, 8, 12, 8);
 
@@ -73,7 +73,7 @@ void ReportsView::build_ui() {
     tabs_->addTab(txn_w, "TRANSACTIONS");
 
     // ── Performance Attribution ──────────────────────────────────────────────
-    auto* attr_w = new QWidget;
+    auto* attr_w = new QWidget(this);
     auto* attr_layout = new QVBoxLayout(attr_w);
     attr_layout->setContentsMargins(12, 8, 12, 8);
 
@@ -128,7 +128,7 @@ void ReportsView::update_summary() {
     grid->setSpacing(8);
 
     auto add_card = [&](int r, int c, const QString& label, const QString& value, const char* color) {
-        auto* card = new QWidget;
+        auto* card = new QWidget(this);
         card->setStyleSheet(
             QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
         auto* cl = new QVBoxLayout(card);

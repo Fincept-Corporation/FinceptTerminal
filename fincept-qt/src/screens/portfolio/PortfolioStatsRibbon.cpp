@@ -30,80 +30,68 @@ PortfolioStatsRibbon::PortfolioStatsRibbon(QWidget* parent) : QWidget(parent) {
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setStyleSheet("QScrollArea { background:transparent; border:none; }");
 
-    auto* inner = new QWidget;
+    auto* inner = new QWidget(this);
     inner->setStyleSheet("background:transparent;");
     cells_layout_ = new QHBoxLayout(inner);
     cells_layout_->setContentsMargins(0, 0, 0, 0);
     cells_layout_->setSpacing(0);
 
     total_value_ = add_cell("TOTAL VALUE", ui::colors::WARNING);
-    total_value_.container->setToolTip(
-        "Current market value of all holdings.\n"
-        "Sum of (quantity × current price) for every position.");
+    total_value_.container->setToolTip("Current market value of all holdings.\n"
+                                       "Sum of (quantity × current price) for every position.");
 
     pnl_ = add_cell("UNREALIZED P&L", ui::colors::TEXT_PRIMARY);
-    pnl_.container->setToolTip(
-        "Unrealized profit or loss across all open positions.\n"
-        "Calculated as: market value − total cost basis.\n"
-        "This gain/loss is not realized until you sell.");
+    pnl_.container->setToolTip("Unrealized profit or loss across all open positions.\n"
+                               "Calculated as: market value − total cost basis.\n"
+                               "This gain/loss is not realized until you sell.");
 
     day_change_ = add_cell("DAY CHANGE", ui::colors::TEXT_PRIMARY);
-    day_change_.container->setToolTip(
-        "Total portfolio value change today as a percentage.\n"
-        "Weighted sum of each holding's intraday % change.");
+    day_change_.container->setToolTip("Total portfolio value change today as a percentage.\n"
+                                      "Weighted sum of each holding's intraday % change.");
 
     cost_basis_ = add_cell("COST BASIS", ui::colors::CYAN);
-    cost_basis_.container->setToolTip(
-        "Total amount invested — sum of (avg buy price × quantity)\n"
-        "for all current positions. Used to compute P&L.");
+    cost_basis_.container->setToolTip("Total amount invested — sum of (avg buy price × quantity)\n"
+                                      "for all current positions. Used to compute P&L.");
 
     positions_ = add_cell("POSITIONS", ui::colors::TEXT_PRIMARY);
-    positions_.container->setToolTip(
-        "Number of distinct holdings in this portfolio,\n"
-        "split into gainers (↑) and losers (↓) today.");
+    positions_.container->setToolTip("Number of distinct holdings in this portfolio,\n"
+                                     "split into gainers (↑) and losers (↓) today.");
 
     concentration_ = add_cell("CONC. TOP3", ui::colors::AMBER);
-    concentration_.container->setToolTip(
-        "Concentration risk: combined weight of the top 3 holdings.\n"
-        "Values above 50% indicate a concentrated portfolio.\n"
-        "Lower is generally better for diversification.");
+    concentration_.container->setToolTip("Concentration risk: combined weight of the top 3 holdings.\n"
+                                         "Values above 50% indicate a concentrated portfolio.\n"
+                                         "Lower is generally better for diversification.");
 
     sharpe_ = add_cell("SHARPE", ui::colors::CYAN);
-    sharpe_.container->setToolTip(
-        "Sharpe Ratio: risk-adjusted return over a risk-free rate.\n"
-        "Formula: (mean daily return − risk-free rate) / std dev of returns × √252.\n"
-        "Above 1.0 = good, above 2.0 = very good, below 0 = worse than risk-free.");
+    sharpe_.container->setToolTip("Sharpe Ratio: risk-adjusted return over a risk-free rate.\n"
+                                  "Formula: (mean daily return − risk-free rate) / std dev of returns × √252.\n"
+                                  "Above 1.0 = good, above 2.0 = very good, below 0 = worse than risk-free.");
 
     beta_ = add_cell("BETA", ui::colors::WARNING);
-    beta_.container->setToolTip(
-        "Beta measures portfolio sensitivity to broad market moves.\n"
-        "Beta = 1.0: moves with the market. >1.0: more volatile.\n"
-        "<1.0: less volatile. Negative beta: inverse correlation.");
+    beta_.container->setToolTip("Beta measures portfolio sensitivity to broad market moves.\n"
+                                "Beta = 1.0: moves with the market. >1.0: more volatile.\n"
+                                "<1.0: less volatile. Negative beta: inverse correlation.");
 
     volatility_ = add_cell("VOLATILITY", ui::colors::AMBER);
-    volatility_.container->setToolTip(
-        "Annualized portfolio volatility (standard deviation of returns).\n"
-        "Formula: std dev of daily returns × √252.\n"
-        "Higher values indicate greater price swings.");
+    volatility_.container->setToolTip("Annualized portfolio volatility (standard deviation of returns).\n"
+                                      "Formula: std dev of daily returns × √252.\n"
+                                      "Higher values indicate greater price swings.");
 
     max_drawdown_ = add_cell("MAX DRAWDOWN", ui::colors::NEGATIVE);
-    max_drawdown_.container->setToolTip(
-        "Maximum peak-to-trough decline in portfolio value.\n"
-        "Measures the worst loss experienced from a high point.\n"
-        "Lower magnitude = better capital preservation.");
+    max_drawdown_.container->setToolTip("Maximum peak-to-trough decline in portfolio value.\n"
+                                        "Measures the worst loss experienced from a high point.\n"
+                                        "Lower magnitude = better capital preservation.");
 
     risk_score_ = add_cell("RISK SCORE", ui::colors::NEGATIVE);
-    risk_score_.container->setToolTip(
-        "Composite risk score from 0 (low risk) to 100 (high risk).\n"
-        "Weighted from: volatility, max drawdown, concentration,\n"
-        "beta, and VaR. Lower is safer.");
+    risk_score_.container->setToolTip("Composite risk score from 0 (low risk) to 100 (high risk).\n"
+                                      "Weighted from: volatility, max drawdown, concentration,\n"
+                                      "beta, and VaR. Lower is safer.");
 
     var95_ = add_cell("VAR (95%)", ui::colors::NEGATIVE);
-    var95_.container->setToolTip(
-        "Value at Risk at 95% confidence — the maximum expected\n"
-        "single-day loss 95% of the time based on historical returns.\n"
-        "E.g., VaR = -2.5% means you should not lose more than\n"
-        "2.5% on 95% of trading days.");
+    var95_.container->setToolTip("Value at Risk at 95% confidence — the maximum expected\n"
+                                 "single-day loss 95% of the time based on historical returns.\n"
+                                 "E.g., VaR = -2.5% means you should not lose more than\n"
+                                 "2.5% on 95% of trading days.");
 
     scroll->setWidget(inner);
     outer->addWidget(scroll);
@@ -111,7 +99,7 @@ PortfolioStatsRibbon::PortfolioStatsRibbon(QWidget* parent) : QWidget(parent) {
 
 PortfolioStatsRibbon::MetricCell PortfolioStatsRibbon::add_cell(const QString& label_text, const char* value_color) {
 
-    auto* container = new QWidget;
+    auto* container = new QWidget(this);
     container->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     auto* vlayout = new QVBoxLayout(container);
     vlayout->setContentsMargins(6, 3, 6, 3);
@@ -126,7 +114,8 @@ PortfolioStatsRibbon::MetricCell PortfolioStatsRibbon::add_cell(const QString& l
     vlayout->addWidget(cell.label);
 
     cell.value = new QLabel("--");
-    cell.value->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700;").arg(value_color).arg(ui::fonts::font_px(0)));
+    cell.value->setStyleSheet(
+        QString("color:%1; font-size:%2px; font-weight:700;").arg(value_color).arg(ui::fonts::font_px(0)));
     vlayout->addWidget(cell.value);
 
     cell.sub = new QLabel;
@@ -146,7 +135,8 @@ void PortfolioStatsRibbon::set_summary(const portfolio::PortfolioSummary& s) {
     auto color = [](double v) -> const char* { return v >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE; };
     auto set_val_color = [](MetricCell& c, const QString& text, const char* col) {
         c.value->setText(text);
-        c.value->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700;").arg(col).arg(ui::fonts::font_px(0)));
+        c.value->setStyleSheet(
+            QString("color:%1; font-size:%2px; font-weight:700;").arg(col).arg(ui::fonts::font_px(0)));
     };
 
     set_val_color(total_value_, fmt(s.total_market_value), ui::colors::WARNING);
@@ -191,7 +181,8 @@ void PortfolioStatsRibbon::set_metrics(const portfolio::ComputedMetrics& m) {
         double rs = *m.risk_score;
         const char* rs_color = rs < 30 ? ui::colors::POSITIVE : rs < 60 ? ui::colors::WARNING : ui::colors::NEGATIVE;
         risk_score_.value->setText(QString::number(rs, 'f', 0));
-        risk_score_.value->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700;").arg(rs_color).arg(ui::fonts::font_px(0)));
+        risk_score_.value->setStyleSheet(
+            QString("color:%1; font-size:%2px; font-weight:700;").arg(rs_color).arg(ui::fonts::font_px(0)));
     } else {
         risk_score_.value->setText("--");
     }
@@ -210,8 +201,8 @@ void PortfolioStatsRibbon::refresh_theme() {
 
     auto refresh_cell = [&](MetricCell& c) {
         if (c.label)
-            c.label->setStyleSheet(
-                QString("color:%1; font-size:" + lsz + "px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY));
+            c.label->setStyleSheet(QString("color:%1; font-size:" + lsz + "px; font-weight:700; letter-spacing:1px;")
+                                       .arg(ui::colors::TEXT_TERTIARY));
         if (c.sub)
             c.sub->setStyleSheet(QString("color:%1; font-size:" + ssz + "px;").arg(ui::colors::TEXT_TERTIARY));
         if (c.container)

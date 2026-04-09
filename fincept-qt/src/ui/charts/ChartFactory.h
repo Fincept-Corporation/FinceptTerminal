@@ -21,8 +21,7 @@ class ChartFactory {
     };
 
     /// Line chart — used for price history, indices.
-    static QChartView* line_chart(const QString& title, const QVector<DataPoint>& data,
-                                  const QString& color = {});
+    static QChartView* line_chart(const QString& title, const QVector<DataPoint>& data, const QString& color = {});
 
     /// Bar chart — used for volume, comparisons.
     static QChartView* bar_chart(const QString& title, const QStringList& categories, const QVector<double>& values,

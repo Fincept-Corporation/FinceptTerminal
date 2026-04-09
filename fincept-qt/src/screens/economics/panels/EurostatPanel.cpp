@@ -26,43 +26,30 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kEurostatScript   = "eurostat_extra_data.py";
+static constexpr const char* kEurostatScript = "eurostat_extra_data.py";
 static constexpr const char* kEurostatSourceId = "eurostat";
-static constexpr const char* kEurostatColor    = "#0369A1";  // EU blue
+static constexpr const char* kEurostatColor = "#0369A1"; // EU blue
 
 struct EurostatDataset {
     QString label;
     QString command;
-    bool    has_country;  // whether this command takes a country arg
+    bool has_country; // whether this command takes a country arg
 };
 
 static const QList<EurostatDataset> kEurostatDatasets = {
-    { "Industrial Production",  "industrial",   true  },
-    { "Retail Trade",           "retail",       true  },
-    { "Energy Balance",         "energy",       true  },
-    { "Trade in Goods",         "trade",        true  },
-    { "Construction Output",    "construction", true  },
-    { "Tourism Statistics",     "tourism",      true  },
+    {"Industrial Production", "industrial", true},
+    {"Retail Trade", "retail", true},
+    {"Energy Balance", "energy", true},
+    {"Trade in Goods", "trade", true},
+    {"Construction Output", "construction", true},
+    {"Tourism Statistics", "tourism", true},
 };
 
-static const QList<QPair<QString,QString>> kEurostatCountries = {
-    { "Germany",        "DE" },
-    { "France",         "FR" },
-    { "Italy",          "IT" },
-    { "Spain",          "ES" },
-    { "Netherlands",    "NL" },
-    { "Poland",         "PL" },
-    { "Belgium",        "BE" },
-    { "Sweden",         "SE" },
-    { "Austria",        "AT" },
-    { "Denmark",        "DK" },
-    { "Finland",        "FI" },
-    { "Portugal",       "PT" },
-    { "Czech Republic", "CZ" },
-    { "Romania",        "RO" },
-    { "Hungary",        "HU" },
-    { "EU27",           "EU27_2020" },
-    { "Euro Area",      "EA20" },
+static const QList<QPair<QString, QString>> kEurostatCountries = {
+    {"Germany", "DE"},     {"France", "FR"},      {"Italy", "IT"},          {"Spain", "ES"},   {"Netherlands", "NL"},
+    {"Poland", "PL"},      {"Belgium", "BE"},     {"Sweden", "SE"},         {"Austria", "AT"}, {"Denmark", "DK"},
+    {"Finland", "FI"},     {"Portugal", "PT"},    {"Czech Republic", "CZ"}, {"Romania", "RO"}, {"Hungary", "HU"},
+    {"EU27", "EU27_2020"}, {"Euro Area", "EA20"},
 };
 
 } // namespace
@@ -74,10 +61,10 @@ QJsonArray EurostatPanel::flatten_sdmx(const QJsonObject& response) {
     if (response.contains("error"))
         return {};
 
-    const QJsonArray  id_arr  = response["id"].toArray();
-    const QJsonArray  size_arr = response["size"].toArray();
-    const QJsonObject dims    = response["dimension"].toObject();
-    const QJsonObject vals    = response["value"].toObject();
+    const QJsonArray id_arr = response["id"].toArray();
+    const QJsonArray size_arr = response["size"].toArray();
+    const QJsonObject dims = response["dimension"].toObject();
+    const QJsonObject vals = response["value"].toObject();
 
     if (id_arr.isEmpty() || size_arr.isEmpty() || vals.isEmpty())
         return {};
@@ -87,7 +74,7 @@ QJsonArray EurostatPanel::flatten_sdmx(const QJsonObject& response) {
 
     // Build reverse map: int_position -> period_string from time dimension index
     // dimension.time.category.index = {"1953-01": 0, "1953-02": 1, ...}
-    const QJsonObject time_cat   = dims["time"].toObject()["category"].toObject();
+    const QJsonObject time_cat = dims["time"].toObject()["category"].toObject();
     const QJsonObject time_index = time_cat["index"].toObject();
 
     QMap<int, QString> pos_to_period;
@@ -97,12 +84,12 @@ QJsonArray EurostatPanel::flatten_sdmx(const QJsonObject& response) {
     // Flatten: for each value entry, derive time position and look up period
     QJsonArray rows;
     for (auto it = vals.constBegin(); it != vals.constEnd(); ++it) {
-        const int flat_idx  = it.key().toInt();
-        const int time_pos  = flat_idx % time_size;
+        const int flat_idx = it.key().toInt();
+        const int time_pos = flat_idx % time_size;
         const QString period = pos_to_period.value(time_pos, QString::number(time_pos));
         QJsonObject row;
         row["period"] = period;
-        row["value"]  = it.value().toDouble();
+        row["value"] = it.value().toDouble();
         rows.append(row);
     }
 
@@ -112,19 +99,18 @@ QJsonArray EurostatPanel::flatten_sdmx(const QJsonObject& response) {
         return a.toObject()["period"].toString() < b.toObject()["period"].toString();
     });
     rows = QJsonArray();
-    for (const auto& v : sorted) rows.append(v);
+    for (const auto& v : sorted)
+        rows.append(v);
 
     return rows;
 }
 
 // ── Panel ─────────────────────────────────────────────────────────────────────
 
-EurostatPanel::EurostatPanel(QWidget* parent)
-    : EconPanelBase(kEurostatSourceId, kEurostatColor, parent) {
+EurostatPanel::EurostatPanel(QWidget* parent) : EconPanelBase(kEurostatSourceId, kEurostatColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &EurostatPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &EurostatPanel::on_result);
 }
 
 void EurostatPanel::activate() {
@@ -157,30 +143,34 @@ void EurostatPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void EurostatPanel::on_fetch() {
-    const int     ds_idx  = dataset_combo_->currentIndex();
-    const auto&   dataset = kEurostatDatasets[ds_idx];
+    const int ds_idx = dataset_combo_->currentIndex();
+    const auto& dataset = kEurostatDatasets[ds_idx];
     const QString country = country_combo_->currentData().toString();
 
-    show_loading("Fetching Eurostat: " + dataset.label + " — "
-                 + country_combo_->currentText() + "…");
+    show_loading("Fetching Eurostat: " + dataset.label + " — " + country_combo_->currentText() + "…");
 
-    QStringList args = { dataset.command };
-    if (dataset.has_country) args << country;
+    QStringList args = {dataset.command};
+    if (dataset.has_country)
+        args << country;
 
     const QString req_id = "eurostat_" + dataset.command + "_" + country;
 
-    services::EconomicsService::instance().execute(
-        kEurostatSourceId, kEurostatScript, dataset.command, args, req_id);
+    services::EconomicsService::instance().execute(kEurostatSourceId, kEurostatScript, dataset.command, args, req_id);
 }
 
-void EurostatPanel::on_result(const QString& request_id,
-                               const services::EconomicsResult& result) {
-    if (result.source_id != kEurostatSourceId) return;
-    if (!request_id.startsWith("eurostat_")) return;
-    if (!result.success) { show_error(result.error); return; }
+void EurostatPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kEurostatSourceId)
+        return;
+    if (!request_id.startsWith("eurostat_"))
+        return;
+    if (!result.success) {
+        show_error(result.error);
+        return;
+    }
 
     const int ds_idx = dataset_combo_->currentIndex();
-    if (ds_idx < 0 || ds_idx >= kEurostatDatasets.size()) return;
+    if (ds_idx < 0 || ds_idx >= kEurostatDatasets.size())
+        return;
     const auto& dataset = kEurostatDatasets[ds_idx];
 
     // Try SDMX flatten first (raw Eurostat format)
@@ -197,11 +187,9 @@ void EurostatPanel::on_result(const QString& request_id,
         return;
     }
 
-    const QString title = "Eurostat: " + dataset.label + " — "
-                        + country_combo_->currentText();
+    const QString title = "Eurostat: " + dataset.label + " — " + country_combo_->currentText();
     display(rows, title);
-    LOG_INFO("EurostatPanel", QString("Displayed %1 rows for %2")
-                                  .arg(rows.size()).arg(title));
+    LOG_INFO("EurostatPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(title));
 }
 
 } // namespace fincept::screens

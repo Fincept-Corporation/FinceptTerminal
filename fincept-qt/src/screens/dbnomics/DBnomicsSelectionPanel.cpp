@@ -31,8 +31,8 @@ static QString kListStyle() {
                    "QListWidget::item { padding: 3px 6px; border-bottom: 1px solid %3; }"
                    "QListWidget::item:hover { background: %4; color: %5; }"
                    "QListWidget::item:selected { background: rgba(217,119,6,0.15); color: %6; }")
-        .arg(col::BG_BASE(), col::TEXT_SECONDARY(), col::BORDER_DIM(),
-             col::BG_HOVER(), col::TEXT_PRIMARY(), col::AMBER());
+        .arg(col::BG_BASE(), col::TEXT_SECONDARY(), col::BORDER_DIM(), col::BG_HOVER(), col::TEXT_PRIMARY(),
+             col::AMBER());
 }
 
 static QString kInputStyle() {
@@ -436,9 +436,8 @@ void DBnomicsSelectionPanel::add_comparison_slot() {
     const int slot_idx = slot_count_++;
 
     auto* slot_widget = new QWidget();
-    slot_widget->setStyleSheet(QString("QWidget { background: %1; border: 1px solid %2; }")
-                                   .arg(col::BG_SURFACE)
-                                   .arg(col::BORDER_DIM));
+    slot_widget->setStyleSheet(
+        QString("QWidget { background: %1; border: 1px solid %2; }").arg(col::BG_SURFACE).arg(col::BORDER_DIM));
 
     auto* slot_layout = new QVBoxLayout(slot_widget);
     slot_layout->setContentsMargins(4, 4, 4, 4);

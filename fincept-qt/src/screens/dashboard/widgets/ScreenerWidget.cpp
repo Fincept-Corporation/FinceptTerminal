@@ -21,7 +21,7 @@ ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget("STOCK SCREENER", p
     vl->setSpacing(0);
 
     // Filter bar
-    filter_bar_ = new QWidget;
+    filter_bar_ = new QWidget(this);
     auto* fl = new QHBoxLayout(filter_bar_);
     fl->setContentsMargins(8, 6, 8, 6);
     fl->setSpacing(8);
@@ -40,7 +40,7 @@ ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget("STOCK SCREENER", p
     vl->addWidget(filter_bar_);
 
     // Column headers
-    header_ = new QWidget;
+    header_ = new QWidget(this);
     auto* hl = new QHBoxLayout(header_);
     hl->setContentsMargins(8, 3, 8, 3);
 
@@ -60,7 +60,7 @@ ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget("STOCK SCREENER", p
     scroll_ = new QScrollArea;
     scroll_->setWidgetResizable(true);
 
-    auto* list_widget = new QWidget;
+    auto* list_widget = new QWidget(this);
     list_widget->setStyleSheet("background: transparent;");
     list_layout_ = new QVBoxLayout(list_widget);
     list_layout_->setContentsMargins(0, 0, 0, 0);
@@ -92,17 +92,20 @@ void ScreenerWidget::apply_styles() {
     count_lbl_->setStyleSheet(
         QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
 
-    header_->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_RAISED()).arg(ui::colors::BORDER_DIM()));
+    header_->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;")
+                               .arg(ui::colors::BG_RAISED())
+                               .arg(ui::colors::BORDER_DIM()));
     for (auto* lbl : header_labels_) {
         lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
                                .arg(ui::colors::TEXT_TERTIARY()));
     }
 
-    scroll_->setStyleSheet("QScrollArea { border: none; background: transparent; }"
-                           "QScrollBar:vertical { width: 4px; background: transparent; }"
-                           + QString("QScrollBar::handle:vertical { background: %1; border-radius: 2px; min-height: 20px; }").arg(ui::colors::BORDER_MED) +
-                           "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
+    scroll_->setStyleSheet(
+        "QScrollArea { border: none; background: transparent; }"
+        "QScrollBar:vertical { width: 4px; background: transparent; }" +
+        QString("QScrollBar::handle:vertical { background: %1; border-radius: 2px; min-height: 20px; }")
+            .arg(ui::colors::BORDER_MED) +
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
 
     // Re-render data rows with current tokens if data exists
     if (!all_quotes_.isEmpty())
@@ -168,7 +171,7 @@ void ScreenerWidget::render_rows(const QVector<services::QuoteData>& rows) {
 
     bool alt = false;
     for (const auto& q : rows) {
-        auto* row = new QWidget;
+        auto* row = new QWidget(this);
         row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED() : "transparent"));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);

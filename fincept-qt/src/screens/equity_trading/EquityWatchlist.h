@@ -36,7 +36,7 @@ class EquityWatchlist : public QWidget {
 
   signals:
     void symbol_selected(const QString& symbol);
-    void symbol_added(const QString& symbol);   // emitted when user adds a new symbol
+    void symbol_added(const QString& symbol); // emitted when user adds a new symbol
 
   private slots:
     void on_cell_clicked(int row, int col);
@@ -47,13 +47,13 @@ class EquityWatchlist : public QWidget {
   private:
     void rebuild_table();
 
-    QLineEdit*        filter_edit_    = nullptr;
-    QLineEdit*        add_edit_       = nullptr;  // symbol add input
-    QPushButton*      add_btn_        = nullptr;
-    QStringListModel* completer_model_= nullptr;
-    QCompleter*       completer_      = nullptr;
-    QLabel*           count_label_    = nullptr;
-    QTableWidget*     table_          = nullptr;
+    QLineEdit* filter_edit_ = nullptr;
+    QLineEdit* add_edit_ = nullptr; // symbol add input
+    QPushButton* add_btn_ = nullptr;
+    QStringListModel* completer_model_ = nullptr;
+    QCompleter* completer_ = nullptr;
+    QLabel* count_label_ = nullptr;
+    QTableWidget* table_ = nullptr;
 
     QVector<WatchlistEntry> entries_;
     QString active_symbol_;

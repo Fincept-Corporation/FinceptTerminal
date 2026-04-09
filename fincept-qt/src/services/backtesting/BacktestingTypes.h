@@ -98,12 +98,12 @@ inline QStringList categories_from_strategies(const QVector<Strategy>& strategie
 /// and VectorBT shape {id, name, default, min, max, step}.
 inline StrategyParam param_from_json(const QJsonObject& p) {
     StrategyParam sp;
-    sp.name      = p.contains("name") ? p.value("name").toString() : p.value("id").toString();
-    sp.label     = p.contains("label") ? p.value("label").toString() : p.value("name").toString(sp.name);
+    sp.name = p.contains("name") ? p.value("name").toString() : p.value("id").toString();
+    sp.label = p.contains("label") ? p.value("label").toString() : p.value("name").toString(sp.name);
     sp.default_val = p.value("default").toDouble(14);
-    sp.min_val   = p.value("min").toDouble(1);
-    sp.max_val   = p.value("max").toDouble(200);
-    sp.step      = p.value("step").toDouble(1);
+    sp.min_val = p.value("min").toDouble(1);
+    sp.max_val = p.value("max").toDouble(200);
+    sp.step = p.value("step").toDouble(1);
     return sp;
 }
 
@@ -121,8 +121,8 @@ inline QVector<Strategy> strategies_from_json(const QJsonObject& root) {
         for (const auto& item : data_val.toArray()) {
             auto obj = item.toObject();
             Strategy s;
-            s.id       = obj.value("type").toString();
-            s.name     = obj.value("name").toString(s.id);
+            s.id = obj.value("type").toString();
+            s.name = obj.value("name").toString(s.id);
             s.category = obj.value("category").toString("other");
             for (const auto& pv : obj.value("parameters").toArray())
                 s.params.append(param_from_json(pv.toObject()));
@@ -143,8 +143,8 @@ inline QVector<Strategy> strategies_from_json(const QJsonObject& root) {
         for (const auto& sv : cats_obj.value(cat).toArray()) {
             auto obj = sv.toObject();
             Strategy s;
-            s.id       = obj.value("id").toString();
-            s.name     = obj.value("name").toString(s.id);
+            s.id = obj.value("id").toString();
+            s.name = obj.value("name").toString(s.id);
             s.category = cat;
             for (const auto& pv : obj.value("params").toArray())
                 s.params.append(param_from_json(pv.toObject()));

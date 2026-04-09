@@ -20,7 +20,7 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setStyleSheet("background: transparent;");
 
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     content->setStyleSheet("background: transparent;");
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(8, 8, 8, 8);
@@ -28,45 +28,43 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
 
     auto make_section = [&](const char* text) {
         auto* lbl = new QLabel(text);
-        lbl->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold; background: transparent; "
-                    "padding-top: 6px;")
-                .arg(ui::colors::MUTED));
+        lbl->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent; "
+                                   "padding-top: 6px;")
+                               .arg(ui::colors::MUTED));
         vl->addWidget(lbl);
     };
 
     auto make_action_btn = [&](const char* text) -> QPushButton* {
         auto* b = new QPushButton(text);
         b->setFixedHeight(26);
-        b->setStyleSheet(
-            QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
-                    "text-align: left; padding: 0 8px; font-size: 12px; }"
-                    "QPushButton:hover { background: %4; color: %5; }")
-                .arg(ui::colors::BG_RAISED, ui::colors::AMBER, ui::colors::BORDER_MED,
-                     ui::colors::BG_HOVER, ui::colors::WHITE));
+        b->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
+                                 "text-align: left; padding: 0 8px; font-size: 12px; }"
+                                 "QPushButton:hover { background: %4; color: %5; }")
+                             .arg(ui::colors::BG_RAISED, ui::colors::AMBER, ui::colors::BORDER_MED,
+                                  ui::colors::BG_HOVER, ui::colors::WHITE));
         vl->addWidget(b);
         return b;
     };
 
     // ── File actions ──────────────────────────────────────────────────────────
     make_section("FILE");
-    auto* new_btn    = make_action_btn("New Report");
-    auto* open_btn   = make_action_btn("Open...");
+    auto* new_btn = make_action_btn("New Report");
+    auto* open_btn = make_action_btn("Open...");
     auto* recent_btn = make_action_btn("Recent Reports...");
 
-    connect(new_btn,    &QPushButton::clicked, this, &ComponentToolbar::new_report_requested);
-    connect(open_btn,   &QPushButton::clicked, this, &ComponentToolbar::open_report_requested);
+    connect(new_btn, &QPushButton::clicked, this, &ComponentToolbar::new_report_requested);
+    connect(open_btn, &QPushButton::clicked, this, &ComponentToolbar::open_report_requested);
     connect(recent_btn, &QPushButton::clicked, this, &ComponentToolbar::recent_reports_requested);
 
     // ── Document settings ─────────────────────────────────────────────────────
     make_section("DOCUMENT");
-    auto* meta_btn     = make_action_btn("Metadata...");
+    auto* meta_btn = make_action_btn("Metadata...");
     auto* template_btn = make_action_btn("Templates...");
-    auto* theme_btn    = make_action_btn("Theme...");
+    auto* theme_btn = make_action_btn("Theme...");
 
-    connect(meta_btn,     &QPushButton::clicked, this, &ComponentToolbar::metadata_requested);
+    connect(meta_btn, &QPushButton::clicked, this, &ComponentToolbar::metadata_requested);
     connect(template_btn, &QPushButton::clicked, this, &ComponentToolbar::templates_requested);
-    connect(theme_btn,    &QPushButton::clicked, this, &ComponentToolbar::theme_requested);
+    connect(theme_btn, &QPushButton::clicked, this, &ComponentToolbar::theme_requested);
 
     // Separator
     auto* sep0 = new QFrame;
@@ -78,20 +76,20 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     make_section("ADD COMPONENT");
 
     const char* types[][2] = {
-        {"Heading",           "heading"},
-        {"Text Block",        "text"},
-        {"Table",             "table"},
-        {"Image",             "image"},
-        {"Chart",             "chart"},
-        {"Sparkline",         "sparkline"},
-        {"Stats Block",       "stats_block"},
-        {"Callout Box",       "callout"},
-        {"Code Block",        "code"},
-        {"Divider",           "divider"},
-        {"Block Quote",       "quote"},
-        {"List",              "list"},
-        {"Market Data",       "market_data"},
-        {"Page Break",        "page_break"},
+        {"Heading", "heading"},
+        {"Text Block", "text"},
+        {"Table", "table"},
+        {"Image", "image"},
+        {"Chart", "chart"},
+        {"Sparkline", "sparkline"},
+        {"Stats Block", "stats_block"},
+        {"Callout Box", "callout"},
+        {"Code Block", "code"},
+        {"Divider", "divider"},
+        {"Block Quote", "quote"},
+        {"List", "list"},
+        {"Market Data", "market_data"},
+        {"Page Break", "page_break"},
         {"Table of Contents", "toc"},
     };
 
@@ -112,7 +110,7 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     font_combo_->setCurrentFont(QFont("Segoe UI"));
     vl->addWidget(font_combo_);
 
-    auto* size_row = new QWidget;
+    auto* size_row = new QWidget(this);
     size_row->setStyleSheet("background: transparent;");
     auto* srl = new QHBoxLayout(size_row);
     srl->setContentsMargins(0, 0, 0, 0);
@@ -138,13 +136,13 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     vl->addWidget(size_row);
 
     auto emit_font = [this]() {
-        emit font_changed(font_combo_->currentFont().family(), font_size_->value(),
-                          bold_btn_->isChecked(), italic_btn_->isChecked());
+        emit font_changed(font_combo_->currentFont().family(), font_size_->value(), bold_btn_->isChecked(),
+                          italic_btn_->isChecked());
     };
-    connect(font_combo_,  &QFontComboBox::currentFontChanged, this, emit_font);
-    connect(font_size_,   &QSpinBox::valueChanged,            this, emit_font);
-    connect(bold_btn_,    &QPushButton::toggled,              this, emit_font);
-    connect(italic_btn_,  &QPushButton::toggled,              this, emit_font);
+    connect(font_combo_, &QFontComboBox::currentFontChanged, this, emit_font);
+    connect(font_size_, &QSpinBox::valueChanged, this, emit_font);
+    connect(bold_btn_, &QPushButton::toggled, this, emit_font);
+    connect(italic_btn_, &QPushButton::toggled, this, emit_font);
 
     // Separator
     auto* sep2 = new QFrame;
@@ -161,13 +159,12 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
         QString("QListWidget { background: %1; border: 1px solid %2; } "
                 "QListWidget::item { color: %3; padding: 3px; font-size: 11px; } "
                 "QListWidget::item:selected { background: %4; color: %5; }")
-            .arg(ui::colors::DARK, ui::colors::BORDER, ui::colors::GRAY,
-                 ui::colors::BG_RAISED, ui::colors::WHITE));
+            .arg(ui::colors::DARK, ui::colors::BORDER, ui::colors::GRAY, ui::colors::BG_RAISED, ui::colors::WHITE));
     connect(structure_list_, &QListWidget::currentRowChanged, this, &ComponentToolbar::structure_selected);
     vl->addWidget(structure_list_, 1);
 
     // Structure action buttons
-    auto* action_row = new QWidget;
+    auto* action_row = new QWidget(this);
     action_row->setStyleSheet("background: transparent;");
     auto* arl = new QHBoxLayout(action_row);
     arl->setContentsMargins(0, 0, 0, 0);
@@ -180,26 +177,30 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
         return b;
     };
 
-    auto* up_btn  = make_small("Up");
-    auto* dn_btn  = make_small("Dn");
+    auto* up_btn = make_small("Up");
+    auto* dn_btn = make_small("Dn");
     auto* dup_btn = make_small("Dup");
     auto* del_btn = make_small("Del");
 
-    connect(up_btn,  &QPushButton::clicked, this, [this]() {
+    connect(up_btn, &QPushButton::clicked, this, [this]() {
         int r = structure_list_->currentRow();
-        if (r > 0) emit move_up(r);
+        if (r > 0)
+            emit move_up(r);
     });
-    connect(dn_btn,  &QPushButton::clicked, this, [this]() {
+    connect(dn_btn, &QPushButton::clicked, this, [this]() {
         int r = structure_list_->currentRow();
-        if (r >= 0) emit move_down(r);
+        if (r >= 0)
+            emit move_down(r);
     });
     connect(dup_btn, &QPushButton::clicked, this, [this]() {
         int r = structure_list_->currentRow();
-        if (r >= 0) emit duplicate(r);
+        if (r >= 0)
+            emit duplicate(r);
     });
     connect(del_btn, &QPushButton::clicked, this, [this]() {
         int r = structure_list_->currentRow();
-        if (r >= 0) emit delete_item(r);
+        if (r >= 0)
+            emit delete_item(r);
     });
 
     vl->addWidget(action_row);
@@ -219,8 +220,7 @@ void ComponentToolbar::add_type_button(QVBoxLayout* layout, const QString& label
         QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
                 "text-align: left; padding: 0 8px; font-size: 12px; }"
                 "QPushButton:hover { background: %4; color: %5; }")
-            .arg(ui::colors::DARK, ui::colors::GRAY, ui::colors::BORDER,
-                 ui::colors::BG_RAISED, ui::colors::WHITE));
+            .arg(ui::colors::DARK, ui::colors::GRAY, ui::colors::BORDER, ui::colors::BG_RAISED, ui::colors::WHITE));
     connect(btn, &QPushButton::clicked, this, [this, type]() { emit add_component(type); });
     layout->addWidget(btn);
 }

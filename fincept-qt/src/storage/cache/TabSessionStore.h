@@ -28,10 +28,8 @@ class TabSessionStore {
     /// Persist screen UI state keyed by screen_key.
     /// state_version is stored alongside — if the loaded version doesn't match
     /// expected_version, an empty QJsonObject is returned so the screen starts fresh.
-    Result<void>        save_screen_state(const QString& key,
-                                          const QJsonObject& state,
-                                          int state_version,
-                                          const QString& session_id = {});
+    Result<void> save_screen_state(const QString& key, const QJsonObject& state, int state_version,
+                                   const QString& session_id = {});
     Result<QJsonObject> load_screen_state(const QString& key, int expected_version);
 
   private:

@@ -40,11 +40,11 @@ class DBnomicsService : public QObject {
     explicit DBnomicsService(QObject* parent = nullptr);
     Q_DISABLE_COPY(DBnomicsService)
 
-    static constexpr const char* kBaseUrl       = "https://api.db.nomics.world/v22";
+    static constexpr const char* kBaseUrl = "https://api.db.nomics.world/v22";
     static constexpr int kProviderCacheSec = 10 * 60; // 10 min
-    static constexpr int kDatasetCacheSec  =  5 * 60; //  5 min
-    static constexpr int kSeriesCacheSec   =  5 * 60; //  5 min
-    static constexpr int kDebounceMs       = 400;
+    static constexpr int kDatasetCacheSec = 5 * 60;   //  5 min
+    static constexpr int kSeriesCacheSec = 5 * 60;    //  5 min
+    static constexpr int kDebounceMs = 400;
 
     // ── Debounce timers ───────────────────────────────────────────────────────
     QTimer* series_debounce_ = nullptr;

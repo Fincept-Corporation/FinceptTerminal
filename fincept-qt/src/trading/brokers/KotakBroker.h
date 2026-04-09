@@ -11,23 +11,33 @@ class KotakBroker : public IBroker {
 
     BrokerProfile profile() const override {
         return BrokerProfile{
-            .id = "kotak", .display_name = "Kotak", .region = "IN", .currency = "INR",
-            .credential_fields = {
-                {CredentialField::ApiKey,    "CONSUMER KEY",   "Enter Consumer Key...",    false},
-                {CredentialField::ApiSecret, "CONSUMER SECRET","Enter Consumer Secret...", true},
-                {CredentialField::AuthCode,  "ACCESS TOKEN",   "Enter Access Token...",    false},
-            },
-            .exchanges = {"NSE","BSE","NFO","MCX","NCDEX"},
-            .product_types = {
-                {"Intraday (MIS)", ProductType::Intraday},
-                {"Delivery (CNC)",ProductType::Delivery},
-                {"Margin (NRML)", ProductType::Margin},
-            },
-            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
-            .has_native_paper=false, .default_paper_balance=1000000.0,
-            .default_watchlist={"HDFCBANK","ICICIBANK","SBIN","TCS","INFY","RELIANCE","TATAMOTORS","BAJFINANCE","HINDUNILVR","ITC"},
-            .default_symbol="RELIANCE", .default_exchange="NSE",
-            .brokerage_info="\u20B920/order or 0.025%",
+            .id = "kotak",
+            .display_name = "Kotak",
+            .region = "IN",
+            .currency = "INR",
+            .credential_fields =
+                {
+                    {CredentialField::ApiKey, "CONSUMER KEY", "Enter Consumer Key...", false},
+                    {CredentialField::ApiSecret, "CONSUMER SECRET", "Enter Consumer Secret...", true},
+                    {CredentialField::AuthCode, "ACCESS TOKEN", "Enter Access Token...", false},
+                },
+            .exchanges = {"NSE", "BSE", "NFO", "MCX", "NCDEX"},
+            .product_types =
+                {
+                    {"Intraday (MIS)", ProductType::Intraday},
+                    {"Delivery (CNC)", ProductType::Delivery},
+                    {"Margin (NRML)", ProductType::Margin},
+                },
+            .supports_intraday = true,
+            .supports_bracket_order = false,
+            .supports_cover_order = false,
+            .has_native_paper = false,
+            .default_paper_balance = 1000000.0,
+            .default_watchlist = {"HDFCBANK", "ICICIBANK", "SBIN", "TCS", "INFY", "RELIANCE", "TATAMOTORS",
+                                  "BAJFINANCE", "HINDUNILVR", "ITC"},
+            .default_symbol = "RELIANCE",
+            .default_exchange = "NSE",
+            .brokerage_info = "\u20B920/order or 0.025%",
         };
     }
 

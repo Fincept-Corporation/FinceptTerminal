@@ -13,8 +13,8 @@
 namespace fincept::services::maritime {
 
 static constexpr const char* kMarineBase = "https://api.fincept.in/marine";
-static constexpr int kVesselTtlSec  = 60;       // position data: 1 min
-static constexpr int kHistoryTtlSec = 5 * 60;   // history: 5 min
+static constexpr int kVesselTtlSec = 60;      // position data: 1 min
+static constexpr int kHistoryTtlSec = 5 * 60; // history: 5 min
 
 // ── Singleton ────────────────────────────────────────────────────────────────
 MaritimeService& MaritimeService::instance() {
@@ -89,24 +89,24 @@ void MaritimeService::get_vessel_position(const QString& imo) {
     body["imo"] = imo.trimmed();
 
     QPointer<MaritimeService> self = this;
-    HttpClient::instance().post(QString(kMarineBase) + "/vessel/position", body, [self, cache_key](Result<QJsonDocument> result) {
-        if (!self)
-            return;
-        if (!result.is_ok()) {
-            LOG_ERROR("Maritime", "Vessel position failed: " + QString::fromStdString(result.error()));
-            emit self->error_occurred("vessel_position", QString::fromStdString(result.error()));
-            return;
-        }
-        auto data = unwrap(result.value().object());
-        auto vessel_obj = data["vessel"].toObject();
-        fincept::CacheManager::instance().put(
-            cache_key,
-            QVariant(QString::fromUtf8(QJsonDocument(vessel_obj).toJson(QJsonDocument::Compact))),
-            kVesselTtlSec, "maritime");
-        auto vessel = self->parse_vessel(vessel_obj);
-        LOG_INFO("Maritime", QString("Found vessel: %1 [%2]").arg(vessel.name, vessel.imo));
-        emit self->vessel_found(vessel);
-    });
+    HttpClient::instance().post(
+        QString(kMarineBase) + "/vessel/position", body, [self, cache_key](Result<QJsonDocument> result) {
+            if (!self)
+                return;
+            if (!result.is_ok()) {
+                LOG_ERROR("Maritime", "Vessel position failed: " + QString::fromStdString(result.error()));
+                emit self->error_occurred("vessel_position", QString::fromStdString(result.error()));
+                return;
+            }
+            auto data = unwrap(result.value().object());
+            auto vessel_obj = data["vessel"].toObject();
+            fincept::CacheManager::instance().put(
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(vessel_obj).toJson(QJsonDocument::Compact))),
+                kVesselTtlSec, "maritime");
+            auto vessel = self->parse_vessel(vessel_obj);
+            LOG_INFO("Maritime", QString("Found vessel: %1 [%2]").arg(vessel.name, vessel.imo));
+            emit self->vessel_found(vessel);
+        });
 }
 
 // ── Multi vessel positions ───────────────────────────────────────────────────
@@ -132,28 +132,28 @@ void MaritimeService::get_multi_vessel_positions(const QStringList& imos) {
     body["imos"] = arr;
 
     QPointer<MaritimeService> self = this;
-    HttpClient::instance().post(QString(kMarineBase) + "/vessel/multi", body, [self, cache_key](Result<QJsonDocument> result) {
-        if (!self)
-            return;
-        if (!result.is_ok()) {
-            LOG_ERROR("Maritime", "Multi vessel failed: " + QString::fromStdString(result.error()));
-            emit self->error_occurred("multi_vessel", QString::fromStdString(result.error()));
-            return;
-        }
-        auto data = unwrap(result.value().object());
-        auto vessels_arr = data["vessels"].toArray();
-        fincept::CacheManager::instance().put(
-            cache_key,
-            QVariant(QString::fromUtf8(QJsonDocument(vessels_arr).toJson(QJsonDocument::Compact))),
-            kVesselTtlSec, "maritime");
-        QVector<VesselData> vessels;
-        vessels.reserve(vessels_arr.size());
-        for (const auto& v : vessels_arr)
-            vessels.append(self->parse_vessel(v.toObject()));
-        int total = data["found_count"].toInt(vessels.size());
-        LOG_INFO("Maritime", QString("Multi vessel: %1 found").arg(vessels.size()));
-        emit self->vessels_loaded(vessels, total);
-    });
+    HttpClient::instance().post(
+        QString(kMarineBase) + "/vessel/multi", body, [self, cache_key](Result<QJsonDocument> result) {
+            if (!self)
+                return;
+            if (!result.is_ok()) {
+                LOG_ERROR("Maritime", "Multi vessel failed: " + QString::fromStdString(result.error()));
+                emit self->error_occurred("multi_vessel", QString::fromStdString(result.error()));
+                return;
+            }
+            auto data = unwrap(result.value().object());
+            auto vessels_arr = data["vessels"].toArray();
+            fincept::CacheManager::instance().put(
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(vessels_arr).toJson(QJsonDocument::Compact))),
+                kVesselTtlSec, "maritime");
+            QVector<VesselData> vessels;
+            vessels.reserve(vessels_arr.size());
+            for (const auto& v : vessels_arr)
+                vessels.append(self->parse_vessel(v.toObject()));
+            int total = data["found_count"].toInt(vessels.size());
+            LOG_INFO("Maritime", QString("Multi vessel: %1 found").arg(vessels.size()));
+            emit self->vessels_loaded(vessels, total);
+        });
 }
 
 // ── Vessel history ───────────────────────────────────────────────────────────
@@ -174,27 +174,27 @@ void MaritimeService::get_vessel_history(const QString& imo) {
     body["imo"] = imo.trimmed();
 
     QPointer<MaritimeService> self = this;
-    HttpClient::instance().post(QString(kMarineBase) + "/vessel/history", body, [self, cache_key](Result<QJsonDocument> result) {
-        if (!self)
-            return;
-        if (!result.is_ok()) {
-            emit self->error_occurred("vessel_history", QString::fromStdString(result.error()));
-            return;
-        }
-        auto data = unwrap(result.value().object());
-        auto arr = data["positions"].toArray();
-        if (arr.isEmpty())
-            arr = data["history"].toArray();
-        fincept::CacheManager::instance().put(
-            cache_key,
-            QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
-            kHistoryTtlSec, "maritime");
-        QVector<VesselData> history;
-        history.reserve(arr.size());
-        for (const auto& v : arr)
-            history.append(self->parse_vessel(v.toObject()));
-        emit self->vessel_history_loaded(history);
-    });
+    HttpClient::instance().post(
+        QString(kMarineBase) + "/vessel/history", body, [self, cache_key](Result<QJsonDocument> result) {
+            if (!self)
+                return;
+            if (!result.is_ok()) {
+                emit self->error_occurred("vessel_history", QString::fromStdString(result.error()));
+                return;
+            }
+            auto data = unwrap(result.value().object());
+            auto arr = data["positions"].toArray();
+            if (arr.isEmpty())
+                arr = data["history"].toArray();
+            fincept::CacheManager::instance().put(
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                kHistoryTtlSec, "maritime");
+            QVector<VesselData> history;
+            history.reserve(arr.size());
+            for (const auto& v : arr)
+                history.append(self->parse_vessel(v.toObject()));
+            emit self->vessel_history_loaded(history);
+        });
 }
 
 // ── Health check ─────────────────────────────────────────────────────────────

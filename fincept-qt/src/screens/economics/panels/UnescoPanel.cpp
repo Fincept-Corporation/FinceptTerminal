@@ -29,53 +29,48 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kUnescoScript   = "unesco_data.py";
+static constexpr const char* kUnescoScript = "unesco_data.py";
 static constexpr const char* kUnescoSourceId = "unesco";
-static constexpr const char* kUnescoColor    = "#00ACC1";  // cyan
+static constexpr const char* kUnescoColor = "#00ACC1"; // cyan
 } // namespace
 
 // Curated preset indicators per theme — used before live list loads
-struct UnescoIndicatorDef { QString name; QString code; };
+struct UnescoIndicatorDef {
+    QString name;
+    QString code;
+};
 
 static const QList<UnescoIndicatorDef> kEducationIndicators = {
-    {"Gross Enrolment Ratio, Primary",                "GER.1"},
-    {"Gross Enrolment Ratio, Secondary",              "GER.2"},
-    {"Gross Enrolment Ratio, Tertiary",               "GER.3"},
-    {"Net Enrolment Rate, Primary",                   "NER.1"},
-    {"Net Enrolment Rate, Secondary",                 "NER.2"},
-    {"Youth Literacy Rate (15-24)",                   "LR.AG15T24"},
-    {"Adult Literacy Rate (15+)",                     "LR.AG15T99"},
-    {"Out-of-School Rate, Primary",                   "ROFST.H.1"},
-    {"Out-of-School Rate, Secondary",                 "ROFST.H.2"},
-    {"Government Expenditure on Education (% GDP)",   "XGDP.FSGOV"},
-    {"Pupil-Teacher Ratio, Primary",                  "PTRHC.1"},
-    {"Trained Teachers, Primary (%)",                 "TRTP.1"},
-    {"Completion Rate, Primary",                      "CR.1"},
-    {"Completion Rate, Secondary",                    "CR.2"},
+    {"Gross Enrolment Ratio, Primary", "GER.1"},    {"Gross Enrolment Ratio, Secondary", "GER.2"},
+    {"Gross Enrolment Ratio, Tertiary", "GER.3"},   {"Net Enrolment Rate, Primary", "NER.1"},
+    {"Net Enrolment Rate, Secondary", "NER.2"},     {"Youth Literacy Rate (15-24)", "LR.AG15T24"},
+    {"Adult Literacy Rate (15+)", "LR.AG15T99"},    {"Out-of-School Rate, Primary", "ROFST.H.1"},
+    {"Out-of-School Rate, Secondary", "ROFST.H.2"}, {"Government Expenditure on Education (% GDP)", "XGDP.FSGOV"},
+    {"Pupil-Teacher Ratio, Primary", "PTRHC.1"},    {"Trained Teachers, Primary (%)", "TRTP.1"},
+    {"Completion Rate, Primary", "CR.1"},           {"Completion Rate, Secondary", "CR.2"},
 };
 
 static const QList<UnescoIndicatorDef> kScienceIndicators = {
-    {"R&D Expenditure (% GDP)",                       "XGDP.GERD"},
-    {"Researchers per million inhabitants",           "RESEARCHERS.TOTAL.FTE"},
-    {"Technicians per million inhabitants",           "TECHN.TOTAL.FTE"},
-    {"Patent Applications (residents)",               "PAT.RESIDENT"},
-    {"Patent Applications (non-residents)",           "PAT.NONRESIDENT"},
-    {"Scientific & Technical Journal Articles",       "JA.SCITECHJ"},
-    {"High-tech Exports (% manufactured exports)",   "HTECH.EXP"},
+    {"R&D Expenditure (% GDP)", "XGDP.GERD"},
+    {"Researchers per million inhabitants", "RESEARCHERS.TOTAL.FTE"},
+    {"Technicians per million inhabitants", "TECHN.TOTAL.FTE"},
+    {"Patent Applications (residents)", "PAT.RESIDENT"},
+    {"Patent Applications (non-residents)", "PAT.NONRESIDENT"},
+    {"Scientific & Technical Journal Articles", "JA.SCITECHJ"},
+    {"High-tech Exports (% manufactured exports)", "HTECH.EXP"},
 };
 
 static const QList<UnescoIndicatorDef> kCultureIndicators = {
-    {"Cultural Employment (% total employment)",      "CEMP.TOTAL"},
-    {"Cultural & Creative Industries (% GDP)",        "CCIGDP.TOTAL"},
-    {"Museum Visitors per 1000 inhabitants",          "MUS.VISIT"},
-    {"Feature Films Produced",                        "FF.PROD"},
-    {"Books Published (per million inhabitants)",     "BOOKS.PUB"},
+    {"Cultural Employment (% total employment)", "CEMP.TOTAL"},
+    {"Cultural & Creative Industries (% GDP)", "CCIGDP.TOTAL"},
+    {"Museum Visitors per 1000 inhabitants", "MUS.VISIT"},
+    {"Feature Films Produced", "FF.PROD"},
+    {"Books Published (per million inhabitants)", "BOOKS.PUB"},
 };
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
-UnescoPanel::UnescoPanel(QWidget* parent)
-    : EconPanelBase(kUnescoSourceId, kUnescoColor, parent) {
+UnescoPanel::UnescoPanel(QWidget* parent) : EconPanelBase(kUnescoSourceId, kUnescoColor, parent) {
 
     // Outer layout: left selector | right base UI
     auto* main = new QHBoxLayout(this);
@@ -83,7 +78,7 @@ UnescoPanel::UnescoPanel(QWidget* parent)
     main->setSpacing(0);
 
     // Left: theme + indicator selector
-    auto* left = new QWidget;
+    auto* left = new QWidget(this);
     left->setFixedWidth(210);
     left->setStyleSheet(sidebar_style());
     auto* lvl = new QVBoxLayout(left);
@@ -91,7 +86,7 @@ UnescoPanel::UnescoPanel(QWidget* parent)
     lvl->setSpacing(0);
 
     // Theme header
-    auto* theme_hdr = new QWidget;
+    auto* theme_hdr = new QWidget(this);
     theme_hdr->setStyleSheet(section_hdr_style());
     theme_hdr->setFixedHeight(32);
     auto* thl = new QHBoxLayout(theme_hdr);
@@ -99,12 +94,11 @@ UnescoPanel::UnescoPanel(QWidget* parent)
     auto* theme_lbl = new QLabel("THEME");
     theme_lbl->setStyleSheet(ctrl_label_style());
     theme_combo_ = new QComboBox;
-    theme_combo_->addItem("Education",          "education");
-    theme_combo_->addItem("Science & Tech",     "science");
-    theme_combo_->addItem("Culture",            "culture");
+    theme_combo_->addItem("Education", "education");
+    theme_combo_->addItem("Science & Tech", "science");
+    theme_combo_->addItem("Culture", "culture");
     theme_combo_->setFixedHeight(22);
-    connect(theme_combo_, &QComboBox::currentIndexChanged,
-            this, &UnescoPanel::on_theme_changed);
+    connect(theme_combo_, &QComboBox::currentIndexChanged, this, &UnescoPanel::on_theme_changed);
     thl->addWidget(theme_lbl);
     thl->addWidget(theme_combo_, 1);
     lvl->addWidget(theme_hdr);
@@ -114,8 +108,7 @@ UnescoPanel::UnescoPanel(QWidget* parent)
     indicator_search_->setPlaceholderText("Filter indicators…");
     indicator_search_->setStyleSheet(search_input_style());
     indicator_search_->setFixedHeight(28);
-    connect(indicator_search_, &QLineEdit::textChanged,
-            this, &UnescoPanel::on_indicator_filter);
+    connect(indicator_search_, &QLineEdit::textChanged, this, &UnescoPanel::on_indicator_filter);
     lvl->addWidget(indicator_search_);
 
     // Indicator list
@@ -127,7 +120,7 @@ UnescoPanel::UnescoPanel(QWidget* parent)
     main->addWidget(left);
 
     // Right: base UI (toolbar + stat cards + table)
-    auto* right = new QWidget;
+    auto* right = new QWidget(this);
     right->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     build_base_ui(right);
     main->addWidget(right, 1);
@@ -135,9 +128,8 @@ UnescoPanel::UnescoPanel(QWidget* parent)
     // Populate initial indicator list
     on_theme_changed(0);
 
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &UnescoPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &UnescoPanel::on_result);
 }
 
 void UnescoPanel::activate() {
@@ -185,9 +177,12 @@ void UnescoPanel::on_theme_changed(int index) {
     indicator_search_->clear();
 
     QList<UnescoIndicatorDef> list;
-    if (index == 0)      list = kEducationIndicators;
-    else if (index == 1) list = kScienceIndicators;
-    else                 list = kCultureIndicators;
+    if (index == 0)
+        list = kEducationIndicators;
+    else if (index == 1)
+        list = kScienceIndicators;
+    else
+        list = kCultureIndicators;
 
     for (const auto& ind : list) {
         current_indicators_.append({ind.name, ind.code});
@@ -204,10 +199,8 @@ void UnescoPanel::on_theme_changed(int index) {
 void UnescoPanel::on_indicator_filter(const QString& text) {
     for (int i = 0; i < indicator_list_->count(); ++i) {
         auto* item = indicator_list_->item(i);
-        const bool match = text.isEmpty() ||
-                           item->text().contains(text, Qt::CaseInsensitive) ||
-                           item->data(Qt::UserRole).toString()
-                               .contains(text, Qt::CaseInsensitive);
+        const bool match = text.isEmpty() || item->text().contains(text, Qt::CaseInsensitive) ||
+                           item->data(Qt::UserRole).toString().contains(text, Qt::CaseInsensitive);
         item->setHidden(!match);
     }
 }
@@ -215,9 +208,8 @@ void UnescoPanel::on_indicator_filter(const QString& text) {
 void UnescoPanel::load_indicators() {
     // Fetch live indicator list from API — fires once per session
     indicators_loaded_ = true;
-    services::EconomicsService::instance().execute(
-        kUnescoSourceId, kUnescoScript, "list_indicators", {},
-        "unesco_list_indicators");
+    services::EconomicsService::instance().execute(kUnescoSourceId, kUnescoScript, "list_indicators", {},
+                                                   "unesco_list_indicators");
 }
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
@@ -229,9 +221,9 @@ void UnescoPanel::on_fetch() {
         return;
     }
     const QString indicator_code = sel_item->data(Qt::UserRole).toString();
-    const QString country        = country_input_->text().trimmed().toUpper();
-    const QString start          = start_input_->text().trimmed();
-    const QString end            = end_input_->text().trimmed();
+    const QString country = country_input_->text().trimmed().toUpper();
+    const QString start = start_input_->text().trimmed();
+    const QString end = end_input_->text().trimmed();
 
     if (country.isEmpty()) {
         show_empty("Enter a 3-letter country code (e.g. USA, GBR, IND)");
@@ -239,27 +231,28 @@ void UnescoPanel::on_fetch() {
     }
 
     QStringList args = {indicator_code, country};
-    if (!start.isEmpty()) args << start;
-    if (!start.isEmpty() && !end.isEmpty()) args << end;
+    if (!start.isEmpty())
+        args << start;
+    if (!start.isEmpty() && !end.isEmpty())
+        args << end;
 
     show_loading("Fetching UNESCO: " + sel_item->text() + " for " + country + "…");
-    services::EconomicsService::instance().execute(
-        kUnescoSourceId, kUnescoScript, "fetch",
-        args,
-        "unesco_fetch_" + indicator_code + "_" + country);
+    services::EconomicsService::instance().execute(kUnescoSourceId, kUnescoScript, "fetch", args,
+                                                   "unesco_fetch_" + indicator_code + "_" + country);
 }
 
 // ── Result ────────────────────────────────────────────────────────────────────
 
-void UnescoPanel::on_result(const QString& request_id,
-                            const services::EconomicsResult& result) {
-    if (result.source_id != kUnescoSourceId) return;
+void UnescoPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kUnescoSourceId)
+        return;
 
     // Handle live indicator list load
     if (request_id == "unesco_list_indicators") {
         // data: { "records": [{"id": "GER.1", "name": "...", "theme": "EDUCATION"}] }
         const QJsonArray records = result.data["data"].toObject()["records"].toArray();
-        if (records.isEmpty()) return;
+        if (records.isEmpty())
+            return;
 
         const QString current_theme = theme_combo_->currentData().toString().toUpper();
         indicator_list_->clear();
@@ -270,7 +263,7 @@ void UnescoPanel::on_result(const QString& request_id,
             const QString theme = obj["theme"].toString();
             if (!current_theme.isEmpty() && !theme.contains(current_theme, Qt::CaseInsensitive))
                 continue;
-            const QString id   = obj["id"].toString();
+            const QString id = obj["id"].toString();
             const QString name = obj["name"].toString();
             current_indicators_.append({name, id});
             auto* item = new QListWidgetItem(name);
@@ -281,7 +274,8 @@ void UnescoPanel::on_result(const QString& request_id,
         return;
     }
 
-    if (!request_id.startsWith("unesco_fetch_")) return;
+    if (!request_id.startsWith("unesco_fetch_"))
+        return;
 
     if (!result.success) {
         show_error(result.error);
@@ -302,17 +296,13 @@ void UnescoPanel::on_result(const QString& request_id,
     // Build title from metadata
     const QJsonObject meta = result.data["metadata"].toObject();
     const QString ind_name = meta["indicator_name"].toString(
-        indicator_list_->currentItem()
-            ? indicator_list_->currentItem()->text()
-            : "Indicator");
-    const QString country  = meta["country"].toString(
-        country_input_->text().toUpper());
+        indicator_list_->currentItem() ? indicator_list_->currentItem()->text() : "Indicator");
+    const QString country = meta["country"].toString(country_input_->text().toUpper());
 
     const QString title = "UNESCO: " + ind_name + " — " + country;
     display(rows, title);
 
-    LOG_INFO("UnescoPanel", QString("Displayed %1 data points for %2")
-             .arg(rows.size()).arg(request_id));
+    LOG_INFO("UnescoPanel", QString("Displayed %1 data points for %2").arg(rows.size()).arg(request_id));
 }
 
 } // namespace fincept::screens

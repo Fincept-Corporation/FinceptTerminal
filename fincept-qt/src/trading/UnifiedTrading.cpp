@@ -3,8 +3,10 @@
 #include "trading/UnifiedTrading.h"
 
 #include "core/logging/Logger.h"
+#include "trading/AccountManager.h"
 #include "trading/PaperTrading.h"
 
+#include <QJsonObject>
 #include <QMutexLocker>
 
 namespace fincept::trading {
@@ -155,6 +157,131 @@ UnifiedOrderResponse UnifiedTrading::cancel_order(const QString& order_id) {
     auto creds = broker->load_credentials();
     auto result = broker->cancel_order(creds, order_id);
     return {result.success, order_id, result.error, "live"};
+}
+
+// ============================================================================
+// Account-Aware Order Routing (new multi-account API)
+// ============================================================================
+
+UnifiedOrderResponse UnifiedTrading::place_order(const QString& account_id, const UnifiedOrder& order) {
+    auto account = AccountManager::instance().get_account(account_id);
+    if (account.account_id.isEmpty())
+        return {false, "", "Account not found: " + account_id, ""};
+
+    if (account.trading_mode == "paper")
+        return place_paper_order_for_account(account_id, order);
+    return place_live_order_for_account(account_id, order);
+}
+
+UnifiedOrderResponse UnifiedTrading::cancel_order(const QString& account_id, const QString& order_id) {
+    auto account = AccountManager::instance().get_account(account_id);
+    if (account.account_id.isEmpty())
+        return {false, "", "Account not found: " + account_id, ""};
+
+    if (account.trading_mode == "paper") {
+        try {
+            pt_cancel_order(order_id);
+            return {true, order_id, "Paper order cancelled", "paper"};
+        } catch (const std::exception& e) {
+            return {false, "", QString("Cancel failed: %1").arg(e.what()), "paper"};
+        }
+    }
+
+    auto* broker = BrokerRegistry::instance().get(account.broker_id);
+    if (!broker)
+        return {false, "", "Broker not found: " + account.broker_id, "live"};
+
+    auto creds = AccountManager::instance().load_credentials(account_id);
+    auto result = broker->cancel_order(creds, order_id);
+    return {result.success, order_id, result.error, "live"};
+}
+
+UnifiedOrderResponse UnifiedTrading::modify_order(const QString& account_id, const QString& order_id,
+                                                   const QJsonObject& modifications) {
+    auto account = AccountManager::instance().get_account(account_id);
+    if (account.account_id.isEmpty())
+        return {false, "", "Account not found: " + account_id, ""};
+
+    if (account.trading_mode == "paper")
+        return {false, "", "Modify not supported for paper orders", "paper"};
+
+    auto* broker = BrokerRegistry::instance().get(account.broker_id);
+    if (!broker)
+        return {false, "", "Broker not found: " + account.broker_id, "live"};
+
+    auto creds = AccountManager::instance().load_credentials(account_id);
+    auto result = broker->modify_order(creds, order_id, modifications);
+    return {result.success, order_id, result.error, "live"};
+}
+
+UnifiedOrderResponse UnifiedTrading::place_paper_order_for_account(const QString& account_id,
+                                                                    const UnifiedOrder& order) {
+    auto account = AccountManager::instance().get_account(account_id);
+    if (account.paper_portfolio_id.isEmpty())
+        return {false, "", "No paper portfolio for this account", "paper"};
+
+    QString symbol = order.exchange.isEmpty() ? order.symbol : order.exchange + ":" + order.symbol;
+    QString side_str = order_side_str(order.side);
+    QString type_str = order_type_str(order.order_type);
+
+    std::optional<double> price_opt;
+    if (order.order_type == OrderType::Market)
+        price_opt = 1000.0;
+    else if (order.price > 0)
+        price_opt = order.price;
+
+    std::optional<double> stop_opt;
+    if (order.stop_price > 0)
+        stop_opt = order.stop_price;
+
+    try {
+        auto paper_order = pt_place_order(account.paper_portfolio_id, symbol, side_str, type_str, order.quantity,
+                                          price_opt, stop_opt, false);
+        if (order.order_type == OrderType::Market) {
+            double fill_price = order.price > 0 ? order.price : 1000.0;
+            pt_fill_order(paper_order.id, fill_price);
+        }
+        return {true, paper_order.id, "Paper order placed", "paper"};
+    } catch (const std::exception& e) {
+        return {false, "", QString("Paper order failed: %1").arg(e.what()), "paper"};
+    }
+}
+
+UnifiedOrderResponse UnifiedTrading::place_live_order_for_account(const QString& account_id,
+                                                                   const UnifiedOrder& order) {
+    auto account = AccountManager::instance().get_account(account_id);
+    auto* broker = BrokerRegistry::instance().get(account.broker_id);
+    if (!broker)
+        return {false, "", "Broker not found: " + account.broker_id, "live"};
+
+    auto creds = AccountManager::instance().load_credentials(account_id);
+    if (creds.access_token.isEmpty())
+        return {false, "", "No credentials for account " + account.display_name + ". Please authenticate.", "live"};
+
+    auto result = broker->place_order(creds, order);
+    return {result.success, result.order_id, result.error, "live"};
+}
+
+// ============================================================================
+// Broadcast Order (multi-account simultaneous placement)
+// ============================================================================
+
+QVector<UnifiedTrading::BroadcastResult> UnifiedTrading::broadcast_order(const QStringList& account_ids,
+                                                                         const UnifiedOrder& order) {
+    QVector<BroadcastResult> results;
+    results.reserve(account_ids.size());
+
+    for (const auto& acct_id : account_ids) {
+        auto account = AccountManager::instance().get_account(acct_id);
+        if (account.account_id.isEmpty()) {
+            results.append({acct_id, "Unknown", {false, "", "Account not found", ""}});
+            continue;
+        }
+        auto response = place_order(acct_id, order);
+        results.append({acct_id, account.display_name, response});
+    }
+
+    return results;
 }
 
 // ============================================================================

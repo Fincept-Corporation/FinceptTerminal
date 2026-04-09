@@ -60,10 +60,10 @@ class EquityResearchService : public QObject {
     QVector<NewsArticle> parse_news(const QJsonArray& arr) const;
 
     // ── Cache TTLs — delegated to CacheManager ───────────────────────────────
-    static constexpr int kQuoteTtlSec      = 30;
-    static constexpr int kInfoTtlSec       = 300;
+    static constexpr int kQuoteTtlSec = 30;
+    static constexpr int kInfoTtlSec = 300;
     static constexpr int kHistoricalTtlSec = 120;
-    static constexpr int kNewsTtlSec       = 180;
+    static constexpr int kNewsTtlSec = 180;
 
     // ── Debounce ──────────────────────────────────────────────────────────────
     static constexpr int kDebounceMs = 350;

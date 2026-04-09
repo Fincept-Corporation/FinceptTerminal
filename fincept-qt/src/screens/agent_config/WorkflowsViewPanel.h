@@ -34,34 +34,34 @@ class WorkflowsViewPanel : public QWidget {
     void run_current_workflow();
 
     // ── Left: catalog ────────────────────────────────────────────────────────
-    QListWidget* catalog_list_   = nullptr;
-    QLabel*      wf_desc_label_  = nullptr;
+    QListWidget* catalog_list_ = nullptr;
+    QLabel* wf_desc_label_ = nullptr;
 
     // ── Center: params ───────────────────────────────────────────────────────
-    QLabel*     params_title_    = nullptr;
-    QComboBox*  llm_profile_combo_ = nullptr;
-    QLabel*     llm_resolved_lbl_  = nullptr;
+    QLabel* params_title_ = nullptr;
+    QComboBox* llm_profile_combo_ = nullptr;
+    QLabel* llm_resolved_lbl_ = nullptr;
 
     // Symbol input (stock analysis)
-    QWidget*   symbol_row_   = nullptr;
+    QWidget* symbol_row_ = nullptr;
     QLineEdit* symbol_input_ = nullptr;
 
     // Custom query input (multi-query / custom)
-    QWidget*    query_row_   = nullptr;
-    QTextEdit*  query_input_ = nullptr;
+    QWidget* query_row_ = nullptr;
+    QTextEdit* query_input_ = nullptr;
 
-    QPushButton* run_btn_        = nullptr;
-    QLabel*      params_status_  = nullptr;
+    QPushButton* run_btn_ = nullptr;
+    QLabel* params_status_ = nullptr;
 
     // ── Right: output ────────────────────────────────────────────────────────
-    QLabel*    output_title_  = nullptr;
-    QLabel*    output_status_ = nullptr;
-    QTextEdit* log_display_   = nullptr;
-    QTextEdit* result_display_= nullptr;
+    QLabel* output_title_ = nullptr;
+    QLabel* output_status_ = nullptr;
+    QTextEdit* log_display_ = nullptr;
+    QTextEdit* result_display_ = nullptr;
 
     // ── State ────────────────────────────────────────────────────────────────
-    bool    executing_          = false;
-    bool    data_loaded_        = false;
+    bool executing_ = false;
+    bool data_loaded_ = false;
     QString pending_request_id_;
     QString current_workflow_type_;
 };

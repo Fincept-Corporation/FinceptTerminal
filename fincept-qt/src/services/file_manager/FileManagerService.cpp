@@ -71,27 +71,25 @@ void FileManagerService::write_metadata(const QJsonArray& files) const {
 // ── Serialisation helpers ─────────────────────────────────────────────────────
 
 QJsonObject FileManagerService::to_json(const ManagedFile& f) const {
-    return QJsonObject{
-        {"id",           f.id},
-        {"name",         f.name},
-        {"originalName", f.original_name},
-        {"size",         f.size},
-        {"type",         f.mime_type},
-        {"uploadedAt",   f.uploaded_at},
-        {"path",         f.path},
-        {"sourceScreen", f.source_screen}
-    };
+    return QJsonObject{{"id", f.id},
+                       {"name", f.name},
+                       {"originalName", f.original_name},
+                       {"size", f.size},
+                       {"type", f.mime_type},
+                       {"uploadedAt", f.uploaded_at},
+                       {"path", f.path},
+                       {"sourceScreen", f.source_screen}};
 }
 
 ManagedFile FileManagerService::from_json(const QJsonObject& obj) const {
     ManagedFile f;
-    f.id            = obj["id"].toString();
-    f.name          = obj["name"].toString();
+    f.id = obj["id"].toString();
+    f.name = obj["name"].toString();
     f.original_name = obj["originalName"].toString();
-    f.size          = obj["size"].toInteger();
-    f.mime_type     = obj["type"].toString();
-    f.uploaded_at   = obj["uploadedAt"].toString();
-    f.path          = obj["path"].toString();
+    f.size = obj["size"].toInteger();
+    f.mime_type = obj["type"].toString();
+    f.uploaded_at = obj["uploadedAt"].toString();
+    f.path = obj["path"].toString();
     f.source_screen = obj["sourceScreen"].toString();
     return f;
 }
@@ -104,7 +102,8 @@ QJsonArray FileManagerService::all_files() const {
 
 ManagedFile FileManagerService::find_by_id(const QString& id) const {
     for (const auto& v : files_cache_) {
-        if (!v.isObject()) continue;
+        if (!v.isObject())
+            continue;
         auto obj = v.toObject();
         if (obj["id"].toString() == id)
             return from_json(obj);
@@ -139,8 +138,8 @@ QString FileManagerService::import_file(const QString& source_path, const QStrin
         return {};
     }
 
-    QString id = QString::number(QDateTime::currentMSecsSinceEpoch()) + "_" +
-                 QUuid::createUuid().toString(QUuid::Id128).left(8);
+    QString id =
+        QString::number(QDateTime::currentMSecsSinceEpoch()) + "_" + QUuid::createUuid().toString(QUuid::Id128).left(8);
     QString ext = info.suffix();
     QString stored_name = id + (ext.isEmpty() ? "" : "." + ext);
     QString dest = full_path(stored_name);
@@ -152,13 +151,13 @@ QString FileManagerService::import_file(const QString& source_path, const QStrin
 
     QMimeDatabase mime_db;
     ManagedFile f;
-    f.id            = id;
-    f.name          = stored_name;
+    f.id = id;
+    f.name = stored_name;
     f.original_name = info.fileName();
-    f.size          = info.size();
-    f.mime_type     = mime_db.mimeTypeForFile(source_path).name();
-    f.uploaded_at   = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-    f.path          = "fincept-files/" + stored_name;
+    f.size = info.size();
+    f.mime_type = mime_db.mimeTypeForFile(source_path).name();
+    f.uploaded_at = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    f.path = "fincept-files/" + stored_name;
     f.source_screen = source_screen;
 
     files_cache_.append(to_json(f));
@@ -170,20 +169,19 @@ QString FileManagerService::import_file(const QString& source_path, const QStrin
     return id;
 }
 
-QString FileManagerService::register_file(const QString& stored_name, const QString& original_name,
-                                           qint64 size, const QString& mime_type,
-                                           const QString& source_screen) {
-    QString id = QString::number(QDateTime::currentMSecsSinceEpoch()) + "_" +
-                 QUuid::createUuid().toString(QUuid::Id128).left(8);
+QString FileManagerService::register_file(const QString& stored_name, const QString& original_name, qint64 size,
+                                          const QString& mime_type, const QString& source_screen) {
+    QString id =
+        QString::number(QDateTime::currentMSecsSinceEpoch()) + "_" + QUuid::createUuid().toString(QUuid::Id128).left(8);
 
     ManagedFile f;
-    f.id            = id;
-    f.name          = stored_name;
+    f.id = id;
+    f.name = stored_name;
     f.original_name = original_name;
-    f.size          = size;
-    f.mime_type     = mime_type;
-    f.uploaded_at   = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-    f.path          = "fincept-files/" + stored_name;
+    f.size = size;
+    f.mime_type = mime_type;
+    f.uploaded_at = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    f.path = "fincept-files/" + stored_name;
     f.source_screen = source_screen;
 
     files_cache_.append(to_json(f));
@@ -198,7 +196,8 @@ QString FileManagerService::register_file(const QString& stored_name, const QStr
 bool FileManagerService::remove_file(const QString& id) {
     for (int i = 0; i < files_cache_.size(); ++i) {
         auto obj = files_cache_[i].toObject();
-        if (obj["id"].toString() != id) continue;
+        if (obj["id"].toString() != id)
+            continue;
 
         // Remove physical file
         QString stored = obj["name"].toString();

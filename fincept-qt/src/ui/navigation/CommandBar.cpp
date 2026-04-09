@@ -24,18 +24,17 @@ static constexpr int kSearchDebounceMs = 300;
 // ── styling ─────────────────────────────────────────────────────────────────
 
 static QString input_ss() {
-    return QString(
-        "QLineEdit{"
-        "  background:%1;"
-        "  color:%2;"
-        "  border:1px solid %3;"
-        "  padding:2px 8px 2px 24px;"
-        "  font-size:12px;"
-        "  font-family:'Consolas',monospace;"
-        "}"
-        "QLineEdit:focus{"
-        "  border:1px solid %4;"
-        "}")
+    return QString("QLineEdit{"
+                   "  background:%1;"
+                   "  color:%2;"
+                   "  border:1px solid %3;"
+                   "  padding:2px 8px 2px 24px;"
+                   "  font-size:12px;"
+                   "  font-family:'Consolas',monospace;"
+                   "}"
+                   "QLineEdit:focus{"
+                   "  border:1px solid %4;"
+                   "}")
         .arg(colors::BG_RAISED.get())
         .arg(colors::TEXT_PRIMARY.get())
         .arg(colors::BORDER_MED.get())
@@ -43,32 +42,30 @@ static QString input_ss() {
 }
 
 static QString drop_ss() {
-    return QString(
-        "QFrame{"
-        "  background:%1;"
-        "  border:1px solid %2;"
-        "  border-top:none;"
-        "}")
+    return QString("QFrame{"
+                   "  background:%1;"
+                   "  border:1px solid %2;"
+                   "  border-top:none;"
+                   "}")
         .arg(colors::BG_SURFACE.get())
         .arg(colors::BORDER_MED.get());
 }
 
 static QString list_ss() {
-    return QString(
-        "QListWidget{"
-        "  background:transparent;"
-        "  border:none;"
-        "  outline:none;"
-        "}"
-        "QListWidget::item{"
-        "  padding:0px;"
-        "  border:none;"
-        "  background:transparent;"
-        "}"
-        "QListWidget::item:selected{"
-        "  background:%1;"
-        "  border-left:3px solid %2;"
-        "}")
+    return QString("QListWidget{"
+                   "  background:transparent;"
+                   "  border:none;"
+                   "  outline:none;"
+                   "}"
+                   "QListWidget::item{"
+                   "  padding:0px;"
+                   "  border:none;"
+                   "  background:transparent;"
+                   "}"
+                   "QListWidget::item:selected{"
+                   "  background:%1;"
+                   "  border-left:3px solid %2;"
+                   "}")
         .arg(colors::BG_RAISED.get())
         .arg(colors::AMBER.get());
 }
@@ -78,13 +75,11 @@ static QString list_ss() {
 /// Convert exchange + symbol to yfinance-compatible ticker.
 /// The /market/search API returns clean symbols (e.g. "RELIANCE") with exchange
 /// as a separate field. yfinance needs suffixed tickers for non-US exchanges.
-static QString to_yfinance_symbol(const QString& symbol, const QString& exchange,
-                                  const QString& country = {}) {
+static QString to_yfinance_symbol(const QString& symbol, const QString& exchange, const QString& country = {}) {
     // EURONEXT suffix depends on country
     if (exchange.toUpper() == "EURONEXT") {
         static const QHash<QString, QString> euronext_map = {
-            {"FR", ".PA"}, {"NL", ".AS"}, {"BE", ".BR"},
-            {"PT", ".LS"}, {"IE", ".IR"},
+            {"FR", ".PA"}, {"NL", ".AS"}, {"BE", ".BR"}, {"PT", ".LS"}, {"IE", ".IR"},
         };
         const auto it = euronext_map.find(country.toUpper());
         return symbol + (it != euronext_map.end() ? it.value() : ".PA");
@@ -92,35 +87,65 @@ static QString to_yfinance_symbol(const QString& symbol, const QString& exchange
 
     static const QHash<QString, QString> suffix_map = {
         // India
-        {"NSE",        ".NS"},  {"BSE",        ".BO"},
+        {"NSE", ".NS"},
+        {"BSE", ".BO"},
         // Asia-Pacific
-        {"HKEX",       ".HK"},  {"TSE",        ".T"},   {"NAG",       ".T"},
-        {"KRX",        ".KS"},  {"SGX",        ".SI"},  {"ASX",       ".AX"},
-        {"IDX",        ".JK"},  {"MYX",        ".KL"},  {"SET",       ".BK"},
-        {"PSE",        ".PS"},  {"TPEX",       ".TWO"},
+        {"HKEX", ".HK"},
+        {"TSE", ".T"},
+        {"NAG", ".T"},
+        {"KRX", ".KS"},
+        {"SGX", ".SI"},
+        {"ASX", ".AX"},
+        {"IDX", ".JK"},
+        {"MYX", ".KL"},
+        {"SET", ".BK"},
+        {"PSE", ".PS"},
+        {"TPEX", ".TWO"},
         // Europe — Germany
-        {"XETR",       ".DE"},  {"FWB",        ".F"},   {"DUS",       ".DU"},
-        {"HAM",        ".HM"},  {"HAN",        ".HA"},  {"MUN",       ".MU"},
-        {"SWB",        ".SG"},  {"GETTEX",     ".DE"},  {"TRADEGATE", ".DE"},
-        {"LS",         ".DE"},  {"LSX",        ".DE"},
+        {"XETR", ".DE"},
+        {"FWB", ".F"},
+        {"DUS", ".DU"},
+        {"HAM", ".HM"},
+        {"HAN", ".HA"},
+        {"MUN", ".MU"},
+        {"SWB", ".SG"},
+        {"GETTEX", ".DE"},
+        {"TRADEGATE", ".DE"},
+        {"LS", ".DE"},
+        {"LSX", ".DE"},
         // Europe — UK
-        {"LSE",        ".L"},   {"LSIN",       ".L"},   {"AQUIS",     ".L"},
+        {"LSE", ".L"},
+        {"LSIN", ".L"},
+        {"AQUIS", ".L"},
         // Europe — Other
-        {"BME",        ".MC"},  {"MIL",        ".MI"},  {"EUROTLX",   ".MI"},
-        {"SIX",        ".SW"},  {"BX",         ".SW"},  {"VIE",       ".VI"},
-        {"LUXSE",      ".LU"},
+        {"BME", ".MC"},
+        {"MIL", ".MI"},
+        {"EUROTLX", ".MI"},
+        {"SIX", ".SW"},
+        {"BX", ".SW"},
+        {"VIE", ".VI"},
+        {"LUXSE", ".LU"},
         // Americas — Canada
-        {"TSX",        ".TO"},  {"TSXV",       ".V"},   {"CSE",       ".CN"},
-        {"NEO",        ".NE"},
+        {"TSX", ".TO"},
+        {"TSXV", ".V"},
+        {"CSE", ".CN"},
+        {"NEO", ".NE"},
         // Americas — Latin America
-        {"BMFBOVESPA", ".SA"},  {"BMV",        ".MX"},  {"BIVA",      ".MX"},
-        {"BCBA",       ".BA"},  {"BCS",        ".SN"},  {"BVC",       ".CL"},
-        {"BVL",        ".LM"},
+        {"BMFBOVESPA", ".SA"},
+        {"BMV", ".MX"},
+        {"BIVA", ".MX"},
+        {"BCBA", ".BA"},
+        {"BCS", ".SN"},
+        {"BVC", ".CL"},
+        {"BVL", ".LM"},
         // Middle East & Africa
-        {"BIST",       ".IS"},  {"QSE",        ".QA"},  {"EGX",       ".CA"},
-        {"NSENG",      ".LG"},
+        {"BIST", ".IS"},
+        {"QSE", ".QA"},
+        {"EGX", ".CA"},
+        {"NSENG", ".LG"},
         // South Asia
-        {"PSX",        ".KA"},  {"DSEBD",      ".BD"},
+        {"PSX", ".KA"},
+        {"DSEBD", ".BD"},
     };
 
     const auto it = suffix_map.find(exchange.toUpper());
@@ -134,56 +159,246 @@ static QString to_yfinance_symbol(const QString& symbol, const QString& exchange
 void CommandBar::build_commands() {
     commands_ = {
         // Primary tabs
-        {"dashboard",      "Dashboard",           "Main overview screen",               {"dash","home","overview","main"},          "F1",  {"dashboard","home","summary"}},
-        {"markets",        "Markets",             "Live market data",                   {"mkts","markets","market","live"},         "F2",  {"markets","stocks","quotes","prices"}},
-        {"news",           "News",                "Financial news feed",                {"news","headlines","feed"},                "F3",  {"news","headlines","articles"}},
-        {"portfolio",      "Portfolio",           "Portfolio management",               {"port","portfolio","pf","holdings"},       "F4",  {"portfolio","holdings","positions"}},
-        {"backtesting",    "Backtesting",         "Strategy backtesting",               {"bktest","backtest","bt"},                 "F5",  {"backtest","strategy","historical"}},
-        {"watchlist",      "Watchlist",           "Manage watchlists",                  {"watch","watchlist","wl"},                 "F6",  {"watchlist","favorites","track"}},
-        {"crypto_trading", "Crypto Trading",      "Cryptocurrency trading",             {"trade","trading","crypto","kraken"},      "F9",  {"trading","crypto","exchange"}},
-        {"ai_chat",        "AI Chat",             "AI assistant",                       {"ai","chat","assistant","bot"},            "F10", {"ai","chat","assistant"}},
-        {"notes",          "Notes",               "Notes and reports",                  {"notes","note"},                           "F11", {"notes","reports","documents"}},
-        {"profile",        "Profile",             "User profile & account",             {"prof","profile","account"},              "F12", {"profile","account","user"}},
-        {"settings",       "Settings",            "Application settings",               {"settings","prefs","config"},             "",    {"settings","preferences"}},
-        {"forum",          "Forum",               "Community forum",                    {"forum","community"},                     "",    {"forum","community","discuss"}},
+        {"dashboard",
+         "Dashboard",
+         "Main overview screen",
+         {"dash", "home", "overview", "main"},
+         "F1",
+         {"dashboard", "home", "summary"}},
+        {"markets",
+         "Markets",
+         "Live market data",
+         {"mkts", "markets", "market", "live"},
+         "F2",
+         {"markets", "stocks", "quotes", "prices"}},
+        {"news", "News", "Financial news feed", {"news", "headlines", "feed"}, "F3", {"news", "headlines", "articles"}},
+        {"portfolio",
+         "Portfolio",
+         "Portfolio management",
+         {"port", "portfolio", "pf", "holdings"},
+         "F4",
+         {"portfolio", "holdings", "positions"}},
+        {"backtesting",
+         "Backtesting",
+         "Strategy backtesting",
+         {"bktest", "backtest", "bt"},
+         "F5",
+         {"backtest", "strategy", "historical"}},
+        {"watchlist",
+         "Watchlist",
+         "Manage watchlists",
+         {"watch", "watchlist", "wl"},
+         "F6",
+         {"watchlist", "favorites", "track"}},
+        {"crypto_trading",
+         "Crypto Trading",
+         "Cryptocurrency trading",
+         {"trade", "trading", "crypto", "kraken"},
+         "F9",
+         {"trading", "crypto", "exchange"}},
+        {"ai_chat", "AI Chat", "AI assistant", {"ai", "chat", "assistant", "bot"}, "F10", {"ai", "chat", "assistant"}},
+        {"notes", "Notes", "Notes and reports", {"notes", "note"}, "F11", {"notes", "reports", "documents"}},
+        {"profile",
+         "Profile",
+         "User profile & account",
+         {"prof", "profile", "account"},
+         "F12",
+         {"profile", "account", "user"}},
+        {"settings",
+         "Settings",
+         "Application settings",
+         {"settings", "prefs", "config"},
+         "",
+         {"settings", "preferences"}},
+        {"forum", "Forum", "Community forum", {"forum", "community"}, "", {"forum", "community", "discuss"}},
         // Trading & Portfolio
-        {"equity_trading", "Equity Trading",      "Stock trading interface",            {"eqtrade","stocks","equities"},           "",    {"equity","stocks","trading"}},
-        {"algo_trading",   "Algo Trading",        "Algorithmic trading",                {"algo","algotrading"},                    "",    {"algo","algorithmic","automated"}},
-        {"alpha_arena",    "Alpha Arena",         "Trading competition platform",       {"alpha","arena","alphaarena"},            "",    {"alpha","competition","leaderboard"}},
-        {"polymarket",     "Polymarket",          "Prediction markets",                 {"poly","polymarket","prediction"},        "",    {"polymarket","prediction","markets"}},
-        {"derivatives",    "Derivatives",         "Options and derivatives",            {"deriv","derivatives","options"},         "",    {"derivatives","options","futures"}},
+        {"equity_trading",
+         "Equity Trading",
+         "Stock trading interface",
+         {"eqtrade", "stocks", "equities"},
+         "",
+         {"equity", "stocks", "trading"}},
+        {"algo_trading",
+         "Algo Trading",
+         "Algorithmic trading",
+         {"algo", "algotrading"},
+         "",
+         {"algo", "algorithmic", "automated"}},
+        {"alpha_arena",
+         "Alpha Arena",
+         "Trading competition platform",
+         {"alpha", "arena", "alphaarena"},
+         "",
+         {"alpha", "competition", "leaderboard"}},
+        {"polymarket",
+         "Polymarket",
+         "Prediction markets",
+         {"poly", "polymarket", "prediction"},
+         "",
+         {"polymarket", "prediction", "markets"}},
+        {"derivatives",
+         "Derivatives",
+         "Options and derivatives",
+         {"deriv", "derivatives", "options"},
+         "",
+         {"derivatives", "options", "futures"}},
         // Research
-        {"equity_research","Equity Research",     "Equity research tools",             {"rsrch","research","equity"},             "",    {"research","equity","fundamental"}},
-        {"screener",       "Screener",            "Stock screener",                     {"scrn","screener","filter","scan"},       "",    {"screener","filter","scan"}},
-        {"ma_analytics",   "M&A Analytics",       "Mergers and acquisitions",           {"ma","mna","mergers"},                    "",    {"ma","mergers","acquisitions"}},
-        {"alt_investments","Alt. Investments",    "Alternative investment analysis",    {"altinv","alt","alternatives"},           "",    {"alternative","investments","hedge"}},
-        {"surface_analytics","Surface Analytics", "Options vol surface & correlation",  {"surface","volsurface","3dviz","3d"},     "",    {"surface","volatility","correlation","pca"}},
+        {"equity_research",
+         "Equity Research",
+         "Equity research tools",
+         {"rsrch", "research", "equity"},
+         "",
+         {"research", "equity", "fundamental"}},
+        {"screener",
+         "Screener",
+         "Stock screener",
+         {"scrn", "screener", "filter", "scan"},
+         "",
+         {"screener", "filter", "scan"}},
+        {"ma_analytics",
+         "M&A Analytics",
+         "Mergers and acquisitions",
+         {"ma", "mna", "mergers"},
+         "",
+         {"ma", "mergers", "acquisitions"}},
+        {"alt_investments",
+         "Alt. Investments",
+         "Alternative investment analysis",
+         {"altinv", "alt", "alternatives"},
+         "",
+         {"alternative", "investments", "hedge"}},
+        {"surface_analytics",
+         "Surface Analytics",
+         "Options vol surface & correlation",
+         {"surface", "volsurface", "3dviz", "3d"},
+         "",
+         {"surface", "volatility", "correlation", "pca"}},
         // Economics & Data
-        {"economics",      "Economics",           "Economic indicators",                {"econ","economics","indicators"},         "",    {"economics","macro","indicators"}},
-        {"gov_data",       "GOVT Data",           "Government securities & open data",  {"govt","gov","government","treasury"},    "",    {"government","treasury","bonds"}},
-        {"dbnomics",       "DBnomics",            "Economic database",                  {"dbn","dbnomics","database"},             "",    {"dbnomics","database","economic"}},
-        {"akshare",        "AKShare Data",        "Chinese financial data",             {"aks","akshare","chinese"},               "",    {"akshare","chinese","china"}},
-        {"asia_markets",   "Asia Markets",        "Asian market data",                  {"asia","apac","asian"},                   "",    {"asia","asian","apac"}},
+        {"economics",
+         "Economics",
+         "Economic indicators",
+         {"econ", "economics", "indicators"},
+         "",
+         {"economics", "macro", "indicators"}},
+        {"gov_data",
+         "GOVT Data",
+         "Government securities & open data",
+         {"govt", "gov", "government", "treasury"},
+         "",
+         {"government", "treasury", "bonds"}},
+        {"dbnomics",
+         "DBnomics",
+         "Economic database",
+         {"dbn", "dbnomics", "database"},
+         "",
+         {"dbnomics", "database", "economic"}},
+        {"akshare",
+         "AKShare Data",
+         "Chinese financial data",
+         {"aks", "akshare", "chinese"},
+         "",
+         {"akshare", "chinese", "china"}},
+        {"asia_markets", "Asia Markets", "Asian market data", {"asia", "apac", "asian"}, "", {"asia", "asian", "apac"}},
         // Geopolitics
-        {"geopolitics",    "Geopolitics",         "Geopolitical analysis",              {"geo","geopolitics","politics"},          "",    {"geopolitics","politics","global"}},
-        {"maritime",       "Maritime",            "Maritime intelligence",              {"marine","maritime","shipping"},          "",    {"maritime","shipping","vessels"}},
-        {"relationship_map","Relationship Map",   "Entity relationship mapping",        {"relmap","relationships","map"},          "",    {"relationship","map","network"}},
+        {"geopolitics",
+         "Geopolitics",
+         "Geopolitical analysis",
+         {"geo", "geopolitics", "politics"},
+         "",
+         {"geopolitics", "politics", "global"}},
+        {"maritime",
+         "Maritime",
+         "Maritime intelligence",
+         {"marine", "maritime", "shipping"},
+         "",
+         {"maritime", "shipping", "vessels"}},
+        {"relationship_map",
+         "Relationship Map",
+         "Entity relationship mapping",
+         {"relmap", "relationships", "map"},
+         "",
+         {"relationship", "map", "network"}},
         // AI / Quant
-        {"ai_quant_lab",   "AI Quant Lab",        "Quantitative analysis lab",          {"quantlab","quant","lab"},                "",    {"quant","quantitative","lab"}},
-        {"quantlib",       "QuantLib",            "Quantitative finance suite",         {"qlcore","ql","quantlib"},                "",    {"quantlib","math","finance","models"}},
-        {"agent_config",   "Agent Config",        "Configure AI agents",                {"agents","agent","config"},               "",    {"agents","ai","configuration"}},
+        {"ai_quant_lab",
+         "AI Quant Lab",
+         "Quantitative analysis lab",
+         {"quantlab", "quant", "lab"},
+         "",
+         {"quant", "quantitative", "lab"}},
+        {"quantlib",
+         "QuantLib",
+         "Quantitative finance suite",
+         {"qlcore", "ql", "quantlib"},
+         "",
+         {"quantlib", "math", "finance", "models"}},
+        {"agent_config",
+         "Agent Config",
+         "Configure AI agents",
+         {"agents", "agent", "config"},
+         "",
+         {"agents", "ai", "configuration"}},
         // Tools
-        {"mcp_servers",    "MCP Servers",         "Model Context Protocol servers",     {"mcp","servers"},                         "",    {"mcp","servers","protocol"}},
-        {"node_editor",    "Node Editor",         "Visual workflow editor",             {"nodes","workflow","node"},               "",    {"nodes","workflow","visual"}},
-        {"code_editor",    "Code Editor",         "Code development",                   {"code","editor","dev"},                   "",    {"code","editor","programming"}},
-        {"excel",          "Excel",               "Excel workbook integration",         {"excel","spreadsheet","xls"},             "",    {"excel","spreadsheet","workbook"}},
-        {"report_builder", "Report Builder",      "Create reports",                     {"report","reports","builder"},            "",    {"report","builder","document"}},
-        {"data_sources",   "Data Sources",        "Manage data sources",                {"datasrc","datasources","sources"},       "",    {"data","sources","connections"}},
-        {"data_mapping",   "Data Mapping",        "API integration & schema transform", {"datamap","mapping","schema"},            "",    {"data","mapping","schema","api"}},
-        {"trade_viz",      "Trade Visualization", "Trade flow visualization",           {"tradeviz","tradegraph"},                 "",    {"trade","visualization","flow"}},
+        {"mcp_servers",
+         "MCP Servers",
+         "Model Context Protocol servers",
+         {"mcp", "servers"},
+         "",
+         {"mcp", "servers", "protocol"}},
+        {"node_editor",
+         "Node Editor",
+         "Visual workflow editor",
+         {"nodes", "workflow", "node"},
+         "",
+         {"nodes", "workflow", "visual"}},
+        {"code_editor",
+         "Code Editor",
+         "Code development",
+         {"code", "editor", "dev"},
+         "",
+         {"code", "editor", "programming"}},
+        {"excel",
+         "Excel",
+         "Excel workbook integration",
+         {"excel", "spreadsheet", "xls"},
+         "",
+         {"excel", "spreadsheet", "workbook"}},
+        {"report_builder",
+         "Report Builder",
+         "Create reports",
+         {"report", "reports", "builder"},
+         "",
+         {"report", "builder", "document"}},
+        {"data_sources",
+         "Data Sources",
+         "Manage data sources",
+         {"datasrc", "datasources", "sources"},
+         "",
+         {"data", "sources", "connections"}},
+        {"data_mapping",
+         "Data Mapping",
+         "API integration & schema transform",
+         {"datamap", "mapping", "schema"},
+         "",
+         {"data", "mapping", "schema", "api"}},
+        {"trade_viz",
+         "Trade Visualization",
+         "Trade flow visualization",
+         {"tradeviz", "tradegraph"},
+         "",
+         {"trade", "visualization", "flow"}},
         // Community / Info
-        {"about",          "About",               "About Fincept Terminal",             {"about","info","version"},                "",    {"about","information","version"}},
-        {"support",        "Support",             "Support tickets",                    {"support","ticket","help"},               "",    {"support","ticket","assistance"}},
+        {"about",
+         "About",
+         "About Fincept Terminal",
+         {"about", "info", "version"},
+         "",
+         {"about", "information", "version"}},
+        {"support",
+         "Support",
+         "Support tickets",
+         {"support", "ticket", "help"},
+         "",
+         {"support", "ticket", "assistance"}},
     };
 }
 
@@ -191,14 +406,14 @@ void CommandBar::build_commands() {
 
 void CommandBar::build_asset_types() {
     asset_types_ = {
-        {"/stock",    "stock",    "Stock",    "Search stocks by symbol or company name"},
-        {"/fund",     "fund",     "Fund",     "Search mutual funds and ETFs"},
-        {"/dr",       "dr",       "DR",       "Search depositary receipts (ADR/GDR)"},
-        {"/index",    "index",    "Index",    "Search market indices"},
-        {"/forex",    "forex",    "Forex",    "Search forex currency pairs"},
-        {"/crypto",   "crypto",   "Crypto",   "Search cryptocurrencies"},
-        {"/futures",  "futures",  "Futures",  "Search futures contracts"},
-        {"/bond",     "bond",     "Bond",     "Search bonds and fixed income"},
+        {"/stock", "stock", "Stock", "Search stocks by symbol or company name"},
+        {"/fund", "fund", "Fund", "Search mutual funds and ETFs"},
+        {"/dr", "dr", "DR", "Search depositary receipts (ADR/GDR)"},
+        {"/index", "index", "Index", "Search market indices"},
+        {"/forex", "forex", "Forex", "Search forex currency pairs"},
+        {"/crypto", "crypto", "Crypto", "Search cryptocurrencies"},
+        {"/futures", "futures", "Futures", "Search futures contracts"},
+        {"/bond", "bond", "Bond", "Search bonds and fixed income"},
         {"/economic", "economic", "Economic", "Search economic indicators"},
     };
 }
@@ -211,30 +426,40 @@ QVector<ScreenCommand> CommandBar::search(const QString& query) const {
 
     const QString q = query.trimmed().toLower();
 
-    struct Scored { int score; const ScreenCommand* cmd; };
+    struct Scored {
+        int score;
+        const ScreenCommand* cmd;
+    };
     QVector<Scored> scored;
 
     for (const auto& cmd : commands_) {
         int score = 0;
         for (const auto& alias : cmd.aliases)
-            if (alias.toLower() == q) { score = 100; break; }
+            if (alias.toLower() == q) {
+                score = 100;
+                break;
+            }
         if (!score) {
             for (const auto& alias : cmd.aliases)
-                if (alias.toLower().startsWith(q)) { score = std::max(score, 80); }
-            if (cmd.name.toLower().contains(q))      score = std::max(score, 70);
+                if (alias.toLower().startsWith(q)) {
+                    score = std::max(score, 80);
+                }
+            if (cmd.name.toLower().contains(q))
+                score = std::max(score, 70);
             for (const auto& alias : cmd.aliases)
-                if (alias.toLower().contains(q))     score = std::max(score, 60);
-            if (cmd.description.toLower().contains(q)) score = std::max(score, 40);
+                if (alias.toLower().contains(q))
+                    score = std::max(score, 60);
+            if (cmd.description.toLower().contains(q))
+                score = std::max(score, 40);
             for (const auto& kw : cmd.keywords)
-                if (kw.toLower().contains(q))        score = std::max(score, 30);
+                if (kw.toLower().contains(q))
+                    score = std::max(score, 30);
         }
         if (score > 0)
             scored.append({score, &cmd});
     }
 
-    std::sort(scored.begin(), scored.end(), [](const Scored& a, const Scored& b) {
-        return a.score > b.score;
-    });
+    std::sort(scored.begin(), scored.end(), [](const Scored& a, const Scored& b) { return a.score > b.score; });
 
     QVector<ScreenCommand> result;
     for (int i = 0; i < std::min((int)scored.size(), kMaxResults); ++i)
@@ -298,14 +523,17 @@ CommandBar::CommandBar(QWidget* parent) : QWidget(parent) {
             hide_dropdown();
     });
 
-    connect(&ThemeManager::instance(), &ThemeManager::theme_changed,
-            this, [this](const ThemeTokens&) { refresh_theme(); });
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { refresh_theme(); });
 }
 
 void CommandBar::refresh_theme() {
-    if (input_)    input_->setStyleSheet(input_ss());
-    if (dropdown_) dropdown_->setStyleSheet(drop_ss());
-    if (list_)     list_->setStyleSheet(list_ss());
+    if (input_)
+        input_->setStyleSheet(input_ss());
+    if (dropdown_)
+        dropdown_->setStyleSheet(drop_ss());
+    if (list_)
+        list_->setStyleSheet(list_ss());
 }
 
 // ── event filter (keyboard nav in input) ─────────────────────────────────────
@@ -318,74 +546,73 @@ bool CommandBar::eventFilter(QObject* obj, QEvent* event) {
     const int count = list_->count();
 
     switch (ke->key()) {
-    case Qt::Key_Down:
-        if (count > 0) {
-            int next = (list_->currentRow() + 1) % count;
-            list_->setCurrentRow(next);
-        }
-        return true;
-
-    case Qt::Key_Up:
-        if (count > 0) {
-            int prev = (list_->currentRow() - 1 + count) % count;
-            list_->setCurrentRow(prev);
-        }
-        return true;
-
-    case Qt::Key_Tab:
-        if (list_->currentItem()) {
-            const QString autocomplete = list_->currentItem()->data(Qt::UserRole + 1).toString();
-            if (mode_ == Mode::SlashPicker) {
-                // Autocomplete slash type and activate asset search
-                input_->setText(autocomplete);
-                for (const auto& at : asset_types_) {
-                    if (at.slash == autocomplete) {
-                        activate_asset_mode(at.api_type);
-                        input_->setText(autocomplete + " ");
-                        input_->setCursorPosition(input_->text().length());
-                        break;
-                    }
-                }
-            } else if (mode_ == Mode::DockSecondary && !dock_primary_id_.isEmpty()
-                       && !dock_verb_.isEmpty()) {
-                // Autocomplete the secondary screen into the full command
-                const QString screen_id = list_->currentItem()->data(Qt::UserRole).toString();
-                if (!screen_id.isEmpty()) {
-                    input_->setText(dock_primary_id_ + " " + dock_verb_ + " " + screen_id);
-                    input_->setCursorPosition(input_->text().length());
-                }
-            } else if (mode_ == Mode::DockCommand && !dock_primary_id_.isEmpty()) {
-                // Autocomplete the verb
-                const QString verb = list_->currentItem()->data(Qt::UserRole).toString();
-                dock_verb_ = verb;
-                if (verb == "remove") {
-                    input_->setText(dock_primary_id_ + " remove");
-                } else {
-                    mode_ = Mode::DockSecondary;
-                    input_->setText(dock_primary_id_ + " " + verb + " ");
-                }
-                input_->setCursorPosition(input_->text().length());
-            } else {
-                // Normal screen mode — autocomplete with the alias
-                input_->setText(autocomplete);
-                hide_dropdown();
+        case Qt::Key_Down:
+            if (count > 0) {
+                int next = (list_->currentRow() + 1) % count;
+                list_->setCurrentRow(next);
             }
-        }
-        return true;
+            return true;
 
-    case Qt::Key_Escape:
-        input_->clear();
-        mode_ = Mode::Screen;
-        active_asset_type_.clear();
-        dock_primary_id_.clear();
-        dock_verb_.clear();
-        search_debounce_->stop();
-        hide_dropdown();
-        input_->clearFocus();
-        return true;
+        case Qt::Key_Up:
+            if (count > 0) {
+                int prev = (list_->currentRow() - 1 + count) % count;
+                list_->setCurrentRow(prev);
+            }
+            return true;
 
-    default:
-        break;
+        case Qt::Key_Tab:
+            if (list_->currentItem()) {
+                const QString autocomplete = list_->currentItem()->data(Qt::UserRole + 1).toString();
+                if (mode_ == Mode::SlashPicker) {
+                    // Autocomplete slash type and activate asset search
+                    input_->setText(autocomplete);
+                    for (const auto& at : asset_types_) {
+                        if (at.slash == autocomplete) {
+                            activate_asset_mode(at.api_type);
+                            input_->setText(autocomplete + " ");
+                            input_->setCursorPosition(input_->text().length());
+                            break;
+                        }
+                    }
+                } else if (mode_ == Mode::DockSecondary && !dock_primary_id_.isEmpty() && !dock_verb_.isEmpty()) {
+                    // Autocomplete the secondary screen into the full command
+                    const QString screen_id = list_->currentItem()->data(Qt::UserRole).toString();
+                    if (!screen_id.isEmpty()) {
+                        input_->setText(dock_primary_id_ + " " + dock_verb_ + " " + screen_id);
+                        input_->setCursorPosition(input_->text().length());
+                    }
+                } else if (mode_ == Mode::DockCommand && !dock_primary_id_.isEmpty()) {
+                    // Autocomplete the verb
+                    const QString verb = list_->currentItem()->data(Qt::UserRole).toString();
+                    dock_verb_ = verb;
+                    if (verb == "remove") {
+                        input_->setText(dock_primary_id_ + " remove");
+                    } else {
+                        mode_ = Mode::DockSecondary;
+                        input_->setText(dock_primary_id_ + " " + verb + " ");
+                    }
+                    input_->setCursorPosition(input_->text().length());
+                } else {
+                    // Normal screen mode — autocomplete with the alias
+                    input_->setText(autocomplete);
+                    hide_dropdown();
+                }
+            }
+            return true;
+
+        case Qt::Key_Escape:
+            input_->clear();
+            mode_ = Mode::Screen;
+            active_asset_type_.clear();
+            dock_primary_id_.clear();
+            dock_verb_.clear();
+            search_debounce_->stop();
+            hide_dropdown();
+            input_->clearFocus();
+            return true;
+
+        default:
+            break;
     }
     return QWidget::eventFilter(obj, event);
 }
@@ -429,7 +656,9 @@ void CommandBar::on_text_changed(const QString& text) {
             auto* rl = new QHBoxLayout(row);
             rl->setContentsMargins(10, 6, 10, 6);
             auto* hint = new QLabel(QString("Type a symbol or name to search %1s...").arg(active_asset_type_));
-            hint->setStyleSheet(QString("color:%1;font-size:11px;font-family:'Consolas',monospace;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
+            hint->setStyleSheet(
+                QString("color:%1;font-size:11px;font-family:'Consolas',monospace;background:transparent;")
+                    .arg(colors::TEXT_TERTIARY.get()));
             rl->addWidget(hint);
             item->setSizeHint(QSize(0, 30));
             list_->setItemWidget(item, row);
@@ -519,10 +748,10 @@ void CommandBar::on_text_changed(const QString& text) {
                     auto* hl2 = new QHBoxLayout(row);
                     hl2->setContentsMargins(10, 6, 10, 6);
                     auto* lbl = new QLabel(QString("Press Enter to close all except %1")
-                                           .arg(resolve_screen_id(first_token).toUpper().replace("_", " ")));
+                                               .arg(resolve_screen_id(first_token).toUpper().replace("_", " ")));
                     lbl->setStyleSheet(QString("color:%1;font-size:11px;"
-                                              "font-family:'Consolas',monospace;background:transparent;")
-                                       .arg(colors::AMBER.get()));
+                                               "font-family:'Consolas',monospace;background:transparent;")
+                                           .arg(colors::AMBER.get()));
                     hl2->addWidget(lbl);
                     item->setSizeHint(QSize(0, 30));
                     list_->setItemWidget(item, row);
@@ -532,8 +761,7 @@ void CommandBar::on_text_changed(const QString& text) {
                     return;
                 }
                 // Transition to DockCommand — show verb suggestions
-                if (rest.isEmpty() || rest == "a" || rest == "ad" ||
-                    rest == "r" || rest == "re" || rest == "rep") {
+                if (rest.isEmpty() || rest == "a" || rest == "ad" || rest == "r" || rest == "re" || rest == "rep") {
                     dock_primary_id_ = resolved;
                     dock_verb_.clear();
                     mode_ = Mode::DockCommand;
@@ -581,15 +809,18 @@ void CommandBar::on_text_changed(const QString& text) {
 
         auto* alias_lbl = new QLabel(cmd.aliases.first().toUpper());
         alias_lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;"
-                                 "font-family:'Consolas',monospace;background:transparent;").arg(colors::TEXT_PRIMARY.get()));
+                                         "font-family:'Consolas',monospace;background:transparent;")
+                                     .arg(colors::TEXT_PRIMARY.get()));
         alias_lbl->setFixedWidth(72);
 
         auto* sep_lbl = new QLabel(QStringLiteral("\u203A"));
-        sep_lbl->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
+        sep_lbl->setStyleSheet(
+            QString("color:%1;font-size:12px;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
 
         auto* name_lbl = new QLabel(cmd.name);
         name_lbl->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;"
-                                "font-family:'Consolas',monospace;").arg(colors::TEXT_SECONDARY.get()));
+                                        "font-family:'Consolas',monospace;")
+                                    .arg(colors::TEXT_SECONDARY.get()));
 
         hl->addWidget(alias_lbl);
         hl->addWidget(sep_lbl);
@@ -598,7 +829,8 @@ void CommandBar::on_text_changed(const QString& text) {
         if (!cmd.shortcut.isEmpty()) {
             auto* sc_lbl = new QLabel(cmd.shortcut);
             sc_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-family:'Consolas',monospace;"
-                                  "background:transparent;").arg(colors::TEXT_DIM.get()));
+                                          "background:transparent;")
+                                      .arg(colors::TEXT_DIM.get()));
             hl->addWidget(sc_lbl);
         }
 
@@ -615,9 +847,10 @@ void CommandBar::on_return_pressed() {
     // screen navigation — the user has to explicitly pick an asset from the list.
     if (mode_ == Mode::AssetSearch) {
         auto* item = list_->currentItem();
-        if (!item) return;
+        if (!item)
+            return;
         const QString symbol = item->data(Qt::UserRole).toString();
-        const QString type   = item->data(Qt::UserRole + 2).toString();
+        const QString type = item->data(Qt::UserRole + 2).toString();
         // Only navigate if this item is an actual asset result (has a symbol)
         if (!symbol.isEmpty())
             select_asset(symbol, type);
@@ -630,8 +863,7 @@ void CommandBar::on_return_pressed() {
         const QString text = input_->text().trimmed();
         // Try compound dock command: "X add Y", "X replace Y", "X remove"
         // Works from Screen, DockCommand, or DockSecondary modes
-        if (mode_ == Mode::Screen || mode_ == Mode::DockCommand
-            || mode_ == Mode::DockSecondary) {
+        if (mode_ == Mode::Screen || mode_ == Mode::DockCommand || mode_ == Mode::DockSecondary) {
             if (try_parse_dock_command(text)) {
                 mode_ = Mode::Screen;
                 dock_primary_id_.clear();
@@ -674,16 +906,18 @@ void CommandBar::on_return_pressed() {
         const QString primary = item->data(Qt::UserRole + 1).toString();
         if (verb == "remove") {
             emit dock_command("remove", primary, {});
-            input_->clear(); mode_ = Mode::Screen;
-            dock_primary_id_.clear(); dock_verb_.clear();
-            hide_dropdown(); input_->clearFocus();
+            input_->clear();
+            mode_ = Mode::Screen;
+            dock_primary_id_.clear();
+            dock_verb_.clear();
+            hide_dropdown();
+            input_->clearFocus();
         } else {
             // Transition to secondary — append verb to input
             dock_verb_ = verb;
             mode_ = Mode::DockSecondary;
             const QString current = input_->text().trimmed();
-            input_->setText(current.endsWith(' ') ? current + verb + " "
-                                                  : current + " " + verb + " ");
+            input_->setText(current.endsWith(' ') ? current + verb + " " : current + " " + verb + " ");
             input_->setCursorPosition(input_->text().length());
             input_->setFocus();
         }
@@ -693,11 +927,15 @@ void CommandBar::on_return_pressed() {
     // ── DockSecondary: user pressed Enter on a secondary screen ─────────
     if (mode_ == Mode::DockSecondary) {
         const QString secondary_id = item->data(Qt::UserRole).toString();
-        if (secondary_id.isEmpty()) return; // header row
+        if (secondary_id.isEmpty())
+            return; // header row
         emit dock_command(dock_verb_, dock_primary_id_, secondary_id);
-        input_->clear(); mode_ = Mode::Screen;
-        dock_primary_id_.clear(); dock_verb_.clear();
-        hide_dropdown(); input_->clearFocus();
+        input_->clear();
+        mode_ = Mode::Screen;
+        dock_primary_id_.clear();
+        dock_verb_.clear();
+        hide_dropdown();
+        input_->clearFocus();
         return;
     }
 
@@ -706,7 +944,8 @@ void CommandBar::on_return_pressed() {
 }
 
 void CommandBar::on_item_clicked(QListWidgetItem* item) {
-    if (!item) return;
+    if (!item)
+        return;
 
     if (mode_ == Mode::SlashPicker) {
         const QString slash = item->data(Qt::UserRole + 1).toString();
@@ -736,16 +975,18 @@ void CommandBar::on_item_clicked(QListWidgetItem* item) {
         const QString primary = item->data(Qt::UserRole + 1).toString();
         if (verb == "remove") {
             emit dock_command("remove", primary, {});
-            input_->clear(); mode_ = Mode::Screen;
-            dock_primary_id_.clear(); dock_verb_.clear();
-            hide_dropdown(); input_->clearFocus();
+            input_->clear();
+            mode_ = Mode::Screen;
+            dock_primary_id_.clear();
+            dock_verb_.clear();
+            hide_dropdown();
+            input_->clearFocus();
         } else {
             // Transition to secondary — append verb to input
             dock_verb_ = verb;
             mode_ = Mode::DockSecondary;
             const QString current = input_->text().trimmed();
-            input_->setText(current.endsWith(' ') ? current + verb + " "
-                                                  : current + " " + verb + " ");
+            input_->setText(current.endsWith(' ') ? current + verb + " " : current + " " + verb + " ");
             input_->setCursorPosition(input_->text().length());
             input_->setFocus();
             show_dock_secondary_suggestions(verb, {});
@@ -755,11 +996,15 @@ void CommandBar::on_item_clicked(QListWidgetItem* item) {
 
     if (mode_ == Mode::DockSecondary) {
         const QString secondary_id = item->data(Qt::UserRole).toString();
-        if (secondary_id.isEmpty()) return; // header row
+        if (secondary_id.isEmpty())
+            return; // header row
         emit dock_command(dock_verb_, dock_primary_id_, secondary_id);
-        input_->clear(); mode_ = Mode::Screen;
-        dock_primary_id_.clear(); dock_verb_.clear();
-        hide_dropdown(); input_->clearFocus();
+        input_->clear();
+        mode_ = Mode::Screen;
+        dock_primary_id_.clear();
+        dock_verb_.clear();
+        hide_dropdown();
+        input_->clearFocus();
         return;
     }
 
@@ -796,15 +1041,18 @@ void CommandBar::show_slash_suggestions(const QString& partial) {
 
         auto* slash_lbl = new QLabel(at.slash);
         slash_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:700;"
-                                 "font-family:'Consolas',monospace;background:transparent;").arg(colors::AMBER.get()));
+                                         "font-family:'Consolas',monospace;background:transparent;")
+                                     .arg(colors::AMBER.get()));
         slash_lbl->setFixedWidth(80);
 
         auto* sep_lbl = new QLabel(QStringLiteral("\u203A"));
-        sep_lbl->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
+        sep_lbl->setStyleSheet(
+            QString("color:%1;font-size:12px;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
 
         auto* desc_lbl = new QLabel(at.description);
         desc_lbl->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;"
-                                "font-family:'Consolas',monospace;").arg(colors::TEXT_SECONDARY.get()));
+                                        "font-family:'Consolas',monospace;")
+                                    .arg(colors::TEXT_SECONDARY.get()));
 
         hl->addWidget(slash_lbl);
         hl->addWidget(sep_lbl);
@@ -834,16 +1082,17 @@ void CommandBar::schedule_asset_search(const QString& query) {
 }
 
 void CommandBar::fire_asset_search(const QString& query) {
-    const QString url = QString("/market/search?q=%1&type=%2&limit=%3")
-                            .arg(query, active_asset_type_)
-                            .arg(kMaxResults);
+    const QString url = QString("/market/search?q=%1&type=%2&limit=%3").arg(query, active_asset_type_).arg(kMaxResults);
 
     QPointer<CommandBar> self = this;
     HttpClient::instance().get(url, [self, query](Result<QJsonDocument> result) {
-        if (!self) return;
+        if (!self)
+            return;
         // Only process if user hasn't changed the query since we fired
-        if (self->pending_query_ != query) return;
-        if (!result.is_ok()) return;
+        if (self->pending_query_ != query)
+            return;
+        if (!result.is_ok())
+            return;
 
         const auto doc = result.value();
         QJsonArray arr;
@@ -872,7 +1121,8 @@ void CommandBar::on_asset_results(const QJsonArray& results) {
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(10, 6, 10, 6);
         auto* lbl = new QLabel("No results found");
-        lbl->setStyleSheet(QString("color:%1;font-size:11px;font-family:'Consolas',monospace;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
+        lbl->setStyleSheet(QString("color:%1;font-size:11px;font-family:'Consolas',monospace;background:transparent;")
+                               .arg(colors::TEXT_TERTIARY.get()));
         rl->addWidget(lbl);
         item->setSizeHint(QSize(0, 30));
         list_->setItemWidget(item, row);
@@ -882,21 +1132,22 @@ void CommandBar::on_asset_results(const QJsonArray& results) {
 
     for (const auto& val : results) {
         const auto obj = val.toObject();
-        const QString symbol   = obj["symbol"].toString();
-        const QString name     = obj["name"].toString();
+        const QString symbol = obj["symbol"].toString();
+        const QString name = obj["name"].toString();
         const QString exchange = obj["exchange"].toString();
-        const QString country  = obj["country"].toString();
-        const QString type     = obj["type"].toString(active_asset_type_);
+        const QString country = obj["country"].toString();
+        const QString type = obj["type"].toString(active_asset_type_);
 
-        if (symbol.isEmpty()) continue;
+        if (symbol.isEmpty())
+            continue;
 
         // Convert to yfinance-compatible ticker (e.g. RELIANCE → RELIANCE.NS)
         const QString yf_symbol = to_yfinance_symbol(symbol, exchange, country);
 
         auto* item = new QListWidgetItem(list_);
-        item->setData(Qt::UserRole, yf_symbol);               // yfinance symbol for loading
-        item->setData(Qt::UserRole + 1, yf_symbol);           // for Tab autocomplete
-        item->setData(Qt::UserRole + 2, type);                // asset type
+        item->setData(Qt::UserRole, yf_symbol);     // yfinance symbol for loading
+        item->setData(Qt::UserRole + 1, yf_symbol); // for Tab autocomplete
+        item->setData(Qt::UserRole + 2, type);      // asset type
 
         auto* row = new QWidget;
         row->setStyleSheet("background:transparent;");
@@ -906,12 +1157,14 @@ void CommandBar::on_asset_results(const QJsonArray& results) {
 
         auto* sym_lbl = new QLabel(yf_symbol);
         sym_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:700;"
-                               "font-family:'Consolas',monospace;background:transparent;").arg(colors::TEXT_PRIMARY.get()));
+                                       "font-family:'Consolas',monospace;background:transparent;")
+                                   .arg(colors::TEXT_PRIMARY.get()));
         sym_lbl->setFixedWidth(110);
 
         auto* name_lbl = new QLabel(name);
         name_lbl->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;"
-                                "font-family:'Consolas',monospace;").arg(colors::TEXT_SECONDARY.get()));
+                                        "font-family:'Consolas',monospace;")
+                                    .arg(colors::TEXT_SECONDARY.get()));
         name_lbl->setMaximumWidth(200);
 
         hl->addWidget(sym_lbl);
@@ -920,16 +1173,18 @@ void CommandBar::on_asset_results(const QJsonArray& results) {
         if (!exchange.isEmpty()) {
             auto* exch_lbl = new QLabel(exchange);
             exch_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-family:'Consolas',monospace;"
-                                    "background:transparent;").arg(colors::TEXT_TERTIARY.get()));
+                                            "background:transparent;")
+                                        .arg(colors::TEXT_TERTIARY.get()));
             hl->addWidget(exch_lbl);
         }
 
         // Type badge
         auto* type_lbl = new QLabel(type.toUpper());
         type_lbl->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;"
-                                "font-family:'Consolas',monospace;background:%2;"
-                                "padding:1px 4px;border-radius:2px;")
-                                .arg(colors::AMBER.get()).arg(colors::BG_RAISED.get()));
+                                        "font-family:'Consolas',monospace;background:%2;"
+                                        "padding:1px 4px;border-radius:2px;")
+                                    .arg(colors::AMBER.get())
+                                    .arg(colors::BG_RAISED.get()));
         hl->addWidget(type_lbl);
 
         item->setSizeHint(QSize(0, 32));
@@ -953,9 +1208,9 @@ void CommandBar::select_asset(const QString& symbol, const QString& type) {
     // Navigate to equity_research and tell it to load the symbol
     emit navigate_to("equity_research");
     EventBus::instance().publish("equity_research.load_symbol", {
-        {"symbol", symbol},
-        {"type", type},
-    });
+                                                                    {"symbol", symbol},
+                                                                    {"type", type},
+                                                                });
 }
 
 // ── dropdown helpers ─────────────────────────────────────────────────────────
@@ -964,17 +1219,21 @@ void CommandBar::show_dock_verb_suggestions(const QString& primary_id) {
     // Show add / replace / remove as clickable suggestions after "<screen> "
     list_->clear();
 
-    struct Verb { QString verb; QString label; QString hint; };
+    struct Verb {
+        QString verb;
+        QString label;
+        QString hint;
+    };
     const QList<Verb> verbs = {
-        {"add",     "ADD",     "Open a second screen alongside"},
+        {"add", "ADD", "Open a second screen alongside"},
         {"replace", "REPLACE", "Close this screen, open another"},
-        {"remove",  "REMOVE",  "Close all other screens"},
+        {"remove", "REMOVE", "Close all other screens"},
     };
 
     for (const auto& v : verbs) {
         auto* item = new QListWidgetItem(list_);
-        item->setData(Qt::UserRole,     v.verb);      // verb
-        item->setData(Qt::UserRole + 1, primary_id);  // primary screen id
+        item->setData(Qt::UserRole, v.verb);         // verb
+        item->setData(Qt::UserRole + 1, primary_id); // primary screen id
 
         auto* row = new QWidget;
         row->setStyleSheet("background:transparent;");
@@ -983,20 +1242,18 @@ void CommandBar::show_dock_verb_suggestions(const QString& primary_id) {
         hl->setSpacing(8);
 
         auto* verb_lbl = new QLabel(v.verb.toUpper());
-        verb_lbl->setStyleSheet(
-            QString("color:%1;font-size:11px;font-weight:700;"
-                    "font-family:'Consolas',monospace;background:transparent;")
-            .arg(colors::AMBER.get()));
+        verb_lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;"
+                                        "font-family:'Consolas',monospace;background:transparent;")
+                                    .arg(colors::AMBER.get()));
         verb_lbl->setFixedWidth(64);
 
         auto* sep = new QLabel(QStringLiteral("\u203A"));
-        sep->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;")
-                           .arg(colors::TEXT_TERTIARY.get()));
+        sep->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
 
         auto* hint_lbl = new QLabel(v.hint);
         hint_lbl->setStyleSheet(
             QString("color:%1;font-size:11px;font-family:'Consolas',monospace;background:transparent;")
-            .arg(colors::TEXT_SECONDARY.get()));
+                .arg(colors::TEXT_SECONDARY.get()));
 
         hl->addWidget(verb_lbl);
         hl->addWidget(sep);
@@ -1023,9 +1280,8 @@ void CommandBar::show_dock_secondary_suggestions(const QString& verb, const QStr
         auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(10, 4, 10, 4);
         auto* lbl = new QLabel(QString("%1 — pick a screen:").arg(verb.toUpper()));
-        lbl->setStyleSheet(
-            QString("color:%1;font-size:10px;font-family:'Consolas',monospace;background:transparent;")
-            .arg(colors::AMBER.get()));
+        lbl->setStyleSheet(QString("color:%1;font-size:10px;font-family:'Consolas',monospace;background:transparent;")
+                               .arg(colors::AMBER.get()));
         hl->addWidget(lbl);
         item->setSizeHint(QSize(0, 24));
         list_->setItemWidget(item, row);
@@ -1034,7 +1290,7 @@ void CommandBar::show_dock_secondary_suggestions(const QString& verb, const QStr
     const auto& pool = results.isEmpty() ? commands_ : results;
     for (const auto& cmd : pool) {
         auto* item = new QListWidgetItem(list_);
-        item->setData(Qt::UserRole,     cmd.id);
+        item->setData(Qt::UserRole, cmd.id);
         item->setData(Qt::UserRole + 1, cmd.aliases.first());
 
         auto* row = new QWidget;
@@ -1044,20 +1300,18 @@ void CommandBar::show_dock_secondary_suggestions(const QString& verb, const QStr
         hl->setSpacing(6);
 
         auto* alias_lbl = new QLabel(cmd.aliases.first().toUpper());
-        alias_lbl->setStyleSheet(
-            QString("color:%1;font-size:11px;font-weight:700;"
-                    "font-family:'Consolas',monospace;background:transparent;")
-            .arg(colors::TEXT_PRIMARY.get()));
+        alias_lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;"
+                                         "font-family:'Consolas',monospace;background:transparent;")
+                                     .arg(colors::TEXT_PRIMARY.get()));
         alias_lbl->setFixedWidth(72);
 
         auto* sep = new QLabel(QStringLiteral("\u203A"));
-        sep->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;")
-                           .arg(colors::TEXT_TERTIARY.get()));
+        sep->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
 
         auto* name_lbl = new QLabel(cmd.name);
         name_lbl->setStyleSheet(
             QString("color:%1;font-size:11px;font-family:'Consolas',monospace;background:transparent;")
-            .arg(colors::TEXT_SECONDARY.get()));
+                .arg(colors::TEXT_SECONDARY.get()));
 
         hl->addWidget(alias_lbl);
         hl->addWidget(sep);
@@ -1066,7 +1320,8 @@ void CommandBar::show_dock_secondary_suggestions(const QString& verb, const QStr
         list_->setItemWidget(item, row);
     }
 
-    if (list_->count() > 1) list_->setCurrentRow(1); // skip header
+    if (list_->count() > 1)
+        list_->setCurrentRow(1); // skip header
     show_dropdown();
 }
 
@@ -1074,60 +1329,72 @@ QString CommandBar::resolve_screen_id(const QString& token) const {
     const QString t = token.trimmed().toLower();
     // Direct id match
     for (const auto& cmd : commands_)
-        if (cmd.id == t) return cmd.id;
+        if (cmd.id == t)
+            return cmd.id;
     // Alias / name match (same logic as search())
     for (const auto& cmd : commands_) {
-        if (cmd.name.toLower() == t) return cmd.id;
+        if (cmd.name.toLower() == t)
+            return cmd.id;
         for (const auto& a : cmd.aliases)
-            if (a.toLower() == t) return cmd.id;
+            if (a.toLower() == t)
+                return cmd.id;
     }
     // Keyword prefix
     const auto results = search(t);
-    if (!results.isEmpty()) return results.first().id;
+    if (!results.isEmpty())
+        return results.first().id;
     return {};
 }
 
 bool CommandBar::try_parse_dock_command(const QString& text) {
     // Not active during asset search or slash picker
-    if (mode_ == Mode::AssetSearch || mode_ == Mode::SlashPicker) return false;
+    if (mode_ == Mode::AssetSearch || mode_ == Mode::SlashPicker)
+        return false;
 
     const QString t = text.trimmed();
 
     // Match: "<primary> add <secondary>"
-    static const QRegularExpression re_add(
-        R"(^(.+?)\s+add\s+(.+)$)", QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression re_add(R"(^(.+?)\s+add\s+(.+)$)", QRegularExpression::CaseInsensitiveOption);
     // Match: "<primary> replace <secondary>"
-    static const QRegularExpression re_replace(
-        R"(^(.+?)\s+replace\s+(.+)$)", QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression re_replace(R"(^(.+?)\s+replace\s+(.+)$)",
+                                               QRegularExpression::CaseInsensitiveOption);
     // Match: "<primary> remove"
-    static const QRegularExpression re_remove(
-        R"(^(.+?)\s+remove$)", QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression re_remove(R"(^(.+?)\s+remove$)", QRegularExpression::CaseInsensitiveOption);
 
-    auto m_add     = re_add.match(t);
+    auto m_add = re_add.match(t);
     auto m_replace = re_replace.match(t);
-    auto m_remove  = re_remove.match(t);
+    auto m_remove = re_remove.match(t);
 
     if (m_add.hasMatch()) {
-        const QString primary   = resolve_screen_id(m_add.captured(1));
+        const QString primary = resolve_screen_id(m_add.captured(1));
         const QString secondary = resolve_screen_id(m_add.captured(2));
-        if (primary.isEmpty() || secondary.isEmpty()) return false;
+        if (primary.isEmpty() || secondary.isEmpty())
+            return false;
         emit dock_command("add", primary, secondary);
-        input_->clear(); hide_dropdown(); input_->clearFocus();
+        input_->clear();
+        hide_dropdown();
+        input_->clearFocus();
         return true;
     }
     if (m_replace.hasMatch()) {
-        const QString primary   = resolve_screen_id(m_replace.captured(1));
+        const QString primary = resolve_screen_id(m_replace.captured(1));
         const QString secondary = resolve_screen_id(m_replace.captured(2));
-        if (primary.isEmpty() || secondary.isEmpty()) return false;
+        if (primary.isEmpty() || secondary.isEmpty())
+            return false;
         emit dock_command("replace", primary, secondary);
-        input_->clear(); hide_dropdown(); input_->clearFocus();
+        input_->clear();
+        hide_dropdown();
+        input_->clearFocus();
         return true;
     }
     if (m_remove.hasMatch()) {
         const QString primary = resolve_screen_id(m_remove.captured(1));
-        if (primary.isEmpty()) return false;
+        if (primary.isEmpty())
+            return false;
         emit dock_command("remove", primary, {});
-        input_->clear(); hide_dropdown(); input_->clearFocus();
+        input_->clear();
+        hide_dropdown();
+        input_->clearFocus();
         return true;
     }
     return false;
@@ -1135,7 +1402,8 @@ bool CommandBar::try_parse_dock_command(const QString& text) {
 
 void CommandBar::execute_index(int index) {
     auto* item = list_->item(index);
-    if (!item) return;
+    if (!item)
+        return;
     emit navigate_to(item->data(Qt::UserRole).toString());
     input_->clear();
     mode_ = Mode::Screen;

@@ -3,8 +3,8 @@
 #include "services/workflow/ExpressionEngine.h"
 #include "services/workflow/NodeRegistry.h"
 
-#include <QTimer>
 #include <QJsonArray>
+#include <QTimer>
 
 namespace fincept::workflow {
 

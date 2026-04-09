@@ -3,8 +3,8 @@
 
 #include "ui/theme/Theme.h"
 
-#include <QHeaderView>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
 
@@ -22,26 +22,23 @@ void PortfolioTxnPanel::build_ui() {
     layout->setSpacing(0);
 
     // Header bar
-    auto* header = new QWidget;
+    auto* header = new QWidget(this);
     header->setFixedHeight(28);
-    header->setStyleSheet(
-        QString("background:%1; border-top:1px solid %2; border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    header->setStyleSheet(QString("background:%1; border-top:1px solid %2; border-bottom:1px solid %2;")
+                              .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(8);
 
     auto* title = new QLabel("TRANSACTION HISTORY");
     title->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;")
-            .arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
     hl->addWidget(title);
 
     hl->addStretch();
 
     count_label_ = new QLabel;
-    count_label_->setStyleSheet(
-        QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_TERTIARY));
+    count_label_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_TERTIARY));
     hl->addWidget(count_label_);
 
     layout->addWidget(header);
@@ -62,24 +59,23 @@ void PortfolioTxnPanel::build_ui() {
     table_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     table_->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Stretch); // Notes stretches
 
-    table_->setStyleSheet(
-        QString("QTableWidget {"
-                "  background:%1; color:%2; border:none;"
-                "  font-size:11px; font-family:%3; gridline-color:%4;"
-                "}"
-                "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %4; }"
-                "QTableWidget::item:selected { background:%5; color:%2; }"
-                "QHeaderView::section {"
-                "  background:%6; color:%7; border:none;"
-                "  border-bottom:2px solid %4; border-right:1px solid %4;"
-                "  font-size:10px; font-weight:700;"
-                "  letter-spacing:0.5px; padding:4px 8px; }"
-                "QScrollBar:vertical { background:%1; width:5px; }"
-                "QScrollBar::handle:vertical { background:%4; min-height:20px; }"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0px; }")
-            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::fonts::DATA_FAMILY,
-                 ui::colors::BORDER_DIM, ui::colors::BG_HOVER,
-                 ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY));
+    table_->setStyleSheet(QString("QTableWidget {"
+                                  "  background:%1; color:%2; border:none;"
+                                  "  font-size:11px; font-family:%3; gridline-color:%4;"
+                                  "}"
+                                  "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %4; }"
+                                  "QTableWidget::item:selected { background:%5; color:%2; }"
+                                  "QHeaderView::section {"
+                                  "  background:%6; color:%7; border:none;"
+                                  "  border-bottom:2px solid %4; border-right:1px solid %4;"
+                                  "  font-size:10px; font-weight:700;"
+                                  "  letter-spacing:0.5px; padding:4px 8px; }"
+                                  "QScrollBar:vertical { background:%1; width:5px; }"
+                                  "QScrollBar::handle:vertical { background:%4; min-height:20px; }"
+                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0px; }")
+                              .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::fonts::DATA_FAMILY,
+                                   ui::colors::BORDER_DIM, ui::colors::BG_HOVER, ui::colors::BG_SURFACE,
+                                   ui::colors::TEXT_TERTIARY));
 
     table_->verticalHeader()->setDefaultSectionSize(24);
 
@@ -119,10 +115,14 @@ void PortfolioTxnPanel::populate() {
         // Type — colour-coded
         auto* type_item = new QTableWidgetItem(t.transaction_type);
         QColor type_color;
-        if (t.transaction_type == "BUY")       type_color = QColor(ui::colors::POSITIVE());
-        else if (t.transaction_type == "SELL") type_color = QColor(ui::colors::NEGATIVE());
-        else if (t.transaction_type == "DIVIDEND") type_color = QColor(ui::colors::CYAN());
-        else                                   type_color = QColor(ui::colors::TEXT_SECONDARY());
+        if (t.transaction_type == "BUY")
+            type_color = QColor(ui::colors::POSITIVE());
+        else if (t.transaction_type == "SELL")
+            type_color = QColor(ui::colors::NEGATIVE());
+        else if (t.transaction_type == "DIVIDEND")
+            type_color = QColor(ui::colors::CYAN());
+        else
+            type_color = QColor(ui::colors::TEXT_SECONDARY());
         type_item->setForeground(type_color);
         type_item->setFont(QFont(ui::fonts::DATA_FAMILY, 9, QFont::Bold));
         table_->setItem(row, 2, type_item);
@@ -142,9 +142,9 @@ void PortfolioTxnPanel::populate() {
         // Total
         auto* total_item = new QTableWidgetItem(QString::number(t.total_value, 'f', 2));
         total_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        const char* total_color = (t.transaction_type == "BUY") ? ui::colors::NEGATIVE
-                                : (t.transaction_type == "SELL") ? ui::colors::POSITIVE
-                                : ui::colors::CYAN;
+        const char* total_color = (t.transaction_type == "BUY")    ? ui::colors::NEGATIVE
+                                  : (t.transaction_type == "SELL") ? ui::colors::POSITIVE
+                                                                   : ui::colors::CYAN;
         total_item->setForeground(QColor(total_color));
         table_->setItem(row, 5, total_item);
 
@@ -163,24 +163,27 @@ void PortfolioTxnPanel::refresh_theme() {
 
     const QString bsz = QString::number(ui::fonts::font_px(0));
     const QString hsz = QString::number(ui::fonts::font_px(-2));
-    table_->setStyleSheet(
-        QString("QTableWidget {"
-                "  background:%1; color:%2; border:none;"
-                "  font-size:" + bsz + "px; font-family:%3; gridline-color:%4;"
-                "}"
-                "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %4; }"
-                "QTableWidget::item:selected { background:%5; color:%2; }"
-                "QHeaderView::section {"
-                "  background:%6; color:%7; border:none;"
-                "  border-bottom:2px solid %4; border-right:1px solid %4;"
-                "  font-size:" + hsz + "px; font-weight:700;"
-                "  letter-spacing:0.5px; padding:4px 8px; }"
-                "QScrollBar:vertical { background:%1; width:5px; }"
-                "QScrollBar::handle:vertical { background:%4; min-height:20px; }"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0px; }")
-            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::fonts::DATA_FAMILY,
-                 ui::colors::BORDER_DIM, ui::colors::BG_HOVER,
-                 ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY));
+    table_->setStyleSheet(QString("QTableWidget {"
+                                  "  background:%1; color:%2; border:none;"
+                                  "  font-size:" +
+                                  bsz +
+                                  "px; font-family:%3; gridline-color:%4;"
+                                  "}"
+                                  "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %4; }"
+                                  "QTableWidget::item:selected { background:%5; color:%2; }"
+                                  "QHeaderView::section {"
+                                  "  background:%6; color:%7; border:none;"
+                                  "  border-bottom:2px solid %4; border-right:1px solid %4;"
+                                  "  font-size:" +
+                                  hsz +
+                                  "px; font-weight:700;"
+                                  "  letter-spacing:0.5px; padding:4px 8px; }"
+                                  "QScrollBar:vertical { background:%1; width:5px; }"
+                                  "QScrollBar::handle:vertical { background:%4; min-height:20px; }"
+                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0px; }")
+                              .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::fonts::DATA_FAMILY,
+                                   ui::colors::BORDER_DIM, ui::colors::BG_HOVER, ui::colors::BG_SURFACE,
+                                   ui::colors::TEXT_TERTIARY));
 
     populate();
 }

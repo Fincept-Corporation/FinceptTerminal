@@ -24,17 +24,16 @@ static QLabel* section_heading(const QString& number, const QString& title) {
 static QLabel* body_text(const QString& text) {
     auto* lbl = new QLabel(text);
     lbl->setWordWrap(true);
-    lbl->setStyleSheet(
-        QString("color: %1; font-size: 12px; line-height: 1.5; background: transparent; %2")
-            .arg(colors::TEXT_PRIMARY, MF));
+    lbl->setStyleSheet(QString("color: %1; font-size: 12px; line-height: 1.5; background: transparent; %2")
+                           .arg(colors::TEXT_PRIMARY, MF));
     return lbl;
 }
 
 static QLabel* bullet(const QString& text) {
     auto* lbl = new QLabel(QString("  > %1").arg(text));
     lbl->setWordWrap(true);
-    lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2")
-                           .arg(colors::TEXT_SECONDARY, MF));
+    lbl->setStyleSheet(
+        QString("color: %1; font-size: 12px; background: transparent; %2").arg(colors::TEXT_SECONDARY, MF));
     return lbl;
 }
 
@@ -49,7 +48,7 @@ TermsScreen::TermsScreen(QWidget* parent) : QWidget(parent) {
     scroll->setWidgetResizable(true);
     scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }");
 
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     page->setStyleSheet(QString("background: %1;").arg(colors::BG_BASE));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
@@ -78,7 +77,7 @@ TermsScreen::TermsScreen(QWidget* parent) : QWidget(parent) {
     vl->addSpacing(12);
 
     // Panel container
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 2px;")
                              .arg(colors::BG_SURFACE, colors::BORDER_DIM));
     auto* pvl = new QVBoxLayout(panel);
@@ -145,7 +144,7 @@ TermsScreen::TermsScreen(QWidget* parent) : QWidget(parent) {
     vl->addWidget(panel);
 
     // Footer navigation
-    auto* footer = new QWidget;
+    auto* footer = new QWidget(this);
     footer->setStyleSheet("background: transparent;");
     auto* fhl = new QHBoxLayout(footer);
     fhl->setContentsMargins(0, 12, 0, 0);
@@ -155,7 +154,8 @@ TermsScreen::TermsScreen(QWidget* parent) : QWidget(parent) {
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
                                    "font-size: 12px; font-family:'Consolas','Courier New',monospace; }"
-                                   "QPushButton:hover { color: #38bdf8; }").arg(colors::CYAN));
+                                   "QPushButton:hover { color: #38bdf8; }")
+                               .arg(colors::CYAN));
         return btn;
     };
 

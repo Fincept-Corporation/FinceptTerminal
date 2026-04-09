@@ -22,9 +22,10 @@
 //   - Token expiry: stat == "Not_Ok" with auth emsg, or HTTP 401
 
 #include "trading/brokers/kotak/KotakBroker.h"
+
+#include "core/logging/Logger.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/instruments/InstrumentService.h"
-#include "core/logging/Logger.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -36,9 +37,11 @@
 namespace fincept::trading {
 
 static constexpr const char* TAG = "KotakBroker";
-static const QString LOGIN_BASE  = "https://mis.kotaksecurities.com";
+static const QString LOGIN_BASE = "https://mis.kotaksecurities.com";
 
-static int64_t now_ts() { return QDateTime::currentSecsSinceEpoch(); }
+static int64_t now_ts() {
+    return QDateTime::currentSecsSinceEpoch();
+}
 
 // ── TOTP helpers (RFC 6238, same implementation as AngelOne) ──────────────────
 
@@ -49,7 +52,8 @@ static QByteArray base32_decode(const QString& input) {
     int buffer = 0, bits = 0;
     for (QChar c : clean) {
         int val = alphabet.indexOf(c);
-        if (val < 0) continue;
+        if (val < 0)
+            continue;
         buffer = (buffer << 5) | val;
         bits += 5;
         if (bits >= 8) {
@@ -67,14 +71,17 @@ static QByteArray hmac_sha1(const QByteArray& key, const QByteArray& msg) {
         k = QCryptographicHash::hash(k, QCryptographicHash::Sha1);
     k = k.leftJustified(block, '\0');
     QByteArray ipad(block, '\x36'), opad(block, '\x5c');
-    for (int i = 0; i < block; ++i) { ipad[i] ^= k[i]; opad[i] ^= k[i]; }
+    for (int i = 0; i < block; ++i) {
+        ipad[i] ^= k[i];
+        opad[i] ^= k[i];
+    }
     QByteArray inner = QCryptographicHash::hash(ipad + msg, QCryptographicHash::Sha1);
     return QCryptographicHash::hash(opad + inner, QCryptographicHash::Sha1);
 }
 
 QString KotakBroker::generate_totp(const QString& base32_secret) {
     if (base32_secret.length() == 6 && base32_secret.toUInt() > 0)
-        return base32_secret;  // already a 6-digit code
+        return base32_secret; // already a 6-digit code
 
     QByteArray key = base32_decode(base32_secret);
     if (key.isEmpty()) {
@@ -83,13 +90,15 @@ QString KotakBroker::generate_totp(const QString& base32_secret) {
     }
     quint64 counter = static_cast<quint64>(QDateTime::currentSecsSinceEpoch()) / 30;
     QByteArray msg(8, '\0');
-    for (int i = 7; i >= 0; --i) { msg[i] = static_cast<char>(counter & 0xFF); counter >>= 8; }
+    for (int i = 7; i >= 0; --i) {
+        msg[i] = static_cast<char>(counter & 0xFF);
+        counter >>= 8;
+    }
     QByteArray hash = hmac_sha1(key, msg);
     int offset = hash[hash.size() - 1] & 0x0F;
-    quint32 code = ((static_cast<quint8>(hash[offset])   & 0x7F) << 24)
-                 | ((static_cast<quint8>(hash[offset+1]) & 0xFF) << 16)
-                 | ((static_cast<quint8>(hash[offset+2]) & 0xFF) <<  8)
-                 |  (static_cast<quint8>(hash[offset+3]) & 0xFF);
+    quint32 code =
+        ((static_cast<quint8>(hash[offset]) & 0x7F) << 24) | ((static_cast<quint8>(hash[offset + 1]) & 0xFF) << 16) |
+        ((static_cast<quint8>(hash[offset + 2]) & 0xFF) << 8) | (static_cast<quint8>(hash[offset + 3]) & 0xFF);
     code %= 1000000;
     return QString("%1").arg(code, 6, 10, QChar('0'));
 }
@@ -99,25 +108,24 @@ QString KotakBroker::generate_totp(const QString& base32_secret) {
 
 KotakBroker::TokenParts KotakBroker::unpack(const QString& packed) {
     const QStringList parts = packed.split(":::");
-    if (parts.size() != 4) return {};
+    if (parts.size() != 4)
+        return {};
     return {parts[0], parts[1], parts[2], parts[3], true};
 }
 
 // ── Exchange segment mapping ──────────────────────────────────────────────────
 QString KotakBroker::kotak_exchange(const QString& exchange) {
     static const QMap<QString, QString> map = {
-        {"NSE", "nse_cm"}, {"BSE", "bse_cm"},
-        {"NFO", "nse_fo"}, {"BFO", "bse_fo"},
-        {"CDS", "cde_fo"}, {"MCX", "mcx_fo"},
+        {"NSE", "nse_cm"}, {"BSE", "bse_cm"}, {"NFO", "nse_fo"},
+        {"BFO", "bse_fo"}, {"CDS", "cde_fo"}, {"MCX", "mcx_fo"},
     };
     return map.value(exchange.toUpper(), "nse_cm");
 }
 
 static QString canonical_exchange(const QString& seg) {
     static const QMap<QString, QString> map = {
-        {"nse_cm", "NSE"}, {"bse_cm", "BSE"},
-        {"nse_fo", "NFO"}, {"bse_fo", "BFO"},
-        {"cde_fo", "CDS"}, {"mcx_fo", "MCX"},
+        {"nse_cm", "NSE"}, {"bse_cm", "BSE"}, {"nse_fo", "NFO"},
+        {"bse_fo", "BFO"}, {"cde_fo", "CDS"}, {"mcx_fo", "MCX"},
     };
     return map.value(seg, seg);
 }
@@ -125,27 +133,34 @@ static QString canonical_exchange(const QString& seg) {
 // ── Product mapping ───────────────────────────────────────────────────────────
 QString KotakBroker::kotak_product(ProductType p) {
     switch (p) {
-        case ProductType::Intraday: return "MIS";
-        case ProductType::Delivery: return "CNC";
-        case ProductType::Margin:   return "NRML";
-        default:                    return "MIS";
+        case ProductType::Intraday:
+            return "MIS";
+        case ProductType::Delivery:
+            return "CNC";
+        case ProductType::Margin:
+            return "NRML";
+        default:
+            return "MIS";
     }
 }
 
 // ── Order type mapping ────────────────────────────────────────────────────────
 QString KotakBroker::kotak_order_type(OrderType t) {
     switch (t) {
-        case OrderType::Market:        return "MKT";
-        case OrderType::Limit:         return "L";
-        case OrderType::StopLoss:      return "SL";
-        case OrderType::StopLossLimit: return "SL-M";
+        case OrderType::Market:
+            return "MKT";
+        case OrderType::Limit:
+            return "L";
+        case OrderType::StopLoss:
+            return "SL";
+        case OrderType::StopLossLimit:
+            return "SL-M";
     }
     return "MKT";
 }
 
 // ── pSymbol lookup ────────────────────────────────────────────────────────────
-QString KotakBroker::lookup_psymbol(const QString& symbol, const QString& exchange,
-                                     const QString& broker_id) {
+QString KotakBroker::lookup_psymbol(const QString& symbol, const QString& exchange, const QString& broker_id) {
     if (!broker_id.isEmpty() && InstrumentService::instance().is_loaded(broker_id)) {
         auto tok = InstrumentService::instance().instrument_token(symbol, exchange, broker_id);
         if (tok.has_value() && tok.value() > 0)
@@ -167,18 +182,20 @@ bool KotakBroker::is_token_expired(const BrokerHttpResponse& resp) {
     if (resp.status_code == 401 || resp.status_code == 403)
         return true;
     const QString emsg = resp.json.value("emsg").toString().toLower();
-    if (emsg.contains("invalid session") || emsg.contains("session expired")
-            || emsg.contains("unauthorized") || emsg.contains("not logged in")
-            || emsg.contains("token expired") || emsg.contains("please login"))
+    if (emsg.contains("invalid session") || emsg.contains("session expired") || emsg.contains("unauthorized") ||
+        emsg.contains("not logged in") || emsg.contains("token expired") || emsg.contains("please login"))
         return true;
     return false;
 }
 
 QString KotakBroker::checked_error(const BrokerHttpResponse& resp, const QString& fallback) {
     QString msg = resp.json.value("emsg").toString();
-    if (msg.isEmpty()) msg = resp.json.value("message").toString();
-    if (msg.isEmpty()) msg = resp.error.isEmpty() ? fallback : resp.error;
-    if (is_token_expired(resp)) return "[TOKEN_EXPIRED] " + msg;
+    if (msg.isEmpty())
+        msg = resp.json.value("message").toString();
+    if (msg.isEmpty())
+        msg = resp.error.isEmpty() ? fallback : resp.error;
+    if (is_token_expired(resp))
+        return "[TOKEN_EXPIRED] " + msg;
     return msg;
 }
 
@@ -186,12 +203,13 @@ QString KotakBroker::checked_error(const BrokerHttpResponse& resp, const QString
 // Standard API calls (orders, positions, etc.) use Auth/Sid/neo-fin-key
 QMap<QString, QString> KotakBroker::auth_headers(const BrokerCredentials& creds) const {
     auto p = unpack(creds.access_token);
-    if (!p.valid) return {};
+    if (!p.valid)
+        return {};
     return {
-        {"Auth",         p.trading_token},
-        {"Sid",          p.trading_sid},
-        {"neo-fin-key",  "neotradeapi"},
-        {"accept",       "application/json"},
+        {"Auth", p.trading_token},
+        {"Sid", p.trading_sid},
+        {"neo-fin-key", "neotradeapi"},
+        {"accept", "application/json"},
         {"Content-Type", "application/x-www-form-urlencoded"},
     };
 }
@@ -204,14 +222,13 @@ QMap<QString, QString> KotakBroker::auth_headers(const BrokerCredentials& creds)
 // Workaround: user is instructed to enter UCC in ClientCode field and the UI
 // pre-fills api_key as "ACCESS_TOKEN|||+91MOBILE|||UCC" (3-part).
 // Fallback: if only 2 parts, UCC is unknown and we skip it (some flows don't need it).
-TokenExchangeResponse KotakBroker::exchange_token(const QString& api_key,
-                                                    const QString& api_secret,
-                                                    const QString& auth_code) {
+TokenExchangeResponse KotakBroker::exchange_token(const QString& api_key, const QString& api_secret,
+                                                  const QString& auth_code) {
     // Parse api_key: "access_token|||+91mobile|||UCC"
     const QStringList parts = api_key.split("|||");
     const QString access_token_portal = parts.value(0).trimmed();
-    QString mobile                    = parts.value(1).trimmed();
-    const QString ucc                 = parts.value(2).trimmed();
+    QString mobile = parts.value(1).trimmed();
+    const QString ucc = parts.value(2).trimmed();
 
     if (access_token_portal.isEmpty())
         return {false, "", "", "", "", "Access token is required (format: token|||+91mobile|||UCC)"};
@@ -239,15 +256,15 @@ TokenExchangeResponse KotakBroker::exchange_token(const QString& api_key,
 
     // ── Step 1: TOTP login ────────────────────────────────────────────────────
     QJsonObject step1_body;
-    step1_body["ucc"]  = ucc;
+    step1_body["ucc"] = ucc;
     step1_body["totp"] = totp_code;
     if (!mobile.isEmpty())
         step1_body["mobileNumber"] = mobile;
 
     QMap<QString, QString> step1_hdrs = {
         {"Authorization", access_token_portal},
-        {"neo-fin-key",   "neotradeapi"},
-        {"Content-Type",  "application/json"},
+        {"neo-fin-key", "neotradeapi"},
+        {"Content-Type", "application/json"},
     };
 
     auto r1 = http.post_json(LOGIN_BASE + "/login/1.0/tradeApiLogin", step1_body, step1_hdrs);
@@ -258,14 +275,13 @@ TokenExchangeResponse KotakBroker::exchange_token(const QString& api_key,
 
     const auto d1 = r1.json.value("data").toObject();
     if (d1.value("status").toString() != "success") {
-        const QString err = r1.json.value("errMsg").toString(
-                            r1.json.value("message").toString("TOTP login failed"));
+        const QString err = r1.json.value("errMsg").toString(r1.json.value("message").toString("TOTP login failed"));
         LOG_ERROR(TAG, "Step1 login error: " + err);
         return {false, "", "", "", "", "TOTP login error: " + err};
     }
 
     const QString view_token = d1.value("token").toString();
-    const QString view_sid   = d1.value("sid").toString();
+    const QString view_sid = d1.value("sid").toString();
     LOG_INFO(TAG, "Kotak Step1 OK, sid=" + view_sid);
 
     // ── Step 2: MPIN validation ───────────────────────────────────────────────
@@ -273,11 +289,8 @@ TokenExchangeResponse KotakBroker::exchange_token(const QString& api_key,
     step2_body["mpin"] = api_secret.trimmed();
 
     QMap<QString, QString> step2_hdrs = {
-        {"Authorization", access_token_portal},
-        {"neo-fin-key",   "neotradeapi"},
-        {"sid",           view_sid},
-        {"Auth",          view_token},
-        {"Content-Type",  "application/json"},
+        {"Authorization", access_token_portal}, {"neo-fin-key", "neotradeapi"}, {"sid", view_sid}, {"Auth", view_token},
+        {"Content-Type", "application/json"},
     };
 
     auto r2 = http.post_json(LOGIN_BASE + "/login/1.0/tradeApiValidate", step2_body, step2_hdrs);
@@ -288,32 +301,30 @@ TokenExchangeResponse KotakBroker::exchange_token(const QString& api_key,
 
     const auto d2 = r2.json.value("data").toObject();
     if (d2.value("status").toString() != "success") {
-        const QString err = r2.json.value("errMsg").toString(
-                            r2.json.value("message").toString("MPIN validation failed"));
+        const QString err =
+            r2.json.value("errMsg").toString(r2.json.value("message").toString("MPIN validation failed"));
         LOG_ERROR(TAG, "Step2 MPIN error: " + err);
         return {false, "", "", "", "", "MPIN validation error: " + err};
     }
 
     const QString trading_token = d2.value("token").toString();
-    const QString trading_sid   = d2.value("sid").toString();
-    const QString base_url      = d2.value("baseUrl").toString();
+    const QString trading_sid = d2.value("sid").toString();
+    const QString base_url = d2.value("baseUrl").toString();
 
     if (base_url.isEmpty())
         LOG_WARN(TAG, "baseUrl missing from MPIN response — API calls may fail");
 
     // Pack: trading_token:::trading_sid:::base_url:::access_token_portal
-    const QString packed = trading_token + ":::" + trading_sid + ":::"
-                         + base_url + ":::" + access_token_portal;
+    const QString packed = trading_token + ":::" + trading_sid + ":::" + base_url + ":::" + access_token_portal;
 
     LOG_INFO(TAG, "Kotak auth complete, ucc=" + ucc + " base_url=" + base_url);
-    return {true, packed, /*refresh*/"", ucc, /*additional*/"", ""};
+    return {true, packed, /*refresh*/ "", ucc, /*additional*/ "", ""};
 }
 
 // ── Place Order ───────────────────────────────────────────────────────────────
 // POST {base_url}/quick/order/rule/ms/place — form-encoded jData (all values strings)
 // Response: stat=="Ok" → nOrdNo is order ID
-OrderPlaceResponse KotakBroker::place_order(const BrokerCredentials& creds,
-                                              const UnifiedOrder& order) {
+OrderPlaceResponse KotakBroker::place_order(const BrokerCredentials& creds, const UnifiedOrder& order) {
     auto p = unpack(creds.access_token);
     if (!p.valid)
         return {false, "", "[TOKEN_EXPIRED] Invalid or missing session token"};
@@ -339,8 +350,7 @@ OrderPlaceResponse KotakBroker::place_order(const BrokerCredentials& creds,
     jobj["tt"] = order.side == OrderSide::Buy ? "B" : "S";
 
     auto hdrs = auth_headers(creds);
-    auto resp = BrokerHttp::instance().post_form(
-        p.base_url + "/quick/order/rule/ms/place", jdata_params(jobj), hdrs);
+    auto resp = BrokerHttp::instance().post_form(p.base_url + "/quick/order/rule/ms/place", jdata_params(jobj), hdrs);
 
     if (!resp.success || resp.json.value("stat").toString() != "Ok") {
         const QString err = checked_error(resp, "place_order failed");
@@ -355,17 +365,16 @@ OrderPlaceResponse KotakBroker::place_order(const BrokerCredentials& creds,
 
 // ── Modify Order ──────────────────────────────────────────────────────────────
 // POST {base_url}/quick/order/vr/modify — form-encoded jData
-ApiResponse<QJsonObject> KotakBroker::modify_order(const BrokerCredentials& creds,
-                                                     const QString& order_id,
-                                                     const QJsonObject& mods) {
+ApiResponse<QJsonObject> KotakBroker::modify_order(const BrokerCredentials& creds, const QString& order_id,
+                                                   const QJsonObject& mods) {
     int64_t ts = now_ts();
     auto p = unpack(creds.access_token);
     if (!p.valid)
         return {false, std::nullopt, "[TOKEN_EXPIRED] Invalid session", ts};
 
-    const QString symbol   = mods.value("symbol").toString();
+    const QString symbol = mods.value("symbol").toString();
     const QString exchange = mods.value("exchange").toString("NSE");
-    const QString psymbol  = lookup_psymbol(symbol, exchange, creds.broker_id);
+    const QString psymbol = lookup_psymbol(symbol, exchange, creds.broker_id);
 
     QJsonObject jobj;
     jobj["no"] = order_id;
@@ -384,8 +393,7 @@ ApiResponse<QJsonObject> KotakBroker::modify_order(const BrokerCredentials& cred
     jobj["tt"] = mods.value("side").toString("B");
 
     auto hdrs = auth_headers(creds);
-    auto resp = BrokerHttp::instance().post_form(
-        p.base_url + "/quick/order/vr/modify", jdata_params(jobj), hdrs);
+    auto resp = BrokerHttp::instance().post_form(p.base_url + "/quick/order/vr/modify", jdata_params(jobj), hdrs);
 
     if (!resp.success || resp.json.value("stat").toString() != "Ok")
         return {false, std::nullopt, checked_error(resp, "modify_order failed"), ts};
@@ -394,8 +402,7 @@ ApiResponse<QJsonObject> KotakBroker::modify_order(const BrokerCredentials& cred
 
 // ── Cancel Order ──────────────────────────────────────────────────────────────
 // POST {base_url}/quick/order/cancel — form-encoded jData={on, am}
-ApiResponse<QJsonObject> KotakBroker::cancel_order(const BrokerCredentials& creds,
-                                                     const QString& order_id) {
+ApiResponse<QJsonObject> KotakBroker::cancel_order(const BrokerCredentials& creds, const QString& order_id) {
     int64_t ts = now_ts();
     auto p = unpack(creds.access_token);
     if (!p.valid)
@@ -406,8 +413,7 @@ ApiResponse<QJsonObject> KotakBroker::cancel_order(const BrokerCredentials& cred
     jobj["am"] = "NO";
 
     auto hdrs = auth_headers(creds);
-    auto resp = BrokerHttp::instance().post_form(
-        p.base_url + "/quick/order/cancel", jdata_params(jobj), hdrs);
+    auto resp = BrokerHttp::instance().post_form(p.base_url + "/quick/order/cancel", jdata_params(jobj), hdrs);
 
     if (!resp.success || resp.json.value("stat").toString() != "Ok")
         return {false, std::nullopt, checked_error(resp, "cancel_order failed"), ts};
@@ -436,21 +442,20 @@ ApiResponse<QVector<BrokerOrderInfo>> KotakBroker::get_orders(const BrokerCreden
     for (const auto& v : arr) {
         const auto o = v.toObject();
         BrokerOrderInfo info;
-        info.order_id     = o.value("nOrdNo").toString();
-        info.symbol       = o.value("trdSym").toString();
-        info.exchange     = canonical_exchange(o.value("exSeg").toString());
-        info.side         = o.value("tt").toString() == "B" ? "buy" : "sell";
-        info.order_type   = o.value("pt").toString();
+        info.order_id = o.value("nOrdNo").toString();
+        info.symbol = o.value("trdSym").toString();
+        info.exchange = canonical_exchange(o.value("exSeg").toString());
+        info.side = o.value("tt").toString() == "B" ? "buy" : "sell";
+        info.order_type = o.value("pt").toString();
         info.product_type = o.value("prod").toString();
-        info.quantity     = o.value("qt").toString().toDouble();
-        info.price        = o.value("pr").toString().toDouble();
-        info.trigger_price= o.value("tp").toString().toDouble();
-        info.filled_qty   = o.value("flBuyQty").toString().toDouble()
-                          + o.value("flSellQty").toString().toDouble();
-        info.avg_price    = o.value("avgPr").toString().toDouble();
-        info.status       = o.value("ordSt").toString().toLower();
-        info.timestamp    = o.value("ordDt").toString();
-        info.message      = o.value("rejRsn").toString();
+        info.quantity = o.value("qt").toString().toDouble();
+        info.price = o.value("pr").toString().toDouble();
+        info.trigger_price = o.value("tp").toString().toDouble();
+        info.filled_qty = o.value("flBuyQty").toString().toDouble() + o.value("flSellQty").toString().toDouble();
+        info.avg_price = o.value("avgPr").toString().toDouble();
+        info.status = o.value("ordSt").toString().toLower();
+        info.timestamp = o.value("ordDt").toString();
+        info.message = o.value("rejRsn").toString();
         orders.append(info);
     }
     return {true, orders, "", ts};
@@ -494,25 +499,24 @@ ApiResponse<QVector<BrokerPosition>> KotakBroker::get_positions(const BrokerCred
     positions.reserve(arr.size());
     for (const auto& v : arr) {
         const auto o = v.toObject();
-        const double buy_qty  = o.value("flBuyQty").toString().toDouble()
-                              + o.value("cfBuyQty").toString().toDouble();
-        const double sell_qty = o.value("flSellQty").toString().toDouble()
-                              + o.value("cfSellQty").toString().toDouble();
-        const double net_qty  = buy_qty - sell_qty;
-        if (net_qty == 0.0) continue;
+        const double buy_qty = o.value("flBuyQty").toString().toDouble() + o.value("cfBuyQty").toString().toDouble();
+        const double sell_qty = o.value("flSellQty").toString().toDouble() + o.value("cfSellQty").toString().toDouble();
+        const double net_qty = buy_qty - sell_qty;
+        if (net_qty == 0.0)
+            continue;
 
-        const double buy_amt  = o.value("buyAmt").toString().toDouble();
+        const double buy_amt = o.value("buyAmt").toString().toDouble();
         const double sell_amt = o.value("sellAmt").toString().toDouble();
 
         BrokerPosition pos;
-        pos.symbol       = o.value("trdSym").toString();
-        pos.exchange     = canonical_exchange(o.value("exSeg").toString());
+        pos.symbol = o.value("trdSym").toString();
+        pos.exchange = canonical_exchange(o.value("exSeg").toString());
         pos.product_type = o.value("prod").toString();
-        pos.quantity     = net_qty;
-        pos.avg_price    = buy_qty > 0 ? buy_amt / buy_qty : 0.0;
-        pos.ltp          = o.value("ltp").toString().toDouble();
-        pos.pnl          = (pos.ltp * net_qty) - (buy_amt - sell_amt);
-        pos.side         = net_qty > 0 ? "LONG" : "SHORT";
+        pos.quantity = net_qty;
+        pos.avg_price = buy_qty > 0 ? buy_amt / buy_qty : 0.0;
+        pos.ltp = o.value("ltp").toString().toDouble();
+        pos.pnl = (pos.ltp * net_qty) - (buy_amt - sell_amt);
+        pos.side = net_qty > 0 ? "LONG" : "SHORT";
         if (pos.avg_price > 0)
             pos.pnl_pct = (pos.ltp - pos.avg_price) / pos.avg_price * 100.0;
         positions.append(pos);
@@ -541,14 +545,14 @@ ApiResponse<QVector<BrokerHolding>> KotakBroker::get_holdings(const BrokerCreden
     for (const auto& v : arr) {
         const auto h = v.toObject();
         BrokerHolding holding;
-        holding.symbol         = h.value("trdSym").toString();
-        holding.exchange       = canonical_exchange(h.value("exSeg").toString());
-        holding.quantity       = h.value("qty").toString().toDouble();
-        holding.avg_price      = h.value("avgPr").toString().toDouble();
-        holding.ltp            = h.value("ltp").toString().toDouble();
+        holding.symbol = h.value("trdSym").toString();
+        holding.exchange = canonical_exchange(h.value("exSeg").toString());
+        holding.quantity = h.value("qty").toString().toDouble();
+        holding.avg_price = h.value("avgPr").toString().toDouble();
+        holding.ltp = h.value("ltp").toString().toDouble();
         holding.invested_value = holding.quantity * holding.avg_price;
-        holding.current_value  = holding.quantity * holding.ltp;
-        holding.pnl            = holding.current_value - holding.invested_value;
+        holding.current_value = holding.quantity * holding.ltp;
+        holding.pnl = holding.current_value - holding.invested_value;
         if (holding.invested_value > 0)
             holding.pnl_pct = holding.pnl / holding.invested_value * 100.0;
         holdings.append(holding);
@@ -566,29 +570,28 @@ ApiResponse<BrokerFunds> KotakBroker::get_funds(const BrokerCredentials& creds) 
         return {false, std::nullopt, "[TOKEN_EXPIRED] Invalid session", ts};
 
     QJsonObject jobj;
-    jobj["seg"]  = "ALL";
+    jobj["seg"] = "ALL";
     jobj["exch"] = "ALL";
     jobj["prod"] = "ALL";
 
     auto hdrs = auth_headers(creds);
-    auto resp = BrokerHttp::instance().post_form(
-        p.base_url + "/quick/user/limits", jdata_params(jobj), hdrs);
+    auto resp = BrokerHttp::instance().post_form(p.base_url + "/quick/user/limits", jdata_params(jobj), hdrs);
 
     if (!resp.success || resp.json.value("stat").toString() != "Ok")
         return {false, std::nullopt, checked_error(resp, "get_funds failed"), ts};
 
     const double collateral_value = resp.json.value("CollateralValue").toString().toDouble();
-    const double pay_in           = resp.json.value("RmsPayInAmt").toString().toDouble();
-    const double pay_out          = resp.json.value("RmsPayOutAmt").toString().toDouble();
-    const double collateral       = resp.json.value("Collateral").toString().toDouble();
-    const double margin_used      = resp.json.value("MarginUsed").toString().toDouble();
+    const double pay_in = resp.json.value("RmsPayInAmt").toString().toDouble();
+    const double pay_out = resp.json.value("RmsPayOutAmt").toString().toDouble();
+    const double collateral = resp.json.value("Collateral").toString().toDouble();
+    const double margin_used = resp.json.value("MarginUsed").toString().toDouble();
 
     BrokerFunds funds;
     funds.available_balance = collateral_value + pay_in - pay_out + collateral;
-    funds.used_margin       = margin_used;
-    funds.total_balance     = funds.available_balance + funds.used_margin;
-    funds.collateral        = collateral;
-    funds.raw_data          = resp.json;
+    funds.used_margin = margin_used;
+    funds.total_balance = funds.available_balance + funds.used_margin;
+    funds.collateral = collateral;
+    funds.raw_data = resp.json;
     return {true, funds, "", ts};
 }
 
@@ -598,7 +601,7 @@ ApiResponse<BrokerFunds> KotakBroker::get_funds(const BrokerCredentials& creds) 
 // Query format: "nse_cm|pSymbol1,nse_cm|pSymbol2,..."
 // Response: JSON array; each item has ltp, ohlc{open,high,low,close}, last_volume, open_int
 ApiResponse<QVector<BrokerQuote>> KotakBroker::get_quotes(const BrokerCredentials& creds,
-                                                            const QVector<QString>& symbols) {
+                                                          const QVector<QString>& symbols) {
     int64_t ts = now_ts();
     if (symbols.isEmpty())
         return {true, QVector<BrokerQuote>{}, "", ts};
@@ -608,7 +611,7 @@ ApiResponse<QVector<BrokerQuote>> KotakBroker::get_quotes(const BrokerCredential
         return {false, std::nullopt, "[TOKEN_EXPIRED] Invalid session", ts};
 
     QStringList queries;
-    QMap<QString, QString> query_to_symbol;  // "nse_cm|pSymbol" → original symbol name
+    QMap<QString, QString> query_to_symbol; // "nse_cm|pSymbol" → original symbol name
 
     for (const auto& sym : symbols) {
         QString exch = "NSE", name = sym;
@@ -617,8 +620,9 @@ ApiResponse<QVector<BrokerQuote>> KotakBroker::get_quotes(const BrokerCredential
             name = sym.section(':', 1);
         }
         const QString psymbol = lookup_psymbol(name, exch, creds.broker_id);
-        if (psymbol.isEmpty()) continue;
-        const QString seg   = kotak_exchange(exch);
+        if (psymbol.isEmpty())
+            continue;
+        const QString seg = kotak_exchange(exch);
         const QString query = seg + "|" + psymbol;
         queries.append(query);
         query_to_symbol[query] = name;
@@ -629,14 +633,13 @@ ApiResponse<QVector<BrokerQuote>> KotakBroker::get_quotes(const BrokerCredential
 
     // URL-encode keeping | and , as-is (safe for path segment)
     const QString combined = queries.join(",");
-    const QString encoded  = QString::fromUtf8(
-        QUrl::toPercentEncoding(combined, /*keep=*/QByteArray("|,")));
+    const QString encoded = QString::fromUtf8(QUrl::toPercentEncoding(combined, /*keep=*/QByteArray("|,")));
 
     // Quotes use Authorization header, not Auth/Sid
     QMap<QString, QString> quote_hdrs = {
         {"Authorization", p.access_token},
-        {"Content-Type",  "application/json"},
-        {"accept",        "application/json"},
+        {"Content-Type", "application/json"},
+        {"accept", "application/json"},
     };
 
     const QString url = p.base_url + "/script-details/1.0/quotes/neosymbol/" + encoded + "/all";
@@ -658,18 +661,17 @@ ApiResponse<QVector<BrokerQuote>> KotakBroker::get_quotes(const BrokerCredential
         const auto q = v.toObject();
         BrokerQuote quote;
         // Match back to symbol: response has exchange + exchange_token fields
-        const QString key = q.value("exchange").toString() + "|"
-                          + q.value("exchange_token").toString();
+        const QString key = q.value("exchange").toString() + "|" + q.value("exchange_token").toString();
         quote.symbol = query_to_symbol.value(key, q.value("display_symbol").toString());
 
         const auto ohlc = q.value("ohlc").toObject();
-        quote.ltp       = q.value("ltp").toDouble();
-        quote.open      = ohlc.value("open").toDouble();
-        quote.high      = ohlc.value("high").toDouble();
-        quote.low       = ohlc.value("low").toDouble();
-        quote.close     = ohlc.value("close").toDouble();
-        quote.volume    = q.value("last_volume").toDouble();
-        quote.change    = quote.ltp - quote.close;
+        quote.ltp = q.value("ltp").toDouble();
+        quote.open = ohlc.value("open").toDouble();
+        quote.high = ohlc.value("high").toDouble();
+        quote.low = ohlc.value("low").toDouble();
+        quote.close = ohlc.value("close").toDouble();
+        quote.volume = q.value("last_volume").toDouble();
+        quote.change = quote.ltp - quote.close;
         if (quote.close > 0)
             quote.change_pct = quote.change / quote.close * 100.0;
         quote.timestamp = ts;
@@ -681,10 +683,8 @@ ApiResponse<QVector<BrokerQuote>> KotakBroker::get_quotes(const BrokerCredential
 // ── Get History ───────────────────────────────────────────────────────────────
 // Kotak Neo does NOT support historical data
 ApiResponse<QVector<BrokerCandle>> KotakBroker::get_history(const BrokerCredentials& /*creds*/,
-                                                              const QString& /*symbol*/,
-                                                              const QString& /*resolution*/,
-                                                              const QString& /*from_date*/,
-                                                              const QString& /*to_date*/) {
+                                                            const QString& /*symbol*/, const QString& /*resolution*/,
+                                                            const QString& /*from_date*/, const QString& /*to_date*/) {
     int64_t ts = now_ts();
     LOG_WARN(TAG, "get_history called — Kotak Neo does not support historical data");
     return {true, QVector<BrokerCandle>{}, "", ts};

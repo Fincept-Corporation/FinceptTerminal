@@ -29,8 +29,8 @@ class AlgoTradingService : public QObject {
                       const QString& end_date, double capital);
 
     // ── Scanner ─────────────────────────────────────────────────────────────
-    void run_scan(const QJsonArray& conditions, const QStringList& symbols, const QString& timeframe,
-                  int lookback_days, const QString& logic = "AND");
+    void run_scan(const QJsonArray& conditions, const QStringList& symbols, const QString& timeframe, int lookback_days,
+                  const QString& logic = "AND");
 
   signals:
     void strategy_saved(QString id);

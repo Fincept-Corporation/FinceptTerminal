@@ -22,7 +22,7 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
     vl->setSpacing(6);
 
     // ── Summary card ──
-    summary_card_ = new QWidget;
+    summary_card_ = new QWidget(this);
     auto* sl = new QGridLayout(summary_card_);
     sl->setContentsMargins(10, 8, 10, 8);
     sl->setHorizontalSpacing(16);
@@ -46,7 +46,7 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
     vl->addWidget(summary_card_);
 
     // ── Holdings list header ──
-    header_row_ = new QWidget;
+    header_row_ = new QWidget(this);
     auto* hl = new QHBoxLayout(header_row_);
     hl->setContentsMargins(8, 3, 8, 3);
 
@@ -67,7 +67,7 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
     scroll_area_ = new QScrollArea;
     scroll_area_->setWidgetResizable(true);
 
-    auto* list_widget = new QWidget;
+    auto* list_widget = new QWidget(this);
     list_widget->setStyleSheet("background: transparent;");
     list_layout_ = new QVBoxLayout(list_widget);
     list_layout_->setContentsMargins(0, 0, 0, 0);
@@ -85,21 +85,17 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
 }
 
 void PortfolioSummaryWidget::apply_styles() {
-    summary_card_->setStyleSheet(
-        QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED()));
+    summary_card_->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED()));
     for (auto* lbl : metric_labels_)
         lbl->setStyleSheet(
             QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
     for (auto* val : metric_values_)
-        val->setStyleSheet(
-            QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;")
-                .arg(ui::colors::TEXT_PRIMARY()));
-    header_row_->setStyleSheet(
-        QString("background: %1;").arg(ui::colors::BG_RAISED()));
+        val->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;")
+                               .arg(ui::colors::TEXT_PRIMARY()));
+    header_row_->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED()));
     for (auto* lbl : header_labels_)
-        lbl->setStyleSheet(
-            QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                .arg(ui::colors::TEXT_TERTIARY()));
+        lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+                               .arg(ui::colors::TEXT_TERTIARY()));
     scroll_area_->setStyleSheet(
         QString("QScrollArea { border: none; background: transparent; }"
                 "QScrollBar:vertical { width: 4px; background: transparent; }"
@@ -110,6 +106,8 @@ void PortfolioSummaryWidget::apply_styles() {
 
 void PortfolioSummaryWidget::on_theme_changed() {
     apply_styles();
+    if (!last_holdings_.isEmpty() && !last_quotes_.isEmpty())
+        render(last_holdings_, last_quotes_);
 }
 
 void PortfolioSummaryWidget::load_holdings() {
@@ -151,8 +149,11 @@ void PortfolioSummaryWidget::fetch_prices(const QVector<Holding>& holdings) {
 }
 
 void PortfolioSummaryWidget::render(const QVector<Holding>& holdings, const QVector<services::QuoteData>& quotes) {
+    last_holdings_ = holdings;
+    last_quotes_ = quotes;
+
     QMap<QString, const services::QuoteData*> qmap;
-    for (const auto& q : quotes)
+    for (const auto& q : last_quotes_)
         qmap[q.symbol] = &q;
 
     double total_value = 0;
@@ -181,7 +182,7 @@ void PortfolioSummaryWidget::render(const QVector<Holding>& holdings, const QVec
         day_pnl += day_chg;
 
         // Row
-        auto* row = new QWidget;
+        auto* row = new QWidget(this);
         row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED() : "transparent"));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);

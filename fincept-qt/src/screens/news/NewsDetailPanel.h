@@ -12,8 +12,9 @@
 
 namespace fincept::screens {
 
-/// Right-side 340px article detail panel with article view, AI analysis,
-/// keyword monitor matches, and related articles.
+/// Overlay detail panel — 420px wide, appears from the right when an article
+/// is selected. Replaces the old fixed 340px panel. Has a close button to
+/// dismiss and return to full-width feed view.
 class NewsDetailPanel : public QWidget {
     Q_OBJECT
   public:
@@ -27,16 +28,24 @@ class NewsDetailPanel : public QWidget {
     void show_infrastructure(const QVector<services::InfrastructureItem>& items);
     void clear();
 
+    /// Show/hide the panel
+    void open_panel();
+    void close_panel();
+    bool is_panel_open() const { return panel_open_; }
+
   signals:
     void analyze_requested(const QString& article_url);
     void related_article_clicked(const services::NewsArticle& article);
     void open_in_browser(const QString& url);
     void copy_url(const QString& url);
     void bookmark_requested(const services::NewsArticle& article);
+    void panel_closed();
 
   private:
     QWidget* build_empty_state();
     QWidget* build_content_view();
+
+    bool panel_open_ = false;
 
     // Article section
     QLabel* headline_label_ = nullptr;
@@ -81,10 +90,11 @@ class NewsDetailPanel : public QWidget {
     QVBoxLayout* infra_layout_ = nullptr;
 
     // Action buttons
-    QPushButton* open_btn_      = nullptr;
-    QPushButton* copy_btn_      = nullptr;
-    QPushButton* save_btn_      = nullptr;
-    QPushButton* bookmark_btn_  = nullptr;
+    QPushButton* open_btn_ = nullptr;
+    QPushButton* copy_btn_ = nullptr;
+    QPushButton* save_btn_ = nullptr;
+    QPushButton* bookmark_btn_ = nullptr;
+    QPushButton* close_btn_ = nullptr;
 
     QStackedWidget* stack_ = nullptr;
     services::NewsArticle current_article_;

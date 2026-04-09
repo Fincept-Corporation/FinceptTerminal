@@ -103,8 +103,10 @@ QWidget* MAModulePanel::build_metric_card(const QString& label, const QString& v
                            .arg(ui::fonts::TINY)
                            .arg(ui::fonts::DATA_FAMILY));
     auto* val = new QLabel(value, card);
-    val->setStyleSheet(
-        QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;").arg(color).arg(ui::fonts::HEADER).arg(ui::fonts::DATA_FAMILY));
+    val->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
+                           .arg(color)
+                           .arg(ui::fonts::HEADER)
+                           .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(lbl);
     vl->addWidget(val);
     return card;
@@ -203,7 +205,7 @@ QWidget* MAModulePanel::build_valuation_panel() {
     apply_tab_stylesheet();
 
     // ── DCF Tab ──
-    auto* dcf = new QWidget;
+    auto* dcf = new QWidget(this);
     auto* dcf_vl = new QVBoxLayout(dcf);
     dcf_vl->setContentsMargins(12, 12, 12, 12);
     dcf_vl->setSpacing(8);
@@ -269,7 +271,7 @@ QWidget* MAModulePanel::build_valuation_panel() {
     sub_tabs_->addTab(dcf, "DCF");
 
     // ── LBO Tab ──
-    auto* lbo = new QWidget;
+    auto* lbo = new QWidget(this);
     auto* lbo_vl = new QVBoxLayout(lbo);
     lbo_vl->setContentsMargins(12, 12, 12, 12);
     lbo_vl->setSpacing(8);
@@ -325,7 +327,7 @@ QWidget* MAModulePanel::build_valuation_panel() {
     sub_tabs_->addTab(lbo, "LBO Returns");
 
     // ── LBO Full Model Tab ──
-    auto* lbo_full = new QWidget;
+    auto* lbo_full = new QWidget(this);
     auto* lbof_vl = new QVBoxLayout(lbo_full);
     lbof_vl->setContentsMargins(12, 12, 12, 12);
     lbof_vl->setSpacing(8);
@@ -375,7 +377,7 @@ QWidget* MAModulePanel::build_valuation_panel() {
     sub_tabs_->addTab(lbo_full, "LBO Model");
 
     // ── LBO Debt Schedule Tab ──
-    auto* lbo_ds = new QWidget;
+    auto* lbo_ds = new QWidget(this);
     auto* ds_vl = new QVBoxLayout(lbo_ds);
     ds_vl->setContentsMargins(12, 12, 12, 12);
     ds_vl->setSpacing(8);
@@ -420,7 +422,7 @@ QWidget* MAModulePanel::build_valuation_panel() {
     sub_tabs_->addTab(lbo_ds, "Debt Schedule");
 
     // ── LBO Sensitivity Tab ──
-    auto* lbo_sens = new QWidget;
+    auto* lbo_sens = new QWidget(this);
     auto* sens_vl = new QVBoxLayout(lbo_sens);
     sens_vl->setContentsMargins(12, 12, 12, 12);
     sens_vl->setSpacing(8);
@@ -467,7 +469,7 @@ QWidget* MAModulePanel::build_valuation_panel() {
     sub_tabs_->addTab(lbo_sens, "Sensitivity");
 
     // ── Trading Comps Tab ──
-    auto* comps = new QWidget;
+    auto* comps = new QWidget(this);
     auto* comps_vl = new QVBoxLayout(comps);
     comps_vl->setContentsMargins(12, 12, 12, 12);
     comps_vl->setSpacing(8);
@@ -510,7 +512,7 @@ QWidget* MAModulePanel::build_valuation_panel() {
     sub_tabs_->addTab(comps, "Trading Comps");
 
     // ── Precedent Transactions Tab ──
-    auto* prec = new QWidget;
+    auto* prec = new QWidget(this);
     auto* prec_vl = new QVBoxLayout(prec);
     prec_vl->setContentsMargins(12, 12, 12, 12);
     prec_vl->setSpacing(8);
@@ -561,7 +563,7 @@ QWidget* MAModulePanel::build_merger_panel() {
     apply_tab_stylesheet();
 
     // ── Accretion/Dilution ──
-    auto* ad = new QWidget;
+    auto* ad = new QWidget(this);
     auto* ad_vl = new QVBoxLayout(ad);
     ad_vl->setContentsMargins(12, 12, 12, 12);
     ad_vl->setSpacing(8);
@@ -641,7 +643,7 @@ QWidget* MAModulePanel::build_merger_panel() {
     sub_tabs_->addTab(ad, "Accretion/Dilution");
 
     // ── Synergies ──
-    auto* syn = new QWidget;
+    auto* syn = new QWidget(this);
     auto* syn_vl = new QVBoxLayout(syn);
     syn_vl->setContentsMargins(12, 12, 12, 12);
     syn_vl->setSpacing(8);
@@ -677,7 +679,7 @@ QWidget* MAModulePanel::build_merger_panel() {
     sub_tabs_->addTab(syn, "Synergies");
 
     // ── Pro Forma ──
-    auto* pf = new QWidget;
+    auto* pf = new QWidget(this);
     auto* pf_vl = new QVBoxLayout(pf);
     pf_vl->setContentsMargins(12, 12, 12, 12);
     pf_vl->setSpacing(8);
@@ -713,7 +715,7 @@ QWidget* MAModulePanel::build_merger_panel() {
     sub_tabs_->addTab(pf, "Pro Forma");
 
     // ── Sources & Uses ──
-    auto* su = new QWidget;
+    auto* su = new QWidget(this);
     auto* su_vl = new QVBoxLayout(su);
     su_vl->setContentsMargins(12, 12, 12, 12);
     su_vl->setSpacing(8);
@@ -745,7 +747,7 @@ QWidget* MAModulePanel::build_merger_panel() {
     sub_tabs_->addTab(su, "Sources & Uses");
 
     // ── Contribution Analysis ──
-    auto* contrib = new QWidget;
+    auto* contrib = new QWidget(this);
     auto* contrib_vl = new QVBoxLayout(contrib);
     contrib_vl->setContentsMargins(12, 12, 12, 12);
     contrib_vl->setSpacing(8);
@@ -783,7 +785,7 @@ QWidget* MAModulePanel::build_merger_panel() {
     sub_tabs_->addTab(contrib, "Contribution");
 
     // ── Payment Structure ──
-    auto* pay_str = new QWidget;
+    auto* pay_str = new QWidget(this);
     auto* pay_vl = new QVBoxLayout(pay_str);
     pay_vl->setContentsMargins(12, 12, 12, 12);
     pay_vl->setSpacing(8);
@@ -819,7 +821,7 @@ QWidget* MAModulePanel::build_merger_panel() {
     sub_tabs_->addTab(pay_str, "Payment");
 
     // ── Earnout ──
-    auto* earn = new QWidget;
+    auto* earn = new QWidget(this);
     auto* earn_vl = new QVBoxLayout(earn);
     earn_vl->setContentsMargins(12, 12, 12, 12);
     earn_vl->setSpacing(8);
@@ -855,7 +857,7 @@ QWidget* MAModulePanel::build_merger_panel() {
     sub_tabs_->addTab(earn, "Earnout");
 
     // ── Exchange Ratio ──
-    auto* exch = new QWidget;
+    auto* exch = new QWidget(this);
     auto* exch_vl = new QVBoxLayout(exch);
     exch_vl->setContentsMargins(12, 12, 12, 12);
     exch_vl->setSpacing(8);
@@ -886,7 +888,7 @@ QWidget* MAModulePanel::build_merger_panel() {
     sub_tabs_->addTab(exch, "Exchange Ratio");
 
     // ── Collar Mechanism ──
-    auto* collar = new QWidget;
+    auto* collar = new QWidget(this);
     auto* collar_vl = new QVBoxLayout(collar);
     collar_vl->setContentsMargins(12, 12, 12, 12);
     collar_vl->setSpacing(8);
@@ -917,7 +919,7 @@ QWidget* MAModulePanel::build_merger_panel() {
     sub_tabs_->addTab(collar, "Collar");
 
     // ── CVR (Contingent Value Rights) ──
-    auto* cvr = new QWidget;
+    auto* cvr = new QWidget(this);
     auto* cvr_vl = new QVBoxLayout(cvr);
     cvr_vl->setContentsMargins(12, 12, 12, 12);
     cvr_vl->setSpacing(8);
@@ -1051,7 +1053,7 @@ QWidget* MAModulePanel::build_startup_panel() {
     apply_tab_stylesheet();
 
     // ── Berkus ──
-    auto* berkus = new QWidget;
+    auto* berkus = new QWidget(this);
     auto* bvl = new QVBoxLayout(berkus);
     bvl->setContentsMargins(12, 12, 12, 12);
     bvl->setSpacing(8);
@@ -1079,7 +1081,7 @@ QWidget* MAModulePanel::build_startup_panel() {
     sub_tabs_->addTab(berkus, "Berkus");
 
     // ── Scorecard ──
-    auto* sc = new QWidget;
+    auto* sc = new QWidget(this);
     auto* scvl = new QVBoxLayout(sc);
     scvl->setContentsMargins(12, 12, 12, 12);
     scvl->setSpacing(8);
@@ -1118,7 +1120,7 @@ QWidget* MAModulePanel::build_startup_panel() {
     sub_tabs_->addTab(sc, "Scorecard");
 
     // ── VC Method ──
-    auto* vc = new QWidget;
+    auto* vc = new QWidget(this);
     auto* vc_vl = new QVBoxLayout(vc);
     vc_vl->setContentsMargins(12, 12, 12, 12);
     vc_vl->setSpacing(8);
@@ -1154,7 +1156,7 @@ QWidget* MAModulePanel::build_startup_panel() {
     sub_tabs_->addTab(vc, "VC Method");
 
     // ── First Chicago ──
-    auto* fc = new QWidget;
+    auto* fc = new QWidget(this);
     auto* fc_vl = new QVBoxLayout(fc);
     fc_vl->setContentsMargins(12, 12, 12, 12);
     fc_vl->setSpacing(8);
@@ -1198,7 +1200,7 @@ QWidget* MAModulePanel::build_startup_panel() {
     sub_tabs_->addTab(fc, "First Chicago");
 
     // ── Risk Factor ──
-    auto* rf = new QWidget;
+    auto* rf = new QWidget(this);
     auto* rf_vl = new QVBoxLayout(rf);
     rf_vl->setContentsMargins(12, 12, 12, 12);
     rf_vl->setSpacing(8);
@@ -1232,7 +1234,7 @@ QWidget* MAModulePanel::build_startup_panel() {
     sub_tabs_->addTab(rf, "Risk Factor");
 
     // ── Comprehensive ──
-    auto* comp = new QWidget;
+    auto* comp = new QWidget(this);
     auto* comp_vl = new QVBoxLayout(comp);
     comp_vl->setContentsMargins(12, 12, 12, 12);
     comp_vl->setSpacing(8);
@@ -1290,7 +1292,7 @@ QWidget* MAModulePanel::build_fairness_panel() {
     apply_tab_stylesheet();
 
     // ── Fairness Analysis ──
-    auto* fa = new QWidget;
+    auto* fa = new QWidget(this);
     auto* fa_vl = new QVBoxLayout(fa);
     fa_vl->setContentsMargins(12, 12, 12, 12);
     fa_vl->setSpacing(8);
@@ -1335,7 +1337,7 @@ QWidget* MAModulePanel::build_fairness_panel() {
     sub_tabs_->addTab(fa, "Fairness Analysis");
 
     // ── Premium Analysis ──
-    auto* pa = new QWidget;
+    auto* pa = new QWidget(this);
     auto* pa_vl = new QVBoxLayout(pa);
     pa_vl->setContentsMargins(12, 12, 12, 12);
     pa_vl->setSpacing(8);
@@ -1371,7 +1373,7 @@ QWidget* MAModulePanel::build_fairness_panel() {
     sub_tabs_->addTab(pa, "Premium Analysis");
 
     // ── Process Quality ──
-    auto* pq = new QWidget;
+    auto* pq = new QWidget(this);
     auto* pq_vl = new QVBoxLayout(pq);
     pq_vl->setContentsMargins(12, 12, 12, 12);
     pq_vl->setSpacing(8);
@@ -1423,7 +1425,7 @@ QWidget* MAModulePanel::build_industry_panel() {
     apply_tab_stylesheet();
 
     // ── Technology ──
-    auto* tech = new QWidget;
+    auto* tech = new QWidget(this);
     auto* tech_vl = new QVBoxLayout(tech);
     tech_vl->setContentsMargins(12, 12, 12, 12);
     tech_vl->setSpacing(8);
@@ -1485,7 +1487,7 @@ QWidget* MAModulePanel::build_industry_panel() {
     sub_tabs_->addTab(tech, "Technology");
 
     // ── Healthcare ──
-    auto* hc = new QWidget;
+    auto* hc = new QWidget(this);
     auto* hc_vl = new QVBoxLayout(hc);
     hc_vl->setContentsMargins(12, 12, 12, 12);
     hc_vl->setSpacing(8);
@@ -1538,7 +1540,7 @@ QWidget* MAModulePanel::build_industry_panel() {
     sub_tabs_->addTab(hc, "Healthcare");
 
     // ── Financial Services ──
-    auto* fs = new QWidget;
+    auto* fs = new QWidget(this);
     auto* fs_vl = new QVBoxLayout(fs);
     fs_vl->setContentsMargins(12, 12, 12, 12);
     fs_vl->setSpacing(8);
@@ -1620,7 +1622,7 @@ QWidget* MAModulePanel::build_advanced_panel() {
     apply_tab_stylesheet();
 
     // ── Monte Carlo ──
-    auto* mc = new QWidget;
+    auto* mc = new QWidget(this);
     auto* mc_vl = new QVBoxLayout(mc);
     mc_vl->setContentsMargins(12, 12, 12, 12);
     mc_vl->setSpacing(8);
@@ -1671,7 +1673,7 @@ QWidget* MAModulePanel::build_advanced_panel() {
     sub_tabs_->addTab(mc, "Monte Carlo");
 
     // ── Regression ──
-    auto* reg = new QWidget;
+    auto* reg = new QWidget(this);
     auto* reg_vl = new QVBoxLayout(reg);
     reg_vl->setContentsMargins(12, 12, 12, 12);
     reg_vl->setSpacing(8);
@@ -1739,7 +1741,7 @@ QWidget* MAModulePanel::build_comparison_panel() {
     apply_tab_stylesheet();
 
     // ── Compare ──
-    auto* cmp = new QWidget;
+    auto* cmp = new QWidget(this);
     auto* cmp_vl = new QVBoxLayout(cmp);
     cmp_vl->setContentsMargins(12, 12, 12, 12);
     cmp_vl->setSpacing(8);
@@ -1779,7 +1781,7 @@ QWidget* MAModulePanel::build_comparison_panel() {
     sub_tabs_->addTab(cmp, "Compare");
 
     // ── Rank ──
-    auto* rank = new QWidget;
+    auto* rank = new QWidget(this);
     auto* rank_vl = new QVBoxLayout(rank);
     rank_vl->setContentsMargins(12, 12, 12, 12);
     rank_vl->setSpacing(8);
@@ -1814,7 +1816,7 @@ QWidget* MAModulePanel::build_comparison_panel() {
     sub_tabs_->addTab(rank, "Rank");
 
     // ── Benchmark ──
-    auto* bench = new QWidget;
+    auto* bench = new QWidget(this);
     auto* bench_vl = new QVBoxLayout(bench);
     bench_vl->setContentsMargins(12, 12, 12, 12);
     bench_vl->setSpacing(8);
@@ -1843,7 +1845,7 @@ QWidget* MAModulePanel::build_comparison_panel() {
     sub_tabs_->addTab(bench, "Benchmark");
 
     // ── Payment Structure ──
-    auto* pay = new QWidget;
+    auto* pay = new QWidget(this);
     auto* pay_vl = new QVBoxLayout(pay);
     pay_vl->setContentsMargins(12, 12, 12, 12);
     pay_vl->setSpacing(8);
@@ -1867,7 +1869,7 @@ QWidget* MAModulePanel::build_comparison_panel() {
     sub_tabs_->addTab(pay, "Payment");
 
     // ── Industry ──
-    auto* ind = new QWidget;
+    auto* ind = new QWidget(this);
     auto* ind_vl = new QVBoxLayout(ind);
     ind_vl->setContentsMargins(12, 12, 12, 12);
     ind_vl->setSpacing(8);
@@ -2057,7 +2059,7 @@ void MAModulePanel::display_result(const QJsonObject& data) {
     results_layout_->addWidget(header);
 
     // 1. Metric cards for top-level scalar values
-    auto* grid = new QWidget;
+    auto* grid = new QWidget(this);
     auto* gl = new QGridLayout(grid);
     gl->setContentsMargins(0, 0, 0, 0);
     gl->setSpacing(8);
@@ -2215,26 +2217,24 @@ void MAModulePanel::on_error(const QString& context, const QString& message) {
 void MAModulePanel::apply_tab_stylesheet() {
     if (!sub_tabs_)
         return;
-    sub_tabs_->setStyleSheet(
-        QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
-                "QTabBar::tab { background:%3; color:%4; padding:6px 16px;"
-                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
-                "border-bottom:2px solid %7; }")
-            .arg(ui::colors::BORDER_DIM(), ui::colors::BG_SURFACE(), ui::colors::BG_RAISED())
-            .arg(ui::colors::TEXT_SECONDARY())
-            .arg(ui::fonts::DATA_FAMILY())
-            .arg(ui::fonts::SMALL)
-            .arg(module_.color.name()));
+    sub_tabs_->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
+                                     "QTabBar::tab { background:%3; color:%4; padding:6px 16px;"
+                                     "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
+                                     "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
+                                     "border-bottom:2px solid %7; }")
+                                 .arg(ui::colors::BORDER_DIM(), ui::colors::BG_SURFACE(), ui::colors::BG_RAISED())
+                                 .arg(ui::colors::TEXT_SECONDARY())
+                                 .arg(ui::fonts::DATA_FAMILY())
+                                 .arg(ui::fonts::SMALL)
+                                 .arg(module_.color.name()));
 }
 
 // ── Theme refresh ───────────────────────────────────────────────────────────
 void MAModulePanel::refresh_theme() {
     // Header bar
     if (header_bar_)
-        header_bar_->setStyleSheet(
-            QString("background:%1; border-bottom:1px solid %2;")
-                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        header_bar_->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
+                                       .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
 
     // Header title
     if (header_title_)
@@ -2253,19 +2253,17 @@ void MAModulePanel::refresh_theme() {
 
     // Header category
     if (header_category_)
-        header_category_->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-family:%3;")
-                .arg(ui::colors::TEXT_TERTIARY())
-                .arg(ui::fonts::TINY)
-                .arg(ui::fonts::DATA_FAMILY()));
+        header_category_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
+                                            .arg(ui::colors::TEXT_TERTIARY())
+                                            .arg(ui::fonts::TINY)
+                                            .arg(ui::fonts::DATA_FAMILY()));
 
     // Status label
     if (status_label_)
-        status_label_->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-family:%3;")
-                .arg(ui::colors::TEXT_TERTIARY())
-                .arg(ui::fonts::TINY)
-                .arg(ui::fonts::DATA_FAMILY()));
+        status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
+                                         .arg(ui::colors::TEXT_TERTIARY())
+                                         .arg(ui::fonts::TINY)
+                                         .arg(ui::fonts::DATA_FAMILY()));
 
     // Tab widget
     apply_tab_stylesheet();

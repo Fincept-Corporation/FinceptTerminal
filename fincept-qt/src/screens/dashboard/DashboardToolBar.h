@@ -2,6 +2,7 @@
 #include <QDateTime>
 #include <QLabel>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QTimer>
 #include <QWidget>
 
@@ -23,10 +24,15 @@ class DashboardToolBar : public QWidget {
     void toggle_pulse_clicked();
     void toggle_compact_clicked();
 
+  protected:
+    void showEvent(QShowEvent* event) override;
+
   private:
     void update_clock();
     void refresh_theme();
 
+    QWidget* left_container_ = nullptr;
+    QWidget* right_container_ = nullptr;
     QLabel* clock_label_ = nullptr;
     QLabel* status_text_ = nullptr;
     QLabel* widget_count_ = nullptr;

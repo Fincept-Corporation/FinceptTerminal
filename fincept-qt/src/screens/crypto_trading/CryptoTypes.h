@@ -81,29 +81,67 @@ inline constexpr int TRADES_POLL_INTERVAL_MS = 5000;
 inline constexpr int CLOCK_UPDATE_MS = 1000;
 
 // Design System Colors — live from ThemeManager
-inline QColor COLOR_BUY()     { return QColor(fincept::ui::ThemeManager::instance().tokens().positive); }
-inline QColor COLOR_SELL()    { return QColor(fincept::ui::ThemeManager::instance().tokens().negative); }
-inline QColor COLOR_DIM()     { return QColor(fincept::ui::ThemeManager::instance().tokens().text_secondary); }
-inline QColor COLOR_ACCENT()  { return QColor(fincept::ui::ThemeManager::instance().tokens().accent); }
+inline QColor COLOR_BUY() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().positive);
+}
+inline QColor COLOR_SELL() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().negative);
+}
+inline QColor COLOR_DIM() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().text_secondary);
+}
+inline QColor COLOR_ACCENT() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().accent);
+}
 
-inline QColor BG_BASE()       { return QColor(fincept::ui::ThemeManager::instance().tokens().bg_base); }
-inline QColor BG_SURFACE()    { return QColor(fincept::ui::ThemeManager::instance().tokens().bg_surface); }
-inline QColor BG_RAISED()     { return QColor(fincept::ui::ThemeManager::instance().tokens().bg_raised); }
-inline QColor BG_HOVER()      { return QColor(fincept::ui::ThemeManager::instance().tokens().bg_hover); }
+inline QColor BG_BASE() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().bg_base);
+}
+inline QColor BG_SURFACE() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().bg_surface);
+}
+inline QColor BG_RAISED() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().bg_raised);
+}
+inline QColor BG_HOVER() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().bg_hover);
+}
 
-inline QColor BORDER_DIM()    { return QColor(fincept::ui::ThemeManager::instance().tokens().border_dim); }
-inline QColor BORDER_MED()    { return QColor(fincept::ui::ThemeManager::instance().tokens().border_med); }
-inline QColor BORDER_BRIGHT() { return QColor(fincept::ui::ThemeManager::instance().tokens().border_bright); }
+inline QColor BORDER_DIM() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().border_dim);
+}
+inline QColor BORDER_MED() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().border_med);
+}
+inline QColor BORDER_BRIGHT() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().border_bright);
+}
 
-inline QColor TEXT_PRIMARY()   { return QColor(fincept::ui::ThemeManager::instance().tokens().text_primary); }
-inline QColor TEXT_SECONDARY() { return QColor(fincept::ui::ThemeManager::instance().tokens().text_secondary); }
-inline QColor TEXT_TERTIARY()  { return QColor(fincept::ui::ThemeManager::instance().tokens().text_tertiary); }
-inline QColor TEXT_DIM()       { return QColor(fincept::ui::ThemeManager::instance().tokens().text_dim); }
+inline QColor TEXT_PRIMARY() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().text_primary);
+}
+inline QColor TEXT_SECONDARY() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().text_secondary);
+}
+inline QColor TEXT_TERTIARY() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().text_tertiary);
+}
+inline QColor TEXT_DIM() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().text_dim);
+}
 
-inline QColor COLOR_WARNING()  { return QColor(fincept::ui::ThemeManager::instance().tokens().warning); }
-inline QColor COLOR_INFO()     { return QColor(fincept::ui::ThemeManager::instance().tokens().info); }
-inline QColor COLOR_CYAN()     { return QColor(fincept::ui::ThemeManager::instance().tokens().cyan); }
+inline QColor COLOR_WARNING() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().warning);
+}
+inline QColor COLOR_INFO() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().info);
+}
+inline QColor COLOR_CYAN() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().cyan);
+}
 
-inline QColor ROW_ALT()        { return QColor(fincept::ui::ThemeManager::instance().tokens().row_alt); }
+inline QColor ROW_ALT() {
+    return QColor(fincept::ui::ThemeManager::instance().tokens().row_alt);
+}
 
 } // namespace fincept::screens::crypto

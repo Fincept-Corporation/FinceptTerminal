@@ -10,10 +10,10 @@ struct ThemeTokens {
     const char* name;
 
     // --- Backgrounds (darkest → lightest) ---
-    const char* bg_base;       // deepest background (#080808 in Obsidian)
-    const char* bg_surface;    // card / panel surface
-    const char* bg_raised;     // slightly elevated surfaces (headers, toolbars)
-    const char* bg_hover;      // hover state background
+    const char* bg_base;    // deepest background (#080808 in Obsidian)
+    const char* bg_surface; // card / panel surface
+    const char* bg_raised;  // slightly elevated surfaces (headers, toolbars)
+    const char* bg_hover;   // hover state background
 
     // --- Borders ---
     const char* border_dim;    // hairline, barely visible
@@ -32,39 +32,37 @@ struct ThemeTokens {
     const char* text_on_accent; // text color when accent is the background
 
     // --- Interactive chrome (close buttons, toolbar icons) ---
-    const char* icon_dim;       // muted icon/button color (close, menu, detach)
-    const char* icon_hover;     // icon color on hover
+    const char* icon_dim;   // muted icon/button color (close, menu, detach)
+    const char* icon_hover; // icon color on hover
 
     // --- Functional (semantic, consistent meaning across all themes) ---
-    const char* positive;      // gain / success / buy
-    const char* positive_dim;  // dimmed positive for borders
-    const char* negative;      // loss / error / sell
-    const char* negative_dim;  // dimmed negative for borders
-    const char* warning;       // caution
-    const char* info;          // informational
-    const char* cyan;          // secondary highlight / links
+    const char* positive;     // gain / success / buy
+    const char* positive_dim; // dimmed positive for borders
+    const char* negative;     // loss / error / sell
+    const char* negative_dim; // dimmed negative for borders
+    const char* warning;      // caution
+    const char* info;         // informational
+    const char* cyan;         // secondary highlight / links
 
     // --- Tinted backgrounds (subtle fills for buy/sell/accent areas) ---
-    const char* accent_bg;     // translucent accent background
-    const char* positive_bg;   // translucent positive background
-    const char* negative_bg;   // translucent negative background
+    const char* accent_bg;   // translucent accent background
+    const char* positive_bg; // translucent positive background
+    const char* negative_bg; // translucent negative background
 
     // --- Table ---
-    const char* row_alt;   // alternating row background
+    const char* row_alt; // alternating row background
 
     // --- Font ---
-    const char* font_family;  // CSS font-family string
-    int         font_size_base; // default body/data size in px (e.g. 14)
+    const char* font_family; // CSS font-family string
+    int font_size_base;      // default body/data size in px (e.g. 14)
 
     // --- Chart color palette (6 series colors for multi-line/bar charts) ---
     std::array<const char*, 6> chart_colors;
 };
 
 // ---------------------------------------------------------------------------
-// Built-in theme presets — defined in ThemeManager.cpp
+// Built-in theme preset — defined in ThemeManager.cpp
 // ---------------------------------------------------------------------------
 extern const ThemeTokens THEME_OBSIDIAN;
-extern const ThemeTokens THEME_BLOOMBERG;
-extern const ThemeTokens THEME_LIGHT;
 
 } // namespace fincept::ui

@@ -16,9 +16,9 @@ struct NormalizedRecord {
     QString mapping_id;
     QString source_id;
     QString schema_name;
-    QJsonObject normalized;   // validated, schema-conformant data
-    QJsonObject raw;          // original API response
-    QStringList errors;       // validation errors (empty = clean)
+    QJsonObject normalized; // validated, schema-conformant data
+    QJsonObject raw;        // original API response
+    QStringList errors;     // validation errors (empty = clean)
     QString extracted_at;
 };
 

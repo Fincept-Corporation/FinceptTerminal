@@ -21,24 +21,41 @@
 namespace fincept::screens {
 
 NewsDetailPanel::NewsDetailPanel(QWidget* parent) : QWidget(parent) {
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) {
-                setStyleSheet(QString("background:%1;color:%2;")
-                    .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
-            });
-    setObjectName("newsDetailPanel");
-    setFixedWidth(340);
+    setObjectName("newsDetailOverlay");
+    setFixedWidth(420);
+    hide(); // start hidden — shown on article click
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
+
+    // Panel header with close button
+    auto* header = new QWidget(this);
+    header->setObjectName("newsDetailHeader");
+    header->setFixedHeight(30);
+    auto* header_layout = new QHBoxLayout(header);
+    header_layout->setContentsMargins(10, 0, 6, 0);
+    header_layout->setSpacing(0);
+
+    auto* title = new QLabel("ARTICLE DETAIL", header);
+    title->setObjectName("newsDetailHeaderTitle");
+    header_layout->addWidget(title);
+    header_layout->addStretch();
+
+    close_btn_ = new QPushButton("x", header);
+    close_btn_->setObjectName("newsDetailCloseBtn");
+    close_btn_->setFixedSize(22, 22);
+    close_btn_->setCursor(Qt::PointingHandCursor);
+    connect(close_btn_, &QPushButton::clicked, this, &NewsDetailPanel::close_panel);
+    header_layout->addWidget(close_btn_);
+    root->addWidget(header);
 
     stack_ = new QStackedWidget(this);
     stack_->addWidget(build_empty_state());
     stack_->addWidget(build_content_view());
     stack_->setCurrentIndex(0);
 
-    root->addWidget(stack_);
+    root->addWidget(stack_, 1);
 
     // Analyze timeout guard (30s)
     analyze_timeout_ = new QTimer(this);
@@ -72,8 +89,8 @@ QWidget* NewsDetailPanel::build_content_view() {
     auto* content = new QWidget(scroll);
     content->setObjectName("newsDetailContent");
     auto* layout = new QVBoxLayout(content);
-    layout->setContentsMargins(10, 8, 10, 8);
-    layout->setSpacing(6);
+    layout->setContentsMargins(12, 10, 12, 10);
+    layout->setSpacing(8);
 
     // Headline
     headline_label_ = new QLabel(content);
@@ -133,7 +150,7 @@ QWidget* NewsDetailPanel::build_content_view() {
     tickers_label_->setObjectName("newsDetailTickers");
     layout->addWidget(tickers_label_);
 
-    // Action buttons
+    // Action buttons — arranged in a flow
     auto* actions = new QWidget(content);
     auto* action_layout = new QHBoxLayout(actions);
     action_layout->setContentsMargins(0, 4, 0, 4);
@@ -159,11 +176,17 @@ QWidget* NewsDetailPanel::build_content_view() {
     bookmark_btn_->setToolTip("Bookmark article");
     bookmark_btn_->setCheckable(true);
 
+    // Translate button
+    translate_btn_ = new QPushButton("TRANSLATE", content);
+    translate_btn_->setObjectName("newsDetailOpenBtn");
+    translate_btn_->setFixedHeight(24);
+
     action_layout->addWidget(open_btn_);
     action_layout->addWidget(copy_btn_);
     action_layout->addWidget(analyze_btn_);
     action_layout->addWidget(save_btn_);
     action_layout->addWidget(bookmark_btn_);
+    action_layout->addWidget(translate_btn_);
     layout->addWidget(actions);
 
     connect(open_btn_, &QPushButton::clicked, this, [this]() {
@@ -183,13 +206,15 @@ QWidget* NewsDetailPanel::build_content_view() {
         emit analyze_requested(current_article_.link);
     });
     connect(save_btn_, &QPushButton::clicked, this, [this]() {
-        if (!has_article_) return;
+        if (!has_article_)
+            return;
 
         // Build a safe filename from headline
         QString safe = current_article_.headline;
         safe.replace(QRegularExpression("[^a-zA-Z0-9_\\- ]"), "").simplified();
         safe.replace(' ', '_');
-        if (safe.length() > 60) safe = safe.left(60);
+        if (safe.length() > 60)
+            safe = safe.left(60);
         QString ts = QString::number(QDateTime::currentMSecsSinceEpoch());
         QString stored_name = "news_" + safe + "_" + ts + ".txt";
         QString dest = services::FileManagerService::instance().storage_dir() + "/" + stored_name;
@@ -202,9 +227,8 @@ QWidget* NewsDetailPanel::build_content_view() {
             out << current_article_.link << "\n\n";
             out << current_article_.summary << "\n";
             f.close();
-            services::FileManagerService::instance().register_file(
-                stored_name, safe + ".txt",
-                QFileInfo(dest).size(), "text/plain", "news");
+            services::FileManagerService::instance().register_file(stored_name, safe + ".txt", QFileInfo(dest).size(),
+                                                                   "text/plain", "news");
             LOG_INFO("News", "Saved article: " + stored_name);
         }
     });
@@ -213,13 +237,6 @@ QWidget* NewsDetailPanel::build_content_view() {
             return;
         emit bookmark_requested(current_article_);
     });
-
-    // Translate button
-    translate_btn_ = new QPushButton("TRANSLATE", content);
-    translate_btn_->setObjectName("newsDetailOpenBtn");
-    translate_btn_->setFixedHeight(24);
-    action_layout->addWidget(translate_btn_);
-
     connect(translate_btn_, &QPushButton::clicked, this, [this]() {
         if (!has_article_)
             return;
@@ -231,7 +248,6 @@ QWidget* NewsDetailPanel::build_content_view() {
                 translate_btn_->setText("TRANSLATE");
                 translate_btn_->setEnabled(true);
                 if (ok && !translated.isEmpty()) {
-                    // Show translation in summary field
                     summary_label_->setText(QString("[%1 -> EN] %2").arg(detected_lang, translated));
                 }
             });
@@ -374,12 +390,30 @@ QWidget* NewsDetailPanel::build_content_view() {
     return scroll;
 }
 
+// ── Panel open/close ───────────────────────────────────────────────────────
+
+void NewsDetailPanel::open_panel() {
+    if (!panel_open_) {
+        panel_open_ = true;
+        show();
+    }
+}
+
+void NewsDetailPanel::close_panel() {
+    if (panel_open_) {
+        panel_open_ = false;
+        hide();
+        emit panel_closed();
+    }
+}
+
 // ── Public methods ──────────────────────────────────────────────────────────
 
 void NewsDetailPanel::show_article(const services::NewsArticle& article) {
     current_article_ = article;
     has_article_ = true;
     stack_->setCurrentIndex(1);
+    open_panel();
 
     headline_label_->setText(article.headline);
 
@@ -407,10 +441,11 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
     // Source with credibility flag
     if (article.source_flag != services::SourceFlag::NONE) {
         QString flag_text = services::NewsService::source_flag_label(article.source_flag);
-        QString flag_color = article.source_flag == services::SourceFlag::STATE_MEDIA ? "" + QString(ui::colors::WARNING()) + "" : ui::colors::WARNING();
+        QString flag_color = article.source_flag == services::SourceFlag::STATE_MEDIA
+                                 ? "" + QString(ui::colors::WARNING()) + ""
+                                 : ui::colors::WARNING();
         source_label_->setText(article.source.toUpper() + "  [" + flag_text + "]");
-        source_label_->setStyleSheet(
-            QString("color: %1; font-weight: 700; background: transparent;").arg(flag_color));
+        source_label_->setStyleSheet(QString("color: %1; font-weight: 700; background: transparent;").arg(flag_color));
     } else {
         source_label_->setText(article.source.toUpper());
         source_label_->setStyleSheet(
@@ -446,7 +481,10 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
         bool is_saved = false;
         if (r.is_ok()) {
             for (const auto& a : r.value()) {
-                if (a.id == article.id) { is_saved = true; break; }
+                if (a.id == article.id) {
+                    is_saved = true;
+                    break;
+                }
             }
         }
         bookmark_btn_->setChecked(is_saved);
@@ -547,7 +585,7 @@ void NewsDetailPanel::show_related(const QVector<services::NewsArticle>& related
         auto* btn = new QPushButton(related_section_);
         btn->setObjectName("newsRelatedBtn");
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setText(QString("%1 - %2").arg(article.source, article.headline.left(50)));
+        btn->setText(QString("%1 - %2").arg(article.source, article.headline.left(55)));
         btn->setToolTip(article.headline);
 
         connect(btn, &QPushButton::clicked, this, [this, article]() { emit related_article_clicked(article); });
@@ -600,21 +638,18 @@ void NewsDetailPanel::show_entities(const services::EntityResult& entities) {
 
     bool has_data = false;
 
-    // Countries
     for (const auto& [name, code] : entities.countries) {
         auto* lbl = new QLabel(QString("Country: %1 (%2)").arg(name, code), entities_section_);
         lbl->setObjectName("newsDetailKeyPoint");
         entities_detail_layout_->addWidget(lbl);
         has_data = true;
     }
-    // Organizations
     for (const auto& org : entities.organizations) {
         auto* lbl = new QLabel(QString("Org: %1").arg(org), entities_section_);
         lbl->setObjectName("newsDetailKeyPoint");
         entities_detail_layout_->addWidget(lbl);
         has_data = true;
     }
-    // People
     for (const auto& person : entities.people) {
         auto* lbl = new QLabel(QString("Person: %1").arg(person), entities_section_);
         lbl->setObjectName("newsDetailKeyPoint");

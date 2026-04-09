@@ -51,39 +51,39 @@ class AiChatScreen : public QWidget, public IStatefulScreen {
 
   private:
     // ── Sidebar ──────────────────────────────────────────────────────────
-    QWidget*      sidebar_       = nullptr;
-    QLineEdit*    search_edit_   = nullptr;
-    QListWidget*  session_list_  = nullptr;
-    QPushButton*  new_btn_       = nullptr;
-    QPushButton*  delete_btn_    = nullptr;
-    QPushButton*  rename_btn_    = nullptr;
-    QLabel*       provider_lbl_  = nullptr;
-    QLabel*       model_lbl_     = nullptr;
+    QWidget* sidebar_ = nullptr;
+    QLineEdit* search_edit_ = nullptr;
+    QListWidget* session_list_ = nullptr;
+    QPushButton* new_btn_ = nullptr;
+    QPushButton* delete_btn_ = nullptr;
+    QPushButton* rename_btn_ = nullptr;
+    QLabel* provider_lbl_ = nullptr;
+    QLabel* model_lbl_ = nullptr;
 
     // ── Chat header ──────────────────────────────────────────────────────
-    QWidget*      chat_widget_        = nullptr;
-    QLabel*       hdr_status_dot_     = nullptr;
-    QLabel*       hdr_status_lbl_     = nullptr;
-    QLabel*       hdr_session_lbl_    = nullptr;
-    QLabel*       hdr_model_lbl_      = nullptr;
-    QLabel*       hdr_tokens_lbl_     = nullptr;
+    QWidget* chat_widget_ = nullptr;
+    QLabel* hdr_status_dot_ = nullptr;
+    QLabel* hdr_status_lbl_ = nullptr;
+    QLabel* hdr_session_lbl_ = nullptr;
+    QLabel* hdr_model_lbl_ = nullptr;
+    QLabel* hdr_tokens_lbl_ = nullptr;
 
     // ── Chat area ────────────────────────────────────────────────────────
-    QScrollArea*  scroll_area_        = nullptr;
-    QWidget*      messages_container_ = nullptr;
-    QVBoxLayout*  messages_layout_    = nullptr;
-    QWidget*      welcome_panel_      = nullptr;
-    QPlainTextEdit* input_box_        = nullptr;
-    QPushButton*  send_btn_           = nullptr;
-    QPushButton*  attach_btn_         = nullptr;
-    QLabel*       attach_badge_       = nullptr;   // shows attached file name
-    QString       attached_file_path_;
+    QScrollArea* scroll_area_ = nullptr;
+    QWidget* messages_container_ = nullptr;
+    QVBoxLayout* messages_layout_ = nullptr;
+    QWidget* welcome_panel_ = nullptr;
+    QPlainTextEdit* input_box_ = nullptr;
+    QPushButton* send_btn_ = nullptr;
+    QPushButton* attach_btn_ = nullptr;
+    QLabel* attach_badge_ = nullptr; // shows attached file name
+    QString attached_file_path_;
 
     // ── Typing indicator ─────────────────────────────────────────────────
-    QWidget*      typing_indicator_   = nullptr;
-    QLabel*       typing_dots_lbl_    = nullptr;
-    QTimer*       typing_timer_       = nullptr;
-    int           typing_step_        = 0;
+    QWidget* typing_indicator_ = nullptr;
+    QLabel* typing_dots_lbl_ = nullptr;
+    QTimer* typing_timer_ = nullptr;
+    int typing_step_ = 0;
 
     // ── State ────────────────────────────────────────────────────────────
     QString active_session_id_;
@@ -92,7 +92,7 @@ class AiChatScreen : public QWidget, public IStatefulScreen {
     std::vector<ai_chat::ConversationMessage> history_;
     bool streaming_ = false;
     QPointer<QTextEdit> streaming_bubble_;
-    int total_tokens_   = 0;
+    int total_tokens_ = 0;
     int total_messages_ = 0;
 
     // ── Build ────────────────────────────────────────────────────────────

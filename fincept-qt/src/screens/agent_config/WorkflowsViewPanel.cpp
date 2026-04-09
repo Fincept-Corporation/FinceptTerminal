@@ -28,36 +28,26 @@ struct WorkflowDef {
 };
 
 static const WorkflowDef kWorkflows[] = {
-    {"stock_analysis",     "Stock Analysis",        "RESEARCH",
-     "Full analysis of a stock: fundamentals, technicals, sentiment, and analyst targets.",
-     true, false},
-    {"portfolio_rebal",    "Portfolio Rebalancing",  "PORTFOLIO",
-     "Analyse current holdings, suggest optimal allocation and rebalancing trades.",
-     false, false},
-    {"risk_assessment",    "Risk Assessment",        "PORTFOLIO",
-     "Compute VaR, CVaR, max drawdown, stress-test scenarios across the portfolio.",
-     false, false},
-    {"execute_multi_query","Multi-Agent Query",      "EXECUTION",
-     "Fan a query out to multiple agents in parallel and aggregate their responses.",
-     false, true},
-    {"macro_scan",         "Macro Scanner",          "RESEARCH",
-     "Scan macro indicators — CPI, GDP, yield curves — and produce a market brief.",
-     false, false},
-    {"earnings_brief",     "Earnings Brief",         "RESEARCH",
-     "Pull the latest earnings release for a ticker and generate an analyst brief.",
-     true, false},
-    {"sector_rotation",    "Sector Rotation",        "RESEARCH",
-     "Identify momentum shifts across sectors and recommend rotation trades.",
-     false, false},
-    {"options_scan",       "Options Flow Scan",      "TRADING",
-     "Scan unusual options activity and surface directional signals. Symbol optional.",
-     false, false},
-    {"sentiment_scan",     "Sentiment Scan",         "RESEARCH",
-     "Aggregate news and social sentiment for a ticker over the past 48 hours.",
-     true, false},
-    {"custom_query",       "Custom Query",           "CUSTOM",
-     "Send a free-form query through the workflow engine with the selected LLM profile.",
-     false, true},
+    {"stock_analysis", "Stock Analysis", "RESEARCH",
+     "Full analysis of a stock: fundamentals, technicals, sentiment, and analyst targets.", true, false},
+    {"portfolio_rebal", "Portfolio Rebalancing", "PORTFOLIO",
+     "Analyse current holdings, suggest optimal allocation and rebalancing trades.", false, false},
+    {"risk_assessment", "Risk Assessment", "PORTFOLIO",
+     "Compute VaR, CVaR, max drawdown, stress-test scenarios across the portfolio.", false, false},
+    {"execute_multi_query", "Multi-Agent Query", "EXECUTION",
+     "Fan a query out to multiple agents in parallel and aggregate their responses.", false, true},
+    {"macro_scan", "Macro Scanner", "RESEARCH",
+     "Scan macro indicators — CPI, GDP, yield curves — and produce a market brief.", false, false},
+    {"earnings_brief", "Earnings Brief", "RESEARCH",
+     "Pull the latest earnings release for a ticker and generate an analyst brief.", true, false},
+    {"sector_rotation", "Sector Rotation", "RESEARCH",
+     "Identify momentum shifts across sectors and recommend rotation trades.", false, false},
+    {"options_scan", "Options Flow Scan", "TRADING",
+     "Scan unusual options activity and surface directional signals. Symbol optional.", false, false},
+    {"sentiment_scan", "Sentiment Scan", "RESEARCH",
+     "Aggregate news and social sentiment for a ticker over the past 48 hours.", true, false},
+    {"custom_query", "Custom Query", "CUSTOM",
+     "Send a free-form query through the workflow engine with the selected LLM profile.", false, true},
 };
 
 static constexpr int kWorkflowCount = static_cast<int>(sizeof(kWorkflows) / sizeof(kWorkflows[0]));
@@ -68,8 +58,8 @@ WorkflowsViewPanel::WorkflowsViewPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("WorkflowsViewPanel");
     build_ui();
     setup_connections();
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { update(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { update(); });
 }
 
 // ── Layout ───────────────────────────────────────────────────────────────────
@@ -95,20 +85,20 @@ void WorkflowsViewPanel::build_ui() {
 // ── Left: workflow catalog ───────────────────────────────────────────────────
 
 QWidget* WorkflowsViewPanel::build_catalog_panel() {
-    auto* p = new QWidget;
+    auto* p = new QWidget(this);
     p->setMinimumWidth(170);
     p->setMaximumWidth(250);
-    p->setStyleSheet(QString("background:%1;border-right:1px solid %2;")
-                         .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    p->setStyleSheet(
+        QString("background:%1;border-right:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
     // Header
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setFixedHeight(34);
-    hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                           .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    hdr->setStyleSheet(
+        QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(10, 0, 10, 0);
     auto* t = new QLabel("WORKFLOWS");
@@ -116,20 +106,19 @@ QWidget* WorkflowsViewPanel::build_catalog_panel() {
     hl->addWidget(t);
     hl->addStretch();
     auto* cnt = new QLabel(QString::number(kWorkflowCount));
-    cnt->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;")
-                           .arg(ui::colors::CYAN, ui::colors::BG_BASE));
+    cnt->setStyleSheet(
+        QString("color:%1;font-size:10px;background:%2;padding:1px 6px;").arg(ui::colors::CYAN, ui::colors::BG_BASE));
     hl->addWidget(cnt);
     vl->addWidget(hdr);
 
     // List
     catalog_list_ = new QListWidget;
-    catalog_list_->setStyleSheet(
-        QString("QListWidget{background:%1;border:none;color:%2;font-size:11px;outline:none;}"
-                "QListWidget::item{padding:7px 10px;border-bottom:1px solid %3;}"
-                "QListWidget::item:selected{background:%4;color:%2;border-left:2px solid %5;}"
-                "QListWidget::item:hover{background:%6;}")
-            .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-                 ui::colors::BG_HOVER, ui::colors::AMBER, ui::colors::BG_HOVER));
+    catalog_list_->setStyleSheet(QString("QListWidget{background:%1;border:none;color:%2;font-size:11px;outline:none;}"
+                                         "QListWidget::item{padding:7px 10px;border-bottom:1px solid %3;}"
+                                         "QListWidget::item:selected{background:%4;color:%2;border-left:2px solid %5;}"
+                                         "QListWidget::item:hover{background:%6;}")
+                                     .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
+                                          ui::colors::BG_HOVER, ui::colors::AMBER, ui::colors::BG_HOVER));
 
     // Group by category — insert dim category headers
     QString last_cat;
@@ -140,7 +129,10 @@ QWidget* WorkflowsViewPanel::build_catalog_panel() {
             auto* sep = new QListWidgetItem(QString("  %1").arg(wf.category));
             sep->setFlags(Qt::NoItemFlags);
             sep->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
-            QFont f; f.setPointSize(8); f.setBold(true); sep->setFont(f);
+            QFont f;
+            f.setPointSize(8);
+            f.setBold(true);
+            sep->setFont(f);
             sep->setBackground(QColor(ui::colors::BG_RAISED()));
             catalog_list_->addItem(sep);
         }
@@ -154,9 +146,8 @@ QWidget* WorkflowsViewPanel::build_catalog_panel() {
     wf_desc_label_ = new QLabel("Select a workflow to configure and run.");
     wf_desc_label_->setWordWrap(true);
     wf_desc_label_->setContentsMargins(10, 6, 10, 8);
-    wf_desc_label_->setStyleSheet(
-        QString("color:%1;font-size:10px;background:%2;border-top:1px solid %3;")
-            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    wf_desc_label_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;border-top:1px solid %3;")
+                                      .arg(ui::colors::TEXT_SECONDARY, ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     vl->addWidget(wf_desc_label_);
 
     return p;
@@ -165,18 +156,18 @@ QWidget* WorkflowsViewPanel::build_catalog_panel() {
 // ── Center: params ───────────────────────────────────────────────────────────
 
 QWidget* WorkflowsViewPanel::build_params_panel() {
-    auto* p = new QWidget;
-    p->setStyleSheet(QString("background:%1;border-right:1px solid %2;")
-                         .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
+    auto* p = new QWidget(this);
+    p->setStyleSheet(
+        QString("background:%1;border-right:1px solid %2;").arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
     // Header
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setFixedHeight(34);
-    hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                           .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    hdr->setStyleSheet(
+        QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(10, 0, 10, 0);
     params_title_ = new QLabel("PARAMETERS");
@@ -186,7 +177,7 @@ QWidget* WorkflowsViewPanel::build_params_panel() {
     vl->addWidget(hdr);
 
     // Body
-    auto* body = new QWidget;
+    auto* body = new QWidget(this);
     auto* bl = new QVBoxLayout(body);
     bl->setContentsMargins(12, 10, 12, 12);
     bl->setSpacing(8);
@@ -212,20 +203,18 @@ QWidget* WorkflowsViewPanel::build_params_panel() {
     bl->addWidget(llm_profile_combo_);
 
     llm_resolved_lbl_ = new QLabel;
-    llm_resolved_lbl_->setStyleSheet(
-        QString("color:%1;font-size:10px;padding:1px 0;").arg(ui::colors::TEXT_TERTIARY));
+    llm_resolved_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:1px 0;").arg(ui::colors::TEXT_TERTIARY));
     bl->addWidget(llm_resolved_lbl_);
 
     // Symbol row (shown for symbol-requiring workflows)
-    symbol_row_ = new QWidget;
+    symbol_row_ = new QWidget(this);
     {
         auto* sl = new QHBoxLayout(symbol_row_);
         sl->setContentsMargins(0, 0, 0, 0);
         sl->setSpacing(6);
         auto* lbl = new QLabel("SYMBOL");
-        lbl->setStyleSheet(
-            QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;min-width:55px;")
-                .arg(ui::colors::TEXT_SECONDARY));
+        lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;min-width:55px;")
+                               .arg(ui::colors::TEXT_SECONDARY));
         sl->addWidget(lbl);
         symbol_input_ = new QLineEdit;
         symbol_input_->setPlaceholderText("e.g. AAPL");
@@ -240,7 +229,7 @@ QWidget* WorkflowsViewPanel::build_params_panel() {
     bl->addWidget(symbol_row_);
 
     // Query row (shown for query-requiring workflows)
-    query_row_ = new QWidget;
+    query_row_ = new QWidget(this);
     {
         auto* ql = new QVBoxLayout(query_row_);
         ql->setContentsMargins(0, 0, 0, 0);
@@ -266,19 +255,17 @@ QWidget* WorkflowsViewPanel::build_params_panel() {
     run_btn_ = new QPushButton("RUN WORKFLOW");
     run_btn_->setCursor(Qt::PointingHandCursor);
     run_btn_->setEnabled(false);
-    run_btn_->setStyleSheet(
-        QString("QPushButton{background:%1;color:%2;border:none;padding:9px;"
-                "font-size:11px;font-weight:700;letter-spacing:1px;}"
-                "QPushButton:hover{background:%3;}"
-                "QPushButton:disabled{background:%4;color:%5;}")
-            .arg(ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::ORANGE,
-                 ui::colors::BG_RAISED, ui::colors::TEXT_TERTIARY));
+    run_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:none;padding:9px;"
+                                    "font-size:11px;font-weight:700;letter-spacing:1px;}"
+                                    "QPushButton:hover{background:%3;}"
+                                    "QPushButton:disabled{background:%4;color:%5;}")
+                                .arg(ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::ORANGE, ui::colors::BG_RAISED,
+                                     ui::colors::TEXT_TERTIARY));
     connect(run_btn_, &QPushButton::clicked, this, &WorkflowsViewPanel::run_current_workflow);
     bl->addWidget(run_btn_);
 
     params_status_ = new QLabel;
-    params_status_->setStyleSheet(
-        QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY));
+    params_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY));
     bl->addWidget(params_status_);
 
     vl->addWidget(body, 1);
@@ -288,17 +275,17 @@ QWidget* WorkflowsViewPanel::build_params_panel() {
 // ── Right: output panel ──────────────────────────────────────────────────────
 
 QWidget* WorkflowsViewPanel::build_output_panel() {
-    auto* p = new QWidget;
+    auto* p = new QWidget(this);
     p->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
     // Header
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setFixedHeight(34);
-    hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                           .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    hdr->setStyleSheet(
+        QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(10, 0, 10, 0);
     output_title_ = new QLabel("OUTPUT");
@@ -307,13 +294,12 @@ QWidget* WorkflowsViewPanel::build_output_panel() {
     hl->addWidget(output_title_);
     hl->addStretch();
     output_status_ = new QLabel;
-    output_status_->setStyleSheet(
-        QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY));
+    output_status_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY));
     hl->addWidget(output_status_);
     vl->addWidget(hdr);
 
     // Body
-    auto* body = new QWidget;
+    auto* body = new QWidget(this);
     auto* bl = new QVBoxLayout(body);
     bl->setContentsMargins(10, 8, 10, 10);
     bl->setSpacing(6);
@@ -331,14 +317,12 @@ QWidget* WorkflowsViewPanel::build_output_panel() {
                 "QScrollBar:vertical{background:%1;width:5px;border:none;}"
                 "QScrollBar::handle:vertical{background:%4;min-height:20px;}"
                 "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY,
-                 ui::colors::BORDER_DIM, ui::colors::BORDER_BRIGHT));
+            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, ui::colors::BORDER_BRIGHT));
     bl->addWidget(log_display_);
 
     auto* res_lbl = new QLabel("RESULT");
-    res_lbl->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;")
-            .arg(ui::colors::TEXT_SECONDARY));
+    res_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;")
+                               .arg(ui::colors::TEXT_SECONDARY));
     bl->addWidget(res_lbl);
 
     result_display_ = new QTextEdit;
@@ -348,8 +332,7 @@ QWidget* WorkflowsViewPanel::build_output_panel() {
                 "QScrollBar:vertical{background:%1;width:5px;border:none;}"
                 "QScrollBar::handle:vertical{background:%4;min-height:20px;}"
                 "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY,
-                 ui::colors::BORDER_DIM, ui::colors::BORDER_BRIGHT));
+            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::BORDER_BRIGHT));
     result_display_->document()->setDefaultStyleSheet(
         QString("body{color:%1;background:%2;font-size:12px;}"
                 "h1,h2,h3{color:%3;margin:6px 0 3px 0;}"
@@ -358,8 +341,8 @@ QWidget* WorkflowsViewPanel::build_output_panel() {
                 "a{color:%5;} ul,ol{margin:3px 0;padding-left:18px;}"
                 "li{margin:2px 0;} strong{color:%1;}"
                 "hr{border:none;border-top:1px solid %6;}")
-            .arg(ui::colors::TEXT_PRIMARY, ui::colors::BG_BASE, ui::colors::AMBER,
-                 ui::colors::BG_RAISED, ui::colors::CYAN, ui::colors::BORDER_DIM));
+            .arg(ui::colors::TEXT_PRIMARY, ui::colors::BG_BASE, ui::colors::AMBER, ui::colors::BG_RAISED,
+                 ui::colors::CYAN, ui::colors::BORDER_DIM));
     bl->addWidget(result_display_, 1);
 
     vl->addWidget(body, 1);
@@ -369,86 +352,82 @@ QWidget* WorkflowsViewPanel::build_output_panel() {
 // ── Connections ──────────────────────────────────────────────────────────────
 
 void WorkflowsViewPanel::setup_connections() {
-    connect(catalog_list_, &QListWidget::currentRowChanged,
-            this, &WorkflowsViewPanel::on_workflow_selected);
+    connect(catalog_list_, &QListWidget::currentRowChanged, this, &WorkflowsViewPanel::on_workflow_selected);
 
     auto& svc = services::AgentService::instance();
 
-    connect(&svc, &services::AgentService::agent_result, this,
-            [this](services::AgentExecutionResult r) {
-                if (r.request_id != pending_request_id_) return;
-                executing_ = false;
-                pending_request_id_.clear();
-                run_btn_->setEnabled(true);
-                run_btn_->setText("RUN WORKFLOW");
-                if (r.success) {
-                    result_display_->setMarkdown(r.response);
-                    const QString msg = QString("Done in %1ms").arg(r.execution_time_ms);
-                    output_status_->setText(msg);
-                    output_status_->setStyleSheet(
-                        QString("color:%1;font-size:10px;").arg(ui::colors::POSITIVE));
-                    log_display_->append(QString("[DONE] %1").arg(msg));
-                } else {
-                    result_display_->setPlainText("Error: " + r.error);
-                    output_status_->setText("FAILED");
-                    output_status_->setStyleSheet(
-                        QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE));
-                    log_display_->append("[ERROR] " + r.error);
-                }
-            });
+    connect(&svc, &services::AgentService::agent_result, this, [this](services::AgentExecutionResult r) {
+        if (r.request_id != pending_request_id_)
+            return;
+        executing_ = false;
+        pending_request_id_.clear();
+        run_btn_->setEnabled(true);
+        run_btn_->setText("RUN WORKFLOW");
+        if (r.success) {
+            result_display_->setMarkdown(r.response);
+            const QString msg = QString("Done in %1ms").arg(r.execution_time_ms);
+            output_status_->setText(msg);
+            output_status_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::POSITIVE));
+            log_display_->append(QString("[DONE] %1").arg(msg));
+        } else {
+            result_display_->setPlainText("Error: " + r.error);
+            output_status_->setText("FAILED");
+            output_status_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE));
+            log_display_->append("[ERROR] " + r.error);
+        }
+    });
 
     connect(&svc, &services::AgentService::agent_stream_thinking, this,
             [this](const QString& request_id, const QString& status) {
-                if (request_id != pending_request_id_) return;
+                if (request_id != pending_request_id_)
+                    return;
                 output_status_->setText(status);
                 log_display_->append("[THINK] " + status);
             });
 
     connect(&svc, &services::AgentService::agent_stream_token, this,
             [this](const QString& request_id, const QString& token) {
-                if (request_id != pending_request_id_) return;
+                if (request_id != pending_request_id_)
+                    return;
                 QTextCursor cursor = result_display_->textCursor();
                 cursor.movePosition(QTextCursor::End);
                 result_display_->setTextCursor(cursor);
                 result_display_->insertPlainText(token + " ");
             });
 
-    connect(&svc, &services::AgentService::agent_stream_done, this,
-            [this](services::AgentExecutionResult r) {
-                if (r.request_id != pending_request_id_) return;
-                executing_ = false;
-                pending_request_id_.clear();
-                run_btn_->setEnabled(true);
-                run_btn_->setText("RUN WORKFLOW");
-                if (r.success) {
-                    result_display_->setMarkdown(r.response);
-                    const QString msg = QString("Done in %1ms").arg(r.execution_time_ms);
-                    output_status_->setText(msg);
-                    output_status_->setStyleSheet(
-                        QString("color:%1;font-size:10px;").arg(ui::colors::POSITIVE));
-                    log_display_->append(QString("[DONE] %1").arg(msg));
-                } else {
-                    result_display_->setPlainText("Error: " + r.error);
-                    output_status_->setText("FAILED");
-                    output_status_->setStyleSheet(
-                        QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE));
-                    log_display_->append("[ERROR] " + r.error);
-                }
-            });
+    connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
+        if (r.request_id != pending_request_id_)
+            return;
+        executing_ = false;
+        pending_request_id_.clear();
+        run_btn_->setEnabled(true);
+        run_btn_->setText("RUN WORKFLOW");
+        if (r.success) {
+            result_display_->setMarkdown(r.response);
+            const QString msg = QString("Done in %1ms").arg(r.execution_time_ms);
+            output_status_->setText(msg);
+            output_status_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::POSITIVE));
+            log_display_->append(QString("[DONE] %1").arg(msg));
+        } else {
+            result_display_->setPlainText("Error: " + r.error);
+            output_status_->setText("FAILED");
+            output_status_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE));
+            log_display_->append("[ERROR] " + r.error);
+        }
+    });
 
-    connect(&svc, &services::AgentService::error_occurred, this,
-            [this](const QString&, const QString& msg) {
-                if (!executing_) return;
-                executing_ = false;
-                pending_request_id_.clear();
-                run_btn_->setEnabled(true);
-                run_btn_->setText("RUN WORKFLOW");
-                result_display_->setPlainText("Error: " + msg);
-                output_status_->setText("ERROR");
-                output_status_->setStyleSheet(
-                    QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE));
-                log_display_->append("[ERROR] " + msg);
-            });
+    connect(&svc, &services::AgentService::error_occurred, this, [this](const QString&, const QString& msg) {
+        if (!executing_)
+            return;
+        executing_ = false;
+        pending_request_id_.clear();
+        run_btn_->setEnabled(true);
+        run_btn_->setText("RUN WORKFLOW");
+        result_display_->setPlainText("Error: " + msg);
+        output_status_->setText("ERROR");
+        output_status_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE));
+        log_display_->append("[ERROR] " + msg);
+    });
 
     connect(llm_profile_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
         const QString pid = llm_profile_combo_->currentData().toString();
@@ -476,21 +455,28 @@ void WorkflowsViewPanel::setup_connections() {
 // ── Workflow selection ───────────────────────────────────────────────────────
 
 void WorkflowsViewPanel::on_workflow_selected(int row) {
-    if (row < 0) return;
+    if (row < 0)
+        return;
     auto* item = catalog_list_->item(row);
-    if (!item || !(item->flags() & Qt::ItemIsEnabled)) return;
+    if (!item || !(item->flags() & Qt::ItemIsEnabled))
+        return;
 
     const QString wf_id = item->data(Qt::UserRole).toString();
-    if (wf_id.isEmpty()) return;
+    if (wf_id.isEmpty())
+        return;
 
     current_workflow_type_ = wf_id;
 
     // Find the def
     const WorkflowDef* def = nullptr;
     for (int i = 0; i < kWorkflowCount; ++i) {
-        if (QString(kWorkflows[i].id) == wf_id) { def = &kWorkflows[i]; break; }
+        if (QString(kWorkflows[i].id) == wf_id) {
+            def = &kWorkflows[i];
+            break;
+        }
     }
-    if (!def) return;
+    if (!def)
+        return;
 
     params_title_->setText(QString("%1  —  PARAMETERS").arg(def->label).toUpper());
     wf_desc_label_->setText(def->desc);
@@ -505,7 +491,8 @@ void WorkflowsViewPanel::on_workflow_selected(int row) {
 // ── Run ──────────────────────────────────────────────────────────────────────
 
 void WorkflowsViewPanel::run_current_workflow() {
-    if (executing_ || current_workflow_type_.isEmpty()) return;
+    if (executing_ || current_workflow_type_.isEmpty())
+        return;
 
     executing_ = true;
     run_btn_->setEnabled(false);
@@ -525,8 +512,7 @@ void WorkflowsViewPanel::run_current_workflow() {
             run_btn_->setEnabled(true);
             run_btn_->setText("RUN WORKFLOW");
             params_status_->setText("Symbol is required");
-            params_status_->setStyleSheet(
-                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
+            params_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
             return;
         }
         params["symbol"] = sym;
@@ -539,8 +525,7 @@ void WorkflowsViewPanel::run_current_workflow() {
             run_btn_->setEnabled(true);
             run_btn_->setText("RUN WORKFLOW");
             params_status_->setText("Query is required");
-            params_status_->setStyleSheet(
-                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
+            params_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
             return;
         }
         params["query"] = q;

@@ -18,8 +18,7 @@ class NewsArticleRepository : public BaseRepository<fincept::services::NewsArtic
 
     /// Load articles newer than since_ts (unix seconds).
     /// Optional category filter ("" = all). Ordered newest-first.
-    Result<QVector<fincept::services::NewsArticle>> load_recent(int64_t since_ts,
-                                                                const QString& category = {},
+    Result<QVector<fincept::services::NewsArticle>> load_recent(int64_t since_ts, const QString& category = {},
                                                                 int limit = 2000) const;
 
     /// Total number of stored articles.
@@ -51,8 +50,7 @@ class NewsArticleRepository : public BaseRepository<fincept::services::NewsArtic
     /// Full-text search over headline + summary using the FTS5 index.
     /// Returns matching articles ordered by FTS rank (best match first).
     /// Falls back to LIKE scan if FTS table is unavailable.
-    Result<QVector<fincept::services::NewsArticle>> search_fts(const QString& query,
-                                                               int64_t since_ts = 0,
+    Result<QVector<fincept::services::NewsArticle>> search_fts(const QString& query, int64_t since_ts = 0,
                                                                int limit = 500) const;
 
   private:

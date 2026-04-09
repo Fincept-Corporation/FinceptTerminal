@@ -1,4 +1,5 @@
 #include "ui/workspace/WorkspaceOpenDialog.h"
+
 #include "services/workspace/WorkspaceManager.h"
 
 #include <QDialogButtonBox>
@@ -19,7 +20,7 @@ static const char* OPEN_DLG_SS =
     "QListWidget::item:selected{background:#1c1c1c;color:#d97706;border-left:2px solid #d97706;}"
     "QListWidget::item:hover{background:#161616;}"
     "QPushButton{background:#1a1a1a;color:#e5e5e5;border:1px solid #2a2a2a;"
-        "border-radius:3px;padding:6px 16px;}"
+    "border-radius:3px;padding:6px 16px;}"
     "QPushButton:hover{background:#222;border-color:#d97706;}"
     "QPushButton#openBtn{background:#d97706;color:#000;font-weight:700;border:none;}"
     "QPushButton#openBtn:hover{background:#b45309;}"
@@ -64,9 +65,8 @@ void WorkspaceOpenDialog::setup_ui() {
     preview_label_ = new QLabel("Select a workspace to preview");
     preview_label_->setWordWrap(true);
     preview_label_->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-    preview_label_->setStyleSheet(
-        "background:#111;border:1px solid #2a2a2a;border-radius:3px;"
-        "padding:12px;color:#aaa;font-size:12px;");
+    preview_label_->setStyleSheet("background:#111;border:1px solid #2a2a2a;border-radius:3px;"
+                                  "padding:12px;color:#aaa;font-size:12px;");
     right->addWidget(preview_label_, 1);
 
     // Buttons
@@ -83,25 +83,26 @@ void WorkspaceOpenDialog::setup_ui() {
     root->addLayout(right, 1);
 
     // ── Connections ───────────────────────────────────────────────────────────
-    connect(workspace_list_, &QListWidget::currentRowChanged,
-            this, &WorkspaceOpenDialog::update_preview);
+    connect(workspace_list_, &QListWidget::currentRowChanged, this, &WorkspaceOpenDialog::update_preview);
 
     connect(workspace_list_, &QListWidget::itemDoubleClicked, this, [this]() {
-        if (open_btn_->isEnabled()) accept();
+        if (open_btn_->isEnabled())
+            accept();
     });
 
     connect(browse_btn, &QPushButton::clicked, this, &WorkspaceOpenDialog::browse_for_file);
     connect(cancel_btn, &QPushButton::clicked, this, &QDialog::reject);
-    connect(open_btn_,  &QPushButton::clicked, this, &QDialog::accept);
+    connect(open_btn_, &QPushButton::clicked, this, &QDialog::accept);
 }
 
 void WorkspaceOpenDialog::load_workspaces() {
     auto result = WorkspaceManager::instance().list_workspaces();
-    if (result.is_err()) return;
+    if (result.is_err())
+        return;
 
     for (const auto& s : result.value()) {
         auto* item = new QListWidgetItem(s.name);
-        item->setData(Qt::UserRole,     s.file_path);
+        item->setData(Qt::UserRole, s.file_path);
         item->setData(Qt::UserRole + 1, s.description);
         item->setData(Qt::UserRole + 2, s.updated_at);
         workspace_list_->addItem(item);
@@ -109,9 +110,10 @@ void WorkspaceOpenDialog::load_workspaces() {
 }
 
 void WorkspaceOpenDialog::browse_for_file() {
-    QString path = QFileDialog::getOpenFileName(
-        this, "Open Workspace File", {}, "Fincept Workspace (*.fwsp);;All Files (*)");
-    if (path.isEmpty()) return;
+    QString path =
+        QFileDialog::getOpenFileName(this, "Open Workspace File", {}, "Fincept Workspace (*.fwsp);;All Files (*)");
+    if (path.isEmpty())
+        return;
     selected_path_ = path;
     open_btn_->setEnabled(true);
     preview_label_->setText(QString("File: %1").arg(path));
@@ -119,14 +121,14 @@ void WorkspaceOpenDialog::browse_for_file() {
 }
 
 void WorkspaceOpenDialog::update_preview(int row) {
-    if (row < 0 || row >= workspace_list_->count()) return;
+    if (row < 0 || row >= workspace_list_->count())
+        return;
     auto* item = workspace_list_->item(row);
     selected_path_ = item->data(Qt::UserRole).toString();
-    QString desc   = item->data(Qt::UserRole + 1).toString();
-    QString date   = item->data(Qt::UserRole + 2).toString();
-    preview_label_->setText(
-        QString("<b>%1</b><br><br>%2<br><br><span style='color:#555'>Last saved: %3</span>")
-            .arg(item->text(), desc.isEmpty() ? "No description" : desc, date));
+    QString desc = item->data(Qt::UserRole + 1).toString();
+    QString date = item->data(Qt::UserRole + 2).toString();
+    preview_label_->setText(QString("<b>%1</b><br><br>%2<br><br><span style='color:#555'>Last saved: %3</span>")
+                                .arg(item->text(), desc.isEmpty() ? "No description" : desc, date));
     open_btn_->setEnabled(true);
 }
 

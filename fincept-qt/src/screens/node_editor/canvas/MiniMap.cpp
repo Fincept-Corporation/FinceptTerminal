@@ -23,12 +23,12 @@ MiniMap::MiniMap(NodeScene* scene, QGraphicsView* main_view, QWidget* parent)
 
     auto apply_minimap_style = [this]() {
         const auto& t = ui::ThemeManager::instance().tokens();
-        setStyleSheet(QString("QGraphicsView { background: %1; border: 1px solid %2; }")
-                      .arg(t.bg_surface, t.border_dim));
+        setStyleSheet(
+            QString("QGraphicsView { background: %1; border: 1px solid %2; }").arg(t.bg_surface, t.border_dim));
     };
     apply_minimap_style();
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [apply_minimap_style](const ui::ThemeTokens&) { apply_minimap_style(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [apply_minimap_style](const ui::ThemeTokens&) { apply_minimap_style(); });
 
     // Update the viewport rect periodically (20fps max per P9)
     update_timer_->setInterval(200);

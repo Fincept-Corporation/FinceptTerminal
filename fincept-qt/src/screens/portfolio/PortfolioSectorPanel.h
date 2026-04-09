@@ -21,7 +21,7 @@ class PortfolioSectorPanel : public QWidget {
     void set_correlation(const QHash<QString, double>& matrix);
 
     // Sector utilities — public so callers can map symbols to sectors
-    static QColor  sector_color(int index);
+    static QColor sector_color(int index);
     static QString infer_sector(const QString& symbol);
 
   signals:
@@ -46,8 +46,8 @@ class PortfolioSectorPanel : public QWidget {
 
     // Data
     QVector<portfolio::HoldingWithQuote> holdings_;
-    QString currency_         = "USD";
-    QString selected_sector_;  // empty = no filter active
+    QString currency_ = "USD";
+    QString selected_sector_;            // empty = no filter active
     QHash<QString, double> corr_matrix_; // real Pearson matrix, key="SYM1|SYM2"
 };
 

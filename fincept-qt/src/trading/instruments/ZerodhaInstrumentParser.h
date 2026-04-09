@@ -30,14 +30,11 @@ class ZerodhaInstrumentParser {
 
   private:
     static Instrument parse_row(const QStringList& cols);
-    static QString    normalise_symbol(const QString& tradingsymbol,
-                                       const QString& name,
-                                       const QString& instrument_type,
-                                       const QString& expiry_nodashes,
-                                       double strike);
-    static QString    normalise_exchange(const QString& exchange, const QString& segment);
-    static QString    expiry_nodashes(const QString& expiry_iso);  // "2024-03-28" → "28MAR24"
-    static QString    map_index_name(const QString& tradingsymbol);
+    static QString normalise_symbol(const QString& tradingsymbol, const QString& name, const QString& instrument_type,
+                                    const QString& expiry_nodashes, double strike);
+    static QString normalise_exchange(const QString& exchange, const QString& segment);
+    static QString expiry_nodashes(const QString& expiry_iso); // "2024-03-28" → "28MAR24"
+    static QString map_index_name(const QString& tradingsymbol);
 };
 
 } // namespace fincept::trading

@@ -125,7 +125,7 @@ void DerivativesScreen::setup_ui() {
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     auto* content_layout = new QVBoxLayout(content);
     content_layout->setContentsMargins(16, 16, 16, 16);
     content_layout->setSpacing(16);
@@ -153,7 +153,7 @@ void DerivativesScreen::setup_ui() {
 }
 
 QWidget* DerivativesScreen::create_header_bar() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("derivHeader");
     bar->setFixedHeight(42);
 
@@ -185,7 +185,7 @@ QWidget* DerivativesScreen::create_header_bar() {
 }
 
 QWidget* DerivativesScreen::create_instrument_bar() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("derivInstrBar");
     bar->setFixedHeight(34);
 
@@ -211,20 +211,20 @@ QWidget* DerivativesScreen::create_instrument_bar() {
 // ── Panel builders ──────────────────────────────────────────────────────────
 
 QWidget* DerivativesScreen::create_bonds_panel() {
-    auto* outer = new QWidget;
+    auto* outer = new QWidget(this);
     auto* grid = new QGridLayout(outer);
     grid->setContentsMargins(0, 0, 0, 0);
     grid->setSpacing(16);
 
     // ── Left: Bond Price Calculator ──
-    auto* price_panel = new QWidget;
+    auto* price_panel = new QWidget(this);
     price_panel->setObjectName("derivPanel");
     auto* pv = new QVBoxLayout(price_panel);
     pv->setContentsMargins(0, 0, 0, 0);
     pv->setSpacing(0);
 
     // Header
-    auto* ph = new QWidget;
+    auto* ph = new QWidget(this);
     ph->setObjectName("derivPanelHeader");
     ph->setFixedHeight(34);
     auto* phl = new QHBoxLayout(ph);
@@ -240,7 +240,7 @@ QWidget* DerivativesScreen::create_bonds_panel() {
     pv->addWidget(ph);
 
     // Inputs
-    auto* body = new QWidget;
+    auto* body = new QWidget(this);
     auto* bl = new QVBoxLayout(body);
     bl->setContentsMargins(12, 12, 12, 12);
     bl->setSpacing(10);
@@ -268,13 +268,13 @@ QWidget* DerivativesScreen::create_bonds_panel() {
     grid->addWidget(price_panel, 0, 0);
 
     // ── Right: YTM Calculator ──
-    auto* ytm_panel = new QWidget;
+    auto* ytm_panel = new QWidget(this);
     ytm_panel->setObjectName("derivPanel");
     auto* yv = new QVBoxLayout(ytm_panel);
     yv->setContentsMargins(0, 0, 0, 0);
     yv->setSpacing(0);
 
-    auto* yh = new QWidget;
+    auto* yh = new QWidget(this);
     yh->setObjectName("derivPanelHeader");
     yh->setFixedHeight(34);
     auto* yhl = new QHBoxLayout(yh);
@@ -289,7 +289,7 @@ QWidget* DerivativesScreen::create_bonds_panel() {
     yhl->addStretch(1);
     yv->addWidget(yh);
 
-    auto* ybody = new QWidget;
+    auto* ybody = new QWidget(this);
     auto* ybl = new QVBoxLayout(ybody);
     ybl->setContentsMargins(12, 12, 12, 12);
     ybl->setSpacing(10);
@@ -318,19 +318,19 @@ QWidget* DerivativesScreen::create_bonds_panel() {
 }
 
 QWidget* DerivativesScreen::create_equity_options_panel() {
-    auto* outer = new QWidget;
+    auto* outer = new QWidget(this);
     auto* grid = new QGridLayout(outer);
     grid->setContentsMargins(0, 0, 0, 0);
     grid->setSpacing(16);
 
     // ── Left: Black-Scholes Pricing ──
-    auto* bs_panel = new QWidget;
+    auto* bs_panel = new QWidget(this);
     bs_panel->setObjectName("derivPanel");
     auto* bv = new QVBoxLayout(bs_panel);
     bv->setContentsMargins(0, 0, 0, 0);
     bv->setSpacing(0);
 
-    auto* bh = new QWidget;
+    auto* bh = new QWidget(this);
     bh->setObjectName("derivPanelHeader");
     bh->setFixedHeight(34);
     auto* bhl = new QHBoxLayout(bh);
@@ -345,7 +345,7 @@ QWidget* DerivativesScreen::create_equity_options_panel() {
     bhl->addStretch(1);
     bv->addWidget(bh);
 
-    auto* bbody = new QWidget;
+    auto* bbody = new QWidget(this);
     auto* bbl = new QVBoxLayout(bbody);
     bbl->setContentsMargins(12, 12, 12, 12);
     bbl->setSpacing(10);
@@ -374,13 +374,13 @@ QWidget* DerivativesScreen::create_equity_options_panel() {
     grid->addWidget(bs_panel, 0, 0);
 
     // ── Right: Implied Volatility ──
-    auto* iv_panel = new QWidget;
+    auto* iv_panel = new QWidget(this);
     iv_panel->setObjectName("derivPanel");
     auto* iv = new QVBoxLayout(iv_panel);
     iv->setContentsMargins(0, 0, 0, 0);
     iv->setSpacing(0);
 
-    auto* ivh = new QWidget;
+    auto* ivh = new QWidget(this);
     ivh->setObjectName("derivPanelHeader");
     ivh->setFixedHeight(34);
     auto* ivhl = new QHBoxLayout(ivh);
@@ -395,7 +395,7 @@ QWidget* DerivativesScreen::create_equity_options_panel() {
     ivhl->addStretch(1);
     iv->addWidget(ivh);
 
-    auto* ivbody = new QWidget;
+    auto* ivbody = new QWidget(this);
     auto* ivbl = new QVBoxLayout(ivbody);
     ivbl->setContentsMargins(12, 12, 12, 12);
     ivbl->setSpacing(10);
@@ -428,7 +428,7 @@ QWidget* DerivativesScreen::create_equity_options_panel() {
 }
 
 QWidget* DerivativesScreen::create_fx_options_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("derivPanel");
     panel->setMaximumWidth(700);
 
@@ -437,7 +437,7 @@ QWidget* DerivativesScreen::create_fx_options_panel() {
     vl->setSpacing(0);
 
     // Header
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("derivPanelHeader");
     hdr->setFixedHeight(34);
     auto* hl = new QHBoxLayout(hdr);
@@ -452,7 +452,7 @@ QWidget* DerivativesScreen::create_fx_options_panel() {
     hl->addStretch(1);
     vl->addWidget(hdr);
 
-    auto* body = new QWidget;
+    auto* body = new QWidget(this);
     auto* bl = new QVBoxLayout(body);
     bl->setContentsMargins(12, 12, 12, 12);
     bl->setSpacing(10);
@@ -484,7 +484,7 @@ QWidget* DerivativesScreen::create_fx_options_panel() {
 }
 
 QWidget* DerivativesScreen::create_swaps_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("derivPanel");
     panel->setMaximumWidth(700);
 
@@ -492,7 +492,7 @@ QWidget* DerivativesScreen::create_swaps_panel() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("derivPanelHeader");
     hdr->setFixedHeight(34);
     auto* hl = new QHBoxLayout(hdr);
@@ -507,7 +507,7 @@ QWidget* DerivativesScreen::create_swaps_panel() {
     hl->addStretch(1);
     vl->addWidget(hdr);
 
-    auto* body = new QWidget;
+    auto* body = new QWidget(this);
     auto* bl = new QVBoxLayout(body);
     bl->setContentsMargins(12, 12, 12, 12);
     bl->setSpacing(10);
@@ -536,7 +536,7 @@ QWidget* DerivativesScreen::create_swaps_panel() {
 }
 
 QWidget* DerivativesScreen::create_credit_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("derivPanel");
     panel->setMaximumWidth(700);
 
@@ -544,7 +544,7 @@ QWidget* DerivativesScreen::create_credit_panel() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("derivPanelHeader");
     hdr->setFixedHeight(34);
     auto* hl = new QHBoxLayout(hdr);
@@ -559,7 +559,7 @@ QWidget* DerivativesScreen::create_credit_panel() {
     hl->addStretch(1);
     vl->addWidget(hdr);
 
-    auto* body = new QWidget;
+    auto* body = new QWidget(this);
     auto* bl = new QVBoxLayout(body);
     bl->setContentsMargins(12, 12, 12, 12);
     bl->setSpacing(10);
@@ -585,7 +585,7 @@ QWidget* DerivativesScreen::create_credit_panel() {
 }
 
 QWidget* DerivativesScreen::create_status_bar() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("derivStatusBar");
     bar->setFixedHeight(26);
 
@@ -610,7 +610,7 @@ QWidget* DerivativesScreen::create_status_bar() {
 }
 
 QWidget* DerivativesScreen::create_results_panel() {
-    auto* frame = new QWidget;
+    auto* frame = new QWidget(this);
     frame->setObjectName("derivResultsPanel");
 
     auto* vl = new QVBoxLayout(frame);
@@ -618,7 +618,7 @@ QWidget* DerivativesScreen::create_results_panel() {
     vl->setSpacing(0);
 
     // Header
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("derivResultsHeader");
     hdr->setFixedHeight(34);
     auto* hl = new QHBoxLayout(hdr);
@@ -635,7 +635,7 @@ QWidget* DerivativesScreen::create_results_panel() {
 // ── Widget factories ────────────────────────────────────────────────────────
 
 QWidget* DerivativesScreen::create_input_row(const QString& label_text, QWidget* input) {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* vl = new QVBoxLayout(w);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(4);
@@ -649,7 +649,7 @@ QWidget* DerivativesScreen::create_input_row(const QString& label_text, QWidget*
 }
 
 QWidget* DerivativesScreen::create_two_col(QWidget* left, QWidget* right) {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* hl = new QHBoxLayout(w);
     hl->setContentsMargins(0, 0, 0, 0);
     hl->setSpacing(8);
@@ -659,7 +659,7 @@ QWidget* DerivativesScreen::create_two_col(QWidget* left, QWidget* right) {
 }
 
 QWidget* DerivativesScreen::create_three_col(QWidget* a, QWidget* b, QWidget* c) {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* hl = new QHBoxLayout(w);
     hl->setContentsMargins(0, 0, 0, 0);
     hl->setSpacing(8);
@@ -922,9 +922,8 @@ void DerivativesScreen::run_pricing(const QString& command, const QStringList& a
             }
 
             fincept::CacheManager::instance().put(
-                cache_key,
-                QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
-                10 * 60, "derivatives");
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), 10 * 60,
+                "derivatives");
 
             self->display_results(obj);
         });
@@ -953,7 +952,7 @@ void DerivativesScreen::clear_results() {
 void DerivativesScreen::display_error(const QString& error) {
     clear_results();
 
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setObjectName("derivErrorPanel");
     auto* hl = new QHBoxLayout(panel);
     hl->setContentsMargins(12, 8, 12, 8);
@@ -977,13 +976,13 @@ void DerivativesScreen::display_error(const QString& error) {
 void DerivativesScreen::display_results(const QJsonObject& result) {
     clear_results();
 
-    auto* body = new QWidget;
+    auto* body = new QWidget(this);
     auto* vl = new QVBoxLayout(body);
     vl->setContentsMargins(12, 12, 12, 12);
     vl->setSpacing(8);
 
     auto make_card = [](const QString& label, const QString& value, bool big = false) {
-        auto* card = new QWidget;
+        auto* card = new QWidget(nullptr);
         card->setObjectName("derivResultCard");
         auto* cv = new QVBoxLayout(card);
         cv->setContentsMargins(8, 6, 8, 6);
@@ -1001,7 +1000,7 @@ void DerivativesScreen::display_results(const QJsonObject& result) {
 
     // Bond results
     if (result.contains("clean_price")) {
-        auto* row1 = new QWidget;
+        auto* row1 = new QWidget(this);
         auto* r1l = new QHBoxLayout(row1);
         r1l->setContentsMargins(0, 0, 0, 0);
         r1l->setSpacing(8);
@@ -1009,7 +1008,7 @@ void DerivativesScreen::display_results(const QJsonObject& result) {
         r1l->addWidget(make_card("DIRTY PRICE", QString::number(result["dirty_price"].toDouble(), 'f', 4)));
         vl->addWidget(row1);
 
-        auto* row2 = new QWidget;
+        auto* row2 = new QWidget(this);
         auto* r2l = new QHBoxLayout(row2);
         r2l->setContentsMargins(0, 0, 0, 0);
         r2l->setSpacing(8);
@@ -1027,7 +1026,7 @@ void DerivativesScreen::display_results(const QJsonObject& result) {
         vl->addWidget(make_card("OPTION PRICE", QString::number(result["price"].toDouble(), 'f', 6), true));
 
         auto greeks = result["greeks"].toObject();
-        auto* grow = new QWidget;
+        auto* grow = new QWidget(this);
         auto* gl = new QHBoxLayout(grow);
         gl->setContentsMargins(0, 0, 0, 0);
         gl->setSpacing(8);
@@ -1051,7 +1050,7 @@ void DerivativesScreen::display_results(const QJsonObject& result) {
         }
         if (result.contains("greeks")) {
             auto greeks = result["greeks"].toObject();
-            auto* grow = new QWidget;
+            auto* grow = new QWidget(this);
             auto* gl = new QHBoxLayout(grow);
             gl->setContentsMargins(0, 0, 0, 0);
             gl->setSpacing(8);
@@ -1067,7 +1066,7 @@ void DerivativesScreen::display_results(const QJsonObject& result) {
     else if (result.contains("swap_value")) {
         vl->addWidget(make_card("SWAP VALUE", QString::number(result["swap_value"].toDouble(), 'f', 2), true));
 
-        auto* row = new QWidget;
+        auto* row = new QWidget(this);
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(0, 0, 0, 0);
         rl->setSpacing(8);
@@ -1080,7 +1079,7 @@ void DerivativesScreen::display_results(const QJsonObject& result) {
     else if (result.contains("upfront_value")) {
         vl->addWidget(make_card("UPFRONT VALUE", QString::number(result["upfront_value"].toDouble(), 'f', 2), true));
 
-        auto* row1 = new QWidget;
+        auto* row1 = new QWidget(this);
         auto* r1l = new QHBoxLayout(row1);
         r1l->setContentsMargins(0, 0, 0, 0);
         r1l->setSpacing(8);
@@ -1088,7 +1087,7 @@ void DerivativesScreen::display_results(const QJsonObject& result) {
         r1l->addWidget(make_card("PROTECTION LEG PV", QString::number(result["protection_leg_pv"].toDouble(), 'f', 2)));
         vl->addWidget(row1);
 
-        auto* row2 = new QWidget;
+        auto* row2 = new QWidget(this);
         auto* r2l = new QHBoxLayout(row2);
         r2l->setContentsMargins(0, 0, 0, 0);
         r2l->setSpacing(8);

@@ -128,13 +128,10 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen {
     std::atomic<bool> live_fetching_{false};
 
     QStringList watchlist_symbols_ = {
-        "BTC/USDT",  "ETH/USDT",  "SOL/USDT",  "BNB/USDT",
-        "XRP/USDT",  "DOGE/USDT", "ADA/USDT",  "AVAX/USDT",
-        "TON/USDT",  "LINK/USDT", "DOT/USDT",  "MATIC/USDT",
-        "UNI/USDT",  "ATOM/USDT", "LTC/USDT",  "BCH/USDT",
-        "APT/USDT",  "ARB/USDT",  "OP/USDT",   "SUI/USDT",
-        "TRX/USDT",  "INJ/USDT",  "NEAR/USDT", "WIF/USDT",
-        "PEPE/USDT",
+        "BTC/USDT",  "ETH/USDT",  "SOL/USDT",  "BNB/USDT",  "XRP/USDT",   "DOGE/USDT", "ADA/USDT",
+        "AVAX/USDT", "TON/USDT",  "LINK/USDT", "DOT/USDT",  "MATIC/USDT", "UNI/USDT",  "ATOM/USDT",
+        "LTC/USDT",  "BCH/USDT",  "APT/USDT",  "ARB/USDT",  "OP/USDT",    "SUI/USDT",  "TRX/USDT",
+        "INJ/USDT",  "NEAR/USDT", "WIF/USDT",  "PEPE/USDT",
     };
 
     QMutex data_mutex_;

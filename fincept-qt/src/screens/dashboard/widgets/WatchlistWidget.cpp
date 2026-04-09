@@ -13,7 +13,7 @@ WatchlistWidget::WatchlistWidget(QWidget* parent)
     auto* vl = content_layout();
 
     // Symbol input bar
-    auto* input_row = new QWidget;
+    auto* input_row = new QWidget(this);
     auto* irl = new QHBoxLayout(input_row);
     irl->setContentsMargins(4, 4, 4, 4);
     irl->setSpacing(4);
@@ -54,19 +54,17 @@ WatchlistWidget::WatchlistWidget(QWidget* parent)
 }
 
 void WatchlistWidget::apply_styles() {
-    symbols_label_->setStyleSheet(
-        QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-            .arg(ui::colors::TEXT_TERTIARY()));
+    symbols_label_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+                                      .arg(ui::colors::TEXT_TERTIARY()));
     symbols_input_->setStyleSheet(
         QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
                 "font-size: 10px; padding: 2px 6px; font-family: Consolas; }"
                 "QLineEdit:focus { border-color: %4; }")
             .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
-    go_btn_->setStyleSheet(
-        QString("QPushButton { background: %1; color: %2; border: none; "
-                "font-size: 9px; font-weight: bold; padding: 3px; }"
-                "QPushButton:hover { background: %1; }")
-            .arg(ui::colors::AMBER(), ui::colors::BG_BASE()));
+    go_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: none; "
+                                   "font-size: 9px; font-weight: bold; padding: 3px; }"
+                                   "QPushButton:hover { background: %1; }")
+                               .arg(ui::colors::AMBER(), ui::colors::BG_BASE()));
 }
 
 void WatchlistWidget::on_theme_changed() {

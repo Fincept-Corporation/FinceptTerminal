@@ -48,82 +48,82 @@ class CreateAgentPanel : public QWidget {
     QJsonObject build_config_json() const;
 
     // ── Left: saved list ─────────────────────────────────────────────────────
-    QListWidget* saved_list_  = nullptr;
-    QLabel*      saved_count_ = nullptr;
+    QListWidget* saved_list_ = nullptr;
+    QLabel* saved_count_ = nullptr;
 
     // ── Center: form ─────────────────────────────────────────────────────────
-    QLineEdit*      name_edit_         = nullptr;
-    QComboBox*      category_combo_    = nullptr;
-    QPlainTextEdit* desc_edit_         = nullptr;
-    QComboBox*      llm_profile_combo_ = nullptr;
-    QLabel*         llm_resolved_lbl_  = nullptr;
+    QLineEdit* name_edit_ = nullptr;
+    QComboBox* category_combo_ = nullptr;
+    QPlainTextEdit* desc_edit_ = nullptr;
+    QComboBox* llm_profile_combo_ = nullptr;
+    QLabel* llm_resolved_lbl_ = nullptr;
     QPlainTextEdit* instructions_edit_ = nullptr;
 
     // Tools
-    QLineEdit*   tool_search_edit_ = nullptr;
-    QListWidget* tools_list_       = nullptr;
+    QLineEdit* tool_search_edit_ = nullptr;
+    QListWidget* tools_list_ = nullptr;
 
     // Feature toggles (checkable tag buttons)
-    QCheckBox* reasoning_check_      = nullptr;
-    QCheckBox* memory_check_         = nullptr;
-    QCheckBox* knowledge_check_      = nullptr;
-    QCheckBox* guardrails_check_     = nullptr;
+    QCheckBox* reasoning_check_ = nullptr;
+    QCheckBox* memory_check_ = nullptr;
+    QCheckBox* knowledge_check_ = nullptr;
+    QCheckBox* guardrails_check_ = nullptr;
     QCheckBox* agentic_memory_check_ = nullptr;
-    QCheckBox* storage_check_        = nullptr;
-    QCheckBox* tracing_check_        = nullptr;
-    QCheckBox* compression_check_    = nullptr;
-    QCheckBox* hooks_check_          = nullptr;
-    QCheckBox* evaluation_check_     = nullptr;
+    QCheckBox* storage_check_ = nullptr;
+    QCheckBox* tracing_check_ = nullptr;
+    QCheckBox* compression_check_ = nullptr;
+    QCheckBox* hooks_check_ = nullptr;
+    QCheckBox* evaluation_check_ = nullptr;
 
     // Knowledge sub-fields
-    QComboBox*      knowledge_type_combo_    = nullptr;
-    QPlainTextEdit* knowledge_urls_edit_     = nullptr;
-    QComboBox*      knowledge_vectordb_combo_= nullptr;
-    QComboBox*      knowledge_embedder_combo_= nullptr;
-    QWidget*        knowledge_sub_           = nullptr;
+    QComboBox* knowledge_type_combo_ = nullptr;
+    QPlainTextEdit* knowledge_urls_edit_ = nullptr;
+    QComboBox* knowledge_vectordb_combo_ = nullptr;
+    QComboBox* knowledge_embedder_combo_ = nullptr;
+    QWidget* knowledge_sub_ = nullptr;
 
     // Guardrails sub-fields
-    QCheckBox* guardrails_pii_check_        = nullptr;
-    QCheckBox* guardrails_injection_check_  = nullptr;
+    QCheckBox* guardrails_pii_check_ = nullptr;
+    QCheckBox* guardrails_injection_check_ = nullptr;
     QCheckBox* guardrails_compliance_check_ = nullptr;
-    QWidget*   guardrails_sub_             = nullptr;
+    QWidget* guardrails_sub_ = nullptr;
 
     // Memory sub-fields
-    QLineEdit* memory_db_path_edit_          = nullptr;
-    QLineEdit* memory_table_edit_            = nullptr;
-    QCheckBox* memory_user_memories_check_   = nullptr;
+    QLineEdit* memory_db_path_edit_ = nullptr;
+    QLineEdit* memory_table_edit_ = nullptr;
+    QCheckBox* memory_user_memories_check_ = nullptr;
     QCheckBox* memory_session_summary_check_ = nullptr;
-    QWidget*   memory_sub_                  = nullptr;
+    QWidget* memory_sub_ = nullptr;
 
     // Storage sub-fields
-    QComboBox* storage_type_combo_  = nullptr;
-    QLineEdit* storage_db_path_edit_= nullptr;
-    QLineEdit* storage_table_edit_  = nullptr;
-    QWidget*   storage_sub_        = nullptr;
+    QComboBox* storage_type_combo_ = nullptr;
+    QLineEdit* storage_db_path_edit_ = nullptr;
+    QLineEdit* storage_table_edit_ = nullptr;
+    QWidget* storage_sub_ = nullptr;
 
     // Agentic memory sub-fields
     QLineEdit* agentic_memory_user_id_edit_ = nullptr;
-    QWidget*   agentic_memory_sub_         = nullptr;
+    QWidget* agentic_memory_sub_ = nullptr;
 
     // MCP servers
     QListWidget* mcp_servers_list_ = nullptr;
 
     // Form actions
-    QPushButton* save_btn_   = nullptr;
-    QLabel*      status_lbl_ = nullptr;
+    QPushButton* save_btn_ = nullptr;
+    QLabel* status_lbl_ = nullptr;
 
     // ── Right: test panel ────────────────────────────────────────────────────
     QPlainTextEdit* test_query_edit_ = nullptr;
-    QPushButton*    test_btn_        = nullptr;
-    QLabel*         test_status_lbl_ = nullptr;
-    QTextEdit*      test_result_     = nullptr;
+    QPushButton* test_btn_ = nullptr;
+    QLabel* test_status_lbl_ = nullptr;
+    QTextEdit* test_result_ = nullptr;
 
     // ── State ────────────────────────────────────────────────────────────────
     QVector<AgentConfig> saved_agents_;
-    QStringList          available_tools_;
-    QString              editing_id_;
-    QString              pending_request_id_;
-    bool                 data_loaded_ = false;
+    QStringList available_tools_;
+    QString editing_id_;
+    QString pending_request_id_;
+    bool data_loaded_ = false;
 };
 
 } // namespace fincept::screens

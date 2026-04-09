@@ -12,23 +12,33 @@ class AliceBlueBroker : public IBroker {
 
     BrokerProfile profile() const override {
         return BrokerProfile{
-            .id = "aliceblue", .display_name = "AliceBlue", .region = "IN", .currency = "INR",
-            .credential_fields = {
-                {CredentialField::ApiKey,    "USER ID",    "Enter User ID...",       false},
-                {CredentialField::ApiSecret, "API SECRET", "Enter API Secret...",    true},
-                {CredentialField::AuthCode,  "AUTH CODE",  "Enter Auth/Request Token...", false},
-            },
+            .id = "aliceblue",
+            .display_name = "AliceBlue",
+            .region = "IN",
+            .currency = "INR",
+            .credential_fields =
+                {
+                    {CredentialField::ApiKey, "USER ID", "Enter User ID...", false},
+                    {CredentialField::ApiSecret, "API SECRET", "Enter API Secret...", true},
+                    {CredentialField::AuthCode, "AUTH CODE", "Enter Auth/Request Token...", false},
+                },
             .exchanges = {"NSE", "BSE", "NFO", "MCX", "NCDEX"},
-            .product_types = {
-                {"Intraday (MIS)",  ProductType::Intraday},
-                {"Delivery (CNC)", ProductType::Delivery},
-                {"Margin (NRML)",  ProductType::Margin},
-            },
-            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
-            .has_native_paper=false, .default_paper_balance=1000000.0,
-            .default_watchlist={"HDFCBANK","ICICIBANK","SBIN","TCS","INFY","RELIANCE","TATAMOTORS","BAJFINANCE","HINDUNILVR","ITC"},
-            .default_symbol="RELIANCE", .default_exchange="NSE",
-            .brokerage_info="\u20B915/order flat",
+            .product_types =
+                {
+                    {"Intraday (MIS)", ProductType::Intraday},
+                    {"Delivery (CNC)", ProductType::Delivery},
+                    {"Margin (NRML)", ProductType::Margin},
+                },
+            .supports_intraday = true,
+            .supports_bracket_order = false,
+            .supports_cover_order = false,
+            .has_native_paper = false,
+            .default_paper_balance = 1000000.0,
+            .default_watchlist = {"HDFCBANK", "ICICIBANK", "SBIN", "TCS", "INFY", "RELIANCE", "TATAMOTORS",
+                                  "BAJFINANCE", "HINDUNILVR", "ITC"},
+            .default_symbol = "RELIANCE",
+            .default_exchange = "NSE",
+            .brokerage_info = "\u20B915/order flat",
         };
     }
 
@@ -49,7 +59,7 @@ class AliceBlueBroker : public IBroker {
                                                    const QString& resolution, const QString& from_date,
                                                    const QString& to_date) override;
 
-    static bool    is_token_expired(const BrokerHttpResponse& resp);
+    static bool is_token_expired(const BrokerHttpResponse& resp);
     static QString checked_error(const BrokerHttpResponse& resp, const QString& fallback);
 
   protected:

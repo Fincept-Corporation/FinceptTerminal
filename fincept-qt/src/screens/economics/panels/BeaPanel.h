@@ -25,24 +25,27 @@ class BeaPanel : public EconPanelBase {
   protected:
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
-    void on_result(const QString& request_id,
-                   const services::EconomicsResult& result) override;
+    void on_result(const QString& request_id, const services::EconomicsResult& result) override;
 
   private:
     void on_category_changed(int index);
     void on_indicator_filter(const QString& text);
 
     // Left sidebar
-    QComboBox*   category_combo_    = nullptr;
-    QLineEdit*   indicator_search_  = nullptr;
-    QListWidget* indicator_list_    = nullptr;
+    QComboBox* category_combo_ = nullptr;
+    QLineEdit* indicator_search_ = nullptr;
+    QListWidget* indicator_list_ = nullptr;
 
     // Toolbar controls
-    QLineEdit*   start_input_       = nullptr;
-    QLineEdit*   end_input_         = nullptr;
-    QComboBox*   freq_combo_        = nullptr;
+    QLineEdit* start_input_ = nullptr;
+    QLineEdit* end_input_ = nullptr;
+    QComboBox* freq_combo_ = nullptr;
 
-    struct IndicatorDef { QString name; QString id; QString unit; };
+    struct IndicatorDef {
+        QString name;
+        QString id;
+        QString unit;
+    };
     QList<IndicatorDef> current_indicators_;
 };
 

@@ -22,9 +22,9 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kFredAnalyticsScript   = "fred_economic_data.py";
+static constexpr const char* kFredAnalyticsScript = "fred_economic_data.py";
 static constexpr const char* kFredAnalyticsSourceId = "fred_analytics";
-static constexpr const char* kFredAnalyticsColor    = "#F97316";  // orange (distinct from FredPanel red)
+static constexpr const char* kFredAnalyticsColor = "#F97316"; // orange (distinct from FredPanel red)
 } // namespace
 
 struct FredAnalDataset {
@@ -34,23 +34,22 @@ struct FredAnalDataset {
 };
 
 static const QList<FredAnalDataset> kFredAnalDatasets = {
-    { "Yield Curve (Treasury Rates)",   "yield_curve",   {}              },
-    { "M1 Money Supply",                "money_supply",  {"m1"}          },
-    { "M2 Money Supply",                "money_supply",  {"m2"}          },
-    { "M3 Money Supply",                "money_supply",  {"m3"}          },
-    { "Fed Funds Rate (Credit)",        "credit",        {"fed_funds_rate"}  },
-    { "Prime Rate (Credit)",            "credit",        {"prime_rate"}       },
-    { "Financial Stress Index",         "stress",        {}              },
-    { "Consumer Sentiment",             "sentiment",     {}              },
-    { "PCE Price Index",                "pce",           {}              },
+    {"Yield Curve (Treasury Rates)", "yield_curve", {}},
+    {"M1 Money Supply", "money_supply", {"m1"}},
+    {"M2 Money Supply", "money_supply", {"m2"}},
+    {"M3 Money Supply", "money_supply", {"m3"}},
+    {"Fed Funds Rate (Credit)", "credit", {"fed_funds_rate"}},
+    {"Prime Rate (Credit)", "credit", {"prime_rate"}},
+    {"Financial Stress Index", "stress", {}},
+    {"Consumer Sentiment", "sentiment", {}},
+    {"PCE Price Index", "pce", {}},
 };
 
 FredAnalyticsPanel::FredAnalyticsPanel(QWidget* parent)
     : EconPanelBase(kFredAnalyticsSourceId, kFredAnalyticsColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &FredAnalyticsPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &FredAnalyticsPanel::on_result);
 }
 
 void FredAnalyticsPanel::activate() {
@@ -73,39 +72,41 @@ void FredAnalyticsPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void FredAnalyticsPanel::on_fetch() {
-    const int   idx     = dataset_combo_->currentIndex();
+    const int idx = dataset_combo_->currentIndex();
     const auto& dataset = kFredAnalDatasets[idx];
 
     show_loading("Fetching FRED Analytics: " + dataset.label + "…");
 
-    QStringList args = { dataset.command };
+    QStringList args = {dataset.command};
     args << dataset.args;
 
     const QString arg_suffix = dataset.args.isEmpty() ? "" : "_" + dataset.args.join("_");
-    services::EconomicsService::instance().execute(
-        kFredAnalyticsSourceId, kFredAnalyticsScript, dataset.command, args,
-        "fredan_" + dataset.command + arg_suffix);
+    services::EconomicsService::instance().execute(kFredAnalyticsSourceId, kFredAnalyticsScript, dataset.command, args,
+                                                   "fredan_" + dataset.command + arg_suffix);
 }
 
 // Extract rows from various FRED Analytics response shapes.
 static QJsonArray extract_fred_analytics_rows(const QJsonObject& data) {
     // Standard observations array
     QJsonArray obs = data["observations"].toArray();
-    if (!obs.isEmpty()) return obs;
+    if (!obs.isEmpty())
+        return obs;
 
     // Yield curve: {curve:[{maturity, yield, date}]}
     obs = data["curve"].toArray();
-    if (!obs.isEmpty()) return obs;
+    if (!obs.isEmpty())
+        return obs;
 
     // Fallback service normalisation
     obs = data["data"].toArray();
     return obs;
 }
 
-void FredAnalyticsPanel::on_result(const QString& request_id,
-                                    const services::EconomicsResult& result) {
-    if (result.source_id != kFredAnalyticsSourceId) return;
-    if (!request_id.startsWith("fredan_")) return;
+void FredAnalyticsPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kFredAnalyticsSourceId)
+        return;
+    if (!request_id.startsWith("fredan_"))
+        return;
 
     if (!result.success) {
         const QString msg = result.error;
@@ -138,7 +139,8 @@ void FredAnalyticsPanel::on_result(const QString& request_id,
     for (const auto& rv : raw) {
         const QJsonObject r = rv.toObject();
         const QString val_str = r["value"].toString();
-        if (val_str == "." || (val_str.isEmpty() && !r["value"].isDouble())) continue;
+        if (val_str == "." || (val_str.isEmpty() && !r["value"].isDouble()))
+            continue;
         rows.append(r);
     }
 
@@ -148,12 +150,12 @@ void FredAnalyticsPanel::on_result(const QString& request_id,
     }
 
     const int idx = dataset_combo_->currentIndex();
-    const QString title = "FRED Analytics: "
-        + (idx >= 0 && idx < kFredAnalDatasets.size() ? kFredAnalDatasets[idx].label : request_id.mid(7));
+    const QString title =
+        "FRED Analytics: " +
+        (idx >= 0 && idx < kFredAnalDatasets.size() ? kFredAnalDatasets[idx].label : request_id.mid(7));
 
     display(rows, title);
-    LOG_INFO("FredAnalyticsPanel", QString("Displayed %1 rows: %2")
-                                       .arg(rows.size()).arg(title));
+    LOG_INFO("FredAnalyticsPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }
 
 } // namespace fincept::screens

@@ -12,14 +12,14 @@ namespace fincept::services {
 
 /// Lightweight record describing one managed file.
 struct ManagedFile {
-    QString id;           // timestamp_uuid8
-    QString name;         // stored filename (id + ext)
+    QString id;   // timestamp_uuid8
+    QString name; // stored filename (id + ext)
     QString original_name;
-    qint64  size = 0;
+    qint64 size = 0;
     QString mime_type;
-    QString uploaded_at;  // ISO-8601 UTC
-    QString path;         // relative: "fincept-files/<name>"
-    QString source_screen;// e.g. "report_builder", "code_editor", ""
+    QString uploaded_at;   // ISO-8601 UTC
+    QString path;          // relative: "fincept-files/<name>"
+    QString source_screen; // e.g. "report_builder", "code_editor", ""
 };
 
 class FileManagerService : public QObject {
@@ -29,10 +29,10 @@ class FileManagerService : public QObject {
     static FileManagerService& instance();
 
     // ── Query ────────────────────────────────────────────────────────────
-    QJsonArray  all_files() const;
+    QJsonArray all_files() const;
     ManagedFile find_by_id(const QString& id) const;
-    QJsonArray  files_for_screen(const QString& screen) const;
-    QJsonArray  files_by_mime(const QString& mime_fragment) const;
+    QJsonArray files_for_screen(const QString& screen) const;
+    QJsonArray files_by_mime(const QString& mime_fragment) const;
 
     // ── Mutations ────────────────────────────────────────────────────────
     /// Copy an external file into managed storage; returns the new file id.
@@ -41,14 +41,13 @@ class FileManagerService : public QObject {
 
     /// Register a file that already lives inside storage_dir() by its stored name.
     /// Used when a screen writes directly to storage_dir() itself.
-    QString register_file(const QString& stored_name, const QString& original_name,
-                          qint64 size, const QString& mime_type,
-                          const QString& source_screen = {});
+    QString register_file(const QString& stored_name, const QString& original_name, qint64 size,
+                          const QString& mime_type, const QString& source_screen = {});
 
-    bool    remove_file(const QString& id);
+    bool remove_file(const QString& id);
 
     // ── Paths ────────────────────────────────────────────────────────────
-    QString storage_dir()    const;
+    QString storage_dir() const;
     QString full_path(const QString& stored_name) const;
 
   signals:
@@ -59,13 +58,13 @@ class FileManagerService : public QObject {
   private:
     explicit FileManagerService(QObject* parent = nullptr);
 
-    QString     metadata_path() const;
-    QJsonArray  read_metadata() const;
-    void        write_metadata(const QJsonArray& files) const;
+    QString metadata_path() const;
+    QJsonArray read_metadata() const;
+    void write_metadata(const QJsonArray& files) const;
     QJsonObject to_json(const ManagedFile& f) const;
     ManagedFile from_json(const QJsonObject& obj) const;
 
-    QJsonArray files_cache_;  // in-memory copy, kept in sync with disk
+    QJsonArray files_cache_; // in-memory copy, kept in sync with disk
 };
 
 } // namespace fincept::services

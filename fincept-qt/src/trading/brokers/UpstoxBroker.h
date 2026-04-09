@@ -11,23 +11,33 @@ class UpstoxBroker : public IBroker {
 
     BrokerProfile profile() const override {
         return BrokerProfile{
-            .id = "upstox", .display_name = "Upstox", .region = "IN", .currency = "INR",
-            .credential_fields = {
-                {CredentialField::ApiKey,    "API KEY",    "Enter API Key...",   false},
-                {CredentialField::ApiSecret, "API SECRET", "Enter API Secret...",true},
-                {CredentialField::AuthCode,  "AUTH CODE",  "Paste auth code...", false},
-            },
-            .exchanges = {"NSE","BSE","NFO","NCDEX"},
-            .product_types = {
-                {"Intraday (I)",  ProductType::Intraday},
-                {"Delivery (D)",  ProductType::Delivery},
-                {"Margin (MTF)",  ProductType::Margin},
-            },
-            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
-            .has_native_paper=false, .default_paper_balance=1000000.0,
-            .default_watchlist={"HDFCBANK","ICICIBANK","SBIN","TCS","INFY","RELIANCE","TATAMOTORS","BAJFINANCE","HINDUNILVR","ITC"},
-            .default_symbol="RELIANCE", .default_exchange="NSE",
-            .brokerage_info="\u20B920/order flat",
+            .id = "upstox",
+            .display_name = "Upstox",
+            .region = "IN",
+            .currency = "INR",
+            .credential_fields =
+                {
+                    {CredentialField::ApiKey, "API KEY", "Enter API Key...", false},
+                    {CredentialField::ApiSecret, "API SECRET", "Enter API Secret...", true},
+                    {CredentialField::AuthCode, "AUTH CODE", "Paste auth code...", false},
+                },
+            .exchanges = {"NSE", "BSE", "NFO", "NCDEX"},
+            .product_types =
+                {
+                    {"Intraday (I)", ProductType::Intraday},
+                    {"Delivery (D)", ProductType::Delivery},
+                    {"Margin (MTF)", ProductType::Margin},
+                },
+            .supports_intraday = true,
+            .supports_bracket_order = false,
+            .supports_cover_order = false,
+            .has_native_paper = false,
+            .default_paper_balance = 1000000.0,
+            .default_watchlist = {"HDFCBANK", "ICICIBANK", "SBIN", "TCS", "INFY", "RELIANCE", "TATAMOTORS",
+                                  "BAJFINANCE", "HINDUNILVR", "ITC"},
+            .default_symbol = "RELIANCE",
+            .default_exchange = "NSE",
+            .brokerage_info = "\u20B920/order flat",
         };
     }
 

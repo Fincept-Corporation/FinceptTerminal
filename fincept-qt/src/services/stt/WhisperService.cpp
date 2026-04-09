@@ -9,6 +9,7 @@
 // All Qt widget / signal interactions happen exclusively on the UI thread.
 
 #include "services/stt/WhisperService.h"
+
 #include "core/logging/Logger.h"
 #include "python/PythonSetupManager.h"
 
@@ -70,10 +71,11 @@ WhisperService::~WhisperService() {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 void WhisperService::start_listening() {
-    if (listening_.load(std::memory_order_relaxed)) return;
+    if (listening_.load(std::memory_order_relaxed))
+        return;
 
     if (!model_loaded_.load(std::memory_order_relaxed)) {
-        ensure_model();   // async — will call start_listening() again via model_ready
+        ensure_model(); // async — will call start_listening() again via model_ready
         return;
     }
 
@@ -81,7 +83,8 @@ void WhisperService::start_listening() {
 }
 
 void WhisperService::stop_listening() {
-    if (!listening_.load(std::memory_order_relaxed)) return;
+    if (!listening_.load(std::memory_order_relaxed))
+        return;
     close_audio_device();
 }
 
@@ -96,8 +99,7 @@ bool WhisperService::is_model_ready() const noexcept {
 QString WhisperService::model_path() const {
     // Co-locate with all other Fincept data under com.fincept.terminal/models/
     // to keep the install footprint in one place.
-    const QString dir = python::PythonSetupManager::instance().install_dir()
-                        + QStringLiteral("/models");
+    const QString dir = python::PythonSetupManager::instance().install_dir() + QStringLiteral("/models");
     return dir + u'/' + kModelFilename;
 }
 
@@ -120,7 +122,8 @@ void WhisperService::download_for_setup() {
 // ── Model management ──────────────────────────────────────────────────────────
 
 void WhisperService::ensure_model() {
-    if (model_loaded_.load(std::memory_order_relaxed)) return;
+    if (model_loaded_.load(std::memory_order_relaxed))
+        return;
 
     const QString path = model_path();
     if (QFile::exists(path)) {
@@ -138,26 +141,22 @@ void WhisperService::ensure_model() {
 }
 
 void WhisperService::download_model() {
-    const QString dir = python::PythonSetupManager::instance().install_dir()
-                        + QStringLiteral("/models");
+    const QString dir = python::PythonSetupManager::instance().install_dir() + QStringLiteral("/models");
     QDir().mkpath(dir);
 
     QNetworkRequest req{QUrl{QString::fromUtf8(kModelUrl)}};
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                     QNetworkRequest::NoLessSafeRedirectPolicy);
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
 
     auto* reply = nam_->get(req);
 
-    connect(reply, &QNetworkReply::downloadProgress, this,
-            [this](qint64 received, qint64 total) {
-                if (total > 0) {
-                    const int pct = static_cast<int>(received * 100 / total);
-                    emit model_download_progress(pct);
-                }
-            });
+    connect(reply, &QNetworkReply::downloadProgress, this, [this](qint64 received, qint64 total) {
+        if (total > 0) {
+            const int pct = static_cast<int>(received * 100 / total);
+            emit model_download_progress(pct);
+        }
+    });
 
-    connect(reply, &QNetworkReply::finished, this,
-            [this, reply]() { on_download_finished(reply); });
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() { on_download_finished(reply); });
 }
 
 void WhisperService::on_download_finished(QNetworkReply* reply) {
@@ -171,12 +170,15 @@ void WhisperService::on_download_finished(QNetworkReply* reply) {
             // Exponential backoff: 2s, 4s, 8s
             const int delay_ms = kRetryBaseMs * (1 << (download_attempt_ - 1));
             LOG_WARN(TAG, QString("Model download failed (attempt %1/%2): %3 — retrying in %4 ms")
-                             .arg(download_attempt_).arg(kMaxDownloadRetries).arg(net_err).arg(delay_ms));
+                              .arg(download_attempt_)
+                              .arg(kMaxDownloadRetries)
+                              .arg(net_err)
+                              .arg(delay_ms));
             emit model_download_progress(0); // reset progress bar
             retry_timer_->start(delay_ms);
         } else {
-            const QString msg = QString("Model download failed after %1 attempts: %2")
-                                    .arg(kMaxDownloadRetries).arg(net_err);
+            const QString msg =
+                QString("Model download failed after %1 attempts: %2").arg(kMaxDownloadRetries).arg(net_err);
             LOG_ERROR(TAG, msg);
             download_attempt_ = 0;
             download_active_.store(false, std::memory_order_release);
@@ -229,12 +231,12 @@ bool WhisperService::load_model() {
     LOG_INFO(TAG, QString("Loading whisper model: %1").arg(path));
 
     whisper_context_params cparams = whisper_context_default_params();
-    cparams.use_gpu = false;   // CPU-only — Vulkan opt-in left for future work
+    cparams.use_gpu = false; // CPU-only — Vulkan opt-in left for future work
 
     ctx_ = whisper_init_from_file_with_params(path.toUtf8().constData(), cparams);
     if (!ctx_) {
-        const QString msg = QStringLiteral("whisper_init_from_file_with_params() failed — ")
-                            + QStringLiteral("model file may be corrupt: ") + path;
+        const QString msg = QStringLiteral("whisper_init_from_file_with_params() failed — ") +
+                            QStringLiteral("model file may be corrupt: ") + path;
         LOG_ERROR(TAG, msg);
         emit error_occurred(msg);
         return false;
@@ -297,9 +299,11 @@ void WhisperService::open_audio_device() {
 
     const bool is_float = (fmt.sampleFormat() == QAudioFormat::Float);
     connect(read_timer, &QTimer::timeout, this, [this, io, is_float]() {
-        if (!io || !audio_source_) return;
+        if (!io || !audio_source_)
+            return;
         const QByteArray data = io->readAll();
-        if (data.isEmpty()) return;
+        if (data.isEmpty())
+            return;
 
         if (is_float) {
             const auto* samples = reinterpret_cast<const float*>(data.constData());
@@ -354,13 +358,12 @@ void WhisperService::close_audio_device() {
 
 void WhisperService::append_samples(const float* data, qsizetype frames) {
     // Best-effort lock — never block the timer callback.
-    if (!ring_mutex_.tryLock()) return;
+    if (!ring_mutex_.tryLock())
+        return;
     const std::size_t n = static_cast<std::size_t>(frames);
     // Clamp ring buffer to avoid unbounded growth if inference falls behind.
     if (ring_buffer_.size() + n > static_cast<std::size_t>(kMaxWindowSamples * 2))
-        ring_buffer_.erase(ring_buffer_.begin(),
-                           ring_buffer_.begin() +
-                           static_cast<std::ptrdiff_t>(n));
+        ring_buffer_.erase(ring_buffer_.begin(), ring_buffer_.begin() + static_cast<std::ptrdiff_t>(n));
     ring_buffer_.insert(ring_buffer_.end(), data, data + n);
     ring_mutex_.unlock();
 }
@@ -375,39 +378,38 @@ std::vector<float> WhisperService::drain_samples() {
 // ── VAD helper ────────────────────────────────────────────────────────────────
 // Returns true if the tail of the buffer contains speech above the RMS threshold.
 static bool has_speech(const std::vector<float>& buf, int tail_samples, float threshold) {
-    if (buf.empty()) return false;
-    const auto n = static_cast<std::ptrdiff_t>(
-        std::min(static_cast<std::size_t>(tail_samples), buf.size()));
+    if (buf.empty())
+        return false;
+    const auto n = static_cast<std::ptrdiff_t>(std::min(static_cast<std::size_t>(tail_samples), buf.size()));
     const float* begin = buf.data() + static_cast<std::ptrdiff_t>(buf.size()) - n;
-    const float rms = std::sqrt(
-        std::inner_product(begin, begin + n, begin, 0.0f) / static_cast<float>(n));
+    const float rms = std::sqrt(std::inner_product(begin, begin + n, begin, 0.0f) / static_cast<float>(n));
     return rms > threshold;
 }
 
 // ── Inference dispatch ────────────────────────────────────────────────────────
 
 void WhisperService::drain_and_infer() {
-    if (!model_loaded_.load(std::memory_order_relaxed)) return;
-    if (inference_busy_.load(std::memory_order_relaxed)) return;
+    if (!model_loaded_.load(std::memory_order_relaxed))
+        return;
+    if (inference_busy_.load(std::memory_order_relaxed))
+        return;
 
     auto new_samples = drain_samples();
-    if (new_samples.empty()) return;
+    if (new_samples.empty())
+        return;
 
     // Append new audio to the sliding window.
-    window_buffer_.insert(window_buffer_.end(),
-                          new_samples.begin(), new_samples.end());
+    window_buffer_.insert(window_buffer_.end(), new_samples.begin(), new_samples.end());
 
     // Trim window to kMaxWindowSamples (keep most recent).
     if (window_buffer_.size() > static_cast<std::size_t>(kMaxWindowSamples)) {
-        const std::size_t excess = window_buffer_.size()
-                                   - static_cast<std::size_t>(kMaxWindowSamples);
-        window_buffer_.erase(window_buffer_.begin(),
-                             window_buffer_.begin() +
-                             static_cast<std::ptrdiff_t>(excess));
+        const std::size_t excess = window_buffer_.size() - static_cast<std::size_t>(kMaxWindowSamples);
+        window_buffer_.erase(window_buffer_.begin(), window_buffer_.begin() + static_cast<std::ptrdiff_t>(excess));
     }
 
     // VAD gate — only infer if there is actual speech in the window tail.
-    if (!has_speech(window_buffer_, kVadTailSamples, kVadThreshold)) return;
+    if (!has_speech(window_buffer_, kVadTailSamples, kVadThreshold))
+        return;
 
     // Take a snapshot for the worker thread — do NOT pass pointers to members.
     std::vector<float> snapshot = window_buffer_;
@@ -416,7 +418,8 @@ void WhisperService::drain_and_infer() {
 
     QPointer<WhisperService> self = this;
     QtConcurrent::run([self, snapshot = std::move(snapshot)]() mutable {
-        if (!self) return;
+        if (!self)
+            return;
         self->run_inference(std::move(snapshot));
     });
 }
@@ -427,23 +430,19 @@ void WhisperService::run_inference(std::vector<float> samples) {
     // all UI interaction goes via QMetaObject::invokeMethod.
 
     whisper_full_params wparams = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
-    wparams.n_threads        = kInferenceThreads;
-    wparams.single_segment   = false;
-    wparams.print_realtime   = false;
-    wparams.print_progress   = false;
+    wparams.n_threads = kInferenceThreads;
+    wparams.single_segment = false;
+    wparams.print_realtime = false;
+    wparams.print_progress = false;
     wparams.print_timestamps = false;
-    wparams.print_special    = false;
-    wparams.translate        = false;
-    wparams.language         = "en";
+    wparams.print_special = false;
+    wparams.translate = false;
+    wparams.language = "en";
     // Reduce audio context from 1500 (30 s) to 256 (~5 s) for lower latency.
-    wparams.audio_ctx        = 256;
-    wparams.no_context       = false;  // keep prior context for continuity
+    wparams.audio_ctx = 256;
+    wparams.no_context = false; // keep prior context for continuity
 
-    const int rc = whisper_full(
-        ctx_,
-        wparams,
-        samples.data(),
-        static_cast<int>(samples.size()));
+    const int rc = whisper_full(ctx_, wparams, samples.data(), static_cast<int>(samples.size()));
 
     inference_busy_.store(false, std::memory_order_release);
 
@@ -457,7 +456,8 @@ void WhisperService::run_inference(std::vector<float> samples) {
     const int n_seg = whisper_full_n_segments(ctx_);
     for (int i = 0; i < n_seg; ++i) {
         const char* seg_text = whisper_full_get_segment_text(ctx_, i);
-        if (seg_text) text += QString::fromUtf8(seg_text);
+        if (seg_text)
+            text += QString::fromUtf8(seg_text);
     }
 
     text = text.trimmed();
@@ -482,14 +482,19 @@ void WhisperService::run_inference(std::vector<float> samples) {
         }
     }
 
-    if (text.isEmpty()) return;
+    if (text.isEmpty())
+        return;
 
     LOG_DEBUG(TAG, QString("Transcript: \"%1\"").arg(text));
 
     QPointer<WhisperService> self = this;
-    QMetaObject::invokeMethod(self, [self, text]() {
-        if (self) emit self->transcription_ready(text);
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(
+        self,
+        [self, text]() {
+            if (self)
+                emit self->transcription_ready(text);
+        },
+        Qt::QueuedConnection);
 }
 
 } // namespace fincept::services

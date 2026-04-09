@@ -29,12 +29,12 @@ class CandleCanvas : public QWidget {
 
     QVector<trading::BrokerCandle> candles_;
     QPixmap cache_;
-    bool    dirty_ = true;
+    bool dirty_ = true;
 
     static constexpr int MAX_VISIBLE = 120;
-    static constexpr int PRICE_AXIS_W = 70;  // pixels reserved for price labels on right
-    static constexpr int TIME_AXIS_H  = 20;  // pixels reserved for time labels at bottom
-    static constexpr int LABEL_STEP   = 20;  // draw a time label every N candles
+    static constexpr int PRICE_AXIS_W = 70; // pixels reserved for price labels on right
+    static constexpr int TIME_AXIS_H = 20;  // pixels reserved for time labels at bottom
+    static constexpr int LABEL_STEP = 20;   // draw a time label every N candles
 };
 
 // ── EquityChart: header + canvas ─────────────────────────────────────────────
@@ -54,9 +54,9 @@ class EquityChart : public QWidget {
   private:
     void set_active_tf(int idx);
 
-    CandleCanvas* canvas_      = nullptr;
-    QPushButton*  tf_buttons_[6] = {};
-    int           active_tf_   = 2; // default "15m"
+    CandleCanvas* canvas_ = nullptr;
+    QPushButton* tf_buttons_[6] = {};
+    int active_tf_ = 2; // default "15m"
 
     static constexpr const char* TF_LABELS[] = {"1m", "5m", "15m", "1h", "1d", "1w"};
 };

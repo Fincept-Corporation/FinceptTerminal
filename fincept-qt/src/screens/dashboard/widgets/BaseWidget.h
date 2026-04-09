@@ -1,5 +1,6 @@
 #pragma once
 #include "ui/theme/ThemeTokens.h"
+
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>

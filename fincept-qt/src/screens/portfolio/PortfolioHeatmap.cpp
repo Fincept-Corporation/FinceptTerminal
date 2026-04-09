@@ -73,16 +73,17 @@ void PortfolioHeatmap::build_ui() {
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setStyleSheet(QString("QScrollArea { border:none; background:transparent; }"
-                          "QScrollBar:vertical { width:4px; background:transparent; }"
-                          "QScrollBar::handle:vertical { background:%1; }").arg(ui::colors::BORDER_BRIGHT));
+                                  "QScrollBar:vertical { width:4px; background:transparent; }"
+                                  "QScrollBar::handle:vertical { background:%1; }")
+                              .arg(ui::colors::BORDER_BRIGHT));
 
-    blocks_container_ = new QWidget;
+    blocks_container_ = new QWidget(this);
     blocks_container_->setStyleSheet("background:transparent;");
     scroll->setWidget(blocks_container_);
     layout->addWidget(scroll, 1);
 
     // Selected holding detail
-    detail_panel_ = new QWidget;
+    detail_panel_ = new QWidget(this);
     detail_panel_->setStyleSheet(
         QString("background:%1; border:1px solid %2; padding:4px;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     detail_panel_->setVisible(false);
@@ -124,7 +125,7 @@ void PortfolioHeatmap::build_ui() {
         QString("color:%1; font-size:8px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY));
     layout->addWidget(risk_header);
 
-    risk_bar_ = new QWidget;
+    risk_bar_ = new QWidget(this);
     risk_bar_->setFixedHeight(10);
     risk_bar_->setStyleSheet(QString("background:%1; border-radius:2px;").arg(ui::colors::BG_BASE));
     layout->addWidget(risk_bar_);
@@ -212,8 +213,8 @@ QColor PortfolioHeatmap::block_color(const portfolio::HoldingWithQuote& h) const
     if (mode_ == portfolio::HeatmapMode::Weight) {
         // Amber: darker base, brighter at higher weights
         double t = std::min(val / 40.0, 1.0);
-        int r = static_cast<int>(100 + t * 117);  // 100 → 217
-        int g = static_cast<int>(50  + t * 69);   // 50  → 119
+        int r = static_cast<int>(100 + t * 117); // 100 → 217
+        int g = static_cast<int>(50 + t * 69);   // 50  → 119
         int b = static_cast<int>(6);
         return QColor(r, g, b);
     }
@@ -222,7 +223,7 @@ QColor PortfolioHeatmap::block_color(const portfolio::HoldingWithQuote& h) const
     double intensity = std::min(std::abs(val) / 20.0, 1.0); // saturates at ±20%
     if (val >= 0) {
         // Dark green → bright green
-        int g = static_cast<int>(80 + intensity * 123);  // 80 → 203
+        int g = static_cast<int>(80 + intensity * 123); // 80 → 203
         int r = static_cast<int>(intensity * 22);
         return QColor(r, g, static_cast<int>(intensity * 30));
     } else {

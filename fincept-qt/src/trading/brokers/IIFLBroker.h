@@ -11,22 +11,32 @@ class IIFLBroker : public IBroker {
 
     BrokerProfile profile() const override {
         return BrokerProfile{
-            .id = "iifl", .display_name = "IIFL", .region = "IN", .currency = "INR",
-            .credential_fields = {
-                {CredentialField::ApiKey,    "APP KEY",    "Enter App Key...",    false},
-                {CredentialField::ApiSecret, "APP SECRET", "Enter App Secret...", true},
-            },
-            .exchanges = {"NSE","BSE"},
-            .product_types = {
-                {"Intraday (MIS)", ProductType::Intraday},
-                {"Delivery (CNC)",ProductType::Delivery},
-                {"Margin (NRML)", ProductType::Margin},
-            },
-            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
-            .has_native_paper=false, .default_paper_balance=1000000.0,
-            .default_watchlist={"HDFCBANK","ICICIBANK","SBIN","TCS","INFY","RELIANCE","TATAMOTORS","BAJFINANCE","HINDUNILVR","ITC"},
-            .default_symbol="RELIANCE", .default_exchange="NSE",
-            .brokerage_info="\u20B920/order flat",
+            .id = "iifl",
+            .display_name = "IIFL",
+            .region = "IN",
+            .currency = "INR",
+            .credential_fields =
+                {
+                    {CredentialField::ApiKey, "APP KEY", "Enter App Key...", false},
+                    {CredentialField::ApiSecret, "APP SECRET", "Enter App Secret...", true},
+                },
+            .exchanges = {"NSE", "BSE"},
+            .product_types =
+                {
+                    {"Intraday (MIS)", ProductType::Intraday},
+                    {"Delivery (CNC)", ProductType::Delivery},
+                    {"Margin (NRML)", ProductType::Margin},
+                },
+            .supports_intraday = true,
+            .supports_bracket_order = false,
+            .supports_cover_order = false,
+            .has_native_paper = false,
+            .default_paper_balance = 1000000.0,
+            .default_watchlist = {"HDFCBANK", "ICICIBANK", "SBIN", "TCS", "INFY", "RELIANCE", "TATAMOTORS",
+                                  "BAJFINANCE", "HINDUNILVR", "ITC"},
+            .default_symbol = "RELIANCE",
+            .default_exchange = "NSE",
+            .brokerage_info = "\u20B920/order flat",
         };
     }
 

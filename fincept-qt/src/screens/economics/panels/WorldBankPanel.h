@@ -20,23 +20,22 @@ class WorldBankPanel : public EconPanelBase {
   protected:
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
-    void on_result(const QString& request_id,
-                   const services::EconomicsResult& result) override;
+    void on_result(const QString& request_id, const services::EconomicsResult& result) override;
 
   private:
     void load_countries();
     void on_country_filter(const QString& text);
     void on_indicator_filter(const QString& text);
 
-    QLineEdit*   country_search_    = nullptr;
-    QListWidget* country_list_      = nullptr;
-    QLineEdit*   indicator_search_  = nullptr;
-    QListWidget* indicator_list_    = nullptr;
-    QComboBox*   date_preset_       = nullptr;
+    QLineEdit* country_search_ = nullptr;
+    QListWidget* country_list_ = nullptr;
+    QLineEdit* indicator_search_ = nullptr;
+    QListWidget* indicator_list_ = nullptr;
+    QComboBox* date_preset_ = nullptr;
 
-    QString selected_country_    = "US";
+    QString selected_country_ = "US";
     QString selected_indicator_;
-    bool    countries_loaded_    = false;
+    bool countries_loaded_ = false;
 };
 
 } // namespace fincept::screens

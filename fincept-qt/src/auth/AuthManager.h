@@ -2,6 +2,7 @@
 #include "auth/AuthTypes.h"
 
 #include <QObject>
+
 #include <functional>
 
 namespace fincept::auth {

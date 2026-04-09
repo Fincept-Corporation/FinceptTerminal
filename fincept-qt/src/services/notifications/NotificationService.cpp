@@ -4,21 +4,21 @@
 #include "storage/repositories/SettingsRepository.h"
 
 // Provider includes
-#include "services/notifications/providers/TelegramProvider.h"
 #include "services/notifications/providers/DiscordProvider.h"
-#include "services/notifications/providers/SlackProvider.h"
 #include "services/notifications/providers/EmailProvider.h"
-#include "services/notifications/providers/WhatsAppProvider.h"
-#include "services/notifications/providers/PushoverProvider.h"
-#include "services/notifications/providers/NtfyProvider.h"
-#include "services/notifications/providers/PushbulletProvider.h"
 #include "services/notifications/providers/GotifyProvider.h"
 #include "services/notifications/providers/MattermostProvider.h"
-#include "services/notifications/providers/TeamsProvider.h"
-#include "services/notifications/providers/WebhookProvider.h"
-#include "services/notifications/providers/PagerDutyProvider.h"
+#include "services/notifications/providers/NtfyProvider.h"
 #include "services/notifications/providers/OpsgenieProvider.h"
+#include "services/notifications/providers/PagerDutyProvider.h"
+#include "services/notifications/providers/PushbulletProvider.h"
+#include "services/notifications/providers/PushoverProvider.h"
 #include "services/notifications/providers/SMSProvider.h"
+#include "services/notifications/providers/SlackProvider.h"
+#include "services/notifications/providers/TeamsProvider.h"
+#include "services/notifications/providers/TelegramProvider.h"
+#include "services/notifications/providers/WebhookProvider.h"
+#include "services/notifications/providers/WhatsAppProvider.h"
 
 #include <algorithm>
 
@@ -70,18 +70,26 @@ void NotificationService::send(const NotificationRequest& req) {
     };
 
     // Check trigger-level filter (in-app always on unless globally disabled)
-    const bool inapp_on   = get_bool("notifications.inapp",        true);
-    const bool price_on   = get_bool("notifications.price_alerts", true);
-    const bool orders_on  = get_bool("notifications.order_fills",  true);
-    const bool news_on    = get_bool("notifications.news_alerts",  false);
+    const bool inapp_on = get_bool("notifications.inapp", true);
+    const bool price_on = get_bool("notifications.price_alerts", true);
+    const bool orders_on = get_bool("notifications.order_fills", true);
+    const bool news_on = get_bool("notifications.news_alerts", false);
 
     bool trigger_allowed = true;
     switch (req.trigger) {
-        case NotifTrigger::PriceAlert:   trigger_allowed = price_on;  break;
-        case NotifTrigger::OrderFill:    trigger_allowed = orders_on; break;
-        case NotifTrigger::NewsAlert:    trigger_allowed = news_on;   break;
+        case NotifTrigger::PriceAlert:
+            trigger_allowed = price_on;
+            break;
+        case NotifTrigger::OrderFill:
+            trigger_allowed = orders_on;
+            break;
+        case NotifTrigger::NewsAlert:
+            trigger_allowed = news_on;
+            break;
         case NotifTrigger::Manual:
-        case NotifTrigger::WorkflowNode: trigger_allowed = true;      break;
+        case NotifTrigger::WorkflowNode:
+            trigger_allowed = true;
+            break;
     }
 
     if (!trigger_allowed) {
@@ -92,9 +100,9 @@ void NotificationService::send(const NotificationRequest& req) {
 
     // Always record in-app history
     NotificationRecord record;
-    record.id          = next_id_++;
-    record.request     = req;
-    record.read        = false;
+    record.id = next_id_++;
+    record.request = req;
+    record.read = false;
     record.received_at = QDateTime::currentDateTime();
     history_.prepend(record);
     if (history_.size() > 200)
@@ -113,8 +121,7 @@ void NotificationService::send(const NotificationRequest& req) {
         const QString pid = p->provider_id();
         p->send(req, [pid](bool ok, const QString& err) {
             if (ok) {
-                LOG_INFO("NotificationService",
-                         QString("Delivered via %1").arg(pid).toStdString().c_str());
+                LOG_INFO("NotificationService", QString("Delivered via %1").arg(pid).toStdString().c_str());
             } else {
                 LOG_WARN("NotificationService",
                          QString("Delivery failed via %1: %2").arg(pid, err).toStdString().c_str());
@@ -123,8 +130,7 @@ void NotificationService::send(const NotificationRequest& req) {
     }
 }
 
-void NotificationService::send_to(const QString& provider_id,
-                                  const NotificationRequest& req,
+void NotificationService::send_to(const QString& provider_id, const NotificationRequest& req,
                                   std::function<void(bool, QString)> cb) {
     auto* p = provider(provider_id);
     if (!p) {
@@ -149,7 +155,8 @@ void NotificationService::mark_read(int id) {
         if (r.id == id && !r.read) {
             r.read = true;
             --unread_;
-            if (unread_ < 0) unread_ = 0;
+            if (unread_ < 0)
+                unread_ = 0;
             emit unread_count_changed(unread_);
             return;
         }

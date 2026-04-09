@@ -181,8 +181,7 @@ QWidget* StrategyListPanel::build_strategy_card(const AlgoStrategy& s, QWidget* 
                 "QComboBox::drop-down { border: none; }"
                 "QComboBox QAbstractItemView { background: %1; color: %2; border: 1px solid %3;"
                 " selection-background-color: %6; %5 }")
-            .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::TEXT_PRIMARY,
-                 fincept::ui::colors::BORDER_DIM)
+            .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::TEXT_PRIMARY, fincept::ui::colors::BORDER_DIM)
             .arg(fincept::ui::fonts::SMALL)
             .arg(kMonoFont())
             .arg(fincept::ui::colors::BG_HOVER));
@@ -204,8 +203,7 @@ QWidget* StrategyListPanel::build_strategy_card(const AlgoStrategy& s, QWidget* 
         QString("QDoubleSpinBox { background: %1; color: %2; border: 1px solid %3; padding: 2px 6px;"
                 " font-size: %4px; %5 }"
                 "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 14px; }")
-            .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::TEXT_PRIMARY,
-                 fincept::ui::colors::BORDER_DIM)
+            .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::TEXT_PRIMARY, fincept::ui::colors::BORDER_DIM)
             .arg(fincept::ui::fonts::SMALL)
             .arg(kMonoFont()));
     make_field("QTY", qty_spin);
@@ -213,14 +211,13 @@ QWidget* StrategyListPanel::build_strategy_card(const AlgoStrategy& s, QWidget* 
     auto* confirm_btn = new QPushButton("GO", deploy_form);
     confirm_btn->setCursor(Qt::PointingHandCursor);
     confirm_btn->setFixedSize(48, 26);
-    confirm_btn->setStyleSheet(
-        QString("QPushButton { background: rgba(22,163,74,0.1); color: %1; border: 1px solid %1;"
-                " font-size: %2px; font-weight: 700; %3 }"
-                "QPushButton:hover { background: %1; color: %4; }")
-            .arg(fincept::ui::colors::POSITIVE)
-            .arg(fincept::ui::fonts::TINY)
-            .arg(kMonoFont())
-            .arg(fincept::ui::colors::BG_BASE));
+    confirm_btn->setStyleSheet(QString("QPushButton { background: rgba(22,163,74,0.1); color: %1; border: 1px solid %1;"
+                                       " font-size: %2px; font-weight: 700; %3 }"
+                                       "QPushButton:hover { background: %1; color: %4; }")
+                                   .arg(fincept::ui::colors::POSITIVE)
+                                   .arg(fincept::ui::fonts::TINY)
+                                   .arg(kMonoFont())
+                                   .arg(fincept::ui::colors::BG_BASE));
     connect(confirm_btn, &QPushButton::clicked, card,
             [id = s.id, sym_input, mode_combo, tf_combo, qty_spin, deploy_form]() {
                 QString symbol = sym_input->text().trimmed().toUpper();
@@ -235,14 +232,13 @@ QWidget* StrategyListPanel::build_strategy_card(const AlgoStrategy& s, QWidget* 
     auto* cancel_btn = new QPushButton("✕", deploy_form);
     cancel_btn->setCursor(Qt::PointingHandCursor);
     cancel_btn->setFixedSize(26, 26);
-    cancel_btn->setStyleSheet(
-        QString("QPushButton { background: transparent; color: %1; border: 1px solid %2;"
-                " font-size: %3px; %4 }"
-                "QPushButton:hover { color: %5; border-color: %5; }")
-            .arg(fincept::ui::colors::TEXT_TERTIARY, fincept::ui::colors::BORDER_DIM)
-            .arg(fincept::ui::fonts::TINY)
-            .arg(kMonoFont())
-            .arg(fincept::ui::colors::NEGATIVE));
+    cancel_btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: 1px solid %2;"
+                                      " font-size: %3px; %4 }"
+                                      "QPushButton:hover { color: %5; border-color: %5; }")
+                                  .arg(fincept::ui::colors::TEXT_TERTIARY, fincept::ui::colors::BORDER_DIM)
+                                  .arg(fincept::ui::fonts::TINY)
+                                  .arg(kMonoFont())
+                                  .arg(fincept::ui::colors::NEGATIVE));
     connect(cancel_btn, &QPushButton::clicked, deploy_form, [deploy_form]() { deploy_form->setVisible(false); });
 
     form_hl->addWidget(confirm_btn, 0, Qt::AlignBottom);
@@ -266,9 +262,8 @@ QWidget* StrategyListPanel::build_strategy_card(const AlgoStrategy& s, QWidget* 
                                   .arg(fincept::ui::fonts::TINY)
                                   .arg(kMonoFont())
                                   .arg(fincept::ui::colors::BG_BASE));
-    connect(deploy_btn, &QPushButton::clicked, card, [deploy_form]() {
-        deploy_form->setVisible(!deploy_form->isVisible());
-    });
+    connect(deploy_btn, &QPushButton::clicked, card,
+            [deploy_form]() { deploy_form->setVisible(!deploy_form->isVisible()); });
     actions->addWidget(deploy_btn);
 
     auto* delete_btn = new QPushButton("DELETE", card);
@@ -341,7 +336,7 @@ void StrategyListPanel::build_ui() {
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
                               .arg(fincept::ui::colors::BG_BASE, fincept::ui::colors::BORDER_MED));
 
-    auto* list_widget = new QWidget;
+    auto* list_widget = new QWidget(this);
     list_widget->setStyleSheet(QString("background: %1;").arg(fincept::ui::colors::BG_BASE));
     list_layout_ = new QVBoxLayout(list_widget);
     list_layout_->setContentsMargins(16, 12, 16, 12);

@@ -13,7 +13,7 @@ NewsWidget::NewsWidget(QWidget* parent) : BaseWidget("MARKET NEWS", parent, ui::
     scroll_area_ = new QScrollArea;
     scroll_area_->setWidgetResizable(true);
 
-    auto* container = new QWidget;
+    auto* container = new QWidget(this);
     news_layout_ = new QVBoxLayout(container);
     news_layout_->setContentsMargins(4, 4, 4, 4);
     news_layout_->setSpacing(0);
@@ -30,16 +30,17 @@ NewsWidget::NewsWidget(QWidget* parent) : BaseWidget("MARKET NEWS", parent, ui::
 }
 
 void NewsWidget::apply_styles() {
-    scroll_area_->setStyleSheet(
-        QString("QScrollArea { border: none; background: transparent; }"
-                "QScrollBar:vertical { width: 6px; background: transparent; }"
-                "QScrollBar::handle:vertical { background: %1; border-radius: 3px; }"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-            .arg(ui::colors::BORDER_MED()));
+    scroll_area_->setStyleSheet(QString("QScrollArea { border: none; background: transparent; }"
+                                        "QScrollBar:vertical { width: 6px; background: transparent; }"
+                                        "QScrollBar::handle:vertical { background: %1; border-radius: 3px; }"
+                                        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+                                    .arg(ui::colors::BORDER_MED()));
 }
 
 void NewsWidget::on_theme_changed() {
     apply_styles();
+    if (!last_articles_.isEmpty())
+        populate(last_articles_);
 }
 
 void NewsWidget::refresh_data() {
@@ -59,6 +60,8 @@ void NewsWidget::refresh_data() {
 }
 
 void NewsWidget::populate(const QJsonArray& articles) {
+    last_articles_ = articles;
+
     // Clear old items (keep the stretch)
     while (news_layout_->count() > 1) {
         auto* item = news_layout_->takeAt(0);
@@ -81,8 +84,8 @@ void NewsWidget::populate(const QJsonArray& articles) {
             time_str = pub_date.mid(11, 5); // "HH:MM"
         }
 
-        auto* row = new QWidget;
-        row->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM));
+        auto* row = new QWidget(this);
+        row->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(4, 4, 4, 4);
         rl->setSpacing(8);
@@ -91,20 +94,20 @@ void NewsWidget::populate(const QJsonArray& articles) {
             auto* time_lbl = new QLabel(time_str);
             time_lbl->setFixedWidth(36);
             time_lbl->setStyleSheet(
-                QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::CYAN));
+                QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::CYAN()));
             rl->addWidget(time_lbl);
         }
 
         auto* headline = new QLabel(title);
         headline->setWordWrap(true);
         headline->setStyleSheet(
-            QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::TEXT_PRIMARY));
+            QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::TEXT_PRIMARY()));
         rl->addWidget(headline, 1);
 
         if (!publisher.isEmpty()) {
             auto* src = new QLabel(publisher);
             src->setStyleSheet(
-                QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY));
+                QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
             rl->addWidget(src);
         }
 

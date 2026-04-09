@@ -27,6 +27,7 @@ class RiskMetricsWidget : public BaseWidget {
     QLabel* vix_value_ = nullptr;
     QLabel* vix_regime_ = nullptr;
     QLabel* vix_bar_fill_ = nullptr;
+    QVector<QFrame*> vix_bar_segments_; // 5 gradient segments
 
     // Separators and section headers
     QFrame* sep1_ = nullptr;

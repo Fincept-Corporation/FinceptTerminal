@@ -18,25 +18,25 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kBcbScript   = "bcb_data.py";
+static constexpr const char* kBcbScript = "bcb_data.py";
 static constexpr const char* kBcbSourceId = "bcb";
-static constexpr const char* kBcbColor    = "#16A34A";  // green (Brazil flag)
+static constexpr const char* kBcbColor = "#16A34A"; // green (Brazil flag)
 } // namespace
 
 struct BcbSeries {
     QString label;
     QString command;
-    QString value_key;  // field name in each data record
+    QString value_key; // field name in each data record
     QString unit;
 };
 
 static const QList<BcbSeries> kBcbSeries = {
-    { "Selic Target Rate",          "selic",        "selic_target",  "% p.a."    },
-    { "IPCA Inflation",             "ipca",         "ipca",          "% monthly" },
-    { "GDP Growth Rate",            "gdp",          "gdp_growth",    "% annual"  },
-    { "Unemployment Rate",          "unemployment", "unemployment",  "%"         },
-    { "Total Credit (BRL M)",       "credit",       "credit_total",  "BRL M"     },
-    { "International Reserves",     "reserves",     "reserves",      "USD M"     },
+    {"Selic Target Rate", "selic", "selic_target", "% p.a."},
+    {"IPCA Inflation", "ipca", "ipca", "% monthly"},
+    {"GDP Growth Rate", "gdp", "gdp_growth", "% annual"},
+    {"Unemployment Rate", "unemployment", "unemployment", "%"},
+    {"Total Credit (BRL M)", "credit", "credit_total", "BRL M"},
+    {"International Reserves", "reserves", "reserves", "USD M"},
 };
 
 // Convert BCB date "DD/MM/YYYY" to ISO "YYYY-MM-DD"
@@ -48,12 +48,10 @@ static QString bcb_date_to_iso(const QString& d) {
     return d;
 }
 
-BcbPanel::BcbPanel(QWidget* parent)
-    : EconPanelBase(kBcbSourceId, kBcbColor, parent) {
+BcbPanel::BcbPanel(QWidget* parent) : EconPanelBase(kBcbSourceId, kBcbColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &BcbPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &BcbPanel::on_result);
 }
 
 void BcbPanel::activate() {
@@ -76,26 +74,32 @@ void BcbPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void BcbPanel::on_fetch() {
-    const int     idx    = series_combo_->currentIndex();
-    const auto&   series = kBcbSeries[idx];
+    const int idx = series_combo_->currentIndex();
+    const auto& series = kBcbSeries[idx];
 
     show_loading("Fetching BCB: " + series.label + "…");
-    services::EconomicsService::instance().execute(
-        kBcbSourceId, kBcbScript, series.command, {},
-        "bcb_" + series.command);
+    services::EconomicsService::instance().execute(kBcbSourceId, kBcbScript, series.command, {},
+                                                   "bcb_" + series.command);
 }
 
-void BcbPanel::on_result(const QString& request_id,
-                          const services::EconomicsResult& result) {
-    if (result.source_id != kBcbSourceId) return;
-    if (!request_id.startsWith("bcb_")) return;
-    if (!result.success) { show_error(result.error); return; }
+void BcbPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kBcbSourceId)
+        return;
+    if (!request_id.startsWith("bcb_"))
+        return;
+    if (!result.success) {
+        show_error(result.error);
+        return;
+    }
 
     // Find series descriptor from command suffix
-    const QString cmd = request_id.mid(4);  // strip "bcb_"
+    const QString cmd = request_id.mid(4); // strip "bcb_"
     const BcbSeries* series_ptr = nullptr;
     for (const auto& s : kBcbSeries)
-        if (s.command == cmd) { series_ptr = &s; break; }
+        if (s.command == cmd) {
+            series_ptr = &s;
+            break;
+        }
 
     // Extract data array — may be under "data" key directly or wrapped by service
     QJsonArray raw = result.data["data"].toArray();
@@ -127,8 +131,7 @@ void BcbPanel::on_result(const QString& request_id,
     }
 
     const int idx = series_combo_->currentIndex();
-    const QString unit = (idx >= 0 && idx < kBcbSeries.size())
-                             ? " (" + kBcbSeries[idx].unit + ")" : "";
+    const QString unit = (idx >= 0 && idx < kBcbSeries.size()) ? " (" + kBcbSeries[idx].unit + ")" : "";
     const QString title = "BCB: " + (series_ptr ? series_ptr->label : cmd) + unit;
 
     display(rows, title);

@@ -18,95 +18,56 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kEconDbScript   = "econdb_data.py";
+static constexpr const char* kEconDbScript = "econdb_data.py";
 static constexpr const char* kEconDbSourceId = "econdb";
-static constexpr const char* kEconDbColor    = "#059669";  // green
+static constexpr const char* kEconDbColor = "#059669"; // green
 } // namespace
 
-static const QList<QPair<QString,QString>> kEconDbIndicators = {
-    { "GDP (Nominal)",              "gdp"   },
-    { "Real GDP",                   "rgdp"  },
-    { "CPI Inflation",              "cpi"   },
-    { "PPI Inflation",              "ppi"   },
-    { "Core Inflation",             "core"  },
-    { "Unemployment Rate",          "urate" },
-    { "Employment",                 "emp"   },
-    { "Industrial Production",      "ip"    },
-    { "Retail Sales",               "reta"  },
-    { "Consumer Confidence",        "conf"  },
-    { "Policy Interest Rate",       "polir" },
-    { "10-Year Yield",              "y10yd" },
-    { "3-Month Yield",              "m3yd"  },
-    { "Government Debt (% GDP)",    "gdebt" },
-    { "Current Account (% GDP)",    "ca"    },
-    { "Trade Balance",              "tb"    },
-    { "Population",                 "pop"   },
-    { "Consumer Prices",            "prc"   },
-    { "Gross Fixed Capital Fmn",    "gfcf"  },
-    { "Exports",                    "exp"   },
-    { "Imports",                    "imp"   },
+static const QList<QPair<QString, QString>> kEconDbIndicators = {
+    {"GDP (Nominal)", "gdp"},
+    {"Real GDP", "rgdp"},
+    {"CPI Inflation", "cpi"},
+    {"PPI Inflation", "ppi"},
+    {"Core Inflation", "core"},
+    {"Unemployment Rate", "urate"},
+    {"Employment", "emp"},
+    {"Industrial Production", "ip"},
+    {"Retail Sales", "reta"},
+    {"Consumer Confidence", "conf"},
+    {"Policy Interest Rate", "polir"},
+    {"10-Year Yield", "y10yd"},
+    {"3-Month Yield", "m3yd"},
+    {"Government Debt (% GDP)", "gdebt"},
+    {"Current Account (% GDP)", "ca"},
+    {"Trade Balance", "tb"},
+    {"Population", "pop"},
+    {"Consumer Prices", "prc"},
+    {"Gross Fixed Capital Fmn", "gfcf"},
+    {"Exports", "exp"},
+    {"Imports", "imp"},
 };
 
 // 49 countries available in EconDB (ISO2 codes)
-static const QList<QPair<QString,QString>> kEconDbCountries = {
-    { "United States",    "US" },
-    { "China",            "CN" },
-    { "Germany",          "DE" },
-    { "Japan",            "JP" },
-    { "United Kingdom",   "GB" },
-    { "France",           "FR" },
-    { "India",            "IN" },
-    { "Brazil",           "BR" },
-    { "Canada",           "CA" },
-    { "South Korea",      "KR" },
-    { "Australia",        "AU" },
-    { "Russia",           "RU" },
-    { "Mexico",           "MX" },
-    { "Spain",            "ES" },
-    { "Italy",            "IT" },
-    { "Netherlands",      "NL" },
-    { "Switzerland",      "CH" },
-    { "Turkey",           "TR" },
-    { "Poland",           "PL" },
-    { "Sweden",           "SE" },
-    { "Belgium",          "BE" },
-    { "Argentina",        "AR" },
-    { "Austria",          "AT" },
-    { "Bangladesh",       "BD" },
-    { "Chile",            "CL" },
-    { "Colombia",         "CO" },
-    { "Czech Republic",   "CZ" },
-    { "Denmark",          "DK" },
-    { "Egypt",            "EG" },
-    { "Finland",          "FI" },
-    { "Greece",           "GR" },
-    { "Hong Kong",        "HK" },
-    { "Hungary",          "HU" },
-    { "Indonesia",        "ID" },
-    { "Israel",           "IL" },
-    { "Malaysia",         "MY" },
-    { "Nigeria",          "NG" },
-    { "Norway",           "NO" },
-    { "Pakistan",         "PK" },
-    { "Peru",             "PE" },
-    { "Philippines",      "PH" },
-    { "Portugal",         "PT" },
-    { "Romania",          "RO" },
-    { "Saudi Arabia",     "SA" },
-    { "Singapore",        "SG" },
-    { "South Africa",     "ZA" },
-    { "Taiwan",           "TW" },
-    { "Thailand",         "TH" },
-    { "Ukraine",          "UA" },
-    { "Vietnam",          "VN" },
+static const QList<QPair<QString, QString>> kEconDbCountries = {
+    {"United States", "US"},  {"China", "CN"},        {"Germany", "DE"},        {"Japan", "JP"},
+    {"United Kingdom", "GB"}, {"France", "FR"},       {"India", "IN"},          {"Brazil", "BR"},
+    {"Canada", "CA"},         {"South Korea", "KR"},  {"Australia", "AU"},      {"Russia", "RU"},
+    {"Mexico", "MX"},         {"Spain", "ES"},        {"Italy", "IT"},          {"Netherlands", "NL"},
+    {"Switzerland", "CH"},    {"Turkey", "TR"},       {"Poland", "PL"},         {"Sweden", "SE"},
+    {"Belgium", "BE"},        {"Argentina", "AR"},    {"Austria", "AT"},        {"Bangladesh", "BD"},
+    {"Chile", "CL"},          {"Colombia", "CO"},     {"Czech Republic", "CZ"}, {"Denmark", "DK"},
+    {"Egypt", "EG"},          {"Finland", "FI"},      {"Greece", "GR"},         {"Hong Kong", "HK"},
+    {"Hungary", "HU"},        {"Indonesia", "ID"},    {"Israel", "IL"},         {"Malaysia", "MY"},
+    {"Nigeria", "NG"},        {"Norway", "NO"},       {"Pakistan", "PK"},       {"Peru", "PE"},
+    {"Philippines", "PH"},    {"Portugal", "PT"},     {"Romania", "RO"},        {"Saudi Arabia", "SA"},
+    {"Singapore", "SG"},      {"South Africa", "ZA"}, {"Taiwan", "TW"},         {"Thailand", "TH"},
+    {"Ukraine", "UA"},        {"Vietnam", "VN"},
 };
 
-EconDbPanel::EconDbPanel(QWidget* parent)
-    : EconPanelBase(kEconDbSourceId, kEconDbColor, parent) {
+EconDbPanel::EconDbPanel(QWidget* parent) : EconPanelBase(kEconDbSourceId, kEconDbColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &EconDbPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &EconDbPanel::on_result);
 }
 
 void EconDbPanel::activate() {
@@ -141,22 +102,23 @@ void EconDbPanel::build_controls(QHBoxLayout* thl) {
 
 void EconDbPanel::on_fetch() {
     const QString indicator = indicator_combo_->currentData().toString();
-    const QString country   = country_combo_->currentData().toString();
+    const QString country = country_combo_->currentData().toString();
 
-    show_loading("Fetching EconDB: " + indicator_combo_->currentText()
-                 + " — " + country_combo_->currentText() + "…");
+    show_loading("Fetching EconDB: " + indicator_combo_->currentText() + " — " + country_combo_->currentText() + "…");
 
-    services::EconomicsService::instance().execute(
-        kEconDbSourceId, kEconDbScript, "indicator",
-        { indicator, country },
-        "econdb_" + indicator + "_" + country);
+    services::EconomicsService::instance().execute(kEconDbSourceId, kEconDbScript, "indicator", {indicator, country},
+                                                   "econdb_" + indicator + "_" + country);
 }
 
-void EconDbPanel::on_result(const QString& request_id,
-                             const services::EconomicsResult& result) {
-    if (result.source_id != kEconDbSourceId) return;
-    if (!request_id.startsWith("econdb_")) return;
-    if (!result.success) { show_error(result.error); return; }
+void EconDbPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kEconDbSourceId)
+        return;
+    if (!request_id.startsWith("econdb_"))
+        return;
+    if (!result.success) {
+        show_error(result.error);
+        return;
+    }
 
     // Primary shape: {observations:[{date,value}], metadata:{description,...}}
     QJsonArray obs = result.data["observations"].toArray();
@@ -175,14 +137,11 @@ void EconDbPanel::on_result(const QString& request_id,
     const QString desc = meta["description"].toString();
     const QString freq = meta["frequency"].toString();
     const QString title = desc.isEmpty()
-        ? "EconDB: " + indicator_combo_->currentText()
-          + " — " + country_combo_->currentText()
-        : "EconDB: " + desc
-          + (freq.isEmpty() ? "" : " (" + freq + ")");
+                              ? "EconDB: " + indicator_combo_->currentText() + " — " + country_combo_->currentText()
+                              : "EconDB: " + desc + (freq.isEmpty() ? "" : " (" + freq + ")");
 
     display(obs, title);
-    LOG_INFO("EconDbPanel", QString("Displayed %1 observations: %2")
-                                .arg(obs.size()).arg(title));
+    LOG_INFO("EconDbPanel", QString("Displayed %1 observations: %2").arg(obs.size()).arg(title));
 }
 
 } // namespace fincept::screens

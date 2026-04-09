@@ -16,14 +16,30 @@ using namespace fincept::ui;
 
 // ── Color accessors (theme-aware) ───────────────────────────────────────────
 namespace {
-inline QColor kColorPrimary()   { return QColor(colors::TEXT_PRIMARY()); }
-inline QColor kColorDim()       { return QColor(colors::TEXT_DIM()); }
-inline QColor kColorSecondary() { return QColor(colors::TEXT_SECONDARY()); }
-inline QColor kColorPos()       { return QColor(colors::POSITIVE()); }
-inline QColor kColorNeg()       { return QColor(colors::NEGATIVE()); }
-inline QColor kColorAmber()     { return QColor(colors::AMBER()); }
-inline QColor kRowEven()        { return QColor(colors::BG_BASE()); }
-inline QColor kRowOdd()         { return QColor(colors::ROW_ALT()); }
+inline QColor kColorPrimary() {
+    return QColor(colors::TEXT_PRIMARY());
+}
+inline QColor kColorDim() {
+    return QColor(colors::TEXT_DIM());
+}
+inline QColor kColorSecondary() {
+    return QColor(colors::TEXT_SECONDARY());
+}
+inline QColor kColorPos() {
+    return QColor(colors::POSITIVE());
+}
+inline QColor kColorNeg() {
+    return QColor(colors::NEGATIVE());
+}
+inline QColor kColorAmber() {
+    return QColor(colors::AMBER());
+}
+inline QColor kRowEven() {
+    return QColor(colors::BG_BASE());
+}
+inline QColor kRowOdd() {
+    return QColor(colors::ROW_ALT());
+}
 const QColor kRowPosHint(22, 163, 74, 12);
 const QColor kRowNegHint(220, 38, 38, 12);
 } // namespace
@@ -37,7 +53,7 @@ CryptoWatchlist::CryptoWatchlist(QWidget* parent) : QWidget(parent) {
     layout->setSpacing(0);
 
     // Header
-    auto* header_widget = new QWidget;
+    auto* header_widget = new QWidget(this);
     header_widget->setObjectName("cryptoWatchlistHeader");
     header_widget->setFixedHeight(30);
     auto* header_layout = new QHBoxLayout(header_widget);
@@ -154,9 +170,9 @@ void CryptoWatchlist::update_prices(const QVector<trading::TickerData>& tickers)
         if (!e.has_data)
             continue;
 
-        auto* sym_item   = table_->item(i, 0);
+        auto* sym_item = table_->item(i, 0);
         auto* price_item = table_->item(i, 1);
-        auto* chg_item   = table_->item(i, 2);
+        auto* chg_item = table_->item(i, 2);
         if (!sym_item || !price_item || !chg_item)
             continue;
 
@@ -176,13 +192,16 @@ void CryptoWatchlist::update_prices(const QVector<trading::TickerData>& tickers)
         chg_item->setForeground(e.change_pct >= 0 ? kColorPos() : kColorNeg());
 
         QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
-        if (e.change_pct > 0.0)  bg = kRowPosHint;
-        else if (e.change_pct < 0.0) bg = kRowNegHint;
+        if (e.change_pct > 0.0)
+            bg = kRowPosHint;
+        else if (e.change_pct < 0.0)
+            bg = kRowNegHint;
 
         sym_item->setForeground(e.symbol == active_symbol_ ? kColorAmber() : kColorPrimary());
         for (int c = 0; c < 3; ++c) {
             auto* it = table_->item(i, c);
-            if (it) it->setBackground(bg);
+            if (it)
+                it->setBackground(bg);
         }
     }
     table_->setUpdatesEnabled(true);
@@ -237,14 +256,17 @@ void CryptoWatchlist::rebuild_table() {
             auto ensure = [&](int col, const QString& text, const QColor& fg,
                               int align = Qt::AlignLeft | Qt::AlignVCenter) {
                 auto* it = table_->item(i, col);
-                if (!it) { it = new QTableWidgetItem; table_->setItem(i, col, it); }
+                if (!it) {
+                    it = new QTableWidgetItem;
+                    table_->setItem(i, col, it);
+                }
                 it->setText(text);
                 it->setForeground(fg);
                 it->setBackground(bg);
                 it->setTextAlignment(align);
             };
             ensure(0, filtered[i].symbol, kColorPrimary());
-            ensure(1, filtered[i].type,   kColorSecondary());
+            ensure(1, filtered[i].type, kColorSecondary());
             ensure(2, "--", kColorDim(), Qt::AlignRight | Qt::AlignVCenter);
         }
         table_->setUpdatesEnabled(true);
@@ -267,13 +289,18 @@ void CryptoWatchlist::rebuild_table() {
     for (int i = 0; i < n; ++i) {
         const auto& e = visible[i];
         QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
-        if (e.has_data && e.change_pct > 0.0) bg = kRowPosHint;
-        else if (e.has_data && e.change_pct < 0.0) bg = kRowNegHint;
+        if (e.has_data && e.change_pct > 0.0)
+            bg = kRowPosHint;
+        else if (e.has_data && e.change_pct < 0.0)
+            bg = kRowNegHint;
 
         auto ensure = [&](int col, const QString& text, const QColor& fg,
                           int align = Qt::AlignLeft | Qt::AlignVCenter) {
             auto* it = table_->item(i, col);
-            if (!it) { it = new QTableWidgetItem; table_->setItem(i, col, it); }
+            if (!it) {
+                it = new QTableWidgetItem;
+                table_->setItem(i, col, it);
+            }
             it->setText(text);
             it->setForeground(fg);
             it->setBackground(bg);
@@ -293,11 +320,9 @@ void CryptoWatchlist::rebuild_table() {
             else
                 price_str = QString::number(e.price, 'f', 6);
         }
-        ensure(1, price_str, e.has_data ? kColorPrimary() : kColorDim(),
-               Qt::AlignRight | Qt::AlignVCenter);
+        ensure(1, price_str, e.has_data ? kColorPrimary() : kColorDim(), Qt::AlignRight | Qt::AlignVCenter);
 
-        ensure(2,
-               e.has_data ? QString("%1%").arg(e.change_pct, 0, 'f', 2) : QString("--"),
+        ensure(2, e.has_data ? QString("%1%").arg(e.change_pct, 0, 'f', 2) : QString("--"),
                e.has_data ? (e.change_pct >= 0.0 ? kColorPos() : kColorNeg()) : kColorDim(),
                Qt::AlignRight | Qt::AlignVCenter);
     }

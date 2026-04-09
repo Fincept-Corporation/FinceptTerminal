@@ -60,30 +60,30 @@ class AIQuantLabScreen : public QWidget, public IStatefulScreen {
     QVector<QPushButton*> module_buttons_;
 
     // Badge bar (scrollable, top bar)
-    QScrollArea*  badge_scroll_ = nullptr;
-    QWidget*      badge_bar_    = nullptr;
+    QScrollArea* badge_scroll_ = nullptr;
+    QWidget* badge_bar_ = nullptr;
     QVector<QPushButton*> badge_buttons_;
 
     // Sidebar widgets that need theme refresh
-    QWidget* top_bar_      = nullptr;
-    QWidget* left_panel_   = nullptr;
-    QWidget* right_panel_  = nullptr;
-    QWidget* status_bar_   = nullptr;
-    QLabel*  sidebar_title_ = nullptr;
-    QWidget* stats_card_   = nullptr;
-    QLabel*  stats_title_  = nullptr;
+    QWidget* top_bar_ = nullptr;
+    QWidget* left_panel_ = nullptr;
+    QWidget* right_panel_ = nullptr;
+    QWidget* status_bar_ = nullptr;
+    QLabel* sidebar_title_ = nullptr;
+    QWidget* stats_card_ = nullptr;
+    QLabel* stats_title_ = nullptr;
 
     QVBoxLayout* left_items_layout_ = nullptr;
 
     // Right panel
-    QLabel* right_title_    = nullptr;
+    QLabel* right_title_ = nullptr;
     QLabel* right_category_ = nullptr;
-    QLabel* right_desc_     = nullptr;
-    QLabel* right_script_   = nullptr;
+    QLabel* right_desc_ = nullptr;
+    QLabel* right_script_ = nullptr;
 
     // Status bar labels
     QLabel* status_engine_val_ = nullptr;
-    QLabel* status_ready_lbl_  = nullptr;
+    QLabel* status_ready_lbl_ = nullptr;
 
     bool first_show_ = true;
 };

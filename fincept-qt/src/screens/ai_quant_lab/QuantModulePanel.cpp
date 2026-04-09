@@ -13,11 +13,11 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QGridLayout>
-#include <QRegularExpression>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QTabWidget>
 #include <QTableWidget>
@@ -122,9 +122,8 @@ static QString table_ss() {
 
 // ── Widget factory helpers ────────────────────────────────────────────────────
 
-QDoubleSpinBox* QuantModulePanel::make_double_spin(double min, double max, double val,
-                                                   int decimals, const QString& suffix,
-                                                   QWidget* parent) {
+QDoubleSpinBox* QuantModulePanel::make_double_spin(double min, double max, double val, int decimals,
+                                                   const QString& suffix, QWidget* parent) {
     auto* spin = new QDoubleSpinBox(parent);
     spin->setRange(min, max);
     spin->setValue(val);
@@ -139,27 +138,23 @@ QPushButton* QuantModulePanel::make_run_button(const QString& text, QWidget* par
     auto* btn = new QPushButton(text, parent);
     btn->setCursor(Qt::PointingHandCursor);
     btn->setFixedHeight(32);
-    btn->setStyleSheet(
-        QString("QPushButton { background:%1; color:%2; font-weight:700; border:none;"
-                "padding:0 20px; border-radius:2px; letter-spacing:0.8px; }"
-                "QPushButton:hover { background:%3; }"
-                "QPushButton:pressed { background:%4; }")
-            .arg(module_.color.name(),
-                 ui::colors::BG_BASE(),
-                 module_.color.lighter(115).name(),
-                 module_.color.darker(110).name()));
+    btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; font-weight:700; border:none;"
+                               "padding:0 20px; border-radius:2px; letter-spacing:0.8px; }"
+                               "QPushButton:hover { background:%3; }"
+                               "QPushButton:pressed { background:%4; }")
+                           .arg(module_.color.name(), ui::colors::BG_BASE(), module_.color.lighter(115).name(),
+                                module_.color.darker(110).name()));
     return btn;
 }
 
 QWidget* QuantModulePanel::build_input_row(const QString& label, QWidget* input, QWidget* parent) {
     auto* row = new QWidget(parent);
-    auto* hl  = new QHBoxLayout(row);
+    auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(0, 2, 0, 2);
     hl->setSpacing(8);
     auto* lbl = new QLabel(label, row);
     lbl->setFixedWidth(160);
-    lbl->setStyleSheet(
-        QString("color:%1; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+    lbl->setStyleSheet(QString("color:%1; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(lbl);
     hl->addWidget(input, 1);
     return row;
@@ -175,9 +170,7 @@ QWidget* QuantModulePanel::build_llm_picker(QWidget* parent, QComboBox** out_com
     auto profiles_result = LlmProfileRepository::instance().list_profiles();
     if (profiles_result.is_ok()) {
         for (const auto& p : profiles_result.value()) {
-            combo->addItem(
-                QString("%1  [%2 / %3]").arg(p.name, p.provider, p.model_id),
-                p.id);
+            combo->addItem(QString("%1  [%2 / %3]").arg(p.name, p.provider, p.model_id), p.id);
         }
     }
     if (combo->count() == 0)
@@ -191,60 +184,58 @@ QWidget* QuantModulePanel::build_llm_picker(QWidget* parent, QComboBox** out_com
             combo->setCurrentIndex(idx);
     }
 
-    if (out_combo) *out_combo = combo;
+    if (out_combo)
+        *out_combo = combo;
     return build_input_row("LLM Profile", combo, parent);
 }
 
 QJsonObject QuantModulePanel::llm_config_from_combo(QComboBox* combo) const {
-    if (!combo) return {};
+    if (!combo)
+        return {};
     QString profile_id = combo->currentData().toString();
-    if (profile_id.isEmpty()) return {};
+    if (profile_id.isEmpty())
+        return {};
 
     auto resolved = LlmProfileRepository::instance().resolve_for_context("ai_quant_lab", profile_id);
     // resolve_for_context uses context_id as a profile_id hint — use get_profile directly
     auto result = LlmProfileRepository::instance().get_profile(profile_id);
-    if (!result.is_ok()) return {};
+    if (!result.is_ok())
+        return {};
 
     const auto& p = result.value();
     QJsonObject cfg;
     cfg["llm_provider"] = p.provider;
-    cfg["llm_api_key"]  = p.api_key;
-    cfg["llm_model"]    = p.model_id;
+    cfg["llm_api_key"] = p.api_key;
+    cfg["llm_model"] = p.model_id;
     cfg["llm_base_url"] = p.base_url;
     return cfg;
 }
 
 // ── Constructor ──────────────────────────────────────────────────────────────
 
-QuantModulePanel::QuantModulePanel(const QuantModule& mod, QWidget* parent)
-    : QWidget(parent), module_(mod) {
+QuantModulePanel::QuantModulePanel(const QuantModule& mod, QWidget* parent) : QWidget(parent), module_(mod) {
     build_ui();
     connect_service();
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { refresh_theme(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { refresh_theme(); });
 }
 
 void QuantModulePanel::refresh_theme() {
-    setStyleSheet(
-        QString("background:%1; color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+    setStyleSheet(QString("background:%1; color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
 
     if (panel_header_)
-        panel_header_->setStyleSheet(
-            QString("background:%1; border-bottom:1px solid %2;")
-                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        panel_header_->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
+                                         .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
 
     if (header_title_)
-        header_title_->setStyleSheet(
-            QString("color:%1; font-weight:700; letter-spacing:1px; background:transparent;")
-                .arg(module_.color.name()));
+        header_title_->setStyleSheet(QString("color:%1; font-weight:700; letter-spacing:1px; background:transparent;")
+                                         .arg(module_.color.name()));
 
     if (header_cat_)
-        header_cat_->setStyleSheet(
-            QString("color:%1; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
+        header_cat_->setStyleSheet(QString("color:%1; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
 
     if (status_label_)
-        status_label_->setStyleSheet(
-            QString("color:%1; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
+        status_label_->setStyleSheet(QString("color:%1; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
 }
 
 void QuantModulePanel::connect_service() {
@@ -350,7 +341,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Risk Metrics ──
-    auto* risk = new QWidget;
+    auto* risk = new QWidget(this);
     auto* rvl = new QVBoxLayout(risk);
     rvl->setContentsMargins(12, 12, 12, 12);
     rvl->setSpacing(8);
@@ -375,7 +366,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     tabs->addTab(risk, "Risk Metrics");
 
     // ── Portfolio Analytics ──
-    auto* port = new QWidget;
+    auto* port = new QWidget(this);
     auto* pvl = new QVBoxLayout(port);
     pvl->setContentsMargins(12, 12, 12, 12);
     pvl->setSpacing(8);
@@ -402,7 +393,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     tabs->addTab(port, "Portfolio");
 
     // ── Options Greeks ──
-    auto* greeks = new QWidget;
+    auto* greeks = new QWidget(this);
     auto* gvl = new QVBoxLayout(greeks);
     gvl->setContentsMargins(12, 12, 12, 12);
     gvl->setSpacing(8);
@@ -443,7 +434,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     tabs->addTab(greeks, "Greeks");
 
     // ── VaR Analysis ──
-    auto* var = new QWidget;
+    auto* var = new QWidget(this);
     auto* vvl = new QVBoxLayout(var);
     vvl->setContentsMargins(12, 12, 12, 12);
     vvl->setSpacing(8);
@@ -472,7 +463,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     tabs->addTab(var, "VaR");
 
     // ── Stress Test ──
-    auto* stress = new QWidget;
+    auto* stress = new QWidget(this);
     auto* svl = new QVBoxLayout(stress);
     svl->setContentsMargins(12, 12, 12, 12);
     svl->setSpacing(8);
@@ -501,7 +492,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     tabs->addTab(stress, "Stress Test");
 
     // ── Backtest ──
-    auto* bt = new QWidget;
+    auto* bt = new QWidget(this);
     auto* bvl = new QVBoxLayout(bt);
     bvl->setContentsMargins(12, 12, 12, 12);
     bvl->setSpacing(8);
@@ -539,7 +530,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     tabs->addTab(bt, "Backtest");
 
     // ── Statistics ──
-    auto* stats = new QWidget;
+    auto* stats = new QWidget(this);
     auto* stvl = new QVBoxLayout(stats);
     stvl->setContentsMargins(12, 12, 12, 12);
     stvl->setSpacing(8);
@@ -632,8 +623,6 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-
-
     auto* strat = new QComboBox(w);
     strat->addItems({"topk_dropout", "weight_based", "enhanced_indexing"});
     strat->setStyleSheet(combo_ss());
@@ -721,8 +710,6 @@ QWidget* QuantModulePanel::build_rl_trading_panel() {
     algo->setStyleSheet(combo_ss());
     combo_inputs_["rl_algo"] = algo;
     vl->addWidget(build_input_row("RL Algorithm", algo, w));
-
-
 
     auto* ticker = new QLineEdit(w);
     ticker->setPlaceholderText("AAPL");
@@ -849,14 +836,13 @@ QWidget* QuantModulePanel::build_deep_agent_panel() {
     // ── Shared LLM profile picker (used by both Deep Analysis and RD-Agent) ──
     QComboBox* llm_combo = nullptr;
     auto* llm_bar = new QWidget(w);
-    llm_bar->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
-                               .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    llm_bar->setStyleSheet(
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     auto* llm_bar_l = new QHBoxLayout(llm_bar);
     llm_bar_l->setContentsMargins(16, 8, 16, 8);
     llm_bar_l->setSpacing(0);
     llm_bar_l->addWidget(build_llm_picker(llm_bar, &llm_combo));
     vl->addWidget(llm_bar);
-
 
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
@@ -867,9 +853,10 @@ QWidget* QuantModulePanel::build_deep_agent_panel() {
     da_vl->setContentsMargins(16, 16, 16, 16);
     da_vl->setSpacing(12);
 
-    auto* desc = new QLabel(
-        "Multi-agent financial analysis powered by LangGraph. Delegates to specialist subagents "
-        "(research, data-analyst, trading, risk-analyzer, portfolio-optimizer, backtester, reporter).", da_w);
+    auto* desc =
+        new QLabel("Multi-agent financial analysis powered by LangGraph. Delegates to specialist subagents "
+                   "(research, data-analyst, trading, risk-analyzer, portfolio-optimizer, backtester, reporter).",
+                   da_w);
     desc->setWordWrap(true);
     desc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                             .arg(ui::colors::TEXT_SECONDARY)
@@ -878,10 +865,9 @@ QWidget* QuantModulePanel::build_deep_agent_panel() {
     da_vl->addWidget(desc);
 
     auto* task_edit = new QTextEdit(da_w);
-    task_edit->setPlaceholderText(
-        "Describe your analysis task...\n"
-        "e.g. \"Conduct a full investment analysis of NVDA: research fundamentals, "
-        "assess risks, and give a buy/sell/hold recommendation with price target\"");
+    task_edit->setPlaceholderText("Describe your analysis task...\n"
+                                  "e.g. \"Conduct a full investment analysis of NVDA: research fundamentals, "
+                                  "assess risks, and give a buy/sell/hold recommendation with price target\"");
     task_edit->setFixedHeight(90);
     task_edit->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
                                      "font-family:%4; font-size:%5px; padding:6px; }")
@@ -909,17 +895,24 @@ QWidget* QuantModulePanel::build_deep_agent_panel() {
     auto* da_run = make_run_button("RUN DEEP ANALYSIS", da_w);
     connect(da_run, &QPushButton::clicked, this, [this, task_edit, agent_type, thread_id, llm_combo]() {
         auto task = task_edit->toPlainText().trimmed();
-        if (task.isEmpty()) { display_error("Please enter an analysis task."); return; }
+        if (task.isEmpty()) {
+            display_error("Please enter an analysis task.");
+            return;
+        }
         auto cfg = llm_config_from_combo(llm_combo);
-        if (cfg.isEmpty()) { display_error("Select an LLM profile before running."); return; }
+        if (cfg.isEmpty()) {
+            display_error("Select an LLM profile before running.");
+            return;
+        }
         status_label_->setText("Running...");
         clear_results();
         QJsonObject params;
-        params["task"]       = task;
+        params["task"] = task;
         params["agent_type"] = agent_type->currentText();
-        params["config"]     = cfg;
+        params["config"] = cfg;
         auto tid = thread_id->text().trimmed();
-        if (!tid.isEmpty()) params["thread_id"] = tid;
+        if (!tid.isEmpty())
+            params["thread_id"] = tid;
         AIQuantLabService::instance().run_deep_agent(params);
     });
     da_vl->addWidget(da_run);
@@ -951,14 +944,12 @@ QWidget* QuantModulePanel::build_deep_agent_panel() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     auto* vl = new QVBoxLayout(w);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
     // shared styles
-
-
 
     auto* sub = new QTabWidget(w);
     sub->setStyleSheet(sub_tab_ss(module_.color.name()));
@@ -966,8 +957,8 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     // ── Status bar ───────────────────────────────────────────────────────────
     auto* status_bar = new QWidget(w);
     status_bar->setFixedHeight(28);
-    status_bar->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
-                                  .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    status_bar->setStyleSheet(
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     auto* sbl = new QHBoxLayout(status_bar);
     sbl->setContentsMargins(12, 0, 12, 0);
     sbl->setSpacing(8);
@@ -1017,16 +1008,15 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     mcp_btn->setToolTip("Start/stop the Fincept MCP tool server\n"
                         "Gives RD-Agent loops access to market data,\n"
                         "financial news and economics tools.");
-    mcp_btn->setStyleSheet(
-        QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
-                "font-family:%2; font-size:%3px; padding:2px 8px; border-radius:2px; }"
-                "QPushButton:checked { background:%4; color:%5; border-color:%4; }"
-                "QPushButton:hover { background:%1; color:%5; }")
-            .arg(ui::colors::TEXT_TERTIARY)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::TINY)
-            .arg(module_.color.name())
-            .arg(ui::colors::BG_BASE));
+    mcp_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
+                                   "font-family:%2; font-size:%3px; padding:2px 8px; border-radius:2px; }"
+                                   "QPushButton:checked { background:%4; color:%5; border-color:%4; }"
+                                   "QPushButton:hover { background:%1; color:%5; }")
+                               .arg(ui::colors::TEXT_TERTIARY)
+                               .arg(ui::fonts::DATA_FAMILY)
+                               .arg(ui::fonts::TINY)
+                               .arg(module_.color.name())
+                               .arg(ui::colors::BG_BASE));
     connect(mcp_btn, &QPushButton::toggled, this, [this, mcp_btn, status_txt](bool checked) {
         if (checked) {
             status_txt->setText("Starting MCP tool server...");
@@ -1045,9 +1035,9 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     fm_vl->setContentsMargins(14, 14, 14, 14);
     fm_vl->setSpacing(10);
 
-    auto* fm_desc = new QLabel(
-        "Autonomous alpha factor discovery via FactorRDLoop. The agent proposes, codes, runs "
-        "and evaluates factors iteratively until the target IC is reached.", fm_w);
+    auto* fm_desc = new QLabel("Autonomous alpha factor discovery via FactorRDLoop. The agent proposes, codes, runs "
+                               "and evaluates factors iteratively until the target IC is reached.",
+                               fm_w);
     fm_desc->setWordWrap(true);
     fm_desc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                .arg(ui::colors::TEXT_SECONDARY)
@@ -1056,7 +1046,8 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     fm_vl->addWidget(fm_desc);
 
     auto* fm_task = new QTextEdit(fm_w);
-    fm_task->setPlaceholderText("Describe the factor hypothesis...\ne.g. \"Discover momentum-based alpha factors for US equities\"");
+    fm_task->setPlaceholderText(
+        "Describe the factor hypothesis...\ne.g. \"Discover momentum-based alpha factors for US equities\"");
     fm_task->setFixedHeight(70);
     fm_task->setStyleSheet(input_ss());
     fm_vl->addWidget(build_input_row("Task Description", fm_task, fm_w));
@@ -1078,17 +1069,23 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     auto* fm_run = make_run_button("START FACTOR MINING", fm_w);
     connect(fm_run, &QPushButton::clicked, this, [this, fm_task, fm_market, fm_iter, fm_ic, status_txt, llm_combo]() {
         auto desc_text = fm_task->toPlainText().trimmed();
-        if (desc_text.isEmpty()) { display_error("Enter a task description."); return; }
+        if (desc_text.isEmpty()) {
+            display_error("Enter a task description.");
+            return;
+        }
         auto cfg = llm_config_from_combo(llm_combo);
-        if (cfg.isEmpty()) { display_error("Select an LLM profile before running."); return; }
+        if (cfg.isEmpty()) {
+            display_error("Select an LLM profile before running.");
+            return;
+        }
         status_label_->setText("Starting...");
         status_txt->setText("Factor mining started...");
         QJsonObject params;
         params["task_description"] = desc_text;
-        params["target_market"]    = fm_market->currentText();
-        params["max_iterations"]   = fm_iter->value();
-        params["target_ic"]        = fm_ic->value();
-        params["config"]           = cfg;
+        params["target_market"] = fm_market->currentText();
+        params["max_iterations"] = fm_iter->value();
+        params["target_ic"] = fm_ic->value();
+        params["config"] = cfg;
         AIQuantLabService::instance().rd_agent_start_factor_mining(params);
     });
     fm_vl->addWidget(fm_run);
@@ -1101,9 +1098,9 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     mo_vl->setContentsMargins(14, 14, 14, 14);
     mo_vl->setSpacing(10);
 
-    auto* mo_desc = new QLabel(
-        "ML model hyperparameter optimization via ModelRDLoop. Supports LightGBM, XGBoost, "
-        "LSTM, GRU, Transformer and TCN. Optimizes for Sharpe, IC, max drawdown, or win rate.", mo_w);
+    auto* mo_desc = new QLabel("ML model hyperparameter optimization via ModelRDLoop. Supports LightGBM, XGBoost, "
+                               "LSTM, GRU, Transformer and TCN. Optimizes for Sharpe, IC, max drawdown, or win rate.",
+                               mo_w);
     mo_desc->setWordWrap(true);
     mo_desc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                .arg(ui::colors::TEXT_SECONDARY)
@@ -1130,14 +1127,17 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     auto* mo_run = make_run_button("START MODEL OPTIMIZATION", mo_w);
     connect(mo_run, &QPushButton::clicked, this, [this, mo_model, mo_target, mo_iter, status_txt, llm_combo]() {
         auto cfg = llm_config_from_combo(llm_combo);
-        if (cfg.isEmpty()) { display_error("Select an LLM profile before running."); return; }
+        if (cfg.isEmpty()) {
+            display_error("Select an LLM profile before running.");
+            return;
+        }
         status_label_->setText("Starting...");
         status_txt->setText("Model optimization started...");
         QJsonObject params;
-        params["model_type"]          = mo_model->currentText();
+        params["model_type"] = mo_model->currentText();
         params["optimization_target"] = mo_target->currentText();
-        params["max_iterations"]      = mo_iter->value();
-        params["config"]              = cfg;
+        params["max_iterations"] = mo_iter->value();
+        params["config"] = cfg;
         AIQuantLabService::instance().rd_agent_start_model_optimization(params);
     });
     mo_vl->addWidget(mo_run);
@@ -1150,9 +1150,9 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     qr_vl->setContentsMargins(14, 14, 14, 14);
     qr_vl->setSpacing(10);
 
-    auto* qr_desc = new QLabel(
-        "Combined factor discovery + model optimization via QuantRDLoop. Runs the full "
-        "research pipeline end-to-end: propose factors, code them, backtest, refine.", qr_w);
+    auto* qr_desc = new QLabel("Combined factor discovery + model optimization via QuantRDLoop. Runs the full "
+                               "research pipeline end-to-end: propose factors, code them, backtest, refine.",
+                               qr_w);
     qr_desc->setWordWrap(true);
     qr_desc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                .arg(ui::colors::TEXT_SECONDARY)
@@ -1161,7 +1161,8 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     qr_vl->addWidget(qr_desc);
 
     auto* qr_goal = new QTextEdit(qr_w);
-    qr_goal->setPlaceholderText("Research goal...\ne.g. \"Build a quantitative equity strategy for mid-cap US stocks\"");
+    qr_goal->setPlaceholderText(
+        "Research goal...\ne.g. \"Build a quantitative equity strategy for mid-cap US stocks\"");
     qr_goal->setFixedHeight(70);
     qr_goal->setStyleSheet(input_ss());
     qr_vl->addWidget(build_input_row("Research Goal", qr_goal, qr_w));
@@ -1180,16 +1181,22 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     auto* qr_run = make_run_button("START QUANT RESEARCH", qr_w);
     connect(qr_run, &QPushButton::clicked, this, [this, qr_goal, qr_market, qr_iter, status_txt, llm_combo]() {
         auto goal = qr_goal->toPlainText().trimmed();
-        if (goal.isEmpty()) { display_error("Enter a research goal."); return; }
+        if (goal.isEmpty()) {
+            display_error("Enter a research goal.");
+            return;
+        }
         auto cfg = llm_config_from_combo(llm_combo);
-        if (cfg.isEmpty()) { display_error("Select an LLM profile before running."); return; }
+        if (cfg.isEmpty()) {
+            display_error("Select an LLM profile before running.");
+            return;
+        }
         status_label_->setText("Starting...");
         status_txt->setText("Quant research started...");
         QJsonObject params;
-        params["research_goal"]  = goal;
-        params["target_market"]  = qr_market->currentText();
+        params["research_goal"] = goal;
+        params["target_market"] = qr_market->currentText();
         params["max_iterations"] = qr_iter->value();
-        params["config"]         = cfg;
+        params["config"] = cfg;
         AIQuantLabService::instance().rd_agent_start_quant_research(params);
     });
     qr_vl->addWidget(qr_run);
@@ -1216,14 +1223,15 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
 
     auto* refresh_btn = new QPushButton("REFRESH", tm_toolbar);
     refresh_btn->setCursor(Qt::PointingHandCursor);
-    refresh_btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
-                                       "font-family:%3; font-size:%4px; font-weight:700; padding:5px 12px; border-radius:2px; }"
-                                       "QPushButton:hover { background:%5; }")
-                                   .arg(module_.color.name())
-                                   .arg(ui::colors::BG_BASE)
-                                   .arg(ui::fonts::DATA_FAMILY)
-                                   .arg(ui::fonts::TINY)
-                                   .arg(module_.color.lighter(120).name()));
+    refresh_btn->setStyleSheet(
+        QString("QPushButton { background:%1; color:%2; border:none;"
+                "font-family:%3; font-size:%4px; font-weight:700; padding:5px 12px; border-radius:2px; }"
+                "QPushButton:hover { background:%5; }")
+            .arg(module_.color.name())
+            .arg(ui::colors::BG_BASE)
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::fonts::TINY)
+            .arg(module_.color.lighter(120).name()));
     tm_hl->addWidget(refresh_btn);
 
     auto* task_id_input = new QLineEdit(tm_toolbar);
@@ -1234,31 +1242,40 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
 
     auto* stop_btn = new QPushButton("STOP", tm_toolbar);
     stop_btn->setCursor(Qt::PointingHandCursor);
-    stop_btn->setStyleSheet(QString("QPushButton { background:" + QString(ui::colors::NEGATIVE()) + "; color:" + QString(ui::colors::TEXT_PRIMARY()) + "; border:none;"
-                                    "font-family:%1; font-size:%2px; font-weight:700; padding:5px 12px; border-radius:2px; }"
-                                    "QPushButton:hover { background:" + QString(ui::colors::NEGATIVE()) + "; }")
-                                .arg(ui::fonts::DATA_FAMILY)
-                                .arg(ui::fonts::TINY));
+    stop_btn->setStyleSheet(
+        QString("QPushButton { background:" + QString(ui::colors::NEGATIVE()) +
+                "; color:" + QString(ui::colors::TEXT_PRIMARY()) +
+                "; border:none;"
+                "font-family:%1; font-size:%2px; font-weight:700; padding:5px 12px; border-radius:2px; }"
+                "QPushButton:hover { background:" +
+                QString(ui::colors::NEGATIVE()) + "; }")
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::fonts::TINY));
     tm_hl->addWidget(stop_btn);
 
     auto* resume_btn = new QPushButton("RESUME", tm_toolbar);
     resume_btn->setCursor(Qt::PointingHandCursor);
-    resume_btn->setStyleSheet(QString("QPushButton { background:" + QString(ui::colors::POSITIVE()) + "; color:" + QString(ui::colors::TEXT_PRIMARY()) + "; border:none;"
-                                      "font-family:%1; font-size:%2px; font-weight:700; padding:5px 12px; border-radius:2px; }"
-                                      "QPushButton:hover { background:" + QString(ui::colors::POSITIVE()) + "; }")
-                                  .arg(ui::fonts::DATA_FAMILY)
-                                  .arg(ui::fonts::TINY));
+    resume_btn->setStyleSheet(
+        QString("QPushButton { background:" + QString(ui::colors::POSITIVE()) +
+                "; color:" + QString(ui::colors::TEXT_PRIMARY()) +
+                "; border:none;"
+                "font-family:%1; font-size:%2px; font-weight:700; padding:5px 12px; border-radius:2px; }"
+                "QPushButton:hover { background:" +
+                QString(ui::colors::POSITIVE()) + "; }")
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::fonts::TINY));
     tm_hl->addWidget(resume_btn);
 
     auto* factors_btn = new QPushButton("GET FACTORS", tm_toolbar);
     factors_btn->setCursor(Qt::PointingHandCursor);
-    factors_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
-                                       "font-family:%2; font-size:%3px; font-weight:700; padding:5px 10px; border-radius:2px; }"
-                                       "QPushButton:hover { background:%1; color:%4; }")
-                                   .arg(module_.color.name())
-                                   .arg(ui::fonts::DATA_FAMILY)
-                                   .arg(ui::fonts::TINY)
-                                   .arg(ui::colors::BG_BASE));
+    factors_btn->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
+                "font-family:%2; font-size:%3px; font-weight:700; padding:5px 10px; border-radius:2px; }"
+                "QPushButton:hover { background:%1; color:%4; }")
+            .arg(module_.color.name())
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::fonts::TINY)
+            .arg(ui::colors::BG_BASE));
     tm_hl->addWidget(factors_btn);
     tm_hl->addStretch();
     tm_vl->addWidget(tm_toolbar);
@@ -1291,7 +1308,10 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
         auto tid = task_id_input->text().trimmed();
         if (tid.isEmpty() && rd_task_table_->currentRow() >= 0)
             tid = rd_task_table_->item(rd_task_table_->currentRow(), 0)->text();
-        if (tid.isEmpty()) { display_error("Select or enter a task ID."); return; }
+        if (tid.isEmpty()) {
+            display_error("Select or enter a task ID.");
+            return;
+        }
         AIQuantLabService::instance().rd_agent_stop_task(tid);
     });
 
@@ -1299,7 +1319,10 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
         auto tid = task_id_input->text().trimmed();
         if (tid.isEmpty() && rd_task_table_->currentRow() >= 0)
             tid = rd_task_table_->item(rd_task_table_->currentRow(), 0)->text();
-        if (tid.isEmpty()) { display_error("Select or enter a task ID."); return; }
+        if (tid.isEmpty()) {
+            display_error("Select or enter a task ID.");
+            return;
+        }
         AIQuantLabService::instance().rd_agent_resume_task(tid);
     });
 
@@ -1307,16 +1330,18 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
         auto tid = task_id_input->text().trimmed();
         if (tid.isEmpty() && rd_task_table_->currentRow() >= 0)
             tid = rd_task_table_->item(rd_task_table_->currentRow(), 0)->text();
-        if (tid.isEmpty()) { display_error("Select or enter a task ID."); return; }
+        if (tid.isEmpty()) {
+            display_error("Select or enter a task ID.");
+            return;
+        }
         AIQuantLabService::instance().rd_agent_get_discovered_factors(tid);
     });
 
     // Populate task_id_input on row click
-    connect(rd_task_table_, &QTableWidget::currentCellChanged, this,
-            [task_id_input, this](int row, int, int, int) {
-                if (row >= 0 && rd_task_table_->item(row, 0))
-                    task_id_input->setText(rd_task_table_->item(row, 0)->text());
-            });
+    connect(rd_task_table_, &QTableWidget::currentCellChanged, this, [task_id_input, this](int row, int, int, int) {
+        if (row >= 0 && rd_task_table_->item(row, 0))
+            task_id_input->setText(rd_task_table_->item(row, 0)->text());
+    });
 
     sub->addTab(tm_w, "Task Monitor");
 
@@ -1496,13 +1521,12 @@ void QuantModulePanel::display_result(const QJsonObject& data) {
     auto* export_btn = new QPushButton("EXPORT RESULTS");
     export_btn->setCursor(Qt::PointingHandCursor);
     export_btn->setFixedHeight(28);
-    export_btn->setStyleSheet(
-        QString("QPushButton { background:transparent; color:%1; border:1px solid %2; "
-                "font-size:%3px; font-family:%4; padding:0 12px; }"
-                "QPushButton:hover { color:%1; background:rgba(255,255,255,0.05); }")
-            .arg(module_.color.name(), ui::colors::BORDER_DIM)
-            .arg(ui::fonts::SMALL)
-            .arg(ui::fonts::DATA_FAMILY));
+    export_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2; "
+                                      "font-size:%3px; font-family:%4; padding:0 12px; }"
+                                      "QPushButton:hover { color:%1; background:rgba(255,255,255,0.05); }")
+                                  .arg(module_.color.name(), ui::colors::BORDER_DIM)
+                                  .arg(ui::fonts::SMALL)
+                                  .arg(ui::fonts::DATA_FAMILY));
     QString json_str = QJsonDocument(data).toJson(QJsonDocument::Indented);
     connect(export_btn, &QPushButton::clicked, this, [this, json_str]() {
         QString safe_name = module_.label;
@@ -1514,9 +1538,9 @@ void QuantModulePanel::display_result(const QJsonObject& data) {
         if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
             f.write(json_str.toUtf8());
             f.close();
-            services::FileManagerService::instance().register_file(
-                stored_name, module_.label + "_result.json",
-                QFileInfo(dest).size(), "application/json", "ai_quant_lab");
+            services::FileManagerService::instance().register_file(stored_name, module_.label + "_result.json",
+                                                                   QFileInfo(dest).size(), "application/json",
+                                                                   "ai_quant_lab");
             LOG_INFO("AIQuantLab", "Exported result: " + stored_name);
         }
     });
@@ -1545,7 +1569,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         auto text = data["result"].toString();
         if (text.isEmpty())
             text = QJsonDocument(data).toJson(QJsonDocument::Indented);
-        if (agent_output_) agent_output_->setPlainText(text);
+        if (agent_output_)
+            agent_output_->setPlainText(text);
         auto tid = data["thread_id"].toString();
         status_label_->setText(tid.isEmpty() ? "Done" : QString("Done — thread: %1").arg(tid));
         return;
@@ -1557,7 +1582,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         auto avail = data["availability"].toObject();
         QStringList flags;
         for (auto it = avail.begin(); it != avail.end(); ++it)
-            if (it.value().toBool()) flags << it.key();
+            if (it.value().toBool())
+                flags << it.key();
         status_label_->setText(QString("rdagent %1 — %2").arg(ver, flags.join(", ")));
         return;
     }
@@ -1570,7 +1596,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             return;
         }
         auto task_id = data["task_id"].toString();
-        auto est     = data["estimated_time"].toString();
+        auto est = data["estimated_time"].toString();
         status_label_->setText(QString("Task %1 started").arg(task_id));
         if (rd_agent_output_)
             rd_agent_output_->setPlainText(
@@ -1598,11 +1624,11 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             else if (status_str == "failed" || status_str == "stopped")
                 status_item->setForeground(QColor("" + QString(ui::colors::NEGATIVE()) + ""));
             rd_task_table_->setItem(row, 2, status_item);
-            rd_task_table_->setItem(row, 3, new QTableWidgetItem(
-                QString::number(obj["progress"].toDouble() * 100, 'f', 0) + "%"));
+            rd_task_table_->setItem(
+                row, 3, new QTableWidgetItem(QString::number(obj["progress"].toDouble() * 100, 'f', 0) + "%"));
             auto ic = obj["best_ic"];
-            rd_task_table_->setItem(row, 4, new QTableWidgetItem(
-                ic.isNull() ? "-" : QString::number(ic.toDouble(), 'f', 4)));
+            rd_task_table_->setItem(row, 4,
+                                    new QTableWidgetItem(ic.isNull() ? "-" : QString::number(ic.toDouble(), 'f', 4)));
             rd_task_table_->setItem(row, 5, new QTableWidgetItem(obj["elapsed_time"].toString("-")));
         }
         status_label_->setText(QString("%1 task(s)").arg(tasks.size()));
@@ -1611,18 +1637,19 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
     // ── RD-Agent: get_task_status ─────────────────────────────────────────────
     if (command == "get_task_status") {
-        if (!data["success"].toBool()) { display_error(data["error"].toString()); return; }
-        auto task_id  = data["task_id"].toString();
+        if (!data["success"].toBool()) {
+            display_error(data["error"].toString());
+            return;
+        }
+        auto task_id = data["task_id"].toString();
         auto progress = data["progress"].toDouble() * 100;
-        auto step     = data["current_step"].toString();
-        auto ic       = data["best_ic"];
-        status_label_->setText(QString("Task %1 — %2% — %3")
-                                   .arg(task_id)
-                                   .arg(progress, 0, 'f', 0)
-                                   .arg(step));
+        auto step = data["current_step"].toString();
+        auto ic = data["best_ic"];
+        status_label_->setText(QString("Task %1 — %2% — %3").arg(task_id).arg(progress, 0, 'f', 0).arg(step));
         if (rd_agent_output_) {
             rd_agent_output_->setPlainText(
-                QString("Task ID:    %1\nStatus:     %2\nProgress:   %3%\nStep:       %4\nBest IC:    %5\nElapsed:    %6")
+                QString(
+                    "Task ID:    %1\nStatus:     %2\nProgress:   %3%\nStep:       %4\nBest IC:    %5\nElapsed:    %6")
                     .arg(task_id, data["status"].toString())
                     .arg(progress, 0, 'f', 0)
                     .arg(step)
@@ -1634,7 +1661,10 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
     // ── RD-Agent: get_discovered_factors ──────────────────────────────────────
     if (command == "get_discovered_factors" && rd_agent_output_) {
-        if (!data["success"].toBool()) { display_error(data["error"].toString()); return; }
+        if (!data["success"].toBool()) {
+            display_error(data["error"].toString());
+            return;
+        }
         auto factors = data["factors"].toArray();
         auto best_ic = data["best_ic"];
         QString out = QString("Discovered Factors: %1  |  Best IC: %2\n\n")
@@ -1657,7 +1687,10 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
     // ── RD-Agent: get_optimized_model ─────────────────────────────────────────
     if (command == "get_optimized_model" && rd_agent_output_) {
-        if (!data["success"].toBool()) { display_error(data["error"].toString()); return; }
+        if (!data["success"].toBool()) {
+            display_error(data["error"].toString());
+            return;
+        }
         auto models = data["models"].toArray();
         QString out = QString("Optimized Models: %1\n\n").arg(models.size());
         int idx = 1;
@@ -1702,42 +1735,47 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                         .arg(data["install"].toString("pip install 'mcp[cli]' 'pydantic-ai[mcp]' yfinance")));
             return;
         }
-        auto url  = data["url"].toString();
+        auto url = data["url"].toString();
         auto port = data["port"].toInt();
         auto tools = data["tools"].toArray();
         QStringList tool_names;
-        for (const auto& t : tools) tool_names << t.toString();
+        for (const auto& t : tools)
+            tool_names << t.toString();
         status_label_->setText(QString("MCP ready on port %1").arg(port));
         if (rd_agent_output_)
-            rd_agent_output_->setPlainText(
-                QString("MCP tool server running at %1\n\nAvailable tools:\n  %2\n\n"
-                        "Enable 'enable_mcp: true' in factor/model/quant research params\n"
-                        "to give RD-Agent loops access to these tools.")
-                    .arg(url, tool_names.join("\n  ")));
+            rd_agent_output_->setPlainText(QString("MCP tool server running at %1\n\nAvailable tools:\n  %2\n\n"
+                                                   "Enable 'enable_mcp: true' in factor/model/quant research params\n"
+                                                   "to give RD-Agent loops access to these tools.")
+                                               .arg(url, tool_names.join("\n  ")));
         return;
     }
 
     // ── RD-Agent: mcp_status ─────────────────────────────────────────────────
     if (command == "mcp_status") {
-        auto avail   = data["mcp_server_available"].toBool();
+        auto avail = data["mcp_server_available"].toBool();
         auto pai_mcp = data["pydantic_ai_mcp"].toBool();
-        auto ports   = data["running_ports"].toArray();
+        auto ports = data["running_ports"].toArray();
         QString info = QString("MCP server available: %1\npydantic-ai MCP: %2\nRunning ports: %3")
                            .arg(avail ? "yes" : "no")
                            .arg(pai_mcp ? "yes" : "no")
                            .arg(ports.isEmpty() ? "none" : [&]() {
                                QStringList ps;
-                               for (const auto& p : ports) ps << QString::number(p.toInt());
+                               for (const auto& p : ports)
+                                   ps << QString::number(p.toInt());
                                return ps.join(", ");
                            }());
         status_label_->setText(avail ? "MCP available" : "MCP not installed");
-        if (rd_agent_output_) rd_agent_output_->setPlainText(info);
+        if (rd_agent_output_)
+            rd_agent_output_->setPlainText(info);
         return;
     }
 
     // ── Factor Discovery ─────────────────────────────────────────────────────
     if (module_id == "factor_discovery") {
-        if (!data["success"].toBool()) { display_error(data["error"].toString()); return; }
+        if (!data["success"].toBool()) {
+            display_error(data["error"].toString());
+            return;
+        }
         clear_results();
         if (command == "get_factor_library") {
             auto factors = data["factors"].toArray();
@@ -1759,8 +1797,11 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             auto range = data["date_range"].toObject();
             auto warning = data["warning"].toString();
             QString summary = QString("Data fetched — %1 records  |  %2 → %3")
-                                  .arg(total).arg(range["start"].toString()).arg(range["end"].toString());
-            if (!warning.isEmpty()) summary += QString("\n⚠ %1").arg(warning);
+                                  .arg(total)
+                                  .arg(range["start"].toString())
+                                  .arg(range["end"].toString());
+            if (!warning.isEmpty())
+                summary += QString("\n⚠ %1").arg(warning);
             auto* lbl = new QLabel(summary, this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
@@ -1771,7 +1812,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         if (command == "get_instruments") {
             auto instruments = data["instruments"].toArray();
             QStringList names;
-            for (const auto& i : instruments) names << i.toString();
+            for (const auto& i : instruments)
+                names << i.toString();
             auto* lbl = new QLabel(QString("Instruments (%1): %2").arg(names.size()).arg(names.join(", ")), this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
@@ -1779,12 +1821,16 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             status_label_->setText(QString("%1 instruments").arg(names.size()));
             return;
         }
-        display_result(data); return;
+        display_result(data);
+        return;
     }
 
     // ── Model Library ────────────────────────────────────────────────────────
     if (module_id == "model_library") {
-        if (!data["success"].toBool()) { display_error(data["error"].toString()); return; }
+        if (!data["success"].toBool()) {
+            display_error(data["error"].toString());
+            return;
+        }
         clear_results();
         if (command == "list_models") {
             auto models = data["models"].toArray();
@@ -1794,7 +1840,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                 out += QString("• %1  [%2]\n  %3\n")
                            .arg(obj["name"].toString(), obj["id"].toString(), obj["description"].toString("-"));
             }
-            if (models.isEmpty()) out += "No models listed (check qlib availability)";
+            if (models.isEmpty())
+                out += "No models listed (check qlib availability)";
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
@@ -1808,11 +1855,11 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             QStringList available, unavailable;
             for (auto it = models_avail.begin(); it != models_avail.end(); ++it)
                 (it.value().toBool() ? available : unavailable) << it.key();
-            auto* lbl = new QLabel(
-                QString("Qlib: %1\nAvailable: %2\nUnavailable: %3")
-                    .arg(qlib_ok ? "✓ Ready" : "✗ Not installed")
-                    .arg(available.join(", "))
-                    .arg(unavailable.join(", ")), this);
+            auto* lbl = new QLabel(QString("Qlib: %1\nAvailable: %2\nUnavailable: %3")
+                                       .arg(qlib_ok ? "✓ Ready" : "✗ Not installed")
+                                       .arg(available.join(", "))
+                                       .arg(unavailable.join(", ")),
+                                   this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
@@ -1821,7 +1868,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         }
         if (command == "train_model") {
             auto model_id = data["model_id"].toString();
-            auto metrics  = data["metrics"].toObject();
+            auto metrics = data["metrics"].toObject();
             QString out = QString("Model Trained: %1\n").arg(model_id);
             for (auto it = metrics.begin(); it != metrics.end(); ++it)
                 out += QString("  %1: %2\n").arg(it.key()).arg(it.value().toDouble(), 0, 'f', 4);
@@ -1832,24 +1879,32 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             status_label_->setText(QString("Trained: %1").arg(model_id));
             return;
         }
-        display_result(data); return;
+        display_result(data);
+        return;
     }
 
     // ── Live Signals ─────────────────────────────────────────────────────────
     if (module_id == "live_signals") {
-        if (!data["success"].toBool()) { display_error(data["error"].toString()); return; }
+        if (!data["success"].toBool()) {
+            display_error(data["error"].toString());
+            return;
+        }
         clear_results();
         if (command == "get_data") {
-            auto total   = data["total_records"].toInt();
-            auto range   = data["date_range"].toObject();
+            auto total = data["total_records"].toInt();
+            auto range = data["date_range"].toObject();
             auto warning = data["warning"].toString();
-            auto instr   = data["instruments"].toArray();
+            auto instr = data["instruments"].toArray();
             QStringList names;
-            for (const auto& i : instr) names << i.toString();
+            for (const auto& i : instr)
+                names << i.toString();
             QString out = QString("Signal Data — %1 records\nInstruments: %2\nRange: %3 → %4")
-                              .arg(total).arg(names.join(", "))
-                              .arg(range["start"].toString()).arg(range["end"].toString());
-            if (!warning.isEmpty()) out += QString("\n⚠ %1").arg(warning);
+                              .arg(total)
+                              .arg(names.join(", "))
+                              .arg(range["start"].toString())
+                              .arg(range["end"].toString());
+            if (!warning.isEmpty())
+                out += QString("\n⚠ %1").arg(warning);
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
@@ -1890,18 +1945,23 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             status_label_->setText("Feature importance loaded");
             return;
         }
-        display_result(data); return;
+        display_result(data);
+        return;
     }
 
     // ── Online Learning ──────────────────────────────────────────────────────
     if (module_id == "online_learning") {
-        if (!data["success"].toBool()) { display_error(data["error"].toString()); return; }
+        if (!data["success"].toBool()) {
+            display_error(data["error"].toString());
+            return;
+        }
         clear_results();
         if (command == "list_models") {
             auto models = data["models"].toArray();
-            auto river  = data["river_available"].toBool();
+            auto river = data["river_available"].toBool();
             QString out = QString("Online Models (%1)  |  River: %2\n\n")
-                              .arg(models.size()).arg(river ? "available" : "not installed");
+                              .arg(models.size())
+                              .arg(river ? "available" : "not installed");
             for (const auto& m : models) {
                 auto obj = m.toObject();
                 out += QString("• %1  [%2]\n  Trained: %3 samples  |  Updated: %4\n")
@@ -1918,20 +1978,20 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         }
         if (command == "create_model") {
             auto* lbl = new QLabel(
-                QString("Created: %1  [%2]")
-                    .arg(data["model_id"].toString(), data["model_type"].toString()), this);
+                QString("Created: %1  [%2]").arg(data["model_id"].toString(), data["model_type"].toString()), this);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText("Model created");
             return;
         }
         if (command == "train") {
-            auto mae     = data["current_mae"].toDouble();
+            auto mae = data["current_mae"].toDouble();
             auto samples = data["samples_trained"].toInt();
-            auto drift   = data["drift_detected"].toBool();
-            auto pred    = data["prediction"];
+            auto drift = data["drift_detected"].toBool();
+            auto pred = data["prediction"];
             QString out = QString("Trained — Samples: %1  |  MAE: %2\nDrift: %3")
-                              .arg(samples).arg(mae, 0, 'f', 6)
+                              .arg(samples)
+                              .arg(mae, 0, 'f', 6)
                               .arg(drift ? "DETECTED" : "none");
             if (!pred.isNull())
                 out += QString("\nPrediction: %1  →  Actual: %2  |  Error: %3")
@@ -1955,27 +2015,32 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             return;
         }
         if (command == "performance") {
-            auto mae     = data["current_mae"].toDouble();
+            auto mae = data["current_mae"].toDouble();
             auto samples = data["samples_trained"].toInt();
-            auto drift   = data["drift_detected"].toBool();
-            auto* lbl = new QLabel(
-                QString("Model: %1  [%2]\nSamples: %3  |  MAE: %4\nDrift: %5\nLast updated: %6")
-                    .arg(data["model_id"].toString(), data["model_type"].toString())
-                    .arg(samples).arg(mae, 0, 'f', 6)
-                    .arg(drift ? "DETECTED" : "none")
-                    .arg(data["last_updated"].isNull() ? "never" : data["last_updated"].toString()), this);
+            auto drift = data["drift_detected"].toBool();
+            auto* lbl = new QLabel(QString("Model: %1  [%2]\nSamples: %3  |  MAE: %4\nDrift: %5\nLast updated: %6")
+                                       .arg(data["model_id"].toString(), data["model_type"].toString())
+                                       .arg(samples)
+                                       .arg(mae, 0, 'f', 6)
+                                       .arg(drift ? "DETECTED" : "none")
+                                       .arg(data["last_updated"].isNull() ? "never" : data["last_updated"].toString()),
+                                   this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("MAE: %1").arg(mae, 0, 'f', 4));
             return;
         }
-        display_result(data); return;
+        display_result(data);
+        return;
     }
 
     // ── Meta Learning ────────────────────────────────────────────────────────
     if (module_id == "meta_learning") {
-        if (!data["success"].toBool()) { display_error(data["error"].toString()); return; }
+        if (!data["success"].toBool()) {
+            display_error(data["error"].toString());
+            return;
+        }
         clear_results();
         if (command == "list_models") {
             auto models = data["models"].toArray();
@@ -1983,8 +2048,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             for (const auto& m : models) {
                 auto obj = m.toObject();
                 out += QString("• %1  [%2 / %3]\n  %4\n")
-                           .arg(obj["name"].toString(), obj["type"].toString(),
-                                obj["library"].toString(), obj["description"].toString("-"));
+                           .arg(obj["name"].toString(), obj["type"].toString(), obj["library"].toString(),
+                                obj["description"].toString("-"));
             }
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
@@ -1994,7 +2059,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             return;
         }
         if (command == "run_selection") {
-            auto best    = data["best_model"].toString();
+            auto best = data["best_model"].toString();
             auto trained = data["trained_count"].toInt();
             auto ranking = data["ranking"].toArray();
             QString out = QString("Best Model: %1  |  Trained: %2\n\nRanking:\n").arg(best).arg(trained);
@@ -2003,7 +2068,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                 auto obj = r.toObject();
                 auto metrics = obj["metrics"].toObject();
                 out += QString("  %1. %2  R²: %3  RMSE: %4\n")
-                           .arg(rank++).arg(obj["model_id"].toString())
+                           .arg(rank++)
+                           .arg(obj["model_id"].toString())
                            .arg(metrics["r2_score"].toDouble(), 0, 'f', 4)
                            .arg(metrics["rmse"].toDouble(), 0, 'f', 4);
             }
@@ -2015,10 +2081,10 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             return;
         }
         if (command == "create_ensemble") {
-            auto* lbl = new QLabel(
-                QString("Ensemble: %1  [%2]\nModels: %3")
-                    .arg(data["ensemble_id"].toString("-"), data["method"].toString("-"))
-                    .arg(data["models"].toArray().size()), this);
+            auto* lbl = new QLabel(QString("Ensemble: %1  [%2]\nModels: %3")
+                                       .arg(data["ensemble_id"].toString("-"), data["method"].toString("-"))
+                                       .arg(data["models"].toArray().size()),
+                                   this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
@@ -2027,7 +2093,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         }
         if (command == "tune_hyperparameters") {
             auto best_params = data["best_params"].toObject();
-            auto best_score  = data["best_score"].toDouble();
+            auto best_score = data["best_score"].toDouble();
             QString out = QString("Best score: %1\nBest params:\n").arg(best_score, 0, 'f', 4);
             for (auto it = best_params.begin(); it != best_params.end(); ++it)
                 out += QString("  %1: %2\n").arg(it.key()).arg(it.value().toVariant().toString());
@@ -2056,17 +2122,22 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             status_label_->setText(QString("%1 result(s)").arg(results.size()));
             return;
         }
-        display_result(data); return;
+        display_result(data);
+        return;
     }
 
     // ── HFT ──────────────────────────────────────────────────────────────────
     if (module_id == "hft") {
-        if (!data["success"].toBool()) { display_error(data["error"].toString()); return; }
+        if (!data["success"].toBool()) {
+            display_error(data["error"].toString());
+            return;
+        }
         clear_results();
         if (command == "create_orderbook") {
-            auto* lbl = new QLabel(
-                QString("Order book created for %1  (depth: %2)")
-                    .arg(data["symbol"].toString()).arg(data["depth"].toInt(10)), this);
+            auto* lbl = new QLabel(QString("Order book created for %1  (depth: %2)")
+                                       .arg(data["symbol"].toString())
+                                       .arg(data["depth"].toInt(10)),
+                                   this);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText("Order book ready");
@@ -2083,28 +2154,33 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                               .arg(spread.isNull() ? "N/A" : QString::number(spread.toDouble(), 'f', 4));
             for (int i = 0; i < qMin(5, (int)bid.size()); ++i) {
                 auto b = bid[i].toObject();
-                out += QString("  %1 x %2\n").arg(b["price"].toDouble(), 0, 'f', 4).arg(b["size"].toDouble(), 0, 'f', 0);
+                out +=
+                    QString("  %1 x %2\n").arg(b["price"].toDouble(), 0, 'f', 4).arg(b["size"].toDouble(), 0, 'f', 0);
             }
             out += "\nTop Asks:\n";
             for (int i = 0; i < qMin(5, (int)ask.size()); ++i) {
                 auto a = ask[i].toObject();
-                out += QString("  %1 x %2\n").arg(a["price"].toDouble(), 0, 'f', 4).arg(a["size"].toDouble(), 0, 'f', 0);
+                out +=
+                    QString("  %1 x %2\n").arg(a["price"].toDouble(), 0, 'f', 4).arg(a["size"].toDouble(), 0, 'f', 0);
             }
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
-            status_label_->setText(QString("Spread: %1").arg(spread.isNull() ? "N/A" : QString::number(spread.toDouble(), 'f', 4)));
+            status_label_->setText(
+                QString("Spread: %1").arg(spread.isNull() ? "N/A" : QString::number(spread.toDouble(), 'f', 4)));
             return;
         }
         if (command == "market_making_quotes") {
             auto bid_p = data["bid_price"].toDouble();
             auto ask_p = data["ask_price"].toDouble();
             auto spread = data["spread"].toDouble();
-            auto* lbl = new QLabel(
-                QString("Market Making Quotes\nBid: %1  |  Ask: %2\nSpread: %3  |  Mid: %4")
-                    .arg(bid_p, 0, 'f', 4).arg(ask_p, 0, 'f', 4)
-                    .arg(spread, 0, 'f', 4).arg(data["mid_price"].toDouble(), 0, 'f', 4), this);
+            auto* lbl = new QLabel(QString("Market Making Quotes\nBid: %1  |  Ask: %2\nSpread: %3  |  Mid: %4")
+                                       .arg(bid_p, 0, 'f', 4)
+                                       .arg(ask_p, 0, 'f', 4)
+                                       .arg(spread, 0, 'f', 4)
+                                       .arg(data["mid_price"].toDouble(), 0, 'f', 4),
+                                   this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
@@ -2113,43 +2189,49 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         }
         if (command == "detect_toxic") {
             auto is_toxic = data["is_toxic"].toBool();
-            auto pin      = data["pin_score"].toDouble();
-            auto* lbl = new QLabel(
-                QString("Toxic Flow: %1\nPIN Score: %2\nClassification: %3")
-                    .arg(is_toxic ? "DETECTED" : "none")
-                    .arg(pin, 0, 'f', 4)
-                    .arg(data["classification"].toString("-")), this);
+            auto pin = data["pin_score"].toDouble();
+            auto* lbl = new QLabel(QString("Toxic Flow: %1\nPIN Score: %2\nClassification: %3")
+                                       .arg(is_toxic ? "DETECTED" : "none")
+                                       .arg(pin, 0, 'f', 4)
+                                       .arg(data["classification"].toString("-")),
+                                   this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(is_toxic ? ui::colors::NEGATIVE() : ui::colors::TEXT_PRIMARY()));
+            lbl->setStyleSheet(
+                QString("color:%1;").arg(is_toxic ? ui::colors::NEGATIVE() : ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(is_toxic ? "⚠ Toxic flow detected" : "Flow normal");
             return;
         }
         if (command == "execute_order") {
             auto fills = data["fills"].toArray();
-            auto filled_qty  = data["filled_quantity"].toDouble();
-            auto avg_price   = data["average_price"].toDouble();
-            auto* lbl = new QLabel(
-                QString("Order Executed\nFilled: %1  |  Avg Price: %2\nFills: %3")
-                    .arg(filled_qty, 0, 'f', 0).arg(avg_price, 0, 'f', 4).arg(fills.size()), this);
+            auto filled_qty = data["filled_quantity"].toDouble();
+            auto avg_price = data["average_price"].toDouble();
+            auto* lbl = new QLabel(QString("Order Executed\nFilled: %1  |  Avg Price: %2\nFills: %3")
+                                       .arg(filled_qty, 0, 'f', 0)
+                                       .arg(avg_price, 0, 'f', 4)
+                                       .arg(fills.size()),
+                                   this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("Filled %1 @ %2").arg(filled_qty, 0, 'f', 0).arg(avg_price, 0, 'f', 4));
             return;
         }
-        display_result(data); return;
+        display_result(data);
+        return;
     }
 
     // ── Rolling Retraining ───────────────────────────────────────────────────
     if (module_id == "rolling_retraining") {
-        if (!data["success"].toBool()) { display_error(data["error"].toString()); return; }
+        if (!data["success"].toBool()) {
+            display_error(data["error"].toString());
+            return;
+        }
         clear_results();
         if (command == "list") {
             auto schedules = data["schedules"].toObject();
-            QString out = schedules.isEmpty()
-                ? "No schedules configured."
-                : QString("Schedules (%1)\n\n").arg(schedules.size());
+            QString out =
+                schedules.isEmpty() ? "No schedules configured." : QString("Schedules (%1)\n\n").arg(schedules.size());
             for (auto it = schedules.begin(); it != schedules.end(); ++it) {
                 auto obj = it.value().toObject();
                 out += QString("• %1\n  Freq: %2  |  Window: %3 days  |  Next: %4\n")
@@ -2165,11 +2247,11 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         }
         if (command == "create") {
             auto sched = data["schedule"].toObject();
-            auto* lbl = new QLabel(
-                QString("Schedule created for %1\nFreq: %2  |  Window: %3 days\nNext run: %4")
-                    .arg(data["model_id"].toString(), sched["freq"].toString())
-                    .arg(sched["window"].toInt())
-                    .arg(sched["next_run"].toString()), this);
+            auto* lbl = new QLabel(QString("Schedule created for %1\nFreq: %2  |  Window: %3 days\nNext run: %4")
+                                       .arg(data["model_id"].toString(), sched["freq"].toString())
+                                       .arg(sched["window"].toInt())
+                                       .arg(sched["next_run"].toString()),
+                                   this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
@@ -2184,7 +2266,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             status_label_->setText("Retrain complete");
             return;
         }
-        display_result(data); return;
+        display_result(data);
+        return;
     }
 
     display_result(data);
@@ -2207,10 +2290,8 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
 
-
-
     // ── Indicators tab ──
-    auto* ind = new QWidget;
+    auto* ind = new QWidget(this);
     auto* ivl = new QVBoxLayout(ind);
     ivl->setContentsMargins(12, 12, 12, 12);
     ivl->setSpacing(8);
@@ -2222,8 +2303,8 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
     ivl->addWidget(build_input_row("Price Data", ind_data, ind));
 
     auto* ind_indicator = new QComboBox(ind);
-    ind_indicator->addItems({"moving_average", "rsi", "macd", "bollinger_bands",
-                              "momentum", "volatility", "returns", "log_returns", "drawdown"});
+    ind_indicator->addItems({"moving_average", "rsi", "macd", "bollinger_bands", "momentum", "volatility", "returns",
+                             "log_returns", "drawdown"});
     ind_indicator->setStyleSheet(combo_ss());
     combo_inputs_["fe_indicator"] = ind_indicator;
     ivl->addWidget(build_input_row("Indicator", ind_indicator, ind));
@@ -2239,9 +2320,9 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
     connect(ind_run, &QPushButton::clicked, this, [this]() {
         status_label_->setText("Computing...");
         QJsonObject params;
-        params["data"]      = text_inputs_["fe_data"]->text();
+        params["data"] = text_inputs_["fe_data"]->text();
         params["indicator"] = combo_inputs_["fe_indicator"]->currentText();
-        params["window"]    = int_inputs_["fe_window"]->value();
+        params["window"] = int_inputs_["fe_window"]->value();
         AIQuantLabService::instance().feature_compute(params);
     });
     ivl->addWidget(ind_run);
@@ -2249,7 +2330,7 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
     tabs->addTab(ind, "Indicators");
 
     // ── Feature Selection tab ──
-    auto* sel = new QWidget;
+    auto* sel = new QWidget(this);
     auto* svl = new QVBoxLayout(sel);
     svl->setContentsMargins(12, 12, 12, 12);
     svl->setSpacing(8);
@@ -2279,9 +2360,10 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
         QJsonObject params;
         auto feat_text = text_inputs_["fe_sel_features"]->text();
         auto doc = QJsonDocument::fromJson(feat_text.toUtf8());
-        if (!doc.isNull()) params["features"] = doc.object();
+        if (!doc.isNull())
+            params["features"] = doc.object();
         params["returns"] = text_inputs_["fe_sel_returns"]->text();
-        params["top_k"]   = int_inputs_["fe_topk"]->value();
+        params["top_k"] = int_inputs_["fe_topk"]->value();
         AIQuantLabService::instance().feature_select_by_ic(params);
     });
     svl->addWidget(sel_run);
@@ -2289,7 +2371,7 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
     tabs->addTab(sel, "Feature Selection");
 
     // ── Expression Engine tab ──
-    auto* expr = new QWidget;
+    auto* expr = new QWidget(this);
     auto* evl = new QVBoxLayout(expr);
     evl->setContentsMargins(12, 12, 12, 12);
     evl->setSpacing(8);
@@ -2312,7 +2394,8 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
         QJsonObject params;
         auto data_text = text_inputs_["fe_expr_data"]->text();
         auto doc = QJsonDocument::fromJson(data_text.toUtf8());
-        if (!doc.isNull()) params["data"] = doc.object();
+        if (!doc.isNull())
+            params["data"] = doc.object();
         params["expression"] = text_inputs_["fe_expression"]->text();
         AIQuantLabService::instance().feature_evaluate_expression(params);
     });
@@ -2338,12 +2421,9 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
 
-
-
     // ── Shared covariance / returns helper ──
-    auto make_cov_tab = [&](const QString& method_id, const QString& btn_label,
-                             bool needs_returns) -> QWidget* {
-        auto* t = new QWidget;
+    auto make_cov_tab = [&](const QString& method_id, const QString& btn_label, bool needs_returns) -> QWidget* {
+        auto* t = new QWidget(this);
         auto* tvl = new QVBoxLayout(t);
         tvl->setContentsMargins(12, 12, 12, 12);
         tvl->setSpacing(8);
@@ -2378,10 +2458,12 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
             QJsonObject params;
             auto assets_str = text_inputs_[method_id + "_assets"]->text().split(',');
             QJsonArray assets_arr;
-            for (auto& a : assets_str) assets_arr.append(a.trimmed());
+            for (auto& a : assets_str)
+                assets_arr.append(a.trimmed());
             params["assets"] = assets_arr;
             auto cov_doc = QJsonDocument::fromJson(text_inputs_[method_id + "_cov"]->text().toUtf8());
-            if (!cov_doc.isNull()) params["cov_matrix"] = cov_doc.array();
+            if (!cov_doc.isNull())
+                params["cov_matrix"] = cov_doc.array();
             if (needs_returns) {
                 QJsonArray ret_arr;
                 for (auto& r : text_inputs_[method_id + "_returns"]->text().split(','))
@@ -2396,13 +2478,13 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
         return t;
     };
 
-    tabs->addTab(make_cov_tab("hierarchical_risk_parity", "RUN HRP", false),        "HRP");
-    tabs->addTab(make_cov_tab("minimum_variance",         "MIN VARIANCE",    false), "Min Variance");
-    tabs->addTab(make_cov_tab("maximum_sharpe",           "MAX SHARPE",      true),  "Max Sharpe");
-    tabs->addTab(make_cov_tab("efficient_frontier",       "EFFICIENT FRONTIER", true), "Eff. Frontier");
+    tabs->addTab(make_cov_tab("hierarchical_risk_parity", "RUN HRP", false), "HRP");
+    tabs->addTab(make_cov_tab("minimum_variance", "MIN VARIANCE", false), "Min Variance");
+    tabs->addTab(make_cov_tab("maximum_sharpe", "MAX SHARPE", true), "Max Sharpe");
+    tabs->addTab(make_cov_tab("efficient_frontier", "EFFICIENT FRONTIER", true), "Eff. Frontier");
 
     // ── Black-Litterman ──
-    auto* bl = new QWidget;
+    auto* bl = new QWidget(this);
     auto* blvl = new QVBoxLayout(bl);
     blvl->setContentsMargins(12, 12, 12, 12);
     blvl->setSpacing(8);
@@ -2436,16 +2518,21 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
         status_label_->setText("Running BL...");
         QJsonObject params;
         QJsonArray caps, views, confs, assets;
-        for (auto& v : text_inputs_["bl_caps"]->text().split(','))   caps.append(v.trimmed().toDouble());
-        for (auto& v : text_inputs_["bl_views"]->text().split(','))  views.append(v.trimmed().toDouble());
-        for (auto& v : text_inputs_["bl_conf"]->text().split(','))   confs.append(v.trimmed().toDouble());
-        for (auto& v : text_inputs_["bl_assets"]->text().split(',')) assets.append(v.trimmed());
-        params["market_caps"]      = caps;
-        params["views"]            = views;
+        for (auto& v : text_inputs_["bl_caps"]->text().split(','))
+            caps.append(v.trimmed().toDouble());
+        for (auto& v : text_inputs_["bl_views"]->text().split(','))
+            views.append(v.trimmed().toDouble());
+        for (auto& v : text_inputs_["bl_conf"]->text().split(','))
+            confs.append(v.trimmed().toDouble());
+        for (auto& v : text_inputs_["bl_assets"]->text().split(','))
+            assets.append(v.trimmed());
+        params["market_caps"] = caps;
+        params["views"] = views;
         params["view_confidences"] = confs;
-        params["assets"]           = assets;
+        params["assets"] = assets;
         auto cov_doc = QJsonDocument::fromJson(text_inputs_["bl_cov"]->text().toUtf8());
-        if (!cov_doc.isNull()) params["cov_matrix"] = cov_doc.array();
+        if (!cov_doc.isNull())
+            params["cov_matrix"] = cov_doc.array();
         AIQuantLabService::instance().portopt_run("black_litterman", params);
     });
     blvl->addWidget(bl_run);
@@ -2470,10 +2557,8 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
 
-
-
     // ── IC Metrics tab ──
-    auto* ic = new QWidget;
+    auto* ic = new QWidget(this);
     auto* icvl = new QVBoxLayout(ic);
     icvl->setContentsMargins(12, 12, 12, 12);
     icvl->setSpacing(8);
@@ -2497,11 +2582,13 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
         status_label_->setText("Calculating...");
         QJsonObject params;
         QJsonArray preds, rets;
-        for (auto& v : text_inputs_["ev_predictions"]->text().split(',')) preds.append(v.trimmed().toDouble());
-        for (auto& v : text_inputs_["ev_returns"]->text().split(','))     rets.append(v.trimmed().toDouble());
+        for (auto& v : text_inputs_["ev_predictions"]->text().split(','))
+            preds.append(v.trimmed().toDouble());
+        for (auto& v : text_inputs_["ev_returns"]->text().split(','))
+            rets.append(v.trimmed().toDouble());
         params["predictions"] = preds;
-        params["returns"]     = rets;
-        params["method"]      = combo_inputs_["ev_ic_method"]->currentText();
+        params["returns"] = rets;
+        params["method"] = combo_inputs_["ev_ic_method"]->currentText();
         AIQuantLabService::instance().evaluation_ic(params);
     });
     icvl->addWidget(ic_run);
@@ -2509,7 +2596,7 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
     tabs->addTab(ic, "IC Metrics");
 
     // ── Full Report tab ──
-    auto* rep = new QWidget;
+    auto* rep = new QWidget(this);
     auto* repvl = new QVBoxLayout(rep);
     repvl->setContentsMargins(12, 12, 12, 12);
     repvl->setSpacing(8);
@@ -2533,11 +2620,13 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
         status_label_->setText("Generating...");
         QJsonObject params;
         QJsonArray preds, rets;
-        for (auto& v : text_inputs_["ev_rep_preds"]->text().split(','))   preds.append(v.trimmed().toDouble());
-        for (auto& v : text_inputs_["ev_rep_returns"]->text().split(',')) rets.append(v.trimmed().toDouble());
-        params["factor_name"]  = text_inputs_["ev_factor_name"]->text();
-        params["predictions"]  = preds;
-        params["returns"]      = rets;
+        for (auto& v : text_inputs_["ev_rep_preds"]->text().split(','))
+            preds.append(v.trimmed().toDouble());
+        for (auto& v : text_inputs_["ev_rep_returns"]->text().split(','))
+            rets.append(v.trimmed().toDouble());
+        params["factor_name"] = text_inputs_["ev_factor_name"]->text();
+        params["predictions"] = preds;
+        params["returns"] = rets;
         AIQuantLabService::instance().evaluation_report(params);
     });
     repvl->addWidget(rep_run);
@@ -2545,7 +2634,7 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
     tabs->addTab(rep, "Full Report");
 
     // ── Risk Metrics tab ──
-    auto* risk = new QWidget;
+    auto* risk = new QWidget(this);
     auto* riskvl = new QVBoxLayout(risk);
     riskvl->setContentsMargins(12, 12, 12, 12);
     riskvl->setSpacing(8);
@@ -2567,13 +2656,15 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
         status_label_->setText("Calculating...");
         QJsonObject params;
         QJsonArray rets;
-        for (auto& v : text_inputs_["ev_risk_returns"]->text().split(',')) rets.append(v.trimmed().toDouble());
-        params["returns"]          = rets;
+        for (auto& v : text_inputs_["ev_risk_returns"]->text().split(','))
+            rets.append(v.trimmed().toDouble());
+        params["returns"] = rets;
         params["confidence_level"] = double_inputs_["ev_risk_conf"]->value();
         auto bench_text = text_inputs_["ev_risk_bench"]->text().trimmed();
         if (!bench_text.isEmpty()) {
             QJsonArray bench;
-            for (auto& v : bench_text.split(',')) bench.append(v.trimmed().toDouble());
+            for (auto& v : bench_text.split(','))
+                bench.append(v.trimmed().toDouble());
             params["benchmark_returns"] = bench;
         }
         AIQuantLabService::instance().evaluation_risk_metrics(params);
@@ -2600,10 +2691,8 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
 
-
-
     // ── TopK-Dropout ──
-    auto* topk = new QWidget;
+    auto* topk = new QWidget(this);
     auto* tkvl = new QVBoxLayout(topk);
     tkvl->setContentsMargins(12, 12, 12, 12);
     tkvl->setSpacing(8);
@@ -2613,12 +2702,14 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
     text_inputs_["st_tk_signal"] = tk_signal;
     tkvl->addWidget(build_input_row("Signal", tk_signal, topk));
     auto* tk_topk = new QSpinBox(topk);
-    tk_topk->setRange(1, 500); tk_topk->setValue(50);
+    tk_topk->setRange(1, 500);
+    tk_topk->setValue(50);
     tk_topk->setStyleSheet(spinbox_ss());
     int_inputs_["st_topk"] = tk_topk;
     tkvl->addWidget(build_input_row("Top-K", tk_topk, topk));
     auto* tk_drop = new QSpinBox(topk);
-    tk_drop->setRange(1, 100); tk_drop->setValue(5);
+    tk_drop->setRange(1, 100);
+    tk_drop->setValue(5);
     tk_drop->setStyleSheet(tk_topk->styleSheet());
     int_inputs_["st_ndrop"] = tk_drop;
     tkvl->addWidget(build_input_row("N-Drop", tk_drop, topk));
@@ -2627,9 +2718,10 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
         status_label_->setText("Creating...");
         QJsonObject params;
         QJsonArray signal;
-        for (auto& v : text_inputs_["st_tk_signal"]->text().split(',')) signal.append(v.trimmed().toDouble());
+        for (auto& v : text_inputs_["st_tk_signal"]->text().split(','))
+            signal.append(v.trimmed().toDouble());
         params["signal"] = signal;
-        params["topk"]   = int_inputs_["st_topk"]->value();
+        params["topk"] = int_inputs_["st_topk"]->value();
         params["n_drop"] = int_inputs_["st_ndrop"]->value();
         AIQuantLabService::instance().strategy_create("create_topk_dropout", params);
     });
@@ -2638,7 +2730,7 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
     tabs->addTab(topk, "TopK-Dropout");
 
     // ── Risk Parity ──
-    auto* rp = new QWidget;
+    auto* rp = new QWidget(this);
     auto* rpvl = new QVBoxLayout(rp);
     rpvl->setContentsMargins(12, 12, 12, 12);
     rpvl->setSpacing(8);
@@ -2660,9 +2752,10 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
         status_label_->setText("Creating...");
         QJsonObject params;
         auto ret_doc = QJsonDocument::fromJson(text_inputs_["st_rp_returns"]->text().toUtf8());
-        if (!ret_doc.isNull()) params["returns"] = ret_doc.array();
-        params["target_risk"]          = double_inputs_["st_rp_target"]->value();
-        params["rebalance_frequency"]  = combo_inputs_["st_rp_freq"]->currentText();
+        if (!ret_doc.isNull())
+            params["returns"] = ret_doc.array();
+        params["target_risk"] = double_inputs_["st_rp_target"]->value();
+        params["rebalance_frequency"] = combo_inputs_["st_rp_freq"]->currentText();
         AIQuantLabService::instance().strategy_create("create_risk_parity", params);
     });
     rpvl->addWidget(rp_run);
@@ -2670,7 +2763,7 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
     tabs->addTab(rp, "Risk Parity");
 
     // ── Portfolio Metrics ──
-    auto* pm = new QWidget;
+    auto* pm = new QWidget(this);
     auto* pmvl = new QVBoxLayout(pm);
     pmvl->setContentsMargins(12, 12, 12, 12);
     pmvl->setSpacing(8);
@@ -2692,13 +2785,15 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
         status_label_->setText("Calculating...");
         QJsonObject params;
         QJsonArray rets;
-        for (auto& v : text_inputs_["st_pm_returns"]->text().split(',')) rets.append(v.trimmed().toDouble());
-        params["returns"]       = rets;
+        for (auto& v : text_inputs_["st_pm_returns"]->text().split(','))
+            rets.append(v.trimmed().toDouble());
+        params["returns"] = rets;
         params["risk_free_rate"] = double_inputs_["st_pm_rf"]->value() / 100.0;
         auto bench_text = text_inputs_["st_pm_bench"]->text().trimmed();
         if (!bench_text.isEmpty()) {
             QJsonArray bench;
-            for (auto& v : bench_text.split(',')) bench.append(v.trimmed().toDouble());
+            for (auto& v : bench_text.split(','))
+                bench.append(v.trimmed().toDouble());
             params["benchmark_returns"] = bench;
         }
         AIQuantLabService::instance().strategy_portfolio_metrics(params);
@@ -2722,20 +2817,20 @@ QWidget* QuantModulePanel::build_data_processors_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-
-
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── List Processors ──
-    auto* list_tab = new QWidget;
+    auto* list_tab = new QWidget(this);
     auto* ltvl = new QVBoxLayout(list_tab);
     ltvl->setContentsMargins(12, 12, 12, 12);
     ltvl->setSpacing(8);
     auto* lt_info = new QLabel("Browse all available data normalizers and transformation processors.", list_tab);
     lt_info->setWordWrap(true);
     lt_info->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                               .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+                               .arg(ui::colors::TEXT_SECONDARY)
+                               .arg(ui::fonts::SMALL)
+                               .arg(ui::fonts::DATA_FAMILY));
     ltvl->addWidget(lt_info);
     auto* lt_run = make_run_button("LIST ALL PROCESSORS", list_tab);
     connect(lt_run, &QPushButton::clicked, this, [this]() {
@@ -2747,7 +2842,7 @@ QWidget* QuantModulePanel::build_data_processors_panel() {
     tabs->addTab(list_tab, "Browse");
 
     // ── Create Pipeline ──
-    auto* pipe_tab = new QWidget;
+    auto* pipe_tab = new QWidget(this);
     auto* ptvl = new QVBoxLayout(pipe_tab);
     ptvl->setContentsMargins(12, 12, 12, 12);
     ptvl->setSpacing(8);
@@ -2767,7 +2862,8 @@ QWidget* QuantModulePanel::build_data_processors_panel() {
         QJsonObject params;
         params["pipeline_id"] = text_inputs_["dp_pipeline_id"]->text();
         auto doc = QJsonDocument::fromJson(text_inputs_["dp_processors"]->text().toUtf8());
-        if (!doc.isNull()) params["processors"] = doc.array();
+        if (!doc.isNull())
+            params["processors"] = doc.array();
         AIQuantLabService::instance().dataproc_create_pipeline(params);
     });
     ptvl->addWidget(pipe_run);
@@ -2775,7 +2871,7 @@ QWidget* QuantModulePanel::build_data_processors_panel() {
     tabs->addTab(pipe_tab, "Create Pipeline");
 
     // ── Process Data ──
-    auto* proc_tab = new QWidget;
+    auto* proc_tab = new QWidget(this);
     auto* procvl = new QVBoxLayout(proc_tab);
     procvl->setContentsMargins(12, 12, 12, 12);
     procvl->setSpacing(8);
@@ -2795,7 +2891,8 @@ QWidget* QuantModulePanel::build_data_processors_panel() {
         QJsonObject params;
         params["pipeline_id"] = text_inputs_["dp_proc_pid"]->text();
         auto doc = QJsonDocument::fromJson(text_inputs_["dp_proc_data"]->text().toUtf8());
-        if (!doc.isNull()) params["data"] = doc.object();
+        if (!doc.isNull())
+            params["data"] = doc.object();
         AIQuantLabService::instance().dataproc_process_data(params);
     });
     procvl->addWidget(proc_run);
@@ -2820,10 +2917,8 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
 
-
-
     // ── IC Analysis ──
-    auto* ic_tab = new QWidget;
+    auto* ic_tab = new QWidget(this);
     auto* icvl = new QVBoxLayout(ic_tab);
     icvl->setContentsMargins(12, 12, 12, 12);
     icvl->setSpacing(8);
@@ -2847,11 +2942,13 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
         status_label_->setText("Analyzing...");
         QJsonObject params;
         QJsonArray preds, rets;
-        for (auto& v : text_inputs_["rp_ic_preds"]->text().split(',')) preds.append(v.trimmed().toDouble());
-        for (auto& v : text_inputs_["rp_ic_rets"]->text().split(','))  rets.append(v.trimmed().toDouble());
+        for (auto& v : text_inputs_["rp_ic_preds"]->text().split(','))
+            preds.append(v.trimmed().toDouble());
+        for (auto& v : text_inputs_["rp_ic_rets"]->text().split(','))
+            rets.append(v.trimmed().toDouble());
         params["predictions"] = preds;
-        params["returns"]     = rets;
-        params["method"]      = combo_inputs_["rp_ic_method"]->currentText();
+        params["returns"] = rets;
+        params["method"] = combo_inputs_["rp_ic_method"]->currentText();
         AIQuantLabService::instance().reporting_ic_analysis(params);
     });
     icvl->addWidget(ic_run);
@@ -2859,7 +2956,7 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     tabs->addTab(ic_tab, "IC Analysis");
 
     // ── Model Performance ──
-    auto* mp_tab = new QWidget;
+    auto* mp_tab = new QWidget(this);
     auto* mpvl = new QVBoxLayout(mp_tab);
     mpvl->setContentsMargins(12, 12, 12, 12);
     mpvl->setSpacing(8);
@@ -2883,12 +2980,14 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
         status_label_->setText("Generating...");
         QJsonObject params;
         QJsonArray preds, rets;
-        for (auto& v : text_inputs_["rp_mp_preds"]->text().split(',')) preds.append(v.trimmed().toDouble());
-        for (auto& v : text_inputs_["rp_mp_rets"]->text().split(','))  rets.append(v.trimmed().toDouble());
+        for (auto& v : text_inputs_["rp_mp_preds"]->text().split(','))
+            preds.append(v.trimmed().toDouble());
+        for (auto& v : text_inputs_["rp_mp_rets"]->text().split(','))
+            rets.append(v.trimmed().toDouble());
         params["predictions"] = preds;
-        params["returns"]     = rets;
-        params["model_name"]  = text_inputs_["rp_mp_name"]->text().isEmpty()
-                                   ? QString("Model") : text_inputs_["rp_mp_name"]->text();
+        params["returns"] = rets;
+        params["model_name"] =
+            text_inputs_["rp_mp_name"]->text().isEmpty() ? QString("Model") : text_inputs_["rp_mp_name"]->text();
         AIQuantLabService::instance().reporting_model_performance(params);
     });
     mpvl->addWidget(mp_run);
@@ -2896,7 +2995,7 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     tabs->addTab(mp_tab, "Model Performance");
 
     // ── Cumulative Returns ──
-    auto* cr_tab = new QWidget;
+    auto* cr_tab = new QWidget(this);
     auto* crvl = new QVBoxLayout(cr_tab);
     crvl->setContentsMargins(12, 12, 12, 12);
     crvl->setSpacing(8);
@@ -2920,12 +3019,14 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
         status_label_->setText("Generating...");
         QJsonObject params;
         QJsonArray rets;
-        for (auto& v : text_inputs_["rp_cr_rets"]->text().split(',')) rets.append(v.trimmed().toDouble());
+        for (auto& v : text_inputs_["rp_cr_rets"]->text().split(','))
+            rets.append(v.trimmed().toDouble());
         params["returns"] = rets;
         auto bench_text = text_inputs_["rp_cr_bench"]->text().trimmed();
         if (!bench_text.isEmpty()) {
             QJsonArray bench;
-            for (auto& v : bench_text.split(',')) bench.append(v.trimmed().toDouble());
+            for (auto& v : bench_text.split(','))
+                bench.append(v.trimmed().toDouble());
             params["benchmark_returns"] = bench;
         }
         auto title = text_inputs_["rp_cr_title"]->text().trimmed();
@@ -2951,20 +3052,20 @@ QWidget* QuantModulePanel::build_factor_discovery_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-
-
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Factor Library ──
-    auto* lib_tab = new QWidget;
+    auto* lib_tab = new QWidget(this);
     auto* libvl = new QVBoxLayout(lib_tab);
     libvl->setContentsMargins(12, 12, 12, 12);
     libvl->setSpacing(8);
     auto* lib_info = new QLabel("Browse all built-in Qlib alpha factors and expressions.", lib_tab);
     lib_info->setWordWrap(true);
     lib_info->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+                                .arg(ui::colors::TEXT_SECONDARY)
+                                .arg(ui::fonts::SMALL)
+                                .arg(ui::fonts::DATA_FAMILY));
     libvl->addWidget(lib_info);
     auto* lib_run = make_run_button("BROWSE FACTOR LIBRARY", lib_tab);
     connect(lib_run, &QPushButton::clicked, this, [this]() {
@@ -2982,7 +3083,7 @@ QWidget* QuantModulePanel::build_factor_discovery_panel() {
     tabs->addTab(lib_tab, "Factor Library");
 
     // ── Fetch Data ──
-    auto* data_tab = new QWidget;
+    auto* data_tab = new QWidget(this);
     auto* datavl = new QVBoxLayout(data_tab);
     datavl->setContentsMargins(12, 12, 12, 12);
     datavl->setSpacing(8);
@@ -3012,14 +3113,18 @@ QWidget* QuantModulePanel::build_factor_discovery_panel() {
         QJsonObject params;
         QJsonArray instr;
         for (auto& s : text_inputs_["fd_instruments"]->text().split(','))
-            if (!s.trimmed().isEmpty()) instr.append(s.trimmed().toLower());
+            if (!s.trimmed().isEmpty())
+                instr.append(s.trimmed().toLower());
         params["instruments"] = instr;
         QJsonArray fields;
         for (auto& s : text_inputs_["fd_fields"]->text().split(','))
-            if (!s.trimmed().isEmpty()) fields.append(s.trimmed());
+            if (!s.trimmed().isEmpty())
+                fields.append(s.trimmed());
         params["fields"] = fields;
-        if (!text_inputs_["fd_start"]->text().isEmpty()) params["start_date"] = text_inputs_["fd_start"]->text().trimmed();
-        if (!text_inputs_["fd_end"]->text().isEmpty())   params["end_date"]   = text_inputs_["fd_end"]->text().trimmed();
+        if (!text_inputs_["fd_start"]->text().isEmpty())
+            params["start_date"] = text_inputs_["fd_start"]->text().trimmed();
+        if (!text_inputs_["fd_end"]->text().isEmpty())
+            params["end_date"] = text_inputs_["fd_end"]->text().trimmed();
         AIQuantLabService::instance().factor_get_data(params);
     });
     datavl->addWidget(fd_run);
@@ -3027,7 +3132,7 @@ QWidget* QuantModulePanel::build_factor_discovery_panel() {
     tabs->addTab(data_tab, "Fetch Data");
 
     // ── Calendar ──
-    auto* cal_tab = new QWidget;
+    auto* cal_tab = new QWidget(this);
     auto* calvl = new QVBoxLayout(cal_tab);
     calvl->setContentsMargins(12, 12, 12, 12);
     calvl->setSpacing(8);
@@ -3045,8 +3150,10 @@ QWidget* QuantModulePanel::build_factor_discovery_panel() {
     connect(cal_run, &QPushButton::clicked, this, [this]() {
         status_label_->setText("Loading...");
         QJsonObject params;
-        if (!text_inputs_["fd_cal_start"]->text().isEmpty()) params["start_date"] = text_inputs_["fd_cal_start"]->text().trimmed();
-        if (!text_inputs_["fd_cal_end"]->text().isEmpty())   params["end_date"]   = text_inputs_["fd_cal_end"]->text().trimmed();
+        if (!text_inputs_["fd_cal_start"]->text().isEmpty())
+            params["start_date"] = text_inputs_["fd_cal_start"]->text().trimmed();
+        if (!text_inputs_["fd_cal_end"]->text().isEmpty())
+            params["end_date"] = text_inputs_["fd_cal_end"]->text().trimmed();
         AIQuantLabService::instance().factor_get_calendar(params);
     });
     calvl->addWidget(cal_run);
@@ -3068,21 +3175,21 @@ QWidget* QuantModulePanel::build_model_library_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-
-
-
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Model Browser ──
-    auto* browse_tab = new QWidget;
+    auto* browse_tab = new QWidget(this);
     auto* btvl = new QVBoxLayout(browse_tab);
     btvl->setContentsMargins(12, 12, 12, 12);
     btvl->setSpacing(8);
-    auto* bt_info = new QLabel("List all available Qlib models (LightGBM, XGBoost, LSTM, Transformer, etc.).", browse_tab);
+    auto* bt_info =
+        new QLabel("List all available Qlib models (LightGBM, XGBoost, LSTM, Transformer, etc.).", browse_tab);
     bt_info->setWordWrap(true);
     bt_info->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                               .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+                               .arg(ui::colors::TEXT_SECONDARY)
+                               .arg(ui::fonts::SMALL)
+                               .arg(ui::fonts::DATA_FAMILY));
     btvl->addWidget(bt_info);
     auto* bt_list = make_run_button("LIST ALL MODELS", browse_tab);
     connect(bt_list, &QPushButton::clicked, this, [this]() {
@@ -3100,7 +3207,7 @@ QWidget* QuantModulePanel::build_model_library_panel() {
     tabs->addTab(browse_tab, "Browse");
 
     // ── Train Model ──
-    auto* train_tab = new QWidget;
+    auto* train_tab = new QWidget(this);
     auto* ttvl = new QVBoxLayout(train_tab);
     ttvl->setContentsMargins(12, 12, 12, 12);
     ttvl->setSpacing(8);
@@ -3131,10 +3238,13 @@ QWidget* QuantModulePanel::build_model_library_panel() {
         params["model_type"] = combo_inputs_["ml_model_type"]->currentText();
         QJsonArray instr;
         for (auto& s : text_inputs_["ml_instruments"]->text().split(','))
-            if (!s.trimmed().isEmpty()) instr.append(s.trimmed().toLower());
+            if (!s.trimmed().isEmpty())
+                instr.append(s.trimmed().toLower());
         params["instruments"] = instr;
-        if (!text_inputs_["ml_start"]->text().isEmpty()) params["start_date"] = text_inputs_["ml_start"]->text().trimmed();
-        if (!text_inputs_["ml_end"]->text().isEmpty())   params["end_date"]   = text_inputs_["ml_end"]->text().trimmed();
+        if (!text_inputs_["ml_start"]->text().isEmpty())
+            params["start_date"] = text_inputs_["ml_start"]->text().trimmed();
+        if (!text_inputs_["ml_end"]->text().isEmpty())
+            params["end_date"] = text_inputs_["ml_end"]->text().trimmed();
         AIQuantLabService::instance().model_train(params);
     });
     ttvl->addWidget(ml_run);
@@ -3142,7 +3252,7 @@ QWidget* QuantModulePanel::build_model_library_panel() {
     tabs->addTab(train_tab, "Train Model");
 
     // ── Backtest ──
-    auto* bt_tab = new QWidget;
+    auto* bt_tab = new QWidget(this);
     auto* btvl2 = new QVBoxLayout(bt_tab);
     btvl2->setContentsMargins(12, 12, 12, 12);
     btvl2->setSpacing(8);
@@ -3173,10 +3283,13 @@ QWidget* QuantModulePanel::build_model_library_panel() {
         params["model_id"] = text_inputs_["ml_bt_model"]->text().trimmed();
         QJsonArray instr;
         for (auto& s : text_inputs_["ml_bt_instr"]->text().split(','))
-            if (!s.trimmed().isEmpty()) instr.append(s.trimmed().toLower());
+            if (!s.trimmed().isEmpty())
+                instr.append(s.trimmed().toLower());
         params["instruments"] = instr;
-        if (!text_inputs_["ml_bt_start"]->text().isEmpty()) params["start_date"] = text_inputs_["ml_bt_start"]->text().trimmed();
-        if (!text_inputs_["ml_bt_end"]->text().isEmpty())   params["end_date"]   = text_inputs_["ml_bt_end"]->text().trimmed();
+        if (!text_inputs_["ml_bt_start"]->text().isEmpty())
+            params["start_date"] = text_inputs_["ml_bt_start"]->text().trimmed();
+        if (!text_inputs_["ml_bt_end"]->text().isEmpty())
+            params["end_date"] = text_inputs_["ml_bt_end"]->text().trimmed();
         AIQuantLabService::instance().model_backtest(params);
     });
     btvl2->addWidget(bt_run2);
@@ -3198,13 +3311,11 @@ QWidget* QuantModulePanel::build_live_signals_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-
-
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Signal Data ──
-    auto* sig_tab = new QWidget;
+    auto* sig_tab = new QWidget(this);
     auto* sigvl = new QVBoxLayout(sig_tab);
     sigvl->setContentsMargins(12, 12, 12, 12);
     sigvl->setSpacing(8);
@@ -3234,14 +3345,18 @@ QWidget* QuantModulePanel::build_live_signals_panel() {
         QJsonObject params;
         QJsonArray instr;
         for (auto& s : text_inputs_["ls_instruments"]->text().split(','))
-            if (!s.trimmed().isEmpty()) instr.append(s.trimmed().toLower());
+            if (!s.trimmed().isEmpty())
+                instr.append(s.trimmed().toLower());
         params["instruments"] = instr;
         QJsonArray fields;
         for (auto& s : text_inputs_["ls_fields"]->text().split(','))
-            if (!s.trimmed().isEmpty()) fields.append(s.trimmed());
+            if (!s.trimmed().isEmpty())
+                fields.append(s.trimmed());
         params["fields"] = fields;
-        if (!text_inputs_["ls_start"]->text().isEmpty()) params["start_date"] = text_inputs_["ls_start"]->text().trimmed();
-        if (!text_inputs_["ls_end"]->text().isEmpty())   params["end_date"]   = text_inputs_["ls_end"]->text().trimmed();
+        if (!text_inputs_["ls_start"]->text().isEmpty())
+            params["start_date"] = text_inputs_["ls_start"]->text().trimmed();
+        if (!text_inputs_["ls_end"]->text().isEmpty())
+            params["end_date"] = text_inputs_["ls_end"]->text().trimmed();
         AIQuantLabService::instance().signals_get_data(params);
     });
     sigvl->addWidget(sig_run);
@@ -3249,7 +3364,7 @@ QWidget* QuantModulePanel::build_live_signals_panel() {
     tabs->addTab(sig_tab, "Signal Data");
 
     // ── Factor Analysis ──
-    auto* fa_tab = new QWidget;
+    auto* fa_tab = new QWidget(this);
     auto* favl = new QVBoxLayout(fa_tab);
     favl->setContentsMargins(12, 12, 12, 12);
     favl->setSpacing(8);
@@ -3274,10 +3389,13 @@ QWidget* QuantModulePanel::build_live_signals_panel() {
         QJsonObject params;
         QJsonArray instr;
         for (auto& s : text_inputs_["ls_fa_instr"]->text().split(','))
-            if (!s.trimmed().isEmpty()) instr.append(s.trimmed().toLower());
+            if (!s.trimmed().isEmpty())
+                instr.append(s.trimmed().toLower());
         params["instruments"] = instr;
-        if (!text_inputs_["ls_fa_start"]->text().isEmpty()) params["start_date"] = text_inputs_["ls_fa_start"]->text().trimmed();
-        if (!text_inputs_["ls_fa_end"]->text().isEmpty())   params["end_date"]   = text_inputs_["ls_fa_end"]->text().trimmed();
+        if (!text_inputs_["ls_fa_start"]->text().isEmpty())
+            params["start_date"] = text_inputs_["ls_fa_start"]->text().trimmed();
+        if (!text_inputs_["ls_fa_end"]->text().isEmpty())
+            params["end_date"] = text_inputs_["ls_fa_end"]->text().trimmed();
         AIQuantLabService::instance().signals_get_factor_analysis(params);
     });
     favl->addWidget(fa_run);
@@ -3285,7 +3403,7 @@ QWidget* QuantModulePanel::build_live_signals_panel() {
     tabs->addTab(fa_tab, "Factor Analysis");
 
     // ── Feature Importance ──
-    auto* fi_tab = new QWidget;
+    auto* fi_tab = new QWidget(this);
     auto* fivl = new QVBoxLayout(fi_tab);
     fivl->setContentsMargins(12, 12, 12, 12);
     fivl->setSpacing(8);
@@ -3320,21 +3438,20 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-
-
-
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Models ──
-    auto* models_tab = new QWidget;
+    auto* models_tab = new QWidget(this);
     auto* mtvl = new QVBoxLayout(models_tab);
     mtvl->setContentsMargins(12, 12, 12, 12);
     mtvl->setSpacing(8);
     auto* mt_info = new QLabel("Incrementally trained models that update on each new data point.", models_tab);
     mt_info->setWordWrap(true);
     mt_info->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                               .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+                               .arg(ui::colors::TEXT_SECONDARY)
+                               .arg(ui::fonts::SMALL)
+                               .arg(ui::fonts::DATA_FAMILY));
     mtvl->addWidget(mt_info);
     auto* mt_list = make_run_button("LIST ALL MODELS", models_tab);
     connect(mt_list, &QPushButton::clicked, this, [this]() {
@@ -3346,7 +3463,7 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
     tabs->addTab(models_tab, "Models");
 
     // ── Create Model ──
-    auto* create_tab = new QWidget;
+    auto* create_tab = new QWidget(this);
     auto* ctvl = new QVBoxLayout(create_tab);
     ctvl->setContentsMargins(12, 12, 12, 12);
     ctvl->setSpacing(8);
@@ -3366,7 +3483,8 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
         QJsonObject params;
         params["model_type"] = combo_inputs_["ol_model_type"]->currentText();
         auto mid = text_inputs_["ol_model_id"]->text().trimmed();
-        if (!mid.isEmpty()) params["model_id"] = mid;
+        if (!mid.isEmpty())
+            params["model_id"] = mid;
         AIQuantLabService::instance().online_create_model(params);
     });
     ctvl->addWidget(ol_create);
@@ -3374,7 +3492,7 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
     tabs->addTab(create_tab, "Create Model");
 
     // ── Incremental Train ──
-    auto* train_tab = new QWidget;
+    auto* train_tab = new QWidget(this);
     auto* ttvl = new QVBoxLayout(train_tab);
     ttvl->setContentsMargins(12, 12, 12, 12);
     ttvl->setSpacing(8);
@@ -3399,7 +3517,8 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
         QJsonObject params;
         params["model_id"] = text_inputs_["ol_train_id"]->text().trimmed();
         auto doc = QJsonDocument::fromJson(text_inputs_["ol_features"]->text().toUtf8());
-        if (!doc.isNull()) params["features"] = doc.object();
+        if (!doc.isNull())
+            params["features"] = doc.object();
         params["target"] = text_inputs_["ol_target"]->text().trimmed().toDouble();
         AIQuantLabService::instance().online_train(params);
     });
@@ -3408,7 +3527,7 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
     tabs->addTab(train_tab, "Incremental Train");
 
     // ── Predict ──
-    auto* pred_tab = new QWidget;
+    auto* pred_tab = new QWidget(this);
     auto* predvl = new QVBoxLayout(pred_tab);
     predvl->setContentsMargins(12, 12, 12, 12);
     predvl->setSpacing(8);
@@ -3428,7 +3547,8 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
         QJsonObject params;
         params["model_id"] = text_inputs_["ol_pred_id"]->text().trimmed();
         auto doc = QJsonDocument::fromJson(text_inputs_["ol_pred_feats"]->text().toUtf8());
-        if (!doc.isNull()) params["features"] = doc.object();
+        if (!doc.isNull())
+            params["features"] = doc.object();
         AIQuantLabService::instance().online_predict(params);
     });
     predvl->addWidget(ol_pred);
@@ -3458,21 +3578,20 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-
-
-
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Model Selection ──
-    auto* sel_tab = new QWidget;
+    auto* sel_tab = new QWidget(this);
     auto* selvl = new QVBoxLayout(sel_tab);
     selvl->setContentsMargins(12, 12, 12, 12);
     selvl->setSpacing(8);
     auto* sel_info = new QLabel("Automatically select the best model from a set of candidates.", sel_tab);
     sel_info->setWordWrap(true);
     sel_info->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+                                .arg(ui::colors::TEXT_SECONDARY)
+                                .arg(ui::fonts::SMALL)
+                                .arg(ui::fonts::DATA_FAMILY));
     selvl->addWidget(sel_info);
     auto* sel_list_btn = make_run_button("LIST AVAILABLE MODELS", sel_tab);
     connect(sel_list_btn, &QPushButton::clicked, this, [this]() {
@@ -3496,7 +3615,8 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
         QJsonObject params;
         QJsonArray model_ids;
         for (auto& s : text_inputs_["ml_sel_models"]->text().split(','))
-            if (!s.trimmed().isEmpty()) model_ids.append(s.trimmed());
+            if (!s.trimmed().isEmpty())
+                model_ids.append(s.trimmed());
         params["model_ids"] = model_ids;
         params["task_type"] = combo_inputs_["ml_sel_task"]->currentText();
         AIQuantLabService::instance().meta_run_selection(params);
@@ -3506,7 +3626,7 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
     tabs->addTab(sel_tab, "Model Selection");
 
     // ── Ensemble ──
-    auto* ens_tab = new QWidget;
+    auto* ens_tab = new QWidget(this);
     auto* ensvl = new QVBoxLayout(ens_tab);
     ensvl->setContentsMargins(12, 12, 12, 12);
     ensvl->setSpacing(8);
@@ -3526,7 +3646,8 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
         QJsonObject params;
         QJsonArray keys;
         for (auto& s : text_inputs_["ml_ens_keys"]->text().split(','))
-            if (!s.trimmed().isEmpty()) keys.append(s.trimmed());
+            if (!s.trimmed().isEmpty())
+                keys.append(s.trimmed());
         params["model_keys"] = keys;
         params["method"] = combo_inputs_["ml_ens_method"]->currentText();
         AIQuantLabService::instance().meta_create_ensemble(params);
@@ -3536,7 +3657,7 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
     tabs->addTab(ens_tab, "Ensemble");
 
     // ── Hyperparameter Tuning ──
-    auto* tune_tab = new QWidget;
+    auto* tune_tab = new QWidget(this);
     auto* tunevl = new QVBoxLayout(tune_tab);
     tunevl->setContentsMargins(12, 12, 12, 12);
     tunevl->setSpacing(8);
@@ -3561,7 +3682,8 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
         QJsonObject params;
         params["model_id"] = combo_inputs_["ml_tune_model"]->currentText();
         auto doc = QJsonDocument::fromJson(text_inputs_["ml_tune_grid"]->text().toUtf8());
-        if (!doc.isNull()) params["param_grid"] = doc.object();
+        if (!doc.isNull())
+            params["param_grid"] = doc.object();
         params["search_method"] = combo_inputs_["ml_tune_method"]->currentText();
         AIQuantLabService::instance().meta_tune_hyperparameters(params);
     });
@@ -3590,14 +3712,11 @@ QWidget* QuantModulePanel::build_hft_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-
-
-
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Order Book ──
-    auto* ob_tab = new QWidget;
+    auto* ob_tab = new QWidget(this);
     auto* obvl = new QVBoxLayout(ob_tab);
     obvl->setContentsMargins(12, 12, 12, 12);
     obvl->setSpacing(8);
@@ -3626,7 +3745,7 @@ QWidget* QuantModulePanel::build_hft_panel() {
     tabs->addTab(ob_tab, "Order Book");
 
     // ── Market Making ──
-    auto* mm_tab = new QWidget;
+    auto* mm_tab = new QWidget(this);
     auto* mmvl = new QVBoxLayout(mm_tab);
     mmvl->setContentsMargins(12, 12, 12, 12);
     mmvl->setSpacing(8);
@@ -3659,7 +3778,7 @@ QWidget* QuantModulePanel::build_hft_panel() {
     tabs->addTab(mm_tab, "Market Making");
 
     // ── Toxic Flow Detection ──
-    auto* toxic_tab = new QWidget;
+    auto* toxic_tab = new QWidget(this);
     auto* toxicvl = new QVBoxLayout(toxic_tab);
     toxicvl->setContentsMargins(12, 12, 12, 12);
     toxicvl->setSpacing(8);
@@ -3692,7 +3811,7 @@ QWidget* QuantModulePanel::build_hft_panel() {
     tabs->addTab(toxic_tab, "Toxic Flow");
 
     // ── Order Execution ──
-    auto* exec_tab = new QWidget;
+    auto* exec_tab = new QWidget(this);
     auto* execvl = new QVBoxLayout(exec_tab);
     execvl->setContentsMargins(12, 12, 12, 12);
     execvl->setSpacing(8);
@@ -3745,21 +3864,20 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-
-
-
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Schedules ──
-    auto* list_tab = new QWidget;
+    auto* list_tab = new QWidget(this);
     auto* ltvl = new QVBoxLayout(list_tab);
     ltvl->setContentsMargins(12, 12, 12, 12);
     ltvl->setSpacing(8);
     auto* lt_info = new QLabel("View all configured rolling retraining schedules.", list_tab);
     lt_info->setWordWrap(true);
     lt_info->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                               .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+                               .arg(ui::colors::TEXT_SECONDARY)
+                               .arg(ui::fonts::SMALL)
+                               .arg(ui::fonts::DATA_FAMILY));
     ltvl->addWidget(lt_info);
     auto* lt_run = make_run_button("LIST SCHEDULES", list_tab);
     connect(lt_run, &QPushButton::clicked, this, [this]() {
@@ -3771,7 +3889,7 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     tabs->addTab(list_tab, "Schedules");
 
     // ── Create Schedule ──
-    auto* create_tab = new QWidget;
+    auto* create_tab = new QWidget(this);
     auto* ctvl = new QVBoxLayout(create_tab);
     ctvl->setContentsMargins(12, 12, 12, 12);
     ctvl->setSpacing(8);
@@ -3794,10 +3912,11 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     connect(rr_create, &QPushButton::clicked, this, [this]() {
         status_label_->setText("Creating...");
         QJsonObject params;
-        params["model_id"]   = text_inputs_["rr_model_id"]->text().trimmed();
-        params["frequency"]  = combo_inputs_["rr_frequency"]->currentText();
+        params["model_id"] = text_inputs_["rr_model_id"]->text().trimmed();
+        params["frequency"] = combo_inputs_["rr_frequency"]->currentText();
         auto w_text = text_inputs_["rr_window"]->text().trimmed();
-        if (!w_text.isEmpty()) params["window"] = w_text.toInt();
+        if (!w_text.isEmpty())
+            params["window"] = w_text.toInt();
         AIQuantLabService::instance().rolling_create_schedule(params);
     });
     ctvl->addWidget(rr_create);
@@ -3805,7 +3924,7 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     tabs->addTab(create_tab, "Create Schedule");
 
     // ── Execute Retrain ──
-    auto* retrain_tab = new QWidget;
+    auto* retrain_tab = new QWidget(this);
     auto* retrainvl = new QVBoxLayout(retrain_tab);
     retrainvl->setContentsMargins(12, 12, 12, 12);
     retrainvl->setSpacing(8);

@@ -5,13 +5,12 @@ namespace fincept::notifications {
 
 class PushbulletProvider final : public BaseProvider {
   public:
-    QString provider_id()   const override { return "pushbullet"; }
-    QString display_name()  const override { return "Pushbullet"; }
-    QString icon()          const override { return "🔵"; }
-    bool    is_configured() const override { return !api_key_.isEmpty(); }
+    QString provider_id() const override { return "pushbullet"; }
+    QString display_name() const override { return "Pushbullet"; }
+    QString icon() const override { return "🔵"; }
+    bool is_configured() const override { return !api_key_.isEmpty(); }
 
-    void send(const NotificationRequest& req,
-              std::function<void(bool, QString)> cb) override;
+    void send(const NotificationRequest& req, std::function<void(bool, QString)> cb) override;
 
   protected:
     void load_fields(SettingsRepository& r, const QString& cat) override;
@@ -19,7 +18,7 @@ class PushbulletProvider final : public BaseProvider {
 
   public:
     QString api_key_;
-    QString channel_tag_;  // optional — push to channel instead of all devices
+    QString channel_tag_; // optional — push to channel instead of all devices
 };
 
 } // namespace fincept::notifications

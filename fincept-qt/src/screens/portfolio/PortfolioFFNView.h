@@ -48,9 +48,9 @@ class PortfolioFFNView : public QWidget {
     QChartView* make_chart_view(const QString& title);
 
     // ── Header ────────────────────────────────────────────────────────────────
-    QPushButton* back_btn_    = nullptr;
-    QPushButton* run_btn_     = nullptr;
-    QLabel*      status_label_ = nullptr;
+    QPushButton* back_btn_ = nullptr;
+    QPushButton* run_btn_ = nullptr;
+    QLabel* status_label_ = nullptr;
 
     // ── Tab container ─────────────────────────────────────────────────────────
     QTabWidget* tabs_ = nullptr;
@@ -59,34 +59,34 @@ class PortfolioFFNView : public QWidget {
     QTableWidget* overview_table_ = nullptr;
 
     // ── Benchmark tab ─────────────────────────────────────────────────────────
-    QWidget*      benchmark_panel_      = nullptr;
-    QTableWidget* benchmark_table_      = nullptr;
-    QLabel*       benchmark_info_label_ = nullptr;
+    QWidget* benchmark_panel_ = nullptr;
+    QTableWidget* benchmark_table_ = nullptr;
+    QLabel* benchmark_info_label_ = nullptr;
 
     // ── Optimisation tab ──────────────────────────────────────────────────────
-    QWidget*       optimization_panel_      = nullptr;
-    QStackedWidget* opt_stack_             = nullptr;   // 0=placeholder, 1=tables
-    QTableWidget*  opt_weights_table_      = nullptr;
-    QTableWidget*  opt_stats_table_        = nullptr;
+    QWidget* optimization_panel_ = nullptr;
+    QStackedWidget* opt_stack_ = nullptr; // 0=placeholder, 1=tables
+    QTableWidget* opt_weights_table_ = nullptr;
+    QTableWidget* opt_stats_table_ = nullptr;
 
     // ── Rebased tab ───────────────────────────────────────────────────────────
-    QWidget*           rebased_panel_      = nullptr;
-    QStackedWidget*    rebased_stack_      = nullptr;   // 0=placeholder, 1=chart
+    QWidget* rebased_panel_ = nullptr;
+    QStackedWidget* rebased_stack_ = nullptr; // 0=placeholder, 1=chart
     QChartView* rebased_chart_view_ = nullptr;
 
     // ── Drawdowns tab ─────────────────────────────────────────────────────────
-    QWidget*           drawdowns_panel_        = nullptr;
-    QStackedWidget*    drawdowns_stack_        = nullptr;
+    QWidget* drawdowns_panel_ = nullptr;
+    QStackedWidget* drawdowns_stack_ = nullptr;
     QChartView* drawdowns_chart_view_ = nullptr;
 
     // ── Rolling correlations tab ──────────────────────────────────────────────
-    QWidget*           rolling_panel_      = nullptr;
-    QStackedWidget*    rolling_stack_      = nullptr;
+    QWidget* rolling_panel_ = nullptr;
+    QStackedWidget* rolling_stack_ = nullptr;
     QChartView* rolling_chart_view_ = nullptr;
 
     // ── State ─────────────────────────────────────────────────────────────────
     portfolio::PortfolioSummary summary_;
-    QString     currency_;
+    QString currency_;
     QJsonObject ffn_data_;
 };
 

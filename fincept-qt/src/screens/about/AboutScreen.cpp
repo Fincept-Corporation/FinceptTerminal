@@ -47,8 +47,7 @@ static QString PANEL() {
 }
 
 static QString PANEL_HEADER() {
-    return QString("background: %1; border-bottom: 1px solid %2;")
-        .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM);
+    return QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM);
 }
 
 static QString LINK_BTN() {
@@ -62,7 +61,7 @@ static QString LINK_BTN() {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 static QWidget* makePanel() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(nullptr);
     w->setStyleSheet(PANEL());
     return w;
 }
@@ -107,7 +106,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
     scroll->setWidgetResizable(true);
     scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }");
 
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
@@ -122,7 +121,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
 
         pvl->addWidget(makePanelHeader("ℹ", "VERSION INFORMATION", ui::colors::AMBER));
 
-        auto* body = new QWidget;
+        auto* body = new QWidget(this);
         body->setStyleSheet("background: transparent;");
         auto* bhl = new QHBoxLayout(body);
         bhl->setContentsMargins(14, 12, 14, 12);
@@ -170,7 +169,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
 
     // ── License — two columns ─────────────────────────────────────────────────
     {
-        auto* row = new QWidget;
+        auto* row = new QWidget(this);
         row->setStyleSheet("background: transparent;");
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(0, 0, 0, 0);
@@ -184,7 +183,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
             pvl->setSpacing(0);
             pvl->addWidget(makePanelHeader("📄", "OPEN SOURCE LICENSE", ui::colors::POSITIVE));
 
-            auto* body = new QWidget;
+            auto* body = new QWidget(this);
             body->setStyleSheet("background: transparent;");
             auto* bvl = new QVBoxLayout(body);
             bvl->setContentsMargins(14, 10, 14, 10);
@@ -214,7 +213,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
             pvl->setSpacing(0);
             pvl->addWidget(makePanelHeader("★", "COMMERCIAL LICENSE", ui::colors::AMBER));
 
-            auto* body = new QWidget;
+            auto* body = new QWidget(this);
             body->setStyleSheet("background: transparent;");
             auto* bvl = new QVBoxLayout(body);
             bvl->setContentsMargins(14, 10, 14, 10);
@@ -247,7 +246,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         pvl->setSpacing(0);
         pvl->addWidget(makePanelHeader("🛡", "TRADEMARKS", ui::colors::AMBER));
 
-        auto* body = new QWidget;
+        auto* body = new QWidget(this);
         body->setStyleSheet("background: transparent;");
         auto* bvl = new QVBoxLayout(body);
         bvl->setContentsMargins(14, 10, 14, 12);
@@ -278,7 +277,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         pvl->setSpacing(0);
         pvl->addWidget(makePanelHeader("🌐", "RESOURCES", ui::colors::AMBER));
 
-        auto* body = new QWidget;
+        auto* body = new QWidget(this);
         body->setStyleSheet("background: transparent;");
         auto* grid = new QGridLayout(body);
         grid->setContentsMargins(14, 10, 14, 12);
@@ -319,7 +318,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         pvl->setSpacing(0);
         pvl->addWidget(makePanelHeader("✉", "CONTACT", ui::colors::AMBER));
 
-        auto* body = new QWidget;
+        auto* body = new QWidget(this);
         body->setStyleSheet("background: transparent;");
         auto* grid = new QGridLayout(body);
         grid->setContentsMargins(14, 10, 14, 12);
@@ -337,7 +336,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         };
 
         for (int i = 0; i < 4; ++i) {
-            auto* col = new QWidget;
+            auto* col = new QWidget(this);
             col->setStyleSheet("background: transparent;");
             auto* cvl = new QVBoxLayout(col);
             cvl->setContentsMargins(0, 0, 0, 0);

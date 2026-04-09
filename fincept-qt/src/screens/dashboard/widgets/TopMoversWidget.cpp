@@ -6,7 +6,7 @@ namespace fincept::screens::widgets {
 
 TopMoversWidget::TopMoversWidget(QWidget* parent) : BaseWidget("TOP MOVERS", parent) {
     // Tab toggle
-    auto* tab_bar = new QWidget;
+    auto* tab_bar = new QWidget(this);
     tab_bar->setFixedHeight(26);
     auto* tl = new QHBoxLayout(tab_bar);
     tl->setContentsMargins(4, 2, 4, 2);

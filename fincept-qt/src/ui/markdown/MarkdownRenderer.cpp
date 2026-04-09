@@ -1,10 +1,10 @@
 // src/ui/markdown/MarkdownRenderer.cpp
 #include "ui/markdown/MarkdownRenderer.h"
 
-#include <md4c-html.h>
-
 #include <QRegularExpression>
 #include <QString>
+
+#include <md4c-html.h>
 #include <string>
 
 namespace fincept::ui {
@@ -71,11 +71,7 @@ QString MarkdownRenderer::render(const QString& markdown) {
     // MD_FLAG_LATEXMATHSPANS — skip (not needed)
     unsigned flags = MD_FLAG_TABLES | MD_FLAG_STRIKETHROUGH | MD_FLAG_TASKLISTS;
 
-    int rc = md_html(input.c_str(),
-                     static_cast<MD_SIZE>(input.size()),
-                     md4c_callback,
-                     &output,
-                     flags,
+    int rc = md_html(input.c_str(), static_cast<MD_SIZE>(input.size()), md4c_callback, &output, flags,
                      /*render_flags=*/0);
 
     if (rc != 0) {

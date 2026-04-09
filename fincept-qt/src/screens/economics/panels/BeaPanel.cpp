@@ -33,61 +33,65 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kBeaScript   = "bea_data.py";
+static constexpr const char* kBeaScript = "bea_data.py";
 static constexpr const char* kBeaSourceId = "bea";
-static constexpr const char* kBeaColor    = "#E65100";  // deep orange
+static constexpr const char* kBeaColor = "#E65100"; // deep orange
 
-struct BeaIndicatorDef { QString name; QString id; QString unit; };
+struct BeaIndicatorDef {
+    QString name;
+    QString id;
+    QString unit;
+};
 
 // ── GDP & Output ──────────────────────────────────────────────────────────────
 static const QList<BeaIndicatorDef> kGdpIndicators = {
-    {"Real GDP Growth (% Change)",          "gdp_growth",     "% change"},
-    {"Nominal GDP (Billions $)",            "nominal_gdp",    "Billions $"},
-    {"Real GDP (Chained 2017 $)",           "real_gdp",       "Billions $"},
-    {"GDP Price Index",                     "gdp_deflator",   "Index"},
-    {"GDP Price Change (%)",                "gdp_price_change","% change"},
-    {"GDP per Capita (Current $)",          "gdp_per_capita", "$ per capita"},
-    {"Gross Domestic Income (Billions $)",  "gdi",            "Billions $"},
+    {"Real GDP Growth (% Change)", "gdp_growth", "% change"},
+    {"Nominal GDP (Billions $)", "nominal_gdp", "Billions $"},
+    {"Real GDP (Chained 2017 $)", "real_gdp", "Billions $"},
+    {"GDP Price Index", "gdp_deflator", "Index"},
+    {"GDP Price Change (%)", "gdp_price_change", "% change"},
+    {"GDP per Capita (Current $)", "gdp_per_capita", "$ per capita"},
+    {"Gross Domestic Income (Billions $)", "gdi", "Billions $"},
 };
 
 // ── Consumption & Investment ──────────────────────────────────────────────────
 static const QList<BeaIndicatorDef> kConsumptionIndicators = {
-    {"Personal Consumption Expenditures",   "pce",              "Billions $"},
-    {"PCE — Goods",                         "pce_goods",        "Billions $"},
-    {"PCE — Services",                      "pce_services",     "Billions $"},
-    {"Gross Private Domestic Investment",   "gross_investment", "Billions $"},
-    {"Fixed Investment",                    "fixed_investment", "Billions $"},
+    {"Personal Consumption Expenditures", "pce", "Billions $"},
+    {"PCE — Goods", "pce_goods", "Billions $"},
+    {"PCE — Services", "pce_services", "Billions $"},
+    {"Gross Private Domestic Investment", "gross_investment", "Billions $"},
+    {"Fixed Investment", "fixed_investment", "Billions $"},
 };
 
 // ── Trade & External ─────────────────────────────────────────────────────────
 static const QList<BeaIndicatorDef> kTradeIndicators = {
-    {"Net Exports (Billions $)",            "net_exports",     "Billions $"},
-    {"Exports of Goods & Services",         "exports",         "Billions $"},
-    {"Imports of Goods & Services",         "imports",         "Billions $"},
-    {"Current Account Balance",             "current_account", "Billions $"},
+    {"Net Exports (Billions $)", "net_exports", "Billions $"},
+    {"Exports of Goods & Services", "exports", "Billions $"},
+    {"Imports of Goods & Services", "imports", "Billions $"},
+    {"Current Account Balance", "current_account", "Billions $"},
 };
 
 // ── Income & Saving ───────────────────────────────────────────────────────────
 static const QList<BeaIndicatorDef> kIncomeIndicators = {
-    {"Personal Income (Billions $)",        "personal_income",    "Billions $"},
-    {"Compensation of Employees",           "compensation",       "Billions $"},
-    {"Wages and Salaries",                  "wages_salaries",     "Billions $"},
-    {"Disposable Personal Income",          "disposable_income",  "Billions $"},
-    {"Personal Saving (Billions $)",        "personal_saving",    "Billions $"},
-    {"Personal Saving Rate (%)",            "saving_rate",        "%"},
-    {"PCE Inflation (% Change)",            "pce_inflation",      "% change"},
-    {"Core PCE Inflation (ex F&E)",         "core_pce_inflation", "% change"},
+    {"Personal Income (Billions $)", "personal_income", "Billions $"},
+    {"Compensation of Employees", "compensation", "Billions $"},
+    {"Wages and Salaries", "wages_salaries", "Billions $"},
+    {"Disposable Personal Income", "disposable_income", "Billions $"},
+    {"Personal Saving (Billions $)", "personal_saving", "Billions $"},
+    {"Personal Saving Rate (%)", "saving_rate", "%"},
+    {"PCE Inflation (% Change)", "pce_inflation", "% change"},
+    {"Core PCE Inflation (ex F&E)", "core_pce_inflation", "% change"},
 };
 
 // ── Government ────────────────────────────────────────────────────────────────
 static const QList<BeaIndicatorDef> kGovtIndicators = {
-    {"Government Spending (Billions $)",    "govt_spending",    "Billions $"},
-    {"Federal Government Spending",         "federal_spending", "Billions $"},
-    {"National Defense Spending",           "defense_spending", "Billions $"},
-    {"Government Current Receipts",         "govt_receipts",    "Billions $"},
-    {"Personal Current Taxes",              "personal_taxes",   "Billions $"},
-    {"Taxes on Corporate Income",           "corporate_taxes",  "Billions $"},
-    {"Gross Saving (Billions $)",           "gross_saving",     "Billions $"},
+    {"Government Spending (Billions $)", "govt_spending", "Billions $"},
+    {"Federal Government Spending", "federal_spending", "Billions $"},
+    {"National Defense Spending", "defense_spending", "Billions $"},
+    {"Government Current Receipts", "govt_receipts", "Billions $"},
+    {"Personal Current Taxes", "personal_taxes", "Billions $"},
+    {"Taxes on Corporate Income", "corporate_taxes", "Billions $"},
+    {"Gross Saving (Billions $)", "gross_saving", "Billions $"},
 };
 
 struct BeaCategoryDef {
@@ -96,19 +100,16 @@ struct BeaCategoryDef {
 };
 
 static const QList<BeaCategoryDef> kBeaCategories = {
-    {"GDP & Output",          &kGdpIndicators},
-    {"Consumption & Investment", &kConsumptionIndicators},
-    {"Trade & External",      &kTradeIndicators},
-    {"Income & Saving",       &kIncomeIndicators},
-    {"Government",            &kGovtIndicators},
+    {"GDP & Output", &kGdpIndicators},       {"Consumption & Investment", &kConsumptionIndicators},
+    {"Trade & External", &kTradeIndicators}, {"Income & Saving", &kIncomeIndicators},
+    {"Government", &kGovtIndicators},
 };
 
 } // namespace
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
-BeaPanel::BeaPanel(QWidget* parent)
-    : EconPanelBase(kBeaSourceId, kBeaColor, parent) {
+BeaPanel::BeaPanel(QWidget* parent) : EconPanelBase(kBeaSourceId, kBeaColor, parent) {
 
     // Outer layout: left selector | right base UI
     auto* main = new QHBoxLayout(this);
@@ -116,7 +117,7 @@ BeaPanel::BeaPanel(QWidget* parent)
     main->setSpacing(0);
 
     // ── Left: category + indicator selector ──────────────────────────────────
-    auto* left = new QWidget;
+    auto* left = new QWidget(this);
     left->setFixedWidth(210);
     left->setStyleSheet(sidebar_style());
     auto* lvl = new QVBoxLayout(left);
@@ -124,7 +125,7 @@ BeaPanel::BeaPanel(QWidget* parent)
     lvl->setSpacing(0);
 
     // Category header
-    auto* cat_hdr = new QWidget;
+    auto* cat_hdr = new QWidget(this);
     cat_hdr->setStyleSheet(section_hdr_style());
     cat_hdr->setFixedHeight(32);
     auto* chl = new QHBoxLayout(cat_hdr);
@@ -135,8 +136,7 @@ BeaPanel::BeaPanel(QWidget* parent)
     for (const auto& c : kBeaCategories)
         category_combo_->addItem(c.label);
     category_combo_->setFixedHeight(22);
-    connect(category_combo_, &QComboBox::currentIndexChanged,
-            this, &BeaPanel::on_category_changed);
+    connect(category_combo_, &QComboBox::currentIndexChanged, this, &BeaPanel::on_category_changed);
     chl->addWidget(cat_lbl);
     chl->addWidget(category_combo_, 1);
     lvl->addWidget(cat_hdr);
@@ -146,8 +146,7 @@ BeaPanel::BeaPanel(QWidget* parent)
     indicator_search_->setPlaceholderText("Filter indicators…");
     indicator_search_->setStyleSheet(search_input_style());
     indicator_search_->setFixedHeight(28);
-    connect(indicator_search_, &QLineEdit::textChanged,
-            this, &BeaPanel::on_indicator_filter);
+    connect(indicator_search_, &QLineEdit::textChanged, this, &BeaPanel::on_indicator_filter);
     lvl->addWidget(indicator_search_);
 
     // Indicator list
@@ -159,7 +158,7 @@ BeaPanel::BeaPanel(QWidget* parent)
     main->addWidget(left);
 
     // ── Right: base UI ────────────────────────────────────────────────────────
-    auto* right = new QWidget;
+    auto* right = new QWidget(this);
     right->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     build_base_ui(right);
     main->addWidget(right, 1);
@@ -167,9 +166,8 @@ BeaPanel::BeaPanel(QWidget* parent)
     // Populate initial indicator list (GDP category)
     on_category_changed(0);
 
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &BeaPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &BeaPanel::on_result);
 }
 
 void BeaPanel::activate() {
@@ -211,7 +209,8 @@ void BeaPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void BeaPanel::on_category_changed(int index) {
-    if (index < 0 || index >= kBeaCategories.size()) return;
+    if (index < 0 || index >= kBeaCategories.size())
+        return;
     indicator_list_->clear();
     indicator_search_->clear();
     current_indicators_.clear();
@@ -219,8 +218,7 @@ void BeaPanel::on_category_changed(int index) {
     const auto& inds = *kBeaCategories[index].indicators;
     for (const auto& ind : inds) {
         current_indicators_.append({ind.name, ind.id, ind.unit});
-        auto* item = new QListWidgetItem(
-            ind.name + "  [" + ind.unit + "]");
+        auto* item = new QListWidgetItem(ind.name + "  [" + ind.unit + "]");
         item->setData(Qt::UserRole, ind.id);
         item->setToolTip(ind.id + " — " + ind.unit);
         indicator_list_->addItem(item);
@@ -232,10 +230,8 @@ void BeaPanel::on_category_changed(int index) {
 void BeaPanel::on_indicator_filter(const QString& text) {
     for (int i = 0; i < indicator_list_->count(); ++i) {
         auto* item = indicator_list_->item(i);
-        item->setHidden(!text.isEmpty() &&
-                        !item->text().contains(text, Qt::CaseInsensitive) &&
-                        !item->data(Qt::UserRole).toString()
-                             .contains(text, Qt::CaseInsensitive));
+        item->setHidden(!text.isEmpty() && !item->text().contains(text, Qt::CaseInsensitive) &&
+                        !item->data(Qt::UserRole).toString().contains(text, Qt::CaseInsensitive));
     }
 }
 
@@ -249,7 +245,7 @@ void BeaPanel::on_fetch() {
     }
     const QString indicator_id = sel->data(Qt::UserRole).toString();
     const QString start = start_input_->text().trimmed();
-    const QString end   = end_input_->text().trimmed();
+    const QString end = end_input_->text().trimmed();
 
     if (start.isEmpty() || end.isEmpty()) {
         show_empty("Enter start and end years");
@@ -258,23 +254,21 @@ void BeaPanel::on_fetch() {
 
     // CLI: fetch <indicator_id> <start_year>-01-01 <end_year>-12-31
     show_loading("Fetching BEA: " + sel->text().split("  [").first() + "…");
-    services::EconomicsService::instance().execute(
-        kBeaSourceId, kBeaScript, "fetch",
-        {indicator_id, start + "-01-01", end + "-12-31"},
-        "bea_fetch_" + indicator_id);
+    services::EconomicsService::instance().execute(kBeaSourceId, kBeaScript, "fetch",
+                                                   {indicator_id, start + "-01-01", end + "-12-31"},
+                                                   "bea_fetch_" + indicator_id);
 }
 
 // ── Result ────────────────────────────────────────────────────────────────────
 
-void BeaPanel::on_result(const QString& request_id,
-                         const services::EconomicsResult& result) {
-    if (result.source_id != kBeaSourceId) return;
-    if (!request_id.startsWith("bea_fetch_")) return;
+void BeaPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kBeaSourceId)
+        return;
+    if (!request_id.startsWith("bea_fetch_"))
+        return;
 
     if (!result.success) {
-        if (result.error.contains("API key") ||
-            result.error.contains("UserID") ||
-            result.error.contains("register")) {
+        if (result.error.contains("API key") || result.error.contains("UserID") || result.error.contains("register")) {
             show_error("BEA API key not configured.\n"
                        "Set BEA_API_KEY environment variable.\n"
                        "Free registration at: www.bea.gov/data/api/register");
@@ -293,15 +287,12 @@ void BeaPanel::on_result(const QString& request_id,
         return;
     }
 
-    const QJsonObject meta    = result.data["metadata"].toObject();
-    const QString ind_name    = meta["indicator_name"].toString(
-        indicator_list_->currentItem()
-            ? indicator_list_->currentItem()->text().split("  [").first()
-            : "Indicator");
+    const QJsonObject meta = result.data["metadata"].toObject();
+    const QString ind_name = meta["indicator_name"].toString(
+        indicator_list_->currentItem() ? indicator_list_->currentItem()->text().split("  [").first() : "Indicator");
 
     display(rows, "BEA: " + ind_name);
-    LOG_INFO("BeaPanel", QString("Displayed %1 data points for %2")
-             .arg(rows.size()).arg(request_id));
+    LOG_INFO("BeaPanel", QString("Displayed %1 data points for %2").arg(rows.size()).arg(request_id));
 }
 
 } // namespace fincept::screens

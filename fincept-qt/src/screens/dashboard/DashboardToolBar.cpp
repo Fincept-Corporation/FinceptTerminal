@@ -4,18 +4,40 @@
 #include "ui/theme/ThemeManager.h"
 
 #include <QHBoxLayout>
+#include <QPalette>
+#include <QStyle>
+
+namespace {
+
+void apply_solid_background(QWidget* widget, const QColor& color) {
+    if (!widget)
+        return;
+
+    widget->setAttribute(Qt::WA_StyledBackground, true);
+    widget->setAutoFillBackground(true);
+
+    QPalette pal = widget->palette();
+    pal.setColor(QPalette::Window, color);
+    widget->setPalette(pal);
+}
+
+} // namespace
 
 namespace fincept::screens {
 
 DashboardToolBar::DashboardToolBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(26);
     setObjectName("dashToolBar");
+    apply_solid_background(this, QColor(ui::colors::BG_SURFACE()));
 
     auto* hl = new QHBoxLayout(this);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(0);
 
-    auto* left = new QWidget;
+    left_container_ = new QWidget(this);
+    left_container_->setObjectName("dtLeftContainer");
+    apply_solid_background(left_container_, QColor(ui::colors::BG_SURFACE()));
+    auto* left = left_container_;
     auto* ll = new QHBoxLayout(left);
     ll->setContentsMargins(0, 0, 0, 0);
     ll->setSpacing(8);
@@ -56,7 +78,10 @@ DashboardToolBar::DashboardToolBar(QWidget* parent) : QWidget(parent) {
     hl->addWidget(left);
     hl->addStretch();
 
-    auto* right = new QWidget;
+    right_container_ = new QWidget(this);
+    right_container_->setObjectName("dtRightContainer");
+    apply_solid_background(right_container_, QColor(ui::colors::BG_SURFACE()));
+    auto* right = right_container_;
     auto* rl = new QHBoxLayout(right);
     rl->setContentsMargins(0, 0, 0, 0);
     rl->setSpacing(4);
@@ -95,8 +120,8 @@ DashboardToolBar::DashboardToolBar(QWidget* parent) : QWidget(parent) {
 
     hl->addWidget(right);
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { refresh_theme(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { refresh_theme(); });
 
     connect(&clock_timer_, &QTimer::timeout, this, &DashboardToolBar::update_clock);
     clock_timer_.start(1000);
@@ -105,34 +130,57 @@ DashboardToolBar::DashboardToolBar(QWidget* parent) : QWidget(parent) {
 }
 
 void DashboardToolBar::refresh_theme() {
-    setStyleSheet(QString(
-        "#dashToolBar { background:%1; border-bottom:1px solid %2; }"
-        "#dtSep { color:%3; background:transparent; }"
-        "#dtBrand { color:%4; font-weight:bold; letter-spacing:1px; background:transparent; }"
-        "#dtSub { color:%5; font-weight:bold; background:transparent; }"
-        "#dtStatus { color:%6; font-weight:bold; background:transparent; }"
-        "#dtClock { color:%7; background:transparent; }"
-        "#dtWidgetCount { color:%8; font-weight:bold; background:transparent; }"
-        "#dtBtn { background:%9; border:1px solid %3; color:%7; padding:0 10px; font-weight:bold; }"
-        "#dtBtn:hover { background:%10; color:%11; border-color:%12; }"
-        "#dtAddBtn { background:%9; border:1px solid %13; color:%4; padding:0 10px; font-weight:bold; }"
-        "#dtAddBtn:hover { background:%10; color:%11; border-color:%12; }"
-        "#dtResetBtn { background:%9; border:1px solid %14; color:%14; padding:0 10px; font-weight:bold; }"
-        "#dtResetBtn:hover { background:%10; color:%11; border-color:%12; }"
-    ).arg(ui::colors::BG_SURFACE())   // %1
-     .arg(ui::colors::BORDER_DIM())   // %2
-     .arg(ui::colors::BORDER_MED())   // %3
-     .arg(ui::colors::AMBER())        // %4
-     .arg(ui::colors::TEXT_TERTIARY()) // %5
-     .arg(ui::colors::POSITIVE())     // %6
-     .arg(ui::colors::TEXT_SECONDARY())// %7
-     .arg(ui::colors::CYAN())         // %8
-     .arg(ui::colors::BG_RAISED())    // %9
-     .arg(ui::colors::BG_HOVER())     // %10
-     .arg(ui::colors::TEXT_PRIMARY()) // %11
-     .arg(ui::colors::BORDER_BRIGHT())// %12
-     .arg(ui::colors::AMBER_DIM())    // %13
-     .arg(ui::colors::NEGATIVE()));   // %14
+    const QColor surface(ui::colors::BG_SURFACE());
+    apply_solid_background(this, surface);
+    apply_solid_background(left_container_, surface);
+    apply_solid_background(right_container_, surface);
+
+    setStyleSheet(
+        QString("#dashToolBar { background:%1; border-bottom:1px solid %2; }"
+                "#dtLeftContainer, #dtRightContainer { background:%1; }"
+                "#dtSep { color:%3; background:transparent; }"
+                "#dtBrand { color:%4; font-weight:bold; letter-spacing:1px; background:transparent; }"
+                "#dtSub { color:%5; font-weight:bold; background:transparent; }"
+                "#dtStatus { color:%6; font-weight:bold; background:transparent; }"
+                "#dtClock { color:%7; background:transparent; }"
+                "#dtWidgetCount { color:%8; font-weight:bold; background:transparent; }"
+                "#dtBtn { background:%9; border:1px solid %3; color:%7; padding:0 10px; font-weight:bold; }"
+                "#dtBtn:hover { background:%10; color:%11; border-color:%12; }"
+                "#dtAddBtn { background:%9; border:1px solid %13; color:%4; padding:0 10px; font-weight:bold; }"
+                "#dtAddBtn:hover { background:%10; color:%11; border-color:%12; }"
+                "#dtResetBtn { background:%9; border:1px solid %14; color:%14; padding:0 10px; font-weight:bold; }"
+                "#dtResetBtn:hover { background:%10; color:%11; border-color:%12; }")
+            .arg(ui::colors::BG_SURFACE())     // %1
+            .arg(ui::colors::BORDER_DIM())     // %2
+            .arg(ui::colors::BORDER_MED())     // %3
+            .arg(ui::colors::AMBER())          // %4
+            .arg(ui::colors::TEXT_TERTIARY())  // %5
+            .arg(ui::colors::POSITIVE())       // %6
+            .arg(ui::colors::TEXT_SECONDARY()) // %7
+            .arg(ui::colors::CYAN())           // %8
+            .arg(ui::colors::BG_RAISED())      // %9
+            .arg(ui::colors::BG_HOVER())       // %10
+            .arg(ui::colors::TEXT_PRIMARY())   // %11
+            .arg(ui::colors::BORDER_BRIGHT())  // %12
+            .arg(ui::colors::AMBER_DIM())      // %13
+            .arg(ui::colors::NEGATIVE()));     // %14
+
+    // Force child containers to re-evaluate their background after stylesheet change.
+    // Without this, Qt may repaint them with the default palette grey on show events.
+    auto repolish = [](QWidget* w) {
+        if (!w) return;
+        w->style()->unpolish(w);
+        w->style()->polish(w);
+        w->update();
+    };
+    repolish(left_container_);
+    repolish(right_container_);
+    repolish(this);
+}
+
+void DashboardToolBar::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    refresh_theme();
 }
 
 void DashboardToolBar::update_clock() {
@@ -147,9 +195,8 @@ void DashboardToolBar::set_connected(bool connected) {
     connected_ = connected;
     status_text_->setText(connected ? "LIVE" : "OFFLINE");
     // refresh_theme handles the base color; override just this label dynamically
-    status_text_->setStyleSheet(
-        QString("color:%1;font-weight:bold;background:transparent;")
-            .arg(connected ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+    status_text_->setStyleSheet(QString("color:%1;font-weight:bold;background:transparent;")
+                                    .arg(connected ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
 }
 
 } // namespace fincept::screens

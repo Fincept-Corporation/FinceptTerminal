@@ -47,7 +47,8 @@ void SessionGuard::check_pulse() {
         // 401/403 → session_token is stale. But the api_key may still be valid.
         // Attempt recovery before logging the user out.
         if (!r.success && (r.status_code == 401 || r.status_code == 403)) {
-            LOG_WARN("SessionGuard", QString("Pulse returned HTTP %1 — attempting session recovery").arg(r.status_code));
+            LOG_WARN("SessionGuard",
+                     QString("Pulse returned HTTP %1 — attempting session recovery").arg(r.status_code));
             is_checking_ = true;
             AuthManager::instance().attempt_session_recovery([this](bool recovered) {
                 is_checking_ = false;

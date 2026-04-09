@@ -4,8 +4,8 @@
 // schema_version tracking, but the actual DDL executes on CacheDatabase.
 // See ScreenStateManager::ensure_table() which calls this at init time.
 
-#include "storage/sqlite/migrations/MigrationRunner.h"
 #include "storage/sqlite/CacheDatabase.h"
+#include "storage/sqlite/migrations/MigrationRunner.h"
 
 #include <QSqlError>
 #include <QSqlQuery>
@@ -29,15 +29,13 @@ Result<void> apply_v015(QSqlDatabase& /*db*/) {
     if (!cdb.is_open())
         return Result<void>::ok(); // cache.db not open yet — table created on open
 
-    auto r = cdb.exec(
-        "CREATE TABLE IF NOT EXISTS screen_state ("
-        "  screen_key    TEXT PRIMARY KEY,"
-        "  state_version INTEGER NOT NULL DEFAULT 1,"
-        "  state_json    TEXT    NOT NULL DEFAULT '{}',"
-        "  updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),"
-        "  session_id    TEXT    NOT NULL DEFAULT ''"
-        ")"
-    );
+    auto r = cdb.exec("CREATE TABLE IF NOT EXISTS screen_state ("
+                      "  screen_key    TEXT PRIMARY KEY,"
+                      "  state_version INTEGER NOT NULL DEFAULT 1,"
+                      "  state_json    TEXT    NOT NULL DEFAULT '{}',"
+                      "  updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),"
+                      "  session_id    TEXT    NOT NULL DEFAULT ''"
+                      ")");
     if (r.is_err())
         return r;
 
@@ -51,7 +49,8 @@ Result<void> apply_v015(QSqlDatabase& /*db*/) {
 
 void register_migration_v015() {
     static bool done = false;
-    if (done) return;
+    if (done)
+        return;
     done = true;
     MigrationRunner::register_migration({15, "screen_state", apply_v015});
 }

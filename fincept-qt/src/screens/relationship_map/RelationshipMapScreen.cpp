@@ -52,7 +52,7 @@ void RelationshipMapScreen::build_ui() {
     root->setSpacing(0);
 
     // ── Header Bar ───────────────────────────────────────────────────────
-    auto* header = new QWidget;
+    auto* header = new QWidget(this);
     header->setFixedHeight(44);
     header->setStyleSheet(
         QString("background: %1; border-bottom: 1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_DIM));
@@ -117,15 +117,15 @@ void RelationshipMapScreen::build_ui() {
                 "padding: 0 10px; font-size: 10px; %3 }"
                 "QPushButton:hover { color: %5; } "
                 "QPushButton:checked { background: rgba(217,119,6,0.1); color: %4; border-color: %6; }")
-            .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM, MF(), colors::AMBER,
-                 colors::TEXT_PRIMARY, colors::AMBER_DIM));
+            .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM, MF(), colors::AMBER, colors::TEXT_PRIMARY,
+                 colors::AMBER_DIM));
     connect(filter_btn_, &QPushButton::toggled, this, [this](bool checked) { filter_panel_->setVisible(checked); });
     hhl->addWidget(filter_btn_);
 
     root->addWidget(header);
 
     // ── Progress bar ─────────────────────────────────────────────────────
-    auto* prog_row = new QWidget;
+    auto* prog_row = new QWidget(this);
     prog_row->setFixedHeight(20);
     prog_row->setStyleSheet(QString("background: %1;").arg(colors::BG_BASE));
     auto* phl = new QHBoxLayout(prog_row);
@@ -149,7 +149,7 @@ void RelationshipMapScreen::build_ui() {
     root->addWidget(prog_row);
 
     // ── Main content area ────────────────────────────────────────────────
-    auto* content = new QWidget;
+    auto* content = new QWidget(this);
     auto* chl = new QHBoxLayout(content);
     chl->setContentsMargins(0, 0, 0, 0);
     chl->setSpacing(0);
@@ -178,7 +178,7 @@ void RelationshipMapScreen::build_ui() {
     legend_widget_->hide();
 
     // ── Status bar ───────────────────────────────────────────────────────
-    auto* status = new QWidget;
+    auto* status = new QWidget(this);
     status->setFixedHeight(24);
     status->setStyleSheet(
         QString("background: %1; border-top: 1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_DIM));
@@ -210,7 +210,7 @@ void RelationshipMapScreen::build_ui() {
 // ── Filter Panel ─────────────────────────────────────────────────────────────
 
 QWidget* RelationshipMapScreen::build_filter_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setFixedWidth(200);
     panel->setStyleSheet(
         QString("background: %1; border-right: 1px solid %2;").arg(colors::BG_SURFACE, colors::BORDER_DIM));
@@ -255,7 +255,7 @@ QWidget* RelationshipMapScreen::build_filter_panel() {
 // ── Detail Panel ─────────────────────────────────────────────────────────────
 
 QWidget* RelationshipMapScreen::build_detail_panel() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setFixedWidth(260);
     panel->setStyleSheet(
         QString("background: %1; border-left: 1px solid %2;").arg(colors::BG_SURFACE, colors::BORDER_DIM));
@@ -294,7 +294,7 @@ QWidget* RelationshipMapScreen::build_detail_panel() {
     scroll->setWidgetResizable(true);
     scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }");
 
-    detail_props_container_ = new QWidget;
+    detail_props_container_ = new QWidget(this);
     detail_props_container_->setStyleSheet("background: transparent;");
     new QVBoxLayout(detail_props_container_);
 
@@ -307,7 +307,7 @@ QWidget* RelationshipMapScreen::build_detail_panel() {
 // ── Legend ────────────────────────────────────────────────────────────────────
 
 QWidget* RelationshipMapScreen::build_legend() {
-    auto* panel = new QWidget;
+    auto* panel = new QWidget(this);
     panel->setFixedWidth(160);
     panel->setStyleSheet(QString("background: rgba(10,10,10,0.9); border: 1px solid %1; "
                                  "border-radius: 2px;")
@@ -323,7 +323,7 @@ QWidget* RelationshipMapScreen::build_legend() {
     vl->addWidget(title);
 
     auto add_entry = [&](NodeCategory cat) {
-        auto* row = new QWidget;
+        auto* row = new QWidget(this);
         row->setStyleSheet("background: transparent;");
         auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(0, 0, 0, 0);
@@ -462,7 +462,7 @@ void RelationshipMapScreen::on_node_selected() {
         // Look up full node data from current_data_ to show rich properties
         // (match by label/ticker)
         if (!label.isEmpty() && has_data_) {
-            auto* sep = new QWidget;
+            auto* sep = new QWidget(this);
             sep->setFixedHeight(1);
             sep->setStyleSheet(QString("background: %1;").arg(colors::BORDER_DIM));
             layout->addWidget(sep);
@@ -527,14 +527,14 @@ void RelationshipMapScreen::update_status_bar() {
 
 QVariantMap RelationshipMapScreen::save_state() const {
     return {
-        {"ticker",      search_input_ ? search_input_->text().trimmed() : QString{}},
+        {"ticker", search_input_ ? search_input_->text().trimmed() : QString{}},
         {"layout_mode", static_cast<int>(layout_mode_)},
     };
 }
 
 void RelationshipMapScreen::restore_state(const QVariantMap& state) {
     const QString ticker = state.value("ticker").toString();
-    const int layout     = state.value("layout_mode", 0).toInt();
+    const int layout = state.value("layout_mode", 0).toInt();
 
     if (layout_combo_) {
         // Find the combo item whose data matches layout_mode

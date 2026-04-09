@@ -12,12 +12,14 @@ TickerBar::TickerBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(24);
 
     auto apply_bg = [this]() {
-        setStyleSheet(QString("background-color: %1;")
-                      .arg(ui::ThemeManager::instance().tokens().bg_base));
+        setStyleSheet(QString("background-color: %1;").arg(ui::colors::BG_BASE()));
     };
     apply_bg();
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this, apply_bg](const ui::ThemeTokens&) { apply_bg(); update(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this, apply_bg](const ui::ThemeTokens&) {
+                apply_bg();
+                update();
+            });
 
     // Dummy data until service provides real data
     entries_ = {
@@ -46,7 +48,7 @@ void TickerBar::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.setRenderHint(QPainter::TextAntialiasing);
 
-    QFont font("Consolas", 10);
+    QFont font(ui::fonts::DATA_FAMILY(), ui::fonts::font_px(-2));
     p.setFont(font);
     QFontMetrics fm(font);
 

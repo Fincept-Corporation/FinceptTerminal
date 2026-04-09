@@ -23,21 +23,19 @@ MarketPanel::MarketPanel(const QString& title, const QStringList& symbols, bool 
     vl->setSpacing(0);
 
     // Header
-    auto* header = new QWidget;
+    auto* header = new QWidget(this);
     header->setFixedHeight(32);
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(10, 0, 8, 0);
 
     title_label_ = new QLabel(title.toUpper());
     title_label_->setStyleSheet(
-        QString("color:%1;font-weight:700;letter-spacing:1.2px;background:transparent;")
-        .arg(ui::colors::AMBER()));
+        QString("color:%1;font-weight:700;letter-spacing:1.2px;background:transparent;").arg(ui::colors::AMBER()));
     hhl->addWidget(title_label_);
     hhl->addStretch();
 
     status_label_ = new QLabel;
-    status_label_->setStyleSheet(
-        QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
+    status_label_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
     hhl->addWidget(status_label_);
     vl->addWidget(header);
 
@@ -72,38 +70,34 @@ MarketPanel::MarketPanel(const QString& title, const QStringList& symbols, bool 
 
     loading_overlay_ = new ui::LoadingOverlay(this);
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { refresh_theme(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { refresh_theme(); });
     refresh_theme();
 }
 
 void MarketPanel::refresh_theme() {
-    setStyleSheet(QString("background:%1;border:1px solid %2;")
-        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    setStyleSheet(
+        QString("background:%1;border:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     // Header
     if (title_label_) {
         title_label_->parentWidget()->setStyleSheet(
             QString("background:%1;border-bottom:1px solid %2;border-left:2px solid %3;")
-            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
         title_label_->setStyleSheet(
-            QString("color:%1;font-weight:700;letter-spacing:1.2px;background:transparent;")
-            .arg(ui::colors::AMBER()));
-        status_label_->setStyleSheet(
-            QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
+            QString("color:%1;font-weight:700;letter-spacing:1.2px;background:transparent;").arg(ui::colors::AMBER()));
+        status_label_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
     }
 
     // Table
     if (table_)
-        table_->setStyleSheet(
-            QString("QTableWidget{background:%1;alternate-background-color:%2;border:none;}"
-                    "QTableWidget::item{padding:0 6px;border-bottom:1px solid %3;}"
-                    "QTableWidget::item:selected{background:%4;}"
-                    "QHeaderView::section{background:%5;color:%6;border:none;"
-                    "border-bottom:1px solid %3;font-weight:600;letter-spacing:0.5px;padding:0 6px;}")
-            .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(),
-                 ui::colors::BORDER_DIM(), ui::colors::BG_HOVER(),
-                 ui::colors::BG_RAISED(), ui::colors::TEXT_DIM()));
+        table_->setStyleSheet(QString("QTableWidget{background:%1;alternate-background-color:%2;border:none;}"
+                                      "QTableWidget::item{padding:0 6px;border-bottom:1px solid %3;}"
+                                      "QTableWidget::item:selected{background:%4;}"
+                                      "QHeaderView::section{background:%5;color:%6;border:none;"
+                                      "border-bottom:1px solid %3;font-weight:600;letter-spacing:0.5px;padding:0 6px;}")
+                                  .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(),
+                                       ui::colors::BG_HOVER(), ui::colors::BG_RAISED(), ui::colors::TEXT_DIM()));
 }
 
 void MarketPanel::set_symbols(const QStringList& s) {
@@ -113,24 +107,22 @@ void MarketPanel::set_symbols(const QStringList& s) {
 
 void MarketPanel::refresh() {
     status_label_->setText("LOADING");
-    status_label_->setStyleSheet(
-        QString("color:%1;background:transparent;").arg(ui::colors::AMBER()));
+    status_label_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::AMBER()));
     loading_overlay_->show_loading("LOADING\xe2\x80\xa6");
 
     QPointer<MarketPanel> self = this;
     services::MarketDataService::instance().fetch_quotes(symbols_, [self](bool ok, QVector<services::QuoteData> q) {
-        if (!self) return;
+        if (!self)
+            return;
         self->loading_overlay_->hide_loading();
         if (!ok) {
             self->status_label_->setText("FAIL");
-            self->status_label_->setStyleSheet(
-                QString("color:%1;background:transparent;").arg(ui::colors::NEGATIVE()));
+            self->status_label_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::NEGATIVE()));
             emit self->refresh_finished();
             return;
         }
         self->status_label_->setText(QString::number(q.size()));
-        self->status_label_->setStyleSheet(
-            QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        self->status_label_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
         self->populate(q);
         emit self->refresh_finished();
     });
@@ -154,11 +146,11 @@ void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {
             return i;
         };
         bool pos = q.change >= 0;
-        const QString cc  = pos ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
+        const QString cc = pos ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
         const QString arr = pos ? "▲" : "▼";
         int prec = q.price > 100 ? 2 : (q.price > 1 ? 2 : 4);
         int col = 0;
-        table_->setItem(row, col++, mk(q.symbol,  ui::colors::TEXT_PRIMARY(),   Qt::AlignLeft | Qt::AlignVCenter));
+        table_->setItem(row, col++, mk(q.symbol, ui::colors::TEXT_PRIMARY(), Qt::AlignLeft | Qt::AlignVCenter));
         if (show_name_)
             table_->setItem(row, col++, mk(q.name, ui::colors::TEXT_TERTIARY(), Qt::AlignLeft | Qt::AlignVCenter));
         table_->setItem(row, col++, mk(QString::number(q.price, 'f', prec), ui::colors::AMBER()));
@@ -166,7 +158,7 @@ void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {
         table_->setItem(row, col++, mk(QString("%1%2%").arg(arr).arg(std::abs(q.change_pct), 0, 'f', 2), cc));
         if (!show_name_) {
             table_->setItem(row, col++, mk(QString::number(q.high, 'f', 2), ui::colors::TEXT_SECONDARY()));
-            table_->setItem(row, col++, mk(QString::number(q.low,  'f', 2), ui::colors::TEXT_SECONDARY()));
+            table_->setItem(row, col++, mk(QString::number(q.low, 'f', 2), ui::colors::TEXT_SECONDARY()));
         }
         table_->setItem(row, col++, mk("--", ui::colors::TEXT_DIM()));
         table_->setRowHeight(row, 26);

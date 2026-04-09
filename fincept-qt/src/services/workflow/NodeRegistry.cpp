@@ -1,5 +1,6 @@
 #include "services/workflow/NodeRegistry.h"
 
+#include "services/workflow/ExpressionEngine.h"
 #include "services/workflow/adapters/ServiceBridges.h"
 #include "services/workflow/nodes/AgentNodes.h"
 #include "services/workflow/nodes/AnalyticsNodes.h"
@@ -13,7 +14,6 @@
 #include "services/workflow/nodes/TradingNodes.h"
 #include "services/workflow/nodes/TriggerNodes.h"
 #include "services/workflow/nodes/UtilityNodes.h"
-#include "services/workflow/ExpressionEngine.h"
 
 #include <QRegularExpression>
 
@@ -209,8 +209,7 @@ void NodeRegistry::register_builtin_nodes() {
 
                     // Parse simple comparisons: field op value
                     // Supported: >, <, >=, <=, ==, !=
-                    static QRegularExpression cmp_re(
-                        R"(^\s*(\$?[\w.]+)\s*(>=|<=|!=|==|>|<)\s*(.+)\s*$)");
+                    static QRegularExpression cmp_re(R"(^\s*(\$?[\w.]+)\s*(>=|<=|!=|==|>|<)\s*(.+)\s*$)");
                     auto match = cmp_re.match(expr);
 
                     if (match.hasMatch()) {
@@ -219,21 +218,25 @@ void NodeRegistry::register_builtin_nodes() {
                         QString rhs_str = match.captured(3).trimmed();
 
                         // Resolve LHS from context
-                        QJsonValue lhs_val = ExpressionEngine::evaluate(
-                            QJsonValue("={{" + lhs_path + "}}"), context);
+                        QJsonValue lhs_val = ExpressionEngine::evaluate(QJsonValue("={{" + lhs_path + "}}"), context);
                         double lhs = lhs_val.toDouble(0);
                         double rhs = rhs_str.toDouble();
 
-                        if (op == ">")       result = lhs > rhs;
-                        else if (op == "<")  result = lhs < rhs;
-                        else if (op == ">=") result = lhs >= rhs;
-                        else if (op == "<=") result = lhs <= rhs;
-                        else if (op == "==") result = lhs == rhs;
-                        else if (op == "!=") result = lhs != rhs;
+                        if (op == ">")
+                            result = lhs > rhs;
+                        else if (op == "<")
+                            result = lhs < rhs;
+                        else if (op == ">=")
+                            result = lhs >= rhs;
+                        else if (op == "<=")
+                            result = lhs <= rhs;
+                        else if (op == "==")
+                            result = lhs == rhs;
+                        else if (op == "!=")
+                            result = lhs != rhs;
                     } else {
                         // Single value expression — resolve and check truthiness
-                        QJsonValue val = ExpressionEngine::evaluate(
-                            QJsonValue("={{" + expr + "}}"), context);
+                        QJsonValue val = ExpressionEngine::evaluate(QJsonValue("={{" + expr + "}}"), context);
                         if (val.isBool())
                             result = val.toBool();
                         else if (val.isDouble())

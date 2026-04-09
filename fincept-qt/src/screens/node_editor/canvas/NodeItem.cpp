@@ -251,13 +251,12 @@ void NodeItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
 void NodeItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
     const auto& tm = ui::ThemeManager::instance().tokens();
     QMenu menu;
-    menu.setStyleSheet(
-        QString("QMenu { background: %1; color: %2; border: 1px solid %3;"
-                "  font-family: Consolas; font-size: 12px; }"
-                "QMenu::item { padding: 4px 20px; }"
-                "QMenu::item:selected { background: %4; color: %5; }"
-                "QMenu::separator { background: %3; height: 1px; margin: 2px 6px; }")
-        .arg(tm.bg_raised, tm.text_primary, tm.border_dim, tm.accent, tm.bg_base));
+    menu.setStyleSheet(QString("QMenu { background: %1; color: %2; border: 1px solid %3;"
+                               "  font-family: Consolas; font-size: 12px; }"
+                               "QMenu::item { padding: 4px 20px; }"
+                               "QMenu::item:selected { background: %4; color: %5; }"
+                               "QMenu::separator { background: %3; height: 1px; margin: 2px 6px; }")
+                           .arg(tm.bg_raised, tm.text_primary, tm.border_dim, tm.accent, tm.bg_base));
 
     auto* duplicate_action = menu.addAction("Duplicate");
     auto* disable_action = menu.addAction(def_.disabled ? "Enable" : "Disable");

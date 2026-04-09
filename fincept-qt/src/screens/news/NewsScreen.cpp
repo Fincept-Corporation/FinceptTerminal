@@ -2,9 +2,6 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
-#include "services/notifications/NotificationService.h"
-#include "storage/repositories/NewsArticleRepository.h"
-#include "storage/repositories/SettingsRepository.h"
 #include "screens/news/NewsCommandBar.h"
 #include "screens/news/NewsDetailPanel.h"
 #include "screens/news/NewsFeedPanel.h"
@@ -12,9 +9,11 @@
 #include "screens/news/NewsTickerStrip.h"
 #include "services/news/NewsCorrelationService.h"
 #include "services/news/NewsNlpService.h"
+#include "services/notifications/NotificationService.h"
+#include "storage/repositories/NewsArticleRepository.h"
+#include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
-#include "ui/theme/ThemeManager.h"
 
 #include <QDateTime>
 #include <QDesktopServices>
@@ -22,7 +21,6 @@
 #include <QScrollBar>
 #include <QSettings>
 #include <QShortcut>
-#include <QSplitter>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QtConcurrent>
@@ -33,13 +31,10 @@
 namespace fincept::screens {
 
 NewsScreen::NewsScreen(QWidget* parent) : QWidget(parent) {
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) {
-                setStyleSheet(QString("background:%1;color:%2;")
-                    .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
-            });
     setObjectName("newsScreen");
+    LOG_INFO("NewsScreen", "Applying news_screen_styles");
     setStyleSheet(ui::styles::news_screen_styles());
+    LOG_INFO("NewsScreen", "news_screen_styles applied");
 
     // Restore persistent preferences
     QSettings settings;
@@ -60,44 +55,30 @@ void NewsScreen::build_ui() {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    // Command bar (32px)
+    // Command bar with integrated intel strip (32px + 26px = 58px total)
     command_bar_ = new NewsCommandBar(this);
     root->addWidget(command_bar_);
 
-    // Three-panel splitter
-    auto* splitter = new QSplitter(Qt::Horizontal, this);
-    splitter->setHandleWidth(1);
-    splitter->setObjectName("newsSplitter");
+    // Content area — horizontal layout: [drawer?] [feed] [detail?]
+    auto* content_widget = new QWidget(this);
+    content_widget->setObjectName("newsContentArea");
+    content_layout_ = new QHBoxLayout(content_widget);
+    content_layout_->setContentsMargins(0, 0, 0, 0);
+    content_layout_->setSpacing(0);
 
-    side_panel_ = new NewsSidePanel(splitter);
-    feed_panel_ = new NewsFeedPanel(splitter);
-    detail_panel_ = new NewsDetailPanel(splitter);
+    // Intel drawer (left, hidden by default, 280px)
+    side_panel_ = new NewsSidePanel(content_widget);
+    content_layout_->addWidget(side_panel_);
 
-    splitter->addWidget(side_panel_);
-    splitter->addWidget(feed_panel_);
-    splitter->addWidget(detail_panel_);
+    // Feed panel (fills remaining space)
+    feed_panel_ = new NewsFeedPanel(content_widget);
+    content_layout_->addWidget(feed_panel_, 1);
 
-    splitter->setStretchFactor(0, 0);
-    splitter->setStretchFactor(1, 1);
-    splitter->setStretchFactor(2, 0);
+    // Detail overlay (right, hidden by default, 420px)
+    detail_panel_ = new NewsDetailPanel(content_widget);
+    content_layout_->addWidget(detail_panel_);
 
-    // Restore saved splitter sizes (Fix #9)
-    QSettings splitter_settings;
-    splitter_settings.beginGroup("news");
-    auto saved_sizes = splitter_settings.value("splitter_sizes").toByteArray();
-    splitter_settings.endGroup();
-    if (!saved_sizes.isEmpty())
-        splitter->restoreState(saved_sizes);
-
-    // Save splitter sizes on change
-    connect(splitter, &QSplitter::splitterMoved, this, [splitter]() {
-        QSettings s;
-        s.beginGroup("news");
-        s.setValue("splitter_sizes", splitter->saveState());
-        s.endGroup();
-    });
-
-    root->addWidget(splitter, 1);
+    root->addWidget(content_widget, 1);
 
     // Ticker strip (22px)
     ticker_strip_ = new NewsTickerStrip(this);
@@ -112,25 +93,27 @@ void NewsScreen::connect_signals() {
     connect(command_bar_, &NewsCommandBar::view_mode_changed, this, &NewsScreen::on_view_mode_changed);
     connect(command_bar_, &NewsCommandBar::search_changed, this, &NewsScreen::on_search_changed);
     connect(command_bar_, &NewsCommandBar::refresh_clicked, this, &NewsScreen::on_refresh);
+    connect(command_bar_, &NewsCommandBar::drawer_toggle_requested, this, &NewsScreen::on_drawer_toggle);
 
     // Feed panel
     connect(feed_panel_, &NewsFeedPanel::article_clicked, this, &NewsScreen::on_article_clicked);
     connect(feed_panel_, &NewsFeedPanel::cluster_clicked, this, &NewsScreen::on_cluster_clicked);
     connect(feed_panel_, &NewsFeedPanel::near_bottom, this, &NewsScreen::on_near_bottom);
 
-    // Side panel
+    // Side panel (drawer)
     connect(side_panel_, &NewsSidePanel::category_clicked, this, &NewsScreen::on_sidebar_category_clicked);
     connect(side_panel_, &NewsSidePanel::article_clicked, this, &NewsScreen::on_sidebar_article_clicked);
     connect(side_panel_, &NewsSidePanel::monitor_added, this, &NewsScreen::on_monitor_added);
     connect(side_panel_, &NewsSidePanel::monitor_toggled, this, &NewsScreen::on_monitor_toggled);
     connect(side_panel_, &NewsSidePanel::monitor_deleted, this, &NewsScreen::on_monitor_deleted);
+    connect(side_panel_, &NewsSidePanel::close_requested, this, &NewsScreen::on_drawer_toggle);
 
-    // Detail panel
+    // Detail panel (overlay)
     connect(detail_panel_, &NewsDetailPanel::analyze_requested, this, &NewsScreen::on_analyze_requested);
+    connect(detail_panel_, &NewsDetailPanel::panel_closed, this, &NewsScreen::on_detail_closed);
     connect(detail_panel_, &NewsDetailPanel::bookmark_requested, this, [this](const services::NewsArticle& article) {
         auto r = fincept::NewsArticleRepository::instance().toggle_saved(article.id);
         if (r.is_ok()) {
-            // Refresh saved section in side panel
             auto saved_r = fincept::NewsArticleRepository::instance().load_saved();
             if (saved_r.is_ok())
                 side_panel_->update_saved(saved_r.value());
@@ -140,7 +123,7 @@ void NewsScreen::connect_signals() {
     // RTL toggle
     connect(command_bar_, &NewsCommandBar::rtl_toggled, this, []() { ui::set_rtl(!ui::is_rtl()); });
 
-    // Variant selector — filter feeds by variant (Fix #11)
+    // Variant selector
     connect(command_bar_, &NewsCommandBar::variant_changed, this, [this](const QString& variant) {
         active_variant_ = variant;
         QSettings s;
@@ -163,17 +146,14 @@ void NewsScreen::connect_signals() {
         if (visible_)
             feed_panel_->model()->advance_pulse();
     });
-    // Started/stopped in showEvent/hideEvent (P3 compliance)
 
-    // Debounced DB seen-write timer: flushes pending_seen_ids_ every 1s
-    // so scroll events never do synchronous DB I/O on the UI thread.
+    // Debounced DB seen-write timer
     seen_flush_timer_ = new QTimer(this);
     seen_flush_timer_->setInterval(1000);
     seen_flush_timer_->setSingleShot(true);
     connect(seen_flush_timer_, &QTimer::timeout, this, [this]() {
         if (pending_seen_ids_.isEmpty())
             return;
-        // Move to local copy and clear, then write in one transaction
         const QSet<QString> ids = std::move(pending_seen_ids_);
         pending_seen_ids_.clear();
         QPointer<NewsScreen> self = this;
@@ -181,15 +161,18 @@ void NewsScreen::connect_signals() {
             for (const auto& id : ids)
                 fincept::NewsArticleRepository::instance().mark_seen(id);
             if (self) {
-                QMetaObject::invokeMethod(self, [self]() {
-                    if (self)
-                        LOG_DEBUG("NewsScreen", QString("Flushed %1 seen IDs to DB").arg(0));
-                }, Qt::QueuedConnection);
+                QMetaObject::invokeMethod(
+                    self,
+                    [self]() {
+                        if (self)
+                            LOG_INFO("NewsScreen", QString("Flushed %1 seen IDs to DB").arg(0));
+                    },
+                    Qt::QueuedConnection);
             }
         });
     });
 
-    // Scroll-based seen tracking — model update is instant, DB write is batched
+    // Scroll-based seen tracking
     connect(feed_panel_->list_view()->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
         auto* lv = feed_panel_->list_view();
         const QRect viewport_rect = lv->viewport()->rect();
@@ -202,7 +185,7 @@ void NewsScreen::connect_signals() {
             }
         }
         if (!pending_seen_ids_.isEmpty())
-            seen_flush_timer_->start(); // restart 1s debounce window
+            seen_flush_timer_->start();
     });
 
     // Summarize button
@@ -249,6 +232,15 @@ void NewsScreen::connect_signals() {
                 QDesktopServices::openUrl(QUrl(article.link));
         }
     });
+
+    // Escape closes detail panel
+    auto* shortcut_esc = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+    connect(shortcut_esc, &QShortcut::activated, this, [this]() {
+        if (detail_panel_->is_panel_open())
+            detail_panel_->close_panel();
+        else if (side_panel_->is_drawer_open())
+            side_panel_->toggle_drawer();
+    });
 }
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -259,17 +251,14 @@ void NewsScreen::showEvent(QShowEvent* e) {
     ticker_strip_->resume();
     pulse_timer_->start();
     services::NewsService::instance().start_auto_refresh();
-    services::NewsService::instance().connect_live_feed(); // Fix #10: WebSocket
+    services::NewsService::instance().connect_live_feed();
 
     if (first_show_) {
         first_show_ = false;
 
-        // Ensure optional columns exist (idempotent, safe on every launch)
         fincept::NewsArticleRepository::instance().ensure_seen_column();
         fincept::NewsArticleRepository::instance().ensure_saved_column();
 
-        // Pre-populate seen state from DB so previously-read articles
-        // don't show the "new" glow after restart (last 30 days only)
         int64_t since_ts = QDateTime::currentSecsSinceEpoch() - (30LL * 86400);
         auto seen_result = fincept::NewsArticleRepository::instance().load_seen_ids(since_ts);
         if (seen_result.is_ok()) {
@@ -277,12 +266,13 @@ void NewsScreen::showEvent(QShowEvent* e) {
                 feed_panel_->model()->mark_seen(id);
         }
 
-        // Pre-populate saved/bookmarked articles in side panel
         auto saved_result = fincept::NewsArticleRepository::instance().load_saved();
         if (saved_result.is_ok())
             side_panel_->update_saved(saved_result.value());
 
+        LOG_INFO("NewsScreen", "showEvent: calling on_refresh");
         on_refresh();
+        LOG_INFO("NewsScreen", "showEvent: on_refresh returned");
     }
 }
 
@@ -292,7 +282,7 @@ void NewsScreen::hideEvent(QHideEvent* e) {
     ticker_strip_->pause();
     pulse_timer_->stop();
     services::NewsService::instance().stop_auto_refresh();
-    services::NewsService::instance().disconnect_live_feed(); // Fix #10
+    services::NewsService::instance().disconnect_live_feed();
     filter_generation_.fetch_add(1, std::memory_order_relaxed);
 }
 
@@ -417,7 +407,6 @@ void NewsScreen::on_article_clicked(const services::NewsArticle& article) {
 }
 
 void NewsScreen::on_cluster_clicked(const services::NewsCluster& cluster) {
-    // Show lead article in detail panel
     detail_panel_->show_article(cluster.lead_article);
 
     QVector<services::NewsArticle> related;
@@ -434,7 +423,7 @@ void NewsScreen::on_near_bottom() {
     visible_article_count_ += PAGE_SIZE;
     auto visible = filtered_articles_.mid(0, visible_article_count_);
     feed_panel_->model()->set_wire_articles(visible);
-    LOG_DEBUG("NewsScreen", QString("Lazy-loaded to %1 articles").arg(visible.size()));
+    LOG_INFO("NewsScreen", QString("Lazy-loaded to %1 articles").arg(visible.size()));
 }
 
 void NewsScreen::on_sidebar_category_clicked(const QString& category) {
@@ -477,16 +466,25 @@ void NewsScreen::on_related_clicked(const services::NewsArticle& article) {
     on_article_clicked(article);
 }
 
+void NewsScreen::on_drawer_toggle() {
+    side_panel_->toggle_drawer();
+}
+
+void NewsScreen::on_detail_closed() {
+    // Feed gets full width back when detail panel closes
+    feed_panel_->model()->set_selected_id("");
+}
+
 // ── Core data pipeline ──────────────────────────────────────────────────────
 
 void NewsScreen::refresh_data(bool force) {
+    LOG_INFO("NewsScreen", "refresh_data: start");
     loading_ = true;
     command_bar_->set_loading(true);
     feed_panel_->set_loading(true);
 
     auto* svc = &services::NewsService::instance();
 
-    // Progressive callback: show articles as each feed arrives
     QPointer<NewsScreen> self = this;
     auto conn = std::make_shared<QMetaObject::Connection>();
     *conn = connect(svc, &services::NewsService::articles_partial, this,
@@ -520,21 +518,18 @@ void NewsScreen::apply_filters_async() {
 
     QPointer<NewsScreen> self = this;
     auto articles_copy = all_articles_;
-    const QString category  = active_category_;
+    const QString category = active_category_;
     const QString time_range = time_range_;
-    const QString search_lower = search_query_.toLower(); // pre-lowercase once
-    const QString sort    = sort_mode_;
+    const QString search_lower = search_query_.toLower();
+    const QString sort = sort_mode_;
     const QString variant = active_variant_;
     int visible_count = visible_article_count_;
 
-    // For 7D / 30D ranges, merge DB history with the current RSS batch so
-    // articles that aged out of the cache are still visible.
-    // Build live_ids once and reuse for both FTS and full-load paths.
+    // For 7D / 30D ranges, merge DB history
     if (time_range == "7D" || time_range == "30D") {
         const int64_t window_sec = (time_range == "30D") ? (30LL * 86400) : (7LL * 86400);
         const int64_t cutoff = QDateTime::currentSecsSinceEpoch() - window_sec;
 
-        // Build ID set once
         QSet<QString> live_ids;
         live_ids.reserve(articles_copy.size());
         for (const auto& a : std::as_const(articles_copy))
@@ -547,8 +542,7 @@ void NewsScreen::apply_filters_async() {
         };
 
         if (!search_lower.isEmpty()) {
-            auto fts_result = fincept::NewsArticleRepository::instance().search_fts(
-                search_lower, cutoff, 1000);
+            auto fts_result = fincept::NewsArticleRepository::instance().search_fts(search_lower, cutoff, 1000);
             if (fts_result.is_ok())
                 merge_into(fts_result.value());
         } else {
@@ -558,9 +552,8 @@ void NewsScreen::apply_filters_async() {
         }
     }
 
-    QtConcurrent::run([self, gen, articles_copy = std::move(articles_copy),
-                       category, time_range, search_lower, sort, variant, visible_count]() {
-        // Time filter
+    QtConcurrent::run([self, gen, articles_copy = std::move(articles_copy), category, time_range, search_lower, sort,
+                       variant, visible_count]() {
         int64_t window_sec = 0;
         if (time_range == "1H")
             window_sec = 3600;
@@ -586,11 +579,10 @@ void NewsScreen::apply_filters_async() {
         int bullish = 0, bearish = 0, neutral = 0;
 
         for (const auto& a : articles_copy) {
-            // Time filter
             if (cutoff > 0 && a.sort_ts < cutoff)
                 continue;
 
-            // Variant filter (Fix #11)
+            // Variant filter
             if (variant == "FINANCE" && a.category != "MARKETS" && a.category != "EARNINGS" &&
                 a.category != "ECONOMIC" && a.category != "REGULATORY")
                 continue;
@@ -599,32 +591,30 @@ void NewsScreen::apply_filters_async() {
             if (variant == "MACRO" && a.category != "ECONOMIC" && a.category != "REGULATORY" &&
                 a.category != "GEOPOLITICS" && a.category != "ENERGY")
                 continue;
-            // "FULL" shows everything
 
-            // Category filter — static map at file scope (never rebuilt)
+            // Category filter
             if (category != "ALL") {
                 static const QHash<QString, QString> cat_map = {
-                    {"MKT",  "MARKETS"},     {"EARN", "EARNINGS"},
-                    {"ECO",  "ECONOMIC"},    {"TECH", "TECH"},
-                    {"NRG",  "ENERGY"},      {"CRPT", "CRYPTO"},
-                    {"GEO",  "GEOPOLITICS"}, {"DEF",  "DEFENSE"},
+                    {"MKT", "MARKETS"}, {"EARN", "EARNINGS"}, {"ECO", "ECONOMIC"},    {"TECH", "TECH"},
+                    {"NRG", "ENERGY"},  {"CRPT", "CRYPTO"},   {"GEO", "GEOPOLITICS"}, {"DEF", "DEFENSE"},
                 };
                 auto it = cat_map.find(category);
                 if (it != cat_map.end() && a.category != it.value())
                     continue;
             }
 
-            // Search filter — search_lower already lowercased, compare against
-            // pre-lowercased article text to avoid per-call toLower() inside Qt
+            // Search filter
             if (!search_lower.isEmpty()) {
-                const QString hl  = a.headline.toLower();
+                const QString hl = a.headline.toLower();
                 const QString sum = a.summary.toLower();
-                bool match = hl.contains(search_lower) ||
-                             sum.contains(search_lower) ||
+                bool match = hl.contains(search_lower) || sum.contains(search_lower) ||
                              a.source.toLower().contains(search_lower);
                 if (!match) {
                     for (const auto& t : std::as_const(a.tickers)) {
-                        if (t.toLower().contains(search_lower)) { match = true; break; }
+                        if (t.toLower().contains(search_lower)) {
+                            match = true;
+                            break;
+                        }
                     }
                 }
                 if (!match)
@@ -654,17 +644,15 @@ void NewsScreen::apply_filters_async() {
             });
         }
 
-        // Cluster
         auto clusters = services::cluster_articles(filtered);
 
-        // Post back to UI thread
         QMetaObject::invokeMethod(
             self,
             [self, gen, filtered, clusters, category_counts, bullish, bearish, neutral]() {
                 if (!self)
                     return;
                 if (gen < self->filter_generation_.load(std::memory_order_relaxed)) {
-                    LOG_DEBUG("NewsScreen", QString("Rejected stale filter gen %1").arg(gen));
+                    LOG_INFO("NewsScreen", QString("Rejected stale filter gen %1").arg(gen));
                     return;
                 }
                 self->update_ui_from_filtered(gen, filtered, clusters, category_counts, bullish, bearish, neutral);
@@ -678,6 +666,8 @@ void NewsScreen::update_ui_from_filtered(int /*generation*/, const QVector<servi
                                          const QMap<QString, int>& category_counts, int bullish, int bearish,
                                          int neutral) {
 
+    LOG_INFO("NewsScreen",
+             QString("update_ui_from_filtered: %1 articles, %2 clusters").arg(filtered.size()).arg(clusters.size()));
     filtered_articles_ = filtered;
     clusters_ = clusters;
 
@@ -687,15 +677,18 @@ void NewsScreen::update_ui_from_filtered(int /*generation*/, const QVector<servi
     feed_panel_->model()->set_clusters(clusters);
     feed_panel_->model()->set_view_mode(view_mode_);
 
-    // Command bar
+    // Command bar counts
     command_bar_->set_article_count(filtered.size());
     int alert_count = static_cast<int>(services::get_breaking_clusters(clusters).size());
     command_bar_->set_alert_count(alert_count);
     command_bar_->set_unseen_count(feed_panel_->model()->unseen_count());
 
-    // Side panel stats
-    side_panel_->update_stats(services::NewsService::instance().feed_count(), filtered.size(), clusters.size(),
-                              services::NewsService::instance().active_sources().size());
+    // Intel strip stats + sentiment (replaces side panel stats)
+    command_bar_->update_stats(services::NewsService::instance().feed_count(), filtered.size(), clusters.size(),
+                               services::NewsService::instance().active_sources().size());
+    command_bar_->update_sentiment(bullish, bearish, neutral);
+
+    // Side panel (drawer) — still gets data for when user opens it
     side_panel_->update_sentiment(bullish, bearish, neutral);
 
     // Top 5 stories
@@ -710,7 +703,6 @@ void NewsScreen::update_ui_from_filtered(int /*generation*/, const QVector<servi
     if (!breaking.isEmpty()) {
         feed_panel_->show_breaking(breaking);
 
-        // ── Notifications: Breaking news ────────────────────────────────────
         auto& repo = fincept::SettingsRepository::instance();
         auto get_bool = [&](const QString& key, bool def) -> bool {
             auto r = repo.get(key);
@@ -725,12 +717,11 @@ void NewsScreen::update_ui_from_filtered(int /*generation*/, const QVector<servi
                 notified_breaking_.insert(lead_id);
 
                 NotificationRequest req;
-                req.title   = QString("BREAKING: %1").arg(cluster.lead_article.headline.left(80));
-                req.message = cluster.lead_article.summary.isEmpty()
-                                  ? cluster.lead_article.source
-                                  : cluster.lead_article.summary.left(160);
-                req.level   = cluster.lead_article.priority == services::Priority::FLASH
-                                  ? NotifLevel::Critical : NotifLevel::Alert;
+                req.title = QString("BREAKING: %1").arg(cluster.lead_article.headline.left(80));
+                req.message = cluster.lead_article.summary.isEmpty() ? cluster.lead_article.source
+                                                                     : cluster.lead_article.summary.left(160);
+                req.level = cluster.lead_article.priority == services::Priority::FLASH ? NotifLevel::Critical
+                                                                                       : NotifLevel::Alert;
                 req.trigger = NotifTrigger::NewsAlert;
                 NotificationService::instance().send(req);
             }
@@ -751,121 +742,21 @@ void NewsScreen::update_ui_from_filtered(int /*generation*/, const QVector<servi
 
     // Deviations
     compute_deviations();
-
-    // ── NLP pipeline (async, results update UI when ready) ──────────────
-    QPointer<NewsScreen> nlp_self = this;
-
-    // Semantic clustering (Fix #13) — upgrade clusters with TF-IDF similarity
-    services::NewsNlpService::instance().cluster_semantic(filtered, [nlp_self](bool ok, QJsonArray semantic_clusters) {
-        if (!nlp_self || !ok || semantic_clusters.isEmpty())
-            return;
-        LOG_DEBUG("NewsScreen", QString("Semantic clustering found %1 groups").arg(semantic_clusters.size()));
-    });
-
-    // Entity extraction
-    services::NewsNlpService::instance().extract_entities(filtered, [nlp_self](bool ok, services::NerResult ner) {
-        if (!nlp_self || !ok)
-            return;
-        // Update side panel with top entities
-        nlp_self->side_panel_->update_entities(ner);
-    });
-
-    // Geolocation + focal point detection (Fix #17)
-    services::NewsNlpService::instance().geolocate_articles(
-        filtered, [nlp_self](bool ok, QVector<services::ArticleGeo> geo) {
-            if (!nlp_self || !ok)
-                return;
-            QSet<QString> geo_ids;
-            for (const auto& g : geo)
-                geo_ids.insert(g.id);
-            nlp_self->feed_panel_->model()->set_geo_articles(geo_ids);
-            nlp_self->side_panel_->update_locations(geo);
-
-            // Focal point detection from geolocated articles
-            QJsonArray geo_json;
-            for (const auto& g : geo) {
-                QJsonObject obj;
-                obj["id"] = g.id;
-                obj["primary_lat"] = g.primary_lat;
-                obj["primary_lon"] = g.primary_lon;
-                obj["category"] = "GENERAL";
-                obj["source"] = "";
-                obj["headline"] = "";
-                // Find matching article for metadata
-                for (const auto& a : nlp_self->filtered_articles_) {
-                    if (a.id == g.id) {
-                        obj["category"] = a.category;
-                        obj["source"] = a.source;
-                        obj["headline"] = a.headline;
-                        break;
-                    }
-                }
-                geo_json.append(obj);
-            }
-            if (geo_json.size() >= 3) {
-                services::NewsCorrelationService::instance().detect_focal_points(
-                    geo_json, [nlp_self](bool fp_ok, QVector<services::FocalPoint> points) {
-                        if (!nlp_self || !fp_ok || points.isEmpty())
-                            return;
-                        LOG_INFO("NewsScreen", QString("Detected %1 focal points").arg(points.size()));
-                        // Focal points shown as part of signals in side panel
-                        // Convert to CorrelationSignal for display
-                        QVector<services::CorrelationSignal> fp_sigs;
-                        for (const auto& fp : points) {
-                            services::CorrelationSignal sig;
-                            sig.type = "geo_convergence";
-                            sig.severity = fp.severity;
-                            sig.value = fp.event_count;
-                            sig.detail = QString("Focal: %1 events at (%2, %3)")
-                                             .arg(fp.event_count)
-                                             .arg(fp.lat, 0, 'f', 1)
-                                             .arg(fp.lon, 0, 'f', 1);
-                            fp_sigs.append(sig);
-                        }
-                        // Append to existing signals in side panel
-                        auto existing = services::NewsCorrelationService::instance().cached_signals();
-                        existing.append(fp_sigs);
-                        nlp_self->side_panel_->update_signals(existing);
-                    });
-            }
-        });
-
-    // Correlation signals
-    services::NewsCorrelationService::instance().detect_signals(
-        filtered, [nlp_self](bool ok, QVector<services::CorrelationSignal> sigs) {
-            if (!nlp_self || !ok)
-                return;
-            nlp_self->side_panel_->update_signals(sigs);
-
-            // Compute CII for top mentioned countries
-            auto ner = services::NewsNlpService::instance().cached_ner();
-            for (int i = 0; i < std::min(5, static_cast<int>(ner.top_countries.size())); ++i) {
-                QString code = ner.top_countries[i].name;
-                services::NewsCorrelationService::instance().compute_instability(
-                    code, sigs, [nlp_self, code](bool ok2, services::InstabilityScore score) {
-                        if (!nlp_self || !ok2)
-                            return;
-                        nlp_self->side_panel_->update_instability(code, score);
-                    });
-            }
-        });
-
-    // Prediction markets (fetch once per refresh cycle)
-    services::NewsCorrelationService::instance().fetch_predictions(
-        [nlp_self](bool ok, QVector<services::PredictionMarket> preds) {
-            if (!nlp_self || !ok)
-                return;
-            nlp_self->side_panel_->update_predictions(preds);
-        });
 }
 
 void NewsScreen::update_monitors() {
     auto monitors = services::NewsMonitorService::instance().get_monitors();
-    auto matches  = services::NewsMonitorService::instance().scan_monitors(monitors, filtered_articles_);
+    auto matches = services::NewsMonitorService::instance().scan_monitors(monitors, filtered_articles_);
     side_panel_->update_monitors(monitors, matches);
     feed_panel_->model()->set_monitor_matches(matches, monitors);
 
-    // ── Notifications: Monitor keyword matches ──────────────────────────────
+    // Update intel strip monitor summary
+    int total_alerts = 0;
+    for (auto it = matches.begin(); it != matches.end(); ++it)
+        total_alerts += it.value().size();
+    command_bar_->update_monitor_summary(monitors.size(), total_alerts);
+
+    // Notifications
     auto& repo = fincept::SettingsRepository::instance();
     auto get_bool = [&](const QString& key, bool def) -> bool {
         auto r = repo.get(key);
@@ -874,7 +765,8 @@ void NewsScreen::update_monitors() {
     if (get_bool("notifications.news_monitors", true)) {
         using namespace fincept::notifications;
         for (const auto& monitor : monitors) {
-            if (!monitor.enabled) continue;
+            if (!monitor.enabled)
+                continue;
             const auto& articles = matches.value(monitor.id);
             for (const auto& article : articles) {
                 const QString dedup_key = monitor.id + ":" + article.id;
@@ -883,9 +775,9 @@ void NewsScreen::update_monitors() {
                 notified_monitors_.insert(dedup_key);
 
                 NotificationRequest req;
-                req.title   = QString("WATCH \"%1\": %2").arg(monitor.label, article.headline.left(70));
+                req.title = QString("WATCH \"%1\": %2").arg(monitor.label, article.headline.left(70));
                 req.message = article.summary.isEmpty() ? article.source : article.summary.left(160);
-                req.level   = NotifLevel::Warning;
+                req.level = NotifLevel::Warning;
                 req.trigger = NotifTrigger::NewsAlert;
                 NotificationService::instance().send(req);
             }
@@ -894,7 +786,6 @@ void NewsScreen::update_monitors() {
 }
 
 void NewsScreen::compute_deviations() {
-    // Count articles per category in the last hour
     int64_t now = QDateTime::currentSecsSinceEpoch();
     int64_t hour_ago = now - 3600;
 
@@ -910,14 +801,12 @@ void NewsScreen::compute_deviations() {
         auto& baseline = baselines_[it.key()];
         baseline.hourly_counts.append(it.value());
 
-        // Keep last 168 hours (7 days)
         while (baseline.hourly_counts.size() > 168)
             baseline.hourly_counts.removeFirst();
 
         if (baseline.hourly_counts.size() < 24)
-            continue; // need at least 24 hours of data
+            continue;
 
-        // Compute mean and stddev
         double sum = 0;
         for (int c : baseline.hourly_counts)
             sum += c;
@@ -931,19 +820,19 @@ void NewsScreen::compute_deviations() {
         baseline.stddev = std::sqrt(var_sum / baseline.hourly_counts.size());
 
         if (baseline.stddev < 0.5)
-            continue; // too little variance
+            continue;
 
         double z_score = (it.value() - baseline.mean_count) / baseline.stddev;
         if (z_score >= 3.0)
             deviations.append({it.key(), z_score});
     }
 
-    // Sort by z-score descending
     std::sort(deviations.begin(), deviations.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
 
     side_panel_->update_deviations(deviations);
+    command_bar_->update_deviations(deviations); // intel strip
 
-    // ── Notifications: Category deviations & FLASH articles ────────────────
+    // Notifications
     auto& repo = fincept::SettingsRepository::instance();
     auto get_bool = [&](const QString& key, bool def) -> bool {
         auto r = repo.get(key);
@@ -958,16 +847,17 @@ void NewsScreen::compute_deviations() {
             notified_deviations_.insert(category);
 
             NotificationRequest req;
-            req.title   = QString("DEVIATION: %1 news spike").arg(category);
+            req.title = QString("DEVIATION: %1 news spike").arg(category);
             req.message = QString("Unusual volume detected (z-score: %1). More %2 articles than normal.")
-                              .arg(z_score, 0, 'f', 1).arg(category);
-            req.level   = z_score >= 5.0 ? NotifLevel::Critical : NotifLevel::Warning;
+                              .arg(z_score, 0, 'f', 1)
+                              .arg(category);
+            req.level = z_score >= 5.0 ? NotifLevel::Critical : NotifLevel::Warning;
             req.trigger = NotifTrigger::NewsAlert;
             NotificationService::instance().send(req);
         }
     }
 
-    // ── Notifications: FLASH / high-impact articles ─────────────────────────
+    // FLASH articles
     if (get_bool("notifications.news_flash", true)) {
         using namespace fincept::notifications;
         for (const auto& article : filtered_articles_) {
@@ -980,19 +870,17 @@ void NewsScreen::compute_deviations() {
             notified_flash_.insert(article.id);
 
             NotificationRequest req;
-            req.title   = QString("FLASH: %1").arg(article.headline.left(80));
+            req.title = QString("FLASH: %1").arg(article.headline.left(80));
             req.message = article.summary.isEmpty() ? article.source : article.summary.left(160);
-            req.level   = NotifLevel::Critical;
+            req.level = NotifLevel::Critical;
             req.trigger = NotifTrigger::NewsAlert;
             NotificationService::instance().send(req);
         }
     }
 
-    // Persist baselines via correlation service (Fix #5)
+    // Persist baselines
     services::NewsCorrelationService::instance().update_baseline(
-        current_counts, [](bool /*ok*/, QMap<QString, services::CategoryBaseline> /*baselines*/) {
-            // Baselines saved to Python cache; no UI action needed
-        });
+        current_counts, [](bool /*ok*/, QMap<QString, services::CategoryBaseline> /*baselines*/) {});
 }
 
 void NewsScreen::sort_articles(QVector<services::NewsArticle>& articles) const {
@@ -1021,28 +909,23 @@ int64_t NewsScreen::time_window_seconds() const {
     return 86400;
 }
 
-// ── IStatefulScreen ───────────────────────────────────────────────────────────
+// ── IStatefulScreen ─────────────────────────────────────────────────────────
 
 QVariantMap NewsScreen::save_state() const {
     return {
-        {"category",    active_category_},
-        {"time_range",  time_range_},
-        {"sort_mode",   sort_mode_},
-        {"view_mode",   view_mode_},
-        {"search_query", search_query_},
-        {"variant",     active_variant_},
+        {"category", active_category_}, {"time_range", time_range_},     {"sort_mode", sort_mode_},
+        {"view_mode", view_mode_},      {"search_query", search_query_}, {"variant", active_variant_},
     };
 }
 
 void NewsScreen::restore_state(const QVariantMap& state) {
-    active_category_ = state.value("category",    "ALL").toString();
-    time_range_      = state.value("time_range",  "24H").toString();
-    sort_mode_       = state.value("sort_mode",   "RELEVANCE").toString();
-    view_mode_       = state.value("view_mode",   "WIRE").toString();
-    search_query_    = state.value("search_query").toString();
-    active_variant_  = state.value("variant",     "FULL").toString();
+    active_category_ = state.value("category", "ALL").toString();
+    time_range_ = state.value("time_range", "24H").toString();
+    sort_mode_ = state.value("sort_mode", "RELEVANCE").toString();
+    view_mode_ = state.value("view_mode", "WIRE").toString();
+    search_query_ = state.value("search_query").toString();
+    active_variant_ = state.value("variant", "FULL").toString();
 
-    // Apply active category to command bar if already built
     if (command_bar_)
         command_bar_->set_active_category(active_category_);
 }

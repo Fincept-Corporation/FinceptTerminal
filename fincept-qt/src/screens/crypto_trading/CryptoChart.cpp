@@ -31,7 +31,7 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
     layout->setSpacing(0);
 
     // Header with TF toggle buttons
-    auto* header = new QWidget;
+    auto* header = new QWidget(this);
     header->setObjectName("cryptoChartHeader");
     header->setFixedHeight(28);
     auto* h_layout = new QHBoxLayout(header);
@@ -208,17 +208,21 @@ void CryptoChart::update_axes(double min_price, double max_price, qint64 min_tim
         // Fallback: extend by one slot using the TF label
         const QString tf = TF_LABELS[active_tf_];
         qint64 slot_ms = 60000; // 1m default
-        if (tf == "5m")       slot_ms = 300000;
-        else if (tf == "15m") slot_ms = 900000;
-        else if (tf == "1h")  slot_ms = 3600000;
-        else if (tf == "4h")  slot_ms = 14400000;
-        else if (tf == "1d")  slot_ms = 86400000;
+        if (tf == "5m")
+            slot_ms = 300000;
+        else if (tf == "15m")
+            slot_ms = 900000;
+        else if (tf == "1h")
+            slot_ms = 3600000;
+        else if (tf == "4h")
+            slot_ms = 14400000;
+        else if (tf == "1d")
+            slot_ms = 86400000;
         effective_max = min_time + slot_ms;
     }
 
     if (min_time != last_min_time_ || effective_max != last_max_time_) {
-        time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(min_time),
-                             QDateTime::fromMSecsSinceEpoch(effective_max));
+        time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(min_time), QDateTime::fromMSecsSinceEpoch(effective_max));
         last_min_time_ = min_time;
         last_max_time_ = effective_max;
     }

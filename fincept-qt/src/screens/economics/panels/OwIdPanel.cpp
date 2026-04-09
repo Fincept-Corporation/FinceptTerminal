@@ -16,10 +16,9 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kOwIdScript   = "owid_data.py";
+static constexpr const char* kOwIdScript = "owid_data.py";
 static constexpr const char* kOwIdSourceId = "owid";
-static constexpr const char* kOwIdColor    = "#10B981";  // OWID green
-
+static constexpr const char* kOwIdColor = "#10B981"; // OWID green
 
 struct OwIdSeries {
     QString label;
@@ -28,22 +27,17 @@ struct OwIdSeries {
 };
 
 static const QList<OwIdSeries> kOwIdSeries = {
-    { "CO2 Emissions",          "co2",             "United States" },
-    { "CO2 Per Capita",         "co2_per_capita",  "United States" },
-    { "Energy Consumption",     "energy",          "China"         },
-    { "Life Expectancy",        "life_expectancy", "Japan"         },
-    { "Poverty Headcount",      "poverty",         "World"         },
-    { "GDP Per Capita",         "gdp_per_capita",  "Germany"       },
+    {"CO2 Emissions", "co2", "United States"}, {"CO2 Per Capita", "co2_per_capita", "United States"},
+    {"Energy Consumption", "energy", "China"}, {"Life Expectancy", "life_expectancy", "Japan"},
+    {"Poverty Headcount", "poverty", "World"}, {"GDP Per Capita", "gdp_per_capita", "Germany"},
 };
 
 } // namespace
 
-OwIdPanel::OwIdPanel(QWidget* parent)
-    : EconPanelBase(kOwIdSourceId, kOwIdColor, parent) {
+OwIdPanel::OwIdPanel(QWidget* parent) : EconPanelBase(kOwIdSourceId, kOwIdColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &OwIdPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &OwIdPanel::on_result);
 }
 
 void OwIdPanel::activate() {
@@ -79,11 +73,10 @@ void OwIdPanel::build_controls(QHBoxLayout* thl) {
     end_edit_->setFixedWidth(52);
 
     // Update default country when series changes
-    connect(series_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this](int idx) {
-                if (idx >= 0 && idx < kOwIdSeries.size())
-                    country_edit_->setText(kOwIdSeries[idx].default_country);
-            });
+    connect(series_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        if (idx >= 0 && idx < kOwIdSeries.size())
+            country_edit_->setText(kOwIdSeries[idx].default_country);
+    });
 
     thl->addWidget(mk_lbl("SERIES"));
     thl->addWidget(series_combo_);
@@ -98,31 +91,39 @@ void OwIdPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void OwIdPanel::on_fetch() {
-    const int   idx    = series_combo_->currentIndex();
+    const int idx = series_combo_->currentIndex();
     const auto& series = kOwIdSeries[idx];
 
     const QString country = country_edit_->text().trimmed();
-    const QString start   = start_edit_->text().trimmed();
-    const QString end     = end_edit_->text().trimmed();
+    const QString start = start_edit_->text().trimmed();
+    const QString end = end_edit_->text().trimmed();
 
-    if (country.isEmpty()) { show_error("Please enter a country name"); return; }
+    if (country.isEmpty()) {
+        show_error("Please enter a country name");
+        return;
+    }
 
     show_loading("Fetching OWID: " + series.label + " — " + country + "…");
 
-    services::EconomicsService::instance().execute(
-        kOwIdSourceId, kOwIdScript, series.command,
-        { country, start, end },
-        "owid_" + series.command);
+    services::EconomicsService::instance().execute(kOwIdSourceId, kOwIdScript, series.command, {country, start, end},
+                                                   "owid_" + series.command);
 }
 
-void OwIdPanel::on_result(const QString& request_id,
-                           const services::EconomicsResult& result) {
-    if (result.source_id != kOwIdSourceId) return;
-    if (!request_id.startsWith("owid_")) return;
-    if (!result.success) { show_error(result.error); return; }
+void OwIdPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kOwIdSourceId)
+        return;
+    if (!request_id.startsWith("owid_"))
+        return;
+    if (!result.success) {
+        show_error(result.error);
+        return;
+    }
 
     const QString inline_err = result.data["error"].toString();
-    if (!inline_err.isEmpty()) { show_error(inline_err); return; }
+    if (!inline_err.isEmpty()) {
+        show_error(inline_err);
+        return;
+    }
 
     // Response: { success, title, country, count, data:[{country, year, <cols>}] }
     QJsonArray rows = result.data["data"].toArray();
@@ -134,14 +135,14 @@ void OwIdPanel::on_result(const QString& request_id,
 
     const QString title = result.data["title"].toString();
     const QString country = result.data["country"].toString();
-    const QString display_title = title.isEmpty()
-        ? ("OWID: " + (series_combo_->currentIndex() >= 0
-               ? kOwIdSeries[series_combo_->currentIndex()].label : request_id.mid(5)))
-        : (title + (country.isEmpty() || country == "All" ? "" : " — " + country));
+    const QString display_title =
+        title.isEmpty()
+            ? ("OWID: " + (series_combo_->currentIndex() >= 0 ? kOwIdSeries[series_combo_->currentIndex()].label
+                                                              : request_id.mid(5)))
+            : (title + (country.isEmpty() || country == "All" ? "" : " — " + country));
 
     display(rows, display_title);
-    LOG_INFO("OwIdPanel",
-             QString("Displayed %1 rows: %2").arg(rows.size()).arg(display_title));
+    LOG_INFO("OwIdPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(display_title));
 }
 
 } // namespace fincept::screens

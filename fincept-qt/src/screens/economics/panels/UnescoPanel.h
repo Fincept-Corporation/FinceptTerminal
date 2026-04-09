@@ -22,23 +22,25 @@ class UnescoPanel : public EconPanelBase {
   protected:
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
-    void on_result(const QString& request_id,
-                   const services::EconomicsResult& result) override;
+    void on_result(const QString& request_id, const services::EconomicsResult& result) override;
 
   private:
     void load_indicators();
     void on_theme_changed(int index);
     void on_indicator_filter(const QString& text);
 
-    QComboBox*   theme_combo_      = nullptr;
-    QLineEdit*   indicator_search_ = nullptr;
-    QListWidget* indicator_list_   = nullptr;
-    QLineEdit*   country_input_    = nullptr;
-    QLineEdit*   start_input_      = nullptr;
-    QLineEdit*   end_input_        = nullptr;
+    QComboBox* theme_combo_ = nullptr;
+    QLineEdit* indicator_search_ = nullptr;
+    QListWidget* indicator_list_ = nullptr;
+    QLineEdit* country_input_ = nullptr;
+    QLineEdit* start_input_ = nullptr;
+    QLineEdit* end_input_ = nullptr;
 
     // preset indicators per theme
-    struct IndicatorDef { QString name; QString code; };
+    struct IndicatorDef {
+        QString name;
+        QString code;
+    };
     QList<IndicatorDef> current_indicators_;
     bool indicators_loaded_ = false;
 };

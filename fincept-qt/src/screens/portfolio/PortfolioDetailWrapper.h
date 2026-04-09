@@ -42,7 +42,7 @@ class PortfolioDetailWrapper : public QWidget {
 
     // Data passed to views
     portfolio::PortfolioSummary current_summary_;
-    portfolio::ComputedMetrics  current_metrics_;
+    portfolio::ComputedMetrics current_metrics_;
     QString current_currency_;
     QVector<portfolio::PortfolioSnapshot> current_snapshots_;
 };

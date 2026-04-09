@@ -17,23 +17,33 @@ class FivePaisaBroker : public IBroker {
 
     BrokerProfile profile() const override {
         return BrokerProfile{
-            .id = "fivepaisa", .display_name = "5Paisa", .region = "IN", .currency = "INR",
-            .credential_fields = {
-                {CredentialField::ApiKey,    "APP KEY (app:::user:::client)", "app_key:::user_id:::client_id", false},
-                {CredentialField::ApiSecret, "APP SECRET",                   "Enter App Secret...",           true},
-                {CredentialField::AuthCode,  "LOGIN (email:::pin:::totp)",   "email:::pin:::totp",            false},
-            },
+            .id = "fivepaisa",
+            .display_name = "5Paisa",
+            .region = "IN",
+            .currency = "INR",
+            .credential_fields =
+                {
+                    {CredentialField::ApiKey, "APP KEY (app:::user:::client)", "app_key:::user_id:::client_id", false},
+                    {CredentialField::ApiSecret, "APP SECRET", "Enter App Secret...", true},
+                    {CredentialField::AuthCode, "LOGIN (email:::pin:::totp)", "email:::pin:::totp", false},
+                },
             .exchanges = {"NSE", "BSE", "NFO", "BFO", "MCX", "CDS"},
-            .product_types = {
-                {"Intraday (MIS)",  ProductType::Intraday},
-                {"Delivery (CNC)", ProductType::Delivery},
-                {"Margin (NRML)",  ProductType::Margin},
-            },
-            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
-            .has_native_paper=false, .default_paper_balance=1000000.0,
-            .default_watchlist={"HDFCBANK","ICICIBANK","SBIN","TCS","INFY","RELIANCE","TATAMOTORS","BAJFINANCE","HINDUNILVR","ITC"},
-            .default_symbol="RELIANCE", .default_exchange="NSE",
-            .brokerage_info="\u20B910/order flat",
+            .product_types =
+                {
+                    {"Intraday (MIS)", ProductType::Intraday},
+                    {"Delivery (CNC)", ProductType::Delivery},
+                    {"Margin (NRML)", ProductType::Margin},
+                },
+            .supports_intraday = true,
+            .supports_bracket_order = false,
+            .supports_cover_order = false,
+            .has_native_paper = false,
+            .default_paper_balance = 1000000.0,
+            .default_watchlist = {"HDFCBANK", "ICICIBANK", "SBIN", "TCS", "INFY", "RELIANCE", "TATAMOTORS",
+                                  "BAJFINANCE", "HINDUNILVR", "ITC"},
+            .default_symbol = "RELIANCE",
+            .default_exchange = "NSE",
+            .brokerage_info = "\u20B910/order flat",
         };
     }
 
@@ -54,7 +64,7 @@ class FivePaisaBroker : public IBroker {
                                                    const QString& resolution, const QString& from_date,
                                                    const QString& to_date) override;
 
-    static bool    is_token_expired(const BrokerHttpResponse& resp);
+    static bool is_token_expired(const BrokerHttpResponse& resp);
     static QString checked_error(const BrokerHttpResponse& resp, const QString& fallback);
 
   protected:
@@ -62,7 +72,9 @@ class FivePaisaBroker : public IBroker {
 
   private:
     // Unpack "app_key:::user_id:::client_id" → {app_key, user_id, client_id}
-    struct KeyParts { QString app_key, user_id, client_id; };
+    struct KeyParts {
+        QString app_key, user_id, client_id;
+    };
     static KeyParts unpack_key(const QString& packed);
 
     static QString fp_exchange(const QString& exchange);
@@ -70,8 +82,7 @@ class FivePaisaBroker : public IBroker {
     static QString fp_interval(const QString& resolution);
 
     // Build the standard 5paisa request envelope
-    static QJsonObject make_body(const QString& app_key, const QString& client_id,
-                                 const QJsonObject& body_fields);
+    static QJsonObject make_body(const QString& app_key, const QString& client_id, const QJsonObject& body_fields);
 };
 
 } // namespace fincept::trading

@@ -2,6 +2,9 @@
 
 #include "screens/dashboard/canvas/DashboardTemplates.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
+
+#include <array>
 
 #include <QFrame>
 #include <QGridLayout>
@@ -31,14 +34,24 @@ class TemplatePreview : public QWidget {
         const float cw = float(width()) / cols;
         const float rh = float(height()) / rows;
 
-        static const QColor colors[] = {
-            QColor(217, 119, 6, 180), QColor(22, 163, 74, 160), QColor(37, 99, 235, 160),
-            QColor(220, 38, 38, 160), QColor(8, 145, 178, 160), QColor(202, 138, 4, 160),
+        static const auto make_colors = []() {
+            const auto& t = ui::ThemeManager::instance().tokens();
+            return std::array<QColor, 6>{
+                QColor(t.accent),    QColor(t.positive), QColor(t.info),
+                QColor(t.negative),  QColor(t.cyan),     QColor(t.warning),
+            };
+        };
+        const auto colors = make_colors();
+        // apply 160-180 alpha for preview readability
+        auto tinted = [&](int i) {
+            QColor c = colors[i % 6];
+            c.setAlpha(i == 0 ? 180 : 160);
+            return c;
         };
         int ci = 0;
         for (const auto& item : items_) {
             QRectF r(item.cell.x * cw + 1, item.cell.y * rh + 1, item.cell.w * cw - 2, item.cell.h * rh - 2);
-            p.fillRect(r, colors[ci++ % 6]);
+            p.fillRect(r, tinted(ci++));
         }
     }
 
@@ -70,7 +83,7 @@ TemplatePicker::TemplatePicker(QWidget* parent) : QDialog(parent) {
     sub->setWordWrap(true);
     vl->addWidget(sub);
 
-    auto* grid_w = new QWidget;
+    auto* grid_w = new QWidget(this);
     auto* grid = new QGridLayout(grid_w);
     grid->setSpacing(8);
     grid->setContentsMargins(0, 0, 0, 0);

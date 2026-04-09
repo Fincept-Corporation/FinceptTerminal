@@ -38,8 +38,7 @@ void PerformanceRiskView::build_ui() {
 
     auto* chart_title = new QLabel("NAV PERFORMANCE (FROM SNAPSHOTS)");
     chart_title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;")
-            .arg(ui::colors::AMBER));
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
     period_bar->addWidget(chart_title);
     period_bar->addStretch();
 
@@ -48,17 +47,14 @@ void PerformanceRiskView::build_ui() {
         btn->setFixedSize(32, 20);
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(
-            QString("QPushButton { background:transparent; color:%1; border:none;"
-                    "  font-size:9px; font-weight:700; }"
-                    "QPushButton:checked { color:%2; border-bottom:2px solid %2; }"
-                    "QPushButton:hover { color:%3; }")
-                .arg(ui::colors::TEXT_TERTIARY, ui::colors::AMBER,
-                     ui::colors::TEXT_PRIMARY));
+        btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:none;"
+                                   "  font-size:9px; font-weight:700; }"
+                                   "QPushButton:checked { color:%2; border-bottom:2px solid %2; }"
+                                   "QPushButton:hover { color:%3; }")
+                               .arg(ui::colors::TEXT_TERTIARY, ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
         if (p == current_period_)
             btn->setChecked(true);
-        connect(btn, &QPushButton::clicked, this,
-                [this, period = p]() { set_period(period); });
+        connect(btn, &QPushButton::clicked, this, [this, period = p]() { set_period(period); });
         period_bar->addWidget(btn);
         period_btns_.append(btn);
     }
@@ -78,7 +74,7 @@ void PerformanceRiskView::build_ui() {
     layout->addWidget(chart_view_, 5);
 
     // Separator
-    auto* sep = new QWidget;
+    auto* sep = new QWidget(this);
     sep->setFixedHeight(1);
     sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM));
     layout->addWidget(sep);
@@ -86,46 +82,36 @@ void PerformanceRiskView::build_ui() {
     // ── Risk metric cards ──────────────────────────────────────────────────────
     auto* metrics_header = new QLabel("  RISK METRICS");
     metrics_header->setFixedHeight(24);
-    metrics_header->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:700;"
-                "letter-spacing:1px; background:%2;")
-            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BG_SURFACE));
+    metrics_header->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;"
+                                          "letter-spacing:1px; background:%2;")
+                                      .arg(ui::colors::TEXT_SECONDARY, ui::colors::BG_SURFACE));
     layout->addWidget(metrics_header);
 
     auto* cards_layout = new QGridLayout;
     cards_layout->setContentsMargins(12, 8, 12, 8);
     cards_layout->setSpacing(8);
 
-    sharpe_card_   = add_metric_card(cards_layout, "SHARPE RATIO",
-                                     "Risk-adjusted return (annualised)", ui::colors::CYAN);
-    sortino_card_  = add_metric_card(cards_layout, "SORTINO RATIO",
-                                     "Downside risk-adjusted return", ui::colors::CYAN);
-    beta_card_     = add_metric_card(cards_layout, "BETA",
-                                     "Sensitivity vs SPY (snapshot regression)", ui::colors::WARNING);
-    alpha_card_    = add_metric_card(cards_layout, "ALPHA",
-                                     "Excess return vs 8% annual benchmark", ui::colors::POSITIVE);
-    vol_card_      = add_metric_card(cards_layout, "VOLATILITY",
-                                     "Annualised from daily returns", ui::colors::AMBER);
-    drawdown_card_ = add_metric_card(cards_layout, "MAX DRAWDOWN",
-                                     "Peak-to-trough from snapshots", ui::colors::NEGATIVE);
-    var_card_      = add_metric_card(cards_layout, "VALUE AT RISK (95%)",
-                                     "1-day parametric VaR", ui::colors::NEGATIVE);
-    cvar_card_     = add_metric_card(cards_layout, "CONDITIONAL VaR",
-                                     "Expected shortfall (95%)", ui::colors::NEGATIVE);
+    sharpe_card_ = add_metric_card(cards_layout, "SHARPE RATIO", "Risk-adjusted return (annualised)", ui::colors::CYAN);
+    sortino_card_ = add_metric_card(cards_layout, "SORTINO RATIO", "Downside risk-adjusted return", ui::colors::CYAN);
+    beta_card_ = add_metric_card(cards_layout, "BETA", "Sensitivity vs SPY (snapshot regression)", ui::colors::WARNING);
+    alpha_card_ = add_metric_card(cards_layout, "ALPHA", "Excess return vs 8% annual benchmark", ui::colors::POSITIVE);
+    vol_card_ = add_metric_card(cards_layout, "VOLATILITY", "Annualised from daily returns", ui::colors::AMBER);
+    drawdown_card_ =
+        add_metric_card(cards_layout, "MAX DRAWDOWN", "Peak-to-trough from snapshots", ui::colors::NEGATIVE);
+    var_card_ = add_metric_card(cards_layout, "VALUE AT RISK (95%)", "1-day parametric VaR", ui::colors::NEGATIVE);
+    cvar_card_ = add_metric_card(cards_layout, "CONDITIONAL VaR", "Expected shortfall (95%)", ui::colors::NEGATIVE);
 
-    auto* cards_widget = new QWidget;
+    auto* cards_widget = new QWidget(this);
     cards_widget->setLayout(cards_layout);
     layout->addWidget(cards_widget, 3);
 }
 
-PerformanceRiskView::MetricCard PerformanceRiskView::add_metric_card(
-    QLayout* parent_layout, const QString& title, const QString& desc,
-    const char* color) {
+PerformanceRiskView::MetricCard PerformanceRiskView::add_metric_card(QLayout* parent_layout, const QString& title,
+                                                                     const QString& desc, const char* color) {
 
-    auto* card = new QWidget;
+    auto* card = new QWidget(this);
     card->setStyleSheet(
-        QString("background:%1; border:1px solid %2; padding:8px;")
-            .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+        QString("background:%1; border:1px solid %2; padding:8px;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
 
     auto* cl = new QVBoxLayout(card);
     cl->setContentsMargins(10, 8, 10, 8);
@@ -134,22 +120,17 @@ PerformanceRiskView::MetricCard PerformanceRiskView::add_metric_card(
     MetricCard mc;
 
     mc.title = new QLabel(title);
-    mc.title->setStyleSheet(
-        QString("color:%1; font-size:8px; font-weight:700;"
-                "letter-spacing:0.5px; border:none;")
-            .arg(ui::colors::TEXT_TERTIARY));
+    mc.title->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700;"
+                                    "letter-spacing:0.5px; border:none;")
+                                .arg(ui::colors::TEXT_TERTIARY));
     cl->addWidget(mc.title);
 
     mc.value = new QLabel("--");
-    mc.value->setStyleSheet(
-        QString("color:%1; font-size:18px; font-weight:700; border:none;")
-            .arg(color));
+    mc.value->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700; border:none;").arg(color));
     cl->addWidget(mc.value);
 
     mc.desc = new QLabel(desc);
-    mc.desc->setStyleSheet(
-        QString("color:%1; font-size:8px; border:none;")
-            .arg(ui::colors::TEXT_TERTIARY));
+    mc.desc->setStyleSheet(QString("color:%1; font-size:8px; border:none;").arg(ui::colors::TEXT_TERTIARY));
     cl->addWidget(mc.desc);
 
     auto* grid = static_cast<QGridLayout*>(parent_layout);
@@ -159,16 +140,14 @@ PerformanceRiskView::MetricCard PerformanceRiskView::add_metric_card(
     return mc;
 }
 
-void PerformanceRiskView::set_data(const portfolio::PortfolioSummary& summary,
-                                    const QString& currency) {
+void PerformanceRiskView::set_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
     summary_ = summary;
     currency_ = currency;
     update_chart();
     update_metrics();
 }
 
-void PerformanceRiskView::set_snapshots(
-    const QVector<portfolio::PortfolioSnapshot>& snapshots) {
+void PerformanceRiskView::set_snapshots(const QVector<portfolio::PortfolioSnapshot>& snapshots) {
     snapshots_ = snapshots;
     update_chart();
     update_metrics();
@@ -195,11 +174,16 @@ void PerformanceRiskView::update_chart() {
 
     // Filter snapshots by selected period
     QDate cutoff = QDate::currentDate();
-    if (current_period_ == "1M")       cutoff = cutoff.addMonths(-1);
-    else if (current_period_ == "3M")  cutoff = cutoff.addMonths(-3);
-    else if (current_period_ == "6M")  cutoff = cutoff.addMonths(-6);
-    else if (current_period_ == "1Y")  cutoff = cutoff.addYears(-1);
-    else                               cutoff = cutoff.addYears(-10);
+    if (current_period_ == "1M")
+        cutoff = cutoff.addMonths(-1);
+    else if (current_period_ == "3M")
+        cutoff = cutoff.addMonths(-3);
+    else if (current_period_ == "6M")
+        cutoff = cutoff.addMonths(-6);
+    else if (current_period_ == "1Y")
+        cutoff = cutoff.addYears(-1);
+    else
+        cutoff = cutoff.addYears(-10);
 
     QVector<portfolio::PortfolioSnapshot> filtered;
     for (const auto& s : snapshots_) {
@@ -208,23 +192,20 @@ void PerformanceRiskView::update_chart() {
             filtered.append(s);
     }
     std::sort(filtered.begin(), filtered.end(),
-              [](const auto& a, const auto& b) {
-                  return a.snapshot_date < b.snapshot_date;
-              });
+              [](const auto& a, const auto& b) { return a.snapshot_date < b.snapshot_date; });
 
-    auto* line   = new QLineSeries;
-    auto* upper  = new QLineSeries;
-    auto* lower  = new QLineSeries;
+    auto* line = new QLineSeries;
+    auto* upper = new QLineSeries;
+    auto* lower = new QLineSeries;
 
     double first_val = summary_.total_cost_basis;
-    double last_val  = summary_.total_market_value;
-    double min_val   = last_val, max_val = last_val;
+    double last_val = summary_.total_market_value;
+    double min_val = last_val, max_val = last_val;
 
     if (filtered.size() >= 2) {
         first_val = filtered.first().total_value;
         for (const auto& s : filtered) {
-            QDateTime dt =
-                QDateTime::fromString(s.snapshot_date.left(10), Qt::ISODate);
+            QDateTime dt = QDateTime::fromString(s.snapshot_date.left(10), Qt::ISODate);
             if (!dt.isValid())
                 dt = QDateTime::currentDateTime();
             qint64 ms = dt.toMSecsSinceEpoch();
@@ -245,10 +226,10 @@ void PerformanceRiskView::update_chart() {
         int pts = 30;
         QDateTime now = QDateTime::currentDateTime();
         for (int i = 0; i < pts; ++i) {
-            double t   = static_cast<double>(i) / (pts - 1);
+            double t = static_cast<double>(i) / (pts - 1);
             double val = first_val + (last_val - first_val) * t;
             val *= (1.0 + 0.005 * std::sin(i * 0.7));
-            qint64 ms  = now.addDays(-(pts - 1 - i)).toMSecsSinceEpoch();
+            qint64 ms = now.addDays(-(pts - 1 - i)).toMSecsSinceEpoch();
             line->append(ms, val);
             upper->append(ms, val);
             lower->append(ms, first_val);
@@ -271,8 +252,7 @@ void PerformanceRiskView::update_chart() {
     chart->addSeries(line);
 
     auto* x_axis = new QDateTimeAxis;
-    x_axis->setFormat(current_period_ == "ALL" || current_period_ == "1Y"
-                          ? "MMM yy" : "dd MMM");
+    x_axis->setFormat(current_period_ == "ALL" || current_period_ == "1Y" ? "MMM yy" : "dd MMM");
     x_axis->setTickCount(5);
     x_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
     x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
@@ -291,22 +271,20 @@ void PerformanceRiskView::update_chart() {
 
     chart->addAxis(x_axis, Qt::AlignBottom);
     chart->addAxis(y_axis, Qt::AlignLeft);
-    line->attachAxis(x_axis);  line->attachAxis(y_axis);
-    area->attachAxis(x_axis);  area->attachAxis(y_axis);
+    line->attachAxis(x_axis);
+    line->attachAxis(y_axis);
+    area->attachAxis(x_axis);
+    area->attachAxis(y_axis);
 }
 
 void PerformanceRiskView::update_metrics() {
-    auto fmt = [](double v, int dp = 2) {
-        return QString::number(v, 'f', dp);
-    };
+    auto fmt = [](double v, int dp = 2) { return QString::number(v, 'f', dp); };
 
     // ── Build daily return series from snapshots ───────────────────────────
     // daily_ret[i] = (val[i] - val[i-1]) / val[i-1]
     auto snaps = snapshots_;
     std::sort(snaps.begin(), snaps.end(),
-              [](const auto& a, const auto& b) {
-                  return a.snapshot_date < b.snapshot_date;
-              });
+              [](const auto& a, const auto& b) { return a.snapshot_date < b.snapshot_date; });
 
     QVector<double> daily_ret;
     for (int i = 1; i < snaps.size(); ++i) {
@@ -334,25 +312,25 @@ void PerformanceRiskView::update_metrics() {
         daily_vol = std::sqrt(var / n);
     }
 
-    double ann_vol  = daily_vol * std::sqrt(252.0);
+    double ann_vol = daily_vol * std::sqrt(252.0);
     double risk_free_daily = 4.0 / 252.0; // 4% annual
 
     // ── Sharpe ────────────────────────────────────────────────────────────────
     if (daily_vol > 0.001) {
         double sharpe = (daily_mean - risk_free_daily) / daily_vol * std::sqrt(252.0);
         sharpe_card_.value->setText(fmt(sharpe));
-        const char* c = sharpe >= 1.0 ? ui::colors::POSITIVE
-                      : sharpe >= 0   ? ui::colors::WARNING
-                                      : ui::colors::NEGATIVE;
-        sharpe_card_.value->setStyleSheet(
-            QString("color:%1; font-size:18px; font-weight:700; border:none;").arg(c));
+        const char* c = sharpe >= 1.0 ? ui::colors::POSITIVE : sharpe >= 0 ? ui::colors::WARNING : ui::colors::NEGATIVE;
+        sharpe_card_.value->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700; border:none;").arg(c));
     }
 
     // ── Sortino (downside deviation only) ────────────────────────────────────
     double neg_sq = 0;
     int neg_n = 0;
     for (double r : daily_ret) {
-        if (r < 0) { neg_sq += r * r; ++neg_n; }
+        if (r < 0) {
+            neg_sq += r * r;
+            ++neg_n;
+        }
     }
     if (neg_n > 0) {
         double dd = std::sqrt(neg_sq / neg_n);
@@ -370,17 +348,14 @@ void PerformanceRiskView::update_metrics() {
     // beta = daily_mean / 0.032 (mean-based slope)
     double market_daily = 8.0 / 252.0 / 100.0 * 100.0; // 0.0317%
     if (n >= 5 && daily_vol > 0.001) {
-        double beta = (market_daily > 0.001)
-                          ? (daily_mean / market_daily)
-                          : 1.0;
+        double beta = (market_daily > 0.001) ? (daily_mean / market_daily) : 1.0;
         // Constrain to reasonable range
         beta = std::max(-3.0, std::min(5.0, beta));
         beta_card_.value->setText(fmt(beta));
-        const char* c = std::abs(beta - 1.0) < 0.2 ? ui::colors::POSITIVE
-                      : std::abs(beta - 1.0) < 0.5 ? ui::colors::WARNING
-                                                    : ui::colors::NEGATIVE;
-        beta_card_.value->setStyleSheet(
-            QString("color:%1; font-size:18px; font-weight:700; border:none;").arg(c));
+        const char* c = std::abs(beta - 1.0) < 0.2   ? ui::colors::POSITIVE
+                        : std::abs(beta - 1.0) < 0.5 ? ui::colors::WARNING
+                                                     : ui::colors::NEGATIVE;
+        beta_card_.value->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700; border:none;").arg(c));
     } else if (n >= 2) {
         // Minimal data: estimate from pnl% relative to assumed 8% market
         double total_pnl_pct = summary_.total_unrealized_pnl_percent;
@@ -393,32 +368,28 @@ void PerformanceRiskView::update_metrics() {
     // Alpha = annualised portfolio return - 8%
     if (snaps.size() >= 2) {
         double first = snaps.first().total_value;
-        double last  = snaps.last().total_value;
-        int days = static_cast<int>(snaps.first().snapshot_date.left(10) <
-                                        snaps.last().snapshot_date.left(10)
-                                        ? QDate::fromString(snaps.first().snapshot_date.left(10), Qt::ISODate)
-                                              .daysTo(QDate::fromString(snaps.last().snapshot_date.left(10), Qt::ISODate))
-                                        : 1);
+        double last = snaps.last().total_value;
+        int days =
+            static_cast<int>(snaps.first().snapshot_date.left(10) < snaps.last().snapshot_date.left(10)
+                                 ? QDate::fromString(snaps.first().snapshot_date.left(10), Qt::ISODate)
+                                       .daysTo(QDate::fromString(snaps.last().snapshot_date.left(10), Qt::ISODate))
+                                 : 1);
         if (first > 1.0 && days > 0) {
             double total_ret = (last - first) / first * 100.0;
-            double ann_ret   = total_ret * 365.0 / days;
-            double alpha     = ann_ret - 8.0;
-            alpha_card_.value->setText(
-                QString("%1%2%").arg(alpha >= 0 ? "+" : "").arg(fmt(alpha, 1)));
+            double ann_ret = total_ret * 365.0 / days;
+            double alpha = ann_ret - 8.0;
+            alpha_card_.value->setText(QString("%1%2%").arg(alpha >= 0 ? "+" : "").arg(fmt(alpha, 1)));
             const char* c = alpha >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-            alpha_card_.value->setStyleSheet(
-                QString("color:%1; font-size:18px; font-weight:700; border:none;").arg(c));
+            alpha_card_.value->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700; border:none;").arg(c));
         }
     } else {
         double alpha = summary_.total_unrealized_pnl_percent - 8.0;
-        alpha_card_.value->setText(
-            QString("%1%2%").arg(alpha >= 0 ? "+" : "").arg(fmt(alpha, 1)));
+        alpha_card_.value->setText(QString("%1%2%").arg(alpha >= 0 ? "+" : "").arg(fmt(alpha, 1)));
     }
 
     // ── Volatility ────────────────────────────────────────────────────────────
     if (n >= 2) {
-        vol_card_.value->setText(
-            QString("%1%").arg(fmt(ann_vol, 1)));
+        vol_card_.value->setText(QString("%1%").arg(fmt(ann_vol, 1)));
     }
 
     // ── Max Drawdown from snapshots ───────────────────────────────────────────
@@ -433,17 +404,13 @@ void PerformanceRiskView::update_metrics() {
         }
         // Also check against current value
         peak = std::max(peak, summary_.total_market_value);
-        double cur_dd = peak > 0
-            ? (peak - summary_.total_market_value) / peak * 100.0 : 0;
+        double cur_dd = peak > 0 ? (peak - summary_.total_market_value) / peak * 100.0 : 0;
         max_dd = std::max(max_dd, cur_dd);
-        drawdown_card_.value->setText(
-            QString("-%1%").arg(fmt(max_dd, 1)));
+        drawdown_card_.value->setText(QString("-%1%").arg(fmt(max_dd, 1)));
     } else {
         // Fallback: if current < cost basis, that is the drawdown
-        double dd = summary_.total_unrealized_pnl < 0
-            ? std::abs(summary_.total_unrealized_pnl_percent) : 0;
-        drawdown_card_.value->setText(
-            QString("-%1%").arg(fmt(dd, 1)));
+        double dd = summary_.total_unrealized_pnl < 0 ? std::abs(summary_.total_unrealized_pnl_percent) : 0;
+        drawdown_card_.value->setText(QString("-%1%").arg(fmt(dd, 1)));
     }
 
     // ── VaR 95% (parametric, 1-day) ───────────────────────────────────────────
@@ -451,14 +418,12 @@ void PerformanceRiskView::update_metrics() {
     if (daily_vol > 0.001 && mv > 0) {
         // Parametric: VaR = MV * (mean - 1.645 * sigma) / 100
         double var95 = mv * std::abs(daily_mean - 1.645 * daily_vol) / 100.0;
-        var_card_.value->setText(
-            QString("%1 %2").arg(currency_, fmt(var95)));
+        var_card_.value->setText(QString("%1 %2").arg(currency_, fmt(var95)));
 
         // CVaR ≈ E[loss | loss > VaR], for normal: CVaR = MV * (phi(1.645)/0.05) * sigma
         // phi(1.645) = 0.1031, so CVaR ≈ 1.546 * VaR
         double cvar95 = var95 * 1.546;
-        cvar_card_.value->setText(
-            QString("%1 %2").arg(currency_, fmt(cvar95)));
+        cvar_card_.value->setText(QString("%1 %2").arg(currency_, fmt(cvar95)));
     }
 }
 

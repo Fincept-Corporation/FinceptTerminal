@@ -30,30 +30,28 @@ StatusBar::StatusBar(QWidget* parent) : QWidget(parent) {
     ready_label_ = mk("READY", "sbReady");
     hl->addWidget(ready_label_);
 
-    connect(&ThemeManager::instance(), &ThemeManager::theme_changed,
-            this, [this](const ThemeTokens&) { refresh_theme(); });
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this](const ThemeTokens&) { refresh_theme(); });
     refresh_theme();
 }
 
 void StatusBar::refresh_theme() {
-    setStyleSheet(QString(
-        "#appStatusBar { background:%1; border-top:1px solid %2; }"
-        "#sbVersion { color:%3; background:transparent; }"
-        "#sbSep { color:%2; background:transparent; }"
-        "#sbFeed { color:%3; background:transparent; }"
-        "#sbSpacer { background:transparent; }"
-        "#sbReady { color:%4; font-weight:700; background:transparent; }"
-    ).arg(colors::BG_BASE())
-     .arg(colors::BORDER_DIM())
-     .arg(colors::TEXT_DIM())
-     .arg(colors::POSITIVE()));
+    setStyleSheet(QString("#appStatusBar { background:%1; border-top:1px solid %2; }"
+                          "#sbVersion { color:%3; background:transparent; }"
+                          "#sbSep { color:%2; background:transparent; }"
+                          "#sbFeed { color:%3; background:transparent; }"
+                          "#sbSpacer { background:transparent; }"
+                          "#sbReady { color:%4; font-weight:700; background:transparent; }")
+                      .arg(colors::BG_BASE())
+                      .arg(colors::BORDER_DIM())
+                      .arg(colors::TEXT_DIM())
+                      .arg(colors::POSITIVE()));
 }
 
 void StatusBar::set_ready(bool ready) {
     ready_label_->setText(ready ? "READY" : "BUSY");
-    ready_label_->setStyleSheet(
-        QString("color:%1;font-weight:700;background:transparent;")
-            .arg(ready ? colors::POSITIVE() : colors::TEXT_TERTIARY()));
+    ready_label_->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;")
+                                    .arg(ready ? colors::POSITIVE() : colors::TEXT_TERTIARY()));
 }
 
 } // namespace fincept::ui

@@ -66,10 +66,10 @@ class DataSourcesScreen : public QWidget, public fincept::screens::IStatefulScre
 
   private:
     // ── UI build ──────────────────────────────────────────────────────────────
-    void     setup_ui();
-    void     apply_screen_styles();
+    void setup_ui();
+    void apply_screen_styles();
     QWidget* build_screen_header();
-    QWidget* build_command_bar();   // stub — kept for compat
+    QWidget* build_command_bar(); // stub — kept for compat
     QWidget* build_stats_strip();
     QWidget* build_tab_bar();
     QWidget* build_browse_page();
@@ -86,59 +86,57 @@ class DataSourcesScreen : public QWidget, public fincept::screens::IStatefulScre
     void update_provider_ladder();
     void update_detail_panel();
     void update_action_states();
-    void show_config_dialog(const ConnectorConfig& config,
-                            const QString& edit_id  = "",
-                            bool           duplicate = false);
+    void show_config_dialog(const ConnectorConfig& config, const QString& edit_id = "", bool duplicate = false);
     void update_connection_status_cell(const QString& conn_id, bool ok, const QString& msg);
     void apply_stat_filter(int stat_index);
 
     QVector<ConnectorConfig> filtered_connectors() const;
-    QVector<DataSource>      filtered_connection_rows() const;
-    void    select_connector_by_id(const QString& connector_id);
+    QVector<DataSource> filtered_connection_rows() const;
+    void select_connector_by_id(const QString& connector_id);
     QString effective_detail_connection_id() const;
     QString preferred_connection_for_connector(const QString& connector_id) const;
 
     // ── Screen header ─────────────────────────────────────────────────────────
-    QLineEdit*   search_edit_   = nullptr;
-    QLabel*      clock_label_   = nullptr;
-    QLabel*      count_label_   = nullptr;
+    QLineEdit* search_edit_ = nullptr;
+    QLabel* clock_label_ = nullptr;
+    QLabel* count_label_ = nullptr;
 
     // ── Connections toolbar ───────────────────────────────────────────────────
-    QLineEdit*   conn_search_edit_  = nullptr;
-    QPushButton* bulk_enable_btn_   = nullptr;
-    QPushButton* bulk_disable_btn_  = nullptr;
-    QPushButton* bulk_delete_btn_   = nullptr;
+    QLineEdit* conn_search_edit_ = nullptr;
+    QPushButton* bulk_enable_btn_ = nullptr;
+    QPushButton* bulk_disable_btn_ = nullptr;
+    QPushButton* bulk_delete_btn_ = nullptr;
 
     // ── Left sidebar ──────────────────────────────────────────────────────────
-    QListWidget* category_list_     = nullptr;
-    QListWidget* provider_ladder_   = nullptr;
+    QListWidget* category_list_ = nullptr;
+    QListWidget* provider_ladder_ = nullptr;
 
     // ── Connector table ───────────────────────────────────────────────────────
-    QTableWidget* connector_table_  = nullptr;
+    QTableWidget* connector_table_ = nullptr;
 
     // ── Detail inspector ──────────────────────────────────────────────────────
-    QLabel*       detail_title_             = nullptr;
-    QLabel*       detail_symbol_            = nullptr;
-    QLabel*       detail_description_       = nullptr;
-    QLabel*       detail_category_value_    = nullptr;
-    QLabel*       detail_transport_value_   = nullptr;
-    QLabel*       detail_auth_value_        = nullptr;
-    QLabel*       detail_test_value_        = nullptr;
-    QLabel*       detail_fields_value_      = nullptr;
-    QLabel*       detail_configured_value_  = nullptr;
-    QLabel*       detail_enabled_value_     = nullptr;
-    QLabel*       detail_last_status_value_ = nullptr;
-    QTableWidget* field_table_              = nullptr;
-    QListWidget*  detail_connections_list_  = nullptr;
-    QPushButton*  new_connection_btn_       = nullptr;
-    QPushButton*  edit_connection_btn_      = nullptr;
-    QPushButton*  test_connection_btn_      = nullptr;
+    QLabel* detail_title_ = nullptr;
+    QLabel* detail_symbol_ = nullptr;
+    QLabel* detail_description_ = nullptr;
+    QLabel* detail_category_value_ = nullptr;
+    QLabel* detail_transport_value_ = nullptr;
+    QLabel* detail_auth_value_ = nullptr;
+    QLabel* detail_test_value_ = nullptr;
+    QLabel* detail_fields_value_ = nullptr;
+    QLabel* detail_configured_value_ = nullptr;
+    QLabel* detail_enabled_value_ = nullptr;
+    QLabel* detail_last_status_value_ = nullptr;
+    QTableWidget* field_table_ = nullptr;
+    QListWidget* detail_connections_list_ = nullptr;
+    QPushButton* new_connection_btn_ = nullptr;
+    QPushButton* edit_connection_btn_ = nullptr;
+    QPushButton* test_connection_btn_ = nullptr;
 
     // ── Stats strip ───────────────────────────────────────────────────────────
-    QLabel* universe_stat_value_    = nullptr;
-    QLabel* configured_stat_value_  = nullptr;
-    QLabel* active_stat_value_      = nullptr;
-    QLabel* auth_stat_value_        = nullptr;
+    QLabel* universe_stat_value_ = nullptr;
+    QLabel* configured_stat_value_ = nullptr;
+    QLabel* active_stat_value_ = nullptr;
+    QLabel* auth_stat_value_ = nullptr;
 
     // ── Connections table ─────────────────────────────────────────────────────
     QTableWidget* connections_table_ = nullptr;
@@ -148,19 +146,19 @@ class DataSourcesScreen : public QWidget, public fincept::screens::IStatefulScre
 
     // ── Timers ────────────────────────────────────────────────────────────────
     QTimer* clock_timer_ = nullptr;
-    QTimer* poll_timer_  = nullptr;
+    QTimer* poll_timer_ = nullptr;
 
     // ── State ─────────────────────────────────────────────────────────────────
     enum class ViewMode { Gallery, Connections };
 
     QVector<DataSource> connections_cache_;
-    QString  selected_connector_id_;
-    QString  selected_connection_id_;
-    Category active_category_     = Category::Database;
-    bool     show_all_categories_ = true;
-    ViewMode view_mode_           = ViewMode::Gallery;
-    int      stat_filter_         = -1;   // -1 = none, 0-3 = stat box index
-    QString  conn_search_text_;
+    QString selected_connector_id_;
+    QString selected_connection_id_;
+    Category active_category_ = Category::Database;
+    bool show_all_categories_ = true;
+    ViewMode view_mode_ = ViewMode::Gallery;
+    int stat_filter_ = -1; // -1 = none, 0-3 = stat box index
+    QString conn_search_text_;
     QMap<QString, QPair<bool, QString>> live_status_cache_;
 };
 

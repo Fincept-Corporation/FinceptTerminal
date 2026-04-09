@@ -23,9 +23,9 @@ std::vector<ToolDef> get_notes_tools() {
             {"title", QJsonObject{{"type", "string"}, {"description", "Note title"}}},
             {"content", QJsonObject{{"type", "string"}, {"description", "Note content (markdown)"}}},
             {"category",
-             QJsonObject{{"type", "string"},
-                         {"description",
-                          "RESEARCH, TRADE_IDEA, MARKET_ANALYSIS, EARNINGS, ECONOMIC, PORTFOLIO, GENERAL"}}},
+             QJsonObject{
+                 {"type", "string"},
+                 {"description", "RESEARCH, TRADE_IDEA, MARKET_ANALYSIS, EARNINGS, ECONOMIC, PORTFOLIO, GENERAL"}}},
             {"priority", QJsonObject{{"type", "string"}, {"description", "HIGH, MEDIUM, LOW"}}},
             {"tickers", QJsonObject{{"type", "string"}, {"description", "Comma-separated ticker symbols"}}},
             {"sentiment", QJsonObject{{"type", "string"}, {"description", "BULLISH, BEARISH, NEUTRAL"}}},
@@ -49,8 +49,7 @@ std::vector<ToolDef> get_notes_tools() {
             if (result.is_err())
                 return ToolResult::fail("Failed to create note: " + QString::fromStdString(result.error()));
 
-            EventBus::instance().publish("notes.created",
-                                         QVariantMap{{"id", static_cast<qlonglong>(result.value())}});
+            EventBus::instance().publish("notes.created", QVariantMap{{"id", static_cast<qlonglong>(result.value())}});
             return ToolResult::ok("Note created: " + title,
                                   QJsonObject{{"id", static_cast<int>(result.value())}, {"title", title}});
         };
@@ -67,8 +66,8 @@ std::vector<ToolDef> get_notes_tools() {
             QJsonObject{{"query", QJsonObject{{"type", "string"}, {"description", "Search query (optional)"}}}};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString query = args["query"].toString().trimmed();
-            auto result = query.isEmpty() ? NotesRepository::instance().list_all()
-                                          : NotesRepository::instance().search(query);
+            auto result =
+                query.isEmpty() ? NotesRepository::instance().list_all() : NotesRepository::instance().search(query);
 
             if (result.is_err())
                 return ToolResult::fail("Failed to load notes: " + QString::fromStdString(result.error()));

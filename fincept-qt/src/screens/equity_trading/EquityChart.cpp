@@ -1,6 +1,7 @@
 // EquityChart.cpp — Custom-painted candlestick chart
 // QPainter-based: no QCandlestickSeries, no QDateTimeAxis gaps.
 #include "screens/equity_trading/EquityChart.h"
+
 #include "screens/equity_trading/EquityTypes.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -22,17 +23,16 @@ CandleCanvas::CandleCanvas(QWidget* parent) : QWidget(parent) {
     setMinimumHeight(120);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) {
-                dirty_ = true;
-                cache_ = QPixmap(); // invalidate cache
-                update();
-            });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        dirty_ = true;
+        cache_ = QPixmap(); // invalidate cache
+        update();
+    });
 }
 
 void CandleCanvas::set_candles(const QVector<trading::BrokerCandle>& candles) {
     candles_ = candles;
-    dirty_   = true;
+    dirty_ = true;
     update();
 }
 
@@ -59,7 +59,8 @@ void CandleCanvas::paintEvent(QPaintEvent*) {
 void CandleCanvas::rebuild_cache() {
     const int W = width();
     const int H = height();
-    if (W <= 0 || H <= 0) return;
+    if (W <= 0 || H <= 0)
+        return;
 
     cache_ = QPixmap(W, H);
     cache_.fill(BG_SURFACE());
@@ -86,7 +87,8 @@ void CandleCanvas::rebuild_cache() {
         lo = std::min(lo, candles_[i].low);
         hi = std::max(hi, candles_[i].high);
     }
-    if (lo >= hi) return;
+    if (lo >= hi)
+        return;
 
     const double margin = (hi - lo) * 0.05;
     lo -= margin;
@@ -95,12 +97,11 @@ void CandleCanvas::rebuild_cache() {
     // ── Layout ───────────────────────────────────────────────────────────────
     const int plot_w = W - PRICE_AXIS_W;
     const int plot_h = H - TIME_AXIS_H;
-    if (plot_w <= 0 || plot_h <= 0) return;
+    if (plot_w <= 0 || plot_h <= 0)
+        return;
 
     // Lambda: price → y pixel
-    auto py = [&](double price) -> int {
-        return static_cast<int>(plot_h - (price - lo) / (hi - lo) * plot_h);
-    };
+    auto py = [&](double price) -> int { return static_cast<int>(plot_h - (price - lo) / (hi - lo) * plot_h); };
 
     // ── Grid lines ───────────────────────────────────────────────────────────
     p.setPen(QPen(BORDER_DIM(), 1));
@@ -111,24 +112,24 @@ void CandleCanvas::rebuild_cache() {
 
     // ── Candle geometry ──────────────────────────────────────────────────────
     const double slot_w = static_cast<double>(plot_w) / count;
-    const int    body_w = qMax(1, static_cast<int>(slot_w * 0.6));
-    const int    half   = body_w / 2;
+    const int body_w = qMax(1, static_cast<int>(slot_w * 0.6));
+    const int half = body_w / 2;
 
     for (int i = 0; i < count; ++i) {
-        const auto& c   = candles_[start + i];
-        const int   cx  = static_cast<int>((i + 0.5) * slot_w); // centre x
-        const bool  bull = c.close >= c.open;
+        const auto& c = candles_[start + i];
+        const int cx = static_cast<int>((i + 0.5) * slot_w); // centre x
+        const bool bull = c.close >= c.open;
 
         const QColor col = bull ? COLOR_BUY() : COLOR_SELL();
 
-        const int open_y  = py(c.open);
+        const int open_y = py(c.open);
         const int close_y = py(c.close);
-        const int high_y  = py(c.high);
-        const int low_y   = py(c.low);
+        const int high_y = py(c.high);
+        const int low_y = py(c.low);
 
         const int body_top = std::min(open_y, close_y);
         const int body_bot = std::max(open_y, close_y);
-        const int body_h   = qMax(1, body_bot - body_top);
+        const int body_h = qMax(1, body_bot - body_top);
 
         // Wick
         p.setPen(QPen(col, 1));
@@ -149,8 +150,8 @@ void CandleCanvas::rebuild_cache() {
 
     for (int g = 0; g <= 5; ++g) {
         double price = lo + (hi - lo) * g / 5.0;
-        int    gy    = py(price);
-        QString txt  = QString::number(price, 'f', 2);
+        int gy = py(price);
+        QString txt = QString::number(price, 'f', 2);
         p.drawText(plot_w + 4, gy + fm.ascent() / 2, txt);
     }
 
@@ -160,16 +161,14 @@ void CandleCanvas::rebuild_cache() {
 
     p.setPen(TEXT_SECONDARY());
     for (int i = 0; i < count; i += LABEL_STEP) {
-        const auto& c  = candles_[start + i];
-        QDateTime   dt = QDateTime::fromMSecsSinceEpoch(c.timestamp);
+        const auto& c = candles_[start + i];
+        QDateTime dt = QDateTime::fromMSecsSinceEpoch(c.timestamp);
         // Show date if daily/weekly, time otherwise
         QString label;
         if (slot_w * LABEL_STEP > 60) {
             // enough space — pick format based on timeframe span
             qint64 span_ms = candles_.last().timestamp - candles_.first().timestamp;
-            label = span_ms > 7LL * 24 * 3600 * 1000
-                        ? dt.toString("dd MMM")
-                        : dt.toString("HH:mm");
+            label = span_ms > 7LL * 24 * 3600 * 1000 ? dt.toString("dd MMM") : dt.toString("HH:mm");
         } else {
             label = dt.toString("HH:mm");
         }
@@ -179,12 +178,10 @@ void CandleCanvas::rebuild_cache() {
     }
     // Always draw the last label
     {
-        const auto& c  = candles_.last();
-        QDateTime   dt = QDateTime::fromMSecsSinceEpoch(c.timestamp);
+        const auto& c = candles_.last();
+        QDateTime dt = QDateTime::fromMSecsSinceEpoch(c.timestamp);
         qint64 span_ms = candles_.last().timestamp - candles_.first().timestamp;
-        QString label = span_ms > 7LL * 24 * 3600 * 1000
-                            ? dt.toString("dd MMM")
-                            : dt.toString("HH:mm");
+        QString label = span_ms > 7LL * 24 * 3600 * 1000 ? dt.toString("dd MMM") : dt.toString("HH:mm");
         int lx = static_cast<int>((count - 0.5) * slot_w);
         int tw = fm.horizontalAdvance(label);
         p.drawText(lx - tw / 2, plot_h + TIME_AXIS_H - 3, label);
@@ -201,7 +198,7 @@ EquityChart::EquityChart(QWidget* parent) : QWidget(parent) {
     layout->setSpacing(0);
 
     // Header with timeframe buttons
-    auto* header = new QWidget;
+    auto* header = new QWidget(this);
     header->setObjectName("eqChartHeader");
     header->setFixedHeight(28);
     auto* h_layout = new QHBoxLayout(header);
@@ -242,7 +239,8 @@ QString EquityChart::current_timeframe() const {
 }
 
 void EquityChart::set_active_tf(int idx) {
-    if (idx == active_tf_) return;
+    if (idx == active_tf_)
+        return;
     for (int i = 0; i < 6; ++i) {
         tf_buttons_[i]->setProperty("active", i == idx);
         tf_buttons_[i]->style()->unpolish(tf_buttons_[i]);

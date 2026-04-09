@@ -4,12 +4,12 @@
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "screens/gov_data/GovDataAustraliaPanel.h"
-#include "screens/gov_data/GovDataCanadaPanel.h"
-#include "screens/gov_data/GovDataProviderPanel.h"
 #include "screens/gov_data/GovDataCKANPanel.h"
+#include "screens/gov_data/GovDataCanadaPanel.h"
 #include "screens/gov_data/GovDataCongressPanel.h"
 #include "screens/gov_data/GovDataFrancePanel.h"
 #include "screens/gov_data/GovDataHKPanel.h"
+#include "screens/gov_data/GovDataProviderPanel.h"
 #include "screens/gov_data/GovDataSwissPanel.h"
 #include "screens/gov_data/GovDataTreasuryPanel.h"
 #include "screens/gov_data/GovDataUKPanel.h"
@@ -35,15 +35,15 @@ static QString build_screen_style() {
     const auto ac = QColor(t.accent);
     const QString ar = QString("%1,%2,%3").arg(ac.red()).arg(ac.green()).arg(ac.blue());
 
-    const QString bg      = QString::fromLatin1(t.bg_base);
-    const QString text    = QString::fromLatin1(t.text_primary);
-    const QString raised  = QString::fromLatin1(t.bg_raised);
-    const QString bdim    = QString::fromLatin1(t.border_dim);
+    const QString bg = QString::fromLatin1(t.bg_base);
+    const QString text = QString::fromLatin1(t.text_primary);
+    const QString raised = QString::fromLatin1(t.bg_raised);
+    const QString bdim = QString::fromLatin1(t.border_dim);
     const QString surface = QString::fromLatin1(t.bg_surface);
-    const QString sec     = QString::fromLatin1(t.text_secondary);
-    const QString hover   = QString::fromLatin1(t.bg_hover);
-    const QString accent  = QString::fromLatin1(t.accent);
-    const QString dim     = QString::fromLatin1(t.text_dim);
+    const QString sec = QString::fromLatin1(t.text_secondary);
+    const QString hover = QString::fromLatin1(t.bg_hover);
+    const QString accent = QString::fromLatin1(t.accent);
+    const QString dim = QString::fromLatin1(t.text_dim);
 
     QString s;
     s += QString("#govScreen { background:%1; }").arg(bg);
@@ -51,20 +51,24 @@ static QString build_screen_style() {
     // Toolbar
     s += QString("#govToolbar { background:%1; border-bottom:1px solid %2; }").arg(raised, bdim);
     s += QString("#govToolbarTitle { color:%1; font-size:13px; font-weight:700;"
-                 "  letter-spacing:1px; background:transparent; }").arg(text);
+                 "  letter-spacing:1px; background:transparent; }")
+             .arg(text);
     s += QString("#govToolbarSub { color:%1; font-size:10px; background:transparent; }").arg(sec);
 
     // Sidebar
     s += QString("#govSidebar { background:%1; border-right:1px solid %2; }").arg(surface, bdim);
     s += QString("#govSidebarHeader { background:%1; border-bottom:1px solid %2; }").arg(raised, bdim);
     s += QString("#govSidebarTitle { color:%1; font-size:9px; font-weight:700;"
-                 "  letter-spacing:1px; background:transparent; }").arg(sec);
+                 "  letter-spacing:1px; background:transparent; }")
+             .arg(sec);
     s += "#govProviderList { background:transparent; border:none; outline:none; }";
     s += QString("#govProviderList::item { color:%1; padding:10px 14px;"
-                 "  border-bottom:1px solid %2; font-size:11px; }").arg(sec, bdim);
+                 "  border-bottom:1px solid %2; font-size:11px; }")
+             .arg(sec, bdim);
     s += QString("#govProviderList::item:hover { color:%1; background:%2; }").arg(text, hover);
     s += QString("#govProviderList::item:selected { color:%1; background:rgba(%2,0.08);"
-                 "  border-left:2px solid %1; padding-left:12px; font-weight:700; }").arg(accent, ar);
+                 "  border-left:2px solid %1; padding-left:12px; font-weight:700; }")
+             .arg(accent, ar);
 
     // Status bar
     s += QString("#govStatusBar { background:%1; border-top:1px solid %2; }").arg(raised, bdim);
@@ -87,9 +91,8 @@ GovDataScreen::GovDataScreen(QWidget* parent) : QWidget(parent) {
     setStyleSheet(build_screen_style());
     build_ui();
 
-    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this, [this]() {
-        setStyleSheet(build_screen_style());
-    });
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
+            [this]() { setStyleSheet(build_screen_style()); });
 }
 
 // ── Show / Hide ──────────────────────────────────────────────────────────────
@@ -120,7 +123,7 @@ void GovDataScreen::build_ui() {
     root->addWidget(build_toolbar());
 
     // Content: sidebar | panel stack
-    auto* content    = new QWidget;
+    auto* content = new QWidget(this);
     auto* content_hl = new QHBoxLayout(content);
     content_hl->setContentsMargins(0, 0, 0, 0);
     content_hl->setSpacing(0);
@@ -131,7 +134,7 @@ void GovDataScreen::build_ui() {
     const auto& providers = services::GovDataService::providers();
     for (int i = 0; i < providers.size(); ++i) {
         const auto& prov = providers[i];
-        QWidget* panel   = nullptr;
+        QWidget* panel = nullptr;
 
         if (prov.id == "us-treasury") {
             panel = new GovDataTreasuryPanel(panel_stack_);
@@ -164,7 +167,7 @@ void GovDataScreen::build_ui() {
 // ── Toolbar ──────────────────────────────────────────────────────────────────
 
 QWidget* GovDataScreen::build_toolbar() {
-    header_bar_ = new QWidget;
+    header_bar_ = new QWidget(this);
     header_bar_->setObjectName("govToolbar");
     header_bar_->setFixedHeight(46);
 
@@ -173,7 +176,7 @@ QWidget* GovDataScreen::build_toolbar() {
     hl->setSpacing(10);
 
     // Title block
-    auto* col = new QWidget;
+    auto* col = new QWidget(this);
     auto* cvl = new QVBoxLayout(col);
     cvl->setContentsMargins(0, 0, 0, 0);
     cvl->setSpacing(0);
@@ -182,8 +185,7 @@ QWidget* GovDataScreen::build_toolbar() {
     header_title_->setObjectName("govToolbarTitle");
 
     header_subtitle_ = new QLabel(
-        QString("Open government portals · %1 sovereign sources")
-            .arg(services::GovDataService::providers().size()));
+        QString("Open government portals · %1 sovereign sources").arg(services::GovDataService::providers().size()));
     header_subtitle_->setObjectName("govToolbarSub");
 
     cvl->addWidget(header_title_);
@@ -197,10 +199,12 @@ QWidget* GovDataScreen::build_toolbar() {
     auto* badge = new QLabel(QString::number(providers.size()) + " PORTALS");
     const auto& t = ThemeManager::instance().tokens();
     auto bc = QColor(t.accent);
-    badge->setStyleSheet(
-        QString("color:%1; background:rgba(%2,%3,%4,0.1); border:1px solid rgba(%2,%3,%4,0.3);"
-                " font-size:9px; font-weight:700; padding:3px 10px; letter-spacing:0.5px;")
-        .arg(t.accent).arg(bc.red()).arg(bc.green()).arg(bc.blue()));
+    badge->setStyleSheet(QString("color:%1; background:rgba(%2,%3,%4,0.1); border:1px solid rgba(%2,%3,%4,0.3);"
+                                 " font-size:9px; font-weight:700; padding:3px 10px; letter-spacing:0.5px;")
+                             .arg(t.accent)
+                             .arg(bc.red())
+                             .arg(bc.green())
+                             .arg(bc.blue()));
     hl->addWidget(badge);
 
     return header_bar_;
@@ -209,7 +213,7 @@ QWidget* GovDataScreen::build_toolbar() {
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 
 QWidget* GovDataScreen::build_sidebar() {
-    auto* sidebar = new QWidget;
+    auto* sidebar = new QWidget(this);
     sidebar->setObjectName("govSidebar");
     sidebar->setFixedWidth(230);
 
@@ -218,7 +222,7 @@ QWidget* GovDataScreen::build_sidebar() {
     vl->setSpacing(0);
 
     // Section header
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(this);
     hdr->setObjectName("govSidebarHeader");
     hdr->setFixedHeight(30);
     auto* hhl = new QHBoxLayout(hdr);
@@ -230,10 +234,12 @@ QWidget* GovDataScreen::build_sidebar() {
     {
         const auto& tk = ThemeManager::instance().tokens();
         auto ac2 = QColor(tk.accent);
-        hcount->setStyleSheet(
-            QString("color:%1; background:rgba(%2,%3,%4,0.12); font-size:9px;"
-                    " font-weight:700; padding:1px 6px;")
-            .arg(tk.accent).arg(ac2.red()).arg(ac2.green()).arg(ac2.blue()));
+        hcount->setStyleSheet(QString("color:%1; background:rgba(%2,%3,%4,0.12); font-size:9px;"
+                                      " font-weight:700; padding:1px 6px;")
+                                  .arg(tk.accent)
+                                  .arg(ac2.red())
+                                  .arg(ac2.green())
+                                  .arg(ac2.blue()));
     }
     hhl->addWidget(htitle);
     hhl->addStretch(1);
@@ -253,8 +259,7 @@ QWidget* GovDataScreen::build_sidebar() {
         item->setData(Qt::UserRole + 1, prov.color);
     }
 
-    connect(provider_list_, &QListWidget::currentRowChanged,
-            this, &GovDataScreen::on_provider_selected);
+    connect(provider_list_, &QListWidget::currentRowChanged, this, &GovDataScreen::on_provider_selected);
     vl->addWidget(provider_list_, 1);
 
     return sidebar;
@@ -263,7 +268,7 @@ QWidget* GovDataScreen::build_sidebar() {
 // ── Status bar ───────────────────────────────────────────────────────────────
 
 QWidget* GovDataScreen::build_status_bar() {
-    auto* bar = new QWidget;
+    auto* bar = new QWidget(this);
     bar->setObjectName("govStatusBar");
     bar->setFixedHeight(24);
 
@@ -323,22 +328,24 @@ void GovDataScreen::on_provider_selected(int row) {
 
 void GovDataScreen::activate_provider(int index) {
     const auto& providers = services::GovDataService::providers();
-    if (index < 0 || index >= providers.size()) return;
+    if (index < 0 || index >= providers.size())
+        return;
 
-    active_index_    = index;
+    active_index_ = index;
     const auto& prov = providers[index];
 
     // Update toolbar title/subtitle with provider color
     header_subtitle_->setText(QString("%1  %2").arg(prov.flag, prov.full_name));
-    header_subtitle_->setStyleSheet(
-        QString("color:%1; font-size:10px; background:transparent;").arg(prov.color));
+    header_subtitle_->setStyleSheet(QString("color:%1; font-size:10px; background:transparent;").arg(prov.color));
     const auto& tk = ThemeManager::instance().tokens();
     header_bar_->setStyleSheet(
         QString("#govToolbar { background:%1; border-bottom:2px solid %2; }").arg(tk.bg_raised, prov.color));
 
     // Status bar
-    if (status_portal_)  status_portal_->setText(prov.name);
-    if (status_country_) status_country_->setText(prov.country);
+    if (status_portal_)
+        status_portal_->setText(prov.name);
+    if (status_country_)
+        status_country_->setText(prov.country);
 
     // Switch panel
     panel_stack_->setCurrentIndex(index);

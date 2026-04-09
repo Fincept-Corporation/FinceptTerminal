@@ -54,7 +54,7 @@ class GeopoliticsService : public QObject {
                     std::function<void(bool, const QString&)> cb);
 
     // Cache TTLs (used as CacheManager ttl_seconds)
-    static constexpr int kEventsTtlSec  = 120;
+    static constexpr int kEventsTtlSec = 120;
     static constexpr int kRefDataTtlSec = 600;
 };
 

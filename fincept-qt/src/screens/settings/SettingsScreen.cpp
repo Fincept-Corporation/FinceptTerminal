@@ -7,20 +7,20 @@
 #include "auth/InactivityGuard.h"
 #include "auth/PinManager.h"
 #include "core/config/AppConfig.h"
-#include "core/events/EventBus.h"
 #include "core/config/ProfileManager.h"
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
-#include "services/notifications/NotificationService.h"
 #include "screens/settings/LlmConfigSection.h"
 #include "screens/settings/McpServersSection.h"
-#include "storage/cache/CacheManager.h"
+#include "services/notifications/NotificationService.h"
 #include "storage/StorageManager.h"
-#include "storage/sqlite/CacheDatabase.h"
-#include "storage/sqlite/Database.h"
+#include "storage/cache/CacheManager.h"
 #include "storage/repositories/DataSourceRepository.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "storage/secure/SecureStorage.h"
+#include "storage/sqlite/CacheDatabase.h"
+#include "storage/sqlite/Database.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -34,13 +34,13 @@
 #include <QLineEdit>
 #include <QMap>
 #include <QMessageBox>
-#include <QSqlError>
-#include <QSqlQuery>
-#include <QSqlRecord>
 #include <QProcess>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QShowEvent>
+#include <QSqlError>
+#include <QSqlQuery>
+#include <QSqlRecord>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -50,8 +50,7 @@ namespace fincept::screens {
 
 // All helpers read live ThemeManager tokens — no font-size overrides (global QSS handles font)
 static QString section_title_ss() {
-    return QString("color:%1;font-weight:bold;letter-spacing:0.5px;background:transparent;")
-        .arg(ui::colors::AMBER());
+    return QString("color:%1;font-weight:bold;letter-spacing:0.5px;background:transparent;").arg(ui::colors::AMBER());
 }
 static QString sub_title_ss() {
     return QString("color:%1;font-weight:700;letter-spacing:0.5px;background:transparent;")
@@ -64,14 +63,12 @@ static QString nav_btn_ss() {
     return QString("QPushButton{background:transparent;color:%1;border:none;text-align:left;padding:0 12px;}"
                    "QPushButton:hover{background:%2;color:%3;}"
                    "QPushButton:checked{color:%4;background:%2;}")
-        .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(),
-             ui::colors::TEXT_PRIMARY(),   ui::colors::AMBER());
+        .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER());
 }
 static QString input_ss() {
     return QString("QLineEdit{background:%1;color:%2;border:1px solid %3;padding:6px;}"
                    "QLineEdit:focus{border:1px solid %4;}")
-        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
-             ui::colors::BORDER_MED(), ui::colors::AMBER());
+        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER());
 }
 static QString btn_primary_ss() {
     return QString("QPushButton{background:%1;color:%2;border:none;font-weight:700;padding:0 16px;height:32px;}"
@@ -81,30 +78,28 @@ static QString btn_primary_ss() {
 static QString btn_secondary_ss() {
     return QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 12px;height:32px;}"
                    "QPushButton:hover{background:%4;}")
-        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
-             ui::colors::BORDER_BRIGHT(), ui::colors::BG_HOVER());
+        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_BRIGHT(), ui::colors::BG_HOVER());
 }
 static QString btn_danger_ss() {
     return QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:4px 12px;}"
                    "QPushButton:hover{background:%4;}")
-        .arg(ui::colors::BG_RAISED(), ui::colors::NEGATIVE(),
-             ui::colors::BORDER_DIM(), ui::colors::BG_HOVER());
+        .arg(ui::colors::BG_RAISED(), ui::colors::NEGATIVE(), ui::colors::BORDER_DIM(), ui::colors::BG_HOVER());
 }
 static QString combo_ss() {
-    return QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:5px 8px;min-width:160px;}"
-                   "QComboBox:focus{border:1px solid %4;}"
-                   "QComboBox::drop-down{border:none;width:20px;}"
-                   "QComboBox QAbstractItemView{background:%1;color:%2;selection-background-color:%5;border:1px solid %3;}")
-        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
-             ui::colors::BORDER_MED(), ui::colors::AMBER(), ui::colors::BG_HOVER());
+    return QString(
+               "QComboBox{background:%1;color:%2;border:1px solid %3;padding:5px 8px;min-width:160px;}"
+               "QComboBox:focus{border:1px solid %4;}"
+               "QComboBox::drop-down{border:none;width:20px;}"
+               "QComboBox QAbstractItemView{background:%1;color:%2;selection-background-color:%5;border:1px solid %3;}")
+        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER(),
+             ui::colors::BG_HOVER());
 }
 static QString check_ss() {
     return QString("QCheckBox{color:%1;background:transparent;}"
                    "QCheckBox::indicator{width:14px;height:14px;}"
                    "QCheckBox::indicator:unchecked{border:1px solid %2;background:%3;}"
                    "QCheckBox::indicator:checked{border:1px solid %4;background:%4;}")
-        .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_BRIGHT(),
-             ui::colors::BG_RAISED(),      ui::colors::AMBER());
+        .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_BRIGHT(), ui::colors::BG_RAISED(), ui::colors::AMBER());
 }
 
 // ── Credential key definitions ────────────────────────────────────────────────
@@ -139,7 +134,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     root->setSpacing(0);
 
     // Left nav panel
-    nav_ = new QWidget;
+    nav_ = new QWidget(this);
     auto* nav = nav_;
     nav->setFixedWidth(200);
     auto* nvl = new QVBoxLayout(nav);
@@ -209,17 +204,16 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
                 []() { ai_chat::LlmService::instance().reload_config(); });
     }
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { refresh_theme(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { refresh_theme(); });
     refresh_theme();
 }
 
 void SettingsScreen::refresh_theme() {
     setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     if (nav_)
-        nav_->setStyleSheet(
-            QString("background:%1;border-right:1px solid %2;")
-            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+        nav_->setStyleSheet(QString("background:%1;border-right:1px solid %2;")
+                                .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     // Re-apply nav button styles
     if (nav_) {
         for (auto* btn : nav_->findChildren<QPushButton*>())
@@ -241,7 +235,7 @@ void SettingsScreen::showEvent(QShowEvent* e) {
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
 QWidget* SettingsScreen::make_row(const QString& label, QWidget* control, const QString& description) {
-    auto* row = new QWidget;
+    auto* row = new QWidget(nullptr);
     row->setStyleSheet("background: transparent;");
     auto* vl = new QVBoxLayout(row);
     vl->setContentsMargins(0, 0, 0, 0);
@@ -277,14 +271,13 @@ QFrame* SettingsScreen::make_sep() {
 QWidget* SettingsScreen::build_credentials() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(
-        QString("QScrollArea{border:none;background:transparent;}"
-                "QScrollBar:vertical{width:6px;background:transparent;}"
-                "QScrollBar::handle:vertical{background:%1;border-radius:3px;}"
-                "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-        .arg(ui::colors::BORDER_MED()));
+    scroll->setStyleSheet(QString("QScrollArea{border:none;background:transparent;}"
+                                  "QScrollBar:vertical{width:6px;background:transparent;}"
+                                  "QScrollBar::handle:vertical{background:%1;border-radius:3px;}"
+                                  "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+                              .arg(ui::colors::BORDER_MED()));
 
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(0);
@@ -311,19 +304,22 @@ QWidget* SettingsScreen::build_credentials() {
 
         // Card frame
         auto* card = new QFrame;
-        card->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:4px;}").arg(ui::colors::BG_SURFACE(),ui::colors::BORDER_DIM()));
+        card->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:4px;}")
+                                .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         auto* cvl = new QVBoxLayout(card);
         cvl->setContentsMargins(0, 0, 0, 0);
         cvl->setSpacing(0);
 
         // Card header
-        auto* hdr = new QWidget;
+        auto* hdr = new QWidget(this);
         hdr->setFixedHeight(34);
-        hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(),ui::colors::BORDER_DIM()));
+        hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+                               .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
         auto* hhl = new QHBoxLayout(hdr);
         hhl->setContentsMargins(12, 0, 12, 0);
         auto* name_lbl = new QLabel(name);
-        name_lbl->setStyleSheet(QString("color:%1;font-weight:600;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
+        name_lbl->setStyleSheet(
+            QString("color:%1;font-weight:600;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
         hhl->addWidget(name_lbl);
         hhl->addStretch();
 
@@ -336,7 +332,7 @@ QWidget* SettingsScreen::build_credentials() {
         cvl->addWidget(hdr);
 
         // Card body: input + save button
-        auto* body = new QWidget;
+        auto* body = new QWidget(this);
         body->setStyleSheet("background: transparent;");
         auto* bhl = new QHBoxLayout(body);
         bhl->setContentsMargins(12, 10, 12, 10);
@@ -361,7 +357,8 @@ QWidget* SettingsScreen::build_credentials() {
                 SecureStorage::instance().remove(key);
                 field->setPlaceholderText("Not configured");
                 status_lbl->setText("Cleared");
-                status_lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+                status_lbl->setStyleSheet(
+                    QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
                 LOG_INFO("Credentials", "Cleared key: " + key);
             } else {
                 auto r = SecureStorage::instance().store(key, val);
@@ -416,23 +413,21 @@ void SettingsScreen::load_credentials() {
 
 // Single source of truth for appearance defaults
 namespace {
-constexpr const char* kDefaultFontSize   = "14px";
+constexpr const char* kDefaultFontSize = "14px";
 constexpr const char* kDefaultFontFamily = "Consolas";
-constexpr const char* kDefaultTheme      = "Obsidian";
-constexpr const char* kDefaultDensity    = "Default";
+constexpr const char* kDefaultDensity = "Default";
 } // namespace
 
 QWidget* SettingsScreen::build_appearance() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(
-        QString("QScrollArea { border: none; background: transparent; }"
-                "QScrollBar:vertical { background: %1; width: 6px; }"
-                "QScrollBar::handle:vertical { background: %2; }"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_MED));
+    scroll->setStyleSheet(QString("QScrollArea { border: none; background: transparent; }"
+                                  "QScrollBar:vertical { background: %1; width: 6px; }"
+                                  "QScrollBar::handle:vertical { background: %2; }"
+                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+                              .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_MED));
 
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(8);
@@ -464,12 +459,13 @@ QWidget* SettingsScreen::build_appearance() {
     connect(appearance_debounce_, &QTimer::timeout, this, [this]() {
         auto& tm = fincept::ui::ThemeManager::instance();
         int px = QString(app_font_size_->currentText()).replace("px", "").toInt();
-        if (px > 0) tm.apply_font(app_font_family_->currentText(), px);
+        if (px > 0)
+            tm.apply_font(app_font_family_->currentText(), px);
         tm.apply_density(app_density_->currentText());
     });
 
     auto restart_debounce = [this]() { appearance_debounce_->start(); };
-    connect(app_font_size_,   &QComboBox::currentTextChanged, this, restart_debounce);
+    connect(app_font_size_, &QComboBox::currentTextChanged, this, restart_debounce);
     connect(app_font_family_, &QComboBox::currentTextChanged, this, restart_debounce);
 
     vl->addSpacing(8);
@@ -481,16 +477,6 @@ QWidget* SettingsScreen::build_appearance() {
     t2->setStyleSheet(sub_title_ss());
     vl->addWidget(t2);
     vl->addSpacing(4);
-
-    app_theme_ = new QComboBox;
-    app_theme_->addItems(fincept::ui::ThemeManager::available_themes());
-    app_theme_->setStyleSheet(combo_ss());
-    vl->addWidget(make_row("Color Theme", app_theme_, "Applied immediately as a live preview."));
-
-    // Live preview: apply theme immediately on change
-    connect(app_theme_, &QComboBox::currentTextChanged, this, [](const QString& name) {
-        fincept::ui::ThemeManager::instance().apply_theme(name);
-    });
 
     app_density_ = new QComboBox;
     app_density_->addItems(fincept::ui::ThemeManager::available_densities());
@@ -513,20 +499,18 @@ QWidget* SettingsScreen::build_appearance() {
     chat_bubble_toggle_ = new QCheckBox("Show AI Chat Bubble");
     chat_bubble_toggle_->setChecked(true);
     chat_bubble_toggle_->setStyleSheet(check_ss());
-    vl->addWidget(make_row("AI Chat Bubble", chat_bubble_toggle_,
-                            "Floating chat assistant in the bottom-right corner."));
+    vl->addWidget(
+        make_row("AI Chat Bubble", chat_bubble_toggle_, "Floating chat assistant in the bottom-right corner."));
 
     ticker_bar_toggle_ = new QCheckBox("Show Ticker Bar");
     ticker_bar_toggle_->setChecked(true);
     ticker_bar_toggle_->setStyleSheet(check_ss());
-    vl->addWidget(make_row("Ticker Bar", ticker_bar_toggle_,
-                            "Live price ticker at the bottom of the screen."));
+    vl->addWidget(make_row("Ticker Bar", ticker_bar_toggle_, "Live price ticker at the bottom of the screen."));
 
     animations_toggle_ = new QCheckBox("Enable Animations");
     animations_toggle_->setChecked(true);
     animations_toggle_->setStyleSheet(check_ss());
-    vl->addWidget(make_row("Animations", animations_toggle_,
-                            "Fade and transition effects throughout the UI."));
+    vl->addWidget(make_row("Animations", animations_toggle_, "Fade and transition effects throughout the UI."));
 
     vl->addSpacing(16);
 
@@ -536,25 +520,22 @@ QWidget* SettingsScreen::build_appearance() {
     apply_btn->setStyleSheet(btn_primary_ss());
     connect(apply_btn, &QPushButton::clicked, this, [this]() {
         auto& repo = SettingsRepository::instance();
-        auto& tm   = fincept::ui::ThemeManager::instance();
+        auto& tm = fincept::ui::ThemeManager::instance();
 
         // Persist all values
-        repo.set("appearance.font_size",       app_font_size_->currentText(),   "appearance");
-        repo.set("appearance.font_family",     app_font_family_->currentText(), "appearance");
-        repo.set("appearance.theme",           app_theme_->currentText(),       "appearance");
-        repo.set("appearance.density",         app_density_->currentText(),     "appearance");
-        repo.set("appearance.show_chat_bubble",
-                 chat_bubble_toggle_->isChecked() ? "true" : "false", "appearance");
-        repo.set("appearance.show_ticker_bar",
-                 ticker_bar_toggle_->isChecked() ? "true" : "false", "appearance");
-        repo.set("appearance.animations",
-                 animations_toggle_->isChecked() ? "true" : "false", "appearance");
+        repo.set("appearance.font_size", app_font_size_->currentText(), "appearance");
+        repo.set("appearance.font_family", app_font_family_->currentText(), "appearance");
+        repo.set("appearance.density", app_density_->currentText(), "appearance");
+        repo.set("appearance.show_chat_bubble", chat_bubble_toggle_->isChecked() ? "true" : "false", "appearance");
+        repo.set("appearance.show_ticker_bar", ticker_bar_toggle_->isChecked() ? "true" : "false", "appearance");
+        repo.set("appearance.animations", animations_toggle_->isChecked() ? "true" : "false", "appearance");
 
         // Flush any pending debounce immediately on save
         if (appearance_debounce_->isActive()) {
             appearance_debounce_->stop();
             int px = QString(app_font_size_->currentText()).replace("px", "").toInt();
-            if (px <= 0) px = 14;
+            if (px <= 0)
+                px = 14;
             tm.apply_font(app_font_family_->currentText(), px);
             tm.apply_density(app_density_->currentText());
         }
@@ -578,7 +559,6 @@ void SettingsScreen::load_appearance() {
     // the associated theme_changed signal re-rendering every widget on screen.
     const QSignalBlocker b1(app_font_size_);
     const QSignalBlocker b2(app_font_family_);
-    const QSignalBlocker b3(app_theme_);
     const QSignalBlocker b4(app_density_);
 
     auto load_combo = [&](QComboBox* cb, const QString& key, const QString& def) {
@@ -590,19 +570,19 @@ void SettingsScreen::load_appearance() {
     };
 
     auto load_check = [&](QCheckBox* cb, const QString& key, bool def) {
-        if (!cb) return;
+        if (!cb)
+            return;
         auto r = repo.get(key);
         cb->setChecked(!r.is_ok() ? def : r.value() != "false");
     };
 
-    load_combo(app_font_size_,   "appearance.font_size",   kDefaultFontSize);
+    load_combo(app_font_size_, "appearance.font_size", kDefaultFontSize);
     load_combo(app_font_family_, "appearance.font_family", kDefaultFontFamily);
-    load_combo(app_theme_,       "appearance.theme",       kDefaultTheme);
-    load_combo(app_density_,     "appearance.density",     kDefaultDensity);
+    load_combo(app_density_, "appearance.density", kDefaultDensity);
 
     load_check(chat_bubble_toggle_, "appearance.show_chat_bubble", true);
-    load_check(ticker_bar_toggle_,  "appearance.show_ticker_bar",  true);
-    load_check(animations_toggle_,  "appearance.animations",       true);
+    load_check(ticker_bar_toggle_, "appearance.show_ticker_bar", true);
+    load_check(animations_toggle_, "appearance.animations", true);
 }
 
 // ── Notifications ─────────────────────────────────────────────────────────────
@@ -618,84 +598,129 @@ struct FieldDef {
     QString key;
     QString label;
     QString placeholder;
-    bool    is_password{false};
+    bool is_password{false};
 };
 
 struct ProviderDef {
-    QString            id;
-    QString            name;
-    QString            icon;
-    QVector<FieldDef>  fields;
+    QString id;
+    QString name;
+    QString icon;
+    QVector<FieldDef> fields;
 };
 
 const QVector<ProviderDef>& provider_defs() {
     static const QVector<ProviderDef> defs = {
-        { "telegram",   "Telegram",     "✈",  {
-            {"bot_token", "Bot Token",   "Enter bot token from @BotFather", true},
-            {"chat_id",   "Chat ID",     "e.g. 123456789"},
-        }},
-        { "discord",    "Discord",      "🎮", {
-            {"webhook_url", "Webhook URL", "https://discord.com/api/webhooks/..."},
-        }},
-        { "slack",      "Slack",        "💬", {
-            {"webhook_url", "Webhook URL", "https://hooks.slack.com/services/..."},
-            {"channel",     "Channel",     "#alerts (optional)"},
-        }},
-        { "email",      "Email",        "📧", {
-            {"smtp_host",  "SMTP Host",    "smtp.gmail.com"},
-            {"smtp_port",  "Port",         "587"},
-            {"smtp_user",  "Username",     "you@gmail.com"},
-            {"smtp_pass",  "Password",     "App password", true},
-            {"to_addr",    "To Address",   "recipient@example.com"},
-            {"from_addr",  "From Address", "you@gmail.com (optional)"},
-        }},
-        { "whatsapp",   "WhatsApp",     "📱", {
-            {"account_sid",  "Account SID",  "Twilio Account SID"},
-            {"auth_token",   "Auth Token",   "Twilio Auth Token", true},
-            {"from_number",  "From Number",  "+14155238886"},
-            {"to_number",    "To Number",    "+1XXXXXXXXXX"},
-        }},
-        { "pushover",   "Pushover",     "🔔", {
-            {"api_token", "API Token",  "Your Pushover app token", true},
-            {"user_key",  "User Key",   "Your Pushover user key",  true},
-        }},
-        { "ntfy",       "ntfy",         "📢", {
-            {"server_url", "Server URL", "https://ntfy.sh (leave empty for default)"},
-            {"topic",      "Topic",      "your-topic-name"},
-            {"token",      "Auth Token", "Optional auth token", true},
-        }},
-        { "pushbullet", "Pushbullet",   "🔵", {
-            {"api_key",     "API Key",     "Your Pushbullet API key", true},
-            {"channel_tag", "Channel Tag", "Optional channel tag"},
-        }},
-        { "gotify",     "Gotify",       "🔊", {
-            {"server_url", "Server URL", "https://your-gotify-server.com"},
-            {"app_token",  "App Token",  "Application token", true},
-        }},
-        { "mattermost", "Mattermost",   "🟦", {
-            {"webhook_url", "Webhook URL", "https://your-mattermost.com/hooks/..."},
-            {"channel",     "Channel",     "#town-square (optional)"},
-            {"username",    "Username",    "Fincept (optional)"},
-        }},
-        { "teams",      "MS Teams",     "🟪", {
-            {"webhook_url", "Webhook URL", "https://outlook.office.com/webhook/..."},
-        }},
-        { "webhook",    "Webhook",      "🌐", {
-            {"url",    "URL",    "https://your-endpoint.com/notify"},
-            {"method", "Method", "POST"},
-        }},
-        { "pagerduty",  "PagerDuty",    "🚨", {
-            {"routing_key", "Routing Key", "32-character integration key", true},
-        }},
-        { "opsgenie",   "Opsgenie",     "🔴", {
-            {"api_key", "API Key", "Your Opsgenie API key", true},
-        }},
-        { "sms",        "SMS (Twilio)", "💬", {
-            {"account_sid",  "Account SID",  "Twilio Account SID"},
-            {"auth_token",   "Auth Token",   "Twilio Auth Token", true},
-            {"from_number",  "From Number",  "+15005550006"},
-            {"to_number",    "To Number",    "+1XXXXXXXXXX"},
-        }},
+        {"telegram",
+         "Telegram",
+         "✈",
+         {
+             {"bot_token", "Bot Token", "Enter bot token from @BotFather", true},
+             {"chat_id", "Chat ID", "e.g. 123456789"},
+         }},
+        {"discord",
+         "Discord",
+         "🎮",
+         {
+             {"webhook_url", "Webhook URL", "https://discord.com/api/webhooks/..."},
+         }},
+        {"slack",
+         "Slack",
+         "💬",
+         {
+             {"webhook_url", "Webhook URL", "https://hooks.slack.com/services/..."},
+             {"channel", "Channel", "#alerts (optional)"},
+         }},
+        {"email",
+         "Email",
+         "📧",
+         {
+             {"smtp_host", "SMTP Host", "smtp.gmail.com"},
+             {"smtp_port", "Port", "587"},
+             {"smtp_user", "Username", "you@gmail.com"},
+             {"smtp_pass", "Password", "App password", true},
+             {"to_addr", "To Address", "recipient@example.com"},
+             {"from_addr", "From Address", "you@gmail.com (optional)"},
+         }},
+        {"whatsapp",
+         "WhatsApp",
+         "📱",
+         {
+             {"account_sid", "Account SID", "Twilio Account SID"},
+             {"auth_token", "Auth Token", "Twilio Auth Token", true},
+             {"from_number", "From Number", "+14155238886"},
+             {"to_number", "To Number", "+1XXXXXXXXXX"},
+         }},
+        {"pushover",
+         "Pushover",
+         "🔔",
+         {
+             {"api_token", "API Token", "Your Pushover app token", true},
+             {"user_key", "User Key", "Your Pushover user key", true},
+         }},
+        {"ntfy",
+         "ntfy",
+         "📢",
+         {
+             {"server_url", "Server URL", "https://ntfy.sh (leave empty for default)"},
+             {"topic", "Topic", "your-topic-name"},
+             {"token", "Auth Token", "Optional auth token", true},
+         }},
+        {"pushbullet",
+         "Pushbullet",
+         "🔵",
+         {
+             {"api_key", "API Key", "Your Pushbullet API key", true},
+             {"channel_tag", "Channel Tag", "Optional channel tag"},
+         }},
+        {"gotify",
+         "Gotify",
+         "🔊",
+         {
+             {"server_url", "Server URL", "https://your-gotify-server.com"},
+             {"app_token", "App Token", "Application token", true},
+         }},
+        {"mattermost",
+         "Mattermost",
+         "🟦",
+         {
+             {"webhook_url", "Webhook URL", "https://your-mattermost.com/hooks/..."},
+             {"channel", "Channel", "#town-square (optional)"},
+             {"username", "Username", "Fincept (optional)"},
+         }},
+        {"teams",
+         "MS Teams",
+         "🟪",
+         {
+             {"webhook_url", "Webhook URL", "https://outlook.office.com/webhook/..."},
+         }},
+        {"webhook",
+         "Webhook",
+         "🌐",
+         {
+             {"url", "URL", "https://your-endpoint.com/notify"},
+             {"method", "Method", "POST"},
+         }},
+        {"pagerduty",
+         "PagerDuty",
+         "🚨",
+         {
+             {"routing_key", "Routing Key", "32-character integration key", true},
+         }},
+        {"opsgenie",
+         "Opsgenie",
+         "🔴",
+         {
+             {"api_key", "API Key", "Your Opsgenie API key", true},
+         }},
+        {"sms",
+         "SMS (Twilio)",
+         "💬",
+         {
+             {"account_sid", "Account SID", "Twilio Account SID"},
+             {"auth_token", "Auth Token", "Twilio Auth Token", true},
+             {"from_number", "From Number", "+15005550006"},
+             {"to_number", "To Number", "+1XXXXXXXXXX"},
+         }},
     };
     return defs;
 }
@@ -707,14 +732,13 @@ QWidget* SettingsScreen::build_notifications() {
 
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(
-        QString("QScrollArea { border: none; background: transparent; }"
-                "QScrollBar:vertical { background: %1; width: 6px; }"
-                "QScrollBar::handle:vertical { background: %2; border-radius: 3px; }"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_MED()));
+    scroll->setStyleSheet(QString("QScrollArea { border: none; background: transparent; }"
+                                  "QScrollBar:vertical { background: %1; width: 6px; }"
+                                  "QScrollBar::handle:vertical { background: %2; border-radius: 3px; }"
+                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+                              .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_MED()));
 
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(6);
@@ -731,15 +755,14 @@ QWidget* SettingsScreen::build_notifications() {
 
         // Card outer frame
         auto* card = new QFrame;
-        card->setStyleSheet(
-            QString("QFrame { background: %1; border: 1px solid %2; border-radius: 3px; }")
-                .arg(fincept::ui::colors::BG_RAISED(), fincept::ui::colors::BORDER_DIM()));
+        card->setStyleSheet(QString("QFrame { background: %1; border: 1px solid %2; border-radius: 3px; }")
+                                .arg(fincept::ui::colors::BG_RAISED(), fincept::ui::colors::BORDER_DIM()));
         auto* cvl = new QVBoxLayout(card);
         cvl->setContentsMargins(0, 0, 0, 0);
         cvl->setSpacing(0);
 
         // ── Header row (icon + name + toggle) ─────────────────────────────────
-        auto* head = new QWidget;
+        auto* head = new QWidget(this);
         head->setFixedHeight(36);
         head->setStyleSheet("background: transparent;");
         head->setCursor(Qt::PointingHandCursor);
@@ -749,14 +772,12 @@ QWidget* SettingsScreen::build_notifications() {
 
         auto* arrow_lbl = new QLabel("▶");
         arrow_lbl->setStyleSheet(
-            QString("color: %1; background: transparent;")
-                .arg(fincept::ui::colors::TEXT_SECONDARY()));
+            QString("color: %1; background: transparent;").arg(fincept::ui::colors::TEXT_SECONDARY()));
         hl->addWidget(arrow_lbl);
 
         auto* icon_lbl = new QLabel(def.icon + "  " + def.name.toUpper());
         icon_lbl->setStyleSheet(
-            QString("color: %1; font-weight: bold; background: transparent;")
-                .arg(fincept::ui::colors::TEXT_PRIMARY()));
+            QString("color: %1; font-weight: bold; background: transparent;").arg(fincept::ui::colors::TEXT_PRIMARY()));
         hl->addWidget(icon_lbl, 1);
 
         pw.enabled = new QCheckBox;
@@ -767,9 +788,8 @@ QWidget* SettingsScreen::build_notifications() {
 
         // ── Body (credential fields + test button) ─────────────────────────────
         pw.body_frame = new QFrame;
-        pw.body_frame->setStyleSheet(
-            QString("QFrame { background: %1; border-top: 1px solid %2; }")
-                .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_DIM()));
+        pw.body_frame->setStyleSheet(QString("QFrame { background: %1; border-top: 1px solid %2; }")
+                                         .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_DIM()));
         auto* bvl = new QVBoxLayout(pw.body_frame);
         bvl->setContentsMargins(12, 10, 12, 10);
         bvl->setSpacing(6);
@@ -787,7 +807,7 @@ QWidget* SettingsScreen::build_notifications() {
         }
 
         // Test button + status
-        auto* test_row = new QWidget;
+        auto* test_row = new QWidget(this);
         test_row->setStyleSheet("background: transparent;");
         auto* thl = new QHBoxLayout(test_row);
         thl->setContentsMargins(0, 4, 0, 0);
@@ -809,54 +829,49 @@ QWidget* SettingsScreen::build_notifications() {
         pw.body_frame->hide(); // collapsed by default
 
         // ── Expand/collapse on header click ───────────────────────────────────
-        connect(head, &QWidget::destroyed, this, [](){}); // keep lifetime
+        connect(head, &QWidget::destroyed, this, []() {}); // keep lifetime
         // Install an event filter to catch mouse press on the header widget
         // (QWidget doesn't have a clicked signal — use a lambda on a QPushButton overlay)
         auto* head_btn = new QPushButton(head);
-        head_btn->setGeometry(0, 0, 9999, 36);  // covers full header
+        head_btn->setGeometry(0, 0, 9999, 36); // covers full header
         head_btn->setFlat(true);
         head_btn->setStyleSheet("QPushButton { background: transparent; border: none; }");
         head_btn->raise();
 
-        connect(head_btn, &QPushButton::clicked, this,
-                [card, pw, arrow_lbl]() mutable {
-                    const bool expanded = pw.body_frame->isVisible();
-                    pw.body_frame->setVisible(!expanded);
-                    arrow_lbl->setText(expanded ? "▶" : "▼");
-                    Q_UNUSED(card);
-                });
+        connect(head_btn, &QPushButton::clicked, this, [card, pw, arrow_lbl]() mutable {
+            const bool expanded = pw.body_frame->isVisible();
+            pw.body_frame->setVisible(!expanded);
+            arrow_lbl->setText(expanded ? "▶" : "▼");
+            Q_UNUSED(card);
+        });
 
         // ── Test Send wiring ──────────────────────────────────────────────────
-        connect(pw.test_btn, &QPushButton::clicked, this,
-                [this, pid, pw]() mutable {
-                    // Save fields first so provider has latest credentials
-                    save_provider_fields(pid, pw);
-                    NotificationService::instance().reload_all_configs();
+        connect(pw.test_btn, &QPushButton::clicked, this, [this, pid, pw]() mutable {
+            // Save fields first so provider has latest credentials
+            save_provider_fields(pid, pw);
+            NotificationService::instance().reload_all_configs();
 
-                    pw.status_lbl->setText("Sending...");
-                    pw.status_lbl->setStyleSheet(
-                        QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+            pw.status_lbl->setText("Sending...");
+            pw.status_lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
 
-                    NotificationRequest req;
-                    req.title   = "Fincept Test";
-                    req.message = "This is a test notification from Fincept Terminal.";
-                    req.trigger = NotifTrigger::Manual;
+            NotificationRequest req;
+            req.title = "Fincept Test";
+            req.message = "This is a test notification from Fincept Terminal.";
+            req.trigger = NotifTrigger::Manual;
 
-                    QPointer<QLabel> status_ptr = pw.status_lbl;
-                    NotificationService::instance().send_to(pid, req,
-                        [status_ptr](bool ok, const QString& err) {
-                            if (!status_ptr) return;
-                            if (ok) {
-                                status_ptr->setText("✓ Sent successfully");
-                                status_ptr->setStyleSheet(
-                                    QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
-                            } else {
-                                status_ptr->setText("✗ " + err.left(60));
-                                status_ptr->setStyleSheet(
-                                    QString("color:%1;background:transparent;").arg(ui::colors::NEGATIVE()));
-                            }
-                        });
-                });
+            QPointer<QLabel> status_ptr = pw.status_lbl;
+            NotificationService::instance().send_to(pid, req, [status_ptr](bool ok, const QString& err) {
+                if (!status_ptr)
+                    return;
+                if (ok) {
+                    status_ptr->setText("✓ Sent successfully");
+                    status_ptr->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
+                } else {
+                    status_ptr->setText("✗ " + err.left(60));
+                    status_ptr->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::NEGATIVE()));
+                }
+            });
+        });
 
         provider_widgets_[def.id] = pw;
         vl->addWidget(card);
@@ -872,17 +887,19 @@ QWidget* SettingsScreen::build_notifications() {
     vl->addWidget(trig_hdr);
     vl->addSpacing(4);
 
-    trigger_inapp_  = new QCheckBox; trigger_inapp_->setStyleSheet(check_ss());
-    trigger_price_  = new QCheckBox; trigger_price_->setStyleSheet(check_ss());
-    trigger_news_   = new QCheckBox; trigger_news_->setStyleSheet(check_ss());
-    trigger_orders_ = new QCheckBox; trigger_orders_->setStyleSheet(check_ss());
+    trigger_inapp_ = new QCheckBox;
+    trigger_inapp_->setStyleSheet(check_ss());
+    trigger_price_ = new QCheckBox;
+    trigger_price_->setStyleSheet(check_ss());
+    trigger_news_ = new QCheckBox;
+    trigger_news_->setStyleSheet(check_ss());
+    trigger_orders_ = new QCheckBox;
+    trigger_orders_->setStyleSheet(check_ss());
 
-    vl->addWidget(make_row("In-App Alerts (toast + bell)", trigger_inapp_,
-                           "Show slide-in toasts and update bell badge."));
-    vl->addWidget(make_row("Price Alerts", trigger_price_,
-                           "Notify when price alert thresholds are crossed."));
-    vl->addWidget(make_row("News Alerts", trigger_news_,
-                           "Enable news notifications (configure which types below)."));
+    vl->addWidget(
+        make_row("In-App Alerts (toast + bell)", trigger_inapp_, "Show slide-in toasts and update bell badge."));
+    vl->addWidget(make_row("Price Alerts", trigger_price_, "Notify when price alert thresholds are crossed."));
+    vl->addWidget(make_row("News Alerts", trigger_news_, "Enable news notifications (configure which types below)."));
 
     // ── News alert sub-options ────────────────────────────────────────────────
     news_subopts_frame_ = new QFrame;
@@ -894,15 +911,18 @@ QWidget* SettingsScreen::build_notifications() {
     sub_vl->setContentsMargins(0, 4, 0, 4);
     sub_vl->setSpacing(4);
 
-    news_breaking_   = new QCheckBox; news_breaking_->setStyleSheet(check_ss());
-    news_monitors_   = new QCheckBox; news_monitors_->setStyleSheet(check_ss());
-    news_deviations_ = new QCheckBox; news_deviations_->setStyleSheet(check_ss());
-    news_flash_      = new QCheckBox; news_flash_->setStyleSheet(check_ss());
+    news_breaking_ = new QCheckBox;
+    news_breaking_->setStyleSheet(check_ss());
+    news_monitors_ = new QCheckBox;
+    news_monitors_->setStyleSheet(check_ss());
+    news_deviations_ = new QCheckBox;
+    news_deviations_->setStyleSheet(check_ss());
+    news_flash_ = new QCheckBox;
+    news_flash_->setStyleSheet(check_ss());
 
-    sub_vl->addWidget(make_row("Breaking News", news_breaking_,
-                               "Notify on FLASH/BREAKING/URGENT priority clusters."));
-    sub_vl->addWidget(make_row("Monitor Keyword Matches", news_monitors_,
-                               "Notify when a news monitor watch list gets new matches."));
+    sub_vl->addWidget(make_row("Breaking News", news_breaking_, "Notify on FLASH/BREAKING/URGENT priority clusters."));
+    sub_vl->addWidget(
+        make_row("Monitor Keyword Matches", news_monitors_, "Notify when a news monitor watch list gets new matches."));
     sub_vl->addWidget(make_row("Category Volume Spikes", news_deviations_,
                                "Notify when a category has abnormally high article volume (z-score ≥ 3)."));
     sub_vl->addWidget(make_row("FLASH + High-Impact Articles", news_flash_,
@@ -911,12 +931,9 @@ QWidget* SettingsScreen::build_notifications() {
     vl->addWidget(news_subopts_frame_);
 
     // Show/hide sub-options based on master toggle
-    connect(trigger_news_, &QCheckBox::toggled, this, [this](bool on) {
-        news_subopts_frame_->setVisible(on);
-    });
+    connect(trigger_news_, &QCheckBox::toggled, this, [this](bool on) { news_subopts_frame_->setVisible(on); });
 
-    vl->addWidget(make_row("Order Fill Alerts", trigger_orders_,
-                           "Notify when orders are filled or rejected."));
+    vl->addWidget(make_row("Order Fill Alerts", trigger_orders_, "Notify when orders are filled or rejected."));
 
     vl->addSpacing(16);
 
@@ -928,14 +945,14 @@ QWidget* SettingsScreen::build_notifications() {
         // Save triggers
         auto& repo = SettingsRepository::instance();
         auto b = [](bool v) { return v ? "1" : "0"; };
-        repo.set("notifications.inapp",           b(trigger_inapp_->isChecked()),   "notifications");
-        repo.set("notifications.price_alerts",    b(trigger_price_->isChecked()),   "notifications");
-        repo.set("notifications.news_alerts",     b(trigger_news_->isChecked()),    "notifications");
-        repo.set("notifications.order_fills",     b(trigger_orders_->isChecked()),  "notifications");
-        repo.set("notifications.news_breaking",   b(news_breaking_->isChecked()),   "notifications");
-        repo.set("notifications.news_monitors",   b(news_monitors_->isChecked()),   "notifications");
+        repo.set("notifications.inapp", b(trigger_inapp_->isChecked()), "notifications");
+        repo.set("notifications.price_alerts", b(trigger_price_->isChecked()), "notifications");
+        repo.set("notifications.news_alerts", b(trigger_news_->isChecked()), "notifications");
+        repo.set("notifications.order_fills", b(trigger_orders_->isChecked()), "notifications");
+        repo.set("notifications.news_breaking", b(news_breaking_->isChecked()), "notifications");
+        repo.set("notifications.news_monitors", b(news_monitors_->isChecked()), "notifications");
         repo.set("notifications.news_deviations", b(news_deviations_->isChecked()), "notifications");
-        repo.set("notifications.news_flash",      b(news_flash_->isChecked()),      "notifications");
+        repo.set("notifications.news_flash", b(news_flash_->isChecked()), "notifications");
 
         // Save every provider
         for (const auto& def : provider_defs())
@@ -954,7 +971,8 @@ QWidget* SettingsScreen::build_notifications() {
 void SettingsScreen::load_notifications() {
     using namespace fincept::notifications;
 
-    if (provider_widgets_.isEmpty()) return;
+    if (provider_widgets_.isEmpty())
+        return;
 
     auto& repo = SettingsRepository::instance();
     auto get_bool = [&](const QString& key, bool def) -> bool {
@@ -963,24 +981,34 @@ void SettingsScreen::load_notifications() {
     };
 
     // Load trigger checkboxes
-    if (trigger_inapp_)  trigger_inapp_->setChecked(get_bool("notifications.inapp",        true));
-    if (trigger_price_)  trigger_price_->setChecked(get_bool("notifications.price_alerts", true));
-    if (trigger_orders_) trigger_orders_->setChecked(get_bool("notifications.order_fills", true));
+    if (trigger_inapp_)
+        trigger_inapp_->setChecked(get_bool("notifications.inapp", true));
+    if (trigger_price_)
+        trigger_price_->setChecked(get_bool("notifications.price_alerts", true));
+    if (trigger_orders_)
+        trigger_orders_->setChecked(get_bool("notifications.order_fills", true));
 
     const bool news_on = get_bool("notifications.news_alerts", false);
-    if (trigger_news_) trigger_news_->setChecked(news_on);
+    if (trigger_news_)
+        trigger_news_->setChecked(news_on);
 
     // News sub-options — default all on, gate on master toggle
-    if (news_breaking_)   news_breaking_->setChecked(get_bool("notifications.news_breaking",   true));
-    if (news_monitors_)   news_monitors_->setChecked(get_bool("notifications.news_monitors",   true));
-    if (news_deviations_) news_deviations_->setChecked(get_bool("notifications.news_deviations", true));
-    if (news_flash_)      news_flash_->setChecked(get_bool("notifications.news_flash",          true));
-    if (news_subopts_frame_) news_subopts_frame_->setVisible(news_on);
+    if (news_breaking_)
+        news_breaking_->setChecked(get_bool("notifications.news_breaking", true));
+    if (news_monitors_)
+        news_monitors_->setChecked(get_bool("notifications.news_monitors", true));
+    if (news_deviations_)
+        news_deviations_->setChecked(get_bool("notifications.news_deviations", true));
+    if (news_flash_)
+        news_flash_->setChecked(get_bool("notifications.news_flash", true));
+    if (news_subopts_frame_)
+        news_subopts_frame_->setVisible(news_on);
 
     // Load per-provider fields
     for (const auto& def : provider_defs()) {
-        if (!provider_widgets_.contains(def.id)) continue;
-        const auto& pw  = provider_widgets_[def.id];
+        if (!provider_widgets_.contains(def.id))
+            continue;
+        const auto& pw = provider_widgets_[def.id];
         const QString cat = QString("notif_%1").arg(def.id);
 
         // Enable toggle
@@ -991,7 +1019,8 @@ void SettingsScreen::load_notifications() {
 
         // Credential fields
         for (const auto& fd : def.fields) {
-            if (!pw.fields.contains(fd.key)) continue;
+            if (!pw.fields.contains(fd.key))
+                continue;
             auto r = repo.get(cat + "." + fd.key);
             if (r.is_ok() && pw.fields[fd.key])
                 pw.fields[fd.key]->setText(r.value());
@@ -1000,8 +1029,7 @@ void SettingsScreen::load_notifications() {
 }
 
 // Helper: persist a single provider's fields from its widget set
-void SettingsScreen::save_provider_fields(const QString& provider_id,
-                                          const ProviderWidgets& pw) {
+void SettingsScreen::save_provider_fields(const QString& provider_id, const ProviderWidgets& pw) {
     auto& repo = SettingsRepository::instance();
     const QString cat = QString("notif_%1").arg(provider_id);
 
@@ -1017,32 +1045,35 @@ void SettingsScreen::save_provider_fields(const QString& provider_id,
 // ── Storage & Cache ───────────────────────────────────────────────────────────
 
 static QString format_bytes(qint64 bytes) {
-    if (bytes < 1024)        return QString::number(bytes) + " B";
-    if (bytes < 1048576)     return QString::number(bytes / 1024.0, 'f', 1) + " KB";
-    if (bytes < 1073741824)  return QString::number(bytes / 1048576.0, 'f', 1) + " MB";
+    if (bytes < 1024)
+        return QString::number(bytes) + " B";
+    if (bytes < 1048576)
+        return QString::number(bytes / 1024.0, 'f', 1) + " KB";
+    if (bytes < 1073741824)
+        return QString::number(bytes / 1048576.0, 'f', 1) + " MB";
     return QString::number(bytes / 1073741824.0, 'f', 2) + " GB";
 }
 
 // Obsidian-standard panel with 34px header bar
 static QFrame* make_panel(const QString& title, QWidget* status_widget = nullptr) {
     auto* panel = new QFrame;
-    panel->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;}")
-        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    panel->setStyleSheet(
+        QString("QFrame{background:%1;border:1px solid %2;}").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     auto* pvl = new QVBoxLayout(panel);
     pvl->setContentsMargins(0, 0, 0, 0);
     pvl->setSpacing(0);
 
-    auto* hdr = new QWidget;
+    auto* hdr = new QWidget(nullptr);
     hdr->setFixedHeight(34);
-    hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-        .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+    hdr->setStyleSheet(
+        QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hhl = new QHBoxLayout(hdr);
     hhl->setContentsMargins(12, 0, 12, 0);
 
     auto* lbl = new QLabel(title);
-    lbl->setStyleSheet(QString("color:%1;font-weight:700;letter-spacing:0.5px;background:transparent;")
-        .arg(ui::colors::AMBER()));
+    lbl->setStyleSheet(
+        QString("color:%1;font-weight:700;letter-spacing:0.5px;background:transparent;").arg(ui::colors::AMBER()));
     hhl->addWidget(lbl);
     hhl->addStretch();
     if (status_widget) {
@@ -1055,13 +1086,11 @@ static QFrame* make_panel(const QString& title, QWidget* status_widget = nullptr
 }
 
 // Obsidian-standard data row: LABEL ······ VALUE, 26px, bottom border
-static QWidget* make_data_row(const QString& label_text, QLabel* value_lbl,
-                               bool alt_bg = false) {
-    auto* row = new QWidget;
+static QWidget* make_data_row(const QString& label_text, QLabel* value_lbl, bool alt_bg = false) {
+    auto* row = new QWidget(nullptr);
     row->setFixedHeight(26);
     row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-        .arg(alt_bg ? ui::colors::ROW_ALT() : "transparent",
-             ui::colors::BORDER_DIM()));
+                           .arg(alt_bg ? ui::colors::ROW_ALT() : "transparent", ui::colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(12, 0, 12, 0);
@@ -1069,26 +1098,24 @@ static QWidget* make_data_row(const QString& label_text, QLabel* value_lbl,
 
     auto* lbl = new QLabel(label_text);
     lbl->setStyleSheet(QString("color:%1;font-weight:600;letter-spacing:0.5px;background:transparent;")
-        .arg(ui::colors::TEXT_SECONDARY()));
+                           .arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(lbl);
     hl->addStretch();
 
     value_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    value_lbl->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;")
-        .arg(ui::colors::TEXT_PRIMARY()));
+    value_lbl->setStyleSheet(
+        QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
     hl->addWidget(value_lbl);
 
     return row;
 }
 
 // Category row: NAME ··· COUNT ··· [CLEAR]  — 26px, terminal table style
-static QWidget* make_category_row(const QString& name, QLabel* count_lbl,
-                                   QPushButton* clear_btn, bool alt) {
-    auto* row = new QWidget;
+static QWidget* make_category_row(const QString& name, QLabel* count_lbl, QPushButton* clear_btn, bool alt) {
+    auto* row = new QWidget(nullptr);
     row->setFixedHeight(26);
     row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-        .arg(alt ? ui::colors::ROW_ALT() : ui::colors::BG_BASE(),
-             ui::colors::BORDER_DIM()));
+                           .arg(alt ? ui::colors::ROW_ALT() : ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(12, 0, 12, 0);
@@ -1101,15 +1128,14 @@ static QWidget* make_category_row(const QString& name, QLabel* count_lbl,
     count_lbl->setObjectName("cat_count");
     count_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     count_lbl->setFixedWidth(70);
-    count_lbl->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;")
-        .arg(ui::colors::CYAN()));
+    count_lbl->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::CYAN()));
     hl->addWidget(count_lbl);
 
     clear_btn->setFixedSize(56, 20);
     clear_btn->setStyleSheet(
         QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid %3;font-weight:700;}"
                 "QPushButton:hover{background:%1;color:%2;}")
-        .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE_DIM()));
+            .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE_DIM()));
     hl->addWidget(clear_btn);
 
     return row;
@@ -1117,27 +1143,25 @@ static QWidget* make_category_row(const QString& name, QLabel* count_lbl,
 
 // Group header row for category tables — amber dim label
 static QWidget* make_group_header(const QString& title) {
-    auto* row = new QWidget;
+    auto* row = new QWidget(nullptr);
     row->setFixedHeight(26);
-    row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-        .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+    row->setStyleSheet(
+        QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(12, 0, 12, 0);
     auto* lbl = new QLabel(title);
-    lbl->setStyleSheet(QString("color:%1;font-weight:700;letter-spacing:0.5px;background:transparent;")
-        .arg(ui::colors::AMBER_DIM()));
+    lbl->setStyleSheet(
+        QString("color:%1;font-weight:700;letter-spacing:0.5px;background:transparent;").arg(ui::colors::AMBER_DIM()));
     hl->addWidget(lbl);
     return row;
 }
 
 // File action row: LABEL ··· SIZE ··· [BUTTON]
-static QWidget* make_file_action_row(const QString& name, QLabel* size_lbl,
-                                      QPushButton* btn, bool alt) {
-    auto* row = new QWidget;
+static QWidget* make_file_action_row(const QString& name, QLabel* size_lbl, QPushButton* btn, bool alt) {
+    auto* row = new QWidget(nullptr);
     row->setFixedHeight(26);
     row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-        .arg(alt ? ui::colors::ROW_ALT() : ui::colors::BG_BASE(),
-             ui::colors::BORDER_DIM()));
+                           .arg(alt ? ui::colors::ROW_ALT() : ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(12, 0, 12, 0);
@@ -1149,15 +1173,15 @@ static QWidget* make_file_action_row(const QString& name, QLabel* size_lbl,
 
     size_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     size_lbl->setFixedWidth(80);
-    size_lbl->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;")
-        .arg(ui::colors::TEXT_SECONDARY()));
+    size_lbl->setStyleSheet(
+        QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(size_lbl);
 
     btn->setFixedSize(56, 20);
     btn->setStyleSheet(
         QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid %3;font-weight:700;}"
                 "QPushButton:hover{background:%1;color:%2;}")
-        .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE_DIM()));
+            .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE_DIM()));
     hl->addWidget(btn);
 
     return row;
@@ -1166,14 +1190,13 @@ static QWidget* make_file_action_row(const QString& name, QLabel* size_lbl,
 QWidget* SettingsScreen::build_storage() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(
-        QString("QScrollArea{border:none;background:transparent;}"
-                "QScrollBar:vertical{width:6px;background:transparent;}"
-                "QScrollBar::handle:vertical{background:%1;border-radius:3px;}"
-                "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-        .arg(ui::colors::BORDER_MED()));
+    scroll->setStyleSheet(QString("QScrollArea{border:none;background:transparent;}"
+                                  "QScrollBar:vertical{width:6px;background:transparent;}"
+                                  "QScrollBar::handle:vertical{background:%1;border-radius:3px;}"
+                                  "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+                              .arg(ui::colors::BORDER_MED()));
 
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(14, 14, 14, 14);
     vl->setSpacing(10);
@@ -1196,20 +1219,19 @@ QWidget* SettingsScreen::build_storage() {
     // ═══════════════════════════════════════════════════════════════════════════
     {
         auto* refresh_lbl = new QLabel("REFRESH");
-        refresh_lbl->setStyleSheet(QString("color:%1;font-weight:600;cursor:pointer;")
-            .arg(ui::colors::AMBER()));
+        refresh_lbl->setStyleSheet(QString("color:%1;font-weight:600;cursor:pointer;").arg(ui::colors::AMBER()));
         refresh_lbl->setCursor(Qt::PointingHandCursor);
         refresh_lbl->installEventFilter(this); // for click
 
         auto* panel = make_panel("DISK USAGE", refresh_lbl);
-        auto* body = new QWidget;
+        auto* body = new QWidget(this);
         body->setStyleSheet("background:transparent;");
         auto* bvl = new QVBoxLayout(body);
         bvl->setContentsMargins(0, 0, 0, 0);
         bvl->setSpacing(0);
 
         // Stat boxes row
-        auto* stat_row = new QWidget;
+        auto* stat_row = new QWidget(this);
         stat_row->setStyleSheet("background:transparent;");
         auto* shl = new QHBoxLayout(stat_row);
         shl->setContentsMargins(10, 10, 10, 10);
@@ -1218,7 +1240,7 @@ QWidget* SettingsScreen::build_storage() {
         auto make_stat_box = [&](const QString& label, QLabel*& val_out) {
             auto* box = new QFrame;
             box->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;}")
-                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+                                   .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
             auto* bx = new QVBoxLayout(box);
             bx->setContentsMargins(12, 12, 12, 14);
             bx->setSpacing(4);
@@ -1226,24 +1248,24 @@ QWidget* SettingsScreen::build_storage() {
 
             val_out = new QLabel("—");
             val_out->setAlignment(Qt::AlignCenter);
-            val_out->setStyleSheet(QString("color:%1;font-size:18px;font-weight:700;background:transparent;")
-                .arg(ui::colors::CYAN()));
+            val_out->setStyleSheet(
+                QString("color:%1;font-size:18px;font-weight:700;background:transparent;").arg(ui::colors::CYAN()));
             bx->addWidget(val_out);
 
             auto* ll = new QLabel(label);
             ll->setAlignment(Qt::AlignCenter);
-            ll->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;")
-                .arg(ui::colors::TEXT_SECONDARY()));
+            ll->setStyleSheet(
+                QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
             bx->addWidget(ll);
 
             shl->addWidget(box, 1);
         };
 
-        make_stat_box("MAIN DB",     storage_main_db_);
-        make_stat_box("CACHE DB",    storage_cache_db_);
-        make_stat_box("LOG FILES",   storage_log_size_);
-        make_stat_box("WORKSPACES",  storage_ws_size_);
-        make_stat_box("TOTAL",       storage_total_size_);
+        make_stat_box("MAIN DB", storage_main_db_);
+        make_stat_box("CACHE DB", storage_cache_db_);
+        make_stat_box("LOG FILES", storage_log_size_);
+        make_stat_box("WORKSPACES", storage_ws_size_);
+        make_stat_box("TOTAL", storage_total_size_);
 
         bvl->addWidget(stat_row);
 
@@ -1260,7 +1282,7 @@ QWidget* SettingsScreen::build_storage() {
         refresh_btn->setStyleSheet(
             QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;border:1px solid %2;font-weight:700;}"
                     "QPushButton:hover{background:%1;color:%3;}")
-            .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
+                .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
 
         connect(refresh_btn, &QPushButton::clicked, this, [this]() { refresh_storage_stats(); });
 
@@ -1282,7 +1304,7 @@ QWidget* SettingsScreen::build_storage() {
     // ═══════════════════════════════════════════════════════════════════════════
     {
         auto* panel = make_panel("DATA CATEGORIES");
-        auto* body = new QWidget;
+        auto* body = new QWidget(this);
         body->setStyleSheet("background:transparent;");
 
         storage_categories_ = new QVBoxLayout(body);
@@ -1290,10 +1312,10 @@ QWidget* SettingsScreen::build_storage() {
         storage_categories_->setSpacing(0);
 
         // Table header
-        auto* th = new QWidget;
+        auto* th = new QWidget(this);
         th->setFixedHeight(26);
         th->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+                              .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
         auto* thl = new QHBoxLayout(th);
         thl->setContentsMargins(12, 0, 12, 0);
         thl->setSpacing(8);
@@ -1330,12 +1352,13 @@ QWidget* SettingsScreen::build_storage() {
             QString cat_id = cat.id;
             QString cat_label = cat.label;
             connect(clear_btn, &QPushButton::clicked, this, [this, cat_id, cat_label, count_lbl]() {
-                auto answer = QMessageBox::warning(
-                    this, "Clear " + cat_label,
-                    "Permanently delete all " + cat_label.toLower() + "?\n\n"
-                    "This cannot be undone.",
-                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
-                if (answer != QMessageBox::Yes) return;
+                auto answer = QMessageBox::warning(this, "Clear " + cat_label,
+                                                   "Permanently delete all " + cat_label.toLower() +
+                                                       "?\n\n"
+                                                       "This cannot be undone.",
+                                                   QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+                if (answer != QMessageBox::Yes)
+                    return;
 
                 auto r = StorageManager::instance().clear_category(cat_id);
                 if (r.is_ok()) {
@@ -1343,14 +1366,12 @@ QWidget* SettingsScreen::build_storage() {
                     LOG_INFO("Settings", "Cleared: " + cat_label);
                 } else {
                     QMessageBox::critical(this, "Error",
-                        "Failed to clear " + cat_label + ":\n" +
-                        QString::fromStdString(r.error()));
+                                          "Failed to clear " + cat_label + ":\n" + QString::fromStdString(r.error()));
                 }
                 refresh_storage_stats();
             });
 
-            storage_categories_->addWidget(
-                make_category_row(cat.label, count_lbl, clear_btn, (row_idx % 2) == 1));
+            storage_categories_->addWidget(make_category_row(cat.label, count_lbl, clear_btn, (row_idx % 2) == 1));
             ++row_idx;
         }
 
@@ -1365,17 +1386,17 @@ QWidget* SettingsScreen::build_storage() {
     // ═══════════════════════════════════════════════════════════════════════════
     {
         auto* panel = make_panel("FILE & STATE MANAGEMENT");
-        auto* body = new QWidget;
+        auto* body = new QWidget(this);
         body->setStyleSheet("background:transparent;");
         auto* bvl = new QVBoxLayout(body);
         bvl->setContentsMargins(0, 0, 0, 0);
         bvl->setSpacing(0);
 
         // Table header
-        auto* th = new QWidget;
+        auto* th = new QWidget(this);
         th->setFixedHeight(26);
         th->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+                              .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
         auto* thl = new QHBoxLayout(th);
         thl->setContentsMargins(12, 0, 12, 0);
         thl->setSpacing(8);
@@ -1395,51 +1416,62 @@ QWidget* SettingsScreen::build_storage() {
         bvl->addWidget(th);
 
         // Helper to create file rows with confirmation
-        auto add_file_row = [&](const QString& name, QLabel* size_lbl,
-                                 const QString& confirm_title, const QString& confirm_msg,
-                                 std::function<void()> action, bool alt) {
+        auto add_file_row = [&](const QString& name, QLabel* size_lbl, const QString& confirm_title,
+                                const QString& confirm_msg, std::function<void()> action, bool alt) {
             auto* btn = new QPushButton("CLR");
             connect(btn, &QPushButton::clicked, this, [this, confirm_title, confirm_msg, action]() {
                 auto answer = QMessageBox::warning(this, confirm_title, confirm_msg,
-                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
-                if (answer != QMessageBox::Yes) return;
+                                                   QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+                if (answer != QMessageBox::Yes)
+                    return;
                 action();
                 refresh_storage_stats();
             });
             bvl->addWidget(make_file_action_row(name, size_lbl, btn, alt));
         };
 
-        auto* log_sz  = new QLabel("—");
-        auto* ws_sz   = new QLabel("—");
-        auto* qs_lbl  = new QLabel("Registry");
+        auto* log_sz = new QLabel("—");
+        auto* ws_sz = new QLabel("—");
+        auto* qs_lbl = new QLabel("Registry");
 
-        add_file_row("Log Files", log_sz,
-            "Clear Logs", "Clear all application log files?\nCurrent log data will be lost.",
-            [this]() { StorageManager::instance().clear_log_files(); LOG_INFO("Settings", "Logs cleared"); },
+        add_file_row(
+            "Log Files", log_sz, "Clear Logs", "Clear all application log files?\nCurrent log data will be lost.",
+            [this]() {
+                StorageManager::instance().clear_log_files();
+                LOG_INFO("Settings", "Logs cleared");
+            },
             false);
 
-        add_file_row("Workspace Files (.fwsp)", ws_sz,
-            "Delete Workspaces", "Delete all saved workspace files?\nThis cannot be undone.",
-            [this]() { StorageManager::instance().clear_workspace_files(); LOG_INFO("Settings", "Workspaces deleted"); },
+        add_file_row(
+            "Workspace Files (.fwsp)", ws_sz, "Delete Workspaces",
+            "Delete all saved workspace files?\nThis cannot be undone.",
+            [this]() {
+                StorageManager::instance().clear_workspace_files();
+                LOG_INFO("Settings", "Workspaces deleted");
+            },
             true);
 
-        add_file_row("Window & UI State", qs_lbl,
-            "Reset UI State", "Reset all window positions, dock layouts, and perspectives?\n"
+        add_file_row(
+            "Window & UI State", qs_lbl, "Reset UI State",
+            "Reset all window positions, dock layouts, and perspectives?\n"
             "Takes effect on next restart.",
-            [this]() { StorageManager::instance().clear_qsettings(); LOG_INFO("Settings", "QSettings cleared"); },
+            [this]() {
+                StorageManager::instance().clear_qsettings();
+                LOG_INFO("Settings", "QSettings cleared");
+            },
             false);
 
         // Cache subcategories as inline buttons
-        auto* cache_row = new QWidget;
+        auto* cache_row = new QWidget(this);
         cache_row->setFixedHeight(30);
-        cache_row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-            .arg(ui::colors::ROW_ALT(), ui::colors::BORDER_DIM()));
+        cache_row->setStyleSheet(
+            QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::ROW_ALT(), ui::colors::BORDER_DIM()));
         auto* chl = new QHBoxLayout(cache_row);
         chl->setContentsMargins(12, 0, 12, 0);
         chl->setSpacing(4);
         auto* cache_label = new QLabel("Cache:");
-        cache_label->setStyleSheet(QString("color:%1;font-weight:600;background:transparent;")
-            .arg(ui::colors::TEXT_SECONDARY()));
+        cache_label->setStyleSheet(
+            QString("color:%1;font-weight:600;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
         chl->addWidget(cache_label);
 
         static const QStringList CACHE_CATS = {"market_data", "news", "quotes", "charts", "general"};
@@ -1447,11 +1479,10 @@ QWidget* SettingsScreen::build_storage() {
             auto* btn = new QPushButton(cat);
             btn->setFixedHeight(18);
             btn->setCursor(Qt::PointingHandCursor);
-            btn->setStyleSheet(
-                QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 6px;}"
-                        "QPushButton:hover{color:%4;border-color:%4;}")
-                .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(),
-                     ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+            btn->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 6px;}"
+                                       "QPushButton:hover{color:%4;border-color:%4;}")
+                                   .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
+                                        ui::colors::AMBER()));
             connect(btn, &QPushButton::clicked, this, [this, cat]() {
                 CacheManager::instance().clear_category(cat);
                 refresh_storage_stats();
@@ -1473,7 +1504,7 @@ QWidget* SettingsScreen::build_storage() {
     // ═══════════════════════════════════════════════════════════════════════════
     {
         auto* panel = make_panel("SQL CONSOLE");
-        auto* body = new QWidget;
+        auto* body = new QWidget(this);
         body->setStyleSheet("background:transparent;");
         auto* bvl = new QVBoxLayout(body);
         bvl->setContentsMargins(10, 8, 10, 8);
@@ -1486,7 +1517,7 @@ QWidget* SettingsScreen::build_storage() {
         bvl->addWidget(hint);
 
         // DB selector + input + execute
-        auto* input_row = new QWidget;
+        auto* input_row = new QWidget(this);
         input_row->setStyleSheet("background:transparent;");
         auto* irl = new QHBoxLayout(input_row);
         irl->setContentsMargins(0, 0, 0, 0);
@@ -1494,7 +1525,7 @@ QWidget* SettingsScreen::build_storage() {
 
         sql_db_selector_ = new QComboBox;
         sql_db_selector_->addItem("fincept.db", "main");
-        sql_db_selector_->addItem("cache.db",   "cache");
+        sql_db_selector_->addItem("cache.db", "cache");
         sql_db_selector_->setFixedWidth(110);
         sql_db_selector_->setStyleSheet(combo_ss());
         irl->addWidget(sql_db_selector_);
@@ -1509,7 +1540,7 @@ QWidget* SettingsScreen::build_storage() {
         exec_btn->setStyleSheet(
             QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;border:1px solid %2;font-weight:700;}"
                     "QPushButton:hover{background:%1;color:%3;}")
-            .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
+                .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
         irl->addWidget(exec_btn);
 
         bvl->addWidget(input_row);
@@ -1531,9 +1562,9 @@ QWidget* SettingsScreen::build_storage() {
                     "QScrollBar:horizontal{height:5px;background:transparent;}"
                     "QScrollBar::handle:horizontal{background:%3;}"
                     "QScrollBar::add-line:horizontal,QScrollBar::sub-line:horizontal{width:0;}")
-            .arg(ui::colors::BORDER_DIM(), ui::colors::BG_BASE(), ui::colors::BORDER_MED()));
+                .arg(ui::colors::BORDER_DIM(), ui::colors::BG_BASE(), ui::colors::BORDER_MED()));
 
-        auto* results_widget = new QWidget;
+        auto* results_widget = new QWidget(this);
         results_widget->setStyleSheet("background:transparent;");
         sql_results_layout_ = new QVBoxLayout(results_widget);
         sql_results_layout_->setContentsMargins(0, 0, 0, 0);
@@ -1543,7 +1574,7 @@ QWidget* SettingsScreen::build_storage() {
         bvl->addWidget(results_scroll);
 
         // Quick-access table list buttons
-        auto* tables_row = new QWidget;
+        auto* tables_row = new QWidget(this);
         tables_row->setStyleSheet("background:transparent;");
         auto* trhl = new QHBoxLayout(tables_row);
         trhl->setContentsMargins(0, 0, 0, 0);
@@ -1552,19 +1583,16 @@ QWidget* SettingsScreen::build_storage() {
         trl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
         trhl->addWidget(trl);
 
-        static const QStringList QUICK_TABLES = {
-            "chat_sessions", "news_articles", "financial_notes", "portfolios",
-            "watchlists", "pt_portfolios", "workflows", "settings"
-        };
+        static const QStringList QUICK_TABLES = {"chat_sessions", "news_articles", "financial_notes", "portfolios",
+                                                 "watchlists",    "pt_portfolios", "workflows",       "settings"};
         for (const QString& tbl : QUICK_TABLES) {
             auto* btn = new QPushButton(tbl);
             btn->setFixedHeight(18);
             btn->setCursor(Qt::PointingHandCursor);
-            btn->setStyleSheet(
-                QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 4px;}"
-                        "QPushButton:hover{color:%4;border-color:%4;}")
-                .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(),
-                     ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+            btn->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 4px;}"
+                                       "QPushButton:hover{color:%4;border-color:%4;}")
+                                   .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
+                                        ui::colors::AMBER()));
             connect(btn, &QPushButton::clicked, this, [this, tbl]() {
                 sql_input_->setText("SELECT * FROM " + tbl + " LIMIT 20");
                 sql_db_selector_->setCurrentIndex(0); // main db
@@ -1577,12 +1605,14 @@ QWidget* SettingsScreen::build_storage() {
         // Execute handler
         auto execute_sql = [this]() {
             QString sql = sql_input_->text().trimmed();
-            if (sql.isEmpty()) return;
+            if (sql.isEmpty())
+                return;
 
             // Clear previous results
             while (sql_results_layout_->count() > 0) {
                 auto* item = sql_results_layout_->takeAt(0);
-                if (item->widget()) item->widget()->deleteLater();
+                if (item->widget())
+                    item->widget()->deleteLater();
                 delete item;
             }
 
@@ -1590,32 +1620,26 @@ QWidget* SettingsScreen::build_storage() {
 
             // Determine if this is a write operation
             QString upper = sql.toUpper().trimmed();
-            bool is_write = upper.startsWith("INSERT") || upper.startsWith("UPDATE") ||
-                            upper.startsWith("DELETE") || upper.startsWith("DROP") ||
-                            upper.startsWith("ALTER") || upper.startsWith("CREATE");
+            bool is_write = upper.startsWith("INSERT") || upper.startsWith("UPDATE") || upper.startsWith("DELETE") ||
+                            upper.startsWith("DROP") || upper.startsWith("ALTER") || upper.startsWith("CREATE");
 
             if (is_write) {
                 // Confirm write operations
-                auto answer = QMessageBox::warning(
-                    this, "Execute Write Query",
-                    "This will modify the database:\n\n" + sql + "\n\nContinue?",
-                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+                auto answer = QMessageBox::warning(this, "Execute Write Query",
+                                                   "This will modify the database:\n\n" + sql + "\n\nContinue?",
+                                                   QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
                 if (answer != QMessageBox::Yes) {
                     sql_status_->setText("Cancelled");
-                    sql_status_->setStyleSheet(QString("color:%1;background:transparent;")
-                        .arg(ui::colors::WARNING()));
+                    sql_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::WARNING()));
                     return;
                 }
             }
 
             // Execute
-            QSqlQuery query(use_cache
-                ? CacheDatabase::instance().raw_db()
-                : Database::instance().raw_db());
+            QSqlQuery query(use_cache ? CacheDatabase::instance().raw_db() : Database::instance().raw_db());
             if (!query.exec(sql)) {
                 sql_status_->setText("Error: " + query.lastError().text());
-                sql_status_->setStyleSheet(QString("color:%1;background:transparent;")
-                    .arg(ui::colors::NEGATIVE()));
+                sql_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::NEGATIVE()));
                 LOG_ERROR("SQL Console", "Query failed: " + query.lastError().text());
                 return;
             }
@@ -1623,8 +1647,7 @@ QWidget* SettingsScreen::build_storage() {
             if (is_write) {
                 int affected = query.numRowsAffected();
                 sql_status_->setText(QString("OK — %1 row(s) affected").arg(affected));
-                sql_status_->setStyleSheet(QString("color:%1;background:transparent;")
-                    .arg(ui::colors::POSITIVE()));
+                sql_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
                 refresh_storage_stats();
                 LOG_INFO("SQL Console", QString("Write query: %1 rows affected").arg(affected));
                 return;
@@ -1635,23 +1658,23 @@ QWidget* SettingsScreen::build_storage() {
             int cols = rec.count();
             if (cols == 0) {
                 sql_status_->setText("OK — no columns returned");
-                sql_status_->setStyleSheet(QString("color:%1;background:transparent;")
-                    .arg(ui::colors::TEXT_SECONDARY()));
+                sql_status_->setStyleSheet(
+                    QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
                 return;
             }
 
             // Column header
-            auto* hdr_row = new QWidget;
+            auto* hdr_row = new QWidget(this);
             hdr_row->setFixedHeight(22);
             hdr_row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+                                       .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
             auto* hhl = new QHBoxLayout(hdr_row);
             hhl->setContentsMargins(6, 0, 6, 0);
             hhl->setSpacing(4);
             for (int c = 0; c < cols; ++c) {
                 auto* cl = new QLabel(rec.fieldName(c));
-                cl->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;")
-                    .arg(ui::colors::TEXT_DIM()));
+                cl->setStyleSheet(
+                    QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
                 hhl->addWidget(cl, 1);
             }
             sql_results_layout_->addWidget(hdr_row);
@@ -1659,30 +1682,29 @@ QWidget* SettingsScreen::build_storage() {
             // Data rows (limit 100)
             int row_count = 0;
             while (query.next() && row_count < 100) {
-                auto* dr = new QWidget;
+                auto* dr = new QWidget(this);
                 dr->setFixedHeight(20);
-                dr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                    .arg((row_count % 2) ? ui::colors::ROW_ALT() : "transparent",
-                         ui::colors::BORDER_DIM()));
+                dr->setStyleSheet(
+                    QString("background:%1;border-bottom:1px solid %2;")
+                        .arg((row_count % 2) ? ui::colors::ROW_ALT() : "transparent", ui::colors::BORDER_DIM()));
                 auto* dhl = new QHBoxLayout(dr);
                 dhl->setContentsMargins(6, 0, 6, 0);
                 dhl->setSpacing(4);
                 for (int c = 0; c < cols; ++c) {
                     QString val = query.value(c).toString();
-                    if (val.length() > 60) val = val.left(57) + "...";
+                    if (val.length() > 60)
+                        val = val.left(57) + "...";
                     auto* vl2 = new QLabel(val);
-                    vl2->setStyleSheet(QString("color:%1;background:transparent;")
-                        .arg(ui::colors::TEXT_PRIMARY()));
+                    vl2->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
                     dhl->addWidget(vl2, 1);
                 }
                 sql_results_layout_->addWidget(dr);
                 ++row_count;
             }
 
-            sql_status_->setText(QString("OK — %1 row(s) returned%2")
-                .arg(row_count).arg(row_count >= 100 ? " (limited to 100)" : ""));
-            sql_status_->setStyleSheet(QString("color:%1;background:transparent;")
-                .arg(ui::colors::POSITIVE()));
+            sql_status_->setText(
+                QString("OK — %1 row(s) returned%2").arg(row_count).arg(row_count >= 100 ? " (limited to 100)" : ""));
+            sql_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
         };
 
         connect(exec_btn, &QPushButton::clicked, this, execute_sql);
@@ -1700,37 +1722,37 @@ QWidget* SettingsScreen::build_storage() {
     {
         auto* panel = new QFrame;
         panel->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;}")
-            .arg(ui::colors::BG_SURFACE(), ui::colors::NEGATIVE_DIM()));
+                                 .arg(ui::colors::BG_SURFACE(), ui::colors::NEGATIVE_DIM()));
         auto* pvl = new QVBoxLayout(panel);
         pvl->setContentsMargins(0, 0, 0, 0);
         pvl->setSpacing(0);
 
         // Red header
-        auto* hdr = new QWidget;
+        auto* hdr = new QWidget(this);
         hdr->setFixedHeight(34);
-        hdr->setStyleSheet(QString("background:rgba(220,38,38,0.08);border-bottom:1px solid %1;")
-            .arg(ui::colors::NEGATIVE_DIM()));
+        hdr->setStyleSheet(
+            QString("background:rgba(220,38,38,0.08);border-bottom:1px solid %1;").arg(ui::colors::NEGATIVE_DIM()));
         auto* hhl = new QHBoxLayout(hdr);
         hhl->setContentsMargins(12, 0, 12, 0);
         auto* hlbl = new QLabel("DANGER ZONE");
         hlbl->setStyleSheet(QString("color:%1;font-weight:700;letter-spacing:0.5px;background:transparent;")
-            .arg(ui::colors::NEGATIVE()));
+                                .arg(ui::colors::NEGATIVE()));
         hhl->addWidget(hlbl);
         pvl->addWidget(hdr);
 
-        auto* body = new QWidget;
+        auto* body = new QWidget(this);
         body->setStyleSheet("background:transparent;");
         auto* bvl = new QVBoxLayout(body);
         bvl->setContentsMargins(12, 10, 12, 10);
         bvl->setSpacing(8);
 
         // Clear all cache
-        auto* cache_row = new QWidget;
+        auto* cache_row = new QWidget(this);
         cache_row->setStyleSheet("background:transparent;");
         auto* cr_hl = new QHBoxLayout(cache_row);
         cr_hl->setContentsMargins(0, 0, 0, 0);
         cr_hl->setSpacing(8);
-        auto* cache_desc = new QWidget;
+        auto* cache_desc = new QWidget(this);
         auto* cd_vl = new QVBoxLayout(cache_desc);
         cd_vl->setContentsMargins(0, 0, 0, 0);
         cd_vl->setSpacing(2);
@@ -1746,12 +1768,13 @@ QWidget* SettingsScreen::build_storage() {
         cache_btn->setStyleSheet(
             QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid %3;font-weight:700;}"
                     "QPushButton:hover{background:%1;color:%2;}")
-            .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE_DIM()));
+                .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE_DIM()));
         connect(cache_btn, &QPushButton::clicked, this, [this]() {
-            auto answer = QMessageBox::warning(this, "Clear All Cache",
-                "Delete all temporary cached data?\nData will be re-fetched on next access.",
+            auto answer = QMessageBox::warning(
+                this, "Clear All Cache", "Delete all temporary cached data?\nData will be re-fetched on next access.",
                 QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
-            if (answer != QMessageBox::Yes) return;
+            if (answer != QMessageBox::Yes)
+                return;
             CacheManager::instance().clear();
             refresh_storage_stats();
             LOG_INFO("Settings", "All cache cleared");
@@ -1762,49 +1785,51 @@ QWidget* SettingsScreen::build_storage() {
         bvl->addWidget(make_sep());
 
         // Nuclear: clear ALL data
-        auto* nuke_row = new QWidget;
+        auto* nuke_row = new QWidget(this);
         nuke_row->setStyleSheet("background:transparent;");
         auto* nr_hl = new QHBoxLayout(nuke_row);
         nr_hl->setContentsMargins(0, 0, 0, 0);
         nr_hl->setSpacing(8);
-        auto* nuke_desc = new QWidget;
+        auto* nuke_desc = new QWidget(this);
         auto* nd_vl = new QVBoxLayout(nuke_desc);
         nd_vl->setContentsMargins(0, 0, 0, 0);
         nd_vl->setSpacing(2);
         auto* nd1 = new QLabel("Clear ALL User Data");
         nd1->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::NEGATIVE()));
         nd_vl->addWidget(nd1);
-        auto* nd2 = new QLabel("Permanently delete all databases, files, cache, and UI state. OS keychain is preserved.");
+        auto* nd2 =
+            new QLabel("Permanently delete all databases, files, cache, and UI state. OS keychain is preserved.");
         nd2->setWordWrap(true);
         nd2->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
         nd_vl->addWidget(nd2);
         nr_hl->addWidget(nuke_desc, 1);
         auto* nuke_btn = new QPushButton("DELETE ALL");
         nuke_btn->setFixedSize(110, 26);
-        nuke_btn->setStyleSheet(
-            QString("QPushButton{background:%1;color:%2;border:2px solid %1;font-weight:700;}"
-                    "QPushButton:hover{background:%2;color:%3;}")
-            .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_BASE()));
+        nuke_btn->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:2px solid %1;font-weight:700;}"
+                                        "QPushButton:hover{background:%2;color:%3;}")
+                                    .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_BASE()));
         connect(nuke_btn, &QPushButton::clicked, this, [this]() {
             auto a1 = QMessageBox::critical(this, "Clear ALL User Data",
-                "WARNING: This will permanently delete ALL data:\n\n"
-                "  Chat history, notes, reports, watchlists\n"
-                "  Portfolios, transactions, paper trades\n"
-                "  Workflows, dashboard layouts\n"
-                "  News articles, RSS feeds, monitors\n"
-                "  Data sources, MCP servers\n"
-                "  Agent configs, LLM configs & profiles\n"
-                "  App settings, credentials, key-value storage\n"
-                "  All cache, log files, workspaces, UI state\n\n"
-                "OS keychain credentials are NOT affected.\n"
-                "This action CANNOT be undone.",
-                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
-            if (a1 != QMessageBox::Yes) return;
+                                            "WARNING: This will permanently delete ALL data:\n\n"
+                                            "  Chat history, notes, reports, watchlists\n"
+                                            "  Portfolios, transactions, paper trades\n"
+                                            "  Workflows, dashboard layouts\n"
+                                            "  News articles, RSS feeds, monitors\n"
+                                            "  Data sources, MCP servers\n"
+                                            "  Agent configs, LLM configs & profiles\n"
+                                            "  App settings, credentials, key-value storage\n"
+                                            "  All cache, log files, workspaces, UI state\n\n"
+                                            "OS keychain credentials are NOT affected.\n"
+                                            "This action CANNOT be undone.",
+                                            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+            if (a1 != QMessageBox::Yes)
+                return;
 
             auto a2 = QMessageBox::critical(this, "Final Confirmation",
-                "ALL data will be permanently deleted.\nAre you absolutely sure?",
-                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
-            if (a2 != QMessageBox::Yes) return;
+                                            "ALL data will be permanently deleted.\nAre you absolutely sure?",
+                                            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+            if (a2 != QMessageBox::Yes)
+                return;
 
             auto& sm = StorageManager::instance();
             for (const auto& info : sm.all_stats())
@@ -1840,8 +1865,8 @@ void SettingsScreen::refresh_storage_stats() {
     if (storage_ws_size_)
         storage_ws_size_->setText(format_bytes(sm.workspace_files_size()));
     if (storage_total_size_)
-        storage_total_size_->setText(format_bytes(
-            sm.main_db_size() + sm.cache_db_size() + sm.log_files_size() + sm.workspace_files_size()));
+        storage_total_size_->setText(
+            format_bytes(sm.main_db_size() + sm.cache_db_size() + sm.log_files_size() + sm.workspace_files_size()));
 
     // Cache entry count
     if (storage_count_)
@@ -1853,10 +1878,12 @@ void SettingsScreen::refresh_storage_stats() {
         int stat_idx = 0;
         for (int i = 0; i < storage_categories_->count() && stat_idx < stats.size(); ++i) {
             auto* item = storage_categories_->itemAt(i);
-            if (!item || !item->widget()) continue;
+            if (!item || !item->widget())
+                continue;
             // Find count label by object name
             auto* count_lbl = item->widget()->findChild<QLabel*>("cat_count");
-            if (!count_lbl) continue;
+            if (!count_lbl)
+                continue;
             count_lbl->setText(QString::number(stats[stat_idx].count));
             ++stat_idx;
         }
@@ -1867,29 +1894,31 @@ void SettingsScreen::refresh_storage_stats() {
 
 // Transport type badge text from data source type string
 static QString ds_transport_badge(const QString& type) {
-    if (type == "websocket") return "WS";
-    if (type == "rest_api")  return "REST";
-    if (type == "sql")       return "SQL";
+    if (type == "websocket")
+        return "WS";
+    if (type == "rest_api")
+        return "REST";
+    if (type == "sql")
+        return "SQL";
     return type.left(4).toUpper();
 }
 
 QWidget* SettingsScreen::build_data_sources() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(
-        QString("QScrollArea{border:none;background:transparent;}"
-                "QScrollBar:vertical{width:6px;background:transparent;}"
-                "QScrollBar::handle:vertical{background:%1;border-radius:3px;}"
-                "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-        .arg(ui::colors::BORDER_MED()));
+    scroll->setStyleSheet(QString("QScrollArea{border:none;background:transparent;}"
+                                  "QScrollBar:vertical{width:6px;background:transparent;}"
+                                  "QScrollBar::handle:vertical{background:%1;border-radius:3px;}"
+                                  "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+                              .arg(ui::colors::BORDER_MED()));
 
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(14, 14, 14, 14);
     vl->setSpacing(10);
 
     // Title + Open Full Screen button
-    auto* title_row = new QWidget;
+    auto* title_row = new QWidget(this);
     title_row->setStyleSheet("background:transparent;");
     auto* trl = new QHBoxLayout(title_row);
     trl->setContentsMargins(0, 0, 0, 0);
@@ -1902,12 +1931,12 @@ QWidget* SettingsScreen::build_data_sources() {
     open_full->setFixedHeight(24);
     open_full->setCursor(Qt::PointingHandCursor);
     open_full->setStyleSheet(
-        QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;border:1px solid %2;font-weight:700;padding:0 10px;}"
-                "QPushButton:hover{background:%1;color:%3;}")
-        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
-    connect(open_full, &QPushButton::clicked, this, []() {
-        EventBus::instance().publish("nav.switch_screen", {{"screen", "data_sources"}});
-    });
+        QString(
+            "QPushButton{background:rgba(217,119,6,0.1);color:%1;border:1px solid %2;font-weight:700;padding:0 10px;}"
+            "QPushButton:hover{background:%1;color:%3;}")
+            .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
+    connect(open_full, &QPushButton::clicked, this,
+            []() { EventBus::instance().publish("nav.switch_screen", {{"screen", "data_sources"}}); });
     trl->addWidget(open_full);
     vl->addWidget(title_row);
 
@@ -1927,14 +1956,15 @@ QWidget* SettingsScreen::build_data_sources() {
     QSet<QString> providers;
     QMap<QString, int> cat_counts;
     for (const auto& ds : connections) {
-        if (ds.enabled) ++active;
+        if (ds.enabled)
+            ++active;
         providers.insert(ds.provider);
         QString cat = ds.category.isEmpty() ? "other" : ds.category;
         cat_counts[cat]++;
     }
 
     {
-        auto* stat_row = new QWidget;
+        auto* stat_row = new QWidget(this);
         stat_row->setStyleSheet("background:transparent;");
         auto* shl = new QHBoxLayout(stat_row);
         shl->setContentsMargins(0, 0, 0, 0);
@@ -1943,7 +1973,7 @@ QWidget* SettingsScreen::build_data_sources() {
         auto make_stat = [&](const QString& label, int value, const QString& color) {
             auto* box = new QFrame;
             box->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;}")
-                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+                                   .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
             auto* bx = new QVBoxLayout(box);
             bx->setContentsMargins(10, 8, 10, 10);
             bx->setSpacing(2);
@@ -1956,16 +1986,17 @@ QWidget* SettingsScreen::build_data_sources() {
 
             auto* ll = new QLabel(label);
             ll->setAlignment(Qt::AlignCenter);
-            ll->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+            ll->setStyleSheet(
+                QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
             bx->addWidget(ll);
 
             shl->addWidget(box, 1);
         };
 
-        make_stat("TOTAL",      total,            ui::colors::CYAN());
-        make_stat("ACTIVE",     active,           ui::colors::POSITIVE());
-        make_stat("INACTIVE",   total - active,   ui::colors::TEXT_DIM());
-        make_stat("PROVIDERS",  providers.size(),  ui::colors::AMBER());
+        make_stat("TOTAL", total, ui::colors::CYAN());
+        make_stat("ACTIVE", active, ui::colors::POSITIVE());
+        make_stat("INACTIVE", total - active, ui::colors::TEXT_DIM());
+        make_stat("PROVIDERS", providers.size(), ui::colors::AMBER());
         vl->addWidget(stat_row);
     }
 
@@ -1974,11 +2005,12 @@ QWidget* SettingsScreen::build_data_sources() {
     // ── Connections table ────────────────────────────────────────────────────
     if (connections.isEmpty()) {
         auto* empty_panel = make_panel("CONNECTIONS");
-        auto* empty_body = new QWidget;
+        auto* empty_body = new QWidget(this);
         empty_body->setStyleSheet("background:transparent;");
         auto* evl = new QVBoxLayout(empty_body);
         evl->setContentsMargins(12, 16, 12, 16);
-        auto* elbl = new QLabel("No data sources configured. Open the full Data Sources screen to browse and add connectors.");
+        auto* elbl =
+            new QLabel("No data sources configured. Open the full Data Sources screen to browse and add connectors.");
         elbl->setWordWrap(true);
         elbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
         evl->addWidget(elbl);
@@ -1993,17 +2025,17 @@ QWidget* SettingsScreen::build_data_sources() {
         }
 
         auto* panel = make_panel("CONNECTIONS");
-        auto* body = new QWidget;
+        auto* body = new QWidget(this);
         body->setStyleSheet("background:transparent;");
         auto* bvl = new QVBoxLayout(body);
         bvl->setContentsMargins(0, 0, 0, 0);
         bvl->setSpacing(0);
 
         // Table header
-        auto* th = new QWidget;
+        auto* th = new QWidget(this);
         th->setFixedHeight(26);
         th->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+                              .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
         auto* thl = new QHBoxLayout(th);
         thl->setContentsMargins(12, 0, 12, 0);
         thl->setSpacing(6);
@@ -2011,7 +2043,10 @@ QWidget* SettingsScreen::build_data_sources() {
         auto add_th = [&](const QString& text, int width = 0) {
             auto* lbl = new QLabel(text);
             lbl->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
-            if (width > 0) { lbl->setFixedWidth(width); lbl->setAlignment(Qt::AlignCenter); }
+            if (width > 0) {
+                lbl->setFixedWidth(width);
+                lbl->setAlignment(Qt::AlignCenter);
+            }
             thl->addWidget(lbl, width > 0 ? 0 : 1);
         };
         add_th("SOURCE");
@@ -2024,24 +2059,24 @@ QWidget* SettingsScreen::build_data_sources() {
         int row_idx = 0;
         for (auto it = grouped.constBegin(); it != grouped.constEnd(); ++it) {
             // Category group header
-            auto* grp = new QWidget;
+            auto* grp = new QWidget(this);
             grp->setFixedHeight(24);
             grp->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+                                   .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
             auto* ghl = new QHBoxLayout(grp);
             ghl->setContentsMargins(12, 0, 12, 0);
             auto* glbl = new QLabel(it.key().toUpper() + QString("  (%1)").arg(it.value().size()));
             glbl->setStyleSheet(QString("color:%1;font-weight:700;letter-spacing:0.5px;background:transparent;")
-                .arg(ui::colors::AMBER_DIM()));
+                                    .arg(ui::colors::AMBER_DIM()));
             ghl->addWidget(glbl);
             bvl->addWidget(grp);
 
             for (const auto& ds : it.value()) {
-                auto* row = new QWidget;
+                auto* row = new QWidget(this);
                 row->setFixedHeight(26);
-                row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                    .arg((row_idx % 2) ? ui::colors::ROW_ALT() : ui::colors::BG_BASE(),
-                         ui::colors::BORDER_DIM()));
+                row->setStyleSheet(
+                    QString("background:%1;border-bottom:1px solid %2;")
+                        .arg((row_idx % 2) ? ui::colors::ROW_ALT() : ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
 
                 auto* rhl = new QHBoxLayout(row);
                 rhl->setContentsMargins(12, 0, 12, 0);
@@ -2050,16 +2085,18 @@ QWidget* SettingsScreen::build_data_sources() {
                 // Name
                 QString name = ds.display_name.isEmpty() ? ds.alias : ds.display_name;
                 auto* name_lbl = new QLabel(name);
-                name_lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(
-                    ds.enabled ? ui::colors::TEXT_PRIMARY() : ui::colors::TEXT_TERTIARY()));
+                name_lbl->setStyleSheet(
+                    QString("color:%1;background:transparent;")
+                        .arg(ds.enabled ? ui::colors::TEXT_PRIMARY() : ui::colors::TEXT_TERTIARY()));
                 rhl->addWidget(name_lbl, 1);
 
                 // Type badge
                 auto* badge = new QLabel(ds_transport_badge(ds.type));
                 badge->setFixedWidth(44);
                 badge->setAlignment(Qt::AlignCenter);
-                badge->setStyleSheet(QString("color:%1;font-weight:700;background:%2;border:1px solid %3;")
-                    .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+                badge->setStyleSheet(
+                    QString("color:%1;font-weight:700;background:%2;border:1px solid %3;")
+                        .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
                 rhl->addWidget(badge);
 
                 // Category
@@ -2077,8 +2114,9 @@ QWidget* SettingsScreen::build_data_sources() {
                 QString source_id = ds.id;
                 connect(toggle, &QCheckBox::toggled, this, [source_id, name_lbl](bool checked) {
                     DataSourceRepository::instance().set_enabled(source_id, checked);
-                    name_lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(
-                        checked ? ui::colors::TEXT_PRIMARY() : ui::colors::TEXT_TERTIARY()));
+                    name_lbl->setStyleSheet(
+                        QString("color:%1;background:transparent;")
+                            .arg(checked ? ui::colors::TEXT_PRIMARY() : ui::colors::TEXT_TERTIARY()));
                     LOG_INFO("DataSources", (checked ? "Enabled: " : "Disabled: ") + source_id);
                 });
                 rhl->addWidget(toggle);
@@ -2090,12 +2128,13 @@ QWidget* SettingsScreen::build_data_sources() {
                 del_btn->setStyleSheet(
                     QString("QPushButton{background:transparent;color:%1;border:none;font-weight:700;}"
                             "QPushButton:hover{color:%2;}")
-                    .arg(ui::colors::TEXT_DIM(), ui::colors::NEGATIVE()));
+                        .arg(ui::colors::TEXT_DIM(), ui::colors::NEGATIVE()));
                 connect(del_btn, &QPushButton::clicked, this, [this, source_id, name, row]() {
                     auto answer = QMessageBox::warning(this, "Delete Connection",
-                        "Delete connection \"" + name + "\"?\n\nThis cannot be undone.",
-                        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
-                    if (answer != QMessageBox::Yes) return;
+                                                       "Delete connection \"" + name + "\"?\n\nThis cannot be undone.",
+                                                       QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+                    if (answer != QMessageBox::Yes)
+                        return;
 
                     DataSourceRepository::instance().remove(source_id);
                     row->hide();
@@ -2117,13 +2156,13 @@ QWidget* SettingsScreen::build_data_sources() {
     // ── Bulk actions ─────────────────────────────────────────────────────────
     {
         auto* panel = make_panel("BULK ACTIONS");
-        auto* body = new QWidget;
+        auto* body = new QWidget(this);
         body->setStyleSheet("background:transparent;");
         auto* bvl = new QVBoxLayout(body);
         bvl->setContentsMargins(10, 8, 10, 8);
         bvl->setSpacing(6);
 
-        auto* btn_row = new QWidget;
+        auto* btn_row = new QWidget(this);
         btn_row->setStyleSheet("background:transparent;");
         auto* brhl = new QHBoxLayout(btn_row);
         brhl->setContentsMargins(0, 0, 0, 0);
@@ -2132,13 +2171,14 @@ QWidget* SettingsScreen::build_data_sources() {
         // Enable all
         auto* enable_all = new QPushButton("ENABLE ALL");
         enable_all->setFixedHeight(24);
-        enable_all->setStyleSheet(
-            QString("QPushButton{background:rgba(22,163,74,0.1);color:%1;border:1px solid %1;font-weight:700;padding:0 10px;}"
-                    "QPushButton:hover{background:%1;color:%2;}")
-            .arg(ui::colors::POSITIVE(), ui::colors::BG_BASE()));
+        enable_all->setStyleSheet(QString("QPushButton{background:rgba(22,163,74,0.1);color:%1;border:1px solid "
+                                          "%1;font-weight:700;padding:0 10px;}"
+                                          "QPushButton:hover{background:%1;color:%2;}")
+                                      .arg(ui::colors::POSITIVE(), ui::colors::BG_BASE()));
         connect(enable_all, &QPushButton::clicked, this, [this]() {
             auto r = DataSourceRepository::instance().list_all();
-            if (!r.is_ok()) return;
+            if (!r.is_ok())
+                return;
             for (const auto& ds : r.value())
                 DataSourceRepository::instance().set_enabled(ds.id, true);
             LOG_INFO("DataSources", "All sources enabled");
@@ -2158,16 +2198,18 @@ QWidget* SettingsScreen::build_data_sources() {
         auto* disable_all = new QPushButton("DISABLE ALL");
         disable_all->setFixedHeight(24);
         disable_all->setStyleSheet(
-            QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid %3;font-weight:700;padding:0 10px;}"
+            QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid %3;font-weight:700;padding:0 "
+                    "10px;}"
                     "QPushButton:hover{background:%1;color:%2;}")
-            .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE_DIM()));
+                .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE_DIM()));
         connect(disable_all, &QPushButton::clicked, this, [this]() {
-            auto answer = QMessageBox::warning(this, "Disable All",
-                "Disable all data source connections?",
-                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
-            if (answer != QMessageBox::Yes) return;
+            auto answer = QMessageBox::warning(this, "Disable All", "Disable all data source connections?",
+                                               QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+            if (answer != QMessageBox::Yes)
+                return;
             auto r = DataSourceRepository::instance().list_all();
-            if (!r.is_ok()) return;
+            if (!r.is_ok())
+                return;
             for (const auto& ds : r.value())
                 DataSourceRepository::instance().set_enabled(ds.id, false);
             LOG_INFO("DataSources", "All sources disabled");
@@ -2188,16 +2230,19 @@ QWidget* SettingsScreen::build_data_sources() {
         delete_all->setStyleSheet(
             QString("QPushButton{background:%1;color:%2;border:2px solid %2;font-weight:700;padding:0 10px;}"
                     "QPushButton:hover{background:%2;color:%3;}")
-            .arg(ui::colors::BG_RAISED(), ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+                .arg(ui::colors::BG_RAISED(), ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
         connect(delete_all, &QPushButton::clicked, this, [this]() {
-            auto answer = QMessageBox::critical(this, "Delete All Connections",
-                "Permanently delete ALL data source connections?\n\n"
-                "This cannot be undone. You can re-add them from the full Data Sources screen.",
-                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
-            if (answer != QMessageBox::Yes) return;
+            auto answer =
+                QMessageBox::critical(this, "Delete All Connections",
+                                      "Permanently delete ALL data source connections?\n\n"
+                                      "This cannot be undone. You can re-add them from the full Data Sources screen.",
+                                      QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+            if (answer != QMessageBox::Yes)
+                return;
 
             auto r = DataSourceRepository::instance().list_all();
-            if (!r.is_ok()) return;
+            if (!r.is_ok())
+                return;
             for (const auto& ds : r.value())
                 DataSourceRepository::instance().remove(ds.id);
             LOG_INFO("DataSources", "All connections deleted");
@@ -2255,8 +2300,8 @@ QWidget* SettingsScreen::build_logging() {
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
 
-    auto* page = new QWidget;
-    auto* vl   = new QVBoxLayout(page);
+    auto* page = new QWidget(this);
+    auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(16);
 
@@ -2298,7 +2343,7 @@ QWidget* SettingsScreen::build_logging() {
     vl->addWidget(tag_desc);
 
     // Container for tag rows
-    log_tag_list_ = new QWidget;
+    log_tag_list_ = new QWidget(this);
     log_tag_layout_ = new QVBoxLayout(log_tag_list_);
     log_tag_layout_->setContentsMargins(0, 0, 0, 0);
     log_tag_layout_->setSpacing(6);
@@ -2307,8 +2352,8 @@ QWidget* SettingsScreen::build_logging() {
     auto& cfg = AppConfig::instance();
     const int count = cfg.get("log/tag_count", 0).toInt();
     auto add_tag_row = [&](const QString& tag, const QString& level) {
-        auto* row  = new QWidget;
-        auto* rl   = new QHBoxLayout(row);
+        auto* row = new QWidget(this);
+        auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(0, 0, 0, 0);
         rl->setSpacing(8);
 
@@ -2326,9 +2371,7 @@ QWidget* SettingsScreen::build_logging() {
         auto* del_btn = new QPushButton("Remove");
         del_btn->setStyleSheet(btn_danger_ss());
         del_btn->setFixedHeight(28);
-        connect(del_btn, &QPushButton::clicked, this, [row]() {
-            row->deleteLater();
-        });
+        connect(del_btn, &QPushButton::clicked, this, [row]() { row->deleteLater(); });
 
         rl->addWidget(tag_edit);
         rl->addWidget(lvl_combo);
@@ -2338,7 +2381,7 @@ QWidget* SettingsScreen::build_logging() {
     };
 
     for (int i = 0; i < count; ++i) {
-        const QString tag   = cfg.get(QString("log/tag_%1_name").arg(i)).toString();
+        const QString tag = cfg.get(QString("log/tag_%1_name").arg(i)).toString();
         const QString level = cfg.get(QString("log/tag_%1_level").arg(i)).toString();
         if (!tag.isEmpty())
             add_tag_row(tag, level);
@@ -2351,9 +2394,7 @@ QWidget* SettingsScreen::build_logging() {
     add_btn->setStyleSheet(btn_secondary_ss());
     add_btn->setFixedHeight(30);
     add_btn->setFixedWidth(180);
-    connect(add_btn, &QPushButton::clicked, this, [this, add_tag_row]() mutable {
-        add_tag_row({}, "Info");
-    });
+    connect(add_btn, &QPushButton::clicked, this, [this, add_tag_row]() mutable { add_tag_row({}, "Info"); });
     vl->addWidget(add_btn);
     vl->addWidget(make_sep());
 
@@ -2371,9 +2412,7 @@ QWidget* SettingsScreen::build_logging() {
         const QString gl = log_global_level_->currentText();
         cfg.set("log/global_level", gl);
         const QHash<QString, LogLevel> lvl_map = {
-            {"Debug", LogLevel::Debug}, {"Info",  LogLevel::Info},
-            {"Warn",  LogLevel::Warn},  {"Error", LogLevel::Error}
-        };
+            {"Debug", LogLevel::Debug}, {"Info", LogLevel::Info}, {"Warn", LogLevel::Warn}, {"Error", LogLevel::Error}};
         log.set_level(lvl_map.value(gl, LogLevel::Info));
 
         // Save + apply per-tag overrides
@@ -2381,13 +2420,15 @@ QWidget* SettingsScreen::build_logging() {
         const auto rows = log_tag_list_->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly);
         int saved = 0;
         for (auto* row : rows) {
-            auto* tag_edit  = row->findChild<QLineEdit*>();
+            auto* tag_edit = row->findChild<QLineEdit*>();
             auto* lvl_combo = row->findChild<QComboBox*>();
-            if (!tag_edit || !lvl_combo) continue;
-            const QString tag   = tag_edit->text().trimmed();
+            if (!tag_edit || !lvl_combo)
+                continue;
+            const QString tag = tag_edit->text().trimmed();
             const QString level = lvl_combo->currentText();
-            if (tag.isEmpty()) continue;
-            cfg.set(QString("log/tag_%1_name").arg(saved),  tag);
+            if (tag.isEmpty())
+                continue;
+            cfg.set(QString("log/tag_%1_name").arg(saved), tag);
             cfg.set(QString("log/tag_%1_level").arg(saved), level);
             log.set_tag_level(tag, lvl_map.value(level, LogLevel::Info));
             ++saved;
@@ -2408,14 +2449,13 @@ QWidget* SettingsScreen::build_logging() {
 QWidget* SettingsScreen::build_security() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(
-        QString("QScrollArea { border: none; background: transparent; }"
-                "QScrollBar:vertical { background: %1; width: 6px; }"
-                "QScrollBar::handle:vertical { background: %2; }"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED()));
+    scroll->setStyleSheet(QString("QScrollArea { border: none; background: transparent; }"
+                                  "QScrollBar:vertical { background: %1; width: 6px; }"
+                                  "QScrollBar::handle:vertical { background: %2; }"
+                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+                              .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED()));
 
-    auto* page = new QWidget;
+    auto* page = new QWidget(this);
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(8);
@@ -2428,16 +2468,13 @@ QWidget* SettingsScreen::build_security() {
     vl->addSpacing(8);
 
     sec_pin_status_ = new QLabel;
-    sec_pin_status_->setStyleSheet(
-        QString("color:%1;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
-    vl->addWidget(make_row("PIN Status", sec_pin_status_,
-                           "A 6-digit PIN is required to unlock the terminal."));
+    sec_pin_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
+    vl->addWidget(make_row("PIN Status", sec_pin_status_, "A 6-digit PIN is required to unlock the terminal."));
 
     sec_lockout_status_ = new QLabel;
-    sec_lockout_status_->setStyleSheet(
-        QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
-    vl->addWidget(make_row("Failed Attempts", sec_lockout_status_,
-                           "PIN lockout engages after 5 consecutive failures."));
+    sec_lockout_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+    vl->addWidget(
+        make_row("Failed Attempts", sec_lockout_status_, "PIN lockout engages after 5 consecutive failures."));
 
     vl->addSpacing(8);
     vl->addWidget(make_sep());
@@ -2455,7 +2492,7 @@ QWidget* SettingsScreen::build_security() {
     vl->addWidget(sec_change_pin_btn_);
 
     // Expandable change-PIN form (hidden by default)
-    sec_change_pin_form_ = new QWidget;
+    sec_change_pin_form_ = new QWidget(this);
     sec_change_pin_form_->setStyleSheet("background: transparent;");
     auto* cpfl = new QVBoxLayout(sec_change_pin_form_);
     cpfl->setContentsMargins(0, 8, 0, 0);
@@ -2484,7 +2521,7 @@ QWidget* SettingsScreen::build_security() {
     sec_pin_error_->setWordWrap(true);
     sec_pin_error_->setStyleSheet(
         QString("color:%1;background:rgba(220,38,38,0.08);border:1px solid %2;padding:6px 8px;")
-        .arg(ui::colors::NEGATIVE(), ui::colors::NEGATIVE_DIM()));
+            .arg(ui::colors::NEGATIVE(), ui::colors::NEGATIVE_DIM()));
     sec_pin_error_->hide();
     cpfl->addWidget(sec_pin_error_);
 
@@ -2492,7 +2529,7 @@ QWidget* SettingsScreen::build_security() {
     sec_pin_success_->setWordWrap(true);
     sec_pin_success_->setStyleSheet(
         QString("color:%1;background:rgba(22,163,74,0.08);border:1px solid %2;padding:6px 8px;")
-        .arg(ui::colors::POSITIVE(), ui::colors::POSITIVE_DIM()));
+            .arg(ui::colors::POSITIVE(), ui::colors::POSITIVE_DIM()));
     sec_pin_success_->hide();
     cpfl->addWidget(sec_pin_success_);
 
@@ -2594,26 +2631,23 @@ QWidget* SettingsScreen::build_security() {
     sec_autolock_toggle_ = new QCheckBox("Enable auto-lock on inactivity");
     sec_autolock_toggle_->setChecked(true);
     sec_autolock_toggle_->setStyleSheet(check_ss());
-    vl->addWidget(make_row("Auto-Lock", sec_autolock_toggle_,
-                           "Locks the terminal after a period of inactivity."));
+    vl->addWidget(make_row("Auto-Lock", sec_autolock_toggle_, "Locks the terminal after a period of inactivity."));
 
     sec_lock_timeout_ = new QComboBox;
-    sec_lock_timeout_->addItem("1 min",  1);
-    sec_lock_timeout_->addItem("2 min",  2);
-    sec_lock_timeout_->addItem("5 min",  5);
+    sec_lock_timeout_->addItem("1 min", 1);
+    sec_lock_timeout_->addItem("2 min", 2);
+    sec_lock_timeout_->addItem("5 min", 5);
     sec_lock_timeout_->addItem("10 min", 10);
     sec_lock_timeout_->addItem("15 min", 15);
     sec_lock_timeout_->addItem("30 min", 30);
     sec_lock_timeout_->addItem("60 min", 60);
     sec_lock_timeout_->setCurrentIndex(3); // default 10 min
     sec_lock_timeout_->setStyleSheet(combo_ss());
-    vl->addWidget(make_row("Lock Timeout", sec_lock_timeout_,
-                           "Time of inactivity before the terminal locks."));
+    vl->addWidget(make_row("Lock Timeout", sec_lock_timeout_, "Time of inactivity before the terminal locks."));
 
     // Enable/disable timeout combo based on toggle
-    connect(sec_autolock_toggle_, &QCheckBox::toggled, this, [this](bool checked) {
-        sec_lock_timeout_->setEnabled(checked);
-    });
+    connect(sec_autolock_toggle_, &QCheckBox::toggled, this,
+            [this](bool checked) { sec_lock_timeout_->setEnabled(checked); });
 
     vl->addSpacing(16);
 
@@ -2634,8 +2668,7 @@ QWidget* SettingsScreen::build_security() {
         guard.set_timeout_minutes(minutes);
         guard.set_enabled(autolock);
 
-        LOG_INFO("Settings", QString("Security settings saved: autolock=%1, timeout=%2min")
-                 .arg(autolock).arg(minutes));
+        LOG_INFO("Settings", QString("Security settings saved: autolock=%1, timeout=%2min").arg(autolock).arg(minutes));
     });
     vl->addWidget(save_btn);
 
@@ -2654,9 +2687,8 @@ void SettingsScreen::load_security() {
             sec_pin_status_->setText("CONFIGURED");
         else
             sec_pin_status_->setText("NOT SET");
-        sec_pin_status_->setStyleSheet(
-            QString("color:%1;font-weight:700;background:transparent;")
-            .arg(pm.has_pin() ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+        sec_pin_status_->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;")
+                                           .arg(pm.has_pin() ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
     }
 
     // Lockout status
@@ -2669,7 +2701,7 @@ void SettingsScreen::load_security() {
         }
         sec_lockout_status_->setStyleSheet(
             QString("color:%1;font-weight:700;background:transparent;")
-            .arg(attempts > 0 ? ui::colors::WARNING() : ui::colors::TEXT_SECONDARY()));
+                .arg(attempts > 0 ? ui::colors::WARNING() : ui::colors::TEXT_SECONDARY()));
     }
 
     // Change PIN button visibility (only if PIN exists)
@@ -2704,8 +2736,8 @@ QWidget* SettingsScreen::build_profiles() {
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
 
-    auto* page = new QWidget;
-    auto* vl   = new QVBoxLayout(page);
+    auto* page = new QWidget(this);
+    auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 20, 24, 20);
     vl->setSpacing(16);
 
@@ -2713,10 +2745,9 @@ QWidget* SettingsScreen::build_profiles() {
     title->setStyleSheet(section_title_ss());
     vl->addWidget(title);
 
-    auto* desc = new QLabel(
-        "Each profile has its own isolated database, credentials, logs and workspaces.\n"
-        "Launch the terminal with  --profile <name>  to open a specific profile.\n"
-        "Different profiles can run simultaneously — useful for separate trading accounts.");
+    auto* desc = new QLabel("Each profile has its own isolated database, credentials, logs and workspaces.\n"
+                            "Launch the terminal with  --profile <name>  to open a specific profile.\n"
+                            "Different profiles can run simultaneously — useful for separate trading accounts.");
     desc->setWordWrap(true);
     desc->setStyleSheet(label_ss());
     vl->addWidget(desc);
@@ -2724,8 +2755,7 @@ QWidget* SettingsScreen::build_profiles() {
 
     // Active profile display
     auto& pm = ProfileManager::instance();
-    auto* active_lbl = new QLabel(
-        QString("Active profile:  <b>%1</b>").arg(pm.active()));
+    auto* active_lbl = new QLabel(QString("Active profile:  <b>%1</b>").arg(pm.active()));
     active_lbl->setStyleSheet(label_ss());
     vl->addWidget(active_lbl);
 
@@ -2734,15 +2764,15 @@ QWidget* SettingsScreen::build_profiles() {
     list_title->setStyleSheet(sub_title_ss());
     vl->addWidget(list_title);
 
-    auto* list_widget = new QWidget;
-    auto* list_vl     = new QVBoxLayout(list_widget);
+    auto* list_widget = new QWidget(this);
+    auto* list_vl = new QVBoxLayout(list_widget);
     list_vl->setContentsMargins(0, 0, 0, 0);
     list_vl->setSpacing(6);
 
     const QStringList profiles = pm.list_profiles();
     for (const QString& name : profiles) {
-        auto* row = new QWidget;
-        auto* hl  = new QHBoxLayout(row);
+        auto* row = new QWidget(this);
+        auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(0, 0, 0, 0);
         hl->setSpacing(8);
 
@@ -2778,8 +2808,8 @@ QWidget* SettingsScreen::build_profiles() {
     new_title->setStyleSheet(sub_title_ss());
     vl->addWidget(new_title);
 
-    auto* new_row = new QWidget;
-    auto* new_hl  = new QHBoxLayout(new_row);
+    auto* new_row = new QWidget(this);
+    auto* new_hl = new QHBoxLayout(new_row);
     new_hl->setContentsMargins(0, 0, 0, 0);
     new_hl->setSpacing(8);
 
@@ -2792,7 +2822,8 @@ QWidget* SettingsScreen::build_profiles() {
     create_btn->setStyleSheet(btn_primary_ss());
     connect(create_btn, &QPushButton::clicked, this, [name_input]() {
         const QString name = name_input->text().trimmed().toLower();
-        if (name.isEmpty()) return;
+        if (name.isEmpty())
+            return;
         ProfileManager::instance().create_profile(name);
         const QString exe = QCoreApplication::applicationFilePath();
         QProcess::startDetached(exe, {"--profile", name});
@@ -2801,9 +2832,8 @@ QWidget* SettingsScreen::build_profiles() {
     new_hl->addWidget(create_btn);
     vl->addWidget(new_row);
 
-    auto* hint = new QLabel(
-        "Creating a profile sets up a fresh data directory. "
-        "The app will restart with the new profile active.");
+    auto* hint = new QLabel("Creating a profile sets up a fresh data directory. "
+                            "The app will restart with the new profile active.");
     hint->setWordWrap(true);
     hint->setStyleSheet(label_ss());
     vl->addWidget(hint);
@@ -2818,7 +2848,8 @@ QVariantMap SettingsScreen::save_state() const {
 }
 
 void SettingsScreen::restore_state(const QVariantMap& state) {
-    if (!sections_) return;
+    if (!sections_)
+        return;
     const int idx = state.value("section", 0).toInt();
     if (idx >= 0 && idx < sections_->count())
         sections_->setCurrentIndex(idx);

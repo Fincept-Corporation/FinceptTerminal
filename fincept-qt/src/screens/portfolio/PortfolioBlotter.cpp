@@ -93,44 +93,48 @@ void PortfolioBlotter::fetch_sparklines() {
 
     QPointer<PortfolioBlotter> self = this;
     services::MarketDataService::instance().fetch_sparklines(
-        symbols,
-        [self](bool ok, QHash<QString, QVector<double>> data) {
-            QMetaObject::invokeMethod(self, [self, ok, data]() {
-                if (!self)
-                    return;
+        symbols, [self](bool ok, QHash<QString, QVector<double>> data) {
+            QMetaObject::invokeMethod(
+                self,
+                [self, ok, data]() {
+                    if (!self)
+                        return;
 
-                // Mark loaded/failed per symbol
-                for (auto it = self->sparkline_state_.begin(); it != self->sparkline_state_.end(); ++it) {
-                    if (ok && data.contains(it.key()))
-                        it.value() = SparklineState::Loaded;
-                    else
-                        it.value() = SparklineState::Failed;
-                }
-                if (ok && !data.isEmpty())
-                    self->sparkline_cache_.insert(data);
-
-                // Repaint only TREND column without full table rebuild
-                for (int r = 0; r < self->table_->rowCount(); ++r) {
-                    auto* item = self->table_->item(r, 0);
-                    if (!item) continue;
-                    const QString sym = item->text();
-                    auto* w = qobject_cast<PortfolioSparkline*>(self->table_->cellWidget(r, 9));
-                    if (!w) continue;
-
-                    const auto state = self->sparkline_state_.value(sym, SparklineState::Failed);
-                    if (state == SparklineState::Loaded && self->sparkline_cache_.contains(sym)) {
-                        const auto& prices = self->sparkline_cache_[sym];
-                        w->set_data(prices);
-                        bool up = prices.size() >= 2 ? prices.last() >= prices.first() : true;
-                        w->set_color(QColor(up ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
-                    } else {
-                        // Failed or still pending — show flat dash line in muted color
-                        QVector<double> dash(6, 0.0);
-                        w->set_data(dash);
-                        w->set_color(QColor(ui::colors::BORDER_MED()));
+                    // Mark loaded/failed per symbol
+                    for (auto it = self->sparkline_state_.begin(); it != self->sparkline_state_.end(); ++it) {
+                        if (ok && data.contains(it.key()))
+                            it.value() = SparklineState::Loaded;
+                        else
+                            it.value() = SparklineState::Failed;
                     }
-                }
-            }, Qt::QueuedConnection);
+                    if (ok && !data.isEmpty())
+                        self->sparkline_cache_.insert(data);
+
+                    // Repaint only TREND column without full table rebuild
+                    for (int r = 0; r < self->table_->rowCount(); ++r) {
+                        auto* item = self->table_->item(r, 0);
+                        if (!item)
+                            continue;
+                        const QString sym = item->text();
+                        auto* w = qobject_cast<PortfolioSparkline*>(self->table_->cellWidget(r, 9));
+                        if (!w)
+                            continue;
+
+                        const auto state = self->sparkline_state_.value(sym, SparklineState::Failed);
+                        if (state == SparklineState::Loaded && self->sparkline_cache_.contains(sym)) {
+                            const auto& prices = self->sparkline_cache_[sym];
+                            w->set_data(prices);
+                            bool up = prices.size() >= 2 ? prices.last() >= prices.first() : true;
+                            w->set_color(QColor(up ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+                        } else {
+                            // Failed or still pending — show flat dash line in muted color
+                            QVector<double> dash(6, 0.0);
+                            w->set_data(dash);
+                            w->set_color(QColor(ui::colors::BORDER_MED()));
+                        }
+                    }
+                },
+                Qt::QueuedConnection);
         });
 }
 
@@ -339,7 +343,8 @@ void PortfolioBlotter::set_sector_filter(const QStringList& symbols) {
 void PortfolioBlotter::apply_filter() {
     for (int r = 0; r < table_->rowCount(); ++r) {
         auto* item = table_->item(r, 0); // symbol column
-        if (!item) continue;
+        if (!item)
+            continue;
         const QString sym = item->text().toLower();
 
         const bool text_ok = filter_text_.isEmpty() || sym.contains(filter_text_);
@@ -347,7 +352,10 @@ void PortfolioBlotter::apply_filter() {
         bool sector_ok = sector_symbols_.isEmpty();
         if (!sector_ok) {
             for (const auto& s : sector_symbols_) {
-                if (sym == s.toLower()) { sector_ok = true; break; }
+                if (sym == s.toLower()) {
+                    sector_ok = true;
+                    break;
+                }
             }
         }
 
@@ -363,20 +371,24 @@ void PortfolioBlotter::on_context_menu(const QPoint& pos) {
     const QString symbol = sorted_[row].symbol;
 
     QMenu menu(this);
-    menu.setStyleSheet(
-        QString("QMenu { background:%1; color:%2; border:1px solid %3; padding:4px; }"
-                "QMenu::item { padding:6px 20px 6px 12px; font-size:11px; }"
-                "QMenu::item:selected { background:%4; color:%5; }"
-                "QMenu::separator { height:1px; background:%3; margin:3px 0; }")
-            .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED,
-                 ui::colors::AMBER_DIM, ui::colors::AMBER));
+    menu.setStyleSheet(QString("QMenu { background:%1; color:%2; border:1px solid %3; padding:4px; }"
+                               "QMenu::item { padding:6px 20px 6px 12px; font-size:11px; }"
+                               "QMenu::item:selected { background:%4; color:%5; }"
+                               "QMenu::separator { height:1px; background:%3; margin:3px 0; }")
+                           .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED,
+                                ui::colors::AMBER_DIM, ui::colors::AMBER));
 
     auto* sym_label = menu.addAction(symbol);
     sym_label->setEnabled(false);
-    sym_label->setFont([&]{ QFont f; f.setBold(true); f.setPointSize(10); return f; }());
+    sym_label->setFont([&] {
+        QFont f;
+        f.setBold(true);
+        f.setPointSize(10);
+        return f;
+    }());
     menu.addSeparator();
 
-    auto* edit_act   = menu.addAction("Edit Transaction");
+    auto* edit_act = menu.addAction("Edit Transaction");
     auto* delete_act = menu.addAction("Close / Delete Position");
 
     edit_act->setIcon(QIcon());
@@ -385,14 +397,10 @@ void PortfolioBlotter::on_context_menu(const QPoint& pos) {
     // Style delete action in red
     delete_act->setData("danger");
     menu.setStyleSheet(menu.styleSheet() +
-        QString("QMenu::item[data='danger'] { color:%1; }").arg(ui::colors::NEGATIVE));
+                       QString("QMenu::item[data='danger'] { color:%1; }").arg(ui::colors::NEGATIVE));
 
-    connect(edit_act,   &QAction::triggered, this, [this, symbol]() {
-        emit edit_transaction_requested(symbol);
-    });
-    connect(delete_act, &QAction::triggered, this, [this, symbol]() {
-        emit delete_position_requested(symbol);
-    });
+    connect(edit_act, &QAction::triggered, this, [this, symbol]() { emit edit_transaction_requested(symbol); });
+    connect(delete_act, &QAction::triggered, this, [this, symbol]() { emit delete_position_requested(symbol); });
 
     menu.exec(table_->viewport()->mapToGlobal(pos));
 }
@@ -401,13 +409,17 @@ void PortfolioBlotter::refresh_theme() {
     const QString bsz = QString::number(ui::fonts::font_px(0));
     const QString hsz = QString::number(ui::fonts::font_px(-2));
     table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; border:none;"
-                                  "  font-size:" + bsz + "px; font-family:%3; gridline-color:transparent; }"
+                                  "  font-size:" +
+                                  bsz +
+                                  "px; font-family:%3; gridline-color:transparent; }"
                                   "QTableWidget::item { padding:5px 8px; border-bottom:1px solid %4; }"
                                   "QTableWidget::item:selected { background:rgba(217,119,6,0.10); color:%6; }"
                                   "QTableWidget::item:hover { background:%7; }"
                                   "QHeaderView::section { background:%8; color:%9; border:none;"
                                   "  border-bottom:2px solid %10; border-right:1px solid %4; padding:5px 8px;"
-                                  "  font-size:" + hsz + "px; font-weight:700; letter-spacing:0.5px; }"
+                                  "  font-size:" +
+                                  hsz +
+                                  "px; font-weight:700; letter-spacing:0.5px; }"
                                   "QScrollBar:vertical { width:5px; background:%1; }"
                                   "QScrollBar::handle:vertical { background:%4; min-height:20px; }")
                               .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::fonts::DATA_FAMILY,

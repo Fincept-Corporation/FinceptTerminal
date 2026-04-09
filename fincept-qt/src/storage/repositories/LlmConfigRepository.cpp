@@ -31,9 +31,10 @@ Result<LlmConfig> LlmConfigRepository::get_active_provider() {
 }
 
 Result<void> LlmConfigRepository::save_provider(const LlmConfig& c) {
-    return exec_write("INSERT OR REPLACE INTO llm_configs (provider, api_key, base_url, model, is_active, tools_enabled, updated_at) "
-                      "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
-                      {c.provider, c.api_key, c.base_url, c.model, c.is_active ? 1 : 0, c.tools_enabled ? 1 : 0});
+    return exec_write(
+        "INSERT OR REPLACE INTO llm_configs (provider, api_key, base_url, model, is_active, tools_enabled, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+        {c.provider, c.api_key, c.base_url, c.model, c.is_active ? 1 : 0, c.tools_enabled ? 1 : 0});
 }
 
 Result<void> LlmConfigRepository::set_active(const QString& provider) {

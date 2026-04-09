@@ -21,40 +21,38 @@
 namespace fincept::screens {
 namespace {
 
-static constexpr const char* kBlsScript   = "bls_data.py";
+static constexpr const char* kBlsScript = "bls_data.py";
 static constexpr const char* kBlsSourceId = "bls";
-static constexpr const char* kBlsColor    = "#DC2626";  // BLS red
+static constexpr const char* kBlsColor = "#DC2626"; // BLS red
 
 struct BlsPreset {
     QString label;
     QString command;
-    QString series_id;  // non-empty -> use get_series command
+    QString series_id; // non-empty -> use get_series command
 };
 
 static const QList<BlsPreset> kBlsPresets = {
-    { "-- Select a series --",             "",                      ""             },
-    { "Total Nonfarm Employment",          "get_series",            "CES0000000001"},
-    { "Unemployment Rate (U-3)",           "get_series",            "LNS14000000"  },
-    { "CPI All Urban Consumers",           "get_series",            "CUUR0000SA0"  },
-    { "CPI Less Food & Energy (Core)",     "get_series",            "CUUR0000SA0L1E"},
-    { "PPI Final Demand",                  "get_series",            "WPUFD4"       },
-    { "Average Hourly Earnings",           "get_series",            "CES0500000003"},
-    { "Labor Force Participation Rate",    "get_series",            "LNS11300000"  },
-    { "Job Openings (JOLTS)",              "get_series",            "JTS000000000000000JOL"},
-    { "Labor Market Overview",             "get_labor_overview",    ""             },
-    { "Inflation Overview",                "get_inflation_overview",""},
-    { "Employment Cost Index",             "get_employment_cost_index",""},
-    { "Productivity & Costs",              "get_productivity_costs",""},
+    {"-- Select a series --", "", ""},
+    {"Total Nonfarm Employment", "get_series", "CES0000000001"},
+    {"Unemployment Rate (U-3)", "get_series", "LNS14000000"},
+    {"CPI All Urban Consumers", "get_series", "CUUR0000SA0"},
+    {"CPI Less Food & Energy (Core)", "get_series", "CUUR0000SA0L1E"},
+    {"PPI Final Demand", "get_series", "WPUFD4"},
+    {"Average Hourly Earnings", "get_series", "CES0500000003"},
+    {"Labor Force Participation Rate", "get_series", "LNS11300000"},
+    {"Job Openings (JOLTS)", "get_series", "JTS000000000000000JOL"},
+    {"Labor Market Overview", "get_labor_overview", ""},
+    {"Inflation Overview", "get_inflation_overview", ""},
+    {"Employment Cost Index", "get_employment_cost_index", ""},
+    {"Productivity & Costs", "get_productivity_costs", ""},
 };
 
 } // namespace
 
-BlsPanel::BlsPanel(QWidget* parent)
-    : EconPanelBase(kBlsSourceId, kBlsColor, parent) {
+BlsPanel::BlsPanel(QWidget* parent) : EconPanelBase(kBlsSourceId, kBlsColor, parent) {
     build_base_ui(this);
-    connect(&services::EconomicsService::instance(),
-            &services::EconomicsService::result_ready,
-            this, &BlsPanel::on_result);
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            &BlsPanel::on_result);
 }
 
 void BlsPanel::activate() {
@@ -75,14 +73,13 @@ void BlsPanel::build_controls(QHBoxLayout* thl) {
     preset_combo_->setFixedHeight(26);
     preset_combo_->setMinimumWidth(240);
 
-    connect(preset_combo_, &QComboBox::currentIndexChanged, this,
-            [this](int idx) {
-                if (idx > 0 && idx < kBlsPresets.size()) {
-                    const auto& p = kBlsPresets[idx];
-                    if (!p.series_id.isEmpty())
-                        series_input_->setText(p.series_id);
-                }
-            });
+    connect(preset_combo_, &QComboBox::currentIndexChanged, this, [this](int idx) {
+        if (idx > 0 && idx < kBlsPresets.size()) {
+            const auto& p = kBlsPresets[idx];
+            if (!p.series_id.isEmpty())
+                series_input_->setText(p.series_id);
+        }
+    });
 
     auto* lbl2 = new QLabel("SERIES ID");
     lbl2->setStyleSheet(ctrl_label_style());
@@ -103,10 +100,13 @@ void BlsPanel::on_fetch() {
     if (idx <= 0) {
         // Check manual series ID
         const QString sid = series_input_->text().trimmed().toUpper();
-        if (sid.isEmpty()) { show_empty("Select a preset or enter a series ID"); return; }
+        if (sid.isEmpty()) {
+            show_empty("Select a preset or enter a series ID");
+            return;
+        }
         show_loading("Fetching BLS series " + sid + "…");
-        services::EconomicsService::instance().execute(
-            kBlsSourceId, kBlsScript, "get_series", {sid}, "bls_series_" + sid);
+        services::EconomicsService::instance().execute(kBlsSourceId, kBlsScript, "get_series", {sid},
+                                                       "bls_series_" + sid);
         return;
     }
 
@@ -116,13 +116,11 @@ void BlsPanel::on_fetch() {
     if (preset.command == "get_series") {
         const QString sid = series_input_->text().trimmed().toUpper();
         const QString use_sid = sid.isEmpty() ? preset.series_id : sid;
-        services::EconomicsService::instance().execute(
-            kBlsSourceId, kBlsScript, "get_series", {use_sid},
-            "bls_series_" + use_sid);
+        services::EconomicsService::instance().execute(kBlsSourceId, kBlsScript, "get_series", {use_sid},
+                                                       "bls_series_" + use_sid);
     } else {
-        services::EconomicsService::instance().execute(
-            kBlsSourceId, kBlsScript, preset.command, {},
-            "bls_" + preset.command);
+        services::EconomicsService::instance().execute(kBlsSourceId, kBlsScript, preset.command, {},
+                                                       "bls_" + preset.command);
     }
 }
 
@@ -139,8 +137,8 @@ static QJsonArray extract_bls_rows(const QJsonObject& data) {
                 QJsonObject row = dv.toObject();
                 row["series"] = title;
                 // Combine year+period into a date string
-                const QString year   = row["year"].toString();
-                const QString period = row["period"].toString();  // e.g. "M01"
+                const QString year = row["year"].toString();
+                const QString period = row["period"].toString(); // e.g. "M01"
                 if (!year.isEmpty() && !period.isEmpty() && period != "M13") {
                     const QString month = period.mid(1).rightJustified(2, '0');
                     row["date"] = year + "-" + month;
@@ -153,19 +151,20 @@ static QJsonArray extract_bls_rows(const QJsonObject& data) {
 
     // Shape 2: {series_data:[...]} or {data:[...]}
     QJsonArray fallback = data["series_data"].toArray();
-    if (fallback.isEmpty()) fallback = data["data"].toArray();
+    if (fallback.isEmpty())
+        fallback = data["data"].toArray();
     return fallback;
 }
 
-void BlsPanel::on_result(const QString& request_id,
-                         const services::EconomicsResult& result) {
-    if (result.source_id != kBlsSourceId) return;
-    if (!request_id.startsWith("bls_")) return;
+void BlsPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
+    if (result.source_id != kBlsSourceId)
+        return;
+    if (!request_id.startsWith("bls_"))
+        return;
 
     if (!result.success) {
         const QString msg = result.error;
-        if (msg.contains("API key") || msg.contains("api_key") ||
-            msg.contains("BLS_API_KEY")) {
+        if (msg.contains("API key") || msg.contains("api_key") || msg.contains("BLS_API_KEY")) {
             show_error("BLS API key not configured.\n"
                        "Set BLS_API_KEY environment variable.\n"
                        "Free key at: data.bls.gov/registrationEngine/");
@@ -195,9 +194,8 @@ void BlsPanel::on_result(const QString& request_id,
     }
 
     const int idx = preset_combo_->currentIndex();
-    const QString title = (idx > 0 && idx < kBlsPresets.size())
-                              ? "BLS: " + kBlsPresets[idx].label
-                              : "BLS: " + series_input_->text().trimmed().toUpper();
+    const QString title = (idx > 0 && idx < kBlsPresets.size()) ? "BLS: " + kBlsPresets[idx].label
+                                                                : "BLS: " + series_input_->text().trimmed().toUpper();
     display(rows, title);
     LOG_INFO("BlsPanel", QString("Displayed %1 rows").arg(rows.size()));
 }

@@ -1,6 +1,7 @@
 #pragma once
 #include "screens/dashboard/widgets/BaseWidget.h"
 
+#include <QJsonArray>
 #include <QScrollArea>
 
 namespace fincept::screens::widgets {
@@ -21,6 +22,7 @@ class NewsWidget : public BaseWidget {
 
     QScrollArea* scroll_area_ = nullptr;
     QVBoxLayout* news_layout_ = nullptr;
+    QJsonArray last_articles_; // cached for theme-change re-populate
 };
 
 } // namespace fincept::screens::widgets

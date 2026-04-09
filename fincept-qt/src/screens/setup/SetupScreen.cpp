@@ -28,18 +28,15 @@ SetupScreen::SetupScreen(QWidget* parent) : QWidget(parent) {
     build_ui();
     prefill_completed_steps();
 
-    connect(&python::PythonSetupManager::instance(), &python::PythonSetupManager::progress_changed,
-            this, &SetupScreen::on_progress);
-    connect(&python::PythonSetupManager::instance(), &python::PythonSetupManager::setup_complete,
-            this, &SetupScreen::on_setup_done);
+    connect(&python::PythonSetupManager::instance(), &python::PythonSetupManager::progress_changed, this,
+            &SetupScreen::on_progress);
+    connect(&python::PythonSetupManager::instance(), &python::PythonSetupManager::setup_complete, this,
+            &SetupScreen::on_setup_done);
 
     auto& ws = services::WhisperService::instance();
-    connect(&ws, &services::WhisperService::model_download_progress,
-            this, &SetupScreen::on_whisper_progress);
-    connect(&ws, &services::WhisperService::model_ready,
-            this, &SetupScreen::on_whisper_ready);
-    connect(&ws, &services::WhisperService::error_occurred,
-            this, &SetupScreen::on_whisper_error);
+    connect(&ws, &services::WhisperService::model_download_progress, this, &SetupScreen::on_whisper_progress);
+    connect(&ws, &services::WhisperService::model_ready, this, &SetupScreen::on_whisper_ready);
+    connect(&ws, &services::WhisperService::error_occurred, this, &SetupScreen::on_whisper_error);
 
     // 15-minute overall timeout — shows skip button if setup is stuck
     timeout_timer_ = new QTimer(this);
@@ -69,9 +66,8 @@ void SetupScreen::build_ui() {
     // ── Title block ───────────────────────────────────────────────────────────
     auto* title = new QLabel("FINCEPT TERMINAL", center);
     title->setAlignment(Qt::AlignCenter);
-    title->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:24px; font-weight:700; letter-spacing:3px;")
-            .arg(kAccent, fonts::DATA_FAMILY));
+    title->setStyleSheet(QString("color:%1; font-family:%2; font-size:24px; font-weight:700; letter-spacing:3px;")
+                             .arg(kAccent, fonts::DATA_FAMILY));
     cl->addWidget(title);
 
     subtitle_lbl_ = new QLabel("Getting your workspace ready", center);
@@ -81,15 +77,13 @@ void SetupScreen::build_ui() {
     cl->addWidget(subtitle_lbl_);
 
     // Brief plain-English explanation
-    auto* intro = new QLabel(
-        "We need to download a few tools and data libraries once.\n"
-        "This only happens the first time — future launches are instant.",
-        center);
+    auto* intro = new QLabel("We need to download a few tools and data libraries once.\n"
+                             "This only happens the first time — future launches are instant.",
+                             center);
     intro->setAlignment(Qt::AlignCenter);
     intro->setWordWrap(true);
-    intro->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:10px; margin-top:4px; margin-bottom:12px;")
-            .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+    intro->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; margin-top:4px; margin-bottom:12px;")
+                             .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
     cl->addWidget(intro);
 
     // ── Divider ───────────────────────────────────────────────────────────────
@@ -100,12 +94,18 @@ void SetupScreen::build_ui() {
     cl->addSpacing(4);
 
     // ── Step rows — plain-English labels + technical key hidden inside ────────
-    cl->addWidget(build_step_row("uv",             "Download Installer",          "Downloads the tool that manages everything else (~13 MB)"));
-    cl->addWidget(build_step_row("python",         "Install Python Runtime",      "The programming language engine used for all analytics"));
-    cl->addWidget(build_step_row("venv",           "Create Isolated Workspaces",  "Two sandboxed environments to keep library versions conflict-free"));
-    cl->addWidget(build_step_row("packages-numpy1","Install Trading Libraries",   "Backtesting, portfolio optimization and legacy quant tools"));
-    cl->addWidget(build_step_row("packages-numpy2","Install Analytics Libraries", "Machine learning, data science and AI agent frameworks"));
-    cl->addWidget(build_step_row("whisper",        "Download Voice Assistant",    "Offline voice recognition model for speech commands (~57 MB)"));
+    cl->addWidget(
+        build_step_row("uv", "Download Installer", "Downloads the tool that manages everything else (~13 MB)"));
+    cl->addWidget(
+        build_step_row("python", "Install Python Runtime", "The programming language engine used for all analytics"));
+    cl->addWidget(build_step_row("venv", "Create Isolated Workspaces",
+                                 "Two sandboxed environments to keep library versions conflict-free"));
+    cl->addWidget(build_step_row("packages-numpy1", "Install Trading Libraries",
+                                 "Backtesting, portfolio optimization and legacy quant tools"));
+    cl->addWidget(build_step_row("packages-numpy2", "Install Analytics Libraries",
+                                 "Machine learning, data science and AI agent frameworks"));
+    cl->addWidget(build_step_row("whisper", "Download Voice Assistant",
+                                 "Offline voice recognition model for speech commands (~57 MB)"));
 
     cl->addSpacing(16);
 
@@ -126,17 +126,15 @@ void SetupScreen::build_ui() {
     status_label_ = new QLabel({}, center);
     status_label_->setAlignment(Qt::AlignCenter);
     status_label_->setWordWrap(true);
-    status_label_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;")
-            .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+    status_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;")
+                                     .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
     cl->addWidget(status_label_);
 
     summary_lbl_ = new QLabel({}, center);
     summary_lbl_->setAlignment(Qt::AlignCenter);
     summary_lbl_->setWordWrap(true);
     summary_lbl_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:10px;")
-            .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+        QString("color:%1; font-family:%2; font-size:10px;").arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
     cl->addWidget(summary_lbl_);
 
     // Skip button
@@ -183,28 +181,25 @@ void SetupScreen::build_ui() {
 
 QWidget* SetupScreen::build_step_row(const QString& key, const QString& label, const QString& sublabel) {
     auto* row = new QWidget(this);
-    auto* hl  = new QHBoxLayout(row);
+    auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(0, 6, 0, 6);
     hl->setSpacing(12);
 
     // Left: label stack (name + description)
     auto* label_col = new QWidget(row);
     label_col->setFixedWidth(220);
-    auto* label_vl  = new QVBoxLayout(label_col);
+    auto* label_vl = new QVBoxLayout(label_col);
     label_vl->setContentsMargins(0, 0, 0, 0);
     label_vl->setSpacing(2);
 
     auto* lbl = new QLabel(label, label_col);
-    lbl->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:11px; font-weight:600;")
-            .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
+    lbl->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px; font-weight:600;")
+                           .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
     label_vl->addWidget(lbl);
 
     auto* sub = new QLabel(sublabel, label_col);
     sub->setWordWrap(true);
-    sub->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:9px;")
-            .arg(colors::TEXT_DIM, fonts::DATA_FAMILY));
+    sub->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;").arg(colors::TEXT_DIM, fonts::DATA_FAMILY));
     label_vl->addWidget(sub);
 
     hl->addWidget(label_col);
@@ -215,10 +210,9 @@ QWidget* SetupScreen::build_step_row(const QString& key, const QString& label, c
     bar->setValue(0);
     bar->setTextVisible(false);
     bar->setFixedHeight(10);
-    bar->setStyleSheet(
-        QString("QProgressBar { background:%1; border:1px solid %2; border-radius:5px; }"
-                "QProgressBar::chunk { background:%3; border-radius:5px; }")
-            .arg(colors::BG_RAISED, colors::BORDER_DIM, kAccent));
+    bar->setStyleSheet(QString("QProgressBar { background:%1; border:1px solid %2; border-radius:5px; }"
+                               "QProgressBar::chunk { background:%3; border-radius:5px; }")
+                           .arg(colors::BG_RAISED, colors::BORDER_DIM, kAccent));
     hl->addWidget(bar, 1);
 
     // Right: status badge
@@ -235,17 +229,18 @@ QWidget* SetupScreen::build_step_row(const QString& key, const QString& label, c
     pulse->setSingleShot(false);
 
     StepUI step;
-    step.label    = lbl;
+    step.label = lbl;
     step.sublabel = sub;
-    step.bar      = bar;
-    step.status   = status;
-    step.pulse    = pulse;
+    step.bar = bar;
+    step.status = status;
+    step.pulse = pulse;
     step.pulse_val = 0;
-    steps_[key]   = step;
+    steps_[key] = step;
 
     // Connect pulse tick — captures key by value so it's safe after row moves
     connect(pulse, &QTimer::timeout, this, [this, key]() {
-        if (!steps_.contains(key)) return;
+        if (!steps_.contains(key))
+            return;
         auto& s = steps_[key];
         // Smooth bouncing fill: ramps 0→85 then stays — gives "working" feel
         // without implying false completion.
@@ -265,25 +260,29 @@ QWidget* SetupScreen::build_step_row(const QString& key, const QString& label, c
 // ─────────────────────────────────────────────────────────────────────────────
 
 void SetupScreen::start_pulse(const QString& key) {
-    if (!steps_.contains(key)) return;
+    if (!steps_.contains(key))
+        return;
     auto& s = steps_[key];
     s.pulse_val = 0;
     s.bar->setValue(0);
-    if (s.pulse) s.pulse->start();
+    if (s.pulse)
+        s.pulse->start();
 }
 
 void SetupScreen::stop_pulse(const QString& key) {
-    if (!steps_.contains(key)) return;
+    if (!steps_.contains(key))
+        return;
     auto& s = steps_[key];
-    if (s.pulse) s.pulse->stop();
+    if (s.pulse)
+        s.pulse->stop();
 }
 
 void SetupScreen::mark_step_active(const QString& key) {
-    if (!steps_.contains(key)) return;
+    if (!steps_.contains(key))
+        return;
     auto& s = steps_[key];
     s.status->setText("Working...");
-    s.status->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:9px;").arg(kAccent, fonts::DATA_FAMILY));
+    s.status->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;").arg(kAccent, fonts::DATA_FAMILY));
     start_pulse(key);
 }
 
@@ -298,7 +297,8 @@ void SetupScreen::on_begin_setup() {
     status_label_->setStyleSheet(
         QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;").arg(kAccent, fonts::DATA_FAMILY));
 
-    if (timeout_timer_) timeout_timer_->start();
+    if (timeout_timer_)
+        timeout_timer_->start();
     python::PythonSetupManager::instance().run_setup();
 }
 
@@ -364,14 +364,14 @@ void SetupScreen::on_setup_done(bool success, const QString& error) {
 }
 
 void SetupScreen::on_whisper_progress(int percent) {
-    if (!steps_.contains("whisper")) return;
+    if (!steps_.contains("whisper"))
+        return;
     auto& s = steps_["whisper"];
     // Whisper gives real % from QNetworkReply — stop pulse and use real value
     stop_pulse("whisper");
     s.bar->setValue(percent);
     s.status->setText(QString("%1%").arg(percent));
-    s.status->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:9px;").arg(kAccent, fonts::DATA_FAMILY));
+    s.status->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;").arg(kAccent, fonts::DATA_FAMILY));
     status_label_->setText(QString("Downloading voice assistant model... %1%").arg(percent));
 }
 
@@ -379,12 +379,12 @@ void SetupScreen::on_whisper_ready() {
     mark_step_done("whisper");
     status_label_->setText("Everything is ready! Launching Fincept Terminal...");
     status_label_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;")
-            .arg(colors::GREEN, fonts::DATA_FAMILY));
+        QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;").arg(colors::GREEN, fonts::DATA_FAMILY));
     begin_btn_->setText("LAUNCH");
 
     LOG_INFO("SetupScreen", "Whisper model ready — setup fully complete");
-    if (timeout_timer_) timeout_timer_->stop();
+    if (timeout_timer_)
+        timeout_timer_->stop();
     QTimer::singleShot(1500, this, [this]() { emit setup_complete(); });
 }
 
@@ -399,15 +399,14 @@ void SetupScreen::on_whisper_error(const QString& message) {
     }
     LOG_WARN("SetupScreen", "Whisper model download failed: " + message);
     whisper_failed_ = true;
-    status_label_->setText(
-        "Voice assistant couldn't be downloaded — voice commands won't be available.\n"
-        "All other features work normally. You can retry or continue without it.");
-    status_label_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;")
-            .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+    status_label_->setText("Voice assistant couldn't be downloaded — voice commands won't be available.\n"
+                           "All other features work normally. You can retry or continue without it.");
+    status_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;")
+                                     .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
     begin_btn_->setText("SETUP COMPLETE");
 
-    if (retry_whisper_btn_) retry_whisper_btn_->setVisible(true);
+    if (retry_whisper_btn_)
+        retry_whisper_btn_->setVisible(true);
     if (skip_btn_) {
         skip_btn_->setVisible(true);
         skip_btn_->setText("CONTINUE WITHOUT VOICE COMMANDS");
@@ -416,7 +415,8 @@ void SetupScreen::on_whisper_error(const QString& message) {
 
 void SetupScreen::on_skip_clicked() {
     LOG_INFO("SetupScreen", "User skipped setup — launching app");
-    if (timeout_timer_) timeout_timer_->stop();
+    if (timeout_timer_)
+        timeout_timer_->stop();
     for (auto [k, s] : steps_.asKeyValueRange())
         stop_pulse(k);
     emit setup_complete();
@@ -424,19 +424,20 @@ void SetupScreen::on_skip_clicked() {
 
 void SetupScreen::on_setup_timeout() {
     LOG_WARN("SetupScreen", "Setup timed out after 15 minutes — showing skip option");
-    status_label_->setText(
-        "Setup is taking longer than expected — possibly a slow internet connection.\n"
-        "You can wait or skip and continue with limited functionality.");
-    status_label_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;")
-            .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
-    if (skip_btn_) skip_btn_->setVisible(true);
+    status_label_->setText("Setup is taking longer than expected — possibly a slow internet connection.\n"
+                           "You can wait or skip and continue with limited functionality.");
+    status_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;")
+                                     .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+    if (skip_btn_)
+        skip_btn_->setVisible(true);
 }
 
 void SetupScreen::on_retry_whisper() {
     whisper_failed_ = false;
-    if (retry_whisper_btn_) retry_whisper_btn_->setVisible(false);
-    if (skip_btn_)          skip_btn_->setVisible(false);
+    if (retry_whisper_btn_)
+        retry_whisper_btn_->setVisible(false);
+    if (skip_btn_)
+        skip_btn_->setVisible(false);
     mark_step_active("whisper");
     status_label_->setText("Retrying voice assistant model download...");
     status_label_->setStyleSheet(
@@ -446,30 +447,36 @@ void SetupScreen::on_retry_whisper() {
 }
 
 void SetupScreen::mark_step_done(const QString& key) {
-    if (!steps_.contains(key)) return;
+    if (!steps_.contains(key))
+        return;
     stop_pulse(key);
     auto& s = steps_[key];
     s.bar->setValue(100);
     s.status->setText("DONE");
-    s.status->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:9px;").arg(colors::GREEN, fonts::DATA_FAMILY));
+    s.status->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;").arg(colors::GREEN, fonts::DATA_FAMILY));
 }
 
 void SetupScreen::prefill_completed_steps() {
-    const auto status  = python::PythonSetupManager::instance().check_status();
+    const auto status = python::PythonSetupManager::instance().check_status();
     const bool whisper = services::WhisperService::is_model_downloaded();
 
-    if (status.uv_installed)                                       mark_step_done("uv");
-    if (status.python_installed)                                   mark_step_done("python");
-    if (status.venv_numpy1_ready && status.venv_numpy2_ready)      mark_step_done("venv");
-    if (status.venv_numpy1_ready)                                  mark_step_done("packages-numpy1");
-    if (status.venv_numpy2_ready)                                  mark_step_done("packages-numpy2");
-    if (whisper)                                                   mark_step_done("whisper");
+    if (status.uv_installed)
+        mark_step_done("uv");
+    if (status.python_installed)
+        mark_step_done("python");
+    if (status.venv_numpy1_ready && status.venv_numpy2_ready)
+        mark_step_done("venv");
+    if (status.venv_numpy1_ready)
+        mark_step_done("packages-numpy1");
+    if (status.venv_numpy2_ready)
+        mark_step_done("packages-numpy2");
+    if (whisper)
+        mark_step_done("whisper");
 
-    const bool any_done = status.uv_installed || status.python_installed
-                          || status.venv_numpy1_ready || status.venv_numpy2_ready || whisper;
-    const bool all_done = status.uv_installed && status.python_installed
-                          && status.venv_numpy1_ready && status.venv_numpy2_ready && whisper;
+    const bool any_done = status.uv_installed || status.python_installed || status.venv_numpy1_ready ||
+                          status.venv_numpy2_ready || whisper;
+    const bool all_done = status.uv_installed && status.python_installed && status.venv_numpy1_ready &&
+                          status.venv_numpy2_ready && whisper;
 
     summary_lbl_->setText({});
 

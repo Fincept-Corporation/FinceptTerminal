@@ -17,23 +17,33 @@ class MotilalBroker : public IBroker {
 
     BrokerProfile profile() const override {
         return BrokerProfile{
-            .id = "motilal", .display_name = "Motilal Oswal", .region = "IN", .currency = "INR",
-            .credential_fields = {
-                {CredentialField::ApiKey,    "API KEY",              "Enter API Key...",            false},
-                {CredentialField::ApiSecret, "PASSWORD",             "Enter Login Password...",     true},
-                {CredentialField::AuthCode,  "DOB:::TOTP",           "DD/MM/YYYY:::6-digit TOTP",   false},
-            },
+            .id = "motilal",
+            .display_name = "Motilal Oswal",
+            .region = "IN",
+            .currency = "INR",
+            .credential_fields =
+                {
+                    {CredentialField::ApiKey, "API KEY", "Enter API Key...", false},
+                    {CredentialField::ApiSecret, "PASSWORD", "Enter Login Password...", true},
+                    {CredentialField::AuthCode, "DOB:::TOTP", "DD/MM/YYYY:::6-digit TOTP", false},
+                },
             .exchanges = {"NSE", "BSE", "NFO", "MCX", "NCDEX"},
-            .product_types = {
-                {"Intraday (MIS)",  ProductType::Intraday},
-                {"Delivery (CNC)", ProductType::Delivery},
-                {"Margin (NRML)",  ProductType::Margin},
-            },
-            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
-            .has_native_paper=false, .default_paper_balance=1000000.0,
-            .default_watchlist={"HDFCBANK","ICICIBANK","SBIN","TCS","INFY","RELIANCE","TATAMOTORS","BAJFINANCE","HINDUNILVR","ITC"},
-            .default_symbol="RELIANCE", .default_exchange="NSE",
-            .brokerage_info="\u20B920/order flat",
+            .product_types =
+                {
+                    {"Intraday (MIS)", ProductType::Intraday},
+                    {"Delivery (CNC)", ProductType::Delivery},
+                    {"Margin (NRML)", ProductType::Margin},
+                },
+            .supports_intraday = true,
+            .supports_bracket_order = false,
+            .supports_cover_order = false,
+            .has_native_paper = false,
+            .default_paper_balance = 1000000.0,
+            .default_watchlist = {"HDFCBANK", "ICICIBANK", "SBIN", "TCS", "INFY", "RELIANCE", "TATAMOTORS",
+                                  "BAJFINANCE", "HINDUNILVR", "ITC"},
+            .default_symbol = "RELIANCE",
+            .default_exchange = "NSE",
+            .brokerage_info = "\u20B920/order flat",
         };
     }
 
@@ -54,7 +64,7 @@ class MotilalBroker : public IBroker {
                                                    const QString& resolution, const QString& from_date,
                                                    const QString& to_date) override;
 
-    static bool    is_token_expired(const BrokerHttpResponse& resp);
+    static bool is_token_expired(const BrokerHttpResponse& resp);
     static QString checked_error(const BrokerHttpResponse& resp, const QString& fallback);
 
   protected:

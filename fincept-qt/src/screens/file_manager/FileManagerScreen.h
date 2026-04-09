@@ -11,8 +11,8 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSplitter>
-#include <QTextEdit>
 #include <QTableWidget>
+#include <QTextEdit>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -59,41 +59,41 @@ class FileManagerScreen : public QWidget, public IStatefulScreen {
     static QString route_for_mime(const QString& mime);
 
     // ── Search / filter bar ──────────────────────────────────────────────
-    QLineEdit*    search_input_    = nullptr;
-    QComboBox*    sort_combo_      = nullptr;
+    QLineEdit* search_input_ = nullptr;
+    QComboBox* sort_combo_ = nullptr;
     // Screen filter chips — one QPushButton per source screen + "All"
-    QWidget*      chips_bar_       = nullptr;
-    QButtonGroup* chip_group_      = nullptr;
-    QString       active_screen_filter_;  // "" = all
+    QWidget* chips_bar_ = nullptr;
+    QButtonGroup* chip_group_ = nullptr;
+    QString active_screen_filter_; // "" = all
 
     // ── Quota bar ────────────────────────────────────────────────────────
-    QProgressBar* quota_bar_       = nullptr;
-    QLabel*       quota_label_     = nullptr;
+    QProgressBar* quota_bar_ = nullptr;
+    QLabel* quota_label_ = nullptr;
     static constexpr qint64 kQuotaBytes = 500LL * 1024 * 1024; // 500 MB
 
     // ── File list ────────────────────────────────────────────────────────
-    QWidget*      file_container_  = nullptr;
-    QVBoxLayout*  file_layout_     = nullptr;
-    QVector<QPushButton*> check_btns_;   // per-card checkbox buttons
-    QVector<QString>      check_ids_;    // parallel file IDs
-    QPushButton*  bulk_delete_btn_ = nullptr;
-    QWidget*      bulk_bar_        = nullptr;
+    QWidget* file_container_ = nullptr;
+    QVBoxLayout* file_layout_ = nullptr;
+    QVector<QPushButton*> check_btns_; // per-card checkbox buttons
+    QVector<QString> check_ids_;       // parallel file IDs
+    QPushButton* bulk_delete_btn_ = nullptr;
+    QWidget* bulk_bar_ = nullptr;
 
     // ── Preview panel ────────────────────────────────────────────────────
-    QWidget*      preview_panel_   = nullptr;
-    QLabel*       preview_title_   = nullptr;
-    QLabel*       preview_meta_    = nullptr;
-    QTextEdit*    preview_text_    = nullptr;
-    QTableWidget* preview_table_   = nullptr;
-    QLabel*       preview_empty_   = nullptr;
+    QWidget* preview_panel_ = nullptr;
+    QLabel* preview_title_ = nullptr;
+    QLabel* preview_meta_ = nullptr;
+    QTextEdit* preview_text_ = nullptr;
+    QTableWidget* preview_table_ = nullptr;
+    QLabel* preview_empty_ = nullptr;
 
     // ── Header controls ──────────────────────────────────────────────────
-    QLabel*       stats_label_     = nullptr;
-    QPushButton*  upload_btn_      = nullptr;
-    QPushButton*  refresh_btn_     = nullptr;
+    QLabel* stats_label_ = nullptr;
+    QPushButton* upload_btn_ = nullptr;
+    QPushButton* refresh_btn_ = nullptr;
 
     // ── Splitter ─────────────────────────────────────────────────────────
-    QSplitter*    splitter_        = nullptr;
+    QSplitter* splitter_ = nullptr;
 
     bool loaded_ = false;
 };

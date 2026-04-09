@@ -33,8 +33,7 @@ std::vector<ToolDef> get_watchlist_tools() {
                 QJsonArray symbols;
                 if (stocks.is_ok()) {
                     for (const auto& s : stocks.value()) {
-                        symbols.append(
-                            QJsonObject{{"symbol", s.symbol}, {"name", s.name}, {"added_at", s.added_at}});
+                        symbols.append(QJsonObject{{"symbol", s.symbol}, {"name", s.name}, {"added_at", s.added_at}});
                     }
                 }
                 result.append(QJsonObject{{"id", wl.id},
@@ -157,8 +156,8 @@ std::vector<ToolDef> get_watchlist_tools() {
         t.category = "watchlist";
         t.input_schema.properties = QJsonObject{
             {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol to remove"}}},
-            {"watchlist_id",
-             QJsonObject{{"type", "string"}, {"description", "Watchlist ID (optional — removes from all if omitted)"}}}};
+            {"watchlist_id", QJsonObject{{"type", "string"},
+                                         {"description", "Watchlist ID (optional — removes from all if omitted)"}}}};
         t.input_schema.required = {"symbol"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString symbol = args["symbol"].toString().trimmed().toUpper();
@@ -178,8 +177,7 @@ std::vector<ToolDef> get_watchlist_tools() {
                 repo.remove_stock(watchlist_id, symbol);
             }
 
-            EventBus::instance().publish("watchlist.updated",
-                                         QVariantMap{{"action", "remove"}, {"symbol", symbol}});
+            EventBus::instance().publish("watchlist.updated", QVariantMap{{"action", "remove"}, {"symbol", symbol}});
             return ToolResult::ok("Removed " + symbol + " from watchlist");
         };
         tools.push_back(std::move(t));

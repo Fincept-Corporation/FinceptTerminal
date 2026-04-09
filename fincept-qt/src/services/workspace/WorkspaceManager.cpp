@@ -69,16 +69,15 @@ void WorkspaceManager::unregister_participant(const QString& screen_id) {
 
 // ── Workspace operations ──────────────────────────────────────────────────────
 
-void WorkspaceManager::new_workspace(const QString& name, const QString& description,
-                                     const QString& template_id) {
+void WorkspaceManager::new_workspace(const QString& name, const QString& description, const QString& template_id) {
     ensure_workspaces_dir();
 
     WorkspaceDef ws = WorkspaceTemplates::make(template_id);
-    ws.metadata.id          = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    ws.metadata.name        = name;
+    ws.metadata.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    ws.metadata.name = name;
     ws.metadata.description = description;
-    ws.metadata.created_at  = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-    ws.metadata.updated_at  = ws.metadata.created_at;
+    ws.metadata.created_at = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    ws.metadata.updated_at = ws.metadata.created_at;
 
     current_workspace_ = std::move(ws);
     pending_states_.clear();
@@ -134,8 +133,7 @@ void WorkspaceManager::save_workspace() {
     ensure_workspaces_dir();
     capture_from_ui();
 
-    current_workspace_->metadata.updated_at =
-        QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    current_workspace_->metadata.updated_at = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
     QJsonDocument doc = WorkspaceSerializer::to_json(*current_workspace_);
     QString path = workspace_file_path(current_workspace_->metadata.id);
@@ -160,8 +158,8 @@ void WorkspaceManager::save_workspace_as(const QString& new_name, const QString&
     capture_from_ui();
 
     WorkspaceDef ws = *current_workspace_;
-    ws.metadata.id         = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    ws.metadata.name       = new_name;
+    ws.metadata.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    ws.metadata.name = new_name;
     ws.metadata.updated_at = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
     QJsonDocument doc = WorkspaceSerializer::to_json(ws);
@@ -192,7 +190,7 @@ void WorkspaceManager::import_workspace(const QString& path) {
 
     // Assign new UUID to avoid collision
     QString new_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    QString dest   = workspace_file_path(new_id);
+    QString dest = workspace_file_path(new_id);
 
     QFile::copy(path, dest);
 
@@ -204,7 +202,7 @@ void WorkspaceManager::import_workspace(const QString& path) {
         auto result = WorkspaceSerializer::from_json(QJsonDocument::fromJson(data));
         if (result.is_ok()) {
             WorkspaceDef ws = result.value();
-            ws.metadata.id  = new_id;
+            ws.metadata.id = new_id;
             QFile fw(dest);
             if (fw.open(QIODevice::WriteOnly | QIODevice::Truncate))
                 fw.write(WorkspaceSerializer::to_json(ws).toJson(QJsonDocument::Indented));
@@ -216,7 +214,8 @@ void WorkspaceManager::import_workspace(const QString& path) {
 }
 
 void WorkspaceManager::export_workspace(const QString& destination_path) {
-    if (!current_workspace_.has_value()) return;
+    if (!current_workspace_.has_value())
+        return;
     capture_from_ui();
 
     QJsonDocument doc = WorkspaceSerializer::to_json(*current_workspace_);
@@ -264,15 +263,14 @@ QString WorkspaceManager::current_workspace_name() const {
 }
 
 QString WorkspaceManager::current_workspace_path() const {
-    return current_workspace_.has_value()
-               ? workspace_file_path(current_workspace_->metadata.id)
-               : QString{};
+    return current_workspace_.has_value() ? workspace_file_path(current_workspace_->metadata.id) : QString{};
 }
 
 // ── Screen changed slot ───────────────────────────────────────────────────────
 
 void WorkspaceManager::on_screen_changed(const QString& screen_id) {
-    if (!current_workspace_.has_value()) return;
+    if (!current_workspace_.has_value())
+        return;
     current_workspace_->active_screen = screen_id;
 
     // Track open screens
@@ -289,12 +287,12 @@ void WorkspaceManager::on_screen_changed(const QString& screen_id) {
 // ── Private helpers ───────────────────────────────────────────────────────────
 
 void WorkspaceManager::capture_from_ui() {
-    if (!current_workspace_.has_value()) return;
+    if (!current_workspace_.has_value())
+        return;
 
     // Window geometry — use primary window (first registered)
     if (!windows_.isEmpty())
-        current_workspace_->window_geometry_base64 =
-            windows_.first()->saveGeometry().toBase64();
+        current_workspace_->window_geometry_base64 = windows_.first()->saveGeometry().toBase64();
 
     // Active screen — use primary router (first registered)
     if (!routers_.isEmpty())
@@ -305,28 +303,25 @@ void WorkspaceManager::capture_from_ui() {
     for (auto it = participants_.cbegin(); it != participants_.cend(); ++it) {
         WorkspaceScreenState ss;
         ss.screen_id = it.key();
-        ss.state     = it.value()->save_state();
+        ss.state = it.value()->save_state();
         current_workspace_->screen_states.append(ss);
     }
 }
 
 void WorkspaceManager::apply_to_ui() {
-    if (!current_workspace_.has_value()) return;
+    if (!current_workspace_.has_value())
+        return;
     const WorkspaceDef& ws = *current_workspace_;
 
     // Store dashboard profile key so DashboardScreen picks it up
-    SettingsRepository::instance().set(
-        "workspace.active_dashboard_profile",
-        ws.metadata.id, "workspace");
+    SettingsRepository::instance().set("workspace.active_dashboard_profile", ws.metadata.id, "workspace");
 
     // Store dashboard layout as base64 in the settings key DashboardScreen reads
     // We serialize the layout and write it so restore_layout() loads the right grid
     {
         QByteArray data;
         QDataStream stream(&data, QIODevice::WriteOnly);
-        stream << ws.dashboard_layout.cols
-               << ws.dashboard_layout.row_h
-               << ws.dashboard_layout.margin;
+        stream << ws.dashboard_layout.cols << ws.dashboard_layout.row_h << ws.dashboard_layout.margin;
         stream << static_cast<int>(ws.dashboard_layout.items.size());
         for (const auto& item : ws.dashboard_layout.items) {
             stream << item.id << item.instance_id;
@@ -334,9 +329,8 @@ void WorkspaceManager::apply_to_ui() {
             stream << item.cell.min_w << item.cell.min_h;
         }
         if (!ws.dashboard_layout.items.isEmpty()) {
-            SettingsRepository::instance().set(
-                "dashboard_canvas_layout",
-                QString::fromLatin1(data.toBase64()), "dashboard");
+            SettingsRepository::instance().set("dashboard_canvas_layout", QString::fromLatin1(data.toBase64()),
+                                               "dashboard");
         }
     }
 
@@ -353,8 +347,7 @@ void WorkspaceManager::apply_to_ui() {
 
     // Restore window geometry — apply to primary window
     if (!windows_.isEmpty() && !ws.window_geometry_base64.isEmpty())
-        windows_.first()->restoreGeometry(
-            QByteArray::fromBase64(ws.window_geometry_base64.toLatin1()));
+        windows_.first()->restoreGeometry(QByteArray::fromBase64(ws.window_geometry_base64.toLatin1()));
 
     // Navigate to active screen — apply to primary router
     if (!routers_.isEmpty() && !ws.active_screen.isEmpty())

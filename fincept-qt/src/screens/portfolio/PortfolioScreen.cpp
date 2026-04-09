@@ -5,7 +5,6 @@
 #include "screens/portfolio/PortfolioAgentPanel.h"
 #include "screens/portfolio/PortfolioAiPanel.h"
 #include "screens/portfolio/PortfolioBlotter.h"
-#include "screens/portfolio/PortfolioTxnPanel.h"
 #include "screens/portfolio/PortfolioCommandBar.h"
 #include "screens/portfolio/PortfolioDetailWrapper.h"
 #include "screens/portfolio/PortfolioDialogs.h"
@@ -16,6 +15,7 @@
 #include "screens/portfolio/PortfolioSectorPanel.h"
 #include "screens/portfolio/PortfolioStatsRibbon.h"
 #include "screens/portfolio/PortfolioStatusBar.h"
+#include "screens/portfolio/PortfolioTxnPanel.h"
 #include "services/file_manager/FileManagerService.h"
 #include "services/portfolio/PortfolioService.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -49,16 +49,14 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
     connect(&svc, &services::PortfolioService::asset_added, this, &PortfolioScreen::on_asset_changed);
     connect(&svc, &services::PortfolioService::asset_sold, this, &PortfolioScreen::on_asset_changed);
     connect(&svc, &services::PortfolioService::snapshots_loaded, this, &PortfolioScreen::on_snapshots_loaded);
-    connect(&svc, &services::PortfolioService::transactions_loaded, this,
-            [this](QVector<portfolio::Transaction> txns) {
-                if (txn_panel_)
-                    txn_panel_->set_transactions(txns);
-            });
-    connect(&svc, &services::PortfolioService::correlation_computed, this,
-            [this](QHash<QString, double> matrix) {
-                if (sector_panel_)
-                    sector_panel_->set_correlation(matrix);
-            });
+    connect(&svc, &services::PortfolioService::transactions_loaded, this, [this](QVector<portfolio::Transaction> txns) {
+        if (txn_panel_)
+            txn_panel_->set_transactions(txns);
+    });
+    connect(&svc, &services::PortfolioService::correlation_computed, this, [this](QHash<QString, double> matrix) {
+        if (sector_panel_)
+            sector_panel_->set_correlation(matrix);
+    });
     connect(&svc, &services::PortfolioService::spy_history_loaded, this,
             [this](QStringList dates, QVector<double> closes) {
                 if (perf_chart_)
@@ -67,12 +65,11 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
                 if (summary_loaded_)
                     services::PortfolioService::instance().compute_metrics(current_summary_);
             });
-    connect(&svc, &services::PortfolioService::risk_free_rate_loaded, this,
-            [this](double /*rate*/) {
-                // Recompute metrics with updated risk-free rate for Sharpe
-                if (summary_loaded_)
-                    services::PortfolioService::instance().compute_metrics(current_summary_);
-            });
+    connect(&svc, &services::PortfolioService::risk_free_rate_loaded, this, [this](double /*rate*/) {
+        // Recompute metrics with updated risk-free rate for Sharpe
+        if (summary_loaded_)
+            services::PortfolioService::instance().compute_metrics(current_summary_);
+    });
 
     // Restore persisted refresh interval (P17)
     {
@@ -95,8 +92,8 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
     svc.load_portfolios();
 
     // Theme change: refresh all child component styles
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) { refresh_theme(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { refresh_theme(); });
 }
 
 void PortfolioScreen::build_ui() {
@@ -128,9 +125,10 @@ void PortfolioScreen::build_ui() {
             syms.append(h.symbol);
         AddDividendDialog dlg(syms, this);
         if (dlg.exec() == QDialog::Accepted) {
-            const double qty   = [&]() -> double {
+            const double qty = [&]() -> double {
                 for (const auto& h : current_summary_.holdings)
-                    if (h.symbol == dlg.symbol()) return h.quantity;
+                    if (h.symbol == dlg.symbol())
+                        return h.quantity;
                 return 0.0;
             }();
             const double total = qty * dlg.amount_per_share();
@@ -244,7 +242,7 @@ void PortfolioScreen::build_ui() {
 }
 
 QWidget* PortfolioScreen::build_empty_state() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
     auto* layout = new QVBoxLayout(w);
     layout->setAlignment(Qt::AlignCenter);
@@ -307,7 +305,7 @@ QWidget* PortfolioScreen::build_empty_state() {
 }
 
 QWidget* PortfolioScreen::build_loading_state() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
     auto* layout = new QVBoxLayout(w);
     layout->setAlignment(Qt::AlignCenter);
@@ -497,8 +495,7 @@ void PortfolioScreen::on_metrics_computed(portfolio::ComputedMetrics metrics) {
         detail_wrapper_->update_metrics(metrics);
 }
 
-void PortfolioScreen::on_snapshots_loaded(QString portfolio_id,
-                                          QVector<portfolio::PortfolioSnapshot> snapshots) {
+void PortfolioScreen::on_snapshots_loaded(QString portfolio_id, QVector<portfolio::PortfolioSnapshot> snapshots) {
     if (portfolio_id != selected_id_)
         return;
     if (perf_chart_)
@@ -577,8 +574,7 @@ void PortfolioScreen::on_detail_view_selected(portfolio::DetailView view) {
 void PortfolioScreen::on_refresh_interval_changed(int ms) {
     refresh_interval_ms_ = ms;
     refresh_timer_->setInterval(ms);
-    SettingsRepository::instance().set("portfolio.refresh_interval_ms",
-                                       QString::number(ms), "portfolio");
+    SettingsRepository::instance().set("portfolio.refresh_interval_ms", QString::number(ms), "portfolio");
 }
 
 void PortfolioScreen::request_refresh() {
@@ -591,7 +587,7 @@ void PortfolioScreen::request_refresh() {
 // ── Phase 3: Main view construction ──────────────────────────────────────────
 
 QWidget* PortfolioScreen::build_main_view() {
-    auto* w = new QWidget;
+    auto* w = new QWidget(this);
     w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
 
     auto* h_layout = new QHBoxLayout(w);
@@ -604,7 +600,7 @@ QWidget* PortfolioScreen::build_main_view() {
     h_layout->addWidget(heatmap_);
 
     // Center: chart + sector (top), blotter (bottom)
-    auto* center = new QWidget;
+    auto* center = new QWidget(this);
     auto* center_layout = new QVBoxLayout(center);
     center_layout->setContentsMargins(0, 0, 0, 0);
     center_layout->setSpacing(0);
@@ -638,37 +634,36 @@ QWidget* PortfolioScreen::build_main_view() {
     center_layout->addWidget(top_split, 40); // 40% of vertical space
 
     // Separator
-    auto* sep = new QWidget;
+    auto* sep = new QWidget(this);
     sep->setFixedHeight(1);
     sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM));
     center_layout->addWidget(sep);
 
     // Filter bar above blotter
-    auto* blotter_section = new QWidget;
-    auto* blotter_layout  = new QVBoxLayout(blotter_section);
+    auto* blotter_section = new QWidget(this);
+    auto* blotter_layout = new QVBoxLayout(blotter_section);
     blotter_layout->setContentsMargins(0, 0, 0, 0);
     blotter_layout->setSpacing(0);
 
-    auto* filter_row = new QWidget;
+    auto* filter_row = new QWidget(this);
     filter_row->setFixedHeight(28);
-    filter_row->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
-                                  .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    filter_row->setStyleSheet(
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* filter_hl = new QHBoxLayout(filter_row);
     filter_hl->setContentsMargins(8, 2, 8, 2);
     filter_hl->setSpacing(6);
 
     auto* filter_icon = new QLabel("⌕");
-    filter_icon->setStyleSheet(QString("color:%1; font-size:13px; background:transparent;")
-                                   .arg(ui::colors::TEXT_TERTIARY));
+    filter_icon->setStyleSheet(
+        QString("color:%1; font-size:13px; background:transparent;").arg(ui::colors::TEXT_TERTIARY));
     filter_hl->addWidget(filter_icon);
 
     auto* filter_edit = new QLineEdit;
     filter_edit->setPlaceholderText("Filter positions…");
-    filter_edit->setStyleSheet(
-        QString("QLineEdit { background:transparent; color:%1; border:none;"
-                "  font-size:11px; font-family:%2; }"
-                "QLineEdit:focus { color:%3; }")
-            .arg(ui::colors::TEXT_SECONDARY, ui::fonts::DATA_FAMILY, ui::colors::TEXT_PRIMARY));
+    filter_edit->setStyleSheet(QString("QLineEdit { background:transparent; color:%1; border:none;"
+                                       "  font-size:11px; font-family:%2; }"
+                                       "QLineEdit:focus { color:%3; }")
+                                   .arg(ui::colors::TEXT_SECONDARY, ui::fonts::DATA_FAMILY, ui::colors::TEXT_PRIMARY));
     filter_hl->addWidget(filter_edit, 1);
 
     blotter_layout->addWidget(filter_row);
@@ -681,31 +676,37 @@ QWidget* PortfolioScreen::build_main_view() {
         services::PortfolioService::instance().load_transactions(selected_id_, 100);
         QPointer<PortfolioScreen> self = this;
         auto conn = std::make_shared<QMetaObject::Connection>();
-        *conn = connect(&services::PortfolioService::instance(),
-                        &services::PortfolioService::transactions_loaded,
-                        this, [this, self, symbol, conn](QVector<portfolio::Transaction> txns) {
-            disconnect(*conn);
-            if (!self) return;
-            // Find most recent transaction for this symbol
-            portfolio::Transaction* match = nullptr;
-            for (auto& t : txns) {
-                if (t.symbol == symbol) { match = &t; break; }
-            }
-            if (!match) return;
-            EditTransactionDialog dlg(*match, this);
-            if (dlg.exec() == QDialog::Accepted) {
-                services::PortfolioService::instance().update_transaction(
-                    match->id, dlg.quantity(), dlg.price(), dlg.date(), dlg.notes());
-            }
-        }, Qt::SingleShotConnection);
+        *conn = connect(
+            &services::PortfolioService::instance(), &services::PortfolioService::transactions_loaded, this,
+            [this, self, symbol, conn](QVector<portfolio::Transaction> txns) {
+                disconnect(*conn);
+                if (!self)
+                    return;
+                // Find most recent transaction for this symbol
+                portfolio::Transaction* match = nullptr;
+                for (auto& t : txns) {
+                    if (t.symbol == symbol) {
+                        match = &t;
+                        break;
+                    }
+                }
+                if (!match)
+                    return;
+                EditTransactionDialog dlg(*match, this);
+                if (dlg.exec() == QDialog::Accepted) {
+                    services::PortfolioService::instance().update_transaction(match->id, dlg.quantity(), dlg.price(),
+                                                                              dlg.date(), dlg.notes());
+                }
+            },
+            Qt::SingleShotConnection);
     });
     connect(blotter_, &PortfolioBlotter::delete_position_requested, this, [this](const QString& symbol) {
         auto* h = find_holding(symbol);
-        if (!h) return;
+        if (!h)
+            return;
         ConfirmDeleteDialog dlg(QString("%1 (%2 shares)").arg(symbol).arg(h->quantity, 0, 'f', 2), this);
         if (dlg.exec() == QDialog::Accepted) {
-            services::PortfolioService::instance().sell_asset(
-                selected_id_, symbol, h->quantity, h->current_price);
+            services::PortfolioService::instance().sell_asset(selected_id_, symbol, h->quantity, h->current_price);
         }
     });
     connect(filter_edit, &QLineEdit::textChanged, blotter_, &PortfolioBlotter::set_filter);
@@ -776,12 +777,18 @@ void PortfolioScreen::update_main_view_data() {
 void PortfolioScreen::refresh_theme() {
     setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
 
-    if (command_bar_)  command_bar_->refresh_theme();
-    if (stats_ribbon_) stats_ribbon_->refresh_theme();
-    if (perf_chart_)   perf_chart_->refresh_theme();
-    if (heatmap_)      heatmap_->refresh_theme();
-    if (blotter_)      blotter_->refresh_theme();
-    if (txn_panel_)    txn_panel_->refresh_theme();
+    if (command_bar_)
+        command_bar_->refresh_theme();
+    if (stats_ribbon_)
+        stats_ribbon_->refresh_theme();
+    if (perf_chart_)
+        perf_chart_->refresh_theme();
+    if (heatmap_)
+        heatmap_->refresh_theme();
+    if (blotter_)
+        blotter_->refresh_theme();
+    if (txn_panel_)
+        txn_panel_->refresh_theme();
 }
 
 void PortfolioScreen::on_symbol_selected(const QString& symbol) {
@@ -863,14 +870,11 @@ void PortfolioScreen::load_demo_portfolio() {
 }
 
 QVariantMap PortfolioScreen::save_state() const {
-    return {
-        {"portfolio_id", selected_id_},
-        {"symbol",       selected_symbol_}
-    };
+    return {{"portfolio_id", selected_id_}, {"symbol", selected_symbol_}};
 }
 
 void PortfolioScreen::restore_state(const QVariantMap& state) {
-    const QString id  = state.value("portfolio_id").toString();
+    const QString id = state.value("portfolio_id").toString();
     const QString sym = state.value("symbol").toString();
     if (!id.isEmpty())
         on_portfolio_selected(id);

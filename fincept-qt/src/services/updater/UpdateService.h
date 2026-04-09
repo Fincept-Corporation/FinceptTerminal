@@ -68,9 +68,9 @@ class UpdateService : public QObject {
     static constexpr const char* DEFAULT_MANIFEST_URL =
         "https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/updates.json";
 
-    QSimpleUpdater* updater_   = nullptr;
-    QString         url_;
-    bool            mandatory_ = false;
+    QSimpleUpdater* updater_ = nullptr;
+    QString url_;
+    bool mandatory_ = false;
 };
 
 } // namespace fincept::services

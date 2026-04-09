@@ -19,8 +19,8 @@ class DocumentCanvas : public QWidget {
   public:
     explicit DocumentCanvas(QWidget* parent = nullptr);
 
-    void render(const QVector<ReportComponent>& components, const ReportMetadata& metadata,
-                const ReportTheme& theme, int selected_index);
+    void render(const QVector<ReportComponent>& components, const ReportMetadata& metadata, const ReportTheme& theme,
+                int selected_index);
 
     /// Returns the last (current) page editor — used for export.
     QTextEdit* text_edit() const { return pages_.isEmpty() ? nullptr : pages_.last(); }
@@ -34,9 +34,9 @@ class DocumentCanvas : public QWidget {
     void dropEvent(QDropEvent* e) override;
 
   private:
-    QScrollArea*    scroll_     = nullptr;
-    QWidget*        container_  = nullptr;
-    QVBoxLayout*    pages_layout_ = nullptr;
+    QScrollArea* scroll_ = nullptr;
+    QWidget* container_ = nullptr;
+    QVBoxLayout* pages_layout_ = nullptr;
     QVector<QTextEdit*> pages_;
 
     QTextEdit* new_page(const ReportTheme& theme);

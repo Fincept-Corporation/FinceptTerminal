@@ -1,8 +1,8 @@
 // src/services/portfolio/PortfolioService.h
 #pragma once
+#include "python/PythonRunner.h"
 #include "screens/portfolio/PortfolioTypes.h"
 #include "services/markets/MarketDataService.h"
-#include "python/PythonRunner.h"
 
 #include <QDateTime>
 #include <QHash>
@@ -43,9 +43,8 @@ class PortfolioService : public QObject {
     void delete_transaction(const QString& id, const QString& portfolio_id);
 
     // ── Dividend ──────────────────────────────────────────────────────────────
-    void record_dividend(const QString& portfolio_id, const QString& symbol,
-                         double qty, double amount_per_share, double total,
-                         const QString& date = {}, const QString& notes = {});
+    void record_dividend(const QString& portfolio_id, const QString& symbol, double qty, double amount_per_share,
+                         double total, const QString& date = {}, const QString& notes = {});
 
     // ── Historical correlation ─────────────────────────────────────────────────
     /// Fetch 30-day daily closes for @p symbols and compute pairwise Pearson
@@ -121,7 +120,7 @@ class PortfolioService : public QObject {
     static constexpr int kCacheTtlSec = 300; // 5 minutes
 
     // ── SPY cache (for OLS beta in compute_metrics) ──────────────────────────
-    QStringList     spy_dates_cache_;
+    QStringList spy_dates_cache_;
     QVector<double> spy_closes_cache_;
 
     // ── Risk-free rate cache (annual decimal, e.g. 0.043) ────────────────────

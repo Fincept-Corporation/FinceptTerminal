@@ -22,15 +22,15 @@ struct ReportComponent {
 };
 
 struct ReportMetadata {
-    QString title   = "Untitled Report";
-    QString author  = "Analyst";
+    QString title = "Untitled Report";
+    QString author = "Analyst";
     QString company = "Fincept Corporation";
     QString date;
     QString header_left;
     QString header_center;
     QString header_right;
     QString footer_left;
-    QString footer_center  = "Page {page}";
+    QString footer_center = "Page {page}";
     QString footer_right;
     bool show_page_numbers = true;
 };
@@ -52,24 +52,38 @@ struct ReportTheme {
 
 namespace report_themes {
 inline ReportTheme light_professional() {
-    return {"Light Professional", "#1a1a1a", "#d97706", "#ffffff",
-            "#333333",            "#f0f0f0", "#1a1a1a", "#f5f5f5",
-            "#f9f9f9",            "#666666", "#cccccc"};
+    return {"Light Professional",
+            "#1a1a1a",
+            "#d97706",
+            "#ffffff",
+            "#333333",
+            "#f0f0f0",
+            "#1a1a1a",
+            "#f5f5f5",
+            "#f9f9f9",
+            "#666666",
+            "#cccccc"};
 }
 inline ReportTheme dark_corporate() {
-    return {"Dark Corporate",     "#e5e5e5", "#d97706", "#1e1e1e",
-            "#cccccc",            "#2a2a2a", "#e5e5e5", "#111111",
-            "#1a1a1a",            "#808080", "#444444"};
+    return {"Dark Corporate", "#e5e5e5", "#d97706", "#1e1e1e", "#cccccc", "#2a2a2a",
+            "#e5e5e5",        "#111111", "#1a1a1a", "#808080", "#444444"};
 }
 inline ReportTheme bloomberg() {
-    return {"Bloomberg Terminal", "#ff8c00", "#ff8c00", "#0a0a0a",
-            "#d4d4d4",            "#1a0a00", "#ff8c00", "#050505",
-            "#0f0f0f",            "#888888", "#333300"};
+    return {"Bloomberg Terminal",
+            "#ff8c00",
+            "#ff8c00",
+            "#0a0a0a",
+            "#d4d4d4",
+            "#1a0a00",
+            "#ff8c00",
+            "#050505",
+            "#0f0f0f",
+            "#888888",
+            "#333300"};
 }
 inline ReportTheme midnight_blue() {
-    return {"Midnight Blue",      "#e2e8f0", "#3b82f6", "#0f172a",
-            "#cbd5e1",            "#1e3a5f", "#e2e8f0", "#0d1b2e",
-            "#132033",            "#64748b", "#1e3a5f"};
+    return {"Midnight Blue", "#e2e8f0", "#3b82f6", "#0f172a", "#cbd5e1", "#1e3a5f",
+            "#e2e8f0",       "#0d1b2e", "#132033", "#64748b", "#1e3a5f"};
 }
 } // namespace report_themes
 
@@ -103,9 +117,9 @@ class RemoveComponentCommand : public QUndoCommand {
 
 class UpdateComponentCommand : public QUndoCommand {
   public:
-    UpdateComponentCommand(ReportBuilderScreen* screen, int index,
-                           const QString& old_content, const QMap<QString, QString>& old_config,
-                           const QString& new_content, const QMap<QString, QString>& new_config);
+    UpdateComponentCommand(ReportBuilderScreen* screen, int index, const QString& old_content,
+                           const QMap<QString, QString>& old_config, const QString& new_content,
+                           const QMap<QString, QString>& new_config);
     void undo() override;
     void redo() override;
     int id() const override { return 1001; }
@@ -174,19 +188,19 @@ class ReportBuilderScreen : public QWidget, public IStatefulScreen {
     void update_component(int index, const QString& content, const QMap<QString, QString>& config);
 
     ComponentToolbar* comp_toolbar_ = nullptr;
-    DocumentCanvas*   canvas_       = nullptr;
-    PropertiesPanel*  properties_   = nullptr;
-    QSplitter*        splitter_     = nullptr;
-    QUndoStack*       undo_stack_   = nullptr;
-    QTimer*           autosave_     = nullptr;
+    DocumentCanvas* canvas_ = nullptr;
+    PropertiesPanel* properties_ = nullptr;
+    QSplitter* splitter_ = nullptr;
+    QUndoStack* undo_stack_ = nullptr;
+    QTimer* autosave_ = nullptr;
 
     QVector<ReportComponent> components_;
-    ReportMetadata           metadata_;
-    ReportTheme              theme_     = report_themes::light_professional();
-    int                      selected_  = -1;
-    int                      next_id_   = 1;
-    QString                  current_file_;
-    QString                  autosave_path_;
+    ReportMetadata metadata_;
+    ReportTheme theme_ = report_themes::light_professional();
+    int selected_ = -1;
+    int next_id_ = 1;
+    QString current_file_;
+    QString autosave_path_;
 
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
