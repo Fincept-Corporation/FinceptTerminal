@@ -90,6 +90,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y \
             cmake ninja-build g++ \
+            libssl-dev \
             qt6-base-dev qt6-base-private-dev \
             qt6-tools-dev qt6-tools-dev-tools \
             libqt6charts6-dev libqt6websockets6-dev \
@@ -101,6 +102,48 @@ jobs:
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
             libxcb-xinerama0 libxcb-xkb1 \
             pkg-config zip
+
+      # ---- OpenSSL dev libs (Windows) ----
+      # windows-2022 runners ship a "Light" OpenSSL with no .lib files.
+      # Install the full version via winget (pre-installed on windows-2022 runners).
+      - name: Install OpenSSL (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          # Try winget first (reliable on windows-2022)
+          $installed = $false
+          try {
+            winget install --id ShiningLight.OpenSSL.Dev --exact --silent `
+              --accept-package-agreements --accept-source-agreements 2>&1
+            $root = if (Test-Path "C:\Program Files\OpenSSL-Win64\lib\libcrypto.lib") {
+              "C:\Program Files\OpenSSL-Win64"
+            } elseif (Test-Path "C:\Program Files\OpenSSL\lib\libcrypto.lib") {
+              "C:\Program Files\OpenSSL"
+            } else { $null }
+            if ($root) {
+              echo "OPENSSL_ROOT_DIR=$root" >> $env:GITHUB_ENV
+              Write-Host "OpenSSL installed via winget at: $root"
+              $installed = $true
+            }
+          } catch { Write-Host "winget attempt failed: $_" }
+
+          if (-not $installed) {
+            # Fallback: Scoop (also pre-installed on windows-2022)
+            try {
+              scoop install openssl 2>&1
+              $scoopRoot = "$env:USERPROFILE\scoop\apps\openssl\current"
+              if (Test-Path "$scoopRoot\lib\libcrypto.lib") {
+                echo "OPENSSL_ROOT_DIR=$scoopRoot" >> $env:GITHUB_ENV
+                Write-Host "OpenSSL installed via scoop at: $scoopRoot"
+                $installed = $true
+              }
+            } catch { Write-Host "scoop attempt failed: $_" }
+          }
+
+          if (-not $installed) {
+            Write-Host "::warning::Could not install OpenSSL dev libs — CMake will attempt its own search"
+          }
 
       # ---- Qt6 target (Windows/macOS) ----
       - name: Install Qt6
@@ -142,9 +185,14 @@ jobs:
         shell: bash
         working-directory: fincept-qt
         run: |
+          OPENSSL_ARG=""
+          if [ -n "${OPENSSL_ROOT_DIR:-}" ]; then
+            OPENSSL_ARG="-DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}"
+          fi
           cmake -B build \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            ${OPENSSL_ARG} \
             ${{ runner.os == 'macOS' && '-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache' || '' }} \
             ${{ matrix.cmake_extra }}
 
@@ -153,18 +201,17 @@ jobs:
         shell: bash
         working-directory: fincept-qt
         run: |
-          # jurplel/install-qt-action with dir set installs into <dir>/Qt/<version>/<arch>
           HOST_QT="${{ runner.temp }}/qt-host/Qt/${{ env.QT_VERSION }}/msvc2022_64"
-          # Use -T ClangCL with the VS generator — this is the correct way to select
-          # clang-cl for ARM64 cross-compilation. -DCMAKE_C_COMPILER does not work with
-          # the Visual Studio generator; -T ClangCL selects the clang_cl_arm64_x64
-          # toolset (x64 host tools targeting ARM64) and satisfies whisper.cpp's
-          # GGML CPU backend requirement for Clang on ARM.
+          OPENSSL_ARG=""
+          if [ -n "${OPENSSL_ROOT_DIR:-}" ]; then
+            OPENSSL_ARG="-DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}"
+          fi
           cmake -B build \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
             -DQT_HOST_PATH="${HOST_QT}" \
             -T ClangCL \
+            ${OPENSSL_ARG} \
             ${{ matrix.cmake_extra }}
 
       # ---- Build ----

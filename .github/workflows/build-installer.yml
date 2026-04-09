@@ -75,6 +75,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y \
             cmake ninja-build g++ \
+            libssl-dev \
             qt6-base-dev qt6-base-private-dev \
             qt6-tools-dev qt6-tools-dev-tools \
             libqt6charts6-dev libqt6websockets6-dev \
@@ -87,29 +88,36 @@ jobs:
             libxcb-xinerama0 libxcb-xkb1 \
             pkg-config zip
 
-      # ---- OpenSSL (Windows) — runners have it pre-installed; expose the path ----
-      - name: Set OpenSSL root (Windows)
+      # ---- OpenSSL dev libs (Windows) ----
+      # The runner ships a "Light" OpenSSL (no .lib files). Install the full version.
+      - name: Install OpenSSL (Windows)
         if: runner.os == 'Windows'
-        shell: bash
+        shell: pwsh
         run: |
-          # windows-2022 runners ship OpenSSL at one of these locations
-          for d in \
-            "C:/Program Files/OpenSSL" \
-            "C:/Program Files/OpenSSL-Win64" \
-            "C:/hostedtoolcache/windows/openssl" \
-            "C:/Tools/openssl"; do
-            if [ -f "$d/lib/libcrypto.lib" ] || [ -f "$d/lib/VC/x64/MD/libcrypto.lib" ]; then
-              echo "OPENSSL_ROOT_DIR=$d" >> $GITHUB_ENV
-              echo "Found OpenSSL at: $d"
-              break
-            fi
-          done
-          # Fallback: use choco to install if not found
-          if [ -z "$OPENSSL_ROOT_DIR" ]; then
-            echo "OpenSSL not found in standard paths — installing via choco"
-            choco install openssl --no-progress -y
-            echo "OPENSSL_ROOT_DIR=C:/Program Files/OpenSSL-Win64" >> $GITHUB_ENV
-          fi
+          # Use winget (pre-installed on windows-2022) to install OpenSSL with dev libs
+          # winget is more reliable than choco for OpenSSL on current runners
+          $ErrorActionPreference = 'Stop'
+          try {
+            winget install --id ShiningLight.OpenSSL.Dev --exact --silent --accept-package-agreements --accept-source-agreements
+            $root = "C:\Program Files\OpenSSL-Win64"
+            if (-not (Test-Path "$root\lib\libcrypto.lib")) {
+              $root = "C:\Program Files\OpenSSL"
+            }
+            echo "OPENSSL_ROOT_DIR=$root" >> $env:GITHUB_ENV
+            echo "Installed OpenSSL at: $root"
+          } catch {
+            # Fallback: download the official Win64 OpenSSL installer directly
+            Write-Host "winget failed, trying direct download..."
+            $url = "https://github.com/nicowillis/openssl-windows-binaries/releases/download/3.3.1/Win64OpenSSL-3_3_1.exe"
+            # Use Scoop as a clean fallback
+            Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+            iex "& {$(irm get.scoop.sh)} -RunAsAdmin" 2>$null || true
+            scoop bucket add main
+            scoop install openssl
+            $scoopDir = "$env:USERPROFILE\scoop\apps\openssl\current"
+            echo "OPENSSL_ROOT_DIR=$scoopDir" >> $env:GITHUB_ENV
+            echo "Installed OpenSSL via scoop at: $scoopDir"
+          }
 
       # ---- Qt6 (Windows / macOS) ----
       - name: Install Qt6
@@ -130,20 +138,18 @@ jobs:
           if [ "${{ runner.os }}" == "Windows" ]; then
             aqt install-tool windows desktop ${{ env.QT_IFW_TOOL }} \
               --outputdir "${{ runner.temp }}/qtifw"
-            echo "QT_IFW_DIR=${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}" >> $GITHUB_ENV
           elif [ "${{ runner.os }}" == "macOS" ]; then
             aqt install-tool mac desktop ${{ env.QT_IFW_TOOL }} \
               --outputdir "${{ runner.temp }}/qtifw"
-            echo "QT_IFW_DIR=${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}" >> $GITHUB_ENV
           else
             aqt install-tool linux desktop ${{ env.QT_IFW_TOOL }} \
               --outputdir "${{ runner.temp }}/qtifw"
-            echo "QT_IFW_DIR=${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}" >> $GITHUB_ENV
           fi
-          echo "QtIFW installed at: ${{ runner.temp }}/qtifw"
+          echo "QT_IFW_DIR=${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}" >> $GITHUB_ENV
+          echo "QtIFW installed:"
           ls "${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/" || true
 
-      # ---- Configure CMake ----
+      # ---- Configure CMake (Linux) ----
       - name: Configure CMake (Linux)
         if: runner.os == 'Linux'
         working-directory: fincept-qt
@@ -156,6 +162,7 @@ jobs:
             -DFINCEPT_BUILD_INSTALLER=ON \
             ${{ matrix.cmake_extra }}
 
+      # ---- Configure CMake (Windows / macOS) ----
       - name: Configure CMake (Windows / macOS)
         if: runner.os != 'Linux'
         shell: bash
@@ -179,7 +186,7 @@ jobs:
       - name: Build
         shell: bash
         working-directory: fincept-qt
-        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel $(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 3)
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel $(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
 
       # ---- Verify binary ----
       - name: Verify build output
@@ -195,8 +202,7 @@ jobs:
             echo "::error::Binary not found at $BINARY"
             exit 1
           fi
-          echo "Binary verified: $BINARY"
-          ls -lh "$BINARY"
+          echo "Binary verified: $BINARY ($(du -sh "$BINARY" | cut -f1))"
 
       # ---- Windows: deploy Qt DLLs before packaging ----
       - name: Deploy Qt DLLs (Windows)
@@ -206,9 +212,11 @@ jobs:
         run: |
           set -euo pipefail
           BUILD_DIR="build/Release"
+          QT_BIN="${QT_ROOT_DIR}/bin"
+          QT_PLUGINS="${QT_ROOT_DIR}/plugins"
 
-          # Run windeployqt
-          WDQT="${QT_ROOT_DIR}/bin/windeployqt.exe"
+          # windeployqt — handles the bulk of Qt DLL discovery
+          WDQT="${QT_BIN}/windeployqt.exe"
           if [ -f "$WDQT" ]; then
             echo "Running windeployqt..."
             "$WDQT" \
@@ -219,19 +227,15 @@ jobs:
               --force \
               "${BUILD_DIR}/${{ matrix.exe }}"
           else
-            echo "::warning::windeployqt not found"
+            echo "::warning::windeployqt not found at ${WDQT}"
           fi
 
-          QT_BIN="${QT_ROOT_DIR}/bin"
-          QT_PLUGINS="${QT_ROOT_DIR}/plugins"
-
-          # Qt Core DLLs (belt+suspenders — windeployqt should handle these)
+          # Qt Core DLLs (belt+suspenders)
           for qt_dll in \
             Qt6Core.dll Qt6Gui.dll Qt6Widgets.dll \
             Qt6Charts.dll Qt6PrintSupport.dll \
             Qt6Network.dll Qt6Sql.dll Qt6Concurrent.dll \
-            Qt6WebSockets.dll \
-            Qt6Multimedia.dll Qt6MultimediaWidgets.dll \
+            Qt6WebSockets.dll Qt6Multimedia.dll Qt6MultimediaWidgets.dll \
             Qt6OpenGL.dll Qt6OpenGLWidgets.dll \
             Qt6Svg.dll Qt6Xml.dll Qt6TextToSpeech.dll; do
             if [ -f "${QT_BIN}/${qt_dll}" ] && [ ! -f "${BUILD_DIR}/${qt_dll}" ]; then
@@ -239,14 +243,24 @@ jobs:
             fi
           done
 
-          # OpenSSL DLLs
+          # OpenSSL DLLs — Qt ships them in its own bin/
           for ssl_dll in \
             libssl-3-x64.dll libcrypto-3-x64.dll \
             libssl-3.dll libcrypto-3.dll; do
             if [ -f "${QT_BIN}/${ssl_dll}" ] && [ ! -f "${BUILD_DIR}/${ssl_dll}" ]; then
               cp "${QT_BIN}/${ssl_dll}" "${BUILD_DIR}/"
+              echo "Copied ${ssl_dll} from Qt bin"
             fi
           done
+          # Also check the OPENSSL_ROOT_DIR bin/ if Qt didn't ship them
+          if [ -n "${OPENSSL_ROOT_DIR:-}" ]; then
+            for ssl_dll in libssl-3-x64.dll libcrypto-3-x64.dll libssl-3.dll libcrypto-3.dll; do
+              if [ -f "${OPENSSL_ROOT_DIR}/bin/${ssl_dll}" ] && [ ! -f "${BUILD_DIR}/${ssl_dll}" ]; then
+                cp "${OPENSSL_ROOT_DIR}/bin/${ssl_dll}" "${BUILD_DIR}/"
+                echo "Copied ${ssl_dll} from OPENSSL_ROOT_DIR"
+              fi
+            done
+          fi
 
           # MSVC Runtime DLLs
           for vcrt_dll in \
@@ -285,20 +299,14 @@ jobs:
             fi
           done
 
-          # qt.conf
           printf '[Paths]\nPrefix = .\nPlugins = .\nLibraries = .\n' > "${BUILD_DIR}/qt.conf"
-
-          echo "=== Build dir contents ($(find "${BUILD_DIR}" -type f | wc -l) files) ==="
+          echo "=== Build dir: $(find "${BUILD_DIR}" -type f | wc -l) files ==="
 
       # ---- Generate installer ----
       - name: Generate Installer (CPack IFW)
         shell: bash
         working-directory: fincept-qt/build
         run: |
-          echo "QT_IFW_DIR=${QT_IFW_DIR}"
-          ls "${QT_IFW_DIR}/bin/" || true
-
-          # Add QtIFW bin to PATH so CPack can find binarycreator
           export PATH="${QT_IFW_DIR}/bin:${PATH}"
           which binarycreator || echo "::warning::binarycreator not on PATH"
 
@@ -308,17 +316,15 @@ jobs:
             cpack -G IFW --verbose
           fi
 
-          echo ""
           echo "=== Generated installer ==="
-          ls -lh FinceptTerminal-*
+          ls -lh FinceptTerminal-* || true
 
       # ---- Upload installer artifact ----
       - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: |
-            fincept-qt/build/FinceptTerminal-*-setup*
+          path: fincept-qt/build/FinceptTerminal-*-setup*
           retention-days: 30
 
   # ---- Release: attach installers to GitHub Release ----
@@ -337,15 +343,11 @@ jobs:
           path: installers
 
       - name: List installers
-        run: |
-          echo "=== Downloaded installer artifacts ==="
-          find installers -type f | sort
-          ls -lhR installers/
+        run: find installers -type f | sort
 
       - name: Attach installers to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: |
-            installers/**/*-setup*
+          files: installers/**/*-setup*
           fail_on_unmatched_files: false

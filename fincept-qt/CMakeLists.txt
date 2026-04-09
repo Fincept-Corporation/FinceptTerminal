@@ -1432,30 +1432,23 @@ target_precompile_headers(FinceptTerminal PRIVATE
 )
 
 # ── OpenSSL — needed for Google Sheets JWT signing ────────────────────────────
-# Strategy (all platforms): find_package first (works on CI runners and system installs).
-# On Windows, also search Qt's bundled OpenSSL and vcpkg as fallbacks.
-if(WIN32)
-    # 1. Try Qt-bundled OpenSSL (set by jurplel/install-qt-action via QT_ROOT_DIR)
-    if(DEFINED ENV{QT_ROOT_DIR} AND NOT OPENSSL_ROOT_DIR)
-        set(OPENSSL_ROOT_DIR "$ENV{QT_ROOT_DIR}" CACHE PATH "" FORCE)
+# OPENSSL_ROOT_DIR can be set via:
+#   - cmake -DOPENSSL_ROOT_DIR=<path>          (CI: passed from workflow)
+#   - environment variable OPENSSL_ROOT_DIR    (CI: set by setup-openssl action)
+#   - vcpkg on dev machine (auto-detected below if not already set)
+if(WIN32 AND NOT OPENSSL_ROOT_DIR AND NOT DEFINED ENV{OPENSSL_ROOT_DIR})
+    # Dev machine vcpkg fallback
+    if(DEFINED ENV{VCPKG_INSTALLED_DIR} AND EXISTS "$ENV{VCPKG_INSTALLED_DIR}/x64-windows/lib/libcrypto.lib")
+        set(OPENSSL_ROOT_DIR "$ENV{VCPKG_INSTALLED_DIR}/x64-windows" CACHE PATH "" FORCE)
+    elseif(DEFINED ENV{VCPKG_ROOT} AND EXISTS "$ENV{VCPKG_ROOT}/installed/x64-windows/lib/libcrypto.lib")
+        set(OPENSSL_ROOT_DIR "$ENV{VCPKG_ROOT}/installed/x64-windows" CACHE PATH "" FORCE)
+    elseif(EXISTS "C:/windowsdisk/fincept-cpp/vcpkg_installed/x64-windows/lib/libcrypto.lib")
+        set(OPENSSL_ROOT_DIR "C:/windowsdisk/fincept-cpp/vcpkg_installed/x64-windows" CACHE PATH "" FORCE)
     endif()
-    # 2. Try VCPKG paths (dev machine / vcpkg toolchain)
-    if(NOT OPENSSL_ROOT_DIR)
-        if(DEFINED ENV{VCPKG_INSTALLED_DIR})
-            set(OPENSSL_ROOT_DIR "$ENV{VCPKG_INSTALLED_DIR}/x64-windows" CACHE PATH "" FORCE)
-        elseif(DEFINED ENV{VCPKG_ROOT})
-            set(OPENSSL_ROOT_DIR "$ENV{VCPKG_ROOT}/installed/x64-windows" CACHE PATH "" FORCE)
-        elseif(EXISTS "C:/windowsdisk/fincept-cpp/vcpkg_installed/x64-windows")
-            set(OPENSSL_ROOT_DIR "C:/windowsdisk/fincept-cpp/vcpkg_installed/x64-windows" CACHE PATH "" FORCE)
-        endif()
-    endif()
-    # 3. GitHub Actions runners have OpenSSL pre-installed here
-    if(NOT OPENSSL_ROOT_DIR AND EXISTS "C:/Program Files/OpenSSL")
-        set(OPENSSL_ROOT_DIR "C:/Program Files/OpenSSL" CACHE PATH "" FORCE)
-    endif()
-    if(NOT OPENSSL_ROOT_DIR AND EXISTS "C:/Program Files/OpenSSL-Win64")
-        set(OPENSSL_ROOT_DIR "C:/Program Files/OpenSSL-Win64" CACHE PATH "" FORCE)
-    endif()
+endif()
+
+if(OPENSSL_ROOT_DIR)
+    message(STATUS "OPENSSL_ROOT_DIR: ${OPENSSL_ROOT_DIR}")
 endif()
 
 find_package(OpenSSL REQUIRED)
