@@ -150,11 +150,19 @@ def extract_entities(headlines_json):
         people = []
         tickers = []
 
-        # Country extraction
+        # Country extraction — use word-boundary matching to avoid substring hits
+        # (e.g. "rome" inside "jerome", "uk" inside "truck", "thai" inside "thailand")
         for pattern, code in COUNTRIES.items():
-            if pattern in text:
-                countries.append({"name": pattern.title(), "code": code})
-                all_countries[code] += 1
+            if len(pattern) <= 4 or " " not in pattern:
+                # Short or single-word patterns: require word boundaries
+                if re.search(r'\b' + re.escape(pattern) + r'\b', text):
+                    countries.append({"name": pattern.title(), "code": code})
+                    all_countries[code] += 1
+            else:
+                # Multi-word patterns: simple substring is fine
+                if pattern in text:
+                    countries.append({"name": pattern.title(), "code": code})
+                    all_countries[code] += 1
 
         # Organization extraction
         for pattern, name in ORGANIZATIONS.items():
@@ -222,6 +230,25 @@ def cluster_semantic(headlines_json):
         return {"success": True, "clusters": [], "method": "too_few_articles"}
 
     # Tokenize and build TF-IDF manually (no sklearn dependency required)
+    # Synonym map: normalize common abbreviations/variants to a canonical form
+    SYNONYMS = {
+        "fed": "federal_reserve", "federal": "federal_reserve", "reserve": "federal_reserve",
+        "ecb": "european_central_bank",
+        "boj": "bank_of_japan",
+        "boe": "bank_of_england",
+        "pboc": "peoples_bank_china",
+        "nato": "nato_alliance",
+        "gop": "republican",
+        "kyiv": "ukraine_capital", "kiev": "ukraine_capital",
+        "sanctioned": "sanction", "sanctions": "sanction",
+        "rates": "interest_rate", "rate": "interest_rate",
+        "inflation": "inflation_cpi",
+        "troops": "military_troops", "soldiers": "military_troops",
+        "missiles": "missile", "strikes": "strike", "attacked": "attack", "attacks": "attack",
+        "crashed": "crash", "crashes": "crash",
+        "rallied": "rally", "rallies": "rally",
+    }
+
     def tokenize(text):
         words = re.findall(r'[a-z]{3,}', text.lower())
         stop = {"the", "and", "for", "are", "but", "not", "you", "all", "can",
@@ -231,7 +258,7 @@ def cluster_semantic(headlines_json):
                 "will", "each", "make", "like", "been", "than", "them", "then",
                 "what", "when", "that", "this", "said", "over", "into", "also",
                 "more", "some", "very", "after", "about", "which", "their", "there"}
-        return [w for w in words if w not in stop]
+        return [SYNONYMS.get(w, w) for w in words if w not in stop]
 
     docs = []
     for a in articles:
@@ -278,8 +305,8 @@ def cluster_semantic(headlines_json):
             return 0.0
         return dot / (norm_a * norm_b)
 
-    # Single-pass clustering (threshold = 0.3)
-    THRESHOLD = 0.3
+    # Single-pass clustering (threshold = 0.25 — catches more topically related articles)
+    THRESHOLD = 0.25
     clusters = []
     assigned = set()
 

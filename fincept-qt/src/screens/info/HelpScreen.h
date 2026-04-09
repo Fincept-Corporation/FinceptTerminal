@@ -3,7 +3,7 @@
 
 namespace fincept::screens {
 
-/// Help — FAQ, quick actions (create account, reset password), contact info.
+/// Help Center — FAQ, quick actions, contact info, support ticket link.
 class HelpScreen : public QWidget {
     Q_OBJECT
   public:

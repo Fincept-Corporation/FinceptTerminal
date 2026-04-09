@@ -21,10 +21,10 @@ namespace fincept::screens {
 
 static const char* MF = "font-family:'Consolas',monospace;";
 static QString PANEL_SS() {
-    return QString("background:%1;border:1px solid %2;").arg(QString(ui::colors::BG_BASE), QString(ui::colors::BORDER_DIM));
+    return QString("background:%1;border:1px solid %2;").arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM);
 }
 static QString HDR_SS() {
-    return QString("background:%1;border-bottom:1px solid %2;").arg(QString(ui::colors::BG_RAISED), QString(ui::colors::BORDER_DIM));
+    return QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM);
 }
 
 QWidget* ProfileScreen::make_panel(const QString& title) {
@@ -40,7 +40,7 @@ QWidget* ProfileScreen::make_panel(const QString& title) {
     hl->setContentsMargins(12, 0, 12, 0);
     auto* t = new QLabel(title);
     t->setStyleSheet(
-        QString("color:%1;font-size:12px;font-weight:700;background:transparent;letter-spacing:0.5px;%2").arg(QString(ui::colors::AMBER), MF));
+        QString("color:%1;font-size:12px;font-weight:700;background:transparent;letter-spacing:0.5px;%2").arg(ui::colors::AMBER, MF));
     hl->addWidget(t);
     hl->addStretch();
     vl->addWidget(hdr);
