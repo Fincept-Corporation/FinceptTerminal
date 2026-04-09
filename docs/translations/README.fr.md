@@ -26,16 +26,16 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 ## Caractéristiques
 
-| **Fonctionnalité**                       | **Description**                                                                                                                                                                                              |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 📊**Analyses de niveau CFA**             | Modèles DCF, optimisation de portefeuille, mesures de risque (VaR, Sharpe), tarification des produits dérivés via Python intégré                                                                             |
-| 🤖**AI Agents**                          | Plus de 20 personnalités d'investisseurs (Buffett, Dalio, Graham), stratégies de hedge funds, support LLM local, multi-fournisseurs (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama) |
-| 🌐**Plus de 100 connecteurs de données** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, FMI, Banque mondiale, AkShare, API gouvernementales                                                                                                          |
-| 📈**Trading en temps réel**              | Crypto (Kraken/HyperLiquid WebSocket), actions, trading algo, moteur de trading papier                                                                                                                       |
-| 🔬**QuantLib Suite**                     | 18 modules d'analyse quantitative — tarification, risque, stochastique, volatilité, titres à revenu fixe                                                                                                     |
-| 🚢**Renseignement mondial**              | Suivi maritime, analyse géopolitique, cartographie des relations, données satellite                                                                                                                          |
-| 🎨**Flux de travail visuels**            | Éditeur de nœuds pour les pipelines d'automatisation, intégration de l'outil MCP                                                                                                                             |
-| 🧠**AI Quant Lab**                       | Modèles ML, découverte de facteurs, HFT, trading d'apprentissage par renforcement                                                                                                                            |
+| **Fonctionnalité**                       | **Description**                                                                                                                                                                                                                                    |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 📊**Analyses de niveau CFA**             | Modèles DCF, optimisation de portefeuille, mesures de risque (VaR, Sharpe), tarification des produits dérivés via Python intégré                                                                                                                   |
+| 🤖**AI Agents**                          | Plus de 20 personnalités d'investisseurs (Buffett, Dalio, Graham), stratégies de hedge funds, support LLM local, multi-fournisseurs (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama)                                       |
+| 🌐**Plus de 100 connecteurs de données** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, FMI, Banque mondiale, AkShare, API gouvernementales, ainsi que des superpositions de données alternatives facultatives telles que le sentiment du marché Adanos pour la recherche sur les actions. |
+| 📈**Trading en temps réel**              | Crypto (Kraken/HyperLiquid WebSocket), actions, trading algo, moteur de trading papier                                                                                                                                                             |
+| 🔬**QuantLib Suite**                     | 18 modules d'analyse quantitative — tarification, risque, stochastique, volatilité, titres à revenu fixe                                                                                                                                           |
+| 🚢**Renseignement mondial**              | Suivi maritime, analyse géopolitique, cartographie des relations, données satellite                                                                                                                                                                |
+| 🎨**Flux de travail visuels**            | Éditeur de nœuds pour les pipelines d'automatisation, intégration de l'outil MCP                                                                                                                                                                   |
+| 🧠**AI Quant Lab**                       | Modèles ML, découverte de facteurs, HFT, trading d'apprentissage par renforcement                                                                                                                                                                  |
 
 * * *
 
@@ -165,6 +165,8 @@ cmake --build build --config Release --parallel
 
 **Terminal Fincept**est une plateforme financière open source conçue pour ceux qui refusent d'être limités par les logiciels traditionnels. Nous sommes en compétition sur**profondeur d'analyse**et**accessibilité des données**– pas sur les informations privilégiées ou les flux exclusifs.
 
+Les versions récentes prennent également en charge les options facultatives**Adanos Market Sentiment**connectivité dans**Sources de données → Données alternatives**. Une fois configuré, Equity Research peut générer des instantanés du sentiment des détaillants multi-sources sur Reddit, X, Finance News et Polymarket. Sans connexion Adanos active, la fonctionnalité reste inactive et le reste de l'application se comporte exactement comme avant.
+
 -   **Performances natives**— C++20 avec Qt6, pas de surcharge Electron/Web
 -   **Binaire simple**- pas de Node.js, pas d'exécution de navigateur, pas de bundle JavaScript
 -   **Analyses de niveau CFA**— couverture complète du programme via les modules Python
@@ -175,12 +177,12 @@ cmake --build build --config Release --parallel
 
 ## Feuille de route
 
-| Chronologie           | Jalon                                                                                        |
-| --------------------- | -------------------------------------------------------------------------------------------- |
-| **T1 2026**           | Streaming en temps réel, backtesting avancé, intégrations de courtiers                       |
-| **vomissements 2026** | Constructeur de stratégie d'options, gestion multi-portefeuilles, plus de 50 agents IA       |
-| **Kz 2026**           | API programmatique, interface utilisateur de formation ML, fonctionnalités institutionnelles |
-| **Avenir**            | Compagnon mobile, synchronisation cloud, marché communautaire                                |
+| Chronologie | Jalon                                                                                        |
+| ----------- | -------------------------------------------------------------------------------------------- |
+| **T1 2026** | Streaming en temps réel, backtesting avancé, intégrations de courtiers                       |
+| **Q2 2026** | Constructeur de stratégie d'options, gestion multi-portefeuilles, plus de 50 agents IA       |
+| **KZ 2026** | API programmatique, interface utilisateur de formation ML, fonctionnalités institutionnelles |
+| **Avenir**  | Compagnon mobile, synchronisation cloud, marché communautaire                                |
 
 * * *
 

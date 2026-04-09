@@ -20,22 +20,22 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 ## Acerca de
 
-**Terminal fincept vch**es una aplicación de escritorio nativa pura de C++20: una reescritura completa de la pila anterior de Tauri/React/Rust. se utiliza**Qt6**para interfaz de usuario y renderizado, integrado**Pitón**para análisis y ofrece rendimiento de clase terminal Bloomberg en un único binario nativo.
+**Terminal fincept vch**es una aplicación de escritorio nativa pura de C++20: una reescritura completa de la pila anterior de Tauri/React/Rust. se utiliza**qt6**para interfaz de usuario y renderizado, integrado**Pitón**para análisis y ofrece rendimiento de clase terminal Bloomberg en un único binario nativo.
 
 * * *
 
 ## Características
 
-| **Característica**                   | **Descripción**                                                                                                                                                                                                     |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 📊**Análisis a nivel CFA**           | Modelos DCF, optimización de cartera, métricas de riesgo (VaR, Sharpe), precios de derivados a través de Python integrado                                                                                           |
-| 🤖**Agentes de IA**                  | Más de 20 personas de inversores (Buffett, Dalio, Graham), estrategias de fondos de cobertura, soporte de LLM local, múltiples proveedores (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama) |
-| 🌐**Más de 100 conectores de datos** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, FMI, Banco Mundial, AkShare, API gubernamentales                                                                                                                    |
-| 📈**Comercio en tiempo real**        | Cripto (Kraken/HyperLiquid WebSocket), acciones, comercio algorítmico, motor de comercio de papel                                                                                                                   |
-| 🔬**Suite QuantLib**                 | 18 módulos de análisis cuantitativo: fijación de precios, riesgo, estocástico, volatilidad, renta fija                                                                                                              |
-| 🚢**Inteligencia global**            | Seguimiento marítimo, análisis geopolítico, mapeo de relaciones, datos satelitales.                                                                                                                                 |
-| 🎨**Flujos de trabajo visuales**     | Editor de nodos para canales de automatización, integración de herramientas MCP                                                                                                                                     |
-| 🧠**Laboratorio cuantitativo de IA** | Modelos de aprendizaje automático, descubrimiento de factores, HFT, comercio de aprendizaje por refuerzo                                                                                                            |
+| **Característica**                   | **Descripción**                                                                                                                                                                                                                            |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 📊**Análisis a nivel CFA**           | Modelos DCF, optimización de cartera, métricas de riesgo (VaR, Sharpe), precios de derivados a través de Python integrado                                                                                                                  |
+| 🤖**Agentes de IA**                  | Más de 20 personas de inversores (Buffett, Dalio, Graham), estrategias de fondos de cobertura, soporte de LLM local, múltiples proveedores (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama)                        |
+| 🌐**Más de 100 conectores de datos** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, FMI, Banco Mundial, AkShare, API gubernamentales, además de superposiciones de datos alternativos opcionales, como el sentimiento del mercado de Adanos para la investigación de acciones. |
+| 📈**Comercio en tiempo real**        | Cripto (Kraken/HyperLiquid WebSocket), acciones, comercio algorítmico, motor de comercio de papel                                                                                                                                          |
+| 🔬**Suite QuantLib**                 | 18 módulos de análisis cuantitativo: fijación de precios, riesgo, estocástico, volatilidad, renta fija                                                                                                                                     |
+| 🚢**Inteligencia global**            | Seguimiento marítimo, análisis geopolítico, mapeo de relaciones, datos satelitales.                                                                                                                                                        |
+| 🎨**Flujos de trabajo visuales**     | Editor de nodos para canales de automatización, integración de herramientas MCP                                                                                                                                                            |
+| 🧠**Laboratorio cuantitativo de IA** | Modelos de aprendizaje automático, descubrimiento de factores, HFT, comercio de aprendizaje por refuerzo                                                                                                                                   |
 
 * * *
 
@@ -106,7 +106,7 @@ docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fincept-ter
 | **git**                | el último | `winget install Git.Git`                                          | `apt install git`     | `brew install git`                 |
 | **Chacer**             | 3.20+     | `winget install Kitware.CMake`                                    | `apt install cmake`   | `brew install cmake`               |
 | **compilador de C ++** | C++20     | MSVC 2022 ([estudio visual](https://visualstudio.microsoft.com/)) | `apt install g++`     | Xcode CLT:`xcode-select --install` |
-| **Qt6**                | 6.5+      | Vea abajo                                                         | Vea abajo             | Vea abajo                          |
+| **qt6**                | 6.5+      | Vea abajo                                                         | Vea abajo             | Vea abajo                          |
 | **Pitón**              | 3.11+     | [python.org](https://www.python.org/downloads/)                   | `apt install python3` | `brew install python`              |
 
 #### Instalar Qt6
@@ -165,6 +165,8 @@ cmake --build build --config Release --parallel
 
 **Terminal Fincept**es una plataforma financiera de código abierto creada para aquellos que se niegan a verse limitados por el software tradicional. Competimos en**profundidad analítica**y**accesibilidad a los datos**– no en información privilegiada ni en feeds exclusivos.
 
+Las versiones recientes también admiten opciones opcionales.**Sentimiento del mercado de Adanos**conectividad en**Fuentes de datos → Datos alternativos**. Cuando se configura, Equity Research puede mostrar instantáneas del sentimiento minorista de fuentes cruzadas en Reddit, X, noticias financieras y Polymarket. Sin una conexión activa de Adanos, la función permanece inactiva y el resto de la aplicación se comporta exactamente como antes.
+
 -   **Rendimiento nativo**— C++20 con Qt6, sin sobrecarga de Electron/web
 -   **binario único**— sin Node.js, sin tiempo de ejecución del navegador, sin paquete de JavaScript
 -   **Análisis a nivel CFA**— cobertura curricular completa a través de módulos de Python
@@ -179,7 +181,7 @@ cmake --build build --config Release --parallel
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | **Primer trimestre de 2026** | Transmisión en tiempo real, backtesting avanzado, integraciones de corredores                                    |
 | **vómitos 2026**             | Creador de estrategias de opciones, gestión de carteras múltiples, más de 50 agentes de IA                       |
-| **2026**                     | API programática, interfaz de usuario de capacitación de aprendizaje automático, características institucionales |
+| **KZ 2026**                  | API programática, interfaz de usuario de capacitación de aprendizaje automático, características institucionales |
 | **Futuro**                   | Compañero móvil, sincronización en la nube, mercado comunitario                                                  |
 
 * * *
@@ -215,7 +217,7 @@ Estamos construyendo juntos el futuro del análisis financiero.
 
 ## Licencia
 
-**Dual Licensed: AGPL-3.0 (Open Source) + Commercial**
+**Licencia dual: AGPL-3.0 (código abierto) + Comercial**
 
 ### Código abierto (AGPL-3.0)
 
