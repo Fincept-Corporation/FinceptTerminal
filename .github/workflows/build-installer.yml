@@ -10,7 +10,8 @@ env:
   BUILD_TYPE: Release
   QT_VERSION: "6.8.3"
   QT_MODULES: "qtcharts qtwebsockets qtmultimedia"
-  QT_IFW_VERSION: "4.8"
+  QT_IFW_VERSION: "4.7"
+  QT_IFW_TOOL: "tools_ifw"
 
 jobs:
   build-installer:
@@ -103,15 +104,15 @@ jobs:
         run: |
           pip install aqtinstall
           if [ "${{ runner.os }}" == "Windows" ]; then
-            aqt install-tool windows desktop qt.tools.ifw.${{ env.QT_IFW_VERSION }} \
+            aqt install-tool windows desktop ${{ env.QT_IFW_TOOL }} \
               --outputdir "${{ runner.temp }}/qtifw"
             echo "QT_IFW_DIR=${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}" >> $GITHUB_ENV
           elif [ "${{ runner.os }}" == "macOS" ]; then
-            aqt install-tool mac desktop qt.tools.ifw.${{ env.QT_IFW_VERSION }} \
+            aqt install-tool mac desktop ${{ env.QT_IFW_TOOL }} \
               --outputdir "${{ runner.temp }}/qtifw"
             echo "QT_IFW_DIR=${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}" >> $GITHUB_ENV
           else
-            aqt install-tool linux desktop qt.tools.ifw.${{ env.QT_IFW_VERSION }} \
+            aqt install-tool linux desktop ${{ env.QT_IFW_TOOL }} \
               --outputdir "${{ runner.temp }}/qtifw"
             echo "QT_IFW_DIR=${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}" >> $GITHUB_ENV
           fi

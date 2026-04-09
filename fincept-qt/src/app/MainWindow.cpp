@@ -727,7 +727,7 @@ void MainWindow::setup_dock_screens() {
 
     // Eagerly constructed: lightweight screens with no data fetching or timers.
     dock_router_->register_screen("report_builder", new screens::ReportBuilderScreen);
-    dock_router_->register_screen("profile", new screens::ProfileScreen);
+    dock_router_->register_factory("profile", []() { return new screens::ProfileScreen; });
     dock_router_->register_screen("settings", new screens::SettingsScreen);
     dock_router_->register_screen("about", new screens::AboutScreen);
     dock_router_->register_screen("support", new screens::SupportScreen);

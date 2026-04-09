@@ -7,6 +7,7 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QDesktopServices>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -20,10 +21,10 @@ namespace fincept::screens {
 
 static const char* MF = "font-family:'Consolas',monospace;";
 static QString PANEL_SS() {
-    return QString("background:%1;border:1px solid %2;").arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM);
+    return QString("background:%1;border:1px solid %2;").arg(QString(ui::colors::BG_BASE), QString(ui::colors::BORDER_DIM));
 }
 static QString HDR_SS() {
-    return QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM);
+    return QString("background:%1;border-bottom:1px solid %2;").arg(QString(ui::colors::BG_RAISED), QString(ui::colors::BORDER_DIM));
 }
 
 QWidget* ProfileScreen::make_panel(const QString& title) {
@@ -39,7 +40,7 @@ QWidget* ProfileScreen::make_panel(const QString& title) {
     hl->setContentsMargins(12, 0, 12, 0);
     auto* t = new QLabel(title);
     t->setStyleSheet(
-        QString("color:%1;font-size:12px;font-weight:700;background:transparent;letter-spacing:0.5px;%2").arg(ui::colors::AMBER, MF));
+        QString("color:%1;font-size:12px;font-weight:700;background:transparent;letter-spacing:0.5px;%2").arg(QString(ui::colors::AMBER), MF));
     hl->addWidget(t);
     hl->addStretch();
     vl->addWidget(hdr);
@@ -149,9 +150,9 @@ void ProfileScreen::build_tab_nav(QVBoxLayout* root) {
         auto* btn = new QPushButton(tabs[i]);
         btn->setFixedHeight(32);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setProperty("section_idx", i);
         connect(btn, &QPushButton::clicked, this, [this, i]() { on_section_changed(i); });
         hl->addWidget(btn);
+        nav_buttons_.append(btn);
     }
     hl->addStretch();
     root->addWidget(nav);
@@ -159,12 +160,9 @@ void ProfileScreen::build_tab_nav(QVBoxLayout* root) {
 
 void ProfileScreen::on_section_changed(int index) {
     sections_->setCurrentIndex(index);
-    for (auto* btn : findChildren<QPushButton*>()) {
-        QVariant v = btn->property("section_idx");
-        if (!v.isValid())
-            continue;
-        btn->setStyleSheet(
-            v.toInt() == index
+    for (int i = 0; i < nav_buttons_.size(); ++i) {
+        nav_buttons_[i]->setStyleSheet(
+            i == index
                 ? QString("QPushButton{background:%1;color:%2;border:none;padding:0 14px;"
                            "font-size:12px;font-weight:700;letter-spacing:0.5px;font-family:'Consolas',monospace;}")
                       .arg(ui::colors::AMBER, ui::colors::BG_BASE)
@@ -475,16 +473,24 @@ QWidget* ProfileScreen::build_support() {
     auto* lrl = new QHBoxLayout(lr);
     lrl->setContentsMargins(12, 10, 12, 10);
     lrl->setSpacing(8);
-    for (auto& s : {"DOCS", "GITHUB", "DISCORD", "FAQ"}) {
-        auto* b = new QPushButton(s);
+    auto make_link_btn = [&](const QString& label, const QString& url) {
+        auto* b = new QPushButton(label);
         b->setFixedHeight(26);
+        b->setCursor(Qt::PointingHandCursor);
         b->setStyleSheet(
             QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 12px;"
                     "font-size:11px;font-family:'Consolas',monospace;}QPushButton:hover{color:%4;background:%5;}")
                 .arg(ui::colors::BG_RAISED, ui::colors::CYAN, ui::colors::BORDER_DIM,
                      ui::colors::TEXT_PRIMARY, ui::colors::BG_HOVER));
+        connect(b, &QPushButton::clicked, this, [url]() {
+            QDesktopServices::openUrl(QUrl(url));
+        });
         lrl->addWidget(b);
-    }
+    };
+    make_link_btn("DOCS",    "https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs");
+    make_link_btn("GITHUB",  "https://github.com/Fincept-Corporation/FinceptTerminal");
+    make_link_btn("DISCORD", "https://discord.gg/ae87a8ygbN");
+    make_link_btn("FAQ",     "https://github.com/Fincept-Corporation/FinceptTerminal/wiki");
     lrl->addStretch();
     lvl->addWidget(lr);
     vl->addWidget(lp);
@@ -529,7 +535,7 @@ void ProfileScreen::refresh_all() {
                                 .arg(MF));
     bill_plan_->setText(s.account_type().toUpper());
     bill_credits_->setText(QString::number(s.user_info.credit_balance, 'f', 2));
-    bill_support_->setText("COMMUNITY");
+    // bill_support_ is populated by fetch_billing_data() from the API; leave it as-is here
 }
 
 void ProfileScreen::fetch_usage_data() {
@@ -539,7 +545,9 @@ void ProfileScreen::fetch_usage_data() {
     usg_plan_->setText(s.account_type().toUpper());
     usg_rate_->setText("—");
 
-    auth::UserApi::instance().get_user_usage(30, [this](auth::ApiResponse r) {
+    QPointer<ProfileScreen> self = this;
+    auth::UserApi::instance().get_user_usage(30, [self](auth::ApiResponse r) {
+        if (!self) return;
         if (!r.success) {
             LOG_WARN("Profile", "Usage fetch failed: " + r.error);
             return;
@@ -547,42 +555,42 @@ void ProfileScreen::fetch_usage_data() {
         auto data = r.data.contains("data") ? r.data["data"].toObject() : r.data;
         if (data.contains("account")) {
             auto a = data["account"].toObject();
-            usg_credits_->setText(QString::number(a["credit_balance"].toDouble(), 'f', 0));
-            usg_plan_->setText(a["account_type"].toString().toUpper());
-            usg_rate_->setText(QString::number(a["rate_limit_per_hour"].toInt()));
+            self->usg_credits_->setText(QString::number(a["credit_balance"].toDouble(), 'f', 0));
+            self->usg_plan_->setText(a["account_type"].toString().toUpper());
+            self->usg_rate_->setText(QString::number(a["rate_limit_per_hour"].toInt()));
         }
         if (data.contains("summary")) {
             auto s = data["summary"].toObject();
-            usg_total_req_->setText(QString::number(s["total_requests"].toInt()));
-            usg_cred_used_->setText(QString::number(s["total_credits_used"].toDouble(), 'f', 0));
-            usg_avg_cred_->setText(QString::number(s["avg_credits_per_request"].toDouble(), 'f', 2));
-            usg_avg_resp_->setText(QString::number(s["avg_response_time_ms"].toDouble(), 'f', 0));
+            self->usg_total_req_->setText(QString::number(s["total_requests"].toInt()));
+            self->usg_cred_used_->setText(QString::number(s["total_credits_used"].toDouble(), 'f', 0));
+            self->usg_avg_cred_->setText(QString::number(s["avg_credits_per_request"].toDouble(), 'f', 2));
+            self->usg_avg_resp_->setText(QString::number(s["avg_response_time_ms"].toDouble(), 'f', 0));
         }
         if (data.contains("daily_usage")) {
             auto d = data["daily_usage"].toArray();
-            usg_daily_table_->setRowCount(0);
+            self->usg_daily_table_->setRowCount(0);
             for (int i = d.size() - 1; i >= 0 && i >= d.size() - 10; i--) {
                 auto e = d[i].toObject();
-                int row = usg_daily_table_->rowCount();
-                usg_daily_table_->insertRow(row);
-                usg_daily_table_->setItem(row, 0, new QTableWidgetItem(e["date"].toString()));
-                usg_daily_table_->setItem(row, 1, new QTableWidgetItem(QString::number(e["request_count"].toInt())));
-                usg_daily_table_->setItem(row, 2,
+                int row = self->usg_daily_table_->rowCount();
+                self->usg_daily_table_->insertRow(row);
+                self->usg_daily_table_->setItem(row, 0, new QTableWidgetItem(e["date"].toString()));
+                self->usg_daily_table_->setItem(row, 1, new QTableWidgetItem(QString::number(e["request_count"].toInt())));
+                self->usg_daily_table_->setItem(row, 2,
                                           new QTableWidgetItem(QString::number(e["credits_used"].toDouble(), 'f', 0)));
             }
         }
         if (data.contains("endpoint_breakdown")) {
             auto eps = data["endpoint_breakdown"].toArray();
-            usg_endpoint_table_->setRowCount(0);
+            self->usg_endpoint_table_->setRowCount(0);
             for (const auto& v : eps) {
                 auto e = v.toObject();
-                int row = usg_endpoint_table_->rowCount();
-                usg_endpoint_table_->insertRow(row);
-                usg_endpoint_table_->setItem(row, 0, new QTableWidgetItem(e["endpoint"].toString()));
-                usg_endpoint_table_->setItem(row, 1, new QTableWidgetItem(QString::number(e["request_count"].toInt())));
-                usg_endpoint_table_->setItem(
+                int row = self->usg_endpoint_table_->rowCount();
+                self->usg_endpoint_table_->insertRow(row);
+                self->usg_endpoint_table_->setItem(row, 0, new QTableWidgetItem(e["endpoint"].toString()));
+                self->usg_endpoint_table_->setItem(row, 1, new QTableWidgetItem(QString::number(e["request_count"].toInt())));
+                self->usg_endpoint_table_->setItem(
                     row, 2, new QTableWidgetItem(QString::number(e["credits_used"].toDouble(), 'f', 0)));
-                usg_endpoint_table_->setItem(
+                self->usg_endpoint_table_->setItem(
                     row, 3, new QTableWidgetItem(QString::number(e["avg_response_time_ms"].toDouble(), 'f', 0)));
             }
         }
@@ -591,17 +599,20 @@ void ProfileScreen::fetch_usage_data() {
 
 void ProfileScreen::fetch_billing_data() {
     LOG_INFO("Profile", "Fetching billing data...");
-    auth::UserApi::instance().get_user_subscription([this](auth::ApiResponse r) {
+    QPointer<ProfileScreen> self = this;
+    auth::UserApi::instance().get_user_subscription([self](auth::ApiResponse r) {
+        if (!self) return;
         if (!r.success) {
             LOG_WARN("Profile", "Subscription fetch failed: " + r.error);
             return;
         }
         auto d = r.data.contains("data") ? r.data["data"].toObject() : r.data;
-        bill_plan_->setText(d["account_type"].toString().toUpper());
-        bill_credits_->setText(QString::number(d["credit_balance"].toDouble(), 'f', 2));
-        bill_support_->setText(d["support_type"].toString().toUpper());
+        self->bill_plan_->setText(d["account_type"].toString().toUpper());
+        self->bill_credits_->setText(QString::number(d["credit_balance"].toDouble(), 'f', 2));
+        self->bill_support_->setText(d["support_type"].toString().toUpper());
     });
-    auth::UserApi::instance().get_payment_history(1, 20, [this](auth::ApiResponse r) {
+    auth::UserApi::instance().get_payment_history(1, 20, [self](auth::ApiResponse r) {
+        if (!self) return;
         if (!r.success) {
             LOG_WARN("Profile", "Payment history failed: " + r.error);
             return;
@@ -612,24 +623,26 @@ void ProfileScreen::fetch_billing_data() {
             p = d["transactions"].toArray();
         if (p.isEmpty() && d.contains("data"))
             p = d["data"].toArray();
-        bill_history_->setRowCount(0);
+        self->bill_history_->setRowCount(0);
         for (const auto& v : p) {
             auto e = v.toObject();
-            int row = bill_history_->rowCount();
-            bill_history_->insertRow(row);
-            bill_history_->setItem(row, 0, new QTableWidgetItem(e["created_at"].toString().left(10)));
-            bill_history_->setItem(row, 1, new QTableWidgetItem(e["plan_name"].toString()));
-            bill_history_->setItem(row, 2,
+            int row = self->bill_history_->rowCount();
+            self->bill_history_->insertRow(row);
+            self->bill_history_->setItem(row, 0, new QTableWidgetItem(e["created_at"].toString().left(10)));
+            self->bill_history_->setItem(row, 1, new QTableWidgetItem(e["plan_name"].toString()));
+            self->bill_history_->setItem(row, 2,
                                    new QTableWidgetItem(QString("$%1").arg(e["amount_usd"].toDouble(), 0, 'f', 2)));
-            bill_history_->setItem(row, 3, new QTableWidgetItem(QString::number(e["credits_purchased"].toInt())));
-            bill_history_->setItem(row, 4, new QTableWidgetItem(e["status"].toString().toUpper()));
+            self->bill_history_->setItem(row, 3, new QTableWidgetItem(QString::number(e["credits_purchased"].toInt())));
+            self->bill_history_->setItem(row, 4, new QTableWidgetItem(e["status"].toString().toUpper()));
         }
     });
 }
 
 void ProfileScreen::fetch_login_history() {
     LOG_INFO("Profile", "Fetching login history...");
-    auth::UserApi::instance().get_login_history(20, 0, [this](auth::ApiResponse r) {
+    QPointer<ProfileScreen> self = this;
+    auth::UserApi::instance().get_login_history(20, 0, [self](auth::ApiResponse r) {
+        if (!self) return;
         if (!r.success) {
             LOG_WARN("Profile", "Login history failed: " + r.error);
             return;
@@ -638,14 +651,14 @@ void ProfileScreen::fetch_login_history() {
         auto h = d["login_history"].toArray();
         if (h.isEmpty())
             h = d["history"].toArray();
-        sec_login_hist_->setRowCount(0);
+        self->sec_login_hist_->setRowCount(0);
         for (const auto& v : h) {
             auto e = v.toObject();
-            int row = sec_login_hist_->rowCount();
-            sec_login_hist_->insertRow(row);
-            sec_login_hist_->setItem(row, 0, new QTableWidgetItem(e["timestamp"].toString().left(19)));
-            sec_login_hist_->setItem(row, 1, new QTableWidgetItem(e["ip_address"].toString()));
-            sec_login_hist_->setItem(row, 2, new QTableWidgetItem(e["status"].toString().toUpper()));
+            int row = self->sec_login_hist_->rowCount();
+            self->sec_login_hist_->insertRow(row);
+            self->sec_login_hist_->setItem(row, 0, new QTableWidgetItem(e["timestamp"].toString().left(19)));
+            self->sec_login_hist_->setItem(row, 1, new QTableWidgetItem(e["ip_address"].toString()));
+            self->sec_login_hist_->setItem(row, 2, new QTableWidgetItem(e["status"].toString().toUpper()));
         }
     });
 }
@@ -690,6 +703,8 @@ void ProfileScreen::show_edit_profile_dialog() {
         QString("QPushButton{background:%1;color:%2;border:none;padding:0 16px;"
                 "font-size:11px;font-weight:700;font-family:'Consolas',monospace;}QPushButton:hover{background:#b45309;}")
             .arg(ui::colors::AMBER, ui::colors::BG_BASE));
+    QPointer<ProfileScreen> self = this;
+    QPointer<QDialog> dlg_ptr = dlg;
     connect(sv, &QPushButton::clicked, this, [=]() {
         QJsonObject data;
         if (!un->text().trimmed().isEmpty())
@@ -698,10 +713,12 @@ void ProfileScreen::show_edit_profile_dialog() {
             data["phone"] = ph->text().trimmed();
         if (!co->text().trimmed().isEmpty())
             data["country"] = co->text().trimmed();
-        auth::UserApi::instance().update_user_profile(data, [this, dlg](auth::ApiResponse r) {
+        auth::UserApi::instance().update_user_profile(data, [self, dlg_ptr](auth::ApiResponse r) {
+            if (!self) return;
             if (r.success) {
                 auth::AuthManager::instance().refresh_user_data();
-                dlg->accept();
+                if (dlg_ptr)
+                    dlg_ptr->accept();
             }
         });
     });

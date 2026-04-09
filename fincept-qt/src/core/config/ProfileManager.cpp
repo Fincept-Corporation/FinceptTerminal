@@ -1,5 +1,6 @@
 #include "core/config/ProfileManager.h"
 #include "core/config/AppPaths.h"
+#include "core/logging/Logger.h"
 
 #include <QDir>
 #include <QFile>
@@ -90,13 +91,22 @@ QStringList ProfileManager::list_profiles() const {
 }
 
 void ProfileManager::create_profile(const QString& name) {
+    // Sanitise: same rules as set_active()
+    QString clean = name.trimmed().toLower();
+    for (QChar& c : clean) {
+        if (!c.isLetterOrNumber() && c != '-' && c != '_')
+            c = '_';
+    }
+    if (clean.isEmpty())
+        return;
+
     QStringList profiles = list_profiles();
-    if (!profiles.contains(name)) {
-        profiles.append(name);
+    if (!profiles.contains(clean)) {
+        profiles.append(clean);
         save_manifest(profiles);
     }
     // Create directory tree eagerly so it's ready for use
-    const QString root = AppPaths::root() + "/profiles/" + name;
+    const QString root = AppPaths::root() + "/profiles/" + clean;
     QDir().mkpath(root + "/data");
     QDir().mkpath(root + "/logs");
     QDir().mkpath(root + "/cache");
@@ -129,6 +139,8 @@ void ProfileManager::save_manifest(const QStringList& profiles) const {
     if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         f.write(QJsonDocument(obj).toJson(QJsonDocument::Indented));
         f.close();
+    } else {
+        LOG_ERROR("ProfileManager", "Failed to write profiles manifest: " + manifest_path());
     }
 }
 

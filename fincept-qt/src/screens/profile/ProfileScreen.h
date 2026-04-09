@@ -2,6 +2,7 @@
 #include <QDialog>
 #include <QLabel>
 #include <QLineEdit>
+#include <QList>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTableWidget>
@@ -19,6 +20,7 @@ class ProfileScreen : public QWidget {
 
   private:
     QStackedWidget* sections_ = nullptr;
+    QList<QPushButton*> nav_buttons_;
 
     // Header labels
     QLabel* username_header_ = nullptr;
