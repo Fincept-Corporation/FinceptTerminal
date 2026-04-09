@@ -76,35 +76,24 @@ ImfPanel::ImfPanel(QWidget* parent)
     // Left: indicator list
     auto* left = new QWidget;
     left->setFixedWidth(240);
-    left->setStyleSheet("background:#0a0a0a; border-right:1px solid #1a1a1a;");
+    left->setStyleSheet(sidebar_style());
     auto* lvl = new QVBoxLayout(left);
     lvl->setContentsMargins(0, 0, 0, 0);
     lvl->setSpacing(0);
 
     auto* hdr = new QLabel("IMF INDICATOR");
-    hdr->setStyleSheet("color:#525252; font-size:8px; font-weight:700;"
-                       " letter-spacing:1px; background:#111111;"
-                       " padding:4px 10px; border-bottom:1px solid #1a1a1a;");
+    hdr->setStyleSheet(section_lbl_style() + section_hdr_style());
     lvl->addWidget(hdr);
 
     indicator_search_ = new QLineEdit;
     indicator_search_->setPlaceholderText("Filter indicators…");
-    indicator_search_->setStyleSheet(
-        "background:#080808; color:#e5e5e5; border:none;"
-        " border-bottom:1px solid #1a1a1a; padding:4px 10px; font-size:11px;");
+    indicator_search_->setStyleSheet(search_input_style());
     connect(indicator_search_, &QLineEdit::textChanged,
             this, &ImfPanel::on_indicator_filter);
     lvl->addWidget(indicator_search_);
 
     indicator_list_ = new QListWidget;
-    indicator_list_->setStyleSheet(
-        QString(
-            "QListWidget { background:transparent; border:none; outline:none; }"
-            "QListWidget::item { color:#808080; padding:5px 10px;"
-            "  border-bottom:1px solid #111111; font-size:11px; }"
-            "QListWidget::item:hover { color:#e5e5e5; background:#161616; }"
-            "QListWidget::item:selected { color:%1; background:rgba(0,0,0,0.3);"
-            "  border-left:2px solid %1; font-weight:700; }").arg(kImfColor));
+    indicator_list_->setStyleSheet(list_style());
     for (const auto& pair : kImfIndicators) {
         auto* item = new QListWidgetItem(pair.first, indicator_list_);
         item->setData(Qt::UserRole, pair.second);
@@ -133,8 +122,7 @@ void ImfPanel::activate() {
 
 void ImfPanel::build_controls(QHBoxLayout* thl) {
     auto* lbl = new QLabel("COUNTRY");
-    lbl->setStyleSheet(
-        "color:#525252; font-size:9px; font-weight:700; background:transparent;");
+    lbl->setStyleSheet(ctrl_label_style());
     country_combo_ = new QComboBox;
     for (const auto& pair : kImfCountries)
         country_combo_->addItem(pair.first, pair.second);

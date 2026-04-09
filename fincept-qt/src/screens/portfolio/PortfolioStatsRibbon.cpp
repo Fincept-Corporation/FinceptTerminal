@@ -3,7 +3,9 @@
 
 #include "ui/theme/Theme.h"
 
+#include <QFrame>
 #include <QHBoxLayout>
+#include <QScrollArea>
 #include <QVBoxLayout>
 
 #include <cmath>
@@ -14,11 +16,25 @@ PortfolioStatsRibbon::PortfolioStatsRibbon(QWidget* parent) : QWidget(parent) {
     setFixedHeight(52);
     setObjectName("portfolioStatsRibbon");
     setStyleSheet(QString("#portfolioStatsRibbon { background:%1; border-bottom:1px solid %2; }")
-                      .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
+                      .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
 
-    auto* layout = new QHBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(0);
+    auto* outer = new QHBoxLayout(this);
+    outer->setContentsMargins(0, 0, 0, 0);
+    outer->setSpacing(0);
+
+    // Scroll area prevents horizontal overflow
+    auto* scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setStyleSheet("QScrollArea { background:transparent; border:none; }");
+
+    auto* inner = new QWidget;
+    inner->setStyleSheet("background:transparent;");
+    cells_layout_ = new QHBoxLayout(inner);
+    cells_layout_->setContentsMargins(0, 0, 0, 0);
+    cells_layout_->setSpacing(0);
 
     total_value_ = add_cell("TOTAL VALUE", ui::colors::WARNING);
     total_value_.container->setToolTip(
@@ -88,13 +104,17 @@ PortfolioStatsRibbon::PortfolioStatsRibbon(QWidget* parent) : QWidget(parent) {
         "single-day loss 95% of the time based on historical returns.\n"
         "E.g., VaR = -2.5% means you should not lose more than\n"
         "2.5% on 95% of trading days.");
+
+    scroll->setWidget(inner);
+    outer->addWidget(scroll);
 }
 
 PortfolioStatsRibbon::MetricCell PortfolioStatsRibbon::add_cell(const QString& label_text, const char* value_color) {
 
     auto* container = new QWidget;
+    container->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     auto* vlayout = new QVBoxLayout(container);
-    vlayout->setContentsMargins(8, 4, 8, 4);
+    vlayout->setContentsMargins(6, 3, 6, 3);
     vlayout->setSpacing(0);
 
     MetricCell cell;
@@ -102,21 +122,21 @@ PortfolioStatsRibbon::MetricCell PortfolioStatsRibbon::add_cell(const QString& l
 
     cell.label = new QLabel(label_text);
     cell.label->setStyleSheet(
-        QString("color:%1; font-size:8px; font-weight:600; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color:%1; font-size:8px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY));
     vlayout->addWidget(cell.label);
 
     cell.value = new QLabel("--");
-    cell.value->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700;").arg(value_color));
+    cell.value->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700;").arg(value_color).arg(ui::fonts::font_px(0)));
     vlayout->addWidget(cell.value);
 
     cell.sub = new QLabel;
-    cell.sub->setStyleSheet(QString("color:%1; font-size:8px;").arg(ui::colors::TEXT_TERTIARY));
+    cell.sub->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
     vlayout->addWidget(cell.sub);
 
     // Right border separator
     container->setStyleSheet(QString("border-right:1px solid %1;").arg(ui::colors::BORDER_DIM));
 
-    static_cast<QHBoxLayout*>(layout())->addWidget(container, 1);
+    cells_layout_->addWidget(container, 1);
 
     return cell;
 }
@@ -126,7 +146,7 @@ void PortfolioStatsRibbon::set_summary(const portfolio::PortfolioSummary& s) {
     auto color = [](double v) -> const char* { return v >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE; };
     auto set_val_color = [](MetricCell& c, const QString& text, const char* col) {
         c.value->setText(text);
-        c.value->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700;").arg(col));
+        c.value->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700;").arg(col).arg(ui::fonts::font_px(0)));
     };
 
     set_val_color(total_value_, fmt(s.total_market_value), ui::colors::WARNING);
@@ -171,13 +191,45 @@ void PortfolioStatsRibbon::set_metrics(const portfolio::ComputedMetrics& m) {
         double rs = *m.risk_score;
         const char* rs_color = rs < 30 ? ui::colors::POSITIVE : rs < 60 ? ui::colors::WARNING : ui::colors::NEGATIVE;
         risk_score_.value->setText(QString::number(rs, 'f', 0));
-        risk_score_.value->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700;").arg(rs_color));
+        risk_score_.value->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700;").arg(rs_color).arg(ui::fonts::font_px(0)));
     } else {
         risk_score_.value->setText("--");
     }
 
     var95_.value->setText(m.var_95.has_value() ? QString::number(*m.var_95, 'f', 2) : "--");
     var95_.sub->setText("1-Day");
+}
+
+void PortfolioStatsRibbon::refresh_theme() {
+    setStyleSheet(QString("#portfolioStatsRibbon { background:%1; border-bottom:1px solid %2; }")
+                      .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+
+    const QString lsz = QString::number(ui::fonts::font_px(-4));
+    const QString vsz = QString::number(ui::fonts::font_px(0));
+    const QString ssz = QString::number(ui::fonts::font_px(-3));
+
+    auto refresh_cell = [&](MetricCell& c) {
+        if (c.label)
+            c.label->setStyleSheet(
+                QString("color:%1; font-size:" + lsz + "px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY));
+        if (c.sub)
+            c.sub->setStyleSheet(QString("color:%1; font-size:" + ssz + "px;").arg(ui::colors::TEXT_TERTIARY));
+        if (c.container)
+            c.container->setStyleSheet(QString("border-right:1px solid %1;").arg(ui::colors::BORDER_DIM));
+    };
+
+    refresh_cell(total_value_);
+    refresh_cell(pnl_);
+    refresh_cell(day_change_);
+    refresh_cell(cost_basis_);
+    refresh_cell(positions_);
+    refresh_cell(concentration_);
+    refresh_cell(sharpe_);
+    refresh_cell(beta_);
+    refresh_cell(volatility_);
+    refresh_cell(max_drawdown_);
+    refresh_cell(risk_score_);
+    refresh_cell(var95_);
 }
 
 } // namespace fincept::screens

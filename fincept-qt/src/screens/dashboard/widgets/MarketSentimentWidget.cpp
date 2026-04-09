@@ -10,9 +10,8 @@ MarketSentimentWidget::MarketSentimentWidget(QWidget* parent) : BaseWidget("MARK
     vl->setSpacing(8);
 
     // ── Score banner ──
-    auto* banner = new QWidget;
-    banner->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED()));
-    auto* bl = new QVBoxLayout(banner);
+    banner_ = new QWidget;
+    auto* bl = new QVBoxLayout(banner_);
     bl->setContentsMargins(12, 10, 12, 10);
     bl->setSpacing(4);
     bl->setAlignment(Qt::AlignCenter);
@@ -23,25 +22,19 @@ MarketSentimentWidget::MarketSentimentWidget(QWidget* parent) : BaseWidget("MARK
     srl->setAlignment(Qt::AlignCenter);
     srl->setSpacing(8);
 
-    auto* arrow = new QLabel(QChar(0x2014)); // em-dash placeholder
-    arrow->setStyleSheet(
-        QString("font-size: 18px; background: transparent; color: %1;").arg(ui::colors::TEXT_TERTIARY()));
-    srl->addWidget(arrow);
+    arrow_label_ = new QLabel(QChar(0x2014)); // em-dash placeholder
+    srl->addWidget(arrow_label_);
 
     score_label_ = new QLabel("--");
-    score_label_->setStyleSheet(QString("color: %1; font-size: 24px; font-weight: bold; background: transparent;")
-                                    .arg(ui::colors::TEXT_TERTIARY()));
     srl->addWidget(score_label_);
 
     bl->addWidget(score_row);
 
     verdict_label_ = new QLabel("LOADING...");
     verdict_label_->setAlignment(Qt::AlignCenter);
-    verdict_label_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                                      .arg(ui::colors::TEXT_TERTIARY()));
     bl->addWidget(verdict_label_);
 
-    vl->addWidget(banner);
+    vl->addWidget(banner_);
 
     // ── Sentiment bar ──
     auto* bar_container = new QWidget;
@@ -51,15 +44,12 @@ MarketSentimentWidget::MarketSentimentWidget(QWidget* parent) : BaseWidget("MARK
     bar_layout->setSpacing(1);
 
     bull_bar_ = new QFrame;
-    bull_bar_->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::POSITIVE()));
     bar_layout->addWidget(bull_bar_, 1);
 
     neutral_bar_ = new QFrame;
-    neutral_bar_->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::TEXT_TERTIARY()));
     bar_layout->addWidget(neutral_bar_, 1);
 
     bear_bar_ = new QFrame;
-    bear_bar_->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::NEGATIVE()));
     bar_layout->addWidget(bear_bar_, 1);
 
     vl->addWidget(bar_container);
@@ -70,64 +60,90 @@ MarketSentimentWidget::MarketSentimentWidget(QWidget* parent) : BaseWidget("MARK
     bll->setContentsMargins(0, 0, 0, 0);
 
     bull_label_ = new QLabel("-- BULL");
-    bull_label_->setStyleSheet(
-        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::POSITIVE()));
     bll->addWidget(bull_label_);
     bll->addStretch();
 
     neutral_label_ = new QLabel("-- NEUTRAL");
-    neutral_label_->setStyleSheet(
-        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
     bll->addWidget(neutral_label_);
     bll->addStretch();
 
     bear_label_ = new QLabel("-- BEAR");
-    bear_label_->setStyleSheet(
-        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::NEGATIVE()));
     bll->addWidget(bear_label_);
 
     vl->addWidget(bar_labels);
 
     // ── VIX and Breadth ──
-    auto* sep = new QFrame;
-    sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
-    vl->addWidget(sep);
+    separator_ = new QFrame;
+    separator_->setFixedHeight(1);
+    vl->addWidget(separator_);
 
     auto* stats = new QWidget;
     auto* stl = new QVBoxLayout(stats);
     stl->setContentsMargins(0, 4, 0, 0);
     stl->setSpacing(4);
 
-    auto make_stat_row = [&](const QString& label, QLabel*& val_out) {
+    auto make_stat_row = [&](const QString& label, QLabel*& title_out, QLabel*& val_out) {
         auto* row = new QWidget;
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(0, 0, 0, 0);
 
-        auto* lbl = new QLabel(label);
-        lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                               .arg(ui::colors::TEXT_TERTIARY()));
-        rl->addWidget(lbl);
+        title_out = new QLabel(label);
+        rl->addWidget(title_out);
         rl->addStretch();
 
         val_out = new QLabel("--");
-        val_out->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                                   .arg(ui::colors::TEXT_PRIMARY()));
         rl->addWidget(val_out);
 
         stl->addWidget(row);
     };
 
-    make_stat_row("VIX (Fear Gauge)", vix_label_);
-    make_stat_row("Advance/Decline", breadth_label_);
+    make_stat_row("VIX (Fear Gauge)", vix_title_label_, vix_label_);
+    make_stat_row("Advance/Decline", breadth_title_label_, breadth_label_);
 
     vl->addWidget(stats);
     vl->addStretch();
 
     connect(this, &BaseWidget::refresh_requested, this, &MarketSentimentWidget::refresh_data);
 
+    apply_styles();
     set_loading(true);
     refresh_data();
+}
+
+void MarketSentimentWidget::apply_styles() {
+    banner_->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED()));
+    arrow_label_->setStyleSheet(
+        QString("font-size: 18px; background: transparent; color: %1;").arg(ui::colors::TEXT_TERTIARY()));
+    score_label_->setStyleSheet(QString("color: %1; font-size: 24px; font-weight: bold; background: transparent;")
+                                    .arg(ui::colors::TEXT_TERTIARY()));
+    verdict_label_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+                                      .arg(ui::colors::TEXT_TERTIARY()));
+
+    bull_bar_->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::POSITIVE()));
+    neutral_bar_->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::TEXT_TERTIARY()));
+    bear_bar_->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::NEGATIVE()));
+
+    bull_label_->setStyleSheet(
+        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::POSITIVE()));
+    neutral_label_->setStyleSheet(
+        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
+    bear_label_->setStyleSheet(
+        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::NEGATIVE()));
+
+    separator_->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
+
+    vix_title_label_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+                                        .arg(ui::colors::TEXT_TERTIARY()));
+    breadth_title_label_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+                                            .arg(ui::colors::TEXT_TERTIARY()));
+    vix_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
+                                  .arg(ui::colors::TEXT_PRIMARY()));
+    breadth_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
+                                      .arg(ui::colors::TEXT_PRIMARY()));
+}
+
+void MarketSentimentWidget::on_theme_changed() {
+    apply_styles();
 }
 
 void MarketSentimentWidget::refresh_data() {

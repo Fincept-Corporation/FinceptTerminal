@@ -2,7 +2,7 @@
 
 #include "screens/node_editor/NodeEditorTypes.h"
 
-#include <QMap>
+#include <QHash>
 #include <QObject>
 #include <QPointer>
 #include <QVector>
@@ -10,7 +10,7 @@
 namespace fincept::workflow {
 
 /// Executes a WorkflowDef as a DAG — topological sort, cycle detection,
-/// async per-node execution with signal-driven progress.
+/// parallel per-level execution with signal-driven progress.
 class WorkflowExecutor : public QObject {
     Q_OBJECT
   public:
@@ -44,29 +44,41 @@ class WorkflowExecutor : public QObject {
     /// Compute topological ordering.
     QVector<QString> topological_sort() const;
 
-    /// Execute the next ready node in the queue.
-    void execute_next();
+    /// Launch all nodes whose in-degree has reached zero.
+    void launch_ready_nodes();
+
+    /// Launch a single node for execution.
+    void launch_single_node(const QString& node_id);
 
     /// Called when a node finishes execution.
-    void on_node_done(const QString& node_id, bool success, QJsonValue output, QString error);
+    void on_node_done(const QString& node_id, bool success,
+                      const QJsonValue& output, const QString& error, int duration_ms = 0);
 
     /// Collect input data for a node from its upstream nodes' outputs.
     QVector<QJsonValue> collect_inputs(const QString& node_id) const;
+
+    /// Emit execution_finished with aggregated results.
+    void finish_execution();
 
     WorkflowDef workflow_;
     bool running_ = false;
     bool stop_requested_ = false;
 
     // Graph: node_id -> list of downstream node_ids
-    QMap<QString, QVector<QString>> adjacency_;
-    // Reverse: node_id -> list of upstream node_ids
-    QMap<QString, QVector<QString>> reverse_adj_;
+    QHash<QString, QVector<QString>> adjacency_;
+    // Edge lookup: target_node_id -> list of edges pointing to it
+    QHash<QString, QVector<EdgeDef>> incoming_edges_;
 
-    // Execution state
-    QVector<QString> execution_order_;
-    int current_index_ = 0;
-    QMap<QString, NodeExecutionResult> results_;
-    QMap<QString, NodeDef> node_map_;
+    // Parallel execution state
+    QHash<QString, int> in_degree_;     // remaining unfinished dependencies (-1 = launched)
+    int pending_count_ = 0;             // nodes currently in-flight
+    int completed_count_ = 0;           // total completed
+    int total_count_ = 0;               // total nodes to execute
+
+    // Node data
+    QHash<QString, NodeExecutionResult> results_;
+    QHash<QString, NodeDef> node_map_;
+    QHash<QString, const NodeTypeDef*> type_cache_;  // pre-resolved type pointers
 
     // Timing
     qint64 start_time_ms_ = 0;

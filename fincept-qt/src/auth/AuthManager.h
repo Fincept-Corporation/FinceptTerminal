@@ -32,6 +32,9 @@ class AuthManager : public QObject {
     void refresh_user_data();
     void attempt_session_recovery(std::function<void(bool)> cb);
 
+    /// True if user needs to set up a PIN (authenticated but no PIN configured).
+    bool needs_pin_setup() const;
+
   signals:
     void auth_state_changed();
     void login_succeeded();
@@ -52,6 +55,12 @@ class AuthManager : public QObject {
     void session_expired();
     void loading_changed(bool loading);
     void subscription_fetched();
+
+    /// Emitted after successful login when PIN setup is needed.
+    void pin_setup_required();
+
+    /// Emitted after login + PIN verify (or setup) — terminal is fully unlocked.
+    void terminal_unlocked();
 
   private:
     AuthManager();

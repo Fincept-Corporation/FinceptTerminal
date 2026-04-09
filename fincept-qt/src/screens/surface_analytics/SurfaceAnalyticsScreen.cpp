@@ -2,9 +2,11 @@
 
 #include "Surface3DWidget.h"
 #include "SurfaceCsvImporter.h"
+#include "core/session/ScreenStateManager.h"
 #include "SurfaceDatabentoPanel.h"
 #include "SurfaceMetricsPanel.h"
 #include "SurfaceTableWidget.h"
+#include "ui/theme/Theme.h"
 
 #include <QComboBox>
 #include <QFileDialog>
@@ -22,21 +24,8 @@
 
 namespace fincept::surface {
 
-// ── Obsidian palette tokens ──────────────────────────────────────────────────
-static const char* BG_BASE = "#080808";
-static const char* BG_SURFACE = "#0a0a0a";
-static const char* BG_RAISED = "#111111";
-static const char* BG_HOVER = "#161616";
-static const char* BORDER_DIM = "#1a1a1a";
-static const char* BORDER_MED = "#222222";
-static const char* BORDER_BRT = "#333333";
-static const char* TEXT_PRI = "#e5e5e5";
-static const char* TEXT_SEC = "#808080";
-static const char* TEXT_TER = "#525252";
-static const char* AMBER = "#d97706";
-static const char* AMBER_DIM = "#78350f";
-static const char* POSITIVE = "#16a34a";
-static const char* NEGATIVE = "#dc2626";
+using namespace fincept::ui;
+
 static const char* MONO = "'Consolas','Courier New',monospace";
 
 // ── Category accent colors (muted, functional only) ─────────────────────────
@@ -60,7 +49,7 @@ static QLabel* make_sep(QWidget* parent) {
     auto* s = new QLabel("|", parent);
     s->setStyleSheet(QString("color:%1; font-size:11px; background:transparent;"
                              " font-family:%2;")
-                         .arg(BORDER_MED)
+                         .arg(colors::BORDER_MED)
                          .arg(MONO));
     return s;
 }
@@ -70,32 +59,35 @@ static QString btn_inactive() {
                    " font-size:11px; font-weight:bold; font-family:%4;"
                    " padding:0 10px; }"
                    "QPushButton:hover { background:%5; color:%6; border-color:%7; }")
-        .arg(BG_RAISED)
-        .arg(BORDER_DIM)
-        .arg(TEXT_SEC)
+        .arg(colors::BG_RAISED)
+        .arg(colors::BORDER_DIM)
+        .arg(colors::TEXT_SECONDARY)
         .arg(MONO)
-        .arg(BG_HOVER)
-        .arg(TEXT_PRI)
-        .arg(BORDER_BRT);
+        .arg(colors::BG_HOVER)
+        .arg(colors::TEXT_PRIMARY)
+        .arg(colors::BORDER_BRIGHT);
 }
 
 static QString btn_active_amber() {
     return QString("QPushButton { background:rgba(217,119,6,0.12); border:1px solid %1; color:%2;"
                    " font-size:11px; font-weight:bold; font-family:%3;"
                    " padding:0 10px; }"
-                   "QPushButton:hover { background:%2; color:#080808; }")
-        .arg(AMBER_DIM)
-        .arg(AMBER)
-        .arg(MONO);
+                   "QPushButton:hover { background:%2; color:%4; }")
+        .arg(colors::AMBER_DIM)
+        .arg(colors::AMBER)
+        .arg(MONO)
+        .arg(colors::BG_BASE);
 }
 
 static QString btn_danger() {
-    return QString("QPushButton { background:rgba(220,38,38,0.08); border:1px solid #7f1d1d; color:%1;"
-                   " font-size:11px; font-weight:bold; font-family:%2;"
+    return QString("QPushButton { background:rgba(220,38,38,0.08); border:1px solid %1; color:%2;"
+                   " font-size:11px; font-weight:bold; font-family:%3;"
                    " padding:0 10px; }"
-                   "QPushButton:hover { background:%1; color:#e5e5e5; }")
-        .arg(NEGATIVE)
-        .arg(MONO);
+                   "QPushButton:hover { background:%2; color:%4; }")
+        .arg(colors::NEGATIVE_DIM)
+        .arg(colors::NEGATIVE)
+        .arg(MONO)
+        .arg(colors::TEXT_PRIMARY);
 }
 
 // ── Constructor ──────────────────────────────────────────────────────────────
@@ -109,7 +101,7 @@ SurfaceAnalyticsScreen::SurfaceAnalyticsScreen(QWidget* parent) : QWidget(parent
 
 // ── Layout ───────────────────────────────────────────────────────────────────
 void SurfaceAnalyticsScreen::setup_ui() {
-    setStyleSheet(QString("QWidget { background:%1; color:%2; font-family:%3; }").arg(BG_BASE).arg(TEXT_PRI).arg(MONO));
+    setStyleSheet(QString("QWidget { background:%1; color:%2; font-family:%3; }").arg(colors::BG_BASE).arg(colors::TEXT_PRIMARY).arg(MONO));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -126,14 +118,14 @@ void SurfaceAnalyticsScreen::setup_ui() {
     // Content — metrics panel | chart area
     auto* splitter = new QSplitter(Qt::Horizontal, this);
     splitter->setHandleWidth(1);
-    splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(BORDER_DIM));
+    splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(colors::BORDER_DIM));
 
     metrics_panel_ = new SurfaceMetricsPanel(splitter);
     splitter->addWidget(metrics_panel_);
 
     // Right: view stack + databento panel
     auto* right = new QWidget(splitter);
-    right->setStyleSheet(QString("background:%1;").arg(BG_BASE));
+    right->setStyleSheet(QString("background:%1;").arg(colors::BG_BASE));
     auto* rvl = new QVBoxLayout(right);
     rvl->setContentsMargins(0, 0, 0, 0);
     rvl->setSpacing(0);
@@ -161,7 +153,7 @@ QWidget* SurfaceAnalyticsScreen::build_category_bar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(32);
     bar->setStyleSheet(
-        QString("QWidget { background:%1; border-bottom:1px solid %2; }").arg(BG_SURFACE).arg(BORDER_DIM));
+        QString("QWidget { background:%1; border-bottom:1px solid %2; }").arg(colors::BG_SURFACE).arg(colors::BORDER_DIM));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(8, 0, 8, 0);
@@ -174,11 +166,12 @@ QWidget* SurfaceAnalyticsScreen::build_category_bar() {
         btn->setFixedHeight(32);
 
         if (active) {
-            btn->setStyleSheet(QString("QPushButton { background:#b45309; color:#e5e5e5;"
-                                       " border:none; border-bottom:2px solid %1;"
+            btn->setStyleSheet(QString("QPushButton { background:#b45309; color:%1;"
+                                       " border:none; border-bottom:2px solid %2;"
                                        " padding:0 14px; font-size:11px; font-weight:bold;"
-                                       " font-family:%2; }"
+                                       " font-family:%3; }"
                                        "QPushButton:hover { background:#b45309; }")
+                                   .arg(colors::TEXT_PRIMARY)
                                    .arg(cat_hex(i))
                                    .arg(MONO));
         } else {
@@ -186,10 +179,10 @@ QWidget* SurfaceAnalyticsScreen::build_category_bar() {
                                        " border:none; padding:0 14px; font-size:11px;"
                                        " font-family:%2; }"
                                        "QPushButton:hover { background:%3; color:%4; }")
-                                   .arg(TEXT_TER)
+                                   .arg(colors::TEXT_TERTIARY)
                                    .arg(MONO)
-                                   .arg(BG_RAISED)
-                                   .arg(TEXT_SEC));
+                                   .arg(colors::BG_RAISED)
+                                   .arg(colors::TEXT_SECONDARY));
         }
 
         btn->setProperty("cat_index", i);
@@ -245,7 +238,7 @@ QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(26);
     bar->setStyleSheet(
-        QString("QWidget { background:%1; border-bottom:1px solid %2; }").arg(BG_SURFACE).arg(BORDER_DIM));
+        QString("QWidget { background:%1; border-bottom:1px solid %2; }").arg(colors::BG_SURFACE).arg(colors::BORDER_DIM));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(8, 0, 8, 0);
@@ -277,17 +270,18 @@ QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
         if (active) {
             btn->setStyleSheet(QString("QPushButton { background:rgba(217,119,6,0.12); border:1px solid %1; color:%2;"
                                        " font-size:11px; font-weight:bold; font-family:%3; padding:0 8px; }"
-                                       "QPushButton:hover { background:%2; color:#080808; }")
-                                   .arg(AMBER_DIM)
-                                   .arg(AMBER)
-                                   .arg(MONO));
+                                       "QPushButton:hover { background:%2; color:%4; }")
+                                   .arg(colors::AMBER_DIM)
+                                   .arg(colors::AMBER)
+                                   .arg(MONO)
+                                   .arg(colors::BG_BASE));
         } else {
             btn->setStyleSheet(QString("QPushButton { background:transparent; border:none; color:%1;"
                                        " font-size:11px; font-family:%2; padding:0 8px; }"
                                        "QPushButton:hover { color:%3; border-bottom:1px solid %4; }")
-                                   .arg(TEXT_SEC)
+                                   .arg(colors::TEXT_SECONDARY)
                                    .arg(MONO)
-                                   .arg(TEXT_PRI)
+                                   .arg(colors::TEXT_PRIMARY)
                                    .arg(acol));
         }
 
@@ -301,7 +295,7 @@ QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
     if (active_category_ == 0) {
         auto* sym_lbl = new QLabel("SYM:", bar);
         sym_lbl->setStyleSheet(
-            QString("color:%1; font-size:11px; background:transparent; font-family:%2;").arg(TEXT_SEC).arg(MONO));
+            QString("color:%1; font-size:11px; background:transparent; font-family:%2;").arg(colors::TEXT_SECONDARY).arg(MONO));
         hl->addWidget(sym_lbl);
 
         symbol_combo_ = new QComboBox(bar);
@@ -314,11 +308,11 @@ QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
                                              "QComboBox::drop-down { border:none; }"
                                              "QComboBox QAbstractItemView { background:%1; color:%2;"
                                              " border:1px solid %3; selection-background-color:%5; }")
-                                         .arg(BG_RAISED)
-                                         .arg(TEXT_PRI)
-                                         .arg(BORDER_DIM)
+                                         .arg(colors::BG_RAISED)
+                                         .arg(colors::TEXT_PRIMARY)
+                                         .arg(colors::BORDER_DIM)
                                          .arg(MONO)
-                                         .arg(BG_HOVER));
+                                         .arg(colors::BG_HOVER));
         connect(symbol_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
                 &SurfaceAnalyticsScreen::on_symbol_changed);
         hl->addWidget(symbol_combo_);
@@ -879,6 +873,7 @@ void SurfaceAnalyticsScreen::on_category_clicked(int index) {
     databento_panel_->set_active_chart(active_chart_, VOL_SYMBOLS[selected_symbol_], VOL_SPOTS[selected_symbol_]);
     update_chart();
     update_metrics();
+    fincept::ScreenStateManager::instance().notify_changed(this);
 }
 
 void SurfaceAnalyticsScreen::on_surface_clicked(int cat, int surf_index) {
@@ -968,10 +963,38 @@ void SurfaceAnalyticsScreen::dispatch_csv(const QString& path) {
 
 // ── Databento slots ───────────────────────────────────────────────────────────
 void SurfaceAnalyticsScreen::on_vol_surface_received(const fincept::DatabentoVolSurfaceResult& r) {
-    if (r.success && !r.vol.z.empty()) {
-        vol_data_ = r.vol;
-        vol_data_.underlying = VOL_SYMBOLS[selected_symbol_];
-        vol_data_.spot_price = VOL_SPOTS[selected_symbol_];
+    if (r.success) {
+        const char* sym = VOL_SYMBOLS[selected_symbol_];
+        float spot = VOL_SPOTS[selected_symbol_];
+        if (!r.vol.z.empty()) {
+            vol_data_ = r.vol;
+            vol_data_.underlying = sym;
+            vol_data_.spot_price = spot;
+        }
+        if (!r.delta.z.empty()) {
+            delta_data_ = r.delta;
+            delta_data_.underlying = sym;
+            delta_data_.spot_price = spot;
+        }
+        if (!r.gamma.z.empty()) {
+            gamma_data_ = r.gamma;
+            gamma_data_.underlying = sym;
+            gamma_data_.spot_price = spot;
+        }
+        if (!r.vega.z.empty()) {
+            vega_data_ = r.vega;
+            vega_data_.underlying = sym;
+            vega_data_.spot_price = spot;
+        }
+        if (!r.theta.z.empty()) {
+            theta_data_ = r.theta;
+            theta_data_.underlying = sym;
+            theta_data_.spot_price = spot;
+        }
+        if (!r.skew.z.empty()) {
+            skew_data_ = r.skew;
+            skew_data_.underlying = sym;
+        }
     }
     update_chart();
     update_metrics();
@@ -982,7 +1005,73 @@ void SurfaceAnalyticsScreen::on_ohlcv_received(const fincept::DatabentoOhlcvResu
     update_metrics();
 }
 
-void SurfaceAnalyticsScreen::on_futures_received(const fincept::DatabentoFuturesResult&) {
+void SurfaceAnalyticsScreen::on_futures_received(const fincept::DatabentoFuturesResult& r) {
+    if (r.success) {
+        if (!r.forward.z.empty())
+            cmdty_fwd_data_ = r.forward;
+        if (!r.contango.z.empty())
+            contango_data_ = r.contango;
+    }
+    update_chart();
+    update_metrics();
+}
+
+void SurfaceAnalyticsScreen::on_surface_received(const fincept::DatabentoSurfaceResult& r) {
+    if (!r.success) {
+        update_chart();
+        return;
+    }
+    const auto& type = r.type;
+
+    if (type == "local_vol" && !r.z.empty()) {
+        local_vol_data_.strikes.assign(r.x_axis.begin(), r.x_axis.end());
+        local_vol_data_.expirations.assign(r.y_axis.begin(), r.y_axis.end());
+        local_vol_data_.z = r.z;
+        local_vol_data_.underlying = VOL_SYMBOLS[selected_symbol_];
+        local_vol_data_.spot_price = VOL_SPOTS[selected_symbol_];
+    } else if (type == "implied_dividend" && !r.z.empty()) {
+        impl_div_data_.strikes.assign(r.x_axis.begin(), r.x_axis.end());
+        impl_div_data_.expirations.assign(r.y_axis.begin(), r.y_axis.end());
+        impl_div_data_.z = r.z;
+        impl_div_data_.underlying = VOL_SYMBOLS[selected_symbol_];
+    } else if (type == "liquidity" && !r.z.empty()) {
+        liquidity_data_.strikes.assign(r.x_axis.begin(), r.x_axis.end());
+        liquidity_data_.expirations.assign(r.y_axis.begin(), r.y_axis.end());
+        liquidity_data_.z = r.z;
+        liquidity_data_.underlying = VOL_SYMBOLS[selected_symbol_];
+    } else if (type == "commodity_vol" && !r.z.empty()) {
+        cmdty_vol_data_.strikes.assign(r.x_axis.begin(), r.x_axis.end());
+        cmdty_vol_data_.expirations.assign(r.y_axis.begin(), r.y_axis.end());
+        cmdty_vol_data_.z = r.z;
+        cmdty_vol_data_.commodity = "CL";
+    } else if (type == "crack_spread" && !r.z.empty()) {
+        crack_data_.spread_types = r.x_labels;
+        crack_data_.contract_months.assign(r.y_axis.begin(), r.y_axis.end());
+        crack_data_.z = r.z;
+    } else if (type == "stress_test" && !r.z.empty()) {
+        stress_data_.scenarios = r.x_labels;
+        stress_data_.portfolios = r.y_labels;
+        stress_data_.z = r.z;
+    } else if (type == "yield_curve" && !r.z.empty()) {
+        yield_data_.maturities.clear();
+        for (float f : r.x_axis) yield_data_.maturities.push_back((int)f);
+        yield_data_.time_points.assign(r.y_axis.begin(), r.y_axis.end());
+        yield_data_.z = r.z;
+    } else if (type == "forward_rate" && !r.z.empty()) {
+        fwd_rate_data_.start_tenors.clear();
+        for (float f : r.x_axis) fwd_rate_data_.start_tenors.push_back((int)f);
+        fwd_rate_data_.forward_periods.assign(r.y_axis.begin(), r.y_axis.end());
+        fwd_rate_data_.z = r.z;
+    } else if (type == "rate_path" && !r.z.empty()) {
+        monetary_data_.central_banks = r.x_labels;
+        monetary_data_.meetings_ahead.assign(r.y_axis.begin(), r.y_axis.end());
+        monetary_data_.z = r.z;
+    } else if (type == "fx_forward_points" && !r.z.empty()) {
+        fx_fwd_data_.pairs = r.x_labels;
+        fx_fwd_data_.tenors.assign(r.y_axis.begin(), r.y_axis.end());
+        fx_fwd_data_.z = r.z;
+    }
+
     update_chart();
     update_metrics();
 }
@@ -996,16 +1085,28 @@ void SurfaceAnalyticsScreen::showEvent(QShowEvent* e) {
             Qt::UniqueConnection);
     connect(databento_panel_, &SurfaceDatabentoPanel::futures_received, this,
             &SurfaceAnalyticsScreen::on_futures_received, Qt::UniqueConnection);
+    connect(databento_panel_, &SurfaceDatabentoPanel::surface_received, this,
+            &SurfaceAnalyticsScreen::on_surface_received, Qt::UniqueConnection);
 }
 
 void SurfaceAnalyticsScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
-    disconnect(databento_panel_, &SurfaceDatabentoPanel::vol_surface_received, this,
-               &SurfaceAnalyticsScreen::on_vol_surface_received);
-    disconnect(databento_panel_, &SurfaceDatabentoPanel::ohlcv_received, this,
-               &SurfaceAnalyticsScreen::on_ohlcv_received);
-    disconnect(databento_panel_, &SurfaceDatabentoPanel::futures_received, this,
-               &SurfaceAnalyticsScreen::on_futures_received);
+    disconnect(databento_panel_, nullptr, this, nullptr);
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap SurfaceAnalyticsScreen::save_state() const {
+    return {
+        {"category", active_category_},
+        {"chart",    static_cast<int>(active_chart_)},
+    };
+}
+
+void SurfaceAnalyticsScreen::restore_state(const QVariantMap& state) {
+    const int cat = state.value("category", 0).toInt();
+    if (cat != active_category_)
+        on_category_clicked(cat);
 }
 
 } // namespace fincept::surface

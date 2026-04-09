@@ -1,6 +1,8 @@
 // CryptoChart.cpp — Candlestick chart with TF toggles, vibrant colors
 #include "screens/crypto_trading/CryptoChart.h"
 
+#include "ui/theme/Theme.h"
+
 #include <QCandlestickSeries>
 #include <QCandlestickSet>
 #include <QChart>
@@ -14,6 +16,8 @@
 #include <QValueAxis>
 
 #include <cmath>
+
+using namespace fincept::ui;
 
 namespace fincept::screens::crypto {
 
@@ -54,16 +58,16 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
 
     // Chart setup
     chart_ = new QChart;
-    chart_->setBackgroundBrush(QBrush(QColor("#0a0a0a")));
-    chart_->setPlotAreaBackgroundBrush(QBrush(QColor("#060606")));
+    chart_->setBackgroundBrush(QBrush(QColor(colors::BG_SURFACE())));
+    chart_->setPlotAreaBackgroundBrush(QBrush(QColor(colors::BG_BASE())));
     chart_->setPlotAreaBackgroundVisible(true);
     chart_->legend()->hide();
     chart_->setMargins(QMargins(4, 4, 4, 4));
 
     series_ = new QCandlestickSeries;
     // Vibrant candle colors
-    series_->setIncreasingColor(QColor("#22c55e")); // bright green
-    series_->setDecreasingColor(QColor("#ef4444")); // bright red
+    series_->setIncreasingColor(QColor(colors::POSITIVE()));
+    series_->setDecreasingColor(QColor(colors::NEGATIVE()));
     series_->setBodyWidth(0.75);
     series_->setPen(QPen(Qt::NoPen)); // no outline on body
     series_->setCapsVisible(false);   // clean look
@@ -71,18 +75,18 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
 
     time_axis_ = new QDateTimeAxis;
     time_axis_->setFormat("HH:mm");
-    time_axis_->setLabelsColor(QColor("#404040"));
-    time_axis_->setGridLineColor(QColor("#151515"));
-    time_axis_->setMinorGridLineColor(QColor("#0e0e0e"));
-    time_axis_->setLinePenColor(QColor("#1a1a1a"));
+    time_axis_->setLabelsColor(QColor(colors::TEXT_DIM()));
+    time_axis_->setGridLineColor(QColor(colors::BG_RAISED()));
+    time_axis_->setMinorGridLineColor(QColor(colors::BG_SURFACE()));
+    time_axis_->setLinePenColor(QColor(colors::BORDER_DIM()));
     chart_->addAxis(time_axis_, Qt::AlignBottom);
     series_->attachAxis(time_axis_);
 
     price_axis_ = new QValueAxis;
-    price_axis_->setLabelsColor(QColor("#404040"));
-    price_axis_->setGridLineColor(QColor("#151515"));
-    price_axis_->setMinorGridLineColor(QColor("#0e0e0e"));
-    price_axis_->setLinePenColor(QColor("#1a1a1a"));
+    price_axis_->setLabelsColor(QColor(colors::TEXT_DIM()));
+    price_axis_->setGridLineColor(QColor(colors::BG_RAISED()));
+    price_axis_->setMinorGridLineColor(QColor(colors::BG_SURFACE()));
+    price_axis_->setLinePenColor(QColor(colors::BORDER_DIM()));
     price_axis_->setLabelFormat("%.1f");
     chart_->addAxis(price_axis_, Qt::AlignRight);
     series_->attachAxis(price_axis_);

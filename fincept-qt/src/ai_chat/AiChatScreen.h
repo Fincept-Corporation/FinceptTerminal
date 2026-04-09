@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ai_chat/LlmService.h"
+#include "screens/IStatefulScreen.h"
 
 #include <QLabel>
 #include <QLineEdit>
@@ -19,10 +20,15 @@
 
 namespace fincept::screens {
 
-class AiChatScreen : public QWidget {
+class AiChatScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit AiChatScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "ai_chat"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* e) override;

@@ -17,37 +17,42 @@ using namespace fincept::ui;
 
 // ── Style constants ──────────────────────────────────────────────────────────
 
-static const char* PANEL = "background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 2px;";
+static QString PANEL() {
+    return QString("background: %1; border: 1px solid %2; border-radius: 2px;")
+        .arg(colors::BG_SURFACE, colors::BORDER_DIM);
+}
 
 static const char* MF = "font-family:'Consolas','Courier New',monospace;";
 
 static QLabel* make_header(const QString& icon, const QString& title, const QString& icon_color) {
     auto* lbl = new QLabel(QString("%1  %2").arg(icon, title));
     lbl->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; "
-                               "background: #111111; padding: 10px 14px; border-bottom: 1px solid #1a1a1a; %2")
-                           .arg(icon_color, MF));
+                               "background: %2; padding: 10px 14px; border-bottom: 1px solid %3; %4")
+                           .arg(icon_color, colors::BG_RAISED, colors::BORDER_DIM, MF));
     return lbl;
 }
 
 static QWidget* make_contact_card(const QString& title, const QString& value, const QString& detail) {
     auto* card = new QWidget;
-    card->setStyleSheet(PANEL);
+    card->setStyleSheet(PANEL());
     auto* vl = new QVBoxLayout(card);
     vl->setContentsMargins(14, 12, 14, 12);
     vl->setSpacing(4);
 
     auto* t = new QLabel(title);
-    t->setStyleSheet(QString("color: #808080; font-size: 10px; font-weight: bold; "
-                             "letter-spacing: 0.5px; background: transparent; %1")
-                         .arg(MF));
+    t->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; "
+                             "letter-spacing: 0.5px; background: transparent; %2")
+                         .arg(colors::TEXT_SECONDARY, MF));
     vl->addWidget(t);
 
     auto* v = new QLabel(value);
-    v->setStyleSheet(QString("color: #e5e5e5; font-size: 13px; font-weight: 600; background: transparent; %1").arg(MF));
+    v->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: 600; background: transparent; %2")
+                         .arg(colors::TEXT_PRIMARY, MF));
     vl->addWidget(v);
 
     auto* d = new QLabel(detail);
-    d->setStyleSheet(QString("color: #525252; font-size: 11px; background: transparent; %1").arg(MF));
+    d->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; %2")
+                         .arg(colors::TEXT_TERTIARY, MF));
     d->setWordWrap(true);
     vl->addWidget(d);
 
@@ -77,9 +82,9 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
     // ── Header ───────────────────────────────────────────────────────────────
     auto* back_btn = new QPushButton("< BACK");
     back_btn->setCursor(Qt::PointingHandCursor);
-    back_btn->setStyleSheet(QString("QPushButton { color: #808080; background: transparent; border: none; "
-                                    "font-size: 12px; %1 } QPushButton:hover { color: #e5e5e5; }")
-                                .arg(MF));
+    back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
+                                    "font-size: 12px; %2 } QPushButton:hover { color: %3; }")
+                                .arg(colors::TEXT_SECONDARY, MF, colors::TEXT_PRIMARY));
     connect(back_btn, &QPushButton::clicked, this, &ContactScreen::navigate_back);
     vl->addWidget(back_btn, 0, Qt::AlignLeft);
 
@@ -99,7 +104,7 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
     // ── Contact Information ──────────────────────────────────────────────────
     {
         auto* panel = new QWidget;
-        panel->setStyleSheet(PANEL);
+        panel->setStyleSheet(PANEL());
         auto* pvl = new QVBoxLayout(panel);
         pvl->setContentsMargins(0, 0, 0, 0);
         pvl->setSpacing(0);
@@ -124,7 +129,7 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
     // ── Quick Actions ────────────────────────────────────────────────────────
     {
         auto* panel = new QWidget;
-        panel->setStyleSheet(PANEL);
+        panel->setStyleSheet(PANEL());
         auto* pvl = new QVBoxLayout(panel);
         pvl->setContentsMargins(0, 0, 0, 0);
         pvl->setSpacing(0);
@@ -141,10 +146,11 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
             auto* btn = new QPushButton(text);
             btn->setFixedHeight(36);
             btn->setCursor(Qt::PointingHandCursor);
-            btn->setStyleSheet(QString("QPushButton { background: #111111; color: #0891b2; border: 1px solid #1a1a1a; "
+            btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
                                        "border-radius: 2px; padding: 8px 16px; font-size: 12px; "
                                        "font-family:'Consolas','Courier New',monospace; }"
-                                       "QPushButton:hover { background: #161616; color: #38bdf8; }"));
+                                       "QPushButton:hover { background: %4; color: #38bdf8; }")
+                                   .arg(colors::BG_RAISED, colors::CYAN, colors::BORDER_DIM, colors::BG_HOVER));
             return btn;
         };
 
@@ -172,7 +178,7 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
     // ── Common Issues ────────────────────────────────────────────────────────
     {
         auto* panel = new QWidget;
-        panel->setStyleSheet(PANEL);
+        panel->setStyleSheet(PANEL());
         auto* pvl = new QVBoxLayout(panel);
         pvl->setContentsMargins(0, 0, 0, 0);
         pvl->setSpacing(0);
@@ -201,12 +207,14 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
         for (const auto& issue : issues) {
             auto* q = new QLabel(QString("> %1").arg(issue.q));
             q->setStyleSheet(
-                QString("color: #e5e5e5; font-size: 12px; font-weight: 600; background: transparent; %1").arg(MF));
+                QString("color: %1; font-size: 12px; font-weight: 600; background: transparent; %2")
+                    .arg(colors::TEXT_PRIMARY, MF));
             bvl->addWidget(q);
 
             auto* a = new QLabel(QString("  %1").arg(issue.a));
             a->setWordWrap(true);
-            a->setStyleSheet(QString("color: #525252; font-size: 11px; background: transparent; %1").arg(MF));
+            a->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; %2")
+                                 .arg(colors::TEXT_TERTIARY, MF));
             bvl->addWidget(a);
             bvl->addSpacing(4);
         }

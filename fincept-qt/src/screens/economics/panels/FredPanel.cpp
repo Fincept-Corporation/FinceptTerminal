@@ -54,8 +54,7 @@ void FredPanel::activate() {
 
 void FredPanel::build_controls(QHBoxLayout* thl) {
     auto* lbl1 = new QLabel("PRESET");
-    lbl1->setStyleSheet(
-        "color:#525252; font-size:9px; font-weight:700; background:transparent;");
+    lbl1->setStyleSheet(ctrl_label_style());
 
     preset_combo_ = new QComboBox;
     for (const auto& p : kFredPresets) preset_combo_->addItem(p.first, p.second);
@@ -68,8 +67,7 @@ void FredPanel::build_controls(QHBoxLayout* thl) {
             });
 
     auto* lbl2 = new QLabel("SERIES ID");
-    lbl2->setStyleSheet(
-        "color:#525252; font-size:9px; font-weight:700; background:transparent;");
+    lbl2->setStyleSheet(ctrl_label_style());
 
     series_input_ = new QLineEdit;
     series_input_->setPlaceholderText("e.g. GDPC1");

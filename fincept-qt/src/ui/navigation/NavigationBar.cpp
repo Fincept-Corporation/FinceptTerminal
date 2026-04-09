@@ -2,6 +2,7 @@
 
 #include "auth/AuthManager.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QDateTime>
 
@@ -9,49 +10,43 @@ namespace fincept::ui {
 
 NavigationBar::NavigationBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(38);
-    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                      .arg(colors::BG_BASE).arg(colors::BORDER_DIM));
+    setObjectName("navBar");
+
     auto* hl = new QHBoxLayout(this);
     hl->setContentsMargins(14, 0, 14, 0);
     hl->setSpacing(0);
 
-    auto mk = [](const QString& t, const QString& c, bool b = false) {
+    auto mk = [](const QString& t, const QString& name) {
         auto* l = new QLabel(t);
-        l->setStyleSheet(QString("color:%1;%2background:transparent;")
-                             .arg(c)
-                             .arg(b ? "font-weight:700;" : ""));
+        l->setObjectName(name);
         return l;
     };
 
-    hl->addWidget(mk("FINCEPT", colors::AMBER.get(), true));
-    hl->addWidget(mk("TERMINAL", colors::TEXT_PRIMARY.get()));
-    hl->addWidget(mk("   ", colors::BG_BASE.get()));
-    hl->addWidget(mk("\xe2\x97\x8f", colors::POSITIVE.get()));
-    hl->addWidget(mk(" LIVE", colors::POSITIVE.get(), true));
+    hl->addWidget(mk("FINCEPT", "navBrand"));
+    hl->addWidget(mk("TERMINAL", "navTitle"));
+    hl->addWidget(mk("   ", "navSpacer"));
+    hl->addWidget(mk("\xe2\x97\x8f", "navLiveDot"));
+    hl->addWidget(mk(" LIVE", "navLive"));
     hl->addStretch();
-    clock_label_ = mk("", colors::TEXT_TERTIARY.get());
+    clock_label_ = mk("", "navClock");
     hl->addWidget(clock_label_);
     hl->addStretch();
-    user_label_ = mk("---", colors::AMBER.get());
+    user_label_ = mk("---", "navUser");
     hl->addWidget(user_label_);
-    hl->addWidget(mk("  |  ", colors::BORDER_DIM.get()));
-    credits_label_ = mk("---", colors::POSITIVE.get());
+    hl->addWidget(mk("  |  ", "navSep"));
+    credits_label_ = mk("---", "navCredits");
     hl->addWidget(credits_label_);
-    hl->addWidget(mk("  |  ", colors::BORDER_DIM.get()));
-    plan_label_ = mk("---", colors::TEXT_PRIMARY.get());
+    hl->addWidget(mk("  |  ", "navSep"));
+    plan_label_ = mk("---", "navPlan");
     hl->addWidget(plan_label_);
-    hl->addWidget(mk("  |  ", colors::BORDER_DIM.get()));
+    hl->addWidget(mk("  |  ", "navSep"));
 
-    auto* logout_btn = new QPushButton("LOGOUT");
-    logout_btn->setFixedHeight(24);
-    logout_btn->setCursor(Qt::PointingHandCursor);
-    logout_btn->setStyleSheet(
-        QString("QPushButton{background:transparent;color:%1;border:1px solid %1;"
-                "padding:0 10px;font-weight:700;}"
-                "QPushButton:hover{background:%1;color:%2;border-color:%1;}")
-            .arg(colors::NEGATIVE).arg(colors::TEXT_PRIMARY));
-    connect(logout_btn, &QPushButton::clicked, this, &NavigationBar::logout_clicked);
-    hl->addWidget(logout_btn);
+    logout_btn_ = new QPushButton("LOGOUT");
+    logout_btn_->setFixedHeight(24);
+    logout_btn_->setCursor(Qt::PointingHandCursor);
+    logout_btn_->setObjectName("navLogout");
+    connect(logout_btn_, &QPushButton::clicked, this, &NavigationBar::logout_clicked);
+    hl->addWidget(logout_btn_);
 
     clock_timer_ = new QTimer(this);
     clock_timer_->setInterval(1000);
@@ -61,7 +56,37 @@ NavigationBar::NavigationBar(QWidget* parent) : QWidget(parent) {
 
     connect(&auth::AuthManager::instance(), &auth::AuthManager::auth_state_changed, this,
             &NavigationBar::refresh_user_display);
+
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed,
+            this, [this](const ThemeTokens&) { refresh_theme(); });
+
     refresh_user_display();
+    refresh_theme();
+}
+
+void NavigationBar::refresh_theme() {
+    setStyleSheet(QString(
+        "#navBar { background:%1; border-bottom:1px solid %2; }"
+        "#navBrand { color:%3; font-weight:700; background:transparent; }"
+        "#navTitle { color:%4; background:transparent; }"
+        "#navSpacer { background:transparent; }"
+        "#navLiveDot { color:%5; background:transparent; }"
+        "#navLive { color:%5; font-weight:700; background:transparent; }"
+        "#navClock { color:%6; background:transparent; }"
+        "#navUser { color:%3; background:transparent; }"
+        "#navSep { color:%2; background:transparent; }"
+        "#navCredits { color:%5; background:transparent; }"
+        "#navPlan { color:%4; background:transparent; }"
+        "#navLogout { background:transparent; color:%7; border:1px solid %7;"
+        "  padding:0 10px; font-weight:700; }"
+        "#navLogout:hover { background:%7; color:%4; border-color:%7; }"
+    ).arg(colors::BG_BASE())        // %1
+     .arg(colors::BORDER_DIM())     // %2
+     .arg(colors::AMBER())          // %3
+     .arg(colors::TEXT_PRIMARY())   // %4
+     .arg(colors::POSITIVE())       // %5
+     .arg(colors::TEXT_TERTIARY())  // %6
+     .arg(colors::NEGATIVE()));     // %7
 }
 
 void NavigationBar::update_clock() {

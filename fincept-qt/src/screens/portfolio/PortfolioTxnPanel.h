@@ -20,6 +20,7 @@ class PortfolioTxnPanel : public QWidget {
 
     /// Clear the table (e.g. when portfolio changes).
     void clear();
+    void refresh_theme();
 
   private:
     void build_ui();

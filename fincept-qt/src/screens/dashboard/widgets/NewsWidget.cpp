@@ -10,12 +10,8 @@
 namespace fincept::screens::widgets {
 
 NewsWidget::NewsWidget(QWidget* parent) : BaseWidget("MARKET NEWS", parent, ui::colors::CYAN) {
-    auto* scroll = new QScrollArea;
-    scroll->setWidgetResizable(true);
-    scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }"
-                          "QScrollBar:vertical { width: 6px; background: transparent; }"
-                          + QString("QScrollBar::handle:vertical { background: %1; border-radius: 3px; }").arg(ui::colors::BORDER_MED) +
-                          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
+    scroll_area_ = new QScrollArea;
+    scroll_area_->setWidgetResizable(true);
 
     auto* container = new QWidget;
     news_layout_ = new QVBoxLayout(container);
@@ -23,13 +19,27 @@ NewsWidget::NewsWidget(QWidget* parent) : BaseWidget("MARKET NEWS", parent, ui::
     news_layout_->setSpacing(0);
     news_layout_->addStretch();
 
-    scroll->setWidget(container);
-    content_layout()->addWidget(scroll);
+    scroll_area_->setWidget(container);
+    content_layout()->addWidget(scroll_area_);
 
     connect(this, &BaseWidget::refresh_requested, this, &NewsWidget::refresh_data);
 
+    apply_styles();
     set_loading(true);
     refresh_data();
+}
+
+void NewsWidget::apply_styles() {
+    scroll_area_->setStyleSheet(
+        QString("QScrollArea { border: none; background: transparent; }"
+                "QScrollBar:vertical { width: 6px; background: transparent; }"
+                "QScrollBar::handle:vertical { background: %1; border-radius: 3px; }"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+            .arg(ui::colors::BORDER_MED()));
+}
+
+void NewsWidget::on_theme_changed() {
+    apply_styles();
 }
 
 void NewsWidget::refresh_data() {

@@ -3,6 +3,8 @@
 // Responsive cells, markdown rendering, keyboard shortcuts, collapsible output.
 #pragma once
 
+#include "screens/IStatefulScreen.h"
+
 #include <QHideEvent>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -144,10 +146,15 @@ class CellNavigator : public QWidget {
 
 // -- Main screen --------------------------------------------------------------
 
-class CodeEditorScreen : public QWidget {
+class CodeEditorScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit CodeEditorScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "code_editor"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* event) override;

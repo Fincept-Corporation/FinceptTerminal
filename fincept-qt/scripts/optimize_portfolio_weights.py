@@ -262,7 +262,24 @@ def build_frontier(mean_ret, cov, n, num_points=40):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    stdin_data = sys.stdin.read()
+    # Support both command-line args (--args <json>) and stdin
+    stdin_data = ""
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        if args[i] == "--args" and i + 1 < len(args):
+            stdin_data = args[i + 1]
+            i += 2
+        elif not args[i].startswith("--") and not stdin_data:
+            stdin_data = args[i]
+            i += 1
+        else:
+            i += 1
+
+    if not stdin_data.strip():
+        # Fall back to stdin for backwards compatibility
+        stdin_data = sys.stdin.read()
+
     if not stdin_data.strip():
         print(json.dumps({"error": "No input data"}))
         return

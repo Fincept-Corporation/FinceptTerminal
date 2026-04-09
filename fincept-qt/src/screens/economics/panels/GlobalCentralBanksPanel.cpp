@@ -126,8 +126,7 @@ void GlobalCentralBanksPanel::activate() {
 
 void GlobalCentralBanksPanel::build_controls(QHBoxLayout* thl) {
     auto* blbl = new QLabel("BANK");
-    blbl->setStyleSheet(
-        "color:#525252; font-size:9px; font-weight:700; background:transparent;");
+    blbl->setStyleSheet(ctrl_label_style());
 
     bank_combo_ = new QComboBox;
     for (const auto& b : kBanks)
@@ -136,8 +135,7 @@ void GlobalCentralBanksPanel::build_controls(QHBoxLayout* thl) {
     bank_combo_->setMinimumWidth(230);
 
     auto* slbl = new QLabel("SERIES");
-    slbl->setStyleSheet(
-        "color:#525252; font-size:9px; font-weight:700; background:transparent;");
+    slbl->setStyleSheet(ctrl_label_style());
 
     series_combo_ = new QComboBox;
     series_combo_->setFixedHeight(26);

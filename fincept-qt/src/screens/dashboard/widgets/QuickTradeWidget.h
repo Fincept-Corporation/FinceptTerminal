@@ -3,6 +3,7 @@
 #include "services/markets/MarketDataService.h"
 
 #include <QComboBox>
+#include <QFrame>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -17,7 +18,11 @@ class QuickTradeWidget : public BaseWidget {
   public:
     explicit QuickTradeWidget(QWidget* parent = nullptr);
 
+  protected:
+    void on_theme_changed() override;
+
   private:
+    void apply_styles();
     void lookup_symbol();
     void on_side_changed(int idx);
     void submit_order();
@@ -43,6 +48,12 @@ class QuickTradeWidget : public BaseWidget {
 
     double current_price_ = 0;
     QString current_symbol_;
+
+    // Widgets needing theme-aware restyling
+    QWidget* quote_card_ = nullptr;
+    QFrame* separator_ = nullptr;
+    QLabel* qty_lbl_ = nullptr;
+    QLabel* price_lbl_ = nullptr;
 };
 
 } // namespace fincept::screens::widgets

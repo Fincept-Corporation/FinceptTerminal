@@ -1,4 +1,5 @@
 #pragma once
+#include "screens/IStatefulScreen.h"
 #include "services/file_manager/FileManagerService.h"
 
 #include <QButtonGroup>
@@ -19,10 +20,15 @@ namespace fincept::screens {
 
 /// File Manager Screen — lists all files tracked by FileManagerService.
 /// Features: filter chips, sort controls, inline preview, bulk delete, quota bar.
-class FileManagerScreen : public QWidget {
+class FileManagerScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit FileManagerScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "file_manager"; }
+    int state_version() const override { return 1; }
 
   signals:
     void open_file_in_screen(const QString& route_id, const QString& file_path);

@@ -129,6 +129,8 @@ void register_control_flow_nodes(NodeRegistry& registry) {
             {
                 {"input_0", "Branch 1", PortDirection::Input, ConnectionType::Main},
                 {"input_1", "Branch 2", PortDirection::Input, ConnectionType::Main},
+                {"input_2", "Branch 3", PortDirection::Input, ConnectionType::Main},
+                {"input_3", "Branch 4", PortDirection::Input, ConnectionType::Main},
             },
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =

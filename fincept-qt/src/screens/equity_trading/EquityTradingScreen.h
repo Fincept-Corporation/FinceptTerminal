@@ -2,6 +2,7 @@
 // Equity Trading Screen — Bloomberg-style coordinator
 // Routes to live brokers (16 supported) or paper trading engine.
 
+#include "screens/IStatefulScreen.h"
 #include "screens/equity_trading/EquityTypes.h"
 #include "services/workspace/IWorkspaceParticipant.h"
 #include "trading/TradingTypes.h"

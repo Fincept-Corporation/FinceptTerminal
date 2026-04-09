@@ -1,6 +1,9 @@
 // src/screens/economics/panels/EconPanelBase.cpp
 #include "screens/economics/panels/EconPanelBase.h"
 
+#include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
+
 #include <QColor>
 #include <QFile>
 #include <QFileDialog>
@@ -11,53 +14,122 @@
 
 namespace fincept::screens {
 
-// ── Stylesheet ────────────────────────────────────────────────────────────────
+// ── Stylesheet (token-based) ──────────────────────────────────────────────────
 
 QString EconPanelBase::panel_style() const {
+    using namespace ui::colors;
     int r = QColor(color_).red();
     int g = QColor(color_).green();
     int b = QColor(color_).blue();
     return QString(
-        "#econToolbar { background:#111111; border-bottom:1px solid #1a1a1a; }"
-        "#econFetchBtn { background:%1; color:#080808; border:none;"
+        "#econToolbar { background:%5; border-bottom:1px solid %6; }"
+        "#econFetchBtn { background:%1; color:%7; border:none;"
         "  font-size:10px; font-weight:700; padding:4px 14px; }"
         "#econFetchBtn:hover { background:rgba(%2,%3,%4,0.75); }"
-        "#econFetchBtn:disabled { background:#1a1a1a; color:#404040; }"
-        "#econCsvBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
+        "#econFetchBtn:disabled { background:%6; color:%8; }"
+        "#econCsvBtn { background:transparent; color:%9; border:1px solid %6;"
         "  font-size:10px; font-weight:700; padding:4px 10px; }"
-        "#econCsvBtn:hover { color:#e5e5e5; background:#161616; }"
+        "#econCsvBtn:hover { color:%10; background:%11; }"
         "QComboBox, QSpinBox, QDateEdit, QLineEdit {"
-        "  background:#080808; color:#e5e5e5; border:1px solid #1a1a1a;"
+        "  background:%7; color:%10; border:1px solid %6;"
         "  font-size:11px; padding:2px 6px; }"
         "QComboBox::drop-down, QDateEdit::drop-down { border:none; }"
-        "QComboBox QAbstractItemView { background:#111111; color:#e5e5e5;"
-        "  border:1px solid #1a1a1a; }"
-        "QTableWidget { background:#080808; color:#e5e5e5; border:none;"
-        "  gridline-color:#1a1a1a; font-size:11px; alternate-background-color:#0a0a0a; }"
-        "QTableWidget::item { padding:5px 8px; border-bottom:1px solid #1a1a1a; }"
+        "QComboBox QAbstractItemView { background:%5; color:%10;"
+        "  border:1px solid %6; }"
+        "QTableWidget { background:%7; color:%10; border:none;"
+        "  gridline-color:%6; font-size:11px; alternate-background-color:%12; }"
+        "QTableWidget::item { padding:5px 8px; border-bottom:1px solid %6; }"
         "QTableWidget::item:selected { background:rgba(%2,%3,%4,0.1); color:%1; }"
-        "QHeaderView::section { background:#111111; color:#808080; border:none;"
-        "  border-bottom:2px solid #1a1a1a; border-right:1px solid #1a1a1a;"
+        "QHeaderView::section { background:%5; color:%9; border:none;"
+        "  border-bottom:2px solid %6; border-right:1px solid %6;"
         "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }"
-        "#econStatCard { background:#0a0a0a; border:1px solid #1a1a1a; }"
-        "#econStatCard:hover { border-color:#333333; }"
-        "#econStatLabel { color:#808080; font-size:8px; font-weight:700;"
+        "#econStatCard { background:%12; border:1px solid %6; }"
+        "#econStatCard:hover { border-color:%13; }"
+        "#econStatLabel { color:%9; font-size:8px; font-weight:700;"
         "  letter-spacing:1px; background:transparent; }"
         "#econStatVal { color:%1; font-size:15px; font-weight:700; background:transparent; }"
-        "#econStatSub { color:#525252; font-size:9px; background:transparent; }"
-        "#econEmptyPage { background:#080808; }"
-        "#econEmptyMsg { color:#808080; font-size:13px; background:transparent; }"
-        "#econErrMsg   { color:#dc2626; font-size:12px; background:transparent; }"
-        "#econTitleLbl { color:#e5e5e5; font-size:11px; font-weight:700;"
+        "#econStatSub { color:%14; font-size:9px; background:transparent; }"
+        "#econEmptyPage { background:%7; }"
+        "#econEmptyMsg { color:%9; font-size:13px; background:transparent; }"
+        "#econErrMsg   { color:%15; font-size:12px; background:transparent; }"
+        "#econTitleLbl { color:%10; font-size:11px; font-weight:700;"
         "  background:transparent; }"
-        "#econRowCount { color:#525252; font-size:9px; background:transparent; }"
-        "QScrollBar:vertical { background:#080808; width:5px; }"
-        "QScrollBar::handle:vertical { background:#1a1a1a; min-height:20px; }"
+        "#econRowCount { color:%14; font-size:9px; background:transparent; }"
+        "QScrollBar:vertical { background:%7; width:5px; }"
+        "QScrollBar::handle:vertical { background:%6; min-height:20px; }"
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }"
-        "QScrollBar:horizontal { background:#080808; height:5px; }"
-        "QScrollBar::handle:horizontal { background:#1a1a1a; min-width:20px; }"
+        "QScrollBar:horizontal { background:%7; height:5px; }"
+        "QScrollBar::handle:horizontal { background:%6; min-width:20px; }"
         "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width:0; }"
-    ).arg(color_).arg(r).arg(g).arg(b);
+    )
+    .arg(color_)                    // %1: source accent
+    .arg(r).arg(g).arg(b)          // %2,%3,%4: accent RGB
+    .arg(BG_RAISED())              // %5
+    .arg(BORDER_DIM())             // %6
+    .arg(BG_BASE())                // %7
+    .arg(TEXT_DIM())               // %8
+    .arg(TEXT_SECONDARY())         // %9
+    .arg(TEXT_PRIMARY())           // %10
+    .arg(BG_HOVER())              // %11
+    .arg(BG_SURFACE())            // %12
+    .arg(BORDER_BRIGHT())         // %13
+    .arg(TEXT_TERTIARY())         // %14
+    .arg(NEGATIVE());             // %15
+}
+
+// ── Reusable token-based style helpers ────────────────────────────────────────
+
+QString EconPanelBase::sidebar_style() {
+    using namespace ui::colors;
+    return QString("background:%1; border-right:1px solid %2;")
+        .arg(BG_SURFACE(), BORDER_DIM());
+}
+
+QString EconPanelBase::section_hdr_style() {
+    using namespace ui::colors;
+    return QString("background:%1; border-bottom:1px solid %2;")
+        .arg(BG_RAISED(), BORDER_DIM());
+}
+
+QString EconPanelBase::section_lbl_style() {
+    using namespace ui::colors;
+    return QString("color:%1; font-size:8px; font-weight:700;"
+                   " letter-spacing:1px; background:transparent; padding:4px 10px;")
+        .arg(TEXT_TERTIARY());
+}
+
+QString EconPanelBase::search_input_style() {
+    using namespace ui::colors;
+    return QString("background:%1; color:%2; border:none;"
+                   " border-bottom:1px solid %3; padding:4px 10px; font-size:11px;")
+        .arg(BG_BASE(), TEXT_PRIMARY(), BORDER_DIM());
+}
+
+QString EconPanelBase::ctrl_label_style() {
+    using namespace ui::colors;
+    return QString("color:%1; font-size:9px; font-weight:700; background:transparent;")
+        .arg(TEXT_TERTIARY());
+}
+
+QString EconPanelBase::list_style() const {
+    using namespace ui::colors;
+    QColor c(color_);
+    QString rgba = QString("%1,%2,%3").arg(c.red()).arg(c.green()).arg(c.blue());
+    return QString(
+        "QListWidget { background:transparent; border:none; outline:none; }"
+        "QListWidget::item { color:%1; padding:5px 10px;"
+        "  border-bottom:1px solid %2; font-size:11px; }"
+        "QListWidget::item:hover { color:%3; background:%4; }"
+        "QListWidget::item:selected { color:%5; background:rgba(%6,0.1);"
+        "  border-left:2px solid %5; font-weight:700; }")
+        .arg(TEXT_SECONDARY(), BG_RAISED(), TEXT_PRIMARY(), BG_HOVER())
+        .arg(color_, rgba);
+}
+
+QString EconPanelBase::notice_style() {
+    using namespace ui::colors;
+    return QString("color:%1; font-size:9px; background:transparent;")
+        .arg(WARNING());
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -65,11 +137,15 @@ QString EconPanelBase::panel_style() const {
 EconPanelBase::EconPanelBase(const QString& source_id,
                              const QString& color,
                              QWidget* parent)
-    : QWidget(parent), source_id_(source_id), color_(color) {}
+    : QWidget(parent), source_id_(source_id), color_(color) {
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, &EconPanelBase::refresh_panel_theme);
+}
 
 // ── Build ─────────────────────────────────────────────────────────────────────
 
 void EconPanelBase::build_base_ui(QWidget* container) {
+    container_ = container;
     container->setStyleSheet(panel_style());
 
     auto* root = new QVBoxLayout(container);
@@ -101,9 +177,8 @@ void EconPanelBase::build_base_ui(QWidget* container) {
     root->addWidget(toolbar);
 
     // Stat cards row
-    auto* cards_row = new QWidget;
-    cards_row->setStyleSheet("background:#080808; border-bottom:1px solid #1a1a1a;");
-    auto* crhl = new QHBoxLayout(cards_row);
+    cards_row_ = new QWidget;
+    auto* crhl = new QHBoxLayout(cards_row_);
     crhl->setContentsMargins(10, 6, 10, 6);
     crhl->setSpacing(6);
 
@@ -129,12 +204,11 @@ void EconPanelBase::build_base_ui(QWidget* container) {
     make_card("AVG",     stat_avg_);
     make_card("POINTS",  stat_count_);
     crhl->addStretch(1);
-    root->addWidget(cards_row);
+    root->addWidget(cards_row_);
 
     // Title bar
-    auto* title_bar = new QWidget;
-    title_bar->setStyleSheet("background:#0a0a0a; border-bottom:1px solid #1a1a1a;");
-    auto* tbhl = new QHBoxLayout(title_bar);
+    title_bar_ = new QWidget;
+    auto* tbhl = new QHBoxLayout(title_bar_);
     tbhl->setContentsMargins(12, 4, 12, 4);
     title_lbl_ = new QLabel;
     title_lbl_->setObjectName("econTitleLbl");
@@ -143,7 +217,7 @@ void EconPanelBase::build_base_ui(QWidget* container) {
     tbhl->addWidget(title_lbl_);
     tbhl->addStretch(1);
     tbhl->addWidget(row_count_);
-    root->addWidget(title_bar);
+    root->addWidget(title_bar_);
 
     // Content stack
     stack_ = new QStackedWidget;
@@ -168,6 +242,24 @@ void EconPanelBase::build_base_ui(QWidget* container) {
     stack_->addWidget(table_);     // index 1
 
     root->addWidget(stack_, 1);
+
+    // Apply token-based inline styles for non-QSS-covered widgets
+    refresh_panel_theme();
+}
+
+// ── Theme refresh ─────────────────────────────────────────────────────────────
+
+void EconPanelBase::refresh_panel_theme() {
+    using namespace ui::colors;
+    if (container_) container_->setStyleSheet(panel_style());
+    if (cards_row_)
+        cards_row_->setStyleSheet(
+            QString("background:%1; border-bottom:1px solid %2;")
+                .arg(BG_BASE(), BORDER_DIM()));
+    if (title_bar_)
+        title_bar_->setStyleSheet(
+            QString("background:%1; border-bottom:1px solid %2;")
+                .arg(BG_SURFACE(), BORDER_DIM()));
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -182,16 +274,20 @@ void EconPanelBase::show_loading(const QString& msg) {
 }
 
 void EconPanelBase::show_error(const QString& msg) {
+    using namespace ui::colors;
     if (!empty_lbl_) return;
-    empty_lbl_->setStyleSheet("color:#dc2626; font-size:12px; background:transparent;");
+    empty_lbl_->setStyleSheet(
+        QString("color:%1; font-size:12px; background:transparent;").arg(NEGATIVE()));
     empty_lbl_->setText("Error: " + msg);
     stack_->setCurrentIndex(0);
     if (fetch_btn_) fetch_btn_->setEnabled(true);
 }
 
 void EconPanelBase::show_empty(const QString& msg) {
+    using namespace ui::colors;
     if (!empty_lbl_) return;
-    empty_lbl_->setStyleSheet("color:#808080; font-size:13px; background:transparent;");
+    empty_lbl_->setStyleSheet(
+        QString("color:%1; font-size:13px; background:transparent;").arg(TEXT_SECONDARY()));
     empty_lbl_->setText(msg);
     stack_->setCurrentIndex(0);
     if (fetch_btn_) fetch_btn_->setEnabled(true);
@@ -302,7 +398,7 @@ void EconPanelBase::update_stats(const QJsonArray& rows) {
                               QString::number(change, 'f', 2) + "%");
         stat_change_->setStyleSheet(
             QString("color:%1; font-size:15px; font-weight:700; background:transparent;")
-                .arg(change >= 0 ? "#16a34a" : "#dc2626"));
+                .arg(change >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
     }
     if (stat_min_)   stat_min_->setText(fmt(mn));
     if (stat_max_)   stat_max_->setText(fmt(mx));

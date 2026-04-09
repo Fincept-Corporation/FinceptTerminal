@@ -5,6 +5,9 @@
 #include "screens/economics/EconomicsScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
+#include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 #include "screens/economics/panels/AdbPanel.h"
 #include "screens/economics/panels/AkShareChinaPanel.h"
 #include "screens/economics/panels/BcbPanel.h"
@@ -125,6 +128,10 @@ EconomicsScreen::EconomicsScreen(QWidget* parent)
     : QWidget(parent) {
     setObjectName("econScreen");
     build_ui();
+
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, &EconomicsScreen::refresh_theme);
+
     // Activate first source
     if (!sources_.isEmpty())
         switch_to(sources_.first().id);
@@ -136,37 +143,29 @@ void EconomicsScreen::build_ui() {
     root->setSpacing(0);
 
     // ── Header ────────────────────────────────────────────────────────────────
-    auto* header = new QWidget;
-    header->setFixedHeight(40);
-    header->setStyleSheet("background:#080808; border-bottom:1px solid #1a1a1a;");
-    auto* hl = new QHBoxLayout(header);
+    header_ = new QWidget;
+    header_->setFixedHeight(40);
+    auto* hl = new QHBoxLayout(header_);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(8);
 
-    auto* title = new QLabel("ECONOMICS DATA EXPLORER");
-    title->setStyleSheet(
-        "color:#e5e5e5; font-size:12px; font-weight:700;"
-        "letter-spacing:1.5px; background:transparent;");
+    title_ = new QLabel("ECONOMICS DATA EXPLORER");
+    subtitle_ = new QLabel("32 global data sources · 1000+ indicators");
 
-    auto* sub = new QLabel("32 global data sources · 1000+ indicators");
-    sub->setStyleSheet("color:#525252; font-size:10px; background:transparent;");
-
-    hl->addWidget(title);
-    hl->addWidget(sub);
+    hl->addWidget(title_);
+    hl->addWidget(subtitle_);
     hl->addStretch();
-    root->addWidget(header);
+    root->addWidget(header_);
 
     // ── Badge bar (scrollable) ────────────────────────────────────────────────
-    auto* scroll = new QScrollArea;
-    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setFixedHeight(34);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setStyleSheet("background:#050505; border-bottom:1px solid #1a1a1a;");
+    scroll_ = new QScrollArea;
+    scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll_->setFixedHeight(34);
+    scroll_->setWidgetResizable(true);
+    scroll_->setFrameShape(QFrame::NoFrame);
 
     badge_bar_ = new QWidget;
-    badge_bar_->setStyleSheet("background:#050505;");
     auto* bhl = new QHBoxLayout(badge_bar_);
     bhl->setContentsMargins(6, 3, 6, 3);
     bhl->setSpacing(4);
@@ -180,18 +179,6 @@ void EconomicsScreen::build_ui() {
         auto* btn = new QPushButton(src.label);
         btn->setCheckable(true);
         btn->setFixedHeight(26);
-        btn->setStyleSheet(QString(
-            "QPushButton { background:#0a0a0a; color:#525252; border:1px solid #1a1a1a;"
-            "  font-size:9px; font-weight:700; padding:0 10px; letter-spacing:0.3px; }"
-            "QPushButton:hover { color:#e5e5e5; border-color:#333333; }"
-            "QPushButton:checked { background:rgba(%1,0.12); color:%2;"
-            "  border-color:%2; }")
-            .arg([]( const QString& hex ) {
-                // convert #RRGGBB to "R,G,G" for rgba
-                QColor c(hex);
-                return QString("%1,%2,%3").arg(c.red()).arg(c.green()).arg(c.blue());
-            }(src.color))
-            .arg(src.color));
 
         const QString sid = src.id;
         connect(btn, &QPushButton::clicked, this, [this, sid]() {
@@ -204,13 +191,60 @@ void EconomicsScreen::build_ui() {
     }
     bhl->addStretch();
 
-    scroll->setWidget(badge_bar_);
-    root->addWidget(scroll);
+    scroll_->setWidget(badge_bar_);
+    root->addWidget(scroll_);
 
     // ── Panel stack ───────────────────────────────────────────────────────────
     stack_ = new QStackedWidget;
-    stack_->setStyleSheet("background:#080808;");
     root->addWidget(stack_, 1);
+
+    // Apply initial theme
+    refresh_theme();
+}
+
+// ── Theme refresh ─────────────────────────────────────────────────────────────
+
+void EconomicsScreen::refresh_theme() {
+    using namespace ui::colors;
+
+    header_->setStyleSheet(
+        QString("background:%1; border-bottom:1px solid %2;")
+            .arg(BG_BASE(), BORDER_DIM()));
+
+    title_->setStyleSheet(
+        QString("color:%1; font-size:12px; font-weight:700;"
+                "letter-spacing:1.5px; background:transparent;")
+            .arg(TEXT_PRIMARY()));
+
+    subtitle_->setStyleSheet(
+        QString("color:%1; font-size:10px; background:transparent;")
+            .arg(TEXT_TERTIARY()));
+
+    scroll_->setStyleSheet(
+        QString("background:%1; border-bottom:1px solid %2;")
+            .arg(BG_BASE(), BORDER_DIM()));
+
+    badge_bar_->setStyleSheet(
+        QString("background:%1;").arg(BG_BASE()));
+
+    // Re-style all badge buttons
+    for (const auto& entry : sources_) {
+        if (!entry.badge) continue;
+        QColor c(entry.color);
+        QString rgba = QString("%1,%2,%3").arg(c.red()).arg(c.green()).arg(c.blue());
+        static_cast<QPushButton*>(entry.badge)->setStyleSheet(QString(
+            "QPushButton { background:%1; color:%2; border:1px solid %3;"
+            "  font-size:9px; font-weight:700; padding:0 10px; letter-spacing:0.3px; }"
+            "QPushButton:hover { color:%4; border-color:%5; }"
+            "QPushButton:checked { background:rgba(%6,0.12); color:%7;"
+            "  border-color:%7; }")
+            .arg(BG_SURFACE(), TEXT_TERTIARY(), BORDER_DIM(),
+                 TEXT_PRIMARY(), BORDER_BRIGHT())
+            .arg(rgba, entry.color));
+    }
+
+    stack_->setStyleSheet(
+        QString("background:%1;").arg(BG_BASE()));
 }
 
 // ── Panel switching ───────────────────────────────────────────────────────────
@@ -235,6 +269,7 @@ EconPanelBase* EconomicsScreen::get_or_create_panel(SourceEntry& entry) {
 void EconomicsScreen::switch_to(const QString& source_id) {
     if (active_id_ == source_id) return;
     active_id_ = source_id;
+    ScreenStateManager::instance().notify_changed(this);
 
     for (auto& entry : sources_) {
         if (entry.badge)
@@ -249,6 +284,18 @@ void EconomicsScreen::switch_to(const QString& source_id) {
             }
         }
     }
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap EconomicsScreen::save_state() const {
+    return {{"source_id", active_id_}};
+}
+
+void EconomicsScreen::restore_state(const QVariantMap& state) {
+    const QString id = state.value("source_id").toString();
+    if (!id.isEmpty())
+        switch_to(id);
 }
 
 } // namespace fincept::screens

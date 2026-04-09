@@ -51,12 +51,14 @@ void PortfolioBlotter::build_ui() {
 
     table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; border:none;"
                                   "  font-size:11px; font-family:%3; gridline-color:transparent; }"
-                                  "QTableWidget::item { padding:3px 6px; border-bottom:1px solid %4; }"
-                                  "QTableWidget::item:selected { background:%5; color:%6; }"
+                                  "QTableWidget::item { padding:5px 8px; border-bottom:1px solid %4; }"
+                                  "QTableWidget::item:selected { background:rgba(217,119,6,0.10); color:%6; }"
                                   "QTableWidget::item:hover { background:%7; }"
                                   "QHeaderView::section { background:%8; color:%9; border:none;"
-                                  "  border-bottom:2px solid %10; padding:4px 6px;"
-                                  "  font-size:9px; font-weight:700; letter-spacing:0.5px; }")
+                                  "  border-bottom:2px solid %10; border-right:1px solid %4; padding:5px 8px;"
+                                  "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+                                  "QScrollBar:vertical { width:5px; background:%1; }"
+                                  "QScrollBar::handle:vertical { background:%4; min-height:20px; }")
                               .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::fonts::DATA_FAMILY,
                                    ui::colors::BORDER_DIM, ui::colors::AMBER_DIM, ui::colors::AMBER,
                                    ui::colors::BG_HOVER, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY)
@@ -383,7 +385,7 @@ void PortfolioBlotter::on_context_menu(const QPoint& pos) {
     // Style delete action in red
     delete_act->setData("danger");
     menu.setStyleSheet(menu.styleSheet() +
-        "QMenu::item[data='danger'] { color:#ef4444; }");
+        QString("QMenu::item[data='danger'] { color:%1; }").arg(ui::colors::NEGATIVE));
 
     connect(edit_act,   &QAction::triggered, this, [this, symbol]() {
         emit edit_transaction_requested(symbol);
@@ -393,6 +395,26 @@ void PortfolioBlotter::on_context_menu(const QPoint& pos) {
     });
 
     menu.exec(table_->viewport()->mapToGlobal(pos));
+}
+
+void PortfolioBlotter::refresh_theme() {
+    const QString bsz = QString::number(ui::fonts::font_px(0));
+    const QString hsz = QString::number(ui::fonts::font_px(-2));
+    table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; border:none;"
+                                  "  font-size:" + bsz + "px; font-family:%3; gridline-color:transparent; }"
+                                  "QTableWidget::item { padding:5px 8px; border-bottom:1px solid %4; }"
+                                  "QTableWidget::item:selected { background:rgba(217,119,6,0.10); color:%6; }"
+                                  "QTableWidget::item:hover { background:%7; }"
+                                  "QHeaderView::section { background:%8; color:%9; border:none;"
+                                  "  border-bottom:2px solid %10; border-right:1px solid %4; padding:5px 8px;"
+                                  "  font-size:" + hsz + "px; font-weight:700; letter-spacing:0.5px; }"
+                                  "QScrollBar:vertical { width:5px; background:%1; }"
+                                  "QScrollBar::handle:vertical { background:%4; min-height:20px; }")
+                              .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::fonts::DATA_FAMILY,
+                                   ui::colors::BORDER_DIM, ui::colors::AMBER_DIM, ui::colors::AMBER,
+                                   ui::colors::BG_HOVER, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY)
+                              .arg(ui::colors::AMBER));
+    populate_table();
 }
 
 } // namespace fincept::screens

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "screens/IStatefulScreen.h"
 #include "storage/repositories/DataMappingRepository.h"
 
 #include <QComboBox>
@@ -24,10 +25,15 @@ namespace fincept::screens {
 /// 5-step wizard: API Config → Schema Select → Field Mapping → Cache → Test & Save.
 /// Supports predefined schemas (OHLCV, QUOTE, TICK, ORDER, POSITION, PORTFOLIO, INSTRUMENT),
 /// custom schemas, multiple parser engines, and Indian broker templates.
-class DataMappingScreen : public QWidget {
+class DataMappingScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit DataMappingScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "data_mapping"; }
+    int state_version() const override { return 1; }
 
   private slots:
     void on_view_changed(int view); // 0=list, 1=create, 2=templates

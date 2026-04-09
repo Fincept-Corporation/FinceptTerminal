@@ -23,11 +23,14 @@ class NavigationBar : public QWidget {
     void update_clock();
 
   private:
-    QLabel* clock_label_ = nullptr;
-    QLabel* user_label_ = nullptr;
-    QLabel* credits_label_ = nullptr;
-    QLabel* plan_label_ = nullptr;
-    QTimer* clock_timer_ = nullptr;
+    void refresh_theme();
+
+    QLabel*      clock_label_   = nullptr;
+    QLabel*      user_label_    = nullptr;
+    QLabel*      credits_label_ = nullptr;
+    QLabel*      plan_label_    = nullptr;
+    QPushButton* logout_btn_    = nullptr;
+    QTimer*      clock_timer_   = nullptr;
 };
 
 } // namespace fincept::ui

@@ -118,20 +118,19 @@ BeaPanel::BeaPanel(QWidget* parent)
     // ── Left: category + indicator selector ──────────────────────────────────
     auto* left = new QWidget;
     left->setFixedWidth(210);
-    left->setStyleSheet("background:#0a0a0a; border-right:1px solid #1a1a1a;");
+    left->setStyleSheet(sidebar_style());
     auto* lvl = new QVBoxLayout(left);
     lvl->setContentsMargins(0, 0, 0, 0);
     lvl->setSpacing(0);
 
     // Category header
     auto* cat_hdr = new QWidget;
-    cat_hdr->setStyleSheet("background:#111111; border-bottom:1px solid #1a1a1a;");
+    cat_hdr->setStyleSheet(section_hdr_style());
     cat_hdr->setFixedHeight(32);
     auto* chl = new QHBoxLayout(cat_hdr);
     chl->setContentsMargins(8, 0, 8, 0);
     auto* cat_lbl = new QLabel("CATEGORY");
-    cat_lbl->setStyleSheet(
-        "color:#808080; font-size:9px; font-weight:700; background:transparent;");
+    cat_lbl->setStyleSheet(ctrl_label_style());
     category_combo_ = new QComboBox;
     for (const auto& c : kBeaCategories)
         category_combo_->addItem(c.label);
@@ -145,9 +144,7 @@ BeaPanel::BeaPanel(QWidget* parent)
     // Indicator search
     indicator_search_ = new QLineEdit;
     indicator_search_->setPlaceholderText("Filter indicators…");
-    indicator_search_->setStyleSheet(
-        "background:#080808; color:#e5e5e5; border:none;"
-        "border-bottom:1px solid #1a1a1a; padding:4px 8px; font-size:10px;");
+    indicator_search_->setStyleSheet(search_input_style());
     indicator_search_->setFixedHeight(28);
     connect(indicator_search_, &QLineEdit::textChanged,
             this, &BeaPanel::on_indicator_filter);
@@ -155,14 +152,7 @@ BeaPanel::BeaPanel(QWidget* parent)
 
     // Indicator list
     indicator_list_ = new QListWidget;
-    indicator_list_->setStyleSheet(
-        QString("QListWidget { background:#080808; border:none; outline:none; font-size:10px; }"
-                "QListWidget::item { color:#808080; padding:4px 10px;"
-                "  border-bottom:1px solid #111111; }"
-                "QListWidget::item:hover { color:#e5e5e5; background:#0f0f0f; }"
-                "QListWidget::item:selected { color:%1;"
-                "  background:rgba(230,81,0,0.08);"
-                "  border-left:2px solid %1; padding-left:8px; }").arg(kBeaColor));
+    indicator_list_->setStyleSheet(list_style());
     indicator_list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     lvl->addWidget(indicator_list_, 1);
 
@@ -191,10 +181,9 @@ void BeaPanel::activate() {
 // ── Controls ──────────────────────────────────────────────────────────────────
 
 void BeaPanel::build_controls(QHBoxLayout* thl) {
-    auto make_lbl = [](const QString& text) {
+    auto make_lbl = [this](const QString& text) {
         auto* l = new QLabel(text);
-        l->setStyleSheet(
-            "color:#525252; font-size:9px; font-weight:700; background:transparent;");
+        l->setStyleSheet(ctrl_label_style());
         return l;
     };
 
@@ -216,10 +205,9 @@ void BeaPanel::build_controls(QHBoxLayout* thl) {
     thl->addWidget(end_input_);
 
     // API key notice
-    auto* notice = new QLabel("Requires BEA_API_KEY");
-    notice->setStyleSheet(
-        "color:#f59e0b; font-size:9px; background:transparent;");
-    thl->addWidget(notice);
+    auto* notice_lbl = new QLabel("Requires BEA_API_KEY");
+    notice_lbl->setStyleSheet(notice_style());
+    thl->addWidget(notice_lbl);
 }
 
 void BeaPanel::on_category_changed(int index) {

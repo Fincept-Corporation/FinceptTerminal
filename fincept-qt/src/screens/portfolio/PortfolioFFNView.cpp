@@ -85,8 +85,8 @@ void PortfolioFFNView::build_ui() {
     back_btn_->setStyleSheet(
         QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                 "  padding:0 10px; font-size:9px; font-weight:700; }"
-                "QPushButton:hover { background:%1; color:#000; }")
-            .arg(ui::colors::AMBER));
+                "QPushButton:hover { background:%1; color:%2; }")
+            .arg(ui::colors::AMBER, ui::colors::BG_BASE));
     connect(back_btn_, &QPushButton::clicked, this, &PortfolioFFNView::back_requested);
     h_layout->addWidget(back_btn_);
 
@@ -112,11 +112,11 @@ void PortfolioFFNView::build_ui() {
     run_btn_->setFixedHeight(24);
     run_btn_->setCursor(Qt::PointingHandCursor);
     run_btn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:#000; border:none;"
+        QString("QPushButton { background:%1; color:%4; border:none;"
                 "  padding:0 12px; font-size:9px; font-weight:700; letter-spacing:0.5px; }"
-                "QPushButton:hover { background:#22c55e; }"
+                "QPushButton:hover { background:%1; }"
                 "QPushButton:disabled { background:%2; color:%3; }")
-            .arg(ui::colors::POSITIVE, ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY));
+            .arg(ui::colors::POSITIVE, ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY, ui::colors::BG_BASE));
     connect(run_btn_, &QPushButton::clicked, this, &PortfolioFFNView::run_ffn);
     h_layout->addWidget(run_btn_);
 

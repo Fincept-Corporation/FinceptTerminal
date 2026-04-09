@@ -1,7 +1,11 @@
 // CryptoTickerBar.cpp — dense price ribbon with bid/ask/spread
 #include "screens/crypto_trading/CryptoTickerBar.h"
 
+#include "ui/theme/Theme.h"
+
 #include <QHBoxLayout>
+
+using namespace fincept::ui;
 
 namespace fincept::screens::crypto {
 
@@ -81,7 +85,7 @@ void CryptoTickerBar::update_data(double price, double change_pct, double high, 
     if (positive != last_positive_) {
         change_label_->setStyleSheet(
             QString("color: %1; font-size: 12px; font-weight: 700; background: transparent; border: none;")
-                .arg(positive ? "#16a34a" : "#dc2626"));
+                .arg(positive ? colors::POSITIVE : colors::NEGATIVE));
         last_positive_ = positive;
     }
 

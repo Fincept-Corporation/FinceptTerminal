@@ -27,6 +27,9 @@ class EdgeItem : public QObject, public QGraphicsPathItem {
     void set_animated(bool animated);
     bool is_animated() const { return animated_; }
 
+    /// Advance dash animation by one tick (called by NodeScene's global timer).
+    void tick_animation();
+
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override;
 
   signals:
@@ -35,7 +38,6 @@ class EdgeItem : public QObject, public QGraphicsPathItem {
 
   protected:
     QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
-    void timerEvent(QTimerEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
 
@@ -45,7 +47,6 @@ class EdgeItem : public QObject, public QGraphicsPathItem {
     PortItem* target_ = nullptr;
     bool animated_ = false;
     qreal dash_offset_ = 0.0;
-    int anim_timer_id_ = 0;
 };
 
 } // namespace fincept::workflow

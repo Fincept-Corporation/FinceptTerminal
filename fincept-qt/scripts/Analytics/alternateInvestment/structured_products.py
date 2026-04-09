@@ -61,5 +61,15 @@ class StructuredProductAnalyzer(AlternativeInvestmentBase):
             'analysis_category': 'THE UGLY'
         }
 
+    def valuation_summary(self) -> Dict[str, Any]:
+        return {
+            'nav': float(self.calculate_nav()),
+            'key_metrics': self.calculate_key_metrics(),
+            'verdict': self.analysis_verdict(),
+            'analysis_category': 'THE UGLY',
+            'rating': '2/10',
+            'analysis_recommendation': 'AVOID - complexity hides costs; buy stocks and bonds separately'
+        }
+
 
 __all__ = ['StructuredProductAnalyzer']

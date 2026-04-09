@@ -5,6 +5,8 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+class QFrame;
+
 namespace fincept::screens {
 
 /// Right-side market pulse panel — Fear/Greed, breadth, top movers, global snapshot, market hours.
@@ -37,21 +39,49 @@ class MarketPulsePanel : public QWidget {
                             const QString& color);
     QWidget* build_breadth_bar(const QString& label, int advancing, int declining);
 
+    /// Re-apply all token-based styles so a theme switch updates every child widget.
+    void refresh_theme();
+
     static QString market_status(const QString& region);
 
+    // ── Header ──
+    QWidget* header_bar_      = nullptr;
+    QLabel*  header_icon_     = nullptr;
+    QLabel*  header_title_    = nullptr;
+    QLabel*  header_live_dot_ = nullptr;
+
+    // ── Scroll area ──
+    QScrollArea* scroll_area_ = nullptr;
+
+    // ── Section headers (5 total) ──
+    struct SectionHeader {
+        QWidget* container = nullptr;
+        QLabel*  icon      = nullptr;
+        QLabel*  title     = nullptr;
+    };
+    SectionHeader sh_breadth_;
+    SectionHeader sh_gainers_;
+    SectionHeader sh_losers_;
+    SectionHeader sh_snapshot_;
+    SectionHeader sh_hours_;
+
     // ── Fear & Greed ──
-    QLabel* fg_score_val_   = nullptr;
-    QLabel* fg_score_max_   = nullptr;
-    QLabel* fg_sentiment_   = nullptr;
-    QFrame* fg_gradient_bar_= nullptr;
+    QLabel* fg_header_label_  = nullptr;
+    QLabel* fg_gauge_icon_    = nullptr;
+    QLabel* fg_score_val_     = nullptr;
+    QLabel* fg_score_max_     = nullptr;
+    QLabel* fg_sentiment_     = nullptr;
+    QFrame* fg_gradient_bar_  = nullptr;
 
     // ── Market Breadth ──
-    // per-exchange: {adv_label, dec_label, green_bar, red_bar}
+    // per-exchange: {name_label, adv_label, slash_label, dec_label, green_bar, red_bar}
     struct BreadthRow {
-        QLabel* adv   = nullptr;
-        QLabel* dec   = nullptr;
-        QWidget* green= nullptr;
-        QWidget* red  = nullptr;
+        QLabel*  name  = nullptr;
+        QLabel*  adv   = nullptr;
+        QLabel*  slash = nullptr;
+        QLabel*  dec   = nullptr;
+        QWidget* green = nullptr;
+        QWidget* red   = nullptr;
     };
     BreadthRow nyse_row_;
     BreadthRow nasdaq_row_;
@@ -63,8 +93,10 @@ class MarketPulsePanel : public QWidget {
 
     // ── Global Snapshot ──
     struct StatRow {
-        QLabel* val = nullptr;
-        QLabel* chg = nullptr;
+        QWidget* container = nullptr;
+        QLabel*  name_lbl  = nullptr;
+        QLabel*  val       = nullptr;
+        QLabel*  chg       = nullptr;
     };
     StatRow vix_row_;
     StatRow us10y_row_;
@@ -75,9 +107,11 @@ class MarketPulsePanel : public QWidget {
 
     // ── Market Hours ──
     struct HoursRow {
-        QLabel* dot    = nullptr;
-        QLabel* status = nullptr;
-        QString region;
+        QWidget* container = nullptr;
+        QLabel*  name_lbl  = nullptr;
+        QLabel*  dot       = nullptr;
+        QLabel*  status    = nullptr;
+        QString  region;
     };
     QVector<HoursRow> hours_rows_;
 

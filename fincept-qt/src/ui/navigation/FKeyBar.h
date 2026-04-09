@@ -31,6 +31,7 @@ class TabBar : public QWidget {
     QString active_id_ = "dashboard";
 
     void add_tab(const TabDef& def);
+    void refresh_theme();
     void update_styles();
 };
 

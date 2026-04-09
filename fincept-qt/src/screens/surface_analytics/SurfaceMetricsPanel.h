@@ -1,5 +1,6 @@
 #pragma once
 #include "SurfaceTypes.h"
+#include "ui/theme/Theme.h"
 
 #include <QLabel>
 #include <QVBoxLayout>
@@ -33,7 +34,7 @@ class SurfaceMetricsPanel : public QWidget {
   private:
     QVBoxLayout* layout_;
     void clear_rows();
-    void add_row(const QString& label, const QString& value, const char* value_color = "#e5e5e5");
+    void add_row(const QString& label, const QString& value, const char* value_color = nullptr);
     void add_section(const QString& title, const char* color);
 };
 

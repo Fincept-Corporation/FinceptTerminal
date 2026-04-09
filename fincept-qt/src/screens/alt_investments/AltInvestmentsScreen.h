@@ -2,90 +2,112 @@
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QFrame>
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QStackedWidget>
-#include <QTextEdit>
+#include <QScrollArea>
+#include <QVBoxLayout>
 #include <QWidget>
 
 namespace fincept::screens {
 
-/// Analyzer descriptor within a category.
 struct AltAnalyzer {
-    QString id;   // Python command name
-    QString name; // Display name
+    QString id;          // Python CLI command (e.g. "high-yield")
+    QString name;        // Display name
+    QString description; // Short description shown in header
 };
 
-/// Category of alternative investments.
 struct AltCategory {
     QString id;
     QString name;
-    QString color; // accent hex
+    QString color;
+    QString icon;
     QList<AltAnalyzer> analyzers;
 };
 
-/// Alternative Investments Analysis Screen.
-/// 10 categories, 27 analyzers backed by Python analytics modules.
-/// Categories: Bonds, Real Estate, Hedge Funds, Commodities, Private Capital,
-/// Annuities, Structured Products, Inflation Protected, Strategies, Digital Assets.
+/// Form field descriptor — drives dynamic form generation per analyzer.
+struct AltField {
+    QString key;          // JSON key sent to Python
+    QString label;        // Display label
+    enum Type { Text, Spin, Combo } type = Spin;
+    double default_val    = 0.0;
+    double min_val        = 0.0;
+    double max_val        = 1e9;
+    int    decimals       = 2;
+    QString prefix;
+    QString suffix;
+    QString combo_items;  // pipe-separated, used when type==Combo
+    bool    divide_100    = false; // divide UI value by 100 before sending (for % fields)
+};
+
 class AltInvestmentsScreen : public QWidget {
     Q_OBJECT
-  public:
+public:
     explicit AltInvestmentsScreen(QWidget* parent = nullptr);
 
-  private slots:
+protected:
+    void showEvent(QShowEvent* e) override;
+    void hideEvent(QHideEvent* e) override;
+
+private slots:
     void on_category_changed(int index);
     void on_analyzer_changed(int index);
     void on_analyze();
 
-  private:
+private:
+    // Setup
     void setup_ui();
     QWidget* create_header();
     QWidget* create_left_panel();
     QWidget* create_center_panel();
     QWidget* create_right_panel();
     QWidget* create_status_bar();
+    void     rebuild_form(int cat, int ana);
 
-    QWidget* build_form_for(const QString& analyzer_id);
+    // Data / execution
     void run_analysis(const QString& command, const QJsonObject& data);
-    void display_verdict(const QJsonObject& result);
+    QJsonObject collect_form_data() const;
+
+    // Display helpers
+    void display_verdict(const QJsonObject& result, const QString& command);
     void display_error(const QString& error);
     void set_loading(bool loading);
+    void append_metric_row(QWidget* parent, QVBoxLayout* vl,
+                           const QString& key, const QJsonValue& val, int depth = 0);
+    QString format_value(const QJsonValue& v) const;
 
-    // Categories
+    // Category/analyzer data
     QList<AltCategory> categories_;
     int active_category_ = 0;
     int active_analyzer_ = 0;
-    bool loading_ = false;
+    bool loading_        = false;
 
-    // UI — Left panel
+    // Left panel
     QList<QPushButton*> cat_btns_;
 
-    // UI — Center
-    QComboBox* analyzer_combo_ = nullptr;
-    QStackedWidget* form_stack_ = nullptr;
-    QPushButton* analyze_btn_ = nullptr;
-    QLabel* center_title_ = nullptr;
+    // Center
+    QLabel*    center_title_    = nullptr;
+    QLabel*    center_desc_     = nullptr;
+    QComboBox* analyzer_combo_  = nullptr;
+    QWidget*   form_container_  = nullptr;  // holds dynamic form rows
+    QVBoxLayout* form_layout_   = nullptr;
+    QPushButton* analyze_btn_   = nullptr;
 
-    // Input fields (reused across forms)
-    QLineEdit* input_name_ = nullptr;
-    QDoubleSpinBox* input_value1_ = nullptr;
-    QDoubleSpinBox* input_value2_ = nullptr;
-    QDoubleSpinBox* input_value3_ = nullptr;
-    QDoubleSpinBox* input_value4_ = nullptr;
-    QDoubleSpinBox* input_value5_ = nullptr;
-    QDoubleSpinBox* input_value6_ = nullptr;
-    QComboBox* input_type_ = nullptr;
+    // Dynamic form fields (rebuilt per analyzer)
+    QList<AltField>      current_fields_;
+    QList<QWidget*>      field_widgets_;   // parallel to current_fields_
 
-    // UI — Right panel (verdict)
-    QLabel* verdict_badge_ = nullptr;
-    QLabel* verdict_recommendation_ = nullptr;
-    QTextEdit* verdict_details_ = nullptr;
-    QLabel* verdict_rating_ = nullptr;
+    // Right panel — verdict
+    QLabel*      verdict_badge_     = nullptr;
+    QLabel*      verdict_rating_    = nullptr;
+    QLabel*      verdict_rec_       = nullptr;
+    QWidget*     metrics_container_ = nullptr;
+    QVBoxLayout* metrics_layout_    = nullptr;
+    QScrollArea* metrics_scroll_    = nullptr;
 
-    // UI — Status
+    // Status bar
     QLabel* status_category_ = nullptr;
     QLabel* status_analyzer_ = nullptr;
 };

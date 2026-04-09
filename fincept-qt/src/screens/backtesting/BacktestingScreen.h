@@ -1,5 +1,6 @@
 // src/screens/backtesting/BacktestingScreen.h
 #pragma once
+#include "screens/IStatefulScreen.h"
 #include "services/backtesting/BacktestingTypes.h"
 
 #include <QCheckBox>
@@ -24,10 +25,15 @@
 namespace fincept::screens {
 
 /// Multi-provider backtesting terminal with 6 providers, 9 commands, 50+ strategies.
-class BacktestingScreen : public QWidget {
+class BacktestingScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit BacktestingScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "backtesting"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* event) override;

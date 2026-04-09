@@ -23,11 +23,19 @@ const ThemeTokens THEME_OBSIDIAN = {
     .text_dim      = "#404040",
     .accent        = "#d97706",
     .accent_dim    = "#78350f",
+    .text_on_accent= "#ffffff",
+    .icon_dim      = "#808080",
+    .icon_hover    = "#e5e5e5",
     .positive      = "#16a34a",
+    .positive_dim  = "#14532d",
     .negative      = "#dc2626",
+    .negative_dim  = "#7f1d1d",
     .warning       = "#ca8a04",
     .info          = "#2563eb",
     .cyan          = "#0891b2",
+    .accent_bg     = "#1a1000",
+    .positive_bg   = "#0a1a0f",
+    .negative_bg   = "#1a0a0a",
     .row_alt       = "#0c0c0c",
     .font_family   = "'Consolas','Courier New',monospace",
     .font_size_base= 14,
@@ -49,67 +57,23 @@ const ThemeTokens THEME_BLOOMBERG = {
     .text_dim      = "#3a3a3a",
     .accent        = "#ff6600",
     .accent_dim    = "#7c2d00",
+    .text_on_accent= "#ffffff",
+    .icon_dim      = "#999999",
+    .icon_hover    = "#ffffff",
     .positive      = "#16a34a",
+    .positive_dim  = "#14532d",
     .negative      = "#ff3333",
+    .negative_dim  = "#7f1d1d",
     .warning       = "#ca8a04",
     .info          = "#2563eb",
     .cyan          = "#00b4d8",
+    .accent_bg     = "#1a0d00",
+    .positive_bg   = "#0a1a0f",
+    .negative_bg   = "#1a0808",
     .row_alt       = "#0d0d0d",
     .font_family   = "'Consolas','Courier New',monospace",
     .font_size_base= 14,
     .chart_colors  = {"#ff6600","#00b4d8","#16a34a","#ff3333","#2563eb","#ca8a04"},
-};
-
-const ThemeTokens THEME_MATRIX = {
-    .name          = "Matrix",
-    .bg_base       = "#030a03",
-    .bg_surface    = "#051005",
-    .bg_raised     = "#0a1a0a",
-    .bg_hover      = "#0f240f",
-    .border_dim    = "#0d2b0d",
-    .border_med    = "#143d14",
-    .border_bright = "#1e5c1e",
-    .text_primary  = "#00ff41",
-    .text_secondary= "#00bb30",
-    .text_tertiary = "#007a1f",
-    .text_dim      = "#004d13",
-    .accent        = "#00ff41",
-    .accent_dim    = "#003d10",
-    .positive      = "#00ff41",
-    .negative      = "#ff0000",
-    .warning       = "#ffff00",
-    .info          = "#00ccff",
-    .cyan          = "#00ccff",
-    .row_alt       = "#040c04",
-    .font_family   = "'Consolas','Courier New',monospace",
-    .font_size_base= 14,
-    .chart_colors  = {"#00ff41","#00ccff","#ffff00","#ff0000","#00bb30","#007a1f"},
-};
-
-const ThemeTokens THEME_MIDNIGHT = {
-    .name          = "Midnight Blue",
-    .bg_base       = "#050a14",
-    .bg_surface    = "#080f1e",
-    .bg_raised     = "#0d1628",
-    .bg_hover      = "#121e33",
-    .border_dim    = "#0f1f3a",
-    .border_med    = "#162845",
-    .border_bright = "#1e3a5f",
-    .text_primary  = "#e2e8f0",
-    .text_secondary= "#94a3b8",
-    .text_tertiary = "#475569",
-    .text_dim      = "#2d3f55",
-    .accent        = "#2563eb",
-    .accent_dim    = "#1e3a8a",
-    .positive      = "#22c55e",
-    .negative      = "#ef4444",
-    .warning       = "#f59e0b",
-    .info          = "#38bdf8",
-    .cyan          = "#38bdf8",
-    .row_alt       = "#060c18",
-    .font_family   = "'Consolas','Courier New',monospace",
-    .font_size_base= 14,
-    .chart_colors  = {"#2563eb","#38bdf8","#22c55e","#ef4444","#f59e0b","#a78bfa"},
 };
 
 const ThemeTokens THEME_LIGHT = {
@@ -131,12 +95,20 @@ const ThemeTokens THEME_LIGHT = {
     // --- Accent (darker amber for white-bg contrast, WCAG AA compliant) ---
     .accent        = "#b45309",
     .accent_dim    = "#fef3c7",
+    .text_on_accent= "#ffffff",
+    .icon_dim      = "#737373",
+    .icon_hover    = "#171717",
     // --- Functional (deepened for white-bg readability) ---
     .positive      = "#15803d",
+    .positive_dim  = "#bbf7d0",
     .negative      = "#dc2626",
+    .negative_dim  = "#fecaca",
     .warning       = "#a16207",
     .info          = "#1d4ed8",
     .cyan          = "#0e7490",
+    .accent_bg     = "#fef3c7",
+    .positive_bg   = "#f0fdf4",
+    .negative_bg   = "#fef2f2",
     // --- Table ---
     .row_alt       = "#fafafa",
     // --- Font ---
@@ -162,21 +134,9 @@ ThemeManager& ThemeManager::instance() {
 
 void ThemeManager::apply_theme(const QString& name) {
     if (name == "Bloomberg Dark")     current_ = THEME_BLOOMBERG;
-    else if (name == "Matrix")        current_ = THEME_MATRIX;
-    else if (name == "Midnight Blue") current_ = THEME_MIDNIGHT;
     else if (name == "Light")         current_ = THEME_LIGHT;
     else                              current_ = THEME_OBSIDIAN;
 
-    // Re-apply custom accent override if one was set
-    if (!accent_override_.isEmpty())
-        current_.accent = accent_override_.constData();
-
-    rebuild_and_apply();
-}
-
-void ThemeManager::apply_accent(const QString& hex) {
-    accent_override_ = hex.toUtf8();          // owned storage — no dangling pointer
-    current_.accent  = accent_override_.constData();
     rebuild_and_apply();
 }
 
@@ -200,7 +160,7 @@ QString ThemeManager::current_theme_name() const {
 }
 
 QStringList ThemeManager::available_themes() {
-    return {"Obsidian", "Bloomberg Dark", "Matrix", "Midnight Blue", "Light"};
+    return {"Obsidian", "Bloomberg Dark", "Light"};
 }
 
 QStringList ThemeManager::available_densities() {
@@ -322,28 +282,86 @@ QString ThemeManager::build_global_qss() const {
         QMenu::item:selected { background: %12; }
         QMenu::separator { background: %6; height: 1px; }
 
+        QScrollArea { border: none; background: %1; }
+        QFrame { background: transparent; border: none; }
+        QDialog { background: %1; color: %2; }
+
+        QTabWidget::pane { border: none; background: %1; }
+
+        QSpinBox, QDoubleSpinBox {
+            background: %5; color: %2; border: 1px solid %6;
+            padding: %7px %8px;
+        }
+        QSpinBox:focus, QDoubleSpinBox:focus { border: 1px solid %4; }
+        QSpinBox::up-button, QSpinBox::down-button,
+        QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
+            border: none; background: %11; width: 16px;
+        }
+
+        QTextBrowser {
+            background: %1; color: %2; border: none; padding: 12px;
+        }
+
+        QToolButton {
+            background: transparent; color: %10; border: none;
+            padding: %7px %8px;
+        }
+        QToolButton:hover { background: %11; color: %2; }
+        QToolButton:pressed { background: %12; }
+        QToolButton:checked { background: %12; color: %2; border-bottom: 2px solid %9; }
+
+        QRadioButton { color: %10; }
+        QRadioButton::indicator {
+            width: 12px; height: 12px; border: 1px solid %4;
+            border-radius: 6px; background: %5;
+        }
+        QRadioButton::indicator:checked {
+            background: %9; border-color: %9;
+        }
+
+        QGroupBox {
+            border: 1px solid %6; margin-top: 12px;
+            padding: %8px %7px; color: %10;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin; left: 8px;
+            padding: 0 4px; color: %9;
+        }
+
+        QSlider::groove:horizontal {
+            height: 4px; background: %6; border-radius: 2px;
+        }
+        QSlider::handle:horizontal {
+            width: 12px; height: 12px; margin: -4px 0;
+            background: %9; border-radius: 6px;
+        }
+        QSlider::handle:horizontal:hover { background: %2; }
+
+        QStatusBar { border: none; background: %1; padding: 0; }
+        QToolBar { border: none; background: %1; spacing: 0; padding: 0; }
+
         /* ── ADS Docking System ─────────────────────────────────────────── */
         ads--CDockContainerWidget { background: %1; }
         ads--CDockAreaWidget { background: %1; }
         ads--CDockAreaTitleBar {
-            background: %1;
-            border-bottom: 1px solid %6;
+            background: %12;
+            border-bottom: 1px solid %3;
             padding: 0px;
+            min-height: 24px;
+            max-height: 24px;
+        }
+        ads--CDockAreaWidget[focused="true"] ads--CDockAreaTitleBar {
+            border-bottom: 2px solid %9;
+        }
+        ads--CDockWidgetTab {
+            background: %12;
+            border: none;
+            padding: 2px 8px;
             min-height: 22px;
             max-height: 22px;
         }
-        ads--CDockAreaWidget[focused="true"] ads--CDockAreaTitleBar {
-            border-bottom: 1px solid %9;
-        }
-        ads--CDockWidgetTab {
-            background: %1;
-            border: none;
-            padding: 1px 6px;
-            min-height: 20px;
-            max-height: 20px;
-        }
         ads--CDockWidgetTab[activeTab="true"] {
-            background: %5;
+            background: %11;
             border-bottom: 2px solid %9;
         }
         ads--CDockWidgetTab[focused="true"] {
@@ -351,42 +369,93 @@ QString ThemeManager::build_global_qss() const {
         }
         ads--CDockWidgetTab #dockWidgetTabLabel {
             color: %10;
-            font-size: 10px;
+            font-size: 11px;
             font-weight: 600;
+            background: transparent;
         }
         ads--CDockWidgetTab[activeTab="true"] #dockWidgetTabLabel {
             color: %2;
         }
         ads--CDockWidgetTab[focused="true"] #dockWidgetTabLabel {
-            color: #ffffff;
+            color: %17;
         }
         ads--CDockWidget {
             background: %1;
             border: none;
         }
         ads--CDockSplitter::handle {
-            background-color: %6;
+            background-color: %3;
         }
         #tabCloseButton {
             background: none; border: none; padding: 0px;
-            max-width: 12px; max-height: 12px; color: #bbbbbb;
+            max-width: 12px; max-height: 12px; color: %10;
         }
-        #tabCloseButton:hover { background: rgba(255, 255, 255, 24); color: #ffffff; }
-        #tabCloseButton:pressed { background: rgba(255, 255, 255, 48); }
+        #tabCloseButton:hover { background: %11; color: %19; }
+        #tabCloseButton:pressed { background: %12; }
         ads--CDockWidgetTab[focused="true"] > #tabCloseButton:hover {
-            background: rgba(255, 255, 255, 48);
+            background: %12;
         }
-        #tabsMenuButton { background: none; border: none; padding: 0px; color: #bbbbbb; }
+        #tabsMenuButton { background: none; border: none; padding: 0px; color: %10; }
         #tabsMenuButton::menu-indicator { image: none; }
-        #tabsMenuButton:hover { background: rgba(255, 255, 255, 24); color: #ffffff; }
-        #dockAreaCloseButton { background: none; border: none; padding: 0px; color: #bbbbbb; }
-        #dockAreaCloseButton:hover { background: rgba(255, 255, 255, 24); color: #ffffff; }
-        #detachGroupButton { background: none; border: none; padding: 0px; color: #bbbbbb; }
-        #detachGroupButton:hover { background: rgba(255, 255, 255, 24); color: #ffffff; }
-        ads--CTitleBarButton { padding: 0px; max-width: 14px; max-height: 14px; color: #bbbbbb; }
-        ads--CTitleBarButton:hover { color: #ffffff; }
+        #tabsMenuButton:hover { background: %11; color: %19; }
+        #dockAreaCloseButton { background: none; border: none; padding: 0px; color: %10; }
+        #dockAreaCloseButton:hover { background: %11; color: %19; }
+        #detachGroupButton { background: none; border: none; padding: 0px; color: %10; }
+        #detachGroupButton:hover { background: %11; color: %19; }
+        ads--CTitleBarButton { padding: 0px; max-width: 14px; max-height: 14px; color: %10; }
+        ads--CTitleBarButton:hover { color: %19; }
         ads--CAutoHideSideBar { background: %1; border: none; }
         QScrollArea#dockWidgetScrollArea { padding: 0px; border: none; }
+
+        /* ── Reusable object-name selectors ────────────────────────────── */
+        #sectionTitle {
+            color: %9; font-size: 13px; font-weight: 700;
+            background: transparent; border: none; padding: 0;
+        }
+        #sectionHeader {
+            color: %10; font-size: 11px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 1px;
+            background: transparent; border: none;
+            border-bottom: 1px solid %6; padding-bottom: 4px;
+        }
+        #cardFrame {
+            background: %5; border: 1px solid %6; border-radius: 6px;
+            padding: %8px;
+        }
+        #commandBar {
+            background: %5; border-bottom: 1px solid %6;
+            padding: %7px %8px;
+        }
+        #accentButton {
+            background: %9; color: %17; border: none;
+            padding: %7px %8px; font-weight: 600;
+        }
+        #accentButton:hover { background: %4; }
+        #accentButton:pressed { background: %12; }
+        #mutedButton {
+            background: %12; color: %10; border: 1px solid %6;
+            padding: %7px %8px;
+        }
+        #mutedButton:hover { background: %11; color: %2; }
+        #statusLabel {
+            color: %10; font-size: 11px; background: transparent;
+            border: none; padding: 0;
+        }
+        #dimLabel {
+            color: %13; font-size: 11px; background: transparent;
+            border: none; padding: 0;
+        }
+        #dataLabel {
+            color: %10; font-size: 13px; background: transparent;
+            border: none; padding: 0;
+        }
+        #dataValue {
+            color: %2; font-size: 13px; font-weight: 600;
+            background: transparent; border: none; padding: 0;
+        }
+        #positiveText { color: %20; }
+        #negativeText { color: %21; }
+        #warningText  { color: %22; }
     )")
     // %1  bg_base
     .arg(t.bg_base)
@@ -419,7 +488,29 @@ QString ThemeManager::build_global_qss() const {
     // %15 font-family
     .arg(font_family_)
     // %16 font-size
-    .arg(font_size_px_);
+    .arg(font_size_px_)
+    // %17 text_on_accent
+    .arg(t.text_on_accent)
+    // %18 icon_dim
+    .arg(t.icon_dim)
+    // %19 icon_hover
+    .arg(t.icon_hover)
+    // %20 positive
+    .arg(t.positive)
+    // %21 negative
+    .arg(t.negative)
+    // %22 warning
+    .arg(t.warning)
+    // %23 positive_dim
+    .arg(t.positive_dim)
+    // %24 negative_dim
+    .arg(t.negative_dim)
+    // %25 accent_bg
+    .arg(t.accent_bg)
+    // %26 positive_bg
+    .arg(t.positive_bg)
+    // %27 negative_bg
+    .arg(t.negative_bg);
 }
 
 } // namespace fincept::ui

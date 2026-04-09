@@ -238,16 +238,17 @@ DocumentCanvas::DocumentCanvas(QWidget* parent) : QWidget(parent) {
     scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     scroll_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     scroll_->setStyleSheet(
-        "QScrollArea { background: #1a1a1a; border: none; }"
-        "QScrollBar:vertical { background: #111111; width: 10px; }"
-        "QScrollBar::handle:vertical { background: #333333; border-radius: 5px; min-height: 20px; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }"
-        "QScrollBar:horizontal { background: #111111; height: 10px; }"
-        "QScrollBar::handle:horizontal { background: #333333; border-radius: 5px; min-width: 20px; }"
-        "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }");
+        QString("QScrollArea { background: %1; border: none; }"
+                "QScrollBar:vertical { background: %2; width: 10px; }"
+                "QScrollBar::handle:vertical { background: %3; border-radius: 5px; min-height: 20px; }"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }"
+                "QScrollBar:horizontal { background: %2; height: 10px; }"
+                "QScrollBar::handle:horizontal { background: %3; border-radius: 5px; min-width: 20px; }"
+                "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }")
+            .arg(ui::colors::BORDER_DIM, ui::colors::BG_RAISED, ui::colors::BORDER_BRIGHT));
 
     container_ = new QWidget;
-    container_->setStyleSheet("background: #1a1a1a;");
+    container_->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM));
     pages_layout_ = new QVBoxLayout(container_);
     pages_layout_->setContentsMargins(40, 40, 40, 40);
     pages_layout_->setSpacing(24); // gap between pages

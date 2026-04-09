@@ -19,31 +19,24 @@ RiskMetricsWidget::RiskMetricsWidget(QWidget* parent) : BaseWidget("RISK METRICS
     vl->setSpacing(6);
 
     // ── VIX section ──
-    auto* vix_card = new QWidget;
-    vix_card->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED()));
-    auto* vcl = new QVBoxLayout(vix_card);
+    vix_card_ = new QWidget;
+    auto* vcl = new QVBoxLayout(vix_card_);
     vcl->setContentsMargins(10, 8, 10, 8);
     vcl->setSpacing(4);
 
     auto* vix_header = new QHBoxLayout;
-    auto* vix_lbl = new QLabel("VIX FEAR GAUGE");
-    vix_lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                               .arg(ui::colors::TEXT_TERTIARY()));
-    vix_header->addWidget(vix_lbl);
+    vix_header_lbl_ = new QLabel("VIX FEAR GAUGE");
+    vix_header->addWidget(vix_header_lbl_);
     vix_header->addStretch();
 
     vix_regime_ = new QLabel("--");
-    vix_regime_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                                   .arg(ui::colors::TEXT_TERTIARY()));
     vix_header->addWidget(vix_regime_);
     vcl->addLayout(vix_header);
 
     vix_value_ = new QLabel("--");
-    vix_value_->setStyleSheet(QString("color: %1; font-size: 22px; font-weight: bold; background: transparent;")
-                                  .arg(ui::colors::TEXT_TERTIARY()));
     vcl->addWidget(vix_value_);
 
-    // VIX gradient bar (0–40 range, 5 segments)
+    // VIX gradient bar (0-40 range, 5 segments) — uses fixed colors, not theme tokens
     auto* bar_row = new QWidget;
     bar_row->setFixedHeight(6);
     auto* brl = new QHBoxLayout(bar_row);
@@ -58,25 +51,20 @@ RiskMetricsWidget::RiskMetricsWidget(QWidget* parent) : BaseWidget("RISK METRICS
     vcl->addWidget(bar_row);
 
     // Bar position indicator
-    vix_bar_fill_ = new QLabel("▲");
-    vix_bar_fill_->setStyleSheet(
-        QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
+    vix_bar_fill_ = new QLabel(QString::fromUtf8("\xe2\x96\xb2"));
     vix_bar_fill_->setAlignment(Qt::AlignLeft);
     vcl->addWidget(vix_bar_fill_);
 
-    vl->addWidget(vix_card);
+    vl->addWidget(vix_card_);
 
     // ── Section separator ──
-    auto* sep1 = new QFrame;
-    sep1->setFixedHeight(1);
-    sep1->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
-    vl->addWidget(sep1);
+    sep1_ = new QFrame;
+    sep1_->setFixedHeight(1);
+    vl->addWidget(sep1_);
 
     // ── Volatile stocks section ──
-    auto* stocks_hdr = new QLabel("HIGH-BETA STOCKS");
-    stocks_hdr->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                                  .arg(ui::colors::TEXT_TERTIARY()));
-    vl->addWidget(stocks_hdr);
+    stocks_hdr_ = new QLabel("HIGH-BETA STOCKS");
+    vl->addWidget(stocks_hdr_);
 
     static const QStringList kVolatile = {"NVDA", "TSLA", "AMD", "META", "PLTR", "COIN"};
     for (const auto& sym : kVolatile) {
@@ -86,20 +74,14 @@ RiskMetricsWidget::RiskMetricsWidget(QWidget* parent) : BaseWidget("RISK METRICS
 
         StockRisk sr;
         sr.symbol = new QLabel(sym);
-        sr.symbol->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                                     .arg(ui::colors::TEXT_PRIMARY()));
         sr.symbol->setFixedWidth(48);
         rl->addWidget(sr.symbol);
 
         sr.chg_pct = new QLabel("--");
-        sr.chg_pct->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                                      .arg(ui::colors::TEXT_TERTIARY()));
         sr.chg_pct->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         rl->addWidget(sr.chg_pct, 1);
 
         sr.hi_lo = new QLabel("--");
-        sr.hi_lo->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
         sr.hi_lo->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         rl->addWidget(sr.hi_lo, 1);
 
@@ -108,28 +90,22 @@ RiskMetricsWidget::RiskMetricsWidget(QWidget* parent) : BaseWidget("RISK METRICS
     }
 
     // ── Correlation proxies ──
-    auto* sep2 = new QFrame;
-    sep2->setFixedHeight(1);
-    sep2->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
-    vl->addWidget(sep2);
+    sep2_ = new QFrame;
+    sep2_->setFixedHeight(1);
+    vl->addWidget(sep2_);
 
-    auto* corr_hdr = new QLabel("SPREAD PROXIES");
-    corr_hdr->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                                .arg(ui::colors::TEXT_TERTIARY()));
-    vl->addWidget(corr_hdr);
+    corr_hdr_ = new QLabel("SPREAD PROXIES");
+    vl->addWidget(corr_hdr_);
 
     auto make_spread_row = [&](const QString& label, QLabel*& out) {
         auto* row = new QWidget;
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(0, 2, 0, 2);
         auto* lbl = new QLabel(label);
-        lbl->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
+        spread_labels_.append(lbl);
         rl->addWidget(lbl);
         rl->addStretch();
         out = new QLabel("--");
-        out->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                               .arg(ui::colors::TEXT_PRIMARY()));
         rl->addWidget(out);
         vl->addWidget(row);
     };
@@ -141,8 +117,65 @@ RiskMetricsWidget::RiskMetricsWidget(QWidget* parent) : BaseWidget("RISK METRICS
     vl->addStretch();
 
     connect(this, &BaseWidget::refresh_requested, this, &RiskMetricsWidget::refresh_data);
+
+    apply_styles();
     set_loading(true);
     refresh_data();
+}
+
+void RiskMetricsWidget::apply_styles() {
+    vix_card_->setStyleSheet(
+        QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED()));
+    vix_header_lbl_->setStyleSheet(
+        QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+            .arg(ui::colors::TEXT_TERTIARY()));
+    vix_regime_->setStyleSheet(
+        QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+            .arg(ui::colors::TEXT_TERTIARY()));
+    vix_value_->setStyleSheet(
+        QString("color: %1; font-size: 22px; font-weight: bold; background: transparent;")
+            .arg(ui::colors::TEXT_TERTIARY()));
+    vix_bar_fill_->setStyleSheet(
+        QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
+
+    sep1_->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
+    sep2_->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
+
+    stocks_hdr_->setStyleSheet(
+        QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+            .arg(ui::colors::TEXT_TERTIARY()));
+    corr_hdr_->setStyleSheet(
+        QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+            .arg(ui::colors::TEXT_TERTIARY()));
+
+    for (const auto& sr : stock_rows_) {
+        sr.symbol->setStyleSheet(
+            QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
+                .arg(ui::colors::TEXT_PRIMARY()));
+        sr.chg_pct->setStyleSheet(
+            QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
+                .arg(ui::colors::TEXT_TERTIARY()));
+        sr.hi_lo->setStyleSheet(
+            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
+    }
+
+    for (auto* lbl : spread_labels_)
+        lbl->setStyleSheet(
+            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
+
+    spy_qqq_spread_->setStyleSheet(
+        QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
+            .arg(ui::colors::TEXT_PRIMARY()));
+    spy_iwm_spread_->setStyleSheet(
+        QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
+            .arg(ui::colors::TEXT_PRIMARY()));
+    equity_bond_lbl_->setStyleSheet(
+        QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
+            .arg(ui::colors::TEXT_PRIMARY()));
+}
+
+void RiskMetricsWidget::on_theme_changed() {
+    apply_styles();
 }
 
 void RiskMetricsWidget::refresh_data() {
@@ -180,7 +213,7 @@ void RiskMetricsWidget::populate(const QVector<services::QuoteData>& quotes) {
             color = ui::colors::NEGATIVE();
         } else {
             regime = "EXTREME FEAR";
-            color = "#ff0000";
+            color = ui::colors::NEGATIVE();
         }
         vix_value_->setStyleSheet(
             QString("color: %1; font-size: 22px; font-weight: bold; background: transparent;").arg(color));

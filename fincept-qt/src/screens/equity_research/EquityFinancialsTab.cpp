@@ -34,8 +34,8 @@ namespace {
 
 static const QString kAmber = "#f59e0b";
 static const QString kCyan = "#22d3ee";
-static const QString kGreen = "#22c55e";
-static const QString kRed = "#ef4444";
+static const QString kGreen = ui::colors::POSITIVE;
+static const QString kRed = ui::colors::NEGATIVE;
 static const QString kBlue = "#3b82f6";
 static const QString kPurple = "#a855f7";
 static const QString kOrange = "#f97316";
@@ -195,9 +195,9 @@ void EquityFinancialsTab::build_ui() {
             border-radius:3px; padding:4px 14px; font-size:11px; font-weight:700;
         }
         QPushButton:checked { background:%3; color:%4; border-color:%3; }
-        QPushButton:hover:!checked { border-color:%3; background:#1a1a1a; }
+        QPushButton:hover:!checked { border-color:%3; background:%5; }
     )")
-                            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, kAmber, ui::colors::BG_BASE);
+                            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, kAmber, ui::colors::BG_BASE, ui::colors::BG_HOVER);
 
     auto make_btn = [&](const QString& label, QPushButton*& out) {
         out = new QPushButton(label);

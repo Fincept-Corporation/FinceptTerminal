@@ -9,7 +9,7 @@ LlmConfigRepository& LlmConfigRepository::instance() {
 
 LlmConfig LlmConfigRepository::map_config(QSqlQuery& q) {
     return {q.value(0).toString(), q.value(1).toString(), q.value(2).toString(), q.value(3).toString(),
-            q.value(4).toBool(),   q.value(5).toString(), q.value(6).toString()};
+            q.value(4).toBool(),   q.value(5).toBool(),   q.value(6).toString(), q.value(7).toString()};
 }
 
 LlmModelConfig LlmConfigRepository::map_model(QSqlQuery& q) {
@@ -19,21 +19,21 @@ LlmModelConfig LlmConfigRepository::map_model(QSqlQuery& q) {
 }
 
 Result<QVector<LlmConfig>> LlmConfigRepository::list_providers() {
-    return query_list("SELECT provider, api_key, base_url, model, is_active, created_at, updated_at "
+    return query_list("SELECT provider, api_key, base_url, model, is_active, tools_enabled, created_at, updated_at "
                       "FROM llm_configs ORDER BY provider",
                       {}, map_config);
 }
 
 Result<LlmConfig> LlmConfigRepository::get_active_provider() {
-    return query_one("SELECT provider, api_key, base_url, model, is_active, created_at, updated_at "
+    return query_one("SELECT provider, api_key, base_url, model, is_active, tools_enabled, created_at, updated_at "
                      "FROM llm_configs WHERE is_active = 1 LIMIT 1",
                      {}, map_config);
 }
 
 Result<void> LlmConfigRepository::save_provider(const LlmConfig& c) {
-    return exec_write("INSERT OR REPLACE INTO llm_configs (provider, api_key, base_url, model, is_active, updated_at) "
-                      "VALUES (?, ?, ?, ?, ?, datetime('now'))",
-                      {c.provider, c.api_key, c.base_url, c.model, c.is_active ? 1 : 0});
+    return exec_write("INSERT OR REPLACE INTO llm_configs (provider, api_key, base_url, model, is_active, tools_enabled, updated_at) "
+                      "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+                      {c.provider, c.api_key, c.base_url, c.model, c.is_active ? 1 : 0, c.tools_enabled ? 1 : 0});
 }
 
 Result<void> LlmConfigRepository::set_active(const QString& provider) {

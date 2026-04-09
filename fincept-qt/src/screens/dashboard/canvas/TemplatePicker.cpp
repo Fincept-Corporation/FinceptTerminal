@@ -24,7 +24,7 @@ class TemplatePreview : public QWidget {
   protected:
     void paintEvent(QPaintEvent*) override {
         QPainter p(this);
-        p.fillRect(rect(), QColor("#0a0a0a"));
+        p.fillRect(rect(), QColor(ui::colors::BG_SURFACE()));
 
         const int cols = 12;
         const int rows = 14;

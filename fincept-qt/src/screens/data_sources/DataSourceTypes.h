@@ -1,7 +1,6 @@
 #pragma once
 // Data Sources Screen — shared types for connector configs, connections, and UI state.
 
-#include <QColor>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -107,21 +106,5 @@ enum class ConnStatus { Connected, Disconnected, Error, Testing };
 // ── UI view modes ──────────────────────────────────────────────────────────
 
 enum class ViewMode { Gallery, Connections };
-
-// ── Obsidian colors ────────────────────────────────────────────────────────
-
-inline const QColor BG_BASE = QColor("#080808");
-inline const QColor BG_SURFACE = QColor("#0a0a0a");
-inline const QColor BG_RAISED = QColor("#111111");
-inline const QColor BG_HOVER = QColor("#161616");
-inline const QColor BORDER_DIM = QColor("#1a1a1a");
-inline const QColor BORDER_MED = QColor("#222222");
-inline const QColor TEXT_PRIMARY = QColor("#e5e5e5");
-inline const QColor TEXT_SECONDARY = QColor("#808080");
-inline const QColor TEXT_TERTIARY = QColor("#525252");
-inline const QColor COLOR_ACCENT = QColor("#d97706");
-inline const QColor COLOR_BUY = QColor("#16a34a");
-inline const QColor COLOR_SELL = QColor("#dc2626");
-inline const QColor COLOR_WARNING = QColor("#ca8a04");
 
 } // namespace fincept::screens::datasources

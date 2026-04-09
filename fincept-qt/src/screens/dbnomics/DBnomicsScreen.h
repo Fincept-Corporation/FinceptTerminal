@@ -1,5 +1,6 @@
 // src/screens/dbnomics/DBnomicsScreen.h
 #pragma once
+#include "screens/IStatefulScreen.h"
 #include "services/dbnomics/DBnomicsModels.h"
 
 #include <QComboBox>
@@ -17,10 +18,15 @@ class DBnomicsSelectionPanel;
 class DBnomicsChartWidget;
 class DBnomicsDataTable;
 
-class DBnomicsScreen : public QWidget {
+class DBnomicsScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit DBnomicsScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "dbnomics"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* event) override;

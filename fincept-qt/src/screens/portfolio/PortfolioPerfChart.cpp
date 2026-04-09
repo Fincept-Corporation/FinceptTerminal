@@ -132,25 +132,26 @@ void PortfolioPerfChart::build_ui() {
 
     // Header: PERFORMANCE + period buttons
     auto* header = new QHBoxLayout;
-    header->setContentsMargins(8, 4, 8, 4);
+    header->setContentsMargins(10, 6, 10, 4);
 
     auto* title = new QLabel("PERFORMANCE");
     title->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1.5px;").arg(ui::colors::TEXT_SECONDARY));
     header->addWidget(title);
     header->addStretch();
 
     for (const auto& p : kPeriods) {
         auto* btn = new QPushButton(p);
-        btn->setFixedSize(28, 18);
+        btn->setFixedSize(32, 22);
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:none;"
-                                   "  font-size:8px; font-weight:700; border-radius:2px; }"
-                                   "QPushButton:checked { color:#000; background:%2;"
-                                   "  border:none; }"
-                                   "QPushButton:hover:!checked { color:%3; }")
-                               .arg(ui::colors::TEXT_TERTIARY, ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+        btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid transparent;"
+                                   "  font-size:9px; font-weight:700; border-radius:2px; }"
+                                   "QPushButton:checked { color:%4; background:%2;"
+                                   "  border:1px solid %2; }"
+                                   "QPushButton:hover:!checked { color:%3; border-color:%5; }")
+                               .arg(ui::colors::TEXT_TERTIARY, ui::colors::AMBER, ui::colors::TEXT_PRIMARY,
+                                    ui::colors::BG_BASE, ui::colors::BORDER_MED));
 
         if (p == current_period_)
             btn->setChecked(true);
@@ -163,16 +164,16 @@ void PortfolioPerfChart::build_ui() {
 
     // Benchmark toggle
     benchmark_btn_ = new QPushButton("SPY");
-    benchmark_btn_->setFixedSize(28, 18);
+    benchmark_btn_->setFixedSize(34, 22);
     benchmark_btn_->setCheckable(true);
     benchmark_btn_->setCursor(Qt::PointingHandCursor);
     benchmark_btn_->setToolTip("Overlay SPY benchmark (normalised to portfolio start value)");
     benchmark_btn_->setStyleSheet(
         QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
-                "  font-size:8px; font-weight:700; border-radius:2px; }"
-                "QPushButton:checked { color:#000; background:%2; border:none; }"
+                "  font-size:9px; font-weight:700; border-radius:2px; }"
+                "QPushButton:checked { color:%4; background:%2; border:1px solid %2; }"
                 "QPushButton:hover:!checked { color:%3; border-color:%3; }")
-            .arg(ui::colors::CYAN, ui::colors::CYAN, ui::colors::TEXT_PRIMARY));
+            .arg(ui::colors::CYAN, ui::colors::CYAN, ui::colors::TEXT_PRIMARY, ui::colors::BG_BASE));
     connect(benchmark_btn_, &QPushButton::clicked, this, [this]() {
         show_benchmark_ = benchmark_btn_->isChecked();
         update_chart();
@@ -184,8 +185,8 @@ void PortfolioPerfChart::build_ui() {
 
     // Info bar: period change, total return, NAV
     auto* info_bar = new QHBoxLayout;
-    info_bar->setContentsMargins(8, 0, 8, 4);
-    info_bar->setSpacing(12);
+    info_bar->setContentsMargins(10, 2, 10, 6);
+    info_bar->setSpacing(14);
 
     period_change_label_ = new QLabel;
     period_change_label_->setStyleSheet(
@@ -193,7 +194,7 @@ void PortfolioPerfChart::build_ui() {
     info_bar->addWidget(period_change_label_);
 
     auto* sep1 = new QLabel("|");
-    sep1->setStyleSheet(QString("color:%1;").arg(ui::colors::BORDER_MED));
+    sep1->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::BORDER_MED));
     info_bar->addWidget(sep1);
 
     total_return_label_ = new QLabel;
@@ -202,7 +203,7 @@ void PortfolioPerfChart::build_ui() {
     info_bar->addWidget(total_return_label_);
 
     auto* sep2 = new QLabel("|");
-    sep2->setStyleSheet(QString("color:%1;").arg(ui::colors::BORDER_MED));
+    sep2->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::BORDER_MED));
     info_bar->addWidget(sep2);
 
     nav_label_ = new QLabel;
@@ -349,7 +350,7 @@ void PortfolioPerfChart::update_chart() {
         period_change_label_->setText(
             QString("%1  — (no history yet, showing NAV only)").arg(current_period_));
         period_change_label_->setStyleSheet(
-            QString("color:%1; font-size:10px; font-weight:500;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color:%1; font-size:11px; font-weight:500;").arg(ui::colors::TEXT_TERTIARY));
     }
 
     // ── Period P&L from the series endpoints ─────────────────────────────────
@@ -379,19 +380,24 @@ void PortfolioPerfChart::update_chart() {
         x_axis->setFormat("dd MMM");
     x_axis->setTickCount(5);
     x_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
-    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
-    x_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM())));
-    x_axis->setLabelsFont(QFont("monospace", 7));
+    x_axis->setGridLineVisible(false);
+    x_axis->setMinorGridLineVisible(false);
+    x_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM()), 1));
+    x_axis->setLabelsFont(QFont(ui::fonts::DATA_FAMILY(), 8));
 
     double padding = std::max((max_val - min_val) * 0.08, max_val * 0.01);
     auto* y_axis = new QValueAxis;
     y_axis->setRange(min_val - padding, max_val + padding);
     y_axis->setLabelFormat("%.0f");
-    y_axis->setTickCount(4);
+    y_axis->setTickCount(5);
     y_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
-    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
-    y_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM())));
-    y_axis->setLabelsFont(QFont("monospace", 7));
+    {
+        QPen grid_pen(QColor(ui::colors::BORDER_DIM()), 1, Qt::DotLine);
+        y_axis->setGridLinePen(grid_pen);
+    }
+    y_axis->setMinorGridLineVisible(false);
+    y_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM()), 1));
+    y_axis->setLabelsFont(QFont(ui::fonts::DATA_FAMILY(), 8));
 
     chart->addAxis(x_axis, Qt::AlignBottom);
     chart->addAxis(y_axis, Qt::AlignLeft);
@@ -480,6 +486,37 @@ void PortfolioPerfChart::update_chart() {
 
     nav_label_->setText(
         QString("NAV %1 %2").arg(currency_).arg(QString::number(last_val, 'f', 2)));
+}
+
+void PortfolioPerfChart::refresh_theme() {
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+
+    const QString bsz = QString::number(ui::fonts::font_px(-3));
+    // Re-style period buttons
+    for (auto* btn : period_btns_) {
+        btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid transparent;"
+                                   "  font-size:" + bsz + "px; font-weight:700; border-radius:2px; }"
+                                   "QPushButton:checked { color:%4; background:%2;"
+                                   "  border:1px solid %2; }"
+                                   "QPushButton:hover:!checked { color:%3; border-color:%5; }")
+                               .arg(ui::colors::TEXT_TERTIARY, ui::colors::AMBER, ui::colors::TEXT_PRIMARY,
+                                    ui::colors::BG_BASE, ui::colors::BORDER_MED));
+    }
+    if (benchmark_btn_) {
+        benchmark_btn_->setStyleSheet(
+            QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
+                    "  font-size:" + bsz + "px; font-weight:700; border-radius:2px; }"
+                    "QPushButton:checked { color:%4; background:%2; border:1px solid %2; }"
+                    "QPushButton:hover:!checked { color:%3; border-color:%3; }")
+                .arg(ui::colors::CYAN, ui::colors::CYAN, ui::colors::TEXT_PRIMARY, ui::colors::BG_BASE));
+    }
+
+    // Chart background
+    if (chart_view_ && chart_view_->chart())
+        chart_view_->chart()->setBackgroundBrush(QColor(ui::colors::BG_BASE()));
+
+    // Rebuild chart with current theme colors (axes, line colors, etc.)
+    update_chart();
 }
 
 } // namespace fincept::screens

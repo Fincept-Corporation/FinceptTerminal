@@ -21,63 +21,44 @@ ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget("STOCK SCREENER", p
     vl->setSpacing(0);
 
     // Filter bar
-    auto* filter_bar = new QWidget;
-    filter_bar->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED()));
-    auto* fl = new QHBoxLayout(filter_bar);
+    filter_bar_ = new QWidget;
+    auto* fl = new QHBoxLayout(filter_bar_);
     fl->setContentsMargins(8, 6, 8, 6);
     fl->setSpacing(8);
 
-    auto* filter_lbl = new QLabel("SORT BY");
-    filter_lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                                  .arg(ui::colors::TEXT_TERTIARY()));
-    fl->addWidget(filter_lbl);
+    filter_lbl_ = new QLabel("SORT BY");
+    fl->addWidget(filter_lbl_);
 
     filter_combo_ = new QComboBox;
     filter_combo_->addItems({"% CHANGE ↑", "% CHANGE ↓", "VOLUME ↓", "PRICE ↓", "PRICE ↑"});
-    filter_combo_->setStyleSheet(
-        QString("QComboBox { background: %1; color: %2; border: 1px solid %3; font-size: 10px; padding: 2px 6px; }"
-                "QComboBox::drop-down { border: none; }"
-                "QComboBox QAbstractItemView { background: %1; color: %2; border: 1px solid %3; }")
-            .arg(ui::colors::BG_BASE())
-            .arg(ui::colors::TEXT_PRIMARY())
-            .arg(ui::colors::BORDER_MED()));
     fl->addWidget(filter_combo_);
     fl->addStretch();
 
-    auto* count_lbl = new QLabel(QString("%1 symbols").arg(kScreenerSymbols.size()));
-    count_lbl->setStyleSheet(
-        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
-    fl->addWidget(count_lbl);
+    count_lbl_ = new QLabel(QString("%1 symbols").arg(kScreenerSymbols.size()));
+    fl->addWidget(count_lbl_);
 
-    vl->addWidget(filter_bar);
+    vl->addWidget(filter_bar_);
 
     // Column headers
-    auto* header = new QWidget;
-    header->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_RAISED()).arg(ui::colors::BORDER_DIM()));
-    auto* hl = new QHBoxLayout(header);
+    header_ = new QWidget;
+    auto* hl = new QHBoxLayout(header_);
     hl->setContentsMargins(8, 3, 8, 3);
 
     auto make_hdr = [&](const QString& t, int s, Qt::Alignment a = Qt::AlignLeft) {
         auto* l = new QLabel(t);
-        l->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                             .arg(ui::colors::TEXT_TERTIARY()));
         l->setAlignment(a);
+        header_labels_.append(l);
         hl->addWidget(l, s);
     };
     make_hdr("SYMBOL", 2);
     make_hdr("PRICE", 2, Qt::AlignRight);
     make_hdr("CHG%", 1, Qt::AlignRight);
     make_hdr("VOLUME", 2, Qt::AlignRight);
-    vl->addWidget(header);
+    vl->addWidget(header_);
 
     // Scrollable list
-    auto* scroll = new QScrollArea;
-    scroll->setWidgetResizable(true);
-    scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }"
-                          "QScrollBar:vertical { width: 4px; background: transparent; }"
-                          + QString("QScrollBar::handle:vertical { background: %1; border-radius: 2px; min-height: 20px; }").arg(ui::colors::BORDER_MED) +
-                          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
+    scroll_ = new QScrollArea;
+    scroll_->setWidgetResizable(true);
 
     auto* list_widget = new QWidget;
     list_widget->setStyleSheet("background: transparent;");
@@ -86,14 +67,50 @@ ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget("STOCK SCREENER", p
     list_layout_->setSpacing(0);
     list_layout_->addStretch();
 
-    scroll->setWidget(list_widget);
-    vl->addWidget(scroll, 1);
+    scroll_->setWidget(list_widget);
+    vl->addWidget(scroll_, 1);
 
     connect(filter_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ScreenerWidget::apply_filter);
     connect(this, &BaseWidget::refresh_requested, this, &ScreenerWidget::refresh_data);
 
+    apply_styles();
     set_loading(true);
     refresh_data();
+}
+
+void ScreenerWidget::apply_styles() {
+    filter_bar_->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED()));
+    filter_lbl_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+                                   .arg(ui::colors::TEXT_TERTIARY()));
+    filter_combo_->setStyleSheet(
+        QString("QComboBox { background: %1; color: %2; border: 1px solid %3; font-size: 10px; padding: 2px 6px; }"
+                "QComboBox::drop-down { border: none; }"
+                "QComboBox QAbstractItemView { background: %1; color: %2; border: 1px solid %3; }")
+            .arg(ui::colors::BG_BASE())
+            .arg(ui::colors::TEXT_PRIMARY())
+            .arg(ui::colors::BORDER_MED()));
+    count_lbl_->setStyleSheet(
+        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
+
+    header_->setStyleSheet(
+        QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_RAISED()).arg(ui::colors::BORDER_DIM()));
+    for (auto* lbl : header_labels_) {
+        lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+                               .arg(ui::colors::TEXT_TERTIARY()));
+    }
+
+    scroll_->setStyleSheet("QScrollArea { border: none; background: transparent; }"
+                           "QScrollBar:vertical { width: 4px; background: transparent; }"
+                           + QString("QScrollBar::handle:vertical { background: %1; border-radius: 2px; min-height: 20px; }").arg(ui::colors::BORDER_MED) +
+                           "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
+
+    // Re-render data rows with current tokens if data exists
+    if (!all_quotes_.isEmpty())
+        apply_filter();
+}
+
+void ScreenerWidget::on_theme_changed() {
+    apply_styles();
 }
 
 void ScreenerWidget::refresh_data() {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "screens/IStatefulScreen.h"
 #include "services/polymarket/PolymarketTypes.h"
 
 #include <QTimer>
@@ -19,11 +20,16 @@ namespace fincept::screens {
 
 /// Production-grade Polymarket Prediction Markets screen.
 /// Thin coordinator owning 5 sub-widget panels, wiring service + WebSocket.
-class PolymarketScreen : public QWidget {
+class PolymarketScreen : public QWidget, public fincept::screens::IStatefulScreen {
     Q_OBJECT
   public:
     explicit PolymarketScreen(QWidget* parent = nullptr);
     ~PolymarketScreen() override;
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "polymarket"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* e) override;

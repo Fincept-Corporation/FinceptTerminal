@@ -17,17 +17,7 @@
 
 namespace fincept::screens {
 
-// ── Bloomberg-style constants ────────────────────────────────────────────────
-
-static constexpr const char* BG       = "#080808";
-static constexpr const char* SURFACE  = "#0e0e0e";
-static constexpr const char* RAISED   = "#141414";
-static constexpr const char* BORDER   = "#1c1c1c";
-static constexpr const char* TXT1     = "#e5e5e5";
-static constexpr const char* TXT2     = "#a0a0a0";
-static constexpr const char* AMBER    = "#d97706";
-static constexpr const char* GREEN    = "#22c55e";
-static constexpr const char* RED      = "#ef4444";
+// ── Accent colors without a theme token ──────────────────────────────────────
 static constexpr const char* CYAN     = "#22d3ee";
 static constexpr const char* YELLOW   = "#eab308";
 static constexpr const char* PURPLE   = "#a855f7";
@@ -45,7 +35,7 @@ namespace {
 
 QFrame* make_panel(const QString& title, const char* title_color) {
     auto* f = new QFrame;
-    f->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}").arg(SURFACE, BORDER));
+    f->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* vl = new QVBoxLayout(f);
     vl->setContentsMargins(10, 7, 10, 7);
     vl->setSpacing(4);
@@ -59,7 +49,7 @@ QFrame* make_panel(const QString& title, const char* title_color) {
         auto* sep = new QFrame;
         sep->setFrameShape(QFrame::HLine);
         sep->setFixedHeight(1);
-        sep->setStyleSheet(QString("border:0;background:%1;").arg(BORDER));
+        sep->setStyleSheet(QString("border:0;background:%1;").arg(ui::colors::BORDER_DIM));
         vl->addWidget(sep);
     }
     return f;
@@ -71,7 +61,7 @@ QLabel* add_row(QFrame* panel, const QString& key, const char* val_color) {
     hl->setContentsMargins(0, 0, 0, 0);
 
     auto* k = new QLabel(key);
-    k->setStyleSheet(QString("color:%1;font-size:%2px;background:transparent;border:0;").arg(TXT2).arg(FONT_KEY));
+    k->setStyleSheet(QString("color:%1;font-size:%2px;background:transparent;border:0;").arg(ui::colors::TEXT_SECONDARY).arg(FONT_KEY));
 
     auto* v = new QLabel("\xe2\x80\x94");
     v->setStyleSheet(QString("color:%1;font-size:%2px;font-weight:600;background:transparent;border:0;")
@@ -128,14 +118,14 @@ void ResearchCandleCanvas::rebuild_cache() {
     if (W <= 0 || H <= 0) return;
 
     cache_ = QPixmap(W, H);
-    cache_.fill(QColor(BG));
+    cache_.fill(QColor(ui::colors::BG_BASE()));
 
     QPainter p(&cache_);
     p.setRenderHint(QPainter::Antialiasing, false);
 
     const int total = candles_.size();
     if (total == 0) {
-        p.setPen(QColor(TXT2));
+        p.setPen(QColor(ui::colors::TEXT_SECONDARY()));
         p.setFont(QFont("Consolas", 11));
         p.drawText(cache_.rect(), Qt::AlignCenter, "Waiting for data...");
         return;
@@ -165,7 +155,7 @@ void ResearchCandleCanvas::rebuild_cache() {
     };
 
     // Grid lines
-    p.setPen(QPen(QColor(BORDER), 1, Qt::DotLine));
+    p.setPen(QPen(QColor(ui::colors::BORDER_DIM()), 1, Qt::DotLine));
     for (int g = 1; g < 6; ++g) {
         int gy = plot_h * g / 6;
         p.drawLine(0, gy, plot_w, gy);
@@ -176,8 +166,8 @@ void ResearchCandleCanvas::rebuild_cache() {
     const int body_w = qMax(1, static_cast<int>(slot_w * 0.65));
     const int half = body_w / 2;
 
-    const QColor bull_color(GREEN);
-    const QColor bear_color(RED);
+    const QColor bull_color(ui::colors::POSITIVE.get());
+    const QColor bear_color(ui::colors::NEGATIVE.get());
     const QColor wick_bull("#2a9d5c");
     const QColor wick_bear("#b83a3a");
 
@@ -207,13 +197,13 @@ void ResearchCandleCanvas::rebuild_cache() {
     }
 
     // Price axis (right)
-    p.setPen(QPen(QColor(BORDER), 1));
+    p.setPen(QPen(QColor(ui::colors::BORDER_DIM.get()), 1));
     p.drawLine(plot_w, 0, plot_w, plot_h);
 
     QFont lbl_font("Consolas", 9);
     p.setFont(lbl_font);
     QFontMetrics fm(lbl_font);
-    p.setPen(QColor(TXT2));
+    p.setPen(QColor(ui::colors::TEXT_SECONDARY.get()));
 
     const bool is_large = hi > 1000;
     for (int g = 0; g <= 6; ++g) {
@@ -224,10 +214,10 @@ void ResearchCandleCanvas::rebuild_cache() {
     }
 
     // Time axis (bottom)
-    p.setPen(QPen(QColor(BORDER), 1));
+    p.setPen(QPen(QColor(ui::colors::BORDER_DIM.get()), 1));
     p.drawLine(0, plot_h, plot_w, plot_h);
 
-    p.setPen(QColor(TXT2));
+    p.setPen(QColor(ui::colors::TEXT_SECONDARY.get()));
     const qint64 span_sec = candles_.last().timestamp - candles_.first().timestamp;
     const int label_step = qMax(1, count / 8);
 
@@ -252,7 +242,7 @@ void ResearchCandleCanvas::rebuild_cache() {
     if (!candles_.isEmpty()) {
         double last_close = candles_.last().close;
         int ly = py(last_close);
-        p.setPen(QPen(QColor(AMBER), 1, Qt::DashLine));
+        p.setPen(QPen(QColor(ui::colors::AMBER.get()), 1, Qt::DashLine));
         p.drawLine(0, ly, plot_w, ly);
     }
 }
@@ -282,7 +272,7 @@ void EquityOverviewTab::set_symbol(const QString& symbol) {
 // ── Build UI ──────────────────────────────────────────────────────────────────
 
 void EquityOverviewTab::build_ui() {
-    setStyleSheet(QString("background:%1;").arg(BG));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
 
     loading_overlay_ = new ui::LoadingOverlay(this);
 
@@ -341,11 +331,11 @@ QWidget* EquityOverviewTab::build_col1() {
 }
 
 QWidget* EquityOverviewTab::build_trading_panel() {
-    auto* p = make_panel("TODAY'S TRADING", AMBER);
+    auto* p = make_panel("TODAY'S TRADING", ui::colors::AMBER);
     open_val_ = add_row(p, "OPEN", CYAN);
-    high_val_ = add_row(p, "HIGH", GREEN);
-    low_val_ = add_row(p, "LOW", RED);
-    prev_close_val_ = add_row(p, "PREV CLOSE", TXT1);
+    high_val_ = add_row(p, "HIGH", ui::colors::POSITIVE);
+    low_val_ = add_row(p, "LOW", ui::colors::NEGATIVE);
+    prev_close_val_ = add_row(p, "PREV CLOSE", ui::colors::TEXT_PRIMARY);
     vol_val_ = add_row(p, "VOLUME", YELLOW);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
@@ -358,8 +348,8 @@ QWidget* EquityOverviewTab::build_valuation_panel() {
     fwd_pe_val_ = add_row(p, "FWD P/E", YELLOW);
     peg_val_ = add_row(p, "PEG RATIO", YELLOW);
     pb_val_ = add_row(p, "P/B RATIO", CYAN);
-    div_val_ = add_row(p, "DIV YIELD", GREEN);
-    beta_val_ = add_row(p, "BETA", TXT1);
+    div_val_ = add_row(p, "DIV YIELD", ui::colors::POSITIVE);
+    beta_val_ = add_row(p, "BETA", ui::colors::TEXT_PRIMARY);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
 }
@@ -370,7 +360,7 @@ QWidget* EquityOverviewTab::build_share_stats_panel() {
     float_val_ = add_row(p, "FLOAT", CYAN);
     insiders_val_ = add_row(p, "INSIDERS", YELLOW);
     institutions_val_ = add_row(p, "INSTITUTIONS", YELLOW);
-    short_pct_val_ = add_row(p, "SHORT %", RED);
+    short_pct_val_ = add_row(p, "SHORT %", ui::colors::NEGATIVE);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
 }
@@ -379,7 +369,7 @@ QWidget* EquityOverviewTab::build_share_stats_panel() {
 
 QWidget* EquityOverviewTab::build_chart_panel() {
     auto* p = new QFrame;
-    p->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}").arg(SURFACE, BORDER));
+    p->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
 
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(8, 6, 8, 6);
@@ -391,19 +381,19 @@ QWidget* EquityOverviewTab::build_chart_panel() {
     btn_row->setContentsMargins(0, 0, 0, 0);
 
     auto* period_lbl = new QLabel("PERIOD");
-    period_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;background:transparent;border:0;").arg(TXT2));
+    period_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;background:transparent;border:0;").arg(ui::colors::TEXT_SECONDARY));
     btn_row->addWidget(period_lbl);
 
     auto btn_style_inactive = QString(
         "QPushButton{background:transparent;color:%1;border:1px solid %2;"
         "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}"
         "QPushButton:hover{border-color:%3;background:%4;}")
-        .arg(TXT2, BORDER, AMBER, RAISED);
+        .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, ui::colors::AMBER, ui::colors::BG_RAISED);
 
     auto btn_style_active = QString(
         "QPushButton{background:%1;color:%2;border:1px solid %1;"
         "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}")
-        .arg(AMBER, BG);
+        .arg(ui::colors::AMBER, ui::colors::BG_BASE);
 
     auto make_btn = [&](const QString& label, QPushButton*& out, const QString& period) {
         out = new QPushButton(label);
@@ -440,12 +430,12 @@ void EquityOverviewTab::switch_period(QPushButton* btn, const QString& period) {
         "QPushButton{background:transparent;color:%1;border:1px solid %2;"
         "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}"
         "QPushButton:hover{border-color:%3;background:%4;}")
-        .arg(TXT2, BORDER, AMBER, RAISED);
+        .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, ui::colors::AMBER, ui::colors::BG_RAISED);
 
     auto active = QString(
         "QPushButton{background:%1;color:%2;border:1px solid %1;"
         "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}")
-        .arg(AMBER, BG);
+        .arg(ui::colors::AMBER, ui::colors::BG_BASE);
 
     for (auto* b : {btn_1m_, btn_3m_, btn_6m_, btn_1y_, btn_5y_})
         b->setStyleSheet(b == btn ? active : inactive);
@@ -472,15 +462,15 @@ QWidget* EquityOverviewTab::build_col4() {
 
 QWidget* EquityOverviewTab::build_analyst_panel() {
     auto* p = make_panel("ANALYST TARGETS", MAGENTA);
-    target_high_val_ = add_row(p, "HIGH", GREEN);
+    target_high_val_ = add_row(p, "HIGH", ui::colors::POSITIVE);
     target_mean_val_ = add_row(p, "MEAN", YELLOW);
-    target_low_val_ = add_row(p, "LOW", RED);
+    target_low_val_ = add_row(p, "LOW", ui::colors::NEGATIVE);
     analyst_count_val_ = add_row(p, "ANALYSTS", CYAN);
 
     rec_key_label_ = new QLabel("\xe2\x80\x94");
     rec_key_label_->setAlignment(Qt::AlignCenter);
     rec_key_label_->setStyleSheet(QString("background:%1;color:%2;border-radius:2px;padding:3px 8px;"
-                                          "font-size:12px;font-weight:700;").arg(RAISED, TXT2));
+                                          "font-size:12px;font-weight:700;").arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY));
     static_cast<QVBoxLayout*>(p->layout())->addWidget(rec_key_label_);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
@@ -488,18 +478,18 @@ QWidget* EquityOverviewTab::build_analyst_panel() {
 
 QWidget* EquityOverviewTab::build_52w_panel() {
     auto* p = make_panel("52 WEEK RANGE", YELLOW);
-    w52h_val_ = add_row(p, "HIGH", GREEN);
-    w52l_val_ = add_row(p, "LOW", RED);
+    w52h_val_ = add_row(p, "HIGH", ui::colors::POSITIVE);
+    w52l_val_ = add_row(p, "LOW", ui::colors::NEGATIVE);
     avg_vol_val_ = add_row(p, "AVG VOL", CYAN);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
 }
 
 QWidget* EquityOverviewTab::build_profitability_panel() {
-    auto* p = make_panel("PROFITABILITY", GREEN);
-    gross_margin_val_ = add_row(p, "GROSS MARGIN", GREEN);
-    op_margin_val_ = add_row(p, "OPER. MARGIN", GREEN);
-    profit_margin_val_ = add_row(p, "PROFIT MARGIN", GREEN);
+    auto* p = make_panel("PROFITABILITY", ui::colors::POSITIVE);
+    gross_margin_val_ = add_row(p, "GROSS MARGIN", ui::colors::POSITIVE);
+    op_margin_val_ = add_row(p, "OPER. MARGIN", ui::colors::POSITIVE);
+    profit_margin_val_ = add_row(p, "PROFIT MARGIN", ui::colors::POSITIVE);
     roa_val_ = add_row(p, "ROA", CYAN);
     roe_val_ = add_row(p, "ROE", CYAN);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
@@ -508,8 +498,8 @@ QWidget* EquityOverviewTab::build_profitability_panel() {
 
 QWidget* EquityOverviewTab::build_growth_panel() {
     auto* p = make_panel("GROWTH RATES", BLUE);
-    rev_growth_val_ = add_row(p, "REVENUE", GREEN);
-    earnings_growth_val_ = add_row(p, "EARNINGS", GREEN);
+    rev_growth_val_ = add_row(p, "REVENUE", ui::colors::POSITIVE);
+    earnings_growth_val_ = add_row(p, "EARNINGS", ui::colors::POSITIVE);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
 }
@@ -540,14 +530,14 @@ QWidget* EquityOverviewTab::build_company_desc_panel() {
     company_desc_->setWordWrap(true);
     company_desc_->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     company_desc_->setStyleSheet(QString("color:%1;font-size:%2px;line-height:1.5;"
-                                         "background:transparent;border:0;").arg(TXT1).arg(FONT_DESC));
+                                         "background:transparent;border:0;").arg(ui::colors::TEXT_PRIMARY).arg(FONT_DESC));
     company_desc_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     static_cast<QVBoxLayout*>(p->layout())->addWidget(company_desc_);
     return p;
 }
 
 QWidget* EquityOverviewTab::build_company_info_panel() {
-    auto* p = make_panel("COMPANY INFO", TXT1);
+    auto* p = make_panel("COMPANY INFO", ui::colors::TEXT_PRIMARY);
     company_emp_ = add_row(p, "EMPLOYEES", CYAN);
     company_web_ = add_row(p, "WEBSITE", BLUE);
     company_currency_ = add_row(p, "CURRENCY", CYAN);
@@ -556,9 +546,9 @@ QWidget* EquityOverviewTab::build_company_info_panel() {
 }
 
 QWidget* EquityOverviewTab::build_financial_health_panel() {
-    auto* p = make_panel("FINANCIAL HEALTH", AMBER);
-    cash_val_ = add_row(p, "CASH", GREEN);
-    debt_val_ = add_row(p, "DEBT", RED);
+    auto* p = make_panel("FINANCIAL HEALTH", ui::colors::AMBER);
+    cash_val_ = add_row(p, "CASH", ui::colors::POSITIVE);
+    debt_val_ = add_row(p, "DEBT", ui::colors::NEGATIVE);
     free_cf_val_ = add_row(p, "FREE CF", CYAN);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
@@ -630,16 +620,16 @@ void EquityOverviewTab::on_info_loaded(services::equity::StockInfo info) {
     analyst_count_val_->setText(info.analyst_count > 0 ? QString::number(info.analyst_count) : "N/A");
 
     QString rec = info.recommendation_key.toUpper().replace("_", " ");
-    const char* rec_color = TXT2;
+    const char* rec_color = ui::colors::TEXT_SECONDARY;
     if (rec == "STRONG BUY" || rec == "BUY")
-        rec_color = GREEN;
+        rec_color = ui::colors::POSITIVE;
     else if (rec == "STRONG SELL" || rec == "SELL")
-        rec_color = RED;
+        rec_color = ui::colors::NEGATIVE;
     else if (rec == "HOLD")
-        rec_color = AMBER;
+        rec_color = ui::colors::AMBER;
     rec_key_label_->setText(rec.isEmpty() ? "\xe2\x80\x94" : rec);
     rec_key_label_->setStyleSheet(QString("background:%1;color:%2;border-radius:2px;padding:3px 8px;"
-                                          "font-size:12px;font-weight:700;").arg(RAISED, rec_color));
+                                          "font-size:12px;font-weight:700;").arg(ui::colors::BG_RAISED, rec_color));
 
     // Profitability
     gross_margin_val_->setText(fmt_pct(info.gross_margins));

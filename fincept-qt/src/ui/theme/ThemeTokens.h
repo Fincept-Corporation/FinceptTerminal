@@ -29,13 +29,25 @@ struct ThemeTokens {
     // --- Accent (theme-defining color) ---
     const char* accent;         // primary highlight (amber/green/blue/orange)
     const char* accent_dim;     // dimmed accent for backgrounds / fills
+    const char* text_on_accent; // text color when accent is the background
+
+    // --- Interactive chrome (close buttons, toolbar icons) ---
+    const char* icon_dim;       // muted icon/button color (close, menu, detach)
+    const char* icon_hover;     // icon color on hover
 
     // --- Functional (semantic, consistent meaning across all themes) ---
-    const char* positive;  // gain / success / buy
-    const char* negative;  // loss / error / sell
-    const char* warning;   // caution
-    const char* info;      // informational
-    const char* cyan;      // secondary highlight / links
+    const char* positive;      // gain / success / buy
+    const char* positive_dim;  // dimmed positive for borders
+    const char* negative;      // loss / error / sell
+    const char* negative_dim;  // dimmed negative for borders
+    const char* warning;       // caution
+    const char* info;          // informational
+    const char* cyan;          // secondary highlight / links
+
+    // --- Tinted backgrounds (subtle fills for buy/sell/accent areas) ---
+    const char* accent_bg;     // translucent accent background
+    const char* positive_bg;   // translucent positive background
+    const char* negative_bg;   // translucent negative background
 
     // --- Table ---
     const char* row_alt;   // alternating row background
@@ -53,8 +65,6 @@ struct ThemeTokens {
 // ---------------------------------------------------------------------------
 extern const ThemeTokens THEME_OBSIDIAN;
 extern const ThemeTokens THEME_BLOOMBERG;
-extern const ThemeTokens THEME_MATRIX;
-extern const ThemeTokens THEME_MIDNIGHT;
 extern const ThemeTokens THEME_LIGHT;
 
 } // namespace fincept::ui

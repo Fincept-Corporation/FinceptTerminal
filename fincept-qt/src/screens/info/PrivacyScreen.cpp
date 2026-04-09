@@ -16,40 +16,45 @@ static const char* MF = "font-family:'Consolas','Courier New',monospace;";
 
 static QLabel* section_heading(const QString& icon, const QString& title) {
     auto* lbl = new QLabel(QString("%1  %2").arg(icon, title));
-    lbl->setStyleSheet(QString("color: #d97706; font-size: 14px; font-weight: 700; "
-                               "background: transparent; margin-top: 8px; %1")
-                           .arg(MF));
+    lbl->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700; "
+                               "background: transparent; margin-top: 8px; %2")
+                           .arg(colors::AMBER, MF));
     return lbl;
 }
 
 static QLabel* body_text(const QString& text) {
     auto* lbl = new QLabel(text);
     lbl->setWordWrap(true);
-    lbl->setStyleSheet(QString("color: #e5e5e5; font-size: 12px; background: transparent; %1").arg(MF));
+    lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2")
+                           .arg(colors::TEXT_PRIMARY, MF));
     return lbl;
 }
 
 static QLabel* bullet(const QString& text) {
     auto* lbl = new QLabel(QString("  > %1").arg(text));
     lbl->setWordWrap(true);
-    lbl->setStyleSheet(QString("color: #808080; font-size: 12px; background: transparent; %1").arg(MF));
+    lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2")
+                           .arg(colors::TEXT_SECONDARY, MF));
     return lbl;
 }
 
 static QWidget* info_card(const QString& title, const QString& desc) {
     auto* card = new QWidget;
-    card->setStyleSheet("background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 2px;");
+    card->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 2px;")
+                            .arg(colors::BG_SURFACE, colors::BORDER_DIM));
     auto* vl = new QVBoxLayout(card);
     vl->setContentsMargins(12, 10, 12, 10);
     vl->setSpacing(4);
 
     auto* t = new QLabel(title);
-    t->setStyleSheet(QString("color: #d97706; font-size: 11px; font-weight: 700; background: transparent; %1").arg(MF));
+    t->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: 700; background: transparent; %2")
+                         .arg(colors::AMBER, MF));
     vl->addWidget(t);
 
     auto* d = new QLabel(desc);
     d->setWordWrap(true);
-    d->setStyleSheet(QString("color: #808080; font-size: 11px; background: transparent; %1").arg(MF));
+    d->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; %2")
+                         .arg(colors::TEXT_SECONDARY, MF));
     vl->addWidget(d);
 
     return card;
@@ -75,9 +80,9 @@ PrivacyScreen::PrivacyScreen(QWidget* parent) : QWidget(parent) {
     // Back
     auto* back_btn = new QPushButton("< BACK");
     back_btn->setCursor(Qt::PointingHandCursor);
-    back_btn->setStyleSheet(QString("QPushButton { color: #808080; background: transparent; border: none; "
-                                    "font-size: 12px; %1 } QPushButton:hover { color: #e5e5e5; }")
-                                .arg(MF));
+    back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
+                                    "font-size: 12px; %2 } QPushButton:hover { color: %3; }")
+                                .arg(colors::TEXT_SECONDARY, MF, colors::TEXT_PRIMARY));
     connect(back_btn, &QPushButton::clicked, this, &PrivacyScreen::navigate_back);
     vl->addWidget(back_btn, 0, Qt::AlignLeft);
 
@@ -95,7 +100,8 @@ PrivacyScreen::PrivacyScreen(QWidget* parent) : QWidget(parent) {
 
     // Main panel
     auto* panel = new QWidget;
-    panel->setStyleSheet("background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 2px;");
+    panel->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 2px;")
+                             .arg(colors::BG_SURFACE, colors::BORDER_DIM));
     auto* pvl = new QVBoxLayout(panel);
     pvl->setContentsMargins(20, 16, 20, 16);
     pvl->setSpacing(6);
@@ -188,9 +194,9 @@ PrivacyScreen::PrivacyScreen(QWidget* parent) : QWidget(parent) {
     auto make_link = [](const QString& text) {
         auto* btn = new QPushButton(text);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet("QPushButton { color: #0891b2; background: transparent; border: none; "
+        btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
                            "font-size: 12px; font-family:'Consolas','Courier New',monospace; }"
-                           "QPushButton:hover { color: #38bdf8; }");
+                           "QPushButton:hover { color: #38bdf8; }").arg(colors::CYAN));
         return btn;
     };
 

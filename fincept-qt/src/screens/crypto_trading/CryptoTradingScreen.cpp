@@ -2,6 +2,7 @@
 #include "screens/crypto_trading/CryptoTradingScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "screens/crypto_trading/CryptoBottomPanel.h"
 #include "screens/crypto_trading/CryptoChart.h"
 #include "screens/crypto_trading/CryptoCredentials.h"
@@ -13,6 +14,7 @@
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
 #include "ui/theme/StyleSheets.h"
+#include "ui/theme/Theme.h"
 
 #include <QCompleter>
 #include <QDateTime>
@@ -159,7 +161,7 @@ void CryptoTradingScreen::setup_ui() {
     // WS status
     ws_status_ = new QLabel("REST");
     ws_status_->setObjectName("cryptoWsStatus");
-    ws_status_->setStyleSheet("color: #ca8a04;");
+    ws_status_->setStyleSheet(QString("color: %1;").arg(ui::colors::WARNING));
     cmd_layout->addWidget(ws_status_);
 
     // Clock
@@ -306,7 +308,7 @@ void CryptoTradingScreen::update_clock() {
     // Update WS status
     const bool connected = ExchangeService::instance().is_ws_connected();
     ws_status_->setText(connected ? "LIVE" : "REST");
-    ws_status_->setStyleSheet(connected ? "color: #16a34a;" : "color: #ca8a04;");
+    ws_status_->setStyleSheet(QString("color: %1;").arg(connected ? ui::colors::POSITIVE : ui::colors::WARNING));
 }
 
 // ============================================================================
@@ -482,12 +484,14 @@ void CryptoTradingScreen::on_exchange_changed(const QString& exchange) {
     es.start_ws_stream(selected_symbol_, watchlist_symbols_);
     load_portfolio();
     async_fetch_candles(selected_symbol_, chart_->current_timeframe());
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 void CryptoTradingScreen::on_symbol_selected(const QString& symbol) {
     if (symbol.isEmpty() || symbol == selected_symbol_)
         return;
     switch_symbol(symbol);
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 void CryptoTradingScreen::switch_symbol(const QString& symbol) {
@@ -893,6 +897,25 @@ void CryptoTradingScreen::async_set_margin_mode(const QString& mode) {
     QtConcurrent::run([symbol, m]() {
         ExchangeService::instance().set_margin_mode(symbol, m);
     });
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap CryptoTradingScreen::save_state() const {
+    return {
+        {"exchange_id",      exchange_id_},
+        {"selected_symbol",  selected_symbol_},
+    };
+}
+
+void CryptoTradingScreen::restore_state(const QVariantMap& state) {
+    const QString exch = state.value("exchange_id", "kraken").toString();
+    const QString sym  = state.value("selected_symbol", "BTC/USDT").toString();
+
+    if (exch != exchange_id_)
+        on_exchange_changed(exch);
+    if (sym != selected_symbol_)
+        on_symbol_selected(sym);
 }
 
 } // namespace fincept::screens

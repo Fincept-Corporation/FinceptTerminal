@@ -1,5 +1,6 @@
 // src/screens/forum/ForumScreen.h
 #pragma once
+#include "screens/IStatefulScreen.h"
 #include "services/forum/ForumModels.h"
 
 #include <QHBoxLayout>
@@ -15,10 +16,15 @@ class ForumFeedPanel;
 class ForumThreadPanel;
 class ForumSidebarPanel;
 
-class ForumScreen : public QWidget {
+class ForumScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit ForumScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "forum"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* event) override;

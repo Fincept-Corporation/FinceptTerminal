@@ -1,5 +1,7 @@
 #pragma once
 
+#include "screens/IStatefulScreen.h"
+
 #include <QComboBox>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -27,10 +29,15 @@ struct StockCategory {
 /// Chinese A/B shares, Hong Kong, and US markets.
 /// 8 categories: Realtime, Historical, Financial, Holdings,
 /// Fund Flow, Boards, Margin/HSGT, Hot & News.
-class AsiaMarketsScreen : public QWidget {
+class AsiaMarketsScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit AsiaMarketsScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "asia_markets"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* e) override;

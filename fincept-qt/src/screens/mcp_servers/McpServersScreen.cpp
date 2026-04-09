@@ -6,6 +6,7 @@
 #include "screens/mcp_servers/McpServersScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "mcp/McpManager.h"
 #include "mcp/McpProvider.h"
 #include "ui/theme/Theme.h"
@@ -452,6 +453,7 @@ QWidget* McpServersScreen::create_status_bar() {
 void McpServersScreen::on_view_changed(int view) {
     active_view_ = view;
     view_stack_->setCurrentIndex(view);
+    ScreenStateManager::instance().notify_changed(this);
     for (int i = 0; i < view_btns_.size(); ++i) {
         view_btns_[i]->setProperty("active", i == view);
         view_btns_[i]->style()->unpolish(view_btns_[i]);
@@ -1114,6 +1116,18 @@ void McpServersScreen::update_status_bar() {
         if (s.status == ServerStatus::Running) ++running;
     status_count_->setText(QString::number(servers.size()) + " servers");
     status_running_->setText(QString::number(running) + " running");
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap McpServersScreen::save_state() const {
+    return {{"active_view", active_view_}};
+}
+
+void McpServersScreen::restore_state(const QVariantMap& state) {
+    const int view = state.value("active_view", 0).toInt();
+    if (view != active_view_)
+        on_view_changed(view);
 }
 
 } // namespace fincept::screens

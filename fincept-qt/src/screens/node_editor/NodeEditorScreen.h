@@ -1,5 +1,6 @@
 #pragma once
 
+#include "screens/IStatefulScreen.h"
 #include "screens/node_editor/NodeEditorTypes.h"
 
 #include <QTimer>
@@ -18,10 +19,15 @@ class MiniMap;
 class ExecutionResultsPanel;
 
 /// Main node editor screen — 3-panel layout with toolbar.
-class NodeEditorScreen : public QWidget {
+class NodeEditorScreen : public QWidget, public fincept::screens::IStatefulScreen {
     Q_OBJECT
   public:
     explicit NodeEditorScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "node_editor"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* event) override;

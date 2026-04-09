@@ -2,6 +2,7 @@
 #include "screens/equity_trading/EquityCredentials.h"
 
 #include "trading/BrokerRegistry.h"
+#include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
 #include <QJsonDocument>
@@ -10,6 +11,8 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens::equity {
+
+using namespace fincept::ui;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -44,21 +47,26 @@ EquityCredentials::EquityCredentials(const QString& broker_id,
 
     setWindowTitle(QString("Connect — %1").arg(profile.display_name));
     setMinimumWidth(420);
-    setStyleSheet(
-        "QDialog { background: #0a0a0a; color: #e5e5e5; }"
-        "QLabel#fieldLabel { color: #808080; font-size: 11px; font-weight: 700; }"
-        "QLabel#titleLabel { color: #d97706; font-size: 14px; font-weight: 700; }"
-        "QLabel#infoLabel  { color: #525252; font-size: 10px; }"
-        "QLabel#savedLabel { color: #16a34a; font-size: 10px; font-weight: 700; }"
-        "QLineEdit { background: #080808; border: 1px solid #222222; color: #e5e5e5;"
+    setStyleSheet(QString(
+        "QDialog { background: %1; color: %2; }"
+        "QLabel#fieldLabel { color: %3; font-size: 11px; font-weight: 700; }"
+        "QLabel#titleLabel { color: %4; font-size: 14px; font-weight: 700; }"
+        "QLabel#infoLabel  { color: %5; font-size: 10px; }"
+        "QLabel#savedLabel { color: %6; font-size: 10px; font-weight: 700; }"
+        "QLineEdit { background: %7; border: 1px solid %8; color: %2;"
         "  padding: 6px; font-size: 12px; border-radius: 2px; }"
-        "QLineEdit:focus { border-color: #d97706; }"
-        "QComboBox { background: #080808; border: 1px solid #222222; color: #e5e5e5;"
+        "QLineEdit:focus { border-color: %4; }"
+        "QComboBox { background: %7; border: 1px solid %8; color: %2;"
         "  padding: 4px 6px; font-size: 12px; }"
         "QComboBox::drop-down { border: none; }"
-        "QComboBox QAbstractItemView { background: #111111; color: #e5e5e5;"
+        "QComboBox QAbstractItemView { background: %9; color: %2;"
         "  selection-background-color: rgba(217,119,6,0.3); }"
-        "QPushButton { padding: 8px 16px; font-weight: 700; font-size: 12px; border-radius: 2px; }");
+        "QPushButton { padding: 8px 16px; font-weight: 700; font-size: 12px; border-radius: 2px; }")
+        .arg(colors::BG_SURFACE).arg(colors::TEXT_PRIMARY)
+        .arg(colors::TEXT_SECONDARY).arg(colors::AMBER)
+        .arg(colors::TEXT_TERTIARY).arg(colors::POSITIVE)
+        .arg(colors::BG_BASE).arg(colors::BORDER_MED)
+        .arg(colors::BG_RAISED));
 
     auto* root = new QVBoxLayout(this);
     root->setSpacing(8);
@@ -87,7 +95,7 @@ EquityCredentials::EquityCredentials(const QString& broker_id,
         cols->setSpacing(12);
 
         // --- LIVE section ---
-        auto* live_box   = make_section("LIVE ACCOUNT", "#d97706");
+        auto* live_box   = make_section("LIVE ACCOUNT", colors::AMBER.get());
         auto* live_lay   = new QVBoxLayout(live_box);
         live_lay->setSpacing(4);
 
@@ -104,15 +112,17 @@ EquityCredentials::EquityCredentials(const QString& broker_id,
         live_lay->addWidget(live_status_);
 
         auto* live_btn = new QPushButton("CONNECT LIVE");
-        live_btn->setStyleSheet(
-            "background: rgba(217,119,6,0.15); color: #d97706; border: 1px solid #92400e;");
+        live_btn->setStyleSheet(QString(
+            "background: rgba(217,119,6,0.15); color: %1; border: 1px solid %2;")
+            .arg(colors::AMBER).arg(colors::AMBER_DIM));
         live_btn->setCursor(Qt::PointingHandCursor);
         connect(live_btn, &QPushButton::clicked, this, [this]() { on_connect("live"); });
         live_lay->addWidget(live_btn);
 
         auto* live_clear = new QPushButton("CLEAR");
-        live_clear->setStyleSheet(
-            "background: rgba(220,38,38,0.1); color: #dc2626; border: 1px solid #7f1d1d;");
+        live_clear->setStyleSheet(QString(
+            "background: rgba(220,38,38,0.1); color: %1; border: 1px solid %2;")
+            .arg(colors::NEGATIVE).arg(colors::NEGATIVE_DIM));
         live_clear->setCursor(Qt::PointingHandCursor);
         connect(live_clear, &QPushButton::clicked, this, [this]() { on_clear("live"); });
         live_lay->addWidget(live_clear);
@@ -142,8 +152,9 @@ EquityCredentials::EquityCredentials(const QString& broker_id,
         paper_lay->addWidget(paper_btn);
 
         auto* paper_clear = new QPushButton("CLEAR");
-        paper_clear->setStyleSheet(
-            "background: rgba(220,38,38,0.1); color: #dc2626; border: 1px solid #7f1d1d;");
+        paper_clear->setStyleSheet(QString(
+            "background: rgba(220,38,38,0.1); color: %1; border: 1px solid %2;")
+            .arg(colors::NEGATIVE).arg(colors::NEGATIVE_DIM));
         paper_clear->setCursor(Qt::PointingHandCursor);
         connect(paper_clear, &QPushButton::clicked, this, [this]() { on_clear("paper"); });
         paper_lay->addWidget(paper_clear);
@@ -227,14 +238,16 @@ EquityCredentials::EquityCredentials(const QString& broker_id,
         root->addSpacing(4);
         auto* btn_row  = new QHBoxLayout;
         auto* save_btn = new QPushButton("CONNECT");
-        save_btn->setStyleSheet(
-            "background: rgba(217,119,6,0.15); color: #d97706; border: 1px solid #92400e;");
+        save_btn->setStyleSheet(QString(
+            "background: rgba(217,119,6,0.15); color: %1; border: 1px solid %2;")
+            .arg(colors::AMBER).arg(colors::AMBER_DIM));
         save_btn->setCursor(Qt::PointingHandCursor);
         connect(save_btn, &QPushButton::clicked, this, [this]() { on_connect(""); });
 
         auto* clear_btn = new QPushButton("CLEAR");
-        clear_btn->setStyleSheet(
-            "background: rgba(220,38,38,0.1); color: #dc2626; border: 1px solid #7f1d1d;");
+        clear_btn->setStyleSheet(QString(
+            "background: rgba(220,38,38,0.1); color: %1; border: 1px solid %2;")
+            .arg(colors::NEGATIVE).arg(colors::NEGATIVE_DIM));
         clear_btn->setCursor(Qt::PointingHandCursor);
         connect(clear_btn, &QPushButton::clicked, this, [this]() { on_clear(""); });
 
@@ -281,18 +294,18 @@ void EquityCredentials::on_connect(const QString& env) {
 
     if (key.isEmpty()) {
         status_label_->setText("API Key is required");
-        status_label_->setStyleSheet("color: #dc2626;");
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE));
         return;
     }
     if (secret.isEmpty() && (field_secret_ || field_live_secret_ || field_paper_secret_)) {
         status_label_->setText("API Secret is required");
-        status_label_->setStyleSheet("color: #dc2626;");
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE));
         return;
     }
 
     emit credentials_saved(broker_id_, key, secret, auth);
     status_label_->setText("Connecting...");
-    status_label_->setStyleSheet("color: #ca8a04;");
+    status_label_->setStyleSheet(QString("color: %1;").arg(colors::WARNING));
     // Don't close — let the screen update the status label and close when done
 }
 
@@ -311,7 +324,7 @@ void EquityCredentials::on_clear(const QString& env) {
         if (field_auth_)   field_auth_->clear();
     }
     status_label_->setText("Cleared");
-    status_label_->setStyleSheet("color: #ca8a04;");
+    status_label_->setStyleSheet(QString("color: %1;").arg(colors::WARNING));
 }
 
 void EquityCredentials::mark_connected(const QString& env, const QString& account_id) {
@@ -322,12 +335,12 @@ void EquityCredentials::mark_connected(const QString& env, const QString& accoun
         paper_status_->setText(label);
     }
     status_label_->setText("Connected successfully");
-    status_label_->setStyleSheet("color: #16a34a;");
+    status_label_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE));
 }
 
 void EquityCredentials::mark_error(const QString& error) {
     status_label_->setText(QString("Error: %1").arg(error));
-    status_label_->setStyleSheet("color: #dc2626;");
+    status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE));
 }
 
 } // namespace fincept::screens::equity

@@ -3,6 +3,7 @@
 
 #include "storage/repositories/LlmProfileRepository.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QGroupBox>
@@ -62,6 +63,7 @@ class LlmConfigSection : public QWidget {
     QPushButton*    fetch_btn_     = nullptr;
     QPushButton*    save_btn_      = nullptr;
     QPushButton*    test_btn_      = nullptr;
+    QCheckBox*      tools_check_   = nullptr;
     QLabel*         status_lbl_    = nullptr;
 
     // Global settings (lives at bottom of provider tab)

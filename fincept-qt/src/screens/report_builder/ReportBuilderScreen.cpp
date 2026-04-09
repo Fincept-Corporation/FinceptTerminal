@@ -1,5 +1,6 @@
 #include "screens/report_builder/ReportBuilderScreen.h"
 
+#include "core/session/ScreenStateManager.h"
 #include "services/file_manager/FileManagerService.h"
 #include "services/markets/MarketDataService.h"
 #include "ui/theme/Theme.h"
@@ -118,6 +119,7 @@ void ReportBuilderScreen::add_component_direct(const ReportComponent& comp, int 
     }
     refresh_canvas();
     refresh_structure();
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 void ReportBuilderScreen::remove_component_direct(int index) {
@@ -127,6 +129,7 @@ void ReportBuilderScreen::remove_component_direct(int index) {
         refresh_canvas();
         refresh_structure();
         select_component(selected_);
+        ScreenStateManager::instance().notify_changed(this);
     }
 }
 
@@ -169,8 +172,10 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
 
     splitter_ = new QSplitter(Qt::Horizontal);
     splitter_->setHandleWidth(1);
-    splitter_->setStyleSheet("QSplitter::handle { background: #1A1A1A; }"
-                             "QSplitter::handle:hover { background: #333333; }");
+    splitter_->setStyleSheet(
+        QString("QSplitter::handle { background: %1; }"
+                "QSplitter::handle:hover { background: %2; }")
+            .arg(ui::colors::BORDER_DIM, ui::colors::BORDER_BRIGHT));
 
     comp_toolbar_ = new ComponentToolbar;
     canvas_       = new DocumentCanvas;
@@ -1820,6 +1825,20 @@ void ReportBuilderScreen::showEvent(QShowEvent* e) {
 void ReportBuilderScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
     autosave_->stop();
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap ReportBuilderScreen::save_state() const {
+    return {{"current_file", current_file_}};
+}
+
+void ReportBuilderScreen::restore_state(const QVariantMap& state) {
+    // current_file_ is only a reference path — the actual content lives in
+    // the undo stack and components_ vector. Just restore the title display.
+    const QString file = state.value("current_file").toString();
+    if (!file.isEmpty())
+        current_file_ = file;
 }
 
 } // namespace fincept::screens

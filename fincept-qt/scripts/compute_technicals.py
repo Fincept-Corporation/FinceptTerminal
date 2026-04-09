@@ -109,6 +109,41 @@ def compute_all_technicals(historical_data_json):
         })
 
 
+def parse_args(args):
+    """
+    Parse command-line arguments supporting both:
+      - Named flags: --data <json> --indicator <name> --period <n> [--symbol <sym>]
+      - Legacy positional: <json_data>
+    """
+    data = None
+    indicator = None
+    period = None
+    symbol = None
+
+    i = 0
+    while i < len(args):
+        if args[i] == "--data" and i + 1 < len(args):
+            data = args[i + 1]
+            i += 2
+        elif args[i] == "--indicator" and i + 1 < len(args):
+            indicator = args[i + 1]
+            i += 2
+        elif args[i] == "--period" and i + 1 < len(args):
+            period = args[i + 1]
+            i += 2
+        elif args[i] == "--symbol" and i + 1 < len(args):
+            symbol = args[i + 1]
+            i += 2
+        elif data is None and not args[i].startswith("--"):
+            # Legacy positional: first non-flag arg is the JSON data
+            data = args[i]
+            i += 1
+        else:
+            i += 1
+
+    return data, indicator, period, symbol
+
+
 def main(args=None):
     """
     Main entry point for worker pool and subprocess execution
@@ -126,10 +161,17 @@ def main(args=None):
     if len(args) < 1:
         return json.dumps({
             "success": False,
-            "error": "Usage: python compute_technicals.py '<historical_data_json>'"
+            "error": "Usage: python compute_technicals.py --data '<json>' --indicator <name> --period <n>"
         })
 
-    historical_data_json = args[0]
+    historical_data_json, indicator, period, symbol = parse_args(args)
+
+    if not historical_data_json:
+        return json.dumps({
+            "success": False,
+            "error": "No data provided. Use --data '<json>' or pass JSON as first positional argument."
+        })
+
     result = compute_all_technicals(historical_data_json)
     return result
 

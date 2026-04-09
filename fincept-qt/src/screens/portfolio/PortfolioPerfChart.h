@@ -44,6 +44,7 @@ class PortfolioPerfChart : public QWidget {
     void set_currency(const QString& currency);
     /// Feed real SPY close prices for benchmark overlay.
     void set_spy_history(const QStringList& dates, const QVector<double>& closes);
+    void refresh_theme();
 
   private:
     void build_ui();

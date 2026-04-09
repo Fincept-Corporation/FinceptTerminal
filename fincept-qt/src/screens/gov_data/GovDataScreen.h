@@ -1,6 +1,8 @@
 // src/screens/gov_data/GovDataScreen.h
 #pragma once
 
+#include "screens/IStatefulScreen.h"
+
 #include <QFrame>
 #include <QHideEvent>
 #include <QLabel>
@@ -11,10 +13,15 @@
 
 namespace fincept::screens {
 
-class GovDataScreen : public QWidget {
+class GovDataScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit GovDataScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "gov_data"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* event) override;

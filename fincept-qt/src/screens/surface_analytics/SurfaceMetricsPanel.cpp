@@ -1,15 +1,19 @@
 #include "SurfaceMetricsPanel.h"
 
+#include "ui/theme/Theme.h"
+
 #include <algorithm>
 #include <cmath>
 
 namespace fincept::surface {
 
+using namespace fincept::ui;
+
 static const char* MONO = "'Consolas','Courier New',monospace";
 
 SurfaceMetricsPanel::SurfaceMetricsPanel(QWidget* parent) : QWidget(parent) {
     setFixedWidth(190);
-    setStyleSheet("QWidget { background:#0a0a0a; border-right:1px solid #1a1a1a; }");
+    setStyleSheet(QString("QWidget { background:%1; border-right:1px solid %2; }").arg(colors::BG_SURFACE).arg(colors::BORDER_DIM));
     layout_ = new QVBoxLayout(this);
     layout_->setContentsMargins(0, 0, 0, 0);
     layout_->setSpacing(0);
@@ -29,31 +33,35 @@ void SurfaceMetricsPanel::add_section(const QString& title, const char* color) {
     auto* lbl = new QLabel(title, this);
     lbl->setFixedHeight(26);
     lbl->setStyleSheet(QString("color:%1; font-size:11px; font-weight:bold; letter-spacing:0.5px;"
-                               " background:#111111; padding:0 10px;"
-                               " border-bottom:1px solid #1a1a1a;"
-                               " font-family:%2;")
+                               " background:%2; padding:0 10px;"
+                               " border-bottom:1px solid %3;"
+                               " font-family:%4;")
                            .arg(color)
+                           .arg(colors::BG_RAISED)
+                           .arg(colors::BORDER_DIM)
                            .arg(MONO));
     layout_->addWidget(lbl);
 }
 
 void SurfaceMetricsPanel::add_row(const QString& label, const QString& value, const char* value_color) {
+    const char* vc = value_color ? value_color : colors::TEXT_PRIMARY();
     auto* row = new QWidget(this);
     row->setFixedHeight(22);
-    row->setStyleSheet("QWidget { background:transparent; border-bottom:1px solid #111111; }");
+    row->setStyleSheet(QString("QWidget { background:transparent; border-bottom:1px solid %1; }").arg(colors::BG_RAISED));
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(4);
 
     auto* lbl = new QLabel(label, row);
-    lbl->setStyleSheet(QString("color:#808080; font-size:11px; background:transparent;"
-                               " font-family:%1; border:none;")
+    lbl->setStyleSheet(QString("color:%1; font-size:11px; background:transparent;"
+                               " font-family:%2; border:none;")
+                           .arg(colors::TEXT_SECONDARY)
                            .arg(MONO));
 
     auto* val = new QLabel(value, row);
     val->setStyleSheet(QString("color:%1; font-size:11px; font-weight:bold; background:transparent;"
                                " font-family:%2; border:none;")
-                           .arg(value_color)
+                           .arg(vc)
                            .arg(MONO));
     val->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
@@ -89,12 +97,12 @@ void SurfaceMetricsPanel::update_metrics(
             }
     };
 
-    const char* POS = "#16a34a";
-    const char* NEG = "#dc2626";
-    const char* PRI = "#e5e5e5";
-    const char* SEC = "#808080";
-    const char* AMB = "#d97706";
-    const char* CYN = "#0891b2";
+    const char* POS = colors::POSITIVE();
+    const char* NEG = colors::NEGATIVE();
+    const char* PRI = colors::TEXT_PRIMARY();
+    const char* SEC = colors::TEXT_SECONDARY();
+    const char* AMB = colors::AMBER();
+    const char* CYN = colors::CYAN();
 
     switch (type) {
         // ── EQUITY DERIVATIVES ────────────────────────────────────────────────────
@@ -169,7 +177,7 @@ void SurfaceMetricsPanel::update_metrics(
         case ChartType::YieldCurve: {
             if (yield.z.empty())
                 break;
-            add_section("■ YIELD CURVE", "#16a34a");
+            add_section("■ YIELD CURVE", POS);
             const auto& last = yield.z.back();
             if (!last.empty()) {
                 add_row("2Y", fmt(last[1], 2) + "%", PRI);
@@ -184,7 +192,7 @@ void SurfaceMetricsPanel::update_metrics(
         case ChartType::SwaptionVol: {
             if (swaption.z.empty())
                 break;
-            add_section("■ SWAPTION VOL", "#16a34a");
+            add_section("■ SWAPTION VOL", POS);
             int me = (int)swaption.z.size() / 2, ms = (int)swaption.z[me].size() / 2;
             add_row("BELLY ATM", fmt(swaption.z[me][ms], 1) + "bp", CYN);
             float mn, mx;
@@ -199,7 +207,7 @@ void SurfaceMetricsPanel::update_metrics(
         case ChartType::CapFloorVol: {
             if (capfloor.z.empty())
                 break;
-            add_section("■ CAP/FLOOR VOL", "#16a34a");
+            add_section("■ CAP/FLOOR VOL", POS);
             float mn, mx;
             minmax_z(capfloor.z, mn, mx);
             add_row("RANGE", fmt(mn, 0) + "-" + fmt(mx, 0) + "bp", SEC);
@@ -209,7 +217,7 @@ void SurfaceMetricsPanel::update_metrics(
         case ChartType::BondSpread: {
             if (bond_spread.z.empty())
                 break;
-            add_section("■ BOND SPREADS", "#16a34a");
+            add_section("■ BOND SPREADS", POS);
             if (bond_spread.z.size() > 3)
                 add_row("BBB 5Y", fmt(bond_spread.z[3][4], 0) + "bp", PRI);
             if (bond_spread.z.size() > 4)
@@ -220,7 +228,7 @@ void SurfaceMetricsPanel::update_metrics(
         case ChartType::OISBasis: {
             if (ois.z.empty())
                 break;
-            add_section("■ OIS BASIS", "#16a34a");
+            add_section("■ OIS BASIS", POS);
             float mn, mx;
             minmax_z(ois.z, mn, mx);
             add_row("RANGE", fmt(mn, 1) + "-" + fmt(mx, 1) + "bp", SEC);
@@ -230,7 +238,7 @@ void SurfaceMetricsPanel::update_metrics(
         case ChartType::RealYield: {
             if (real_yield.z.empty())
                 break;
-            add_section("■ REAL YIELD", "#16a34a");
+            add_section("■ REAL YIELD", POS);
             const auto& last = real_yield.z.back();
             if (!last.empty()) {
                 add_row("5Y REAL", fmt(last[2], 2) + "%", last[2] > 0 ? POS : NEG);
@@ -241,7 +249,7 @@ void SurfaceMetricsPanel::update_metrics(
         case ChartType::ForwardRate: {
             if (fwd_rate.z.empty())
                 break;
-            add_section("■ FORWARD RATE", "#16a34a");
+            add_section("■ FORWARD RATE", POS);
             float mn, mx;
             minmax_z(fwd_rate.z, mn, mx);
             add_row("MIN", fmt(mn, 2) + "%", PRI);
@@ -254,7 +262,7 @@ void SurfaceMetricsPanel::update_metrics(
         case ChartType::FXVol: {
             if (fx_vol.z.empty())
                 break;
-            add_section("■ FX VOL", "#ca8a04");
+            add_section("■ FX VOL", colors::WARNING());
             add_row("PAIR", QString::fromStdString(fx_vol.pair), AMB);
             if (fx_vol.z.size() > 2)
                 add_row("1M ATM", fmt(fx_vol.z[2][2], 2) + "%", PRI);
@@ -266,7 +274,7 @@ void SurfaceMetricsPanel::update_metrics(
         case ChartType::FXForwardPoints: {
             if (fx_fwd.z.empty())
                 break;
-            add_section("■ FX FWD PTS", "#ca8a04");
+            add_section("■ FX FWD PTS", colors::WARNING());
             add_row("PAIRS", QString::number(fx_fwd.z.size()), SEC);
             add_row("TENORS", QString::number(fx_fwd.tenors.size()), SEC);
             break;
@@ -274,7 +282,7 @@ void SurfaceMetricsPanel::update_metrics(
         case ChartType::CrossCurrencyBasis: {
             if (xccy.z.empty())
                 break;
-            add_section("■ XCCY BASIS", "#ca8a04");
+            add_section("■ XCCY BASIS", colors::WARNING());
             float mn, mx;
             minmax_z(xccy.z, mn, mx);
             add_row("RANGE", fmt(mn, 1) + "-" + fmt(mx, 1) + "bp", SEC);
@@ -286,7 +294,7 @@ void SurfaceMetricsPanel::update_metrics(
         case ChartType::CDSSpread: {
             if (cds.z.empty())
                 break;
-            add_section("■ CDS SPREADS", "#dc2626");
+            add_section("■ CDS SPREADS", NEG);
             if (!cds.entities.empty())
                 add_row(QString::fromStdString(cds.entities[0]) + " 5Y", fmt(cds.z[0][4], 0) + "bp", NEG);
             if (cds.z.size() > 1)
@@ -297,7 +305,7 @@ void SurfaceMetricsPanel::update_metrics(
         case ChartType::CreditTransition: {
             if (credit_trans.z.empty())
                 break;
-            add_section("■ TRANSITION", "#dc2626");
+            add_section("■ TRANSITION", NEG);
             add_row("AAA→AAA", fmt(credit_trans.z[0][0], 1) + "%", POS);
             if (credit_trans.z.size() > 6)
                 add_row("CCC→D", fmt(credit_trans.z[6][7], 1) + "%", NEG);
@@ -307,7 +315,7 @@ void SurfaceMetricsPanel::update_metrics(
         case ChartType::RecoveryRate: {
             if (recovery.z.empty())
                 break;
-            add_section("■ RECOVERY RATE", "#dc2626");
+            add_section("■ RECOVERY RATE", NEG);
             float mn, mx;
             minmax_z(recovery.z, mn, mx);
             add_row("RANGE", fmt(mn, 1) + "-" + fmt(mx, 1) + "%", SEC);
@@ -478,8 +486,8 @@ void SurfaceMetricsPanel::update_metrics(
         }
 
         default:
-            add_section("■ METRICS", "#525252");
-            add_row("SELECT", "A SURFACE", "#525252");
+            add_section("■ METRICS", colors::TEXT_TERTIARY());
+            add_row("SELECT", "A SURFACE", colors::TEXT_TERTIARY());
             break;
     }
 

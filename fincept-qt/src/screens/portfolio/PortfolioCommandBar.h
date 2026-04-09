@@ -25,6 +25,7 @@ class PortfolioCommandBar : public QWidget {
     void set_has_selection(bool has_selection);
     void set_has_portfolios(bool has_portfolios);
     void set_refresh_interval(int ms);
+    void refresh_theme();
 
   signals:
     void portfolio_selected(QString id);

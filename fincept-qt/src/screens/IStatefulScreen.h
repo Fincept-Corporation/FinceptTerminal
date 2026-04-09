@@ -27,6 +27,12 @@ class IStatefulScreen {
 
     /// Unique key used for storage — must match the screen's dock id.
     virtual QString state_key() const = 0;
+
+    /// State schema version. Increment this whenever save_state()'s key set
+    /// changes in an incompatible way. Stored state with a different version
+    /// is discarded and the screen starts with a clean slate rather than
+    /// crashing or misinterpreting stale keys.
+    virtual int state_version() const { return 1; }
 };
 
 } // namespace fincept::screens

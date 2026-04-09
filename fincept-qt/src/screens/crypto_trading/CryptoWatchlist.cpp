@@ -1,6 +1,8 @@
 // CryptoWatchlist.cpp — compact watchlist, 3-column, no horizontal scroll
 #include "screens/crypto_trading/CryptoWatchlist.h"
 
+#include "ui/theme/Theme.h"
+
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QMutexLocker>
@@ -10,16 +12,18 @@
 
 namespace fincept::screens::crypto {
 
-// ── Static color cache ──────────────────────────────────────────────────────
+using namespace fincept::ui;
+
+// ── Color accessors (theme-aware) ───────────────────────────────────────────
 namespace {
-const QColor kColorPrimary("#e5e5e5");
-const QColor kColorDim("#404040");
-const QColor kColorSecondary("#808080");
-const QColor kColorPos("#16a34a");
-const QColor kColorNeg("#dc2626");
-const QColor kColorAmber("#d97706");
-const QColor kRowEven("#080808");
-const QColor kRowOdd("#0c0c0c");
+inline QColor kColorPrimary()   { return QColor(colors::TEXT_PRIMARY()); }
+inline QColor kColorDim()       { return QColor(colors::TEXT_DIM()); }
+inline QColor kColorSecondary() { return QColor(colors::TEXT_SECONDARY()); }
+inline QColor kColorPos()       { return QColor(colors::POSITIVE()); }
+inline QColor kColorNeg()       { return QColor(colors::NEGATIVE()); }
+inline QColor kColorAmber()     { return QColor(colors::AMBER()); }
+inline QColor kRowEven()        { return QColor(colors::BG_BASE()); }
+inline QColor kRowOdd()         { return QColor(colors::ROW_ALT()); }
 const QColor kRowPosHint(22, 163, 74, 12);
 const QColor kRowNegHint(220, 38, 38, 12);
 } // namespace
@@ -166,16 +170,16 @@ void CryptoWatchlist::update_prices(const QVector<trading::TickerData>& tickers)
             price_str = QString::number(e.price, 'f', 6);
 
         price_item->setText(price_str);
-        price_item->setForeground(kColorPrimary);
+        price_item->setForeground(kColorPrimary());
 
         chg_item->setText(QString("%1%").arg(e.change_pct, 0, 'f', 2));
-        chg_item->setForeground(e.change_pct >= 0 ? kColorPos : kColorNeg);
+        chg_item->setForeground(e.change_pct >= 0 ? kColorPos() : kColorNeg());
 
-        QColor bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+        QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
         if (e.change_pct > 0.0)  bg = kRowPosHint;
         else if (e.change_pct < 0.0) bg = kRowNegHint;
 
-        sym_item->setForeground(e.symbol == active_symbol_ ? kColorAmber : kColorPrimary);
+        sym_item->setForeground(e.symbol == active_symbol_ ? kColorAmber() : kColorPrimary());
         for (int c = 0; c < 3; ++c) {
             auto* it = table_->item(i, c);
             if (it) it->setBackground(bg);
@@ -229,7 +233,7 @@ void CryptoWatchlist::rebuild_table() {
             table_->setRowCount(n);
 
         for (int i = 0; i < n; ++i) {
-            const QColor& bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+            const QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
             auto ensure = [&](int col, const QString& text, const QColor& fg,
                               int align = Qt::AlignLeft | Qt::AlignVCenter) {
                 auto* it = table_->item(i, col);
@@ -239,9 +243,9 @@ void CryptoWatchlist::rebuild_table() {
                 it->setBackground(bg);
                 it->setTextAlignment(align);
             };
-            ensure(0, filtered[i].symbol, kColorPrimary);
-            ensure(1, filtered[i].type,   kColorSecondary);
-            ensure(2, "--", kColorDim, Qt::AlignRight | Qt::AlignVCenter);
+            ensure(0, filtered[i].symbol, kColorPrimary());
+            ensure(1, filtered[i].type,   kColorSecondary());
+            ensure(2, "--", kColorDim(), Qt::AlignRight | Qt::AlignVCenter);
         }
         table_->setUpdatesEnabled(true);
         return;
@@ -262,7 +266,7 @@ void CryptoWatchlist::rebuild_table() {
 
     for (int i = 0; i < n; ++i) {
         const auto& e = visible[i];
-        QColor bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+        QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
         if (e.has_data && e.change_pct > 0.0) bg = kRowPosHint;
         else if (e.has_data && e.change_pct < 0.0) bg = kRowNegHint;
 
@@ -276,7 +280,7 @@ void CryptoWatchlist::rebuild_table() {
             it->setTextAlignment(align);
         };
 
-        QColor sym_color = (e.symbol == active_symbol_) ? kColorAmber : kColorPrimary;
+        QColor sym_color = (e.symbol == active_symbol_) ? kColorAmber() : kColorPrimary();
         ensure(0, e.symbol, sym_color);
 
         // Price — adaptive decimal places
@@ -289,12 +293,12 @@ void CryptoWatchlist::rebuild_table() {
             else
                 price_str = QString::number(e.price, 'f', 6);
         }
-        ensure(1, price_str, e.has_data ? kColorPrimary : kColorDim,
+        ensure(1, price_str, e.has_data ? kColorPrimary() : kColorDim(),
                Qt::AlignRight | Qt::AlignVCenter);
 
         ensure(2,
                e.has_data ? QString("%1%").arg(e.change_pct, 0, 'f', 2) : QString("--"),
-               e.has_data ? (e.change_pct >= 0.0 ? kColorPos : kColorNeg) : kColorDim,
+               e.has_data ? (e.change_pct >= 0.0 ? kColorPos() : kColorNeg()) : kColorDim(),
                Qt::AlignRight | Qt::AlignVCenter);
     }
     table_->setUpdatesEnabled(true);

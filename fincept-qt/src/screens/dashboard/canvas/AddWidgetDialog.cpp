@@ -97,11 +97,13 @@ AddWidgetDialog::AddWidgetDialog(QWidget* parent) : QDialog(parent) {
     // ── Scrollable card grid ──
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }"
-                          "QScrollBar:vertical { width: 5px; background: transparent; }"
-                          "QScrollBar::handle:vertical { background: #333; border-radius: 2px; min-height: 20px; }"
-                          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-                          "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }");
+    scroll->setStyleSheet(
+        QString("QScrollArea { border: none; background: transparent; }"
+                "QScrollBar:vertical { width: 5px; background: transparent; }"
+                "QScrollBar::handle:vertical { background: %1; border-radius: 2px; min-height: 20px; }"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+                "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }")
+            .arg(ui::colors::BORDER_BRIGHT));
 
     card_container_ = new QWidget;
     card_container_->setStyleSheet("background: transparent;");
@@ -131,11 +133,12 @@ AddWidgetDialog::AddWidgetDialog(QWidget* parent) : QDialog(parent) {
     add_btn_->setFixedSize(110, 30);
     add_btn_->setCursor(Qt::PointingHandCursor);
     add_btn_->setEnabled(false);
-    add_btn_->setStyleSheet(QString("QPushButton { background: %1; color: #000; border: none; "
+    add_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %4; border: none; "
                                     "font-size: 10px; font-weight: bold; border-radius: 2px; letter-spacing: 0.5px; }"
-                                    "QPushButton:hover { background: #f59e0b; }"
+                                    "QPushButton:hover { background: %5; }"
                                     "QPushButton:disabled { background: %2; color: %3; }")
-                                .arg(ui::colors::AMBER(), ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY()));
+                                .arg(ui::colors::AMBER(), ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY(),
+                                     ui::colors::BG_BASE(), ui::colors::WARNING()));
     connect(add_btn_, &QPushButton::clicked, this, &AddWidgetDialog::confirm);
     bot->addWidget(add_btn_);
     root->addLayout(bot);
@@ -175,8 +178,9 @@ void AddWidgetDialog::build_category_bar(QVBoxLayout* root) {
                                    "padding: 2px 12px; font-size: 10px; font-weight: bold; "
                                    "letter-spacing: 0.5px; border-radius: 2px; }"
                                    "QPushButton:hover { border-color: %4; color: %4; }"
-                                   "QPushButton:checked { background: %4; color: #000; border-color: %4; }")
-                               .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED(), ui::colors::TEXT_PRIMARY(), accent));
+                                   "QPushButton:checked { background: %4; color: %5; border-color: %4; }")
+                               .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED(), ui::colors::TEXT_PRIMARY(),
+                                    accent, ui::colors::BG_BASE()));
 
         if (cat == "All")
             btn->setChecked(true);

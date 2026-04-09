@@ -20,11 +20,8 @@ static const char* MF = "font-family:'Consolas','Courier New',monospace;";
 RecentFilesWidget::RecentFilesWidget(QWidget* parent)
     : BaseWidget("Recent Files", parent, ui::colors::AMBER.get()) {
 
-    auto* scroll = new QScrollArea;
-    scroll->setWidgetResizable(true);
-    scroll->setStyleSheet("QScrollArea{border:none;background:transparent;}"
-                          "QScrollBar:vertical{background:transparent;width:4px;}"
-                          + QString("QScrollBar::handle:vertical{background:%1;}").arg(ui::colors::BORDER_MED));
+    scroll_ = new QScrollArea;
+    scroll_->setWidgetResizable(true);
 
     auto* container = new QWidget;
     container->setStyleSheet("background:transparent;");
@@ -32,14 +29,16 @@ RecentFilesWidget::RecentFilesWidget(QWidget* parent)
     list_layout_->setContentsMargins(4, 4, 4, 4);
     list_layout_->setSpacing(3);
     list_layout_->addStretch();
-    scroll->setWidget(container);
+    scroll_->setWidget(container);
 
-    content_layout()->addWidget(scroll);
+    content_layout()->addWidget(scroll_);
 
     // Refresh when service changes
     connect(&FileManagerService::instance(), &FileManagerService::files_changed,
             this, &RecentFilesWidget::refresh_data);
     connect(this, &BaseWidget::refresh_requested, this, &RecentFilesWidget::refresh_data);
+
+    apply_styles();
 }
 
 void RecentFilesWidget::showEvent(QShowEvent* e) {
@@ -120,6 +119,21 @@ void RecentFilesWidget::refresh_data() {
     }
 
     list_layout_->addStretch();
+}
+
+void RecentFilesWidget::apply_styles() {
+    scroll_->setStyleSheet("QScrollArea{border:none;background:transparent;}"
+                           "QScrollBar:vertical{background:transparent;width:4px;}"
+                           + QString("QScrollBar::handle:vertical{background:%1;}").arg(ui::colors::BORDER_MED));
+
+    // Rows are built dynamically in refresh_data() using current tokens,
+    // so re-running refresh_data() picks up the new theme.
+    if (loaded_)
+        refresh_data();
+}
+
+void RecentFilesWidget::on_theme_changed() {
+    apply_styles();
 }
 
 } // namespace fincept::screens::widgets

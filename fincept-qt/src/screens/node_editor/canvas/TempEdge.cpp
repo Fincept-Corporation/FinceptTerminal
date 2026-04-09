@@ -1,6 +1,7 @@
 #include "screens/node_editor/canvas/TempEdge.h"
 
 #include "screens/node_editor/canvas/PortItem.h"
+#include "ui/theme/Theme.h"
 
 #include <QPainterPath>
 #include <QPen>
@@ -10,7 +11,7 @@
 namespace fincept::workflow {
 
 TempEdge::TempEdge(PortItem* source, QGraphicsItem* parent) : QGraphicsPathItem(parent), source_(source) {
-    setPen(QPen(QColor("#d97706"), 2.0, Qt::DashLine, Qt::RoundCap));
+    setPen(QPen(QColor(ui::colors::AMBER.get()), 2.0, Qt::DashLine, Qt::RoundCap));
     setZValue(10); // above everything
 }
 

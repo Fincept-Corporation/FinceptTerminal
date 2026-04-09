@@ -5,6 +5,7 @@
 #include "services/agents/AgentTypes.h"
 #include "services/file_manager/FileManagerService.h"
 #include "storage/repositories/LlmProfileRepository.h"
+#include "ui/theme/Theme.h"
 
 #include <QFileDialog>
 #include <QFileInfo>
@@ -12,14 +13,18 @@
 #include <QJsonDocument>
 #include <QPushButton>
 
-namespace {
-static const char* kInputStyle = "background: #1e1e1e; color: #e5e5e5; border: 1px solid #2a2a2a;"
-                                 "font-family: Consolas; font-size: 12px; padding: 4px 6px;";
-
-static const char* kLabelStyle = "color: #808080; font-family: Consolas; font-size: 11px; font-weight: bold;";
-} // namespace
-
 namespace fincept::workflow {
+
+static QString input_style() {
+    return QString("background: %1; color: %2; border: 1px solid %3;"
+                   "font-family: Consolas; font-size: 12px; padding: 4px 6px;")
+        .arg(ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED);
+}
+
+static QString label_style() {
+    return QString("color: %1; font-family: Consolas; font-size: 11px; font-weight: bold;")
+        .arg(ui::colors::TEXT_SECONDARY);
+}
 
 QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue& current_value,
                                         std::function<void(const QString& key, QJsonValue value)> on_change,
@@ -31,7 +36,7 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
 
     // Label
     auto* label = new QLabel(param.label + (param.required ? " *" : ""));
-    label->setStyleSheet(kLabelStyle);
+    label->setStyleSheet(label_style());
     layout->addWidget(label);
 
     QString key = param.key;
@@ -41,7 +46,8 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         edit->setText(current_value.toString(param.default_value.toString()));
         edit->setPlaceholderText(param.placeholder);
         edit->setStyleSheet(
-            QString("QLineEdit { %1 } QLineEdit:focus { border: 1px solid #d97706; }").arg(kInputStyle));
+            QString("QLineEdit { %1 } QLineEdit:focus { border: 1px solid %2; }")
+                .arg(input_style(), ui::colors::AMBER));
         layout->addWidget(edit);
 
         QObject::connect(edit, &QLineEdit::textChanged, container,
@@ -53,9 +59,9 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         spin->setValue(current_value.toDouble(param.default_value.toDouble()));
         spin->setStyleSheet(QString("QDoubleSpinBox { %1 }"
                                     "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {"
-                                    "  background: #2a2a2a; border: 1px solid #2a2a2a; width: 14px;"
+                                    "  background: %2; border: 1px solid %2; width: 14px;"
                                     "}")
-                                .arg(kInputStyle));
+                                .arg(input_style(), ui::colors::BORDER_MED));
         layout->addWidget(spin);
 
         QObject::connect(spin, &QDoubleSpinBox::valueChanged, container,
@@ -63,11 +69,14 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
     } else if (param.type == "boolean") {
         auto* check = new QCheckBox(param.label);
         check->setChecked(current_value.toBool(param.default_value.toBool()));
-        check->setStyleSheet("QCheckBox { color: #e5e5e5; font-family: Consolas; font-size: 12px; }"
-                             "QCheckBox::indicator {"
-                             "  width: 14px; height: 14px; background: #1e1e1e; border: 1px solid #2a2a2a;"
-                             "}"
-                             "QCheckBox::indicator:checked { background: #d97706; }");
+        check->setStyleSheet(
+            QString("QCheckBox { color: %1; font-family: Consolas; font-size: 12px; }"
+                    "QCheckBox::indicator {"
+                    "  width: 14px; height: 14px; background: %2; border: 1px solid %3;"
+                    "}"
+                    "QCheckBox::indicator:checked { background: %4; }")
+                .arg(ui::colors::TEXT_PRIMARY, ui::colors::BG_HOVER,
+                     ui::colors::BORDER_MED, ui::colors::AMBER));
         layout->addWidget(check);
 
         // Remove the label since checkbox has its own
@@ -81,13 +90,15 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         combo->setCurrentText(current_value.toString(param.default_value.toString()));
         combo->setStyleSheet(QString("QComboBox { %1 }"
                                      "QComboBox::drop-down {"
-                                     "  background: #2a2a2a; border: 1px solid #2a2a2a; width: 18px;"
+                                     "  background: %2; border: 1px solid %2; width: 18px;"
                                      "}"
                                      "QComboBox QAbstractItemView {"
-                                     "  background: #1e1e1e; color: #e5e5e5; border: 1px solid #2a2a2a;"
-                                     "  selection-background-color: #d97706; font-family: Consolas;"
+                                     "  background: %3; color: %4; border: 1px solid %2;"
+                                     "  selection-background-color: %5; font-family: Consolas;"
                                      "}")
-                                 .arg(kInputStyle));
+                                 .arg(input_style(), ui::colors::BORDER_MED,
+                                      ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY,
+                                      ui::colors::AMBER));
         layout->addWidget(combo);
 
         QObject::connect(combo, &QComboBox::currentTextChanged, container,
@@ -109,8 +120,8 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         text_edit->setMinimumHeight(80);
         text_edit->setMaximumHeight(200);
         text_edit->setStyleSheet(QString("QPlainTextEdit { %1 }"
-                                         "QPlainTextEdit:focus { border: 1px solid #d97706; }")
-                                     .arg(kInputStyle));
+                                         "QPlainTextEdit:focus { border: 1px solid %2; }")
+                                     .arg(input_style(), ui::colors::AMBER));
         layout->addWidget(text_edit);
 
         QObject::connect(
@@ -140,13 +151,15 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         auto* combo = new QComboBox;
         combo->setStyleSheet(QString("QComboBox { %1 }"
                                      "QComboBox::drop-down {"
-                                     "  background: #2a2a2a; border: 1px solid #2a2a2a; width: 18px;"
+                                     "  background: %2; border: 1px solid %2; width: 18px;"
                                      "}"
                                      "QComboBox QAbstractItemView {"
-                                     "  background: #1e1e1e; color: #e5e5e5; border: 1px solid #2a2a2a;"
-                                     "  selection-background-color: #d97706; font-family: Consolas;"
+                                     "  background: %3; color: %4; border: 1px solid %2;"
+                                     "  selection-background-color: %5; font-family: Consolas;"
                                      "}")
-                                 .arg(kInputStyle));
+                                 .arg(input_style(), ui::colors::BORDER_MED,
+                                      ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY,
+                                      ui::colors::AMBER));
 
         // Build file filter string for QFileDialog e.g. "Spreadsheets (*.xlsx *.csv)"
         QString dialog_filter;
@@ -192,10 +205,12 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         auto* import_btn = new QPushButton("+ Import");
         import_btn->setFixedHeight(24);
         import_btn->setToolTip("Import a file from your PC into the File Manager");
-        import_btn->setStyleSheet("QPushButton { background: #2a2a2a; color: #d97706;"
-                                  " border: 1px solid #3a3a3a; font-family: Consolas;"
-                                  " font-size: 10px; padding: 0 6px; }"
-                                  "QPushButton:hover { background: #3a3a3a; }");
+        import_btn->setStyleSheet(
+            QString("QPushButton { background: %1; color: %2;"
+                    " border: 1px solid %3; font-family: Consolas;"
+                    " font-size: 10px; padding: 0 6px; }"
+                    "QPushButton:hover { background: %3; }")
+                .arg(ui::colors::BORDER_MED, ui::colors::AMBER, ui::colors::TEXT_DIM));
         rl->addWidget(import_btn);
 
         layout->addWidget(row);
@@ -204,7 +219,8 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         if (!allowed_exts.isEmpty()) {
             auto* hint = new QLabel("Accepted: " + allowed_exts.join(", ").toUpper()
                                     + "  •  Or pick an already-imported file above");
-            hint->setStyleSheet("color: #525252; font-family: Consolas; font-size: 10px;");
+            hint->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;")
+                                   .arg(ui::colors::TEXT_TERTIARY));
             hint->setWordWrap(true);
             layout->addWidget(hint);
         }
@@ -244,10 +260,12 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
 
         auto* combo = new QComboBox;
         combo->setStyleSheet(QString("QComboBox { %1 }"
-                                     "QComboBox::drop-down { background:#2a2a2a; border:1px solid #2a2a2a; width:18px; }"
-                                     "QComboBox QAbstractItemView { background:#1e1e1e; color:#e5e5e5;"
-                                     "  border:1px solid #2a2a2a; selection-background-color:#7c3aed;"
-                                     "  font-family:Consolas; }").arg(kInputStyle));
+                                     "QComboBox::drop-down { background:%2; border:1px solid %2; width:18px; }"
+                                     "QComboBox QAbstractItemView { background:%3; color:%4;"
+                                     "  border:1px solid %2; selection-background-color:#7c3aed;"
+                                     "  font-family:Consolas; }")
+                                 .arg(input_style(), ui::colors::BORDER_MED,
+                                      ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY));
 
         // Constrain combo so it never overflows the panel
         combo->setMaximumWidth(260);
@@ -297,9 +315,11 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         auto* refresh_btn = new QPushButton("↻");
         refresh_btn->setFixedSize(24, 24);
         refresh_btn->setToolTip("Refresh agent list");
-        refresh_btn->setStyleSheet("QPushButton { background:#2a2a2a; color:#7c3aed;"
-                                   " border:1px solid #2a2a2a; font-size:13px; }"
-                                   "QPushButton:hover { background:#3a3a3a; }");
+        refresh_btn->setStyleSheet(
+            QString("QPushButton { background:%1; color:#7c3aed;"
+                    " border:1px solid %1; font-size:13px; }"
+                    "QPushButton:hover { background:%2; }")
+                .arg(ui::colors::BORDER_MED, ui::colors::TEXT_DIM));
         rl->addWidget(refresh_btn);
         layout->addWidget(row);
 
@@ -317,10 +337,12 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         combo->setMaximumWidth(260);
         combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         combo->setStyleSheet(QString("QComboBox { %1 }"
-                                     "QComboBox::drop-down { background:#2a2a2a; border:1px solid #2a2a2a; width:18px; }"
-                                     "QComboBox QAbstractItemView { background:#1e1e1e; color:#e5e5e5;"
-                                     "  border:1px solid #2a2a2a; selection-background-color:#7c3aed;"
-                                     "  font-family:Consolas; }").arg(kInputStyle));
+                                     "QComboBox::drop-down { background:%2; border:1px solid %2; width:18px; }"
+                                     "QComboBox QAbstractItemView { background:%3; color:%4;"
+                                     "  border:1px solid %2; selection-background-color:#7c3aed;"
+                                     "  font-family:Consolas; }")
+                                 .arg(input_style(), ui::colors::BORDER_MED,
+                                      ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY));
         combo->addItem("— agent default —", QString());
 
         QString saved = current_value.toString();
@@ -336,7 +358,8 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         layout->addWidget(combo);
 
         auto* hint = new QLabel("Leave blank to use the LLM assigned to the agent in Agent Config");
-        hint->setStyleSheet("color:#525252; font-family:Consolas; font-size:10px;");
+        hint->setStyleSheet(QString("color:%1; font-family:Consolas; font-size:10px;")
+                                .arg(ui::colors::TEXT_TERTIARY));
         hint->setWordWrap(true);
         layout->addWidget(hint);
 
@@ -357,10 +380,12 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         combo->setMaximumWidth(260);
         combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         combo->setStyleSheet(QString("QComboBox { %1 }"
-                                     "QComboBox::drop-down { background:#2a2a2a; border:1px solid #2a2a2a; width:18px; }"
-                                     "QComboBox QAbstractItemView { background:#1e1e1e; color:#e5e5e5;"
-                                     "  border:1px solid #2a2a2a; selection-background-color:#6366f1;"
-                                     "  font-family:Consolas; }").arg(kInputStyle));
+                                     "QComboBox::drop-down { background:%2; border:1px solid %2; width:18px; }"
+                                     "QComboBox QAbstractItemView { background:%3; color:%4;"
+                                     "  border:1px solid %2; selection-background-color:#6366f1;"
+                                     "  font-family:Consolas; }")
+                                 .arg(input_style(), ui::colors::BORDER_MED,
+                                      ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY));
 
         auto populate_tools = [combo, current_value]() {
             QString saved = combo->count() > 0 ? combo->currentData().toString()
@@ -379,7 +404,7 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
                     if (model) {
                         auto* sep = model->item(combo->count() - 1);
                         sep->setFlags(sep->flags() & ~Qt::ItemIsEnabled);
-                        sep->setData(QColor("#525252"), Qt::ForegroundRole);
+                        sep->setData(QColor(ui::colors::TEXT_TERTIARY.get()), Qt::ForegroundRole);
                     }
                     last_server = t.server_name;
                 }
@@ -403,14 +428,17 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         auto* refresh_btn = new QPushButton("↻");
         refresh_btn->setFixedSize(24, 24);
         refresh_btn->setToolTip("Refresh tool list");
-        refresh_btn->setStyleSheet("QPushButton { background:#2a2a2a; color:#6366f1;"
-                                   " border:1px solid #2a2a2a; font-size:13px; }"
-                                   "QPushButton:hover { background:#3a3a3a; }");
+        refresh_btn->setStyleSheet(
+            QString("QPushButton { background:%1; color:#6366f1;"
+                    " border:1px solid %1; font-size:13px; }"
+                    "QPushButton:hover { background:%2; }")
+                .arg(ui::colors::BORDER_MED, ui::colors::TEXT_DIM));
         rl->addWidget(refresh_btn);
         layout->addWidget(row);
 
         auto* hint = new QLabel("All Fincept internal tools. Input JSON flows in as arguments.");
-        hint->setStyleSheet("color:#525252; font-family:Consolas; font-size:10px;");
+        hint->setStyleSheet(QString("color:%1; font-family:Consolas; font-size:10px;")
+                                .arg(ui::colors::TEXT_TERTIARY));
         hint->setWordWrap(true);
         layout->addWidget(hint);
 

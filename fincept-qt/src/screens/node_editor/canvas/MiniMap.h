@@ -16,6 +16,10 @@ class MiniMap : public QGraphicsView {
 
     void update_viewport_rect();
 
+    /// Start/stop the viewport tracking timer.
+    void start_tracking() { if (update_timer_) update_timer_->start(); }
+    void stop_tracking()  { if (update_timer_) update_timer_->stop(); }
+
   protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;

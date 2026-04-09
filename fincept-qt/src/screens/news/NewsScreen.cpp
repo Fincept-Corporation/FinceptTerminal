@@ -1,6 +1,7 @@
 #include "screens/news/NewsScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "services/notifications/NotificationService.h"
 #include "storage/repositories/NewsArticleRepository.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -304,6 +305,7 @@ void NewsScreen::on_category_changed(const QString& category) {
     s.beginGroup("news");
     s.setValue("category", category);
     s.endGroup();
+    ScreenStateManager::instance().notify_changed(this);
     apply_filters_async();
 }
 
@@ -314,6 +316,7 @@ void NewsScreen::on_time_range_changed(const QString& range) {
     s.beginGroup("news");
     s.setValue("time_range", range);
     s.endGroup();
+    ScreenStateManager::instance().notify_changed(this);
     apply_filters_async();
 }
 
@@ -323,6 +326,7 @@ void NewsScreen::on_sort_changed(const QString& sort) {
     s.beginGroup("news");
     s.setValue("sort_mode", sort);
     s.endGroup();
+    ScreenStateManager::instance().notify_changed(this);
     apply_filters_async();
 }
 
@@ -332,12 +336,14 @@ void NewsScreen::on_view_mode_changed(const QString& mode) {
     s.beginGroup("news");
     s.setValue("view_mode", mode);
     s.endGroup();
+    ScreenStateManager::instance().notify_changed(this);
     feed_panel_->model()->set_view_mode(mode);
 }
 
 void NewsScreen::on_search_changed(const QString& query) {
     search_query_ = query;
     visible_article_count_ = PAGE_SIZE;
+    ScreenStateManager::instance().notify_changed(this);
     apply_filters_async();
 }
 
@@ -1013,6 +1019,32 @@ int64_t NewsScreen::time_window_seconds() const {
     if (time_range_ == "7D")
         return 604800;
     return 86400;
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap NewsScreen::save_state() const {
+    return {
+        {"category",    active_category_},
+        {"time_range",  time_range_},
+        {"sort_mode",   sort_mode_},
+        {"view_mode",   view_mode_},
+        {"search_query", search_query_},
+        {"variant",     active_variant_},
+    };
+}
+
+void NewsScreen::restore_state(const QVariantMap& state) {
+    active_category_ = state.value("category",    "ALL").toString();
+    time_range_      = state.value("time_range",  "24H").toString();
+    sort_mode_       = state.value("sort_mode",   "RELEVANCE").toString();
+    view_mode_       = state.value("view_mode",   "WIRE").toString();
+    search_query_    = state.value("search_query").toString();
+    active_variant_  = state.value("variant",     "FULL").toString();
+
+    // Apply active category to command bar if already built
+    if (command_bar_)
+        command_bar_->set_active_category(active_category_);
 }
 
 } // namespace fincept::screens

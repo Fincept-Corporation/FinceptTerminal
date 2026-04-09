@@ -149,8 +149,8 @@ void ForumThreadPanel::build_ui() {
     auto* hdr_outer = new QWidget;
     hdr_outer->setStyleSheet(
         QString("background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-                "stop:0 #0e0e0e,stop:1 %1);")
-            .arg(ui::colors::BG_BASE()));
+                "stop:0 %1,stop:1 %2);")
+            .arg(ui::colors::BG_SURFACE(), ui::colors::BG_BASE()));
     auto* hdr_outer_hl = new QHBoxLayout(hdr_outer);
     hdr_outer_hl->setContentsMargins(0, 0, 0, 0);
 

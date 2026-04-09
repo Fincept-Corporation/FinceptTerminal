@@ -1,6 +1,7 @@
 #pragma once
 // Data Sources Screen — Bloomberg-style data connector command center.
 
+#include "screens/IStatefulScreen.h"
 #include "screens/data_sources/DataSourceTypes.h"
 #include "storage/repositories/DataSourceRepository.h"
 
@@ -19,10 +20,15 @@
 
 namespace fincept::screens::datasources {
 
-class DataSourcesScreen : public QWidget {
+class DataSourcesScreen : public QWidget, public fincept::screens::IStatefulScreen {
     Q_OBJECT
   public:
     explicit DataSourcesScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "data_sources"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* event) override;

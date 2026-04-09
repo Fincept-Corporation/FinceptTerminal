@@ -108,6 +108,21 @@ Result<void> CacheDatabase::create_tables() {
     if (r.is_err())
         return r;
 
+    // Screen UI state — survives crashes, restored per screen on next open
+    r = exec("CREATE TABLE IF NOT EXISTS screen_state ("
+             "  screen_key    TEXT PRIMARY KEY,"
+             "  state_version INTEGER NOT NULL DEFAULT 1,"
+             "  state_json    TEXT    NOT NULL DEFAULT '{}',"
+             "  updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),"
+             "  session_id    TEXT    NOT NULL DEFAULT ''"
+             ")");
+    if (r.is_err())
+        return r;
+
+    r = exec("CREATE INDEX IF NOT EXISTS idx_screen_state_updated ON screen_state(updated_at)");
+    if (r.is_err())
+        return r;
+
     LOG_INFO("CacheDB", "Cache tables initialized");
     return Result<void>::ok();
 }

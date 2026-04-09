@@ -115,10 +115,9 @@ void EconDbPanel::activate() {
 }
 
 void EconDbPanel::build_controls(QHBoxLayout* thl) {
-    auto lbl = [](const QString& t) {
+    auto lbl = [this](const QString& t) {
         auto* l = new QLabel(t);
-        l->setStyleSheet(
-            "color:#525252; font-size:9px; font-weight:700; background:transparent;");
+        l->setStyleSheet(ctrl_label_style());
         return l;
     };
 

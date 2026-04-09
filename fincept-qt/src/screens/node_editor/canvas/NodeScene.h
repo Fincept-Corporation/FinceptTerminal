@@ -4,6 +4,7 @@
 
 #include <QGraphicsScene>
 #include <QMap>
+#include <QTimer>
 
 namespace fincept::workflow {
 
@@ -70,15 +71,22 @@ class NodeScene : public QGraphicsScene {
   public:
     /// Animate edges connected to a node (during execution).
     void set_edges_animated(const QString& node_id, bool animated);
-    /// Stop all edge animations.
+    /// Stop all edge animations (clears animated state).
     void stop_all_edge_animations();
+    /// Pause/resume the animation timer without clearing animated state.
+    void pause_edge_animations();
+    void resume_edge_animations();
+    bool has_animated_edges() const { return animated_edge_count_ > 0; }
 
   private:
     void adjust_edges_for_node(const QString& node_id);
+    void tick_edge_animations();
 
     QMap<QString, NodeItem*> nodes_;
     QMap<QString, EdgeItem*> edges_;
     TempEdge* temp_edge_ = nullptr;
+    QTimer anim_timer_;
+    int animated_edge_count_ = 0;
 };
 
 } // namespace fincept::workflow

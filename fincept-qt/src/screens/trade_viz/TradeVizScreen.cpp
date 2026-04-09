@@ -20,29 +20,40 @@ namespace fincept::screens {
 
 static const char* FONT = "'Consolas','Courier New',monospace";
 
-static const char* COMBO_SS = "QComboBox { background: #111111; color: #e5e5e5; border: 1px solid #1a1a1a;"
-                              "  padding: 2px 8px; font-size: 11px; font-family: 'Consolas','Courier New',monospace;"
-                              "  min-width: 100px; }"
-                              "QComboBox:hover { border-color: #333333; }"
-                              "QComboBox::drop-down { border: none; width: 16px; }"
-                              "QComboBox::down-arrow { image: none; border-left: 4px solid transparent;"
-                              "  border-right: 4px solid transparent; border-top: 5px solid #808080; }"
-                              "QComboBox QAbstractItemView { background: #0a0a0a; color: #e5e5e5;"
-                              "  border: 1px solid #1a1a1a; selection-background-color: #161616;"
-                              "  selection-color: #d97706; font-family: 'Consolas','Courier New',monospace; }";
+static QString combo_ss() {
+    return QString(
+        "QComboBox { background: %1; color: %2; border: 1px solid %3;"
+        "  padding: 2px 8px; font-size: 11px; font-family: 'Consolas','Courier New',monospace;"
+        "  min-width: 100px; }"
+        "QComboBox:hover { border-color: %4; }"
+        "QComboBox::drop-down { border: none; width: 16px; }"
+        "QComboBox::down-arrow { image: none; border-left: 4px solid transparent;"
+        "  border-right: 4px solid transparent; border-top: 5px solid %5; }"
+        "QComboBox QAbstractItemView { background: %6; color: %2;"
+        "  border: 1px solid %3; selection-background-color: %7;"
+        "  selection-color: %8; font-family: 'Consolas','Courier New',monospace; }")
+        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+             ui::colors::BORDER_BRIGHT(), ui::colors::TEXT_SECONDARY(), ui::colors::BG_BASE(),
+             ui::colors::BG_HOVER(), ui::colors::AMBER());
+}
 
-static const char* TABLE_SS =
-    "QTableWidget { background: #080808; color: #e5e5e5; border: none;"
-    "  gridline-color: #111111; font-size: 13px; font-family: 'Consolas','Courier New',monospace; }"
-    "QTableWidget::item { padding: 3px 10px; border-bottom: 1px solid #111111; }"
-    "QTableWidget::item:selected { background: #161616; color: #e5e5e5; }"
-    "QHeaderView::section { background: #0a0a0a; color: #808080; font-size: 12px;"
-    "  font-weight: bold; border: none; border-bottom: 1px solid #1a1a1a;"
-    "  padding: 6px 10px; font-family: 'Consolas','Courier New',monospace; }"
-    "QScrollBar:vertical { width: 5px; background: transparent; }"
-    "QScrollBar::handle:vertical { background: #222222; }"
-    "QScrollBar::handle:vertical:hover { background: #333333; }"
-    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }";
+static QString table_ss() {
+    return QString(
+        "QTableWidget { background: %1; color: %2; border: none;"
+        "  gridline-color: %3; font-size: 13px; font-family: 'Consolas','Courier New',monospace; }"
+        "QTableWidget::item { padding: 3px 10px; border-bottom: 1px solid %3; }"
+        "QTableWidget::item:selected { background: %4; color: %2; }"
+        "QHeaderView::section { background: %5; color: %6; font-size: 12px;"
+        "  font-weight: bold; border: none; border-bottom: 1px solid %7;"
+        "  padding: 6px 10px; font-family: 'Consolas','Courier New',monospace; }"
+        "QScrollBar:vertical { width: 5px; background: transparent; }"
+        "QScrollBar::handle:vertical { background: %8; }"
+        "QScrollBar::handle:vertical:hover { background: %9; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+        .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_RAISED(),
+             ui::colors::BG_HOVER(), ui::colors::BG_BASE(), ui::colors::TEXT_SECONDARY(),
+             ui::colors::BORDER_DIM(), ui::colors::BORDER_MED(), ui::colors::BORDER_BRIGHT());
+}
 
 // ── Trade data ──────────────────────────────────────────────────────────────
 
@@ -71,7 +82,7 @@ static constexpr int NUM_PARTNERS = 15;
 class TradeFlowChordWidget : public QWidget {
   public:
     explicit TradeFlowChordWidget(QWidget* parent = nullptr) : QWidget(parent) {
-        setStyleSheet("background: #080808;");
+        setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
     }
 
   protected:
@@ -204,7 +215,7 @@ class TradeFlowChordWidget : public QWidget {
             QFont lf(FONT, 9);
             lf.setBold(true);
             p.setFont(lf);
-            p.setPen(QColor("#e5e5e5"));
+            p.setPen(QColor(ui::colors::TEXT_PRIMARY()));
             QRect lr(lx - 32, ly - 9, 64, 18);
             p.drawText(lr, Qt::AlignCenter, g_partners[i].abbrev);
         }
@@ -212,19 +223,19 @@ class TradeFlowChordWidget : public QWidget {
         // ── Center "US" node ─────────────────────────────────────────────────
         QRect us_rect(cx - 16, cy - 12, 32, 24);
         p.fillRect(us_rect, QColor(30, 30, 30));
-        p.setPen(QPen(QColor("#d97706"), 1));
+        p.setPen(QPen(QColor(ui::colors::AMBER()), 1));
         p.drawRect(us_rect);
 
         QFont us_font(FONT, 10);
         us_font.setBold(true);
         p.setFont(us_font);
-        p.setPen(QColor("#d97706"));
+        p.setPen(QColor(ui::colors::AMBER()));
         p.drawText(us_rect, Qt::AlignCenter, "US");
 
         // ── Scale axis labels ────────────────────────────────────────────────
         QFont sf(FONT, 7);
         p.setFont(sf);
-        p.setPen(QColor("#404040"));
+        p.setPen(QColor(ui::colors::TEXT_DIM()));
 
         // Import scale — above center
         int sx = cx - 50;
@@ -251,7 +262,7 @@ class TradeFlowChordWidget : public QWidget {
             p.fillRect(bx + i, by, 1, 8, QColor(r_comp, g_comp, b_comp));
         }
         p.setFont(QFont(FONT, 7));
-        p.setPen(QColor("#808080"));
+        p.setPen(QColor(ui::colors::TEXT_SECONDARY()));
         double lo = max_val * 0.1;
         double mid = max_val * 0.5;
         double hi = max_val;
@@ -267,7 +278,8 @@ class TradeFlowChordWidget : public QWidget {
 
 QWidget* TradeVizScreen::build_tab_bar() {
     auto* bar = new QWidget;
-    bar->setStyleSheet("background: #0a0a0a; border-bottom: 1px solid #333333;");
+    bar->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;")
+                           .arg(ui::colors::BG_BASE(), ui::colors::BORDER_BRIGHT()));
     bar->setFixedHeight(28);
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(0, 0, 0, 0);
@@ -293,13 +305,13 @@ QWidget* TradeVizScreen::build_tab_bar() {
         bl->setSpacing(4);
 
         auto* num = new QLabel(t.num);
-        num->setStyleSheet("color: #808080; font-size: 11px; background: transparent;"
-                           " font-family: 'Consolas','Courier New',monospace;");
+        num->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;"
+                           " font-family: 'Consolas','Courier New',monospace;").arg(ui::colors::TEXT_SECONDARY()));
         bl->addWidget(num);
 
         auto* lbl = new QLabel(t.label);
-        lbl->setStyleSheet("color: #e5e5e5; font-size: 13px; font-weight: bold; background: transparent;"
-                           " font-family: 'Consolas','Courier New',monospace;");
+        lbl->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;"
+                           " font-family: 'Consolas','Courier New',monospace;").arg(ui::colors::TEXT_PRIMARY()));
         bl->addWidget(lbl);
 
         hl->addWidget(btn);
@@ -309,8 +321,8 @@ QWidget* TradeVizScreen::build_tab_bar() {
 
     // Right side: "Trade Flow" title
     auto* title = new QLabel("Trade Flow");
-    title->setStyleSheet("color: #d97706; font-size: 16px; font-weight: bold; background: transparent;"
-                         " padding-right: 14px; font-family: 'Consolas','Courier New',monospace;");
+    title->setStyleSheet(QString("color: %1; font-size: 16px; font-weight: bold; background: transparent;"
+                         " padding-right: 14px; font-family: 'Consolas','Courier New',monospace;").arg(ui::colors::AMBER()));
     hl->addWidget(title);
 
     return bar;
@@ -322,7 +334,8 @@ QWidget* TradeVizScreen::build_tab_bar() {
 
 QWidget* TradeVizScreen::build_filter_bar() {
     auto* bar = new QWidget;
-    bar->setStyleSheet("background: #111111; border-bottom: 1px solid #1a1a1a;");
+    bar->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;")
+                           .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     bar->setFixedHeight(32);
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(10, 0, 10, 0);
@@ -330,7 +343,7 @@ QWidget* TradeVizScreen::build_filter_bar() {
 
     // Country selector
     country_combo_ = new QComboBox;
-    country_combo_->setStyleSheet(COMBO_SS);
+    country_combo_->setStyleSheet(combo_ss());
     country_combo_->addItems({"United States", "China", "Germany", "Japan", "United Kingdom", "France", "India",
                               "Italy", "Canada", "South Korea", "Mexico", "Brazil", "Australia", "Netherlands",
                               "Switzerland"});
@@ -339,20 +352,20 @@ QWidget* TradeVizScreen::build_filter_bar() {
 
     // Browse button
     auto* browse = new QLabel("20) Browse");
-    browse->setStyleSheet("color: #e5e5e5; font-size: 12px; font-weight: bold; background: transparent;"
-                          " font-family: 'Consolas','Courier New',monospace;");
+    browse->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; background: transparent;"
+                          " font-family: 'Consolas','Courier New',monospace;").arg(ui::colors::TEXT_PRIMARY()));
     hl->addWidget(browse);
 
     hl->addSpacing(10);
 
     // Order by
     auto* order_lbl = new QLabel("Order by");
-    order_lbl->setStyleSheet("color: #808080; font-size: 11px; font-weight: bold; background: transparent;"
-                             " font-family: 'Consolas','Courier New',monospace;");
+    order_lbl->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;"
+                             " font-family: 'Consolas','Courier New',monospace;").arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(order_lbl);
 
     order_combo_ = new QComboBox;
-    order_combo_->setStyleSheet(COMBO_SS);
+    order_combo_->setStyleSheet(combo_ss());
     order_combo_->addItems({"Total Trade", "Imports", "Exports", "Trade Balance", "% of GDP"});
     hl->addWidget(order_combo_);
 
@@ -360,12 +373,12 @@ QWidget* TradeVizScreen::build_filter_bar() {
 
     // Periodicity
     auto* period_lbl = new QLabel("Periodicity");
-    period_lbl->setStyleSheet("color: #808080; font-size: 11px; font-weight: bold; background: transparent;"
-                              " font-family: 'Consolas','Courier New',monospace;");
+    period_lbl->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;"
+                              " font-family: 'Consolas','Courier New',monospace;").arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(period_lbl);
 
     period_combo_ = new QComboBox;
-    period_combo_->setStyleSheet(COMBO_SS);
+    period_combo_->setStyleSheet(combo_ss());
     period_combo_->addItems({"Yearly", "Quarterly", "Monthly"});
     hl->addWidget(period_combo_);
 
@@ -373,12 +386,12 @@ QWidget* TradeVizScreen::build_filter_bar() {
 
     // Year navigation
     auto* prev_btn = new QLabel("<<");
-    prev_btn->setStyleSheet("color: #808080; font-size: 12px; font-weight: bold; background: transparent;"
-                            " font-family: 'Consolas','Courier New',monospace;");
+    prev_btn->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; background: transparent;"
+                            " font-family: 'Consolas','Courier New',monospace;").arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(prev_btn);
 
     year_combo_ = new QComboBox;
-    year_combo_->setStyleSheet(COMBO_SS);
+    year_combo_->setStyleSheet(combo_ss());
     year_combo_->setFixedWidth(80);
     for (int y = 2024; y >= 2010; --y) {
         year_combo_->addItem(QString::number(y));
@@ -386,16 +399,16 @@ QWidget* TradeVizScreen::build_filter_bar() {
     hl->addWidget(year_combo_);
 
     auto* next_btn = new QLabel(">>");
-    next_btn->setStyleSheet("color: #808080; font-size: 12px; font-weight: bold; background: transparent;"
-                            " font-family: 'Consolas','Courier New',monospace;");
+    next_btn->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; background: transparent;"
+                            " font-family: 'Consolas','Courier New',monospace;").arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(next_btn);
 
     hl->addStretch();
 
     // Clock
     clock_label_ = new QLabel(QDateTime::currentDateTime().toString("HH:mm:ss"));
-    clock_label_->setStyleSheet("color: #525252; font-size: 11px; background: transparent;"
-                                " font-family: 'Consolas','Courier New',monospace;");
+    clock_label_->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;"
+                                " font-family: 'Consolas','Courier New',monospace;").arg(ui::colors::TEXT_TERTIARY()));
     hl->addWidget(clock_label_);
 
     return bar;
@@ -407,13 +420,13 @@ QWidget* TradeVizScreen::build_filter_bar() {
 
 QWidget* TradeVizScreen::build_partner_table() {
     auto* panel = new QWidget;
-    panel->setStyleSheet("background: #080808;");
+    panel->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
     partner_table_ = new QTableWidget;
-    partner_table_->setStyleSheet(TABLE_SS);
+    partner_table_->setStyleSheet(table_ss());
     partner_table_->setColumnCount(3);
     partner_table_->setHorizontalHeaderLabels({"", "Trading Partner", "Total Trade ($M)"});
     partner_table_->verticalHeader()->setVisible(false);
@@ -422,7 +435,7 @@ QWidget* TradeVizScreen::build_partner_table() {
     partner_table_->setShowGrid(false);
     partner_table_->setAlternatingRowColors(true);
     partner_table_->setStyleSheet(partner_table_->styleSheet() +
-                                  " QTableWidget { alternate-background-color: #0c0c0c; }");
+                                  QString(" QTableWidget { alternate-background-color: %1; }").arg(ui::colors::BG_SURFACE()));
 
     auto* hdr = partner_table_->horizontalHeader();
     hdr->setSectionResizeMode(0, QHeaderView::Fixed);
@@ -441,18 +454,18 @@ void TradeVizScreen::populate_partner_table() {
         double total = g_partners[i].imports + g_partners[i].exports;
 
         auto* rank = new QTableWidgetItem(QString("%1)").arg(i + 1));
-        rank->setForeground(QColor("#808080"));
+        rank->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
         rank->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         rank->setFont(QFont(FONT, 12));
         partner_table_->setItem(i, 0, rank);
 
         auto* name = new QTableWidgetItem(g_partners[i].name);
-        name->setForeground(QColor("#16a34a"));
+        name->setForeground(QColor(ui::colors::POSITIVE()));
         name->setFont(QFont(FONT, 13, QFont::Bold));
         partner_table_->setItem(i, 1, name);
 
         auto* val = new QTableWidgetItem(QString::number(total, 'f', 2));
-        val->setForeground(QColor("#e5e5e5"));
+        val->setForeground(QColor(ui::colors::TEXT_PRIMARY()));
         val->setFont(QFont(FONT, 13, QFont::Bold));
         val->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         partner_table_->setItem(i, 2, val);
@@ -514,8 +527,9 @@ void TradeVizScreen::setup_ui() {
 
     // ── Main content: chord diagram (left) + partner table (right) ───────────
     auto* splitter = new QSplitter(Qt::Horizontal);
-    splitter->setStyleSheet("QSplitter { background: #080808; }"
-                            "QSplitter::handle { background: #1a1a1a; width: 1px; }");
+    splitter->setStyleSheet(QString("QSplitter { background: %1; }"
+                            "QSplitter::handle { background: %2; width: 1px; }")
+                                .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
 
     splitter->addWidget(new TradeFlowChordWidget);
     splitter->addWidget(build_partner_table());

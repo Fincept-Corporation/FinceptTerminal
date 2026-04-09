@@ -25,6 +25,7 @@ namespace fincept::screens::equity {
 
 EquityOrderBook::EquityOrderBook(QWidget* parent) : QWidget(parent) {
     setObjectName("eqOrderBook");
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this]() { update(); });
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -146,7 +147,8 @@ void EquityOrderBook::rebuild_cache() {
         // Depth bar
         const double ratio = qty / max_qty;
         const int bar_w = static_cast<int>(w * ratio * 0.4);
-        p.fillRect(w - bar_w, y, bar_w, ROW_H, QColor(220, 38, 38, 25));
+        QColor sell_bar(color_sell()); sell_bar.setAlpha(25);
+        p.fillRect(w - bar_w, y, bar_w, ROW_H, sell_bar);
 
         p.setPen(color_sell());
         p.drawText(col_price, y, w / 2 - 8, ROW_H, Qt::AlignLeft | Qt::AlignVCenter, QString::number(price, 'f', 2));
@@ -163,7 +165,8 @@ void EquityOrderBook::rebuild_cache() {
 
         const double ratio = qty / max_qty;
         const int bar_w = static_cast<int>(w * ratio * 0.4);
-        p.fillRect(w - bar_w, y, bar_w, ROW_H, QColor(22, 163, 74, 25));
+        QColor buy_bar(color_buy()); buy_bar.setAlpha(25);
+        p.fillRect(w - bar_w, y, bar_w, ROW_H, buy_bar);
 
         p.setPen(color_buy());
         p.drawText(col_price, y, w / 2 - 8, ROW_H, Qt::AlignLeft | Qt::AlignVCenter, QString::number(price, 'f', 2));

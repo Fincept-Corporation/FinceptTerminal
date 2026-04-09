@@ -1,6 +1,7 @@
 #include "screens/alpha_arena/AlphaArenaScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "python/PythonRunner.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
@@ -758,6 +759,7 @@ void AlphaArenaScreen::on_right_tab_changed(int tab) {
         right_tab_btns_[i]->style()->unpolish(right_tab_btns_[i]);
         right_tab_btns_[i]->style()->polish(right_tab_btns_[i]);
     }
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 void AlphaArenaScreen::on_competition_type_changed(int index) {
@@ -1081,6 +1083,20 @@ void AlphaArenaScreen::populate_model_list() {
 
     LOG_DEBUG("AlphaArena",
               QString("Model list populated: %1 entries").arg(model_entries_.size()));
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap AlphaArenaScreen::save_state() const {
+    return {
+        {"right_tab", right_stack_ ? right_stack_->currentIndex() : 0},
+    };
+}
+
+void AlphaArenaScreen::restore_state(const QVariantMap& state) {
+    const int tab = state.value("right_tab", 0).toInt();
+    if (tab > 0)
+        on_right_tab_changed(tab);
 }
 
 } // namespace fincept::screens

@@ -86,7 +86,12 @@ class DockScreenRouter : public QObject {
 
     ads::CDockWidget* create_dock_widget(const QString& id);
     void materialize_screen(const QString& id);
+
+  public:
+    /// Map a screen id to its human-readable title.
     static QString title_for_id(const QString& id);
+
+  private:
 
     /// Persist and restore a user-edited tab title (separate from screen state).
     void save_tab_title(const QString& id, const QString& title);

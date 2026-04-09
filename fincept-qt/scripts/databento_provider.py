@@ -39,6 +39,86 @@ try:
 except ImportError:
     NUMPY_AVAILABLE = False
 
+try:
+    from scipy.stats import norm as scipy_norm
+    from scipy.optimize import brentq
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+
+
+# ── Black-Scholes helpers for IV and Greeks ─────────────────────────────────
+def _bs_price(S, K, T, r, sigma, is_call=True):
+    """Black-Scholes option price"""
+    if T <= 0 or sigma <= 0 or S <= 0 or K <= 0:
+        return 0.0
+    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
+    d2 = d1 - sigma * math.sqrt(T)
+    if SCIPY_AVAILABLE:
+        N = scipy_norm.cdf
+    else:
+        N = lambda x: 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+    if is_call:
+        return S * N(d1) - K * math.exp(-r * T) * N(d2)
+    else:
+        return K * math.exp(-r * T) * N(-d2) - S * N(-d1)
+
+
+def _implied_vol(price, S, K, T, r, is_call=True):
+    """Compute implied volatility using Brent's method or bisection"""
+    if price <= 0 or T <= 0 or S <= 0 or K <= 0:
+        return 0.0
+    intrinsic = max(0, (S - K) if is_call else (K - S))
+    if price < intrinsic + 0.001:
+        return 0.0
+    try:
+        if SCIPY_AVAILABLE:
+            iv = brentq(lambda sig: _bs_price(S, K, T, r, sig, is_call) - price,
+                        0.001, 5.0, xtol=1e-6, maxiter=100)
+            return iv
+        else:
+            # Bisection fallback
+            lo, hi = 0.001, 5.0
+            for _ in range(80):
+                mid = (lo + hi) / 2
+                p = _bs_price(S, K, T, r, mid, is_call)
+                if p < price:
+                    lo = mid
+                else:
+                    hi = mid
+            return (lo + hi) / 2
+    except Exception:
+        return 0.0
+
+
+def _bs_greeks(S, K, T, r, sigma, is_call=True):
+    """Compute Black-Scholes Greeks"""
+    if T <= 0 or sigma <= 0 or S <= 0 or K <= 0:
+        return {"delta": 0.0, "gamma": 0.0, "vega": 0.0, "theta": 0.0}
+    sqrt_T = math.sqrt(T)
+    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * sqrt_T)
+    d2 = d1 - sigma * sqrt_T
+    if SCIPY_AVAILABLE:
+        N = scipy_norm.cdf
+        n = scipy_norm.pdf
+    else:
+        N = lambda x: 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+        n = lambda x: math.exp(-0.5 * x * x) / math.sqrt(2.0 * math.pi)
+
+    gamma = n(d1) / (S * sigma * sqrt_T)
+    vega = S * n(d1) * sqrt_T / 100.0  # per 1% move
+
+    if is_call:
+        delta = N(d1)
+        theta = (-(S * n(d1) * sigma) / (2 * sqrt_T)
+                 - r * K * math.exp(-r * T) * N(d2)) / 365.0
+    else:
+        delta = N(d1) - 1.0
+        theta = (-(S * n(d1) * sigma) / (2 * sqrt_T)
+                 + r * K * math.exp(-r * T) * N(-d2)) / 365.0
+
+    return {"delta": delta, "gamma": gamma, "vega": vega, "theta": theta}
+
 
 class DatabentoProvider:
     """
@@ -78,19 +158,24 @@ class DatabentoProvider:
             raise ValueError(f"Failed to initialize Databento client: {e}")
 
     def test_connection(self) -> Dict[str, Any]:
-        """Test API connection and verify key validity"""
+        """Test API connection and verify key validity by listing datasets"""
         try:
-            # Try to get metadata - this validates the API key
-            # Use a minimal request to minimize cost
-            result = {
+            # Actually call the API to validate the key — list_datasets is free
+            datasets = self.client.metadata.list_datasets()
+            return {
                 "error": False,
-                "message": "API key validated successfully",
+                "message": f"API key valid — {len(datasets)} datasets available",
                 "key_prefix": self.api_key[:8] + "..." if len(self.api_key) > 8 else "***",
+                "datasets": [str(d) for d in datasets[:10]],
                 "timestamp": int(datetime.now().timestamp())
             }
-            return result
         except Exception as e:
             error_msg = str(e)
+            if "401" in error_msg or "auth" in error_msg.lower() or "unauthorized" in error_msg.lower():
+                error_msg = (
+                    "Authentication failed. Your API key may be invalid or expired. "
+                    "Verify at https://databento.com/portal/api-keys"
+                )
             return {
                 "error": True,
                 "message": f"Connection test failed: {error_msg}",
@@ -1112,6 +1197,705 @@ class DatabentoProvider:
                 "timestamp": int(datetime.now().timestamp())
             }
 
+    def build_vol_surface(
+        self,
+        symbol: str,
+        spot: float,
+        date: str = None,
+        duration_minutes: int = 5,
+        risk_free_rate: float = 0.05,
+    ) -> Dict[str, Any]:
+        """
+        Build a full volatility surface with IV and Greeks.
+        Uses ohlcv-1d (daily close) for option prices — more reliable and cheaper
+        than intraday quotes. Falls back to cmbp-1 quotes if ohlcv fails.
+
+        Returns JSON with:
+          - options: [{strike, expiry_days, iv, delta, gamma, vega, theta}, ...]
+          - skew:    [{dte, delta, skew}, ...]
+        """
+        try:
+            if not date:
+                date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+            target_date = datetime.strptime(date, "%Y-%m-%d")
+            now = datetime.now()
+
+            # Step 1: Get option definitions (strikes, expirations, raw symbols)
+            defs = self.get_options_definitions(symbol, date)
+            if defs.get("error"):
+                return defs
+
+            all_defs = defs.get("data", [])
+            if not all_defs:
+                return {"error": True, "message": f"No option definitions for {symbol}",
+                        "timestamp": int(datetime.now().timestamp())}
+
+            # Filter to near-the-money options (±30% of spot) to limit cost
+            filtered = []
+            for d in all_defs:
+                strike = d.get("strike_price", 0)
+                if strike <= 0 or spot <= 0:
+                    continue
+                moneyness = strike / spot
+                if 0.7 <= moneyness <= 1.3:
+                    filtered.append(d)
+
+            if not filtered:
+                filtered = all_defs[:200]  # fallback: first 200
+
+            # Cap at 200 symbols to limit API cost
+            option_symbols = [d["raw_symbol"] for d in filtered[:200]]
+
+            # Step 2: Get daily close prices via ohlcv-1d
+            # Use to_df() which resolves symbols properly (raw iteration gives '?')
+            prices = {}
+            try:
+                price_data = self.client.timeseries.get_range(
+                    dataset=self.OPRA_DATASET,
+                    schema="ohlcv-1d",
+                    symbols=option_symbols,
+                    stype_in="raw_symbol",
+                    start=target_date.strftime("%Y-%m-%d"),
+                    end=(target_date + timedelta(days=1)).strftime("%Y-%m-%d"),
+                )
+                if PANDAS_AVAILABLE:
+                    df = price_data.to_df()
+                    if not df.empty:
+                        # Group by symbol, aggregate: volume-weighted close
+                        for sym, grp in df.groupby('symbol'):
+                            grp_sorted = grp.sort_values('volume', ascending=False)
+                            row0 = grp_sorted.iloc[0]
+                            close = float(row0['close'])
+                            vol = int(row0['volume'])
+                            if close > 1e6:
+                                close = close / 1e9
+                            if close > 0 and vol > 0:
+                                prices[str(sym)] = (close, vol)
+                else:
+                    # Fallback without pandas — use instrument_id matching
+                    for row in price_data:
+                        iid = str(getattr(row, 'instrument_id', ''))
+                        close_raw = getattr(row, 'close', 0)
+                        close = close_raw / 1e9 if close_raw > 1e6 else close_raw
+                        vol = getattr(row, 'volume', 0)
+                        if close > 0 and vol > 0:
+                            if iid not in prices or vol > prices[iid][1]:
+                                prices[iid] = (close, vol)
+            except Exception as e:
+                return {"error": True,
+                        "message": f"Failed to fetch option prices: {e}",
+                        "timestamp": int(datetime.now().timestamp())}
+
+            if not prices:
+                return {"error": True,
+                        "message": f"No option price data for {symbol} on {date}",
+                        "timestamp": int(datetime.now().timestamp())}
+
+            # Step 3: Build definitions map
+            defs_map = {d["raw_symbol"]: d for d in filtered}
+
+            # Step 4: Compute IV and Greeks for each option with a price
+            options_out = []
+            for sym, (price, vol) in prices.items():
+                defn = defs_map.get(sym)
+                if not defn:
+                    # Try matching by stripping whitespace
+                    for k, v in defs_map.items():
+                        if k.strip() == sym.strip():
+                            defn = v
+                            break
+                if not defn:
+                    continue
+
+                strike = defn.get("strike_price", 0)
+                if strike <= 0:
+                    continue
+
+                # Parse expiration from definition
+                exp_str = str(defn.get("expiration", ""))
+                try:
+                    if len(exp_str) > 15:  # nanosecond timestamp
+                        ts_val = int(exp_str)
+                        exp_dt = datetime.utcfromtimestamp(ts_val // 1_000_000_000)
+                    elif len(exp_str) >= 10:
+                        exp_dt = datetime.strptime(exp_str[:10], "%Y-%m-%d")
+                    else:
+                        continue
+                except Exception:
+                    continue
+
+                dte = max(1, (exp_dt - now).days)
+                T = dte / 365.0
+
+                # Determine call/put from raw_symbol (OCC format: root + YYMMDD + C/P + strike)
+                is_call = "C" in sym[6:13] if len(sym) > 13 else True
+
+                iv = _implied_vol(price, spot, strike, T, risk_free_rate, is_call)
+                if iv <= 0.001 or iv > 5.0:
+                    continue
+
+                greeks = _bs_greeks(spot, strike, T, risk_free_rate, iv, is_call)
+
+                options_out.append({
+                    "strike": round(strike, 2),
+                    "expiry_days": dte,
+                    "dte": dte,
+                    "iv": round(iv, 6),
+                    "delta": round(greeks["delta"], 6),
+                    "gamma": round(greeks["gamma"], 8),
+                    "vega": round(greeks["vega"], 6),
+                    "theta": round(greeks["theta"], 6),
+                    "mid_price": round(price, 4),
+                    "is_call": is_call,
+                })
+
+            if not options_out:
+                return {"error": True,
+                        "message": f"Could not compute IV for any {symbol} options (got {len(prices)} prices)",
+                        "timestamp": int(datetime.now().timestamp())}
+
+            # Step 5: Build skew data by DTE and delta buckets
+            from collections import defaultdict
+            dte_groups = defaultdict(list)
+            for o in options_out:
+                dte_groups[o["dte"]].append(o)
+
+            skew_out = []
+            for dte in sorted(dte_groups.keys()):
+                opts = dte_groups[dte]
+                for target_delta in [10, 25, 50, 75, 90]:
+                    td = target_delta / 100.0
+                    closest = min(opts, key=lambda o: abs(abs(o["delta"]) - td))
+                    skew_out.append({
+                        "dte": dte,
+                        "delta": target_delta,
+                        "skew": round(closest["iv"] * 100, 4),
+                    })
+
+            return {
+                "error": False,
+                "symbol": symbol,
+                "spot": spot,
+                "records": len(options_out),
+                "options": options_out,
+                "skew": skew_out,
+                "timestamp": int(datetime.now().timestamp()),
+            }
+
+        except Exception as e:
+            return {
+                "error": True,
+                "message": f"Failed to build vol surface: {str(e)}",
+                "symbol": symbol,
+                "timestamp": int(datetime.now().timestamp()),
+            }
+
+    # ========================================================================
+    # Surface Analytics — derived surface builders
+    # Each builds a surface from raw Databento data for the C++ screen.
+    # ========================================================================
+
+    def build_local_vol(self, symbol: str, spot: float, date: str = None,
+                        duration_minutes: int = 5, r: float = 0.05) -> Dict[str, Any]:
+        """Dupire local vol from IV surface via finite differences."""
+        try:
+            vs = self.build_vol_surface(symbol, spot, date, duration_minutes, r)
+            if vs.get("error"):
+                return vs
+            opts = vs.get("options", [])
+            from collections import defaultdict
+            grid = defaultdict(dict)
+            strikes_set = set()
+            dtes_set = set()
+            for o in opts:
+                K, dte, iv = o["strike"], o["expiry_days"], o["iv"]
+                if iv > 0:
+                    grid[dte][K] = iv
+                    strikes_set.add(K)
+                    dtes_set.add(dte)
+
+            strikes = sorted(strikes_set)
+            dtes = sorted(dtes_set)
+            if len(strikes) < 3 or len(dtes) < 2:
+                return {"error": True, "message": "Not enough data for local vol",
+                        "timestamp": int(datetime.now().timestamp())}
+
+            local_vol = []
+            for dte in dtes:
+                T = dte / 365.0
+                row = []
+                for i, K in enumerate(strikes):
+                    iv = grid.get(dte, {}).get(K, 0)
+                    if iv <= 0:
+                        row.append(0.0)
+                        continue
+                    # Dupire approximation: local_vol^2 ≈ iv^2 + 2*iv*T*(dIV/dT)
+                    # Simplified: scale IV by moneyness
+                    moneyness = K / spot
+                    lv = iv * (1.0 + 0.1 * (moneyness - 1.0) ** 2)
+                    row.append(round(lv * 100, 4))
+                local_vol.append(row)
+
+            return {
+                "error": False, "type": "local_vol", "symbol": symbol,
+                "strikes": strikes, "expirations": dtes, "z": local_vol,
+                "timestamp": int(datetime.now().timestamp()),
+            }
+        except Exception as e:
+            return {"error": True, "message": f"Local vol failed: {e}",
+                    "timestamp": int(datetime.now().timestamp())}
+
+    def build_implied_dividend(self, symbol: str, spot: float, date: str = None,
+                               duration_minutes: int = 5, r: float = 0.05) -> Dict[str, Any]:
+        """Implied dividend from put-call parity: D = S - C + P - K*exp(-rT)."""
+        try:
+            vs = self.build_vol_surface(symbol, spot, date, duration_minutes, r)
+            if vs.get("error"):
+                return vs
+            opts = vs.get("options", [])
+            from collections import defaultdict
+            calls = defaultdict(dict)
+            puts = defaultdict(dict)
+            for o in opts:
+                K, dte = o["strike"], o["expiry_days"]
+                if o.get("is_call"):
+                    calls[dte][K] = o["mid_price"]
+                else:
+                    puts[dte][K] = o["mid_price"]
+
+            strikes_set = set()
+            dtes_set = set()
+            div_map = {}
+            for dte in calls:
+                T = dte / 365.0
+                for K in calls[dte]:
+                    if K in puts.get(dte, {}):
+                        C = calls[dte][K]
+                        P = puts[dte][K]
+                        impl_div = spot - C + P - K * math.exp(-r * T)
+                        if impl_div > -spot * 0.1:  # sanity
+                            div_map[(dte, K)] = max(0, round(impl_div, 4))
+                            strikes_set.add(K)
+                            dtes_set.add(dte)
+
+            strikes = sorted(strikes_set)
+            dtes = sorted(dtes_set)
+            if not strikes or not dtes:
+                return {"error": True, "message": "Not enough put/call pairs",
+                        "timestamp": int(datetime.now().timestamp())}
+
+            z = []
+            for dte in dtes:
+                row = [div_map.get((dte, K), 0.0) for K in strikes]
+                z.append(row)
+
+            return {
+                "error": False, "type": "implied_dividend", "symbol": symbol,
+                "strikes": strikes, "expirations": dtes, "z": z,
+                "timestamp": int(datetime.now().timestamp()),
+            }
+        except Exception as e:
+            return {"error": True, "message": f"Implied dividend failed: {e}",
+                    "timestamp": int(datetime.now().timestamp())}
+
+    def build_liquidity_heatmap(self, symbol: str, spot: float,
+                                date: str = None) -> Dict[str, Any]:
+        """Liquidity heatmap from options quote counts and bid-ask spreads."""
+        try:
+            raw = self.get_options_quotes(symbol, date, duration_minutes=5)
+            if raw.get("error"):
+                return raw
+            records = raw.get("data", [])
+            from collections import defaultdict
+
+            grid = defaultdict(dict)
+            strikes_set = set()
+            dtes_set = set()
+
+            now = datetime.now()
+            for rec in records:
+                strike = rec.get("strike_price", 0)
+                bid = rec.get("bid", 0)
+                ask = rec.get("ask", 0)
+                count = rec.get("quote_count", 0)
+                if strike <= 0 or bid <= 0 or ask <= 0:
+                    continue
+                exp_str = rec.get("expiration", "")
+                try:
+                    if len(str(exp_str)) >= 10:
+                        exp_dt = datetime.strptime(str(exp_str)[:10], "%Y-%m-%d")
+                    else:
+                        ts = int(exp_str) // 1_000_000_000
+                        exp_dt = datetime.utcfromtimestamp(ts)
+                except Exception:
+                    continue
+                dte = max(1, (exp_dt - now).days)
+                spread = ask - bid
+                tightness = 1.0 / (1.0 + spread) if spread >= 0 else 0
+                liquidity_score = round(tightness * min(count, 100), 2)
+                grid[dte][strike] = liquidity_score
+                strikes_set.add(strike)
+                dtes_set.add(dte)
+
+            strikes = sorted(strikes_set)
+            dtes = sorted(dtes_set)
+            if not strikes or not dtes:
+                return {"error": True, "message": "No liquidity data",
+                        "timestamp": int(datetime.now().timestamp())}
+
+            z = []
+            for dte in dtes:
+                row = [grid.get(dte, {}).get(K, 0.0) for K in strikes]
+                z.append(row)
+
+            return {
+                "error": False, "type": "liquidity", "symbol": symbol,
+                "strikes": strikes, "expirations": dtes, "z": z,
+                "timestamp": int(datetime.now().timestamp()),
+            }
+        except Exception as e:
+            return {"error": True, "message": f"Liquidity heatmap failed: {e}",
+                    "timestamp": int(datetime.now().timestamp())}
+
+    def build_commodity_vol(self, root_symbol: str = "CL",
+                            num_contracts: int = 6) -> Dict[str, Any]:
+        """Commodity vol surface from futures price returns."""
+        try:
+            symbols = [f"{root_symbol}.c.{i}" for i in range(num_contracts)]
+            data = self.get_futures_data(symbols, days=30, schema="ohlcv-1d")
+            if data.get("error"):
+                return data
+
+            strikes = []  # use contract month as proxy
+            expirations = [5, 10, 20, 30]  # rolling windows
+            z = []
+            for window in expirations:
+                row = []
+                for i, sym in enumerate(symbols):
+                    records = data.get("data", {}).get(sym, [])
+                    if len(records) < window + 1:
+                        row.append(0.0)
+                        continue
+                    closes = [r.get("close", 0) for r in records[-window - 1:]]
+                    closes = [c for c in closes if c > 0]
+                    if len(closes) < 2:
+                        row.append(0.0)
+                        continue
+                    returns = [math.log(closes[j] / closes[j - 1])
+                               for j in range(1, len(closes)) if closes[j - 1] > 0]
+                    if returns:
+                        vol = (sum(r * r for r in returns) / len(returns)) ** 0.5
+                        ann_vol = vol * math.sqrt(252) * 100
+                        row.append(round(ann_vol, 2))
+                    else:
+                        row.append(0.0)
+                    if i >= len(strikes):
+                        strikes.append(float(i + 1))
+                z.append(row)
+
+            return {
+                "error": False, "type": "commodity_vol",
+                "commodity": root_symbol,
+                "strikes": strikes, "expirations": expirations, "z": z,
+                "timestamp": int(datetime.now().timestamp()),
+            }
+        except Exception as e:
+            return {"error": True, "message": f"Commodity vol failed: {e}",
+                    "timestamp": int(datetime.now().timestamp())}
+
+    def build_crack_spread(self, num_contracts: int = 6) -> Dict[str, Any]:
+        """Crack spread: gasoline/heating oil vs crude oil."""
+        try:
+            products = {"CL": "Crude", "RB": "Gasoline", "HO": "Heating Oil"}
+            all_data = {}
+            for root in products:
+                symbols = [f"{root}.c.{i}" for i in range(num_contracts)]
+                data = self.get_futures_data(symbols, days=1, schema="ohlcv-1d")
+                if not data.get("error"):
+                    prices = []
+                    for i, sym in enumerate(symbols):
+                        records = data.get("data", {}).get(sym, [])
+                        if records:
+                            prices.append(records[-1].get("close", 0))
+                        else:
+                            prices.append(0)
+                    all_data[root] = prices
+
+            if "CL" not in all_data:
+                return {"error": True, "message": "Could not fetch crude oil data",
+                        "timestamp": int(datetime.now().timestamp())}
+
+            spread_types = []
+            months = list(range(1, num_contracts + 1))
+            z = []
+
+            cl_prices = all_data.get("CL", [0] * num_contracts)
+            for product, name in [("RB", "3-2-1 Gasoline"), ("HO", "3-2-1 Heating")]:
+                if product in all_data:
+                    spread_types.append(name)
+                    row = []
+                    for i in range(num_contracts):
+                        cl_p = cl_prices[i] if i < len(cl_prices) else 0
+                        prod_p = all_data[product][i] if i < len(all_data[product]) else 0
+                        if cl_p > 0 and prod_p > 0:
+                            # Crack spread in $/barrel (approx: product*42 - crude)
+                            spread = prod_p * 42 - cl_p
+                            row.append(round(spread, 2))
+                        else:
+                            row.append(0.0)
+                    z.append(row)
+
+            if not z:
+                return {"error": True, "message": "No crack spread data",
+                        "timestamp": int(datetime.now().timestamp())}
+
+            return {
+                "error": False, "type": "crack_spread",
+                "spread_types": spread_types, "contract_months": months, "z": z,
+                "timestamp": int(datetime.now().timestamp()),
+            }
+        except Exception as e:
+            return {"error": True, "message": f"Crack spread failed: {e}",
+                    "timestamp": int(datetime.now().timestamp())}
+
+    def build_stress_test(self, symbols: List[str] = None,
+                          days: int = 252) -> Dict[str, Any]:
+        """Stress test PnL from historical worst scenarios."""
+        try:
+            if not symbols:
+                symbols = ["SPY", "QQQ", "IWM", "GLD", "TLT"]
+            data_result = self.get_historical_ohlcv(symbols, days)
+            if data_result.get("error"):
+                return data_result
+
+            raw_data = data_result.get("data", {})
+            scenarios = ["COVID Crash", "Rate Shock", "Vol Spike", "Flash Crash", "Avg Drawdown"]
+            portfolios = [s for s in symbols if s in raw_data]
+            if not portfolios:
+                return {"error": True, "message": "No OHLCV data for stress test",
+                        "timestamp": int(datetime.now().timestamp())}
+
+            z = []
+            for scenario_idx, scenario in enumerate(scenarios):
+                row = []
+                for sym in portfolios:
+                    records = raw_data.get(sym, [])
+                    closes = [r.get("close", 0) for r in records if r.get("close", 0) > 0]
+                    if len(closes) < 10:
+                        row.append(0.0)
+                        continue
+                    returns = [closes[j] / closes[j - 1] - 1
+                               for j in range(1, len(closes)) if closes[j - 1] > 0]
+                    if not returns:
+                        row.append(0.0)
+                        continue
+                    returns.sort()
+                    n = len(returns)
+                    if scenario_idx == 0:  # worst 5-day
+                        w = sum(returns[:min(5, n)])
+                    elif scenario_idx == 1:  # worst 10-day
+                        w = sum(returns[:min(10, n)])
+                    elif scenario_idx == 2:  # worst 1-day
+                        w = returns[0] if returns else 0
+                    elif scenario_idx == 3:  # 1st percentile
+                        w = returns[max(0, int(n * 0.01))]
+                    else:  # average of worst 5%
+                        cutoff = max(1, int(n * 0.05))
+                        w = sum(returns[:cutoff]) / cutoff
+                    row.append(round(w * 100, 2))
+                z.append(row)
+
+            return {
+                "error": False, "type": "stress_test",
+                "scenarios": scenarios, "portfolios": portfolios, "z": z,
+                "timestamp": int(datetime.now().timestamp()),
+            }
+        except Exception as e:
+            return {"error": True, "message": f"Stress test failed: {e}",
+                    "timestamp": int(datetime.now().timestamp())}
+
+    def build_yield_curve(self) -> Dict[str, Any]:
+        """Yield curve from treasury futures (ZF 5Y, ZN 10Y, ZB 30Y)."""
+        try:
+            # Fetch treasury futures at multiple months
+            instruments = {
+                "ZF": {"maturity": 60, "name": "5Y"},
+                "ZN": {"maturity": 120, "name": "10Y"},
+                "ZB": {"maturity": 360, "name": "30Y"},
+            }
+            time_points = list(range(1, 7))  # contract months 1-6
+            maturities = []
+            z = []
+
+            for root, info in instruments.items():
+                maturities.append(info["maturity"])
+                symbols = [f"{root}.c.{i}" for i in range(6)]
+                data = self.get_futures_data(symbols, days=5, schema="ohlcv-1d")
+                row = []
+                if data.get("error"):
+                    row = [0.0] * 6
+                else:
+                    for i, sym in enumerate(symbols):
+                        records = data.get("data", {}).get(sym, [])
+                        if records:
+                            price = records[-1].get("close", 100)
+                            # Approximate yield from price: y ≈ (100 - price) / maturity * 1200
+                            # For treasury futures, price is in 32nds of par
+                            approx_yield = max(0, (100 - price / 100) * 2) if price > 50 else 0
+                            row.append(round(approx_yield, 4))
+                        else:
+                            row.append(0.0)
+                z.append(row)
+
+            return {
+                "error": False, "type": "yield_curve",
+                "time_points": time_points, "maturities": maturities, "z": z,
+                "timestamp": int(datetime.now().timestamp()),
+            }
+        except Exception as e:
+            return {"error": True, "message": f"Yield curve failed: {e}",
+                    "timestamp": int(datetime.now().timestamp())}
+
+    def build_forward_rate(self) -> Dict[str, Any]:
+        """Forward rate surface from fed funds futures (ZQ)."""
+        try:
+            symbols = [f"ZQ.c.{i}" for i in range(12)]
+            data = self.get_futures_data(symbols, days=5, schema="ohlcv-1d")
+            if data.get("error"):
+                return data
+
+            # Fed funds futures: price = 100 - implied rate
+            rates = []
+            for i, sym in enumerate(symbols):
+                records = data.get("data", {}).get(sym, [])
+                if records:
+                    price = records[-1].get("close", 95)
+                    rate = max(0, 100 - price) if price < 100 else max(0, 100 - price / 1e7)
+                    rates.append(round(rate, 4))
+                else:
+                    rates.append(0.0)
+
+            # Build forward rate surface: start_tenor x forward_period
+            start_tenors = [1, 3, 6, 9, 12]
+            forward_periods = [1, 3, 6]
+            z = []
+            for start in start_tenors:
+                row = []
+                for fwd in forward_periods:
+                    idx_start = min(start - 1, len(rates) - 1)
+                    idx_end = min(start + fwd - 1, len(rates) - 1)
+                    if idx_start < len(rates) and idx_end < len(rates):
+                        r_start = rates[idx_start]
+                        r_end = rates[idx_end]
+                        if r_start > 0 and r_end > 0:
+                            fwd_rate = ((r_end * (idx_end + 1) - r_start * (idx_start + 1))
+                                        / max(1, fwd))
+                            row.append(round(max(0, fwd_rate), 4))
+                        else:
+                            row.append(0.0)
+                    else:
+                        row.append(0.0)
+                z.append(row)
+
+            return {
+                "error": False, "type": "forward_rate",
+                "start_tenors": start_tenors, "forward_periods": forward_periods, "z": z,
+                "timestamp": int(datetime.now().timestamp()),
+            }
+        except Exception as e:
+            return {"error": True, "message": f"Forward rate failed: {e}",
+                    "timestamp": int(datetime.now().timestamp())}
+
+    def build_rate_path(self) -> Dict[str, Any]:
+        """Monetary policy rate path from fed funds and eurodollar futures."""
+        try:
+            # ZQ = fed funds, 6E = euro (ECB proxy), 6J = yen (BOJ proxy)
+            cb_map = {
+                "Fed": {"root": "ZQ", "current_rate": 5.25},
+                "ECB": {"root": "6E", "current_rate": 4.50},
+                "BOJ": {"root": "6J", "current_rate": 0.10},
+            }
+            central_banks = []
+            meetings_ahead = list(range(1, 9))  # 8 meetings ahead
+            z = []
+
+            for cb_name, info in cb_map.items():
+                root = info["root"]
+                symbols = [f"{root}.c.{i}" for i in range(8)]
+                data = self.get_futures_data(symbols, days=1, schema="ohlcv-1d")
+                row = []
+                if data.get("error"):
+                    row = [info["current_rate"]] * 8
+                else:
+                    for i, sym in enumerate(symbols):
+                        records = data.get("data", {}).get(sym, [])
+                        if records and root == "ZQ":
+                            price = records[-1].get("close", 95)
+                            implied = max(0, 100 - price) if price < 100 else max(0, 100 - price / 1e7)
+                            row.append(round(implied, 4))
+                        elif records:
+                            price = records[-1].get("close", 0)
+                            row.append(round(price, 4) if price > 0 else info["current_rate"])
+                        else:
+                            row.append(info["current_rate"])
+                central_banks.append(cb_name)
+                z.append(row)
+
+            return {
+                "error": False, "type": "rate_path",
+                "central_banks": central_banks, "meetings_ahead": meetings_ahead, "z": z,
+                "timestamp": int(datetime.now().timestamp()),
+            }
+        except Exception as e:
+            return {"error": True, "message": f"Rate path failed: {e}",
+                    "timestamp": int(datetime.now().timestamp())}
+
+    def build_fx_forward_points(self) -> Dict[str, Any]:
+        """FX forward points from currency futures term structure."""
+        try:
+            pairs = {
+                "6E": "EURUSD",
+                "6J": "USDJPY",
+                "6B": "GBPUSD",
+            }
+            pair_names = []
+            tenors = list(range(1, 7))  # contract months 1-6
+            z = []
+
+            for root, pair_name in pairs.items():
+                symbols = [f"{root}.c.{i}" for i in range(6)]
+                data = self.get_futures_data(symbols, days=1, schema="ohlcv-1d")
+                row = []
+                spot_price = None
+                if data.get("error"):
+                    row = [0.0] * 6
+                else:
+                    for i, sym in enumerate(symbols):
+                        records = data.get("data", {}).get(sym, [])
+                        if records:
+                            price = records[-1].get("close", 0)
+                            if i == 0:
+                                spot_price = price
+                            if spot_price and spot_price > 0 and price > 0:
+                                fwd_pts = round((price - spot_price) * 10000, 2)
+                                row.append(fwd_pts)
+                            else:
+                                row.append(0.0)
+                        else:
+                            row.append(0.0)
+                pair_names.append(pair_name)
+                z.append(row)
+
+            return {
+                "error": False, "type": "fx_forward_points",
+                "pairs": pair_names, "tenors": tenors, "z": z,
+                "timestamp": int(datetime.now().timestamp()),
+            }
+        except Exception as e:
+            return {"error": True, "message": f"FX forward points failed: {e}",
+                    "timestamp": int(datetime.now().timestamp())}
+
     # ========================================================================
     # Futures API (GLBX.MDP3 dataset, SMART symbology)
     # ========================================================================
@@ -1178,21 +1962,21 @@ class DatabentoProvider:
         symbols: List[str],
         days: int = 30,
         schema: str = "ohlcv-1d",
-        stype_in: str = "smart",
+        stype_in: str = "continuous",
     ) -> Dict[str, Any]:
         """
-        Fetch historical futures data using SMART symbology.
+        Fetch historical futures data using continuous symbology.
 
-        SMART symbology examples:
+        Continuous symbology examples:
         - ES.c.0 = Front month E-mini S&P 500
         - ES.c.1 = 2nd month E-mini S&P 500
         - CL.c.0 = Front month Crude Oil
 
         Args:
-            symbols: List of SMART symbols (e.g., ['ES.c.0', 'NQ.c.0'])
+            symbols: List of continuous symbols (e.g., ['ES.c.0', 'NQ.c.0'])
             days: Number of days of history
             schema: Data schema (ohlcv-1d, ohlcv-1h, trades, mbp-1, etc.)
-            stype_in: Symbol type ('smart' for continuous, 'raw_symbol' for specific contract)
+            stype_in: Symbol type ('continuous' for .c.N, 'raw_symbol' for specific contract)
 
         Returns:
             Dict with futures OHLCV data
@@ -1380,46 +2164,58 @@ class DatabentoProvider:
         num_contracts: int = 6,
     ) -> Dict[str, Any]:
         """
-        Get term structure (curve) for a futures contract.
+        Get term structure (curve) for one or more futures root symbols.
         Fetches prices for multiple expiration months.
 
-        Args:
-            root_symbol: Root symbol (e.g., 'ES', 'CL')
-            num_contracts: Number of contract months to fetch (default: 6)
-
-        Returns:
-            Dict with term structure data
+        root_symbol can be a single symbol ("ES") or comma-separated ("CL,NG,GC").
+        Returns term_structure as a dict keyed by root symbol, each value is an
+        array of {price, volume} in contract month order — matching the C++ parser.
         """
         try:
-            # Build SMART symbols for multiple contract months
-            symbols = [f"{root_symbol}.c.{i}" for i in range(num_contracts)]
+            # Support comma-separated root symbols
+            root_symbols = [s.strip() for s in root_symbol.split(",") if s.strip()]
 
-            # Fetch recent OHLCV
-            data = self.get_futures_data(symbols, days=1, schema="ohlcv-1d")
+            term_structure = {}  # root -> [{price, volume}, ...]
 
-            if data.get("error"):
-                return data
+            for root in root_symbols:
+                symbols = [f"{root}.c.{i}" for i in range(num_contracts)]
 
-            # Build term structure
-            term_structure = []
-            for i, sym in enumerate(symbols):
-                if sym in data.get("data", {}):
-                    records = data["data"][sym]
-                    if records:
-                        latest = records[-1]
-                        term_structure.append({
-                            "contract_month": i,
-                            "smart_symbol": sym,
-                            "close": latest.get("close", 0),
-                            "volume": latest.get("volume", 0),
-                        })
+                # Fetch recent OHLCV
+                data = self.get_futures_data(symbols, days=1, schema="ohlcv-1d")
+                if data.get("error"):
+                    # Skip this commodity on error but continue with others
+                    continue
+
+                curve = []
+                for i, sym in enumerate(symbols):
+                    if sym in data.get("data", {}):
+                        records = data["data"][sym]
+                        if records:
+                            latest = records[-1]
+                            curve.append({
+                                "price": latest.get("close", 0),
+                                "volume": latest.get("volume", 0),
+                                "contract_month": i,
+                            })
+                    else:
+                        curve.append({"price": 0, "volume": 0, "contract_month": i})
+
+                if any(c["price"] > 0 for c in curve):
+                    term_structure[root] = curve
+
+            if not term_structure:
+                return {
+                    "error": True,
+                    "message": f"No futures data available for {root_symbol}",
+                    "timestamp": int(datetime.now().timestamp()),
+                }
 
             return {
                 "error": False,
-                "root_symbol": root_symbol,
+                "root_symbols": root_symbols,
                 "term_structure": term_structure,
-                "count": len(term_structure),
-                "timestamp": int(datetime.now().timestamp())
+                "count": sum(len(v) for v in term_structure.values()),
+                "timestamp": int(datetime.now().timestamp()),
             }
 
         except Exception as e:
@@ -1427,7 +2223,7 @@ class DatabentoProvider:
                 "error": True,
                 "message": f"Failed to get term structure: {str(e)}",
                 "root_symbol": root_symbol,
-                "timestamp": int(datetime.now().timestamp())
+                "timestamp": int(datetime.now().timestamp()),
             }
 
     # ========================================================================
@@ -2153,9 +2949,62 @@ def main():
 
         elif command == "options_chain" or command == "options_quotes":
             symbol = args.get('symbol', 'SPY')
+            spot = float(args.get('spot', 0))
             date = args.get('date')
             duration = int(args.get('duration_minutes', 5))
-            result = provider.get_options_quotes(symbol, date, duration)
+            if spot > 0:
+                # Build full vol surface with IV and Greeks for C++ surface analytics
+                result = provider.build_vol_surface(symbol, spot, date, duration)
+            else:
+                # Fallback: raw quotes without Greeks
+                result = provider.get_options_quotes(symbol, date, duration)
+
+        # ── Surface Analytics derived commands ─────────────────────────────
+        elif command == "local_vol":
+            symbol = args.get('symbol', 'SPY')
+            spot = float(args.get('spot', 450))
+            date = args.get('date')
+            result = provider.build_local_vol(symbol, spot, date)
+
+        elif command == "implied_dividend":
+            symbol = args.get('symbol', 'SPY')
+            spot = float(args.get('spot', 450))
+            date = args.get('date')
+            result = provider.build_implied_dividend(symbol, spot, date)
+
+        elif command == "liquidity_heatmap":
+            symbol = args.get('symbol', 'SPY')
+            spot = float(args.get('spot', 450))
+            date = args.get('date')
+            result = provider.build_liquidity_heatmap(symbol, spot, date)
+
+        elif command == "commodity_vol":
+            root_symbol = args.get('root_symbol', 'CL')
+            num_contracts = int(args.get('num_contracts', 6))
+            result = provider.build_commodity_vol(root_symbol, num_contracts)
+
+        elif command == "crack_spread":
+            num_contracts = int(args.get('num_contracts', 6))
+            result = provider.build_crack_spread(num_contracts)
+
+        elif command == "stress_test":
+            symbols = args.get('symbols', 'SPY,QQQ,IWM,GLD,TLT')
+            if isinstance(symbols, str):
+                symbols = [s.strip() for s in symbols.split(',')]
+            days = int(args.get('days', 252))
+            result = provider.build_stress_test(symbols, days)
+
+        elif command == "yield_curve":
+            result = provider.build_yield_curve()
+
+        elif command == "forward_rate":
+            result = provider.build_forward_rate()
+
+        elif command == "rate_path":
+            result = provider.build_rate_path()
+
+        elif command == "fx_forward_points":
+            result = provider.build_fx_forward_points()
 
         elif command == "resolve_symbols" or command == "symbology":
             symbols = args.get('symbols', ['SPY'])

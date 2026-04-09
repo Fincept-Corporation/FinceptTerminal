@@ -13,7 +13,8 @@
 namespace fincept::screens {
 
 PortfolioHeatmap::PortfolioHeatmap(QWidget* parent) : QWidget(parent) {
-    setFixedWidth(220);
+    setMinimumWidth(180);
+    setMaximumWidth(220);
     build_ui();
 }
 
@@ -22,26 +23,28 @@ void PortfolioHeatmap::build_ui() {
         QString("background:%1; border-right:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
 
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(6, 6, 6, 6);
-    layout->setSpacing(4);
+    layout->setContentsMargins(8, 8, 8, 6);
+    layout->setSpacing(5);
 
     // Header: title + mode buttons
     auto* header = new QHBoxLayout;
     auto* title = new QLabel("HOLDINGS");
     title->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1.5px;").arg(ui::colors::TEXT_SECONDARY));
     header->addWidget(title);
     header->addStretch();
 
     auto make_mode_btn = [&](const QString& text) {
         auto* btn = new QPushButton(text);
-        btn->setFixedSize(36, 18);
+        btn->setFixedSize(38, 20);
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                                   "  font-size:8px; font-weight:700; }"
-                                   "QPushButton:checked { background:%3; color:#000; border-color:%3; }")
-                               .arg(ui::colors::TEXT_TERTIARY, ui::colors::BORDER_DIM, ui::colors::AMBER));
+                                   "  font-size:9px; font-weight:700; border-radius:2px; }"
+                                   "QPushButton:checked { background:%3; color:%4; border-color:%3; }"
+                                   "QPushButton:hover:!checked { color:%5; border-color:%5; }")
+                               .arg(ui::colors::TEXT_TERTIARY, ui::colors::BORDER_DIM, ui::colors::AMBER,
+                                    ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY));
         header->addWidget(btn);
         return btn;
     };
@@ -69,9 +72,9 @@ void PortfolioHeatmap::build_ui() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setStyleSheet("QScrollArea { border:none; background:transparent; }"
+    scroll->setStyleSheet(QString("QScrollArea { border:none; background:transparent; }"
                           "QScrollBar:vertical { width:4px; background:transparent; }"
-                          "QScrollBar::handle:vertical { background:#333; }");
+                          "QScrollBar::handle:vertical { background:%1; }").arg(ui::colors::BORDER_BRIGHT));
 
     blocks_container_ = new QWidget;
     blocks_container_->setStyleSheet("background:transparent;");
@@ -89,17 +92,17 @@ void PortfolioHeatmap::build_ui() {
     dp_layout->setSpacing(2);
 
     detail_symbol_ = new QLabel;
-    detail_symbol_->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700;").arg(ui::colors::CYAN));
+    detail_symbol_->setStyleSheet(QString("color:%1; font-size:14px; font-weight:700;").arg(ui::colors::CYAN));
     dp_layout->addWidget(detail_symbol_);
 
     auto add_detail_row = [&](QLabel*& lbl, const QString& prefix) {
         auto* row = new QHBoxLayout;
         auto* lab = new QLabel(prefix);
-        lab->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
+        lab->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_TERTIARY));
         row->addWidget(lab);
         lbl = new QLabel("--");
         lbl->setAlignment(Qt::AlignRight);
-        lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY));
+        lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_PRIMARY));
         row->addWidget(lbl);
         dp_layout->addLayout(row);
     };
@@ -118,42 +121,42 @@ void PortfolioHeatmap::build_ui() {
     // Risk gauge
     auto* risk_header = new QLabel("RISK SCORE");
     risk_header->setStyleSheet(
-        QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color:%1; font-size:8px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY));
     layout->addWidget(risk_header);
 
     risk_bar_ = new QWidget;
-    risk_bar_->setFixedHeight(8);
-    risk_bar_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    risk_bar_->setFixedHeight(10);
+    risk_bar_->setStyleSheet(QString("background:%1; border-radius:2px;").arg(ui::colors::BG_BASE));
     layout->addWidget(risk_bar_);
 
     risk_value_ = new QLabel("--");
     risk_value_->setAlignment(Qt::AlignCenter);
-    risk_value_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY));
+    risk_value_->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY));
     layout->addWidget(risk_value_);
 
     // Top movers
     auto* movers_header = new QLabel("TOP MOVERS");
     movers_header->setStyleSheet(
-        QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color:%1; font-size:8px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY));
     layout->addWidget(movers_header);
 
     top_gainer_ = new QLabel;
-    top_gainer_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE));
+    top_gainer_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::POSITIVE));
     layout->addWidget(top_gainer_);
 
     top_loser_ = new QLabel;
-    top_loser_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
+    top_loser_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::NEGATIVE));
     layout->addWidget(top_loser_);
 
     // Quick stats
     auto add_stat = [&](QLabel*& lbl, const QString& prefix) {
         auto* row = new QHBoxLayout;
         auto* lab = new QLabel(prefix);
-        lab->setStyleSheet(QString("color:%1; font-size:8px;").arg(ui::colors::TEXT_TERTIARY));
+        lab->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_TERTIARY));
         row->addWidget(lab);
         lbl = new QLabel("--");
         lbl->setAlignment(Qt::AlignRight);
-        lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_SECONDARY));
+        lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY));
         row->addWidget(lbl);
         layout->addLayout(row);
     };
@@ -259,13 +262,13 @@ void PortfolioHeatmap::rebuild_blocks() {
                                         : QString("border:1px solid %1;").arg(ui::colors::BORDER_DIM);
 
         block->setStyleSheet(QString("QPushButton { background:rgb(%1,%2,%3); %4"
-                                     "  text-align:left; padding:4px 6px;"
-                                     "  color:#ffffff; font-size:9px; font-weight:700; }"
+                                     "  text-align:left; padding:4px 6px; border-radius:2px;"
+                                     "  color:%6; font-size:10px; font-weight:700; }"
                                      "QPushButton:hover { border-color:%5; }")
                                  .arg(bg.red())
                                  .arg(bg.green())
                                  .arg(bg.blue())
-                                 .arg(border_style, ui::colors::AMBER));
+                                 .arg(border_style, ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
 
         // Content
         double chg_val = mode_ == portfolio::HeatmapMode::DayChange ? h.day_change_percent
@@ -372,6 +375,17 @@ void PortfolioHeatmap::update_top_movers() {
                             .arg(worst->symbol)
                             .arg(worst->day_change_percent >= 0 ? "+" : "")
                             .arg(QString::number(worst->day_change_percent, 'f', 2)));
+}
+
+void PortfolioHeatmap::refresh_theme() {
+    setStyleSheet(
+        QString("background:%1; border-right:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+
+    detail_panel_->setStyleSheet(
+        QString("background:%1; border:1px solid %2; padding:4px;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+
+    // Rebuild blocks picks up new theme colors for borders/text
+    rebuild_blocks();
 }
 
 } // namespace fincept::screens

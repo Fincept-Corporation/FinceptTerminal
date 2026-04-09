@@ -13,6 +13,9 @@
 #include "services/workflow/nodes/TradingNodes.h"
 #include "services/workflow/nodes/TriggerNodes.h"
 #include "services/workflow/nodes/UtilityNodes.h"
+#include "services/workflow/ExpressionEngine.h"
+
+#include <QRegularExpression>
 
 namespace fincept::workflow {
 
@@ -176,10 +179,80 @@ void NodeRegistry::register_builtin_nodes() {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                // Placeholder: always takes the true branch
-                Q_UNUSED(params);
                 auto data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
-                cb(true, data, {});
+                QString cond_str = params.value("condition").toString().trimmed();
+
+                bool result = false;
+
+                if (cond_str.isEmpty()) {
+                    // No condition — evaluate truthiness of input
+                    if (data.isBool())
+                        result = data.toBool();
+                    else if (data.isDouble())
+                        result = data.toDouble() != 0.0;
+                    else if (data.isString())
+                        result = !data.toString().isEmpty();
+                    else if (data.isObject() || data.isArray())
+                        result = true;
+                } else {
+                    // Strip ={{ }} wrapper if present
+                    QString expr = cond_str;
+                    if (expr.startsWith("={{") && expr.endsWith("}}"))
+                        expr = expr.mid(3, expr.length() - 5).trimmed();
+
+                    // Build context from input data
+                    QJsonObject context;
+                    if (data.isObject())
+                        context = data.toObject();
+                    else
+                        context["value"] = data;
+
+                    // Parse simple comparisons: field op value
+                    // Supported: >, <, >=, <=, ==, !=
+                    static QRegularExpression cmp_re(
+                        R"(^\s*(\$?[\w.]+)\s*(>=|<=|!=|==|>|<)\s*(.+)\s*$)");
+                    auto match = cmp_re.match(expr);
+
+                    if (match.hasMatch()) {
+                        QString lhs_path = match.captured(1).trimmed();
+                        QString op = match.captured(2);
+                        QString rhs_str = match.captured(3).trimmed();
+
+                        // Resolve LHS from context
+                        QJsonValue lhs_val = ExpressionEngine::evaluate(
+                            QJsonValue("={{" + lhs_path + "}}"), context);
+                        double lhs = lhs_val.toDouble(0);
+                        double rhs = rhs_str.toDouble();
+
+                        if (op == ">")       result = lhs > rhs;
+                        else if (op == "<")  result = lhs < rhs;
+                        else if (op == ">=") result = lhs >= rhs;
+                        else if (op == "<=") result = lhs <= rhs;
+                        else if (op == "==") result = lhs == rhs;
+                        else if (op == "!=") result = lhs != rhs;
+                    } else {
+                        // Single value expression — resolve and check truthiness
+                        QJsonValue val = ExpressionEngine::evaluate(
+                            QJsonValue("={{" + expr + "}}"), context);
+                        if (val.isBool())
+                            result = val.toBool();
+                        else if (val.isDouble())
+                            result = val.toDouble() != 0.0;
+                        else if (val.isString())
+                            result = !val.toString().isEmpty() && val.toString() != "false";
+                        else
+                            result = !val.isNull() && !val.isUndefined();
+                    }
+                }
+
+                // Annotate the output with the branch taken
+                QJsonObject out;
+                if (data.isObject())
+                    out = data.toObject();
+                else
+                    out["value"] = data;
+                out["_branch"] = result ? "true" : "false";
+                cb(true, out, {});
             },
     });
 

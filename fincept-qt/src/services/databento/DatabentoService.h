@@ -11,6 +11,7 @@
 #include <QString>
 
 #include <string>
+#include <vector>
 
 namespace fincept {
 
@@ -37,6 +38,18 @@ struct DatabentoFuturesResult {
     surface::ContangoData contango;
 };
 
+// Generic surface result — carries any strike×expiry or row×col surface
+struct DatabentoSurfaceResult {
+    bool success = false;
+    QString error;
+    QString type; // e.g. "local_vol", "liquidity", "implied_dividend", etc.
+    std::vector<float> x_axis;              // strikes or row labels (numeric)
+    std::vector<int> y_axis;                // expirations or col labels
+    std::vector<std::string> x_labels;      // string labels (if non-numeric)
+    std::vector<std::string> y_labels;      // string labels (if non-numeric)
+    std::vector<std::vector<float>> z;
+};
+
 class DatabentoService : public QObject {
     Q_OBJECT
   public:
@@ -60,6 +73,18 @@ class DatabentoService : public QObject {
     // Fetch futures term structure → commodity forwards + contango
     void fetch_futures_term_structure(const QStringList& commodities);
 
+    // ── Extended surface fetches ──────────────────────────────────────────
+    void fetch_local_vol(const QString& symbol, float spot);
+    void fetch_implied_dividend(const QString& symbol, float spot);
+    void fetch_liquidity(const QString& symbol, float spot);
+    void fetch_commodity_vol(const QString& root_symbol);
+    void fetch_crack_spread();
+    void fetch_stress_test(const QStringList& symbols);
+    void fetch_yield_curve();
+    void fetch_forward_rate();
+    void fetch_rate_path();
+    void fetch_fx_forward_points();
+
     // Cache access (returns last fetched data, empty if never fetched)
     const DatabentoOhlcvResult& last_ohlcv() const { return cached_ohlcv_; }
     const DatabentoVolSurfaceResult& last_vol() const { return cached_vol_; }
@@ -71,6 +96,7 @@ class DatabentoService : public QObject {
     void ohlcv_ready(const DatabentoOhlcvResult& result);
     void vol_surface_ready(const DatabentoVolSurfaceResult& result);
     void futures_ready(const DatabentoFuturesResult& result);
+    void surface_ready(const DatabentoSurfaceResult& result);
     void fetch_started(const QString& description);
     void fetch_failed(const QString& error);
 

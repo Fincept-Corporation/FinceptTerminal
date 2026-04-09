@@ -16,7 +16,7 @@ namespace fincept::screens {
 
 /// Full-featured settings screen.
 /// Sections: Credentials | Appearance | Notifications | Storage & Cache |
-///           Data Sources | LLM Config | MCP Servers | Logging
+///           Data Sources | LLM Config | MCP Servers | Logging | Security | Profiles
 class SettingsScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
@@ -42,6 +42,7 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
     QWidget* build_llm_config();
     QWidget* build_mcp_servers();
     QWidget* build_logging();
+    QWidget* build_security();
     QWidget* build_profiles();
 
     // ── Shared layout helper ──────────────────────────────────────────────────
@@ -60,8 +61,6 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
     QCheckBox*   chat_bubble_toggle_  = nullptr;
     QCheckBox*   ticker_bar_toggle_   = nullptr;
     QCheckBox*   animations_toggle_   = nullptr;
-    QPushButton* accent_color_btn_    = nullptr;
-    QString      custom_accent_color_;
     QTimer*      appearance_debounce_ = nullptr; // coalesces rapid font/density changes
 
     // ── Notifications state ───────────────────────────────────────────────────
@@ -107,11 +106,26 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
     QWidget*     log_tag_list_      = nullptr;   // VBox container for tag rows
     QVBoxLayout* log_tag_layout_    = nullptr;
 
+    // ── Security state ──────────────────────────────────────────────────────────
+    QLabel*      sec_pin_status_     = nullptr;
+    QComboBox*   sec_lock_timeout_   = nullptr;
+    QCheckBox*   sec_autolock_toggle_ = nullptr;
+    QLabel*      sec_lockout_status_ = nullptr;
+    QPushButton* sec_change_pin_btn_ = nullptr;
+    // Change PIN sub-widgets (shown/hidden dynamically)
+    QWidget*     sec_change_pin_form_ = nullptr;
+    QLineEdit*   sec_current_pin_    = nullptr;
+    QLineEdit*   sec_new_pin_        = nullptr;
+    QLineEdit*   sec_confirm_pin_    = nullptr;
+    QLabel*      sec_pin_error_      = nullptr;
+    QLabel*      sec_pin_success_    = nullptr;
+
     // ── Data loaders (called from showEvent) ──────────────────────────────────
     void refresh_theme();
     void load_credentials();
     void load_appearance();
     void load_notifications();
+    void load_security();
     void refresh_storage_stats();
 
     // ── Notification helpers ──────────────────────────────────────────────────

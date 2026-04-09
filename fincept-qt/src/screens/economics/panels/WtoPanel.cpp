@@ -22,6 +22,7 @@
 
 #include "core/logging/Logger.h"
 #include "services/economics/EconomicsService.h"
+#include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
 #include <QJsonArray>
@@ -67,10 +68,9 @@ void WtoPanel::activate() {
 // ── Controls ──────────────────────────────────────────────────────────────────
 
 void WtoPanel::build_controls(QHBoxLayout* thl) {
-    auto make_lbl = [](const QString& text) {
+    auto make_lbl = [this](const QString& text) {
         auto* l = new QLabel(text);
-        l->setStyleSheet(
-            "color:#525252; font-size:9px; font-weight:700; background:transparent;");
+        l->setStyleSheet(ctrl_label_style());
         return l;
     };
 
@@ -102,8 +102,7 @@ void WtoPanel::build_controls(QHBoxLayout* thl) {
     years_input_->setFixedWidth(110);
 
     apikey_notice_ = new QLabel("Requires WTO_API_KEY");
-    apikey_notice_->setStyleSheet(
-        "color:#f59e0b; font-size:9px; background:transparent;");
+    apikey_notice_->setStyleSheet(notice_style());
 
     thl->addWidget(make_lbl("SECTION"));
     thl->addWidget(section_combo_);
@@ -123,13 +122,13 @@ void WtoPanel::on_section_changed(int index) {
 
     if (is_timeseries) {
         apikey_notice_->setText("Requires WTO_API_KEY");
-        apikey_notice_->setStyleSheet(
-            "color:#f59e0b; font-size:9px; background:transparent;");
+        apikey_notice_->setStyleSheet(notice_style());
         reporter_input_->setPlaceholderText("Reporter (e.g. US, CN, DE)");
     } else {
         apikey_notice_->setText("Free — no API key");
         apikey_notice_->setStyleSheet(
-            "color:#16a34a; font-size:9px; background:transparent;");
+            QString("color:%1; font-size:9px; background:transparent;")
+                .arg(ui::colors::POSITIVE()));
         reporter_input_->setPlaceholderText("Member code (e.g. US, CN)");
     }
 }

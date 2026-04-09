@@ -14,63 +14,91 @@ namespace fincept::screens {
 
 // ── Obsidian Design System Styles ────────────────────────────────────────────
 
-static const char* CARD_STYLE = "background: #0a0a0a;"
-                                "border: 1px solid #1a1a1a;";
+static QString card_style() {
+    return QString("background: %1; border: 1px solid %2;")
+        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM);
+}
 
-static const char* INPUT_STYLE = "QLineEdit {"
-                                 "  background: #0a0a0a; color: #e5e5e5;"
-                                 "  border: 1px solid #1a1a1a;"
-                                 "  padding: 6px 10px; font-size: 15px;"
-                                 "  font-family: 'Consolas','Courier New',monospace;"
-                                 "  selection-background-color: #d97706; selection-color: #080808;"
-                                 "}"
-                                 "QLineEdit:focus { border: 1px solid #333333; }"
-                                 "QLineEdit::placeholder { color: #404040; }";
+static QString input_style() {
+    return QString("QLineEdit {"
+                   "  background: %1; color: %2;"
+                   "  border: 1px solid %3;"
+                   "  padding: 6px 10px; font-size: 15px;"
+                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  selection-background-color: %4; selection-color: %5;"
+                   "}"
+                   "QLineEdit:focus { border: 1px solid %6; }"
+                   "QLineEdit::placeholder { color: %7; }")
+        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
+             ui::colors::AMBER, ui::colors::BG_BASE,
+             ui::colors::BORDER_BRIGHT, ui::colors::TEXT_DIM);
+}
 
-static const char* BTN_PRIMARY = "QPushButton {"
-                                 "  background: rgba(217,119,6,0.1); color: #d97706;"
-                                 "  border: 1px solid #78350f;"
-                                 "  padding: 0 16px; font-size: 14px; font-weight: 700;"
-                                 "  font-family: 'Consolas','Courier New',monospace;"
-                                 "}"
-                                 "QPushButton:hover { background: #d97706; color: #080808; }"
-                                 "QPushButton:disabled { color: #404040; background: #111111; border-color: #1a1a1a; }";
+static QString btn_primary() {
+    return QString("QPushButton {"
+                   "  background: rgba(217,119,6,0.1); color: %1;"
+                   "  border: 1px solid %2;"
+                   "  padding: 0 16px; font-size: 14px; font-weight: 700;"
+                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "}"
+                   "QPushButton:hover { background: %1; color: %3; }"
+                   "QPushButton:disabled { color: %4; background: %5; border-color: %6; }")
+        .arg(ui::colors::AMBER, ui::colors::AMBER_DIM, ui::colors::BG_BASE,
+             ui::colors::TEXT_DIM, ui::colors::BG_RAISED, ui::colors::BORDER_DIM);
+}
 
-static const char* BTN_STANDARD = "QPushButton {"
-                                  "  background: #111111; color: #808080;"
-                                  "  border: 1px solid #1a1a1a;"
-                                  "  padding: 0 12px; font-size: 14px; font-weight: 700;"
-                                  "  font-family: 'Consolas','Courier New',monospace;"
-                                  "}"
-                                  "QPushButton:hover { color: #e5e5e5; background: #161616; }";
+static QString btn_standard() {
+    return QString("QPushButton {"
+                   "  background: %1; color: %2;"
+                   "  border: 1px solid %3;"
+                   "  padding: 0 12px; font-size: 14px; font-weight: 700;"
+                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "}"
+                   "QPushButton:hover { color: %4; background: %5; }")
+        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM,
+             ui::colors::TEXT_PRIMARY, ui::colors::BG_HOVER);
+}
 
-static const char* BTN_DANGER = "QPushButton {"
-                                "  background: rgba(220,38,38,0.1); color: #dc2626;"
-                                "  border: 1px solid #7f1d1d;"
-                                "  padding: 0 16px; font-size: 14px; font-weight: 700;"
-                                "  font-family: 'Consolas','Courier New',monospace;"
-                                "}"
-                                "QPushButton:hover { background: #dc2626; color: #e5e5e5; }"
-                                "QPushButton:disabled { color: #404040; background: #111111; border-color: #1a1a1a; }";
+static QString btn_danger() {
+    return QString("QPushButton {"
+                   "  background: rgba(220,38,38,0.1); color: %1;"
+                   "  border: 1px solid #7f1d1d;"
+                   "  padding: 0 16px; font-size: 14px; font-weight: 700;"
+                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "}"
+                   "QPushButton:hover { background: %1; color: %2; }"
+                   "QPushButton:disabled { color: %3; background: %4; border-color: %5; }")
+        .arg(ui::colors::NEGATIVE, ui::colors::TEXT_PRIMARY,
+             ui::colors::TEXT_DIM, ui::colors::BG_RAISED, ui::colors::BORDER_DIM);
+}
 
-static const char* LINK_STYLE = "QPushButton {"
-                                "  color: #808080; background: transparent; border: none;"
-                                "  font-size: 13px; font-weight: 400;"
-                                "  font-family: 'Consolas','Courier New',monospace;"
-                                "}"
-                                "QPushButton:hover { color: #e5e5e5; }";
+static QString link_style() {
+    return QString("QPushButton {"
+                   "  color: %1; background: transparent; border: none;"
+                   "  font-size: 13px; font-weight: 400;"
+                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "}"
+                   "QPushButton:hover { color: %2; }")
+        .arg(ui::colors::TEXT_SECONDARY, ui::colors::TEXT_PRIMARY);
+}
 
-static const char* LABEL_STYLE = "color: #808080; font-size: 13px; font-weight: 700;"
-                                 "background: transparent; letter-spacing: 0.5px;"
-                                 "font-family: 'Consolas','Courier New',monospace;";
+static QString label_style() {
+    return QString("color: %1; font-size: 13px; font-weight: 700;"
+                   "background: transparent; letter-spacing: 0.5px;"
+                   "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::TEXT_SECONDARY);
+}
 
-static const char* MUTED_STYLE = "color: #525252; font-size: 13px; background: transparent;"
-                                 "font-family: 'Consolas','Courier New',monospace;";
+static QString muted_style() {
+    return QString("color: %1; font-size: 13px; background: transparent;"
+                   "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::TEXT_TERTIARY);
+}
 
 static QFrame* make_separator() {
     auto* sep = new QFrame;
     sep->setFixedHeight(1);
-    sep->setStyleSheet("background: #1a1a1a; border: none;");
+    sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_DIM));
     return sep;
 }
 
@@ -108,9 +136,9 @@ LoginScreen::LoginScreen(QWidget* parent) : QWidget(parent) {
 
 void LoginScreen::paintEvent(QPaintEvent* /*event*/) {
     QPainter p(this);
-    p.fillRect(rect(), QColor(0x08, 0x08, 0x08));
+    p.fillRect(rect(), QColor(ui::colors::BG_BASE()));
 
-    p.setPen(QPen(QColor(0x12, 0x12, 0x12), 1));
+    p.setPen(QPen(QColor(ui::colors::BG_RAISED()), 1));
     const int step = 24;
     for (int x = 0; x < width(); x += step)
         p.drawLine(x, 0, x, height());
@@ -119,7 +147,7 @@ void LoginScreen::paintEvent(QPaintEvent* /*event*/) {
 
     int cx = width() / 2;
     int cy = height() / 2;
-    p.setPen(QPen(QColor(0x1a, 0x1a, 0x1a), 1));
+    p.setPen(QPen(QColor(ui::colors::BORDER_DIM()), 1));
     p.drawLine(cx - 60, cy, cx + 60, cy);
     p.drawLine(cx, cy - 60, cx, cy + 60);
 }
@@ -128,7 +156,7 @@ void LoginScreen::paintEvent(QPaintEvent* /*event*/) {
 
 void LoginScreen::build_login_page() {
     auto* page = new QWidget;
-    page->setStyleSheet(CARD_STYLE);
+    page->setStyleSheet(card_style());
 
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(28, 22, 28, 22);
@@ -137,44 +165,46 @@ void LoginScreen::build_login_page() {
     // Header bar
     auto* header = new QWidget;
     header->setFixedHeight(38);
-    header->setStyleSheet("background: #111111; border: none;");
+    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
     auto* title = new QLabel("SIGN IN");
-    title->setStyleSheet("color: #d97706; font-size: 14px; font-weight: 700;"
+    title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
                          "background: transparent; letter-spacing: 1px;"
-                         "font-family: 'Consolas','Courier New',monospace;");
+                         "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::AMBER));
     hl->addWidget(title);
     hl->addStretch();
 
     auto* brand = new QLabel("FINCEPT");
-    brand->setStyleSheet("color: #404040; font-size: 12px; font-weight: 700;"
+    brand->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
                          "background: transparent; letter-spacing: 0.5px;"
-                         "font-family: 'Consolas','Courier New',monospace;");
+                         "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::TEXT_DIM));
     hl->addWidget(brand);
     vl->addWidget(header);
 
     auto* subtitle = new QLabel("Access your terminal account");
-    subtitle->setStyleSheet(MUTED_STYLE);
+    subtitle->setStyleSheet(muted_style());
     vl->addWidget(subtitle);
 
     vl->addWidget(make_separator());
 
     // Email
     auto* email_lbl = new QLabel("EMAIL");
-    email_lbl->setStyleSheet(LABEL_STYLE);
+    email_lbl->setStyleSheet(label_style());
     vl->addWidget(email_lbl);
 
     email_input_ = new QLineEdit;
     email_input_->setPlaceholderText("user@domain.com");
     email_input_->setFixedHeight(34);
-    email_input_->setStyleSheet(INPUT_STYLE);
+    email_input_->setStyleSheet(input_style());
     vl->addWidget(email_input_);
 
     // Password
     auto* pw_lbl = new QLabel("PASSWORD");
-    pw_lbl->setStyleSheet(LABEL_STYLE);
+    pw_lbl->setStyleSheet(label_style());
     vl->addWidget(pw_lbl);
 
     auto* pw_row = new QWidget;
@@ -187,12 +217,12 @@ void LoginScreen::build_login_page() {
     password_input_->setPlaceholderText("enter password");
     password_input_->setEchoMode(QLineEdit::Password);
     password_input_->setFixedHeight(34);
-    password_input_->setStyleSheet(INPUT_STYLE);
+    password_input_->setStyleSheet(input_style());
     prl->addWidget(password_input_);
 
     show_pw_btn_ = new QPushButton("SHOW");
     show_pw_btn_->setFixedSize(58, 34);
-    show_pw_btn_->setStyleSheet(BTN_STANDARD);
+    show_pw_btn_->setStyleSheet(btn_standard());
     connect(show_pw_btn_, &QPushButton::clicked, this, [this]() {
         bool hidden = password_input_->echoMode() == QLineEdit::Password;
         password_input_->setEchoMode(hidden ? QLineEdit::Normal : QLineEdit::Password);
@@ -204,10 +234,11 @@ void LoginScreen::build_login_page() {
     // Error
     error_label_ = new QLabel;
     error_label_->setWordWrap(true);
-    error_label_->setStyleSheet("color: #dc2626; font-size: 13px;"
+    error_label_->setStyleSheet(QString("color: %1; font-size: 13px;"
                                 "background: rgba(220,38,38,0.08);"
                                 "border: 1px solid #7f1d1d; padding: 6px 8px;"
-                                "font-family: 'Consolas','Courier New',monospace;");
+                                "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::NEGATIVE));
     error_label_->hide();
     vl->addWidget(error_label_);
 
@@ -218,14 +249,14 @@ void LoginScreen::build_login_page() {
     brl->setContentsMargins(0, 0, 0, 0);
 
     auto* forgot_btn = new QPushButton("FORGOT PASSWORD?");
-    forgot_btn->setStyleSheet(LINK_STYLE);
+    forgot_btn->setStyleSheet(link_style());
     connect(forgot_btn, &QPushButton::clicked, this, &LoginScreen::navigate_forgot_password);
     brl->addWidget(forgot_btn);
     brl->addStretch();
 
     login_btn_ = new QPushButton("  SIGN IN  ");
     login_btn_->setFixedHeight(32);
-    login_btn_->setStyleSheet(BTN_PRIMARY);
+    login_btn_->setStyleSheet(btn_primary());
     connect(login_btn_, &QPushButton::clicked, this, &LoginScreen::on_login);
     brl->addWidget(login_btn_);
     vl->addWidget(btn_row);
@@ -240,14 +271,15 @@ void LoginScreen::build_login_page() {
     rrl->setAlignment(Qt::AlignCenter);
 
     auto* no_acct = new QLabel("No account?");
-    no_acct->setStyleSheet(MUTED_STYLE);
+    no_acct->setStyleSheet(muted_style());
     rrl->addWidget(no_acct);
 
     auto* signup_btn = new QPushButton("SIGN UP");
-    signup_btn->setStyleSheet("QPushButton { color: #d97706; background: transparent; border: none;"
+    signup_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none;"
                               "  font-size: 13px; font-weight: 700;"
                               "  font-family: 'Consolas','Courier New',monospace; }"
-                              "QPushButton:hover { color: #e5e5e5; }");
+                              "QPushButton:hover { color: %2; }")
+        .arg(ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
     connect(signup_btn, &QPushButton::clicked, this, &LoginScreen::navigate_register);
     rrl->addWidget(signup_btn);
     vl->addWidget(reg_row);
@@ -262,7 +294,7 @@ void LoginScreen::build_login_page() {
 
 void LoginScreen::build_mfa_page() {
     mfa_page_ = new QWidget;
-    mfa_page_->setStyleSheet(CARD_STYLE);
+    mfa_page_->setStyleSheet(card_style());
 
     auto* vl = new QVBoxLayout(mfa_page_);
     vl->setContentsMargins(28, 22, 28, 22);
@@ -270,33 +302,35 @@ void LoginScreen::build_mfa_page() {
 
     auto* header = new QWidget;
     header->setFixedHeight(38);
-    header->setStyleSheet("background: #111111; border: none;");
+    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
     auto* title = new QLabel("TWO-FACTOR AUTH");
-    title->setStyleSheet("color: #d97706; font-size: 14px; font-weight: 700;"
+    title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
                          "background: transparent; letter-spacing: 1px;"
-                         "font-family: 'Consolas','Courier New',monospace;");
+                         "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::AMBER));
     hl->addWidget(title);
     hl->addStretch();
 
     auto* indicator = new QLabel("SECURE");
-    indicator->setStyleSheet("color: #16a34a; font-size: 12px; font-weight: 700;"
+    indicator->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
                              "background: transparent; letter-spacing: 0.5px;"
-                             "font-family: 'Consolas','Courier New',monospace;");
+                             "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::POSITIVE));
     hl->addWidget(indicator);
     vl->addWidget(header);
 
     auto* sub = new QLabel("Enter the 6-digit code from your authenticator");
     sub->setWordWrap(true);
-    sub->setStyleSheet(MUTED_STYLE);
+    sub->setStyleSheet(muted_style());
     vl->addWidget(sub);
 
     vl->addWidget(make_separator());
 
     auto* lbl = new QLabel("VERIFICATION CODE");
-    lbl->setStyleSheet(LABEL_STYLE);
+    lbl->setStyleSheet(label_style());
     vl->addWidget(lbl);
 
     mfa_input_ = new QLineEdit;
@@ -304,33 +338,37 @@ void LoginScreen::build_mfa_page() {
     mfa_input_->setMaxLength(6);
     mfa_input_->setAlignment(Qt::AlignCenter);
     mfa_input_->setFixedHeight(40);
-    mfa_input_->setStyleSheet("QLineEdit {"
-                              "  background: #0a0a0a; color: #e5e5e5;"
-                              "  border: 1px solid #1a1a1a;"
+    mfa_input_->setStyleSheet(QString("QLineEdit {"
+                              "  background: %1; color: %2;"
+                              "  border: 1px solid %3;"
                               "  font-size: 20px; letter-spacing: 10px;"
                               "  font-family: 'Consolas','Courier New',monospace;"
-                              "  selection-background-color: #d97706; selection-color: #080808;"
+                              "  selection-background-color: %4; selection-color: %5;"
                               "}"
-                              "QLineEdit:focus { border: 1px solid #333333; }");
+                              "QLineEdit:focus { border: 1px solid %6; }")
+        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
+             ui::colors::AMBER, ui::colors::BG_BASE,
+             ui::colors::BORDER_BRIGHT));
     vl->addWidget(mfa_input_);
 
     mfa_error_ = new QLabel;
     mfa_error_->setWordWrap(true);
-    mfa_error_->setStyleSheet("color: #dc2626; font-size: 13px;"
+    mfa_error_->setStyleSheet(QString("color: %1; font-size: 13px;"
                               "background: rgba(220,38,38,0.08);"
                               "border: 1px solid #7f1d1d; padding: 6px 8px;"
-                              "font-family: 'Consolas','Courier New',monospace;");
+                              "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::NEGATIVE));
     mfa_error_->hide();
     vl->addWidget(mfa_error_);
 
     mfa_verify_btn_ = new QPushButton("  VERIFY  ");
     mfa_verify_btn_->setFixedHeight(32);
-    mfa_verify_btn_->setStyleSheet(BTN_PRIMARY);
+    mfa_verify_btn_->setStyleSheet(btn_primary());
     connect(mfa_verify_btn_, &QPushButton::clicked, this, &LoginScreen::on_mfa_verify);
     vl->addWidget(mfa_verify_btn_);
 
     auto* back = new QPushButton("BACK TO LOGIN");
-    back->setStyleSheet(LINK_STYLE);
+    back->setStyleSheet(link_style());
     connect(back, &QPushButton::clicked, this, [this]() { pages_->setCurrentIndex(0); });
     vl->addWidget(back, 0, Qt::AlignCenter);
 
@@ -343,7 +381,7 @@ void LoginScreen::build_mfa_page() {
 
 void LoginScreen::build_conflict_page() {
     conflict_page_ = new QWidget;
-    conflict_page_->setStyleSheet(CARD_STYLE);
+    conflict_page_->setStyleSheet(card_style());
 
     auto* vl = new QVBoxLayout(conflict_page_);
     vl->setContentsMargins(28, 22, 28, 22);
@@ -351,41 +389,44 @@ void LoginScreen::build_conflict_page() {
 
     auto* header = new QWidget;
     header->setFixedHeight(38);
-    header->setStyleSheet("background: #111111; border: none;");
+    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
     auto* title = new QLabel("SESSION CONFLICT");
-    title->setStyleSheet("color: #ca8a04; font-size: 14px; font-weight: 700;"
+    title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
                          "background: transparent; letter-spacing: 1px;"
-                         "font-family: 'Consolas','Courier New',monospace;");
+                         "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::WARNING));
     hl->addWidget(title);
     hl->addStretch();
 
     auto* warn = new QLabel("WARNING");
-    warn->setStyleSheet("color: #ca8a04; font-size: 12px; font-weight: 700;"
+    warn->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
                         "background: transparent; letter-spacing: 0.5px;"
-                        "font-family: 'Consolas','Courier New',monospace;");
+                        "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::WARNING));
     hl->addWidget(warn);
     vl->addWidget(header);
 
     conflict_msg_ = new QLabel;
     conflict_msg_->setWordWrap(true);
-    conflict_msg_->setStyleSheet("color: #808080; font-size: 14px; background: transparent;"
-                                 "font-family: 'Consolas','Courier New',monospace;");
+    conflict_msg_->setStyleSheet(QString("color: %1; font-size: 14px; background: transparent;"
+                                 "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::TEXT_SECONDARY));
     vl->addWidget(conflict_msg_);
 
     vl->addWidget(make_separator());
 
     auto* force_btn = new QPushButton("  LOG OUT OTHER SESSION & CONTINUE  ");
     force_btn->setFixedHeight(32);
-    force_btn->setStyleSheet(BTN_DANGER);
+    force_btn->setStyleSheet(btn_danger());
     connect(force_btn, &QPushButton::clicked, this, &LoginScreen::on_force_login);
     vl->addWidget(force_btn);
 
     auto* cancel_btn = new QPushButton("  CANCEL  ");
     cancel_btn->setFixedHeight(32);
-    cancel_btn->setStyleSheet(BTN_STANDARD);
+    cancel_btn->setStyleSheet(btn_standard());
     connect(cancel_btn, &QPushButton::clicked, this, [this]() { pages_->setCurrentIndex(0); });
     vl->addWidget(cancel_btn);
 

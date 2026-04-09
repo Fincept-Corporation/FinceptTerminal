@@ -5,6 +5,7 @@
 #include <QLineEdit>
 #include <QProcess>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QStackedWidget>
 
 #ifdef HAS_QT_MULTIMEDIA
@@ -31,7 +32,11 @@ class VideoPlayerWidget : public BaseWidget {
     void on_ytdlp_finished(int exit_code, QProcess::ExitStatus status);
     void on_ytdlp_error(QProcess::ProcessError error);
 
+  protected:
+    void on_theme_changed() override;
+
   private:
+    void apply_styles();
     void build_channel_list();
     void build_player_view();
     void play_url(const QString& url, const QString& title);
@@ -50,6 +55,20 @@ class VideoPlayerWidget : public BaseWidget {
     QString pending_title_; // title while yt-dlp is resolving
     QString current_url_;   // currently selected stream URL (original, may be YouTube)
     QString current_title_; // title of current stream for refresh
+
+    // Widgets needing theme-aware restyling
+    QScrollArea* scroll_ = nullptr;
+    QLabel* channel_header_ = nullptr;
+    QVector<QPushButton*> channel_rows_;
+    QVector<QLabel*> channel_name_labels_;
+    QVector<QLabel*> channel_desc_labels_;
+    QLabel* channel_sep_ = nullptr;
+    QLabel* custom_header_ = nullptr;
+    QPushButton* play_btn_ = nullptr;
+    QLabel* helper_label_ = nullptr;
+    QLabel* status_label_placeholder_ = nullptr; // #ifndef HAS_QT_MULTIMEDIA placeholder
+    QWidget* controls_ = nullptr;
+    QPushButton* stop_btn_ = nullptr;
 
 #ifdef HAS_QT_MULTIMEDIA
     QMediaPlayer* player_ = nullptr;

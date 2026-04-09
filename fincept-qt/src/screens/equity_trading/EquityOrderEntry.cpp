@@ -4,6 +4,7 @@
 #include "core/logging/Logger.h"
 #include "screens/equity_trading/EquityTypes.h"
 #include "trading/BrokerRegistry.h"
+#include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
 #include <QMetaObject>
@@ -16,6 +17,8 @@
 #include <cmath>
 
 namespace fincept::screens::equity {
+
+using namespace fincept::ui;
 
 EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     setObjectName("eqOrderEntry");
@@ -38,7 +41,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
 
     mode_label_ = new QLabel("PAPER");
     mode_label_->setObjectName("eqOeMode");
-    mode_label_->setStyleSheet("color: #16a34a;");
+    mode_label_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE));
     h_layout->addWidget(mode_label_);
 
     layout->addWidget(header);
@@ -111,7 +114,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     // Brokerage info
     brokerage_label_ = new QLabel("");
     brokerage_label_->setObjectName("eqOeBrokerage");
-    brokerage_label_->setStyleSheet("color: #525252; font-size: 10px;");
+    brokerage_label_->setStyleSheet(QString("color: %1; font-size: 10px;").arg(colors::TEXT_TERTIARY));
     form->addWidget(brokerage_label_);
 
     form->addSpacing(2);
@@ -325,7 +328,7 @@ void EquityOrderEntry::set_current_price(double price) {
 void EquityOrderEntry::set_mode(bool is_paper) {
     is_paper_ = is_paper;
     mode_label_->setText(is_paper ? "PAPER" : "LIVE");
-    mode_label_->setStyleSheet(QString("color: %1;").arg(is_paper ? "#16a34a" : "#dc2626"));
+    mode_label_->setStyleSheet(QString("color: %1;").arg(is_paper ? colors::POSITIVE() : colors::NEGATIVE()));
     if (is_paper) margin_label_->hide();
 }
 
@@ -348,7 +351,7 @@ void EquityOrderEntry::on_submit() {
     const double qty = qty_edit_->text().toDouble();
     if (qty <= 0) {
         status_label_->setText("Enter a valid quantity");
-        status_label_->setStyleSheet("color: #dc2626;");
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE));
         return;
     }
 
@@ -379,7 +382,7 @@ void EquityOrderEntry::on_submit() {
 
 void EquityOrderEntry::show_order_status(const QString& msg, bool success) {
     status_label_->setText(msg);
-    status_label_->setStyleSheet(success ? "color: #16a34a;" : "color: #dc2626;");
+    status_label_->setStyleSheet(QString("color: %1;").arg(success ? colors::POSITIVE() : colors::NEGATIVE()));
     QTimer::singleShot(5000, status_label_, [this]() { status_label_->clear(); });
 }
 
@@ -455,7 +458,7 @@ void EquityOrderEntry::fetch_margin_async() {
                 const QString sym = currency_symbol(self->current_currency_);
                 self->margin_label_->setText(
                     QString("Margin: %1%2").arg(sym).arg(m.total, 0, 'f', 2));
-                self->margin_label_->setStyleSheet("color: #f59e0b; font-size: 10px;");
+                self->margin_label_->setStyleSheet(QString("color: %1; font-size: 10px;").arg(colors::AMBER));
                 self->margin_label_->show();
             } else {
                 self->margin_label_->hide();

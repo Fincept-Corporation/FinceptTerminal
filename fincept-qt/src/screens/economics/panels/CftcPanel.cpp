@@ -11,6 +11,7 @@
 
 #include "core/logging/Logger.h"
 #include "services/economics/EconomicsService.h"
+#include "ui/theme/Theme.h"
 
 #include <QFrame>
 #include <QGridLayout>
@@ -107,10 +108,9 @@ void CftcPanel::activate() {
 // ── Controls ──────────────────────────────────────────────────────────────────
 
 void CftcPanel::build_controls(QHBoxLayout* thl) {
-    auto make_lbl = [](const QString& text) {
+    auto make_lbl = [this](const QString& text) {
         auto* l = new QLabel(text);
-        l->setStyleSheet(
-            "color:#525252; font-size:9px; font-weight:700; background:transparent;");
+        l->setStyleSheet(ctrl_label_style());
         return l;
     };
 
@@ -143,29 +143,38 @@ void CftcPanel::build_controls(QHBoxLayout* thl) {
 // ── Sentiment widget ──────────────────────────────────────────────────────────
 
 void CftcPanel::build_sentiment_widget() {
+    using namespace ui::colors;
+
+    const auto card_bg = QString("background:%1; border:1px solid %2;")
+        .arg(BG_RAISED(), BORDER_DIM());
+    const auto lbl_ss = QString("color:%1; font-size:9px; font-weight:700;"
+        " letter-spacing:1px; background:transparent;").arg(TEXT_SECONDARY());
+
     sentiment_widget_ = new QWidget;
-    sentiment_widget_->setStyleSheet("background:#080808;");
+    sentiment_widget_->setStyleSheet(QString("background:%1;").arg(BG_BASE()));
     auto* root = new QVBoxLayout(sentiment_widget_);
     root->setContentsMargins(20, 16, 20, 16);
     root->setSpacing(12);
 
     // Header
     auto* hdr = new QWidget;
-    hdr->setStyleSheet("background:#111111; border:1px solid #1a1a1a;");
+    hdr->setStyleSheet(card_bg);
     auto* hdr_hl = new QHBoxLayout(hdr);
     hdr_hl->setContentsMargins(14, 10, 14, 10);
 
     auto* title_lbl = new QLabel("COT MARKET SENTIMENT");
     title_lbl->setStyleSheet(
-        "color:#e5e5e5; font-size:12px; font-weight:700; background:transparent;");
+        QString("color:%1; font-size:12px; font-weight:700; background:transparent;")
+            .arg(TEXT_PRIMARY()));
 
     sent_market_lbl_ = new QLabel("—");
     sent_market_lbl_->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; background:transparent;")
-        .arg(kCftcColor));
+            .arg(color_));
     sent_date_lbl_ = new QLabel("—");
     sent_date_lbl_->setStyleSheet(
-        "color:#525252; font-size:10px; background:transparent;");
+        QString("color:%1; font-size:10px; background:transparent;")
+            .arg(TEXT_TERTIARY()));
 
     hdr_hl->addWidget(title_lbl);
     hdr_hl->addStretch(1);
@@ -182,27 +191,29 @@ void CftcPanel::build_sentiment_widget() {
     auto make_card = [&](const QString& title_text, QLabel*& bias_out,
                          QLabel*& net_out, const QString& desc) {
         auto* card = new QWidget;
-        card->setStyleSheet("background:#111111; border:1px solid #1a1a1a;");
+        card->setStyleSheet(card_bg);
         card->setMinimumHeight(120);
         auto* cvl = new QVBoxLayout(card);
         cvl->setContentsMargins(14, 12, 14, 12);
         cvl->setSpacing(4);
 
         auto* ttl = new QLabel(title_text);
-        ttl->setStyleSheet(
-            "color:#808080; font-size:9px; font-weight:700; letter-spacing:1px;"
-            "background:transparent;");
+        ttl->setStyleSheet(lbl_ss);
 
         bias_out = new QLabel("—");
         bias_out->setStyleSheet(
-            "color:#e5e5e5; font-size:18px; font-weight:700; background:transparent;");
+            QString("color:%1; font-size:18px; font-weight:700; background:transparent;")
+                .arg(TEXT_PRIMARY()));
 
         net_out = new QLabel("Net: —");
         net_out->setStyleSheet(
-            "color:#525252; font-size:10px; background:transparent;");
+            QString("color:%1; font-size:10px; background:transparent;")
+                .arg(TEXT_TERTIARY()));
 
         auto* d = new QLabel(desc);
-        d->setStyleSheet("color:#404040; font-size:9px; background:transparent;");
+        d->setStyleSheet(
+            QString("color:%1; font-size:9px; background:transparent;")
+                .arg(TEXT_DIM()));
         d->setWordWrap(true);
 
         cvl->addWidget(ttl);
@@ -220,24 +231,24 @@ void CftcPanel::build_sentiment_widget() {
 
     // OI & trend row
     auto* oi_row = new QWidget;
-    oi_row->setStyleSheet("background:#111111; border:1px solid #1a1a1a;");
+    oi_row->setStyleSheet(card_bg);
     auto* oi_hl = new QHBoxLayout(oi_row);
     oi_hl->setContentsMargins(14, 8, 14, 8);
     oi_hl->setSpacing(20);
 
     auto* oi_lbl = new QLabel("OPEN INTEREST");
-    oi_lbl->setStyleSheet(
-        "color:#808080; font-size:9px; font-weight:700; background:transparent;");
+    oi_lbl->setStyleSheet(lbl_ss);
     sent_oi_lbl_ = new QLabel("—");
     sent_oi_lbl_->setStyleSheet(
-        "color:#e5e5e5; font-size:13px; font-weight:700; background:transparent;");
+        QString("color:%1; font-size:13px; font-weight:700; background:transparent;")
+            .arg(TEXT_PRIMARY()));
 
     auto* trend_lbl = new QLabel("OI TREND");
-    trend_lbl->setStyleSheet(
-        "color:#808080; font-size:9px; font-weight:700; background:transparent;");
+    trend_lbl->setStyleSheet(lbl_ss);
     sent_oi_trend_ = new QLabel("—");
     sent_oi_trend_->setStyleSheet(
-        "color:#e5e5e5; font-size:13px; font-weight:700; background:transparent;");
+        QString("color:%1; font-size:13px; font-weight:700; background:transparent;")
+            .arg(TEXT_PRIMARY()));
 
     oi_hl->addWidget(oi_lbl);
     oi_hl->addWidget(sent_oi_lbl_);
@@ -366,25 +377,26 @@ void CftcPanel::show_sentiment(const QJsonObject& s) {
     const double oi = s["open_interest"].toDouble();
     sent_oi_lbl_->setText(oi > 0 ? QString::number(static_cast<qint64>(oi)) : "—");
 
+    using namespace ui::colors;
     const QString oi_trend = s["overall_sentiment"].toObject()["oi_trend"].toString();
     sent_oi_trend_->setText(oi_trend.isEmpty() ? "—" : oi_trend.toUpper());
     sent_oi_trend_->setStyleSheet(
         QString("color:%1; font-size:13px; font-weight:700; background:transparent;")
-        .arg(oi_trend == "increasing" ? "#16a34a" : "#dc2626"));
+        .arg(oi_trend == "increasing" ? POSITIVE() : NEGATIVE()));
 
     const QString comm_bias =
         s["overall_sentiment"].toObject()["commercial_bias"].toString();
     sent_comm_bias_->setText(comm_bias.isEmpty() ? "—" : comm_bias.toUpper());
     sent_comm_bias_->setStyleSheet(
         QString("color:%1; font-size:18px; font-weight:700; background:transparent;")
-        .arg(comm_bias == "bullish" ? "#16a34a" : "#dc2626"));
+        .arg(comm_bias == "bullish" ? POSITIVE() : NEGATIVE()));
 
     const QString noncomm_bias =
         s["overall_sentiment"].toObject()["non_commercial_bias"].toString();
     sent_noncomm_bias_->setText(noncomm_bias.isEmpty() ? "—" : noncomm_bias.toUpper());
     sent_noncomm_bias_->setStyleSheet(
         QString("color:%1; font-size:18px; font-weight:700; background:transparent;")
-        .arg(noncomm_bias == "bullish" ? "#16a34a" : "#dc2626"));
+        .arg(noncomm_bias == "bullish" ? POSITIVE() : NEGATIVE()));
 
     const QJsonObject comm = s["commercial_positions"].toObject();
     const double comm_net = comm["net"].toDouble();

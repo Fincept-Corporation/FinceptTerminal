@@ -1,6 +1,7 @@
 #include "screens/quantlib/QuantLibScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "services/quantlib/QuantLibClient.h"
 #include "ui/theme/Theme.h"
 
@@ -459,6 +460,7 @@ void QuantLibScreen::on_module_changed(int index) {
 
     populate_panels(index);
     LOG_INFO("QuantLib", "Module: " + m.name);
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 void QuantLibScreen::on_panel_changed(QListWidgetItem* item) {
@@ -466,6 +468,7 @@ void QuantLibScreen::on_panel_changed(QListWidgetItem* item) {
         return;
     active_panel_ = item->text();
     status_panel_->setText(active_panel_);
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 void QuantLibScreen::on_endpoint_changed(int index) {
@@ -1327,6 +1330,34 @@ void QuantLibScreen::set_loading(bool loading) {
     loading_ = loading;
     exec_btn_->setEnabled(!loading);
     exec_btn_->setText(loading ? "COMPUTING..." : "EXECUTE COMPUTATION");
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap QuantLibScreen::save_state() const {
+    return {
+        {"module", active_module_},
+        {"panel",  active_panel_},
+    };
+}
+
+void QuantLibScreen::restore_state(const QVariantMap& state) {
+    const int mod = state.value("module", 0).toInt();
+    if (mod != active_module_)
+        on_module_changed(mod);
+
+    const QString panel = state.value("panel").toString();
+    if (!panel.isEmpty() && module_tree_) {
+        // Find matching item in the tree and select it
+        auto items = module_tree_->findItems(panel, Qt::MatchExactly | Qt::MatchRecursive);
+        if (!items.isEmpty()) {
+            module_tree_->setCurrentItem(items.first());
+            // on_panel_changed expects QListWidgetItem* — extract text directly
+            active_panel_ = items.first()->text(0);
+            status_panel_->setText(active_panel_);
+            ScreenStateManager::instance().notify_changed(this);
+        }
+    }
 }
 
 } // namespace fincept::screens

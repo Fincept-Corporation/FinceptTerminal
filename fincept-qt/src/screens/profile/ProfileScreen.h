@@ -77,7 +77,7 @@ class ProfileScreen : public QWidget {
     // Helpers
     QWidget* make_panel(const QString& title);
     QWidget* make_data_row(const QString& label, QLabel*& value_out);
-    QWidget* make_stat_box(const QString& label, QLabel*& value_out, const QString& color = "#0891b2");
+    QWidget* make_stat_box(const QString& label, QLabel*& value_out, const QString& color);
 
     void show_edit_profile_dialog();
     void show_logout_confirm();

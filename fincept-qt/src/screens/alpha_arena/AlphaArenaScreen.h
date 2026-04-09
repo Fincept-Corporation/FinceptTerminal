@@ -1,5 +1,7 @@
 #pragma once
 
+#include "screens/IStatefulScreen.h"
+
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QJsonArray>
@@ -33,10 +35,15 @@ struct ArenaModelEntry {
 /// Pits multiple LLM agents against each other in crypto or prediction markets.
 /// Features: competition creation, leaderboard, performance charts, AI decisions,
 /// HITL approval, sentiment analysis, portfolio metrics, grid strategies, research.
-class AlphaArenaScreen : public QWidget {
+class AlphaArenaScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit AlphaArenaScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "alpha_arena"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* e) override;

@@ -1,5 +1,7 @@
 // src/screens/portfolio/PortfolioSparkline.h
 #pragma once
+#include "ui/theme/Theme.h"
+
 #include <QColor>
 #include <QPixmap>
 #include <QVector>
@@ -25,7 +27,7 @@ class PortfolioSparkline : public QWidget {
     void rebuild_pixmap();
 
     QVector<double> data_;
-    QColor color_ = QColor("#16a34a");
+    QColor color_ = QColor(ui::colors::POSITIVE());
     QPixmap cached_;
     bool dirty_ = true;
 };

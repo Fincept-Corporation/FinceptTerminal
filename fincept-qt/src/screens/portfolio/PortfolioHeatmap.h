@@ -19,6 +19,7 @@ class PortfolioHeatmap : public QWidget {
     void set_metrics(const portfolio::ComputedMetrics& metrics);
     void set_selected_symbol(const QString& symbol);
     void set_currency(const QString& currency);
+    void refresh_theme();
 
   signals:
     void symbol_selected(QString symbol);

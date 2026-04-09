@@ -60,12 +60,16 @@ class LlmService : public QObject {
     static LlmService& instance();
 
     // Non-streaming (blocking — call from background thread via QtConcurrent::run)
-    LlmResponse chat(const QString& user_message, const std::vector<ConversationMessage>& history);
+    // use_tools: when false, disables MCP tool execution for this request
+    //            (use for the floating bubble to prevent unintended navigation)
+    LlmResponse chat(const QString& user_message, const std::vector<ConversationMessage>& history,
+                      bool use_tools = true);
 
     // Streaming — launches background thread; on_chunk called on that thread.
     // Emit finished_streaming(response) when done to get result on UI thread.
+    // use_tools: when false, disables MCP tool execution for this request
     void chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,
-                        StreamCallback on_chunk);
+                        StreamCallback on_chunk, bool use_tools = true);
 
     // Reload config from DB (call after user changes LLM settings)
     void reload_config();
@@ -77,6 +81,7 @@ class LlmService : public QObject {
     QString active_base_url() const;
     double  active_temperature() const;
     int     active_max_tokens() const;
+    bool    tools_enabled() const;
     bool    is_configured() const;
 
     // ── Profile-aware resolution ──────────────────────────────────────────────
@@ -115,6 +120,7 @@ class LlmService : public QObject {
     mutable double temperature_ = 0.7;
     mutable int max_tokens_ = 4096;
     mutable QString system_prompt_;
+    mutable bool tools_enabled_ = true;
     mutable bool config_loaded_ = false;
 
     void ensure_config() const;
@@ -167,6 +173,17 @@ class LlmService : public QObject {
     };
     static HttpResult blocking_post(const QString& url, const QJsonObject& body, const QMap<QString, QString>& headers,
                                     int timeout_ms = 120000);
+    static HttpResult blocking_get(const QString& url, const QMap<QString, QString>& headers,
+                                   int timeout_ms = 30000);
+
+    // QEventLoop-based HTTP for Cloudflare-protected endpoints (Fincept)
+    static HttpResult eventloop_request(const QString& method, const QString& url,
+                                        const QByteArray& body, const QMap<QString, QString>& headers,
+                                        int timeout_ms = 30000);
+
+    // Fincept async path: POST /research/llm/async → poll /research/llm/status/{id}
+    LlmResponse fincept_async_request(const QString& user_message,
+                                      const std::vector<ConversationMessage>& history);
 };
 
 } // namespace fincept::ai_chat

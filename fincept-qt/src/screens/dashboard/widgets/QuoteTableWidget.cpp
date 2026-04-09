@@ -20,8 +20,17 @@ QuoteTableWidget::QuoteTableWidget(const QString& title, const QStringList& symb
 
     connect(this, &BaseWidget::refresh_requested, this, &QuoteTableWidget::refresh_data);
 
+    apply_styles();
     set_loading(true);
     refresh_data();
+}
+
+void QuoteTableWidget::apply_styles() {
+    // QuoteTableWidget delegates styling to DataTable; nothing extra needed.
+}
+
+void QuoteTableWidget::on_theme_changed() {
+    apply_styles();
 }
 
 void QuoteTableWidget::refresh_data() {

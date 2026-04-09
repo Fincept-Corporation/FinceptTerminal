@@ -1,6 +1,8 @@
 // src/screens/portfolio/PortfolioSparkline.cpp
 #include "screens/portfolio/PortfolioSparkline.h"
 
+#include "ui/theme/Theme.h"
+
 #include <QPainter>
 
 #include <algorithm>
@@ -11,6 +13,10 @@ PortfolioSparkline::PortfolioSparkline(int w, int h, QWidget* parent) : QWidget(
     if (w > 0 && h > 0)
         setFixedSize(w, h);
     setAttribute(Qt::WA_OpaquePaintEvent);
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this]() {
+        dirty_ = true;
+        update();
+    });
 }
 
 void PortfolioSparkline::set_data(const QVector<double>& data) {
@@ -39,7 +45,7 @@ void PortfolioSparkline::resizeEvent(QResizeEvent* event) {
 
 void PortfolioSparkline::rebuild_pixmap() {
     cached_ = QPixmap(size());
-    cached_.fill(QColor("#0d0d0d")); // match BG_BASE
+    cached_.fill(QColor(ui::colors::BG_BASE()));
 
     if (data_.size() < 2) {
         dirty_ = false;

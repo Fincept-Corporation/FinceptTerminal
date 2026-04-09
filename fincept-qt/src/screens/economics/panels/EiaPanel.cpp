@@ -19,6 +19,7 @@
 
 #include "core/logging/Logger.h"
 #include "services/economics/EconomicsService.h"
+#include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
 #include <QJsonArray>
@@ -80,10 +81,9 @@ void EiaPanel::activate() {
 // ── Controls ──────────────────────────────────────────────────────────────────
 
 void EiaPanel::build_controls(QHBoxLayout* thl) {
-    auto make_lbl = [](const QString& text) {
+    auto make_lbl = [this](const QString& text) {
         auto* l = new QLabel(text);
-        l->setStyleSheet(
-            "color:#525252; font-size:9px; font-weight:700; background:transparent;");
+        l->setStyleSheet(ctrl_label_style());
         return l;
     };
 
@@ -105,7 +105,8 @@ void EiaPanel::build_controls(QHBoxLayout* thl) {
 
     apikey_notice_ = new QLabel("No API key needed");
     apikey_notice_->setStyleSheet(
-        "color:#16a34a; font-size:9px; background:transparent;");
+        QString("color:%1; font-size:9px; background:transparent;")
+            .arg(ui::colors::POSITIVE()));
 
     thl->addWidget(make_lbl("SOURCE"));
     thl->addWidget(source_combo_);
@@ -122,14 +123,14 @@ void EiaPanel::on_source_changed(int index) {
             category_combo_->addItem(c.first, c.second);
         apikey_notice_->setText("No API key needed");
         apikey_notice_->setStyleSheet(
-            "color:#16a34a; font-size:9px; background:transparent;");
+            QString("color:%1; font-size:9px; background:transparent;")
+                .arg(ui::colors::POSITIVE()));
     } else {
         // STEO
         for (const auto& t : kSteoTables)
             category_combo_->addItem(t.first, t.second);
         apikey_notice_->setText("Requires EIA_API_KEY");
-        apikey_notice_->setStyleSheet(
-            "color:#f59e0b; font-size:9px; background:transparent;");
+        apikey_notice_->setStyleSheet(notice_style());
     }
 }
 

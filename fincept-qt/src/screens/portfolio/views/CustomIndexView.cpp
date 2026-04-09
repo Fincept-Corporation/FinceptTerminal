@@ -143,10 +143,10 @@ QWidget* CustomIndexView::build_create_panel() {
     create_btn_->setFixedHeight(26);
     create_btn_->setCursor(Qt::PointingHandCursor);
     create_btn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:#000; border:none;"
+        QString("QPushButton { background:%1; color:%3; border:none;"
                 "  padding:0 16px; font-size:10px; font-weight:700; }"
                 "QPushButton:hover { background:%2; }")
-            .arg(ui::colors::AMBER, ui::colors::WARNING));
+            .arg(ui::colors::AMBER, ui::colors::WARNING, ui::colors::BG_BASE));
     connect(create_btn_, &QPushButton::clicked, this, &CustomIndexView::create_index);
     config->addWidget(create_btn_);
 
@@ -210,10 +210,10 @@ QWidget* CustomIndexView::build_index_list_panel() {
     delete_btn_->setFixedHeight(26);
     delete_btn_->setCursor(Qt::PointingHandCursor);
     delete_btn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:#fff; border:none;"
+        QString("QPushButton { background:%1; color:%2; border:none;"
                 "  padding:0 14px; font-size:9px; font-weight:700; }"
-                "QPushButton:hover { background:#dc2626; }")
-            .arg(ui::colors::NEGATIVE));
+                "QPushButton:hover { background:%1; }")
+            .arg(ui::colors::NEGATIVE, ui::colors::TEXT_PRIMARY));
     connect(delete_btn_, &QPushButton::clicked, this, &CustomIndexView::delete_selected_index);
     header_row->addWidget(delete_btn_);
     layout->addLayout(header_row);

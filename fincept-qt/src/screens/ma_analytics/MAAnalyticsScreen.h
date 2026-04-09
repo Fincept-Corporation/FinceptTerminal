@@ -1,5 +1,6 @@
 // src/screens/ma_analytics/MAAnalyticsScreen.h
 #pragma once
+#include "screens/IStatefulScreen.h"
 #include "services/ma_analytics/MAAnalyticsTypes.h"
 
 #include <QHideEvent>
@@ -18,10 +19,15 @@ class MAModulePanel;
 /// Left: module navigation by category (CORE / SPECIALIZED / ANALYTICS)
 /// Center: active module content (stacked widget)
 /// Right: module info & capabilities sidebar
-class MAAnalyticsScreen : public QWidget {
+class MAAnalyticsScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit MAAnalyticsScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "ma_analytics"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -29,6 +35,7 @@ class MAAnalyticsScreen : public QWidget {
 
   private slots:
     void on_module_selected(int index);
+    void refresh_theme();
 
   private:
     void build_ui();
@@ -57,6 +64,19 @@ class MAAnalyticsScreen : public QWidget {
 
     // Top bar quick selector
     QVector<QPushButton*> quick_buttons_;
+
+    // Themed widgets that need refresh
+    QWidget* top_bar_ = nullptr;
+    QWidget* status_bar_ = nullptr;
+    QLabel* brand_label_ = nullptr;
+    QLabel* ready_label_ = nullptr;
+    QLabel* subtitle_label_ = nullptr;
+    QLabel* modules_title_ = nullptr;
+    QLabel* info_title_ = nullptr;
+    QLabel* cap_header_ = nullptr;
+    QLabel* stats_title_ = nullptr;
+    QWidget* stats_card_ = nullptr;
+    QLabel* tips_label_ = nullptr;
 
     bool left_open_ = true;
     bool right_open_ = true;

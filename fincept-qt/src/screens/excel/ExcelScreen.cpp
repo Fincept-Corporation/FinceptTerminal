@@ -2,6 +2,7 @@
 #include "screens/excel/ExcelScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "screens/excel/SpreadsheetWidget.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
@@ -21,7 +22,7 @@ namespace fincept::screens {
 
 using namespace fincept::ui;
 
-static const QString kAccent = "#ea580c"; // Orange accent matching Tauri version
+static QString kAccent() { return QString("#ea580c"); } // Orange accent matching Tauri version
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constructor
@@ -50,7 +51,7 @@ void ExcelScreen::hideEvent(QHideEvent* event) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void ExcelScreen::build_ui() {
-    setStyleSheet(QString("QWidget { background:#000000; color:%1; }").arg(colors::TEXT_PRIMARY));
+    setStyleSheet(QString("QWidget { background:%1; color:%2; }").arg(colors::BG_BASE, colors::TEXT_PRIMARY));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -64,13 +65,16 @@ void ExcelScreen::build_ui() {
     sheet_tabs_->setTabPosition(QTabWidget::South);
     sheet_tabs_->setMovable(true);
     sheet_tabs_->setTabsClosable(false); // We handle close via button
-    sheet_tabs_->setStyleSheet(QString("QTabWidget::pane { border:none; background:#1a1a1a; }"
-                                       "QTabBar { background:#2d2d2d; }"
-                                       "QTabBar::tab { background:#404040; color:#a3a3a3; border:1px solid #525252;"
+    sheet_tabs_->setStyleSheet(QString("QTabWidget::pane { border:none; background:%3; }"
+                                       "QTabBar { background:%4; }"
+                                       "QTabBar::tab { background:%5; color:%6; border:1px solid %7;"
                                        "  padding:4px 14px; font-family:%1; font-size:10px; margin-right:2px; }"
-                                       "QTabBar::tab:selected { background:%2; color:#fff; border-color:%2; }"
-                                       "QTabBar::tab:hover { background:#525252; }")
-                                   .arg(fonts::DATA_FAMILY, kAccent));
+                                       "QTabBar::tab:selected { background:%2; color:%8; border-color:%2; }"
+                                       "QTabBar::tab:hover { background:%7; }")
+                                   .arg(fonts::DATA_FAMILY, kAccent(),
+                                        colors::BG_HOVER, colors::BORDER_MED,
+                                        colors::TEXT_DIM, colors::TEXT_SECONDARY,
+                                        colors::TEXT_TERTIARY, colors::TEXT_PRIMARY));
 
     // Add initial sheet
     auto* sheet1 = new SpreadsheetWidget("Sheet1", 100, 26, sheet_tabs_);
@@ -83,14 +87,16 @@ void ExcelScreen::build_ui() {
     // Status bar
     auto* status_bar = new QWidget(this);
     status_bar->setFixedHeight(24);
-    status_bar->setStyleSheet(QString("background:#1a1a1a; border-top:1px solid #2d2d2d;"));
+    status_bar->setStyleSheet(QString("background:%1; border-top:1px solid %2;")
+                                 .arg(colors::BG_HOVER, colors::BORDER_MED));
 
     auto* status_hl = new QHBoxLayout(status_bar);
     status_hl->setContentsMargins(12, 0, 12, 0);
     status_hl->setSpacing(12);
 
     status_label_ = new QLabel(this);
-    status_label_->setStyleSheet(QString("color:#a3a3a3; font-family:%1; font-size:9px;").arg(fonts::DATA_FAMILY));
+    status_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;")
+                                    .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
     status_hl->addWidget(status_label_);
     status_hl->addStretch();
 
@@ -102,7 +108,8 @@ void ExcelScreen::build_ui() {
 QWidget* ExcelScreen::build_toolbar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(40);
-    bar->setStyleSheet("background:#2d2d2d; border-bottom:1px solid #404040;");
+    bar->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
+                           .arg(colors::BORDER_MED, colors::TEXT_DIM));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(12, 0, 12, 0);
@@ -111,18 +118,19 @@ QWidget* ExcelScreen::build_toolbar() {
     // Title
     auto* title = new QLabel("EXCEL SPREADSHEET", bar);
     title->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px; font-weight:700; margin-right:12px;")
-                             .arg(kAccent, fonts::DATA_FAMILY));
+                             .arg(kAccent(), fonts::DATA_FAMILY));
     hl->addWidget(title);
 
     // Button factory
     auto make_btn = [&](const QString& text, const QString& tooltip = {}) -> QPushButton* {
         auto* btn = new QPushButton(text, bar);
         btn->setToolTip(tooltip);
-        btn->setStyleSheet(QString("QPushButton { background:#404040; color:#fff; border:none;"
+        btn->setStyleSheet(QString("QPushButton { background:%3; color:%4; border:none;"
                                    " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
-                                   "QPushButton:hover { background:#525252; }"
+                                   "QPushButton:hover { background:%5; }"
                                    "QPushButton:pressed { background:%2; }")
-                               .arg(fonts::DATA_FAMILY, kAccent));
+                               .arg(fonts::DATA_FAMILY, kAccent(),
+                                    colors::TEXT_DIM, colors::TEXT_PRIMARY, colors::TEXT_TERTIARY));
         return btn;
     };
 
@@ -141,7 +149,7 @@ QWidget* ExcelScreen::build_toolbar() {
     // Separator
     auto* sep1 = new QWidget(bar);
     sep1->setFixedSize(1, 20);
-    sep1->setStyleSheet("background:#525252;");
+    sep1->setStyleSheet(QString("background:%1;").arg(colors::TEXT_TERTIARY));
     hl->addWidget(sep1);
 
     auto* add_btn = make_btn("+ SHEET", "Add new sheet");
@@ -153,10 +161,10 @@ QWidget* ExcelScreen::build_toolbar() {
     hl->addWidget(rename_btn);
 
     auto* del_btn = make_btn("DELETE", "Delete current sheet");
-    del_btn->setStyleSheet(QString("QPushButton { background:#404040; color:#fff; border:none;"
+    del_btn->setStyleSheet(QString("QPushButton { background:%2; color:%3; border:none;"
                                    " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
-                                   "QPushButton:hover { background:#ef4444; }")
-                               .arg(fonts::DATA_FAMILY));
+                                   "QPushButton:hover { background:%4; }")
+                               .arg(fonts::DATA_FAMILY, colors::TEXT_DIM, colors::TEXT_PRIMARY, colors::NEGATIVE));
     connect(del_btn, &QPushButton::clicked, this, &ExcelScreen::on_delete_sheet);
     hl->addWidget(del_btn);
 
@@ -165,7 +173,8 @@ QWidget* ExcelScreen::build_toolbar() {
     // File name label
     auto* fname_label = new QLabel(file_name_, bar);
     fname_label->setObjectName("excelFileName");
-    fname_label->setStyleSheet(QString("color:#a3a3a3; font-family:%1; font-size:10px;").arg(fonts::DATA_FAMILY));
+    fname_label->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px;")
+                                  .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
     hl->addWidget(fname_label);
 
     return bar;
@@ -395,6 +404,7 @@ void ExcelScreen::on_rename_sheet() {
 void ExcelScreen::on_tab_changed(int index) {
     Q_UNUSED(index);
     update_status();
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -425,6 +435,18 @@ void ExcelScreen::update_status() {
     }
     if (status_label_)
         status_label_->setText(info);
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap ExcelScreen::save_state() const {
+    return {{"tab_index", sheet_tabs_ ? sheet_tabs_->currentIndex() : 0}};
+}
+
+void ExcelScreen::restore_state(const QVariantMap& state) {
+    const int idx = state.value("tab_index", 0).toInt();
+    if (sheet_tabs_ && idx < sheet_tabs_->count())
+        sheet_tabs_->setCurrentIndex(idx);
 }
 
 } // namespace fincept::screens

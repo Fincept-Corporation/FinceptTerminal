@@ -3,6 +3,7 @@
 #include "core/events/EventBus.h"
 #include "network/http/HttpClient.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QApplication>
 #include <QEvent>
@@ -296,6 +297,15 @@ CommandBar::CommandBar(QWidget* parent) : QWidget(parent) {
         if (!now || (now != input_ && !dropdown_->isAncestorOf(now) && now != list_))
             hide_dropdown();
     });
+
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed,
+            this, [this](const ThemeTokens&) { refresh_theme(); });
+}
+
+void CommandBar::refresh_theme() {
+    if (input_)    input_->setStyleSheet(input_ss());
+    if (dropdown_) dropdown_->setStyleSheet(drop_ss());
+    if (list_)     list_->setStyleSheet(list_ss());
 }
 
 // ── event filter (keyboard nav in input) ─────────────────────────────────────
@@ -325,19 +335,39 @@ bool CommandBar::eventFilter(QObject* obj, QEvent* event) {
     case Qt::Key_Tab:
         if (list_->currentItem()) {
             const QString autocomplete = list_->currentItem()->data(Qt::UserRole + 1).toString();
-            input_->setText(autocomplete);
-            // If we just autocompleted a slash type, activate asset mode
             if (mode_ == Mode::SlashPicker) {
+                // Autocomplete slash type and activate asset search
+                input_->setText(autocomplete);
                 for (const auto& at : asset_types_) {
                     if (at.slash == autocomplete) {
                         activate_asset_mode(at.api_type);
-                        // Put cursor after "/type " so user can type the query
                         input_->setText(autocomplete + " ");
                         input_->setCursorPosition(input_->text().length());
                         break;
                     }
                 }
+            } else if (mode_ == Mode::DockSecondary && !dock_primary_id_.isEmpty()
+                       && !dock_verb_.isEmpty()) {
+                // Autocomplete the secondary screen into the full command
+                const QString screen_id = list_->currentItem()->data(Qt::UserRole).toString();
+                if (!screen_id.isEmpty()) {
+                    input_->setText(dock_primary_id_ + " " + dock_verb_ + " " + screen_id);
+                    input_->setCursorPosition(input_->text().length());
+                }
+            } else if (mode_ == Mode::DockCommand && !dock_primary_id_.isEmpty()) {
+                // Autocomplete the verb
+                const QString verb = list_->currentItem()->data(Qt::UserRole).toString();
+                dock_verb_ = verb;
+                if (verb == "remove") {
+                    input_->setText(dock_primary_id_ + " remove");
+                } else {
+                    mode_ = Mode::DockSecondary;
+                    input_->setText(dock_primary_id_ + " " + verb + " ");
+                }
+                input_->setCursorPosition(input_->text().length());
             } else {
+                // Normal screen mode — autocomplete with the alias
+                input_->setText(autocomplete);
                 hide_dropdown();
             }
         }
@@ -595,11 +625,21 @@ void CommandBar::on_return_pressed() {
         return;
     }
 
+    // ── Try compound dock command from typed text in any dock-related mode ──
     if (!dropdown_->isVisible() || !list_->currentItem()) {
+        const QString text = input_->text().trimmed();
+        // Try compound dock command: "X add Y", "X replace Y", "X remove"
+        // Works from Screen, DockCommand, or DockSecondary modes
+        if (mode_ == Mode::Screen || mode_ == Mode::DockCommand
+            || mode_ == Mode::DockSecondary) {
+            if (try_parse_dock_command(text)) {
+                mode_ = Mode::Screen;
+                dock_primary_id_.clear();
+                dock_verb_.clear();
+                return;
+            }
+        }
         if (mode_ == Mode::Screen) {
-            const QString text = input_->text().trimmed();
-            // Try compound dock command first: "X add Y", "X replace Y", "X remove"
-            if (try_parse_dock_command(text)) return;
             // Fall back to simple screen navigation
             const auto results = search(text);
             if (!results.isEmpty()) {
@@ -625,6 +665,39 @@ void CommandBar::on_return_pressed() {
                 return;
             }
         }
+        return;
+    }
+
+    // ── DockCommand: user pressed Enter on a verb suggestion ────────────
+    if (mode_ == Mode::DockCommand) {
+        const QString verb = item->data(Qt::UserRole).toString();
+        const QString primary = item->data(Qt::UserRole + 1).toString();
+        if (verb == "remove") {
+            emit dock_command("remove", primary, {});
+            input_->clear(); mode_ = Mode::Screen;
+            dock_primary_id_.clear(); dock_verb_.clear();
+            hide_dropdown(); input_->clearFocus();
+        } else {
+            // Transition to secondary — append verb to input
+            dock_verb_ = verb;
+            mode_ = Mode::DockSecondary;
+            const QString current = input_->text().trimmed();
+            input_->setText(current.endsWith(' ') ? current + verb + " "
+                                                  : current + " " + verb + " ");
+            input_->setCursorPosition(input_->text().length());
+            input_->setFocus();
+        }
+        return;
+    }
+
+    // ── DockSecondary: user pressed Enter on a secondary screen ─────────
+    if (mode_ == Mode::DockSecondary) {
+        const QString secondary_id = item->data(Qt::UserRole).toString();
+        if (secondary_id.isEmpty()) return; // header row
+        emit dock_command(dock_verb_, dock_primary_id_, secondary_id);
+        input_->clear(); mode_ = Mode::Screen;
+        dock_primary_id_.clear(); dock_verb_.clear();
+        hide_dropdown(); input_->clearFocus();
         return;
     }
 
@@ -1015,8 +1088,8 @@ QString CommandBar::resolve_screen_id(const QString& token) const {
 }
 
 bool CommandBar::try_parse_dock_command(const QString& text) {
-    // Only active in Screen mode — not during asset search or slash picker
-    if (mode_ != Mode::Screen) return false;
+    // Not active during asset search or slash picker
+    if (mode_ == Mode::AssetSearch || mode_ == Mode::SlashPicker) return false;
 
     const QString t = text.trimmed();
 

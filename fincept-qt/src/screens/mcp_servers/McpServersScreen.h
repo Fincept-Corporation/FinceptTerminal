@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mcp/McpClient.h"
+#include "screens/IStatefulScreen.h"
 
 #include <QLabel>
 #include <QLineEdit>
@@ -13,10 +14,15 @@
 
 namespace fincept::screens {
 
-class McpServersScreen : public QWidget {
+class McpServersScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit McpServersScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "mcp_servers"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* e) override;

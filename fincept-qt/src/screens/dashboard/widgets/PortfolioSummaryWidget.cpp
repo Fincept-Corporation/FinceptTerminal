@@ -22,22 +22,19 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
     vl->setSpacing(6);
 
     // ── Summary card ──
-    auto* summary = new QWidget;
-    summary->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED));
-    auto* sl = new QGridLayout(summary);
+    summary_card_ = new QWidget;
+    auto* sl = new QGridLayout(summary_card_);
     sl->setContentsMargins(10, 8, 10, 8);
     sl->setHorizontalSpacing(16);
     sl->setVerticalSpacing(4);
 
     auto make_metric = [&](const QString& label, QLabel*& value_out, int row, int col) {
         auto* lbl = new QLabel(label);
-        lbl->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY));
+        metric_labels_.append(lbl);
         sl->addWidget(lbl, row * 2, col);
 
         value_out = new QLabel("--");
-        value_out->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;")
-                                     .arg(ui::colors::TEXT_PRIMARY));
+        metric_values_.append(value_out);
         sl->addWidget(value_out, row * 2 + 1, col);
     };
 
@@ -46,19 +43,17 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
     make_metric("TOTAL P&L", total_pnl_lbl_, 1, 0);
     make_metric("HOLDINGS", num_holdings_lbl_, 1, 1);
 
-    vl->addWidget(summary);
+    vl->addWidget(summary_card_);
 
     // ── Holdings list header ──
-    auto* hdr = new QWidget;
-    hdr->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED));
-    auto* hl = new QHBoxLayout(hdr);
+    header_row_ = new QWidget;
+    auto* hl = new QHBoxLayout(header_row_);
     hl->setContentsMargins(8, 3, 8, 3);
 
     auto make_hdr_lbl = [&](const QString& t, int s, Qt::Alignment a = Qt::AlignLeft) {
         auto* l = new QLabel(t);
-        l->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                             .arg(ui::colors::TEXT_TERTIARY));
         l->setAlignment(a);
+        header_labels_.append(l);
         hl->addWidget(l, s);
     };
     make_hdr_lbl("SYM", 1);
@@ -66,15 +61,11 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
     make_hdr_lbl("PRICE", 1, Qt::AlignRight);
     make_hdr_lbl("VALUE", 1, Qt::AlignRight);
     make_hdr_lbl("P&L", 1, Qt::AlignRight);
-    vl->addWidget(hdr);
+    vl->addWidget(header_row_);
 
     // Scrollable holdings list
-    auto* scroll = new QScrollArea;
-    scroll->setWidgetResizable(true);
-    scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }"
-                          "QScrollBar:vertical { width: 4px; background: transparent; }"
-                          + QString("QScrollBar::handle:vertical { background: %1; border-radius: 2px; min-height: 20px; }").arg(ui::colors::BORDER_MED) +
-                          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
+    scroll_area_ = new QScrollArea;
+    scroll_area_->setWidgetResizable(true);
 
     auto* list_widget = new QWidget;
     list_widget->setStyleSheet("background: transparent;");
@@ -83,12 +74,42 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
     list_layout_->setSpacing(0);
     list_layout_->addStretch();
 
-    scroll->setWidget(list_widget);
-    vl->addWidget(scroll, 1);
+    scroll_area_->setWidget(list_widget);
+    vl->addWidget(scroll_area_, 1);
 
     connect(this, &BaseWidget::refresh_requested, this, [this] { load_holdings(); });
+
+    apply_styles();
     set_loading(true);
     load_holdings();
+}
+
+void PortfolioSummaryWidget::apply_styles() {
+    summary_card_->setStyleSheet(
+        QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED()));
+    for (auto* lbl : metric_labels_)
+        lbl->setStyleSheet(
+            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
+    for (auto* val : metric_values_)
+        val->setStyleSheet(
+            QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;")
+                .arg(ui::colors::TEXT_PRIMARY()));
+    header_row_->setStyleSheet(
+        QString("background: %1;").arg(ui::colors::BG_RAISED()));
+    for (auto* lbl : header_labels_)
+        lbl->setStyleSheet(
+            QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+                .arg(ui::colors::TEXT_TERTIARY()));
+    scroll_area_->setStyleSheet(
+        QString("QScrollArea { border: none; background: transparent; }"
+                "QScrollBar:vertical { width: 4px; background: transparent; }"
+                "QScrollBar::handle:vertical { background: %1; border-radius: 2px; min-height: 20px; }"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+            .arg(ui::colors::BORDER_MED()));
+}
+
+void PortfolioSummaryWidget::on_theme_changed() {
+    apply_styles();
 }
 
 void PortfolioSummaryWidget::load_holdings() {

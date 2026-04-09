@@ -15,7 +15,11 @@ class TopMoversWidget : public BaseWidget {
   public:
     explicit TopMoversWidget(QWidget* parent = nullptr);
 
+  protected:
+    void on_theme_changed() override;
+
   private:
+    void apply_styles();
     void refresh_data();
     void show_tab(bool gainers);
 

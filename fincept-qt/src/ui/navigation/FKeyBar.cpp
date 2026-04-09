@@ -1,13 +1,12 @@
 #include "ui/navigation/FKeyBar.h"
 
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 namespace fincept::ui {
 
 TabBar::TabBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(32);
-    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                      .arg(colors::BG_BASE).arg(colors::BORDER_DIM));
     auto* scroll_area = new QScrollArea(this);
     scroll_area->setWidgetResizable(true);
     scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -41,7 +40,10 @@ TabBar::TabBar(QWidget* parent) : QWidget(parent) {
     auto* root = new QHBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->addWidget(scroll_area);
-    update_styles();
+
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed,
+            this, [this](const ThemeTokens&) { refresh_theme(); });
+    refresh_theme();
 }
 
 void TabBar::add_tab(const TabDef& def) {
@@ -63,6 +65,12 @@ void TabBar::set_active(const QString& tab_id) {
     if (active_id_ == tab_id)
         return;
     active_id_ = tab_id;
+    update_styles();
+}
+
+void TabBar::refresh_theme() {
+    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+                      .arg(colors::BG_BASE).arg(colors::BORDER_DIM));
     update_styles();
 }
 

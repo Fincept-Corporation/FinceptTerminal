@@ -2,6 +2,7 @@
 #include "screens/backtesting/BacktestingScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "services/backtesting/BacktestingService.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
@@ -1026,6 +1027,7 @@ void BacktestingScreen::on_provider_changed(int index) {
     svc.load_strategies(slug);
     svc.load_command_options(slug);
     svc.execute(slug, "get_indicators", {});
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 void BacktestingScreen::update_provider_buttons() {
@@ -1574,6 +1576,24 @@ void BacktestingScreen::on_error(const QString& context, const QString& message)
     run_button_->setEnabled(true);
     set_status_state("ERROR", ui::colors::NEGATIVE, "rgba(220,38,38,0.08)");
     display_error(QString("[%1] %2").arg(context, message));
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap BacktestingScreen::save_state() const {
+    return {
+        {"provider", active_provider_},
+        {"command",  active_command_},
+    };
+}
+
+void BacktestingScreen::restore_state(const QVariantMap& state) {
+    const int prov = state.value("provider", 0).toInt();
+    const int cmd  = state.value("command", 0).toInt();
+    if (prov != active_provider_)
+        on_provider_changed(prov);
+    if (cmd != active_command_)
+        on_command_changed(cmd);
 }
 
 } // namespace fincept::screens

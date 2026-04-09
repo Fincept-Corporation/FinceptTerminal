@@ -24,18 +24,19 @@ static QWidget* make_faq(const QString& question, const QString& answer) {
 
     auto* q_btn = new QPushButton(QString("> %1").arg(question));
     q_btn->setCursor(Qt::PointingHandCursor);
-    q_btn->setStyleSheet(QString("QPushButton { color: #e5e5e5; background: #0a0a0a; border: 1px solid #1a1a1a; "
+    q_btn->setStyleSheet(QString("QPushButton { color: %1; background: %2; border: 1px solid %3; "
                                  "border-radius: 2px; padding: 10px 14px; text-align: left; "
-                                 "font-size: 12px; font-weight: 600; %1 }"
-                                 "QPushButton:hover { background: #111111; }")
-                             .arg(MF));
+                                 "font-size: 12px; font-weight: 600; %4 }"
+                                 "QPushButton:hover { background: %5; }")
+                             .arg(colors::TEXT_PRIMARY, colors::BG_SURFACE, colors::BORDER_DIM,
+                                  MF, colors::BG_RAISED));
 
     auto* a_lbl = new QLabel(answer);
     a_lbl->setWordWrap(true);
-    a_lbl->setStyleSheet(QString("color: #808080; font-size: 12px; background: #0a0a0a; "
-                                 "border: 1px solid #1a1a1a; border-top: none; "
-                                 "padding: 10px 14px; %1")
-                             .arg(MF));
+    a_lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: %2; "
+                                 "border: 1px solid %3; border-top: none; "
+                                 "padding: 10px 14px; %4")
+                             .arg(colors::TEXT_SECONDARY, colors::BG_SURFACE, colors::BORDER_DIM, MF));
     a_lbl->setVisible(false);
 
     QObject::connect(q_btn, &QPushButton::clicked, a_lbl, [a_lbl, q_btn, question]() {
@@ -69,9 +70,9 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
     // Back
     auto* back_btn = new QPushButton("< BACK");
     back_btn->setCursor(Qt::PointingHandCursor);
-    back_btn->setStyleSheet(QString("QPushButton { color: #808080; background: transparent; border: none; "
-                                    "font-size: 12px; %1 } QPushButton:hover { color: #e5e5e5; }")
-                                .arg(MF));
+    back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
+                                    "font-size: 12px; %2 } QPushButton:hover { color: %3; }")
+                                .arg(colors::TEXT_SECONDARY, MF, colors::TEXT_PRIMARY));
     connect(back_btn, &QPushButton::clicked, this, &HelpScreen::navigate_back);
     vl->addWidget(back_btn, 0, Qt::AlignLeft);
 
@@ -138,10 +139,11 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
             auto* btn = new QPushButton(text);
             btn->setFixedHeight(40);
             btn->setCursor(Qt::PointingHandCursor);
-            btn->setStyleSheet(QString("QPushButton { background: #0a0a0a; color: #0891b2; border: 1px solid #1a1a1a; "
+            btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
                                        "border-radius: 2px; font-size: 12px; font-weight: 600; "
                                        "font-family:'Consolas','Courier New',monospace; }"
-                                       "QPushButton:hover { background: #111111; color: #38bdf8; }"));
+                                       "QPushButton:hover { background: %4; color: #38bdf8; }")
+                                   .arg(colors::BG_SURFACE, colors::CYAN, colors::BORDER_DIM, colors::BG_RAISED));
             return btn;
         };
 
@@ -161,7 +163,8 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
     // ── Contact Information ──────────────────────────────────────────────────
     {
         auto* panel = new QWidget;
-        panel->setStyleSheet("background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 2px;");
+        panel->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 2px;")
+                                 .arg(colors::BG_SURFACE, colors::BORDER_DIM));
         auto* pvl = new QVBoxLayout(panel);
         pvl->setContentsMargins(14, 12, 14, 12);
         pvl->setSpacing(6);
@@ -174,8 +177,8 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
 
         auto info = [](const QString& label, const QString& value) {
             auto* lbl = new QLabel(QString("%1:  %2").arg(label, value));
-            lbl->setStyleSheet(QString("color: #808080; font-size: 12px; background: transparent; "
-                                       "font-family:'Consolas','Courier New',monospace;"));
+            lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; "
+                                       "font-family:'Consolas','Courier New',monospace;").arg(colors::TEXT_SECONDARY));
             return lbl;
         };
 

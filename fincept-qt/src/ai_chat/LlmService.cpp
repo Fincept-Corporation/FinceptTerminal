@@ -55,6 +55,7 @@ void LlmService::ensure_config() const {
     provider_ = model_ = api_key_ = base_url_ = system_prompt_ = {};
     temperature_ = 0.7;
     max_tokens_ = 4096;
+    tools_enabled_ = true;
 
     auto providers = LlmConfigRepository::instance().list_providers();
     if (providers.is_ok()) {
@@ -64,6 +65,7 @@ void LlmService::ensure_config() const {
                 api_key_ = c.api_key;
                 base_url_ = c.base_url;
                 model_ = c.model;
+                tools_enabled_ = c.tools_enabled;
                 break;
             }
         }
@@ -74,14 +76,15 @@ void LlmService::ensure_config() const {
             api_key_ = c.api_key;
             base_url_ = c.base_url;
             model_ = c.model;
+            tools_enabled_ = c.tools_enabled;
         }
     }
 
     // Fallback: if no provider configured, use Fincept with session API key
     if (provider_.isEmpty()) {
         provider_ = "fincept";
-        model_ = "fincept-llm";
-        base_url_ = "https://api.fincept.in/research/llm";
+        model_ = "MiniMax-M2.7";
+        base_url_ = {};
         LOG_INFO(TAG, "No LLM provider configured — using Fincept default");
     }
 
@@ -159,6 +162,12 @@ int LlmService::active_max_tokens() const {
     return max_tokens_;
 }
 
+bool LlmService::tools_enabled() const {
+    QMutexLocker lock(&mutex_);
+    ensure_config();
+    return tools_enabled_;
+}
+
 bool LlmService::is_configured() const {
     QMutexLocker lock(&mutex_);
     ensure_config();
@@ -199,11 +208,11 @@ QString LlmService::get_endpoint_url() const {
     // Called with mutex_ held
     const QString& p = provider_;
 
-    // Fincept: base_url IS the full endpoint (no path suffix needed)
+    // Fincept: two endpoints — sync chat and async LLM
+    // base_url_ stores the base domain; append path here.
     if (p == "fincept") {
-        if (!base_url_.isEmpty())
-            return base_url_;
-        return "https://api.fincept.in/research/llm";
+        // sync endpoint for chat (short replies)
+        return "https://api.fincept.in/research/chat";
     }
 
     // Custom base_url takes priority for other providers
@@ -254,6 +263,8 @@ QMap<QString, QString> LlmService::get_headers() const {
         auto tok = SettingsRepository::instance().get("session_token");
         if (tok.is_ok() && !tok.value().isEmpty())
             h["X-Session-Token"] = tok.value();
+        // Cloudflare requires a User-Agent header
+        h["User-Agent"] = "FinceptTerminal/4.0";
     } else {
         // OpenAI-compatible
         if (!api_key_.isEmpty())
@@ -290,7 +301,7 @@ QJsonObject LlmService::build_openai_request(const QString& user_message,
     if (stream)
         req["stream"] = true;
 
-    if (!stream && with_tools) {
+    if (!stream && with_tools && tools_enabled_) {
         QJsonArray tools = mcp::McpService::instance().format_tools_for_openai();
         if (!tools.isEmpty())
             req["tools"] = tools;
@@ -320,7 +331,7 @@ QJsonObject LlmService::build_anthropic_request(const QString& user_message,
 
     // Anthropic tool format: array of {name, description, input_schema}
     // (no "type":"function" wrapper like OpenAI)
-    if (!stream) {
+    if (!stream && tools_enabled_) {
         QJsonArray ant_tools;
         auto all_tools = mcp::McpService::instance().get_all_tools();
         for (const auto& tool : all_tools) {
@@ -362,7 +373,7 @@ QJsonObject LlmService::build_gemini_request(const QString& user_message,
     }
 
     // Gemini tool format: tools[{functionDeclarations:[{name, description, parameters}]}]
-    auto all_tools = mcp::McpService::instance().get_all_tools();
+    auto all_tools = tools_enabled_ ? mcp::McpService::instance().get_all_tools() : std::vector<mcp::UnifiedTool>{};
     if (!all_tools.empty()) {
         QJsonArray fn_decls;
         for (const auto& tool : all_tools) {
@@ -384,42 +395,21 @@ QJsonObject LlmService::build_gemini_request(const QString& user_message,
 
 QJsonObject LlmService::build_fincept_request(const QString& user_message,
                                               const std::vector<ConversationMessage>& history, bool with_tools) {
-    QString prompt;
+    // Fincept /research/chat uses the OpenAI messages array format
+    QJsonArray messages;
     if (!system_prompt_.isEmpty())
-        prompt += "System: " + system_prompt_ + "\n\n";
-    for (const auto& m : history) {
-        if (m.role == "user")
-            prompt += "User: " + m.content + "\n\n";
-        else if (m.role == "assistant")
-            prompt += "Assistant: " + m.content + "\n\n";
-    }
-    prompt += "User: " + user_message;
+        messages.append(QJsonObject{{"role", "system"}, {"content", system_prompt_}});
+    for (const auto& m : history)
+        messages.append(QJsonObject{{"role", m.role}, {"content", m.content}});
+    messages.append(QJsonObject{{"role", "user"}, {"content", user_message}});
 
     QJsonObject req;
-    req["prompt"] = prompt;
-    req["temperature"] = temperature_;
-    req["max_tokens"] = max_tokens_;
-    // Pass selected model if it's a real server model name (not the legacy placeholder)
+    req["messages"] = messages;
+    // Pass model if set to a real model name (not the legacy placeholder)
     if (!model_.isEmpty() && model_ != "fincept-llm")
         req["model"] = model_;
 
-    if (with_tools) {
-        QJsonArray all_tools = mcp::McpService::instance().format_tools_for_openai();
-        if (!all_tools.isEmpty()) {
-            QJsonArray fns;
-            for (const auto& t : all_tools) {
-                QJsonObject fn = t.toObject()["function"].toObject();
-                // Validate: name and parameters must be non-empty
-                if (fn.isEmpty() || fn["name"].toString().isEmpty())
-                    continue;
-                if (!fn.contains("parameters"))
-                    fn["parameters"] = QJsonObject{{"type", "object"}, {"properties", QJsonObject{}}};
-                fns.append(fn);
-            }
-            if (!fns.isEmpty())
-                req["tools"] = fns;
-        }
-    }
+    Q_UNUSED(with_tools) // Fincept /research/chat does not support tools yet
     return req;
 }
 
@@ -429,74 +419,255 @@ QJsonObject LlmService::build_fincept_request(const QString& user_message,
 
 LlmService::HttpResult LlmService::blocking_post(const QString& url, const QJsonObject& body,
                                                  const QMap<QString, QString>& headers, int timeout_ms) {
-    HttpResult result;
+    // Delegate to eventloop_request which works reliably on background threads.
+    // The old waitForReadyRead() approach failed for Cloudflare-protected endpoints
+    // because QNetworkAccessManager requires an event loop for TLS/SSL negotiation.
+    QByteArray json_data = QJsonDocument(body).toJson(QJsonDocument::Compact);
+    return eventloop_request("POST", url, json_data, headers, timeout_ms);
+}
 
-    // Each background thread call needs its own QNetworkAccessManager.
-    // IMPORTANT: Do NOT use QEventLoop here — this runs on a QtConcurrent bg
-    // thread, and QEventLoop on a non-GUI thread causes undefined behaviour.
-    // Instead use waitForReadyRead() which is safe on any thread.
+// ============================================================================
+// Blocking GET helper (mirrors blocking_post but without a body)
+// ============================================================================
+
+LlmService::HttpResult LlmService::blocking_get(const QString& url, const QMap<QString, QString>& headers,
+                                                 int timeout_ms) {
+    return eventloop_request("GET", url, {}, headers, timeout_ms);
+}
+
+// ============================================================================
+// Fincept async path — POST /research/llm/async → poll /research/llm/status/{id}
+// Used for the primary LLM response (sync /research/chat for follow-ups)
+// ============================================================================
+
+// Helper: synchronous POST/GET using QEventLoop on a background thread.
+// This is required for endpoints behind Cloudflare (like api.fincept.in)
+// because QNetworkAccessManager needs an event loop to process TLS/SSL
+// negotiation and HTTP redirects. The waitForReadyRead() approach used by
+// blocking_post() works for some servers but fails for Cloudflare-protected ones.
+LlmService::HttpResult LlmService::eventloop_request(const QString& method, const QString& url,
+                                                      const QByteArray& body,
+                                                      const QMap<QString, QString>& headers,
+                                                      int timeout_ms) {
+    HttpResult result;
     QNetworkAccessManager nam;
     QNetworkRequest req{QUrl(url)};
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     for (auto it = headers.constBegin(); it != headers.constEnd(); ++it)
         req.setRawHeader(it.key().toUtf8(), it.value().toUtf8());
 
-    QByteArray json_data = QJsonDocument(body).toJson(QJsonDocument::Compact);
-    QNetworkReply* reply = nam.post(req, json_data);
+    QNetworkReply* reply = (method == "GET") ? nam.get(req) : nam.post(req, body);
 
-    // Block on background thread using waitForReadyRead loop (thread-safe).
-    qint64 elapsed = 0;
-    const int poll_ms = 50;
-    while (!reply->isFinished()) {
-        if (!reply->waitForReadyRead(poll_ms)) {
-            elapsed += poll_ms;
-            if (elapsed >= timeout_ms) {
-                reply->abort();
-                // delete directly — nam and reply are stack-owned on this bg
-                // thread which has no event loop, so deleteLater() would leak.
-                delete reply;
-                result.error = "Request timed out";
-                return result;
-            }
-        }
+    QEventLoop loop;
+    QTimer timer;
+    timer.setSingleShot(true);
+    timer.start(timeout_ms);
+    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (!reply->isFinished()) {
+        reply->abort();
+        reply->deleteLater();
+        result.error = "Request timed out";
+        return result;
     }
 
     result.status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     result.body = reply->readAll();
-
-    if (result.status >= 200 && result.status < 300) {
-        result.success = true;
-    } else {
-        // Prefer server's JSON error message over Qt's generic network string.
-        // Parse body first; fall back to Qt errorString if body has no message.
+    result.success = (result.status >= 200 && result.status < 300);
+    if (!result.success) {
         QString server_msg;
-        if (!result.body.isEmpty()) {
-            auto err_doc = QJsonDocument::fromJson(result.body);
-            if (!err_doc.isNull() && err_doc.isObject()) {
-                QJsonObject ej = err_doc.object();
-                // Fincept: {"success":false,"message":"..."}
-                if (ej.contains("message") && ej["message"].isString())
-                    server_msg = ej["message"].toString();
-                // OpenAI: {"error":{"message":"..."}} or {"error":"..."}
-                if (server_msg.isEmpty() && ej.contains("error")) {
-                    QJsonValue ev = ej["error"];
-                    if (ev.isString())
-                        server_msg = ev.toString();
-                    else if (ev.isObject())
-                        server_msg = ev.toObject()["message"].toString();
-                }
-                // Anthropic: {"error":{"type":"...","message":"..."}}
-                if (server_msg.isEmpty() && ej.contains("detail"))
-                    server_msg = ej["detail"].toString();
-            }
+        auto err_doc = QJsonDocument::fromJson(result.body);
+        if (!err_doc.isNull() && err_doc.isObject()) {
+            QJsonObject ej = err_doc.object();
+            if (ej.contains("message") && ej["message"].isString())
+                server_msg = ej["message"].toString();
         }
-        result.error = server_msg.isEmpty() ? QString("HTTP %1: %2").arg(result.status).arg(reply->errorString())
-                                            : QString("HTTP %1: %2").arg(result.status).arg(server_msg);
+        result.error = server_msg.isEmpty()
+            ? QString("HTTP %1: %2").arg(result.status).arg(reply->errorString())
+            : QString("HTTP %1: %2").arg(result.status).arg(server_msg);
+    }
+    reply->deleteLater();
+    return result;
+}
+
+// Build a compact tool catalog string for injection into the system prompt.
+// This allows models that don't support structured tool_calls to still
+// emit text-based tool invocations that try_extract_and_execute_text_tool_calls
+// can detect and execute.
+static QString build_tool_catalog_for_prompt() {
+    auto all_tools = mcp::McpService::instance().get_all_tools();
+    if (all_tools.empty())
+        return {};
+
+    // Only include the most useful tools (navigation, market data, portfolio, etc.)
+    // to keep prompt size reasonable. Skip very niche tools.
+    QString catalog;
+    catalog += "You have access to the following tools. To use a tool, emit a <tool_call> block:\n";
+    catalog += "<tool_call>{\"name\": \"TOOL_NAME\", \"arguments\": {\"param\": \"value\"}}</tool_call>\n\n";
+    catalog += "Available tools:\n";
+
+    int count = 0;
+    for (const auto& tool : all_tools) {
+        // Build qualified name: server_id__tool_name
+        QString fn_name = tool.server_id + "__" + tool.name;
+        catalog += "- " + fn_name + ": " + tool.description;
+
+        // Add parameter hints from schema
+        QJsonObject props = tool.input_schema["properties"].toObject();
+        if (!props.isEmpty()) {
+            QStringList params;
+            for (auto it = props.constBegin(); it != props.constEnd(); ++it)
+                params.append(it.key());
+            catalog += " (params: " + params.join(", ") + ")";
+        }
+        catalog += "\n";
+        ++count;
+        // Cap at 60 tools to avoid overwhelming the prompt
+        if (count >= 60) {
+            catalog += "... and " + QString::number(all_tools.size() - 60) + " more tools available.\n";
+            break;
+        }
+    }
+    return catalog;
+}
+
+LlmResponse LlmService::fincept_async_request(const QString& user_message,
+                                               const std::vector<ConversationMessage>& history) {
+    LlmResponse resp;
+
+    // Build prompt string for the async endpoint (it takes a plain prompt, not messages)
+    QString prompt;
+    if (!system_prompt_.isEmpty())
+        prompt += system_prompt_ + "\n\n";
+
+    // Inject tool catalog so the model can emit text-based tool calls
+    if (tools_enabled_) {
+        QString tool_catalog = build_tool_catalog_for_prompt();
+        if (!tool_catalog.isEmpty())
+            prompt += tool_catalog + "\n";
     }
 
-    // delete directly — same reason as timeout path above (no event loop on bg thread).
-    delete reply;
-    return result;
+    for (const auto& m : history) {
+        if (m.role == "user")
+            prompt += "User: " + m.content + "\n\n";
+        else if (m.role == "assistant")
+            prompt += "Assistant: " + m.content + "\n\n";
+    }
+    prompt += "User: " + user_message;
+
+    QJsonObject submit_body;
+    submit_body["prompt"] = prompt;
+    submit_body["max_tokens"] = max_tokens_;
+    submit_body["temperature"] = temperature_;
+
+    auto hdr = get_headers();
+    const QString async_url = "https://api.fincept.in/research/llm/async";
+    const QString status_base = "https://api.fincept.in/research/llm/status/";
+
+    LOG_INFO(TAG, QString("Fincept async: submitting to %1 (api_key=%2, prompt_len=%3)")
+                      .arg(async_url)
+                      .arg(api_key_.isEmpty() ? "EMPTY" : api_key_.left(12) + "...")
+                      .arg(prompt.length()));
+
+    QByteArray json_data = QJsonDocument(submit_body).toJson(QJsonDocument::Compact);
+    auto submit = eventloop_request("POST", async_url, json_data, hdr, 30000);
+    if (!submit.success) {
+        resp.error = "Fincept async submit failed: " + submit.error;
+        LOG_ERROR(TAG, resp.error);
+        return resp;
+    }
+
+    auto submit_doc = QJsonDocument::fromJson(submit.body);
+    if (submit_doc.isNull()) {
+        resp.error = "Fincept async: failed to parse submit response";
+        return resp;
+    }
+
+    // Response can nest task_id at top level or inside data
+    QJsonObject sj = submit_doc.object();
+    QString task_id = sj["task_id"].toString();
+    if (task_id.isEmpty())
+        task_id = sj["data"].toObject()["task_id"].toString();
+    if (task_id.isEmpty()) {
+        resp.error = "Fincept async: no task_id in submit response";
+        return resp;
+    }
+    LOG_INFO(TAG, "Fincept async task_id: " + task_id);
+
+    // Poll every 3 seconds, up to 120 seconds total
+    const QString poll_url = status_base + task_id;
+    constexpr int MAX_POLLS = 40;
+    for (int i = 0; i < MAX_POLLS; ++i) {
+        QThread::msleep(3000);
+
+        auto poll = eventloop_request("GET", poll_url, {}, hdr, 15000);
+        if (!poll.success) {
+            LOG_WARN(TAG, "Fincept async poll failed: " + poll.error);
+            continue;
+        }
+
+        auto poll_doc = QJsonDocument::fromJson(poll.body);
+        if (poll_doc.isNull())
+            continue;
+
+        QJsonObject pj = poll_doc.object();
+        QString status = pj["status"].toString();
+        QJsonObject data_obj = pj["data"].toObject();
+        if (status.isEmpty())
+            status = data_obj["status"].toString();
+
+        LOG_INFO(TAG, QString("Fincept async poll %1 status=%2").arg(i + 1).arg(status));
+
+        if (status == "completed") {
+            // data.data.response
+            QString response = data_obj["data"].toObject()["response"].toString();
+            if (response.isEmpty())
+                response = data_obj["response"].toString();
+            if (response.isEmpty()) {
+                resp.error = "Fincept async completed but response is empty";
+                LOG_WARN(TAG, "Fincept async task completed with empty response field");
+                return resp;
+            }
+            resp.content = response;
+            resp.success = true;
+
+            QJsonObject usage = data_obj["data"].toObject()["usage"].toObject();
+            if (!usage.isEmpty()) {
+                resp.prompt_tokens     = usage["input_tokens"].toInt();
+                resp.completion_tokens = usage["output_tokens"].toInt();
+                resp.total_tokens      = usage["total_tokens"].toInt();
+            }
+
+            // Check for text-based tool calls in the response.
+            // The model may have emitted <tool_call>...</tool_call> blocks.
+            if (!resp.content.isEmpty()) {
+                LOG_INFO(TAG, "Fincept: checking response for text-based tool calls");
+                // Use the sync /research/chat endpoint for follow-up after tool execution
+                QString followup_url = get_endpoint_url();
+                auto followup_hdr = get_headers();
+                auto tool_result = try_extract_and_execute_text_tool_calls(
+                    resp.content, user_message, followup_url, followup_hdr);
+                if (tool_result.has_value()) {
+                    LOG_INFO(TAG, "Fincept: text tool calls detected and executed");
+                    return tool_result.value();
+                }
+            }
+            return resp;
+        }
+
+        if (status == "failed") {
+            QString err = pj["error"].toString();
+            if (err.isEmpty())
+                err = data_obj["error"].toString();
+            resp.error = "Fincept async task failed: " + (err.isEmpty() ? "unknown error" : err);
+            return resp;
+        }
+    }
+
+    resp.error = "Fincept async timed out waiting for response";
+    return resp;
 }
 
 // ============================================================================
@@ -522,7 +693,11 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
         if (!api_key_.isEmpty())
             url += "?key=" + api_key_;
     } else if (provider_ == "fincept") {
-        req_body = build_fincept_request(user_message, history, true);
+        // Fincept uses two separate endpoints:
+        // Primary response → async (submit + poll, returns richer model output)
+        // Follow-ups (tool results) → sync /research/chat
+        LOG_INFO(TAG, "do_request: routing to fincept_async_request");
+        return fincept_async_request(user_message, history);
     } else {
         req_body = build_openai_request(user_message, history, false, true);
     }
@@ -708,81 +883,18 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
         }
 
     } else if (provider_ == "fincept") {
+        // /research/chat returns OpenAI-compatible choices array:
+        // {"success":true,"data":{"choices":[{"message":{"role":"assistant","content":"..."}}],...}}
         QJsonObject data = rj.contains("data") ? rj["data"].toObject() : rj;
-
-        // Check for tool calls
-        QJsonArray tcs = data["tool_calls"].toArray();
-        if (!tcs.isEmpty()) {
-            LOG_INFO(TAG, QString("Fincept returned %1 tool calls").arg(tcs.size()));
-            QString tool_results;
-            for (const auto& tc_val : tcs) {
-                QJsonObject tc = tc_val.toObject();
-                QString fn_name =
-                    tc.contains("function") ? tc["function"].toObject()["name"].toString() : tc["name"].toString();
-                QString args_str = tc.contains("function") ? tc["function"].toObject()["arguments"].toString()
-                                                           : tc["arguments"].toString("{}");
-
-                QJsonObject fn_args = QJsonDocument::fromJson(args_str.toUtf8()).object();
-                auto tool_res = mcp::McpService::instance().execute_openai_function(fn_name, fn_args);
-
-                QString result_content;
-                if (!tool_res.message.isEmpty())
-                    result_content = tool_res.message;
-                else if (!tool_res.data.isNull() && !tool_res.data.isUndefined())
-                    result_content = QJsonDocument(tool_res.data.toObject()).toJson().left(2000);
-                else
-                    result_content = QJsonDocument(tool_res.to_json()).toJson().left(2000);
-
-                int sep = fn_name.indexOf("__");
-                QString short_name = (sep >= 0) ? fn_name.mid(sep + 2) : fn_name;
-                tool_results += "\n**Tool: " + short_name + "**\n" + result_content + "\n";
-            }
-
-            // Follow-up request with tool results
-            if (!tool_results.isEmpty()) {
-                QString follow_prompt = "User asked: \"" + user_message +
-                                        "\"\n\n"
-                                        "I retrieved this data:\n" +
-                                        tool_results +
-                                        "\n\nPlease provide a clear, concise summary of this data in natural language.";
-
-                QJsonObject follow_body{
-                    {"prompt", follow_prompt}, {"temperature", temperature_}, {"max_tokens", max_tokens_}};
-                auto fu = blocking_post(url, follow_body, hdr);
-                if (fu.success) {
-                    auto fu_doc = QJsonDocument::fromJson(fu.body);
-                    if (!fu_doc.isNull()) {
-                        QJsonObject fu_d =
-                            fu_doc.object().contains("data") ? fu_doc.object()["data"].toObject() : fu_doc.object();
-                        for (const QString& k : {"response", "content", "answer", "text"}) {
-                            if (fu_d.contains(k)) {
-                                resp.content = fu_d[k].toString();
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            for (const QString& k : {"response", "content", "answer", "text", "result"}) {
-                if (data.contains(k) && !data[k].toString().isEmpty()) {
-                    resp.content = data[k].toString();
-                    break;
-                }
-            }
-            if (resp.content.isEmpty() && data.contains("ai_response")) {
-                QJsonValue ai = data["ai_response"];
-                if (ai.isObject() && ai.toObject().contains("content"))
-                    resp.content = ai.toObject()["content"].toString();
-                else if (ai.isString())
-                    resp.content = ai.toString();
-            }
-            // API returned success=true but empty response text — treat as soft error
-            if (resp.content.isEmpty()) {
-                resp.error = "Fincept LLM returned an empty response. Please try again.";
-                LOG_WARN(TAG, "Fincept API returned empty response field despite success=true");
-                return resp;
-            }
+        QJsonArray choices = data["choices"].toArray();
+        if (!choices.isEmpty()) {
+            resp.content = choices[0].toObject()["message"].toObject()["content"].toString();
+        }
+        // API returned success=true but empty response text — treat as soft error
+        if (resp.content.isEmpty()) {
+            resp.error = "Fincept LLM returned an empty response. Please try again.";
+            LOG_WARN(TAG, "Fincept /research/chat returned empty choices or content");
+            return resp;
         }
 
     } else {
@@ -1160,9 +1272,14 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(
         if (!system_prompt_.isEmpty())
             follow_body["system"] = system_prompt_;
     } else if (provider_ == "fincept") {
-        follow_body["prompt"] = follow_prompt;
-        follow_body["temperature"] = temperature_;
-        follow_body["max_tokens"] = max_tokens_;
+        // /research/chat uses messages array
+        QJsonArray msgs;
+        if (!system_prompt_.isEmpty())
+            msgs.append(QJsonObject{{"role", "system"}, {"content", system_prompt_}});
+        msgs.append(QJsonObject{{"role", "user"}, {"content", follow_prompt}});
+        follow_body["messages"] = msgs;
+        if (!model_.isEmpty() && model_ != "fincept-llm")
+            follow_body["model"] = model_;
     } else {
         // OpenAI-compatible
         QJsonArray msgs;
@@ -1203,13 +1320,11 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(
             }
         }
     } else if (provider_ == "fincept") {
+        // /research/chat: {"success":true,"data":{"choices":[{"message":{"content":"..."}}]}}
         QJsonObject data = fu_rj.contains("data") ? fu_rj["data"].toObject() : fu_rj;
-        for (const QString& k : {"response", "content", "answer", "text"}) {
-            if (data.contains(k)) {
-                resp.content = data[k].toString();
-                break;
-            }
-        }
+        QJsonArray fu_choices = data["choices"].toArray();
+        if (!fu_choices.isEmpty())
+            resp.content = fu_choices[0].toObject()["message"].toObject()["content"].toString();
     } else {
         QJsonArray choices = fu_rj["choices"].toArray();
         if (!choices.isEmpty())
@@ -1691,7 +1806,8 @@ void LlmService::fetch_models(const QString& provider, const QString& api_key, c
 // Public API
 // ============================================================================
 
-LlmResponse LlmService::chat(const QString& user_message, const std::vector<ConversationMessage>& history) {
+LlmResponse LlmService::chat(const QString& user_message, const std::vector<ConversationMessage>& history,
+                              bool use_tools) {
     QMutexLocker lock(&mutex_);
     ensure_config();
 
@@ -1702,6 +1818,7 @@ LlmResponse LlmService::chat(const QString& user_message, const std::vector<Conv
     QString p = provider_, k = api_key_, b = base_url_, m = model_, sp = system_prompt_;
     double t = temperature_;
     int mx = max_tokens_;
+    const bool saved_tools = tools_enabled_;
     lock.unlock();
 
     // Restore snapshot into members for use by helper methods
@@ -1715,15 +1832,24 @@ LlmResponse LlmService::chat(const QString& user_message, const std::vector<Conv
     temperature_ = t;
     max_tokens_ = mx;
 
-    return do_request(user_message, history);
+    // Override tools_enabled_ for this request scope if caller disabled tools
+    if (!use_tools) tools_enabled_ = false;
+
+    auto resp = do_request(user_message, history);
+
+    // Restore tools_enabled_ to saved value
+    tools_enabled_ = saved_tools;
+
+    return resp;
 }
 
 void LlmService::chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,
-                                StreamCallback on_chunk) {
+                                StreamCallback on_chunk, bool use_tools) {
     // Snapshot config under lock
     QString p, k, b, m, sp;
     double t;
     int mx;
+    bool saved_tools;
     {
         QMutexLocker lock(&mutex_);
         ensure_config();
@@ -1734,6 +1860,7 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
         sp = system_prompt_;
         t = temperature_;
         mx = max_tokens_;
+        saved_tools = tools_enabled_;
     }
 
     if (p.isEmpty()) {
@@ -1752,7 +1879,8 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
         if (!self) return;
         on_chunk(chunk, done);
     };
-    QtConcurrent::run([self, p, k, b, m, sp, t, mx, user_message, history_copy, guarded_chunk]() {
+    QtConcurrent::run([self, p, k, b, m, sp, t, mx, user_message, history_copy, guarded_chunk,
+                       use_tools, saved_tools]() {
         if (!self)
             return;
 
@@ -1768,9 +1896,17 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
             self->system_prompt_ = sp;
             self->temperature_   = t;
             self->max_tokens_    = mx;
+            // Disable tools for this request if caller requested it
+            if (!use_tools) self->tools_enabled_ = false;
         }
 
         auto resp = self->do_streaming_request(user_message, history_copy, guarded_chunk);
+
+        // Restore tools_enabled_ to saved value
+        {
+            QMutexLocker lock(&self->mutex_);
+            self->tools_enabled_ = saved_tools;
+        }
 
         if (self) {
             QMetaObject::invokeMethod(

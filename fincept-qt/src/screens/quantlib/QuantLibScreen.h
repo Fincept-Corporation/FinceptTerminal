@@ -1,5 +1,7 @@
 #pragma once
 
+#include "screens/IStatefulScreen.h"
+
 #include <QComboBox>
 #include <QJsonObject>
 #include <QLabel>
@@ -27,10 +29,15 @@ struct QuantModule {
 /// Numerical, Physics, Portfolio, Pricing, Regulatory, Risk, Scheduling,
 /// Solver, Statistics, Stochastic, Volatility.
 /// All computations via api.fincept.in REST API.
-class QuantLibScreen : public QWidget {
+class QuantLibScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit QuantLibScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "quantlib"; }
+    int state_version() const override { return 1; }
 
   private slots:
     void on_module_changed(int index);

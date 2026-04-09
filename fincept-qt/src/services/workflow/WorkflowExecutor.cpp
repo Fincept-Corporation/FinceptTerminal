@@ -6,7 +6,7 @@
 #include "services/workflow/NodeRegistry.h"
 
 #include <QDateTime>
-#include <QElapsedTimer>
+#include <QJsonArray>
 #include <QMetaObject>
 #include <QSet>
 
@@ -23,13 +23,24 @@ void WorkflowExecutor::execute(const WorkflowDef& workflow) {
     workflow_ = workflow;
     running_ = true;
     stop_requested_ = false;
-    current_index_ = 0;
+    pending_count_ = 0;
+    completed_count_ = 0;
     results_.clear();
     node_map_.clear();
+    type_cache_.clear();
+    in_degree_.clear();
 
-    // Index nodes by id
-    for (const auto& nd : workflow_.nodes)
+    const int n = workflow_.nodes.size();
+    node_map_.reserve(n);
+    results_.reserve(n);
+    type_cache_.reserve(n);
+    in_degree_.reserve(n);
+
+    // Index nodes by id and pre-resolve type pointers
+    for (const auto& nd : workflow_.nodes) {
         node_map_.insert(nd.id, nd);
+        type_cache_.insert(nd.id, NodeRegistry::instance().find(nd.type));
+    }
 
     build_graph();
 
@@ -45,9 +56,9 @@ void WorkflowExecutor::execute(const WorkflowDef& workflow) {
         return;
     }
 
-    execution_order_ = topological_sort();
+    QVector<QString> order = topological_sort();
 
-    if (execution_order_.isEmpty()) {
+    if (order.isEmpty()) {
         LOG_WARN("Executor", "No executable nodes in workflow");
         running_ = false;
         WorkflowExecutionResult wr;
@@ -57,15 +68,32 @@ void WorkflowExecutor::execute(const WorkflowDef& workflow) {
         return;
     }
 
+    // Build in-degree map from topological set
+    QSet<QString> exec_set;
+    exec_set.reserve(order.size());
+    for (const auto& id : order)
+        exec_set.insert(id);
+
+    for (const auto& id : order) {
+        int deg = 0;
+        for (const auto& edge : incoming_edges_.value(id)) {
+            if (exec_set.contains(edge.source_node))
+                ++deg;
+        }
+        in_degree_.insert(id, deg);
+    }
+
+    total_count_ = order.size();
+
     start_time_ms_ = QDateTime::currentMSecsSinceEpoch();
     ExecutionHooks::instance().emit_workflow_start(workflow_.id);
     AuditLogger::instance().log(AuditAction::WorkflowStarted, workflow_.id, {}, {},
-                                QString("Started: %1 (%2 nodes)").arg(workflow_.name).arg(execution_order_.size()));
+                                QString("Started: %1 (%2 nodes)").arg(workflow_.name).arg(total_count_));
     emit execution_started(workflow_.id);
 
-    LOG_INFO("Executor", QString("Starting execution: %1 (%2 nodes)").arg(workflow_.name).arg(execution_order_.size()));
+    LOG_INFO("Executor", QString("Starting execution: %1 (%2 nodes)").arg(workflow_.name).arg(total_count_));
 
-    execute_next();
+    launch_ready_nodes();
 }
 
 void WorkflowExecutor::execute_from(const WorkflowDef& workflow, const QString& start_node_id) {
@@ -77,12 +105,21 @@ void WorkflowExecutor::execute_from(const WorkflowDef& workflow, const QString& 
     workflow_ = workflow;
     running_ = true;
     stop_requested_ = false;
-    current_index_ = 0;
+    pending_count_ = 0;
+    completed_count_ = 0;
     results_.clear();
     node_map_.clear();
+    type_cache_.clear();
+    in_degree_.clear();
 
-    for (const auto& nd : workflow_.nodes)
+    const int n = workflow_.nodes.size();
+    node_map_.reserve(n);
+    type_cache_.reserve(n);
+
+    for (const auto& nd : workflow_.nodes) {
         node_map_.insert(nd.id, nd);
+        type_cache_.insert(nd.id, NodeRegistry::instance().find(nd.type));
+    }
 
     build_graph();
 
@@ -115,13 +152,14 @@ void WorkflowExecutor::execute_from(const WorkflowDef& workflow, const QString& 
     }
 
     // Filter topo order to only downstream nodes
-    execution_order_.clear();
+    QVector<QString> order;
+    order.reserve(downstream.size());
     for (const auto& id : full_order) {
         if (downstream.contains(id))
-            execution_order_.append(id);
+            order.append(id);
     }
 
-    if (execution_order_.isEmpty()) {
+    if (order.isEmpty()) {
         running_ = false;
         WorkflowExecutionResult wr;
         wr.workflow_id = workflow_.id;
@@ -130,14 +168,33 @@ void WorkflowExecutor::execute_from(const WorkflowDef& workflow, const QString& 
         return;
     }
 
+    // Build in-degree map for the downstream subset
+    QSet<QString> exec_set;
+    exec_set.reserve(order.size());
+    for (const auto& id : order)
+        exec_set.insert(id);
+
+    in_degree_.reserve(order.size());
+    results_.reserve(order.size());
+    for (const auto& id : order) {
+        int deg = 0;
+        for (const auto& edge : incoming_edges_.value(id)) {
+            if (exec_set.contains(edge.source_node))
+                ++deg;
+        }
+        in_degree_.insert(id, deg);
+    }
+
+    total_count_ = order.size();
+
     start_time_ms_ = QDateTime::currentMSecsSinceEpoch();
     ExecutionHooks::instance().emit_workflow_start(workflow_.id);
     emit execution_started(workflow_.id);
 
     LOG_INFO("Executor",
-             QString("Partial execution from %1: %2 nodes").arg(start_node_id).arg(execution_order_.size()));
+             QString("Partial execution from %1: %2 nodes").arg(start_node_id).arg(total_count_));
 
-    execute_next();
+    launch_ready_nodes();
 }
 
 void WorkflowExecutor::stop() {
@@ -145,36 +202,32 @@ void WorkflowExecutor::stop() {
         return;
     stop_requested_ = true;
     LOG_INFO("Executor", "Stop requested");
-    // Force immediate completion — don't wait for the in-flight node to finish.
-    // Set running_ false and emit execution_finished right now so the UI unlocks.
-    running_ = false;
-    WorkflowExecutionResult wr;
-    wr.workflow_id = workflow_.id;
-    wr.total_duration_ms = static_cast<int>(QDateTime::currentMSecsSinceEpoch() - start_time_ms_);
-    wr.success = false;
-    wr.error = "Execution stopped by user";
-    for (auto it = results_.constBegin(); it != results_.constEnd(); ++it)
-        wr.node_results.append(it.value());
-    ExecutionHooks::instance().emit_workflow_end(workflow_.id, false, wr.total_duration_ms);
-    AuditLogger::instance().log(AuditAction::WorkflowFailed, workflow_.id, {}, {}, "Stopped by user");
-    emit execution_finished(wr);
+
+    // If no nodes are in-flight, finish immediately.
+    // Otherwise, in-flight nodes will complete and on_node_done will
+    // see stop_requested_ and trigger finish_execution when pending reaches 0.
+    if (pending_count_ == 0)
+        finish_execution();
 }
 
 // ── Graph construction ─────────────────────────────────────────────────
 
 void WorkflowExecutor::build_graph() {
+    const int n = workflow_.nodes.size();
     adjacency_.clear();
-    reverse_adj_.clear();
+    adjacency_.reserve(n);
+    incoming_edges_.clear();
+    incoming_edges_.reserve(n);
 
     // Initialize all nodes
     for (const auto& nd : workflow_.nodes) {
         adjacency_[nd.id];
-        reverse_adj_[nd.id];
+        incoming_edges_[nd.id];
     }
 
     for (const auto& ed : workflow_.edges) {
         adjacency_[ed.source_node].append(ed.target_node);
-        reverse_adj_[ed.target_node].append(ed.source_node);
+        incoming_edges_[ed.target_node].append(ed);
     }
 }
 
@@ -182,7 +235,8 @@ void WorkflowExecutor::build_graph() {
 
 bool WorkflowExecutor::has_cycle() const {
     enum Color { White, Gray, Black };
-    QMap<QString, Color> color;
+    QHash<QString, Color> color;
+    color.reserve(adjacency_.size());
     for (auto it = adjacency_.constBegin(); it != adjacency_.constEnd(); ++it)
         color[it.key()] = White;
 
@@ -208,22 +262,25 @@ bool WorkflowExecutor::has_cycle() const {
 // ── Topological sort (Kahn's algorithm) ────────────────────────────────
 
 QVector<QString> WorkflowExecutor::topological_sort() const {
-    QMap<QString, int> in_degree;
+    QHash<QString, int> in_deg;
+    in_deg.reserve(adjacency_.size());
     for (auto it = adjacency_.constBegin(); it != adjacency_.constEnd(); ++it)
-        in_degree[it.key()] = 0;
+        in_deg[it.key()] = 0;
 
     for (auto it = adjacency_.constBegin(); it != adjacency_.constEnd(); ++it) {
         for (const auto& v : it.value())
-            in_degree[v]++;
+            in_deg[v]++;
     }
 
     QVector<QString> queue;
-    for (auto it = in_degree.constBegin(); it != in_degree.constEnd(); ++it) {
+    queue.reserve(adjacency_.size());
+    for (auto it = in_deg.constBegin(); it != in_deg.constEnd(); ++it) {
         if (it.value() == 0)
             queue.append(it.key());
     }
 
     QVector<QString> order;
+    order.reserve(adjacency_.size());
     int front = 0;
     while (front < queue.size()) {
         QString u = queue[front++];
@@ -236,8 +293,8 @@ QVector<QString> WorkflowExecutor::topological_sort() const {
         order.append(u);
 
         for (const auto& v : adjacency_.value(u)) {
-            in_degree[v]--;
-            if (in_degree[v] == 0)
+            in_deg[v]--;
+            if (in_deg[v] == 0)
                 queue.append(v);
         }
     }
@@ -245,52 +302,40 @@ QVector<QString> WorkflowExecutor::topological_sort() const {
     return order;
 }
 
-// ── Execution loop ─────────────────────────────────────────────────────
+// ── Parallel execution ─────────────────────────────────────────────────
 
-void WorkflowExecutor::execute_next() {
-    if (stop_requested_ || current_index_ >= execution_order_.size()) {
-        // Execution complete
-        running_ = false;
-
-        WorkflowExecutionResult wr;
-        wr.workflow_id = workflow_.id;
-        wr.total_duration_ms = static_cast<int>(QDateTime::currentMSecsSinceEpoch() - start_time_ms_);
-
-        // Check if any node failed
-        wr.success = true;
-        for (auto it = results_.constBegin(); it != results_.constEnd(); ++it) {
-            wr.node_results.append(it.value());
-            if (!it->success)
-                wr.success = false;
-        }
-
-        if (stop_requested_) {
-            wr.success = false;
-            wr.error = "Execution stopped by user";
-        }
-
-        LOG_INFO("Executor",
-                 QString("Execution %1 in %2ms").arg(wr.success ? "completed" : "failed").arg(wr.total_duration_ms));
-
-        ExecutionHooks::instance().emit_workflow_end(workflow_.id, wr.success, wr.total_duration_ms);
-        AuditLogger::instance().log(
-            wr.success ? AuditAction::WorkflowCompleted : AuditAction::WorkflowFailed, workflow_.id, {}, {},
-            QString("%1 in %2ms").arg(wr.success ? "Completed" : "Failed").arg(wr.total_duration_ms));
-
-        emit execution_finished(wr);
+void WorkflowExecutor::launch_ready_nodes() {
+    if (stop_requested_) {
+        if (pending_count_ == 0)
+            finish_execution();
         return;
     }
 
-    QString node_id = execution_order_[current_index_];
+    // Collect all nodes with in_degree_ == 0 (ready to run)
+    QVector<QString> ready;
+    for (auto it = in_degree_.begin(); it != in_degree_.end(); ++it) {
+        if (it.value() == 0) {
+            ready.append(it.key());
+            it.value() = -1; // mark as launched
+        }
+    }
+
+    for (const QString& node_id : ready)
+        launch_single_node(node_id);
+}
+
+void WorkflowExecutor::launch_single_node(const QString& node_id) {
     auto nd_it = node_map_.constFind(node_id);
     if (nd_it == node_map_.constEnd()) {
-        current_index_++;
-        execute_next();
+        // Unknown node — skip
+        completed_count_++;
+        if (completed_count_ == total_count_)
+            finish_execution();
         return;
     }
 
     const NodeDef& nd = nd_it.value();
-    const auto* type_def = NodeRegistry::instance().find(nd.type);
+    const auto* type_def = type_cache_.value(node_id, nullptr);
 
     if (!type_def || !type_def->execute) {
         // No executor — pass through with warning
@@ -301,9 +346,19 @@ void WorkflowExecutor::execute_next() {
         nr.output = QJsonObject{{"pass_through", true}};
         results_.insert(node_id, nr);
         emit node_completed(node_id, nr);
-        current_index_++;
-        // Use queued invocation to avoid deep recursion
-        QMetaObject::invokeMethod(this, &WorkflowExecutor::execute_next, Qt::QueuedConnection);
+        completed_count_++;
+
+        // Propagate readiness to downstream nodes
+        for (const auto& downstream : adjacency_.value(node_id)) {
+            auto deg_it = in_degree_.find(downstream);
+            if (deg_it != in_degree_.end() && deg_it.value() > 0)
+                deg_it.value()--;
+        }
+
+        if (completed_count_ == total_count_)
+            finish_execution();
+        else
+            QMetaObject::invokeMethod(this, &WorkflowExecutor::launch_ready_nodes, Qt::QueuedConnection);
         return;
     }
 
@@ -311,6 +366,41 @@ void WorkflowExecutor::execute_next() {
     emit node_started(node_id);
 
     QVector<QJsonValue> inputs = collect_inputs(node_id);
+
+    // Skip nodes whose upstream branching filtered out all inputs.
+    if (inputs.isEmpty() && !incoming_edges_.value(node_id).isEmpty()) {
+        bool has_upstream_results = false;
+        for (const auto& edge : incoming_edges_.value(node_id)) {
+            if (results_.contains(edge.source_node)) {
+                has_upstream_results = true;
+                break;
+            }
+        }
+        if (has_upstream_results) {
+            // Upstream nodes ran but outputs were filtered by port routing — skip.
+            NodeExecutionResult nr;
+            nr.node_id = node_id;
+            nr.success = true;
+            nr.output = QJsonObject{{"_skipped", true}};
+            results_.insert(node_id, nr);
+            emit node_completed(node_id, nr);
+            completed_count_++;
+
+            for (const auto& downstream : adjacency_.value(node_id)) {
+                auto deg_it = in_degree_.find(downstream);
+                if (deg_it != in_degree_.end() && deg_it.value() > 0)
+                    deg_it.value()--;
+            }
+
+            if (completed_count_ == total_count_)
+                finish_execution();
+            else
+                QMetaObject::invokeMethod(this, &WorkflowExecutor::launch_ready_nodes, Qt::QueuedConnection);
+            return;
+        }
+    }
+
+    pending_count_++;
     qint64 node_start = QDateTime::currentMSecsSinceEpoch();
 
     // Execute asynchronously with QPointer guard (P8)
@@ -321,27 +411,29 @@ void WorkflowExecutor::execute_next() {
                               return;
                           QMetaObject::invokeMethod(
                               self,
-                              [self, node_id, success, output, error, node_start]() {
+                              [self, node_id, success, output = std::move(output),
+                               error = std::move(error), node_start]() {
                                   if (!self)
                                       return;
-                                  NodeExecutionResult nr;
-                                  nr.node_id = node_id;
-                                  nr.success = success;
-                                  nr.output = output;
-                                  nr.error = error;
-                                  nr.duration_ms = static_cast<int>(QDateTime::currentMSecsSinceEpoch() - node_start);
-                                  self->on_node_done(node_id, success, output, error);
+                                  int duration = static_cast<int>(
+                                      QDateTime::currentMSecsSinceEpoch() - node_start);
+                                  self->on_node_done(node_id, success, output, error, duration);
                               },
                               Qt::QueuedConnection);
                       });
 }
 
-void WorkflowExecutor::on_node_done(const QString& node_id, bool success, QJsonValue output, QString error) {
+void WorkflowExecutor::on_node_done(const QString& node_id, bool success,
+                                     const QJsonValue& output, const QString& error,
+                                     int duration_ms) {
+    pending_count_--;
+
     NodeExecutionResult nr;
     nr.node_id = node_id;
     nr.success = success;
     nr.output = output;
     nr.error = error;
+    nr.duration_ms = duration_ms;
 
     results_.insert(node_id, nr);
 
@@ -354,6 +446,7 @@ void WorkflowExecutor::on_node_done(const QString& node_id, bool success, QJsonV
     }
 
     emit node_completed(node_id, nr);
+    completed_count_++;
 
     if (!success) {
         auto nd_it = node_map_.constFind(node_id);
@@ -362,22 +455,107 @@ void WorkflowExecutor::on_node_done(const QString& node_id, bool success, QJsonV
         if (!continue_on_fail) {
             LOG_ERROR("Executor", QString("Node %1 failed: %2 — aborting").arg(node_id, error));
             stop_requested_ = true;
+            if (pending_count_ == 0)
+                finish_execution();
+            return;
         } else {
             LOG_WARN("Executor", QString("Node %1 failed but continue_on_fail is set: %2").arg(node_id, error));
         }
     }
 
-    current_index_++;
-    execute_next();
+    // Propagate readiness to downstream nodes
+    for (const auto& downstream : adjacency_.value(node_id)) {
+        auto deg_it = in_degree_.find(downstream);
+        if (deg_it != in_degree_.end() && deg_it.value() > 0)
+            deg_it.value()--;
+    }
+
+    if (completed_count_ == total_count_) {
+        finish_execution();
+    } else if (!stop_requested_) {
+        launch_ready_nodes();
+    } else if (pending_count_ == 0) {
+        finish_execution();
+    }
+}
+
+void WorkflowExecutor::finish_execution() {
+    running_ = false;
+
+    WorkflowExecutionResult wr;
+    wr.workflow_id = workflow_.id;
+    wr.total_duration_ms = static_cast<int>(QDateTime::currentMSecsSinceEpoch() - start_time_ms_);
+
+    wr.success = true;
+    wr.node_results.reserve(results_.size());
+    for (auto it = results_.constBegin(); it != results_.constEnd(); ++it) {
+        wr.node_results.append(it.value());
+        if (!it->success)
+            wr.success = false;
+    }
+
+    if (stop_requested_) {
+        wr.success = false;
+        if (wr.error.isEmpty())
+            wr.error = "Execution stopped";
+    }
+
+    LOG_INFO("Executor",
+             QString("Execution %1 in %2ms").arg(wr.success ? "completed" : "failed").arg(wr.total_duration_ms));
+
+    ExecutionHooks::instance().emit_workflow_end(workflow_.id, wr.success, wr.total_duration_ms);
+    AuditLogger::instance().log(
+        wr.success ? AuditAction::WorkflowCompleted : AuditAction::WorkflowFailed, workflow_.id, {}, {},
+        QString("%1 in %2ms").arg(wr.success ? "Completed" : "Failed").arg(wr.total_duration_ms));
+
+    emit execution_finished(wr);
 }
 
 QVector<QJsonValue> WorkflowExecutor::collect_inputs(const QString& node_id) const {
     QVector<QJsonValue> inputs;
-    for (const auto& upstream_id : reverse_adj_.value(node_id)) {
-        auto it = results_.constFind(upstream_id);
-        if (it != results_.constEnd())
-            inputs.append(it->output);
+
+    for (const auto& edge : incoming_edges_.value(node_id)) {
+        auto it = results_.constFind(edge.source_node);
+        if (it == results_.constEnd())
+            continue;
+
+        const QJsonValue& output = it->output;
+
+        // Port-based routing: if upstream output has _branch or _route annotation,
+        // only flow data through the matching source_port.
+        if (output.isObject()) {
+            QJsonObject obj = output.toObject();
+
+            // If/Else branching: _branch = "true" or "false"
+            if (obj.contains("_branch")) {
+                QString branch = obj.value("_branch").toString();
+                bool is_true_port  = (edge.source_port == "output_true"
+                                      || edge.source_port == "output_pass"
+                                      || edge.source_port == "output_open");
+                bool is_false_port = (edge.source_port == "output_false"
+                                      || edge.source_port == "output_fail"
+                                      || edge.source_port == "output_closed");
+                if (is_true_port && branch != "true")
+                    continue;
+                if (is_false_port && branch != "false")
+                    continue;
+            }
+
+            // Switch routing: _route = 0, 1, 2
+            if (obj.contains("_route")) {
+                int route = obj.value("_route").toInt(-1);
+                if (edge.source_port == "output_0" && route != 0)
+                    continue;
+                if (edge.source_port == "output_1" && route != 1)
+                    continue;
+                if (edge.source_port == "output_2" && route != 2)
+                    continue;
+            }
+        }
+
+        inputs.append(output);
     }
+
     return inputs;
 }
 

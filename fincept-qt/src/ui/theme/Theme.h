@@ -53,12 +53,22 @@ inline constexpr ColorToken TEXT_DIM      {&ThemeTokens::text_dim};
 inline constexpr ColorToken AMBER         {&ThemeTokens::accent};
 inline constexpr ColorToken AMBER_DIM     {&ThemeTokens::accent_dim};
 inline constexpr ColorToken ORANGE        {&ThemeTokens::accent};
+inline constexpr ColorToken TEXT_ON_ACCENT{&ThemeTokens::text_on_accent};
+
+inline constexpr ColorToken ICON_DIM      {&ThemeTokens::icon_dim};
+inline constexpr ColorToken ICON_HOVER    {&ThemeTokens::icon_hover};
 
 inline constexpr ColorToken POSITIVE      {&ThemeTokens::positive};
+inline constexpr ColorToken POSITIVE_DIM  {&ThemeTokens::positive_dim};
 inline constexpr ColorToken NEGATIVE      {&ThemeTokens::negative};
+inline constexpr ColorToken NEGATIVE_DIM  {&ThemeTokens::negative_dim};
 inline constexpr ColorToken WARNING       {&ThemeTokens::warning};
 inline constexpr ColorToken INFO          {&ThemeTokens::info};
 inline constexpr ColorToken CYAN          {&ThemeTokens::cyan};
+
+inline constexpr ColorToken ACCENT_BG    {&ThemeTokens::accent_bg};
+inline constexpr ColorToken POSITIVE_BG  {&ThemeTokens::positive_bg};
+inline constexpr ColorToken NEGATIVE_BG  {&ThemeTokens::negative_bg};
 
 // Legacy aliases
 inline constexpr ColorToken GREEN         {&ThemeTokens::positive};
@@ -93,6 +103,14 @@ constexpr int BODY   = 16;
 constexpr int DATA   = 14;
 constexpr int SMALL  = 13;
 constexpr int TINY   = 12;
+
+/// Runtime font size relative to the user-configured base size.
+/// offset=0 → base (e.g. 14px), offset=-2 → 12px, offset=+2 → 16px.
+/// Minimum clamped to 7px.
+inline int font_px(int offset = 0) {
+    int v = ThemeManager::instance().tokens().font_size_base + offset;
+    return v < 7 ? 7 : v;
+}
 
 } // namespace fonts
 

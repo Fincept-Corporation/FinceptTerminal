@@ -6,6 +6,7 @@
 
 #include "core/logging/Logger.h"
 #include "services/gov_data/GovDataService.h"
+#include "ui/theme/Theme.h"
 
 #include <QDesktopServices>
 #include <QFileDialog>
@@ -24,64 +25,78 @@ static constexpr const char* kGovDataHKScript = "data_gov_hk_api.py";
 static constexpr const char* kGovDataHKColor  = "#F43F5E";
 } // namespace
 
-// ── Stylesheet ────────────────────────────────────────────────────────────────
+using namespace fincept::ui;
 
-static const QString kPanelStyle = QStringLiteral(
-    "#hkPanelToolbar { background:#111111; border-bottom:1px solid #1a1a1a; }"
+// ── Dynamic stylesheet ───────────────────────────────────────────────────────
 
-    "#hkTabBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:4px 12px; letter-spacing:0.5px; }"
-    "#hkTabBtn:hover { color:#e5e5e5; background:#161616; }"
-    "#hkTabBtn:checked { background:rgba(244,63,94,0.12); color:#F43F5E;"
-    "  border:1px solid #F43F5E; }"
+static QString build_hk_style() {
+    const auto& t  = ui::ThemeManager::instance().tokens();
+    const auto  cc = QColor(kGovDataHKColor);
+    const QString cr = QString::number(cc.red());
+    const QString cg = QString::number(cc.green());
+    const QString cb = QString::number(cc.blue());
+    const QString c  = kGovDataHKColor;
 
-    "#hkBackBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:4px 10px; }"
-    "#hkBackBtn:hover { color:#e5e5e5; background:#161616; }"
+    QString s;
+    s += QString("#hkPanelToolbar { background:%1; border-bottom:1px solid %2; }").arg(t.bg_raised, t.border_dim);
 
-    "#hkFetchBtn { background:#F43F5E; color:#e5e5e5; border:none;"
-    "  font-size:10px; font-weight:700; padding:4px 14px; }"
-    "#hkFetchBtn:hover { background:#e11d48; }"
-    "#hkFetchBtn:disabled { background:#1a1a1a; color:#404040; }"
+    s += QString("#hkTabBtn { background:transparent; color:%1; border:1px solid %2;"
+                 "  font-size:10px; font-weight:700; padding:4px 12px; letter-spacing:0.5px; }").arg(t.text_secondary, t.border_dim);
+    s += QString("#hkTabBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
+    s += QString("#hkTabBtn:checked { background:rgba(%1,%2,%3,0.12); color:%4;"
+                 "  border:1px solid %4; }").arg(cr, cg, cb, c);
 
-    "#hkCsvBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:4px 10px; }"
-    "#hkCsvBtn:hover { color:#e5e5e5; background:#161616; }"
+    s += QString("#hkBackBtn { background:transparent; color:%1; border:1px solid %2;"
+                 "  font-size:10px; font-weight:700; padding:4px 10px; }").arg(t.text_secondary, t.border_dim);
+    s += QString("#hkBackBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
 
-    "#hkSearch { background:#080808; color:#e5e5e5; border:none;"
-    "  border-bottom:1px solid #1a1a1a; padding:4px 10px; font-size:11px; }"
-    "#hkSearch:focus { border-bottom:1px solid #F43F5E; }"
+    s += QString("#hkFetchBtn { background:%1; color:%2; border:none;"
+                 "  font-size:10px; font-weight:700; padding:4px 14px; }").arg(c, t.bg_base);
+    s += QString("#hkFetchBtn:hover { background:%1; }").arg(cc.lighter(120).name());
+    s += QString("#hkFetchBtn:disabled { background:%1; color:%2; }").arg(t.border_dim, t.text_dim);
 
-    "QTableWidget { background:#080808; color:#e5e5e5; border:none;"
-    "  gridline-color:#1a1a1a; font-size:11px; alternate-background-color:#0a0a0a; }"
-    "QTableWidget::item { padding:5px 8px; border-bottom:1px solid #1a1a1a; }"
-    "QTableWidget::item:selected { background:rgba(244,63,94,0.10); color:#F43F5E; }"
-    "QHeaderView::section { background:#111111; color:#808080; border:none;"
-    "  border-bottom:2px solid #1a1a1a; border-right:1px solid #1a1a1a;"
-    "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+    s += QString("#hkCsvBtn { background:transparent; color:%1; border:1px solid %2;"
+                 "  font-size:10px; font-weight:700; padding:4px 10px; }").arg(t.text_secondary, t.border_dim);
+    s += QString("#hkCsvBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
 
-    "#hkStatusPage { background:#080808; }"
-    "#hkStatusMsg  { color:#808080; font-size:13px; background:transparent; }"
-    "#hkStatusErr  { color:#dc2626; font-size:12px; background:transparent; }"
+    s += QString("#hkSearch { background:%1; color:%2; border:none;"
+                 "  border-bottom:1px solid %3; padding:4px 10px; font-size:11px; }").arg(t.bg_base, t.text_primary, t.border_dim);
+    s += QString("#hkSearch:focus { border-bottom:1px solid %1; }").arg(c);
 
-    "#hkBreadcrumb { background:#0a0a0a; border-bottom:1px solid #1a1a1a; }"
-    "#hkBreadText  { color:#808080; font-size:9px; background:transparent; }"
-    "#hkBreadCount { color:#808080; font-size:9px; background:transparent; }"
+    s += QString("QTableWidget { background:%1; color:%2; border:none;"
+                 "  gridline-color:%3; font-size:11px; alternate-background-color:%4; }").arg(t.bg_base, t.text_primary, t.border_dim, t.bg_surface);
+    s += QString("QTableWidget::item { padding:5px 8px; border-bottom:1px solid %1; }").arg(t.border_dim);
+    s += QString("QTableWidget::item:selected { background:rgba(%1,%2,%3,0.10); color:%4; }").arg(cr, cg, cb, c);
+    s += QString("QHeaderView::section { background:%1; color:%2; border:none;"
+                 "  border-bottom:2px solid %3; border-right:1px solid %3;"
+                 "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }").arg(t.bg_raised, t.text_secondary, t.border_dim);
 
-    "QScrollBar:vertical { background:#080808; width:5px; }"
-    "QScrollBar::handle:vertical { background:#1a1a1a; min-height:20px; }"
-    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }"
-);
+    s += QString("#hkStatusPage { background:%1; }").arg(t.bg_base);
+    s += QString("#hkStatusMsg  { color:%1; font-size:13px; background:transparent; }").arg(t.text_secondary);
+    s += QString("#hkStatusErr  { color:%1; font-size:12px; background:transparent; }").arg(t.negative);
+
+    s += QString("#hkBreadcrumb { background:%1; border-bottom:1px solid %2; }").arg(t.bg_surface, t.border_dim);
+    s += QString("#hkBreadText  { color:%1; font-size:9px; background:transparent; }").arg(t.text_secondary);
+    s += QString("#hkBreadCount { color:%1; font-size:9px; background:transparent; }").arg(t.text_secondary);
+
+    s += QString("QScrollBar:vertical { background:%1; width:5px; }").arg(t.bg_base);
+    s += QString("QScrollBar::handle:vertical { background:%1; min-height:20px; }").arg(t.border_dim);
+    s += "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }";
+    return s;
+}
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 GovDataHKPanel::GovDataHKPanel(QWidget* parent)
     : QWidget(parent) {
-    setStyleSheet(kPanelStyle);
+    setStyleSheet(build_hk_style());
     build_ui();
     connect(&services::GovDataService::instance(),
             &services::GovDataService::result_ready,
             this, &GovDataHKPanel::on_result);
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this]() {
+        setStyleSheet(build_hk_style());
+    });
 }
 
 // ── Build UI ──────────────────────────────────────────────────────────────────
@@ -579,7 +594,7 @@ void GovDataHKPanel::show_loading(const QString& message) {
 
 void GovDataHKPanel::show_error(const QString& message) {
     status_label_->setStyleSheet(
-        "color:#dc2626; font-size:12px; background:transparent;");
+        QString("color:%1; font-size:12px; background:transparent;").arg(colors::NEGATIVE()));
     status_label_->setText("Error: " + message);
     content_stack_->setCurrentIndex(Status);
     LOG_ERROR("GovHK", message);
@@ -587,8 +602,8 @@ void GovDataHKPanel::show_error(const QString& message) {
 
 void GovDataHKPanel::show_status(const QString& message, bool is_error) {
     status_label_->setStyleSheet(is_error
-        ? "color:#dc2626; font-size:12px; background:transparent;"
-        : "color:#808080; font-size:12px; background:transparent;");
+        ? QString("color:%1; font-size:12px; background:transparent;").arg(colors::NEGATIVE())
+        : QString("color:%1; font-size:12px; background:transparent;").arg(colors::TEXT_SECONDARY()));
     status_label_->setText(message);
     content_stack_->setCurrentIndex(Status);
 }

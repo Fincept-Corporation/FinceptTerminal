@@ -13,11 +13,16 @@ class PerformanceWidget : public BaseWidget {
   public:
     explicit PerformanceWidget(QWidget* parent = nullptr);
 
+  protected:
+    void on_theme_changed() override;
+
   private:
+    void apply_styles();
     void refresh_data();
     void populate(const QVector<services::QuoteData>& quotes);
 
     struct MetricRow {
+        QWidget* row_widget = nullptr;
         QLabel* label = nullptr;
         QLabel* value = nullptr;
         QLabel* period = nullptr;

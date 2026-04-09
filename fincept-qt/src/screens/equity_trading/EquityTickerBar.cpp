@@ -1,6 +1,8 @@
 // EquityTickerBar.cpp — dense price ribbon with bid/ask/spread
 #include "screens/equity_trading/EquityTickerBar.h"
 
+#include "ui/theme/Theme.h"
+
 #include <QHBoxLayout>
 
 #include <cmath>
@@ -74,7 +76,7 @@ void EquityTickerBar::update_quote(double ltp, double change, double change_pct,
     if (positive != last_positive_) {
         change_label_->setStyleSheet(
             QString("color: %1; font-size: 12px; font-weight: 700; background: transparent; border: none;")
-                .arg(positive ? "#16a34a" : "#dc2626"));
+                .arg(positive ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
         last_positive_ = positive;
     }
 

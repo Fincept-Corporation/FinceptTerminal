@@ -21,14 +21,10 @@ class ThemeManager : public QObject {
 public:
     static ThemeManager& instance();
 
-    /// Apply a named preset ("Obsidian", "Bloomberg Dark", "Matrix", "Midnight Blue", "Light").
+    /// Apply a named preset ("Obsidian", "Bloomberg Dark", "Light").
     /// Builds global QSS from tokens and calls qApp->setStyleSheet().
     /// Emits theme_changed(tokens) so custom painters can update.
     void apply_theme(const QString& name);
-
-    /// Override the active theme's accent color with a custom hex string (e.g. "#ff0000").
-    /// Re-applies QSS and emits theme_changed.
-    void apply_accent(const QString& hex);
 
     /// Change the application font family and base size.
     /// Calls qApp->setFont() immediately — takes effect on all widgets.
@@ -48,7 +44,7 @@ public:
     static QStringList available_densities(); // single source of truth for density names
 
 signals:
-    /// Emitted after every successful apply_theme / apply_accent / apply_density call.
+    /// Emitted after every successful apply_theme / apply_density call.
     /// Custom paintEvent widgets connect to this to invalidate caches and call update().
     void theme_changed(const fincept::ui::ThemeTokens& tokens);
 
@@ -62,7 +58,6 @@ private:
     QString     font_family_    = "Consolas";
     int         font_size_px_   = 14;
     int         density_pad_    = 4;  // px padding driven by density setting
-    QByteArray  accent_override_;     // owns memory for custom accent const char*
     mutable QString cached_qss_;     // last built QSS — skip rebuild if tokens unchanged
 };
 

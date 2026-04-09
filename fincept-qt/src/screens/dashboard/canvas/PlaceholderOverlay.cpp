@@ -1,4 +1,5 @@
 #include "screens/dashboard/canvas/PlaceholderOverlay.h"
+#include "ui/theme/Theme.h"
 
 #include <QPainter>
 #include <QPen>
@@ -14,10 +15,13 @@ PlaceholderOverlay::PlaceholderOverlay(QWidget* parent) : QWidget(parent) {
 
 void PlaceholderOverlay::paintEvent(QPaintEvent*) {
     QPainter p(this);
-    // Orange fill, very low alpha — matches react-grid-layout placeholder
-    p.fillRect(rect(), QColor(217, 119, 6, 22)); // AMBER at ~9% opacity
-    // Dashed orange border
-    QPen pen(QColor(217, 119, 6, 180), 1, Qt::DashLine);
+    QColor accent(ui::colors::AMBER());
+    // Accent fill at ~9% opacity
+    accent.setAlpha(22);
+    p.fillRect(rect(), accent);
+    // Dashed accent border
+    accent.setAlpha(180);
+    QPen pen(accent, 1, Qt::DashLine);
     p.setPen(pen);
     p.drawRect(rect().adjusted(0, 0, -1, -1));
 }

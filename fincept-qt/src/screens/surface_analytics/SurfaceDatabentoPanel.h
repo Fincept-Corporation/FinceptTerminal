@@ -27,6 +27,7 @@ class SurfaceDatabentoPanel : public QWidget {
     void vol_surface_received(const fincept::DatabentoVolSurfaceResult& result);
     void ohlcv_received(const fincept::DatabentoOhlcvResult& result);
     void futures_received(const fincept::DatabentoFuturesResult& result);
+    void surface_received(const fincept::DatabentoSurfaceResult& result);
 
   protected:
     void showEvent(QShowEvent* e) override;
@@ -41,6 +42,7 @@ class SurfaceDatabentoPanel : public QWidget {
     void on_ohlcv_ready(const fincept::DatabentoOhlcvResult& r);
     void on_vol_ready(const fincept::DatabentoVolSurfaceResult& r);
     void on_futures_ready(const fincept::DatabentoFuturesResult& r);
+    void on_surface_ready(const fincept::DatabentoSurfaceResult& r);
 
   private:
     void setup_ui();
@@ -49,6 +51,16 @@ class SurfaceDatabentoPanel : public QWidget {
     bool needs_ohlcv() const;
     bool needs_vol_surface() const;
     bool needs_futures() const;
+    bool needs_local_vol() const;
+    bool needs_implied_dividend() const;
+    bool needs_liquidity() const;
+    bool needs_commodity_vol() const;
+    bool needs_crack_spread() const;
+    bool needs_stress_test() const;
+    bool needs_yield_curve() const;
+    bool needs_forward_rate() const;
+    bool needs_rate_path() const;
+    bool needs_fx_forward_points() const;
 
     // Widgets
     QLineEdit* api_key_input_ = nullptr;

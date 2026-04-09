@@ -23,17 +23,17 @@ void PortfolioTxnPanel::build_ui() {
 
     // Header bar
     auto* header = new QWidget;
-    header->setFixedHeight(24);
+    header->setFixedHeight(28);
     header->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;")
+        QString("background:%1; border-top:1px solid %2; border-bottom:1px solid %2;")
             .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* hl = new QHBoxLayout(header);
-    hl->setContentsMargins(8, 0, 8, 0);
+    hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(8);
 
     auto* title = new QLabel("TRANSACTION HISTORY");
     title->setStyleSheet(
-        QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px;")
+        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;")
             .arg(ui::colors::TEXT_SECONDARY));
     hl->addWidget(title);
 
@@ -41,7 +41,7 @@ void PortfolioTxnPanel::build_ui() {
 
     count_label_ = new QLabel;
     count_label_->setStyleSheet(
-        QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_TERTIARY));
     hl->addWidget(count_label_);
 
     layout->addWidget(header);
@@ -67,20 +67,21 @@ void PortfolioTxnPanel::build_ui() {
                 "  background:%1; color:%2; border:none;"
                 "  font-size:11px; font-family:%3; gridline-color:%4;"
                 "}"
-                "QTableWidget::item { padding:2px 6px; border-bottom:1px solid %4; }"
+                "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %4; }"
                 "QTableWidget::item:selected { background:%5; color:%2; }"
                 "QHeaderView::section {"
                 "  background:%6; color:%7; border:none;"
-                "  border-bottom:1px solid %4; font-size:9px; font-weight:700;"
-                "  letter-spacing:0.5px; padding:3px 6px; }"
-                "QScrollBar:vertical { background:%1; width:6px; }"
-                "QScrollBar::handle:vertical { background:%4; border-radius:3px; }"
+                "  border-bottom:2px solid %4; border-right:1px solid %4;"
+                "  font-size:10px; font-weight:700;"
+                "  letter-spacing:0.5px; padding:4px 8px; }"
+                "QScrollBar:vertical { background:%1; width:5px; }"
+                "QScrollBar::handle:vertical { background:%4; min-height:20px; }"
                 "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0px; }")
             .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::fonts::DATA_FAMILY,
                  ui::colors::BORDER_DIM, ui::colors::BG_HOVER,
                  ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY));
 
-    table_->verticalHeader()->setDefaultSectionSize(22);
+    table_->verticalHeader()->setDefaultSectionSize(24);
 
     layout->addWidget(table_, 1);
 }
@@ -155,6 +156,33 @@ void PortfolioTxnPanel::populate() {
 
     table_->setSortingEnabled(true);
     count_label_->setText(QString("%1 transactions").arg(txns_.size()));
+}
+
+void PortfolioTxnPanel::refresh_theme() {
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+
+    const QString bsz = QString::number(ui::fonts::font_px(0));
+    const QString hsz = QString::number(ui::fonts::font_px(-2));
+    table_->setStyleSheet(
+        QString("QTableWidget {"
+                "  background:%1; color:%2; border:none;"
+                "  font-size:" + bsz + "px; font-family:%3; gridline-color:%4;"
+                "}"
+                "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %4; }"
+                "QTableWidget::item:selected { background:%5; color:%2; }"
+                "QHeaderView::section {"
+                "  background:%6; color:%7; border:none;"
+                "  border-bottom:2px solid %4; border-right:1px solid %4;"
+                "  font-size:" + hsz + "px; font-weight:700;"
+                "  letter-spacing:0.5px; padding:4px 8px; }"
+                "QScrollBar:vertical { background:%1; width:5px; }"
+                "QScrollBar::handle:vertical { background:%4; min-height:20px; }"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0px; }")
+            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::fonts::DATA_FAMILY,
+                 ui::colors::BORDER_DIM, ui::colors::BG_HOVER,
+                 ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY));
+
+    populate();
 }
 
 } // namespace fincept::screens

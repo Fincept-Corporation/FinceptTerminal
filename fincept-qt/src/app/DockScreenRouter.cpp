@@ -1,6 +1,7 @@
 #include "app/DockScreenRouter.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "core/session/SessionManager.h"
 #include "screens/IStatefulScreen.h"
 
@@ -598,9 +599,7 @@ void DockScreenRouter::save_screen_state(const QString& id) {
     if (!screen) return;
     auto* stateful = dynamic_cast<screens::IStatefulScreen*>(screen);
     if (!stateful) return;
-    SessionManager::instance().save_tab_state(
-        "screen_state/" + id, stateful->save_state());
-    LOG_DEBUG("DockRouter", "Saved screen state: " + id);
+    ScreenStateManager::instance().save_now(stateful);
 }
 
 void DockScreenRouter::restore_screen_state(const QString& id) {
@@ -608,11 +607,7 @@ void DockScreenRouter::restore_screen_state(const QString& id) {
     if (!screen) return;
     auto* stateful = dynamic_cast<screens::IStatefulScreen*>(screen);
     if (!stateful) return;
-    const auto state = SessionManager::instance().load_tab_state("screen_state/" + id);
-    if (!state.isEmpty()) {
-        stateful->restore_state(state);
-        LOG_DEBUG("DockRouter", "Restored screen state: " + id);
-    }
+    ScreenStateManager::instance().restore(stateful);
 }
 
 } // namespace fincept

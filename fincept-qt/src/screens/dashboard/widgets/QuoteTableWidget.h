@@ -22,7 +22,11 @@ class QuoteTableWidget : public BaseWidget {
 
     void refresh_data();
 
+  protected:
+    void on_theme_changed() override;
+
   private:
+    void apply_styles();
     void populate(const QVector<fincept::services::QuoteData>& quotes);
 
     QStringList symbols_;

@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QProcessEnvironment>
 #include <QStandardPaths>
 
@@ -24,15 +25,19 @@ PythonRunner& PythonRunner::instance() {
 }
 
 PythonRunner::PythonRunner() {
-    python_path_ = find_python();
     scripts_dir_ = find_scripts_dir();
-
-    if (python_path_.isEmpty()) {
-        LOG_WARN("Python", "No Python interpreter found");
-    } else {
-        LOG_INFO("Python", "Python: " + python_path_);
-    }
     LOG_INFO("Python", "Scripts: " + scripts_dir_);
+
+    // Try fast, non-blocking venv detection first
+    python_path_ = find_python_sync();
+
+    if (!python_path_.isEmpty()) {
+        python_init_done_ = true;
+        LOG_INFO("Python", "Python: " + python_path_);
+    } else {
+        // System python detection requires a process spawn — do it async
+        find_python_async();
+    }
 }
 
 bool PythonRunner::is_available() const {
@@ -48,7 +53,6 @@ QString PythonRunner::scripts_dir() const {
 
 // ── Venv routing ─────────────────────────────────────────────────────────────
 // Routes scripts to the correct venv based on their name.
-// Scripts matching kNumpy1Scripts go to venv-numpy1, all others to venv-numpy2.
 
 static QString select_venv_for_script(const QString& script) {
     QString lower = script.toLower();
@@ -62,7 +66,8 @@ static QString select_venv_for_script(const QString& script) {
 
 // ── Find Python ──────────────────────────────────────────────────────────────
 
-QString PythonRunner::find_python() const {
+// Fast, non-blocking detection: checks only file existence (no process spawns)
+QString PythonRunner::find_python_sync() const {
     // 1. Use UV-managed venvs from PythonSetupManager (preferred)
     auto& setup = PythonSetupManager::instance();
     QString venv2_py = setup.python_path("venv-numpy2");
@@ -90,20 +95,47 @@ QString PythonRunner::find_python() const {
         }
     }
 
-    // 3. Fallback to system python
+    return {}; // No venv found — need async system python check
+}
+
+// Async detection: spawns `python --version` without blocking the UI thread
+void PythonRunner::find_python_async() {
 #ifdef _WIN32
     QString sys_python = "python";
 #else
     QString sys_python = "python3";
 #endif
 
-    QProcess test;
-    test.start(sys_python, {"--version"});
-    if (test.waitForFinished(5000) && test.exitCode() == 0) {
-        return sys_python;
-    }
+    auto* proc = new QProcess(this);
 
-    return {};
+#ifdef _WIN32
+    proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
+        cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
+    });
+#endif
+
+    connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+            [this, proc, sys_python](int exit_code, QProcess::ExitStatus) {
+                proc->deleteLater();
+                if (exit_code == 0) {
+                    python_path_ = sys_python;
+                    LOG_INFO("Python", "System Python found: " + sys_python);
+                } else {
+                    LOG_WARN("Python", "No Python interpreter found");
+                }
+                python_init_done_ = true;
+
+                // Drain any requests that were queued while we were detecting
+                start_next();
+            });
+
+    connect(proc, &QProcess::errorOccurred, this, [this, proc](QProcess::ProcessError) {
+        proc->deleteLater();
+        LOG_WARN("Python", "No Python interpreter found (process error)");
+        python_init_done_ = true;
+    });
+
+    proc->start(sys_python, {"--version"});
 }
 
 // ── Find Scripts Directory ───────────────────────────────────────────────────
@@ -149,7 +181,7 @@ QString PythonRunner::find_scripts_dir() const {
 // ── Run Script ───────────────────────────────────────────────────────────────
 
 void PythonRunner::run(const QString& script, const QStringList& args, Callback cb) {
-    if (python_path_.isEmpty()) {
+    if (python_init_done_ && python_path_.isEmpty()) {
         cb({false, {}, "Python not available — run first-time setup from the app", -1});
         return;
     }
@@ -168,7 +200,7 @@ void PythonRunner::run(const QString& script, const QStringList& args, Callback 
 /// Run arbitrary Python code (for notebook/colab cells).
 /// Creates a temp file, executes it, returns output.
 void PythonRunner::run_code(const QString& code, Callback cb) {
-    if (python_path_.isEmpty()) {
+    if (python_init_done_ && python_path_.isEmpty()) {
         cb({false, {}, "Python not available — run first-time setup from the app", -1});
         return;
     }
@@ -191,8 +223,19 @@ void PythonRunner::run_code(const QString& code, Callback cb) {
 }
 
 void PythonRunner::start_next() {
+    // Don't start if Python detection is still in progress
+    if (!python_init_done_)
+        return;
+
     while (active_count_ < max_concurrent_ && !queue_.isEmpty()) {
         auto req = queue_.dequeue();
+
+        if (python_path_.isEmpty()) {
+            // Python became unavailable — fail the request
+            req.cb({false, {}, "Python not available", -1});
+            continue;
+        }
+
         ++active_count_;
 
         // Determine if this is inline code or a script file
@@ -223,7 +266,6 @@ void PythonRunner::start_next() {
 
         // If the script is inside a sub-package (contains '/'), use -m <module>
         // so Python can resolve relative imports (from .core import ...).
-        // Convert "Analytics/economics/trade_geopolitics.py" → "-m Analytics.economics.trade_geopolitics"
         if (!is_code && req.script.contains('/')) {
             QString module = req.script;
             module.remove(".py");
@@ -241,15 +283,10 @@ void PythonRunner::start_next() {
         env.insert("PYTHONDONTWRITEBYTECODE", "1");
         env.insert("PYTHONUNBUFFERED", "1");
         env.insert("FINCEPT_DATA_DIR", PythonSetupManager::instance().install_dir());
-        // Add scripts dir to PYTHONPATH so package-relative imports (from .core import ...)
-        // work when scripts inside sub-packages are run directly as script files.
+
         QString existing_pypath = env.value("PYTHONPATH");
         QString new_pypath = scripts_dir_ + (existing_pypath.isEmpty() ? "" : ";" + existing_pypath);
 
-        // For nested packages invoked with -m (e.g. agents/finagent_core/main.py → -m agents.finagent_core.main),
-        // the __init__.py may use absolute imports like "from finagent_core.xxx import ...".
-        // These need the parent directory of the package on PYTHONPATH.
-        // e.g. "from finagent_core.core_agent import ..." needs scripts/agents/ on the path.
         if (!is_code && req.script.contains('/')) {
             QString script_dir = QFileInfo(scripts_dir_ + "/" + req.script).dir().absolutePath();
             QString parent_of_pkg = QFileInfo(script_dir).dir().absolutePath();
@@ -267,15 +304,32 @@ void PythonRunner::start_next() {
         });
 #endif
 
+        // Initialize incremental output buffers
+        proc_buffers_[proc] = {};
+
+        // Buffer stdout/stderr incrementally instead of reading all at once on finish
+        connect(proc, &QProcess::readyReadStandardOutput, this, [this, proc]() {
+            proc_buffers_[proc].stdout_buf.append(proc->readAllStandardOutput());
+        });
+        connect(proc, &QProcess::readyReadStandardError, this, [this, proc]() {
+            proc_buffers_[proc].stderr_buf.append(proc->readAllStandardError());
+        });
+
         auto cb = std::move(req.cb);
-        auto script = req.script;
+        auto script_name = std::move(req.script);
 
         connect(
             proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-            [this, proc, cb, script, is_code, temp_file](int exit_code, QProcess::ExitStatus status) {
-                Q_UNUSED(status);
-                QString stdout_str = QString::fromUtf8(proc->readAllStandardOutput());
-                QString stderr_str = QString::fromUtf8(proc->readAllStandardError());
+            [this, proc, cb = std::move(cb), script_name, is_code, temp_file](int exit_code, QProcess::ExitStatus) {
+                // Collect any remaining buffered data
+                auto& bufs = proc_buffers_[proc];
+                bufs.stdout_buf.append(proc->readAllStandardOutput());
+                bufs.stderr_buf.append(proc->readAllStandardError());
+
+                QString stdout_str = QString::fromUtf8(bufs.stdout_buf);
+                QString stderr_str = QString::fromUtf8(bufs.stderr_buf);
+
+                proc_buffers_.remove(proc);
                 proc->deleteLater();
 
                 // Clean up temp file for inline code
@@ -289,31 +343,31 @@ void PythonRunner::start_next() {
                 if (is_code) {
                     // For notebook cells: return raw stdout, not JSON-extracted
                     result.success = (exit_code == 0);
-                    result.output = stdout_str;
-                    result.error = stderr_str;
+                    result.output = std::move(stdout_str);
+                    result.error = std::move(stderr_str);
                 } else {
                     // For scripts: extract JSON from output
                     QString json_out = extract_json(stdout_str);
                     result.success = (exit_code == 0 && !json_out.isEmpty());
-                    result.output = json_out.isEmpty() ? stdout_str : json_out;
-                    result.error = stderr_str;
+                    result.output = json_out.isEmpty() ? std::move(stdout_str) : std::move(json_out);
+                    result.error = std::move(stderr_str);
                 }
 
                 if (!result.success && !is_code) {
                     LOG_ERROR(
                         "Python",
-                        QString("Script %1 failed (exit=%2): %3").arg(script).arg(exit_code).arg(stderr_str.left(200)));
+                        QString("Script %1 failed (exit=%2): %3").arg(script_name).arg(exit_code).arg(result.error.left(200)));
                 }
 
-                cb(result);
+                cb(std::move(result));
 
                 --active_count_;
                 start_next(); // drain queue
             });
 
-        connect(proc, &QProcess::errorOccurred, this, [this, proc, cb, is_code, temp_file](QProcess::ProcessError err) {
-            Q_UNUSED(err);
+        connect(proc, &QProcess::errorOccurred, this, [this, proc, cb, is_code, temp_file](QProcess::ProcessError) {
             QString error_msg = proc->errorString();
+            proc_buffers_.remove(proc);
             proc->deleteLater();
             if (is_code && !temp_file.isEmpty())
                 QFile::remove(temp_file);

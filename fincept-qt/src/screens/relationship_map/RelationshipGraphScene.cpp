@@ -74,7 +74,7 @@ class GraphNodeItem : public QGraphicsRectItem {
         auto* label = new QGraphicsTextItem(this);
         label->setPlainText(data.label);
         label->setFont(data.category == NodeCategory::Company ? QFont("Consolas", 12, QFont::Bold) : mono_bold);
-        label->setDefaultTextColor(QColor("#e5e5e5"));
+        label->setDefaultTextColor(QColor(ui::colors::TEXT_PRIMARY()));
         label->setPos(-sz.width() / 2 + 8, -sz.height() / 2 + 18);
 
         // Sublabel
@@ -82,7 +82,7 @@ class GraphNodeItem : public QGraphicsRectItem {
             auto* sub = new QGraphicsTextItem(this);
             sub->setPlainText(data.sublabel);
             sub->setFont(mono_small);
-            sub->setDefaultTextColor(QColor("#808080"));
+            sub->setDefaultTextColor(QColor(ui::colors::TEXT_SECONDARY()));
             sub->setPos(-sz.width() / 2 + 8, -sz.height() / 2 + 38);
         }
 
@@ -135,7 +135,7 @@ class GraphNodeItem : public QGraphicsRectItem {
 // ── Scene ────────────────────────────────────────────────────────────────────
 
 RelationshipGraphScene::RelationshipGraphScene(QObject* parent) : QGraphicsScene(parent) {
-    setBackgroundBrush(QBrush(QColor("#080808")));
+    setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
 }
 
 void RelationshipGraphScene::clear_graph() {
@@ -428,7 +428,7 @@ RelationshipGraphView::RelationshipGraphView(QGraphicsScene* scene, QWidget* par
     setDragMode(QGraphicsView::ScrollHandDrag);
     setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
     setViewportUpdateMode(QGraphicsView::SmartViewportUpdate);
-    setStyleSheet("QGraphicsView { border: none; background: #080808; }");
+    setStyleSheet(QString("QGraphicsView { border: none; background: %1; }").arg(ui::colors::BG_BASE));
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 

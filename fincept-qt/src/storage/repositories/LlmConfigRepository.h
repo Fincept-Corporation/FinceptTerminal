@@ -9,6 +9,7 @@ struct LlmConfig {
     QString base_url;
     QString model;
     bool is_active = false;
+    bool tools_enabled = true;
     QString created_at;
     QString updated_at;
 };

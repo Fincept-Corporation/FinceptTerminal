@@ -22,6 +22,7 @@ class PortfolioBlotter : public QWidget {
     void set_filter(const QString& text);
     /// Show only rows whose symbol is in @p symbols. Empty list = show all.
     void set_sector_filter(const QStringList& symbols);
+    void refresh_theme();
 
   signals:
     void symbol_selected(QString symbol);

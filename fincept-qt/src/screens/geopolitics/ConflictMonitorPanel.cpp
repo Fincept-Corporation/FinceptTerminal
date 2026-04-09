@@ -122,11 +122,12 @@ void ConflictMonitorPanel::build_ui() {
 
     auto* stats_title = new QLabel("TOP CATEGORIES", sidebar);
     stats_title->setStyleSheet(
-        QString("color:#FF0000; font-size:%1px; font-weight:700; font-family:%2;"
-                "letter-spacing:1px; padding-bottom:6px; border-bottom:1px solid %3;")
+        QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
+                "letter-spacing:1px; padding-bottom:6px; border-bottom:1px solid %4;")
+            .arg(ui::colors::NEGATIVE())
             .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::colors::BORDER_DIM));
+            .arg(ui::fonts::DATA_FAMILY())
+            .arg(ui::colors::BORDER_DIM()));
     svl->addWidget(stats_title);
 
     auto* stats_container = new QWidget(sidebar);
@@ -148,9 +149,14 @@ void ConflictMonitorPanel::build_ui() {
     // Selected event detail panel
     detail_panel_ = new QWidget(sidebar);
     detail_panel_->setVisible(false);
-    detail_panel_->setStyleSheet(
-        "background:rgba(255,0,0,0.04); border:1px solid rgba(255,0,0,0.2);"
-        "border-left:3px solid #FF0000; border-radius:2px;");
+    {
+        QColor neg(ui::colors::NEGATIVE());
+        auto neg_rgb = QString("%1,%2,%3").arg(neg.red()).arg(neg.green()).arg(neg.blue());
+        detail_panel_->setStyleSheet(
+            QString("background:rgba(%1,0.04); border:1px solid rgba(%1,0.2);"
+                    "border-left:3px solid %2;")
+                .arg(neg_rgb).arg(ui::colors::NEGATIVE()));
+    }
 
     auto* dvl = new QVBoxLayout(detail_panel_);
     dvl->setContentsMargins(10, 10, 10, 10);
@@ -158,9 +164,10 @@ void ConflictMonitorPanel::build_ui() {
 
     auto* detail_title = new QLabel("SELECTED EVENT", detail_panel_);
     detail_title->setStyleSheet(
-        QString("color:#FF0000; font-size:%1px; font-weight:700; font-family:%2; letter-spacing:1px;")
+        QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
+            .arg(ui::colors::NEGATIVE())
             .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY));
+            .arg(ui::fonts::DATA_FAMILY()));
     dvl->addWidget(detail_title);
 
     auto* grid_widget = new QWidget(detail_panel_);
@@ -304,7 +311,7 @@ void ConflictMonitorPanel::update_stats(const QVector<NewsEvent>& events) {
         auto* row = new QWidget;
         row->setStyleSheet(
             QString("border-left:2px solid %1; padding-left:4px;"
-                    "background:rgba(%2,0.04); border-radius:1px;")
+                    "background:rgba(%2,0.04);")
                 .arg(col_hex).arg(col_rgb));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(6, 2, 4, 2);

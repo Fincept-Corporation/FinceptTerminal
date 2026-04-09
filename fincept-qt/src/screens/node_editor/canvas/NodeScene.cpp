@@ -13,6 +13,10 @@ namespace fincept::workflow {
 
 NodeScene::NodeScene(QObject* parent) : QGraphicsScene(parent) {
     setSceneRect(-5000, -5000, 10000, 10000);
+
+    // Single global timer for all edge animations (P9: 20fps)
+    anim_timer_.setInterval(50);
+    connect(&anim_timer_, &QTimer::timeout, this, &NodeScene::tick_edge_animations);
 }
 
 NodeItem* NodeScene::add_node(const NodeDef& def, const NodeTypeDef& type_def) {
@@ -219,17 +223,48 @@ void NodeScene::set_edges_animated(const QString& node_id, bool animated) {
     if (!node)
         return;
 
+    auto toggle = [this, animated](EdgeItem* edge) {
+        if (edge->is_animated() == animated)
+            return;
+        edge->set_animated(animated);
+        animated_edge_count_ += animated ? 1 : -1;
+    };
+
     for (auto* port : node->input_ports())
         for (auto* edge : port->edges())
-            edge->set_animated(animated);
+            toggle(edge);
     for (auto* port : node->output_ports())
         for (auto* edge : port->edges())
-            edge->set_animated(animated);
+            toggle(edge);
+
+    // Start/stop the single global timer based on whether any edges are animated
+    if (animated_edge_count_ > 0 && !anim_timer_.isActive())
+        anim_timer_.start();
+    else if (animated_edge_count_ <= 0 && anim_timer_.isActive())
+        anim_timer_.stop();
 }
 
 void NodeScene::stop_all_edge_animations() {
     for (auto it = edges_.constBegin(); it != edges_.constEnd(); ++it)
         it.value()->set_animated(false);
+    animated_edge_count_ = 0;
+    anim_timer_.stop();
+}
+
+void NodeScene::pause_edge_animations() {
+    anim_timer_.stop();
+}
+
+void NodeScene::resume_edge_animations() {
+    if (animated_edge_count_ > 0 && !anim_timer_.isActive())
+        anim_timer_.start();
+}
+
+void NodeScene::tick_edge_animations() {
+    for (auto it = edges_.constBegin(); it != edges_.constEnd(); ++it) {
+        if (it.value()->is_animated())
+            it.value()->tick_animation();
+    }
 }
 
 } // namespace fincept::workflow

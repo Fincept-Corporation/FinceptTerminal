@@ -9,7 +9,7 @@
 
 namespace fincept::chat_mode {
 
-/// Left sidebar panel — session list, search, new/delete/rename.
+/// Left sidebar panel — session list, search, new/delete/rename/export.
 class ChatSessionPanel : public QWidget {
     Q_OBJECT
   public:
@@ -33,7 +33,9 @@ class ChatSessionPanel : public QWidget {
     void on_new_clicked();
     void on_delete_clicked();
     void on_rename_clicked();
+    void on_export_clicked();
     void on_search_changed(const QString& text);
+    void on_search_server();
 
   private:
     QLineEdit*   search_edit_   = nullptr;
@@ -41,8 +43,11 @@ class ChatSessionPanel : public QWidget {
     QPushButton* new_btn_       = nullptr;
     QPushButton* delete_btn_    = nullptr;
     QPushButton* rename_btn_    = nullptr;
+    QPushButton* export_btn_    = nullptr;
     QPushButton* exit_btn_      = nullptr;
     QLabel*      stats_lbl_     = nullptr;
+
+    QTimer*      search_timer_  = nullptr;  // debounce server search
 
     QString active_uuid_;
     QVector<ChatSession> sessions_;

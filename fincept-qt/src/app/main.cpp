@@ -1,10 +1,13 @@
 #include "app/MainWindow.h"
 #include "auth/AuthManager.h"
+#include "auth/InactivityGuard.h"
+#include "auth/PinManager.h"
 #include "auth/SessionGuard.h"
 #include "core/config/AppConfig.h"
 #include "core/config/AppPaths.h"
 #include "core/config/ProfileManager.h"
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "core/session/SessionManager.h"
 #include "mcp/McpInit.h"
 #include "network/http/HttpClient.h"
@@ -24,6 +27,7 @@
 #include <QDir>
 #include <QFile>
 #include <QLockFile>
+#include <QUuid>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QStandardPaths>
@@ -179,6 +183,8 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v011();
     fincept::register_migration_v012();
     fincept::register_migration_v013();
+    fincept::register_migration_v014();
+    fincept::register_migration_v015();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -229,6 +235,14 @@ int main(int argc, char* argv[]) {
         LOG_WARN("App", "Cache DB failed (non-fatal): " + QString::fromStdString(cache_result.error()));
     }
 
+    // Assign a unique session ID so ScreenStateManager can tag each state write.
+    // This lets us distinguish cross-session restores from same-session saves.
+    {
+        const QString sid = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        fincept::ScreenStateManager::instance().set_session_id(sid);
+        LOG_INFO("App", "Session ID: " + sid);
+    }
+
     LOG_INFO("App", "Checking settings for legacy migration...");
     // One-time migration: copy settings from old DB (Local\FinceptTerminal\fincept_settings.db)
     // to new DB (Roaming\Fincept\FinceptTerminal\fincept.db) if the new DB has no settings yet.
@@ -275,6 +289,23 @@ int main(int argc, char* argv[]) {
 
     // Session guard — auto-logout on 401
     fincept::auth::SessionGuard session_guard;
+
+    // Initialize PinManager — loads PIN state from SecureStorage
+    (void)fincept::auth::PinManager::instance();
+
+    // Inactivity guard — auto-lock after idle timeout.
+    // Load timeout setting from DB (default 10 minutes).
+    {
+        auto& guard = fincept::auth::InactivityGuard::instance();
+        auto timeout_r = fincept::SettingsRepository::instance().get("security.lock_timeout_minutes");
+        if (timeout_r.is_ok() && !timeout_r.value().isEmpty()) {
+            int minutes = timeout_r.value().toInt();
+            if (minutes > 0)
+                guard.set_timeout_minutes(minutes);
+        }
+        // Guard is installed on qApp and enabled by MainWindow::on_terminal_unlocked()
+        // after the user successfully enters their PIN.
+    }
 
     // Initialize MCP tool system — registers all internal tools and starts
     // external MCP servers in the background (non-blocking).

@@ -18,45 +18,68 @@ namespace fincept::screens {
 
 // ── Style constants ───────────────────────────────────────────────────────────
 
-static const char* SS_INPUT =
-    "QLineEdit, QTextEdit, QComboBox {"
-    "  background: #080808; color: #e5e5e5;"
-    "  border: 1px solid #222222; padding: 6px 8px;"
-    "  font-size: 12px; font-family: 'Consolas','Courier New',monospace; }"
-    "QLineEdit:focus, QTextEdit:focus { border-color: #333333; }"
-    "QComboBox::drop-down { border: none; }"
-    "QComboBox QAbstractItemView { background: #0a0a0a; color: #e5e5e5; border: 1px solid #222; }";
+static QString SS_INPUT() {
+    return QString(
+        "QLineEdit, QTextEdit, QComboBox {"
+        "  background: %1; color: %2;"
+        "  border: 1px solid %3; padding: 6px 8px;"
+        "  font-size: 12px; font-family: 'Consolas','Courier New',monospace; }"
+        "QLineEdit:focus, QTextEdit:focus { border-color: %4; }"
+        "QComboBox::drop-down { border: none; }"
+        "QComboBox QAbstractItemView { background: %5; color: %2; border: 1px solid %3; }")
+        .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED,
+             ui::colors::BORDER_BRIGHT, ui::colors::BG_SURFACE);
+}
 
-static const char* SS_BTN_AMBER = "QPushButton { background: #d97706; color: #000; border: none;"
-                                  "  padding: 4px 14px; font-size: 11px; font-weight: bold;"
-                                  "  font-family: 'Consolas','Courier New',monospace; }"
-                                  "QPushButton:hover { background: #b45309; }"
-                                  "QPushButton:disabled { background: #404040; color: #666; }";
+static QString SS_BTN_AMBER() {
+    return QString(
+        "QPushButton { background: %1; color: %2; border: none;"
+        "  padding: 4px 14px; font-size: 11px; font-weight: bold;"
+        "  font-family: 'Consolas','Courier New',monospace; }"
+        "QPushButton:hover { background: #b45309; }"
+        "QPushButton:disabled { background: %2; color: #666; }")
+        .arg(ui::colors::AMBER, ui::colors::TEXT_DIM);
+}
 
-static const char* SS_BTN_GREEN = "QPushButton { background: #16a34a; color: #000; border: none;"
-                                  "  padding: 4px 14px; font-size: 11px; font-weight: bold;"
-                                  "  font-family: 'Consolas','Courier New',monospace; }"
-                                  "QPushButton:hover { background: #15803d; }"
-                                  "QPushButton:disabled { background: #404040; color: #666; }";
+static QString SS_BTN_GREEN() {
+    return QString(
+        "QPushButton { background: %1; color: %2; border: none;"
+        "  padding: 4px 14px; font-size: 11px; font-weight: bold;"
+        "  font-family: 'Consolas','Courier New',monospace; }"
+        "QPushButton:hover { background: #15803d; }"
+        "QPushButton:disabled { background: %2; color: #666; }")
+        .arg(ui::colors::POSITIVE, ui::colors::TEXT_DIM);
+}
 
-static const char* SS_BTN_GRAY = "QPushButton { background: #1a1a1a; color: #808080; border: 1px solid #222;"
-                                 "  padding: 4px 14px; font-size: 11px; font-weight: bold;"
-                                 "  font-family: 'Consolas','Courier New',monospace; }"
-                                 "QPushButton:hover { background: #222; color: #e5e5e5; }";
+static QString SS_BTN_GRAY() {
+    return QString(
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
+        "  padding: 4px 14px; font-size: 11px; font-weight: bold;"
+        "  font-family: 'Consolas','Courier New',monospace; }"
+        "QPushButton:hover { background: %3; color: %4; }")
+        .arg(ui::colors::BORDER_DIM, ui::colors::TEXT_SECONDARY,
+             ui::colors::BORDER_MED, ui::colors::TEXT_PRIMARY);
+}
 
-static const char* SS_BTN_RED_OUTLINE =
-    "QPushButton { background: transparent; color: #dc2626; border: 1px solid #dc2626;"
-    "  padding: 4px 10px; font-size: 10px; font-weight: bold;"
-    "  font-family: 'Consolas','Courier New',monospace; }"
-    "QPushButton:hover { background: #dc262620; }"
-    "QPushButton:disabled { border-color: #404040; color: #404040; }";
+static QString SS_BTN_RED_OUTLINE() {
+    return QString(
+        "QPushButton { background: transparent; color: %1; border: 1px solid %1;"
+        "  padding: 4px 10px; font-size: 10px; font-weight: bold;"
+        "  font-family: 'Consolas','Courier New',monospace; }"
+        "QPushButton:hover { background: %1; }"
+        "QPushButton:disabled { border-color: %2; color: %2; }")
+        .arg(ui::colors::NEGATIVE, ui::colors::TEXT_DIM);
+}
 
-static const char* SS_BTN_GREEN_OUTLINE =
-    "QPushButton { background: transparent; color: #16a34a; border: 1px solid #16a34a;"
-    "  padding: 4px 10px; font-size: 10px; font-weight: bold;"
-    "  font-family: 'Consolas','Courier New',monospace; }"
-    "QPushButton:hover { background: #16a34a20; }"
-    "QPushButton:disabled { border-color: #404040; color: #404040; }";
+static QString SS_BTN_GREEN_OUTLINE() {
+    return QString(
+        "QPushButton { background: transparent; color: %1; border: 1px solid %1;"
+        "  padding: 4px 10px; font-size: 10px; font-weight: bold;"
+        "  font-family: 'Consolas','Courier New',monospace; }"
+        "QPushButton:hover { background: %1; }"
+        "QPushButton:disabled { border-color: %2; color: %2; }")
+        .arg(ui::colors::POSITIVE, ui::colors::TEXT_DIM);
+}
 
 static const char* SS_MONO = "font-family: 'Consolas','Courier New',monospace;";
 
@@ -65,23 +88,23 @@ static const char* SS_MONO = "font-family: 'Consolas','Courier New',monospace;";
 QString SupportScreen::status_color(const QString& s) {
     QString l = s.toLower();
     if (l == "open" || l == "in_progress")
-        return "#0891b2";
+        return ui::colors::CYAN;
     if (l == "resolved" || l == "closed")
-        return "#16a34a";
+        return ui::colors::POSITIVE;
     if (l == "pending")
-        return "#ca8a04";
-    return "#808080";
+        return ui::colors::WARNING;
+    return ui::colors::TEXT_SECONDARY;
 }
 
 QString SupportScreen::priority_color(const QString& p) {
     QString l = p.toLower();
     if (l == "high" || l == "urgent")
-        return "#dc2626";
+        return ui::colors::NEGATIVE;
     if (l == "medium")
-        return "#d97706";
+        return ui::colors::AMBER;
     if (l == "low")
-        return "#16a34a";
-    return "#808080";
+        return ui::colors::POSITIVE;
+    return ui::colors::TEXT_SECONDARY;
 }
 
 static QLabel* mono_label(const QString& text, const QString& color, int size = 12, bool bold = false) {
@@ -98,7 +121,7 @@ static QWidget* hsep() {
     auto* f = new QFrame;
     f->setFrameShape(QFrame::HLine);
     f->setFixedHeight(1);
-    f->setStyleSheet("background: #1a1a1a; border: none;");
+    f->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_DIM));
     return f;
 }
 
@@ -123,19 +146,19 @@ SupportScreen::SupportScreen(QWidget* parent) : QWidget(parent) {
 
         refresh_btn_ = new QPushButton("↻  REFRESH");
         refresh_btn_->setFixedHeight(24);
-        refresh_btn_->setStyleSheet(SS_BTN_AMBER);
+        refresh_btn_->setStyleSheet(SS_BTN_AMBER());
         connect(refresh_btn_, &QPushButton::clicked, this, &SupportScreen::load_tickets);
         bl->addWidget(refresh_btn_);
 
         new_ticket_btn_ = new QPushButton("+  NEW TICKET");
         new_ticket_btn_->setFixedHeight(24);
-        new_ticket_btn_->setStyleSheet(SS_BTN_GREEN);
+        new_ticket_btn_->setStyleSheet(SS_BTN_GREEN());
         connect(new_ticket_btn_, &QPushButton::clicked, this, [this]() { switch_to(1); });
         bl->addWidget(new_ticket_btn_);
 
         back_btn_ = new QPushButton("←  BACK TO LIST");
         back_btn_->setFixedHeight(24);
-        back_btn_->setStyleSheet(SS_BTN_GRAY);
+        back_btn_->setStyleSheet(SS_BTN_GRAY());
         back_btn_->hide();
         connect(back_btn_, &QPushButton::clicked, this, [this]() { switch_to(0); });
         bl->addWidget(back_btn_);
@@ -147,7 +170,7 @@ SupportScreen::SupportScreen(QWidget* parent) : QWidget(parent) {
         bl->addWidget(stat_total_);
         bl->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY(), 11));
         bl->addWidget(mono_label("OPEN:", ui::colors::TEXT_TERTIARY(), 11));
-        stat_open_ = mono_label("0", "#ca8a04", 11, true);
+        stat_open_ = mono_label("0", ui::colors::WARNING(), 11, true);
         bl->addWidget(stat_open_);
         bl->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY(), 11));
         bl->addWidget(mono_label("RESOLVED:", ui::colors::TEXT_TERTIARY(), 11));
@@ -224,7 +247,8 @@ QWidget* SupportScreen::build_create_page() {
 
     // Form card
     auto* card = new QWidget;
-    card->setStyleSheet("background: #0a0a0a; border: 1px solid #1a1a1a; border-left: 3px solid #16a34a;");
+    card->setStyleSheet(QString("background: %1; border: 1px solid %2; border-left: 3px solid %3;")
+                            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM, ui::colors::POSITIVE));
     auto* cl = new QVBoxLayout(card);
     cl->setContentsMargins(18, 14, 18, 16);
     cl->setSpacing(10);
@@ -235,7 +259,7 @@ QWidget* SupportScreen::build_create_page() {
     subject_input_ = new QLineEdit;
     subject_input_->setPlaceholderText("Brief description of your issue");
     subject_input_->setFixedHeight(32);
-    subject_input_->setStyleSheet(SS_INPUT);
+    subject_input_->setStyleSheet(SS_INPUT());
     cl->addWidget(subject_input_);
 
     // Category + Priority row
@@ -251,7 +275,7 @@ QWidget* SupportScreen::build_create_page() {
     category_combo_ = new QComboBox;
     category_combo_->addItems({"technical", "billing", "feature", "bug", "account", "other"});
     category_combo_->setFixedHeight(32);
-    category_combo_->setStyleSheet(SS_INPUT);
+    category_combo_->setStyleSheet(SS_INPUT());
     cat_vl->addWidget(category_combo_);
     crl->addLayout(cat_vl);
 
@@ -262,7 +286,7 @@ QWidget* SupportScreen::build_create_page() {
     priority_combo_->addItems({"low", "medium", "high"});
     priority_combo_->setCurrentIndex(1);
     priority_combo_->setFixedHeight(32);
-    priority_combo_->setStyleSheet(SS_INPUT);
+    priority_combo_->setStyleSheet(SS_INPUT());
     pri_vl->addWidget(priority_combo_);
     crl->addLayout(pri_vl);
 
@@ -272,12 +296,12 @@ QWidget* SupportScreen::build_create_page() {
     desc_input_ = new QTextEdit;
     desc_input_->setPlaceholderText("Provide detailed information about your issue...");
     desc_input_->setMinimumHeight(200);
-    desc_input_->setStyleSheet(SS_INPUT);
+    desc_input_->setStyleSheet(SS_INPUT());
     cl->addWidget(desc_input_);
 
     create_btn_ = new QPushButton("CREATE TICKET");
     create_btn_->setFixedHeight(34);
-    create_btn_->setStyleSheet(SS_BTN_GREEN);
+    create_btn_->setStyleSheet(SS_BTN_GREEN());
     connect(create_btn_, &QPushButton::clicked, this, &SupportScreen::on_create_ticket);
     cl->addWidget(create_btn_);
 
@@ -309,14 +333,16 @@ QWidget* SupportScreen::build_detail_page() {
     demo_banner_ = new QLabel("DEMO TICKET — This shows how the support system works. "
                               "Create your own ticket to get real support!");
     demo_banner_->setWordWrap(true);
-    demo_banner_->setStyleSheet("background: #2563eb; color: #000; font-size: 11px; font-weight: bold;"
-                                " padding: 8px 12px; font-family: 'Consolas','Courier New',monospace;");
+    demo_banner_->setStyleSheet(QString("background: %1; color: %2; font-size: 11px; font-weight: bold;"
+                                       " padding: 8px 12px;")
+                                   .arg(ui::colors::INFO, ui::colors::BG_BASE));
     demo_banner_->hide();
     vl->addWidget(demo_banner_);
 
     // Ticket info card
     auto* info_card = new QWidget;
-    info_card->setStyleSheet("background: #0a0a0a; border: 1px solid #1a1a1a;");
+    info_card->setStyleSheet(QString("background: %1; border: 1px solid %2;")
+                                .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* icl = new QVBoxLayout(info_card);
     icl->setContentsMargins(14, 12, 14, 12);
     icl->setSpacing(8);
@@ -334,14 +360,14 @@ QWidget* SupportScreen::build_detail_page() {
 
     close_btn_ = new QPushButton("CLOSE");
     close_btn_->setFixedHeight(26);
-    close_btn_->setStyleSheet(SS_BTN_RED_OUTLINE);
+    close_btn_->setStyleSheet(SS_BTN_RED_OUTLINE());
     close_btn_->hide();
     connect(close_btn_, &QPushButton::clicked, this, &SupportScreen::on_close_ticket);
     srl->addWidget(close_btn_);
 
     reopen_btn_ = new QPushButton("REOPEN");
     reopen_btn_->setFixedHeight(26);
-    reopen_btn_->setStyleSheet(SS_BTN_GREEN_OUTLINE);
+    reopen_btn_->setStyleSheet(SS_BTN_GREEN_OUTLINE());
     reopen_btn_->hide();
     connect(reopen_btn_, &QPushButton::clicked, this, &SupportScreen::on_reopen_ticket);
     srl->addWidget(reopen_btn_);
@@ -356,9 +382,10 @@ QWidget* SupportScreen::build_detail_page() {
     detail_body_lbl_ = new QLabel;
     detail_body_lbl_->setWordWrap(true);
     detail_body_lbl_->setTextFormat(Qt::PlainText);
-    detail_body_lbl_->setStyleSheet("color: #e5e5e5; font-size: 12px; background: #080808;"
-                                    " border-left: 3px solid #2563eb; padding: 10px 12px;"
-                                    " font-family: 'Consolas','Courier New',monospace;");
+    detail_body_lbl_->setStyleSheet(QString("color: %1; font-size: 12px; background: %2;"
+                                           " border-left: 3px solid %3; padding: 10px 12px;"
+                                           " font-family: 'Consolas','Courier New',monospace;")
+                                       .arg(ui::colors::TEXT_PRIMARY, ui::colors::BG_BASE, ui::colors::INFO));
     icl->addWidget(detail_body_lbl_);
 
     vl->addWidget(info_card);
@@ -384,7 +411,8 @@ QWidget* SupportScreen::build_detail_page() {
 
     // Reply box
     reply_box_ = new QWidget;
-    reply_box_->setStyleSheet("background: #0a0a0a; border: 1px solid #1a1a1a; border-left: 3px solid #16a34a;");
+    reply_box_->setStyleSheet(QString("background: %1; border: 1px solid %2; border-left: 3px solid %3;")
+                                 .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM, ui::colors::POSITIVE));
     auto* rbl = new QVBoxLayout(reply_box_);
     rbl->setContentsMargins(14, 10, 14, 12);
     rbl->setSpacing(8);
@@ -393,12 +421,12 @@ QWidget* SupportScreen::build_detail_page() {
     msg_input_ = new QTextEdit;
     msg_input_->setPlaceholderText("Type your message here...");
     msg_input_->setFixedHeight(80);
-    msg_input_->setStyleSheet(SS_INPUT);
+    msg_input_->setStyleSheet(SS_INPUT());
     rbl->addWidget(msg_input_);
 
     send_btn_ = new QPushButton("✉  SEND MESSAGE");
     send_btn_->setFixedHeight(30);
-    send_btn_->setStyleSheet(SS_BTN_GREEN);
+    send_btn_->setStyleSheet(SS_BTN_GREEN());
     connect(send_btn_, &QPushButton::clicked, this, &SupportScreen::on_send_message);
     rbl->addWidget(send_btn_);
 
@@ -406,11 +434,12 @@ QWidget* SupportScreen::build_detail_page() {
 
     // Demo-ticket read-only notice
     demo_box_ = new QWidget;
-    demo_box_->setStyleSheet("background: #0a0a0a; border: 1px solid #2563eb; border-left: 3px solid #2563eb;");
+    demo_box_->setStyleSheet(QString("background: %1; border: 1px solid %2; border-left: 3px solid %2;")
+                                .arg(ui::colors::BG_SURFACE, ui::colors::INFO));
     auto* dbl = new QVBoxLayout(demo_box_);
     dbl->setContentsMargins(14, 10, 14, 12);
     dbl->setSpacing(6);
-    dbl->addWidget(mono_label("DEMO TICKET — READ ONLY", "#2563eb", 11, true));
+    dbl->addWidget(mono_label("DEMO TICKET — READ ONLY", ui::colors::INFO(), 11, true));
     dbl->addWidget(mono_label("This is a demonstration ticket. You cannot add messages here.\n"
                               "Click BACK TO LIST → + NEW TICKET to create a real support request.",
                               ui::colors::TEXT_TERTIARY(), 11));
@@ -523,10 +552,12 @@ void SupportScreen::load_tickets() {
             }
 
             auto* row = new QWidget;
-            row->setStyleSheet(QString("background: #0a0a0a;"
-                                       "border: 1px solid %1;"
-                                       "border-left: 3px solid %2;")
-                                   .arg(is_demo ? "#2563eb" : "#1a1a1a", status_color(status)));
+            row->setStyleSheet(QString("background: %1;"
+                                       "border: 1px solid %2;"
+                                       "border-left: 3px solid %3;")
+                                   .arg(ui::colors::BG_SURFACE,
+                                        is_demo ? ui::colors::INFO() : ui::colors::BORDER_DIM(),
+                                        status_color(status)));
             row->setCursor(Qt::PointingHandCursor);
 
             auto* rl = new QGridLayout(row);
@@ -548,9 +579,9 @@ void SupportScreen::load_tickets() {
 
             // Col 3: Priority badge
             auto* pr_lbl = new QLabel(priority.toUpper());
-            pr_lbl->setStyleSheet(QString("background: %1; color: #000; font-size: 9px; font-weight: bold;"
+            pr_lbl->setStyleSheet(QString("background: %1; color: %2; font-size: 9px; font-weight: bold;"
                                           " padding: 2px 6px; font-family: 'Consolas','Courier New',monospace;")
-                                      .arg(priority_color(priority)));
+                                      .arg(priority_color(priority), ui::colors::BG_BASE));
             pr_lbl->setFixedHeight(18);
             rl->addWidget(pr_lbl, 0, 3);
 
@@ -565,8 +596,9 @@ void SupportScreen::load_tickets() {
             // Demo badge
             if (is_demo) {
                 auto* badge = new QLabel("DEMO");
-                badge->setStyleSheet("background: #2563eb; color: #000; font-size: 9px; font-weight: bold;"
-                                     " padding: 2px 6px; font-family: 'Consolas','Courier New',monospace;");
+                badge->setStyleSheet(QString("background: %1; color: %2; font-size: 9px; font-weight: bold;"
+                                            " padding: 2px 6px; font-family: 'Consolas','Courier New',monospace;")
+                                        .arg(ui::colors::INFO, ui::colors::BG_BASE));
                 rl->addWidget(badge, 0, 6);
             }
 
@@ -582,8 +614,9 @@ void SupportScreen::load_tickets() {
             // Wrap row in a flat QPushButton for click + hover handling
             auto* btn = new QPushButton;
             btn->setFlat(true);
-            btn->setStyleSheet("QPushButton { border: none; background: transparent; padding: 0; }"
-                               "QPushButton:hover > QWidget { background: #111111; }");
+            btn->setStyleSheet(QString("QPushButton { border: none; background: transparent; padding: 0; }"
+                                      "QPushButton:hover > QWidget { background: %1; }")
+                                  .arg(ui::colors::BG_RAISED));
             auto* inner_lay = new QHBoxLayout(btn);
             inner_lay->setContentsMargins(0, 0, 0, 0);
             row->setParent(btn);
@@ -615,8 +648,9 @@ void SupportScreen::load_tickets() {
                 if (demo_copy) {
                     // Add a canned support message
                     auto* m = new QWidget;
-                    m->setStyleSheet("background: #0a0a0a; border: 1px solid #1a1a1a;"
-                                     " border-left: 3px solid #9333ea;");
+                    m->setStyleSheet(QString("background: %1; border: 1px solid %2;"
+                                            " border-left: 3px solid #9333ea;")
+                                        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
                     auto* ml = new QVBoxLayout(m);
                     ml->setContentsMargins(12, 8, 12, 10);
                     ml->setSpacing(4);
@@ -658,9 +692,9 @@ void SupportScreen::load_tickets() {
                                 ts = mdt.toLocalTime().toString("MMM d, yyyy hh:mm");
 
                             auto* m = new QWidget;
-                            m->setStyleSheet(QString("background: #0a0a0a; border: 1px solid #1a1a1a;"
-                                                     " border-left: 3px solid %1;")
-                                                 .arg(border_color));
+                            m->setStyleSheet(QString("background: %1; border: 1px solid %2;"
+                                                     " border-left: 3px solid %3;")
+                                                 .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM, border_color));
                             auto* ml = new QVBoxLayout(m);
                             ml->setContentsMargins(12, 8, 12, 10);
                             ml->setSpacing(4);
@@ -732,8 +766,9 @@ void SupportScreen::on_send_message() {
             if (!mcl)
                 return;
             auto* m = new QWidget;
-            m->setStyleSheet("background: #0a0a0a; border: 1px solid #1a1a1a;"
-                             " border-left: 3px solid #0891b2;");
+            m->setStyleSheet(QString("background: %1; border: 1px solid %2;"
+                                    " border-left: 3px solid %3;")
+                                .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM, ui::colors::CYAN));
             auto* ml = new QVBoxLayout(m);
             ml->setContentsMargins(12, 8, 12, 10);
             ml->setSpacing(4);

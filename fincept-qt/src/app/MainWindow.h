@@ -11,6 +11,7 @@ namespace ads { class CDockManager; }
 namespace fincept { class DockScreenRouter; }
 namespace fincept::ui { class DockToolBar; class DockStatusBar; class TabBar; }
 namespace fincept::chat_mode { class ChatModeScreen; }
+namespace fincept::screens { class LockScreen; }
 
 namespace fincept {
 
@@ -53,6 +54,9 @@ class MainWindow : public QMainWindow {
     // Chat mode
     chat_mode::ChatModeScreen* chat_mode_screen_ = nullptr;
 
+    // Lock/PIN screen
+    screens::LockScreen* lock_screen_ = nullptr;
+
     void setup_auth_screens();
     void setup_app_screens();
     void setup_docking_mode();
@@ -60,6 +64,9 @@ class MainWindow : public QMainWindow {
     void setup_navigation();
     void on_auth_state_changed();
     void toggle_chat_mode();
+    void show_lock_screen();
+    void on_terminal_unlocked();
+    void update_window_title();
 
     // Info screens stack (Contact, Terms, Privacy, Trademarks, Help)
     QStackedWidget* info_stack_ = nullptr;

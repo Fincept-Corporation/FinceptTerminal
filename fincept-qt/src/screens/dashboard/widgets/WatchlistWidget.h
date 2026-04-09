@@ -11,11 +11,17 @@ class WatchlistWidget : public BaseWidget {
   public:
     explicit WatchlistWidget(QWidget* parent = nullptr);
 
+  protected:
+    void on_theme_changed() override;
+
   private:
+    void apply_styles();
     void refresh_data();
     void populate(const QVector<services::QuoteData>& quotes);
 
     QLineEdit* symbols_input_ = nullptr;
+    QLabel* symbols_label_ = nullptr;
+    QPushButton* go_btn_ = nullptr;
     ui::DataTable* table_ = nullptr;
     QStringList symbols_;
 };

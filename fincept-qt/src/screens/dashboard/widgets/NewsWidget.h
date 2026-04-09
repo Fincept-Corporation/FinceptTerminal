@@ -11,10 +11,15 @@ class NewsWidget : public BaseWidget {
   public:
     explicit NewsWidget(QWidget* parent = nullptr);
 
+  protected:
+    void on_theme_changed() override;
+
   private:
+    void apply_styles();
     void refresh_data();
     void populate(const QJsonArray& articles);
 
+    QScrollArea* scroll_area_ = nullptr;
     QVBoxLayout* news_layout_ = nullptr;
 };
 

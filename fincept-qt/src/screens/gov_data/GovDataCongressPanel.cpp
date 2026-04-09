@@ -21,62 +21,75 @@ using namespace fincept::ui;
 static const QString kGovDataCongressColor  = "#8B5CF6";
 static const QString kGovDataCongressScript = "congress_gov_data.py";
 
-// ── Stylesheet ───────────────────────────────────────────────────────────────
+// ── Dynamic stylesheet ──────────────────────────────────────────────────────
 
-static const char* kGovDataCongressStyle =
-    "#govCongressToolbar { background:#111111; border-bottom:1px solid #1a1a1a; }"
+static QString build_congress_style() {
+    const auto& t  = ThemeManager::instance().tokens();
+    const auto  cc = QColor(kGovDataCongressColor);
+    const QString cr = QString::number(cc.red());
+    const QString cg = QString::number(cc.green());
+    const QString cb = QString::number(cc.blue());
+    const QString c  = kGovDataCongressColor;
 
-    "#govCongressTab { background:transparent; color:#808080; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:4px 12px; letter-spacing:0.5px; }"
-    "#govCongressTab:hover { color:#e5e5e5; background:#161616; }"
-    "#govCongressTab:checked { background:rgba(139,92,246,0.12); color:#8B5CF6;"
-    "  border:1px solid #8B5CF6; }"
+    QString s;
+    s += QString("#govCongressToolbar { background:%1; border-bottom:1px solid %2; }").arg(t.bg_raised, t.border_dim);
 
-    "#govBackBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:4px 10px; }"
-    "#govBackBtn:hover { color:#e5e5e5; background:#161616; }"
+    s += QString("#govCongressTab { background:transparent; color:%1; border:1px solid %2;"
+                 "  font-size:10px; font-weight:700; padding:4px 12px; letter-spacing:0.5px; }").arg(t.text_secondary, t.border_dim);
+    s += QString("#govCongressTab:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
+    s += QString("#govCongressTab:checked { background:rgba(%1,%2,%3,0.12); color:%4;"
+                 "  border:1px solid %4; }").arg(cr, cg, cb, c);
 
-    "#govFetchBtn { background:#8B5CF6; color:#080808; border:none;"
-    "  font-size:10px; font-weight:700; padding:4px 14px; }"
-    "#govFetchBtn:hover { background:#a78bfa; }"
-    "#govFetchBtn:disabled { background:#1a1a1a; color:#404040; }"
-    "#govCsvBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:4px 10px; }"
-    "#govCsvBtn:hover { color:#e5e5e5; background:#161616; }"
+    s += QString("#govBackBtn { background:transparent; color:%1; border:1px solid %2;"
+                 "  font-size:10px; font-weight:700; padding:4px 10px; }").arg(t.text_secondary, t.border_dim);
+    s += QString("#govBackBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
 
-    "QSpinBox { background:#080808; color:#e5e5e5; border:1px solid #1a1a1a;"
-    "  font-size:11px; padding:2px 6px; }"
-    "QSpinBox::up-button, QSpinBox::down-button { width:14px; }"
-    "QComboBox { background:#080808; color:#e5e5e5; border:1px solid #1a1a1a;"
-    "  font-size:11px; padding:2px 6px; }"
-    "QComboBox::drop-down { border:none; }"
-    "QComboBox QAbstractItemView { background:#111111; color:#e5e5e5; border:1px solid #1a1a1a; }"
+    s += QString("#govFetchBtn { background:%1; color:%2; border:none;"
+                 "  font-size:10px; font-weight:700; padding:4px 14px; }").arg(c, t.bg_base);
+    s += QString("#govFetchBtn:hover { background:%1; }").arg(cc.lighter(120).name());
+    s += QString("#govFetchBtn:disabled { background:%1; color:%2; }").arg(t.border_dim, t.text_dim);
+    s += QString("#govCsvBtn { background:transparent; color:%1; border:1px solid %2;"
+                 "  font-size:10px; font-weight:700; padding:4px 10px; }").arg(t.text_secondary, t.border_dim);
+    s += QString("#govCsvBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
 
-    "QTableWidget { background:#080808; color:#e5e5e5; border:none;"
-    "  gridline-color:#1a1a1a; font-size:11px; alternate-background-color:#0a0a0a; }"
-    "QTableWidget::item { padding:5px 8px; border-bottom:1px solid #1a1a1a; }"
-    "QTableWidget::item:selected { background:rgba(139,92,246,0.1); color:#8B5CF6; }"
-    "QHeaderView::section { background:#111111; color:#808080; border:none;"
-    "  border-bottom:2px solid #1a1a1a; border-right:1px solid #1a1a1a;"
-    "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+    s += QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
+                 "  font-size:11px; padding:2px 6px; }").arg(t.bg_base, t.text_primary, t.border_dim);
+    s += "QSpinBox::up-button, QSpinBox::down-button { width:14px; }";
+    s += QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                 "  font-size:11px; padding:2px 6px; }").arg(t.bg_base, t.text_primary, t.border_dim);
+    s += "QComboBox::drop-down { border:none; }";
+    s += QString("QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3; }").arg(t.bg_raised, t.text_primary, t.border_dim);
 
-    "QTextBrowser { background:#080808; color:#e5e5e5; border:none; padding:16px; font-size:12px; }"
+    s += QString("QTableWidget { background:%1; color:%2; border:none;"
+                 "  gridline-color:%3; font-size:11px; alternate-background-color:%4; }").arg(t.bg_base, t.text_primary, t.border_dim, t.bg_surface);
+    s += QString("QTableWidget::item { padding:5px 8px; border-bottom:1px solid %1; }").arg(t.border_dim);
+    s += QString("QTableWidget::item:selected { background:rgba(%1,%2,%3,0.1); color:%4; }").arg(cr, cg, cb, c);
+    s += QString("QHeaderView::section { background:%1; color:%2; border:none;"
+                 "  border-bottom:2px solid %3; border-right:1px solid %3;"
+                 "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }").arg(t.bg_raised, t.text_secondary, t.border_dim);
 
-    "#govStatusPage { background:#080808; }"
-    "#govStatusMsg { color:#808080; font-size:13px; background:transparent; }"
-    "#govStatusErr { color:#dc2626; font-size:12px; background:transparent; }"
+    s += QString("QTextBrowser { background:%1; color:%2; border:none; padding:16px; font-size:12px; }").arg(t.bg_base, t.text_primary);
 
-    "QScrollBar:vertical { background:#080808; width:5px; }"
-    "QScrollBar::handle:vertical { background:#1a1a1a; min-height:20px; }"
-    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }";
+    s += QString("#govStatusPage { background:%1; }").arg(t.bg_base);
+    s += QString("#govStatusMsg { color:%1; font-size:13px; background:transparent; }").arg(t.text_secondary);
+    s += QString("#govStatusErr { color:%1; font-size:12px; background:transparent; }").arg(t.negative);
+
+    s += QString("QScrollBar:vertical { background:%1; width:5px; }").arg(t.bg_base);
+    s += QString("QScrollBar::handle:vertical { background:%1; min-height:20px; }").arg(t.border_dim);
+    s += "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }";
+    return s;
+}
 
 // ── Constructor ──────────────────────────────────────────────────────────────
 
 GovDataCongressPanel::GovDataCongressPanel(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(kGovDataCongressStyle);
+    setStyleSheet(build_congress_style());
     build_ui();
     connect(&services::GovDataService::instance(), &services::GovDataService::result_ready,
             this, &GovDataCongressPanel::on_result);
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this, [this]() {
+        setStyleSheet(build_congress_style());
+    });
 }
 
 // ── Build UI ─────────────────────────────────────────────────────────────────
@@ -181,7 +194,7 @@ QWidget* GovDataCongressPanel::build_toolbar() {
     hl->addSpacing(14);
 
     // Congress number
-    auto lbl_style = "color:#525252; font-size:9px; font-weight:700; background:transparent;";
+    auto lbl_style = QString("color:%1; font-size:9px; font-weight:700; background:transparent;").arg(colors::TEXT_TERTIARY());
     auto* cong_lbl = new QLabel("CONGRESS");
     cong_lbl->setStyleSheet(lbl_style);
     hl->addWidget(cong_lbl);
@@ -359,9 +372,11 @@ void GovDataCongressPanel::populate_bill_detail(const QJsonObject& data) {
         "<h3 style='color:" + kGovDataCongressColor + ";'>\\1</h3>");
     html.replace(QRegularExpression("\\*\\*(.+?)\\*\\*"), "<b>\\1</b>");
 
+    const auto& tk = ThemeManager::instance().tokens();
     detail_browser_->setHtml(
-        "<html><body style='background:#080808; color:#e5e5e5; font-family:Consolas,monospace;"
-        " font-size:12px; padding:16px;'>" + html + "</body></html>");
+        QString("<html><body style='background:%1; color:%2; font-family:%3,monospace;"
+                " font-size:12px; padding:16px;'>").arg(tk.bg_base, tk.text_primary, tk.font_family)
+        + html + "</body></html>");
     back_btn_->setVisible(true);
     current_view_ = BillDetail;
 }
@@ -392,7 +407,8 @@ void GovDataCongressPanel::show_loading(const QString& message) {
 }
 
 void GovDataCongressPanel::show_error(const QString& message) {
-    status_label_->setStyleSheet("color:#dc2626; font-size:12px; background:transparent;");
+    status_label_->setStyleSheet(
+        QString("color:%1; font-size:12px; background:transparent;").arg(colors::NEGATIVE()));
     status_label_->setText("Error: " + message);
     content_stack_->setCurrentIndex(3);
 }

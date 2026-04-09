@@ -1,6 +1,7 @@
 // src/screens/relationship_map/RelationshipMapScreen.cpp
 #include "screens/relationship_map/RelationshipMapScreen.h"
 
+#include "core/session/ScreenStateManager.h"
 #include "screens/relationship_map/RelationshipGraphScene.h"
 #include "services/relationship_map/RelationshipMapService.h"
 #include "ui/theme/Theme.h"
@@ -17,7 +18,9 @@ namespace fincept::screens {
 using namespace fincept::ui;
 using namespace fincept::relmap;
 
-static const char* MF = "font-family:'Consolas','Courier New',monospace;";
+static inline QString MF() {
+    return QStringLiteral("font-family:'Consolas','Courier New',monospace;");
+}
 
 // ── Constructor ──────────────────────────────────────────────────────────────
 
@@ -60,7 +63,7 @@ void RelationshipMapScreen::build_ui() {
     auto* title = new QLabel("CORPORATE INTELLIGENCE MAP");
     title->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700; "
                                  "letter-spacing: 0.5px; %2")
-                             .arg(colors::AMBER, MF));
+                             .arg(colors::AMBER, MF()));
     hhl->addWidget(title);
 
     // Search
@@ -71,7 +74,7 @@ void RelationshipMapScreen::build_ui() {
         QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
                 "padding: 4px 10px; font-size: 12px; %4 }"
                 "QLineEdit:focus { border-color: %5; }")
-            .arg(colors::BG_SURFACE, colors::TEXT_PRIMARY, colors::BORDER_DIM, MF, colors::AMBER));
+            .arg(colors::BG_SURFACE, colors::TEXT_PRIMARY, colors::BORDER_DIM, MF(), colors::AMBER));
     connect(search_input_, &QLineEdit::returnPressed, this, &RelationshipMapScreen::on_search);
     hhl->addWidget(search_input_);
 
@@ -79,10 +82,10 @@ void RelationshipMapScreen::build_ui() {
     search_btn->setCursor(Qt::PointingHandCursor);
     search_btn->setFixedHeight(28);
     search_btn->setStyleSheet(
-        QString("QPushButton { background: rgba(217,119,6,0.15); color: %1; border: 1px solid #78350f; "
+        QString("QPushButton { background: rgba(217,119,6,0.15); color: %1; border: 1px solid %3; "
                 "padding: 0 14px; font-size: 11px; font-weight: 700; %2 }"
-                "QPushButton:hover { background: %1; color: #080808; }")
-            .arg(colors::AMBER, MF));
+                "QPushButton:hover { background: %1; color: %4; }")
+            .arg(colors::AMBER, MF(), colors::AMBER_DIM, colors::BG_BASE));
     connect(search_btn, &QPushButton::clicked, this, &RelationshipMapScreen::on_search);
     hhl->addWidget(search_btn);
 
@@ -95,11 +98,12 @@ void RelationshipMapScreen::build_ui() {
     layout_combo_->addItem("FORCE", (int)LayoutMode::Force);
     layout_combo_->setStyleSheet(QString("QComboBox { background: %1; color: %2; border: 1px solid %3; "
                                          "padding: 3px 8px; font-size: 10px; %4 }")
-                                     .arg(colors::BG_SURFACE, colors::TEXT_SECONDARY, colors::BORDER_DIM, MF));
+                                     .arg(colors::BG_SURFACE, colors::TEXT_SECONDARY, colors::BORDER_DIM, MF()));
     connect(layout_combo_, &QComboBox::currentIndexChanged, this, [this](int idx) {
         layout_mode_ = static_cast<LayoutMode>(layout_combo_->itemData(idx).toInt());
         if (has_data_)
             rebuild_graph();
+        ScreenStateManager::instance().notify_changed(this);
     });
     hhl->addWidget(layout_combo_);
 
@@ -111,9 +115,10 @@ void RelationshipMapScreen::build_ui() {
     filter_btn_->setStyleSheet(
         QString("QPushButton { background: transparent; color: %1; border: 1px solid %2; "
                 "padding: 0 10px; font-size: 10px; %3 }"
-                "QPushButton:hover { color: #e5e5e5; } "
-                "QPushButton:checked { background: rgba(217,119,6,0.1); color: %4; border-color: #78350f; }")
-            .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM, MF, colors::AMBER));
+                "QPushButton:hover { color: %5; } "
+                "QPushButton:checked { background: rgba(217,119,6,0.1); color: %4; border-color: %6; }")
+            .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM, MF(), colors::AMBER,
+                 colors::TEXT_PRIMARY, colors::AMBER_DIM));
     connect(filter_btn_, &QPushButton::toggled, this, [this](bool checked) { filter_panel_->setVisible(checked); });
     hhl->addWidget(filter_btn_);
 
@@ -127,7 +132,7 @@ void RelationshipMapScreen::build_ui() {
     phl->setContentsMargins(12, 2, 12, 2);
 
     progress_label_ = new QLabel("Ready");
-    progress_label_->setStyleSheet(QString("color: %1; font-size: 9px; %2").arg(colors::TEXT_DIM, MF));
+    progress_label_->setStyleSheet(QString("color: %1; font-size: 9px; %2").arg(colors::TEXT_DIM, MF()));
     phl->addWidget(progress_label_);
 
     progress_bar_ = new QProgressBar;
@@ -181,19 +186,19 @@ void RelationshipMapScreen::build_ui() {
     shl->setContentsMargins(12, 0, 12, 0);
 
     status_nodes_ = new QLabel("READY");
-    status_nodes_->setStyleSheet(QString("color: %1; font-size: 9px; %2").arg(colors::TEXT_DIM, MF));
+    status_nodes_->setStyleSheet(QString("color: %1; font-size: 9px; %2").arg(colors::TEXT_DIM, MF()));
     shl->addWidget(status_nodes_);
 
     shl->addStretch();
 
     status_quality_ = new QLabel("");
-    status_quality_->setStyleSheet(QString("color: %1; font-size: 9px; %2").arg(colors::TEXT_DIM, MF));
+    status_quality_->setStyleSheet(QString("color: %1; font-size: 9px; %2").arg(colors::TEXT_DIM, MF()));
     shl->addWidget(status_quality_);
 
     shl->addStretch();
 
     status_brand_ = new QLabel("FINCEPT TERMINAL");
-    status_brand_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: 700; %2").arg(colors::AMBER, MF));
+    status_brand_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: 700; %2").arg(colors::AMBER, MF()));
     shl->addWidget(status_brand_);
 
     root->addWidget(status);
@@ -216,7 +221,7 @@ QWidget* RelationshipMapScreen::build_filter_panel() {
     auto* title = new QLabel("FILTERS");
     title->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700; "
                                  "letter-spacing: 0.5px; %2")
-                             .arg(colors::AMBER, MF));
+                             .arg(colors::AMBER, MF()));
     vl->addWidget(title);
 
     auto make_check = [&](const QString& label, bool& state, NodeCategory cat) {
@@ -227,7 +232,7 @@ QWidget* RelationshipMapScreen::build_filter_panel() {
                                   "QCheckBox::indicator { width: 12px; height: 12px; "
                                   "border: 1px solid %3; background: transparent; }"
                                   "QCheckBox::indicator:checked { background: %3; }")
-                              .arg(colors::TEXT_SECONDARY, MF, col.name()));
+                              .arg(colors::TEXT_SECONDARY, MF(), col.name()));
         connect(cb, &QCheckBox::toggled, this, [this, &state](bool checked) {
             state = checked;
             if (has_data_)
@@ -261,7 +266,7 @@ QWidget* RelationshipMapScreen::build_detail_panel() {
     auto* header = new QHBoxLayout;
     detail_title_ = new QLabel("SELECT A NODE");
     detail_title_->setStyleSheet(
-        QString("color: %1; font-size: 12px; font-weight: 700; %2").arg(colors::TEXT_PRIMARY, MF));
+        QString("color: %1; font-size: 12px; font-weight: 700; %2").arg(colors::TEXT_PRIMARY, MF()));
     header->addWidget(detail_title_);
     header->addStretch();
 
@@ -269,8 +274,8 @@ QWidget* RelationshipMapScreen::build_detail_panel() {
     close_btn->setFixedSize(20, 20);
     close_btn->setCursor(Qt::PointingHandCursor);
     close_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
-                                     "font-size: 11px; %2 } QPushButton:hover { color: #e5e5e5; }")
-                                 .arg(colors::TEXT_DIM, MF));
+                                     "font-size: 11px; %2 } QPushButton:hover { color: %3; }")
+                                 .arg(colors::TEXT_DIM, MF(), colors::TEXT_PRIMARY));
     connect(close_btn, &QPushButton::clicked, this, [this]() {
         detail_panel_->hide();
         scene_->clearSelection();
@@ -281,7 +286,7 @@ QWidget* RelationshipMapScreen::build_detail_panel() {
     detail_category_ = new QLabel("");
     detail_category_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: 700; "
                                             "letter-spacing: 0.5px; %2")
-                                        .arg(colors::TEXT_TERTIARY, MF));
+                                        .arg(colors::TEXT_TERTIARY, MF()));
     vl->addWidget(detail_category_);
 
     // Scrollable properties
@@ -314,7 +319,7 @@ QWidget* RelationshipMapScreen::build_legend() {
     auto* title = new QLabel("LEGEND");
     title->setStyleSheet(QString("color: %1; font-size: 8px; font-weight: 700; "
                                  "letter-spacing: 0.5px; %2")
-                             .arg(colors::TEXT_DIM, MF));
+                             .arg(colors::TEXT_DIM, MF()));
     vl->addWidget(title);
 
     auto add_entry = [&](NodeCategory cat) {
@@ -330,7 +335,7 @@ QWidget* RelationshipMapScreen::build_legend() {
         hl->addWidget(dot);
 
         auto* lbl = new QLabel(category_label(cat));
-        lbl->setStyleSheet(QString("color: %1; font-size: 8px; %2").arg(colors::TEXT_TERTIARY, MF));
+        lbl->setStyleSheet(QString("color: %1; font-size: 8px; %2").arg(colors::TEXT_TERTIARY, MF()));
         hl->addWidget(lbl);
         hl->addStretch();
         vl->addWidget(row);
@@ -362,6 +367,7 @@ void RelationshipMapScreen::on_search() {
     has_data_ = false;
 
     services::RelationshipMapService::instance().fetch(ticker);
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 void RelationshipMapScreen::on_progress(int percent, const QString& message) {
@@ -389,7 +395,7 @@ void RelationshipMapScreen::on_data_ready(const RelationshipData& data) {
 void RelationshipMapScreen::on_fetch_failed(const QString& error) {
     progress_bar_->hide();
     progress_label_->setText("Error: " + error);
-    progress_label_->setStyleSheet(QString("color: %1; font-size: 9px; %2").arg(colors::NEGATIVE, MF));
+    progress_label_->setStyleSheet(QString("color: %1; font-size: 9px; %2").arg(colors::NEGATIVE, MF()));
 }
 
 void RelationshipMapScreen::rebuild_graph() {
@@ -435,7 +441,7 @@ void RelationshipMapScreen::on_node_selected() {
         detail_title_->setText(label.isEmpty() ? "NODE" : label);
         detail_category_->setText(category_text);
         detail_category_->setStyleSheet(
-            QString("color: %1; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; %2").arg(colors::AMBER, MF));
+            QString("color: %1; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; %2").arg(colors::AMBER, MF()));
 
         // Clear and repopulate properties
         auto* layout = detail_props_container_->layout();
@@ -449,7 +455,7 @@ void RelationshipMapScreen::on_node_selected() {
         if (!sublabel.isEmpty()) {
             auto* sub = new QLabel(sublabel);
             sub->setWordWrap(true);
-            sub->setStyleSheet(QString("color: %1; font-size: 11px; %2").arg(colors::TEXT_SECONDARY, MF));
+            sub->setStyleSheet(QString("color: %1; font-size: 11px; %2").arg(colors::TEXT_SECONDARY, MF()));
             layout->addWidget(sub);
         }
 
@@ -465,7 +471,7 @@ void RelationshipMapScreen::on_node_selected() {
             if (label == current_data_.company.ticker) {
                 auto add_prop = [&](const QString& key, const QString& val) {
                     auto* row = new QLabel(QString("%1:  %2").arg(key, val));
-                    row->setStyleSheet(QString("color: %1; font-size: 10px; %2").arg(colors::TEXT_SECONDARY, MF));
+                    row->setStyleSheet(QString("color: %1; font-size: 10px; %2").arg(colors::TEXT_SECONDARY, MF()));
                     layout->addWidget(row);
                 };
                 add_prop("Sector", current_data_.company.sector);
@@ -485,7 +491,7 @@ void RelationshipMapScreen::on_node_selected() {
                 if (p.ticker == label) {
                     auto add_prop = [&](const QString& key, const QString& val) {
                         auto* row = new QLabel(QString("%1:  %2").arg(key, val));
-                        row->setStyleSheet(QString("color: %1; font-size: 10px; %2").arg(colors::TEXT_SECONDARY, MF));
+                        row->setStyleSheet(QString("color: %1; font-size: 10px; %2").arg(colors::TEXT_SECONDARY, MF()));
                         layout->addWidget(row);
                     };
                     add_prop("Mkt Cap", QString("$%1B").arg(p.market_cap / 1e9, 0, 'f', 1));
@@ -515,6 +521,35 @@ void RelationshipMapScreen::update_status_bar() {
                                .arg(current_data_.peers.size())
                                .arg(current_data_.institutional_holders.size()));
     status_quality_->setText(QString("QUALITY: %1%").arg(current_data_.data_quality));
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap RelationshipMapScreen::save_state() const {
+    return {
+        {"ticker",      search_input_ ? search_input_->text().trimmed() : QString{}},
+        {"layout_mode", static_cast<int>(layout_mode_)},
+    };
+}
+
+void RelationshipMapScreen::restore_state(const QVariantMap& state) {
+    const QString ticker = state.value("ticker").toString();
+    const int layout     = state.value("layout_mode", 0).toInt();
+
+    if (layout_combo_) {
+        // Find the combo item whose data matches layout_mode
+        for (int i = 0; i < layout_combo_->count(); ++i) {
+            if (layout_combo_->itemData(i).toInt() == layout) {
+                layout_combo_->setCurrentIndex(i);
+                break;
+            }
+        }
+    }
+
+    if (!ticker.isEmpty() && search_input_) {
+        search_input_->setText(ticker);
+        on_search();
+    }
 }
 
 } // namespace fincept::screens

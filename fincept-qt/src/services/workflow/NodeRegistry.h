@@ -2,7 +2,7 @@
 
 #include "screens/node_editor/NodeEditorTypes.h"
 
-#include <QMap>
+#include <QHash>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -24,7 +24,7 @@ class NodeRegistry {
     NodeRegistry();
     void register_builtin_nodes();
 
-    QMap<QString, NodeTypeDef> registry_;
+    QHash<QString, NodeTypeDef> registry_;
 };
 
 } // namespace fincept::workflow

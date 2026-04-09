@@ -2,6 +2,7 @@
 #pragma once
 #include "screens/portfolio/PortfolioTypes.h"
 
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QWidget>
 
@@ -14,6 +15,7 @@ class PortfolioStatsRibbon : public QWidget {
 
     void set_summary(const portfolio::PortfolioSummary& summary);
     void set_metrics(const portfolio::ComputedMetrics& metrics);
+    void refresh_theme();
 
   private:
     struct MetricCell {
@@ -25,6 +27,7 @@ class PortfolioStatsRibbon : public QWidget {
 
     MetricCell add_cell(const QString& label_text, const char* value_color);
 
+    QHBoxLayout* cells_layout_ = nullptr;
     MetricCell total_value_;
     MetricCell pnl_;
     MetricCell day_change_;

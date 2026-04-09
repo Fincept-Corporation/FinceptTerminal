@@ -1,6 +1,7 @@
 #include "screens/node_editor/NodeEditorScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "screens/node_editor/canvas/MiniMap.h"
 #include "screens/node_editor/canvas/NodeCanvas.h"
 #include "screens/node_editor/canvas/NodeItem.h"
@@ -12,6 +13,7 @@
 #include "screens/node_editor/toolbar/NodeEditorToolbar.h"
 #include "services/workflow/NodeRegistry.h"
 #include "services/workflow/WorkflowService.h"
+#include "ui/theme/Theme.h"
 
 #include <QFileDialog>
 #include <QFrame>
@@ -43,8 +45,11 @@ NodeEditorScreen::NodeEditorScreen(QWidget* parent)
 void NodeEditorScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     auto_save_timer_->start();
-    if (minimap_ && minimap_->findChild<QTimer*>())
-        minimap_->findChild<QTimer*>()->start();
+    if (minimap_)
+        minimap_->start_tracking();
+    // Resume edge animations if execution is in progress
+    if (scene_ && scene_->has_animated_edges())
+        scene_->resume_edge_animations();
 
     // Restore workspace state
     QSettings settings;
@@ -71,8 +76,11 @@ void NodeEditorScreen::showEvent(QShowEvent* event) {
 void NodeEditorScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
     auto_save_timer_->stop();
-    if (minimap_ && minimap_->findChild<QTimer*>())
-        minimap_->findChild<QTimer*>()->stop();
+    if (minimap_)
+        minimap_->stop_tracking();
+    // Pause edge animations while hidden — no point rendering offscreen
+    if (scene_)
+        scene_->pause_edge_animations();
 
     // Save workspace state
     QSettings settings;
@@ -178,14 +186,15 @@ void NodeEditorScreen::build_ui() {
     // ── Separator ──────────────────────────────────────────────────
     auto* sep = new QFrame;
     sep->setFixedHeight(1);
-    sep->setStyleSheet("background: #2a2a2a; border: none;");
+    sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED));
     root->addWidget(sep);
 
     // ── 3-panel splitter ───────────────────────────────────────────
     auto* splitter = new QSplitter(Qt::Horizontal);
     splitter->setHandleWidth(1);
-    splitter->setStyleSheet("QSplitter::handle { background: #2a2a2a; }"
-                            "QSplitter::handle:hover { background: #4a4a4a; }");
+    splitter->setStyleSheet(QString("QSplitter::handle { background: %1; }"
+                                    "QSplitter::handle:hover { background: %2; }")
+                                .arg(ui::colors::BORDER_MED, ui::colors::TEXT_DIM));
 
     // Left: Node palette
     palette_ = new NodePalette;
@@ -509,6 +518,7 @@ void NodeEditorScreen::on_save_workflow() {
     wf.id = current_workflow_id_;
     wf.name = toolbar_->workflow_name();
     WorkflowService::instance().save_workflow(wf);
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 void NodeEditorScreen::on_load_workflow() {
@@ -679,6 +689,7 @@ void NodeEditorScreen::on_show_templates() {
         make_edge(n1.id, "output_main", n4.id, "input_0");
         make_edge(n2.id, "output_main", n5.id, "input_0");
         make_edge(n3.id, "output_main", n5.id, "input_1");
+        make_edge(n4.id, "output_main", n5.id, "input_2");
         make_edge(n5.id, "output_main", n6.id, "input_0");
         toolbar_->set_workflow_name("Stock Quote Lookup");
     } else if (idx == 2) {
@@ -703,6 +714,7 @@ void NodeEditorScreen::on_show_templates() {
         make_edge(n2.id, "output_main", n5.id, "input_0");
         make_edge(n3.id, "output_main", n6.id, "input_0");
         make_edge(n4.id, "output_main", n6.id, "input_1");
+        make_edge(n5.id, "output_main", n6.id, "input_2");
         make_edge(n6.id, "output_main", n7.id, "input_0");
         toolbar_->set_workflow_name("Multi-Indicator Scanner");
     } else if (idx == 3) {
@@ -726,6 +738,7 @@ void NodeEditorScreen::on_show_templates() {
         make_edge(n1.id, "output_main", n4.id, "input_0");
         make_edge(n2.id, "output_main", n5.id, "input_0");
         make_edge(n3.id, "output_main", n5.id, "input_1");
+        make_edge(n4.id, "output_main", n5.id, "input_2");
         make_edge(n5.id, "output_main", n6.id, "input_0");
         make_edge(n6.id, "output_main", n7.id, "input_0");
         toolbar_->set_workflow_name("Sector Correlation Analysis");
@@ -745,6 +758,7 @@ void NodeEditorScreen::on_show_templates() {
         make_edge(n1.id, "output_main", n4.id, "input_0");
         make_edge(n2.id, "output_main", n5.id, "input_0");
         make_edge(n3.id, "output_main", n5.id, "input_1");
+        make_edge(n4.id, "output_main", n5.id, "input_2");
         make_edge(n5.id, "output_main", n6.id, "input_0");
         toolbar_->set_workflow_name("Economic Dashboard");
     } else if (idx == 5) {
@@ -924,6 +938,7 @@ void NodeEditorScreen::on_show_templates() {
         make_edge(n1.id, "output_main", n4.id, "input_0");
         make_edge(n2.id, "output_main", n5.id, "input_0");
         make_edge(n3.id, "output_main", n5.id, "input_1");
+        make_edge(n4.id, "output_main", n5.id, "input_2");
         make_edge(n5.id, "output_main", n6.id, "input_0");
         make_edge(n5.id, "output_main", n7.id, "input_0");
         make_edge(n6.id, "output_main", n8.id, "input_0");
@@ -1028,6 +1043,22 @@ void NodeEditorScreen::on_deploy() {
     } else {
         LOG_INFO("NodeEditor", QString("Saved draft: %1").arg(wf.name));
     }
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap NodeEditorScreen::save_state() const {
+    return {{"workflow_id", current_workflow_id_}};
+}
+
+void NodeEditorScreen::restore_state(const QVariantMap& state) {
+    const QString wf_id = state.value("workflow_id").toString();
+    if (wf_id.isEmpty()) return;
+
+    // wire_signals() already connected workflow_loaded → scene_->deserialize().
+    // Just trigger the load — the existing handler in wire_signals() does the rest.
+    current_workflow_id_ = wf_id;
+    WorkflowService::instance().load_workflow(wf_id);
 }
 
 } // namespace fincept::workflow

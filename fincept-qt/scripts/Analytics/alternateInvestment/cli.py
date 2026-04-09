@@ -786,14 +786,14 @@ def analyze_preferred_stocks(data: Dict[str, Any], method: str = 'yield_analysis
         analyzer = PreferredStockAnalyzer(params)
 
         if method == 'yield_analysis':
-            metrics = analyzer.calculate_yields()
+            metrics = {
+                'current_yield': float(analyzer.calculate_current_yield()),
+                'yield_to_call': analyzer.calculate_yield_to_call()
+            }
         elif method == 'call_risk':
             metrics = analyzer.analyze_call_risk()
         elif method == 'dividend_safety':
-            metrics = analyzer.dividend_suspension_risk_analysis(
-                data.get('issuer_credit_rating', 'BBB'),
-                Decimal(str(data.get('interest_coverage', 3.0)))
-            )
+            metrics = analyzer.analyze_dividend_suspension_risk()
         else:
             metrics = analyzer.calculate_key_metrics()
 
@@ -1308,12 +1308,9 @@ def analyze_leveraged_funds(data: Dict[str, Any], method: str = 'decay') -> Dict
         analyzer = LeveragedFundAnalyzer(params)
 
         if method == 'decay':
-            metrics = analyzer.volatility_decay_analysis(
-                data.get('days', 252),
-                Decimal(str(data.get('volatility', 0.20)))
-            )
+            metrics = analyzer.volatility_decay_example()
         elif method == 'volatility':
-            metrics = analyzer.amplification_analysis()
+            metrics = analyzer.volatility_decay_example()
         elif method == 'verdict':
             metrics = analyzer.analysis_verdict()
         else:
@@ -1340,9 +1337,9 @@ def analyze_structured_products(data: Dict[str, Any], method: str = 'complexity'
         analyzer = StructuredProductAnalyzer(params)
 
         if method == 'complexity':
-            metrics = analyzer.complexity_analysis()
+            metrics = analyzer.analysis_verdict()
         elif method == 'costs':
-            metrics = analyzer.hidden_costs_analysis()
+            metrics = analyzer.analysis_verdict()
         elif method == 'verdict':
             metrics = analyzer.analysis_verdict()
         else:
@@ -1369,14 +1366,13 @@ def analyze_variable_annuities(data: Dict[str, Any], method: str = 'fees') -> Di
         analyzer = VariableAnnuityAnalyzer(params)
 
         if method == 'fees':
-            metrics = analyzer.fee_analysis()
+            metrics = analyzer.total_annual_cost()
         elif method == 'tax':
-            metrics = analyzer.tax_efficiency_analysis()
+            years = int(data.get('years', 20))
+            gross_return = Decimal(str(data.get('gross_return', 0.08)))
+            metrics = analyzer.tax_deferral_myth(years, gross_return)
         elif method == 'alternatives':
-            metrics = analyzer.compare_to_alternatives(
-                Decimal(str(data.get('alternative_return', 0.08))),
-                Decimal(str(data.get('alternative_fee', 0.0020)))
-            )
+            metrics = analyzer.compare_to_alternatives()
         elif method == 'verdict':
             metrics = analyzer.analysis_verdict()
         else:

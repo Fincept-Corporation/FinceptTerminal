@@ -4,6 +4,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QApplication>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -34,22 +35,37 @@ PortfolioCommandBar::PortfolioCommandBar(QWidget* parent) : QWidget(parent) {
 }
 
 void PortfolioCommandBar::build_ui() {
-    setFixedHeight(40);
+    setFixedHeight(36);
     setObjectName("portfolioCommandBar");
     setStyleSheet(QString("#portfolioCommandBar { background:%1; border-bottom:2px solid %2; }")
                       .arg(ui::colors::BG_SURFACE, ui::colors::AMBER));
 
-    auto* layout = new QHBoxLayout(this);
-    layout->setContentsMargins(8, 0, 8, 0);
-    layout->setSpacing(4);
+    auto* outer = new QHBoxLayout(this);
+    outer->setContentsMargins(0, 0, 0, 0);
+    outer->setSpacing(0);
+
+    // Wrap entire bar in scroll area to prevent horizontal overflow
+    auto* scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setStyleSheet("QScrollArea { background:transparent; border:none; }");
+
+    auto* inner = new QWidget;
+    inner->setStyleSheet("background:transparent;");
+    auto* layout = new QHBoxLayout(inner);
+    layout->setContentsMargins(6, 0, 6, 0);
+    layout->setSpacing(3);
 
     build_portfolio_selector(layout);
 
     // Inline stats (wrapped in container for show/hide)
     stats_container_ = new QWidget;
+    stats_container_->setStyleSheet("background:transparent;");
     auto* stats_layout = new QHBoxLayout(stats_container_);
     stats_layout->setContentsMargins(0, 0, 0, 0);
-    stats_layout->setSpacing(4);
+    stats_layout->setSpacing(3);
     stats_layout->addWidget(nav_label_);
     stats_layout->addWidget(pnl_label_);
     stats_layout->addWidget(day_label_);
@@ -58,36 +74,36 @@ void PortfolioCommandBar::build_ui() {
 
     // Action buttons (wrapped for show/hide)
     actions_container_ = new QWidget;
+    actions_container_->setStyleSheet("background:transparent;");
     auto* actions_layout = new QHBoxLayout(actions_container_);
     actions_layout->setContentsMargins(0, 0, 0, 0);
-    actions_layout->setSpacing(4);
+    actions_layout->setSpacing(3);
     build_action_buttons(actions_layout);
     layout->addWidget(actions_container_);
 
     // Separator
     auto* sep = new QWidget;
-    sep->setFixedSize(1, 20);
+    sep->setFixedSize(1, 18);
     sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_MED));
     layout->addWidget(sep);
 
     // Detail buttons + AI/Agent (wrapped for show/hide)
     details_container_ = new QWidget;
+    details_container_->setStyleSheet("background:transparent;");
     auto* details_layout = new QHBoxLayout(details_container_);
     details_layout->setContentsMargins(0, 0, 0, 0);
-    details_layout->setSpacing(4);
+    details_layout->setSpacing(2);
     build_detail_buttons(details_layout);
-
-    details_layout->addStretch();
 
     // AI + Agent buttons inside details container
     auto make_tool_btn = [&](const QString& text, const char* color, auto signal) {
         auto* btn = new QPushButton(text);
-        btn->setFixedHeight(22);
+        btn->setFixedHeight(20);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
-                                   "  padding:0 8px; font-size:9px; font-weight:700; letter-spacing:0.5px; }"
-                                   "QPushButton:hover { background:%1; color:#000; }")
-                               .arg(color));
+                                   "  padding:0 6px; font-size:9px; font-weight:700; }"
+                                   "QPushButton:hover { background:%1; color:%2; }")
+                               .arg(color, ui::colors::BG_BASE));
         connect(btn, &QPushButton::clicked, this, signal);
         details_layout->addWidget(btn);
         return btn;
@@ -97,7 +113,9 @@ void PortfolioCommandBar::build_ui() {
     make_tool_btn("AGENT", "#00D4AA", &PortfolioCommandBar::agent_run_requested);
 
     layout->addWidget(details_container_);
-    layout->addStretch();
+
+    scroll->setWidget(inner);
+    outer->addWidget(scroll);
 
     // Initially hide everything until portfolios load
     stats_container_->hide();
@@ -108,7 +126,8 @@ void PortfolioCommandBar::build_ui() {
 void PortfolioCommandBar::build_portfolio_selector(QHBoxLayout* layout) {
     // Selector button (dropdown trigger)
     selector_btn_ = new QPushButton("SELECT PORTFOLIO \u25BE");
-    selector_btn_->setFixedHeight(24);
+    selector_btn_->setFixedHeight(22);
+    selector_btn_->setMaximumWidth(240);
     selector_btn_->setCursor(Qt::PointingHandCursor);
     selector_btn_->setStyleSheet(
         QString("QPushButton { background:%1; color:%2; border:1px solid %3;"
@@ -121,7 +140,7 @@ void PortfolioCommandBar::build_portfolio_selector(QHBoxLayout* layout) {
     // Create stat labels (added to stats_container_ in build_ui, not here)
     auto make_stat = [](QLabel*& lbl) {
         lbl = new QLabel;
-        lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::TEXT_TERTIARY));
+        lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY));
     };
     make_stat(nav_label_);
     make_stat(pnl_label_);
@@ -187,10 +206,10 @@ void PortfolioCommandBar::build_portfolio_selector(QHBoxLayout* layout) {
     auto* create_btn = new QPushButton("+ CREATE NEW");
     create_btn->setFixedHeight(22);
     create_btn->setCursor(Qt::PointingHandCursor);
-    create_btn->setStyleSheet(QString("QPushButton { background:%1; color:#000; border:none;"
+    create_btn->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
                                       "  font-size:9px; font-weight:700; }"
                                       "QPushButton:hover { background:%2; }")
-                                  .arg(ui::colors::AMBER, ui::colors::WARNING));
+                                  .arg(ui::colors::AMBER, ui::colors::WARNING, ui::colors::BG_BASE));
     connect(create_btn, &QPushButton::clicked, this, [this]() {
         dropdown_->hide();
         dropdown_visible_ = false;
@@ -203,8 +222,8 @@ void PortfolioCommandBar::build_portfolio_selector(QHBoxLayout* layout) {
     delete_btn->setCursor(Qt::PointingHandCursor);
     delete_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                                       "  font-size:9px; font-weight:700; }"
-                                      "QPushButton:hover { background:%1; color:#000; }")
-                                  .arg(ui::colors::NEGATIVE));
+                                      "QPushButton:hover { background:%1; color:%2; }")
+                                  .arg(ui::colors::NEGATIVE, ui::colors::BG_BASE));
     connect(delete_btn, &QPushButton::clicked, this, [this]() {
         if (!selected_id_.isEmpty()) {
             dropdown_->hide();
@@ -221,19 +240,19 @@ void PortfolioCommandBar::build_portfolio_selector(QHBoxLayout* layout) {
 void PortfolioCommandBar::build_action_buttons(QHBoxLayout* layout) {
     auto make_btn = [&](const QString& text, const char* bg, const char* fg) {
         auto* btn = new QPushButton(text);
-        btn->setFixedHeight(22);
+        btn->setFixedHeight(20);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
-                                   "  padding:0 10px; font-size:9px; font-weight:700; letter-spacing:0.5px; }"
+        btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none; border-radius:2px;"
+                                   "  padding:0 8px; font-size:9px; font-weight:700; letter-spacing:0.5px; }"
                                    "QPushButton:hover { opacity:0.85; }")
                                .arg(bg, fg));
         layout->addWidget(btn);
         return btn;
     };
 
-    buy_btn_ = make_btn("BUY", ui::colors::POSITIVE, "#000000");
-    sell_btn_ = make_btn("SELL", ui::colors::NEGATIVE, "#ffffff");
-    auto* div_btn = make_btn("DIV", ui::colors::CYAN, "#000000");
+    buy_btn_ = make_btn("BUY", ui::colors::POSITIVE, ui::colors::BG_BASE);
+    sell_btn_ = make_btn("SELL", ui::colors::NEGATIVE, ui::colors::TEXT_PRIMARY);
+    auto* div_btn = make_btn("DIV", ui::colors::CYAN, ui::colors::BG_BASE);
 
     connect(buy_btn_,  &QPushButton::clicked, this, &PortfolioCommandBar::buy_requested);
     connect(sell_btn_, &QPushButton::clicked, this, &PortfolioCommandBar::sell_requested);
@@ -241,10 +260,10 @@ void PortfolioCommandBar::build_action_buttons(QHBoxLayout* layout) {
 
     // Refresh
     refresh_btn_ = new QPushButton("\u21BB");
-    refresh_btn_->setFixedSize(22, 22);
+    refresh_btn_->setFixedSize(20, 20);
     refresh_btn_->setCursor(Qt::PointingHandCursor);
     refresh_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                                        "  font-size:12px; }"
+                                        "  font-size:11px; }"
                                         "QPushButton:hover { border-color:%1; }")
                                     .arg(ui::colors::AMBER, ui::colors::BORDER_MED));
     connect(refresh_btn_, &QPushButton::clicked, this, &PortfolioCommandBar::refresh_requested);
@@ -252,7 +271,7 @@ void PortfolioCommandBar::build_action_buttons(QHBoxLayout* layout) {
 
     // Refresh interval selector
     interval_cb_ = new QComboBox;
-    interval_cb_->setFixedHeight(22);
+    interval_cb_->setFixedHeight(20);
     interval_cb_->addItem("1m", 60000);
     interval_cb_->addItem("5m", 300000);
     interval_cb_->addItem("10m", 600000);
@@ -283,14 +302,14 @@ void PortfolioCommandBar::build_action_buttons(QHBoxLayout* layout) {
 
     // FFN toggle
     ffn_btn_ = new QPushButton("FFN");
-    ffn_btn_->setFixedHeight(22);
+    ffn_btn_->setFixedHeight(20);
     ffn_btn_->setCheckable(true);
     ffn_btn_->setCursor(Qt::PointingHandCursor);
     ffn_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                                     "  padding:0 8px; font-size:9px; font-weight:700; }"
-                                    "QPushButton:checked { background:%3; color:#000; border-color:%3; }"
+                                    "QPushButton:checked { background:%3; color:%4; border-color:%3; }"
                                     "QPushButton:hover { border-color:%3; }")
-                                .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::AMBER));
+                                .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::AMBER, ui::colors::BG_BASE));
     connect(ffn_btn_, &QPushButton::clicked, this, &PortfolioCommandBar::ffn_toggled);
     layout->addWidget(ffn_btn_);
 }
@@ -303,11 +322,12 @@ void PortfolioCommandBar::build_detail_buttons(QHBoxLayout* layout) {
         btn->setProperty("detailView", static_cast<int>(def.view));
 
         QString color = def.color;
+        QString rgb_str = [&]() { QColor c(color); return QString("%1,%2,%3").arg(c.red()).arg(c.green()).arg(c.blue()); }();
         btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                                    "  padding:0 6px; font-size:8px; font-weight:700; letter-spacing:0.3px; }"
-                                   "QPushButton:hover { background:%3; color:#000; border-color:%3; }"
-                                   "QPushButton[active=\"true\"] { background:%3; color:#000; border-color:%3; }")
-                               .arg(color, ui::colors::BORDER_DIM, color));
+                                   "QPushButton:hover { background:rgba(%5,0.12); color:%3; border-color:%3; }"
+                                   "QPushButton[active=\"true\"] { background:rgba(%5,0.15); color:%3; border-color:%3; }")
+                               .arg(color, ui::colors::BORDER_DIM, color, ui::colors::BG_BASE, rgb_str));
 
         connect(btn, &QPushButton::clicked, this, [this, view = def.view]() { emit detail_view_selected(view); });
 
@@ -366,14 +386,14 @@ void PortfolioCommandBar::set_summary(const portfolio::PortfolioSummary& s) {
 
     pnl_label_->setText(
         QString("P&L %1%2%").arg(s.total_unrealized_pnl >= 0 ? "+" : "").arg(fmt(s.total_unrealized_pnl_percent)));
-    pnl_label_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;").arg(color(s.total_unrealized_pnl)));
+    pnl_label_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(color(s.total_unrealized_pnl)));
 
     day_label_->setText(
         QString("DAY %1%2%").arg(s.total_day_change >= 0 ? "+" : "").arg(fmt(s.total_day_change_percent)));
-    day_label_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;").arg(color(s.total_day_change)));
+    day_label_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(color(s.total_day_change)));
 
     pos_label_->setText(QString("POS %1 | W%2/L%3").arg(s.total_positions).arg(s.gainers).arg(s.losers));
-    pos_label_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::TEXT_SECONDARY));
+    pos_label_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY));
 }
 
 void PortfolioCommandBar::set_refreshing(bool refreshing) {
@@ -415,6 +435,26 @@ void PortfolioCommandBar::set_refresh_interval(int ms) {
             interval_cb_->setCurrentIndex(i);
             break;
         }
+    }
+}
+
+void PortfolioCommandBar::refresh_theme() {
+    setStyleSheet(QString("#portfolioCommandBar { background:%1; border-bottom:2px solid %2; }")
+                      .arg(ui::colors::BG_SURFACE, ui::colors::AMBER));
+
+    selector_btn_->setStyleSheet(
+        QString("QPushButton { background:%1; color:%2; border:1px solid %3;"
+                "  padding:0 12px; font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+                "QPushButton:hover { border-color:%4; color:%4; }")
+            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::AMBER));
+
+    dropdown_->setStyleSheet(
+        QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_MED));
+
+    // Detail buttons keep their per-view accent colors but refresh base tokens
+    for (auto* btn : detail_btns_) {
+        btn->style()->unpolish(btn);
+        btn->style()->polish(btn);
     }
 }
 

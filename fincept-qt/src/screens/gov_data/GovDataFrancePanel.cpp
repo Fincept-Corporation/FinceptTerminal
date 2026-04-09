@@ -4,6 +4,7 @@
 
 #include "core/logging/Logger.h"
 #include "services/gov_data/GovDataService.h"
+#include "ui/theme/Theme.h"
 
 #include <QDesktopServices>
 #include <QFileDialog>
@@ -22,64 +23,78 @@ static constexpr const char* kGovDataFranceScript = "french_gov_api.py";
 static constexpr const char* kGovDataFranceColor  = "#2563EB";
 } // namespace
 
-// ── Stylesheet ────────────────────────────────────────────────────────────────
+using namespace fincept::ui;
 
-static const QString kPanelStyle = QStringLiteral(
-    "#frPanelToolbar { background:#111111; border-bottom:1px solid #1a1a1a; }"
+// ── Dynamic stylesheet ───────────────────────────────────────────────────────
 
-    "#frTabBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:4px 12px; letter-spacing:0.5px; }"
-    "#frTabBtn:hover { color:#e5e5e5; background:#161616; }"
-    "#frTabBtn:checked { background:rgba(37,99,235,0.12); color:#2563EB;"
-    "  border:1px solid #2563EB; }"
+static QString build_france_style() {
+    const auto& t  = ui::ThemeManager::instance().tokens();
+    const auto  cc = QColor(kGovDataFranceColor);
+    const QString cr = QString::number(cc.red());
+    const QString cg = QString::number(cc.green());
+    const QString cb = QString::number(cc.blue());
+    const QString c  = kGovDataFranceColor;
 
-    "#frBackBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:4px 10px; }"
-    "#frBackBtn:hover { color:#e5e5e5; background:#161616; }"
+    QString s;
+    s += QString("#frPanelToolbar { background:%1; border-bottom:1px solid %2; }").arg(t.bg_raised, t.border_dim);
 
-    "#frFetchBtn { background:#2563EB; color:#e5e5e5; border:none;"
-    "  font-size:10px; font-weight:700; padding:4px 14px; }"
-    "#frFetchBtn:hover { background:#1d4ed8; }"
-    "#frFetchBtn:disabled { background:#1a1a1a; color:#404040; }"
+    s += QString("#frTabBtn { background:transparent; color:%1; border:1px solid %2;"
+                 "  font-size:10px; font-weight:700; padding:4px 12px; letter-spacing:0.5px; }").arg(t.text_secondary, t.border_dim);
+    s += QString("#frTabBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
+    s += QString("#frTabBtn:checked { background:rgba(%1,%2,%3,0.12); color:%4;"
+                 "  border:1px solid %4; }").arg(cr, cg, cb, c);
 
-    "#frCsvBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:4px 10px; }"
-    "#frCsvBtn:hover { color:#e5e5e5; background:#161616; }"
+    s += QString("#frBackBtn { background:transparent; color:%1; border:1px solid %2;"
+                 "  font-size:10px; font-weight:700; padding:4px 10px; }").arg(t.text_secondary, t.border_dim);
+    s += QString("#frBackBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
 
-    "#frSearch { background:#080808; color:#e5e5e5; border:none;"
-    "  border-bottom:1px solid #1a1a1a; padding:4px 10px; font-size:11px; }"
-    "#frSearch:focus { border-bottom:1px solid #2563EB; }"
+    s += QString("#frFetchBtn { background:%1; color:%2; border:none;"
+                 "  font-size:10px; font-weight:700; padding:4px 14px; }").arg(c, t.bg_base);
+    s += QString("#frFetchBtn:hover { background:%1; }").arg(cc.lighter(120).name());
+    s += QString("#frFetchBtn:disabled { background:%1; color:%2; }").arg(t.border_dim, t.text_dim);
 
-    "QTableWidget { background:#080808; color:#e5e5e5; border:none;"
-    "  gridline-color:#1a1a1a; font-size:11px; alternate-background-color:#0a0a0a; }"
-    "QTableWidget::item { padding:5px 8px; border-bottom:1px solid #1a1a1a; }"
-    "QTableWidget::item:selected { background:rgba(37,99,235,0.10); color:#2563EB; }"
-    "QHeaderView::section { background:#111111; color:#808080; border:none;"
-    "  border-bottom:2px solid #1a1a1a; border-right:1px solid #1a1a1a;"
-    "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+    s += QString("#frCsvBtn { background:transparent; color:%1; border:1px solid %2;"
+                 "  font-size:10px; font-weight:700; padding:4px 10px; }").arg(t.text_secondary, t.border_dim);
+    s += QString("#frCsvBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
 
-    "#frStatusPage { background:#080808; }"
-    "#frStatusMsg  { color:#808080; font-size:13px; background:transparent; }"
-    "#frStatusErr  { color:#dc2626; font-size:12px; background:transparent; }"
+    s += QString("#frSearch { background:%1; color:%2; border:none;"
+                 "  border-bottom:1px solid %3; padding:4px 10px; font-size:11px; }").arg(t.bg_base, t.text_primary, t.border_dim);
+    s += QString("#frSearch:focus { border-bottom:1px solid %1; }").arg(c);
 
-    "#frBreadcrumb { background:#0a0a0a; border-bottom:1px solid #1a1a1a; }"
-    "#frBreadText  { color:#808080; font-size:9px; background:transparent; }"
-    "#frBreadCount { color:#808080; font-size:9px; background:transparent; }"
+    s += QString("QTableWidget { background:%1; color:%2; border:none;"
+                 "  gridline-color:%3; font-size:11px; alternate-background-color:%4; }").arg(t.bg_base, t.text_primary, t.border_dim, t.bg_surface);
+    s += QString("QTableWidget::item { padding:5px 8px; border-bottom:1px solid %1; }").arg(t.border_dim);
+    s += QString("QTableWidget::item:selected { background:rgba(%1,%2,%3,0.10); color:%4; }").arg(cr, cg, cb, c);
+    s += QString("QHeaderView::section { background:%1; color:%2; border:none;"
+                 "  border-bottom:2px solid %3; border-right:1px solid %3;"
+                 "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }").arg(t.bg_raised, t.text_secondary, t.border_dim);
 
-    "QScrollBar:vertical { background:#080808; width:5px; }"
-    "QScrollBar::handle:vertical { background:#1a1a1a; min-height:20px; }"
-    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }"
-);
+    s += QString("#frStatusPage { background:%1; }").arg(t.bg_base);
+    s += QString("#frStatusMsg  { color:%1; font-size:13px; background:transparent; }").arg(t.text_secondary);
+    s += QString("#frStatusErr  { color:%1; font-size:12px; background:transparent; }").arg(t.negative);
+
+    s += QString("#frBreadcrumb { background:%1; border-bottom:1px solid %2; }").arg(t.bg_surface, t.border_dim);
+    s += QString("#frBreadText  { color:%1; font-size:9px; background:transparent; }").arg(t.text_secondary);
+    s += QString("#frBreadCount { color:%1; font-size:9px; background:transparent; }").arg(t.text_secondary);
+
+    s += QString("QScrollBar:vertical { background:%1; width:5px; }").arg(t.bg_base);
+    s += QString("QScrollBar::handle:vertical { background:%1; min-height:20px; }").arg(t.border_dim);
+    s += "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }";
+    return s;
+}
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 GovDataFrancePanel::GovDataFrancePanel(QWidget* parent)
     : QWidget(parent) {
-    setStyleSheet(kPanelStyle);
+    setStyleSheet(build_france_style());
     build_ui();
     connect(&services::GovDataService::instance(),
             &services::GovDataService::result_ready,
             this, &GovDataFrancePanel::on_result);
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this]() {
+        setStyleSheet(build_france_style());
+    });
 }
 
 // ── Build UI ──────────────────────────────────────────────────────────────────
@@ -483,7 +498,7 @@ void GovDataFrancePanel::populate_services(const QJsonArray& data) {
         QString created = obj["created_at"].toString();
         if (created.length() > 10) created = created.left(10);
         auto* dt = new QTableWidgetItem(created);
-        dt->setForeground(QColor("#808080"));
+        dt->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
         services_table_->setItem(i, 3, dt);
     }
 
@@ -511,13 +526,13 @@ void GovDataFrancePanel::populate_datasets(const QJsonArray& data) {
         // organization is a plain string in this API, not an object
         QString org = obj["organization"].toString();
         auto* org_item = new QTableWidgetItem(org);
-        org_item->setForeground(QColor("#808080"));
+        org_item->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
         org_item->setToolTip(org);
         datasets_table_->setItem(i, 1, org_item);
 
         QString license = obj["license"].toString();
         auto* lic_item = new QTableWidgetItem(license.isEmpty() ? "—" : license);
-        lic_item->setForeground(QColor("#808080"));
+        lic_item->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
         datasets_table_->setItem(i, 2, lic_item);
 
         int num_res = obj["num_resources"].toInt(0);
@@ -584,7 +599,7 @@ void GovDataFrancePanel::populate_resources(const QJsonArray& data) {
 
         QString type = obj["format"].toString();
         auto* type_item = new QTableWidgetItem(type.isEmpty() ? "—" : type);
-        type_item->setForeground(QColor("#808080"));
+        type_item->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
         type_item->setTextAlignment(Qt::AlignCenter);
         resources_table_->setItem(i, 1, type_item);
     }
@@ -603,7 +618,7 @@ void GovDataFrancePanel::show_loading(const QString& message) {
 
 void GovDataFrancePanel::show_error(const QString& message) {
     status_label_->setStyleSheet(
-        "color:#dc2626; font-size:12px; background:transparent;");
+        QString("color:%1; font-size:12px; background:transparent;").arg(ui::colors::NEGATIVE()));
     status_label_->setText("Error: " + message);
     content_stack_->setCurrentIndex(Status);
     LOG_ERROR("GovFrance", message);
@@ -611,8 +626,8 @@ void GovDataFrancePanel::show_error(const QString& message) {
 
 void GovDataFrancePanel::show_status(const QString& message, bool is_error) {
     status_label_->setStyleSheet(is_error
-        ? "color:#dc2626; font-size:12px; background:transparent;"
-        : "color:#808080; font-size:12px; background:transparent;");
+        ? QString("color:%1; font-size:12px; background:transparent;").arg(ui::colors::NEGATIVE())
+        : QString("color:%1; font-size:12px; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     status_label_->setText(message);
     content_stack_->setCurrentIndex(Status);
 }

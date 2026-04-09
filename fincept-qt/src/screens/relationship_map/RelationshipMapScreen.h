@@ -1,6 +1,7 @@
 // src/screens/relationship_map/RelationshipMapScreen.h
 #pragma once
 
+#include "screens/IStatefulScreen.h"
 #include "screens/relationship_map/RelationshipMapTypes.h"
 
 #include <QComboBox>
@@ -19,10 +20,15 @@ namespace fincept::screens {
 
 /// Corporate Intelligence Relationship Map — full screen with search, graph,
 /// filter panel, detail panel, legend, and status bar.
-class RelationshipMapScreen : public QWidget {
+class RelationshipMapScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit RelationshipMapScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "relationship_map"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* event) override;

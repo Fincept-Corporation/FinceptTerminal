@@ -2,6 +2,7 @@
 #include "screens/algo_trading/AlgoTradingScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "screens/algo_trading/DeploymentDashboard.h"
 #include "screens/algo_trading/ScannerPanel.h"
 #include "screens/algo_trading/StrategyBuilderPanel.h"
@@ -167,6 +168,7 @@ void AlgoTradingScreen::on_tab_changed(int index) {
     active_tab_ = index;
     content_stack_->setCurrentIndex(index);
     update_tab_buttons();
+    ScreenStateManager::instance().notify_changed(this);
 
     // Refresh data when switching tabs
     if (index == 1)
@@ -188,6 +190,18 @@ void AlgoTradingScreen::update_tab_buttons() {
                                            .arg(active ? QString("rgba(%1,0.12)").arg(colors[i].mid(1)) : "transparent")
                                            .arg(active ? "700" : "400"));
     }
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap AlgoTradingScreen::save_state() const {
+    return {{"tab_index", active_tab_}};
+}
+
+void AlgoTradingScreen::restore_state(const QVariantMap& state) {
+    const int idx = state.value("tab_index", 0).toInt();
+    if (idx >= 0 && idx < tab_buttons_.size())
+        on_tab_changed(idx);
 }
 
 } // namespace fincept::screens

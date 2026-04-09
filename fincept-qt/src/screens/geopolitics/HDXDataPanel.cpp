@@ -12,6 +12,12 @@ namespace fincept::screens {
 
 using namespace fincept::services::geo;
 
+// Helper: get cyan accent RGB string for rgba() usage
+static QString cyan_rgb() {
+    QColor c(ui::colors::CYAN());
+    return QString("%1,%2,%3").arg(c.red()).arg(c.green()).arg(c.blue());
+}
+
 HDXDataPanel::HDXDataPanel(QWidget* parent) : QWidget(parent) {
     build_ui();
     connect_service();
@@ -40,9 +46,10 @@ void HDXDataPanel::build_ui() {
 
     auto* title = new QLabel("HDX HUMANITARIAN DATA", header);
     title->setStyleSheet(
-        QString("color:#00E5FF; font-size:%1px; font-weight:700; font-family:%2; letter-spacing:1px;")
+        QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
+            .arg(ui::colors::CYAN())
             .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY));
+            .arg(ui::fonts::DATA_FAMILY()));
     hhl->addWidget(title);
 
     auto* div = new QWidget(header);
@@ -50,18 +57,21 @@ void HDXDataPanel::build_ui() {
     div->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM));
     hhl->addWidget(div);
 
+    auto rgb = cyan_rgb();
     const QStringList views = {"Conflicts", "Humanitarian", "Explorer", "Datasets"};
     for (int i = 0; i < views.size(); ++i) {
         auto* btn = new QPushButton(views[i].toUpper(), header);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(
             QString("QPushButton { color:%1; font-size:%2px; font-family:%3;"
-                    "padding:4px 12px; border:none; border-radius:0; background:transparent;"
+                    "padding:4px 12px; border:none; background:transparent;"
                     "font-weight:400; }"
-                    "QPushButton:hover { color:#00E5FF; background:rgba(0,229,255,0.04); }")
+                    "QPushButton:hover { color:%4; background:rgba(%5,0.04); }")
                 .arg(ui::colors::TEXT_TERTIARY)
                 .arg(ui::fonts::TINY)
-                .arg(ui::fonts::DATA_FAMILY));
+                .arg(ui::fonts::DATA_FAMILY)
+                .arg(ui::colors::CYAN())
+                .arg(rgb));
         connect(btn, &QPushButton::clicked, this, [this, i]() { on_view_changed(i); });
         hhl->addWidget(btn);
         view_buttons_.append(btn);
@@ -74,11 +84,12 @@ void HDXDataPanel::build_ui() {
     search_edit_->setFixedWidth(240);
     search_edit_->setStyleSheet(
         QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                "font-family:%4; font-size:%5px; padding:4px 8px; border-radius:2px; }"
-                "QLineEdit:focus { border-color:#00E5FF; }")
+                "font-family:%4; font-size:%5px; padding:4px 8px; }"
+                "QLineEdit:focus { border-color:%6; }")
             .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
             .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::SMALL));
+            .arg(ui::fonts::SMALL)
+            .arg(ui::colors::CYAN()));
     connect(search_edit_, &QLineEdit::returnPressed, this, [this]() {
         auto q = search_edit_->text().trimmed();
         if (!q.isEmpty()) {
@@ -89,12 +100,14 @@ void HDXDataPanel::build_ui() {
     hhl->addWidget(search_edit_);
 
     dataset_count_ = new QLabel("0 datasets", header);
+    dataset_count_->setFixedHeight(22);
     dataset_count_->setStyleSheet(
-        QString("color:#00E5FF; font-size:%1px; font-family:%2; padding:2px 8px;"
-                "background:rgba(0,229,255,0.08); border:1px solid rgba(0,229,255,0.25);"
-                "border-radius:2px; font-weight:700;")
+        QString("color:%1; font-size:%2px; font-family:%3; padding:2px 6px;"
+                "background:rgba(%4,0.08); border:1px solid rgba(%4,0.25); font-weight:700;")
+            .arg(ui::colors::CYAN())
             .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY));
+            .arg(ui::fonts::DATA_FAMILY())
+            .arg(rgb));
     hhl->addWidget(dataset_count_);
 
     root->addWidget(header);
@@ -122,13 +135,14 @@ void HDXDataPanel::build_ui() {
         QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
                 "font-family:%4; font-size:%5px; border:none; }"
                 "QTableWidget::item { padding:3px 8px; }"
-                "QTableWidget::item:selected { background:rgba(0,229,255,0.15); }"
-                "QHeaderView::section { background:%6; color:%7; font-weight:700;"
+                "QTableWidget::item:selected { background:rgba(%6,0.15); }"
+                "QHeaderView::section { background:%7; color:%8; font-weight:700;"
                 "padding:5px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
-                "QTableWidget::item:alternate { background:%8; }")
+                "QTableWidget::item:alternate { background:%9; }")
             .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
             .arg(ui::fonts::DATA_FAMILY)
             .arg(ui::fonts::SMALL)
+            .arg(rgb)
             .arg(ui::colors::BG_RAISED)
             .arg(ui::colors::TEXT_SECONDARY)
             .arg(ui::colors::ROW_ALT));
@@ -137,7 +151,8 @@ void HDXDataPanel::build_ui() {
     loading_label_ = new QLabel("Loading HDX data...", this);
     loading_label_->setAlignment(Qt::AlignCenter);
     loading_label_->setStyleSheet(
-        QString("color:#00E5FF; font-size:%1px; font-family:%2; background:%3;")
+        QString("color:%1; font-size:%2px; font-family:%3; background:%4;")
+            .arg(ui::colors::CYAN())
             .arg(ui::fonts::DATA)
             .arg(ui::fonts::DATA_FAMILY)
             .arg(ui::colors::BG_SURFACE));
@@ -191,14 +206,18 @@ void HDXDataPanel::build_ui() {
 
     auto* explore_btn = new QPushButton("SEARCH", explorer_bar_);
     explore_btn->setCursor(Qt::PointingHandCursor);
-    explore_btn->setStyleSheet(
-        QString("QPushButton { background:#00E5FF; color:%1; font-family:%2;"
-                "font-size:%3px; font-weight:700; border:none; padding:6px 16px;"
-                "border-radius:2px; }"
-                "QPushButton:hover { background:#00B8D4; }")
-            .arg(ui::colors::BG_BASE)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::SMALL));
+    {
+        QColor cy(ui::colors::CYAN());
+        explore_btn->setStyleSheet(
+            QString("QPushButton { background:%1; color:%2; font-family:%3;"
+                    "font-size:%4px; font-weight:700; border:none; padding:6px 16px; }"
+                    "QPushButton:hover { background:%5; }")
+                .arg(ui::colors::CYAN())
+                .arg(ui::colors::BG_BASE())
+                .arg(ui::fonts::DATA_FAMILY())
+                .arg(ui::fonts::SMALL)
+                .arg(cy.darker(120).name()));
+    }
     connect(explore_btn, &QPushButton::clicked, this, [this]() {
         auto country = country_combo_->currentText().trimmed();
         show_loading(true);
@@ -221,26 +240,31 @@ void HDXDataPanel::build_ui() {
 
 void HDXDataPanel::on_view_changed(int index) {
     active_view_ = index;
+    auto rgb = cyan_rgb();
     for (int i = 0; i < view_buttons_.size(); ++i) {
         const bool active = (i == index);
         if (active) {
             view_buttons_[i]->setStyleSheet(
-                QString("QPushButton { color:#00E5FF; font-size:%1px; font-family:%2;"
+                QString("QPushButton { color:%1; font-size:%2px; font-family:%3;"
                         "padding:4px 12px;"
-                        "border-bottom:2px solid #00E5FF; border-top:none; border-left:none; border-right:none;"
-                        "border-radius:0; background:rgba(0,229,255,0.06); font-weight:700; }"
-                        "QPushButton:hover { background:rgba(0,229,255,0.10); }")
+                        "border-bottom:2px solid %1; border-top:none; border-left:none; border-right:none;"
+                        "background:rgba(%4,0.06); font-weight:700; }"
+                        "QPushButton:hover { background:rgba(%4,0.10); }")
+                    .arg(ui::colors::CYAN())
                     .arg(ui::fonts::TINY)
-                    .arg(ui::fonts::DATA_FAMILY));
+                    .arg(ui::fonts::DATA_FAMILY)
+                    .arg(rgb));
         } else {
             view_buttons_[i]->setStyleSheet(
                 QString("QPushButton { color:%1; font-size:%2px; font-family:%3;"
-                        "padding:4px 12px; border:none; border-radius:0; background:transparent;"
+                        "padding:4px 12px; border:none; background:transparent;"
                         "font-weight:400; }"
-                        "QPushButton:hover { color:#00E5FF; background:rgba(0,229,255,0.04); }")
+                        "QPushButton:hover { color:%4; background:rgba(%5,0.04); }")
                     .arg(ui::colors::TEXT_TERTIARY)
                     .arg(ui::fonts::TINY)
-                    .arg(ui::fonts::DATA_FAMILY));
+                    .arg(ui::fonts::DATA_FAMILY)
+                    .arg(ui::colors::CYAN())
+                    .arg(rgb));
         }
     }
 

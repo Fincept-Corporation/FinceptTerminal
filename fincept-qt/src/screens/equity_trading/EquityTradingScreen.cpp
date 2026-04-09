@@ -2,6 +2,7 @@
 #include "screens/equity_trading/EquityTradingScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "services/workspace/WorkspaceManager.h"
 #include "screens/equity_trading/EquityBottomPanel.h"
 #include "screens/equity_trading/EquityChart.h"
@@ -19,6 +20,7 @@
 #include "trading/UnifiedTrading.h"
 #include "trading/websocket/AngelOneWebSocket.h"
 #include "ui/theme/StyleSheets.h"
+#include "ui/theme/Theme.h"
 
 #include <QCompleter>
 #include <QDate>
@@ -97,6 +99,17 @@ EquityTradingScreen::~EquityTradingScreen() {
 void EquityTradingScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
 
+    // Restore persisted session state on first show
+    if (!initialized_) {
+        const auto s = ScreenStateManager::instance().load_direct("equity_trading");
+        if (!s.isEmpty()) {
+            const QString broker = s.value("broker_id", broker_id_).toString();
+            const QString sym    = s.value("selected_symbol", selected_symbol_).toString();
+            if (broker != broker_id_) on_broker_changed(broker);
+            if (sym != selected_symbol_) on_symbol_selected(sym);
+        }
+    }
+
     // Start (or reconnect) WebSocket if available for this broker
     if (ws_) {
         if (!ws_->is_connected())
@@ -129,6 +142,11 @@ void EquityTradingScreen::hideEvent(QHideEvent* event) {
     if (market_clock_timer_) market_clock_timer_->stop();
     // Keep WebSocket connected in background — it will auto-reconnect on show
     LOG_INFO(TAG, "Screen hidden — timers stopped");
+    ScreenStateManager::instance().save_direct("equity_trading", {
+        {"broker_id",        broker_id_},
+        {"selected_symbol",  selected_symbol_},
+        {"selected_exchange", selected_exchange_},
+    });
 }
 
 // ============================================================================
@@ -210,7 +228,7 @@ void EquityTradingScreen::setup_ui() {
     // Connection status indicator
     conn_label_ = new QLabel("○ NOT CONNECTED");
     conn_label_->setObjectName("eqConnLabel");
-    conn_label_->setStyleSheet("color: #525252; font-size: 10px; font-weight: 700;");
+    conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY));
     cmd_layout->addWidget(conn_label_);
 
     // API button
@@ -356,7 +374,7 @@ void EquityTradingScreen::setup_timers() {
                 }
                 const QString env  = env_str;
                 conn_label_->setText(QString("● %1%2").arg(acct, env));
-                conn_label_->setStyleSheet("color: #16a34a; font-size: 10px; font-weight: 700;");
+                conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::POSITIVE));
                 async_fetch_positions();
                 async_fetch_holdings();
                 async_fetch_orders();
@@ -894,7 +912,7 @@ void EquityTradingScreen::on_broker_changed(const QString& broker) {
 
     // Reset connection status, then check if credentials already saved
     conn_label_->setText("○ NOT CONNECTED");
-    conn_label_->setStyleSheet("color: #525252; font-size: 10px; font-weight: 700;");
+    conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY));
 
     // Update default watchlist based on broker region
     auto* b = BrokerRegistry::instance().get(broker);
@@ -965,7 +983,7 @@ void EquityTradingScreen::on_broker_changed(const QString& broker) {
                 }
             }
             conn_label_->setText(QString("● %1%2").arg(acct, env_str));
-            conn_label_->setStyleSheet("color: #16a34a; font-size: 10px; font-weight: 700;");
+            conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::POSITIVE));
             async_fetch_positions();
             async_fetch_holdings();
             async_fetch_orders();
@@ -1044,7 +1062,7 @@ void EquityTradingScreen::handle_token_expired() {
         return;
 
     conn_label_->setText("⚠ TOKEN EXPIRED");
-    conn_label_->setStyleSheet("color: #dc2626; font-size: 10px; font-weight: 700;");
+    conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::NEGATIVE));
     LOG_WARN(TAG, QString("Access token expired for broker %1 — prompting re-auth").arg(broker_id_));
 
     // Re-open the credentials dialog so the user can paste a new request_token
@@ -1065,7 +1083,7 @@ void EquityTradingScreen::on_api_clicked() {
             [self, dlg_ptr](const QString& bid, const QString& key, const QString& secret, const QString& auth) {
                 if (!self) return;
                 self->conn_label_->setText("◌ CONNECTING...");
-                self->conn_label_->setStyleSheet("color: #ca8a04; font-size: 10px; font-weight: 700;");
+                self->conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::WARNING));
                 self->api_btn_->setEnabled(false);
 
                 QtConcurrent::run([self, dlg_ptr, bid, key, secret, auth]() {
@@ -1103,7 +1121,7 @@ void EquityTradingScreen::on_api_clicked() {
                                                      ? bid.toUpper() : token_result.user_id;
                             self->conn_label_->setText(QString("● %1").arg(acct));
                             self->conn_label_->setStyleSheet(
-                                "color: #16a34a; font-size: 10px; font-weight: 700;");
+                                QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::POSITIVE));
 
                             // Update dialog status — stays open so user can add other env
                             if (dlg_ptr)
@@ -1128,7 +1146,7 @@ void EquityTradingScreen::on_api_clicked() {
                             LOG_ERROR(TAG, QString("Auth failed %1: %2").arg(bid, token_result.error));
                             self->conn_label_->setText(QString("✕ %1").arg(token_result.error));
                             self->conn_label_->setStyleSheet(
-                                "color: #dc2626; font-size: 10px; font-weight: 700;");
+                                QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::NEGATIVE));
                             if (dlg_ptr) dlg_ptr->mark_error(token_result.error);
                         }
                     }, Qt::QueuedConnection);
@@ -1544,7 +1562,7 @@ void EquityTradingScreen::on_ws_connected() {
     QString existing = conn_label_->text();
     if (!existing.contains("[WS]"))
         conn_label_->setText(existing + " [WS]");
-    conn_label_->setStyleSheet("color: #16a34a; font-size: 10px; font-weight: 700;");
+    conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::POSITIVE));
 
     ws_resubscribe();
 }

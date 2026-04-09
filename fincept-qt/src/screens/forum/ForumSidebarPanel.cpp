@@ -31,7 +31,7 @@ ForumSidebarPanel::ForumSidebarPanel(QWidget* parent) : QWidget(parent) {
 void ForumSidebarPanel::build_ui() {
     setFixedWidth(240);
     setStyleSheet(QString("background:%1;border-right:1px solid %2;")
-                      .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
+                      .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -42,9 +42,9 @@ void ForumSidebarPanel::build_ui() {
     brand->setFixedHeight(56);
     brand->setStyleSheet(
         QString("background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-                "stop:0 #0f0f0f,stop:1 %1);"
-                "border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
+                "stop:0 %1,stop:1 %2);"
+                "border-bottom:1px solid %3;")
+            .arg(ui::colors::BG_SURFACE(), ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
     auto* brand_vl = new QVBoxLayout(brand);
     brand_vl->setContentsMargins(16, 10, 16, 0);
     brand_vl->setSpacing(2);
@@ -58,13 +58,13 @@ void ForumSidebarPanel::build_ui() {
     auto* brand_icon = new QLabel("◈");
     brand_icon->setStyleSheet(
         QString("color:%1;font-size:20px;background:transparent;")
-            .arg(ui::colors::AMBER));
+            .arg(ui::colors::AMBER()));
 
     auto* brand_title = new QLabel("COMMUNITY");
     brand_title->setStyleSheet(
         QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;"
                 "background:transparent;%2")
-            .arg(ui::colors::TEXT_PRIMARY, M(13)));
+            .arg(ui::colors::TEXT_PRIMARY(), M(13)));
 
     brand_hl->addWidget(brand_icon);
     brand_hl->addWidget(brand_title, 1);
@@ -76,7 +76,7 @@ void ForumSidebarPanel::build_ui() {
     brand_accent_->setStyleSheet(
         QString("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
                 "stop:0 %1,stop:0.4 %2,stop:0.7 %3,stop:1 transparent);")
-            .arg(ui::colors::AMBER, ui::colors::ORANGE, ui::colors::CYAN));
+            .arg(ui::colors::AMBER(), ui::colors::ORANGE(), ui::colors::CYAN()));
     brand_vl->addWidget(brand_accent_);
 
     root->addWidget(brand);
@@ -85,7 +85,7 @@ void ForumSidebarPanel::build_ui() {
     auto* profile_card = new QWidget;
     profile_card->setStyleSheet(
         QString("background:%1;border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* pc_hl = new QHBoxLayout(profile_card);
     pc_hl->setContentsMargins(14, 12, 14, 12);
     pc_hl->setSpacing(12);
@@ -96,7 +96,7 @@ void ForumSidebarPanel::build_ui() {
     avatar_lbl_->setStyleSheet(
         QString("color:%1;font-size:14px;font-weight:700;background:%2;"
                 "border-radius:18px;%3")
-            .arg(ui::colors::BG_BASE, ui::colors::AMBER, M(14)));
+            .arg(ui::colors::BG_BASE(), ui::colors::AMBER(), M(14)));
 
     auto* profile_info = new QVBoxLayout;
     profile_info->setSpacing(1);
@@ -105,17 +105,17 @@ void ForumSidebarPanel::build_ui() {
     profile_name_lbl_ = new QLabel("Loading...");
     profile_name_lbl_->setStyleSheet(
         QString("color:%1;font-size:12px;font-weight:700;background:transparent;%2")
-            .arg(ui::colors::TEXT_PRIMARY, M(12)));
+            .arg(ui::colors::TEXT_PRIMARY(), M(12)));
 
     profile_sub_lbl_ = new QLabel("...");
     profile_sub_lbl_->setStyleSheet(
         QString("color:%1;font-size:10px;background:transparent;%2")
-            .arg(ui::colors::TEXT_TERTIARY, M(10)));
+            .arg(ui::colors::TEXT_TERTIARY(), M(10)));
 
     profile_rep_lbl_ = new QLabel;
     profile_rep_lbl_->setStyleSheet(
         QString("color:%1;font-size:10px;font-weight:700;background:transparent;%2")
-            .arg(ui::colors::AMBER, M(10)));
+            .arg(ui::colors::AMBER(), M(10)));
 
     profile_info->addWidget(profile_name_lbl_);
     profile_info->addWidget(profile_sub_lbl_);
@@ -130,7 +130,7 @@ void ForumSidebarPanel::build_ui() {
     search_wrap->setFixedHeight(40);
     search_wrap->setStyleSheet(
         QString("background:%1;border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
+            .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
     auto* search_hl = new QHBoxLayout(search_wrap);
     search_hl->setContentsMargins(12, 6, 12, 6);
     search_hl->setSpacing(6);
@@ -138,7 +138,7 @@ void ForumSidebarPanel::build_ui() {
     auto* search_icon = new QLabel("⌕");
     search_icon->setStyleSheet(
         QString("color:%1;font-size:14px;background:transparent;")
-            .arg(ui::colors::TEXT_TERTIARY));
+            .arg(ui::colors::TEXT_TERTIARY()));
     search_icon->setFixedWidth(16);
 
     search_input_ = new QLineEdit;
@@ -150,9 +150,9 @@ void ForumSidebarPanel::build_ui() {
                 "QLineEdit:focus{border-color:%4;color:%5;"
                 "background:rgba(255,255,255,0.05);}"
                 "QLineEdit::placeholder{color:%6;}")
-            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM,
-                 M(11), ui::colors::BORDER_BRIGHT,
-                 ui::colors::TEXT_PRIMARY, ui::colors::TEXT_DIM));
+            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
+                 M(11), ui::colors::BORDER_BRIGHT(),
+                 ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_DIM()));
 
     connect(search_input_, &QLineEdit::returnPressed, this,
             [this]() { emit search_requested(search_input_->text().trimmed()); });
@@ -169,10 +169,10 @@ void ForumSidebarPanel::build_ui() {
     scroll->setStyleSheet(
         QString("QScrollArea{border:none;background:%1;}"
                 "QScrollBar:vertical{width:0px;}")
-            .arg(ui::colors::BG_BASE));
+            .arg(ui::colors::BG_BASE()));
 
     auto* body = new QWidget;
-    body->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    body->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* body_vl = new QVBoxLayout(body);
     body_vl->setContentsMargins(0, 0, 0, 0);
     body_vl->setSpacing(0);
@@ -182,14 +182,14 @@ void ForumSidebarPanel::build_ui() {
     stats_hdr->setFixedHeight(22);
     stats_hdr->setStyleSheet(
         QString("background:%1;border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* sh_hl = new QHBoxLayout(stats_hdr);
     sh_hl->setContentsMargins(14, 0, 14, 0);
     auto* sh_lbl = new QLabel("ACTIVITY");
     sh_lbl->setStyleSheet(
         QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1.5px;"
                 "background:transparent;%2")
-            .arg(ui::colors::TEXT_TERTIARY, M(9)));
+            .arg(ui::colors::TEXT_TERTIARY(), M(9)));
     sh_hl->addWidget(sh_lbl);
     sh_hl->addStretch();
     body_vl->addWidget(stats_hdr);
@@ -197,7 +197,7 @@ void ForumSidebarPanel::build_ui() {
     auto* stats_row = new QWidget;
     stats_row->setStyleSheet(
         QString("background:%1;border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* sr_hl = new QHBoxLayout(stats_row);
     sr_hl->setContentsMargins(0, 0, 0, 0);
     sr_hl->setSpacing(0);
@@ -216,15 +216,15 @@ void ForumSidebarPanel::build_ui() {
         auto* l = new QLabel(label);
         l->setStyleSheet(
             QString("color:%1;font-size:8px;letter-spacing:0.8px;background:transparent;%2")
-                .arg(ui::colors::TEXT_DIM, M(8)));
+                .arg(ui::colors::TEXT_DIM(), M(8)));
         cvl->addWidget(out);
         cvl->addWidget(l);
         return cell;
     };
 
-    sr_hl->addWidget(mk_mini_stat("POSTS", ui::colors::TEXT_PRIMARY, stat_posts_val_));
-    sr_hl->addWidget(mk_mini_stat("REPLIES", ui::colors::CYAN, stat_comments_val_));
-    sr_hl->addWidget(mk_mini_stat("TODAY", ui::colors::AMBER, stat_active_val_));
+    sr_hl->addWidget(mk_mini_stat("POSTS", ui::colors::TEXT_PRIMARY(), stat_posts_val_));
+    sr_hl->addWidget(mk_mini_stat("REPLIES", ui::colors::CYAN(), stat_comments_val_));
+    sr_hl->addWidget(mk_mini_stat("TODAY", ui::colors::AMBER(), stat_active_val_));
     body_vl->addWidget(stats_row);
 
     // ── Trending button ───────────────────────────────────────────────────────
@@ -237,8 +237,8 @@ void ForumSidebarPanel::build_ui() {
                 "border-bottom:1px solid %2;text-align:left;padding:0 14px;"
                 "font-size:11px;font-weight:600;%3}"
                 "QPushButton:hover{background:rgba(217,119,6,0.1);color:%4;}")
-            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM,
-                 M(11), ui::colors::AMBER));
+            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
+                 M(11), ui::colors::AMBER()));
     connect(trending_btn, &QPushButton::clicked, this,
             &ForumSidebarPanel::trending_clicked);
     body_vl->addWidget(trending_btn);
@@ -248,19 +248,19 @@ void ForumSidebarPanel::build_ui() {
     chan_hdr->setFixedHeight(26);
     chan_hdr->setStyleSheet(
         QString("background:%1;border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
+            .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
     auto* ch_hl = new QHBoxLayout(chan_hdr);
     ch_hl->setContentsMargins(14, 0, 14, 0);
     ch_hl->setSpacing(6);
     auto* ch_dot = new QLabel("●");
     ch_dot->setStyleSheet(
         QString("color:%1;font-size:6px;background:transparent;")
-            .arg(ui::colors::AMBER));
+            .arg(ui::colors::AMBER()));
     auto* ch_lbl = new QLabel("CHANNELS");
     ch_lbl->setStyleSheet(
         QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1.5px;"
                 "background:transparent;%2")
-            .arg(ui::colors::TEXT_TERTIARY, M(9)));
+            .arg(ui::colors::TEXT_TERTIARY(), M(9)));
 
     auto* new_post_btn = new QPushButton("+");
     new_post_btn->setFixedSize(18, 18);
@@ -270,7 +270,7 @@ void ForumSidebarPanel::build_ui() {
         QString("QPushButton{background:transparent;color:%1;border:none;"
                 "font-size:14px;font-weight:700;%2}"
                 "QPushButton:hover{color:%3;}")
-            .arg(ui::colors::TEXT_DIM, M(14), ui::colors::AMBER));
+            .arg(ui::colors::TEXT_DIM(), M(14), ui::colors::AMBER()));
     connect(new_post_btn, &QPushButton::clicked, this, [this]() {
         int cat_id = active_category_id_ > 0 ? active_category_id_ : 1;
         emit new_post_requested(cat_id);
@@ -295,19 +295,19 @@ void ForumSidebarPanel::build_ui() {
     lb_hdr->setStyleSheet(
         QString("background:%1;border-top:1px solid %2;"
                 "border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
+            .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
     auto* lb_hl = new QHBoxLayout(lb_hdr);
     lb_hl->setContentsMargins(14, 0, 14, 0);
     lb_hl->setSpacing(6);
     auto* lb_dot = new QLabel("★");
     lb_dot->setStyleSheet(
         QString("color:%1;font-size:8px;background:transparent;")
-            .arg(ui::colors::AMBER));
+            .arg(ui::colors::AMBER()));
     auto* lb_lbl = new QLabel("LEADERBOARD");
     lb_lbl->setStyleSheet(
         QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1.5px;"
                 "background:transparent;%2")
-            .arg(ui::colors::TEXT_TERTIARY, M(9)));
+            .arg(ui::colors::TEXT_TERTIARY(), M(9)));
     lb_hl->addWidget(lb_dot);
     lb_hl->addWidget(lb_lbl);
     lb_hl->addStretch();
@@ -323,7 +323,7 @@ void ForumSidebarPanel::build_ui() {
     ph->setFixedHeight(28);
     ph->setStyleSheet(
         QString("color:%1;font-size:10px;background:transparent;%2")
-            .arg(ui::colors::TEXT_DIM, M(10)));
+            .arg(ui::colors::TEXT_DIM(), M(10)));
     contrib_layout_->addWidget(ph);
     body_vl->addWidget(contrib_container_);
 
@@ -336,7 +336,7 @@ void ForumSidebarPanel::build_ui() {
 // Data setters
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 void ForumSidebarPanel::set_my_profile(const services::ForumProfile& profile) {
-    QString color = profile.avatar_color.isEmpty() ? ui::colors::AMBER
+    QString color = profile.avatar_color.isEmpty() ? ui::colors::AMBER()
                                                     : profile.avatar_color;
     QString initials = profile.display_name.isEmpty()
                            ? "?"
@@ -345,7 +345,7 @@ void ForumSidebarPanel::set_my_profile(const services::ForumProfile& profile) {
     avatar_lbl_->setStyleSheet(
         QString("color:%1;font-size:14px;font-weight:700;background:%2;"
                 "border-radius:18px;%3")
-            .arg(ui::colors::BG_BASE, color, M(14)));
+            .arg(ui::colors::BG_BASE(), color, M(14)));
 
     profile_name_lbl_->setText(profile.display_name);
     profile_sub_lbl_->setText("@" + profile.username);
@@ -402,7 +402,7 @@ void ForumSidebarPanel::rebuild_categories() {
 
     for (const auto& cat : categories_) {
         const bool active = (cat.id == active_category_id_);
-        QString color = cat.color.isEmpty() ? ui::colors::AMBER : cat.color;
+        QString color = cat.color.isEmpty() ? ui::colors::AMBER() : cat.color;
 
         auto* row = new QWidget;
         row->setFixedHeight(34);
@@ -412,11 +412,11 @@ void ForumSidebarPanel::rebuild_categories() {
                 ? QString("background:rgba(255,255,255,0.03);"
                           "border-bottom:1px solid %1;"
                           "border-left:2px solid %2;")
-                      .arg(ui::colors::BORDER_DIM, color)
+                      .arg(ui::colors::BORDER_DIM(), color)
                 : QString("background:transparent;"
                           "border-bottom:1px solid %1;"
                           "border-left:2px solid transparent;")
-                      .arg(ui::colors::BORDER_DIM));
+                      .arg(ui::colors::BORDER_DIM()));
 
         auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(10, 0, 10, 0);
@@ -427,7 +427,7 @@ void ForumSidebarPanel::rebuild_categories() {
         hash->setFixedWidth(14);
         hash->setStyleSheet(
             QString("color:%1;font-size:13px;font-weight:600;background:transparent;%2")
-                .arg(active ? ui::colors::TEXT_SECONDARY : ui::colors::TEXT_DIM,
+                .arg(active ? ui::colors::TEXT_SECONDARY() : ui::colors::TEXT_DIM(),
                      M(13)));
 
         // Name
@@ -436,9 +436,9 @@ void ForumSidebarPanel::rebuild_categories() {
             active
                 ? QString("color:%1;font-size:12px;font-weight:600;"
                           "background:transparent;%2")
-                      .arg(ui::colors::TEXT_PRIMARY, M(12))
+                      .arg(ui::colors::TEXT_PRIMARY(), M(12))
                 : QString("color:%1;font-size:12px;background:transparent;%2")
-                      .arg(ui::colors::TEXT_SECONDARY, M(12)));
+                      .arg(ui::colors::TEXT_SECONDARY(), M(12)));
 
         // Post count badge
         auto* count_lbl = new QLabel;
@@ -451,7 +451,7 @@ void ForumSidebarPanel::rebuild_categories() {
                 QString("color:%1;font-size:9px;font-weight:700;"
                         "background:rgba(255,255,255,0.04);"
                         "border-radius:9px;padding:0 6px;%2")
-                    .arg(ui::colors::TEXT_TERTIARY, M(9)));
+                    .arg(ui::colors::TEXT_TERTIARY(), M(9)));
         }
 
         // Click handler
@@ -489,14 +489,14 @@ void ForumSidebarPanel::rebuild_contributors() {
         ph->setFixedHeight(28);
         ph->setStyleSheet(
             QString("color:%1;font-size:10px;background:transparent;%2")
-                .arg(ui::colors::TEXT_DIM, M(10)));
+                .arg(ui::colors::TEXT_DIM(), M(10)));
         contrib_layout_->addWidget(ph);
         return;
     }
 
     // Medal icons for top 3
     static const char* medals[] = {"🥇", "🥈", "🥉", " 4", " 5"};
-    const QString rank_colors[] = {ui::colors::AMBER(), ui::colors::TEXT_SECONDARY(), "#cd7f32",
+    const QString rank_colors[] = {ui::colors::AMBER(), ui::colors::TEXT_SECONDARY(), ui::colors::WARNING(),
                                    ui::colors::TEXT_TERTIARY(), ui::colors::TEXT_TERTIARY()};
 
     for (int i = 0; i < std::min(5, (int)contributors_.size()); ++i) {
@@ -505,8 +505,8 @@ void ForumSidebarPanel::rebuild_contributors() {
         row->setFixedHeight(32);
         row->setStyleSheet(
             QString("background:%1;border-bottom:1px solid %2;")
-                .arg(i % 2 == 0 ? ui::colors::BG_BASE : ui::colors::BG_SURFACE,
-                     ui::colors::BORDER_DIM));
+                .arg(i % 2 == 0 ? ui::colors::BG_BASE() : ui::colors::BG_SURFACE(),
+                     ui::colors::BORDER_DIM()));
         auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(14, 0, 14, 0);
         hl->setSpacing(8);
@@ -529,13 +529,13 @@ void ForumSidebarPanel::rebuild_contributors() {
         av->setStyleSheet(
             QString("color:%1;font-size:10px;font-weight:700;background:%2;"
                     "border-radius:11px;%3")
-                .arg(ui::colors::BG_BASE, det_color(c.display_name), M(10)));
+                .arg(ui::colors::BG_BASE(), det_color(c.display_name), M(10)));
 
         // Name
         auto* name = new QLabel(c.display_name.left(12));
         name->setStyleSheet(
             QString("color:%1;font-size:11px;background:transparent;%2")
-                .arg(ui::colors::TEXT_SECONDARY, M(11)));
+                .arg(ui::colors::TEXT_SECONDARY(), M(11)));
 
         // Rep
         auto* rep = new QLabel(QString("★%1").arg(c.reputation));

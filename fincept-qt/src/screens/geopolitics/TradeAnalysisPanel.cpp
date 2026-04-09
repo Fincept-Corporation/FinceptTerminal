@@ -31,25 +31,33 @@ void TradeAnalysisPanel::connect_service() {
 }
 
 // ── Shared style helpers ──────────────────────────────────────────────────────
+static QString warn_rgb() {
+    QColor c(ui::colors::WARNING());
+    return QString("%1,%2,%3").arg(c.red()).arg(c.green()).arg(c.blue());
+}
+
 static QString combo_style() {
     return QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                   "font-family:%4; font-size:%5px; padding:4px 8px; border-radius:2px; }"
-                   "QComboBox:focus { border-color:#FFC400; }"
+                   "font-family:%4; font-size:%5px; padding:4px 8px; }"
+                   "QComboBox:focus { border-color:%6; }"
                    "QComboBox::drop-down { border:none; width:18px; }"
                    "QComboBox QAbstractItemView { background:%1; color:%2; "
-                   "selection-background-color:rgba(255,196,0,0.15); border:1px solid %3; }")
+                   "selection-background-color:rgba(%7,0.15); border:1px solid %3; }")
         .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
         .arg(ui::fonts::DATA_FAMILY)
-        .arg(ui::fonts::SMALL);
+        .arg(ui::fonts::SMALL)
+        .arg(ui::colors::WARNING())
+        .arg(warn_rgb());
 }
 
 static QString spin_style() {
     return QString("QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
-                   "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                   "QDoubleSpinBox:focus { border-color:#FFC400; }")
+                   "font-family:%4; font-size:%5px; padding:4px 6px; }"
+                   "QDoubleSpinBox:focus { border-color:%6; }")
         .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
         .arg(ui::fonts::DATA_FAMILY)
-        .arg(ui::fonts::SMALL);
+        .arg(ui::fonts::SMALL)
+        .arg(ui::colors::WARNING());
 }
 
 static QWidget* make_field(const QString& label_text, QWidget* input, QWidget* parent,
@@ -98,9 +106,10 @@ void TradeAnalysisPanel::build_ui() {
     hhl->setContentsMargins(16, 0, 16, 0);
     auto* title = new QLabel("TRADE GEOPOLITICS ANALYSIS", header);
     title->setStyleSheet(
-        QString("color:#FFC400; font-size:%1px; font-weight:700; font-family:%2; letter-spacing:1px;")
+        QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
+            .arg(ui::colors::WARNING())
             .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY));
+            .arg(ui::fonts::DATA_FAMILY()));
     hhl->addWidget(title);
     hhl->addStretch();
     status_label_ = new QLabel(header);
@@ -137,12 +146,13 @@ void TradeAnalysisPanel::build_ui() {
         QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
                 "QTabBar::tab { background:%3; color:%4; padding:5px 16px;"
                 "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                "QTabBar::tab:selected { background:%2; color:#FFC400; font-weight:700;"
-                "border-bottom:2px solid #FFC400; }")
+                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
+                "border-bottom:2px solid %7; }")
             .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
             .arg(ui::colors::TEXT_SECONDARY)
             .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::SMALL));
+            .arg(ui::fonts::SMALL)
+            .arg(ui::colors::WARNING()));
 
     // ── Page 0: Benefits & Costs ──────────────────────────────────────────────
     auto* p0 = new QWidget;
@@ -179,10 +189,17 @@ void TradeAnalysisPanel::build_ui() {
     auto* run0 = new QPushButton("RUN ANALYSIS", p0);
     run0->setCursor(Qt::PointingHandCursor);
     run0->setStyleSheet(
-        QString("QPushButton { background:#FFC400; color:%1; font-family:%2; font-size:%3px;"
-                "font-weight:700; border:none; padding:6px 16px; border-radius:2px; }"
-                "QPushButton:hover { background:#E5B000; }")
-            .arg(ui::colors::BG_BASE).arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+        [&]() {
+            QColor w(ui::colors::WARNING());
+            return QString("QPushButton { background:%1; color:%2; font-family:%3; font-size:%4px;"
+                    "font-weight:700; border:none; padding:6px 16px; }"
+                    "QPushButton:hover { background:%5; }")
+                .arg(ui::colors::WARNING())
+                .arg(ui::colors::BG_BASE())
+                .arg(ui::fonts::DATA_FAMILY())
+                .arg(ui::fonts::SMALL)
+                .arg(w.darker(120).name());
+        }());
     connect(run0, &QPushButton::clicked, this, [this, vol_spin, price_spin, cons_spin]() {
         status_label_->setText("Analyzing...");
         QJsonObject p;
@@ -242,10 +259,17 @@ void TradeAnalysisPanel::build_ui() {
     auto* run1 = new QPushButton("RUN ANALYSIS", p1);
     run1->setCursor(Qt::PointingHandCursor);
     run1->setStyleSheet(
-        QString("QPushButton { background:#FFC400; color:%1; font-family:%2; font-size:%3px;"
-                "font-weight:700; border:none; padding:6px 16px; border-radius:2px; }"
-                "QPushButton:hover { background:#E5B000; }")
-            .arg(ui::colors::BG_BASE).arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+        [&]() {
+            QColor w(ui::colors::WARNING());
+            return QString("QPushButton { background:%1; color:%2; font-family:%3; font-size:%4px;"
+                    "font-weight:700; border:none; padding:6px 16px; }"
+                    "QPushButton:hover { background:%5; }")
+                .arg(ui::colors::WARNING())
+                .arg(ui::colors::BG_BASE())
+                .arg(ui::fonts::DATA_FAMILY())
+                .arg(ui::fonts::SMALL)
+                .arg(w.darker(120).name());
+        }());
     connect(run1, &QPushButton::clicked, this,
             [this, tariff_spin, quota_spin, subsidy_spin, dev_combo, maturity_combo]() {
         status_label_->setText("Analyzing...");
@@ -297,10 +321,17 @@ void TradeAnalysisPanel::build_ui() {
     auto* run2 = new QPushButton("RUN ANALYSIS", p2);
     run2->setCursor(Qt::PointingHandCursor);
     run2->setStyleSheet(
-        QString("QPushButton { background:#FFC400; color:%1; font-family:%2; font-size:%3px;"
-                "font-weight:700; border:none; padding:6px 16px; border-radius:2px; }"
-                "QPushButton:hover { background:#E5B000; }")
-            .arg(ui::colors::BG_BASE).arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+        [&]() {
+            QColor w(ui::colors::WARNING());
+            return QString("QPushButton { background:%1; color:%2; font-family:%3; font-size:%4px;"
+                    "font-weight:700; border:none; padding:6px 16px; }"
+                    "QPushButton:hover { background:%5; }")
+                .arg(ui::colors::WARNING())
+                .arg(ui::colors::BG_BASE())
+                .arg(ui::fonts::DATA_FAMILY())
+                .arg(ui::fonts::SMALL)
+                .arg(w.darker(120).name());
+        }());
     connect(run2, &QPushButton::clicked, this, [this, bloc_combo, tc_spin, td_spin]() {
         status_label_->setText("Analyzing...");
         QJsonObject p;
@@ -349,10 +380,17 @@ void TradeAnalysisPanel::build_ui() {
     auto* run3 = new QPushButton("RUN ANALYSIS", p3);
     run3->setCursor(Qt::PointingHandCursor);
     run3->setStyleSheet(
-        QString("QPushButton { background:#FFC400; color:%1; font-family:%2; font-size:%3px;"
-                "font-weight:700; border:none; padding:6px 16px; border-radius:2px; }"
-                "QPushButton:hover { background:#E5B000; }")
-            .arg(ui::colors::BG_BASE).arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+        [&]() {
+            QColor w(ui::colors::WARNING());
+            return QString("QPushButton { background:%1; color:%2; font-family:%3; font-size:%4px;"
+                    "font-weight:700; border:none; padding:6px 16px; }"
+                    "QPushButton:hover { background:%5; }")
+                .arg(ui::colors::WARNING())
+                .arg(ui::colors::BG_BASE())
+                .arg(ui::fonts::DATA_FAMILY())
+                .arg(ui::fonts::SMALL)
+                .arg(w.darker(120).name());
+        }());
     connect(run3, &QPushButton::clicked, this, [this, lib_combo, tariff_cut_spin, gdp_spin]() {
         status_label_->setText("Analyzing...");
         QJsonObject p;
@@ -397,9 +435,9 @@ void TradeAnalysisPanel::display_result(const QJsonObject& data) {
 
     auto* hdr = new QLabel("ANALYSIS RESULTS");
     hdr->setStyleSheet(
-        QString("color:#FFC400; font-size:%1px; font-weight:700; font-family:%2;"
+        QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                 "letter-spacing:1px; padding:8px 0 4px 0;")
-            .arg(ui::fonts::TINY).arg(ui::fonts::DATA_FAMILY));
+            .arg(ui::colors::WARNING()).arg(ui::fonts::TINY).arg(ui::fonts::DATA_FAMILY()));
     results_layout_->addWidget(hdr);
 
     // Flatten and display JSON as a table
@@ -476,10 +514,13 @@ void TradeAnalysisPanel::on_error(const QString& context, const QString& message
     auto* err = new QLabel(QString("[%1] %2").arg(context, message));
     err->setWordWrap(true);
     err->setStyleSheet(
-        QString("color:%1; font-size:%2px; font-family:%3; padding:12px;"
-                "background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.3);"
-                "border-radius:2px;")
-            .arg(ui::colors::NEGATIVE).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+        [&]() {
+            QColor neg(ui::colors::NEGATIVE());
+            auto neg_rgb = QString("%1,%2,%3").arg(neg.red()).arg(neg.green()).arg(neg.blue());
+            return QString("color:%1; font-size:%2px; font-family:%3; padding:12px;"
+                    "background:rgba(%4,0.08); border:1px solid rgba(%4,0.3);")
+                .arg(ui::colors::NEGATIVE()).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY()).arg(neg_rgb);
+        }());
     results_layout_->addWidget(err);
 }
 

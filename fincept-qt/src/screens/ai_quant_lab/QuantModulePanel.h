@@ -67,17 +67,22 @@ class QuantModulePanel : public QWidget {
     void display_error(const QString& msg);
     void clear_results();
 
+    void refresh_theme();
+
     fincept::services::quant::QuantModule module_;
     QVBoxLayout* results_layout_ = nullptr;
-    QLabel* status_label_ = nullptr;
-    QTextEdit* agent_output_ = nullptr;  // deep_agent LangGraph tab
-    QTextEdit* rd_agent_output_ = nullptr;  // rd_agent tab output
-    QTableWidget* rd_task_table_ = nullptr;  // rd_agent task monitor
+    QLabel*      status_label_   = nullptr;
+    QWidget*     panel_header_   = nullptr;  // the fixed header bar inside build_ui()
+    QLabel*      header_title_   = nullptr;
+    QLabel*      header_cat_     = nullptr;
+    QTextEdit*   agent_output_   = nullptr;  // deep_agent LangGraph tab
+    QTextEdit*   rd_agent_output_= nullptr;  // rd_agent tab output
+    QTableWidget*rd_task_table_  = nullptr;  // rd_agent task monitor
 
     QHash<QString, QDoubleSpinBox*> double_inputs_;
-    QHash<QString, QLineEdit*> text_inputs_;
-    QHash<QString, QComboBox*> combo_inputs_;
-    QHash<QString, QSpinBox*> int_inputs_;
+    QHash<QString, QLineEdit*>      text_inputs_;
+    QHash<QString, QComboBox*>      combo_inputs_;
+    QHash<QString, QSpinBox*>       int_inputs_;
 };
 
 } // namespace fincept::screens

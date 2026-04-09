@@ -16,16 +16,14 @@ EconomicCalendarWidget::EconomicCalendarWidget(QWidget* parent)
     vl->setSpacing(0);
 
     // Column headers
-    auto* header = new QWidget;
-    header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED()));
-    auto* hl = new QHBoxLayout(header);
+    header_widget_ = new QWidget;
+    auto* hl = new QHBoxLayout(header_widget_);
     hl->setContentsMargins(8, 4, 8, 4);
 
     auto make_hdr = [&](const QString& text, int stretch, Qt::Alignment align = Qt::AlignLeft) {
         auto* lbl = new QLabel(text);
-        lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                               .arg(ui::colors::TEXT_TERTIARY()));
         lbl->setAlignment(align);
+        header_labels_.append(lbl);
         hl->addWidget(lbl, stretch);
     };
     make_hdr("EVENT", 4);
@@ -34,20 +32,15 @@ EconomicCalendarWidget::EconomicCalendarWidget(QWidget* parent)
     make_hdr("ACT", 1, Qt::AlignRight);
     make_hdr("FCST", 1, Qt::AlignRight);
     make_hdr("IMP", 1, Qt::AlignRight);
-    vl->addWidget(header);
+    vl->addWidget(header_widget_);
 
-    auto* sep = new QFrame;
-    sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
-    vl->addWidget(sep);
+    header_sep_ = new QFrame;
+    header_sep_->setFixedHeight(1);
+    vl->addWidget(header_sep_);
 
     // Scrollable list
-    auto* scroll = new QScrollArea;
-    scroll->setWidgetResizable(true);
-    scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }"
-                          "QScrollBar:vertical { width: 4px; background: transparent; }"
-                          + QString("QScrollBar::handle:vertical { background: %1; border-radius: 2px; min-height: 20px; }").arg(ui::colors::BORDER_MED) +
-                          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
+    scroll_area_ = new QScrollArea;
+    scroll_area_->setWidgetResizable(true);
 
     auto* list_widget = new QWidget;
     list_widget->setStyleSheet("background: transparent;");
@@ -57,17 +50,41 @@ EconomicCalendarWidget::EconomicCalendarWidget(QWidget* parent)
 
     status_label_ = new QLabel("Loading...");
     status_label_->setAlignment(Qt::AlignCenter);
-    status_label_->setStyleSheet(
-        QString("color: %1; font-size: 10px; padding: 16px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
     list_layout_->addWidget(status_label_);
     list_layout_->addStretch();
 
-    scroll->setWidget(list_widget);
-    vl->addWidget(scroll, 1);
+    scroll_area_->setWidget(list_widget);
+    vl->addWidget(scroll_area_, 1);
 
     connect(this, &BaseWidget::refresh_requested, this, &EconomicCalendarWidget::refresh_data);
+
+    apply_styles();
     set_loading(true);
     refresh_data();
+}
+
+void EconomicCalendarWidget::apply_styles() {
+    header_widget_->setStyleSheet(
+        QString("background: %1;").arg(ui::colors::BG_RAISED()));
+    for (auto* lbl : header_labels_)
+        lbl->setStyleSheet(
+            QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+                .arg(ui::colors::TEXT_TERTIARY()));
+    header_sep_->setStyleSheet(
+        QString("background: %1;").arg(ui::colors::BORDER_DIM()));
+    scroll_area_->setStyleSheet(
+        QString("QScrollArea { border: none; background: transparent; }"
+                "QScrollBar:vertical { width: 4px; background: transparent; }"
+                "QScrollBar::handle:vertical { background: %1; border-radius: 2px; min-height: 20px; }"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+            .arg(ui::colors::BORDER_MED()));
+    status_label_->setStyleSheet(
+        QString("color: %1; font-size: 10px; padding: 16px; background: transparent;")
+            .arg(ui::colors::TEXT_TERTIARY()));
+}
+
+void EconomicCalendarWidget::on_theme_changed() {
+    apply_styles();
 }
 
 void EconomicCalendarWidget::refresh_data() {

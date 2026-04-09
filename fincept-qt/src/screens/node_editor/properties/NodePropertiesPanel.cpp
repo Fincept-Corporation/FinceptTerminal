@@ -1,6 +1,7 @@
 #include "screens/node_editor/properties/NodePropertiesPanel.h"
 
 #include "screens/node_editor/properties/ParameterWidgets.h"
+#include "ui/theme/Theme.h"
 
 #include <QFrame>
 #include <QLabel>
@@ -30,7 +31,8 @@ void NodePropertiesPanel::build_ui() {
     el->setAlignment(Qt::AlignCenter);
     auto* empty_label = new QLabel("Select a node\nto edit properties");
     empty_label->setAlignment(Qt::AlignCenter);
-    empty_label->setStyleSheet("color: #525252; font-family: Consolas; font-size: 12px;");
+    empty_label->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 12px;")
+                                   .arg(ui::colors::TEXT_TERTIARY));
     el->addWidget(empty_label);
 
     // ── Editor page (populated dynamically) ────────────────────────
@@ -42,16 +44,18 @@ void NodePropertiesPanel::build_ui() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setStyleSheet("QScrollArea { background: #141414; border: none; }"
-                          "QScrollBar:vertical {"
-                          "  background: #141414; width: 6px; margin: 0;"
-                          "}"
-                          "QScrollBar::handle:vertical {"
-                          "  background: #4a4a4a; min-height: 20px;"
-                          "}"
-                          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
-                          "  height: 0; background: none;"
-                          "}");
+    scroll->setStyleSheet(
+        QString("QScrollArea { background: %1; border: none; }"
+                "QScrollBar:vertical {"
+                "  background: %1; width: 6px; margin: 0;"
+                "}"
+                "QScrollBar::handle:vertical {"
+                "  background: %2; min-height: 20px;"
+                "}"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                "  height: 0; background: none;"
+                "}")
+            .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_DIM));
 
     auto* scroll_content = new QWidget;
     editor_layout_ = new QVBoxLayout(scroll_content);
@@ -99,24 +103,27 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
     // ── Header ─────────────────────────────────────────────────────
     auto* header = new QWidget;
     header->setFixedHeight(34);
-    header->setStyleSheet("background: #1e1e1e;");
+    header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_HOVER));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(10, 0, 10, 0);
 
     auto* title = new QLabel("PROPERTIES");
-    title->setStyleSheet("color: #d97706; font-family: Consolas; font-size: 12px;"
-                         "font-weight: bold; letter-spacing: 0.5px;");
+    title->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 12px;"
+                                 "font-weight: bold; letter-spacing: 0.5px;")
+                             .arg(ui::colors::AMBER));
     hl->addWidget(title);
     hl->addStretch();
 
     auto* del_btn = new QPushButton("DEL");
     del_btn->setFixedSize(36, 22);
-    del_btn->setStyleSheet("QPushButton {"
-                           "  background: rgba(220,38,38,0.1); color: #dc2626;"
-                           "  border: 1px solid rgba(220,38,38,0.3); font-family: Consolas;"
-                           "  font-size: 10px; font-weight: bold;"
-                           "}"
-                           "QPushButton:hover { background: #dc2626; color: #e5e5e5; }");
+    del_btn->setStyleSheet(
+        QString("QPushButton {"
+                "  background: %1; color: %2;"
+                "  border: 1px solid rgba(220,38,38,0.3); font-family: Consolas;"
+                "  font-size: 10px; font-weight: bold;"
+                "}"
+                "QPushButton:hover { background: %2; color: %3; }")
+            .arg(ui::colors::NEGATIVE_BG, ui::colors::NEGATIVE, ui::colors::TEXT_PRIMARY));
     QString node_id = node.id;
     connect(del_btn, &QPushButton::clicked, this, [this, node_id]() { emit delete_requested(node_id); });
     hl->addWidget(del_btn);
@@ -126,7 +133,7 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
     // ── Separator ──────────────────────────────────────────────────
     auto* sep = new QFrame;
     sep->setFixedHeight(1);
-    sep->setStyleSheet("background: #2a2a2a; border: none;");
+    sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED));
     editor_layout_->insertWidget(pos++, sep);
 
     // ── Node name ──────────────────────────────────────────────────
@@ -136,15 +143,19 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
     nsl->setSpacing(4);
 
     auto* name_label = new QLabel("NAME");
-    name_label->setStyleSheet("color: #808080; font-family: Consolas; font-size: 11px; font-weight: bold;");
+    name_label->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px; font-weight: bold;")
+                                  .arg(ui::colors::TEXT_SECONDARY));
     nsl->addWidget(name_label);
 
     auto* name_edit = new QLineEdit(node.name);
-    name_edit->setStyleSheet("QLineEdit {"
-                             "  background: #1e1e1e; color: #e5e5e5; border: 1px solid #2a2a2a;"
-                             "  font-family: Consolas; font-size: 12px; padding: 4px 6px;"
-                             "}"
-                             "QLineEdit:focus { border: 1px solid #d97706; }");
+    name_edit->setStyleSheet(
+        QString("QLineEdit {"
+                "  background: %1; color: %2; border: 1px solid %3;"
+                "  font-family: Consolas; font-size: 12px; padding: 4px 6px;"
+                "}"
+                "QLineEdit:focus { border: 1px solid %4; }")
+            .arg(ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY,
+                 ui::colors::BORDER_MED, ui::colors::AMBER));
     nsl->addWidget(name_edit);
 
     connect(name_edit, &QLineEdit::textChanged, this, [this](const QString& text) {
@@ -156,20 +167,22 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
 
     // ── Type info ──────────────────────────────────────────────────
     auto* type_label = new QLabel(QString("%1  |  %2").arg(type_def.category, type_def.type_id));
-    type_label->setStyleSheet("color: #525252; font-family: Consolas; font-size: 10px; padding: 0 0 6px 0;");
+    type_label->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px; padding: 0 0 6px 0;")
+                                  .arg(ui::colors::TEXT_TERTIARY));
     editor_layout_->insertWidget(pos++, type_label);
 
     // ── Separator ──────────────────────────────────────────────────
     auto* sep2 = new QFrame;
     sep2->setFixedHeight(1);
-    sep2->setStyleSheet("background: #2a2a2a; border: none;");
+    sep2->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED));
     editor_layout_->insertWidget(pos++, sep2);
 
     // ── Parameters ─────────────────────────────────────────────────
     if (!type_def.parameters.isEmpty()) {
         auto* param_header = new QLabel("PARAMETERS");
-        param_header->setStyleSheet("color: #d97706; font-family: Consolas; font-size: 11px;"
-                                    "font-weight: bold; padding: 8px 0 4px 0; letter-spacing: 0.5px;");
+        param_header->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px;"
+                                           "font-weight: bold; padding: 8px 0 4px 0; letter-spacing: 0.5px;")
+                                       .arg(ui::colors::AMBER));
         editor_layout_->insertWidget(pos++, param_header);
 
         for (const auto& param : type_def.parameters) {
@@ -188,21 +201,24 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
     // ── Settings section ───────────────────────────────────────────
     auto* sep3 = new QFrame;
     sep3->setFixedHeight(1);
-    sep3->setStyleSheet("background: #2a2a2a; border: none;");
+    sep3->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED));
     editor_layout_->insertWidget(pos++, sep3);
 
     auto* settings_header = new QLabel("SETTINGS");
-    settings_header->setStyleSheet("color: #d97706; font-family: Consolas; font-size: 11px;"
-                                   "font-weight: bold; padding: 8px 0 4px 0; letter-spacing: 0.5px;");
+    settings_header->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px;"
+                                            "font-weight: bold; padding: 8px 0 4px 0; letter-spacing: 0.5px;")
+                                       .arg(ui::colors::AMBER));
     editor_layout_->insertWidget(pos++, settings_header);
 
     // Disabled toggle
     auto* disabled_check = new QCheckBox("Disabled");
     disabled_check->setChecked(node.disabled);
     disabled_check->setStyleSheet(
-        "QCheckBox { color: #e5e5e5; font-family: Consolas; font-size: 12px; }"
-        "QCheckBox::indicator { width: 14px; height: 14px; background: #1e1e1e; border: 1px solid #2a2a2a; }"
-        "QCheckBox::indicator:checked { background: #d97706; }");
+        QString("QCheckBox { color: %1; font-family: Consolas; font-size: 12px; }"
+                "QCheckBox::indicator { width: 14px; height: 14px; background: %2; border: 1px solid %3; }"
+                "QCheckBox::indicator:checked { background: %4; }")
+            .arg(ui::colors::TEXT_PRIMARY, ui::colors::BG_HOVER,
+                 ui::colors::BORDER_MED, ui::colors::AMBER));
     editor_layout_->insertWidget(pos++, disabled_check);
 
     // Continue on fail toggle

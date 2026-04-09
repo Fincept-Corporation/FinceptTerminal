@@ -18,7 +18,7 @@ namespace fincept::screens {
 
 using namespace fincept::ui;
 
-static const QString kAccent = "#d97706"; // Amber
+static const QString kAccent = colors::AMBER;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constructor

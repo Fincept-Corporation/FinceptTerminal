@@ -10,43 +10,48 @@
 #include <QSizePolicy>
 
 // ── Shared constants ─────────────────────────────────────────────────────────
+namespace col = fincept::ui::colors;
 
 namespace {
 
-static const QString kSpinStyle = "QLabel { color: #525252; font-family: 'Consolas','Courier New',monospace;"
-                                  " font-size: 11px; background: transparent; }";
+static QString kSpinStyle() {
+    return QString("QLabel { color: %1; font-family: 'Consolas','Courier New',monospace;"
+                   " font-size: 11px; background: transparent; }")
+        .arg(col::TEXT_TERTIARY());
+}
 
 // ── Style constants ─────────────────────────────────────────────────────────
 
-static const QString kListStyle = R"(
-    QListWidget {
-        background: #080808; color: #808080;
-        border: none;
-        font-family: 'Consolas','Courier New',monospace;
-        font-size: 11px;
-    }
-    QListWidget::item { padding: 3px 6px; border-bottom: 1px solid #1a1a1a; }
-    QListWidget::item:hover { background: #161616; color: #e5e5e5; }
-    QListWidget::item:selected { background: rgba(217,119,6,0.15); color: #d97706; }
-)";
+static QString kListStyle() {
+    return QString("QListWidget {"
+                   "  background: %1; color: %2;"
+                   "  border: none;"
+                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  font-size: 11px; }"
+                   "QListWidget::item { padding: 3px 6px; border-bottom: 1px solid %3; }"
+                   "QListWidget::item:hover { background: %4; color: %5; }"
+                   "QListWidget::item:selected { background: rgba(217,119,6,0.15); color: %6; }")
+        .arg(col::BG_BASE(), col::TEXT_SECONDARY(), col::BORDER_DIM(),
+             col::BG_HOVER(), col::TEXT_PRIMARY(), col::AMBER());
+}
 
-static const QString kInputStyle = R"(
-    QLineEdit {
-        background: #0a0a0a; color: #e5e5e5; border: 1px solid #222222;
-        padding: 4px 8px;
-        font-family: 'Consolas','Courier New',monospace; font-size: 11px;
-    }
-    QLineEdit:focus { border: 1px solid #d97706; }
-)";
+static QString kInputStyle() {
+    return QString("QLineEdit {"
+                   "  background: %1; color: %2; border: 1px solid %3;"
+                   "  padding: 4px 8px;"
+                   "  font-family: 'Consolas','Courier New',monospace; font-size: 11px; }"
+                   "QLineEdit:focus { border: 1px solid %4; }")
+        .arg(col::BG_SURFACE(), col::TEXT_PRIMARY(), col::BORDER_MED(), col::AMBER());
+}
 
-static const QString kLoadMoreStyle = R"(
-    QPushButton {
-        background: transparent; color: #525252;
-        border: 1px solid #1a1a1a; padding: 3px 8px;
-        font-family: 'Consolas','Courier New',monospace; font-size: 10px;
-    }
-    QPushButton:hover { color: #d97706; border-color: #d97706; }
-)";
+static QString kLoadMoreStyle() {
+    return QString("QPushButton {"
+                   "  background: transparent; color: %1;"
+                   "  border: 1px solid %2; padding: 3px 8px;"
+                   "  font-family: 'Consolas','Courier New',monospace; font-size: 10px; }"
+                   "QPushButton:hover { color: %3; border-color: %3; }")
+        .arg(col::TEXT_TERTIARY(), col::BORDER_DIM(), col::AMBER());
+}
 
 } // namespace
 
@@ -56,7 +61,7 @@ static QLabel* make_spin_label(const QString& text, QWidget* parent) {
     auto* lbl = new QLabel(text, parent);
     lbl->setFixedHeight(80);
     lbl->setAlignment(Qt::AlignCenter);
-    lbl->setStyleSheet(kSpinStyle);
+    lbl->setStyleSheet(kSpinStyle());
     lbl->hide();
     return lbl;
 }
@@ -79,15 +84,15 @@ QLabel* DBnomicsSelectionPanel::make_section_label(const QString& text) {
                                  "font-family: 'Consolas','Courier New',monospace; "
                                  "padding: 5px 8px; background: %2; "
                                  "border-bottom: 1px solid %3;")
-                             .arg(ui::colors::AMBER)
-                             .arg(ui::colors::BG_RAISED)
-                             .arg(ui::colors::BORDER_DIM));
+                             .arg(col::AMBER)
+                             .arg(col::BG_RAISED)
+                             .arg(col::BORDER_DIM));
     return label;
 }
 
 QListWidget* DBnomicsSelectionPanel::make_styled_list(int fixed_height) {
     auto* list = new QListWidget();
-    list->setStyleSheet(kListStyle);
+    list->setStyleSheet(kListStyle());
     list->setFixedHeight(fixed_height);
     list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     return list;
@@ -95,7 +100,7 @@ QListWidget* DBnomicsSelectionPanel::make_styled_list(int fixed_height) {
 
 QPushButton* DBnomicsSelectionPanel::make_load_more_button() {
     auto* btn = new QPushButton("LOAD MORE");
-    btn->setStyleSheet(kLoadMoreStyle);
+    btn->setStyleSheet(kLoadMoreStyle());
     btn->setFixedHeight(22);
     btn->hide();
     return btn;
@@ -112,7 +117,7 @@ QWidget* DBnomicsSelectionPanel::build_search_section() {
     layout->addWidget(make_section_label("GLOBAL SEARCH"));
 
     global_search_input_ = new QLineEdit(w);
-    global_search_input_->setStyleSheet(kInputStyle);
+    global_search_input_->setStyleSheet(kInputStyle());
     global_search_input_->setFixedHeight(28);
     global_search_input_->setPlaceholderText("Search providers, datasets...");
     layout->addWidget(global_search_input_);
@@ -184,7 +189,7 @@ QWidget* DBnomicsSelectionPanel::build_provider_section() {
     pc_layout->setSpacing(0);
 
     provider_filter_input_ = new QLineEdit(prov_content_);
-    provider_filter_input_->setStyleSheet(kInputStyle);
+    provider_filter_input_->setStyleSheet(kInputStyle());
     provider_filter_input_->setFixedHeight(26);
     provider_filter_input_->setPlaceholderText("Filter providers...");
     pc_layout->addWidget(provider_filter_input_);
@@ -278,7 +283,7 @@ QWidget* DBnomicsSelectionPanel::build_series_section() {
     sc_layout->setSpacing(0);
 
     series_search_input_ = new QLineEdit(series_content_);
-    series_search_input_->setStyleSheet(kInputStyle);
+    series_search_input_->setStyleSheet(kInputStyle());
     series_search_input_->setFixedHeight(26);
     series_search_input_->setPlaceholderText("Search series...");
     sc_layout->addWidget(series_search_input_);
@@ -325,8 +330,8 @@ QWidget* DBnomicsSelectionPanel::build_action_buttons() {
                 "border: 1px solid %2; padding: 3px 8px; "
                 "font-family: 'Consolas','Courier New',monospace; font-size: 10px; font-weight: 700; }"
                 "QPushButton:hover { background: rgba(217,119,6,0.2); }")
-            .arg(ui::colors::AMBER)
-            .arg(ui::colors::AMBER_DIM));
+            .arg(col::AMBER)
+            .arg(col::AMBER_DIM));
     connect(add_btn, &QPushButton::clicked, this, [this]() { emit add_to_single_view_clicked(); });
     layout->addWidget(add_btn);
 
@@ -338,7 +343,7 @@ QWidget* DBnomicsSelectionPanel::build_action_buttons() {
                 "border: 1px solid %2; padding: 3px 8px; "
                 "font-family: 'Consolas','Courier New',monospace; font-size: 10px; font-weight: 700; }"
                 "QPushButton:hover { background: rgba(220,38,38,0.2); }")
-            .arg(ui::colors::NEGATIVE)
+            .arg(col::NEGATIVE)
             .arg("#7f1d1d"));
     connect(clear_btn, &QPushButton::clicked, this, [this]() { emit clear_all_clicked(); });
     layout->addWidget(clear_btn);
@@ -362,7 +367,7 @@ QWidget* DBnomicsSelectionPanel::build_comparison_slots_section() {
                 "border: 1px solid rgba(22,163,74,0.4); padding: 3px 8px; "
                 "font-family: 'Consolas','Courier New',monospace; font-size: 10px; font-weight: 700; }"
                 "QPushButton:hover { background: rgba(22,163,74,0.2); }")
-            .arg(ui::colors::POSITIVE));
+            .arg(col::POSITIVE));
     connect(add_slot_btn, &QPushButton::clicked, this, [this]() { emit add_slot_clicked(); });
     layout->addWidget(add_slot_btn);
 
@@ -380,7 +385,7 @@ QWidget* DBnomicsSelectionPanel::build_comparison_slots_section() {
 
 void DBnomicsSelectionPanel::build_ui() {
     setFixedWidth(280);
-    setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background: %1;").arg(col::BG_BASE));
 
     auto* root_layout = new QVBoxLayout(this);
     root_layout->setContentsMargins(0, 0, 0, 0);
@@ -394,8 +399,8 @@ void DBnomicsSelectionPanel::build_ui() {
                                   "QScrollBar:vertical { background: %1; width: 6px; }"
                                   "QScrollBar::handle:vertical { background: %2; }"
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-                              .arg(ui::colors::BG_BASE)
-                              .arg(ui::colors::BORDER_DIM));
+                              .arg(col::BG_BASE)
+                              .arg(col::BORDER_DIM));
 
     auto* content = new QWidget();
     auto* content_layout = new QVBoxLayout(content);
@@ -419,9 +424,9 @@ void DBnomicsSelectionPanel::build_ui() {
                                          "font-family: 'Consolas','Courier New',monospace; "
                                          "padding: 3px 8px; background: %2; "
                                          "border-top: 1px solid %3;")
-                                     .arg(ui::colors::TEXT_TERTIARY)
-                                     .arg(ui::colors::BG_RAISED)
-                                     .arg(ui::colors::BORDER_DIM));
+                                     .arg(col::TEXT_TERTIARY)
+                                     .arg(col::BG_RAISED)
+                                     .arg(col::BORDER_DIM));
     root_layout->addWidget(status_label_);
 }
 
@@ -432,8 +437,8 @@ void DBnomicsSelectionPanel::add_comparison_slot() {
 
     auto* slot_widget = new QWidget();
     slot_widget->setStyleSheet(QString("QWidget { background: %1; border: 1px solid %2; }")
-                                   .arg(ui::colors::BG_SURFACE)
-                                   .arg(ui::colors::BORDER_DIM));
+                                   .arg(col::BG_SURFACE)
+                                   .arg(col::BORDER_DIM));
 
     auto* slot_layout = new QVBoxLayout(slot_widget);
     slot_layout->setContentsMargins(4, 4, 4, 4);
@@ -448,7 +453,7 @@ void DBnomicsSelectionPanel::add_comparison_slot() {
     auto* slot_label = new QLabel(QString("SLOT %1").arg(slot_idx + 1));
     slot_label->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700; "
                                       "font-family: 'Consolas','Courier New',monospace;")
-                                  .arg(ui::colors::AMBER));
+                                  .arg(col::AMBER));
     header_layout->addWidget(slot_label);
     header_layout->addStretch();
 
@@ -457,7 +462,7 @@ void DBnomicsSelectionPanel::add_comparison_slot() {
     remove_btn->setStyleSheet(QString("QPushButton { background: rgba(220,38,38,0.1); color: %1; "
                                       "border: 1px solid rgba(220,38,38,0.3); font-size: 11px; font-weight: 700; }"
                                       "QPushButton:hover { background: rgba(220,38,38,0.25); }")
-                                  .arg(ui::colors::NEGATIVE));
+                                  .arg(col::NEGATIVE));
     connect(remove_btn, &QPushButton::clicked, this, [this, slot_idx]() { emit remove_slot_clicked(slot_idx); });
     header_layout->addWidget(remove_btn);
     slot_layout->addWidget(header_row);
@@ -469,9 +474,9 @@ void DBnomicsSelectionPanel::add_comparison_slot() {
                                           "border: 1px solid %2; "
                                           "font-family: 'Consolas','Courier New',monospace; font-size: 9px; }"
                                           "QPushButton:hover { color: %3; border-color: %3; }")
-                                      .arg(ui::colors::TEXT_TERTIARY)
-                                      .arg(ui::colors::BORDER_DIM)
-                                      .arg(ui::colors::AMBER));
+                                      .arg(col::TEXT_TERTIARY)
+                                      .arg(col::BORDER_DIM)
+                                      .arg(col::AMBER));
     connect(add_series_btn, &QPushButton::clicked, this, [this, slot_idx]() { emit add_to_slot_clicked(slot_idx); });
     slot_layout->addWidget(add_series_btn);
 
@@ -715,7 +720,7 @@ void DBnomicsSelectionPanel::update_slot_series(int slot_index, const QVector<se
         auto* name_label = new QLabel(name);
         name_label->setStyleSheet(QString("color: %1; font-size: 10px; "
                                           "font-family: 'Consolas','Courier New',monospace;")
-                                      .arg(ui::colors::TEXT_SECONDARY));
+                                      .arg(col::TEXT_SECONDARY));
         name_label->setToolTip(dp.series_name);
         row_layout->addWidget(name_label, 1);
 
@@ -726,8 +731,8 @@ void DBnomicsSelectionPanel::update_slot_series(int slot_index, const QVector<se
         remove_btn->setStyleSheet(
             QString("QPushButton { background: transparent; color: %1; border: none; font-size: 10px; }"
                     "QPushButton:hover { color: %2; }")
-                .arg(ui::colors::TEXT_TERTIARY)
-                .arg(ui::colors::NEGATIVE));
+                .arg(col::TEXT_TERTIARY)
+                .arg(col::NEGATIVE));
         connect(remove_btn, &QPushButton::clicked, this,
                 [this, slot_index, series_id]() { emit remove_from_slot_clicked(slot_index, series_id); });
         row_layout->addWidget(remove_btn);

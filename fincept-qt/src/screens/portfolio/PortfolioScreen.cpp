@@ -1,6 +1,7 @@
 // src/screens/portfolio/PortfolioScreen.cpp
 #include "screens/portfolio/PortfolioScreen.h"
 
+#include "core/session/ScreenStateManager.h"
 #include "screens/portfolio/PortfolioAgentPanel.h"
 #include "screens/portfolio/PortfolioAiPanel.h"
 #include "screens/portfolio/PortfolioBlotter.h"
@@ -35,6 +36,7 @@ namespace fincept::screens {
 
 PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
     build_ui();
+    refresh_theme(); // Apply theme-aware font sizes and colors on first build
 
     // Connect to PortfolioService signals
     auto& svc = services::PortfolioService::instance();
@@ -91,6 +93,10 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
 
     // Load portfolios
     svc.load_portfolios();
+
+    // Theme change: refresh all child component styles
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) { refresh_theme(); });
 }
 
 void PortfolioScreen::build_ui() {
@@ -268,10 +274,10 @@ QWidget* PortfolioScreen::build_empty_state() {
     auto* create_btn = new QPushButton("CREATE NEW");
     create_btn->setFixedSize(120, 32);
     create_btn->setCursor(Qt::PointingHandCursor);
-    create_btn->setStyleSheet(QString("QPushButton { background:%1; color:#000; border:none;"
+    create_btn->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
                                       "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
                                       "QPushButton:hover { background:%2; }")
-                                  .arg(ui::colors::AMBER, ui::colors::WARNING));
+                                  .arg(ui::colors::AMBER, ui::colors::WARNING, ui::colors::BG_BASE));
     connect(create_btn, &QPushButton::clicked, this, &PortfolioScreen::on_create_requested);
     btn_row->addWidget(create_btn);
 
@@ -399,6 +405,7 @@ void PortfolioScreen::on_portfolio_selected(const QString& id) {
         return;
 
     selected_id_ = id;
+    ScreenStateManager::instance().notify_changed(this);
     summary_loaded_ = false;
     active_detail_ = std::nullopt;
     command_bar_->set_detail_view(std::nullopt);
@@ -624,10 +631,11 @@ QWidget* PortfolioScreen::build_main_view() {
 
     top_split->addWidget(perf_chart_);
     top_split->addWidget(sector_panel_);
-    top_split->setStretchFactor(0, 3); // 60%
-    top_split->setStretchFactor(1, 2); // 40%
+    top_split->setStretchFactor(0, 7); // ~70%
+    top_split->setStretchFactor(1, 3); // ~30%
+    sector_panel_->setMinimumWidth(180);
 
-    center_layout->addWidget(top_split, 42); // 42% of vertical space
+    center_layout->addWidget(top_split, 40); // 40% of vertical space
 
     // Separator
     auto* sep = new QWidget;
@@ -706,10 +714,11 @@ QWidget* PortfolioScreen::build_main_view() {
 
     // Transaction history panel below blotter
     txn_panel_ = new PortfolioTxnPanel;
+    txn_panel_->setMinimumHeight(80);
+    txn_panel_->setMaximumHeight(160);
     blotter_layout->addWidget(txn_panel_);
-    txn_panel_->setFixedHeight(130);
 
-    center_layout->addWidget(blotter_section, 58); // 58% of vertical space
+    center_layout->addWidget(blotter_section, 60); // 60% of vertical space
 
     h_layout->addWidget(center, 1); // center takes remaining space
 
@@ -762,6 +771,17 @@ void PortfolioScreen::update_main_view_data() {
         blotter_->set_selected_symbol(selected_symbol_);
         order_panel_->set_holding(find_holding(selected_symbol_));
     }
+}
+
+void PortfolioScreen::refresh_theme() {
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+
+    if (command_bar_)  command_bar_->refresh_theme();
+    if (stats_ribbon_) stats_ribbon_->refresh_theme();
+    if (perf_chart_)   perf_chart_->refresh_theme();
+    if (heatmap_)      heatmap_->refresh_theme();
+    if (blotter_)      blotter_->refresh_theme();
+    if (txn_panel_)    txn_panel_->refresh_theme();
 }
 
 void PortfolioScreen::on_symbol_selected(const QString& symbol) {

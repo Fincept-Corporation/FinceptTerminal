@@ -106,5 +106,15 @@ class LeveragedFundAnalyzer(AlternativeInvestmentBase):
             'analysis_category': 'THE UGLY'
         }
 
+    def valuation_summary(self) -> Dict[str, Any]:
+        return {
+            'nav': float(self.calculate_nav()),
+            'key_metrics': self.calculate_key_metrics(),
+            'verdict': self.analysis_verdict(),
+            'analysis_category': 'THE UGLY',
+            'rating': '1/10',
+            'analysis_recommendation': 'AVOID - volatility decay guarantees long-term underperformance'
+        }
+
 
 __all__ = ['LeveragedFundAnalyzer']

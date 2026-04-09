@@ -1,6 +1,7 @@
 #include "screens/polymarket/PolymarketScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "screens/polymarket/PolymarketBrowsePanel.h"
 #include "screens/polymarket/PolymarketCommandBar.h"
 #include "screens/polymarket/PolymarketDetailPanel.h"
@@ -152,6 +153,7 @@ void PolymarketScreen::on_view_changed(const QString& view) {
 void PolymarketScreen::on_category_changed(const QString& category) {
     active_category_ = category;
     command_bar_->set_active_category(category);
+    ScreenStateManager::instance().notify_changed(this);
     load_current_view();
 }
 
@@ -371,6 +373,26 @@ void PolymarketScreen::on_ws_orderbook_updated(const QString& /*asset_id*/, cons
 void PolymarketScreen::on_ws_status_changed(bool connected) {
     command_bar_->set_ws_status(connected);
     status_bar_->set_ws_status(connected);
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap PolymarketScreen::save_state() const {
+    return {
+        {"category", active_category_},
+        {"view",     active_view_},
+        {"sort",     active_sort_},
+    };
+}
+
+void PolymarketScreen::restore_state(const QVariantMap& state) {
+    const QString cat  = state.value("category", "ALL").toString();
+    const QString view = state.value("view", "MARKETS").toString();
+    const QString sort = state.value("sort", "volume").toString();
+
+    active_sort_ = sort;
+    active_view_ = view;
+    on_category_changed(cat);
 }
 
 } // namespace fincept::screens

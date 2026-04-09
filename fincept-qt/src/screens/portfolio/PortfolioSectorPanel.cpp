@@ -533,7 +533,7 @@ void PortfolioSectorPanel::update_correlation() {
                 bg = QColor(220, 38, 38, static_cast<int>(std::abs(corr) * 140 + 20));
             }
 
-            const char* text_color = is_diag ? "#000000" : ui::colors::TEXT_PRIMARY;
+            const char* text_color = is_diag ? ui::colors::BG_BASE : ui::colors::TEXT_PRIMARY;
             cell->setStyleSheet(
                 QString("background:rgba(%1,%2,%3,%4); color:%5;"
                         "font-size:7px; font-weight:600;")

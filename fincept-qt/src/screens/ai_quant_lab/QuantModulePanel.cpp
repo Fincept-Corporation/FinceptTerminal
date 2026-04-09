@@ -30,52 +30,136 @@ namespace fincept::screens {
 
 using namespace fincept::services::quant;
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Shared style helpers (live tokens — called at widget-creation time) ───────
+// These replace 60+ copy-pasted inline style blocks across all panel builders.
 
-QDoubleSpinBox* QuantModulePanel::make_double_spin(double min, double max, double val, int decimals,
-                                                   const QString& suffix, QWidget* parent) {
+static QString input_ss() {
+    return QString("QLineEdit,QTextEdit { background:%1; color:%2; border:1px solid %3;"
+                   "padding:4px 6px; border-radius:2px; }"
+                   "QLineEdit:focus,QTextEdit:focus { border-color:%4; }")
+        .arg(ui::colors::BG_RAISED())
+        .arg(ui::colors::TEXT_PRIMARY())
+        .arg(ui::colors::BORDER_MED())
+        .arg(ui::colors::BORDER_BRIGHT());
+}
+
+static QString combo_ss() {
+    return QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                   "padding:3px 6px; border-radius:2px; }"
+                   "QComboBox:focus { border-color:%4; }"
+                   "QComboBox::drop-down { border:none; width:18px; }"
+                   "QComboBox QAbstractItemView { background:%1; color:%2;"
+                   "selection-background-color:%5; border:1px solid %3; }")
+        .arg(ui::colors::BG_RAISED())
+        .arg(ui::colors::TEXT_PRIMARY())
+        .arg(ui::colors::BORDER_MED())
+        .arg(ui::colors::BORDER_BRIGHT())
+        .arg(ui::colors::BG_HOVER());
+}
+
+static QString spinbox_ss() {
+    return QString("QSpinBox,QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
+                   "padding:4px 6px; border-radius:2px; }"
+                   "QSpinBox:focus,QDoubleSpinBox:focus { border-color:%4; }"
+                   "QSpinBox::up-button,QSpinBox::down-button,"
+                   "QDoubleSpinBox::up-button,QDoubleSpinBox::down-button { width:16px; }")
+        .arg(ui::colors::BG_RAISED())
+        .arg(ui::colors::TEXT_PRIMARY())
+        .arg(ui::colors::BORDER_MED())
+        .arg(ui::colors::BORDER_BRIGHT());
+}
+
+static QString tab_ss(const QString& accent) {
+    return QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
+                   "QTabBar::tab { background:%3; color:%4; padding:6px 14px;"
+                   "border:1px solid %1; border-bottom:none; margin-right:1px; }"
+                   "QTabBar::tab:selected { background:%2; color:%5; font-weight:700;"
+                   "border-bottom:2px solid %5; }"
+                   "QTabBar::tab:hover { color:%4; background:%6; }")
+        .arg(ui::colors::BORDER_DIM())
+        .arg(ui::colors::BG_SURFACE())
+        .arg(ui::colors::BG_RAISED())
+        .arg(ui::colors::TEXT_SECONDARY())
+        .arg(accent)
+        .arg(ui::colors::BG_HOVER());
+}
+
+static QString sub_tab_ss(const QString& accent) {
+    return QString("QTabWidget::pane { border:none; background:%1; }"
+                   "QTabBar::tab { background:%2; color:%3; padding:5px 12px;"
+                   "border:1px solid %4; border-bottom:none; margin-right:1px; }"
+                   "QTabBar::tab:selected { background:%1; color:%5; font-weight:700; }"
+                   "QTabBar { background:%2; }")
+        .arg(ui::colors::BG_SURFACE())
+        .arg(ui::colors::BG_RAISED())
+        .arg(ui::colors::TEXT_SECONDARY())
+        .arg(ui::colors::BORDER_DIM())
+        .arg(accent);
+}
+
+static QString output_ss() {
+    return QString("QTextEdit { background:%1; color:%2; border:1px solid %3; padding:8px; }")
+        .arg(ui::colors::BG_RAISED())
+        .arg(ui::colors::TEXT_PRIMARY())
+        .arg(ui::colors::BORDER_DIM());
+}
+
+static QString table_ss() {
+    return QString("QTableWidget { background:%1; color:%2; border:1px solid %3;"
+                   "gridline-color:%3; alternate-background-color:%4; }"
+                   "QTableWidget::item { padding:3px 6px; }"
+                   "QHeaderView::section { background:%5; color:%6; font-weight:700;"
+                   "padding:4px 8px; border:none; border-bottom:1px solid %3; }"
+                   "QTableWidget::item:selected { background:%7; color:%2; }")
+        .arg(ui::colors::BG_SURFACE())
+        .arg(ui::colors::TEXT_PRIMARY())
+        .arg(ui::colors::BORDER_DIM())
+        .arg(ui::colors::ROW_ALT())
+        .arg(ui::colors::BG_RAISED())
+        .arg(ui::colors::TEXT_SECONDARY())
+        .arg(ui::colors::BG_HOVER());
+}
+
+// ── Widget factory helpers ────────────────────────────────────────────────────
+
+QDoubleSpinBox* QuantModulePanel::make_double_spin(double min, double max, double val,
+                                                   int decimals, const QString& suffix,
+                                                   QWidget* parent) {
     auto* spin = new QDoubleSpinBox(parent);
     spin->setRange(min, max);
     spin->setValue(val);
     spin->setDecimals(decimals);
     if (!suffix.isEmpty())
         spin->setSuffix(suffix);
-    spin->setStyleSheet(QString("QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
-                                "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                                "QDoubleSpinBox:focus { border-color:%6; }")
-                            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                            .arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL)
-                            .arg(module_.color.name()));
+    spin->setStyleSheet(spinbox_ss());
     return spin;
 }
 
 QPushButton* QuantModulePanel::make_run_button(const QString& text, QWidget* parent) {
     auto* btn = new QPushButton(text, parent);
     btn->setCursor(Qt::PointingHandCursor);
-    btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; font-family:%3; font-size:%4px;"
-                               "font-weight:700; border:none; padding:8px 20px; border-radius:2px;"
-                               "letter-spacing:1px; }"
-                               "QPushButton:hover { background:%5; }")
-                           .arg(module_.color.name())
-                           .arg(ui::colors::BG_BASE)
-                           .arg(ui::fonts::DATA_FAMILY)
-                           .arg(ui::fonts::SMALL)
-                           .arg(module_.color.lighter(120).name()));
+    btn->setFixedHeight(32);
+    btn->setStyleSheet(
+        QString("QPushButton { background:%1; color:%2; font-weight:700; border:none;"
+                "padding:0 20px; border-radius:2px; letter-spacing:0.8px; }"
+                "QPushButton:hover { background:%3; }"
+                "QPushButton:pressed { background:%4; }")
+            .arg(module_.color.name(),
+                 ui::colors::BG_BASE(),
+                 module_.color.lighter(115).name(),
+                 module_.color.darker(110).name()));
     return btn;
 }
 
 QWidget* QuantModulePanel::build_input_row(const QString& label, QWidget* input, QWidget* parent) {
     auto* row = new QWidget(parent);
-    auto* hl = new QHBoxLayout(row);
+    auto* hl  = new QHBoxLayout(row);
     hl->setContentsMargins(0, 2, 0, 2);
     hl->setSpacing(8);
     auto* lbl = new QLabel(label, row);
     lbl->setFixedWidth(160);
-    lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                           .arg(ui::colors::TEXT_SECONDARY)
-                           .arg(ui::fonts::SMALL)
-                           .arg(ui::fonts::DATA_FAMILY));
+    lbl->setStyleSheet(
+        QString("color:%1; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(lbl);
     hl->addWidget(input, 1);
     return row;
@@ -85,13 +169,7 @@ QWidget* QuantModulePanel::build_input_row(const QString& label, QWidget* input,
 
 QWidget* QuantModulePanel::build_llm_picker(QWidget* parent, QComboBox** out_combo) {
     auto* combo = new QComboBox(parent);
-    combo->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                 "font-family:%4; font-size:%5px; padding:4px 8px; }"
-                                 "QComboBox::drop-down { border:none; }"
-                                 "QComboBox QAbstractItemView { background:%1; color:%2; }")
-                             .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                             .arg(ui::fonts::DATA_FAMILY)
-                             .arg(ui::fonts::SMALL));
+    combo->setStyleSheet(combo_ss());
 
     // Populate from saved profiles
     auto profiles_result = LlmProfileRepository::instance().list_profiles();
@@ -103,7 +181,7 @@ QWidget* QuantModulePanel::build_llm_picker(QWidget* parent, QComboBox** out_com
         }
     }
     if (combo->count() == 0)
-        combo->addItem("No LLM profiles — configure in Settings → LLM Config", QString());
+        combo->addItem("No LLM profiles — configure in Settings → LLM Config", QVariant());
 
     // Pre-select the global default if present
     auto resolved = LlmProfileRepository::instance().resolve_for_context("ai_quant_lab");
@@ -138,14 +216,35 @@ QJsonObject QuantModulePanel::llm_config_from_combo(QComboBox* combo) const {
 
 // ── Constructor ──────────────────────────────────────────────────────────────
 
-QuantModulePanel::QuantModulePanel(const QuantModule& mod, QWidget* parent) : QWidget(parent), module_(mod) {
+QuantModulePanel::QuantModulePanel(const QuantModule& mod, QWidget* parent)
+    : QWidget(parent), module_(mod) {
     build_ui();
     connect_service();
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) {
-                setStyleSheet(QString("background:%1;color:%2;")
-                    .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
-            });
+            this, [this](const ui::ThemeTokens&) { refresh_theme(); });
+}
+
+void QuantModulePanel::refresh_theme() {
+    setStyleSheet(
+        QString("background:%1; color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+
+    if (panel_header_)
+        panel_header_->setStyleSheet(
+            QString("background:%1; border-bottom:1px solid %2;")
+                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+
+    if (header_title_)
+        header_title_->setStyleSheet(
+            QString("color:%1; font-weight:700; letter-spacing:1px; background:transparent;")
+                .arg(module_.color.name()));
+
+    if (header_cat_)
+        header_cat_->setStyleSheet(
+            QString("color:%1; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
+
+    if (status_label_)
+        status_label_->setStyleSheet(
+            QString("color:%1; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
 }
 
 void QuantModulePanel::connect_service() {
@@ -159,34 +258,32 @@ void QuantModulePanel::build_ui() {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    // Module header
-    auto* header = new QWidget(this);
-    header->setFixedHeight(36);
-    header->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
-    auto* hhl = new QHBoxLayout(header);
+    // Module header — stored for refresh_theme()
+    panel_header_ = new QWidget(this);
+    panel_header_->setFixedHeight(36);
+    auto* hhl = new QHBoxLayout(panel_header_);
     hhl->setContentsMargins(16, 0, 16, 0);
-    auto* title = new QLabel(module_.label.toUpper(), header);
-    title->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                                 "letter-spacing:1px;")
-                             .arg(module_.color.name())
-                             .arg(ui::fonts::TINY)
-                             .arg(ui::fonts::DATA_FAMILY));
-    hhl->addWidget(title);
-    auto* div = new QWidget(header);
+    hhl->setSpacing(8);
+
+    header_title_ = new QLabel(module_.label.toUpper(), panel_header_);
+    hhl->addWidget(header_title_);
+
+    auto* div = new QWidget(panel_header_);
+    div->setObjectName("panelHeaderDiv");
     div->setFixedSize(1, 14);
-    div->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM));
     hhl->addWidget(div);
-    auto* cat = new QLabel(module_.category, header);
-    cat->setStyleSheet(
-        QString("color:%1; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
-    hhl->addWidget(cat);
+
+    QString cat_label = module_.category;
+    cat_label.replace('_', '/');
+    header_cat_ = new QLabel(cat_label, panel_header_);
+    hhl->addWidget(header_cat_);
+
     hhl->addStretch();
-    status_label_ = new QLabel(header);
-    status_label_->setStyleSheet(
-        QString("color:%1; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
+
+    status_label_ = new QLabel(panel_header_);
     hhl->addWidget(status_label_);
-    root->addWidget(header);
+
+    root->addWidget(panel_header_);
 
     // Content
     auto* scroll = new QScrollArea(this);
@@ -250,24 +347,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     vl->setSpacing(12);
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
-                                "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-                                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
-                                "border-bottom:2px solid %7; }")
-                            .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-                            .arg(ui::colors::TEXT_SECONDARY)
-                            .arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL)
-                            .arg(module_.color.name()));
-
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                               "QLineEdit:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY)
-                           .arg(ui::fonts::SMALL)
-                           .arg(module_.color.name());
+    tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Risk Metrics ──
     auto* risk = new QWidget;
@@ -276,7 +356,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     rvl->setSpacing(8);
     auto* risk_returns = new QLineEdit(risk);
     risk_returns->setPlaceholderText("Daily returns (comma-separated, e.g. 0.01,-0.02,0.005)");
-    risk_returns->setStyleSheet(input_style);
+    risk_returns->setStyleSheet(input_ss());
     text_inputs_["gs_risk_returns"] = risk_returns;
     rvl->addWidget(build_input_row("Daily Returns", risk_returns, risk));
     auto* risk_rf = make_double_spin(0, 20, 4.5, 2, "%", risk);
@@ -301,12 +381,12 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     pvl->setSpacing(8);
     auto* port_ret = new QLineEdit(port);
     port_ret->setPlaceholderText("Portfolio returns (comma-separated)");
-    port_ret->setStyleSheet(input_style);
+    port_ret->setStyleSheet(input_ss());
     text_inputs_["gs_port_returns"] = port_ret;
     pvl->addWidget(build_input_row("Portfolio Returns", port_ret, port));
     auto* bench_ret = new QLineEdit(port);
     bench_ret->setPlaceholderText("Benchmark returns (comma-separated)");
-    bench_ret->setStyleSheet(input_style);
+    bench_ret->setStyleSheet(input_ss());
     text_inputs_["gs_bench_returns"] = bench_ret;
     pvl->addWidget(build_input_row("Benchmark Returns", bench_ret, port));
     auto* port_run = make_run_button("ANALYZE PORTFOLIO", port);
@@ -343,11 +423,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     gvl->addWidget(build_input_row("Volatility", g_vol, greeks));
     auto* g_type = new QComboBox(greeks);
     g_type->addItems({"call", "put"});
-    g_type->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                  "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                              .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                              .arg(ui::fonts::DATA_FAMILY)
-                              .arg(ui::fonts::SMALL));
+    g_type->setStyleSheet(combo_ss());
     combo_inputs_["gs_option_type"] = g_type;
     gvl->addWidget(build_input_row("Option Type", g_type, greeks));
     auto* greeks_run = make_run_button("CALCULATE GREEKS", greeks);
@@ -373,7 +449,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     vvl->setSpacing(8);
     auto* var_ret = new QLineEdit(var);
     var_ret->setPlaceholderText("Daily returns (comma-separated)");
-    var_ret->setStyleSheet(input_style);
+    var_ret->setStyleSheet(input_ss());
     text_inputs_["gs_var_returns"] = var_ret;
     vvl->addWidget(build_input_row("Daily Returns", var_ret, var));
     auto* var_pos = make_double_spin(0, 1e12, 1e6, 0, "", var);
@@ -402,7 +478,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     svl->setSpacing(8);
     auto* st_ret = new QLineEdit(stress);
     st_ret->setPlaceholderText("Daily returns (comma-separated)");
-    st_ret->setStyleSheet(input_style);
+    st_ret->setStyleSheet(input_ss());
     text_inputs_["gs_stress_returns"] = st_ret;
     svl->addWidget(build_input_row("Daily Returns", st_ret, stress));
     auto* st_pos = make_double_spin(0, 1e12, 1e6, 0, "", stress);
@@ -436,7 +512,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     bvl->addWidget(build_input_row("Strategy", bt_strat, bt));
     auto* bt_ticker = new QLineEdit(bt);
     bt_ticker->setPlaceholderText("AAPL");
-    bt_ticker->setStyleSheet(input_style);
+    bt_ticker->setStyleSheet(input_ss());
     text_inputs_["gs_bt_ticker"] = bt_ticker;
     bvl->addWidget(build_input_row("Ticker", bt_ticker, bt));
     auto* bt_capital = make_double_spin(1000, 1e12, 100000, 0, "", bt);
@@ -445,11 +521,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     auto* bt_lookback = new QSpinBox(bt);
     bt_lookback->setRange(5, 252);
     bt_lookback->setValue(20);
-    bt_lookback->setStyleSheet(QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
-                                       "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                   .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                                   .arg(ui::fonts::DATA_FAMILY)
-                                   .arg(ui::fonts::SMALL));
+    bt_lookback->setStyleSheet(spinbox_ss());
     int_inputs_["gs_bt_lookback"] = bt_lookback;
     bvl->addWidget(build_input_row("Lookback Period", bt_lookback, bt));
     auto* bt_run = make_run_button("RUN BACKTEST", bt);
@@ -473,7 +545,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     stvl->setSpacing(8);
     auto* st_vals = new QLineEdit(stats);
     st_vals->setPlaceholderText("Values (comma-separated, e.g. 10.5,11.2,9.8)");
-    st_vals->setStyleSheet(input_style);
+    st_vals->setStyleSheet(input_ss());
     text_inputs_["gs_stats_values"] = st_vals;
     stvl->addWidget(build_input_row("Values", st_vals, stats));
     auto* stats_run = make_run_button("CALCULATE STATISTICS", stats);
@@ -508,12 +580,6 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY)
-                           .arg(ui::fonts::SMALL);
-
     // Data input
     auto* data_lbl = new QLabel("DATA INPUT", w);
     data_lbl->setStyleSheet(QString("color:%1; font-weight:700; font-family:%2;"
@@ -524,7 +590,7 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
 
     auto* symbol = new QLineEdit(w);
     symbol->setPlaceholderText("Ticker symbol (e.g. AAPL) or comma-separated values");
-    symbol->setStyleSheet(input_style);
+    symbol->setStyleSheet(input_ss());
     text_inputs_["cfa_symbol"] = symbol;
     vl->addWidget(build_input_row("Symbol / Data", symbol, w));
 
@@ -532,11 +598,7 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
     auto* analysis_type = new QComboBox(w);
     analysis_type->addItems({"trend_analysis", "stationarity_test", "arima_model", "forecasting", "supervised_learning",
                              "unsupervised_learning", "resampling_methods", "validate_data"});
-    analysis_type->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                         "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                     .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                                     .arg(ui::fonts::DATA_FAMILY)
-                                     .arg(ui::fonts::SMALL));
+    analysis_type->setStyleSheet(combo_ss());
     combo_inputs_["cfa_analysis"] = analysis_type;
     vl->addWidget(build_input_row("Analysis Type", analysis_type, w));
 
@@ -570,37 +632,29 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY)
-                           .arg(ui::fonts::SMALL);
+
 
     auto* strat = new QComboBox(w);
     strat->addItems({"topk_dropout", "weight_based", "enhanced_indexing"});
-    strat->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                 "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                             .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                             .arg(ui::fonts::DATA_FAMILY)
-                             .arg(ui::fonts::SMALL));
+    strat->setStyleSheet(combo_ss());
     combo_inputs_["bt_strategy"] = strat;
     vl->addWidget(build_input_row("Strategy", strat, w));
 
     auto* instruments = new QLineEdit(w);
     instruments->setPlaceholderText("AAPL,MSFT,GOOG,AMZN");
-    instruments->setStyleSheet(input_style);
+    instruments->setStyleSheet(input_ss());
     text_inputs_["bt_instruments"] = instruments;
     vl->addWidget(build_input_row("Instruments", instruments, w));
 
     auto* start_date = new QLineEdit(w);
     start_date->setPlaceholderText("2020-01-01");
-    start_date->setStyleSheet(input_style);
+    start_date->setStyleSheet(input_ss());
     text_inputs_["bt_start"] = start_date;
     vl->addWidget(build_input_row("Start Date", start_date, w));
 
     auto* end_date = new QLineEdit(w);
     end_date->setPlaceholderText("2024-01-01");
-    end_date->setStyleSheet(input_style);
+    end_date->setStyleSheet(input_ss());
     text_inputs_["bt_end"] = end_date;
     vl->addWidget(build_input_row("End Date", end_date, w));
 
@@ -611,17 +665,13 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
     auto* topk = new QSpinBox(w);
     topk->setRange(1, 100);
     topk->setValue(10);
-    topk->setStyleSheet(QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
-                                "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                            .arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL));
+    topk->setStyleSheet(spinbox_ss());
     int_inputs_["bt_topk"] = topk;
     vl->addWidget(build_input_row("Top K Positions", topk, w));
 
     auto* benchmark = new QLineEdit(w);
     benchmark->setPlaceholderText("SH000300 (CSI300)");
-    benchmark->setStyleSheet(input_style);
+    benchmark->setStyleSheet(input_ss());
     text_inputs_["bt_benchmark"] = benchmark;
     vl->addWidget(build_input_row("Benchmark", benchmark, w));
 
@@ -668,34 +718,22 @@ QWidget* QuantModulePanel::build_rl_trading_panel() {
 
     auto* algo = new QComboBox(w);
     algo->addItems({"PPO", "DQN", "A2C", "SAC", "TD3"});
-    algo->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                            .arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL));
+    algo->setStyleSheet(combo_ss());
     combo_inputs_["rl_algo"] = algo;
     vl->addWidget(build_input_row("RL Algorithm", algo, w));
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY)
-                           .arg(ui::fonts::SMALL);
+
 
     auto* ticker = new QLineEdit(w);
     ticker->setPlaceholderText("AAPL");
-    ticker->setStyleSheet(input_style);
+    ticker->setStyleSheet(input_ss());
     text_inputs_["rl_ticker"] = ticker;
     vl->addWidget(build_input_row("Ticker", ticker, w));
 
     auto* episodes = new QSpinBox(w);
     episodes->setRange(10, 10000);
     episodes->setValue(100);
-    episodes->setStyleSheet(QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
-                                    "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                                .arg(ui::fonts::DATA_FAMILY)
-                                .arg(ui::fonts::SMALL));
+    episodes->setStyleSheet(spinbox_ss());
     int_inputs_["rl_episodes"] = episodes;
     vl->addWidget(build_input_row("Training Episodes", episodes, w));
 
@@ -743,22 +781,14 @@ QWidget* QuantModulePanel::build_advanced_models_panel() {
     auto* model_type = new QComboBox(w);
     model_type->addItems(
         {"LSTM", "GRU", "Transformer", "Localformer", "HIST", "GAT", "LightGBM", "XGBoost", "CatBoost"});
-    model_type->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                      "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                  .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                                  .arg(ui::fonts::DATA_FAMILY)
-                                  .arg(ui::fonts::SMALL));
+    model_type->setStyleSheet(combo_ss());
     combo_inputs_["adv_model"] = model_type;
     vl->addWidget(build_input_row("Model Type", model_type, w));
 
     auto* hidden = new QSpinBox(w);
     hidden->setRange(16, 1024);
     hidden->setValue(64);
-    hidden->setStyleSheet(QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
-                                  "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                              .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                              .arg(ui::fonts::DATA_FAMILY)
-                              .arg(ui::fonts::SMALL));
+    hidden->setStyleSheet(spinbox_ss());
     int_inputs_["adv_hidden"] = hidden;
     vl->addWidget(build_input_row("Hidden Size", hidden, w));
 
@@ -827,22 +857,9 @@ QWidget* QuantModulePanel::build_deep_agent_panel() {
     llm_bar_l->addWidget(build_llm_picker(llm_bar, &llm_combo));
     vl->addWidget(llm_bar);
 
-    auto tab_style = QString(
-        "QTabWidget::pane { border:none; background:%1; }"
-        "QTabBar::tab { background:%2; color:%3; padding:7px 16px;"
-        "font-family:%4; font-size:%5px; border:1px solid %6; border-bottom:none; margin-right:2px; }"
-        "QTabBar::tab:selected { background:%1; color:%7; font-weight:700;"
-        "border-bottom:2px solid %7; }"
-        "QTabBar::tab:hover { color:%3; background:%2; }")
-        .arg(ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-        .arg(ui::colors::TEXT_SECONDARY)
-        .arg(ui::fonts::DATA_FAMILY)
-        .arg(ui::fonts::SMALL)
-        .arg(ui::colors::BORDER_DIM)
-        .arg(module_.color.name());
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(tab_style);
+    tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Tab 1: LangGraph Deep Analysis ──────────────────────────────────────
     auto* da_w = new QWidget(tabs);
@@ -875,13 +892,7 @@ QWidget* QuantModulePanel::build_deep_agent_panel() {
 
     auto* agent_type = new QComboBox(da_w);
     agent_type->addItems({"general", "research", "trading_strategy", "portfolio_management", "risk_assessment"});
-    agent_type->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                      "font-family:%4; font-size:%5px; padding:4px 8px; }"
-                                      "QComboBox::drop-down { border:none; }"
-                                      "QComboBox QAbstractItemView { background:%1; color:%2; }")
-                                  .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                                  .arg(ui::fonts::DATA_FAMILY)
-                                  .arg(ui::fonts::SMALL));
+    agent_type->setStyleSheet(combo_ss());
     combo_inputs_["agent_type"] = agent_type;
     da_vl->addWidget(build_input_row("Agent Type", agent_type, da_w));
 
@@ -917,11 +928,7 @@ QWidget* QuantModulePanel::build_deep_agent_panel() {
     agent_output_->setReadOnly(true);
     agent_output_->setPlaceholderText("Analysis results will appear here...");
     agent_output_->setMinimumHeight(300);
-    agent_output_->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
-                                         "font-family:%4; font-size:%5px; padding:12px; }")
-                                     .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
-                                     .arg(ui::fonts::DATA_FAMILY)
-                                     .arg(ui::fonts::SMALL));
+    agent_output_->setStyleSheet(output_ss());
     da_vl->addWidget(agent_output_, 1);
 
     auto* rc = new QWidget(da_w);
@@ -950,37 +957,11 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     vl->setSpacing(0);
 
     // shared styles
-    auto input_style = QString("QLineEdit,QTextEdit,QSpinBox { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                               "QLineEdit:focus,QTextEdit:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY)
-                           .arg(ui::fonts::SMALL)
-                           .arg(module_.color.name());
 
-    auto combo_style = QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 8px; }"
-                               "QComboBox::drop-down { border:none; }"
-                               "QComboBox QAbstractItemView { background:%1; color:%2; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY)
-                           .arg(ui::fonts::SMALL);
 
-    auto sub_tab_style = QString(
-        "QTabWidget::pane { border:none; background:%1; }"
-        "QTabBar::tab { background:%2; color:%3; padding:5px 12px;"
-        "font-family:%4; font-size:%5px; border:1px solid %6; border-bottom:none; margin-right:1px; }"
-        "QTabBar::tab:selected { background:%1; color:%7; font-weight:700; }"
-        "QTabBar { background:%2; }")
-        .arg(ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-        .arg(ui::colors::TEXT_SECONDARY)
-        .arg(ui::fonts::DATA_FAMILY)
-        .arg(ui::fonts::TINY)
-        .arg(ui::colors::BORDER_DIM)
-        .arg(module_.color.name());
 
     auto* sub = new QTabWidget(w);
-    sub->setStyleSheet(sub_tab_style);
+    sub->setStyleSheet(sub_tab_ss(module_.color.name()));
 
     // ── Status bar ───────────────────────────────────────────────────────────
     auto* status_bar = new QWidget(w);
@@ -1077,18 +1058,18 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     auto* fm_task = new QTextEdit(fm_w);
     fm_task->setPlaceholderText("Describe the factor hypothesis...\ne.g. \"Discover momentum-based alpha factors for US equities\"");
     fm_task->setFixedHeight(70);
-    fm_task->setStyleSheet(input_style);
+    fm_task->setStyleSheet(input_ss());
     fm_vl->addWidget(build_input_row("Task Description", fm_task, fm_w));
 
     auto* fm_market = new QComboBox(fm_w);
     fm_market->addItems({"US", "CN", "EU", "IN", "JP", "HK", "GLOBAL"});
-    fm_market->setStyleSheet(combo_style);
+    fm_market->setStyleSheet(combo_ss());
     fm_vl->addWidget(build_input_row("Target Market", fm_market, fm_w));
 
     auto* fm_iter = new QSpinBox(fm_w);
     fm_iter->setRange(1, 100);
     fm_iter->setValue(10);
-    fm_iter->setStyleSheet(input_style);
+    fm_iter->setStyleSheet(input_ss());
     fm_vl->addWidget(build_input_row("Max Iterations", fm_iter, fm_w));
 
     auto* fm_ic = make_double_spin(0.01, 0.50, 0.05, 3, "", fm_w);
@@ -1132,18 +1113,18 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
 
     auto* mo_model = new QComboBox(mo_w);
     mo_model->addItems({"lightgbm", "xgboost", "lstm", "gru", "transformer", "tcn"});
-    mo_model->setStyleSheet(combo_style);
+    mo_model->setStyleSheet(combo_ss());
     mo_vl->addWidget(build_input_row("Model Type", mo_model, mo_w));
 
     auto* mo_target = new QComboBox(mo_w);
     mo_target->addItems({"sharpe", "ic", "max_drawdown", "win_rate", "calmar_ratio"});
-    mo_target->setStyleSheet(combo_style);
+    mo_target->setStyleSheet(combo_ss());
     mo_vl->addWidget(build_input_row("Optimize For", mo_target, mo_w));
 
     auto* mo_iter = new QSpinBox(mo_w);
     mo_iter->setRange(1, 100);
     mo_iter->setValue(10);
-    mo_iter->setStyleSheet(input_style);
+    mo_iter->setStyleSheet(input_ss());
     mo_vl->addWidget(build_input_row("Max Iterations", mo_iter, mo_w));
 
     auto* mo_run = make_run_button("START MODEL OPTIMIZATION", mo_w);
@@ -1182,18 +1163,18 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     auto* qr_goal = new QTextEdit(qr_w);
     qr_goal->setPlaceholderText("Research goal...\ne.g. \"Build a quantitative equity strategy for mid-cap US stocks\"");
     qr_goal->setFixedHeight(70);
-    qr_goal->setStyleSheet(input_style);
+    qr_goal->setStyleSheet(input_ss());
     qr_vl->addWidget(build_input_row("Research Goal", qr_goal, qr_w));
 
     auto* qr_market = new QComboBox(qr_w);
     qr_market->addItems({"US", "CN", "EU", "IN", "JP", "HK", "GLOBAL"});
-    qr_market->setStyleSheet(combo_style);
+    qr_market->setStyleSheet(combo_ss());
     qr_vl->addWidget(build_input_row("Target Market", qr_market, qr_w));
 
     auto* qr_iter = new QSpinBox(qr_w);
     qr_iter->setRange(1, 100);
     qr_iter->setValue(15);
-    qr_iter->setStyleSheet(input_style);
+    qr_iter->setStyleSheet(input_ss());
     qr_vl->addWidget(build_input_row("Max Iterations", qr_iter, qr_w));
 
     auto* qr_run = make_run_button("START QUANT RESEARCH", qr_w);
@@ -1230,7 +1211,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     auto* filter_combo = new QComboBox(tm_toolbar);
     filter_combo->addItems({"All", "running", "completed", "stopped", "failed"});
     filter_combo->setFixedWidth(120);
-    filter_combo->setStyleSheet(combo_style);
+    filter_combo->setStyleSheet(combo_ss());
     tm_hl->addWidget(filter_combo);
 
     auto* refresh_btn = new QPushButton("REFRESH", tm_toolbar);
@@ -1247,7 +1228,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
 
     auto* task_id_input = new QLineEdit(tm_toolbar);
     task_id_input->setPlaceholderText("Task ID...");
-    task_id_input->setStyleSheet(input_style);
+    task_id_input->setStyleSheet(input_ss());
     task_id_input->setFixedWidth(200);
     tm_hl->addWidget(task_id_input);
 
@@ -1289,18 +1270,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     rd_task_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     rd_task_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     rd_task_table_->setAlternatingRowColors(true);
-    rd_task_table_->setStyleSheet(
-        QString("QTableWidget { background:%1; color:%2; border:1px solid %3; gridline-color:%3;"
-                "font-family:%4; font-size:%5px; alternate-background-color:%6; }"
-                "QHeaderView::section { background:%7; color:%8; border:none; border-bottom:1px solid %3;"
-                "padding:4px 8px; font-weight:700; font-family:%4; font-size:%5px; }"
-                "QTableWidget::item:selected { background:%9; color:%2; }")
-            .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::SMALL)
-            .arg(ui::colors::BG_RAISED)
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY)
-            .arg(module_.color.darker(150).name()));
+    rd_task_table_->setStyleSheet(table_ss());
     tm_vl->addWidget(rd_task_table_, 1);
 
     // Output area for factor results
@@ -1308,11 +1278,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     rd_agent_output_->setReadOnly(true);
     rd_agent_output_->setPlaceholderText("Select a task and click GET FACTORS / GET MODEL to view results...");
     rd_agent_output_->setFixedHeight(160);
-    rd_agent_output_->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
-                                            "font-family:%4; font-size:%5px; padding:8px; }")
-                                        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
-                                        .arg(ui::fonts::DATA_FAMILY)
-                                        .arg(ui::fonts::SMALL));
+    rd_agent_output_->setStyleSheet(output_ss());
     tm_vl->addWidget(rd_agent_output_);
 
     // Wire toolbar buttons
@@ -1504,18 +1470,7 @@ void QuantModulePanel::display_result(const QJsonObject& data) {
         table->horizontalHeader()->setStretchLastSection(true);
         table->verticalHeader()->setVisible(false);
         table->setMaximumHeight(qMin(keys.size() * 30 + 30, 400));
-        table->setStyleSheet(QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
-                                     "font-family:%4; font-size:%5px; border:1px solid %3; }"
-                                     "QTableWidget::item { padding:4px 8px; }"
-                                     "QHeaderView::section { background:%6; color:%7; font-weight:700;"
-                                     "padding:4px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
-                                     "QTableWidget::item:alternate { background:%8; }")
-                                 .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
-                                 .arg(ui::fonts::DATA_FAMILY)
-                                 .arg(ui::fonts::SMALL)
-                                 .arg(ui::colors::BG_RAISED)
-                                 .arg(ui::colors::TEXT_SECONDARY)
-                                 .arg(ui::colors::ROW_ALT));
+        table->setStyleSheet(table_ss());
 
         for (int r = 0; r < keys.size(); ++r) {
             auto label = keys[r];
@@ -1534,11 +1489,7 @@ void QuantModulePanel::display_result(const QJsonObject& data) {
     raw->setReadOnly(true);
     raw->setMaximumHeight(200);
     raw->setPlainText(QJsonDocument(data).toJson(QJsonDocument::Indented));
-    raw->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:8px; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
-                           .arg(ui::fonts::DATA_FAMILY)
-                           .arg(ui::fonts::SMALL));
+    raw->setStyleSheet(output_ss());
     results_layout_->addWidget(raw);
 
     // Export button — saves raw JSON to File Manager
@@ -1798,8 +1749,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             }
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; white-space:pre;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("%1 factors").arg(factors.size()));
             return;
@@ -1813,8 +1763,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             if (!warning.isEmpty()) summary += QString("\n⚠ %1").arg(warning);
             auto* lbl = new QLabel(summary, this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("%1 records").arg(total));
             return;
@@ -1825,8 +1774,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             for (const auto& i : instruments) names << i.toString();
             auto* lbl = new QLabel(QString("Instruments (%1): %2").arg(names.size()).arg(names.join(", ")), this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("%1 instruments").arg(names.size()));
             return;
@@ -1849,8 +1797,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             if (models.isEmpty()) out += "No models listed (check qlib availability)";
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("%1 models").arg(models.size()));
             return;
@@ -1867,8 +1814,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                     .arg(available.join(", "))
                     .arg(unavailable.join(", ")), this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(qlib_ok ? "Qlib ready" : "Qlib unavailable");
             return;
@@ -1881,8 +1827,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                 out += QString("  %1: %2\n").arg(it.key()).arg(it.value().toDouble(), 0, 'f', 4);
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("Trained: %1").arg(model_id));
             return;
@@ -1907,8 +1852,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             if (!warning.isEmpty()) out += QString("\n⚠ %1").arg(warning);
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("%1 records").arg(total));
             return;
@@ -1925,8 +1869,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             }
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("%1 factors").arg(factors.size()));
             return;
@@ -1942,8 +1885,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                 out += QString("• %-20s %1\n").arg(p.second, 0, 'f', 4).arg(p.first, -20);
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText("Feature importance loaded");
             return;
@@ -1969,8 +1911,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             }
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("%1 model(s)").arg(models.size()));
             return;
@@ -1979,8 +1920,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             auto* lbl = new QLabel(
                 QString("Created: %1  [%2]")
                     .arg(data["model_id"].toString(), data["model_type"].toString()), this);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText("Model created");
             return;
@@ -2000,9 +1940,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                            .arg(data["error"].toDouble(), 0, 'f', 6);
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(drift ? QString("" + QString(ui::colors::NEGATIVE()) + "") : ui::colors::TEXT_PRIMARY)
-                                   .arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(drift ? ui::colors::NEGATIVE() : ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(drift ? "⚠ Drift detected" : QString("MAE: %1").arg(mae, 0, 'f', 4));
             return;
@@ -2011,8 +1949,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             auto pred = data["prediction"];
             auto* lbl = new QLabel(
                 QString("Prediction: %1").arg(pred.isNull() ? "N/A" : QString::number(pred.toDouble(), 'f', 6)), this);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; font-weight:700;")
-                                   .arg(module_.color.name()).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1; font-weight:700;").arg(module_.color.name()));
             results_layout_->addWidget(lbl);
             status_label_->setText("Prediction ready");
             return;
@@ -2028,8 +1965,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                     .arg(drift ? "DETECTED" : "none")
                     .arg(data["last_updated"].isNull() ? "never" : data["last_updated"].toString()), this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("MAE: %1").arg(mae, 0, 'f', 4));
             return;
@@ -2052,8 +1988,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             }
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("%1 models").arg(models.size()));
             return;
@@ -2074,8 +2009,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             }
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("Best: %1").arg(best));
             return;
@@ -2086,8 +2020,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                     .arg(data["ensemble_id"].toString("-"), data["method"].toString("-"))
                     .arg(data["models"].toArray().size()), this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText("Ensemble created");
             return;
@@ -2100,8 +2033,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                 out += QString("  %1: %2\n").arg(it.key()).arg(it.value().toVariant().toString());
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("Best score: %1").arg(best_score, 0, 'f', 4));
             return;
@@ -2119,8 +2051,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             }
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("%1 result(s)").arg(results.size()));
             return;
@@ -2136,8 +2067,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             auto* lbl = new QLabel(
                 QString("Order book created for %1  (depth: %2)")
                     .arg(data["symbol"].toString()).arg(data["depth"].toInt(10)), this);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText("Order book ready");
             return;
@@ -2162,8 +2092,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             }
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("Spread: %1").arg(spread.isNull() ? "N/A" : QString::number(spread.toDouble(), 'f', 4)));
             return;
@@ -2177,8 +2106,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                     .arg(bid_p, 0, 'f', 4).arg(ask_p, 0, 'f', 4)
                     .arg(spread, 0, 'f', 4).arg(data["mid_price"].toDouble(), 0, 'f', 4), this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("Bid: %1 / Ask: %2").arg(bid_p, 0, 'f', 4).arg(ask_p, 0, 'f', 4));
             return;
@@ -2192,9 +2120,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                     .arg(pin, 0, 'f', 4)
                     .arg(data["classification"].toString("-")), this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(is_toxic ? QString("" + QString(ui::colors::NEGATIVE()) + "") : ui::colors::TEXT_PRIMARY)
-                                   .arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(is_toxic ? ui::colors::NEGATIVE() : ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(is_toxic ? "⚠ Toxic flow detected" : "Flow normal");
             return;
@@ -2207,8 +2133,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                 QString("Order Executed\nFilled: %1  |  Avg Price: %2\nFills: %3")
                     .arg(filled_qty, 0, 'f', 0).arg(avg_price, 0, 'f', 4).arg(fills.size()), this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("Filled %1 @ %2").arg(filled_qty, 0, 'f', 0).arg(avg_price, 0, 'f', 4));
             return;
@@ -2233,8 +2158,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             }
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText(QString("%1 schedule(s)").arg(schedules.size()));
             return;
@@ -2247,8 +2171,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                     .arg(sched["window"].toInt())
                     .arg(sched["next_run"].toString()), this);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText("Schedule created");
             return;
@@ -2256,8 +2179,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         if (command == "retrain") {
             auto* lbl = new QLabel(
                 QString("Retrain complete: %1\n%2").arg(data["model_id"].toString(), data["message"].toString()), this);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText("Retrain complete");
             return;
@@ -2283,19 +2205,9 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
     vl->setSpacing(12);
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
-                                "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-                                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700; }")
-                            .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-                            .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL).arg(module_.color.name()));
+    tabs->setStyleSheet(tab_ss(module_.color.name()));
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                               "QLineEdit:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL).arg(module_.color.name());
+
 
     // ── Indicators tab ──
     auto* ind = new QWidget;
@@ -2305,27 +2217,21 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
 
     auto* ind_data = new QLineEdit(ind);
     ind_data->setPlaceholderText("Price data (comma-separated, e.g. 100,102,101,105,108)");
-    ind_data->setStyleSheet(input_style);
+    ind_data->setStyleSheet(input_ss());
     text_inputs_["fe_data"] = ind_data;
     ivl->addWidget(build_input_row("Price Data", ind_data, ind));
 
     auto* ind_indicator = new QComboBox(ind);
     ind_indicator->addItems({"moving_average", "rsi", "macd", "bollinger_bands",
                               "momentum", "volatility", "returns", "log_returns", "drawdown"});
-    ind_indicator->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                         "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                     .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                                     .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    ind_indicator->setStyleSheet(combo_ss());
     combo_inputs_["fe_indicator"] = ind_indicator;
     ivl->addWidget(build_input_row("Indicator", ind_indicator, ind));
 
     auto* ind_window = new QSpinBox(ind);
     ind_window->setRange(2, 200);
     ind_window->setValue(14);
-    ind_window->setStyleSheet(QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
-                                      "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                  .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                                  .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    ind_window->setStyleSheet(spinbox_ss());
     int_inputs_["fe_window"] = ind_window;
     ivl->addWidget(build_input_row("Window", ind_window, ind));
 
@@ -2350,23 +2256,20 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
 
     auto* sel_features = new QLineEdit(sel);
     sel_features->setPlaceholderText("Feature values JSON: {\"rsi\":[...],\"macd\":[...]}");
-    sel_features->setStyleSheet(input_style);
+    sel_features->setStyleSheet(input_ss());
     text_inputs_["fe_sel_features"] = sel_features;
     svl->addWidget(build_input_row("Features (JSON)", sel_features, sel));
 
     auto* sel_returns = new QLineEdit(sel);
     sel_returns->setPlaceholderText("Target returns (comma-separated)");
-    sel_returns->setStyleSheet(input_style);
+    sel_returns->setStyleSheet(input_ss());
     text_inputs_["fe_sel_returns"] = sel_returns;
     svl->addWidget(build_input_row("Returns", sel_returns, sel));
 
     auto* sel_topk = new QSpinBox(sel);
     sel_topk->setRange(1, 50);
     sel_topk->setValue(5);
-    sel_topk->setStyleSheet(QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
-                                    "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                                .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    sel_topk->setStyleSheet(spinbox_ss());
     int_inputs_["fe_topk"] = sel_topk;
     svl->addWidget(build_input_row("Top-K Features", sel_topk, sel));
 
@@ -2393,13 +2296,13 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
 
     auto* expr_data = new QLineEdit(expr);
     expr_data->setPlaceholderText("{\"close\":[100,102,...],\"volume\":[1000,1200,...]}");
-    expr_data->setStyleSheet(input_style);
+    expr_data->setStyleSheet(input_ss());
     text_inputs_["fe_expr_data"] = expr_data;
     evl->addWidget(build_input_row("OHLCV Data (JSON)", expr_data, expr));
 
     auto* expr_expr = new QLineEdit(expr);
     expr_expr->setPlaceholderText("e.g. Mean(close, 5) / Std(close, 20)");
-    expr_expr->setStyleSheet(input_style);
+    expr_expr->setStyleSheet(input_ss());
     text_inputs_["fe_expression"] = expr_expr;
     evl->addWidget(build_input_row("Expression", expr_expr, expr));
 
@@ -2433,19 +2336,9 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
     vl->setSpacing(12);
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
-                                "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-                                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700; }")
-                            .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-                            .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL).arg(module_.color.name()));
+    tabs->setStyleSheet(tab_ss(module_.color.name()));
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                               "QLineEdit:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL).arg(module_.color.name());
+
 
     // ── Shared covariance / returns helper ──
     auto make_cov_tab = [&](const QString& method_id, const QString& btn_label,
@@ -2457,20 +2350,20 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
 
         auto* assets_in = new QLineEdit(t);
         assets_in->setPlaceholderText("Asset names (comma-separated, e.g. AAPL,GOOG,MSFT)");
-        assets_in->setStyleSheet(input_style);
+        assets_in->setStyleSheet(input_ss());
         text_inputs_[method_id + "_assets"] = assets_in;
         tvl->addWidget(build_input_row("Assets", assets_in, t));
 
         auto* cov_in = new QLineEdit(t);
         cov_in->setPlaceholderText("Covariance matrix JSON: [[0.04,0.01],[0.01,0.09]]");
-        cov_in->setStyleSheet(input_style);
+        cov_in->setStyleSheet(input_ss());
         text_inputs_[method_id + "_cov"] = cov_in;
         tvl->addWidget(build_input_row("Covariance Matrix", cov_in, t));
 
         if (needs_returns) {
             auto* ret_in = new QLineEdit(t);
             ret_in->setPlaceholderText("Expected returns (comma-separated, e.g. 0.10,0.15,0.12)");
-            ret_in->setStyleSheet(input_style);
+            ret_in->setStyleSheet(input_ss());
             text_inputs_[method_id + "_returns"] = ret_in;
             tvl->addWidget(build_input_row("Expected Returns", ret_in, t));
         }
@@ -2515,27 +2408,27 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
     blvl->setSpacing(8);
     auto* bl_assets = new QLineEdit(bl);
     bl_assets->setPlaceholderText("Asset names (comma-separated)");
-    bl_assets->setStyleSheet(input_style);
+    bl_assets->setStyleSheet(input_ss());
     text_inputs_["bl_assets"] = bl_assets;
     blvl->addWidget(build_input_row("Assets", bl_assets, bl));
     auto* bl_caps = new QLineEdit(bl);
     bl_caps->setPlaceholderText("Market caps (comma-separated, e.g. 2000,1500,800)");
-    bl_caps->setStyleSheet(input_style);
+    bl_caps->setStyleSheet(input_ss());
     text_inputs_["bl_caps"] = bl_caps;
     blvl->addWidget(build_input_row("Market Caps ($B)", bl_caps, bl));
     auto* bl_cov = new QLineEdit(bl);
     bl_cov->setPlaceholderText("Covariance matrix JSON: [[0.04,0.01],[0.01,0.09]]");
-    bl_cov->setStyleSheet(input_style);
+    bl_cov->setStyleSheet(input_ss());
     text_inputs_["bl_cov"] = bl_cov;
     blvl->addWidget(build_input_row("Covariance Matrix", bl_cov, bl));
     auto* bl_views = new QLineEdit(bl);
     bl_views->setPlaceholderText("Views (comma-separated, e.g. 0.05,0.10)");
-    bl_views->setStyleSheet(input_style);
+    bl_views->setStyleSheet(input_ss());
     text_inputs_["bl_views"] = bl_views;
     blvl->addWidget(build_input_row("Views", bl_views, bl));
     auto* bl_conf = new QLineEdit(bl);
     bl_conf->setPlaceholderText("View confidences (e.g. 0.8,0.6)");
-    bl_conf->setStyleSheet(input_style);
+    bl_conf->setStyleSheet(input_ss());
     text_inputs_["bl_conf"] = bl_conf;
     blvl->addWidget(build_input_row("View Confidences", bl_conf, bl));
     auto* bl_run = make_run_button("RUN BLACK-LITTERMAN", bl);
@@ -2575,19 +2468,9 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
     vl->setSpacing(12);
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
-                                "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-                                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700; }")
-                            .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-                            .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL).arg(module_.color.name()));
+    tabs->setStyleSheet(tab_ss(module_.color.name()));
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                               "QLineEdit:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL).arg(module_.color.name());
+
 
     // ── IC Metrics tab ──
     auto* ic = new QWidget;
@@ -2596,20 +2479,17 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
     icvl->setSpacing(8);
     auto* ic_preds = new QLineEdit(ic);
     ic_preds->setPlaceholderText("Predictions (comma-separated, e.g. 0.1,0.2,-0.1,0.3)");
-    ic_preds->setStyleSheet(input_style);
+    ic_preds->setStyleSheet(input_ss());
     text_inputs_["ev_predictions"] = ic_preds;
     icvl->addWidget(build_input_row("Predictions", ic_preds, ic));
     auto* ic_rets = new QLineEdit(ic);
     ic_rets->setPlaceholderText("Actual returns (comma-separated)");
-    ic_rets->setStyleSheet(input_style);
+    ic_rets->setStyleSheet(input_ss());
     text_inputs_["ev_returns"] = ic_rets;
     icvl->addWidget(build_input_row("Returns", ic_rets, ic));
     auto* ic_method = new QComboBox(ic);
     ic_method->addItems({"pearson", "spearman"});
-    ic_method->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                      "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                 .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                                 .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    ic_method->setStyleSheet(combo_ss());
     combo_inputs_["ev_ic_method"] = ic_method;
     icvl->addWidget(build_input_row("Method", ic_method, ic));
     auto* ic_run = make_run_button("CALCULATE IC METRICS", ic);
@@ -2635,17 +2515,17 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
     repvl->setSpacing(8);
     auto* rep_name = new QLineEdit(rep);
     rep_name->setPlaceholderText("Factor name (e.g. momentum)");
-    rep_name->setStyleSheet(input_style);
+    rep_name->setStyleSheet(input_ss());
     text_inputs_["ev_factor_name"] = rep_name;
     repvl->addWidget(build_input_row("Factor Name", rep_name, rep));
     auto* rep_preds = new QLineEdit(rep);
     rep_preds->setPlaceholderText("Predictions (comma-separated)");
-    rep_preds->setStyleSheet(input_style);
+    rep_preds->setStyleSheet(input_ss());
     text_inputs_["ev_rep_preds"] = rep_preds;
     repvl->addWidget(build_input_row("Predictions", rep_preds, rep));
     auto* rep_rets = new QLineEdit(rep);
     rep_rets->setPlaceholderText("Returns (comma-separated)");
-    rep_rets->setStyleSheet(input_style);
+    rep_rets->setStyleSheet(input_ss());
     text_inputs_["ev_rep_returns"] = rep_rets;
     repvl->addWidget(build_input_row("Returns", rep_rets, rep));
     auto* rep_run = make_run_button("GENERATE EVALUATION REPORT", rep);
@@ -2671,12 +2551,12 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
     riskvl->setSpacing(8);
     auto* risk_rets = new QLineEdit(risk);
     risk_rets->setPlaceholderText("Daily returns (comma-separated)");
-    risk_rets->setStyleSheet(input_style);
+    risk_rets->setStyleSheet(input_ss());
     text_inputs_["ev_risk_returns"] = risk_rets;
     riskvl->addWidget(build_input_row("Returns", risk_rets, risk));
     auto* risk_bench = new QLineEdit(risk);
     risk_bench->setPlaceholderText("Benchmark returns (optional, comma-separated)");
-    risk_bench->setStyleSheet(input_style);
+    risk_bench->setStyleSheet(input_ss());
     text_inputs_["ev_risk_bench"] = risk_bench;
     riskvl->addWidget(build_input_row("Benchmark (opt.)", risk_bench, risk));
     auto* risk_conf = make_double_spin(0.8, 0.999, 0.95, 3, "", risk);
@@ -2718,19 +2598,9 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
     vl->setSpacing(12);
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
-                                "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-                                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700; }")
-                            .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-                            .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL).arg(module_.color.name()));
+    tabs->setStyleSheet(tab_ss(module_.color.name()));
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                               "QLineEdit:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL).arg(module_.color.name());
+
 
     // ── TopK-Dropout ──
     auto* topk = new QWidget;
@@ -2739,15 +2609,12 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
     tkvl->setSpacing(8);
     auto* tk_signal = new QLineEdit(topk);
     tk_signal->setPlaceholderText("Signal values (comma-separated)");
-    tk_signal->setStyleSheet(input_style);
+    tk_signal->setStyleSheet(input_ss());
     text_inputs_["st_tk_signal"] = tk_signal;
     tkvl->addWidget(build_input_row("Signal", tk_signal, topk));
     auto* tk_topk = new QSpinBox(topk);
     tk_topk->setRange(1, 500); tk_topk->setValue(50);
-    tk_topk->setStyleSheet(QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
-                                   "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                               .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                               .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    tk_topk->setStyleSheet(spinbox_ss());
     int_inputs_["st_topk"] = tk_topk;
     tkvl->addWidget(build_input_row("Top-K", tk_topk, topk));
     auto* tk_drop = new QSpinBox(topk);
@@ -2777,7 +2644,7 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
     rpvl->setSpacing(8);
     auto* rp_returns = new QLineEdit(rp);
     rp_returns->setPlaceholderText("Asset returns matrix JSON: [[0.01,-0.02,...],[...]]");
-    rp_returns->setStyleSheet(input_style);
+    rp_returns->setStyleSheet(input_ss());
     text_inputs_["st_rp_returns"] = rp_returns;
     rpvl->addWidget(build_input_row("Returns Matrix", rp_returns, rp));
     auto* rp_target = make_double_spin(0.01, 1.0, 0.10, 2, "", rp);
@@ -2785,10 +2652,7 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
     rpvl->addWidget(build_input_row("Target Risk", rp_target, rp));
     auto* rp_freq = new QComboBox(rp);
     rp_freq->addItems({"monthly", "weekly", "daily", "quarterly"});
-    rp_freq->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                    "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                               .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                               .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    rp_freq->setStyleSheet(combo_ss());
     combo_inputs_["st_rp_freq"] = rp_freq;
     rpvl->addWidget(build_input_row("Rebalance", rp_freq, rp));
     auto* rp_run = make_run_button("CREATE RISK PARITY STRATEGY", rp);
@@ -2812,12 +2676,12 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
     pmvl->setSpacing(8);
     auto* pm_rets = new QLineEdit(pm);
     pm_rets->setPlaceholderText("Portfolio returns (comma-separated)");
-    pm_rets->setStyleSheet(input_style);
+    pm_rets->setStyleSheet(input_ss());
     text_inputs_["st_pm_returns"] = pm_rets;
     pmvl->addWidget(build_input_row("Returns", pm_rets, pm));
     auto* pm_bench = new QLineEdit(pm);
     pm_bench->setPlaceholderText("Benchmark returns (optional)");
-    pm_bench->setStyleSheet(input_style);
+    pm_bench->setStyleSheet(input_ss());
     text_inputs_["st_pm_bench"] = pm_bench;
     pmvl->addWidget(build_input_row("Benchmark (opt.)", pm_bench, pm));
     auto* pm_rf = make_double_spin(0, 20, 2.0, 2, "%", pm);
@@ -2858,20 +2722,10 @@ QWidget* QuantModulePanel::build_data_processors_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                               "QLineEdit:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL).arg(module_.color.name());
+
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
-                                "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-                                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700; }")
-                            .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-                            .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL).arg(module_.color.name()));
+    tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── List Processors ──
     auto* list_tab = new QWidget;
@@ -2899,12 +2753,12 @@ QWidget* QuantModulePanel::build_data_processors_panel() {
     ptvl->setSpacing(8);
     auto* pipe_id = new QLineEdit(pipe_tab);
     pipe_id->setPlaceholderText("Pipeline ID (e.g. my_pipeline)");
-    pipe_id->setStyleSheet(input_style);
+    pipe_id->setStyleSheet(input_ss());
     text_inputs_["dp_pipeline_id"] = pipe_id;
     ptvl->addWidget(build_input_row("Pipeline ID", pipe_id, pipe_tab));
     auto* pipe_procs = new QLineEdit(pipe_tab);
     pipe_procs->setPlaceholderText(R"([{"type":"zscore"},{"type":"winsorize","lower":0.01,"upper":0.99}])");
-    pipe_procs->setStyleSheet(input_style);
+    pipe_procs->setStyleSheet(input_ss());
     text_inputs_["dp_processors"] = pipe_procs;
     ptvl->addWidget(build_input_row("Processors (JSON)", pipe_procs, pipe_tab));
     auto* pipe_run = make_run_button("CREATE PIPELINE", pipe_tab);
@@ -2927,12 +2781,12 @@ QWidget* QuantModulePanel::build_data_processors_panel() {
     procvl->setSpacing(8);
     auto* proc_pid = new QLineEdit(proc_tab);
     proc_pid->setPlaceholderText("Pipeline ID (must be created first)");
-    proc_pid->setStyleSheet(input_style);
+    proc_pid->setStyleSheet(input_ss());
     text_inputs_["dp_proc_pid"] = proc_pid;
     procvl->addWidget(build_input_row("Pipeline ID", proc_pid, proc_tab));
     auto* proc_data = new QLineEdit(proc_tab);
     proc_data->setPlaceholderText(R"({"feature_close":[100,102,...],"feature_volume":[1000,1200,...]})");
-    proc_data->setStyleSheet(input_style);
+    proc_data->setStyleSheet(input_ss());
     text_inputs_["dp_proc_data"] = proc_data;
     procvl->addWidget(build_input_row("Data (JSON)", proc_data, proc_tab));
     auto* proc_run = make_run_button("PROCESS DATA", proc_tab);
@@ -2964,19 +2818,9 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     vl->setSpacing(12);
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
-                                "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-                                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700; }")
-                            .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-                            .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL).arg(module_.color.name()));
+    tabs->setStyleSheet(tab_ss(module_.color.name()));
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                               "QLineEdit:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL).arg(module_.color.name());
+
 
     // ── IC Analysis ──
     auto* ic_tab = new QWidget;
@@ -2985,20 +2829,17 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     icvl->setSpacing(8);
     auto* ic_preds = new QLineEdit(ic_tab);
     ic_preds->setPlaceholderText("Predictions (comma-separated)");
-    ic_preds->setStyleSheet(input_style);
+    ic_preds->setStyleSheet(input_ss());
     text_inputs_["rp_ic_preds"] = ic_preds;
     icvl->addWidget(build_input_row("Predictions", ic_preds, ic_tab));
     auto* ic_rets = new QLineEdit(ic_tab);
     ic_rets->setPlaceholderText("Returns (comma-separated)");
-    ic_rets->setStyleSheet(input_style);
+    ic_rets->setStyleSheet(input_ss());
     text_inputs_["rp_ic_rets"] = ic_rets;
     icvl->addWidget(build_input_row("Returns", ic_rets, ic_tab));
     auto* ic_method = new QComboBox(ic_tab);
     ic_method->addItems({"both", "pearson", "spearman"});
-    ic_method->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                      "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                 .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                                 .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    ic_method->setStyleSheet(combo_ss());
     combo_inputs_["rp_ic_method"] = ic_method;
     icvl->addWidget(build_input_row("Method", ic_method, ic_tab));
     auto* ic_run = make_run_button("GENERATE IC ANALYSIS", ic_tab);
@@ -3024,17 +2865,17 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     mpvl->setSpacing(8);
     auto* mp_preds = new QLineEdit(mp_tab);
     mp_preds->setPlaceholderText("Model predictions (comma-separated)");
-    mp_preds->setStyleSheet(input_style);
+    mp_preds->setStyleSheet(input_ss());
     text_inputs_["rp_mp_preds"] = mp_preds;
     mpvl->addWidget(build_input_row("Predictions", mp_preds, mp_tab));
     auto* mp_rets = new QLineEdit(mp_tab);
     mp_rets->setPlaceholderText("Actual returns (comma-separated)");
-    mp_rets->setStyleSheet(input_style);
+    mp_rets->setStyleSheet(input_ss());
     text_inputs_["rp_mp_rets"] = mp_rets;
     mpvl->addWidget(build_input_row("Returns", mp_rets, mp_tab));
     auto* mp_name = new QLineEdit(mp_tab);
     mp_name->setPlaceholderText("Model name (e.g. LightGBM)");
-    mp_name->setStyleSheet(input_style);
+    mp_name->setStyleSheet(input_ss());
     text_inputs_["rp_mp_name"] = mp_name;
     mpvl->addWidget(build_input_row("Model Name", mp_name, mp_tab));
     auto* mp_run = make_run_button("GENERATE MODEL PERFORMANCE REPORT", mp_tab);
@@ -3061,17 +2902,17 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     crvl->setSpacing(8);
     auto* cr_rets = new QLineEdit(cr_tab);
     cr_rets->setPlaceholderText("Portfolio returns (comma-separated)");
-    cr_rets->setStyleSheet(input_style);
+    cr_rets->setStyleSheet(input_ss());
     text_inputs_["rp_cr_rets"] = cr_rets;
     crvl->addWidget(build_input_row("Returns", cr_rets, cr_tab));
     auto* cr_bench = new QLineEdit(cr_tab);
     cr_bench->setPlaceholderText("Benchmark returns (optional, comma-separated)");
-    cr_bench->setStyleSheet(input_style);
+    cr_bench->setStyleSheet(input_ss());
     text_inputs_["rp_cr_bench"] = cr_bench;
     crvl->addWidget(build_input_row("Benchmark (opt.)", cr_bench, cr_tab));
     auto* cr_title = new QLineEdit(cr_tab);
     cr_title->setPlaceholderText("Chart title (e.g. Strategy vs Benchmark)");
-    cr_title->setStyleSheet(input_style);
+    cr_title->setStyleSheet(input_ss());
     text_inputs_["rp_cr_title"] = cr_title;
     crvl->addWidget(build_input_row("Title", cr_title, cr_tab));
     auto* cr_run = make_run_button("GENERATE CUMULATIVE RETURN CHART", cr_tab);
@@ -3110,20 +2951,10 @@ QWidget* QuantModulePanel::build_factor_discovery_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                               "QLineEdit:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL).arg(module_.color.name());
+
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
-                                "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-                                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700; }")
-                            .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-                            .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL).arg(module_.color.name()));
+    tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Factor Library ──
     auto* lib_tab = new QWidget;
@@ -3157,22 +2988,22 @@ QWidget* QuantModulePanel::build_factor_discovery_panel() {
     datavl->setSpacing(8);
     auto* fd_instr = new QLineEdit(data_tab);
     fd_instr->setPlaceholderText("Instruments (comma-separated, e.g. aapl,msft)");
-    fd_instr->setStyleSheet(input_style);
+    fd_instr->setStyleSheet(input_ss());
     text_inputs_["fd_instruments"] = fd_instr;
     datavl->addWidget(build_input_row("Instruments", fd_instr, data_tab));
     auto* fd_fields = new QLineEdit(data_tab);
     fd_fields->setPlaceholderText("Fields (comma-separated, e.g. $close,$volume,$open)");
-    fd_fields->setStyleSheet(input_style);
+    fd_fields->setStyleSheet(input_ss());
     text_inputs_["fd_fields"] = fd_fields;
     datavl->addWidget(build_input_row("Fields", fd_fields, data_tab));
     auto* fd_start = new QLineEdit(data_tab);
     fd_start->setPlaceholderText("Start date (YYYY-MM-DD, e.g. 2019-01-01)");
-    fd_start->setStyleSheet(input_style);
+    fd_start->setStyleSheet(input_ss());
     text_inputs_["fd_start"] = fd_start;
     datavl->addWidget(build_input_row("Start Date", fd_start, data_tab));
     auto* fd_end = new QLineEdit(data_tab);
     fd_end->setPlaceholderText("End date (YYYY-MM-DD, e.g. 2020-11-10)");
-    fd_end->setStyleSheet(input_style);
+    fd_end->setStyleSheet(input_ss());
     text_inputs_["fd_end"] = fd_end;
     datavl->addWidget(build_input_row("End Date", fd_end, data_tab));
     auto* fd_run = make_run_button("FETCH DATA", data_tab);
@@ -3202,12 +3033,12 @@ QWidget* QuantModulePanel::build_factor_discovery_panel() {
     calvl->setSpacing(8);
     auto* cal_start = new QLineEdit(cal_tab);
     cal_start->setPlaceholderText("Start date (YYYY-MM-DD)");
-    cal_start->setStyleSheet(input_style);
+    cal_start->setStyleSheet(input_ss());
     text_inputs_["fd_cal_start"] = cal_start;
     calvl->addWidget(build_input_row("Start Date", cal_start, cal_tab));
     auto* cal_end = new QLineEdit(cal_tab);
     cal_end->setPlaceholderText("End date (YYYY-MM-DD)");
-    cal_end->setStyleSheet(input_style);
+    cal_end->setStyleSheet(input_ss());
     text_inputs_["fd_cal_end"] = cal_end;
     calvl->addWidget(build_input_row("End Date", cal_end, cal_tab));
     auto* cal_run = make_run_button("GET TRADING CALENDAR", cal_tab);
@@ -3237,26 +3068,11 @@ QWidget* QuantModulePanel::build_model_library_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                               "QLineEdit:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL).arg(module_.color.name());
-    auto combo_style = QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:3px 6px; }"
-                               "QComboBox::drop-down { border:none; }"
-                               "QComboBox QAbstractItemView { background:%1; color:%2; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL);
+
+
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
-                                "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-                                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700; }")
-                            .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-                            .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL).arg(module_.color.name()));
+    tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Model Browser ──
     auto* browse_tab = new QWidget;
@@ -3289,23 +3105,23 @@ QWidget* QuantModulePanel::build_model_library_panel() {
     ttvl->setContentsMargins(12, 12, 12, 12);
     ttvl->setSpacing(8);
     auto* ml_type = new QComboBox(train_tab);
-    ml_type->setStyleSheet(combo_style);
+    ml_type->setStyleSheet(combo_ss());
     ml_type->addItems({"lightgbm", "xgboost", "catboost", "linear", "lstm", "gru", "transformer"});
     combo_inputs_["ml_model_type"] = ml_type;
     ttvl->addWidget(build_input_row("Model Type", ml_type, train_tab));
     auto* ml_instr = new QLineEdit(train_tab);
     ml_instr->setPlaceholderText("Instruments (comma-separated, e.g. aapl,msft)");
-    ml_instr->setStyleSheet(input_style);
+    ml_instr->setStyleSheet(input_ss());
     text_inputs_["ml_instruments"] = ml_instr;
     ttvl->addWidget(build_input_row("Instruments", ml_instr, train_tab));
     auto* ml_start = new QLineEdit(train_tab);
     ml_start->setPlaceholderText("Train start (YYYY-MM-DD)");
-    ml_start->setStyleSheet(input_style);
+    ml_start->setStyleSheet(input_ss());
     text_inputs_["ml_start"] = ml_start;
     ttvl->addWidget(build_input_row("Start Date", ml_start, train_tab));
     auto* ml_end = new QLineEdit(train_tab);
     ml_end->setPlaceholderText("Train end (YYYY-MM-DD)");
-    ml_end->setStyleSheet(input_style);
+    ml_end->setStyleSheet(input_ss());
     text_inputs_["ml_end"] = ml_end;
     ttvl->addWidget(build_input_row("End Date", ml_end, train_tab));
     auto* ml_run = make_run_button("TRAIN MODEL", train_tab);
@@ -3332,22 +3148,22 @@ QWidget* QuantModulePanel::build_model_library_panel() {
     btvl2->setSpacing(8);
     auto* bt_model = new QLineEdit(bt_tab);
     bt_model->setPlaceholderText("Model ID (from training output)");
-    bt_model->setStyleSheet(input_style);
+    bt_model->setStyleSheet(input_ss());
     text_inputs_["ml_bt_model"] = bt_model;
     btvl2->addWidget(build_input_row("Model ID", bt_model, bt_tab));
     auto* bt_instr = new QLineEdit(bt_tab);
     bt_instr->setPlaceholderText("Instruments (comma-separated)");
-    bt_instr->setStyleSheet(input_style);
+    bt_instr->setStyleSheet(input_ss());
     text_inputs_["ml_bt_instr"] = bt_instr;
     btvl2->addWidget(build_input_row("Instruments", bt_instr, bt_tab));
     auto* bt_start2 = new QLineEdit(bt_tab);
     bt_start2->setPlaceholderText("Backtest start (YYYY-MM-DD)");
-    bt_start2->setStyleSheet(input_style);
+    bt_start2->setStyleSheet(input_ss());
     text_inputs_["ml_bt_start"] = bt_start2;
     btvl2->addWidget(build_input_row("Start Date", bt_start2, bt_tab));
     auto* bt_end2 = new QLineEdit(bt_tab);
     bt_end2->setPlaceholderText("Backtest end (YYYY-MM-DD)");
-    bt_end2->setStyleSheet(input_style);
+    bt_end2->setStyleSheet(input_ss());
     text_inputs_["ml_bt_end"] = bt_end2;
     btvl2->addWidget(build_input_row("End Date", bt_end2, bt_tab));
     auto* bt_run2 = make_run_button("RUN BACKTEST", bt_tab);
@@ -3382,20 +3198,10 @@ QWidget* QuantModulePanel::build_live_signals_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                               "QLineEdit:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL).arg(module_.color.name());
+
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
-                                "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-                                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700; }")
-                            .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-                            .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL).arg(module_.color.name()));
+    tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Signal Data ──
     auto* sig_tab = new QWidget;
@@ -3404,22 +3210,22 @@ QWidget* QuantModulePanel::build_live_signals_panel() {
     sigvl->setSpacing(8);
     auto* sig_instr = new QLineEdit(sig_tab);
     sig_instr->setPlaceholderText("Instruments (comma-separated, e.g. aapl,msft,goog)");
-    sig_instr->setStyleSheet(input_style);
+    sig_instr->setStyleSheet(input_ss());
     text_inputs_["ls_instruments"] = sig_instr;
     sigvl->addWidget(build_input_row("Instruments", sig_instr, sig_tab));
     auto* sig_fields = new QLineEdit(sig_tab);
     sig_fields->setPlaceholderText("Fields (e.g. $close,$open,$high,$low,$volume)");
-    sig_fields->setStyleSheet(input_style);
+    sig_fields->setStyleSheet(input_ss());
     text_inputs_["ls_fields"] = sig_fields;
     sigvl->addWidget(build_input_row("Fields", sig_fields, sig_tab));
     auto* sig_start = new QLineEdit(sig_tab);
     sig_start->setPlaceholderText("Start date (YYYY-MM-DD)");
-    sig_start->setStyleSheet(input_style);
+    sig_start->setStyleSheet(input_ss());
     text_inputs_["ls_start"] = sig_start;
     sigvl->addWidget(build_input_row("Start Date", sig_start, sig_tab));
     auto* sig_end = new QLineEdit(sig_tab);
     sig_end->setPlaceholderText("End date (YYYY-MM-DD)");
-    sig_end->setStyleSheet(input_style);
+    sig_end->setStyleSheet(input_ss());
     text_inputs_["ls_end"] = sig_end;
     sigvl->addWidget(build_input_row("End Date", sig_end, sig_tab));
     auto* sig_run = make_run_button("FETCH SIGNALS", sig_tab);
@@ -3449,17 +3255,17 @@ QWidget* QuantModulePanel::build_live_signals_panel() {
     favl->setSpacing(8);
     auto* fa_instr = new QLineEdit(fa_tab);
     fa_instr->setPlaceholderText("Instruments (comma-separated)");
-    fa_instr->setStyleSheet(input_style);
+    fa_instr->setStyleSheet(input_ss());
     text_inputs_["ls_fa_instr"] = fa_instr;
     favl->addWidget(build_input_row("Instruments", fa_instr, fa_tab));
     auto* fa_start = new QLineEdit(fa_tab);
     fa_start->setPlaceholderText("Start date (YYYY-MM-DD)");
-    fa_start->setStyleSheet(input_style);
+    fa_start->setStyleSheet(input_ss());
     text_inputs_["ls_fa_start"] = fa_start;
     favl->addWidget(build_input_row("Start Date", fa_start, fa_tab));
     auto* fa_end = new QLineEdit(fa_tab);
     fa_end->setPlaceholderText("End date (YYYY-MM-DD)");
-    fa_end->setStyleSheet(input_style);
+    fa_end->setStyleSheet(input_ss());
     text_inputs_["ls_fa_end"] = fa_end;
     favl->addWidget(build_input_row("End Date", fa_end, fa_tab));
     auto* fa_run = make_run_button("RUN FACTOR ANALYSIS", fa_tab);
@@ -3485,7 +3291,7 @@ QWidget* QuantModulePanel::build_live_signals_panel() {
     fivl->setSpacing(8);
     auto* fi_model = new QLineEdit(fi_tab);
     fi_model->setPlaceholderText("Trained model ID");
-    fi_model->setStyleSheet(input_style);
+    fi_model->setStyleSheet(input_ss());
     text_inputs_["ls_fi_model"] = fi_model;
     fivl->addWidget(build_input_row("Model ID", fi_model, fi_tab));
     auto* fi_run = make_run_button("GET FEATURE IMPORTANCE", fi_tab);
@@ -3514,26 +3320,11 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                               "QLineEdit:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL).arg(module_.color.name());
-    auto combo_style = QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:3px 6px; }"
-                               "QComboBox::drop-down { border:none; }"
-                               "QComboBox QAbstractItemView { background:%1; color:%2; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL);
+
+
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
-                                "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-                                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700; }")
-                            .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-                            .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL).arg(module_.color.name()));
+    tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Models ──
     auto* models_tab = new QWidget;
@@ -3560,13 +3351,13 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
     ctvl->setContentsMargins(12, 12, 12, 12);
     ctvl->setSpacing(8);
     auto* ol_model_type = new QComboBox(create_tab);
-    ol_model_type->setStyleSheet(combo_style);
+    ol_model_type->setStyleSheet(combo_ss());
     ol_model_type->addItems({"linear", "bayesian_linear", "pa", "tree", "adaptive_tree", "bagging", "ewa", "srp"});
     combo_inputs_["ol_model_type"] = ol_model_type;
     ctvl->addWidget(build_input_row("Model Type", ol_model_type, create_tab));
     auto* ol_model_id = new QLineEdit(create_tab);
     ol_model_id->setPlaceholderText("Model ID (optional, auto-generated if blank)");
-    ol_model_id->setStyleSheet(input_style);
+    ol_model_id->setStyleSheet(input_ss());
     text_inputs_["ol_model_id"] = ol_model_id;
     ctvl->addWidget(build_input_row("Model ID", ol_model_id, create_tab));
     auto* ol_create = make_run_button("CREATE MODEL", create_tab);
@@ -3589,17 +3380,17 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
     ttvl->setSpacing(8);
     auto* ol_tid = new QLineEdit(train_tab);
     ol_tid->setPlaceholderText("Model ID");
-    ol_tid->setStyleSheet(input_style);
+    ol_tid->setStyleSheet(input_ss());
     text_inputs_["ol_train_id"] = ol_tid;
     ttvl->addWidget(build_input_row("Model ID", ol_tid, train_tab));
     auto* ol_feats = new QLineEdit(train_tab);
     ol_feats->setPlaceholderText(R"({"close":94.0,"volume":1000000,"rsi":55.0})");
-    ol_feats->setStyleSheet(input_style);
+    ol_feats->setStyleSheet(input_ss());
     text_inputs_["ol_features"] = ol_feats;
     ttvl->addWidget(build_input_row("Features (JSON)", ol_feats, train_tab));
     auto* ol_target = new QLineEdit(train_tab);
     ol_target->setPlaceholderText("Target value (e.g. 0.02)");
-    ol_target->setStyleSheet(input_style);
+    ol_target->setStyleSheet(input_ss());
     text_inputs_["ol_target"] = ol_target;
     ttvl->addWidget(build_input_row("Target", ol_target, train_tab));
     auto* ol_train = make_run_button("TRAIN ONE STEP", train_tab);
@@ -3623,12 +3414,12 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
     predvl->setSpacing(8);
     auto* ol_pid = new QLineEdit(pred_tab);
     ol_pid->setPlaceholderText("Model ID");
-    ol_pid->setStyleSheet(input_style);
+    ol_pid->setStyleSheet(input_ss());
     text_inputs_["ol_pred_id"] = ol_pid;
     predvl->addWidget(build_input_row("Model ID", ol_pid, pred_tab));
     auto* ol_pfeats = new QLineEdit(pred_tab);
     ol_pfeats->setPlaceholderText(R"({"close":95.0,"volume":1100000,"rsi":58.0})");
-    ol_pfeats->setStyleSheet(input_style);
+    ol_pfeats->setStyleSheet(input_ss());
     text_inputs_["ol_pred_feats"] = ol_pfeats;
     predvl->addWidget(build_input_row("Features (JSON)", ol_pfeats, pred_tab));
     auto* ol_pred = make_run_button("PREDICT", pred_tab);
@@ -3667,26 +3458,11 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                               "QLineEdit:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL).arg(module_.color.name());
-    auto combo_style = QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:3px 6px; }"
-                               "QComboBox::drop-down { border:none; }"
-                               "QComboBox QAbstractItemView { background:%1; color:%2; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL);
+
+
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
-                                "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-                                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700; }")
-                            .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-                            .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL).arg(module_.color.name()));
+    tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Model Selection ──
     auto* sel_tab = new QWidget;
@@ -3706,11 +3482,11 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
     selvl->addWidget(sel_list_btn);
     auto* sel_models = new QLineEdit(sel_tab);
     sel_models->setPlaceholderText("Model IDs (comma-separated, e.g. lightgbm,xgboost,random_forest)");
-    sel_models->setStyleSheet(input_style);
+    sel_models->setStyleSheet(input_ss());
     text_inputs_["ml_sel_models"] = sel_models;
     selvl->addWidget(build_input_row("Models", sel_models, sel_tab));
     auto* sel_task = new QComboBox(sel_tab);
-    sel_task->setStyleSheet(combo_style);
+    sel_task->setStyleSheet(combo_ss());
     sel_task->addItems({"regression", "classification"});
     combo_inputs_["ml_sel_task"] = sel_task;
     selvl->addWidget(build_input_row("Task Type", sel_task, sel_tab));
@@ -3736,11 +3512,11 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
     ensvl->setSpacing(8);
     auto* ens_keys = new QLineEdit(ens_tab);
     ens_keys->setPlaceholderText("Model keys (from selection output, comma-separated)");
-    ens_keys->setStyleSheet(input_style);
+    ens_keys->setStyleSheet(input_ss());
     text_inputs_["ml_ens_keys"] = ens_keys;
     ensvl->addWidget(build_input_row("Model Keys", ens_keys, ens_tab));
     auto* ens_method = new QComboBox(ens_tab);
-    ens_method->setStyleSheet(combo_style);
+    ens_method->setStyleSheet(combo_ss());
     ens_method->addItems({"voting", "stacking", "averaging"});
     combo_inputs_["ml_ens_method"] = ens_method;
     ensvl->addWidget(build_input_row("Ensemble Method", ens_method, ens_tab));
@@ -3765,17 +3541,17 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
     tunevl->setContentsMargins(12, 12, 12, 12);
     tunevl->setSpacing(8);
     auto* tune_model = new QComboBox(tune_tab);
-    tune_model->setStyleSheet(combo_style);
+    tune_model->setStyleSheet(combo_ss());
     tune_model->addItems({"lightgbm", "xgboost", "random_forest", "catboost"});
     combo_inputs_["ml_tune_model"] = tune_model;
     tunevl->addWidget(build_input_row("Model", tune_model, tune_tab));
     auto* tune_grid = new QLineEdit(tune_tab);
     tune_grid->setPlaceholderText(R"({"n_estimators":[50,100,200],"max_depth":[3,5,7]})");
-    tune_grid->setStyleSheet(input_style);
+    tune_grid->setStyleSheet(input_ss());
     text_inputs_["ml_tune_grid"] = tune_grid;
     tunevl->addWidget(build_input_row("Param Grid (JSON)", tune_grid, tune_tab));
     auto* tune_method = new QComboBox(tune_tab);
-    tune_method->setStyleSheet(combo_style);
+    tune_method->setStyleSheet(combo_ss());
     tune_method->addItems({"grid", "random"});
     combo_inputs_["ml_tune_method"] = tune_method;
     tunevl->addWidget(build_input_row("Search Method", tune_method, tune_tab));
@@ -3814,26 +3590,11 @@ QWidget* QuantModulePanel::build_hft_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                               "QLineEdit:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL).arg(module_.color.name());
-    auto combo_style = QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:3px 6px; }"
-                               "QComboBox::drop-down { border:none; }"
-                               "QComboBox QAbstractItemView { background:%1; color:%2; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL);
+
+
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
-                                "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-                                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700; }")
-                            .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-                            .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL).arg(module_.color.name()));
+    tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Order Book ──
     auto* ob_tab = new QWidget;
@@ -3842,7 +3603,7 @@ QWidget* QuantModulePanel::build_hft_panel() {
     obvl->setSpacing(8);
     auto* hft_symbol = new QLineEdit(ob_tab);
     hft_symbol->setPlaceholderText("Symbol (e.g. AAPL)");
-    hft_symbol->setStyleSheet(input_style);
+    hft_symbol->setStyleSheet(input_ss());
     text_inputs_["hft_symbol"] = hft_symbol;
     obvl->addWidget(build_input_row("Symbol", hft_symbol, ob_tab));
     auto* ob_create = make_run_button("CREATE ORDER BOOK", ob_tab);
@@ -3871,17 +3632,17 @@ QWidget* QuantModulePanel::build_hft_panel() {
     mmvl->setSpacing(8);
     auto* mm_sym = new QLineEdit(mm_tab);
     mm_sym->setPlaceholderText("Symbol (e.g. AAPL)");
-    mm_sym->setStyleSheet(input_style);
+    mm_sym->setStyleSheet(input_ss());
     text_inputs_["hft_mm_symbol"] = mm_sym;
     mmvl->addWidget(build_input_row("Symbol", mm_sym, mm_tab));
     auto* mm_mid = new QLineEdit(mm_tab);
     mm_mid->setPlaceholderText("Mid price (e.g. 150.0)");
-    mm_mid->setStyleSheet(input_style);
+    mm_mid->setStyleSheet(input_ss());
     text_inputs_["hft_mm_mid"] = mm_mid;
     mmvl->addWidget(build_input_row("Mid Price", mm_mid, mm_tab));
     auto* mm_spread = new QLineEdit(mm_tab);
     mm_spread->setPlaceholderText("Spread multiplier (e.g. 0.02)");
-    mm_spread->setStyleSheet(input_style);
+    mm_spread->setStyleSheet(input_ss());
     text_inputs_["hft_mm_spread"] = mm_spread;
     mmvl->addWidget(build_input_row("Spread Multiplier", mm_spread, mm_tab));
     auto* mm_run = make_run_button("GET MARKET MAKING QUOTES", mm_tab);
@@ -3904,17 +3665,17 @@ QWidget* QuantModulePanel::build_hft_panel() {
     toxicvl->setSpacing(8);
     auto* tox_sym = new QLineEdit(toxic_tab);
     tox_sym->setPlaceholderText("Symbol (e.g. AAPL)");
-    tox_sym->setStyleSheet(input_style);
+    tox_sym->setStyleSheet(input_ss());
     text_inputs_["hft_tox_symbol"] = tox_sym;
     toxicvl->addWidget(build_input_row("Symbol", tox_sym, toxic_tab));
     auto* tox_price = new QLineEdit(toxic_tab);
     tox_price->setPlaceholderText("Trade price (e.g. 150.5)");
-    tox_price->setStyleSheet(input_style);
+    tox_price->setStyleSheet(input_ss());
     text_inputs_["hft_tox_price"] = tox_price;
     toxicvl->addWidget(build_input_row("Trade Price", tox_price, toxic_tab));
     auto* tox_size = new QLineEdit(toxic_tab);
     tox_size->setPlaceholderText("Trade size (e.g. 100)");
-    tox_size->setStyleSheet(input_style);
+    tox_size->setStyleSheet(input_ss());
     text_inputs_["hft_tox_size"] = tox_size;
     toxicvl->addWidget(build_input_row("Trade Size", tox_size, toxic_tab));
     auto* tox_run = make_run_button("DETECT TOXIC FLOW", toxic_tab);
@@ -3937,22 +3698,22 @@ QWidget* QuantModulePanel::build_hft_panel() {
     execvl->setSpacing(8);
     auto* exec_sym = new QLineEdit(exec_tab);
     exec_sym->setPlaceholderText("Symbol (e.g. AAPL)");
-    exec_sym->setStyleSheet(input_style);
+    exec_sym->setStyleSheet(input_ss());
     text_inputs_["hft_exec_symbol"] = exec_sym;
     execvl->addWidget(build_input_row("Symbol", exec_sym, exec_tab));
     auto* exec_side = new QComboBox(exec_tab);
-    exec_side->setStyleSheet(combo_style);
+    exec_side->setStyleSheet(combo_ss());
     exec_side->addItems({"buy", "sell"});
     combo_inputs_["hft_exec_side"] = exec_side;
     execvl->addWidget(build_input_row("Side", exec_side, exec_tab));
     auto* exec_qty = new QLineEdit(exec_tab);
     exec_qty->setPlaceholderText("Quantity (e.g. 100)");
-    exec_qty->setStyleSheet(input_style);
+    exec_qty->setStyleSheet(input_ss());
     text_inputs_["hft_exec_qty"] = exec_qty;
     execvl->addWidget(build_input_row("Quantity", exec_qty, exec_tab));
     auto* exec_price = new QLineEdit(exec_tab);
     exec_price->setPlaceholderText("Limit price (e.g. 150.0)");
-    exec_price->setStyleSheet(input_style);
+    exec_price->setStyleSheet(input_ss());
     text_inputs_["hft_exec_price"] = exec_price;
     execvl->addWidget(build_input_row("Limit Price", exec_price, exec_tab));
     auto* exec_run = make_run_button("EXECUTE ORDER", exec_tab);
@@ -3984,26 +3745,11 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-                               "QLineEdit:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL).arg(module_.color.name());
-    auto combo_style = QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                               "font-family:%4; font-size:%5px; padding:3px 6px; }"
-                               "QComboBox::drop-down { border:none; }"
-                               "QComboBox QAbstractItemView { background:%1; color:%2; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-                           .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL);
+
+
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
-                                "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-                                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-                                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700; }")
-                            .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-                            .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL).arg(module_.color.name()));
+    tabs->setStyleSheet(tab_ss(module_.color.name()));
 
     // ── Schedules ──
     auto* list_tab = new QWidget;
@@ -4031,17 +3777,17 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     ctvl->setSpacing(8);
     auto* rr_model_id = new QLineEdit(create_tab);
     rr_model_id->setPlaceholderText("Model ID (e.g. model_aapl)");
-    rr_model_id->setStyleSheet(input_style);
+    rr_model_id->setStyleSheet(input_ss());
     text_inputs_["rr_model_id"] = rr_model_id;
     ctvl->addWidget(build_input_row("Model ID", rr_model_id, create_tab));
     auto* rr_freq = new QComboBox(create_tab);
-    rr_freq->setStyleSheet(combo_style);
+    rr_freq->setStyleSheet(combo_ss());
     rr_freq->addItems({"daily", "weekly", "monthly"});
     combo_inputs_["rr_frequency"] = rr_freq;
     ctvl->addWidget(build_input_row("Frequency", rr_freq, create_tab));
     auto* rr_window = new QLineEdit(create_tab);
     rr_window->setPlaceholderText("Retrain window (trading days, e.g. 252)");
-    rr_window->setStyleSheet(input_style);
+    rr_window->setStyleSheet(input_ss());
     text_inputs_["rr_window"] = rr_window;
     ctvl->addWidget(build_input_row("Window (days)", rr_window, create_tab));
     auto* rr_create = make_run_button("CREATE SCHEDULE", create_tab);
@@ -4065,7 +3811,7 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     retrainvl->setSpacing(8);
     auto* rr_exec_id = new QLineEdit(retrain_tab);
     rr_exec_id->setPlaceholderText("Model ID to retrain");
-    rr_exec_id->setStyleSheet(input_style);
+    rr_exec_id->setStyleSheet(input_ss());
     text_inputs_["rr_exec_id"] = rr_exec_id;
     retrainvl->addWidget(build_input_row("Model ID", rr_exec_id, retrain_tab));
     auto* rr_exec = make_run_button("EXECUTE RETRAIN NOW", retrain_tab);

@@ -6,6 +6,7 @@
 
 #include "core/logging/Logger.h"
 #include "services/gov_data/GovDataService.h"
+#include "ui/theme/Theme.h"
 
 #include <QDesktopServices>
 #include <QFileDialog>
@@ -24,73 +25,94 @@ static constexpr const char* kGovDataCKANScript = "datagovuk_api.py";
 static constexpr const char* kGovDataCKANColor  = "#10B981";
 } // namespace
 
-// ── Stylesheet ────────────────────────────────────────────────────────────────
+// ── Dynamic stylesheet ───────────────────────────────────────────────────────
 
-static const QString kPanelStyle = QStringLiteral(
-    "#ckanPortalBar { background:#0d0d0d; border-bottom:1px solid #1a1a1a; }"
-    "#ckanPortalLabel { color:#808080; font-size:9px; font-weight:700;"
-    "  letter-spacing:0.5px; background:transparent; }"
-    "QComboBox#ckanPortalCombo { background:#111111; color:#10B981; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:2px 8px; min-width:160px; }"
-    "QComboBox#ckanPortalCombo::drop-down { border:none; width:18px; }"
-    "QComboBox#ckanPortalCombo QAbstractItemView { background:#111111; color:#e5e5e5;"
-    "  selection-background-color:rgba(16,185,129,0.12); border:1px solid #1a1a1a; }"
+static QString build_ckan_style() {
+    const auto& t  = ui::ThemeManager::instance().tokens();
+    const auto  cc = QColor(kGovDataCKANColor);
+    const QString cr = QString::number(cc.red());
+    const QString cg = QString::number(cc.green());
+    const QString cb = QString::number(cc.blue());
+    const QString c  = kGovDataCKANColor;
 
-    "#ckanPanelToolbar { background:#111111; border-bottom:1px solid #1a1a1a; }"
+    QString s;
+    // Portal bar
+    s += QString("#ckanPortalBar { background:%1; border-bottom:1px solid %2; }").arg(t.bg_surface, t.border_dim);
+    s += QString("#ckanPortalLabel { color:%1; font-size:9px; font-weight:700;"
+                 "  letter-spacing:0.5px; background:transparent; }").arg(t.text_secondary);
+    s += QString("QComboBox#ckanPortalCombo { background:%1; color:%2; border:1px solid %3;"
+                 "  font-size:10px; font-weight:700; padding:2px 8px; min-width:160px; }").arg(t.bg_raised, c, t.border_dim);
+    s += "QComboBox#ckanPortalCombo::drop-down { border:none; width:18px; }";
+    s += QString("QComboBox#ckanPortalCombo QAbstractItemView { background:%1; color:%2;"
+                 "  selection-background-color:rgba(%3,%4,%5,0.12); border:1px solid %6; }").arg(t.bg_raised, t.text_primary, cr, cg, cb, t.border_dim);
 
-    "#ckanTabBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:4px 12px; letter-spacing:0.5px; }"
-    "#ckanTabBtn:hover { color:#e5e5e5; background:#161616; }"
-    "#ckanTabBtn:checked { background:rgba(16,185,129,0.12); color:#10B981;"
-    "  border:1px solid #10B981; }"
+    // Toolbar
+    s += QString("#ckanPanelToolbar { background:%1; border-bottom:1px solid %2; }").arg(t.bg_raised, t.border_dim);
 
-    "#ckanBackBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:4px 10px; }"
-    "#ckanBackBtn:hover { color:#e5e5e5; background:#161616; }"
+    // Tab buttons
+    s += QString("#ckanTabBtn { background:transparent; color:%1; border:1px solid %2;"
+                 "  font-size:10px; font-weight:700; padding:4px 12px; letter-spacing:0.5px; }").arg(t.text_secondary, t.border_dim);
+    s += QString("#ckanTabBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
+    s += QString("#ckanTabBtn:checked { background:rgba(%1,%2,%3,0.12); color:%4;"
+                 "  border:1px solid %4; }").arg(cr, cg, cb, c);
 
-    "#ckanFetchBtn { background:#10B981; color:#080808; border:none;"
-    "  font-size:10px; font-weight:700; padding:4px 14px; }"
-    "#ckanFetchBtn:hover { background:#059669; }"
-    "#ckanFetchBtn:disabled { background:#1a1a1a; color:#404040; }"
+    // Back button
+    s += QString("#ckanBackBtn { background:transparent; color:%1; border:1px solid %2;"
+                 "  font-size:10px; font-weight:700; padding:4px 10px; }").arg(t.text_secondary, t.border_dim);
+    s += QString("#ckanBackBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
 
-    "#ckanCsvBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:4px 10px; }"
-    "#ckanCsvBtn:hover { color:#e5e5e5; background:#161616; }"
+    // Fetch / action buttons
+    s += QString("#ckanFetchBtn { background:%1; color:%2; border:none;"
+                 "  font-size:10px; font-weight:700; padding:4px 14px; }").arg(c, t.bg_base);
+    s += QString("#ckanFetchBtn:hover { background:%1; }").arg(cc.lighter(120).name());
+    s += QString("#ckanFetchBtn:disabled { background:%1; color:%2; }").arg(t.border_dim, t.text_dim);
+    s += QString("#ckanCsvBtn { background:transparent; color:%1; border:1px solid %2;"
+                 "  font-size:10px; font-weight:700; padding:4px 10px; }").arg(t.text_secondary, t.border_dim);
+    s += QString("#ckanCsvBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
 
-    "#ckanSearch { background:#080808; color:#e5e5e5; border:none;"
-    "  border-bottom:1px solid #1a1a1a; padding:4px 10px; font-size:11px; }"
-    "#ckanSearch:focus { border-bottom:1px solid #10B981; }"
+    // Search
+    s += QString("#ckanSearch { background:%1; color:%2; border:none;"
+                 "  border-bottom:1px solid %3; padding:4px 10px; font-size:11px; }").arg(t.bg_base, t.text_primary, t.border_dim);
+    s += QString("#ckanSearch:focus { border-bottom:1px solid %1; }").arg(c);
 
-    "QTableWidget { background:#080808; color:#e5e5e5; border:none;"
-    "  gridline-color:#1a1a1a; font-size:11px; alternate-background-color:#0a0a0a; }"
-    "QTableWidget::item { padding:5px 8px; border-bottom:1px solid #1a1a1a; }"
-    "QTableWidget::item:selected { background:rgba(16,185,129,0.10); color:#10B981; }"
-    "QHeaderView::section { background:#111111; color:#808080; border:none;"
-    "  border-bottom:2px solid #1a1a1a; border-right:1px solid #1a1a1a;"
-    "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+    // Tables
+    s += QString("QTableWidget { background:%1; color:%2; border:none;"
+                 "  gridline-color:%3; font-size:11px; alternate-background-color:%4; }").arg(t.bg_base, t.text_primary, t.border_dim, t.bg_surface);
+    s += QString("QTableWidget::item { padding:5px 8px; border-bottom:1px solid %1; }").arg(t.border_dim);
+    s += QString("QTableWidget::item:selected { background:rgba(%1,%2,%3,0.10); color:%4; }").arg(cr, cg, cb, c);
+    s += QString("QHeaderView::section { background:%1; color:%2; border:none;"
+                 "  border-bottom:2px solid %3; border-right:1px solid %3;"
+                 "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }").arg(t.bg_raised, t.text_secondary, t.border_dim);
 
-    "#ckanStatusPage { background:#080808; }"
-    "#ckanStatusMsg  { color:#808080; font-size:13px; background:transparent; }"
-    "#ckanStatusErr  { color:#dc2626; font-size:12px; background:transparent; }"
+    // Status
+    s += QString("#ckanStatusPage { background:%1; }").arg(t.bg_base);
+    s += QString("#ckanStatusMsg  { color:%1; font-size:13px; background:transparent; }").arg(t.text_secondary);
+    s += QString("#ckanStatusErr  { color:%1; font-size:12px; background:transparent; }").arg(t.negative);
 
-    "#ckanBreadcrumb { background:#0a0a0a; border-bottom:1px solid #1a1a1a; }"
-    "#ckanBreadText  { color:#808080; font-size:9px; background:transparent; }"
-    "#ckanBreadCount { color:#808080; font-size:9px; background:transparent; }"
+    // Breadcrumb
+    s += QString("#ckanBreadcrumb { background:%1; border-bottom:1px solid %2; }").arg(t.bg_surface, t.border_dim);
+    s += QString("#ckanBreadText  { color:%1; font-size:9px; background:transparent; }").arg(t.text_secondary);
+    s += QString("#ckanBreadCount { color:%1; font-size:9px; background:transparent; }").arg(t.text_secondary);
 
-    "QScrollBar:vertical { background:#080808; width:5px; }"
-    "QScrollBar::handle:vertical { background:#1a1a1a; min-height:20px; }"
-    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }"
-);
+    // Scrollbar
+    s += QString("QScrollBar:vertical { background:%1; width:5px; }").arg(t.bg_base);
+    s += QString("QScrollBar::handle:vertical { background:%1; min-height:20px; }").arg(t.border_dim);
+    s += "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }";
+    return s;
+}
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 GovDataCKANPanel::GovDataCKANPanel(QWidget* parent)
     : QWidget(parent) {
-    setStyleSheet(kPanelStyle);
+    setStyleSheet(build_ckan_style());
     build_ui();
     connect(&services::GovDataService::instance(),
             &services::GovDataService::result_ready,
             this, &GovDataCKANPanel::on_result);
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this]() {
+        setStyleSheet(build_ckan_style());
+    });
 }
 
 // ── Build UI ──────────────────────────────────────────────────────────────────
@@ -566,7 +588,7 @@ void GovDataCKANPanel::populate_datasets(const QJsonArray& data, int total_count
         QString tags_str = tags.mid(0, 3).join(", ");
         if (tags.size() > 3) tags_str += QString(" +%1").arg(tags.size() - 3);
         auto* tag_item = new QTableWidgetItem(tags_str);
-        tag_item->setForeground(QColor("#808080"));
+        tag_item->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
         datasets_table_->setItem(i, 3, tag_item);
     }
 
@@ -631,16 +653,16 @@ void GovDataCKANPanel::show_loading(const QString& message) {
 
 void GovDataCKANPanel::show_error(const QString& message) {
     status_label_->setStyleSheet(
-        "color:#dc2626; font-size:12px; background:transparent;");
+        QString("color:%1; font-size:12px; background:transparent;").arg(ui::colors::NEGATIVE()));
     status_label_->setText("Error: " + message);
     content_stack_->setCurrentIndex(3);
     LOG_ERROR("GovCKAN", message);
 }
 
 void GovDataCKANPanel::show_status(const QString& message, bool is_error) {
-    status_label_->setStyleSheet(is_error
-        ? "color:#dc2626; font-size:12px; background:transparent;"
-        : "color:#808080; font-size:12px; background:transparent;");
+    status_label_->setStyleSheet(
+        QString("color:%1; font-size:12px; background:transparent;")
+        .arg(is_error ? ui::colors::NEGATIVE() : ui::colors::TEXT_SECONDARY()));
     status_label_->setText(message);
     content_stack_->setCurrentIndex(3);
 }

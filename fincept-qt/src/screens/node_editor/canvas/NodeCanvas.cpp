@@ -3,6 +3,7 @@
 #include "screens/node_editor/canvas/NodeScene.h"
 #include "screens/node_editor/canvas/PortItem.h"
 #include "services/workflow/NodeRegistry.h"
+#include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
 #include <QAction>
@@ -32,7 +33,8 @@ NodeCanvas::NodeCanvas(NodeScene* scene, QWidget* parent) : QGraphicsView(scene,
     setAcceptDrops(true);
     setTransformationAnchor(AnchorUnderMouse);
 
-    setStyleSheet("QGraphicsView { background: #0d0d0d; border: none; }");
+    setStyleSheet(QString("QGraphicsView { background: %1; border: none; }")
+                      .arg(ui::colors::BG_BASE));
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
             this, [this](const ui::ThemeTokens&) {

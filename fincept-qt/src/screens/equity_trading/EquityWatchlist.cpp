@@ -245,7 +245,7 @@ void EquityWatchlist::on_add_symbol_entered() {
         auto results = trading::InstrumentService::instance().search(sym, "", broker_id_, 1);
         if (results.isEmpty()) {
             // Not found — flash the edit red briefly to signal invalid
-            add_edit_->setStyleSheet("border: 1px solid #dc2626;");
+            add_edit_->setStyleSheet(QString("border: 1px solid %1;").arg(fincept::ui::colors::NEGATIVE));
             QTimer::singleShot(800, add_edit_, [this]() {
                 add_edit_->setStyleSheet("");
             });

@@ -3,6 +3,8 @@
 // formula bar, import/export (.xlsx), snapshots, and dark theme.
 #pragma once
 
+#include "screens/IStatefulScreen.h"
+
 #include <QHideEvent>
 #include <QLabel>
 #include <QPushButton>
@@ -15,10 +17,15 @@ namespace fincept::screens {
 
 class SpreadsheetWidget;
 
-class ExcelScreen : public QWidget {
+class ExcelScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit ExcelScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "excel"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* event) override;

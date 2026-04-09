@@ -117,10 +117,10 @@ void PortfolioOrderPanel::build_ui() {
     submit_btn_ = new QPushButton("OPEN BUY ORDER");
     submit_btn_->setFixedHeight(32);
     submit_btn_->setCursor(Qt::PointingHandCursor);
-    submit_btn_->setStyleSheet(QString("QPushButton { background:%1; color:#000; border:none;"
+    submit_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
                                        "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
                                        "QPushButton:hover { opacity:0.9; }")
-                                   .arg(ui::colors::POSITIVE));
+                                   .arg(ui::colors::POSITIVE, ui::colors::BG_BASE));
     connect(submit_btn_, &QPushButton::clicked, this, [this]() {
         if (side_ == "BUY")
             emit buy_submitted();

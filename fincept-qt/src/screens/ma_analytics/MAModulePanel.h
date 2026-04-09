@@ -24,6 +24,9 @@ class MAModulePanel : public QWidget {
   public:
     explicit MAModulePanel(const fincept::services::ma::ModuleInfo& info, QWidget* parent = nullptr);
 
+  public slots:
+    void refresh_theme();
+
   private slots:
     void on_result_ready(const QString& context, const QJsonObject& data);
     void on_error(const QString& context, const QString& message);
@@ -31,6 +34,7 @@ class MAModulePanel : public QWidget {
   private:
     void build_ui();
     void connect_service();
+    void apply_tab_stylesheet();
 
     // Module-specific builders
     QWidget* build_valuation_panel();
@@ -57,6 +61,9 @@ class MAModulePanel : public QWidget {
 
     fincept::services::ma::ModuleInfo module_;
     QTabWidget* sub_tabs_ = nullptr;
+    QWidget* header_bar_ = nullptr;
+    QLabel* header_title_ = nullptr;
+    QLabel* header_category_ = nullptr;
     QVBoxLayout* results_layout_ = nullptr;
     QWidget* results_container_ = nullptr;
     QLabel* status_label_ = nullptr;

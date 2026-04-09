@@ -15,7 +15,11 @@ class MarketSentimentWidget : public BaseWidget {
   public:
     explicit MarketSentimentWidget(QWidget* parent = nullptr);
 
+  protected:
+    void on_theme_changed() override;
+
   private:
+    void apply_styles();
     void refresh_data();
     void populate(const QVector<services::QuoteData>& quotes);
 
@@ -29,6 +33,13 @@ class MarketSentimentWidget : public BaseWidget {
     QFrame* neutral_bar_ = nullptr;
     QLabel* vix_label_ = nullptr;
     QLabel* breadth_label_ = nullptr;
+
+    // Widgets needing theme-aware restyling
+    QWidget* banner_ = nullptr;
+    QLabel* arrow_label_ = nullptr;
+    QFrame* separator_ = nullptr;
+    QLabel* vix_title_label_ = nullptr;
+    QLabel* breadth_title_label_ = nullptr;
 };
 
 } // namespace fincept::screens::widgets

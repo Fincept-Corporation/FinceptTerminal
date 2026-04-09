@@ -1,6 +1,8 @@
 // CryptoTimeSales.cpp — custom-painted real-time trade tape
 #include "screens/crypto_trading/CryptoTimeSales.h"
 
+#include "ui/theme/Theme.h"
+
 #include <QDateTime>
 #include <QMutexLocker>
 #include <QPainter>
@@ -8,14 +10,16 @@
 
 namespace fincept::screens::crypto {
 
+using namespace fincept::ui;
+
 namespace {
-const QColor kBgBase("#080808");
-const QColor kRowEven("#080808");
-const QColor kRowOdd("#0c0c0c");
-const QColor kTextDim("#404040");
-const QColor kTextSec("#808080");
-const QColor kColorBuy("#16a34a");
-const QColor kColorSell("#dc2626");
+inline QColor kBgBase()    { return QColor(colors::BG_BASE()); }
+inline QColor kRowEven()   { return QColor(colors::BG_BASE()); }
+inline QColor kRowOdd()    { return QColor(colors::ROW_ALT()); }
+inline QColor kTextDim()   { return QColor(colors::TEXT_DIM()); }
+inline QColor kTextSec()   { return QColor(colors::TEXT_SECONDARY()); }
+inline QColor kColorBuy()  { return QColor(colors::POSITIVE()); }
+inline QColor kColorSell() { return QColor(colors::NEGATIVE()); }
 } // namespace
 
 CryptoTimeSales::CryptoTimeSales(QWidget* parent) : QWidget(parent) {
@@ -26,6 +30,7 @@ CryptoTimeSales::CryptoTimeSales(QWidget* parent) : QWidget(parent) {
     repaint_timer_->setSingleShot(true);
     repaint_timer_->setInterval(50); // max 20fps
     connect(repaint_timer_, &QTimer::timeout, this, [this]() { update(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this]() { update(); });
 }
 
 void CryptoTimeSales::showEvent(QShowEvent* e) {
@@ -84,7 +89,7 @@ void CryptoTimeSales::rebuild_cache() {
         return;
 
     cache_ = QPixmap(w, h);
-    cache_.fill(kBgBase);
+    cache_.fill(kBgBase());
 
     QPainter p(&cache_);
     p.setFont(QFont("Consolas", 9));
@@ -96,7 +101,7 @@ void CryptoTimeSales::rebuild_cache() {
     }
 
     // Header row
-    p.setPen(kTextDim);
+    p.setPen(kTextDim());
     p.drawText(QRect(4, 0, 70, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, "TIME");
     p.drawText(QRect(74, 0, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "PRICE");
     p.drawText(QRect(74 + w / 3, 0, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "QTY");
@@ -108,14 +113,14 @@ void CryptoTimeSales::rebuild_cache() {
     for (int i = 0; i < count; ++i) {
         const auto& t = snapshot[i];
         const int y = (i + 1) * ROW_H;
-        const QColor& bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+        const QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
         p.fillRect(0, y, w, ROW_H, bg);
 
         const bool is_buy = (t.side == "buy");
-        const QColor& price_color = is_buy ? kColorBuy : kColorSell;
+        const QColor price_color = is_buy ? kColorBuy() : kColorSell();
 
         // Time
-        p.setPen(kTextDim);
+        p.setPen(kTextDim());
         p.drawText(QRect(4, y, 70, ROW_H), Qt::AlignLeft | Qt::AlignVCenter,
                    QDateTime::fromMSecsSinceEpoch(t.timestamp).toString("HH:mm:ss"));
 
@@ -124,7 +129,7 @@ void CryptoTimeSales::rebuild_cache() {
         p.drawText(QRect(74, y, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, QString::number(t.price, 'f', 2));
 
         // Quantity
-        p.setPen(kTextSec);
+        p.setPen(kTextSec());
         p.drawText(QRect(74 + w / 3, y, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter,
                    QString::number(t.amount, 'f', 4));
 
@@ -134,7 +139,7 @@ void CryptoTimeSales::rebuild_cache() {
     }
 
     if (count == 0) {
-        p.setPen(kTextDim);
+        p.setPen(kTextDim());
         p.drawText(rect(), Qt::AlignCenter, "Waiting for trades...");
     }
 

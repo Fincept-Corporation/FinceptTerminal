@@ -47,9 +47,9 @@ MarketPulsePanel::MarketPulsePanel(QWidget* parent) : QWidget(parent) {
 
     vl->addWidget(build_header());
 
-    auto* scroll = new QScrollArea;
-    scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(
+    scroll_area_ = new QScrollArea;
+    scroll_area_->setWidgetResizable(true);
+    scroll_area_->setStyleSheet(
         QString("QScrollArea{border:none;background:transparent;}"
                 "QScrollBar:vertical{width:6px;background:transparent;}"
                 "QScrollBar::handle:vertical{background:%1;border-radius:3px;min-height:20px;}"
@@ -69,8 +69,8 @@ MarketPulsePanel::MarketPulsePanel(QWidget* parent) : QWidget(parent) {
     cl->addWidget(build_market_hours_section());
     cl->addStretch();
 
-    scroll->setWidget(content);
-    vl->addWidget(scroll, 1);
+    scroll_area_->setWidget(content);
+    vl->addWidget(scroll_area_, 1);
 
     // ── Timers ──
     refresh_timer_ = new QTimer(this);
@@ -82,10 +82,159 @@ MarketPulsePanel::MarketPulsePanel(QWidget* parent) : QWidget(parent) {
     connect(hours_timer_, &QTimer::timeout, this, &MarketPulsePanel::refresh_market_hours);
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
-            this, [this](const ui::ThemeTokens&) {
-                setStyleSheet(QString("background:%1;").arg(ui::colors::PANEL()));
-            });
+            this, [this](const ui::ThemeTokens&) { refresh_theme(); });
+    refresh_theme();
+}
+
+// ── Theme refresh ────────────────────────────────────────────────────────────
+
+void MarketPulsePanel::refresh_theme() {
+    // ── Root panel ──
     setStyleSheet(QString("background:%1;").arg(ui::colors::PANEL()));
+
+    // ── Header bar ──
+    if (header_bar_)
+        header_bar_->setStyleSheet(
+            QString("background: %1; border-bottom: 1px solid %2;")
+                .arg(ui::colors::BG_RAISED(), ui::colors::AMBER_DIM()));
+    if (header_icon_)
+        header_icon_->setStyleSheet(
+            QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER()));
+    if (header_title_)
+        header_title_->setStyleSheet(
+            QString("color: %1; font-size: 10px; font-weight: bold; letter-spacing: 1px; background: transparent;")
+                .arg(ui::colors::AMBER()));
+    if (header_live_dot_)
+        header_live_dot_->setStyleSheet(
+            QString("background: %1; border-radius: 3px;").arg(ui::colors::POSITIVE()));
+
+    // ── Scroll area ──
+    if (scroll_area_)
+        scroll_area_->setStyleSheet(
+            QString("QScrollArea{border:none;background:transparent;}"
+                    "QScrollBar:vertical{width:6px;background:transparent;}"
+                    "QScrollBar::handle:vertical{background:%1;border-radius:3px;min-height:20px;}"
+                    "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+                .arg(ui::colors::BORDER_MED()));
+
+    // ── Section headers ──
+    auto style_section = [](SectionHeader& sh, const QString& icon_color) {
+        if (sh.container)
+            sh.container->setStyleSheet(
+                QString("background: %1; border-bottom: 1px solid %2; border-top: 1px solid %2;")
+                    .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        if (sh.icon)
+            sh.icon->setStyleSheet(
+                QString("color: %1; font-size: 10px; background: transparent;").arg(icon_color));
+        if (sh.title)
+            sh.title->setStyleSheet(
+                QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
+                    .arg(ui::colors::TEXT_SECONDARY()));
+    };
+
+    style_section(sh_breadth_,  ui::colors::CYAN());
+    style_section(sh_gainers_,  ui::colors::POSITIVE());
+    style_section(sh_losers_,   ui::colors::NEGATIVE());
+    style_section(sh_snapshot_, ui::colors::INFO());
+    style_section(sh_hours_,    ui::colors::WARNING());
+
+    // ── Fear & Greed ──
+    if (fg_header_label_)
+        fg_header_label_->setStyleSheet(
+            QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
+                .arg(ui::colors::TEXT_SECONDARY()));
+    if (fg_gauge_icon_)
+        fg_gauge_icon_->setStyleSheet(
+            QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER()));
+    // fg_gradient_bar_ uses fixed colors (red->green gradient), no theme tokens — skip
+    if (fg_score_val_)
+        fg_score_val_->setStyleSheet(
+            QString("color: %1; font-size: 18px; font-weight: bold; background: transparent;")
+                .arg(ui::colors::TEXT_TERTIARY()));
+    if (fg_score_max_)
+        fg_score_max_->setStyleSheet(
+            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
+    if (fg_sentiment_)
+        fg_sentiment_->setStyleSheet(
+            QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
+                .arg(ui::colors::TEXT_TERTIARY()));
+
+    // ── Market Breadth rows ──
+    auto style_breadth = [](BreadthRow& row) {
+        if (row.name)
+            row.name->setStyleSheet(
+                QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+                    .arg(ui::colors::TEXT_SECONDARY()));
+        if (row.adv)
+            row.adv->setStyleSheet(
+                QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::POSITIVE()));
+        if (row.slash)
+            row.slash->setStyleSheet(
+                QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
+        if (row.dec)
+            row.dec->setStyleSheet(
+                QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::NEGATIVE()));
+        if (row.green)
+            row.green->setStyleSheet(
+                QString("background: %1; border-radius: 0;").arg(ui::colors::POSITIVE()));
+        if (row.red)
+            row.red->setStyleSheet(
+                QString("background: %1; border-radius: 0;").arg(ui::colors::NEGATIVE()));
+    };
+
+    style_breadth(nyse_row_);
+    style_breadth(nasdaq_row_);
+    style_breadth(sp500_row_);
+
+    // ── Global Snapshot rows ──
+    // Each stat row has a fixed val_color that maps to a specific token.
+    // Re-resolve them here so theme changes take effect.
+    struct StatDef {
+        StatRow& row;
+        QString  val_color;
+    };
+    StatDef stat_defs[] = {
+        {vix_row_,   ui::colors::WARNING()},
+        {us10y_row_, ui::colors::CYAN()},
+        {dxy_row_,   ui::colors::CYAN()},
+        {gold_row_,  ui::colors::WARNING()},
+        {oil_row_,   ui::colors::CYAN()},
+        {btc_row_,   ui::colors::AMBER()},
+    };
+
+    for (auto& sd : stat_defs) {
+        if (sd.row.container)
+            sd.row.container->setStyleSheet(
+                QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
+        if (sd.row.name_lbl)
+            sd.row.name_lbl->setStyleSheet(
+                QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.3px; background: transparent;")
+                    .arg(ui::colors::TEXT_SECONDARY()));
+        if (sd.row.val)
+            sd.row.val->setStyleSheet(
+                QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
+                    .arg(sd.val_color));
+        if (sd.row.chg)
+            sd.row.chg->setStyleSheet(
+                QString("color: %1; font-size: 8px; font-weight: bold; background: transparent;")
+                    .arg(ui::colors::TEXT_TERTIARY()));
+    }
+
+    // ── Market Hours rows ──
+    for (auto& hr : hours_rows_) {
+        if (hr.container)
+            hr.container->setStyleSheet(
+                QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
+        if (hr.name_lbl)
+            hr.name_lbl->setStyleSheet(
+                QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+                    .arg(ui::colors::TEXT_SECONDARY()));
+        // dot and status colors are data-driven (open/closed/pre) —
+        // refresh_market_hours() handles those, call it to re-resolve tokens.
+    }
+
+    // Re-resolve data-driven status dot/label colors.
+    refresh_market_hours();
 }
 
 void MarketPulsePanel::showEvent(QShowEvent* e) {
@@ -105,31 +254,31 @@ void MarketPulsePanel::hideEvent(QHideEvent* e) {
 // ── Header ───────────────────────────────────────────────────────────────────
 
 QWidget* MarketPulsePanel::build_header() {
-    auto* bar = new QWidget;
-    bar->setFixedHeight(30);
-    bar->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid rgba(217,119,6,0.25);").arg(ui::colors::BG_RAISED()));
+    header_bar_ = new QWidget;
+    header_bar_->setFixedHeight(30);
+    header_bar_->setStyleSheet(
+        QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::AMBER_DIM()));
 
-    auto* hl = new QHBoxLayout(bar);
+    auto* hl = new QHBoxLayout(header_bar_);
     hl->setContentsMargins(12, 0, 12, 0);
 
-    auto* icon = new QLabel(QChar(0x25C8));
-    icon->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER()));
-    hl->addWidget(icon);
+    header_icon_ = new QLabel(QChar(0x25C8));
+    header_icon_->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER()));
+    hl->addWidget(header_icon_);
 
-    auto* title = new QLabel("MARKET PULSE");
-    title->setStyleSheet(
+    header_title_ = new QLabel("MARKET PULSE");
+    header_title_->setStyleSheet(
         QString("color: %1; font-size: 10px; font-weight: bold; letter-spacing: 1px; background: transparent;")
             .arg(ui::colors::AMBER()));
-    hl->addWidget(title);
+    hl->addWidget(header_title_);
     hl->addStretch();
 
-    auto* live_dot = new QLabel;
-    live_dot->setFixedSize(6, 6);
-    live_dot->setStyleSheet(QString("background: %1; border-radius: 3px;").arg(ui::colors::POSITIVE()));
-    hl->addWidget(live_dot);
+    header_live_dot_ = new QLabel;
+    header_live_dot_->setFixedSize(6, 6);
+    header_live_dot_->setStyleSheet(QString("background: %1; border-radius: 3px;").arg(ui::colors::POSITIVE()));
+    hl->addWidget(header_live_dot_);
 
-    return bar;
+    return header_bar_;
 }
 
 QWidget* MarketPulsePanel::build_section_header(const QString& title, const QString& icon_char,
@@ -153,6 +302,21 @@ QWidget* MarketPulsePanel::build_section_header(const QString& title, const QStr
     hl->addWidget(lbl);
     hl->addStretch();
 
+    // Store pointers into the corresponding SectionHeader member
+    // so refresh_theme() can re-apply styles later.
+    SectionHeader* sh = nullptr;
+    if (title == "MARKET BREADTH")   sh = &sh_breadth_;
+    else if (title == "TOP GAINERS") sh = &sh_gainers_;
+    else if (title == "TOP LOSERS")  sh = &sh_losers_;
+    else if (title == "GLOBAL SNAPSHOT") sh = &sh_snapshot_;
+    else if (title == "MARKET HOURS")    sh = &sh_hours_;
+
+    if (sh) {
+        sh->container  = w;
+        sh->icon       = icn;
+        sh->title      = lbl;
+    }
+
     return w;
 }
 
@@ -169,16 +333,16 @@ QWidget* MarketPulsePanel::build_fear_greed_section() {
     auto* hrl = new QHBoxLayout(header_row);
     hrl->setContentsMargins(0, 0, 0, 0);
 
-    auto* label = new QLabel("FEAR & GREED INDEX");
-    label->setStyleSheet(
+    fg_header_label_ = new QLabel("FEAR & GREED INDEX");
+    fg_header_label_->setStyleSheet(
         QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
             .arg(ui::colors::TEXT_SECONDARY()));
-    hrl->addWidget(label);
+    hrl->addWidget(fg_header_label_);
     hrl->addStretch();
 
-    auto* gauge_icon = new QLabel(QChar(0x25CE));
-    gauge_icon->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER()));
-    hrl->addWidget(gauge_icon);
+    fg_gauge_icon_ = new QLabel(QChar(0x25CE));
+    fg_gauge_icon_->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER()));
+    hrl->addWidget(fg_gauge_icon_);
 
     vl->addWidget(header_row);
 
@@ -244,10 +408,10 @@ QWidget* MarketPulsePanel::build_breadth_section() {
         auto* tl = new QHBoxLayout(top);
         tl->setContentsMargins(0, 0, 0, 0);
 
-        auto* nm = new QLabel(name);
-        nm->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+        row.name = new QLabel(name);
+        row.name->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
                               .arg(ui::colors::TEXT_SECONDARY()));
-        tl->addWidget(nm);
+        tl->addWidget(row.name);
         tl->addStretch();
 
         row.adv = new QLabel("--");
@@ -255,10 +419,10 @@ QWidget* MarketPulsePanel::build_breadth_section() {
             QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::POSITIVE()));
         tl->addWidget(row.adv);
 
-        auto* slash = new QLabel("/");
-        slash->setStyleSheet(
+        row.slash = new QLabel("/");
+        row.slash->setStyleSheet(
             QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
-        tl->addWidget(slash);
+        tl->addWidget(row.slash);
 
         row.dec = new QLabel("--");
         row.dec->setStyleSheet(
@@ -455,6 +619,9 @@ QWidget* MarketPulsePanel::build_global_snapshot_section() {
         hl->addWidget(lbl);
         hl->addStretch();
 
+        d.row.container = rw;
+        d.row.name_lbl  = lbl;
+
         d.row.val = new QLabel("--");
         d.row.val->setStyleSheet(
             QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(d.color));
@@ -509,7 +676,9 @@ QWidget* MarketPulsePanel::build_market_hours_section() {
         rl->addStretch();
 
         HoursRow hr;
-        hr.region = ex.region;
+        hr.container = row;
+        hr.name_lbl  = name;
+        hr.region    = ex.region;
 
         hr.dot = new QLabel;
         hr.dot->setFixedSize(5, 5);
@@ -662,7 +831,7 @@ void MarketPulsePanel::refresh_data() {
                 sentiment_color = ui::colors::NEGATIVE();
             } else if (score <= 40) {
                 sentiment_text  = "FEAR";
-                sentiment_color = "#FF6644";
+                sentiment_color = ui::colors::WARNING();
             } else if (score <= 60) {
                 sentiment_text  = "NEUTRAL";
                 sentiment_color = ui::colors::WARNING();

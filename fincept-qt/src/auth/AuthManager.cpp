@@ -1,6 +1,7 @@
 #include "auth/AuthManager.h"
 
 #include "auth/AuthApi.h"
+#include "auth/PinManager.h"
 #include "auth/UserApi.h"
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
@@ -111,8 +112,15 @@ void AuthManager::clear_session() {
     fincept::SettingsRepository::instance().remove("fincept_api_key");
     fincept::SecureStorage::instance().remove("api_key");
 
+    // Clear PIN and lockout state on logout — user must set up again after re-login
+    PinManager::instance().clear_pin();
+
     // Clear auto-configured fincept LLM provider and reset LlmService
     LlmConfigRepository::instance().delete_provider("fincept");
+}
+
+bool AuthManager::needs_pin_setup() const {
+    return session_.authenticated && !PinManager::instance().has_pin();
 }
 
 // ── Initialize ───────────────────────────────────────────────────────────────
@@ -484,25 +492,37 @@ void AuthManager::auto_configure_fincept_llm() {
     if (session_.api_key.isEmpty())
         return;
 
-    // Store API key in settings for fallback access
+    // Always store API key in settings — LlmService resolves it at runtime
     fincept::SettingsRepository::instance().set("fincept_api_key", session_.api_key, "auth");
 
-    // Save/update fincept as an LLM provider (api_key left empty — resolved from
-    // SettingsRepository at runtime by LlmService::ensure_config())
-    LlmConfig fincept_llm;
-    fincept_llm.provider = "fincept";
-    fincept_llm.model = "fincept-llm";
-    fincept_llm.base_url = "https://api.fincept.in/research/llm";
+    // Only create the fincept provider row if it doesn't already exist.
+    // This prevents overwriting the user's model/settings choice on every
+    // session revalidation (~30s interval).
+    auto providers = LlmConfigRepository::instance().list_providers();
+    bool fincept_exists = false;
+    if (providers.is_ok()) {
+        for (const auto& p : providers.value()) {
+            if (p.provider.toLower() == "fincept") {
+                fincept_exists = true;
+                break;
+            }
+        }
+    }
 
-    LlmConfigRepository::instance().save_provider(fincept_llm);
+    if (!fincept_exists) {
+        LlmConfig fincept_llm;
+        fincept_llm.provider = "fincept";
+        fincept_llm.model = "MiniMax-M2.7";
+        fincept_llm.base_url = {};
+        LlmConfigRepository::instance().save_provider(fincept_llm);
+        LOG_INFO("Auth", "Created fincept LLM provider config");
+    }
 
-    // Set as active if no other provider is configured
+    // Set as active if no other provider is currently active
     auto active = LlmConfigRepository::instance().get_active_provider();
     bool has_active = active.is_ok() && !active.value().provider.isEmpty();
     if (!has_active)
         LlmConfigRepository::instance().set_active("fincept");
-
-    LOG_INFO("Auth", "Fincept LLM auto-configured with session API key");
 }
 
 } // namespace fincept::auth

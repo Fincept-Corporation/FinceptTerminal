@@ -2,6 +2,7 @@
 #include "screens/data_sources/DataSourcesScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "screens/data_sources/ConnectorRegistry.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
@@ -144,7 +145,7 @@ int enabled_connections_for_provider(const QVector<DataSource>& rows, const QStr
 }
 
 QTableWidgetItem* make_item(const QString& text,
-                            const QColor& color = QColor("#e5e5e5"),
+                            const QColor& color = QColor(col::TEXT_PRIMARY.get()),
                             Qt::Alignment alignment = Qt::AlignLeft | Qt::AlignVCenter) {
     auto* item = new QTableWidgetItem(text);
     item->setForeground(color);
@@ -373,14 +374,14 @@ static const QString kScreenStylesheet = R"(
     #dsBtnAccent:disabled { opacity: 0.4; }
     #dsBtnDanger {
         background: rgba(220,38,38,0.08); color: %14;
-        border: 1px solid #7f1d1d; padding: 0 10px;
+        border: 1px solid %15; padding: 0 10px;
         font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
     }
     #dsBtnDanger:hover:enabled { background: rgba(220,38,38,0.18); border-color: %14; }
     #dsBtnDanger:disabled { opacity: 0.4; }
     #dsBtnGreen {
         background: rgba(22,163,74,0.08); color: %13;
-        border: 1px solid #14532d; padding: 0 10px;
+        border: 1px solid %16; padding: 0 10px;
         font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
     }
     #dsBtnGreen:hover:enabled { background: rgba(22,163,74,0.18); border-color: %13; }
@@ -477,7 +478,9 @@ void DataSourcesScreen::setup_ui() {
         .arg(col::BORDER_BRIGHT)     // %11
         .arg(col::AMBER_DIM)         // %12
         .arg(col::POSITIVE)          // %13
-        .arg(col::NEGATIVE);         // %14
+        .arg(col::NEGATIVE)          // %14
+        .arg(col::NEGATIVE_DIM)      // %15
+        .arg(col::POSITIVE_DIM);     // %16
     setStyleSheet(style);
 
     auto* root = new QVBoxLayout(this);
@@ -832,7 +835,7 @@ QWidget* DataSourcesScreen::build_connector_panel() {
     connector_table_->setAlternatingRowColors(true);
     connector_table_->setStyleSheet(
         connector_table_->styleSheet() +
-        "QTableWidget { alternate-background-color: #0c0c0c; }");
+        QString("QTableWidget { alternate-background-color: %1; }").arg(col::ROW_ALT));
     connect(connector_table_, &QTableWidget::itemSelectionChanged,
             this, &DataSourcesScreen::on_connector_selection_changed);
     connect(connector_table_, &QTableWidget::cellDoubleClicked,
@@ -1139,7 +1142,7 @@ QWidget* DataSourcesScreen::build_connections_page() {
     connections_table_->setAlternatingRowColors(true);
     connections_table_->setStyleSheet(
         connections_table_->styleSheet() +
-        "QTableWidget { alternate-background-color: #0c0c0c; }");
+        QString("QTableWidget { alternate-background-color: %1; }").arg(col::ROW_ALT));
     connect(connections_table_, &QTableWidget::itemSelectionChanged,
             this, &DataSourcesScreen::on_connection_selection_changed);
 
@@ -1684,11 +1687,13 @@ void DataSourcesScreen::update_stats_strip() {
     // Highlight active stat filter
     auto reset_color = [](QLabel* v) {
         v->setStyleSheet(
-            "color:#e5e5e5;font-size:22px;font-weight:700;background:transparent;");
+            QString("color:%1;font-size:22px;font-weight:700;background:transparent;")
+                .arg(col::TEXT_PRIMARY));
     };
     auto set_amber = [](QLabel* v) {
         v->setStyleSheet(
-            "color:#d97706;font-size:22px;font-weight:700;background:transparent;");
+            QString("color:%1;font-size:22px;font-weight:700;background:transparent;")
+                .arg(col::AMBER));
     };
 
     reset_color(universe_stat_value_);
@@ -1932,6 +1937,7 @@ void DataSourcesScreen::on_search_changed(const QString& /*text*/) {
 void DataSourcesScreen::on_connector_clicked(const QString& connector_id) {
     if (const auto* cfg = find_connector_config(connector_id)) {
         selected_connector_id_ = cfg->id;
+        ScreenStateManager::instance().notify_changed(this);
         const QString existing_connection = preferred_connection_for_connector(cfg->id);
         show_config_dialog(*cfg, existing_connection);
     }
@@ -2290,16 +2296,17 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
         result_dlg.resize(420, 160);
         result_dlg.setModal(true);
         result_dlg.setStyleSheet(
-            "QDialog{background:#0a0a0a;color:#e5e5e5;font-family:'Consolas','Courier New',monospace;}"
+            QString("QDialog{background:%1;color:%2;font-family:'Consolas','Courier New',monospace;}"
             "QLabel{font-size:13px;background:transparent;}"
-            "QPushButton{background:#111111;color:#e5e5e5;border:1px solid #1a1a1a;"
+            "QPushButton{background:%3;color:%2;border:1px solid %4;"
             "padding:6px 18px;font-size:12px;font-weight:700;}"
-            "QPushButton:hover{background:#1a1a1a;}");
+            "QPushButton:hover{background:%4;}")
+                .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::BG_RAISED, col::BORDER_DIM));
         auto* vl = new QVBoxLayout(&result_dlg);
         vl->setContentsMargins(24, 20, 24, 16); vl->setSpacing(10);
         auto* lbl = new QLabel("This connector does not support connectivity testing.");
         lbl->setWordWrap(true);
-        lbl->setStyleSheet("color:#808080;font-size:13px;background:transparent;");
+        lbl->setStyleSheet(QString("color:%1;font-size:13px;background:transparent;").arg(col::TEXT_SECONDARY));
         vl->addWidget(lbl); vl->addStretch();
         auto* btn = new QPushButton("Close");
         btn->setCursor(Qt::PointingHandCursor);
@@ -2420,17 +2427,18 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
         result_dlg.resize(420, 160);
         result_dlg.setModal(true);
         result_dlg.setStyleSheet(
-            "QDialog{background:#0a0a0a;color:#e5e5e5;font-family:'Consolas','Courier New',monospace;}"
+            QString("QDialog{background:%1;color:%2;font-family:'Consolas','Courier New',monospace;}"
             "QLabel{font-size:13px;background:transparent;}"
-            "QPushButton{background:#111111;color:#e5e5e5;border:1px solid #1a1a1a;"
+            "QPushButton{background:%3;color:%2;border:1px solid %4;"
             "padding:6px 18px;font-size:12px;font-weight:700;}"
-            "QPushButton:hover{background:#1a1a1a;}");
+            "QPushButton:hover{background:%4;}")
+                .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::BG_RAISED, col::BORDER_DIM));
         auto* vl = new QVBoxLayout(&result_dlg);
         vl->setContentsMargins(24, 20, 24, 16); vl->setSpacing(10);
         auto* lbl = new QLabel("No testable endpoint found in the saved configuration.\n"
                                "Ensure required fields (URL, host, or API key) are filled in.");
         lbl->setWordWrap(true);
-        lbl->setStyleSheet("color:#808080;font-size:13px;background:transparent;");
+        lbl->setStyleSheet(QString("color:%1;font-size:13px;background:transparent;").arg(col::TEXT_SECONDARY));
         vl->addWidget(lbl); vl->addStretch();
         auto* btn = new QPushButton("Close");
         btn->setCursor(Qt::PointingHandCursor);
@@ -2490,11 +2498,12 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
             result_dlg.resize(440, 190);
             result_dlg.setModal(true);
             result_dlg.setStyleSheet(
-                "QDialog{background:#0a0a0a;color:#e5e5e5;font-family:'Consolas','Courier New',monospace;}"
+                QString("QDialog{background:%1;color:%2;font-family:'Consolas','Courier New',monospace;}"
                 "QLabel{font-size:13px;background:transparent;}"
-                "QPushButton{background:#111111;color:#e5e5e5;border:1px solid #1a1a1a;"
+                "QPushButton{background:%3;color:%2;border:1px solid %4;"
                 "padding:6px 18px;font-size:12px;font-weight:700;}"
-                "QPushButton:hover{background:#1a1a1a;}");
+                "QPushButton:hover{background:%4;}")
+                    .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::BG_RAISED, col::BORDER_DIM));
 
             auto* vl = new QVBoxLayout(&result_dlg);
             vl->setContentsMargins(24, 20, 24, 16);
@@ -2503,18 +2512,18 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
             auto* status_lbl = new QLabel(success ? "Connection successful" : "Connection failed");
             status_lbl->setStyleSheet(
                 QString("color:%1;font-size:14px;font-weight:700;background:transparent;")
-                    .arg(success ? "#16a34a" : "#dc2626"));
+                    .arg(success ? col::POSITIVE.operator QString() : col::NEGATIVE.operator QString()));
             vl->addWidget(status_lbl);
 
             auto* msg_lbl = new QLabel(message);
             msg_lbl->setWordWrap(true);
-            msg_lbl->setStyleSheet("color:#808080;font-size:12px;background:transparent;");
+            msg_lbl->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(col::TEXT_SECONDARY));
             vl->addWidget(msg_lbl);
 
             if (success) {
                 auto* note = new QLabel("Note: TCP reachability confirmed. API key validity is not verified here.");
                 note->setWordWrap(true);
-                note->setStyleSheet("color:#525252;font-size:11px;font-style:italic;background:transparent;");
+                note->setStyleSheet(QString("color:%1;font-size:11px;font-style:italic;background:transparent;").arg(col::TEXT_TERTIARY));
                 vl->addWidget(note);
             }
             vl->addStretch();
@@ -2689,11 +2698,12 @@ void DataSourcesScreen::on_bulk_delete_selected() {
     confirm.setStandardButtons(QMessageBox::Yes | QMessageBox::Cancel);
     confirm.setDefaultButton(QMessageBox::Cancel);
     confirm.setStyleSheet(
-        "QMessageBox { background:#0a0a0a; color:#e5e5e5; font-family:'Consolas','Courier New',monospace; }"
-        "QLabel { color:#e5e5e5; font-size:13px; background:transparent; }"
-        "QPushButton { background:#111111; color:#e5e5e5; border:1px solid #1a1a1a;"
+        QString("QMessageBox { background:%1; color:%2; font-family:'Consolas','Courier New',monospace; }"
+        "QLabel { color:%2; font-size:13px; background:transparent; }"
+        "QPushButton { background:%3; color:%2; border:1px solid %4;"
         " padding:6px 18px; font-size:12px; font-weight:700; }"
-        "QPushButton:hover { background:#1a1a1a; }");
+        "QPushButton:hover { background:%4; }")
+            .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::BG_RAISED, col::BORDER_DIM));
     if (confirm.exec() != QMessageBox::Yes) return;
 
     for (const auto& id : selected_ids) {
@@ -2916,6 +2926,21 @@ void DataSourcesScreen::refresh_connections() {
 void DataSourcesScreen::update_clock() {
     if (clock_label_)
         clock_label_->setText(QDateTime::currentDateTime().toString("HH:mm:ss"));
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap DataSourcesScreen::save_state() const {
+    return {
+        {"connector_id", selected_connector_id_},
+        {"category",     static_cast<int>(active_category_)},
+    };
+}
+
+void DataSourcesScreen::restore_state(const QVariantMap& state) {
+    const QString id = state.value("connector_id").toString();
+    if (!id.isEmpty())
+        select_connector_by_id(id);
 }
 
 } // namespace fincept::screens::datasources

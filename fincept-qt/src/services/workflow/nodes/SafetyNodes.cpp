@@ -64,15 +64,15 @@ void register_safety_nodes(NodeRegistry& registry) {
                                     .arg(max_vol, 0, 'f', 3);
 
                 QJsonObject out = trade;
-                out["risk_check_passed"] = failures.isEmpty();
-                if (!failures.isEmpty()) {
+                bool passed = failures.isEmpty();
+                out["risk_check_passed"] = passed;
+                out["_branch"] = passed ? "true" : "false";
+                if (!passed) {
                     QJsonArray fa;
                     for (const QString& f : failures) fa.append(f);
                     out["risk_failures"] = fa;
-                    cb(false, out, failures.join("; "));
-                } else {
-                    cb(true, out, {});
                 }
+                cb(true, out, {});
             },
     });
 
@@ -116,14 +116,14 @@ void register_safety_nodes(NodeRegistry& registry) {
                     failures << QString("Weekly loss $%1 exceeds limit $%2")
                                     .arg(-weekly_pnl, 0, 'f', 2).arg(weekly_limit, 0, 'f', 2);
 
-                obj["loss_limit_passed"] = failures.isEmpty();
-                if (!failures.isEmpty()) {
+                bool passed = failures.isEmpty();
+                obj["loss_limit_passed"] = passed;
+                obj["_branch"] = passed ? "true" : "false";
+                if (!passed) {
                     QJsonArray fa; for (const QString& f : failures) fa.append(f);
                     obj["loss_failures"] = fa;
-                    cb(false, obj, failures.join("; "));
-                } else {
-                    cb(true, obj, {});
                 }
+                cb(true, obj, {});
             },
     });
 
@@ -167,14 +167,14 @@ void register_safety_nodes(NodeRegistry& registry) {
                     failures << QString("Trade value $%1 exceeds max $%2")
                                     .arg(trade_val, 0, 'f', 2).arg(max_value, 0, 'f', 2);
 
-                obj["size_limit_passed"] = failures.isEmpty();
-                if (!failures.isEmpty()) {
+                bool passed = failures.isEmpty();
+                obj["size_limit_passed"] = passed;
+                obj["_branch"] = passed ? "true" : "false";
+                if (!passed) {
                     QJsonArray fa; for (const QString& f : failures) fa.append(f);
                     obj["size_failures"] = fa;
-                    cb(false, obj, failures.join("; "));
-                } else {
-                    cb(true, obj, {});
                 }
+                cb(true, obj, {});
             },
     });
 
@@ -236,12 +236,9 @@ void register_safety_nodes(NodeRegistry& registry) {
                 obj["exchange"]     = exchange;
                 obj["utc_time"]     = utc_now.toString("HH:mm");
                 obj["session_type"] = in_regular ? "regular" : (in_premarket ? "pre_market" : "closed");
-
-                if (is_open)
-                    cb(true, obj, {});
-                else
-                    cb(false, obj, QString("Market closed: %1 UTC on %2")
-                                       .arg(utc_now.toString("HH:mm"), exchange));
+                // Route: output_open = true branch, output_closed = false branch
+                obj["_branch"] = is_open ? "true" : "false";
+                cb(true, obj, {});
             },
     });
 
@@ -282,15 +279,12 @@ void register_safety_nodes(NodeRegistry& registry) {
                     drawdown_pct = (peak > 0) ? ((peak - current) / peak * 100.0) : 0;
                 }
 
+                bool passed = drawdown_pct <= max_dd;
                 obj["drawdown_pct"]         = drawdown_pct;
                 obj["max_drawdown_pct"]     = max_dd;
-                obj["drawdown_check_passed"]= drawdown_pct <= max_dd;
-
-                if (drawdown_pct > max_dd)
-                    cb(false, obj, QString("Drawdown %1% exceeds max %2%")
-                                       .arg(drawdown_pct, 0, 'f', 2).arg(max_dd, 0, 'f', 2));
-                else
-                    cb(true, obj, {});
+                obj["drawdown_check_passed"]= passed;
+                obj["_branch"] = passed ? "true" : "false";
+                cb(true, obj, {});
             },
     });
 
@@ -324,14 +318,11 @@ void register_safety_nodes(NodeRegistry& registry) {
                 double max_corr = params.value("max_correlation").toDouble(0.8);
                 double corr     = std::abs(obj.value("correlation").toDouble(0));
 
-                obj["correlation_check_passed"] = corr <= max_corr;
+                bool passed = corr <= max_corr;
+                obj["correlation_check_passed"] = passed;
                 obj["correlation_abs"]          = corr;
-
-                if (corr > max_corr)
-                    cb(false, obj, QString("Correlation %1 exceeds max %2")
-                                       .arg(corr, 0, 'f', 3).arg(max_corr, 0, 'f', 3));
-                else
-                    cb(true, obj, {});
+                obj["_branch"] = passed ? "true" : "false";
+                cb(true, obj, {});
             },
     });
 
@@ -382,10 +373,8 @@ void register_safety_nodes(NodeRegistry& registry) {
                 }
 
                 obj["volatility_check_passed"] = !exceeded;
-                if (exceeded)
-                    cb(false, obj, reason);
-                else
-                    cb(true, obj, {});
+                obj["_branch"] = exceeded ? "false" : "true";
+                cb(true, obj, {});
             },
     });
 }

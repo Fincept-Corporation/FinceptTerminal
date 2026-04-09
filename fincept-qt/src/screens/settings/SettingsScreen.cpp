@@ -4,10 +4,13 @@
 #include "screens/settings/SettingsScreen.h"
 
 #include "ai_chat/LlmService.h"
+#include "auth/InactivityGuard.h"
+#include "auth/PinManager.h"
 #include "core/config/AppConfig.h"
 #include "core/events/EventBus.h"
 #include "core/config/ProfileManager.h"
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "services/notifications/NotificationService.h"
 #include "screens/settings/LlmConfigSection.h"
 #include "screens/settings/McpServersSection.h"
@@ -22,7 +25,6 @@
 #include "ui/theme/ThemeManager.h"
 
 #include <QCheckBox>
-#include <QColorDialog>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QFontDatabase>
@@ -159,7 +161,8 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     sections_->addWidget(build_llm_config());    // 5
     sections_->addWidget(build_mcp_servers());   // 6
     sections_->addWidget(build_logging());       // 7
-    sections_->addWidget(build_profiles());      // 8
+    sections_->addWidget(build_security());      // 8
+    sections_->addWidget(build_profiles());      // 9
 
     QList<QPushButton*> nav_btns;
     auto make_btn = [&](const QString& text, int idx) {
@@ -176,6 +179,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
             }
             btn->setChecked(true);
             sections_->setCurrentIndex(idx);
+            ScreenStateManager::instance().notify_changed(this);
         });
         nvl->addWidget(btn);
         nav_btns.append(btn);
@@ -190,7 +194,8 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     make_btn("LLM Config", 5);
     make_btn("MCP Servers", 6);
     make_btn("Logging", 7);
-    make_btn("Profiles", 8);
+    make_btn("Security", 8);
+    make_btn("Profiles", 9);
 
     first->setChecked(true);
 
@@ -227,6 +232,7 @@ void SettingsScreen::showEvent(QShowEvent* e) {
     load_credentials();
     load_appearance();
     load_notifications();
+    load_security();
     refresh_storage_stats();
     if (auto* llm = qobject_cast<LlmConfigSection*>(sections_->widget(5)))
         llm->reload();
@@ -486,27 +492,6 @@ QWidget* SettingsScreen::build_appearance() {
         fincept::ui::ThemeManager::instance().apply_theme(name);
     });
 
-    // Accent color override
-    accent_color_btn_ = new QPushButton("Pick Color");
-    accent_color_btn_->setFixedWidth(120);
-    accent_color_btn_->setStyleSheet(btn_secondary_ss());
-    connect(accent_color_btn_, &QPushButton::clicked, this, [this]() {
-        QColor initial = custom_accent_color_.isEmpty()
-            ? QColor(fincept::ui::ThemeManager::instance().tokens().accent)
-            : QColor(custom_accent_color_);
-        QColor chosen = QColorDialog::getColor(initial, this, "Choose Accent Color");
-        if (chosen.isValid()) {
-            custom_accent_color_ = chosen.name();
-            accent_color_btn_->setStyleSheet(
-                QString("QPushButton { background: %1; color: %2; border: none; "
-                        "padding: 0 12px; height: 32px; }")
-                .arg(custom_accent_color_,
-                     QString(fincept::ui::ThemeManager::instance().tokens().bg_base)));
-            fincept::ui::ThemeManager::instance().apply_accent(custom_accent_color_);
-        }
-    });
-    vl->addWidget(make_row("Accent Color", accent_color_btn_, "Overrides the theme's default accent color."));
-
     app_density_ = new QComboBox;
     app_density_->addItems(fincept::ui::ThemeManager::available_densities());
     app_density_->setCurrentText("Default");
@@ -564,8 +549,6 @@ QWidget* SettingsScreen::build_appearance() {
                  ticker_bar_toggle_->isChecked() ? "true" : "false", "appearance");
         repo.set("appearance.animations",
                  animations_toggle_->isChecked() ? "true" : "false", "appearance");
-        if (!custom_accent_color_.isEmpty())
-            repo.set("appearance.accent_color", custom_accent_color_, "appearance");
 
         // Flush any pending debounce immediately on save
         if (appearance_debounce_->isActive()) {
@@ -575,8 +558,6 @@ QWidget* SettingsScreen::build_appearance() {
             tm.apply_font(app_font_family_->currentText(), px);
             tm.apply_density(app_density_->currentText());
         }
-        if (!custom_accent_color_.isEmpty())
-            tm.apply_accent(custom_accent_color_);
 
         LOG_INFO("Settings", "Appearance saved and applied");
     });
@@ -622,19 +603,6 @@ void SettingsScreen::load_appearance() {
     load_check(chat_bubble_toggle_, "appearance.show_chat_bubble", true);
     load_check(ticker_bar_toggle_,  "appearance.show_ticker_bar",  true);
     load_check(animations_toggle_,  "appearance.animations",       true);
-
-    // Restore custom accent color if set
-    auto r_accent = repo.get("appearance.accent_color");
-    if (r_accent.is_ok() && !r_accent.value().isEmpty()) {
-        custom_accent_color_ = r_accent.value();
-        if (accent_color_btn_) {
-            accent_color_btn_->setStyleSheet(
-                QString("QPushButton { background: %1; color: %2; border: none; "
-                        "padding: 0 12px; height: 32px; }")
-                .arg(custom_accent_color_,
-                     QString(fincept::ui::ThemeManager::instance().tokens().bg_base)));
-        }
-    }
 }
 
 // ── Notifications ─────────────────────────────────────────────────────────────
@@ -1139,9 +1107,9 @@ static QWidget* make_category_row(const QString& name, QLabel* count_lbl,
 
     clear_btn->setFixedSize(56, 20);
     clear_btn->setStyleSheet(
-        QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid #7f1d1d;font-weight:700;}"
+        QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid %3;font-weight:700;}"
                 "QPushButton:hover{background:%1;color:%2;}")
-        .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+        .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE_DIM()));
     hl->addWidget(clear_btn);
 
     return row;
@@ -1187,9 +1155,9 @@ static QWidget* make_file_action_row(const QString& name, QLabel* size_lbl,
 
     btn->setFixedSize(56, 20);
     btn->setStyleSheet(
-        QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid #7f1d1d;font-weight:700;}"
+        QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid %3;font-weight:700;}"
                 "QPushButton:hover{background:%1;color:%2;}")
-        .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+        .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE_DIM()));
     hl->addWidget(btn);
 
     return row;
@@ -1731,8 +1699,8 @@ QWidget* SettingsScreen::build_storage() {
     // ═══════════════════════════════════════════════════════════════════════════
     {
         auto* panel = new QFrame;
-        panel->setStyleSheet(QString("QFrame{background:%1;border:1px solid #7f1d1d;}")
-            .arg(ui::colors::BG_SURFACE()));
+        panel->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;}")
+            .arg(ui::colors::BG_SURFACE(), ui::colors::NEGATIVE_DIM()));
         auto* pvl = new QVBoxLayout(panel);
         pvl->setContentsMargins(0, 0, 0, 0);
         pvl->setSpacing(0);
@@ -1740,7 +1708,8 @@ QWidget* SettingsScreen::build_storage() {
         // Red header
         auto* hdr = new QWidget;
         hdr->setFixedHeight(34);
-        hdr->setStyleSheet("background:rgba(220,38,38,0.08);border-bottom:1px solid #7f1d1d;");
+        hdr->setStyleSheet(QString("background:rgba(220,38,38,0.08);border-bottom:1px solid %1;")
+            .arg(ui::colors::NEGATIVE_DIM()));
         auto* hhl = new QHBoxLayout(hdr);
         hhl->setContentsMargins(12, 0, 12, 0);
         auto* hlbl = new QLabel("DANGER ZONE");
@@ -1775,9 +1744,9 @@ QWidget* SettingsScreen::build_storage() {
         auto* cache_btn = new QPushButton("CLEAR CACHE");
         cache_btn->setFixedSize(110, 26);
         cache_btn->setStyleSheet(
-            QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid #7f1d1d;font-weight:700;}"
+            QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid %3;font-weight:700;}"
                     "QPushButton:hover{background:%1;color:%2;}")
-            .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+            .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE_DIM()));
         connect(cache_btn, &QPushButton::clicked, this, [this]() {
             auto answer = QMessageBox::warning(this, "Clear All Cache",
                 "Delete all temporary cached data?\nData will be re-fetched on next access.",
@@ -2189,9 +2158,9 @@ QWidget* SettingsScreen::build_data_sources() {
         auto* disable_all = new QPushButton("DISABLE ALL");
         disable_all->setFixedHeight(24);
         disable_all->setStyleSheet(
-            QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid #7f1d1d;font-weight:700;padding:0 10px;}"
+            QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid %3;font-weight:700;padding:0 10px;}"
                     "QPushButton:hover{background:%1;color:%2;}")
-            .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+            .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE_DIM()));
         connect(disable_all, &QPushButton::clicked, this, [this]() {
             auto answer = QMessageBox::warning(this, "Disable All",
                 "Disable all data source connections?",
@@ -2432,6 +2401,301 @@ QWidget* SettingsScreen::build_logging() {
     vl->addStretch();
     scroll->setWidget(page);
     return scroll;
+}
+
+// ── Security ─────────────────────────────────────────────────────────────────
+
+QWidget* SettingsScreen::build_security() {
+    auto* scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setStyleSheet(
+        QString("QScrollArea { border: none; background: transparent; }"
+                "QScrollBar:vertical { background: %1; width: 6px; }"
+                "QScrollBar::handle:vertical { background: %2; }"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED()));
+
+    auto* page = new QWidget;
+    auto* vl = new QVBoxLayout(page);
+    vl->setContentsMargins(24, 24, 24, 24);
+    vl->setSpacing(8);
+
+    // ── PIN STATUS ────────────────────────────────────────────────────────────
+    auto* t1 = new QLabel("PIN AUTHENTICATION");
+    t1->setStyleSheet(section_title_ss());
+    vl->addWidget(t1);
+    vl->addWidget(make_sep());
+    vl->addSpacing(8);
+
+    sec_pin_status_ = new QLabel;
+    sec_pin_status_->setStyleSheet(
+        QString("color:%1;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
+    vl->addWidget(make_row("PIN Status", sec_pin_status_,
+                           "A 6-digit PIN is required to unlock the terminal."));
+
+    sec_lockout_status_ = new QLabel;
+    sec_lockout_status_->setStyleSheet(
+        QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+    vl->addWidget(make_row("Failed Attempts", sec_lockout_status_,
+                           "PIN lockout engages after 5 consecutive failures."));
+
+    vl->addSpacing(8);
+    vl->addWidget(make_sep());
+    vl->addSpacing(8);
+
+    // ── CHANGE PIN ────────────────────────────────────────────────────────────
+    auto* t2 = new QLabel("CHANGE PIN");
+    t2->setStyleSheet(sub_title_ss());
+    vl->addWidget(t2);
+    vl->addSpacing(4);
+
+    sec_change_pin_btn_ = new QPushButton("Change PIN");
+    sec_change_pin_btn_->setFixedWidth(140);
+    sec_change_pin_btn_->setStyleSheet(btn_secondary_ss());
+    vl->addWidget(sec_change_pin_btn_);
+
+    // Expandable change-PIN form (hidden by default)
+    sec_change_pin_form_ = new QWidget;
+    sec_change_pin_form_->setStyleSheet("background: transparent;");
+    auto* cpfl = new QVBoxLayout(sec_change_pin_form_);
+    cpfl->setContentsMargins(0, 8, 0, 0);
+    cpfl->setSpacing(6);
+
+    auto make_pin_field = [&](const QString& placeholder) {
+        auto* input = new QLineEdit;
+        input->setPlaceholderText(placeholder);
+        input->setMaxLength(6);
+        input->setEchoMode(QLineEdit::Password);
+        input->setFixedWidth(200);
+        input->setStyleSheet(input_ss());
+        return input;
+    };
+
+    sec_current_pin_ = make_pin_field("Current PIN");
+    cpfl->addWidget(make_row("Current PIN", sec_current_pin_));
+
+    sec_new_pin_ = make_pin_field("New PIN");
+    cpfl->addWidget(make_row("New PIN", sec_new_pin_));
+
+    sec_confirm_pin_ = make_pin_field("Confirm PIN");
+    cpfl->addWidget(make_row("Confirm PIN", sec_confirm_pin_));
+
+    sec_pin_error_ = new QLabel;
+    sec_pin_error_->setWordWrap(true);
+    sec_pin_error_->setStyleSheet(
+        QString("color:%1;background:rgba(220,38,38,0.08);border:1px solid %2;padding:6px 8px;")
+        .arg(ui::colors::NEGATIVE(), ui::colors::NEGATIVE_DIM()));
+    sec_pin_error_->hide();
+    cpfl->addWidget(sec_pin_error_);
+
+    sec_pin_success_ = new QLabel;
+    sec_pin_success_->setWordWrap(true);
+    sec_pin_success_->setStyleSheet(
+        QString("color:%1;background:rgba(22,163,74,0.08);border:1px solid %2;padding:6px 8px;")
+        .arg(ui::colors::POSITIVE(), ui::colors::POSITIVE_DIM()));
+    sec_pin_success_->hide();
+    cpfl->addWidget(sec_pin_success_);
+
+    auto* save_pin_btn = new QPushButton("Update PIN");
+    save_pin_btn->setFixedWidth(140);
+    save_pin_btn->setStyleSheet(btn_primary_ss());
+    cpfl->addWidget(save_pin_btn);
+
+    sec_change_pin_form_->hide();
+    vl->addWidget(sec_change_pin_form_);
+
+    // Toggle form visibility
+    connect(sec_change_pin_btn_, &QPushButton::clicked, this, [this]() {
+        bool showing = sec_change_pin_form_->isVisible();
+        sec_change_pin_form_->setVisible(!showing);
+        sec_change_pin_btn_->setText(showing ? "Change PIN" : "Cancel");
+        if (!showing) {
+            sec_current_pin_->clear();
+            sec_new_pin_->clear();
+            sec_confirm_pin_->clear();
+            sec_pin_error_->hide();
+            sec_pin_success_->hide();
+            sec_current_pin_->setFocus();
+        }
+    });
+
+    // Save PIN handler
+    connect(save_pin_btn, &QPushButton::clicked, this, [this]() {
+        sec_pin_error_->hide();
+        sec_pin_success_->hide();
+
+        auto& pm = auth::PinManager::instance();
+        const QString current = sec_current_pin_->text();
+        const QString new_pin = sec_new_pin_->text();
+        const QString confirm = sec_confirm_pin_->text();
+
+        // Verify current PIN
+        if (!pm.verify_pin(current)) {
+            sec_pin_error_->setText("Current PIN is incorrect");
+            sec_pin_error_->show();
+            sec_current_pin_->clear();
+            sec_current_pin_->setFocus();
+            return;
+        }
+
+        // Validate new PIN
+        if (new_pin.length() != 6) {
+            sec_pin_error_->setText("New PIN must be exactly 6 digits");
+            sec_pin_error_->show();
+            return;
+        }
+        for (const QChar& c : new_pin) {
+            if (!c.isDigit()) {
+                sec_pin_error_->setText("PIN must contain only digits");
+                sec_pin_error_->show();
+                return;
+            }
+        }
+        if (new_pin != confirm) {
+            sec_pin_error_->setText("New PINs do not match");
+            sec_pin_error_->show();
+            sec_confirm_pin_->clear();
+            sec_confirm_pin_->setFocus();
+            return;
+        }
+        if (new_pin == current) {
+            sec_pin_error_->setText("New PIN must be different from current PIN");
+            sec_pin_error_->show();
+            return;
+        }
+
+        auto result = pm.set_pin(new_pin);
+        if (result.is_err()) {
+            sec_pin_error_->setText(QString::fromStdString(result.error()));
+            sec_pin_error_->show();
+            return;
+        }
+
+        sec_pin_success_->setText("PIN updated successfully");
+        sec_pin_success_->show();
+        sec_current_pin_->clear();
+        sec_new_pin_->clear();
+        sec_confirm_pin_->clear();
+        load_security();
+
+        LOG_INFO("Settings", "PIN changed via Security settings");
+    });
+
+    vl->addSpacing(8);
+    vl->addWidget(make_sep());
+    vl->addSpacing(8);
+
+    // ── AUTO-LOCK ─────────────────────────────────────────────────────────────
+    auto* t3 = new QLabel("AUTO-LOCK");
+    t3->setStyleSheet(sub_title_ss());
+    vl->addWidget(t3);
+    vl->addSpacing(4);
+
+    sec_autolock_toggle_ = new QCheckBox("Enable auto-lock on inactivity");
+    sec_autolock_toggle_->setChecked(true);
+    sec_autolock_toggle_->setStyleSheet(check_ss());
+    vl->addWidget(make_row("Auto-Lock", sec_autolock_toggle_,
+                           "Locks the terminal after a period of inactivity."));
+
+    sec_lock_timeout_ = new QComboBox;
+    sec_lock_timeout_->addItem("1 min",  1);
+    sec_lock_timeout_->addItem("2 min",  2);
+    sec_lock_timeout_->addItem("5 min",  5);
+    sec_lock_timeout_->addItem("10 min", 10);
+    sec_lock_timeout_->addItem("15 min", 15);
+    sec_lock_timeout_->addItem("30 min", 30);
+    sec_lock_timeout_->addItem("60 min", 60);
+    sec_lock_timeout_->setCurrentIndex(3); // default 10 min
+    sec_lock_timeout_->setStyleSheet(combo_ss());
+    vl->addWidget(make_row("Lock Timeout", sec_lock_timeout_,
+                           "Time of inactivity before the terminal locks."));
+
+    // Enable/disable timeout combo based on toggle
+    connect(sec_autolock_toggle_, &QCheckBox::toggled, this, [this](bool checked) {
+        sec_lock_timeout_->setEnabled(checked);
+    });
+
+    vl->addSpacing(16);
+
+    // ── SAVE ──────────────────────────────────────────────────────────────────
+    auto* save_btn = new QPushButton("Save Security Settings");
+    save_btn->setFixedWidth(200);
+    save_btn->setStyleSheet(btn_primary_ss());
+    connect(save_btn, &QPushButton::clicked, this, [this]() {
+        auto& repo = SettingsRepository::instance();
+        auto& guard = auth::InactivityGuard::instance();
+
+        bool autolock = sec_autolock_toggle_->isChecked();
+        int minutes = sec_lock_timeout_->currentData().toInt();
+
+        repo.set("security.autolock_enabled", autolock ? "true" : "false", "security");
+        repo.set("security.lock_timeout_minutes", QString::number(minutes), "security");
+
+        guard.set_timeout_minutes(minutes);
+        guard.set_enabled(autolock);
+
+        LOG_INFO("Settings", QString("Security settings saved: autolock=%1, timeout=%2min")
+                 .arg(autolock).arg(minutes));
+    });
+    vl->addWidget(save_btn);
+
+    vl->addStretch();
+    scroll->setWidget(page);
+    return scroll;
+}
+
+void SettingsScreen::load_security() {
+    auto& pm = auth::PinManager::instance();
+    auto& repo = SettingsRepository::instance();
+
+    // PIN status
+    if (sec_pin_status_) {
+        if (pm.has_pin())
+            sec_pin_status_->setText("CONFIGURED");
+        else
+            sec_pin_status_->setText("NOT SET");
+        sec_pin_status_->setStyleSheet(
+            QString("color:%1;font-weight:700;background:transparent;")
+            .arg(pm.has_pin() ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+    }
+
+    // Lockout status
+    if (sec_lockout_status_) {
+        int attempts = pm.failed_attempts();
+        if (attempts == 0) {
+            sec_lockout_status_->setText("0 / 5");
+        } else {
+            sec_lockout_status_->setText(QString("%1 / 5").arg(attempts));
+        }
+        sec_lockout_status_->setStyleSheet(
+            QString("color:%1;font-weight:700;background:transparent;")
+            .arg(attempts > 0 ? ui::colors::WARNING() : ui::colors::TEXT_SECONDARY()));
+    }
+
+    // Change PIN button visibility (only if PIN exists)
+    if (sec_change_pin_btn_)
+        sec_change_pin_btn_->setEnabled(pm.has_pin());
+
+    // Auto-lock settings
+    if (sec_autolock_toggle_ && sec_lock_timeout_) {
+        const QSignalBlocker b1(sec_autolock_toggle_);
+        const QSignalBlocker b2(sec_lock_timeout_);
+
+        auto r_enabled = repo.get("security.autolock_enabled");
+        bool enabled = !r_enabled.is_ok() || r_enabled.value() != "false"; // default true
+        sec_autolock_toggle_->setChecked(enabled);
+        sec_lock_timeout_->setEnabled(enabled);
+
+        auto r_timeout = repo.get("security.lock_timeout_minutes");
+        int minutes = r_timeout.is_ok() ? r_timeout.value().toInt() : 10;
+        // Find matching combo index by data
+        for (int i = 0; i < sec_lock_timeout_->count(); ++i) {
+            if (sec_lock_timeout_->itemData(i).toInt() == minutes) {
+                sec_lock_timeout_->setCurrentIndex(i);
+                break;
+            }
+        }
+    }
 }
 
 // ── Profiles ──────────────────────────────────────────────────────────────────

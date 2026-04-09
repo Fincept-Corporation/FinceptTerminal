@@ -18,25 +18,19 @@ PerformanceWidget::PerformanceWidget(QWidget* parent)
 
     for (const auto& label : labels) {
         auto* row = new QWidget;
-        row->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
 
         MetricRow mr;
+        mr.row_widget = row;
         mr.label = new QLabel(label);
-        mr.label->setStyleSheet(
-            QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
         rl->addWidget(mr.label);
         rl->addStretch();
 
         mr.period = new QLabel("TODAY");
-        mr.period->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
         rl->addWidget(mr.period);
 
         mr.value = new QLabel("--");
-        mr.value->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;")
-                                    .arg(ui::colors::TEXT_PRIMARY()));
         rl->addWidget(mr.value);
 
         rows_.append(mr);
@@ -46,8 +40,27 @@ PerformanceWidget::PerformanceWidget(QWidget* parent)
 
     connect(this, &BaseWidget::refresh_requested, this, &PerformanceWidget::refresh_data);
 
+    apply_styles();
     set_loading(true);
     refresh_data();
+}
+
+void PerformanceWidget::apply_styles() {
+    for (const auto& mr : rows_) {
+        mr.row_widget->setStyleSheet(
+            QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
+        mr.label->setStyleSheet(
+            QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
+        mr.period->setStyleSheet(
+            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
+        mr.value->setStyleSheet(
+            QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;")
+                .arg(ui::colors::TEXT_PRIMARY()));
+    }
+}
+
+void PerformanceWidget::on_theme_changed() {
+    apply_styles();
 }
 
 void PerformanceWidget::refresh_data() {

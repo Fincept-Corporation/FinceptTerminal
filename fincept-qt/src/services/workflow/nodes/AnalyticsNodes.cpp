@@ -33,6 +33,14 @@ void analytics_run_python_json(const QString& script, const QStringList& args,
             cb(false, {}, "Invalid JSON: " + res.output.left(200));
             return;
         }
+        // Check for Python-level error: {"success": false, "error": "..."}
+        if (doc.isObject()) {
+            auto obj = doc.object();
+            if (obj.contains("success") && !obj.value("success").toBool(true)) {
+                cb(false, {}, obj.value("error").toString("Python script returned failure"));
+                return;
+            }
+        }
         cb(true, doc.isObject() ? QJsonValue(doc.object()) : QJsonValue(doc.array()), {});
     });
 }

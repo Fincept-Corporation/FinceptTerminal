@@ -15,30 +15,41 @@ namespace fincept::screens {
 
 static const char* FONT = "'Consolas','Courier New',monospace";
 
-static const char* SIDEBAR_SS = "QTreeWidget { background: #0a0a0a; color: #808080; border: none;"
-                                "  font-size: 12px; font-family: 'Consolas','Courier New',monospace;"
-                                "  outline: none; }"
-                                "QTreeWidget::item { height: 26px; padding-left: 6px; border: none; }"
-                                "QTreeWidget::item:hover { background: #111111; color: #e5e5e5; }"
-                                "QTreeWidget::item:selected { background: #161616; color: #d97706; }"
-                                "QTreeWidget::branch { background: #0a0a0a; }"
-                                "QTreeWidget::branch:hover { background: #111111; }"
-                                "QTreeWidget::branch:has-children:!has-siblings:closed,"
-                                "QTreeWidget::branch:closed:has-children:has-siblings"
-                                " { border-image: none; image: none; }"
-                                "QTreeWidget::branch:open:has-children:!has-siblings,"
-                                "QTreeWidget::branch:open:has-children:has-siblings"
-                                " { border-image: none; image: none; }"
-                                "QScrollBar:vertical { width: 5px; background: transparent; }"
-                                "QScrollBar::handle:vertical { background: #222222; }"
-                                "QScrollBar::handle:vertical:hover { background: #333333; }"
-                                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }";
+static QString SIDEBAR_SS() {
+    return QString(
+        "QTreeWidget { background: %1; color: %2; border: none;"
+        "  font-size: 12px; font-family: 'Consolas','Courier New',monospace;"
+        "  outline: none; }"
+        "QTreeWidget::item { height: 26px; padding-left: 6px; border: none; }"
+        "QTreeWidget::item:hover { background: %3; color: %4; }"
+        "QTreeWidget::item:selected { background: %5; color: %6; }"
+        "QTreeWidget::branch { background: %1; }"
+        "QTreeWidget::branch:hover { background: %3; }"
+        "QTreeWidget::branch:has-children:!has-siblings:closed,"
+        "QTreeWidget::branch:closed:has-children:has-siblings"
+        " { border-image: none; image: none; }"
+        "QTreeWidget::branch:open:has-children:!has-siblings,"
+        "QTreeWidget::branch:open:has-children:has-siblings"
+        " { border-image: none; image: none; }"
+        "QScrollBar:vertical { width: 5px; background: transparent; }"
+        "QScrollBar::handle:vertical { background: %7; }"
+        "QScrollBar::handle:vertical:hover { background: %8; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY,
+             ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY,
+             ui::colors::BG_HOVER, ui::colors::AMBER,
+             ui::colors::BORDER_MED, ui::colors::BORDER_BRIGHT);
+}
 
-static const char* SCROLL_SS = "QScrollArea { border: none; background: transparent; }"
-                               "QScrollBar:vertical { width: 5px; background: transparent; }"
-                               "QScrollBar::handle:vertical { background: #222222; }"
-                               "QScrollBar::handle:vertical:hover { background: #333333; }"
-                               "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }";
+static QString SCROLL_SS() {
+    return QString(
+        "QScrollArea { border: none; background: transparent; }"
+        "QScrollBar:vertical { width: 5px; background: transparent; }"
+        "QScrollBar::handle:vertical { background: %1; }"
+        "QScrollBar::handle:vertical:hover { background: %2; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+        .arg(ui::colors::BORDER_MED, ui::colors::BORDER_BRIGHT);
+}
 
 // ============================================================================
 // Helpers
@@ -46,25 +57,25 @@ static const char* SCROLL_SS = "QScrollArea { border: none; background: transpar
 
 QLabel* DocsScreen::make_heading(const QString& text) {
     auto* lbl = new QLabel(text);
-    lbl->setStyleSheet("color: #d97706; font-size: 14px; font-weight: bold; letter-spacing: 0.5px;"
-                       " background: transparent; font-family: 'Consolas','Courier New',monospace;"
-                       " padding: 4px 0;");
+    lbl->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: bold; letter-spacing: 0.5px;"
+                              " background: transparent; font-family: 'Consolas','Courier New',monospace;"
+                              " padding: 4px 0;").arg(ui::colors::AMBER));
     lbl->setWordWrap(true);
     return lbl;
 }
 
 QLabel* DocsScreen::make_body_label(const QString& text) {
     auto* lbl = new QLabel(text);
-    lbl->setStyleSheet("color: #e5e5e5; font-size: 12px; background: transparent; line-height: 1.5;"
-                       " font-family: 'Consolas','Courier New',monospace;");
+    lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; line-height: 1.5;"
+                              " font-family: 'Consolas','Courier New',monospace;").arg(ui::colors::TEXT_PRIMARY));
     lbl->setWordWrap(true);
     return lbl;
 }
 
 QLabel* DocsScreen::make_muted_label(const QString& text) {
     auto* lbl = new QLabel(text);
-    lbl->setStyleSheet("color: #808080; font-size: 11px; background: transparent;"
-                       " font-family: 'Consolas','Courier New',monospace;");
+    lbl->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;"
+                              " font-family: 'Consolas','Courier New',monospace;").arg(ui::colors::TEXT_SECONDARY));
     lbl->setWordWrap(true);
     return lbl;
 }
@@ -72,7 +83,8 @@ QLabel* DocsScreen::make_muted_label(const QString& text) {
 QWidget* DocsScreen::make_section_panel(const QString& icon, const QString& title, const QString& body,
                                         const QString& accent_color) {
     auto* panel = new QWidget;
-    panel->setStyleSheet("background: #0a0a0a; border: 1px solid #1a1a1a;");
+    panel->setStyleSheet(QString("background: %1; border: 1px solid %2;")
+                            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
@@ -80,15 +92,16 @@ QWidget* DocsScreen::make_section_panel(const QString& icon, const QString& titl
     // Header
     auto* hdr = new QLabel(QString("%1  %2").arg(icon, title));
     hdr->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 0.5px;"
-                               " background: #111111; padding: 8px 12px; border-bottom: 1px solid #1a1a1a;"
+                               " background: %2; padding: 8px 12px; border-bottom: 1px solid %3;"
                                " font-family: 'Consolas','Courier New',monospace;")
-                           .arg(accent_color));
+                           .arg(accent_color, ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     vl->addWidget(hdr);
 
     // Body
     auto* content = new QLabel(body);
-    content->setStyleSheet("color: #e5e5e5; font-size: 12px; background: transparent; padding: 10px 12px;"
-                           " font-family: 'Consolas','Courier New',monospace; line-height: 1.6;");
+    content->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; padding: 10px 12px;"
+                                  " font-family: 'Consolas','Courier New',monospace; line-height: 1.6;")
+                               .arg(ui::colors::TEXT_PRIMARY));
     content->setWordWrap(true);
     vl->addWidget(content);
 
@@ -98,15 +111,17 @@ QWidget* DocsScreen::make_section_panel(const QString& icon, const QString& titl
 QWidget* DocsScreen::make_skill_panel(const QString& beginner, const QString& intermediate, const QString& advanced,
                                       const QString& pro) {
     auto* panel = new QWidget;
-    panel->setStyleSheet("background: #0a0a0a; border: 1px solid #1a1a1a;");
+    panel->setStyleSheet(QString("background: %1; border: 1px solid %2;")
+                            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
     auto* hdr = new QLabel("SKILL LEVELS");
-    hdr->setStyleSheet("color: #d97706; font-size: 11px; font-weight: bold; letter-spacing: 0.5px;"
-                       " background: #111111; padding: 8px 12px; border-bottom: 1px solid #1a1a1a;"
-                       " font-family: 'Consolas','Courier New',monospace;");
+    hdr->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 0.5px;"
+                              " background: %2; padding: 8px 12px; border-bottom: 1px solid %3;"
+                              " font-family: 'Consolas','Courier New',monospace;")
+                           .arg(ui::colors::AMBER, ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     vl->addWidget(hdr);
 
     struct Level {
@@ -115,15 +130,15 @@ QWidget* DocsScreen::make_skill_panel(const QString& beginner, const QString& in
         const QString& text;
     };
     Level levels[] = {
-        {"BEGINNER", "#16a34a", beginner},
-        {"INTERMEDIATE", "#2563eb", intermediate},
-        {"ADVANCED", "#d97706", advanced},
-        {"PRO", "#dc2626", pro},
+        {"BEGINNER", ui::colors::POSITIVE(), beginner},
+        {"INTERMEDIATE", ui::colors::INFO(), intermediate},
+        {"ADVANCED", ui::colors::AMBER(), advanced},
+        {"PRO", ui::colors::NEGATIVE(), pro},
     };
 
     for (const auto& lvl : levels) {
         auto* row = new QWidget;
-        row->setStyleSheet("background: transparent; border-bottom: 1px solid #111111;");
+        row->setStyleSheet(QString("background: transparent; border-bottom: 1px solid %1;").arg(ui::colors::BG_RAISED));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(12, 8, 12, 8);
         rl->setSpacing(10);
@@ -136,8 +151,8 @@ QWidget* DocsScreen::make_skill_panel(const QString& beginner, const QString& in
         rl->addWidget(badge);
 
         auto* desc = new QLabel(lvl.text);
-        desc->setStyleSheet("color: #e5e5e5; font-size: 11px; background: transparent;"
-                            " font-family: 'Consolas','Courier New',monospace;");
+        desc->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;"
+                                   " font-family: 'Consolas','Courier New',monospace;").arg(ui::colors::TEXT_PRIMARY));
         desc->setWordWrap(true);
         rl->addWidget(desc, 1);
 
@@ -160,7 +175,7 @@ QWidget* DocsScreen::make_page(const QString& title, const QString& subtitle,
                                const std::vector<std::pair<QString, QString>>& sections) {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(SCROLL_SS);
+    scroll->setStyleSheet(SCROLL_SS());
 
     auto* page = new QWidget;
     page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
@@ -177,12 +192,12 @@ QWidget* DocsScreen::make_page(const QString& title, const QString& subtitle,
     // Separator
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet("color: #1a1a1a;");
+    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM));
     vl->addWidget(sep);
 
     // Sections
     for (const auto& [heading, body] : sections) {
-        vl->addWidget(make_section_panel("■", heading, body, "#d97706"));
+        vl->addWidget(make_section_panel("■", heading, body, ui::colors::AMBER));
     }
 
     vl->addStretch();
@@ -197,7 +212,7 @@ QWidget* DocsScreen::make_page(const QString& title, const QString& subtitle,
 QWidget* DocsScreen::page_welcome() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(SCROLL_SS);
+    scroll->setStyleSheet(SCROLL_SS());
 
     auto* page = new QWidget;
     page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
@@ -210,7 +225,7 @@ QWidget* DocsScreen::page_welcome() {
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet("color: #1a1a1a;");
+    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM));
     vl->addWidget(sep);
 
     vl->addWidget(
@@ -222,7 +237,7 @@ QWidget* DocsScreen::page_welcome() {
                            "With 45+ integrated screens, real-time WebSocket feeds, embedded Python analytics, "
                            "and support for 15+ broker integrations, Fincept Terminal bridges the gap between "
                            "retail and institutional tooling.",
-                           "#d97706"));
+                           ui::colors::AMBER));
 
     vl->addWidget(make_section_panel("■", "KEY CAPABILITIES",
                                      "■  Real-time market data across equities, crypto, forex, commodities\n"
@@ -238,7 +253,7 @@ QWidget* DocsScreen::page_welcome() {
                                      "■  Report builder with drag-and-drop components\n"
                                      "■  Backtesting with 6 providers and 50+ strategies\n"
                                      "■  Algorithmic trading with strategy builder and scanner",
-                                     "#16a34a"));
+                                     ui::colors::POSITIVE));
 
     vl->addWidget(make_section_panel("■", "WHO IS THIS FOR?",
                                      "■  Retail traders seeking institutional-quality tools\n"
@@ -248,7 +263,7 @@ QWidget* DocsScreen::page_welcome() {
                                      "■  Algorithmic trading developers\n"
                                      "■  Crypto traders needing multi-exchange access\n"
                                      "■  Economics researchers working with global datasets",
-                                     "#2563eb"));
+                                     ui::colors::INFO));
 
     vl->addWidget(make_section_panel("■", "NAVIGATION",
                                      "Use the sidebar on the left to browse documentation by category. "
@@ -257,7 +272,7 @@ QWidget* DocsScreen::page_welcome() {
                                      "■  Key Features — detailed capabilities\n"
                                      "■  Real-World Usage — practical applications\n"
                                      "■  Skill Levels — Beginner through Pro guidance",
-                                     "#808080"));
+                                     ui::colors::TEXT_SECONDARY));
 
     vl->addStretch();
     scroll->setWidget(page);
@@ -267,7 +282,7 @@ QWidget* DocsScreen::page_welcome() {
 QWidget* DocsScreen::page_getting_started() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(SCROLL_SS);
+    scroll->setStyleSheet(SCROLL_SS());
 
     auto* page = new QWidget;
     page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
@@ -280,7 +295,7 @@ QWidget* DocsScreen::page_getting_started() {
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet("color: #1a1a1a;");
+    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM));
     vl->addWidget(sep);
 
     vl->addWidget(make_section_panel("1", "LAUNCH & LOGIN",
@@ -290,7 +305,7 @@ QWidget* DocsScreen::page_getting_started() {
                                      "■  Continue as Guest (limited features)\n"
                                      "■  Log in with existing credentials\n\n"
                                      "After login, you'll land on the Dashboard — your home base.",
-                                     "#16a34a"));
+                                     ui::colors::POSITIVE));
 
     vl->addWidget(make_section_panel("2", "THE INTERFACE",
                                      "The terminal has four main zones:\n\n"
@@ -300,14 +315,14 @@ QWidget* DocsScreen::page_getting_started() {
                                      "STATUS BAR (bottom) — Version, market indicators, connection status\n\n"
                                      "Use the Navigate menu (in toolbar) to access 30+ additional screens "
                                      "organized by category: Markets & Data, Trading, Research, Tools, etc.",
-                                     "#2563eb"));
+                                     ui::colors::INFO));
 
     vl->addWidget(make_section_panel("3", "KEYBOARD SHORTCUTS",
                                      "F11  — Toggle fullscreen\n"
                                      "F10  — Focus mode (hide tab/status bars for maximum screen space)\n"
                                      "F5   — Refresh current screen\n"
                                      "Ctrl+P — Take screenshot (saved to home directory)",
-                                     "#d97706"));
+                                     ui::colors::AMBER));
 
     vl->addWidget(make_section_panel("4", "SUBSCRIPTION PLANS",
                                      "Fincept Terminal offers tiered access:\n\n"
@@ -315,7 +330,7 @@ QWidget* DocsScreen::page_getting_started() {
                                      "■  PRO — Full market data, all screens, real trading, AI chat\n"
                                      "■  ENTERPRISE — Everything + API access, priority support\n\n"
                                      "Manage your plan from Settings or the Pricing screen.",
-                                     "#d97706"));
+                                     ui::colors::AMBER));
 
     vl->addWidget(
         make_skill_panel("Explore the Dashboard, set up a watchlist, browse market data",
@@ -360,7 +375,7 @@ QWidget* DocsScreen::page_keyboard_shortcuts() {
 QWidget* DocsScreen::page_dashboard() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(SCROLL_SS);
+    scroll->setStyleSheet(SCROLL_SS());
 
     auto* page = new QWidget;
     page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
@@ -373,7 +388,7 @@ QWidget* DocsScreen::page_dashboard() {
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet("color: #1a1a1a;");
+    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM));
     vl->addWidget(sep);
 
     vl->addWidget(
@@ -381,7 +396,7 @@ QWidget* DocsScreen::page_dashboard() {
                            "The Dashboard is your primary workspace. It features a draggable widget grid "
                            "where you can arrange market widgets, a scrolling ticker bar showing live prices, "
                            "a market pulse panel with sector performance, and a status bar showing connection state.",
-                           "#d97706"));
+                           ui::colors::AMBER));
 
     vl->addWidget(make_section_panel("■", "AVAILABLE WIDGETS",
                                      "■  Stock Quote — Real-time price, change, volume for any symbol\n"
@@ -401,7 +416,7 @@ QWidget* DocsScreen::page_dashboard() {
                                      "■  Crypto — Top cryptocurrency prices\n"
                                      "■  Commodities — Gold, oil, silver, natural gas\n"
                                      "■  Portfolio Summary — Holdings overview with allocation",
-                                     "#16a34a"));
+                                     ui::colors::POSITIVE));
 
     vl->addWidget(
         make_section_panel("■", "REAL-WORLD USAGE",
@@ -409,7 +424,7 @@ QWidget* DocsScreen::page_dashboard() {
                            "■  Active trading: Pin stock quote + quick trade widgets, monitor watchlist\n"
                            "■  Portfolio management: Use portfolio summary + risk metrics + performance\n"
                            "■  Sector rotation: Combine sector heatmap + top movers + indices",
-                           "#2563eb"));
+                           ui::colors::INFO));
 
     vl->addWidget(make_skill_panel(
         "Start with default layout. Add a Stock Quote widget for a symbol you follow. Watch the ticker bar.",
@@ -427,7 +442,7 @@ QWidget* DocsScreen::page_dashboard() {
 QWidget* DocsScreen::page_markets() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(SCROLL_SS);
+    scroll->setStyleSheet(SCROLL_SS());
 
     auto* page = new QWidget;
     page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
@@ -440,14 +455,14 @@ QWidget* DocsScreen::page_markets() {
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet("color: #1a1a1a;");
+    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM));
     vl->addWidget(sep);
 
     vl->addWidget(make_section_panel("■", "OVERVIEW",
                                      "The Markets screen provides a comprehensive view of global markets organized "
                                      "by region. It displays indices, equities, forex, commodities, and crypto in "
                                      "panel-based layouts with configurable auto-refresh (default: 10 minutes).",
-                                     "#d97706"));
+                                     ui::colors::AMBER));
 
     vl->addWidget(make_section_panel("■", "KEY FEATURES",
                                      "■  Regional panels — US, Europe, Asia, Global\n"
@@ -456,14 +471,14 @@ QWidget* DocsScreen::page_markets() {
                                      "■  Market hours and session status indicators\n"
                                      "■  Sort by name, price, change, or volume\n"
                                      "■  Click any instrument to navigate to detailed view",
-                                     "#16a34a"));
+                                     ui::colors::POSITIVE));
 
     vl->addWidget(make_section_panel("■", "REAL-WORLD USAGE",
                                      "■  Pre-market: Scan global indices to gauge overnight sentiment\n"
                                      "■  Cross-market analysis: Compare US vs Europe vs Asia performance\n"
                                      "■  Commodity tracking: Monitor gold, oil, natural gas alongside equities\n"
                                      "■  FX correlation: Watch currency pairs relative to equity moves",
-                                     "#2563eb"));
+                                     ui::colors::INFO));
 
     vl->addWidget(
         make_skill_panel("Browse the default view. Learn to read green (up) and red (down) color coding.",
@@ -532,7 +547,7 @@ QWidget* DocsScreen::page_watchlist() {
 QWidget* DocsScreen::page_crypto_trading() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(SCROLL_SS);
+    scroll->setStyleSheet(SCROLL_SS());
 
     auto* page = new QWidget;
     page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
@@ -545,21 +560,21 @@ QWidget* DocsScreen::page_crypto_trading() {
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet("color: #1a1a1a;");
+    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM));
     vl->addWidget(sep);
 
     vl->addWidget(make_section_panel("■", "OVERVIEW",
                                      "A full-featured crypto trading terminal supporting 10+ exchanges with real-time "
                                      "WebSocket feeds. Features OHLC charts, order book depth, order entry with market/"
                                      "limit/stop orders, watchlist, and a paper trading engine for risk-free practice.",
-                                     "#d97706"));
+                                     ui::colors::AMBER));
 
     vl->addWidget(make_section_panel("■", "SUPPORTED EXCHANGES",
                                      "Kraken  |  Binance  |  Bybit  |  OKX  |  Coinbase  |  Bitget\n"
                                      "Gate  |  KuCoin  |  MEXC  |  HTX\n\n"
                                      "Each exchange supports: spot trading, real-time orderbook, OHLC candles, "
                                      "ticker data, and trade history via WebSocket.",
-                                     "#16a34a"));
+                                     ui::colors::POSITIVE));
 
     vl->addWidget(make_section_panel("■", "PANELS",
                                      "■  Command Bar — Exchange selector, symbol input, paper/live toggle, API config\n"
@@ -569,7 +584,7 @@ QWidget* DocsScreen::page_crypto_trading() {
                                      "■  Order Entry — Market, Limit, Stop-Limit with SL/TP\n"
                                      "■  Order Book — Live bid/ask depth visualization\n"
                                      "■  Bottom Panel — Open orders, order history, positions, balances",
-                                     "#2563eb"));
+                                     ui::colors::INFO));
 
     vl->addWidget(make_section_panel("■", "PAPER TRADING",
                                      "Built-in paper trading engine with:\n"
@@ -578,7 +593,7 @@ QWidget* DocsScreen::page_crypto_trading() {
                                      "■  P&L tracking per position\n"
                                      "■  Order history persistence\n"
                                      "■  Switch between Paper and Live mode with one click",
-                                     "#0891b2"));
+                                     ui::colors::CYAN));
 
     vl->addWidget(make_skill_panel(
         "Start in Paper mode. Pick BTC/USDT, place a small market buy, watch it fill. Learn the order book.",
@@ -1331,7 +1346,7 @@ QWidget* DocsScreen::page_profile() {
 void DocsScreen::build_sidebar() {
     sidebar_ = new QTreeWidget;
     sidebar_->setHeaderHidden(true);
-    sidebar_->setStyleSheet(SIDEBAR_SS);
+    sidebar_->setStyleSheet(SIDEBAR_SS());
     sidebar_->setIndentation(16);
     sidebar_->setAnimated(true);
     sidebar_->setRootIsDecorated(true);
@@ -1348,7 +1363,7 @@ void DocsScreen::build_sidebar() {
         QFont f(FONT, 10);
         f.setBold(true);
         cat->setFont(0, f);
-        cat->setForeground(0, QColor("#d97706"));
+        cat->setForeground(0, QColor(ui::colors::AMBER.get()));
         cat->setExpanded(true);
         return cat;
     };
@@ -1520,32 +1535,37 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
 
     // ── Command bar ──────────────────────────────────────────────────────────
     auto* cmd = new QWidget;
-    cmd->setStyleSheet("background: #0a0a0a; border-bottom: 1px solid #1a1a1a;");
+    cmd->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;")
+                           .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     cmd->setFixedHeight(32);
     auto* cmd_hl = new QHBoxLayout(cmd);
     cmd_hl->setContentsMargins(10, 0, 10, 0);
     cmd_hl->setSpacing(10);
 
     auto* title = new QLabel("DOCUMENTATION");
-    title->setStyleSheet("color: #d97706; font-size: 12px; font-weight: bold; letter-spacing: 1px;"
-                         " background: transparent; font-family: 'Consolas','Courier New',monospace;");
+    title->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; letter-spacing: 1px;"
+                                " background: transparent; font-family: 'Consolas','Courier New',monospace;")
+                            .arg(ui::colors::AMBER));
     cmd_hl->addWidget(title);
 
     auto* sep = new QLabel("|");
-    sep->setStyleSheet("color: #333333; background: transparent; font-family: 'Consolas',monospace;");
+    sep->setStyleSheet(QString("color: %1; background: transparent; font-family: 'Consolas',monospace;")
+                           .arg(ui::colors::BORDER_BRIGHT));
     cmd_hl->addWidget(sep);
 
     breadcrumb_ = new QLabel("FINCEPT TERMINAL v4.0.0");
-    breadcrumb_->setStyleSheet("color: #808080; font-size: 11px; font-weight: bold;"
-                               " background: transparent; letter-spacing: 0.5px;"
-                               " font-family: 'Consolas','Courier New',monospace;");
+    breadcrumb_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold;"
+                                      " background: transparent; letter-spacing: 0.5px;"
+                                      " font-family: 'Consolas','Courier New',monospace;")
+                                  .arg(ui::colors::TEXT_SECONDARY));
     cmd_hl->addWidget(breadcrumb_);
 
     cmd_hl->addStretch();
 
     auto* count = new QLabel("35 TOPICS  |  9 CATEGORIES");
-    count->setStyleSheet("color: #525252; font-size: 11px; background: transparent;"
-                         " font-family: 'Consolas','Courier New',monospace;");
+    count->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;"
+                                " font-family: 'Consolas','Courier New',monospace;")
+                            .arg(ui::colors::TEXT_TERTIARY));
     cmd_hl->addWidget(count);
 
     root->addWidget(cmd);
@@ -1555,8 +1575,9 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
     build_content_pages();
 
     auto* splitter = new QSplitter(Qt::Horizontal);
-    splitter->setStyleSheet("QSplitter { background: #080808; }"
-                            "QSplitter::handle { background: #1a1a1a; width: 1px; }");
+    splitter->setStyleSheet(QString("QSplitter { background: %1; }"
+                                    "QSplitter::handle { background: %2; width: 1px; }")
+                                .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
     splitter->addWidget(sidebar_);
     splitter->addWidget(pages_);
     splitter->setStretchFactor(0, 0);

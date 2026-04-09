@@ -39,9 +39,7 @@ void FinceptMacroPanel::activate() {
 
 void FinceptMacroPanel::build_controls(QHBoxLayout* thl) {
     auto* lbl = new QLabel("FINCEPT MACRO — COMING SOON");
-    lbl->setStyleSheet(
-        QString("color:%1; font-size:9px; font-weight:700;"
-                "background:transparent; letter-spacing:1px;").arg(kFinceptMacroColor));
+    lbl->setStyleSheet(ctrl_label_style() + "letter-spacing:1px;");
     thl->addWidget(lbl);
 }
 

@@ -49,7 +49,7 @@ QString LlmConfigSection::default_base_url(const QString& provider) {
     if (p == "ollama")
         return "http://localhost:11434";
     if (p == "fincept")
-        return "https://api.fincept.in/research/llm";
+        return {}; // endpoints are hardcoded in LlmService, no base_url needed
     return {};
 }
 
@@ -325,6 +325,16 @@ QWidget* LlmConfigSection::build_form_panel() {
     field_style(base_url_edit_);
     form->addRow(b_lbl, base_url_edit_);
 
+    // Tools toggle
+    tools_check_ = new QCheckBox("Enable MCP Tools (navigation, market data, portfolio, etc.)");
+    tools_check_->setChecked(true);
+    tools_check_->setStyleSheet(
+        "QCheckBox{color:" + QString(ui::colors::TEXT_PRIMARY()) + ";spacing:8px;}"
+        "QCheckBox::indicator{width:16px;height:16px;border:1px solid " + QString(ui::colors::BORDER_MED()) + ";border-radius:3px;background:" + QString(ui::colors::BG_RAISED()) + ";}"
+        "QCheckBox::indicator:checked{background:" + QString(ui::colors::AMBER()) + ";border-color:" + QString(ui::colors::AMBER()) + ";}");
+    tools_check_->setToolTip("When enabled, the AI can interact with the terminal: navigate screens, fetch market data, manage watchlists, etc.");
+    form->addRow(new QLabel(""), tools_check_);
+
     vl->addLayout(form);
 
     // Buttons
@@ -444,15 +454,20 @@ void LlmConfigSection::load_providers() {
     auto result = LlmConfigRepository::instance().list_providers();
     if (result.is_ok()) {
         for (const auto& p : result.value()) {
-            QString display = p.provider;
+            bool is_fincept = (p.provider.toLower() == "fincept");
+            QString display = is_fincept ? "Fincept LLM" : p.provider;
             if (p.is_active)
                 display += "  ✓";
-            if (!p.model.isEmpty())
+            // Show model tag only for non-fincept providers
+            if (!is_fincept && !p.model.isEmpty())
                 display += "  [" + p.model + "]";
             auto* item = new QListWidgetItem(display);
             item->setData(Qt::UserRole, p.provider);
+            // Only the active provider gets amber color
             if (p.is_active)
-                item->setForeground(QColor("" + QString(ui::colors::AMBER()) + ""));
+                item->setForeground(QColor(ui::colors::AMBER()));
+            else
+                item->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
             provider_list_->addItem(item);
         }
     }
@@ -502,26 +517,34 @@ void LlmConfigSection::populate_form(const QString& provider) {
             }
             base_url_edit_->setText(p.base_url.isEmpty() ? def_url : p.base_url);
 
+            // Tools toggle — always visible
+            tools_check_->setChecked(p.tools_enabled);
+            tools_check_->setVisible(true);
+
             if (is_fincept) {
                 api_key_edit_->clear();
                 auto stored = SettingsRepository::instance().get("fincept_api_key");
                 if (stored.is_ok() && !stored.value().isEmpty()) {
                     QString masked = stored.value().left(8) + "...";
-                    api_key_edit_->setPlaceholderText("From session: " + masked);
+                    api_key_edit_->setPlaceholderText("Linked to your Fincept account: " + masked);
                 } else {
-                    api_key_edit_->setPlaceholderText("Login to auto-configure");
+                    api_key_edit_->setPlaceholderText("Login to your Fincept account to enable");
                 }
                 api_key_edit_->setEnabled(false);
-                model_combo_->setEnabled(true);   // allow model selection
-                base_url_edit_->setEnabled(false);
-                fetch_btn_->setEnabled(true);     // allow fetching available models
+                // Fincept is a managed service — hide model/base_url/fetch
+                model_combo_->setVisible(false);
+                fetch_btn_->setVisible(false);
+                base_url_edit_->setVisible(false);
             } else {
                 api_key_edit_->setText(p.api_key);
                 api_key_edit_->setEnabled(true);
                 api_key_edit_->setPlaceholderText("sk-...");
+                model_combo_->setVisible(true);
                 model_combo_->setEnabled(true);
-                base_url_edit_->setEnabled(true);
+                fetch_btn_->setVisible(true);
                 fetch_btn_->setEnabled(true);
+                base_url_edit_->setVisible(true);
+                base_url_edit_->setEnabled(true);
             }
             return;
         }
@@ -530,10 +553,24 @@ void LlmConfigSection::populate_form(const QString& provider) {
     // New provider — clear form
     api_key_edit_->clear();
     api_key_edit_->setEnabled(!is_fincept);
-    base_url_edit_->setText(def_url);
-    base_url_edit_->setEnabled(!is_fincept);
-    model_combo_->setEnabled(true);   // fincept allows model selection
-    fetch_btn_->setEnabled(true);     // fincept supports fetching models
+    if (is_fincept) {
+        auto stored = SettingsRepository::instance().get("fincept_api_key");
+        if (stored.is_ok() && !stored.value().isEmpty())
+            api_key_edit_->setPlaceholderText("Linked to your Fincept account: " + stored.value().left(8) + "...");
+        else
+            api_key_edit_->setPlaceholderText("Login to your Fincept account to enable");
+        model_combo_->setVisible(false);
+        fetch_btn_->setVisible(false);
+        base_url_edit_->setVisible(false);
+    } else {
+        model_combo_->setVisible(true);
+        model_combo_->setEnabled(true);
+        fetch_btn_->setVisible(true);
+        fetch_btn_->setEnabled(true);
+        base_url_edit_->setVisible(true);
+        base_url_edit_->setEnabled(true);
+        base_url_edit_->setText(def_url);
+    }
 }
 
 // ============================================================================
@@ -566,13 +603,13 @@ void LlmConfigSection::on_save_provider() {
     cfg.model = model_combo_->currentText().trimmed();
     cfg.base_url = base_url_edit_->text().trimmed();
     cfg.is_active = true;
+    cfg.tools_enabled = tools_check_->isChecked();
 
-    // Fincept defaults
+    // Fincept defaults — endpoints are hardcoded in LlmService, base_url not needed
     if (is_fincept) {
         if (cfg.model.isEmpty())
             cfg.model = "MiniMax-M2.7";
-        if (cfg.base_url.isEmpty())
-            cfg.base_url = "https://api.fincept.in/research/llm";
+        cfg.base_url = {}; // not used for fincept
     }
 
     // Basic validation
@@ -580,19 +617,18 @@ void LlmConfigSection::on_save_provider() {
         show_status("API key is required for " + provider, true);
         return;
     }
-    if (cfg.model.isEmpty()) {
+    if (!is_fincept && cfg.model.isEmpty()) {
         show_status("Model name is required", true);
         return;
     }
 
-    // Set this as active (deactivates others)
-    LlmConfigRepository::instance().set_active(provider);
+    // Save first (INSERT OR REPLACE), THEN set active (deactivates others + activates this one)
     auto r2 = LlmConfigRepository::instance().save_provider(cfg);
-
     if (r2.is_err()) {
         show_status("Failed to save: " + QString::fromStdString(r2.error()), true);
         return;
     }
+    LlmConfigRepository::instance().set_active(provider);
 
     show_status("Saved and set as active provider", false);
     load_providers();
@@ -648,7 +684,17 @@ void LlmConfigSection::on_test_connection() {
         return;
     }
 
-    if (provider != "ollama" && provider != "fincept") {
+    if (provider == "fincept") {
+        // Fincept is a managed service — verify API key exists
+        auto stored = SettingsRepository::instance().get("fincept_api_key");
+        if (stored.is_ok() && !stored.value().isEmpty())
+            show_status("Fincept connected — API key active", false);
+        else
+            show_status("Not connected — login to your Fincept account first", true);
+        return;
+    }
+
+    if (provider != "ollama") {
         if (api_key_edit_->text().trimmed().isEmpty()) {
             show_status("API key required for test", true);
             return;
@@ -685,7 +731,12 @@ void LlmConfigSection::on_fetch_models() {
         return;
     }
 
-    if (provider != "ollama" && provider != "fincept") {
+    if (provider == "fincept") {
+        show_status("Fincept manages models automatically", false);
+        return;
+    }
+
+    if (provider != "ollama") {
         if (api_key_edit_->text().trimmed().isEmpty()) {
             show_status("Enter API key first, then fetch models", true);
             return;

@@ -1,5 +1,6 @@
 // src/screens/geopolitics/GeopoliticsScreen.h
 #pragma once
+#include "screens/IStatefulScreen.h"
 #include "services/geopolitics/GeopoliticsTypes.h"
 
 #include <QComboBox>
@@ -25,10 +26,15 @@ class TradeAnalysisPanel;
 /// Left: filter controls (country, city, category)
 /// Center: tab-switched content (Conflict Monitor, HDX, Relationships, Trade)
 /// Right: event detail / legend panel
-class GeopoliticsScreen : public QWidget {
+class GeopoliticsScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit GeopoliticsScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "geopolitics"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* event) override;

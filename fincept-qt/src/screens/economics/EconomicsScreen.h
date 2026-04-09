@@ -5,25 +5,41 @@
 // Each panel is lazy-constructed on first activation.
 #pragma once
 
+#include "screens/IStatefulScreen.h"
+
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QMap>
+#include <QScrollArea>
 #include <QStackedWidget>
 #include <QWidget>
+
+namespace fincept::ui { struct ThemeTokens; }
 
 namespace fincept::screens {
 
 class EconPanelBase;
 
-class EconomicsScreen : public QWidget {
+class EconomicsScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit EconomicsScreen(QWidget* parent = nullptr);
 
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "economics"; }
+    int state_version() const override { return 1; }
+
   private:
     void build_ui();
     void switch_to(const QString& source_id);
+    void refresh_theme();
 
     // badge bar + stacked panels
+    QWidget*        header_      = nullptr;
+    QLabel*         title_       = nullptr;
+    QLabel*         subtitle_    = nullptr;
+    QScrollArea*    scroll_      = nullptr;
     QWidget*        badge_bar_   = nullptr;
     QStackedWidget* stack_       = nullptr;
 

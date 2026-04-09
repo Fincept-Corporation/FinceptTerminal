@@ -51,8 +51,20 @@ class EconPanelBase : public QWidget {
     void display(const QJsonArray& rows, const QString& title = {});
     void export_csv();
 
-    /// Per-provider accent color stylesheet.
+    /// Per-provider accent color stylesheet (uses live theme tokens).
     QString panel_style() const;
+
+    /// Called when theme changes — re-applies panel_style(). Override for extra widgets.
+    virtual void refresh_panel_theme();
+
+    // ── Reusable token-based style helpers for sidebar panels ─────────────────
+    static QString sidebar_style();        // left panel background + border
+    static QString section_hdr_style();    // section header bar (e.g. "COUNTRY")
+    static QString section_lbl_style();    // section header label text
+    static QString search_input_style();   // search/filter QLineEdit
+    static QString ctrl_label_style();     // toolbar control labels ("YEARS", "PRESET")
+    QString        list_style() const;     // QListWidget using source accent color
+    static QString notice_style();         // warning/info notice label
 
     // ── Shared widgets (accessible to subclasses) ─────────────────────────────
     QLabel*      stat_latest_  = nullptr;
@@ -70,11 +82,14 @@ class EconPanelBase : public QWidget {
   private:
     void update_stats(const QJsonArray& rows);
 
-    QStackedWidget* stack_     = nullptr;  // 0=empty/status  1=table
-    QLabel*         empty_lbl_ = nullptr;
-    QTableWidget*   table_     = nullptr;
-    QLabel*         title_lbl_ = nullptr;
-    QLabel*         row_count_ = nullptr;
+    QWidget*        container_  = nullptr;  // root widget that owns panel_style()
+    QWidget*        cards_row_  = nullptr;
+    QWidget*        title_bar_  = nullptr;
+    QStackedWidget* stack_      = nullptr;  // 0=empty/status  1=table
+    QLabel*         empty_lbl_  = nullptr;
+    QTableWidget*   table_      = nullptr;
+    QLabel*         title_lbl_  = nullptr;
+    QLabel*         row_count_  = nullptr;
 };
 
 } // namespace fincept::screens

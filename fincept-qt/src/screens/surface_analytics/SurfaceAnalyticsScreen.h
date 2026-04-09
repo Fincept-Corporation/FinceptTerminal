@@ -4,6 +4,7 @@
 
 #include "SurfaceDemoData.h"
 #include "SurfaceTypes.h"
+#include "screens/IStatefulScreen.h"
 #include "services/databento/DatabentoService.h"
 
 #include <QComboBox>
@@ -22,10 +23,15 @@ class SurfaceTableWidget;
 class SurfaceMetricsPanel;
 class SurfaceDatabentoPanel;
 
-class SurfaceAnalyticsScreen : public QWidget {
+class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefulScreen {
     Q_OBJECT
   public:
     explicit SurfaceAnalyticsScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "surface_analytics"; }
+    int state_version() const override { return 1; }
 
   private slots:
     void on_category_clicked(int index);
@@ -39,6 +45,7 @@ class SurfaceAnalyticsScreen : public QWidget {
     void on_vol_surface_received(const fincept::DatabentoVolSurfaceResult& r);
     void on_ohlcv_received(const fincept::DatabentoOhlcvResult& r);
     void on_futures_received(const fincept::DatabentoFuturesResult& r);
+    void on_surface_received(const fincept::DatabentoSurfaceResult& r);
 
   protected:
     void showEvent(QShowEvent* e) override;

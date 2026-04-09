@@ -1,5 +1,7 @@
 #include "screens/node_editor/properties/ExecutionResultsPanel.h"
 
+#include "ui/theme/Theme.h"
+
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QJsonArray>
@@ -41,11 +43,14 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
     card->setObjectName("resultCard");
     card->setStyleSheet(
         QString("QWidget#resultCard {"
-                "  background: #161616;"
-                "  border-left: 3px solid %1;"
-                "  border-bottom: 1px solid #222;"
+                "  background: %1;"
+                "  border-left: 3px solid %2;"
+                "  border-bottom: 1px solid %3;"
                 "  margin: 0;"
-                "}").arg(ok ? "#16a34a" : "#dc2626"));
+                "}")
+            .arg(ui::colors::BG_HOVER,
+                 ok ? ui::colors::POSITIVE.get() : ui::colors::NEGATIVE.get(),
+                 ui::colors::BORDER_MED));
 
     auto* vl = new QVBoxLayout(card);
     vl->setContentsMargins(10, 6, 10, 6);
@@ -62,12 +67,14 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
     badge->setFixedWidth(16);
     badge->setAlignment(Qt::AlignCenter);
     badge->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px;"
-                                 " font-weight: bold;").arg(ok ? "#16a34a" : "#dc2626"));
+                                 " font-weight: bold;")
+                             .arg(ok ? ui::colors::POSITIVE.get() : ui::colors::NEGATIVE.get()));
     hl->addWidget(badge);
 
     // Node ID (truncated)
     auto* id_lbl = new QLabel(result.node_id.left(8) + "…");
-    id_lbl->setStyleSheet("color: #525252; font-family: Consolas; font-size: 9px;");
+    id_lbl->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 9px;")
+                              .arg(ui::colors::TEXT_TERTIARY));
     id_lbl->setToolTip(result.node_id);
     hl->addWidget(id_lbl);
 
@@ -75,7 +82,8 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
 
     // Duration
     auto* dur_lbl = new QLabel(format_duration(result.duration_ms));
-    dur_lbl->setStyleSheet("color: #525252; font-family: Consolas; font-size: 9px;");
+    dur_lbl->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 9px;")
+                               .arg(ui::colors::TEXT_TERTIARY));
     hl->addWidget(dur_lbl);
 
     vl->addWidget(header_row);
@@ -86,8 +94,9 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
         auto* err = new QLabel(result.error.isEmpty() ? "Unknown error" : result.error);
         err->setWordWrap(true);
         err->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        err->setStyleSheet("color: #f87171; font-family: Consolas; font-size: 10px;"
-                           " background: transparent; padding: 2px 0;");
+        err->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;"
+                                  " background: transparent; padding: 2px 0;")
+                              .arg(ui::colors::NEGATIVE));
         vl->addWidget(err);
     } else if (result.output.isObject()) {
         auto obj = result.output.toObject();
@@ -102,15 +111,17 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
             auto* text = new QLabel(response);
             text->setWordWrap(true);
             text->setTextInteractionFlags(Qt::TextSelectableByMouse);
-            text->setStyleSheet("color: #e5e5e5; font-family: Consolas; font-size: 10px;"
-                                " background: transparent; line-height: 1.4;");
+            text->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;"
+                                      " background: transparent; line-height: 1.4;")
+                                  .arg(ui::colors::TEXT_PRIMARY));
             vl->addWidget(text);
 
             // Show exec time if present
             if (obj.contains("exec_ms")) {
                 auto* meta = new QLabel(QString("Agent ran in %1ms")
                                         .arg(obj.value("exec_ms").toInt()));
-                meta->setStyleSheet("color: #525252; font-family: Consolas; font-size: 9px;");
+                meta->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 9px;")
+                                       .arg(ui::colors::TEXT_TERTIARY));
                 vl->addWidget(meta);
             }
         }
@@ -119,8 +130,9 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
             double price = obj["price"].toDouble();
             auto* price_lbl = new QLabel(
                 QString("%1  $%2").arg(obj["symbol"].toString()).arg(price, 0, 'f', 2));
-            price_lbl->setStyleSheet("color: #e5e5e5; font-family: Consolas; font-size: 11px;"
-                                     " font-weight: bold;");
+            price_lbl->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px;"
+                                           " font-weight: bold;")
+                                       .arg(ui::colors::TEXT_PRIMARY));
             vl->addWidget(price_lbl);
         }
         // Generic key-value pairs
@@ -138,14 +150,16 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
 
                 auto* key = new QLabel(it.key() + ":");
                 key->setFixedWidth(110);
-                key->setStyleSheet("color: #808080; font-family: Consolas; font-size: 10px;");
+                key->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;")
+                                      .arg(ui::colors::TEXT_SECONDARY));
                 rl->addWidget(key);
 
                 QString valStr = value_to_string(it.value());
                 auto* val = new QLabel(valStr);
                 val->setWordWrap(true);
                 val->setTextInteractionFlags(Qt::TextSelectableByMouse);
-                val->setStyleSheet("color: #e5e5e5; font-family: Consolas; font-size: 10px;");
+                val->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;")
+                                      .arg(ui::colors::TEXT_PRIMARY));
                 rl->addWidget(val, 1);
 
                 gl->addWidget(row);
@@ -157,7 +171,8 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
         auto* val = new QLabel(value_to_string(result.output));
         val->setWordWrap(true);
         val->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        val->setStyleSheet("color: #e5e5e5; font-family: Consolas; font-size: 10px;");
+        val->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;")
+                              .arg(ui::colors::TEXT_PRIMARY));
         vl->addWidget(val);
     }
 
@@ -181,13 +196,13 @@ void ExecutionResultsPanel::build_ui() {
     // ── Top separator ──────────────────────────────────────────────
     auto* sep = new QFrame;
     sep->setFixedHeight(1);
-    sep->setStyleSheet("background: #2a2a2a; border: none;");
+    sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED));
     root->addWidget(sep);
 
     // ── Header bar ────────────────────────────────────────────────
     auto* header = new QWidget;
     header->setFixedHeight(32);
-    header->setStyleSheet("background: #1a1a1a;");
+    header->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(10, 0, 8, 0);
     hl->setSpacing(8);
@@ -195,65 +210,77 @@ void ExecutionResultsPanel::build_ui() {
     // Collapse toggle
     collapse_btn_ = new QPushButton("▸");
     collapse_btn_->setFixedSize(18, 18);
-    collapse_btn_->setStyleSheet("QPushButton { background: transparent; color: #808080;"
-                                 "  border: none; font-size: 10px; }"
-                                 "QPushButton:hover { color: #e5e5e5; }");
+    collapse_btn_->setStyleSheet(
+        QString("QPushButton { background: transparent; color: %1;"
+                "  border: none; font-size: 10px; }"
+                "QPushButton:hover { color: %2; }")
+            .arg(ui::colors::TEXT_SECONDARY, ui::colors::TEXT_PRIMARY));
     collapse_btn_->setToolTip("Expand / Collapse");
     connect(collapse_btn_, &QPushButton::clicked, this,
             [this]() { set_collapsed(!collapsed_); });
     hl->addWidget(collapse_btn_);
 
     auto* title = new QLabel("EXECUTION RESULTS");
-    title->setStyleSheet("color: #d97706; font-family: Consolas; font-size: 10px;"
-                         " font-weight: bold; letter-spacing: 0.5px;");
+    title->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;"
+                                " font-weight: bold; letter-spacing: 0.5px;")
+                             .arg(ui::colors::AMBER));
     hl->addWidget(title);
 
     // Node counter badge
     node_counter_ = new QLabel("");
-    node_counter_->setStyleSheet("color: #525252; font-family: Consolas; font-size: 10px;");
+    node_counter_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;")
+                                     .arg(ui::colors::TEXT_TERTIARY));
     hl->addWidget(node_counter_);
 
     hl->addStretch();
 
     // Status label
     status_label_ = new QLabel("IDLE");
-    status_label_->setStyleSheet("color: #525252; font-family: Consolas;"
-                                 " font-size: 10px; font-weight: bold;");
+    status_label_->setStyleSheet(QString("color: %1; font-family: Consolas;"
+                                        " font-size: 10px; font-weight: bold;")
+                                    .arg(ui::colors::TEXT_TERTIARY));
     hl->addWidget(status_label_);
 
     // Separator
     auto* vsep = new QFrame;
     vsep->setFixedSize(1, 16);
-    vsep->setStyleSheet("background: #2a2a2a; border: none;");
+    vsep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED));
     hl->addWidget(vsep);
 
     // Clear button
     clear_btn_ = new QPushButton("CLEAR");
     clear_btn_->setFixedHeight(20);
-    clear_btn_->setStyleSheet("QPushButton { background: transparent; color: #525252;"
-                              "  border: none; font-family: Consolas; font-size: 10px; }"
-                              "QPushButton:hover { color: #e5e5e5; }");
+    clear_btn_->setStyleSheet(
+        QString("QPushButton { background: transparent; color: %1;"
+                "  border: none; font-family: Consolas; font-size: 10px; }"
+                "QPushButton:hover { color: %2; }")
+            .arg(ui::colors::TEXT_TERTIARY, ui::colors::TEXT_PRIMARY));
     connect(clear_btn_, &QPushButton::clicked, this, &ExecutionResultsPanel::clear);
     hl->addWidget(clear_btn_);
 
     // Copy button
     copy_btn_ = new QPushButton("COPY");
     copy_btn_->setFixedHeight(20);
-    copy_btn_->setStyleSheet("QPushButton { background: transparent; color: #525252;"
-                             "  border: none; font-family: Consolas; font-size: 10px; }"
-                             "QPushButton:hover { color: #d97706; }");
+    copy_btn_->setStyleSheet(
+        QString("QPushButton { background: transparent; color: %1;"
+                "  border: none; font-family: Consolas; font-size: 10px; }"
+                "QPushButton:hover { color: %2; }")
+            .arg(ui::colors::TEXT_TERTIARY, ui::colors::AMBER));
     copy_btn_->setToolTip("Copy all results to clipboard");
     connect(copy_btn_, &QPushButton::clicked, this, [this]() {
         QGuiApplication::clipboard()->setText(copy_buffer_);
         copy_btn_->setText("COPIED!");
-        copy_btn_->setStyleSheet("QPushButton { background: transparent; color: #16a34a;"
-                                 "  border: none; font-family: Consolas; font-size: 10px; }");
+        copy_btn_->setStyleSheet(
+            QString("QPushButton { background: transparent; color: %1;"
+                    "  border: none; font-family: Consolas; font-size: 10px; }")
+                .arg(ui::colors::POSITIVE));
         QTimer::singleShot(1500, copy_btn_, [this]() {
             copy_btn_->setText("COPY");
             copy_btn_->setStyleSheet(
-                "QPushButton { background: transparent; color: #525252;"
-                "  border: none; font-family: Consolas; font-size: 10px; }"
-                "QPushButton:hover { color: #d97706; }");
+                QString("QPushButton { background: transparent; color: %1;"
+                        "  border: none; font-family: Consolas; font-size: 10px; }"
+                        "QPushButton:hover { color: %2; }")
+                    .arg(ui::colors::TEXT_TERTIARY, ui::colors::AMBER));
         });
     });
     hl->addWidget(copy_btn_);
@@ -266,13 +293,14 @@ void ExecutionResultsPanel::build_ui() {
     scroll_area_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll_area_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     scroll_area_->setStyleSheet(
-        "QScrollArea { background: #111; border: none; }"
-        "QScrollBar:vertical { background: #111; width: 5px; border: none; }"
-        "QScrollBar::handle:vertical { background: #333; min-height: 20px; border-radius: 2px; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
+        QString("QScrollArea { background: %1; border: none; }"
+                "QScrollBar:vertical { background: %1; width: 5px; border: none; }"
+                "QScrollBar::handle:vertical { background: %2; min-height: 20px; border-radius: 2px; }"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+            .arg(ui::colors::BG_RAISED, ui::colors::BORDER_BRIGHT));
 
     results_container_ = new QWidget;
-    results_container_->setStyleSheet("background: #111;");
+    results_container_->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED));
     results_layout_ = new QVBoxLayout(results_container_);
     results_layout_->setContentsMargins(0, 0, 0, 0);
     results_layout_->setSpacing(0);
@@ -302,8 +330,9 @@ void ExecutionResultsPanel::clear() {
     copy_buffer_.clear();
     node_counter_->setText("");
     status_label_->setText("IDLE");
-    status_label_->setStyleSheet("color: #525252; font-family: Consolas;"
-                                 " font-size: 10px; font-weight: bold;");
+    status_label_->setStyleSheet(QString("color: %1; font-family: Consolas;"
+                                         " font-size: 10px; font-weight: bold;")
+                                    .arg(ui::colors::TEXT_TERTIARY));
 }
 
 void ExecutionResultsPanel::set_started(const QString& workflow_id) {
@@ -312,8 +341,9 @@ void ExecutionResultsPanel::set_started(const QString& workflow_id) {
     show();
     set_collapsed(false); // auto-expand when execution starts
     status_label_->setText("RUNNING…");
-    status_label_->setStyleSheet("color: #d97706; font-family: Consolas;"
-                                 " font-size: 10px; font-weight: bold;");
+    status_label_->setStyleSheet(QString("color: %1; font-family: Consolas;"
+                                         " font-size: 10px; font-weight: bold;")
+                                    .arg(ui::colors::AMBER));
 }
 
 void ExecutionResultsPanel::add_node_result(const NodeExecutionResult& result) {
@@ -325,9 +355,10 @@ void ExecutionResultsPanel::add_node_result(const NodeExecutionResult& result) {
     if (error_count_ > 0)
         counter += QString("  %1 error%2").arg(error_count_).arg(error_count_ == 1 ? "" : "s");
     node_counter_->setText(counter);
-    node_counter_->setStyleSheet(error_count_ > 0
-        ? "color: #dc2626; font-family: Consolas; font-size: 10px;"
-        : "color: #525252; font-family: Consolas; font-size: 10px;");
+    node_counter_->setStyleSheet(
+        QString("color: %1; font-family: Consolas; font-size: 10px;")
+            .arg(error_count_ > 0 ? ui::colors::NEGATIVE.get()
+                                  : ui::colors::TEXT_TERTIARY.get()));
 
     // Append plain-text representation to copy buffer
     copy_buffer_ += QString("[%1] %2  %3\n")
@@ -366,15 +397,17 @@ void ExecutionResultsPanel::set_finished(const WorkflowExecutionResult& result) 
     if (result.success) {
         status_label_->setText(
             QString("DONE  %1").arg(format_duration(result.total_duration_ms)));
-        status_label_->setStyleSheet("color: #16a34a; font-family: Consolas;"
-                                     " font-size: 10px; font-weight: bold;");
+        status_label_->setStyleSheet(QString("color: %1; font-family: Consolas;"
+                                             " font-size: 10px; font-weight: bold;")
+                                        .arg(ui::colors::POSITIVE));
     } else {
         QString msg = result.error.startsWith("Execution stopped")
                       ? "STOPPED"
                       : QString("FAILED  %1").arg(result.error);
         status_label_->setText(msg);
-        status_label_->setStyleSheet("color: #dc2626; font-family: Consolas;"
-                                     " font-size: 10px; font-weight: bold;");
+        status_label_->setStyleSheet(QString("color: %1; font-family: Consolas;"
+                                             " font-size: 10px; font-weight: bold;")
+                                        .arg(ui::colors::NEGATIVE));
     }
 }
 

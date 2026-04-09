@@ -2,6 +2,7 @@
 #include "screens/geopolitics/GeopoliticsScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "screens/geopolitics/ConflictMonitorPanel.h"
 #include "screens/geopolitics/HDXDataPanel.h"
 #include "screens/geopolitics/RelationshipPanel.h"
@@ -125,10 +126,10 @@ QWidget* GeopoliticsScreen::build_top_bar() {
 
     struct TabDef { QString label; QString color; };
     const QVector<TabDef> tabs = {
-        {"MONITOR",   "#FF0000"},
-        {"HDX DATA",  "#00E5FF"},
-        {"RELATIONS", "#9D4EDD"},
-        {"TRADE",     "#FFC400"},
+        {"MONITOR",   ui::colors::NEGATIVE},
+        {"HDX DATA",  ui::colors::CYAN},
+        {"RELATIONS", ui::colors::INFO},
+        {"TRADE",     ui::colors::WARNING},
     };
 
     for (int i = 0; i < tabs.size(); ++i) {
@@ -136,7 +137,7 @@ QWidget* GeopoliticsScreen::build_top_bar() {
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(
             QString("QPushButton { color:%1; font-size:%2px; font-family:%3;"
-                    "padding:4px 14px; border:none; border-radius:0;"
+                    "padding:4px 14px; border:none;"
                     "background:transparent; font-weight:400; }"
                     "QPushButton:hover { color:%4; background:rgba(%5,0.06); }")
                 .arg(ui::colors::TEXT_TERTIARY)
@@ -172,13 +173,18 @@ QWidget* GeopoliticsScreen::build_top_bar() {
     hl->addWidget(div2);
 
     event_count_label_ = new QLabel("0 EVENTS", bar);
-    event_count_label_->setStyleSheet(
-        QString("color:%1; font-size:%2px; font-family:%3; padding:3px 8px;"
-                "background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.25);"
-                "border-radius:2px; font-weight:700;")
-            .arg(ui::colors::NEGATIVE)
-            .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY));
+    event_count_label_->setFixedHeight(22);
+    {
+        QColor neg(ui::colors::NEGATIVE());
+        auto neg_rgb = QString("%1,%2,%3").arg(neg.red()).arg(neg.green()).arg(neg.blue());
+        event_count_label_->setStyleSheet(
+            QString("color:%1; font-size:%2px; font-family:%3; padding:2px 6px;"
+                    "background:rgba(%4,0.08); border:1px solid rgba(%4,0.25); font-weight:700;")
+                .arg(ui::colors::NEGATIVE())
+                .arg(ui::fonts::TINY)
+                .arg(ui::fonts::DATA_FAMILY())
+                .arg(neg_rgb));
+    }
     hl->addWidget(event_count_label_);
 
     return bar;
@@ -198,20 +204,22 @@ QWidget* GeopoliticsScreen::build_filter_panel() {
 
     auto* title = new QLabel("FILTERS", panel);
     title->setStyleSheet(
-        QString("color:#FF0000; font-size:%1px; font-weight:700; font-family:%2;"
-                "letter-spacing:1px; padding-bottom:4px; border-bottom:1px solid %3;")
+        QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
+                "letter-spacing:1px; padding-bottom:4px; border-bottom:1px solid %4;")
+            .arg(ui::colors::NEGATIVE())
             .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::colors::BORDER_DIM));
+            .arg(ui::fonts::DATA_FAMILY())
+            .arg(ui::colors::BORDER_DIM()));
     vl->addWidget(title);
 
     auto input_style =
         QString("QLineEdit, QComboBox { background:%1; color:%2; border:1px solid %3;"
-                "font-family:%4; font-size:%5px; padding:5px 8px; border-radius:2px; }"
-                "QLineEdit:focus, QComboBox:focus { border-color:#FF0000; }")
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::SMALL);
+                "font-family:%4; font-size:%5px; padding:5px 8px; }"
+                "QLineEdit:focus, QComboBox:focus { border-color:%6; }")
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
+            .arg(ui::fonts::DATA_FAMILY())
+            .arg(ui::fonts::SMALL)
+            .arg(ui::colors::NEGATIVE());
 
     auto label_style =
         QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
@@ -251,13 +259,18 @@ QWidget* GeopoliticsScreen::build_filter_panel() {
 
     auto* apply_btn = new QPushButton("APPLY FILTERS", panel);
     apply_btn->setCursor(Qt::PointingHandCursor);
-    apply_btn->setStyleSheet(
-        QString("QPushButton { background:#FF0000; color:%1; font-family:%2; font-size:%3px;"
-                "font-weight:700; border:none; padding:6px 12px; border-radius:2px; }"
-                "QPushButton:hover { background:#CC0000; }")
-            .arg(ui::colors::BG_BASE)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::SMALL));
+    {
+        QColor neg(ui::colors::NEGATIVE());
+        apply_btn->setStyleSheet(
+            QString("QPushButton { background:%1; color:%2; font-family:%3; font-size:%4px;"
+                    "font-weight:700; border:none; padding:6px 12px; }"
+                    "QPushButton:hover { background:%5; }")
+                .arg(ui::colors::NEGATIVE())
+                .arg(ui::colors::BG_BASE())
+                .arg(ui::fonts::DATA_FAMILY())
+                .arg(ui::fonts::SMALL)
+                .arg(neg.darker(120).name()));
+    }
     connect(apply_btn, &QPushButton::clicked, this, &GeopoliticsScreen::on_apply_filters);
     vl->addWidget(apply_btn);
 
@@ -265,7 +278,7 @@ QWidget* GeopoliticsScreen::build_filter_panel() {
     clear_btn->setCursor(Qt::PointingHandCursor);
     clear_btn->setStyleSheet(
         QString("QPushButton { background:transparent; color:%1; font-family:%2; font-size:%3px;"
-                "border:1px solid %4; padding:5px 12px; border-radius:2px; }"
+                "border:1px solid %4; padding:5px 12px; }"
                 "QPushButton:hover { background:%5; }")
             .arg(ui::colors::TEXT_SECONDARY)
             .arg(ui::fonts::DATA_FAMILY)
@@ -390,32 +403,35 @@ void GeopoliticsScreen::on_tab_changed(int index) {
     active_tab_ = index;
     if (content_stack_)
         content_stack_->setCurrentIndex(index);
+    ScreenStateManager::instance().notify_changed(this);
 
-    const QStringList colors = {"#FF0000", "#00E5FF", "#9D4EDD", "#FFC400"};
+    const QStringList colors = {ui::colors::NEGATIVE, ui::colors::CYAN, ui::colors::INFO, ui::colors::WARNING};
     for (int i = 0; i < tab_buttons_.size(); ++i) {
         const bool active = (i == index);
+        QColor c(colors[i]);
+        auto rgb = QString("%1,%2,%3").arg(c.red()).arg(c.green()).arg(c.blue());
         if (active) {
             tab_buttons_[i]->setStyleSheet(
                 QString("QPushButton { color:%1; font-size:%2px; font-family:%3;"
                         "padding:4px 14px;"
                         "border-bottom:2px solid %1; border-top:none; border-left:none; border-right:none;"
-                        "border-radius:0; background:rgba(%4,0.06); font-weight:700; }"
+                        "background:rgba(%4,0.06); font-weight:700; }"
                         "QPushButton:hover { background:rgba(%4,0.10); }")
                     .arg(colors[i])
                     .arg(ui::fonts::TINY)
                     .arg(ui::fonts::DATA_FAMILY)
-                    .arg(colors[i].mid(1)));
+                    .arg(rgb));
         } else {
             tab_buttons_[i]->setStyleSheet(
                 QString("QPushButton { color:%1; font-size:%2px; font-family:%3;"
-                        "padding:4px 14px; border:none; border-radius:0;"
+                        "padding:4px 14px; border:none;"
                         "background:transparent; font-weight:400; }"
                         "QPushButton:hover { color:%4; background:rgba(%5,0.06); }")
                     .arg(ui::colors::TEXT_TERTIARY)
                     .arg(ui::fonts::TINY)
                     .arg(ui::fonts::DATA_FAMILY)
                     .arg(colors[i])
-                    .arg(colors[i].mid(1)));
+                    .arg(rgb));
         }
     }
 }
@@ -423,14 +439,15 @@ void GeopoliticsScreen::on_tab_changed(int index) {
 void GeopoliticsScreen::on_events_loaded(QVector<services::geo::NewsEvent> events, int total) {
     event_count_label_->setText(QString("%1 EVENTS").arg(total));
     const QString color = total > 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
+    QColor clr(color);
+    auto clr_rgb = QString("%1,%2,%3").arg(clr.red()).arg(clr.green()).arg(clr.blue());
     event_count_label_->setStyleSheet(
-        QString("color:%1; font-size:%2px; font-family:%3; padding:3px 8px;"
-                "background:rgba(%4,0.08); border:1px solid rgba(%4,0.25);"
-                "border-radius:2px; font-weight:700;")
+        QString("color:%1; font-size:%2px; font-family:%3; padding:2px 6px;"
+                "background:rgba(%4,0.08); border:1px solid rgba(%4,0.25); font-weight:700;")
             .arg(color)
             .arg(ui::fonts::TINY)
             .arg(ui::fonts::DATA_FAMILY)
-            .arg(color.mid(1)));
+            .arg(clr_rgb));
     status_label_->setText("READY");
     status_label_->setStyleSheet(
         QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
@@ -448,6 +465,18 @@ void GeopoliticsScreen::on_error(const QString& context, const QString& message)
             .arg(ui::fonts::TINY)
             .arg(ui::fonts::DATA_FAMILY));
     LOG_ERROR("Geopolitics", QString("[%1] %2").arg(context, message));
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap GeopoliticsScreen::save_state() const {
+    return {{"tab_index", active_tab_}};
+}
+
+void GeopoliticsScreen::restore_state(const QVariantMap& state) {
+    const int idx = state.value("tab_index", 0).toInt();
+    if (idx >= 0 && idx < tab_buttons_.size())
+        on_tab_changed(idx);
 }
 
 } // namespace fincept::screens

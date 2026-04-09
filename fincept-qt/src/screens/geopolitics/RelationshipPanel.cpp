@@ -38,11 +38,11 @@ static QVector<RelationshipNode> build_nodes() {
 }
 
 static QColor severity_color(const QString& sev) {
-    if (sev == "critical")     return QColor("#FF0000");
-    if (sev == "high")         return QColor("#FFA500");
-    if (sev == "medium")       return QColor("#FF9800");
-    if (sev == "low")          return QColor("#4CAF50");
-    return QColor("#2196F3"); // organization
+    if (sev == "critical")     return QColor(ui::colors::NEGATIVE());
+    if (sev == "high")         return QColor(ui::colors::WARNING());
+    if (sev == "medium")       return QColor(ui::colors::WARNING()).lighter(120);
+    if (sev == "low")          return QColor(ui::colors::POSITIVE());
+    return QColor(ui::colors::INFO()); // organization
 }
 
 RelationshipPanel::RelationshipPanel(QWidget* parent) : QWidget(parent) {
@@ -66,9 +66,10 @@ void RelationshipPanel::build_ui() {
 
     auto* title = new QLabel("GEOPOLITICAL RELATIONSHIP NETWORK", header);
     title->setStyleSheet(
-        QString("color:#9D4EDD; font-size:%1px; font-weight:700; font-family:%2; letter-spacing:1px;")
+        QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
+            .arg(ui::colors::INFO())
             .arg(ui::fonts::TINY)
-            .arg(ui::fonts::DATA_FAMILY));
+            .arg(ui::fonts::DATA_FAMILY()));
     hhl->addWidget(title);
     hhl->addStretch();
 
@@ -85,7 +86,7 @@ void RelationshipPanel::build_ui() {
         header);
     stats->setStyleSheet(
         QString("color:%1; font-size:%2px; font-family:%3; padding:2px 8px;"
-                "background:rgba(255,255,255,0.04); border:1px solid %4; border-radius:2px;")
+                "background:rgba(255,255,255,0.04); border:1px solid %4;")
             .arg(ui::colors::TEXT_TERTIARY)
             .arg(ui::fonts::TINY)
             .arg(ui::fonts::DATA_FAMILY)
@@ -146,9 +147,9 @@ void RelationshipPanel::build_ui() {
         cvl->addWidget(grid_w);
     };
 
-    add_section("ACTIVE CONFLICTS", "#FF0000", "conflict");
-    add_section("CRISIS TYPES",     "#FFA500", "crisis");
-    add_section("ORGANIZATIONS",    "#2196F3", "organization");
+    add_section("ACTIVE CONFLICTS", ui::colors::NEGATIVE(), "conflict");
+    add_section("CRISIS TYPES",     ui::colors::WARNING(), "crisis");
+    add_section("ORGANIZATIONS",    ui::colors::INFO(), "organization");
 
     cvl->addStretch();
     scroll->setWidget(content);
@@ -167,7 +168,7 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
     card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     card->setStyleSheet(
         QString("#nodeCard { background:%1; border:1px solid rgba(%2,0.25);"
-                "border-left:3px solid %3; border-radius:3px; }")
+                "border-left:3px solid %3; }")
             .arg(ui::colors::BG_RAISED)
             .arg(col_rgb)
             .arg(col_hex));

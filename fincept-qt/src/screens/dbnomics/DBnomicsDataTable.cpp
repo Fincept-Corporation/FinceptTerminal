@@ -82,7 +82,7 @@ void DBnomicsDataTable::build_ui() {
                               .arg(ui::colors::BG_HOVER)       // %4
                               .arg(ui::colors::BG_RAISED)      // %5
                               .arg(ui::colors::TEXT_SECONDARY) // %6
-                              .arg("#0a0a0a"));                // %7 alternate row
+                              .arg(ui::colors::BG_SURFACE));   // %7 alternate row
     stack_->addWidget(table_);                                 // index 1
 
     stack_->setCurrentIndex(1);

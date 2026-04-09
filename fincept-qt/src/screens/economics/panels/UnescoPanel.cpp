@@ -85,20 +85,19 @@ UnescoPanel::UnescoPanel(QWidget* parent)
     // Left: theme + indicator selector
     auto* left = new QWidget;
     left->setFixedWidth(210);
-    left->setStyleSheet("background:#0a0a0a; border-right:1px solid #1a1a1a;");
+    left->setStyleSheet(sidebar_style());
     auto* lvl = new QVBoxLayout(left);
     lvl->setContentsMargins(0, 0, 0, 0);
     lvl->setSpacing(0);
 
     // Theme header
     auto* theme_hdr = new QWidget;
-    theme_hdr->setStyleSheet("background:#111111; border-bottom:1px solid #1a1a1a;");
+    theme_hdr->setStyleSheet(section_hdr_style());
     theme_hdr->setFixedHeight(32);
     auto* thl = new QHBoxLayout(theme_hdr);
     thl->setContentsMargins(8, 0, 8, 0);
     auto* theme_lbl = new QLabel("THEME");
-    theme_lbl->setStyleSheet(
-        "color:#808080; font-size:9px; font-weight:700; background:transparent;");
+    theme_lbl->setStyleSheet(ctrl_label_style());
     theme_combo_ = new QComboBox;
     theme_combo_->addItem("Education",          "education");
     theme_combo_->addItem("Science & Tech",     "science");
@@ -113,9 +112,7 @@ UnescoPanel::UnescoPanel(QWidget* parent)
     // Indicator search
     indicator_search_ = new QLineEdit;
     indicator_search_->setPlaceholderText("Filter indicators…");
-    indicator_search_->setStyleSheet(
-        "background:#080808; color:#e5e5e5; border:none;"
-        "border-bottom:1px solid #1a1a1a; padding:4px 8px; font-size:10px;");
+    indicator_search_->setStyleSheet(search_input_style());
     indicator_search_->setFixedHeight(28);
     connect(indicator_search_, &QLineEdit::textChanged,
             this, &UnescoPanel::on_indicator_filter);
@@ -123,13 +120,7 @@ UnescoPanel::UnescoPanel(QWidget* parent)
 
     // Indicator list
     indicator_list_ = new QListWidget;
-    indicator_list_->setStyleSheet(
-        QString("QListWidget { background:#080808; border:none; outline:none; font-size:10px; }"
-                "QListWidget::item { color:#808080; padding:4px 10px;"
-                "  border-bottom:1px solid #111111; }"
-                "QListWidget::item:hover { color:#e5e5e5; background:#0f0f0f; }"
-                "QListWidget::item:selected { color:%1; background:rgba(0,172,193,0.08);"
-                "  border-left:2px solid %1; padding-left:8px; }").arg(kUnescoColor));
+    indicator_list_->setStyleSheet(list_style());
     indicator_list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     lvl->addWidget(indicator_list_, 1);
 
@@ -158,10 +149,9 @@ void UnescoPanel::activate() {
 // ── Controls ──────────────────────────────────────────────────────────────────
 
 void UnescoPanel::build_controls(QHBoxLayout* thl) {
-    auto make_lbl = [](const QString& text) {
+    auto make_lbl = [this](const QString& text) {
         auto* l = new QLabel(text);
-        l->setStyleSheet(
-            "color:#525252; font-size:9px; font-weight:700; background:transparent;");
+        l->setStyleSheet(ctrl_label_style());
         return l;
     };
 

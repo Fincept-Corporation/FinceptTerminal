@@ -341,7 +341,7 @@ void AnalyticsSectorsView::update_correlation() {
             else
                 bg = QColor(220, 38, 38, static_cast<int>(std::abs(corr) * 140));
 
-            const char* tc = (r == c) ? "#000" : ui::colors::TEXT_PRIMARY;
+            const char* tc = (r == c) ? ui::colors::BG_BASE : ui::colors::TEXT_PRIMARY;
             cell->setStyleSheet(QString("background:rgba(%1,%2,%3,%4); color:%5;"
                                         "font-size:8px; font-weight:600;")
                                     .arg(bg.red())

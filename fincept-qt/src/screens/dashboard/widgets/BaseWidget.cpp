@@ -108,6 +108,15 @@ void BaseWidget::refresh_base_theme() {
         title_bar_->setStyleSheet(
             QString("background:%1;border-bottom:1px solid %2;")
             .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+    if (title_label_)
+        title_label_->setStyleSheet(
+            QString("color:%1;font-size:9px;font-weight:bold;letter-spacing:0.5px;"
+                    "background:transparent;text-transform:uppercase;").arg(accent_color_));
+    if (accent_bar_)
+        accent_bar_->setStyleSheet(QString("background:%1;border-radius:1px;").arg(accent_color_));
+    if (loading_label_)
+        loading_label_->setStyleSheet(
+            QString("color:%1;font-size:9px;background:transparent;").arg(ui::colors::AMBER()));
     if (refresh_btn_)
         refresh_btn_->setStyleSheet(
             QString("QPushButton{color:%1;background:%2;border:1px solid %3;border-radius:2px;padding:0;}"

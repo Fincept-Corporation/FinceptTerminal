@@ -1,6 +1,7 @@
 #include "screens/asia_markets/AsiaMarketsScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 #include "ui/theme/Theme.h"
@@ -410,6 +411,7 @@ void AsiaMarketsScreen::on_category_changed(int index) {
     search_input_->clear();
 
     LOG_INFO("AsiaMarkets", "Category: " + categories_[index].name);
+    ScreenStateManager::instance().notify_changed(this);
 
     if (endpoint_cache_.contains(categories_[index].script)) {
         populate_endpoint_list(endpoint_cache_[categories_[index].script]);
@@ -429,6 +431,7 @@ void AsiaMarketsScreen::on_region_changed(int index) {
 
     status_region_->setText("REGION: " + regions_[index]);
     LOG_INFO("AsiaMarkets", "Region: " + regions_[index]);
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 void AsiaMarketsScreen::on_endpoint_clicked(QListWidgetItem* item) {
@@ -797,6 +800,28 @@ void AsiaMarketsScreen::display_error(const QString& error) {
 void AsiaMarketsScreen::set_loading(bool loading) {
     loading_ = loading;
     exec_btn_->setEnabled(!loading && !active_endpoint_.isEmpty());
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap AsiaMarketsScreen::save_state() const {
+    return {
+        {"category", active_category_},
+        {"region",   active_region_},
+        {"endpoint", active_endpoint_},
+    };
+}
+
+void AsiaMarketsScreen::restore_state(const QVariantMap& state) {
+    const int region = state.value("region", 0).toInt();
+    if (region != active_region_)
+        on_region_changed(region);
+
+    const int cat = state.value("category", 0).toInt();
+    if (cat != active_category_)
+        on_category_changed(cat);
+    // active_endpoint_ is restored via on_category_changed populating the list;
+    // exact endpoint row selection would need list rebuilding — skip for simplicity.
 }
 
 } // namespace fincept::screens

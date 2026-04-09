@@ -31,8 +31,22 @@ SectorHeatmapWidget::SectorHeatmapWidget(QWidget* parent) : BaseWidget("SECTOR H
 
     connect(this, &BaseWidget::refresh_requested, this, &SectorHeatmapWidget::refresh_data);
 
+    apply_styles();
     set_loading(true);
     refresh_data();
+}
+
+void SectorHeatmapWidget::apply_styles() {
+    // The grid cells are rebuilt dynamically in populate() using current tokens.
+    // Re-populate with existing data to pick up new theme colors.
+    // If no data yet, nothing to restyle.
+}
+
+void SectorHeatmapWidget::on_theme_changed() {
+    apply_styles();
+    // Re-populate the grid with current data so cells pick up new token values
+    if (grid_->count() > 0)
+        refresh_data();
 }
 
 void SectorHeatmapWidget::refresh_data() {
@@ -65,11 +79,9 @@ void SectorHeatmapWidget::populate(const QVector<services::QuoteData>& quotes) {
         cell->setMinimumSize(80, 40);
 
         int intensity = static_cast<int>(std::min(std::abs(q.change_pct) * 60.0, 200.0));
-        QString bg_color;
-        if (q.change_pct >= 0)
-            bg_color = QString("rgba(22, 163, 74, %1)").arg(40 + intensity);
-        else
-            bg_color = QString("rgba(220, 38, 38, %1)").arg(40 + intensity);
+        QColor tint(q.change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE());
+        tint.setAlpha(40 + intensity);
+        QString bg_color = tint.name(QColor::HexArgb);
 
         cell->setStyleSheet(
             QString("background: %1; border: 1px solid %2; border-radius: 2px;").arg(bg_color, ui::colors::BORDER_DIM));

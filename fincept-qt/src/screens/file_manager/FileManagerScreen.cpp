@@ -2,6 +2,7 @@
 #include "screens/file_manager/FileManagerScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "ui/theme/Theme.h"
 
 #include <QButtonGroup>
@@ -26,7 +27,10 @@ using namespace fincept::ui;
 using fincept::services::FileManagerService;
 
 static const char* MF    = "font-family:'Consolas','Courier New',monospace;";
-static const char* PANEL = "background:#0d0d0d;border:1px solid #1a1a1a;border-radius:2px;";
+static QString panel_ss() {
+    return QString("background:%1;border:1px solid %2;border-radius:2px;")
+        .arg(colors::BG_SURFACE(), colors::BORDER_DIM());
+}
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
@@ -39,7 +43,7 @@ FileManagerScreen::FileManagerScreen(QWidget* parent) : QWidget(parent) {
 // ── UI ────────────────────────────────────────────────────────────────────────
 
 void FileManagerScreen::build_ui() {
-    setStyleSheet(QString("QWidget#FMRoot{background:%1;}").arg(colors::BG_BASE));
+    setStyleSheet(QString("QWidget#FMRoot{background:%1;}").arg(colors::BG_BASE()));
     setObjectName("FMRoot");
 
     auto* root = new QVBoxLayout(this);
@@ -49,7 +53,7 @@ void FileManagerScreen::build_ui() {
     // ── Header ───────────────────────────────────────────────────────────────
     auto* header = new QWidget;
     header->setStyleSheet(
-        QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_DIM));
+        QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_RAISED(), colors::BORDER_DIM()));
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(14, 10, 14, 10);
     hhl->setSpacing(8);
@@ -57,18 +61,18 @@ void FileManagerScreen::build_ui() {
     auto* title = new QLabel("FILE MANAGER");
     title->setStyleSheet(
         QString("color:%1;font-size:14px;font-weight:700;letter-spacing:0.5px;background:transparent;%2")
-            .arg(colors::AMBER, MF));
+            .arg(colors::AMBER(), MF));
     hhl->addWidget(title);
 
     auto* sub = new QLabel("Manage files across the terminal");
     sub->setStyleSheet(
-        QString("color:%1;font-size:12px;background:transparent;%2").arg(colors::TEXT_TERTIARY, MF));
+        QString("color:%1;font-size:12px;background:transparent;%2").arg(colors::TEXT_TERTIARY(), MF));
     hhl->addWidget(sub);
     hhl->addStretch();
 
     stats_label_ = new QLabel("0 files | 0 B");
     stats_label_->setStyleSheet(
-        QString("color:%1;font-size:11px;background:transparent;%2").arg(colors::TEXT_DIM, MF));
+        QString("color:%1;font-size:11px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
     hhl->addWidget(stats_label_);
 
     refresh_btn_ = new QPushButton("REFRESH");
@@ -76,18 +80,18 @@ void FileManagerScreen::build_ui() {
     refresh_btn_->setStyleSheet(
         QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                 "padding:4px 12px;font-size:11px;%3}"
-                "QPushButton:hover{color:#e5e5e5;background:%4;}")
-            .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM, MF, colors::BG_HOVER));
+                "QPushButton:hover{color:%4;background:%5;}")
+            .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM(), MF, colors::TEXT_PRIMARY(), colors::BG_HOVER()));
     connect(refresh_btn_, &QPushButton::clicked, this, [this]() { render_files(); update_stats(); });
     hhl->addWidget(refresh_btn_);
 
     upload_btn_ = new QPushButton("UPLOAD FILES");
     upload_btn_->setCursor(Qt::PointingHandCursor);
     upload_btn_->setStyleSheet(
-        QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;border:1px solid #78350f;"
+        QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;border:1px solid %3;"
                 "padding:4px 12px;font-size:11px;font-weight:700;%2}"
-                "QPushButton:hover{background:%1;color:#080808;}")
-            .arg(colors::AMBER, MF));
+                "QPushButton:hover{background:%1;color:%4;}")
+            .arg(colors::AMBER(), MF, colors::AMBER_DIM(), colors::BG_BASE()));
     connect(upload_btn_, &QPushButton::clicked, this, &FileManagerScreen::upload_files);
     hhl->addWidget(upload_btn_);
     root->addWidget(header);
@@ -101,7 +105,7 @@ void FileManagerScreen::build_ui() {
     // ── Bulk action bar (hidden until items checked) ──────────────────────────
     bulk_bar_ = new QWidget;
     bulk_bar_->setStyleSheet(
-        QString("background:#1a0a00;border-bottom:1px solid #78350f;"));
+        QString("background:#1a0a00;border-bottom:1px solid %1;").arg(colors::AMBER_DIM()));
     bulk_bar_->setVisible(false);
     auto* bbl = new QHBoxLayout(bulk_bar_);
     bbl->setContentsMargins(14, 6, 14, 6);
@@ -109,15 +113,15 @@ void FileManagerScreen::build_ui() {
 
     auto* sel_lbl = new QLabel("Selected files:");
     sel_lbl->setStyleSheet(
-        QString("color:%1;font-size:11px;background:transparent;%2").arg(colors::TEXT_SECONDARY, MF));
+        QString("color:%1;font-size:11px;background:transparent;%2").arg(colors::TEXT_SECONDARY(), MF));
     bbl->addWidget(sel_lbl);
 
     bulk_delete_btn_ = new QPushButton("DELETE SELECTED");
     bulk_delete_btn_->setCursor(Qt::PointingHandCursor);
     bulk_delete_btn_->setStyleSheet(
-        QString("QPushButton{background:transparent;color:#ef4444;border:1px solid #7f1d1d;"
-                "padding:3px 12px;font-size:11px;font-weight:700;%1}"
-                "QPushButton:hover{background:#ef4444;color:#fff;}").arg(MF));
+        QString("QPushButton{background:transparent;color:%1;border:1px solid #7f1d1d;"
+                "padding:3px 12px;font-size:11px;font-weight:700;%2}"
+                "QPushButton:hover{background:%1;color:%3;}").arg(colors::NEGATIVE(), MF, colors::TEXT_PRIMARY()));
     connect(bulk_delete_btn_, &QPushButton::clicked, this, &FileManagerScreen::delete_selected);
     bbl->addWidget(bulk_delete_btn_);
     bbl->addStretch();
@@ -127,7 +131,7 @@ void FileManagerScreen::build_ui() {
     desel_btn->setStyleSheet(
         QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                 "padding:3px 12px;font-size:11px;%3}"
-                "QPushButton:hover{color:#e5e5e5;}").arg(colors::TEXT_DIM, colors::BORDER_DIM, MF));
+                "QPushButton:hover{color:%4;}").arg(colors::TEXT_DIM(), colors::BORDER_DIM(), MF, colors::TEXT_PRIMARY()));
     connect(desel_btn, &QPushButton::clicked, this, [this]() {
         for (auto* btn : check_btns_) btn->setChecked(false);
         update_bulk_bar();
@@ -137,7 +141,7 @@ void FileManagerScreen::build_ui() {
 
     // ── Splitter: file list | preview ─────────────────────────────────────────
     splitter_ = new QSplitter(Qt::Horizontal);
-    splitter_->setStyleSheet("QSplitter::handle{background:#1a1a1a;width:1px;}");
+    splitter_->setStyleSheet(QString("QSplitter::handle{background:%1;width:1px;}").arg(colors::BORDER_DIM()));
     splitter_->setChildrenCollapsible(false);
 
     // Left: scroll area with file cards
@@ -145,11 +149,11 @@ void FileManagerScreen::build_ui() {
     scroll->setWidgetResizable(true);
     scroll->setStyleSheet("QScrollArea{border:none;background:transparent;}"
                           "QScrollBar:vertical{background:transparent;width:6px;}"
-                          "QScrollBar::handle:vertical{background:#222222;}"
-                          "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}");
+                          + QString("QScrollBar::handle:vertical{background:%1;}"
+                          "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}").arg(colors::BORDER_MED()));
 
     file_container_ = new QWidget;
-    file_container_->setStyleSheet(QString("background:%1;").arg(colors::BG_BASE));
+    file_container_->setStyleSheet(QString("background:%1;").arg(colors::BG_BASE()));
     file_layout_ = new QVBoxLayout(file_container_);
     file_layout_->setContentsMargins(14, 8, 14, 8);
     file_layout_->setSpacing(6);
@@ -167,14 +171,14 @@ void FileManagerScreen::build_ui() {
 void FileManagerScreen::build_quota_bar(QVBoxLayout* root) {
     auto* qw = new QWidget;
     qw->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                          .arg(colors::BG_BASE, colors::BORDER_DIM));
+                          .arg(colors::BG_BASE(), colors::BORDER_DIM()));
     auto* ql = new QHBoxLayout(qw);
     ql->setContentsMargins(14, 6, 14, 6);
     ql->setSpacing(10);
 
     quota_label_ = new QLabel("Storage: 0 B / 500 MB");
     quota_label_->setStyleSheet(
-        QString("color:%1;font-size:11px;background:transparent;%2").arg(colors::TEXT_DIM, MF));
+        QString("color:%1;font-size:11px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
     ql->addWidget(quota_label_);
 
     quota_bar_ = new QProgressBar;
@@ -183,8 +187,8 @@ void FileManagerScreen::build_quota_bar(QVBoxLayout* root) {
     quota_bar_->setTextVisible(false);
     quota_bar_->setFixedHeight(6);
     quota_bar_->setStyleSheet(
-        "QProgressBar{background:#1a1a1a;border:none;border-radius:3px;}"
-        "QProgressBar::chunk{background:#d97706;border-radius:3px;}");
+        QString("QProgressBar{background:%1;border:none;border-radius:3px;}"
+        "QProgressBar::chunk{background:%2;border-radius:3px;}").arg(colors::BORDER_DIM(), colors::AMBER()));
     ql->addWidget(quota_bar_, 1);
 
     root->addWidget(qw);
@@ -193,7 +197,7 @@ void FileManagerScreen::build_quota_bar(QVBoxLayout* root) {
 void FileManagerScreen::build_filter_bar(QVBoxLayout* root) {
     auto* bar = new QWidget;
     bar->setStyleSheet(
-        QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_BASE, colors::BORDER_DIM));
+        QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_BASE(), colors::BORDER_DIM()));
     auto* bl = new QVBoxLayout(bar);
     bl->setContentsMargins(14, 8, 14, 8);
     bl->setSpacing(6);
@@ -211,13 +215,13 @@ void FileManagerScreen::build_filter_bar(QVBoxLayout* root) {
         QString("QLineEdit{background:%1;color:%2;border:1px solid %3;"
                 "padding:5px 10px;font-size:12px;%4}"
                 "QLineEdit:focus{border-color:%5;}")
-            .arg(colors::BG_SURFACE, colors::TEXT_PRIMARY, colors::BORDER_DIM, MF, colors::AMBER));
+            .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), MF, colors::AMBER()));
     connect(search_input_, &QLineEdit::textChanged, this, [this]() { render_files(); });
     r1l->addWidget(search_input_, 1);
 
     auto* sort_lbl = new QLabel("Sort:");
     sort_lbl->setStyleSheet(
-        QString("color:%1;font-size:11px;background:transparent;%2").arg(colors::TEXT_DIM, MF));
+        QString("color:%1;font-size:11px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
     r1l->addWidget(sort_lbl);
 
     sort_combo_ = new QComboBox;
@@ -229,7 +233,7 @@ void FileManagerScreen::build_filter_bar(QVBoxLayout* root) {
                 "QComboBox::drop-down{border:none;}"
                 "QComboBox QAbstractItemView{background:%1;color:%2;border:1px solid %3;"
                 "selection-background-color:%5;}")
-            .arg(colors::BG_SURFACE, colors::TEXT_PRIMARY, colors::BORDER_DIM, MF, colors::BG_HOVER));
+            .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), MF, colors::BG_HOVER()));
     connect(sort_combo_, &QComboBox::currentIndexChanged, this, [this]() { render_files(); });
     r1l->addWidget(sort_combo_);
     bl->addWidget(row1);
@@ -249,7 +253,7 @@ void FileManagerScreen::build_filter_bar(QVBoxLayout* root) {
         "border-radius:10px;padding:2px 10px;font-size:10px;%3}"
         "QPushButton:checked{background:%4;color:#000;border-color:%4;}"
         "QPushButton:hover:!checked{border-color:%4;}")
-        .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM, MF, colors::AMBER);
+        .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM(), MF, colors::AMBER());
 
     static const QStringList screens = {
         "All", "portfolio", "backtesting", "news", "equity_research",
@@ -266,7 +270,7 @@ void FileManagerScreen::build_filter_bar(QVBoxLayout* root) {
         cl->addWidget(chip);
         QString filter_val = (s == "All") ? "" : s;
         connect(chip, &QPushButton::toggled, this, [this, filter_val](bool checked) {
-            if (checked) { active_screen_filter_ = filter_val; render_files(); }
+            if (checked) { active_screen_filter_ = filter_val; render_files(); ScreenStateManager::instance().notify_changed(this); }
         });
     }
     cl->addStretch();
@@ -278,7 +282,7 @@ void FileManagerScreen::build_filter_bar(QVBoxLayout* root) {
 QWidget* FileManagerScreen::build_preview_panel() {
     preview_panel_ = new QWidget;
     preview_panel_->setStyleSheet(
-        QString("background:%1;border-left:1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_DIM));
+        QString("background:%1;border-left:1px solid %2;").arg(colors::BG_RAISED(), colors::BORDER_DIM()));
     auto* vl = new QVBoxLayout(preview_panel_);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
@@ -286,14 +290,14 @@ QWidget* FileManagerScreen::build_preview_panel() {
     // Preview header
     auto* hdr = new QWidget;
     hdr->setStyleSheet(
-        QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_SURFACE, colors::BORDER_DIM));
+        QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_SURFACE(), colors::BORDER_DIM()));
     auto* hhl = new QHBoxLayout(hdr);
     hhl->setContentsMargins(12, 8, 12, 8);
 
     auto* plbl = new QLabel("PREVIEW");
     plbl->setStyleSheet(
         QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;background:transparent;%2")
-            .arg(colors::AMBER, MF));
+            .arg(colors::AMBER(), MF));
     hhl->addWidget(plbl);
     hhl->addStretch();
 
@@ -302,7 +306,7 @@ QWidget* FileManagerScreen::build_preview_panel() {
     close_btn->setCursor(Qt::PointingHandCursor);
     close_btn->setStyleSheet(
         QString("QPushButton{background:transparent;color:%1;border:none;font-size:12px;}"
-                "QPushButton:hover{color:#ef4444;}").arg(colors::TEXT_DIM));
+                "QPushButton:hover{color:%2;}").arg(colors::TEXT_DIM(), colors::NEGATIVE()));
     connect(close_btn, &QPushButton::clicked, this, &FileManagerScreen::clear_preview);
     hhl->addWidget(close_btn);
     vl->addWidget(hdr);
@@ -311,20 +315,20 @@ QWidget* FileManagerScreen::build_preview_panel() {
     preview_title_ = new QLabel;
     preview_title_->setWordWrap(true);
     preview_title_->setStyleSheet(
-        QString("color:#e5e5e5;font-size:12px;font-weight:600;background:transparent;"
-                "padding:10px 12px 2px 12px;%1").arg(MF));
+        QString("color:%1;font-size:12px;font-weight:600;background:transparent;"
+                "padding:10px 12px 2px 12px;%2").arg(colors::TEXT_PRIMARY(), MF));
     vl->addWidget(preview_title_);
 
     preview_meta_ = new QLabel;
     preview_meta_->setWordWrap(true);
     preview_meta_->setStyleSheet(
         QString("color:%1;font-size:10px;background:transparent;padding:0 12px 8px 12px;%2")
-            .arg(colors::TEXT_DIM, MF));
+            .arg(colors::TEXT_DIM(), MF));
     vl->addWidget(preview_meta_);
 
     auto* div = new QFrame;
     div->setFrameShape(QFrame::HLine);
-    div->setStyleSheet("background:#1a1a1a;max-height:1px;border:none;");
+    div->setStyleSheet(QString("background:%1;max-height:1px;border:none;").arg(colors::BORDER_DIM()));
     vl->addWidget(div);
 
     // Text preview
@@ -333,7 +337,7 @@ QWidget* FileManagerScreen::build_preview_panel() {
     preview_text_->setStyleSheet(
         QString("QTextEdit{background:%1;color:%2;border:none;"
                 "padding:10px;font-size:11px;%3}")
-            .arg(colors::BG_BASE, colors::TEXT_PRIMARY, MF));
+            .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), MF));
     preview_text_->setVisible(false);
     vl->addWidget(preview_text_, 1);
 
@@ -343,8 +347,8 @@ QWidget* FileManagerScreen::build_preview_panel() {
         QString("QTableWidget{background:%1;color:%2;border:none;gridline-color:%3;font-size:11px;%4}"
                 "QHeaderView::section{background:%5;color:%6;border:none;"
                 "border-bottom:1px solid %3;padding:4px;font-size:10px;font-weight:700;%4}")
-            .arg(colors::BG_BASE, colors::TEXT_PRIMARY, colors::BORDER_DIM, MF,
-                 colors::BG_SURFACE, colors::TEXT_SECONDARY));
+            .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), MF,
+                 colors::BG_SURFACE(), colors::TEXT_SECONDARY));
     preview_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     preview_table_->setSelectionMode(QAbstractItemView::SingleSelection);
     preview_table_->horizontalHeader()->setStretchLastSection(true);
@@ -358,7 +362,7 @@ QWidget* FileManagerScreen::build_preview_panel() {
     preview_empty_->setWordWrap(true);
     preview_empty_->setStyleSheet(
         QString("color:%1;font-size:12px;background:transparent;padding:30px;%2")
-            .arg(colors::TEXT_DIM, MF));
+            .arg(colors::TEXT_DIM(), MF));
     vl->addWidget(preview_empty_, 1);
 
     return preview_panel_;
@@ -608,14 +612,14 @@ void FileManagerScreen::render_files() {
             hero_lbl->setAlignment(Qt::AlignCenter);
             hero_lbl->setStyleSheet(
                 QString("color:%1;font-size:36px;font-weight:700;background:transparent;%2")
-                    .arg(colors::AMBER, MF));
+                    .arg(colors::AMBER(), MF));
             skl->addWidget(hero_lbl);
 
             auto* hero_sub = new QLabel("Your terminal file index is empty.");
             hero_sub->setAlignment(Qt::AlignCenter);
             hero_sub->setStyleSheet(
                 QString("color:%1;font-size:14px;background:transparent;%2")
-                    .arg(colors::TEXT_SECONDARY, MF));
+                    .arg(colors::TEXT_SECONDARY(), MF));
             skl->addWidget(hero_sub);
 
             auto* hero_hint = new QLabel(
@@ -625,18 +629,18 @@ void FileManagerScreen::render_files() {
             hero_hint->setWordWrap(true);
             hero_hint->setStyleSheet(
                 QString("color:%1;font-size:12px;background:transparent;%2")
-                    .arg(colors::TEXT_DIM, MF));
+                    .arg(colors::TEXT_DIM(), MF));
             skl->addWidget(hero_hint);
 
             auto* div = new QFrame;
             div->setFrameShape(QFrame::HLine);
-            div->setStyleSheet("background:#1a1a1a;max-height:1px;border:none;");
+            div->setStyleSheet(QString("background:%1;max-height:1px;border:none;").arg(colors::BORDER_DIM()));
             skl->addWidget(div);
 
             auto* sources_lbl = new QLabel("FILES ARE COLLECTED FROM");
             sources_lbl->setStyleSheet(
                 QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;"
-                        "background:transparent;%2").arg(colors::TEXT_DIM, MF));
+                        "background:transparent;%2").arg(colors::TEXT_DIM(), MF));
             skl->addWidget(sources_lbl);
 
             struct SI { QString icon, name, desc; };
@@ -663,7 +667,7 @@ void FileManagerScreen::render_files() {
             for (int i = 0; i < 11; ++i) {
                 const auto& s = sources[i];
                 auto* card = new QWidget;
-                card->setStyleSheet("background:#0d0d0d;border:1px solid #1a1a1a;border-radius:2px;");
+                card->setStyleSheet(panel_ss());
                 auto* cl2 = new QHBoxLayout(card);
                 cl2->setContentsMargins(10,8,10,8); cl2->setSpacing(8);
                 auto* badge = new QLabel(s.icon);
@@ -671,18 +675,18 @@ void FileManagerScreen::render_files() {
                 badge->setAlignment(Qt::AlignCenter);
                 badge->setStyleSheet(
                     QString("color:%1;font-size:10px;font-weight:700;"
-                            "background:rgba(217,119,6,0.08);border:1px solid #78350f;"
-                            "border-radius:2px;padding:2px 0;%2").arg(colors::AMBER, MF));
+                            "background:rgba(217,119,6,0.08);border:1px solid %2;"
+                            "border-radius:2px;padding:2px 0;%3").arg(colors::AMBER(), colors::AMBER_DIM(), MF));
                 cl2->addWidget(badge);
                 auto* txt = new QWidget; txt->setStyleSheet("background:transparent;");
                 auto* tl  = new QVBoxLayout(txt); tl->setContentsMargins(0,0,0,0); tl->setSpacing(1);
                 auto* nl  = new QLabel(s.name);
                 nl->setStyleSheet(
-                    QString("color:#e5e5e5;font-size:11px;font-weight:600;background:transparent;%1").arg(MF));
+                    QString("color:%1;font-size:11px;font-weight:600;background:transparent;%2").arg(colors::TEXT_PRIMARY(), MF));
                 tl->addWidget(nl);
                 auto* dl  = new QLabel(s.desc);
                 dl->setStyleSheet(
-                    QString("color:%1;font-size:10px;background:transparent;%2").arg(colors::TEXT_DIM, MF));
+                    QString("color:%1;font-size:10px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
                 tl->addWidget(dl);
                 cl2->addWidget(txt, 1);
                 grid->addWidget(card, i/3, i%3);
@@ -691,13 +695,13 @@ void FileManagerScreen::render_files() {
 
             auto* div2 = new QFrame;
             div2->setFrameShape(QFrame::HLine);
-            div2->setStyleSheet("background:#1a1a1a;max-height:1px;border:none;");
+            div2->setStyleSheet(QString("background:%1;max-height:1px;border:none;").arg(colors::BORDER_DIM()));
             skl->addWidget(div2);
 
             auto* tips_lbl = new QLabel("TIPS");
             tips_lbl->setStyleSheet(
                 QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;"
-                        "background:transparent;%2").arg(colors::TEXT_DIM, MF));
+                        "background:transparent;%2").arg(colors::TEXT_DIM(), MF));
             skl->addWidget(tips_lbl);
 
             for (const char* tip : {
@@ -710,7 +714,7 @@ void FileManagerScreen::render_files() {
                 tl2->setWordWrap(true);
                 tl2->setStyleSheet(
                     QString("color:%1;font-size:11px;background:transparent;%2")
-                        .arg(colors::TEXT_TERTIARY, MF));
+                        .arg(colors::TEXT_TERTIARY(), MF));
                 skl->addWidget(tl2);
             }
             skl->addStretch();
@@ -719,7 +723,7 @@ void FileManagerScreen::render_files() {
             auto* empty = new QLabel("No files match your search or filter.");
             empty->setAlignment(Qt::AlignCenter);
             empty->setStyleSheet(
-                QString("color:%1;font-size:13px;padding:40px;%2").arg(colors::TEXT_DIM, MF));
+                QString("color:%1;font-size:13px;padding:40px;%2").arg(colors::TEXT_DIM(), MF));
             file_layout_->addWidget(empty);
         }
         file_layout_->addStretch();
@@ -737,13 +741,13 @@ void FileManagerScreen::render_files() {
             grp_lbl->setStyleSheet(
                 QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;"
                         "background:transparent;padding:8px 0 2px 0;%2")
-                    .arg(colors::TEXT_DIM, MF));
+                    .arg(colors::TEXT_DIM(), MF));
             file_layout_->addWidget(grp_lbl);
         }
 
         // ── Card ─────────────────────────────────────────────────────────────
         auto* card = new QWidget;
-        card->setStyleSheet(QString(PANEL));
+        card->setStyleSheet(panel_ss());
         card->setCursor(Qt::PointingHandCursor);
         auto* hl = new QHBoxLayout(card);
         hl->setContentsMargins(8, 8, 12, 8);
@@ -756,7 +760,7 @@ void FileManagerScreen::render_files() {
         chk->setStyleSheet(
             QString("QPushButton{background:transparent;color:%1;border:none;font-size:14px;}"
                     "QPushButton:checked{color:%2;}")
-                .arg(colors::TEXT_DIM, colors::AMBER));
+                .arg(colors::TEXT_DIM(), colors::AMBER()));
         connect(chk, &QPushButton::toggled, this, [this, chk](bool checked) {
             chk->setText(checked ? "☑" : "☐");
             update_bulk_bar();
@@ -784,7 +788,7 @@ void FileManagerScreen::render_files() {
 
         auto* name_lbl = new QLabel(file["originalName"].toString());
         name_lbl->setStyleSheet(
-            QString("color:#e5e5e5;font-size:12px;font-weight:600;background:transparent;%1").arg(MF));
+            QString("color:%1;font-size:12px;font-weight:600;background:transparent;%2").arg(colors::TEXT_PRIMARY(), MF));
         info_vl->addWidget(name_lbl);
 
         QString date_str = QDateTime::fromString(file["uploadedAt"].toString(), Qt::ISODate)
@@ -792,7 +796,7 @@ void FileManagerScreen::render_files() {
         auto* meta_lbl = new QLabel(
             format_size(file["size"].toInteger()) + "  |  " + date_str);
         meta_lbl->setStyleSheet(
-            QString("color:%1;font-size:10px;background:transparent;%2").arg(colors::TEXT_DIM, MF));
+            QString("color:%1;font-size:10px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
         info_vl->addWidget(meta_lbl);
 
         QString fid = file["id"].toString();
@@ -807,7 +811,7 @@ void FileManagerScreen::render_files() {
             QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                     "font-size:10px;font-weight:700;padding:0 8px;%3}"
                     "QPushButton:hover{color:%4;border-color:%4;}")
-                .arg(colors::TEXT_DIM, colors::BORDER_DIM, MF, colors::AMBER));
+                .arg(colors::TEXT_DIM(), colors::BORDER_DIM(), MF, colors::AMBER()));
         connect(preview_btn, &QPushButton::clicked, this, [this, fid]() { show_preview(fid); });
         hl->addWidget(info, 1);
         hl->addWidget(preview_btn);
@@ -822,7 +826,7 @@ void FileManagerScreen::render_files() {
                 QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                         "font-size:10px;font-weight:700;padding:0 8px;%3}"
                         "QPushButton:hover{color:%1;background:rgba(217,119,6,0.15);}")
-                    .arg(colors::AMBER, colors::BORDER_DIM, MF));
+                    .arg(colors::AMBER(), colors::BORDER_DIM(), MF));
             connect(open_btn, &QPushButton::clicked, this, [this, fid]() { open_with(fid); });
             hl->addWidget(open_btn);
         }
@@ -834,8 +838,8 @@ void FileManagerScreen::render_files() {
         dl_btn->setStyleSheet(
             QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                     "font-size:10px;font-weight:700;%3}"
-                    "QPushButton:hover{color:#38bdf8;background:#111111;}")
-                .arg(colors::CYAN, colors::BORDER_DIM, MF));
+                    "QPushButton:hover{color:#38bdf8;background:%4;}")
+                .arg(colors::CYAN(), colors::BORDER_DIM(), MF, colors::BG_RAISED()));
         connect(dl_btn, &QPushButton::clicked, this, [this, fid]() { download_file(fid); });
         hl->addWidget(dl_btn);
 
@@ -846,8 +850,8 @@ void FileManagerScreen::render_files() {
         del_btn->setStyleSheet(
             QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                     "font-size:10px;font-weight:700;%3}"
-                    "QPushButton:hover{color:#ef4444;background:rgba(239,68,68,0.1);}")
-                .arg(colors::TEXT_DIM, colors::BORDER_DIM, MF));
+                    "QPushButton:hover{color:%4;background:rgba(239,68,68,0.1);}")
+                .arg(colors::TEXT_DIM(), colors::BORDER_DIM(), MF, colors::NEGATIVE()));
         connect(del_btn, &QPushButton::clicked, this, [this, fid]() { delete_file(fid); });
         hl->addWidget(del_btn);
 
@@ -874,10 +878,10 @@ void FileManagerScreen::update_stats() {
         quota_label_->setText(
             QString("Storage: %1 / 500 MB").arg(format_size(total_size)));
         // Turn red if > 80%
-        QString chunk_color = (pct > 800) ? "#ef4444" : "#d97706";
+        QString chunk_color = (pct > 800) ? colors::NEGATIVE() : colors::AMBER();
         quota_bar_->setStyleSheet(
-            QString("QProgressBar{background:#1a1a1a;border:none;border-radius:3px;}"
-                    "QProgressBar::chunk{background:%1;border-radius:3px;}").arg(chunk_color));
+            QString("QProgressBar{background:%1;border:none;border-radius:3px;}"
+                    "QProgressBar::chunk{background:%2;border-radius:3px;}").arg(colors::BORDER_DIM(), chunk_color));
     }
 }
 
@@ -891,14 +895,14 @@ QString FileManagerScreen::format_size(qint64 bytes) {
 }
 
 QString FileManagerScreen::file_type_color(const QString& mime) {
-    if (mime.contains("spreadsheet")||mime.contains("csv")||mime.contains("excel")) return "#16a34a";
-    if (mime.contains("image"))   return "#2563eb";
+    if (mime.contains("spreadsheet")||mime.contains("csv")||mime.contains("excel")) return colors::POSITIVE();
+    if (mime.contains("image"))   return colors::INFO();
     if (mime.contains("video"))   return "#7c3aed";
     if (mime.contains("audio"))   return "#db2777";
-    if (mime.contains("zip")||mime.contains("archive")) return "#ca8a04";
-    if (mime.contains("pdf"))     return "#dc2626";
-    if (mime.contains("json")||mime.contains("python")||mime.contains("ipynb")) return "#0891b2";
-    return "#808080";
+    if (mime.contains("zip")||mime.contains("archive")) return colors::WARNING();
+    if (mime.contains("pdf"))     return colors::NEGATIVE();
+    if (mime.contains("json")||mime.contains("python")||mime.contains("ipynb")) return colors::CYAN();
+    return colors::TEXT_SECONDARY();
 }
 
 QString FileManagerScreen::open_with_label(const QString& mime) {
@@ -913,6 +917,32 @@ QString FileManagerScreen::route_for_mime(const QString& mime) {
     if (mime.contains("spreadsheet")||mime.contains("excel")||mime.contains("csv")) return "excel";
     if (mime.contains("pdf")) return "report_builder";
     return {};
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap FileManagerScreen::save_state() const {
+    return {{"screen_filter", active_screen_filter_}};
+}
+
+void FileManagerScreen::restore_state(const QVariantMap& state) {
+    const QString filter = state.value("screen_filter").toString();
+    if (filter != active_screen_filter_) {
+        active_screen_filter_ = filter;
+        // Find and check the matching chip
+        if (chip_group_) {
+            for (auto* btn : chip_group_->buttons()) {
+                auto* chip = qobject_cast<QPushButton*>(btn);
+                if (!chip) continue;
+                QString chip_filter = chip->text() == "All" ? "" : chip->text();
+                if (chip_filter == filter) {
+                    chip->setChecked(true);
+                    break;
+                }
+            }
+        }
+        render_files();
+    }
 }
 
 } // namespace fincept::screens

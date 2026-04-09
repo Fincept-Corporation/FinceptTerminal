@@ -12,20 +12,8 @@ TopMoversWidget::TopMoversWidget(QWidget* parent) : BaseWidget("TOP MOVERS", par
     tl->setContentsMargins(4, 2, 4, 2);
     tl->setSpacing(0);
 
-    auto active_style = [](const QString& color) {
-        return QString("QPushButton { background: %1; color: %2; border: none; "
-                       "font-size: 9px; font-weight: bold; padding: 4px; }")
-            .arg(color, ui::colors::BG_BASE);
-    };
-    auto inactive_style = QString("QPushButton { background: %1; color: %2; border: none; "
-                                  "font-size: 9px; font-weight: bold; padding: 4px; }")
-                              .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY);
-
     gainers_btn_ = new QPushButton(QString(QChar(0x25B2)) + " GAINERS");
     losers_btn_ = new QPushButton(QString(QChar(0x25BC)) + " LOSERS");
-
-    gainers_btn_->setStyleSheet(active_style(ui::colors::POSITIVE));
-    losers_btn_->setStyleSheet(inactive_style);
 
     connect(gainers_btn_, &QPushButton::clicked, this, [this]() { show_tab(true); });
     connect(losers_btn_, &QPushButton::clicked, this, [this]() { show_tab(false); });
@@ -43,8 +31,18 @@ TopMoversWidget::TopMoversWidget(QWidget* parent) : BaseWidget("TOP MOVERS", par
 
     connect(this, &BaseWidget::refresh_requested, this, &TopMoversWidget::refresh_data);
 
+    apply_styles();
     set_loading(true);
     refresh_data();
+}
+
+void TopMoversWidget::apply_styles() {
+    // Apply styles based on current tab state
+    show_tab(showing_gainers_);
+}
+
+void TopMoversWidget::on_theme_changed() {
+    apply_styles();
 }
 
 void TopMoversWidget::refresh_data() {

@@ -239,6 +239,7 @@ set(CORE_SOURCES
     src/core/logging/Logger.cpp
     src/core/events/EventBus.cpp
     src/core/session/SessionManager.cpp
+    src/core/session/ScreenStateManager.cpp
 )
 
 # Network
@@ -254,6 +255,8 @@ set(AUTH_SOURCES
     src/auth/AuthApi.cpp
     src/auth/UserApi.cpp
     src/auth/SessionGuard.cpp
+    src/auth/PinManager.cpp
+    src/auth/InactivityGuard.cpp
 )
 
 # Storage
@@ -319,6 +322,12 @@ set(STORAGE_SOURCES
 
     # News articles — dedicated news article storage
     src/storage/sqlite/migrations/v013_news_articles.cpp
+
+    # LLM tools toggle
+    src/storage/sqlite/migrations/v014_llm_tools_toggle.cpp
+
+    # Screen UI state — crash-safe per-screen state in cache.db
+    src/storage/sqlite/migrations/v015_screen_state.cpp
 )
 
 # Python runner
@@ -519,6 +528,7 @@ set(SCREEN_SOURCES
     src/screens/auth/RegisterScreen.cpp
     src/screens/auth/ForgotPasswordScreen.cpp
     src/screens/auth/PricingScreen.cpp
+    src/screens/auth/LockScreen.cpp
     src/screens/profile/ProfileScreen.cpp
     src/screens/settings/SettingsScreen.cpp
     src/screens/settings/LlmConfigSection.cpp
@@ -533,6 +543,7 @@ set(SCREEN_SOURCES
     src/screens/chat_mode/ChatMessagePanel.cpp
     src/screens/chat_mode/ChatAgentPanel.cpp
     src/screens/chat_mode/ChatModeScreen.cpp
+    src/screens/chat_mode/TerminalToolBridge.cpp
     src/screens/setup/SetupScreen.cpp
     src/screens/info/ContactScreen.cpp
     src/screens/info/TermsScreen.cpp
@@ -853,6 +864,7 @@ set_source_files_properties(
     src/screens/alt_investments/AltInvestmentsScreen.cpp
     src/screens/asia_markets/AsiaMarketsScreen.cpp
     src/screens/auth/ForgotPasswordScreen.cpp
+    src/screens/auth/LockScreen.cpp
     src/screens/auth/LoginScreen.cpp
     src/screens/auth/PricingScreen.cpp
     src/screens/auth/RegisterScreen.cpp
@@ -1072,6 +1084,8 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v011_custom_indices.cpp
     src/storage/sqlite/migrations/v012_data_normalization.cpp
     src/storage/sqlite/migrations/v013_news_articles.cpp
+    src/storage/sqlite/migrations/v014_llm_tools_toggle.cpp
+    src/storage/sqlite/migrations/v015_screen_state.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp

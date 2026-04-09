@@ -105,8 +105,8 @@ void EquityAnalysisTab::build_ui() {
     auto* hl_vl = static_cast<QVBoxLayout*>(health_panel->layout());
     auto* health_grid = new QGridLayout;
     health_grid->setSpacing(16);
-    health_grid->addWidget(make_card("TOTAL CASH", cash_val_, "#22c55e"), 0, 0);
-    health_grid->addWidget(make_card("TOTAL DEBT", debt_val_, "#ef4444"), 0, 1);
+    health_grid->addWidget(make_card("TOTAL CASH", cash_val_, ui::colors::POSITIVE), 0, 0);
+    health_grid->addWidget(make_card("TOTAL DEBT", debt_val_, ui::colors::NEGATIVE), 0, 1);
     health_grid->addWidget(make_card("FREE CASHFLOW", fcf_val_, "#22d3ee"), 1, 0);
     health_grid->addWidget(make_card("OPERATING CF", ocf_val_, "#60a5fa"), 1, 1);
     hl_vl->addLayout(health_grid);
@@ -125,13 +125,13 @@ void EquityAnalysisTab::build_ui() {
     ev_vl->addStretch();
 
     // ── Panel 3: REVENUE & PROFITS (bottom-left, green) ───────────────────────
-    auto* rev_panel = make_panel("REVENUE & PROFITS", "#22c55e");
+    auto* rev_panel = make_panel("REVENUE & PROFITS", ui::colors::POSITIVE);
     auto* rev_vl = static_cast<QVBoxLayout*>(rev_panel->layout());
     auto* rev_grid = new QGridLayout;
     rev_grid->setSpacing(16);
-    rev_grid->addWidget(make_card("TOTAL REVENUE", rev_val_, "#22c55e"), 0, 0);
+    rev_grid->addWidget(make_card("TOTAL REVENUE", rev_val_, ui::colors::POSITIVE), 0, 0);
     rev_grid->addWidget(make_card("REVENUE/SHARE", rev_share_val_, "#22d3ee"), 0, 1);
-    rev_grid->addWidget(make_card("GROSS PROFITS", gp_val_, "#22c55e"), 1, 0);
+    rev_grid->addWidget(make_card("GROSS PROFITS", gp_val_, ui::colors::POSITIVE), 1, 0);
     rev_grid->addWidget(make_card("EBITDA MARGINS", ebitda_m_val_, "#eab308"), 1, 1);
     rev_vl->addLayout(rev_grid);
     rev_vl->addStretch();
@@ -143,10 +143,10 @@ void EquityAnalysisTab::build_ui() {
     rat_grid->setSpacing(16);
     rat_grid->addWidget(make_card("P/E RATIO", pe_val_, ui::colors::TEXT_PRIMARY), 0, 0);
     rat_grid->addWidget(make_card("PEG RATIO", peg_val_, ui::colors::TEXT_PRIMARY), 0, 1);
-    rat_grid->addWidget(make_card("ROE", roe_val_, "#22c55e"), 1, 0);
-    rat_grid->addWidget(make_card("ROA", roa_val_, "#22c55e"), 1, 1);
+    rat_grid->addWidget(make_card("ROE", roe_val_, ui::colors::POSITIVE), 1, 0);
+    rat_grid->addWidget(make_card("ROA", roa_val_, ui::colors::POSITIVE), 1, 1);
     rat_grid->addWidget(make_card("BETA", beta_val_, "#22d3ee"), 2, 0);
-    rat_grid->addWidget(make_card("SHORT RATIO", short_rat_val_, "#ef4444"), 2, 1);
+    rat_grid->addWidget(make_card("SHORT RATIO", short_rat_val_, ui::colors::NEGATIVE), 2, 1);
     rat_vl->addLayout(rat_grid);
     rat_vl->addStretch();
 

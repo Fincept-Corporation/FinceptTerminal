@@ -13,6 +13,7 @@ class StatusBar : public QWidget {
     void set_ready(bool ready);
 
   private:
+    void refresh_theme();
     QLabel* ready_label_ = nullptr;
 };
 

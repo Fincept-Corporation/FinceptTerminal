@@ -95,6 +95,9 @@ class CommandBar : public QWidget {
     QString dock_primary_id_;  // screen id locked in after user types "<screen> "
     QString dock_verb_;        // "add" or "replace" — locked in after user picks verb
 
+    // ── Theme ─────────────────────────────────────────────────────────────────
+    void refresh_theme();
+
     // ── Dropdown helpers ───────────────────────────────────────────────────────
     void show_dropdown();
     void hide_dropdown();

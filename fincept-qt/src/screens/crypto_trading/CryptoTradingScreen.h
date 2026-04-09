@@ -1,6 +1,7 @@
 #pragma once
 // Crypto Trading Screen — Bloomberg-style coordinator
 
+#include "screens/IStatefulScreen.h"
 #include "screens/crypto_trading/CryptoTypes.h"
 #include "trading/TradingTypes.h"
 
@@ -29,11 +30,16 @@ class CryptoBottomPanel;
 
 namespace fincept::screens {
 
-class CryptoTradingScreen : public QWidget {
+class CryptoTradingScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit CryptoTradingScreen(QWidget* parent = nullptr);
     ~CryptoTradingScreen();
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "crypto_trading"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* event) override;

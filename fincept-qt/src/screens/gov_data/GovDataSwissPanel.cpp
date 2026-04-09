@@ -25,68 +25,80 @@ static constexpr const char* kGovDataSwissColor  = "#E11D48";
 
 using namespace fincept::ui;
 
-// ── Panel stylesheet ─────────────────────────────────────────────────────────
+// ── Dynamic stylesheet ──────────────────────────────────────────────────────
 
-static const QString kSwissStyle = QString(
-    "#govPanelToolbar { background:#111111; border-bottom:1px solid #1a1a1a; }"
+static QString build_swiss_style() {
+    const auto& t  = ui::ThemeManager::instance().tokens();
+    const auto  cc = QColor(kGovDataSwissColor);
+    const QString cr = QString::number(cc.red());
+    const QString cg = QString::number(cc.green());
+    const QString cb = QString::number(cc.blue());
+    const QString c  = kGovDataSwissColor;
 
-    "#govTabBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:4px 12px; letter-spacing:0.5px; }"
-    "#govTabBtn:hover { color:#e5e5e5; background:#161616; }"
-    "#govTabBtn:checked { background:rgba(225,29,72,0.12); color:#E11D48;"
-    "  border:1px solid #E11D48; }"
+    QString s;
+    s += QString("#govPanelToolbar { background:%1; border-bottom:1px solid %2; }").arg(t.bg_raised, t.border_dim);
 
-    "#govBackBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:4px 10px; }"
-    "#govBackBtn:hover { color:#e5e5e5; background:#161616; }"
+    s += QString("#govTabBtn { background:transparent; color:%1; border:1px solid %2;"
+                 "  font-size:10px; font-weight:700; padding:4px 12px; letter-spacing:0.5px; }").arg(t.text_secondary, t.border_dim);
+    s += QString("#govTabBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
+    s += QString("#govTabBtn:checked { background:rgba(%1,%2,%3,0.12); color:%4;"
+                 "  border:1px solid %4; }").arg(cr, cg, cb, c);
 
-    "#govFetchBtn { background:#E11D48; color:#080808; border:none;"
-    "  font-size:10px; font-weight:700; padding:4px 14px; }"
-    "#govFetchBtn:hover { background:#fb7185; }"
-    "#govFetchBtn:disabled { background:#1a1a1a; color:#404040; }"
+    s += QString("#govBackBtn { background:transparent; color:%1; border:1px solid %2;"
+                 "  font-size:10px; font-weight:700; padding:4px 10px; }").arg(t.text_secondary, t.border_dim);
+    s += QString("#govBackBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
 
-    "#govCsvBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
-    "  font-size:10px; font-weight:700; padding:4px 10px; }"
-    "#govCsvBtn:hover { color:#e5e5e5; background:#161616; }"
+    s += QString("#govFetchBtn { background:%1; color:%2; border:none;"
+                 "  font-size:10px; font-weight:700; padding:4px 14px; }").arg(c, t.bg_base);
+    s += QString("#govFetchBtn:hover { background:%1; }").arg(cc.lighter(120).name());
+    s += QString("#govFetchBtn:disabled { background:%1; color:%2; }").arg(t.border_dim, t.text_dim);
 
-    "#govSearch { background:#080808; color:#e5e5e5; border:none;"
-    "  border-bottom:1px solid #1a1a1a; padding:4px 10px; font-size:11px; }"
-    "#govSearch:focus { border-bottom:1px solid #E11D48; }"
+    s += QString("#govCsvBtn { background:transparent; color:%1; border:1px solid %2;"
+                 "  font-size:10px; font-weight:700; padding:4px 10px; }").arg(t.text_secondary, t.border_dim);
+    s += QString("#govCsvBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
 
-    "QTableWidget { background:#080808; color:#e5e5e5; border:none;"
-    "  gridline-color:#1a1a1a; font-size:11px; alternate-background-color:#0a0a0a; }"
-    "QTableWidget::item { padding:5px 8px; border-bottom:1px solid #1a1a1a; }"
-    "QTableWidget::item:selected { background:rgba(225,29,72,0.10); color:#E11D48; }"
-    "QHeaderView::section { background:#111111; color:#808080; border:none;"
-    "  border-bottom:2px solid #1a1a1a; border-right:1px solid #1a1a1a;"
-    "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+    s += QString("#govSearch { background:%1; color:%2; border:none;"
+                 "  border-bottom:1px solid %3; padding:4px 10px; font-size:11px; }").arg(t.bg_base, t.text_primary, t.border_dim);
+    s += QString("#govSearch:focus { border-bottom:1px solid %1; }").arg(c);
 
-    "#govStatusPage { background:#080808; }"
-    "#govStatusMsg  { color:#808080; font-size:13px; background:transparent; }"
-    "#govStatusErr  { color:#dc2626; font-size:12px; background:transparent; }"
+    s += QString("QTableWidget { background:%1; color:%2; border:none;"
+                 "  gridline-color:%3; font-size:11px; alternate-background-color:%4; }").arg(t.bg_base, t.text_primary, t.border_dim, t.bg_surface);
+    s += QString("QTableWidget::item { padding:5px 8px; border-bottom:1px solid %1; }").arg(t.border_dim);
+    s += QString("QTableWidget::item:selected { background:rgba(%1,%2,%3,0.10); color:%4; }").arg(cr, cg, cb, c);
+    s += QString("QHeaderView::section { background:%1; color:%2; border:none;"
+                 "  border-bottom:2px solid %3; border-right:1px solid %3;"
+                 "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }").arg(t.bg_raised, t.text_secondary, t.border_dim);
 
-    "#govBreadcrumb       { background:#0a0a0a; border-bottom:1px solid #1a1a1a; }"
-    "#govBreadcrumbText   { color:#808080; font-size:9px; background:transparent; }"
-    "#govBreadcrumbActive { color:#E11D48; font-size:9px; font-weight:700; background:transparent; }"
+    s += QString("#govStatusPage { background:%1; }").arg(t.bg_base);
+    s += QString("#govStatusMsg  { color:%1; font-size:13px; background:transparent; }").arg(t.text_secondary);
+    s += QString("#govStatusErr  { color:%1; font-size:12px; background:transparent; }").arg(t.negative);
 
-    "#govStatusBar    { background:#0a0a0a; border-top:1px solid #1a1a1a; }"
-    "#govWatermark    { color:#404040; font-size:9px; background:transparent; }"
+    s += QString("#govBreadcrumb       { background:%1; border-bottom:1px solid %2; }").arg(t.bg_surface, t.border_dim);
+    s += QString("#govBreadcrumbText   { color:%1; font-size:9px; background:transparent; }").arg(t.text_secondary);
+    s += QString("#govBreadcrumbActive { color:%1; font-size:9px; font-weight:700; background:transparent; }").arg(c);
 
-    "QScrollBar:vertical { background:#080808; width:5px; }"
-    "QScrollBar::handle:vertical { background:#1a1a1a; min-height:20px; }"
-    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }"
-);
+    s += QString("#govStatusBar    { background:%1; border-top:1px solid %2; }").arg(t.bg_surface, t.border_dim);
+    s += QString("#govWatermark    { color:%1; font-size:9px; background:transparent; }").arg(t.text_dim);
+
+    s += QString("QScrollBar:vertical { background:%1; width:5px; }").arg(t.bg_base);
+    s += QString("QScrollBar::handle:vertical { background:%1; min-height:20px; }").arg(t.border_dim);
+    s += "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }";
+    return s;
+}
 
 // ── Constructor ──────────────────────────────────────────────────────────────
 
 GovDataSwissPanel::GovDataSwissPanel(QWidget* parent)
     : QWidget(parent) {
-    setStyleSheet(kSwissStyle);
+    setStyleSheet(build_swiss_style());
     build_ui();
     connect(&services::GovDataService::instance(),
             &services::GovDataService::result_ready,
             this,
             &GovDataSwissPanel::on_result);
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this]() {
+        setStyleSheet(build_swiss_style());
+    });
 }
 
 // ── Build UI ─────────────────────────────────────────────────────────────────
@@ -427,7 +439,7 @@ void GovDataSwissPanel::populate_datasets(const QJsonArray& data, int total_coun
             if (publisher.isEmpty()) publisher = pub_obj["name"].toString();
         }
         auto* pub_item = new QTableWidgetItem(publisher);
-        pub_item->setForeground(QColor("#808080"));
+        pub_item->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
         datasets_table_->setItem(i, 3, pub_item);
     }
 
@@ -598,14 +610,14 @@ void GovDataSwissPanel::update_breadcrumb() {
 
 void GovDataSwissPanel::show_loading(const QString& message) {
     status_label_->setStyleSheet(
-        "color:#E11D48; font-size:13px; background:transparent;");
+        QString("color:%1; font-size:13px; background:transparent;").arg(kGovDataSwissColor));
     status_label_->setText(message);
     content_stack_->setCurrentIndex(3);
 }
 
 void GovDataSwissPanel::show_error(const QString& message) {
     status_label_->setStyleSheet(
-        "color:#dc2626; font-size:12px; background:transparent;");
+        QString("color:%1; font-size:12px; background:transparent;").arg(ui::colors::NEGATIVE()));
     status_label_->setText("Error: " + message);
     content_stack_->setCurrentIndex(3);
     LOG_ERROR("GovDataSwiss", "Error: " + message);
@@ -613,7 +625,7 @@ void GovDataSwissPanel::show_error(const QString& message) {
 
 void GovDataSwissPanel::show_empty(const QString& message) {
     status_label_->setStyleSheet(
-        "color:#808080; font-size:12px; background:transparent;");
+        QString("color:%1; font-size:12px; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     status_label_->setText(message);
     content_stack_->setCurrentIndex(3);
 }

@@ -13,53 +13,78 @@ namespace fincept::screens {
 
 // ── Obsidian Styles ──────────────────────────────────────────────────────────
 
-static const char* CARD_STYLE = "background: #0a0a0a; border: 1px solid #1a1a1a;";
+static QString card_style() {
+    return QString("background: %1; border: 1px solid %2;")
+        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM);
+}
 
-static const char* INPUT_STYLE = "QLineEdit {"
-                                 "  background: #0a0a0a; color: #e5e5e5;"
-                                 "  border: 1px solid #1a1a1a;"
-                                 "  padding: 6px 10px; font-size: 15px;"
-                                 "  font-family: 'Consolas','Courier New',monospace;"
-                                 "  selection-background-color: #d97706; selection-color: #080808;"
-                                 "}"
-                                 "QLineEdit:focus { border: 1px solid #333333; }"
-                                 "QLineEdit::placeholder { color: #404040; }";
+static QString input_style() {
+    return QString("QLineEdit {"
+                   "  background: %1; color: %2;"
+                   "  border: 1px solid %3;"
+                   "  padding: 6px 10px; font-size: 15px;"
+                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "  selection-background-color: %4; selection-color: %5;"
+                   "}"
+                   "QLineEdit:focus { border: 1px solid %6; }"
+                   "QLineEdit::placeholder { color: %7; }")
+        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
+             ui::colors::AMBER, ui::colors::BG_BASE,
+             ui::colors::BORDER_BRIGHT, ui::colors::TEXT_DIM);
+}
 
-static const char* BTN_PRIMARY = "QPushButton {"
-                                 "  background: rgba(217,119,6,0.1); color: #d97706;"
-                                 "  border: 1px solid #78350f;"
-                                 "  padding: 0 16px; font-size: 14px; font-weight: 700;"
-                                 "  font-family: 'Consolas','Courier New',monospace;"
-                                 "}"
-                                 "QPushButton:hover { background: #d97706; color: #080808; }"
-                                 "QPushButton:disabled { color: #404040; background: #111111; border-color: #1a1a1a; }";
+static QString btn_primary() {
+    return QString("QPushButton {"
+                   "  background: rgba(217,119,6,0.1); color: %1;"
+                   "  border: 1px solid %2;"
+                   "  padding: 0 16px; font-size: 14px; font-weight: 700;"
+                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "}"
+                   "QPushButton:hover { background: %1; color: %3; }"
+                   "QPushButton:disabled { color: %4; background: %5; border-color: %6; }")
+        .arg(ui::colors::AMBER, ui::colors::AMBER_DIM, ui::colors::BG_BASE,
+             ui::colors::TEXT_DIM, ui::colors::BG_RAISED, ui::colors::BORDER_DIM);
+}
 
-static const char* BTN_STANDARD = "QPushButton {"
-                                  "  background: #111111; color: #808080;"
-                                  "  border: 1px solid #1a1a1a;"
-                                  "  padding: 0 12px; font-size: 14px; font-weight: 700;"
-                                  "  font-family: 'Consolas','Courier New',monospace;"
-                                  "}"
-                                  "QPushButton:hover { color: #e5e5e5; background: #161616; }";
+static QString btn_standard() {
+    return QString("QPushButton {"
+                   "  background: %1; color: %2;"
+                   "  border: 1px solid %3;"
+                   "  padding: 0 12px; font-size: 14px; font-weight: 700;"
+                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "}"
+                   "QPushButton:hover { color: %4; background: %5; }")
+        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM,
+             ui::colors::TEXT_PRIMARY, ui::colors::BG_HOVER);
+}
 
-static const char* LINK_STYLE = "QPushButton {"
-                                "  color: #808080; background: transparent; border: none;"
-                                "  font-size: 13px; font-weight: 400;"
-                                "  font-family: 'Consolas','Courier New',monospace;"
-                                "}"
-                                "QPushButton:hover { color: #e5e5e5; }";
+static QString link_style() {
+    return QString("QPushButton {"
+                   "  color: %1; background: transparent; border: none;"
+                   "  font-size: 13px; font-weight: 400;"
+                   "  font-family: 'Consolas','Courier New',monospace;"
+                   "}"
+                   "QPushButton:hover { color: %2; }")
+        .arg(ui::colors::TEXT_SECONDARY, ui::colors::TEXT_PRIMARY);
+}
 
-static const char* LABEL_STYLE = "color: #808080; font-size: 13px; font-weight: 700;"
-                                 "background: transparent; letter-spacing: 0.5px;"
-                                 "font-family: 'Consolas','Courier New',monospace;";
+static QString label_style() {
+    return QString("color: %1; font-size: 13px; font-weight: 700;"
+                   "background: transparent; letter-spacing: 0.5px;"
+                   "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::TEXT_SECONDARY);
+}
 
-static const char* MUTED_STYLE = "color: #525252; font-size: 13px; background: transparent;"
-                                 "font-family: 'Consolas','Courier New',monospace;";
+static QString muted_style() {
+    return QString("color: %1; font-size: 13px; background: transparent;"
+                   "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::TEXT_TERTIARY);
+}
 
 static QFrame* make_separator() {
     auto* sep = new QFrame;
     sep->setFixedHeight(1);
-    sep->setStyleSheet("background: #1a1a1a; border: none;");
+    sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_DIM));
     return sep;
 }
 
@@ -102,9 +127,9 @@ ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
 
 void ForgotPasswordScreen::paintEvent(QPaintEvent* /*event*/) {
     QPainter p(this);
-    p.fillRect(rect(), QColor(0x08, 0x08, 0x08));
+    p.fillRect(rect(), QColor(ui::colors::BG_BASE()));
 
-    p.setPen(QPen(QColor(0x12, 0x12, 0x12), 1));
+    p.setPen(QPen(QColor(ui::colors::BG_RAISED()), 1));
     const int step = 24;
     for (int x = 0; x < width(); x += step)
         p.drawLine(x, 0, x, height());
@@ -116,7 +141,7 @@ void ForgotPasswordScreen::paintEvent(QPaintEvent* /*event*/) {
 
 void ForgotPasswordScreen::build_email_page() {
     auto* page = new QWidget;
-    page->setStyleSheet(CARD_STYLE);
+    page->setStyleSheet(card_style());
 
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(28, 22, 28, 22);
@@ -125,55 +150,58 @@ void ForgotPasswordScreen::build_email_page() {
     // Header
     auto* header = new QWidget;
     header->setFixedHeight(38);
-    header->setStyleSheet("background: #111111; border: none;");
+    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
     auto* back = new QPushButton("<");
     back->setFixedSize(24, 24);
-    back->setStyleSheet("QPushButton { color: #808080; background: transparent; border: none;"
+    back->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none;"
                         "  font-size: 16px; font-family: 'Consolas','Courier New',monospace; }"
-                        "QPushButton:hover { color: #e5e5e5; }");
+                        "QPushButton:hover { color: %2; }")
+        .arg(ui::colors::TEXT_SECONDARY, ui::colors::TEXT_PRIMARY));
     connect(back, &QPushButton::clicked, this, &ForgotPasswordScreen::navigate_login);
     hl->addWidget(back);
 
     auto* title = new QLabel("RESET PASSWORD");
-    title->setStyleSheet("color: #d97706; font-size: 14px; font-weight: 700;"
+    title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
                          "background: transparent; letter-spacing: 1px;"
-                         "font-family: 'Consolas','Courier New',monospace;");
+                         "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::AMBER));
     hl->addWidget(title);
     hl->addStretch();
     vl->addWidget(header);
 
     auto* sub = new QLabel("Enter your email and we'll send a verification code.");
     sub->setWordWrap(true);
-    sub->setStyleSheet(MUTED_STYLE);
+    sub->setStyleSheet(muted_style());
     vl->addWidget(sub);
 
     vl->addWidget(make_separator());
 
     auto* lbl = new QLabel("EMAIL");
-    lbl->setStyleSheet(LABEL_STYLE);
+    lbl->setStyleSheet(label_style());
     vl->addWidget(lbl);
 
     email_input_ = new QLineEdit;
     email_input_->setPlaceholderText("user@domain.com");
     email_input_->setFixedHeight(34);
-    email_input_->setStyleSheet(INPUT_STYLE);
+    email_input_->setStyleSheet(input_style());
     vl->addWidget(email_input_);
 
     error_label_ = new QLabel;
     error_label_->setWordWrap(true);
-    error_label_->setStyleSheet("color: #dc2626; font-size: 13px;"
+    error_label_->setStyleSheet(QString("color: %1; font-size: 13px;"
                                 "background: rgba(220,38,38,0.08);"
                                 "border: 1px solid #7f1d1d; padding: 6px 8px;"
-                                "font-family: 'Consolas','Courier New',monospace;");
+                                "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::NEGATIVE));
     error_label_->hide();
     vl->addWidget(error_label_);
 
     auto* send_btn = new QPushButton("  SEND CODE  ");
     send_btn->setFixedHeight(32);
-    send_btn->setStyleSheet(BTN_PRIMARY);
+    send_btn->setStyleSheet(btn_primary());
     connect(send_btn, &QPushButton::clicked, this, &ForgotPasswordScreen::on_send_code);
     connect(email_input_, &QLineEdit::returnPressed, this, &ForgotPasswordScreen::on_send_code);
     vl->addWidget(send_btn);
@@ -181,7 +209,7 @@ void ForgotPasswordScreen::build_email_page() {
     vl->addWidget(make_separator());
 
     auto* back_login = new QPushButton("REMEMBER YOUR PASSWORD? SIGN IN");
-    back_login->setStyleSheet(LINK_STYLE);
+    back_login->setStyleSheet(link_style());
     connect(back_login, &QPushButton::clicked, this, &ForgotPasswordScreen::navigate_login);
     vl->addWidget(back_login, 0, Qt::AlignCenter);
 
@@ -193,7 +221,7 @@ void ForgotPasswordScreen::build_email_page() {
 
 void ForgotPasswordScreen::build_otp_sent_page() {
     auto* page = new QWidget;
-    page->setStyleSheet(CARD_STYLE);
+    page->setStyleSheet(card_style());
 
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(28, 22, 28, 22);
@@ -201,33 +229,34 @@ void ForgotPasswordScreen::build_otp_sent_page() {
 
     auto* header = new QWidget;
     header->setFixedHeight(38);
-    header->setStyleSheet("background: #111111; border: none;");
+    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
     auto* title = new QLabel("CHECK YOUR EMAIL");
-    title->setStyleSheet("color: #d97706; font-size: 14px; font-weight: 700;"
+    title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
                          "background: transparent; letter-spacing: 1px;"
-                         "font-family: 'Consolas','Courier New',monospace;");
+                         "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::AMBER));
     hl->addWidget(title);
     hl->addStretch();
     vl->addWidget(header);
 
     auto* sub = new QLabel("We've sent a verification code. Enter it on the next screen to reset your password.");
     sub->setWordWrap(true);
-    sub->setStyleSheet(MUTED_STYLE);
+    sub->setStyleSheet(muted_style());
     vl->addWidget(sub);
 
     vl->addWidget(make_separator());
 
     auto* cont_btn = new QPushButton("  I HAVE THE CODE  ");
     cont_btn->setFixedHeight(32);
-    cont_btn->setStyleSheet(BTN_PRIMARY);
+    cont_btn->setStyleSheet(btn_primary());
     connect(cont_btn, &QPushButton::clicked, this, [this]() { pages_->setCurrentIndex(2); });
     vl->addWidget(cont_btn);
 
     auto* resend = new QPushButton("DIDN'T RECEIVE? RESEND");
-    resend->setStyleSheet(LINK_STYLE);
+    resend->setStyleSheet(link_style());
     connect(resend, &QPushButton::clicked, this, &ForgotPasswordScreen::on_resend);
     vl->addWidget(resend, 0, Qt::AlignCenter);
 
@@ -239,7 +268,7 @@ void ForgotPasswordScreen::build_otp_sent_page() {
 
 void ForgotPasswordScreen::build_reset_page() {
     auto* page = new QWidget;
-    page->setStyleSheet(CARD_STYLE);
+    page->setStyleSheet(card_style());
 
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(28, 22, 28, 22);
@@ -247,14 +276,15 @@ void ForgotPasswordScreen::build_reset_page() {
 
     auto* header = new QWidget;
     header->setFixedHeight(38);
-    header->setStyleSheet("background: #111111; border: none;");
+    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
     auto* title = new QLabel("RESET PASSWORD");
-    title->setStyleSheet("color: #d97706; font-size: 14px; font-weight: 700;"
+    title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
                          "background: transparent; letter-spacing: 1px;"
-                         "font-family: 'Consolas','Courier New',monospace;");
+                         "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::AMBER));
     hl->addWidget(title);
     hl->addStretch();
     vl->addWidget(header);
@@ -263,12 +293,12 @@ void ForgotPasswordScreen::build_reset_page() {
 
     auto add_field = [&](const char* label, const char* placeholder, bool is_password = false) -> QLineEdit* {
         auto* lbl = new QLabel(label);
-        lbl->setStyleSheet(LABEL_STYLE);
+        lbl->setStyleSheet(label_style());
         vl->addWidget(lbl);
         auto* input = new QLineEdit;
         input->setPlaceholderText(placeholder);
         input->setFixedHeight(34);
-        input->setStyleSheet(INPUT_STYLE);
+        input->setStyleSheet(input_style());
         if (is_password)
             input->setEchoMode(QLineEdit::Password);
         vl->addWidget(input);
@@ -281,10 +311,11 @@ void ForgotPasswordScreen::build_reset_page() {
 
     auto* err = new QLabel;
     err->setWordWrap(true);
-    err->setStyleSheet("color: #dc2626; font-size: 13px;"
+    err->setStyleSheet(QString("color: %1; font-size: 13px;"
                        "background: rgba(220,38,38,0.08);"
                        "border: 1px solid #7f1d1d; padding: 6px 8px;"
-                       "font-family: 'Consolas','Courier New',monospace;");
+                       "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::NEGATIVE));
     err->hide();
     vl->addWidget(err);
     connect(&auth::AuthManager::instance(), &auth::AuthManager::password_reset_failed, this, [err](const QString& e) {
@@ -294,7 +325,7 @@ void ForgotPasswordScreen::build_reset_page() {
 
     auto* reset_btn = new QPushButton("  RESET PASSWORD  ");
     reset_btn->setFixedHeight(32);
-    reset_btn->setStyleSheet(BTN_PRIMARY);
+    reset_btn->setStyleSheet(btn_primary());
     connect(reset_btn, &QPushButton::clicked, this, &ForgotPasswordScreen::on_reset_password);
     vl->addWidget(reset_btn);
 
@@ -306,7 +337,7 @@ void ForgotPasswordScreen::build_reset_page() {
 
 void ForgotPasswordScreen::build_success_page() {
     auto* page = new QWidget;
-    page->setStyleSheet(CARD_STYLE);
+    page->setStyleSheet(card_style());
 
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(28, 22, 28, 22);
@@ -315,35 +346,37 @@ void ForgotPasswordScreen::build_success_page() {
 
     auto* header = new QWidget;
     header->setFixedHeight(38);
-    header->setStyleSheet("background: #111111; border: none;");
+    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
     auto* title = new QLabel("PASSWORD RESET");
-    title->setStyleSheet("color: #16a34a; font-size: 14px; font-weight: 700;"
+    title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
                          "background: transparent; letter-spacing: 1px;"
-                         "font-family: 'Consolas','Courier New',monospace;");
+                         "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::POSITIVE));
     hl->addWidget(title);
     hl->addStretch();
 
     auto* status = new QLabel("SUCCESS");
-    status->setStyleSheet("color: #16a34a; font-size: 12px; font-weight: 700;"
+    status->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
                           "background: transparent; letter-spacing: 0.5px;"
-                          "font-family: 'Consolas','Courier New',monospace;");
+                          "font-family: 'Consolas','Courier New',monospace;")
+        .arg(ui::colors::POSITIVE));
     hl->addWidget(status);
     vl->addWidget(header);
 
     auto* sub = new QLabel("Your password has been reset. You can now sign in with your new password.");
     sub->setWordWrap(true);
     sub->setAlignment(Qt::AlignCenter);
-    sub->setStyleSheet(MUTED_STYLE);
+    sub->setStyleSheet(muted_style());
     vl->addWidget(sub);
 
     vl->addWidget(make_separator());
 
     auto* login_btn = new QPushButton("  CONTINUE TO LOGIN  ");
     login_btn->setFixedHeight(32);
-    login_btn->setStyleSheet(BTN_PRIMARY);
+    login_btn->setStyleSheet(btn_primary());
     connect(login_btn, &QPushButton::clicked, this, &ForgotPasswordScreen::navigate_login);
     vl->addWidget(login_btn);
 

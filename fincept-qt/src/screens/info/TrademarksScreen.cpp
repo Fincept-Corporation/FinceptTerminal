@@ -15,23 +15,25 @@ static const char* MF = "font-family:'Consolas','Courier New',monospace;";
 
 static QLabel* heading(const QString& num, const QString& title) {
     auto* lbl = new QLabel(QString("%1. %2").arg(num, title));
-    lbl->setStyleSheet(QString("color: #d97706; font-size: 14px; font-weight: 700; "
-                               "background: transparent; margin-top: 8px; %1")
-                           .arg(MF));
+    lbl->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700; "
+                               "background: transparent; margin-top: 8px; %2")
+                           .arg(colors::AMBER, MF));
     return lbl;
 }
 
 static QLabel* body(const QString& text) {
     auto* lbl = new QLabel(text);
     lbl->setWordWrap(true);
-    lbl->setStyleSheet(QString("color: #e5e5e5; font-size: 12px; background: transparent; %1").arg(MF));
+    lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2")
+                           .arg(colors::TEXT_PRIMARY, MF));
     return lbl;
 }
 
 static QLabel* bullet(const QString& text) {
     auto* lbl = new QLabel(QString("  > %1").arg(text));
     lbl->setWordWrap(true);
-    lbl->setStyleSheet(QString("color: #808080; font-size: 12px; background: transparent; %1").arg(MF));
+    lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2")
+                           .arg(colors::TEXT_SECONDARY, MF));
     return lbl;
 }
 
@@ -55,9 +57,9 @@ TrademarksScreen::TrademarksScreen(QWidget* parent) : QWidget(parent) {
     // Back
     auto* back_btn = new QPushButton("< BACK");
     back_btn->setCursor(Qt::PointingHandCursor);
-    back_btn->setStyleSheet(QString("QPushButton { color: #808080; background: transparent; border: none; "
-                                    "font-size: 12px; %1 } QPushButton:hover { color: #e5e5e5; }")
-                                .arg(MF));
+    back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
+                                    "font-size: 12px; %2 } QPushButton:hover { color: %3; }")
+                                .arg(colors::TEXT_SECONDARY, MF, colors::TEXT_PRIMARY));
     connect(back_btn, &QPushButton::clicked, this, &TrademarksScreen::navigate_back);
     vl->addWidget(back_btn, 0, Qt::AlignLeft);
 
@@ -75,7 +77,8 @@ TrademarksScreen::TrademarksScreen(QWidget* parent) : QWidget(parent) {
 
     // Panel
     auto* panel = new QWidget;
-    panel->setStyleSheet("background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 2px;");
+    panel->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 2px;")
+                             .arg(colors::BG_SURFACE, colors::BORDER_DIM));
     auto* pvl = new QVBoxLayout(panel);
     pvl->setContentsMargins(20, 16, 20, 16);
     pvl->setSpacing(6);

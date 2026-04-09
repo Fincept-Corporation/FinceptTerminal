@@ -156,17 +156,17 @@ void EquityPeersTab::populate_table(const QVector<services::equity::PeerData>& p
         if (v <= 0.0)
             return QColor("#6b7280");
         if (v <= good)
-            return QColor("#22c55e");
+            return QColor(ui::colors::POSITIVE());
         if (v <= warn)
             return QColor("#eab308");
-        return QColor("#ef4444");
+        return QColor(ui::colors::NEGATIVE());
     };
     auto color_pct_pos = [](double v) -> QColor {
         if (v == 0.0)
             return QColor("#6b7280");
         if (v > 0.0)
-            return QColor("#22c55e");
-        return QColor("#ef4444");
+            return QColor(ui::colors::POSITIVE());
+        return QColor(ui::colors::NEGATIVE());
     };
 
     auto set_cell = [&](int row, int col, const QString& text, const QColor& fg = QColor(),
@@ -208,8 +208,8 @@ void EquityPeersTab::populate_table(const QVector<services::equity::PeerData>& p
         set_cell(r, 11, fmt_pct(p.operating_margin), color_pct_pos(p.operating_margin));
         set_cell(r, 12, fmt_pct(p.revenue_growth), color_pct_pos(p.revenue_growth));
         set_cell(r, 13, fmt(p.debt_to_equity, 2), color_ratio(p.debt_to_equity, 0.5, 2.0));
-        set_cell(r, 14, fmt_pct(p.dividend_yield), p.dividend_yield > 0 ? QColor("#22c55e") : QColor("#6b7280"));
-        set_cell(r, 15, fmt(p.beta, 2), p.beta >= 0 && p.beta <= 1.5 ? QColor("#22c55e") : QColor("#ef4444"));
+        set_cell(r, 14, fmt_pct(p.dividend_yield), p.dividend_yield > 0 ? QColor(ui::colors::POSITIVE()) : QColor("#6b7280"));
+        set_cell(r, 15, fmt(p.beta, 2), p.beta >= 0 && p.beta <= 1.5 ? QColor(ui::colors::POSITIVE()) : QColor(ui::colors::NEGATIVE()));
     }
 
     peer_table_->resizeColumnsToContents();

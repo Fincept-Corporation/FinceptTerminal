@@ -56,46 +56,29 @@ WorldBankPanel::WorldBankPanel(QWidget* parent)
     // ── Left: country + indicator selectors ──────────────────────────────────
     auto* left = new QWidget;
     left->setFixedWidth(220);
-    left->setStyleSheet("background:#0a0a0a; border-right:1px solid #1a1a1a;");
+    left->setStyleSheet(sidebar_style());
     auto* lvl = new QVBoxLayout(left);
     lvl->setContentsMargins(0, 0, 0, 0);
     lvl->setSpacing(0);
 
-    auto section_header = [](const QString& text) {
+    auto section_header = [this](const QString& text) {
         auto* lbl = new QLabel(text);
-        lbl->setStyleSheet("color:#525252; font-size:8px; font-weight:700;"
-                           " letter-spacing:1px; background:#111111;"
-                           " padding:4px 10px; border-bottom:1px solid #1a1a1a;");
+        lbl->setStyleSheet(section_lbl_style()
+            + section_hdr_style());
         return lbl;
-    };
-
-    auto list_style = [](const QString& col) {
-        return QString(
-            "QListWidget { background:transparent; border:none; outline:none; }"
-            "QListWidget::item { color:#808080; padding:5px 10px;"
-            "  border-bottom:1px solid #111111; font-size:11px; }"
-            "QListWidget::item:hover { color:#e5e5e5; background:#161616; }"
-            "QListWidget::item:selected { color:%1; background:rgba(0,0,0,0.3);"
-            "  border-left:2px solid %1; font-weight:700; }").arg(col);
-    };
-
-    auto search_style = []() {
-        return QString("background:#080808; color:#e5e5e5; border:none;"
-                       " border-bottom:1px solid #1a1a1a; padding:4px 10px;"
-                       " font-size:11px;");
     };
 
     // Country
     lvl->addWidget(section_header("COUNTRY"));
     country_search_ = new QLineEdit;
     country_search_->setPlaceholderText("Filter countries…");
-    country_search_->setStyleSheet(search_style());
+    country_search_->setStyleSheet(search_input_style());
     connect(country_search_, &QLineEdit::textChanged,
             this, &WorldBankPanel::on_country_filter);
     lvl->addWidget(country_search_);
 
     country_list_ = new QListWidget;
-    country_list_->setStyleSheet(list_style(kWorldBankColor));
+    country_list_->setStyleSheet(list_style());
     connect(country_list_, &QListWidget::currentItemChanged, this,
             [this](QListWidgetItem* item) {
                 if (item) selected_country_ = item->data(Qt::UserRole).toString();
@@ -106,13 +89,13 @@ WorldBankPanel::WorldBankPanel(QWidget* parent)
     lvl->addWidget(section_header("INDICATOR"));
     indicator_search_ = new QLineEdit;
     indicator_search_->setPlaceholderText("Filter indicators…");
-    indicator_search_->setStyleSheet(search_style());
+    indicator_search_->setStyleSheet(search_input_style());
     connect(indicator_search_, &QLineEdit::textChanged,
             this, &WorldBankPanel::on_indicator_filter);
     lvl->addWidget(indicator_search_);
 
     indicator_list_ = new QListWidget;
-    indicator_list_->setStyleSheet(list_style(kWorldBankColor));
+    indicator_list_->setStyleSheet(list_style());
     for (const auto& pair : kWbIndicators) {
         auto* item = new QListWidgetItem(pair.first, indicator_list_);
         item->setData(Qt::UserRole, pair.second);
@@ -150,8 +133,7 @@ void WorldBankPanel::load_countries() {
 
 void WorldBankPanel::build_controls(QHBoxLayout* thl) {
     auto* lbl = new QLabel("YEARS");
-    lbl->setStyleSheet(
-        "color:#525252; font-size:9px; font-weight:700; background:transparent;");
+    lbl->setStyleSheet(ctrl_label_style());
     date_preset_ = new QComboBox;
     date_preset_->addItem("5 Years",   5);
     date_preset_->addItem("10 Years", 10);

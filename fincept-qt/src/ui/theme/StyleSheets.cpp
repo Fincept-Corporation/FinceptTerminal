@@ -37,15 +37,15 @@ QString data_value() {
 QString accent_button() {
     return QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
                    "padding: 4px 12px; font-size: 12px; font-weight: bold; }"
-                   "QPushButton:hover { background: #111111; color: #FF8800; }")
-        .arg(colors::PANEL, colors::ORANGE, colors::BORDER);
+                   "QPushButton:hover { background: %4; color: %2; }")
+        .arg(colors::PANEL, colors::ORANGE, colors::BORDER, colors::BG_RAISED);
 }
 
 QString muted_button() {
     return QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
                    "padding: 4px 12px; font-size: 12px; }"
-                   "QPushButton:hover { background: #111111; color: %4; }")
-        .arg(colors::PANEL, colors::MUTED, colors::BORDER, colors::GRAY);
+                   "QPushButton:hover { background: %4; color: %5; }")
+        .arg(colors::PANEL, colors::MUTED, colors::BORDER, colors::BG_RAISED, colors::GRAY);
 }
 
 QString news_screen_styles() {
@@ -84,7 +84,7 @@ QString news_screen_styles() {
                "#newsFeedList::item:hover { background: transparent; }"
 
                /* ── Breaking banner ── */
-               "#newsBreakingBanner { background: rgba(220,38,38,0.15); border-bottom: 1px solid %11; }"
+               "#newsBreakingBanner { background: %17; border-bottom: 1px solid %11; }"
                "#newsBreakingTag { color: %4; background: %11; font-size: 10px; font-weight: 700; "
                "  letter-spacing: 1px; padding: 1px 4px; }"
                "#newsBreakingHeadline { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
@@ -159,7 +159,7 @@ QString news_screen_styles() {
                "#newsDetailOpenBtn, #newsDetailCopyBtn { background: %8; color: %7; "
                "  border: 1px solid %3; font-size: 11px; font-weight: 700; padding: 0 10px; }"
                "#newsDetailOpenBtn:hover, #newsDetailCopyBtn:hover { color: %4; }"
-               "#newsDetailAnalyzeBtn { background: rgba(217,119,6,0.1); color: %12; "
+               "#newsDetailAnalyzeBtn { background: %16; color: %12; "
                "  border: 1px solid %10; font-size: 11px; font-weight: 700; padding: 0 10px; }"
                "#newsDetailAnalyzeBtn:hover { background: %12; color: %1; }"
                "#newsDetailAnalyzeBtn:disabled { color: %6; background: %8; border-color: %3; }"
@@ -196,6 +196,7 @@ QString news_screen_styles() {
         .arg(colors::CYAN)           // %14
         .arg(colors::POSITIVE)       // %15
         .arg(colors::WARNING)        // %16
+        .arg(colors::NEGATIVE_BG)    // %17
         ;
 }
 
@@ -210,7 +211,7 @@ QString crypto_trading_styles() {
                "  letter-spacing: 1px; background: transparent; border: none; }"
                "#cryptoCommandBarSep { color: %3; font-size: 14px; background: transparent; border: none; }"
 
-               "#cryptoExchangeBtn { background: rgba(217,119,6,0.08); color: %12; "
+               "#cryptoExchangeBtn { background: %16; color: %12; "
                "  border: 1px solid %10; padding: 2px 10px; font-size: 11px; "
                "  font-weight: 700; letter-spacing: 0.5px; }"
                "#cryptoExchangeBtn:hover { background: %12; color: %1; }"
@@ -231,10 +232,10 @@ QString crypto_trading_styles() {
                "#cryptoStatLabel { color: %6; font-size: 11px; background: transparent; border: none; }"
 
                "#cryptoModeBtn { padding: 2px 10px; font-weight: 700; font-size: 11px; letter-spacing: 0.5px; }"
-               "#cryptoModeBtn[mode=\"paper\"] { background: rgba(22,163,74,0.1); color: %15; border: 1px solid "
-               "#14532d; }"
-               "#cryptoModeBtn[mode=\"live\"] { background: rgba(220,38,38,0.1); color: %11; border: 1px solid "
-               "#7f1d1d; }"
+               "#cryptoModeBtn[mode=\"paper\"] { background: %17; color: %15; border: 1px solid "
+               "%19; }"
+               "#cryptoModeBtn[mode=\"live\"] { background: %18; color: %11; border: 1px solid "
+               "%20; }"
                "#cryptoApiBtn { background: %8; color: %7; border: 1px solid %3; "
                "  padding: 2px 10px; font-size: 11px; font-weight: 700; }"
                "#cryptoApiBtn:hover { color: %4; background: %13; }"
@@ -259,7 +260,7 @@ QString crypto_trading_styles() {
                "  color: %4; padding: 3px 10px; font-size: 12px; }"
                "#cryptoWatchlistSearch:focus { border-bottom-color: %5; }"
                "#cryptoWatchlistTable { background: %1; border: none; color: %4; font-size: 12px; }"
-               "#cryptoWatchlistTable::item { padding: 0 4px; border-bottom: 1px solid #111111; }"
+               "#cryptoWatchlistTable::item { padding: 0 4px; border-bottom: 1px solid %3; }"
                "#cryptoWatchlistTable::item:selected { background: %13; }"
                "QHeaderView::section { background: %2; color: %9; font-size: 11px; font-weight: 700; "
                "  border: none; border-bottom: 1px solid %3; padding: 0 4px; }"
@@ -332,11 +333,11 @@ QString crypto_trading_styles() {
                "#cryptoOeStatus { font-size: 11px; background: transparent; border: none; }"
                "#cryptoOeStatus[error=\"true\"] { color: %11; }"
 
-               "#cryptoBuySubmit { background: rgba(22,163,74,0.12); color: %15; "
-               "  border: 1px solid #14532d; padding: 8px; font-weight: 700; font-size: 13px; }"
+               "#cryptoBuySubmit { background: %17; color: %15; "
+               "  border: 1px solid %19; padding: 8px; font-weight: 700; font-size: 13px; }"
                "#cryptoBuySubmit:hover { background: %15; color: %1; }"
-               "#cryptoSellSubmit { background: rgba(220,38,38,0.12); color: %11; "
-               "  border: 1px solid #7f1d1d; padding: 8px; font-weight: 700; font-size: 13px; }"
+               "#cryptoSellSubmit { background: %18; color: %11; "
+               "  border: 1px solid %20; padding: 8px; font-weight: 700; font-size: 13px; }"
                "#cryptoSellSubmit:hover { background: %11; color: %4; }"
 
                "#cryptoAdvToggle { background: transparent; color: %6; border: none; "
@@ -353,12 +354,12 @@ QString crypto_trading_styles() {
                "#cryptoBottomTabs QTabBar::tab:hover:!selected { color: %7; }"
 
                "#cryptoBottomTable { background: %1; border: none; color: %4; font-size: 12px; }"
-               "#cryptoBottomTable::item { padding: 0 4px; border-bottom: 1px solid #111111; }"
+               "#cryptoBottomTable::item { padding: 0 4px; border-bottom: 1px solid %3; }"
                "#cryptoBottomTable QHeaderView::section { background: %2; color: %9; "
                "  font-size: 11px; font-weight: 700; border: none; border-bottom: 1px solid %3; padding: 0 4px; }"
 
-               "#cryptoCancelBtn { background: rgba(220,38,38,0.1); color: %11; "
-               "  border: 1px solid #7f1d1d; padding: 1px 6px; font-size: 10px; font-weight: 700; }"
+               "#cryptoCancelBtn { background: %18; color: %11; "
+               "  border: 1px solid %20; padding: 1px 6px; font-size: 10px; font-weight: 700; }"
                "#cryptoCancelBtn:hover { background: %11; color: %4; }"
 
                "#cryptoInfoRow { border-bottom: 1px solid %3; }"
@@ -395,6 +396,11 @@ QString crypto_trading_styles() {
         .arg(colors::BG_HOVER)       // %13
         .arg(colors::CYAN)           // %14
         .arg(colors::POSITIVE)       // %15
+        .arg(colors::ACCENT_BG)      // %16
+        .arg(colors::POSITIVE_BG)    // %17
+        .arg(colors::NEGATIVE_BG)    // %18
+        .arg(colors::POSITIVE_DIM)   // %19
+        .arg(colors::NEGATIVE_DIM)   // %20
         ;
 }
 
@@ -408,7 +414,7 @@ QString equity_trading_styles() {
                "#eqCommandBar { background: %8; border-bottom: 1px solid %3; }"
                "#eqCommandBarSep { color: %3; font-size: 14px; background: transparent; border: none; }"
 
-               "#eqBrokerBtn { background: rgba(217,119,6,0.08); color: %12; "
+               "#eqBrokerBtn { background: %16; color: %12; "
                "  border: 1px solid %10; padding: 2px 10px; font-size: 11px; "
                "  font-weight: 700; letter-spacing: 0.5px; }"
                "#eqBrokerBtn:hover { background: %12; color: %1; }"
@@ -434,8 +440,8 @@ QString equity_trading_styles() {
                "#eqStatLabel { color: %6; font-size: 11px; background: transparent; border: none; }"
 
                "#eqModeBtn { padding: 2px 10px; font-weight: 700; font-size: 11px; letter-spacing: 0.5px; }"
-               "#eqModeBtn[mode=\"paper\"] { background: rgba(22,163,74,0.1); color: %15; border: 1px solid #14532d; }"
-               "#eqModeBtn[mode=\"live\"] { background: rgba(220,38,38,0.1); color: %11; border: 1px solid #7f1d1d; }"
+               "#eqModeBtn[mode=\"paper\"] { background: %17; color: %15; border: 1px solid %19; }"
+               "#eqModeBtn[mode=\"live\"] { background: %18; color: %11; border: 1px solid %20; }"
                "#eqApiBtn { background: %8; color: %7; border: 1px solid %3; "
                "  padding: 2px 10px; font-size: 11px; font-weight: 700; }"
                "#eqApiBtn:hover { color: %4; background: %13; }"
@@ -458,7 +464,7 @@ QString equity_trading_styles() {
                "  color: %4; padding: 3px 10px; font-size: 12px; }"
                "#eqWatchlistSearch:focus { border-bottom-color: %5; }"
                "#eqWatchlistTable { background: %1; border: none; color: %4; font-size: 12px; }"
-               "#eqWatchlistTable::item { padding: 0 4px; border-bottom: 1px solid #111111; }"
+               "#eqWatchlistTable::item { padding: 0 4px; border-bottom: 1px solid %3; }"
                "#eqWatchlistTable::item:selected { background: %13; }"
                "#eqWatchlistTable QHeaderView::section { background: %2; color: %9; font-size: 11px; "
                "  font-weight: 700; border: none; border-bottom: 1px solid %3; padding: 0 4px; }"
@@ -525,11 +531,11 @@ QString equity_trading_styles() {
                "#eqOeCost { color: %6; font-size: 11px; background: transparent; border: none; }"
                "#eqOeStatus { font-size: 11px; background: transparent; border: none; }"
 
-               "#eqBuySubmit { background: rgba(22,163,74,0.12); color: %15; "
-               "  border: 1px solid #14532d; padding: 8px; font-weight: 700; font-size: 13px; }"
+               "#eqBuySubmit { background: %17; color: %15; "
+               "  border: 1px solid %19; padding: 8px; font-weight: 700; font-size: 13px; }"
                "#eqBuySubmit:hover { background: %15; color: %1; }"
-               "#eqSellSubmit { background: rgba(220,38,38,0.12); color: %11; "
-               "  border: 1px solid #7f1d1d; padding: 8px; font-weight: 700; font-size: 13px; }"
+               "#eqSellSubmit { background: %18; color: %11; "
+               "  border: 1px solid %20; padding: 8px; font-weight: 700; font-size: 13px; }"
                "#eqSellSubmit:hover { background: %11; color: %4; }"
 
                "#eqAdvToggle { background: transparent; color: %6; border: none; "
@@ -546,7 +552,7 @@ QString equity_trading_styles() {
                "#eqBottomTabs QTabBar::tab:hover:!selected { color: %7; }"
 
                "#eqTable { background: %1; border: none; color: %4; font-size: 12px; }"
-               "#eqTable::item { padding: 0 4px; border-bottom: 1px solid #111111; }"
+               "#eqTable::item { padding: 0 4px; border-bottom: 1px solid %3; }"
                "#eqTable QHeaderView::section { background: %2; color: %9; "
                "  font-size: 11px; font-weight: 700; border: none; border-bottom: 1px solid %3; padding: 0 4px; }")
         .arg(colors::BG_BASE)        // %1
@@ -564,6 +570,11 @@ QString equity_trading_styles() {
         .arg(colors::BG_HOVER)       // %13
         .arg(colors::CYAN)           // %14
         .arg(colors::POSITIVE)       // %15
+        .arg(colors::ACCENT_BG)      // %16
+        .arg(colors::POSITIVE_BG)    // %17
+        .arg(colors::NEGATIVE_BG)    // %18
+        .arg(colors::POSITIVE_DIM)   // %19
+        .arg(colors::NEGATIVE_DIM)   // %20
         ;
 }
 

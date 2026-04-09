@@ -13,14 +13,26 @@ class RiskMetricsWidget : public BaseWidget {
   public:
     explicit RiskMetricsWidget(QWidget* parent = nullptr);
 
+  protected:
+    void on_theme_changed() override;
+
   private:
+    void apply_styles();
     void refresh_data();
     void populate(const QVector<services::QuoteData>& quotes);
 
     // VIX section
+    QWidget* vix_card_ = nullptr;
+    QLabel* vix_header_lbl_ = nullptr;
     QLabel* vix_value_ = nullptr;
     QLabel* vix_regime_ = nullptr;
     QLabel* vix_bar_fill_ = nullptr;
+
+    // Separators and section headers
+    QFrame* sep1_ = nullptr;
+    QFrame* sep2_ = nullptr;
+    QLabel* stocks_hdr_ = nullptr;
+    QLabel* corr_hdr_ = nullptr;
 
     // Volatility cluster labels [6 stocks]
     struct StockRisk {
@@ -30,6 +42,8 @@ class RiskMetricsWidget : public BaseWidget {
     };
     QVector<StockRisk> stock_rows_;
 
+    // Spread row labels (the left-hand descriptors)
+    QVector<QLabel*> spread_labels_;
     // Correlation proxies
     QLabel* spy_qqq_spread_ = nullptr;
     QLabel* spy_iwm_spread_ = nullptr;

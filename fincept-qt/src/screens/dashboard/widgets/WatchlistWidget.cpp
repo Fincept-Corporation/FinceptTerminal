@@ -18,26 +18,15 @@ WatchlistWidget::WatchlistWidget(QWidget* parent)
     irl->setContentsMargins(4, 4, 4, 4);
     irl->setSpacing(4);
 
-    auto* lbl = new QLabel("SYMBOLS:");
-    lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                           .arg(ui::colors::TEXT_TERTIARY));
-    irl->addWidget(lbl);
+    symbols_label_ = new QLabel("SYMBOLS:");
+    irl->addWidget(symbols_label_);
 
     symbols_input_ = new QLineEdit(symbols_.join(", "));
-    symbols_input_->setStyleSheet(
-        QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
-                "font-size: 10px; padding: 2px 6px; font-family: Consolas; }"
-                "QLineEdit:focus { border-color: %4; }")
-            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::AMBER));
     irl->addWidget(symbols_input_, 1);
 
-    auto* go_btn = new QPushButton("GO");
-    go_btn->setFixedWidth(32);
-    go_btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: none; "
-                                  "font-size: 9px; font-weight: bold; padding: 3px; }"
-                                  + QString("QPushButton:hover { background: %1; }").arg(ui::colors::AMBER))
-                              .arg(ui::colors::AMBER, ui::colors::BG_BASE));
-    connect(go_btn, &QPushButton::clicked, this, [this]() {
+    go_btn_ = new QPushButton("GO");
+    go_btn_->setFixedWidth(32);
+    connect(go_btn_, &QPushButton::clicked, this, [this]() {
         QString text = symbols_input_->text().trimmed().toUpper();
         symbols_.clear();
         for (auto& s : text.split(",")) {
@@ -47,7 +36,7 @@ WatchlistWidget::WatchlistWidget(QWidget* parent)
         }
         refresh_data();
     });
-    irl->addWidget(go_btn);
+    irl->addWidget(go_btn_);
 
     vl->addWidget(input_row);
 
@@ -59,8 +48,29 @@ WatchlistWidget::WatchlistWidget(QWidget* parent)
 
     connect(this, &BaseWidget::refresh_requested, this, &WatchlistWidget::refresh_data);
 
+    apply_styles();
     set_loading(true);
     refresh_data();
+}
+
+void WatchlistWidget::apply_styles() {
+    symbols_label_->setStyleSheet(
+        QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+            .arg(ui::colors::TEXT_TERTIARY()));
+    symbols_input_->setStyleSheet(
+        QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
+                "font-size: 10px; padding: 2px 6px; font-family: Consolas; }"
+                "QLineEdit:focus { border-color: %4; }")
+            .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+    go_btn_->setStyleSheet(
+        QString("QPushButton { background: %1; color: %2; border: none; "
+                "font-size: 9px; font-weight: bold; padding: 3px; }"
+                "QPushButton:hover { background: %1; }")
+            .arg(ui::colors::AMBER(), ui::colors::BG_BASE()));
+}
+
+void WatchlistWidget::on_theme_changed() {
+    apply_styles();
 }
 
 void WatchlistWidget::refresh_data() {

@@ -1,4 +1,5 @@
 #pragma once
+#include "screens/IStatefulScreen.h"
 #include "storage/repositories/NotesRepository.h"
 
 #include <QComboBox>
@@ -14,10 +15,15 @@ namespace fincept::screens {
 
 /// Financial Notes Screen — 3-panel layout:
 /// Category Sidebar | Notes List | Editor / Viewer
-class NotesScreen : public QWidget {
+class NotesScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit NotesScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "notes"; }
+    int state_version() const override { return 1; }
 
   private slots:
     void on_category_selected(int row);

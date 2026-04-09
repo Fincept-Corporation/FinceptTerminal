@@ -63,10 +63,9 @@ void BlsPanel::activate() {
 }
 
 void BlsPanel::build_controls(QHBoxLayout* thl) {
-    auto lbl = [](const QString& t) {
+    auto lbl = [this](const QString& t) {
         auto* l = new QLabel(t);
-        l->setStyleSheet(
-            "color:#525252; font-size:9px; font-weight:700; background:transparent;");
+        l->setStyleSheet(ctrl_label_style());
         return l;
     };
 
@@ -86,8 +85,7 @@ void BlsPanel::build_controls(QHBoxLayout* thl) {
             });
 
     auto* lbl2 = new QLabel("SERIES ID");
-    lbl2->setStyleSheet(
-        "color:#525252; font-size:9px; font-weight:700; background:transparent;");
+    lbl2->setStyleSheet(ctrl_label_style());
 
     series_input_ = new QLineEdit;
     series_input_->setPlaceholderText("e.g. CES0000000001");

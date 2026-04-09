@@ -13,14 +13,9 @@
 
 namespace fincept::screens {
 
-// Color-only label style — no font-size/family (global QSS handles those)
-static QString lbl_ss(const QString& color, bool bold = false) {
-    return QString("color:%1;background:transparent;%2")
-        .arg(color, bold ? "font-weight:bold;" : "");
-}
-
 DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(24);
+    setObjectName("dashStatusBar");
 
     start_time_ = QDateTime::currentMSecsSinceEpoch();
 
@@ -28,47 +23,46 @@ DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(0);
 
-    auto make_lbl = [](const QString& text, const QString& color, bool bold = false) {
+    auto make_lbl = [](const QString& text, const QString& name) {
         auto* l = new QLabel(text);
-        l->setStyleSheet(lbl_ss(color, bold));
+        l->setObjectName(name);
         return l;
     };
-    auto make_sep = [&]() { return make_lbl("|", ui::colors::BORDER_MED()); };
+    auto make_sep = [&]() { return make_lbl("|", "dsSep"); };
 
     // ── Left ──
     auto* left = new QWidget;
-    left->setStyleSheet("background:transparent;");
     auto* ll = new QHBoxLayout(left);
     ll->setContentsMargins(0, 0, 0, 0);
     ll->setSpacing(8);
 
-    ll->addWidget(make_lbl("v4.0.0", ui::colors::TEXT_SECONDARY(), true));
+    ll->addWidget(make_lbl("v4.0.0", "dsVersion"));
     ll->addWidget(make_sep());
 
-    const struct { const char* label; const char* color; } feeds[] = {
-        {"EQ", ui::colors::POSITIVE()}, {"FX", ui::colors::POSITIVE()},
-        {"CM", ui::colors::WARNING()},  {"FI", ui::colors::POSITIVE()},
-        {"CR", ui::colors::POSITIVE()},
-    };
-    for (auto& f : feeds)
-        ll->addWidget(make_lbl(f.label, f.color, true));
+    const char* feed_names[] = {"EQ", "FX", "CM", "FI", "CR"};
+    for (auto& f : feed_names) {
+        auto* fl = make_lbl(f, "dsFeed");
+        // CM gets warning color — handled in refresh_theme via property
+        if (QString(f) == "CM") fl->setProperty("warn", true);
+        ll->addWidget(fl);
+    }
 
     ll->addWidget(make_sep());
-    ll->addWidget(make_lbl("SESSION:", ui::colors::TEXT_SECONDARY()));
+    ll->addWidget(make_lbl("SESSION:", "dsLabel"));
     uptime_label_ = new QLabel("00:00:00");
-    uptime_label_->setStyleSheet(lbl_ss(ui::colors::CYAN(), true));
+    uptime_label_->setObjectName("dsUptime");
     ll->addWidget(uptime_label_);
 
     ll->addWidget(make_sep());
-    ll->addWidget(make_lbl("LAYOUT:", ui::colors::TEXT_SECONDARY()));
+    ll->addWidget(make_lbl("LAYOUT:", "dsLabel"));
     layout_label_ = new QLabel("ACTIVE");
-    layout_label_->setStyleSheet(lbl_ss(ui::colors::POSITIVE(), true));
+    layout_label_->setObjectName("dsLayout");
     ll->addWidget(layout_label_);
 
     ll->addWidget(make_sep());
-    ll->addWidget(make_lbl("FEEDS:", ui::colors::TEXT_SECONDARY()));
+    ll->addWidget(make_lbl("FEEDS:", "dsLabel"));
     feeds_label_ = new QLabel("CONNECTED");
-    feeds_label_->setStyleSheet(lbl_ss(ui::colors::POSITIVE(), true));
+    feeds_label_->setObjectName("dsFeeds");
     ll->addWidget(feeds_label_);
 
     hl->addWidget(left);
@@ -76,28 +70,25 @@ DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
 
     // ── Right ──
     auto* right = new QWidget;
-    right->setStyleSheet("background:transparent;");
     auto* rl = new QHBoxLayout(right);
     rl->setContentsMargins(0, 0, 0, 0);
     rl->setSpacing(8);
 
-    rl->addWidget(make_lbl("MEM: OPTIMAL", ui::colors::CYAN()));
+    rl->addWidget(make_lbl("MEM: OPTIMAL", "dsMem"));
     rl->addWidget(make_sep());
 
     latency_label_ = new QLabel("LAT: ---");
-    latency_label_->setStyleSheet(lbl_ss(ui::colors::TEXT_SECONDARY(), true));
+    latency_label_->setObjectName("dsLatency");
     rl->addWidget(latency_label_);
 
     rl->addWidget(make_sep());
-    rl->addWidget(make_lbl("● READY", ui::colors::POSITIVE(), true));
+    rl->addWidget(make_lbl(QString::fromUtf8("● READY"), "dsReady"));
     rl->addWidget(make_sep());
 
     // ── Notification bell ──────────────────────────────────────────────────
     notif_bell_ = new fincept::ui::NotifBell(this);
     rl->addWidget(notif_bell_);
 
-    // Panel is a popup — parented to the top-level window so it can float
-    // over all widgets. We create it lazily on first click.
     connect(notif_bell_, &fincept::ui::NotifBell::bell_clicked,
             this, &DashboardStatusBar::toggle_notif_panel);
 
@@ -118,8 +109,26 @@ DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
 }
 
 void DashboardStatusBar::refresh_theme() {
-    setStyleSheet(QString("background:%1;border-top:1px solid %2;")
-        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    setStyleSheet(QString(
+        "#dashStatusBar { background:%1; border-top:1px solid %2; }"
+        "#dsSep { color:%3; background:transparent; }"
+        "#dsVersion { color:%4; font-weight:bold; background:transparent; }"
+        "#dsLabel { color:%4; background:transparent; }"
+        "#dsFeed { color:%5; font-weight:bold; background:transparent; }"
+        "#dsFeed[warn=\"true\"] { color:%6; }"
+        "#dsUptime { color:%7; font-weight:bold; background:transparent; }"
+        "#dsLayout { color:%5; font-weight:bold; background:transparent; }"
+        "#dsFeeds { color:%5; font-weight:bold; background:transparent; }"
+        "#dsMem { color:%7; background:transparent; }"
+        "#dsLatency { color:%4; font-weight:bold; background:transparent; }"
+        "#dsReady { color:%5; font-weight:bold; background:transparent; }"
+    ).arg(ui::colors::BG_SURFACE())    // %1
+     .arg(ui::colors::BORDER_DIM())    // %2
+     .arg(ui::colors::BORDER_MED())    // %3
+     .arg(ui::colors::TEXT_SECONDARY())// %4
+     .arg(ui::colors::POSITIVE())      // %5
+     .arg(ui::colors::WARNING())       // %6
+     .arg(ui::colors::CYAN()));        // %7
 }
 
 void DashboardStatusBar::update_uptime() {
@@ -134,14 +143,16 @@ void DashboardStatusBar::update_uptime() {
 void DashboardStatusBar::set_widget_count(int count) {
     layout_label_->setText(count > 0 ? "ACTIVE" : "EMPTY");
     layout_label_->setStyleSheet(
-        lbl_ss(count > 0 ? ui::colors::POSITIVE() : ui::colors::TEXT_SECONDARY(), true));
+        QString("color:%1;font-weight:bold;background:transparent;")
+            .arg(count > 0 ? ui::colors::POSITIVE() : ui::colors::TEXT_SECONDARY()));
 }
 
 void DashboardStatusBar::set_connected(bool connected) {
     connected_ = connected;
     feeds_label_->setText(connected ? "CONNECTED" : "DISCONNECTED");
     feeds_label_->setStyleSheet(
-        lbl_ss(connected ? ui::colors::POSITIVE() : ui::colors::NEGATIVE(), true));
+        QString("color:%1;font-weight:bold;background:transparent;")
+            .arg(connected ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
 }
 
 void DashboardStatusBar::ping_api() {
@@ -159,14 +170,16 @@ void DashboardStatusBar::ping_api() {
 void DashboardStatusBar::set_latency(int ms) {
     if (ms < 0) {
         latency_label_->setText("LAT: ERR");
-        latency_label_->setStyleSheet(lbl_ss(ui::colors::NEGATIVE(), true));
+        latency_label_->setStyleSheet(
+            QString("color:%1;font-weight:bold;background:transparent;").arg(ui::colors::NEGATIVE()));
         return;
     }
     latency_label_->setText(QString("LAT: %1ms").arg(ms));
     const QString color = ms < 100 ? ui::colors::POSITIVE()
                         : ms < 300 ? ui::colors::AMBER()
                                    : ui::colors::NEGATIVE();
-    latency_label_->setStyleSheet(lbl_ss(color, true));
+    latency_label_->setStyleSheet(
+        QString("color:%1;font-weight:bold;background:transparent;").arg(color));
 }
 
 void DashboardStatusBar::toggle_notif_panel() {

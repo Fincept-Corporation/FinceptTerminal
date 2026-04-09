@@ -1,44 +1,59 @@
 #include "ui/navigation/StatusBar.h"
 
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 namespace fincept::ui {
 
 StatusBar::StatusBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(26);
-    setStyleSheet(QString("background:%1;border-top:1px solid %2;")
-                      .arg(colors::BG_BASE).arg(colors::BORDER_DIM));
+    setObjectName("appStatusBar");
+
     auto* hl = new QHBoxLayout(this);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(0);
 
-    auto mk = [](const QString& t, const QString& c, int sz = 12, bool b = false) {
+    auto mk = [](const QString& t, const QString& name) {
         auto* l = new QLabel(t);
-        l->setStyleSheet(QString("color:%1;font-size:%2px;%3background:transparent;"
-                                 "font-family:'Consolas',monospace;")
-                             .arg(c)
-                             .arg(sz)
-                             .arg(b ? "font-weight:700;" : ""));
+        l->setObjectName(name);
         return l;
     };
 
-    hl->addWidget(mk("v4.0.0", colors::TEXT_DIM.get()));
-    hl->addWidget(mk("  |  ", colors::BORDER_DIM.get()));
+    hl->addWidget(mk("v4.0.0", "sbVersion"));
+    hl->addWidget(mk("  |  ", "sbSep"));
     const char* feeds[] = {"EQ", "FX", "CM", "FI", "CR"};
     for (auto& f : feeds) {
-        hl->addWidget(mk(f, colors::TEXT_DIM.get()));
-        hl->addWidget(mk(" ", colors::BG_BASE.get()));
+        hl->addWidget(mk(f, "sbFeed"));
+        hl->addWidget(mk(" ", "sbSpacer"));
     }
     hl->addStretch();
-    ready_label_ = mk("READY", colors::POSITIVE.get(), 8, true);
+    ready_label_ = mk("READY", "sbReady");
     hl->addWidget(ready_label_);
+
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed,
+            this, [this](const ThemeTokens&) { refresh_theme(); });
+    refresh_theme();
+}
+
+void StatusBar::refresh_theme() {
+    setStyleSheet(QString(
+        "#appStatusBar { background:%1; border-top:1px solid %2; }"
+        "#sbVersion { color:%3; background:transparent; }"
+        "#sbSep { color:%2; background:transparent; }"
+        "#sbFeed { color:%3; background:transparent; }"
+        "#sbSpacer { background:transparent; }"
+        "#sbReady { color:%4; font-weight:700; background:transparent; }"
+    ).arg(colors::BG_BASE())
+     .arg(colors::BORDER_DIM())
+     .arg(colors::TEXT_DIM())
+     .arg(colors::POSITIVE()));
 }
 
 void StatusBar::set_ready(bool ready) {
     ready_label_->setText(ready ? "READY" : "BUSY");
-    ready_label_->setStyleSheet(QString("color:%1;font-size:12px;font-weight:700;background:transparent;"
-                                        "font-family:'Consolas',monospace;")
-                                    .arg(ready ? colors::POSITIVE.get() : colors::TEXT_TERTIARY.get()));
+    ready_label_->setStyleSheet(
+        QString("color:%1;font-weight:700;background:transparent;")
+            .arg(ready ? colors::POSITIVE() : colors::TEXT_TERTIARY()));
 }
 
 } // namespace fincept::ui

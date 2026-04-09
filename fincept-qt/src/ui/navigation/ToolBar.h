@@ -44,11 +44,14 @@ class ToolBar : public QWidget {
     QLabel* live_label_ = nullptr;
     QPushButton* plan_btn_ = nullptr;
     QPushButton* chat_mode_btn_ = nullptr;
+    QPushButton* logout_btn_ = nullptr;
     QTimer* clock_timer_ = nullptr;
     QVector<QLabel*> separators_;
+    QLabel* fincept_label_ = nullptr;
 
     CommandBar* command_bar_ = nullptr;
 
+    void refresh_theme();
     void apply_responsive_layout(int width);
 
     QMenu* build_file_menu();

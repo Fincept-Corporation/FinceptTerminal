@@ -48,12 +48,14 @@ class PythonRunner : public QObject {
 
   private:
     PythonRunner();
-    QString find_python() const;
+    QString find_python_sync() const;
+    void find_python_async();
     QString find_scripts_dir() const;
     void start_next();
 
     QString python_path_;
     QString scripts_dir_;
+    bool python_init_done_ = false;
 
     // Concurrency limiter
     static constexpr int DEFAULT_MAX_CONCURRENT = 3;
@@ -66,6 +68,13 @@ class PythonRunner : public QObject {
         Callback cb;
     };
     QQueue<QueuedRequest> queue_;
+
+    // Incremental output buffering per process
+    struct ProcessBuffers {
+        QByteArray stdout_buf;
+        QByteArray stderr_buf;
+    };
+    QHash<QProcess*, ProcessBuffers> proc_buffers_;
 };
 
 /// Extract last JSON line/block from Python output

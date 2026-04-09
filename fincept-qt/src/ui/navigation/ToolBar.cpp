@@ -2,6 +2,7 @@
 
 #include "auth/AuthManager.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QAction>
 #include <QDateTime>
@@ -36,8 +37,6 @@ static QString popup_ss() {
 
 ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(32);
-    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                      .arg(colors::BG_BASE).arg(colors::BORDER_DIM));
     auto* hl = new QHBoxLayout(this);
     hl->setContentsMargins(4, 0, 6, 0);
     hl->setSpacing(0);
@@ -62,49 +61,44 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
 
     auto sep = [&]() -> QLabel* {
         auto* s = new QLabel("|");
-        s->setStyleSheet(QString("color:%1;background:transparent;padding:0 3px;")
-                             .arg(colors::TEXT_DIM));
         s->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         hl->addWidget(s);
         separators_.append(s);
         return s;
     };
 
-    auto mk = [](const QString& t, const QString& c, bool b = false) -> QLabel* {
+    auto mk = [](const QString& t) -> QLabel* {
         auto* l = new QLabel(t);
-        l->setStyleSheet(QString("color:%1;%2background:transparent;")
-                             .arg(c)
-                             .arg(b ? "font-weight:700;" : ""));
         l->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         return l;
     };
 
     sep();
-    auto* fincept_lbl = mk("FINCEPT ", colors::AMBER.get(), true);
-    hl->addWidget(fincept_lbl);
-    branding_label_ = mk("TERMINAL", colors::TEXT_PRIMARY.get(), true);
+    fincept_label_ = mk("FINCEPT ");
+    hl->addWidget(fincept_label_);
+    branding_label_ = mk("TERMINAL");
     hl->addWidget(branding_label_);
-    subtitle_label_ = mk("  |  PROFESSIONAL RESEARCH DESK", colors::TEXT_SECONDARY.get());
+    subtitle_label_ = mk("  |  PROFESSIONAL RESEARCH DESK");
     hl->addWidget(subtitle_label_);
-    hl->addWidget(mk("  ", colors::BG_BASE.get()));
-    live_dot_ = mk("\xe2\x97\x8f", colors::POSITIVE.get());
+    hl->addWidget(mk("  "));
+    live_dot_ = mk("\xe2\x97\x8f");
     hl->addWidget(live_dot_);
-    live_label_ = mk(" LIVE", colors::POSITIVE.get(), true);
+    live_label_ = mk(" LIVE");
     hl->addWidget(live_label_);
 
     hl->addStretch(1);
 
-    clock_label_ = mk("", colors::TEXT_PRIMARY.get());
+    clock_label_ = mk("");
     clock_label_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     hl->addWidget(clock_label_);
 
     hl->addStretch(1);
 
-    user_label_ = mk("---", colors::AMBER.get());
+    user_label_ = mk("---");
     user_label_->setMaximumWidth(120);
     hl->addWidget(user_label_);
     sep();
-    credits_label_ = mk("---", colors::POSITIVE.get());
+    credits_label_ = mk("---");
     credits_label_->setMaximumWidth(100);
     hl->addWidget(credits_label_);
     sep();
@@ -112,38 +106,25 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     plan_btn_->setCursor(Qt::PointingHandCursor);
     plan_btn_->setToolTip("View Plans & Pricing");
     plan_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    plan_btn_->setStyleSheet(QString("QPushButton{color:%1;background:transparent;border:none;padding:0 2px;}"
-                                    "QPushButton:hover{color:%2;}")
-                                 .arg(colors::TEXT_PRIMARY).arg(colors::AMBER));
     connect(plan_btn_, &QPushButton::clicked, this, &ToolBar::plan_clicked);
     hl->addWidget(plan_btn_);
     sep();
 
-    chat_mode_btn_ = new QPushButton("⬡ CHAT");
+    chat_mode_btn_ = new QPushButton(QString::fromUtf8("⬡ CHAT"));
     chat_mode_btn_->setFixedHeight(20);
     chat_mode_btn_->setCursor(Qt::PointingHandCursor);
     chat_mode_btn_->setToolTip("Switch to Chat Mode (F9)");
     chat_mode_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    chat_mode_btn_->setStyleSheet(
-        QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                "padding:0 8px;font-weight:700;}"
-                "QPushButton:hover{background:%2;color:%3;border-color:%1;}")
-            .arg(colors::AMBER).arg(colors::AMBER_DIM).arg(colors::TEXT_PRIMARY));
     connect(chat_mode_btn_, &QPushButton::clicked, this, &ToolBar::chat_mode_toggled);
     hl->addWidget(chat_mode_btn_);
     sep();
 
-    auto* logout_btn = new QPushButton("LOGOUT");
-    logout_btn->setFixedHeight(20);
-    logout_btn->setCursor(Qt::PointingHandCursor);
-    logout_btn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    logout_btn->setStyleSheet(
-        QString("QPushButton{background:transparent;color:%1;border:1px solid %1;"
-                "padding:0 8px;font-weight:700;}"
-                "QPushButton:hover{background:%1;color:%2;border-color:%1;}")
-            .arg(colors::NEGATIVE).arg(colors::TEXT_PRIMARY));
-    connect(logout_btn, &QPushButton::clicked, this, &ToolBar::logout_clicked);
-    hl->addWidget(logout_btn);
+    logout_btn_ = new QPushButton("LOGOUT");
+    logout_btn_->setFixedHeight(20);
+    logout_btn_->setCursor(Qt::PointingHandCursor);
+    logout_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    connect(logout_btn_, &QPushButton::clicked, this, &ToolBar::logout_clicked);
+    hl->addWidget(logout_btn_);
 
     clock_timer_ = new QTimer(this);
     clock_timer_->setInterval(1000);
@@ -153,7 +134,56 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
 
     connect(&auth::AuthManager::instance(), &auth::AuthManager::auth_state_changed, this,
             &ToolBar::refresh_user_display);
+
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed,
+            this, [this](const ThemeTokens&) { refresh_theme(); });
+
     refresh_user_display();
+    refresh_theme();
+}
+
+void ToolBar::refresh_theme() {
+    // Bar background
+    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+                      .arg(colors::BG_BASE).arg(colors::BORDER_DIM));
+    // Menu bar + popup menus
+    if (menu_bar_) {
+        menu_bar_->setStyleSheet(menu_ss());
+        for (auto* action : menu_bar_->actions())
+            if (action->menu()) action->menu()->setStyleSheet(popup_ss());
+    }
+    // Separators
+    for (auto* s : separators_)
+        s->setStyleSheet(QString("color:%1;background:transparent;padding:0 3px;").arg(colors::TEXT_DIM));
+    // Branding labels
+    auto lbl = [](QLabel* l, const QString& c, bool b = false) {
+        if (l) l->setStyleSheet(QString("color:%1;%2background:transparent;").arg(c, b ? "font-weight:700;" : ""));
+    };
+    lbl(fincept_label_, colors::AMBER(), true);
+    lbl(branding_label_, colors::TEXT_PRIMARY(), true);
+    lbl(subtitle_label_, colors::TEXT_SECONDARY());
+    lbl(live_dot_, colors::POSITIVE());
+    lbl(live_label_, colors::POSITIVE(), true);
+    lbl(clock_label_, colors::TEXT_PRIMARY());
+    lbl(user_label_, colors::AMBER());
+    lbl(credits_label_, colors::POSITIVE());
+    // Buttons
+    if (plan_btn_)
+        plan_btn_->setStyleSheet(QString("QPushButton{color:%1;background:transparent;border:none;padding:0 2px;}"
+                                         "QPushButton:hover{color:%2;}")
+                                     .arg(colors::TEXT_PRIMARY).arg(colors::AMBER));
+    if (chat_mode_btn_)
+        chat_mode_btn_->setStyleSheet(
+            QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
+                    "padding:0 8px;font-weight:700;}"
+                    "QPushButton:hover{background:%2;color:%3;border-color:%1;}")
+                .arg(colors::AMBER).arg(colors::AMBER_DIM).arg(colors::TEXT_PRIMARY));
+    if (logout_btn_)
+        logout_btn_->setStyleSheet(
+            QString("QPushButton{background:transparent;color:%1;border:1px solid %1;"
+                    "padding:0 8px;font-weight:700;}"
+                    "QPushButton:hover{background:%1;color:%2;border-color:%1;}")
+                .arg(colors::NEGATIVE).arg(colors::TEXT_PRIMARY));
 }
 
 void ToolBar::resizeEvent(QResizeEvent* e) {
@@ -233,8 +263,8 @@ QMenu* ToolBar::build_file_menu() {
     m->addAction("Save Workspace",    this, [this]() { emit action_triggered("save_workspace"); });
     m->addAction("Save Workspace As", this, [this]() { emit action_triggered("save_workspace_as"); });
     m->addSeparator();
-    m->addAction("Import Data", this, [this]() { emit action_triggered("import_data"); });
-    m->addAction("Export Data", this, [this]() { emit action_triggered("export_data"); });
+    m->addAction("Import Workspace", this, [this]() { emit action_triggered("import_data"); });
+    m->addAction("Export Workspace", this, [this]() { emit action_triggered("export_data"); });
     m->addSeparator();
     m->addAction("File Manager", this, [this]() { emit navigate_to("file_manager"); });
     m->addSeparator();
@@ -346,15 +376,48 @@ QMenu* ToolBar::build_view_menu() {
     panels->addAction("AI Chat",         this, [this]() { emit action_triggered("panel_ai_chat"); });
     m->addSeparator();
 
-    // Quick Switch — jump to a preset screen
+    // Quick Switch — jump to a preset screen layout
     auto* persp = m->addMenu("Quick Switch");
     persp->setStyleSheet(popup_ss());
     persp->addAction("Save Workspace", this, [this]() { emit action_triggered("perspective_save"); });
     persp->addSeparator();
-    persp->addAction("Trading View",    this, [this]() { emit action_triggered("perspective_trading"); });
-    persp->addAction("Research View",   this, [this]() { emit action_triggered("perspective_research"); });
-    persp->addAction("News View",       this, [this]() { emit action_triggered("perspective_news"); });
+
+    // Trading
+    auto* qs_trading = persp->addMenu("Trading");
+    qs_trading->setStyleSheet(popup_ss());
+    qs_trading->addAction("Crypto Trading",  this, [this]() { emit action_triggered("perspective_trading"); });
+    qs_trading->addAction("Equity Trading",  this, [this]() { emit action_triggered("perspective_equity"); });
+    qs_trading->addAction("Algo Trading",    this, [this]() { emit action_triggered("perspective_algo"); });
+
+    // Research
+    auto* qs_research = persp->addMenu("Research");
+    qs_research->setStyleSheet(popup_ss());
+    qs_research->addAction("Equity Research", this, [this]() { emit action_triggered("perspective_research"); });
+    qs_research->addAction("Derivatives",     this, [this]() { emit action_triggered("perspective_derivatives"); });
+    qs_research->addAction("M&&A Analytics",  this, [this]() { emit action_triggered("perspective_ma"); });
+
+    // Portfolio & Markets
     persp->addAction("Portfolio View",  this, [this]() { emit action_triggered("perspective_portfolio"); });
+    persp->addAction("Markets View",    this, [this]() { emit action_triggered("perspective_markets"); });
+    persp->addAction("News View",       this, [this]() { emit action_triggered("perspective_news"); });
+
+    // Economics & Data
+    auto* qs_econ = persp->addMenu("Economics && Data");
+    qs_econ->setStyleSheet(popup_ss());
+    qs_econ->addAction("Economics",    this, [this]() { emit action_triggered("perspective_economics"); });
+    qs_econ->addAction("Data Sources", this, [this]() { emit action_triggered("perspective_data"); });
+
+    // Geopolitics
+    persp->addAction("Geopolitics View", this, [this]() { emit action_triggered("perspective_geopolitics"); });
+
+    // AI & Quant
+    auto* qs_ai = persp->addMenu("AI && Quant");
+    qs_ai->setStyleSheet(popup_ss());
+    qs_ai->addAction("Quant Lab",  this, [this]() { emit action_triggered("perspective_quant"); });
+    qs_ai->addAction("AI Chat",    this, [this]() { emit action_triggered("perspective_ai"); });
+
+    // Tools
+    persp->addAction("Tools View", this, [this]() { emit action_triggered("perspective_tools"); });
     m->addSeparator();
 
     m->addAction("Refresh Screen\tF5", this, [this]() { emit action_triggered("refresh"); });

@@ -139,12 +139,12 @@ QWidget* PortfolioOptimizationView::build_optimize_tab() {
     run_btn_->setFixedHeight(26);
     run_btn_->setCursor(Qt::PointingHandCursor);
     run_btn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:#000; border:none;"
+        QString("QPushButton { background:%1; color:%5; border:none;"
                 "  padding:0 16px; font-size:10px; font-weight:700; }"
                 "QPushButton:hover { background:%2; }"
                 "QPushButton:disabled { background:%3; color:%4; }")
             .arg(ui::colors::AMBER, ui::colors::WARNING,
-                 ui::colors::BG_RAISED, ui::colors::TEXT_TERTIARY));
+                 ui::colors::BG_RAISED, ui::colors::TEXT_TERTIARY, ui::colors::BG_BASE));
     connect(run_btn_, &QPushButton::clicked, this, &PortfolioOptimizationView::run_optimization);
     config->addWidget(run_btn_);
 

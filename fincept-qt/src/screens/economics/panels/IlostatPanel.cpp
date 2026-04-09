@@ -48,9 +48,9 @@ void IlostatPanel::activate() {
 }
 
 void IlostatPanel::build_controls(QHBoxLayout* thl) {
-    auto mk_lbl = [](const QString& t) {
+    auto mk_lbl = [this](const QString& t) {
         auto* l = new QLabel(t);
-        l->setStyleSheet("color:#525252; font-size:9px; font-weight:700; background:transparent;");
+        l->setStyleSheet(ctrl_label_style());
         return l;
     };
 

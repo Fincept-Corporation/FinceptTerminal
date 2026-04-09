@@ -1,6 +1,7 @@
 #include "screens/data_mapping/DataMappingScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "network/http/HttpClient.h"
 #include "services/data_normalization/DataNormalizationService.h"
 #include "storage/repositories/DataMappingRepository.h"
@@ -79,7 +80,7 @@ static const QString kStyle =
                    "#dmSecondaryBtn:hover { color: %4; }"
                    "#dmSaveBtn { background: %6; color: %1; border: none; padding: 6px 20px; "
                    "  font-size: 10px; font-weight: 700; }"
-                   "#dmSaveBtn:hover { background: #22c55e; }"
+                   "#dmSaveBtn:hover { background: %6; }"
                    "#dmSaveBtn:disabled { background: %10; color: %11; }"
 
                    "QTableWidget { background: %1; color: %4; border: none; gridline-color: %8; "
@@ -1578,6 +1579,7 @@ void DataMappingScreen::on_view_changed(int view) {
     }
 
     LOG_INFO("DataMapping", "View: " + names[view]);
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 void DataMappingScreen::on_step_changed(int step) {
@@ -1905,6 +1907,21 @@ void DataMappingScreen::build_mapping_config(QJsonObject& config) {
         }
     }
     config["field_mappings"] = mappings;
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap DataMappingScreen::save_state() const {
+    return {
+        {"view", current_view_},
+    };
+}
+
+void DataMappingScreen::restore_state(const QVariantMap& state) {
+    const int view = state.value("view", 0).toInt();
+    // Only restore the list/templates view — don't resume a partial wizard
+    if (view == 0 || view == 1)
+        on_view_changed(view);
 }
 
 } // namespace fincept::screens

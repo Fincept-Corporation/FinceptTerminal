@@ -3,6 +3,7 @@
 
 #include "screens/crypto_trading/CryptoDepthChart.h"
 #include "screens/crypto_trading/CryptoTimeSales.h"
+#include "ui/theme/Theme.h"
 
 #include <QDateTime>
 #include <QHBoxLayout>
@@ -15,13 +16,15 @@
 
 namespace fincept::screens::crypto {
 
+using namespace fincept::ui;
+
 namespace {
-const QColor kRowEven("#080808");
-const QColor kRowOdd("#0c0c0c");
-const QColor kColorPos("#16a34a");
-const QColor kColorNeg("#dc2626");
-const QColor kColorSec("#808080");
-const QColor kColorTert("#525252");
+inline QColor kRowEven() { return QColor(colors::BG_BASE()); }
+inline QColor kRowOdd()  { return QColor(colors::ROW_ALT()); }
+inline QColor kColorPos() { return QColor(colors::POSITIVE()); }
+inline QColor kColorNeg() { return QColor(colors::NEGATIVE()); }
+inline QColor kColorSec() { return QColor(colors::TEXT_SECONDARY()); }
+inline QColor kColorTert() { return QColor(colors::TEXT_TERTIARY()); }
 } // namespace
 
 // Static helper: ensure QTableWidgetItem exists at (row, col)
@@ -189,7 +192,7 @@ void CryptoBottomPanel::set_positions(const QVector<trading::PtPosition>& positi
 
     for (int i = 0; i < n; ++i) {
         const auto& pos = positions[i];
-        const QColor& bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+        const QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
 
         auto set = [&](int col, const QString& text, const QColor& fg = QColor(),
                        int align = Qt::AlignLeft | Qt::AlignVCenter) {
@@ -202,11 +205,11 @@ void CryptoBottomPanel::set_positions(const QVector<trading::PtPosition>& positi
         };
 
         set(0, pos.symbol);
-        set(1, pos.side.toUpper(), pos.side == "long" ? kColorPos : kColorNeg);
+        set(1, pos.side.toUpper(), pos.side == "long" ? kColorPos() : kColorNeg());
         set(2, QString::number(pos.quantity, 'f', 6), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(3, QString::number(pos.entry_price, 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(4, QString::number(pos.current_price, 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
-        set(5, QString::number(pos.unrealized_pnl, 'f', 2), pos.unrealized_pnl >= 0 ? kColorPos : kColorNeg,
+        set(5, QString::number(pos.unrealized_pnl, 'f', 2), pos.unrealized_pnl >= 0 ? kColorPos() : kColorNeg(),
             Qt::AlignRight | Qt::AlignVCenter);
         set(6, QString::number(pos.leverage, 'f', 1), QColor(), Qt::AlignRight | Qt::AlignVCenter);
     }
@@ -227,7 +230,7 @@ void CryptoBottomPanel::set_orders(const QVector<trading::PtOrder>& orders) {
 
     for (int i = 0; i < n; ++i) {
         const auto& o = active[i];
-        const QColor& bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+        const QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
 
         auto set = [&](int col, const QString& text, const QColor& fg = QColor(),
                        int align = Qt::AlignLeft | Qt::AlignVCenter) {
@@ -240,11 +243,11 @@ void CryptoBottomPanel::set_orders(const QVector<trading::PtOrder>& orders) {
         };
 
         set(0, o.symbol);
-        set(1, o.side.toUpper(), o.side == "buy" ? kColorPos : kColorNeg);
+        set(1, o.side.toUpper(), o.side == "buy" ? kColorPos() : kColorNeg());
         set(2, o.order_type.toUpper());
         set(3, QString::number(o.quantity, 'f', 6), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(4, o.price ? QString::number(*o.price, 'f', 2) : "MKT", QColor(), Qt::AlignRight | Qt::AlignVCenter);
-        set(5, o.status.toUpper(), kColorSec);
+        set(5, o.status.toUpper(), kColorSec());
 
         // Cancel button — reuse existing widget, update its order_id property
         auto* existing = qobject_cast<QPushButton*>(orders_table_->cellWidget(i, 6));
@@ -273,7 +276,7 @@ void CryptoBottomPanel::set_trades(const QVector<trading::PtTrade>& trades) {
 
     for (int i = 0; i < n; ++i) {
         const auto& t = trades[i];
-        const QColor& bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+        const QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
 
         auto set = [&](int col, const QString& text, const QColor& fg = QColor(),
                        int align = Qt::AlignLeft | Qt::AlignVCenter) {
@@ -286,12 +289,12 @@ void CryptoBottomPanel::set_trades(const QVector<trading::PtTrade>& trades) {
         };
 
         set(0, t.symbol);
-        set(1, t.side.toUpper(), t.side == "buy" ? kColorPos : kColorNeg);
+        set(1, t.side.toUpper(), t.side == "buy" ? kColorPos() : kColorNeg());
         set(2, QString::number(t.price, 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(3, QString::number(t.quantity, 'f', 6), QColor(), Qt::AlignRight | Qt::AlignVCenter);
-        set(4, QString::number(t.fee, 'f', 4), kColorSec, Qt::AlignRight | Qt::AlignVCenter);
-        set(5, QString::number(t.pnl, 'f', 2), t.pnl >= 0 ? kColorPos : kColorNeg, Qt::AlignRight | Qt::AlignVCenter);
-        set(6, t.timestamp, kColorTert);
+        set(4, QString::number(t.fee, 'f', 4), kColorSec(), Qt::AlignRight | Qt::AlignVCenter);
+        set(5, QString::number(t.pnl, 'f', 2), t.pnl >= 0 ? kColorPos() : kColorNeg(), Qt::AlignRight | Qt::AlignVCenter);
+        set(6, t.timestamp, kColorTert());
     }
     trades_table_->setUpdatesEnabled(true);
 }
@@ -338,7 +341,7 @@ void CryptoBottomPanel::set_live_positions(const QJsonArray& positions) {
 
     for (int i = 0; i < n; ++i) {
         auto p = positions[i].toObject();
-        const QColor& bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+        const QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
 
         auto set = [&](int col, const QString& text, const QColor& fg = QColor(),
                        int align = Qt::AlignLeft | Qt::AlignVCenter) {
@@ -352,12 +355,12 @@ void CryptoBottomPanel::set_live_positions(const QJsonArray& positions) {
 
         const QString side_str = p.value("side").toString();
         set(0, p.value("symbol").toString());
-        set(1, side_str.toUpper(), side_str.contains("long") ? kColorPos : kColorNeg);
+        set(1, side_str.toUpper(), side_str.contains("long") ? kColorPos() : kColorNeg());
         set(2, QString::number(p.value("contracts").toDouble(), 'f', 4), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(3, QString::number(p.value("entryPrice").toDouble(), 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(4, QString::number(p.value("markPrice").toDouble(), 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         const double pnl = p.value("unrealizedPnl").toDouble();
-        set(5, QString::number(pnl, 'f', 2), pnl >= 0 ? kColorPos : kColorNeg, Qt::AlignRight | Qt::AlignVCenter);
+        set(5, QString::number(pnl, 'f', 2), pnl >= 0 ? kColorPos() : kColorNeg(), Qt::AlignRight | Qt::AlignVCenter);
         set(6, QString::number(p.value("leverage").toDouble(), 'f', 0), QColor(), Qt::AlignRight | Qt::AlignVCenter);
     }
     positions_table_->setUpdatesEnabled(true);
@@ -371,7 +374,7 @@ void CryptoBottomPanel::set_live_orders(const QJsonArray& orders) {
 
     for (int i = 0; i < n; ++i) {
         auto o = orders[i].toObject();
-        const QColor& bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+        const QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
 
         auto set = [&](int col, const QString& text, const QColor& fg = QColor(),
                        int align = Qt::AlignLeft | Qt::AlignVCenter) {
@@ -385,11 +388,11 @@ void CryptoBottomPanel::set_live_orders(const QJsonArray& orders) {
 
         const QString side_str = o.value("side").toString();
         set(0, o.value("symbol").toString());
-        set(1, side_str.toUpper(), side_str == "buy" ? kColorPos : kColorNeg);
+        set(1, side_str.toUpper(), side_str == "buy" ? kColorPos() : kColorNeg());
         set(2, o.value("type").toString().toUpper());
         set(3, QString::number(o.value("amount").toDouble(), 'f', 4), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(4, QString::number(o.value("price").toDouble(), 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
-        set(5, o.value("status").toString().toUpper(), kColorSec);
+        set(5, o.value("status").toString().toUpper(), kColorSec());
 
         auto* existing_btn = qobject_cast<QPushButton*>(orders_table_->cellWidget(i, 6));
         if (existing_btn) {
@@ -417,7 +420,7 @@ void CryptoBottomPanel::update_my_trades(const QJsonObject& data) {
 
     for (int i = 0; i < n; ++i) {
         const auto t = trades[i].toObject();
-        const QColor& bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+        const QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
 
         auto set = [&](int col, const QString& text, const QColor& fg = QColor(),
                        int align = Qt::AlignLeft | Qt::AlignVCenter) {
@@ -436,13 +439,13 @@ void CryptoBottomPanel::update_my_trades(const QJsonObject& data) {
             : "--";
 
         set(0, t.value("symbol").toString());
-        set(1, side.toUpper(), side == "buy" ? kColorPos : kColorNeg);
+        set(1, side.toUpper(), side == "buy" ? kColorPos() : kColorNeg());
         set(2, QString::number(t.value("price").toDouble(), 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(3, QString::number(t.value("amount").toDouble(), 'f', 6), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(4, QString::number(t.value("cost").toDouble(), 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
-        set(5, QString::number(t.value("fee").toDouble(), 'f', 6), kColorSec, Qt::AlignRight | Qt::AlignVCenter);
-        set(6, t.value("fee_currency").toString(), kColorTert);
-        set(7, time_str, kColorTert);
+        set(5, QString::number(t.value("fee").toDouble(), 'f', 6), kColorSec(), Qt::AlignRight | Qt::AlignVCenter);
+        set(6, t.value("fee_currency").toString(), kColorTert());
+        set(7, time_str, kColorTert());
     }
     my_trades_table_->setUpdatesEnabled(true);
 }
@@ -452,7 +455,7 @@ void CryptoBottomPanel::update_fees(const QJsonObject& data) {
     if (data.contains("symbol")) {
         fees_table_->setUpdatesEnabled(false);
         fees_table_->setRowCount(1);
-        const QColor& bg = kRowEven;
+        const QColor bg = kRowEven();
 
         auto set = [&](int col, const QString& text, const QColor& fg = QColor()) {
             auto* it = ensure_item(fees_table_, 0, col);
@@ -464,8 +467,8 @@ void CryptoBottomPanel::update_fees(const QJsonObject& data) {
         };
 
         set(0, data.value("symbol").toString());
-        set(1, QString::number(data.value("maker").toDouble() * 100.0, 'f', 4) + "%", kColorSec);
-        set(2, QString::number(data.value("taker").toDouble() * 100.0, 'f', 4) + "%", kColorSec);
+        set(1, QString::number(data.value("maker").toDouble() * 100.0, 'f', 4) + "%", kColorSec());
+        set(2, QString::number(data.value("taker").toDouble() * 100.0, 'f', 4) + "%", kColorSec());
         fees_table_->setUpdatesEnabled(true);
         return;
     }
@@ -479,7 +482,7 @@ void CryptoBottomPanel::update_fees(const QJsonObject& data) {
 
     for (int i = 0; i < n; ++i) {
         const auto f = fees[i].toObject();
-        const QColor& bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+        const QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
 
         auto set = [&](int col, const QString& text, const QColor& fg = QColor()) {
             auto* it = ensure_item(fees_table_, i, col);
@@ -491,8 +494,8 @@ void CryptoBottomPanel::update_fees(const QJsonObject& data) {
         };
 
         set(0, f.value("symbol").toString());
-        set(1, QString::number(f.value("maker").toDouble() * 100.0, 'f', 4) + "%", kColorSec);
-        set(2, QString::number(f.value("taker").toDouble() * 100.0, 'f', 4) + "%", kColorSec);
+        set(1, QString::number(f.value("maker").toDouble() * 100.0, 'f', 4) + "%", kColorSec());
+        set(2, QString::number(f.value("taker").toDouble() * 100.0, 'f', 4) + "%", kColorSec());
     }
     fees_table_->setUpdatesEnabled(true);
 }

@@ -1,4 +1,5 @@
 #pragma once
+#include "screens/IStatefulScreen.h"
 #include "services/news/NewsClusterService.h"
 #include "services/news/NewsMonitorService.h"
 #include "services/news/NewsService.h"
@@ -20,10 +21,15 @@ class NewsTickerStrip;
 
 /// Main news screen orchestrator. Owns all state, connects all panels,
 /// manages the async lifecycle with generation IDs for stale result rejection.
-class NewsScreen : public QWidget {
+class NewsScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit NewsScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "news"; }
+    int state_version() const override { return 1; }
 
   protected:
     void showEvent(QShowEvent* event) override;

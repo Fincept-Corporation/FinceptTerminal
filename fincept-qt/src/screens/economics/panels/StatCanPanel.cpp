@@ -53,8 +53,7 @@ void StatCanPanel::activate() {
 
 void StatCanPanel::build_controls(QHBoxLayout* thl) {
     auto* lbl = new QLabel("SERIES");
-    lbl->setStyleSheet(
-        "color:#525252; font-size:9px; font-weight:700; background:transparent;");
+    lbl->setStyleSheet(ctrl_label_style());
 
     series_combo_ = new QComboBox;
     for (const auto& s : kStatCanSeries)

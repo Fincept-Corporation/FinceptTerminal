@@ -9,7 +9,6 @@
 #include <QMenu>
 #include <QPainter>
 #include <QPainterPath>
-#include <QTimerEvent>
 
 namespace fincept::workflow {
 
@@ -62,17 +61,14 @@ void EdgeItem::set_animated(bool animated) {
     if (animated_ == animated)
         return;
     animated_ = animated;
+    dash_offset_ = 0.0;
+    update();
+}
 
-    if (animated_) {
-        dash_offset_ = 0.0;
-        anim_timer_id_ = startTimer(50); // 20fps per P9
-    } else {
-        if (anim_timer_id_) {
-            killTimer(anim_timer_id_);
-            anim_timer_id_ = 0;
-        }
-        dash_offset_ = 0.0;
-    }
+void EdgeItem::tick_animation() {
+    if (!animated_)
+        return;
+    dash_offset_ -= 1.0;
     update();
 }
 
@@ -99,13 +95,6 @@ void EdgeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
     }
     painter->setPen(pen);
     painter->drawPath(path());
-}
-
-void EdgeItem::timerEvent(QTimerEvent* event) {
-    if (event->timerId() == anim_timer_id_) {
-        dash_offset_ -= 1.0; // negative offset advances dashes along path direction (left → right)
-        update();
-    }
 }
 
 void EdgeItem::keyPressEvent(QKeyEvent* event) {

@@ -1,4 +1,5 @@
 #pragma once
+#include "screens/IStatefulScreen.h"
 #include "screens/report_builder/ComponentToolbar.h"
 #include "screens/report_builder/DocumentCanvas.h"
 #include "screens/report_builder/PropertiesPanel.h"
@@ -130,10 +131,15 @@ class MoveComponentCommand : public QUndoCommand {
 
 // ── Main Screen ────────────────────────────────────────────────────────────────
 
-class ReportBuilderScreen : public QWidget {
+class ReportBuilderScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit ReportBuilderScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "report_builder"; }
+    int state_version() const override { return 1; }
 
     // Called by undo commands — do NOT push to undo stack inside these
     void add_component_direct(const ReportComponent& comp, int at);

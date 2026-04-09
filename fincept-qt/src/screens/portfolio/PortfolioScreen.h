@@ -60,6 +60,7 @@ class PortfolioScreen : public QWidget, public IStatefulScreen {
 
   private:
     void build_ui();
+    void refresh_theme();
     QWidget* build_empty_state();
     QWidget* build_loading_state();
     QWidget* build_main_view();

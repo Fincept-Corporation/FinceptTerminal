@@ -425,9 +425,9 @@ void ForumFeedPanel::rebuild_posts() {
                 ? QString("color:%1;font-size:15px;font-weight:700;"
                           "background:transparent;line-height:1.3;%2")
                       .arg(ui::colors::TEXT_PRIMARY(), M(15))
-                : QString("color:#c8c8c8;font-size:15px;font-weight:600;"
-                          "background:transparent;line-height:1.3;%1")
-                      .arg(M(15)));
+                : QString("color:%1;font-size:15px;font-weight:600;"
+                          "background:transparent;line-height:1.3;%2")
+                      .arg(ui::colors::TEXT_PRIMARY(), M(15)));
         cl->addWidget(title);
 
         // ── Row 3: body preview ───────────────────────────────────────────────

@@ -2,6 +2,7 @@
 #include "screens/dbnomics/DBnomicsScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "screens/dbnomics/DBnomicsChartWidget.h"
 #include "screens/dbnomics/DBnomicsDataTable.h"
 #include "screens/dbnomics/DBnomicsSelectionPanel.h"
@@ -222,10 +223,12 @@ void DBnomicsScreen::build_ui() {
     auto* single_splitter = new QSplitter(Qt::Vertical, single_page);
     single_splitter->setHandleWidth(5);
     single_splitter->setChildrenCollapsible(false);
-    single_splitter->setStyleSheet("QSplitter::handle:vertical {"
-                                   "  background: #1a1a1a; height: 5px;"
-                                   "  border-top: 1px solid #222; border-bottom: 1px solid #222; }"
-                                   "QSplitter::handle:vertical:hover { background: #d97706; }");
+    single_splitter->setStyleSheet(
+        QString("QSplitter::handle:vertical {"
+                "  background: %1; height: 5px;"
+                "  border-top: 1px solid %2; border-bottom: 1px solid %2; }"
+                "QSplitter::handle:vertical:hover { background: %3; }")
+            .arg(ui::colors::BORDER_DIM, ui::colors::BORDER_MED, ui::colors::AMBER));
 
     chart_widget_ = new DBnomicsChartWidget(single_splitter);
     data_table_ = new DBnomicsDataTable(single_splitter);
@@ -556,6 +559,7 @@ void DBnomicsScreen::on_provider_selected(const QString& code) {
     set_status(QString("Loading datasets for %1...").arg(code));
     selection_panel_->set_datasets_loading(true);
     services::DBnomicsService::instance().fetch_datasets(code, 0);
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 void DBnomicsScreen::on_dataset_selected(const QString& code) {
@@ -569,6 +573,7 @@ void DBnomicsScreen::on_series_selected(const QString& prov, const QString& ds, 
     chart_widget_->set_loading(true);
     data_table_->set_loading(true);
     services::DBnomicsService::instance().fetch_observations(prov, ds, code);
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -760,7 +765,8 @@ void DBnomicsScreen::rebuild_comparison_view() {
         card->setMinimumHeight(260);
         card->setMinimumWidth(320); // ensure Y-axis labels always have room
         card->setObjectName("slotCard");
-        card->setStyleSheet("QWidget#slotCard { background:#0d0d0d; border:1px solid #1f1f1f; }");
+        card->setStyleSheet(QString("QWidget#slotCard { background:%1; border:1px solid %2; }")
+                                .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
 
         auto* card_vl = new QVBoxLayout(card);
         card_vl->setContentsMargins(0, 0, 0, 0);
@@ -770,7 +776,8 @@ void DBnomicsScreen::rebuild_comparison_view() {
         auto* header = new QWidget(card);
         header->setFixedHeight(32);
         header->setObjectName("cardHeader");
-        header->setStyleSheet("QWidget#cardHeader { background:#111; border-bottom:1px solid #1f1f1f; }");
+        header->setStyleSheet(QString("QWidget#cardHeader { background:%1; border-bottom:1px solid %2; }")
+                                  .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
 
         auto* header_hl = new QHBoxLayout(header);
         header_hl->setContentsMargins(10, 0, 8, 0);
@@ -811,8 +818,10 @@ void DBnomicsScreen::rebuild_comparison_view() {
         auto* card_splitter = new QSplitter(Qt::Vertical, card);
         card_splitter->setHandleWidth(4);
         card_splitter->setChildrenCollapsible(false);
-        card_splitter->setStyleSheet("QSplitter::handle:vertical { background:#1a1a1a; height:4px; }"
-                                     "QSplitter::handle:vertical:hover { background:#d97706; }");
+        card_splitter->setStyleSheet(
+            QString("QSplitter::handle:vertical { background:%1; height:4px; }"
+                    "QSplitter::handle:vertical:hover { background:%2; }")
+                .arg(ui::colors::BORDER_DIM, ui::colors::AMBER));
 
         auto* chart = new DBnomicsChartWidget(card_splitter);
         chart->set_compact(true); // tighter margins + no legend for grid slots
@@ -867,6 +876,36 @@ void DBnomicsScreen::rebuild_comparison_view() {
 
     // grid_widget expands to fill all available space in comparison_content_
     comparison_layout_->addWidget(grid_widget, 1);
+}
+
+// ── IStatefulScreen ───────────────────────────────────────────────────────────
+
+QVariantMap DBnomicsScreen::save_state() const {
+    return {
+        {"provider", selection_panel_->selected_provider()},
+        {"dataset",  selection_panel_->selected_dataset()},
+        {"series",   selection_panel_->selected_series()},
+        {"view_mode", static_cast<int>(view_mode_)},
+    };
+}
+
+void DBnomicsScreen::restore_state(const QVariantMap& state) {
+    const QString prov = state.value("provider").toString();
+    const QString ds   = state.value("dataset").toString();
+    const QString ser  = state.value("series").toString();
+    const int mode     = state.value("view_mode", 0).toInt();
+
+    if (mode == 1) {
+        view_mode_ = services::DbnViewMode::Comparison;
+        view_stack_->setCurrentIndex(1);
+    }
+
+    if (!prov.isEmpty())
+        on_provider_selected(prov);
+    if (!ds.isEmpty())
+        on_dataset_selected(ds);
+    if (!ser.isEmpty())
+        on_series_selected(prov, ds, ser);
 }
 
 } // namespace fincept::screens

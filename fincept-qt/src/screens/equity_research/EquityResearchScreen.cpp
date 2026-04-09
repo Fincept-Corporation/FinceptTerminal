@@ -9,6 +9,7 @@
 #include "screens/equity_research/EquityTalippTab.h"
 #include "screens/equity_research/EquityTechnicalsTab.h"
 #include "core/events/EventBus.h"
+#include "core/session/ScreenStateManager.h"
 #include "services/equity/EquityResearchService.h"
 #include "ui/theme/Theme.h"
 
@@ -180,6 +181,7 @@ void EquityResearchScreen::on_info_loaded(services::equity::StockInfo info) {
 }
 
 void EquityResearchScreen::on_tab_changed(int index) {
+    ScreenStateManager::instance().notify_changed(this);
     if (current_symbol_.isEmpty())
         return;
 
