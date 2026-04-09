@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 project(FinceptTerminal VERSION 4.0.0 LANGUAGES CXX)
+enable_testing()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -423,6 +424,8 @@ set(SERVICE_SOURCES
     src/services/dbnomics/DBnomicsService.cpp
     src/services/gov_data/GovDataService.cpp
     src/services/equity/EquityResearchService.cpp
+    src/services/equity/MarketSentimentService.cpp
+    src/services/equity/MarketSentimentSupport.cpp
     src/services/ma_analytics/MAAnalyticsService.cpp
     src/services/geopolitics/GeopoliticsService.cpp
     src/services/maritime/MaritimeService.cpp
@@ -775,6 +778,7 @@ set(SCREEN_SOURCES
     src/screens/equity_research/EquityTalippTab.cpp
     src/screens/equity_research/EquityPeersTab.cpp
     src/screens/equity_research/EquityNewsTab.cpp
+    src/screens/equity_research/EquitySentimentTab.cpp
 
     # Portfolio
     src/screens/portfolio/PortfolioScreen.cpp
@@ -943,6 +947,7 @@ set_source_files_properties(
     src/screens/equity_research/EquityOverviewTab.cpp
     src/screens/equity_research/EquityPeersTab.cpp
     src/screens/equity_research/EquityResearchScreen.cpp
+    src/screens/equity_research/EquitySentimentTab.cpp
     src/screens/equity_research/EquityTalippTab.cpp
     src/screens/equity_research/EquityTechnicalsTab.cpp
     src/screens/excel/ExcelScreen.cpp
@@ -1478,6 +1483,14 @@ target_link_libraries(FinceptTerminal PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
 )
+
+add_executable(fincept_market_sentiment_support_test
+    tests/MarketSentimentSupportTest.cpp
+    src/services/equity/MarketSentimentSupport.cpp
+)
+target_include_directories(fincept_market_sentiment_support_test PRIVATE src)
+target_link_libraries(fincept_market_sentiment_support_test PRIVATE Qt6::Core)
+add_test(NAME fincept_market_sentiment_support_test COMMAND fincept_market_sentiment_support_test)
 
 # macOS: also link Security.framework for Keychain in SecureStorage
 if(APPLE)
