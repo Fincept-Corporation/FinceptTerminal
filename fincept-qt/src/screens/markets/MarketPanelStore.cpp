@@ -46,7 +46,20 @@ QVector<MarketPanelConfig> MarketPanelStore::load() {
         if (!cfg.id.isEmpty() && !cfg.title.isEmpty())
             panels.append(cfg);
     }
-    return panels.isEmpty() ? build_defaults() : panels;
+    if (panels.isEmpty())
+        return build_defaults();
+
+    // Migration: if all panels have column_index==0 (old save format), redistribute evenly
+    bool all_zero = true;
+    for (const auto& p : panels) {
+        if (p.column_index != 0) { all_zero = false; break; }
+    }
+    if (all_zero && panels.size() > 1) {
+        for (int i = 0; i < panels.size(); ++i)
+            panels[i].column_index = i % 3;
+    }
+
+    return panels;
 }
 
 void MarketPanelStore::save(const QVector<MarketPanelConfig>& panels) {
@@ -91,6 +104,10 @@ QVector<MarketPanelConfig> MarketPanelStore::build_defaults() {
             syms << t.symbol;
         panels.append(MarketPanelConfig::make(reg.region, syms, true));
     }
+
+    // Distribute panels evenly across 3 columns
+    for (int i = 0; i < panels.size(); ++i)
+        panels[i].column_index = i % 3;
 
     return panels;
 }

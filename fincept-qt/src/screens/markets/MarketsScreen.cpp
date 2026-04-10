@@ -27,9 +27,10 @@ namespace fincept::screens {
 // Helper
 // ---------------------------------------------------------------------------
 
-static QString lbl_ss(const QString& color, bool bold = false, int px = 12) {
-    return QString("color:%1;background:transparent;font-size:%2px;font-family:monospace;%3")
-        .arg(color).arg(px).arg(bold ? "font-weight:bold;" : "");
+static QString lbl_ss(const QString& color, bool bold = false, int px = -1) {
+    const int sz = (px > 0) ? px : ui::fonts::font_px(-2);
+    return QString("color:%1;background:transparent;font-size:%2px;font-family:'%3';%4")
+        .arg(color).arg(sz).arg(ui::fonts::DATA_FAMILY()).arg(bold ? "font-weight:bold;" : "");
 }
 
 // ---------------------------------------------------------------------------
@@ -325,9 +326,10 @@ QWidget* MarketsScreen::build_header_bar() {
         b->setFlat(true);
         b->setStyleSheet(
             QString("QPushButton{background:transparent;color:%1;border:none;"
-                    "font-size:11px;font-family:monospace;padding:0 6px;}"
-                    "QPushButton:hover{color:%2;}")
-                .arg(ui::colors::TEXT_DIM(), ui::colors::TEXT_PRIMARY()));
+                    "font-size:%2px;font-family:'%3';padding:0 6px;}"
+                    "QPushButton:hover{color:%4;}")
+                .arg(ui::colors::TEXT_DIM()).arg(ui::fonts::font_px(-3))
+                .arg(ui::fonts::DATA_FAMILY()).arg(ui::colors::TEXT_PRIMARY()));
         return b;
     };
 
@@ -341,10 +343,12 @@ QWidget* MarketsScreen::build_header_bar() {
         auto_btn->setText(auto_update_ ? "[F9] AUTO: ON" : "[F9] AUTO: OFF");
         auto_btn->setStyleSheet(
             QString("QPushButton{background:transparent;color:%1;border:none;"
-                    "font-size:11px;font-family:monospace;padding:0 6px;}"
+                    "font-size:%3px;font-family:'%4';padding:0 6px;}"
                     "QPushButton:hover{color:%2;}")
                 .arg(auto_update_ ? ui::colors::AMBER() : ui::colors::TEXT_DIM(),
-                     ui::colors::TEXT_PRIMARY()));
+                     ui::colors::TEXT_PRIMARY())
+                .arg(ui::fonts::font_px(-3))
+                .arg(ui::fonts::DATA_FAMILY()));
     };
     update_auto_style();
     connect(auto_btn, &QPushButton::clicked, this, [this, update_auto_style]() {
@@ -370,12 +374,14 @@ QWidget* MarketsScreen::build_header_bar() {
     iv->setCurrentIndex(1);
     iv->setStyleSheet(
         QString("QComboBox{background:transparent;color:%1;border:none;"
-                "font-size:11px;font-family:monospace;padding:0 4px;}"
+                "font-size:%6px;font-family:'%7';padding:0 4px;}"
                 "QComboBox::drop-down{border:none;width:12px;}"
                 "QComboBox QAbstractItemView{background:%2;color:%3;border:1px solid %4;"
-                "selection-background-color:%5;font-size:11px;font-family:monospace;}")
+                "selection-background-color:%5;font-size:%6px;font-family:'%7';}")
             .arg(ui::colors::TEXT_DIM(), ui::colors::BG_RAISED(),
-                 ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
+                 ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER())
+            .arg(ui::fonts::font_px(-3))
+            .arg(ui::fonts::DATA_FAMILY()));
     connect(iv, &QComboBox::currentIndexChanged, this, [this, iv](int i) {
         update_interval_ms_ = iv->itemData(i).toInt();
         auto_refresh_timer_->setInterval(update_interval_ms_);
@@ -388,11 +394,13 @@ QWidget* MarketsScreen::build_header_bar() {
         auto* menu = new QMenu(this);
         menu->setStyleSheet(
             QString("QMenu{background:%1;border:1px solid %2;color:%3;"
-                    "font-size:11px;font-family:monospace;}"
+                    "font-size:%5px;font-family:'%6';}"
                     "QMenu::item{padding:4px 16px;}"
                     "QMenu::item:selected{background:%4;}")
                 .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED(),
-                     ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER()));
+                     ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER())
+                .arg(ui::fonts::font_px(-3))
+                .arg(ui::fonts::DATA_FAMILY()));
         for (int i = 0; i < kNumColumns; ++i) {
             auto* act = menu->addAction(QString("ADD TO COL %1").arg(i + 1));
             connect(act, &QAction::triggered, this, [this, i]() {

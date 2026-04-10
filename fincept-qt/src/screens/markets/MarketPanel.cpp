@@ -17,6 +17,7 @@ MarketPanel::MarketPanel(const MarketPanelConfig& config, QWidget* parent)
     if (config_.column_order.isEmpty())
         config_.column_order = default_market_columns();
     setMinimumWidth(180);
+    setMinimumHeight(kHeaderH + kColHeaderH + kRowH * 4);  // always room for at least 4 rows
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     build_ui();
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
@@ -210,7 +211,11 @@ void MarketPanel::refresh() {
 void MarketPanel::show_data() {
     error_widget_->setVisible(false);
     table_->setVisible(true);
-    populate(cached_quotes_);
+    // Defer populate until after the splitter has performed layout so body_->height() is valid
+    QPointer<MarketPanel> self = this;
+    QMetaObject::invokeMethod(this, [self]() {
+        if (self) self->populate(self->cached_quotes_);
+    }, Qt::QueuedConnection);
 }
 
 void MarketPanel::show_error(const QString& msg) {
@@ -221,7 +226,10 @@ void MarketPanel::show_error(const QString& msg) {
 
 void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {
     const int body_h  = body_->height();
-    const int visible = (body_h - kColHeaderH) / kRowH;
+    // Use actual visible rows if laid out, otherwise show all quotes (resizeEvent will trim)
+    const int visible = (body_h > kColHeaderH + kRowH)
+                            ? (body_h - kColHeaderH) / kRowH
+                            : quotes.size();
     const int count   = qMin(quotes.size(), qMax(visible, 0));
     table_->setRowCount(count);
 
@@ -281,6 +289,12 @@ void MarketPanel::resizeEvent(QResizeEvent* event) {
 // ---------------------------------------------------------------------------
 
 void MarketPanel::refresh_theme() {
+    const QString ff   = ui::fonts::DATA_FAMILY;
+    const int    fdata = ui::fonts::font_px(-2);   // table cell font size (base-2, e.g. 12px at base 14)
+    const int    fhdr  = ui::fonts::font_px(-2);   // column header font size
+    const int    fbtn  = ui::fonts::font_px(-3);   // button font size (base-3, e.g. 11px)
+    const int    ftitle = ui::fonts::font_px(-1);  // panel title font size (base-1, e.g. 13px)
+
     setStyleSheet(
         QString("background:%1;border:1px solid %2;")
             .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
@@ -293,41 +307,42 @@ void MarketPanel::refresh_theme() {
 
     const QString btn_ss =
         QString("QPushButton{background:transparent;color:%1;border:none;"
-                "font-size:11px;font-family:monospace;padding:0 4px;}"
-                "QPushButton:hover{color:%2;}")
-            .arg(ui::colors::TEXT_DIM(), ui::colors::TEXT_PRIMARY());
+                "font-size:%2px;font-family:'%3';padding:0 4px;}"
+                "QPushButton:hover{color:%4;}")
+            .arg(ui::colors::TEXT_DIM()).arg(fbtn).arg(ff).arg(ui::colors::TEXT_PRIMARY());
     if (cols_btn_)   cols_btn_->setStyleSheet(btn_ss);
     if (edit_btn_)   edit_btn_->setStyleSheet(btn_ss);
     if (delete_btn_) delete_btn_->setStyleSheet(btn_ss);
 
     if (title_label_)
         title_label_->setStyleSheet(
-            QString("color:%1;font-size:12px;font-weight:700;font-family:monospace;background:transparent;")
-                .arg(ui::colors::TEXT_PRIMARY()));
+            QString("color:%1;font-size:%2px;font-weight:700;font-family:'%3';background:transparent;")
+                .arg(ui::colors::TEXT_PRIMARY()).arg(ftitle).arg(ff));
 
     if (error_label_)
         error_label_->setStyleSheet(
-            QString("color:%1;font-size:11px;font-family:monospace;background:transparent;")
-                .arg(ui::colors::NEGATIVE()));
+            QString("color:%1;font-size:%2px;font-family:'%3';background:transparent;")
+                .arg(ui::colors::NEGATIVE()).arg(fdata).arg(ff));
 
     if (retry_btn_)
         retry_btn_->setStyleSheet(
             QString("QPushButton{background:transparent;color:%1;border:none;"
-                    "font-size:11px;font-family:monospace;padding:0 4px;}"
-                    "QPushButton:hover{color:%2;}")
-                .arg(ui::colors::TEXT_DIM(), ui::colors::TEXT_PRIMARY()));
+                    "font-size:%2px;font-family:'%3';padding:0 4px;}"
+                    "QPushButton:hover{color:%4;}")
+                .arg(ui::colors::TEXT_DIM()).arg(fbtn).arg(ff).arg(ui::colors::TEXT_PRIMARY()));
 
     if (table_) {
         table_->setStyleSheet(
             QString("QTableWidget{background:%1;alternate-background-color:%2;border:none;"
-                    "font-size:11px;font-family:monospace;}"
+                    "font-size:%6px;font-family:'%7';}"
                     "QTableWidget::item{padding:0 4px;}"
                     "QTableWidget::item:selected{background:transparent;}"
                     "QHeaderView::section{background:%3;color:%4;border:none;"
-                    "border-bottom:1px solid %5;font-size:11px;font-weight:600;"
-                    "font-family:monospace;padding:0 4px;}")
+                    "border-bottom:1px solid %5;font-size:%6px;font-weight:600;"
+                    "font-family:'%7';padding:0 4px;}")
                 .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::BG_BASE(),
-                     ui::colors::TEXT_DIM(), ui::colors::BORDER_DIM()));
+                     ui::colors::TEXT_DIM(), ui::colors::BORDER_DIM())
+                .arg(fhdr).arg(ff));
     }
 }
 
