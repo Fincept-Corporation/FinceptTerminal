@@ -69,7 +69,7 @@ if(Qt6WebSockets_FOUND)
 endif()
 
 # Optional: MultimediaWidgets (for inline video/stream playback)
-# Qt6::Multimedia is already required above (needed for QAudioSource / WhisperService).
+# Qt6::Multimedia is already required above (needed for QMediaPlayer in AiChatBubble / VideoPlayerWidget).
 find_package(Qt6 QUIET COMPONENTS MultimediaWidgets)
 if(Qt6MultimediaWidgets_FOUND)
     set(HAS_MULTIMEDIA TRUE)
@@ -111,51 +111,6 @@ else()
         -UQT_NO_CAST_FROM_ASCII -UQT_NO_CAST_FROM_BYTEARRAY
         -UQT_NO_CAST_TO_ASCII   -UQT_NO_URL_CAST_FROM_STRING
     )
-endif()
-
-# ── whisper.cpp (offline speech-to-text, cross-platform) ─────────────────────
-# Disable all whisper examples/tests — we only need the static library + header.
-set(WHISPER_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
-set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(BUILD_SHARED_LIBS      OFF CACHE BOOL "" FORCE)
-# SDL2 is only needed by the stream example — not required when embedding.
-set(WHISPER_SDL2           OFF CACHE BOOL "" FORCE)
-
-# Whisper/GGML build guards — prevent CI failures across all platforms:
-#
-# GGML_NATIVE: detects host CPU features at configure time and enables
-#   architecture-specific intrinsics. Breaks in three ways on CI:
-#   - macOS ARM64 native: runner may lack i8mm support → vmmlaq_s32 build error
-#   - macOS ARM64 → x86_64 cross: detects apple-m3 CPU, invalid for x86 target
-#   - Windows ARM64 (clang-cl): emits 'native+nodotprod+noi8mm+nosve', unsupported
-#   We embed whisper for STT only — native CPU tuning gives negligible benefit
-#   vs the build fragility it introduces across CI runners.
-#
-# GGML_METAL: uses Objective-C (.m files). GGML's CMake unity build merges .m
-#   into a .c translation unit, which breaks ObjC syntax (@class, @protocol etc.)
-#   on all macOS jobs. We use CPU inference only (use_gpu=false in WhisperService),
-#   so Metal provides no benefit.
-if(APPLE)
-    set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
-    set(GGML_METAL  OFF CACHE BOOL "" FORCE)
-elseif(MSVC AND CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
-    # Windows ARM64 cross-compile: clang-cl rejects GGML's native ARM feature string.
-    set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
-endif()
-FetchContent_Declare(
-    whisper
-    GIT_REPOSITORY https://github.com/ggml-org/whisper.cpp.git
-    GIT_TAG        v1.7.4
-    GIT_SHALLOW    TRUE
-    # After first fetch, never touch the network again — saves 3-8s per configure
-    UPDATE_DISCONNECTED TRUE
-)
-FetchContent_MakeAvailable(whisper)
-# whisper.cpp uses C-style casts internally — suppress warnings for third-party code
-if(MSVC)
-    target_compile_options(whisper PRIVATE /W0)
-else()
-    target_compile_options(whisper PRIVATE -w)
 endif()
 
 # ── QSimpleUpdater (cross-platform auto-update) ──────────────────────────────
@@ -502,8 +457,8 @@ set(SERVICE_SOURCES
     src/services/polymarket/PolymarketService.cpp
     src/services/polymarket/PolymarketWebSocket.cpp
 
-    # Whisper STT service (cross-platform offline speech recognition)
-    src/services/stt/WhisperService.cpp
+    # Speech-to-text service (Python speech_recognition + Google API)
+    src/services/stt/SpeechService.cpp
 
     # Modular notification system — service + 15 providers
     src/services/notifications/NotificationService.cpp
@@ -1159,8 +1114,6 @@ set_source_files_properties(
     src/trading/brokers/ibkr/IBKRBroker.cpp
     src/trading/brokers/tradier/TradierBroker.cpp
     src/trading/brokers/saxo/SaxoBankBroker.cpp
-    # WhisperService has a static local QStringList — exclude from unity to avoid ODR issues
-    src/services/stt/WhisperService.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
@@ -1283,8 +1236,6 @@ add_executable(FinceptTerminal ${_FINCEPT_EXE_FLAGS}
 
 target_include_directories(FinceptTerminal PRIVATE
     src
-    ${whisper_SOURCE_DIR}/include
-    ${whisper_SOURCE_DIR}
     ${SingleApplication_SOURCE_DIR}
 )
 
@@ -1513,7 +1464,6 @@ target_link_libraries(FinceptTerminal PRIVATE
     QXlsx::QXlsx
     qgeoview
     QSimpleUpdater
-    whisper
     md4c
     md4c-html
     SingleApplication::SingleApplication

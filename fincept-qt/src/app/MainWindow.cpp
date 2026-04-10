@@ -260,11 +260,13 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
     auto& km = KeyConfigManager::instance();
 
     auto* act_chat = km.action(KeyAction::ToggleChat);
-    act_chat->setParent(this);
+    act_chat->setShortcutContext(Qt::WindowShortcut);
+    addAction(act_chat);
     connect(act_chat, &QAction::triggered, this, &MainWindow::toggle_chat_mode);
 
     auto* act_fs = km.action(KeyAction::Fullscreen);
-    act_fs->setParent(this);
+    act_fs->setShortcutContext(Qt::WindowShortcut);
+    addAction(act_fs);
     connect(act_fs, &QAction::triggered, this, [this]() {
         if (isFullScreen())
             showNormal();
@@ -273,7 +275,8 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
     });
 
     auto* act_focus = km.action(KeyAction::FocusMode);
-    act_focus->setParent(this);
+    act_focus->setShortcutContext(Qt::WindowShortcut);
+    addAction(act_focus);
     connect(act_focus, &QAction::triggered, this, [this]() {
         focus_mode_ = !focus_mode_;
         if (dock_toolbar_)
@@ -283,7 +286,8 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
     });
 
     auto* act_refresh = km.action(KeyAction::Refresh);
-    act_refresh->setParent(this);
+    act_refresh->setShortcutContext(Qt::WindowShortcut);
+    addAction(act_refresh);
     connect(act_refresh, &QAction::triggered, this, [this]() {
         if (dock_manager_) {
             auto* focused = dock_manager_->focusedDockWidget();
@@ -293,7 +297,8 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
     });
 
     auto* act_screenshot = km.action(KeyAction::Screenshot);
-    act_screenshot->setParent(this);
+    act_screenshot->setShortcutContext(Qt::WindowShortcut);
+    addAction(act_screenshot);
     connect(act_screenshot, &QAction::triggered, this, [this]() {
         QScreen* scr = this->screen();
         if (!scr)
@@ -692,7 +697,7 @@ void MainWindow::setup_docking_mode() {
     static bool s_ads_configured = false;
     if (!s_ads_configured) {
         ads::CDockManager::setConfigFlags(
-            ads::CDockManager::DefaultOpaqueConfig | ads::CDockManager::FocusHighlighting |
+            ads::CDockManager::DefaultOpaqueConfig |
             ads::CDockManager::AlwaysShowTabs | ads::CDockManager::DockAreaHasTabsMenuButton |
             ads::CDockManager::DockAreaDynamicTabsMenuButtonVisibility |
             ads::CDockManager::FloatingContainerHasWidgetTitle | ads::CDockManager::FloatingContainerHasWidgetIcon |
@@ -722,6 +727,11 @@ void MainWindow::setup_docking_mode() {
     dock_layout->addWidget(tab_bar_);
 
     dock_manager_ = new ads::CDockManager(dock_wrapper);
+    // ADS loads its own default.css via setStyleSheet() in its constructor.
+    // That CSS uses palette(window)/palette(highlight) — the Windows system
+    // gray/blue — which overrides our global QSS. Replace it with our own
+    // theme-matched ADS stylesheet so our colors apply consistently.
+    dock_manager_->setStyleSheet(ui::ThemeManager::instance().build_ads_qss());
     dock_layout->addWidget(dock_manager_);
 
 }

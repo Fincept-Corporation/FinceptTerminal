@@ -5,7 +5,9 @@
 #include "services/algo_trading/AlgoTradingService.h"
 #include "ui/theme/Theme.h"
 
+#include <QFrame>
 #include <QHBoxLayout>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QScrollArea>
 
@@ -140,9 +142,12 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
 
     top->addStretch();
 
-    // Status badge
+    // Status badge with dot prefix
     QColor status_clr = deployment_status_color(d.status);
-    auto* status_badge = new QLabel(d.status.toUpper(), card);
+    QString status_dot;
+    if (d.status == "running" || d.status == "starting")
+        status_dot = "● ";
+    auto* status_badge = new QLabel(status_dot + d.status.toUpper(), card);
     status_badge->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
                                         " padding: 2px 8px; background: rgba(%4,%5,%6,0.08);"
                                         " border: 1px solid rgba(%4,%5,%6,0.25);")
@@ -160,7 +165,8 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
     auto* metrics = new QHBoxLayout;
     metrics->setSpacing(16);
 
-    auto add_metric = [&](const QString& label, const QString& value, const QString& color) {
+    auto add_metric = [&](const QString& label, const QString& value, const QString& color,
+                          int font_size = fincept::ui::fonts::SMALL) {
         auto* w = new QWidget(card);
         auto* ml = new QVBoxLayout(w);
         ml->setContentsMargins(0, 0, 0, 0);
@@ -174,17 +180,18 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
         val->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
                                    " background: transparent; border: none;")
                                .arg(color)
-                               .arg(fincept::ui::fonts::SMALL)
+                               .arg(font_size)
                                .arg(kMonoFont()));
         ml->addWidget(lbl);
         ml->addWidget(val);
         metrics->addWidget(w);
     };
 
-    // P&L
+    // P&L — larger font to match Quant Lab KPI style
     double total_pnl = d.total_pnl + d.unrealized_pnl;
     add_metric("P&L", QString("%1$%2").arg(total_pnl >= 0 ? "+" : "-").arg(std::abs(total_pnl), 0, 'f', 2),
-               total_pnl >= 0 ? fincept::ui::colors::POSITIVE : fincept::ui::colors::NEGATIVE);
+               total_pnl >= 0 ? fincept::ui::colors::POSITIVE : fincept::ui::colors::NEGATIVE,
+               fincept::ui::fonts::TITLE);
 
     // Win Rate
     add_metric("WIN RATE", QString("%1%").arg(d.win_rate, 0, 'f', 1), fincept::ui::colors::TEXT_PRIMARY);
@@ -210,6 +217,18 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
     metrics->addStretch();
 
     vl->addLayout(metrics);
+
+    // ── Win rate progress bar ────────────────────────────────────────────────
+    auto* win_bar = new QProgressBar(card);
+    win_bar->setFixedHeight(4);
+    win_bar->setRange(0, 100);
+    win_bar->setValue(static_cast<int>(d.win_rate));
+    win_bar->setTextVisible(false);
+    win_bar->setStyleSheet(
+        QString("QProgressBar { background: %1; border: none; border-radius: 2px; }"
+                "QProgressBar::chunk { background: %2; border-radius: 2px; }")
+            .arg(fincept::ui::colors::BG_RAISED, fincept::ui::colors::POSITIVE));
+    vl->addWidget(win_bar);
 
     // ── Error message if any ────────────────────────────────────────────────
     if (!d.error_message.isEmpty()) {
@@ -327,6 +346,39 @@ void DeploymentDashboard::build_ui() {
         build_stat_card("AVG WIN RATE", "0.0%", fincept::ui::colors::TEXT_PRIMARY, &avg_win_rate_, content));
 
     vl->addLayout(summary_row);
+
+    // ── Equity curve placeholder ─────────────────────────────────────────────
+    equity_placeholder_ = new QFrame(content);
+    equity_placeholder_->setFixedHeight(140);
+    equity_placeholder_->setFrameShape(QFrame::NoFrame);
+    equity_placeholder_->setStyleSheet(
+        QString("QFrame { background: %1; border: 1px solid %2; }")
+            .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_DIM));
+    {
+        auto* eq_vl = new QVBoxLayout(equity_placeholder_);
+        eq_vl->setContentsMargins(12, 8, 12, 8);
+        eq_vl->setSpacing(4);
+
+        auto* eq_header_row = new QHBoxLayout;
+        auto* eq_title = new QLabel("EQUITY CURVE", equity_placeholder_);
+        eq_title->setStyleSheet(kSectionLabel());
+        eq_header_row->addWidget(eq_title);
+        eq_header_row->addStretch();
+        eq_vl->addLayout(eq_header_row);
+
+        eq_vl->addStretch();
+
+        auto* eq_hint = new QLabel("Select a deployment to view curve", equity_placeholder_);
+        eq_hint->setAlignment(Qt::AlignCenter);
+        eq_hint->setStyleSheet(
+            QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
+                .arg(fincept::ui::colors::TEXT_TERTIARY)
+                .arg(fincept::ui::fonts::SMALL)
+                .arg(kMonoFont()));
+        eq_vl->addWidget(eq_hint);
+        eq_vl->addStretch();
+    }
+    vl->addWidget(equity_placeholder_);
 
     // ── Control bar ─────────────────────────────────────────────────────────
     auto* control_bar = new QHBoxLayout;

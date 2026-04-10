@@ -54,7 +54,7 @@ KeyConfigManager::KeyConfigManager() {
     for (auto it = defaults_.begin(); it != defaults_.end(); ++it) {
         auto* act = new QAction(this);
         act->setShortcut(it.value());
-        act->setShortcutContext(Qt::WindowShortcut);
+        act->setShortcutContext(Qt::ApplicationShortcut);
         actions_[it.key()] = act;
     }
 

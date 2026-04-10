@@ -7,6 +7,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QSpinBox>
+#include <QTableWidget>
 #include <QTextEdit>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -29,14 +30,14 @@ class ScannerPanel : public QWidget {
     void connect_service();
     void apply_preset(int index);
 
-    QVBoxLayout* conditions_layout_ = nullptr;
-    QTextEdit* symbols_edit_ = nullptr;
-    QComboBox* timeframe_combo_ = nullptr;
-    QSpinBox* lookback_spin_ = nullptr;
-    QComboBox* preset_combo_ = nullptr;
-    QComboBox* logic_combo_ = nullptr;
-    QVBoxLayout* results_layout_ = nullptr;
-    QLabel* status_label_ = nullptr;
+    QVBoxLayout*  conditions_layout_ = nullptr;
+    QTextEdit*    symbols_edit_      = nullptr;
+    QComboBox*    timeframe_combo_   = nullptr;
+    QSpinBox*     lookback_spin_     = nullptr;
+    QComboBox*    preset_combo_      = nullptr;
+    QComboBox*    logic_combo_       = nullptr;
+    QTableWidget* results_table_     = nullptr; // replaced QVBoxLayout
+    QLabel*       status_label_      = nullptr;
 };
 
 } // namespace fincept::screens

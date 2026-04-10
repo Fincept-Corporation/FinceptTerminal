@@ -42,6 +42,10 @@ class ThemeManager : public QObject {
     QFont current_font() const;
     static QStringList available_densities(); // single source of truth for density names
 
+    /// Returns QSS that must be applied directly to the CDockManager widget
+    /// to override ADS's internally loaded default.css / focus_highlighting.css.
+    QString build_ads_qss() const;
+
   signals:
     /// Emitted after every successful apply_theme / apply_density call.
     /// Custom paintEvent widgets connect to this to invalidate caches and call update().

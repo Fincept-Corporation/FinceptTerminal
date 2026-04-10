@@ -18,7 +18,7 @@ MarketPanel::MarketPanel(const MarketPanelConfig& config, QWidget* parent)
         config_.column_order = default_market_columns();
     setMinimumWidth(180);
     setMinimumHeight(kHeaderH + kColHeaderH + kRowH * 4);  // always room for at least 4 rows
-    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Ignored);
     build_ui();
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this](const ui::ThemeTokens&) { refresh_theme(); });
@@ -83,9 +83,13 @@ void MarketPanel::build_ui() {
     table_->verticalHeader()->setDefaultSectionSize(kRowH);
     table_->horizontalHeader()->setFixedHeight(kColHeaderH);
     table_->horizontalHeader()->setHighlightSections(false);
-    table_->horizontalHeader()->setStretchLastSection(true);
+    table_->horizontalHeader()->setStretchLastSection(false);
     table_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     table_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    // Prevent the table's content-based sizeHint from dominating splitter layout.
+    // Without this, QTableWidget returns a large sizeHint proportional to row count,
+    // causing the first panel in each column to grab disproportionate space.
+    table_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Ignored);
     setup_table_columns();
     bl->addWidget(table_);
 
@@ -110,15 +114,20 @@ void MarketPanel::build_ui() {
 void MarketPanel::setup_table_columns() {
     const QStringList& cols = config_.column_order;
     table_->setColumnCount(cols.size());
-    table_->setHorizontalHeaderLabels(cols);
 
+    // Set header labels with alignment matching cell alignment
     for (int i = 0; i < cols.size(); ++i) {
         const QString& c = cols[i];
-        if (c == "SYMBOL" || c == "NAME")
-            table_->horizontalHeader()->setSectionResizeMode(i, QHeaderView::Stretch);
-        else
-            table_->horizontalHeader()->setSectionResizeMode(i, QHeaderView::ResizeToContents);
+        auto* hdr = new QTableWidgetItem(c);
+        bool is_text = (c == "SYMBOL" || c == "NAME");
+        hdr->setTextAlignment(is_text ? (Qt::AlignLeft | Qt::AlignVCenter)
+                                      : (Qt::AlignRight | Qt::AlignVCenter));
+        table_->setHorizontalHeaderItem(i, hdr);
     }
+
+    // All columns stretch to fill available width evenly.
+    for (int i = 0; i < cols.size(); ++i)
+        table_->horizontalHeader()->setSectionResizeMode(i, QHeaderView::Stretch);
 }
 
 // ---------------------------------------------------------------------------
@@ -270,6 +279,18 @@ void MarketPanel::update_visible_rows() {
     if (!table_ || !body_) return;
     const int visible = (body_->height() - kColHeaderH) / kRowH;
     table_->setRowCount(qMax(visible, 0));
+}
+
+// ---------------------------------------------------------------------------
+// Size hints — small uniform value so QSplitter distributes equal height
+// ---------------------------------------------------------------------------
+
+QSize MarketPanel::sizeHint() const {
+    return QSize(180, 138);  // kHeaderH + kColHeaderH + kRowH*4
+}
+
+QSize MarketPanel::minimumSizeHint() const {
+    return QSize(180, 138);
 }
 
 // ---------------------------------------------------------------------------

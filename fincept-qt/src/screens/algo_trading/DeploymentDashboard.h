@@ -2,7 +2,9 @@
 #pragma once
 #include "services/algo_trading/AlgoTradingTypes.h"
 
+#include <QFrame>
 #include <QLabel>
+#include <QProgressBar>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -26,12 +28,15 @@ class DeploymentDashboard : public QWidget {
 
     // Summary stats
     QLabel* active_count_ = nullptr;
-    QLabel* total_pnl_ = nullptr;
+    QLabel* total_pnl_    = nullptr;
     QLabel* total_trades_ = nullptr;
     QLabel* avg_win_rate_ = nullptr;
 
+    // Equity curve placeholder
+    QFrame* equity_placeholder_ = nullptr;
+
     QVBoxLayout* deployments_layout_ = nullptr;
-    QLabel* status_label_ = nullptr;
+    QLabel*      status_label_       = nullptr;
 };
 
 } // namespace fincept::screens

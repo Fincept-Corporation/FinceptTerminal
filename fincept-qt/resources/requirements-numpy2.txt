@@ -152,3 +152,7 @@ mlflow>=2.0.0
 # VisionQuant Pattern Intelligence
 faiss-cpu>=1.7.0
 mplfinance>=0.12.0
+
+# Voice recognition (speech-to-text via Google API)
+SpeechRecognition>=3.10.0
+PyAudio>=0.2.14

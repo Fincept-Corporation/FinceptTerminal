@@ -26,6 +26,7 @@ struct AlgoStrategy {
     bool is_active = true;
     QString created_at;
     QString updated_at;
+    QJsonObject last_backtest; // in-memory only — populated when backtest runs, not persisted
 };
 
 // ── Deployment ──────────────────────────────────────────────────────────────

@@ -1,6 +1,9 @@
 #include "ui/theme/ThemeManager.h"
 
+#include "core/logging/Logger.h"
+
 #include <QApplication>
+#include <QWidget>
 
 namespace fincept::ui {
 
@@ -91,21 +94,29 @@ QFont ThemeManager::current_font() const {
 }
 
 void ThemeManager::rebuild_and_apply() {
-    // Keep qApp->font() in sync with our font_family_/font_size_px_ so that
-    // widgets using inline setStyleSheet() (which bypass QSS font inheritance)
-    // still render with the correct font.
+    LOG_INFO("ThemeManager", QString("rebuild_and_apply: font=%1 size=%2px density_pad=%3")
+        .arg(font_family_).arg(font_size_px_).arg(density_pad_));
+
     QFont f(font_family_);
     f.setStyleHint(QFont::Monospace);
     f.setPixelSize(font_size_px_);
-    if (qApp->font() != f)
+    if (qApp->font() != f) {
+        LOG_INFO("ThemeManager", "Applying new QFont to qApp");
         qApp->setFont(f);
+    }
 
     QString qss = build_global_qss();
+    LOG_INFO("ThemeManager", QString("Global QSS length: %1 chars").arg(qss.length()));
     if (qss != cached_qss_) {
+        LOG_INFO("ThemeManager", "QSS changed — calling qApp->setStyleSheet()");
         cached_qss_ = qss;
         qApp->setStyleSheet(qss);
+        LOG_INFO("ThemeManager", "qApp->setStyleSheet() complete");
+    } else {
+        LOG_INFO("ThemeManager", "QSS unchanged — skipping setStyleSheet");
     }
     emit theme_changed(current_);
+    LOG_INFO("ThemeManager", "theme_changed emitted");
 }
 
 QString ThemeManager::build_global_qss() const {
@@ -200,8 +211,63 @@ QString ThemeManager::build_global_qss() const {
         QMenu::separator { background: %6; height: 1px; }
 
         QScrollArea { border: none; background: %1; }
+        /* QFrame transparent background — EXCLUDE ADS classes that extend QFrame
+           (CDockWidgetTab, CDockAreaTitleBar) because this app-level rule would
+           override their widget-level styling from CDockManager, making tabs
+           transparent and labels invisible. We use :!property selectors are not
+           available, so we explicitly re-set ADS widgets after. */
         QFrame { background: transparent; border: none; }
-        QDialog { background: %1; color: %2; }
+        /* Re-assert ADS widget backgrounds AFTER the QFrame rule.
+           In app-level QSS, later rules with more specific selectors win. */
+        ads--CDockContainerWidget { background: %1; border: none; }
+        ads--CDockAreaWidget { background: %1; border: none; }
+        ads--CDockWidget { background: %1; border: none; }
+        ads--CDockAreaTitleBar {
+            background: %12;
+            border-bottom: 1px solid %6;
+            padding: 0px;
+            min-height: 24px;
+            max-height: 24px;
+        }
+        ads--CDockAreaWidget[focused="true"] ads--CDockAreaTitleBar {
+            background: %12;
+            border-bottom: 1px solid %9;
+        }
+        ads--CDockWidgetTab {
+            background: %5;
+            border: none;
+            border-right: 1px solid %6;
+            padding: 2px 8px;
+            min-height: 22px;
+            max-height: 22px;
+        }
+        ads--CDockWidgetTab[activeTab="true"] {
+            background: %12;
+            border-bottom: 2px solid %9;
+            border-right: 1px solid %6;
+        }
+        ads--CDockWidgetTab[focused="true"] {
+            background: %12;
+            border-bottom: 2px solid %9;
+            border-right: 1px solid %6;
+        }
+        ads--CDockWidgetTab QLabel {
+            color: %10;
+            font-size: 11px;
+            font-weight: 600;
+            background: transparent;
+        }
+        ads--CDockWidgetTab[activeTab="true"] QLabel { color: %2; }
+        ads--CDockWidgetTab[focused="true"] QLabel { color: %2; }
+        ads--CDockSplitter::handle { background-color: %6; }
+        ads--CTitleBarButton {
+            padding: 2px; max-width: 16px; max-height: 16px;
+            min-width: 16px; min-height: 16px;
+            background: transparent; border: none;
+        }
+        ads--CTitleBarButton:hover { background: %11; }
+        ads--CAutoHideSideBar { background: %1; border: none; }
+        QScrollArea#dockWidgetScrollArea { padding: 0px; border: none; }
 
         QTabWidget::pane { border: none; background: %1; }
 
@@ -257,52 +323,7 @@ QString ThemeManager::build_global_qss() const {
         QStatusBar { border: none; background: %1; padding: 0; }
         QToolBar { border: none; background: %1; spacing: 0; padding: 0; }
 
-        /* ── ADS Docking System ─────────────────────────────────────────── */
-        ads--CDockContainerWidget { background: %1; }
-        ads--CDockAreaWidget { background: %1; }
-        ads--CDockAreaTitleBar {
-            background: %12;
-            border-bottom: 1px solid %3;
-            padding: 0px;
-            min-height: 24px;
-            max-height: 24px;
-        }
-        ads--CDockAreaWidget[focused="true"] ads--CDockAreaTitleBar {
-            border-bottom: 2px solid %9;
-        }
-        ads--CDockWidgetTab {
-            background: %12;
-            border: none;
-            padding: 2px 8px;
-            min-height: 22px;
-            max-height: 22px;
-        }
-        ads--CDockWidgetTab[activeTab="true"] {
-            background: %11;
-            border-bottom: 2px solid %9;
-        }
-        ads--CDockWidgetTab[focused="true"] {
-            background: %9;
-        }
-        ads--CDockWidgetTab #dockWidgetTabLabel {
-            color: %10;
-            font-size: 11px;
-            font-weight: 600;
-            background: transparent;
-        }
-        ads--CDockWidgetTab[activeTab="true"] #dockWidgetTabLabel {
-            color: %2;
-        }
-        ads--CDockWidgetTab[focused="true"] #dockWidgetTabLabel {
-            color: %17;
-        }
-        ads--CDockWidget {
-            background: %1;
-            border: none;
-        }
-        ads--CDockSplitter::handle {
-            background-color: %3;
-        }
+        /* ── ADS icon buttons ───────────────────────────────────────────── */
         #tabCloseButton {
             background: none; border: none; padding: 2px;
             width: 16px; height: 16px; min-width: 16px; min-height: 16px;
@@ -356,14 +377,6 @@ QString ThemeManager::build_global_qss() const {
             background: %11;
             image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><line x1='3' y1='12' x2='13' y2='12' stroke='%23e5e5e5' stroke-width='1.5' stroke-linecap='round'/></svg>");
         }
-        ads--CTitleBarButton {
-            padding: 2px; max-width: 16px; max-height: 16px;
-            min-width: 16px; min-height: 16px;
-        }
-        ads--CTitleBarButton:hover { background: %11; }
-        ads--CAutoHideSideBar { background: %1; border: none; }
-        QScrollArea#dockWidgetScrollArea { padding: 0px; border: none; }
-
         /* ── Reusable object-name selectors ────────────────────────────── */
         #sectionTitle {
             color: %9; font-size: 13px; font-weight: 700;
@@ -468,6 +481,81 @@ QString ThemeManager::build_global_qss() const {
         .arg(t.positive_bg)
         // %27 negative_bg
         .arg(t.negative_bg);
+}
+
+QString ThemeManager::build_ads_qss() const {
+    const auto& t = current_;
+    LOG_INFO("ThemeManager", QString("build_ads_qss: bg_base=%1 bg_raised=%2 bg_surface=%3 accent=%4 border_dim=%5")
+        .arg(t.bg_base).arg(t.bg_raised).arg(t.bg_surface).arg(t.accent).arg(t.border_dim));
+    // This stylesheet is applied directly to CDockManager to completely override
+    // ADS's internally loaded default.css / focus_highlighting.css which use
+    // palette(window)/palette(highlight) — the Windows system gray/blue colors.
+    QString qss = QString(R"(
+        ads--CDockContainerWidget { background: %1; }
+        ads--CDockAreaWidget { background: %1; }
+        ads--CDockAreaTitleBar {
+            background: %2;
+            border-bottom: 1px solid %3;
+            padding: 0px;
+            min-height: 24px;
+            max-height: 24px;
+        }
+        ads--CDockAreaWidget[focused="true"] ads--CDockAreaTitleBar {
+            background: %2;
+            border-bottom: 1px solid %4;
+        }
+        ads--CDockWidgetTab {
+            background: %5;
+            border: none;
+            border-right: 1px solid %3;
+            padding: 2px 8px;
+            min-height: 22px;
+            max-height: 22px;
+        }
+        ads--CDockWidgetTab[activeTab="true"] {
+            background: %2;
+            border-bottom: 2px solid %4;
+            border-right: 1px solid %3;
+        }
+        ads--CDockWidgetTab[focused="true"] {
+            background: %2;
+            border-bottom: 2px solid %4;
+            border-right: 1px solid %3;
+        }
+        ads--CDockWidgetTab QLabel {
+            color: %6;
+            font-size: 11px;
+            font-weight: 600;
+            background: transparent;
+        }
+        ads--CDockWidgetTab[activeTab="true"] QLabel {
+            color: %7;
+        }
+        ads--CDockWidgetTab[focused="true"] QLabel {
+            color: %7;
+        }
+        ads--CDockWidget { background: %1; border: none; }
+        ads--CDockSplitter::handle { background-color: %3; }
+        ads--CTitleBarButton {
+            padding: 2px; max-width: 16px; max-height: 16px;
+            min-width: 16px; min-height: 16px;
+            background: transparent; border: none;
+        }
+        ads--CTitleBarButton:hover { background: %8; }
+        ads--CAutoHideSideBar { background: %1; border: none; }
+        QScrollArea#dockWidgetScrollArea { padding: 0px; border: none; }
+    )")
+        .arg(t.bg_base)        // %1
+        .arg(t.bg_raised)      // %2
+        .arg(t.border_dim)     // %3
+        .arg(t.accent)         // %4
+        .arg(t.bg_surface)     // %5
+        .arg(t.text_secondary) // %6
+        .arg(t.text_primary)   // %7
+        .arg(t.bg_hover);      // %8
+
+    LOG_INFO("ThemeManager", QString("build_ads_qss: produced %1 chars").arg(qss.length()));
+    return qss;
 }
 
 } // namespace fincept::ui

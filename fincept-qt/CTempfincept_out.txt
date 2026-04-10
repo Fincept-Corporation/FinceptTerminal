@@ -1,0 +1,4 @@
+Microsoft Windows [Version 10.0.26200.8037]
+(c) Microsoft Corporation. All rights reserved.
+
+C:\windowsdisk\finceptTerminal\fincept-qt>

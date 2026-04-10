@@ -24,6 +24,9 @@ class MarketPanel : public QWidget {
     const QString& panel_id() const { return config_.id; }
     void update_config(const MarketPanelConfig& cfg);
 
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
+
   signals:
     void refresh_finished();
     void edit_requested(const QString& panel_id);

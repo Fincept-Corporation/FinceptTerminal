@@ -6,6 +6,7 @@
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 
+#include <QFile>
 #include <QJsonDocument>
 #include <QPointer>
 #include <QUuid>
@@ -14,7 +15,7 @@ namespace fincept::services::algo {
 
 static constexpr int kStrategiesTtlSec = 30;
 static constexpr int kDeploymentsTtlSec = 30;
-static constexpr const char* kStrategiesCacheKey = "algo:strategies";
+static constexpr const char* kStrategiesCacheKey = "algo:strategies:registry";
 static constexpr const char* kDeploymentsCacheKey = "algo:deployments";
 
 // ── DB path helper ────────────────────────────────────────────────────────────
@@ -91,16 +92,23 @@ static QVector<AlgoStrategy> parse_strategies(const QJsonArray& arr) {
 }
 
 void AlgoTradingService::list_strategies() {
-    const QVariant cached = fincept::CacheManager::instance().get(kStrategiesCacheKey);
-    if (!cached.isNull()) {
-        auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
+    // Fast path: read pre-generated registry_index.json directly — no Python spawn needed
+    const QString json_path =
+        python::PythonRunner::instance().scripts_dir() + "/strategies/registry_index.json";
+    QFile f(json_path);
+    if (f.open(QIODevice::ReadOnly)) {
+        auto doc = QJsonDocument::fromJson(f.readAll());
+        f.close();
         if (!doc.isNull()) {
+            LOG_INFO("AlgoTrading", QString("Loaded registry from %1").arg(json_path));
             emit strategies_loaded(parse_strategies(doc.object()["strategies"].toArray()));
             return;
         }
     }
 
-    run_python("algo_trading/backtest_engine.py", {"list_strategies", "--db", algo_db_path()}, "list_strategies",
+    // Fallback: run Python to regenerate the index
+    LOG_WARN("AlgoTrading", "registry_index.json missing — falling back to Python");
+    run_python("algo_trading/backtest_engine.py", {"list_registry"}, "list_strategies",
                [this](bool ok, const QString& out) {
                    if (!ok) {
                        emit error_occurred("list_strategies", out);
@@ -108,10 +116,6 @@ void AlgoTradingService::list_strategies() {
                    }
                    auto doc = QJsonDocument::fromJson(python::extract_json(out).toUtf8());
                    auto obj = doc.object();
-                   fincept::CacheManager::instance().put(
-                       kStrategiesCacheKey,
-                       QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
-                       kStrategiesTtlSec, "algo_trading");
                    emit strategies_loaded(parse_strategies(obj["strategies"].toArray()));
                });
 }

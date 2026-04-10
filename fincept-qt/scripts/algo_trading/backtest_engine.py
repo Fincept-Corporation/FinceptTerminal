@@ -534,6 +534,40 @@ def cmd_list_strategies(db_path: str):
         print(json.dumps({'success': False, 'error': str(e), 'strategies': []}))
 
 
+def cmd_list_registry():
+    """Return all strategies from the strategies/_registry.py index."""
+    try:
+        import importlib.util
+        registry_path = os.path.join(os.path.dirname(__file__), '..', 'strategies', '_registry.py')
+        registry_path = os.path.normpath(registry_path)
+        spec = importlib.util.spec_from_file_location('_registry', registry_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        reg = mod.STRATEGY_REGISTRY  # dict: id -> {name, category, path}
+        strategies = []
+        for fct_id, meta in reg.items():
+            strategies.append({
+                'id':               fct_id,
+                'name':             meta.get('name', fct_id),
+                'description':      meta.get('category', ''),
+                'timeframe':        '1d',
+                'entry_conditions': [],
+                'exit_conditions':  [],
+                'entry_logic':      'AND',
+                'exit_logic':       'AND',
+                'stop_loss':        0,
+                'take_profit':      0,
+                'trailing_stop':    0,
+                'is_active':        1,
+                'created_at':       '',
+                'updated_at':       '',
+                'script_path':      meta.get('path', ''),
+            })
+        print(json.dumps({'success': True, 'strategies': strategies}))
+    except Exception as e:
+        print(json.dumps({'success': False, 'error': str(e), 'strategies': []}))
+
+
 def cmd_delete_strategy(strategy_id: str, db_path: str):
     """Soft-delete a strategy (set is_active=0)."""
     try:
@@ -668,7 +702,7 @@ def main():
     debug(f"sys.argv: {sys.argv}")
 
     parser = argparse.ArgumentParser(description='Backtest Engine')
-    parser.add_argument('command', choices=['save_strategy', 'list_strategies', 'delete_strategy', 'run_backtest'],
+    parser.add_argument('command', choices=['save_strategy', 'list_strategies', 'list_registry', 'delete_strategy', 'run_backtest'],
                         help='Subcommand to execute')
     parser.add_argument('payload', nargs='?', default=None,
                         help='JSON payload or ID depending on command')
@@ -695,6 +729,9 @@ def main():
 
     elif args.command == 'list_strategies':
         cmd_list_strategies(db_path)
+
+    elif args.command == 'list_registry':
+        cmd_list_registry()
 
     elif args.command == 'delete_strategy':
         if not args.payload:

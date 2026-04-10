@@ -113,6 +113,8 @@ class AIQuantLabService : public QObject {
     void rolling_create_schedule(const QJsonObject& params);
     void rolling_execute_retrain(const QJsonObject& params);
     void rolling_list_schedules();
+    void rolling_preview_tasks(const QJsonObject& params);
+    void rolling_delete_schedule(const QJsonObject& params);
 
     // ── Feature Engineering ─────────────────────────────────────────────────
     void feature_compute(const QJsonObject& params);

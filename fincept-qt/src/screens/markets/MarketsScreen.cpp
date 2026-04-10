@@ -117,6 +117,20 @@ void MarketsScreen::build_splitter_layout() {
         }
     }
 
+    // Distribute equal height to every panel in each column so no single row
+    // grabs disproportionate space.  (Restored saved state may override this.)
+    for (auto* vs : col_splitters_) {
+        const int n = vs->count();
+        if (n > 1) {
+            const int equal = 1000;            // arbitrary equal weight
+            QList<int> sizes;
+            sizes.reserve(n);
+            for (int i = 0; i < n; ++i)
+                sizes.append(equal);
+            vs->setSizes(sizes);
+        }
+    }
+
     refresh_theme();
 }
 
@@ -157,11 +171,9 @@ int MarketsScreen::column_with_fewest_panels() const {
 
 void MarketsScreen::save_splitter_state() {
     if (!h_splitter_) return;
-    QString state = QString::fromLatin1(h_splitter_->saveState().toBase64());
-    for (int i = 0; i < col_splitters_.size(); ++i) {
-        state += QString("|col%1:%2").arg(i).arg(
-            QString::fromLatin1(col_splitters_[i]->saveState().toBase64()));
-    }
+    // Save only horizontal splitter state (column widths).
+    // Vertical row heights are always equal-distributed on build.
+    const QString state = QString::fromLatin1(h_splitter_->saveState().toBase64());
     SettingsRepository::instance().set("markets_splitter_state", state);
 }
 
@@ -172,22 +184,14 @@ void MarketsScreen::restore_splitter_state() {
 
     const QString saved = res.value();
     int sep = saved.indexOf('|');
+    // Restore only the horizontal splitter (column widths).
+    // Vertical (row heights) are set to equal in build_splitter_layout()
+    // and must not be overridden by stale saved state.
     if (sep < 0) {
         h_splitter_->restoreState(QByteArray::fromBase64(saved.toLatin1()));
         return;
     }
     h_splitter_->restoreState(QByteArray::fromBase64(saved.left(sep).toLatin1()));
-    const QStringList parts = saved.mid(sep + 1).split('|');
-    for (const QString& part : parts) {
-        if (!part.startsWith("col")) continue;
-        int colon = part.indexOf(':');
-        if (colon < 0) continue;
-        int idx = part.mid(3, colon - 3).toInt();
-        if (idx >= 0 && idx < col_splitters_.size()) {
-            col_splitters_[idx]->restoreState(
-                QByteArray::fromBase64(part.mid(colon + 1).toLatin1()));
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -492,6 +496,25 @@ void MarketsScreen::update_clocks() {
 
 void MarketsScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
+
+    // Distribute equal space now that geometry is valid.
+    // Horizontal: equal column widths.
+    if (h_splitter_ && h_splitter_->count() > 1) {
+        QList<int> hsizes;
+        for (int i = 0; i < h_splitter_->count(); ++i)
+            hsizes.append(1000);
+        h_splitter_->setSizes(hsizes);
+    }
+    // Vertical: equal panel heights within each column.
+    for (auto* vs : col_splitters_) {
+        if (vs->count() > 1) {
+            QList<int> vsizes;
+            for (int i = 0; i < vs->count(); ++i)
+                vsizes.append(1000);
+            vs->setSizes(vsizes);
+        }
+    }
+
     if (auto_update_ && auto_refresh_timer_) auto_refresh_timer_->start();
     if (session_timer_) session_timer_->start();
     if (clock_timer_)   clock_timer_->start();

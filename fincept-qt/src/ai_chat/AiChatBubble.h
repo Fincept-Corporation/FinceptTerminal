@@ -22,13 +22,13 @@ namespace fincept {
 
 // ── AiChatBubble ─────────────────────────────────────────────────────────────
 // Floating AI assistant bubble — fixed bottom-right corner of the main window.
-// Features: streaming chat, voice input (whisper.cpp offline STT — cross-platform),
+// Features: streaming chat, voice input (Python speech_recognition + Google STT),
 // TTS output via QMediaPlayer, session persistence via ChatRepository.
 //
 // Voice flow:
 //   mic_btn / voice_mode_btn
-//       → WhisperService::start_listening()
-//       → WhisperService::transcription_ready(text)   [signal on UI thread]
+//       → SpeechService::start_listening()
+//       → SpeechService::transcription_ready(text)   [signal on UI thread]
 //       → on_transcription(text)
 //       → input_box_ populated → on_send()
 
@@ -55,7 +55,6 @@ class AiChatBubble : public QWidget {
     void on_transcription(const QString& text);
     void on_stt_listening_changed(bool active);
     void on_stt_error(const QString& message);
-    void on_model_download_progress(int percent);
     void on_tts_media_status(QMediaPlayer::MediaStatus status);
 
   private:

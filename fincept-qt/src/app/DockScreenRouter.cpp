@@ -5,15 +5,15 @@
 #include "core/session/SessionManager.h"
 #include "screens/IStatefulScreen.h"
 
-#include <QDebug>
 #include <QEvent>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
-#include <QPalette>
 #include <QVBoxLayout>
 
 #include <DockAreaWidget.h>
+#include <DockManager.h>
+#include <DockWidget.h>
 #include <DockWidgetTab.h>
 
 namespace fincept {
@@ -73,7 +73,8 @@ QString DockScreenRouter::title_for_id(const QString& id) {
     return titles.value(id, id);
 }
 
-DockScreenRouter::DockScreenRouter(ads::CDockManager* manager, QObject* parent) : QObject(parent), manager_(manager) {}
+DockScreenRouter::DockScreenRouter(ads::CDockManager* manager, QObject* parent) : QObject(parent), manager_(manager) {
+}
 
 void DockScreenRouter::register_screen(const QString& id, QWidget* screen) {
     // Store the screen widget — the CDockWidget is only created on first navigate().
@@ -251,8 +252,18 @@ void DockScreenRouter::navigate(const QString& id, bool exclusive) {
     // call, the tab stays hidden because isClosed() returns false and the
     // previous conditional `if (isClosed()) toggleView(true)` was skipped.
     dw->toggleView(true);
+    // ADS does not restore CDockWidgetTab visibility when toggleView(true)
+    // re-opens a previously hidden widget — the tab stays hidden from the
+    // ensure_all_registered() phase where all widgets were toggleView(false)'d.
+    // Force the tab visible so the label text appears in the title bar.
+    if (auto* tab = dw->tabWidget()) {
+        if (tab->isHidden())
+            tab->setVisible(true);
+    }
     dw->raise();
     dw->setAsCurrentTab();
+
+    apply_ads_theme();
 
     current_id_ = id;
     SessionManager::instance().set_last_screen(id);
@@ -306,6 +317,10 @@ void DockScreenRouter::tab_into(const QString& id) {
     }
 
     dw->toggleView(true);
+    if (auto* tab = dw->tabWidget()) {
+        if (tab->isHidden())
+            tab->setVisible(true);
+    }
     dw->raise();
     dw->setAsCurrentTab();
 
@@ -400,6 +415,8 @@ void DockScreenRouter::ensure_all_registered() {
             dw->toggleView(false); // start hidden
         }
     }
+    // Apply theme directly to all title bars and tabs created above.
+    apply_ads_theme();
 }
 
 ads::CDockWidget* DockScreenRouter::find_dock_widget(const QString& id) const {
@@ -623,6 +640,25 @@ void DockScreenRouter::restore_screen_state(const QString& id) {
     if (!stateful)
         return;
     ScreenStateManager::instance().restore(stateful);
+}
+
+void DockScreenRouter::apply_ads_theme() {
+    // ADS's CSS (build_ads_qss on CDockManager) handles all ADS widget styling.
+    // This function ensures tab widgets and labels don't have stale widget-level
+    // QSS that could interfere with ADS's CSS cascade, and forces hidden tabs
+    // visible (they can get stuck hidden after ensure_all_registered()).
+    for (auto* dw : manager_->dockWidgetsMap()) {
+        if (auto* tab = dw->tabWidget()) {
+            if (!tab->styleSheet().isEmpty())
+                tab->setStyleSheet(QString());
+            if (tab->isHidden() && !dw->isClosed())
+                tab->setVisible(true);
+            for (auto* lbl : tab->findChildren<QLabel*>()) {
+                if (!lbl->styleSheet().isEmpty())
+                    lbl->setStyleSheet(QString());
+            }
+        }
+    }
 }
 
 } // namespace fincept

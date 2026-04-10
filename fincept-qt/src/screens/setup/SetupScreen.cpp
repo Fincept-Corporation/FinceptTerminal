@@ -3,7 +3,6 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonSetupManager.h"
-#include "services/stt/WhisperService.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -32,11 +31,6 @@ SetupScreen::SetupScreen(QWidget* parent) : QWidget(parent) {
             &SetupScreen::on_progress);
     connect(&python::PythonSetupManager::instance(), &python::PythonSetupManager::setup_complete, this,
             &SetupScreen::on_setup_done);
-
-    auto& ws = services::WhisperService::instance();
-    connect(&ws, &services::WhisperService::model_download_progress, this, &SetupScreen::on_whisper_progress);
-    connect(&ws, &services::WhisperService::model_ready, this, &SetupScreen::on_whisper_ready);
-    connect(&ws, &services::WhisperService::error_occurred, this, &SetupScreen::on_whisper_error);
 
     // 15-minute overall timeout — shows skip button if setup is stuck
     timeout_timer_ = new QTimer(this);
@@ -104,8 +98,6 @@ void SetupScreen::build_ui() {
                                  "Backtesting, portfolio optimization and legacy quant tools"));
     cl->addWidget(build_step_row("packages-numpy2", "Install Analytics Libraries",
                                  "Machine learning, data science and AI agent frameworks"));
-    cl->addWidget(build_step_row("whisper", "Download Voice Assistant",
-                                 "Offline voice recognition model for speech commands (~57 MB)"));
 
     cl->addSpacing(16);
 
@@ -149,19 +141,6 @@ void SetupScreen::build_ui() {
             .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY, colors::BG_RAISED));
     connect(skip_btn_, &QPushButton::clicked, this, &SetupScreen::on_skip_clicked);
     cl->addWidget(skip_btn_);
-
-    // Retry voice model button
-    retry_whisper_btn_ = new QPushButton("RETRY VOICE MODEL DOWNLOAD", center);
-    retry_whisper_btn_->setFixedHeight(36);
-    retry_whisper_btn_->setCursor(Qt::PointingHandCursor);
-    retry_whisper_btn_->setVisible(false);
-    retry_whisper_btn_->setStyleSheet(
-        QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
-                " font-family:%2; font-size:12px; font-weight:600; letter-spacing:1px; border-radius:3px; }"
-                "QPushButton:hover { background:%3; }")
-            .arg(kAccent, fonts::DATA_FAMILY, colors::BG_RAISED));
-    connect(retry_whisper_btn_, &QPushButton::clicked, this, &SetupScreen::on_retry_whisper);
-    cl->addWidget(retry_whisper_btn_);
 
     // Install dir — small, dim, for power users
     auto* dir_label = new QLabel("Installing to: " + python::PythonSetupManager::instance().install_dir(), center);
@@ -343,12 +322,14 @@ void SetupScreen::on_progress(const python::SetupProgress& progress) {
 
 void SetupScreen::on_setup_done(bool success, const QString& error) {
     if (success) {
-        LOG_INFO("SetupScreen", "Python setup completed — starting voice model download");
-        status_label_->setText("Downloading the offline voice assistant model...");
+        LOG_INFO("SetupScreen", "Python setup completed — all steps done");
+        status_label_->setText("Everything is ready! Launching Fincept Terminal...");
         status_label_->setStyleSheet(
-            QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;").arg(kAccent, fonts::DATA_FAMILY));
-        mark_step_active("whisper");
-        services::WhisperService::instance().download_for_setup();
+            QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;").arg(colors::GREEN, fonts::DATA_FAMILY));
+        begin_btn_->setText("LAUNCH");
+        if (timeout_timer_)
+            timeout_timer_->stop();
+        QTimer::singleShot(1500, this, [this]() { emit setup_complete(); });
     } else {
         // Stop all running pulses
         for (auto [k, s] : steps_.asKeyValueRange())
@@ -360,56 +341,6 @@ void SetupScreen::on_setup_done(bool success, const QString& error) {
         status_label_->setStyleSheet(
             QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;").arg(colors::RED, fonts::DATA_FAMILY));
         LOG_ERROR("SetupScreen", "Setup failed: " + error);
-    }
-}
-
-void SetupScreen::on_whisper_progress(int percent) {
-    if (!steps_.contains("whisper"))
-        return;
-    auto& s = steps_["whisper"];
-    // Whisper gives real % from QNetworkReply — stop pulse and use real value
-    stop_pulse("whisper");
-    s.bar->setValue(percent);
-    s.status->setText(QString("%1%").arg(percent));
-    s.status->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;").arg(kAccent, fonts::DATA_FAMILY));
-    status_label_->setText(QString("Downloading voice assistant model... %1%").arg(percent));
-}
-
-void SetupScreen::on_whisper_ready() {
-    mark_step_done("whisper");
-    status_label_->setText("Everything is ready! Launching Fincept Terminal...");
-    status_label_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;").arg(colors::GREEN, fonts::DATA_FAMILY));
-    begin_btn_->setText("LAUNCH");
-
-    LOG_INFO("SetupScreen", "Whisper model ready — setup fully complete");
-    if (timeout_timer_)
-        timeout_timer_->stop();
-    QTimer::singleShot(1500, this, [this]() { emit setup_complete(); });
-}
-
-void SetupScreen::on_whisper_error(const QString& message) {
-    stop_pulse("whisper");
-    if (steps_.contains("whisper")) {
-        auto& s = steps_["whisper"];
-        s.bar->setValue(s.pulse_val > 0 ? s.pulse_val : 0);
-        s.status->setText("SKIPPED");
-        s.status->setStyleSheet(
-            QString("color:%1; font-family:%2; font-size:9px;").arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
-    }
-    LOG_WARN("SetupScreen", "Whisper model download failed: " + message);
-    whisper_failed_ = true;
-    status_label_->setText("Voice assistant couldn't be downloaded — voice commands won't be available.\n"
-                           "All other features work normally. You can retry or continue without it.");
-    status_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;")
-                                     .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
-    begin_btn_->setText("SETUP COMPLETE");
-
-    if (retry_whisper_btn_)
-        retry_whisper_btn_->setVisible(true);
-    if (skip_btn_) {
-        skip_btn_->setVisible(true);
-        skip_btn_->setText("CONTINUE WITHOUT VOICE COMMANDS");
     }
 }
 
@@ -432,20 +363,6 @@ void SetupScreen::on_setup_timeout() {
         skip_btn_->setVisible(true);
 }
 
-void SetupScreen::on_retry_whisper() {
-    whisper_failed_ = false;
-    if (retry_whisper_btn_)
-        retry_whisper_btn_->setVisible(false);
-    if (skip_btn_)
-        skip_btn_->setVisible(false);
-    mark_step_active("whisper");
-    status_label_->setText("Retrying voice assistant model download...");
-    status_label_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;").arg(kAccent, fonts::DATA_FAMILY));
-    LOG_INFO("SetupScreen", "User requested Whisper retry");
-    services::WhisperService::instance().download_for_setup();
-}
-
 void SetupScreen::mark_step_done(const QString& key) {
     if (!steps_.contains(key))
         return;
@@ -458,7 +375,6 @@ void SetupScreen::mark_step_done(const QString& key) {
 
 void SetupScreen::prefill_completed_steps() {
     const auto status = python::PythonSetupManager::instance().check_status();
-    const bool whisper = services::WhisperService::is_model_downloaded();
 
     if (status.uv_installed)
         mark_step_done("uv");
@@ -470,13 +386,11 @@ void SetupScreen::prefill_completed_steps() {
         mark_step_done("packages-numpy1");
     if (status.venv_numpy2_ready)
         mark_step_done("packages-numpy2");
-    if (whisper)
-        mark_step_done("whisper");
 
     const bool any_done = status.uv_installed || status.python_installed || status.venv_numpy1_ready ||
-                          status.venv_numpy2_ready || whisper;
+                          status.venv_numpy2_ready;
     const bool all_done = status.uv_installed && status.python_installed && status.venv_numpy1_ready &&
-                          status.venv_numpy2_ready && whisper;
+                          status.venv_numpy2_ready;
 
     summary_lbl_->setText({});
 

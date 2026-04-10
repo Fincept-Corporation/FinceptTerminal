@@ -85,6 +85,10 @@ class DockScreenRouter : public QObject {
 
     ads::CDockWidget* create_dock_widget(const QString& id);
     void materialize_screen(const QString& id);
+    /// Apply theme colors directly to all CDockAreaTitleBar and CDockWidgetTab
+    /// widgets. Called after any addDockWidget() call since those create new
+    /// QFrame-derived widgets that the app-level QFrame rule overrides.
+    void apply_ads_theme();
 
   public:
     /// Map a screen id to its human-readable title.

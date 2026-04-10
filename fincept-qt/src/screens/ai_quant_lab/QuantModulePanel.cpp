@@ -24,6 +24,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QRegularExpression>
+#include <QFrame>
+#include <QProgressBar>
 #include <QScrollArea>
 #include <QTabWidget>
 #include <QTableWidget>
@@ -2732,49 +2734,249 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
     // ── Rolling Retraining ───────────────────────────────────────────────────
     if (module_id == "rolling_retraining") {
+        // ── Streaming events from retrain command ────────────────────────────
+        const QString event = data["event"].toString();
+        if (!event.isEmpty()) {
+            auto* pb  = this->findChild<QProgressBar*>("rr_progress");
+            auto* log = this->findChild<QTextEdit*>("rr_log");
+
+            if (event == "start") {
+                const int total = data["total_windows"].toInt();
+                if (pb) { pb->setRange(0, total); pb->setValue(0); pb->setFormat("0 / %v windows"); }
+                if (log) log->append(QString("Starting retrain: %1  |  %2 windows")
+                                         .arg(data["model_id"].toString()).arg(total));
+                status_label_->setText(QString("Retraining %1 — 0/%2 windows")
+                                           .arg(data["model_id"].toString()).arg(total));
+            } else if (event == "window") {
+                const int idx   = data["index"].toInt();
+                const int total = data["total"].toInt();
+                if (pb) { pb->setValue(idx); pb->setFormat(QString("%1 / %2 windows").arg(idx).arg(total)); }
+                if (log) log->append(QString("  Window %1/%2  train→%3  test %4→%5")
+                                         .arg(idx).arg(total)
+                                         .arg(data["train_end"].toString().left(10))
+                                         .arg(data["test_start"].toString().left(10))
+                                         .arg(data["test_end"].toString().left(10)));
+                status_label_->setText(QString("Window %1/%2").arg(idx).arg(total));
+            } else if (event == "ensemble") {
+                if (log) log->append(QString("  %1").arg(data["message"].toString()));
+                status_label_->setText("Combining rolling results...");
+            } else if (event == "done") {
+                const int total = data["windows_trained"].toInt();
+                if (pb) { pb->setValue(total); pb->setFormat("Complete"); }
+                if (log) log->append(QString("\nDone — %1 windows in %2s  |  Experiment: %3")
+                                         .arg(total)
+                                         .arg(data["elapsed_sec"].toDouble(), 0, 'f', 1)
+                                         .arg(data["exp_name"].toString()));
+                status_label_->setText(QString("Retrain complete — %1 windows in %2s")
+                                           .arg(total)
+                                           .arg(data["elapsed_sec"].toDouble(), 0, 'f', 1));
+            } else if (event == "error") {
+                if (pb) { pb->setFormat("Failed"); }
+                if (log) log->append(QString("\nError: %1").arg(data["error"].toString()));
+                display_error(data["error"].toString());
+            }
+            return;
+        }
+
+        // ── Non-streaming responses ──────────────────────────────────────────
         if (!data["success"].toBool()) {
             display_error(data["error"].toString());
             return;
         }
         clear_results();
+
         if (command == "list") {
             auto schedules = data["schedules"].toObject();
-            QString out =
-                schedules.isEmpty() ? "No schedules configured." : QString("Schedules (%1)\n\n").arg(schedules.size());
-            for (auto it = schedules.begin(); it != schedules.end(); ++it) {
-                auto obj = it.value().toObject();
-                out += QString("• %1\n  Freq: %2  |  Window: %3 days  |  Next: %4\n")
-                           .arg(it.key(), obj["freq"].toString(), QString::number(obj["window"].toInt()))
-                           .arg(obj["next_run"].toString("-"));
+            // Find the cards container and repopulate it
+            auto* cards_w = this->findChild<QWidget*>("rr_cards_container");
+            if (cards_w) {
+                auto* cards_vl = qobject_cast<QVBoxLayout*>(cards_w->layout());
+                // Remove old cards (keep the trailing stretch)
+                while (cards_vl->count() > 1)
+                    delete cards_vl->takeAt(0)->widget();
+
+                if (schedules.isEmpty()) {
+                    auto* empty = new QLabel("No schedules configured yet.\nUse the Create Schedule tab to add one.",
+                                             cards_w);
+                    empty->setAlignment(Qt::AlignCenter);
+                    empty->setStyleSheet(QString("color:%1; font-size:12px; padding:24px;")
+                                             .arg(ui::colors::TEXT_SECONDARY()));
+                    cards_vl->insertWidget(0, empty);
+                } else {
+                    int i = 0;
+                    for (auto it = schedules.begin(); it != schedules.end(); ++it, ++i) {
+                        const QString mid = it.key();
+                        auto obj = it.value().toObject();
+
+                        // Card frame
+                        auto* card = new QWidget(cards_w);
+                        card->setStyleSheet(QString(
+                            "QWidget{background:%1;border:1px solid %2;border-radius:6px;}"
+                            "QWidget:hover{border-color:%3;}")
+                            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED(),
+                                 module_.color.name()));
+
+                        auto* cvl = new QVBoxLayout(card);
+                        cvl->setContentsMargins(12, 10, 12, 10);
+                        cvl->setSpacing(4);
+
+                        // Top row: model ID + status badge
+                        auto* top = new QWidget(card);
+                        top->setStyleSheet("QWidget{background:transparent;border:none;}");
+                        auto* thl = new QHBoxLayout(top);
+                        thl->setContentsMargins(0, 0, 0, 0);
+
+                        auto* id_lbl = new QLabel(mid, top);
+                        id_lbl->setStyleSheet(QString("color:%1;font-weight:700;font-size:13px;"
+                                                       "background:transparent;border:none;")
+                                                  .arg(ui::colors::TEXT_PRIMARY()));
+                        thl->addWidget(id_lbl);
+                        thl->addStretch();
+
+                        const QString status = obj["last_status"].toString("pending");
+                        const QString badge_color = (status == "completed") ? "#22c55e"
+                                                  : (status == "failed")    ? "#ef4444"
+                                                                            : "#f59e0b";
+                        auto* badge = new QLabel(status.toUpper(), top);
+                        badge->setStyleSheet(QString("color:%1;background:transparent;border:none;"
+                                                      "font-size:10px;font-weight:700;")
+                                                 .arg(badge_color));
+                        thl->addWidget(badge);
+                        cvl->addWidget(top);
+
+                        // Details row
+                        const QString freq   = obj["frequency"].toString(obj["freq"].toString());
+                        const QString window = QString::number(obj["window"].toInt());
+                        const QString next   = obj["next_run"].toString("-").left(16).replace("T", "  ");
+                        const QString last   = obj["last_run"].isNull()
+                                                   ? "Never"
+                                                   : obj["last_run"].toString().left(16).replace("T", "  ");
+                        auto* detail = new QLabel(
+                            QString("Freq: %1  |  Window: %2 days  |  Next: %3  |  Last: %4")
+                                .arg(freq, window, next, last), card);
+                        detail->setStyleSheet(QString("color:%1;font-size:11px;"
+                                                       "background:transparent;border:none;")
+                                                  .arg(ui::colors::TEXT_SECONDARY()));
+                        cvl->addWidget(detail);
+
+                        // Action buttons row
+                        auto* acts = new QWidget(card);
+                        acts->setStyleSheet("QWidget{background:transparent;border:none;}");
+                        auto* ahl = new QHBoxLayout(acts);
+                        ahl->setContentsMargins(0, 4, 0, 0);
+                        ahl->setSpacing(6);
+
+                        auto* run_btn = new QPushButton("Run Now", acts);
+                        run_btn->setStyleSheet(QString(
+                            "QPushButton{background:%1;color:%2;border:1px solid %1;"
+                            "border-radius:3px;font-size:10px;font-weight:700;padding:3px 10px;}"
+                            "QPushButton:hover{background:%3;}")
+                            .arg(module_.color.name(), "#000000", module_.color.lighter(115).name()));
+                        connect(run_btn, &QPushButton::clicked, this, [this, mid]() {
+                            if (auto* pb = this->findChild<QProgressBar*>("rr_progress"))
+                                { pb->setValue(0); pb->setFormat("Starting..."); }
+                            if (auto* log = this->findChild<QTextEdit*>("rr_log")) log->clear();
+                            status_label_->setText(QString("Retraining %1...").arg(mid));
+                            QJsonObject p; p["model_id"] = mid;
+                            AIQuantLabService::instance().rolling_execute_retrain(p);
+                        });
+                        ahl->addWidget(run_btn);
+
+                        auto* del_btn = new QPushButton("Delete", acts);
+                        del_btn->setStyleSheet(QString(
+                            "QPushButton{background:transparent;color:#ef4444;border:1px solid #ef4444;"
+                            "border-radius:3px;font-size:10px;font-weight:700;padding:3px 10px;}"
+                            "QPushButton:hover{background:#7f1d1d;}"));
+                        connect(del_btn, &QPushButton::clicked, this, [this, mid]() {
+                            status_label_->setText(QString("Deleting %1...").arg(mid));
+                            QJsonObject p; p["model_id"] = mid;
+                            AIQuantLabService::instance().rolling_delete_schedule(p);
+                        });
+                        ahl->addWidget(del_btn);
+                        ahl->addStretch();
+                        cvl->addWidget(acts);
+
+                        cards_vl->insertWidget(i, card);
+                    }
+                }
             }
-            auto* lbl = new QLabel(out, this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
             status_label_->setText(QString("%1 schedule(s)").arg(schedules.size()));
             return;
         }
+
         if (command == "create") {
             auto sched = data["schedule"].toObject();
-            auto* lbl = new QLabel(QString("Schedule created for %1\nFreq: %2  |  Window: %3 days\nNext run: %4")
-                                       .arg(data["model_id"].toString(), sched["freq"].toString())
-                                       .arg(sched["window"].toInt())
-                                       .arg(sched["next_run"].toString()),
-                                   this);
+            const QString tmpl = data["template_generated"].toBool()
+                                     ? QString("\nBuilt-in LightGBM+Alpha158 template generated at:\n%1")
+                                           .arg(data["conf_path"].toString())
+                                     : "";
+            clear_results();
+            auto* lbl = new QLabel(
+                QString("Schedule created: %1\nFreq: %2  |  Window: %3 days  |  Next: %4%5")
+                    .arg(data["model_id"].toString(),
+                         sched["frequency"].toString(),
+                         QString::number(sched["window"].toInt()),
+                         sched["next_run"].toString().left(16).replace("T", "  "),
+                         tmpl),
+                this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
-            status_label_->setText("Schedule created");
+            status_label_->setText("Schedule created — switch to Schedules tab to view");
             return;
         }
-        if (command == "retrain") {
-            auto* lbl = new QLabel(
-                QString("Retrain complete: %1\n%2").arg(data["model_id"].toString(), data["message"].toString()), this);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText("Retrain complete");
+
+        if (command == "preview") {
+            clear_results();
+            const int total = data["total_windows"].toInt();
+            auto windows = data["windows"].toArray();
+
+            auto* hdr = new QLabel(
+                QString("Preview: %1 rolling windows  (step=%2, horizon=%3)")
+                    .arg(total).arg(data["step"].toInt()).arg(data["horizon"].toInt()),
+                this);
+            hdr->setStyleSheet(QString("color:%1;font-weight:700;font-size:13px;")
+                                   .arg(ui::colors::TEXT_PRIMARY()));
+            results_layout_->addWidget(hdr);
+
+            // Table of windows
+            auto* tbl = new QTableWidget(total, 4, this);
+            tbl->setStyleSheet(table_ss());
+            tbl->setHorizontalHeaderLabels({"#", "Train Start", "Train End", "Test Period"});
+            tbl->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+            tbl->verticalHeader()->setVisible(false);
+            tbl->setEditTriggers(QAbstractItemView::NoEditTriggers);
+            tbl->setSelectionBehavior(QAbstractItemView::SelectRows);
+            tbl->setAlternatingRowColors(true);
+            int row = 0;
+            for (const auto& v : windows) {
+                auto obj = v.toObject();
+                auto item = [&](const QString& s) {
+                    auto* it = new QTableWidgetItem(s.left(10));
+                    it->setTextAlignment(Qt::AlignCenter);
+                    return it;
+                };
+                tbl->setItem(row, 0, item(QString::number(row + 1)));
+                tbl->setItem(row, 1, item(obj["train_start"].toString()));
+                tbl->setItem(row, 2, item(obj["train_end"].toString()));
+                tbl->setItem(row, 3, item(QString("%1 → %2")
+                    .arg(obj["test_start"].toString().left(10),
+                         obj["test_end"].toString().left(10))));
+                ++row;
+            }
+            tbl->setMaximumHeight(220);
+            results_layout_->addWidget(tbl);
+            status_label_->setText(QString("Preview: %1 windows").arg(total));
             return;
         }
+
+        if (command == "delete") {
+            status_label_->setText(QString("Deleted: %1").arg(data["model_id"].toString()));
+            // Auto-refresh the schedule list
+            AIQuantLabService::instance().rolling_list_schedules();
+            return;
+        }
+
         display_result(data);
         return;
     }
@@ -4664,84 +4866,212 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
+    const QString accent = module_.color.name();
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(tab_ss(module_.color.name()));
+    tabs->setStyleSheet(tab_ss(accent));
 
-    // ── Schedules ──
-    auto* list_tab = new QWidget(this);
+    // ── Tab 1: Schedules ─────────────────────────────────────────────────────
+    auto* list_tab = new QWidget;
     auto* ltvl = new QVBoxLayout(list_tab);
     ltvl->setContentsMargins(12, 12, 12, 12);
-    ltvl->setSpacing(8);
-    auto* lt_info = new QLabel("View all configured rolling retraining schedules.", list_tab);
+    ltvl->setSpacing(10);
+
+    auto* lt_info = new QLabel(
+        "Schedules are persisted in ~/.fincept/rolling_schedules.json. "
+        "Click Refresh to load the latest state.", list_tab);
     lt_info->setWordWrap(true);
-    lt_info->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                               .arg(ui::colors::TEXT_SECONDARY)
-                               .arg(ui::fonts::SMALL)
-                               .arg(ui::fonts::DATA_FAMILY));
+    lt_info->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
     ltvl->addWidget(lt_info);
-    auto* lt_run = make_run_button("LIST SCHEDULES", list_tab);
+
+    // Schedule cards container (scrollable)
+    auto* scroll = new QScrollArea(list_tab);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setStyleSheet(QString("QScrollArea{background:transparent;border:none;}"
+                                  "QScrollBar:vertical{background:%1;width:6px;border-radius:3px;}"
+                                  "QScrollBar::handle:vertical{background:%2;border-radius:3px;}")
+                              .arg(ui::colors::BG_BASE(), ui::colors::BORDER_MED()));
+    auto* cards_w = new QWidget;
+    cards_w->setStyleSheet("background:transparent;");
+    auto* cards_vl = new QVBoxLayout(cards_w);
+    cards_vl->setContentsMargins(0, 0, 0, 0);
+    cards_vl->setSpacing(8);
+    cards_vl->addStretch();
+    scroll->setWidget(cards_w);
+    ltvl->addWidget(scroll, 1);
+
+    // Store pointer so result handler can repopulate cards
+    // We tag the cards container via objectName
+    cards_w->setObjectName("rr_cards_container");
+
+    auto* lt_run = make_run_button("REFRESH SCHEDULES", list_tab);
     connect(lt_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Loading...");
+        status_label_->setText("Loading schedules...");
         AIQuantLabService::instance().rolling_list_schedules();
     });
     ltvl->addWidget(lt_run);
-    ltvl->addStretch();
     tabs->addTab(list_tab, "Schedules");
 
-    // ── Create Schedule ──
-    auto* create_tab = new QWidget(this);
+    // ── Tab 2: Create Schedule ───────────────────────────────────────────────
+    auto* create_tab = new QWidget;
     auto* ctvl = new QVBoxLayout(create_tab);
     ctvl->setContentsMargins(12, 12, 12, 12);
     ctvl->setSpacing(8);
+
     auto* rr_model_id = new QLineEdit(create_tab);
-    rr_model_id->setPlaceholderText("Model ID (e.g. model_aapl)");
+    rr_model_id->setPlaceholderText("Unique model ID (e.g. lgbm_sp500)");
     rr_model_id->setStyleSheet(input_ss());
     text_inputs_["rr_model_id"] = rr_model_id;
-    ctvl->addWidget(build_input_row("Model ID", rr_model_id, create_tab));
+    ctvl->addWidget(build_input_row("Model ID *", rr_model_id, create_tab));
+
+    auto* rr_conf = new QLineEdit(create_tab);
+    rr_conf->setPlaceholderText("Optional: path to Qlib YAML config (leave blank for built-in LightGBM+Alpha158)");
+    rr_conf->setStyleSheet(input_ss());
+    text_inputs_["rr_conf_path"] = rr_conf;
+    ctvl->addWidget(build_input_row("Config Path", rr_conf, create_tab));
+
     auto* rr_freq = new QComboBox(create_tab);
     rr_freq->setStyleSheet(combo_ss());
     rr_freq->addItems({"daily", "weekly", "monthly"});
     combo_inputs_["rr_frequency"] = rr_freq;
     ctvl->addWidget(build_input_row("Frequency", rr_freq, create_tab));
+
     auto* rr_window = new QLineEdit(create_tab);
-    rr_window->setPlaceholderText("Retrain window (trading days, e.g. 252)");
+    rr_window->setPlaceholderText("Rolling window in trading days (default: 252)");
     rr_window->setStyleSheet(input_ss());
     text_inputs_["rr_window"] = rr_window;
     ctvl->addWidget(build_input_row("Window (days)", rr_window, create_tab));
-    auto* rr_create = make_run_button("CREATE SCHEDULE", create_tab);
-    connect(rr_create, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Creating...");
+
+    auto* rr_step = new QLineEdit(create_tab);
+    rr_step->setPlaceholderText("Step size between windows (default: 20)");
+    rr_step->setStyleSheet(input_ss());
+    text_inputs_["rr_step"] = rr_step;
+    ctvl->addWidget(build_input_row("Step (days)", rr_step, create_tab));
+
+    // Region selector
+    auto* rr_region = new QComboBox(create_tab);
+    rr_region->setStyleSheet(combo_ss());
+    rr_region->addItems({"us", "cn"});
+    combo_inputs_["rr_region"] = rr_region;
+    ctvl->addWidget(build_input_row("Data Region", rr_region, create_tab));
+
+    // Preview + Create buttons side by side
+    auto* btn_row = new QWidget(create_tab);
+    auto* btn_hl = new QHBoxLayout(btn_row);
+    btn_hl->setContentsMargins(0, 4, 0, 0);
+    btn_hl->setSpacing(8);
+
+    auto* rr_preview = make_run_button("PREVIEW WINDOWS", btn_row);
+    rr_preview->setStyleSheet(QString(
+        "QPushButton{background:%1;color:%2;border:1px solid %1;border-radius:4px;"
+        "font-size:11px;font-weight:700;padding:6px 14px;}"
+        "QPushButton:hover{background:%3;}")
+        .arg(ui::colors::BG_RAISED(), accent, ui::colors::BG_HOVER()));
+    connect(rr_preview, &QPushButton::clicked, this, [this]() {
+        const QString mid = text_inputs_["rr_model_id"]->text().trimmed();
+        const QString cp  = text_inputs_["rr_conf_path"]->text().trimmed();
+        if (mid.isEmpty() && cp.isEmpty()) {
+            status_label_->setText("Enter a Model ID or Config Path to preview.");
+            return;
+        }
+        status_label_->setText("Generating preview...");
         QJsonObject params;
-        params["model_id"] = text_inputs_["rr_model_id"]->text().trimmed();
+        if (!mid.isEmpty()) params["model_id"] = mid;
+        if (!cp.isEmpty())  params["conf_path"] = cp;
+        const QString step = text_inputs_["rr_step"]->text().trimmed();
+        if (!step.isEmpty()) params["step"] = step.toInt();
+        AIQuantLabService::instance().rolling_preview_tasks(params);
+    });
+    btn_hl->addWidget(rr_preview, 1);
+
+    auto* rr_create = make_run_button("CREATE SCHEDULE", btn_row);
+    connect(rr_create, &QPushButton::clicked, this, [this]() {
+        const QString mid = text_inputs_["rr_model_id"]->text().trimmed();
+        if (mid.isEmpty()) {
+            status_label_->setText("Model ID is required.");
+            return;
+        }
+        status_label_->setText("Creating schedule...");
+        QJsonObject params;
+        params["model_id"]  = mid;
         params["frequency"] = combo_inputs_["rr_frequency"]->currentText();
-        auto w_text = text_inputs_["rr_window"]->text().trimmed();
-        if (!w_text.isEmpty())
-            params["window"] = w_text.toInt();
+        params["region"]    = combo_inputs_["rr_region"]->currentText();
+        const QString cp    = text_inputs_["rr_conf_path"]->text().trimmed();
+        if (!cp.isEmpty()) params["conf_path"] = cp;
+        const QString win   = text_inputs_["rr_window"]->text().trimmed();
+        if (!win.isEmpty()) params["window"] = win.toInt();
+        const QString step  = text_inputs_["rr_step"]->text().trimmed();
+        if (!step.isEmpty()) params["step"] = step.toInt();
         AIQuantLabService::instance().rolling_create_schedule(params);
     });
-    ctvl->addWidget(rr_create);
+    btn_hl->addWidget(rr_create, 1);
+    ctvl->addWidget(btn_row);
     ctvl->addStretch();
     tabs->addTab(create_tab, "Create Schedule");
 
-    // ── Execute Retrain ──
-    auto* retrain_tab = new QWidget(this);
+    // ── Tab 3: Execute Retrain ───────────────────────────────────────────────
+    auto* retrain_tab = new QWidget;
     auto* retrainvl = new QVBoxLayout(retrain_tab);
     retrainvl->setContentsMargins(12, 12, 12, 12);
-    retrainvl->setSpacing(8);
+    retrainvl->setSpacing(10);
+
+    auto* rt_info = new QLabel(
+        "Executes a full rolling retrain for a scheduled model. Each window trains "
+        "independently and progress is streamed live below.", retrain_tab);
+    rt_info->setWordWrap(true);
+    rt_info->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
+    retrainvl->addWidget(rt_info);
+
     auto* rr_exec_id = new QLineEdit(retrain_tab);
-    rr_exec_id->setPlaceholderText("Model ID to retrain");
+    rr_exec_id->setPlaceholderText("Model ID (must be in Schedules)");
     rr_exec_id->setStyleSheet(input_ss());
     text_inputs_["rr_exec_id"] = rr_exec_id;
-    retrainvl->addWidget(build_input_row("Model ID", rr_exec_id, retrain_tab));
+    retrainvl->addWidget(build_input_row("Model ID *", rr_exec_id, retrain_tab));
+
+    // Progress bar
+    auto* rr_progress = new QProgressBar(retrain_tab);
+    rr_progress->setObjectName("rr_progress");
+    rr_progress->setRange(0, 100);
+    rr_progress->setValue(0);
+    rr_progress->setTextVisible(true);
+    rr_progress->setFormat("Idle");
+    rr_progress->setStyleSheet(QString(
+        "QProgressBar{background:%1;border:1px solid %2;border-radius:4px;"
+        "color:%3;font-size:11px;font-weight:600;text-align:center;height:20px;}"
+        "QProgressBar::chunk{background:%4;border-radius:3px;}")
+        .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED(),
+             ui::colors::TEXT_PRIMARY(), accent));
+    retrainvl->addWidget(rr_progress);
+
+    // Streaming log output
+    auto* rr_log = new QTextEdit(retrain_tab);
+    rr_log->setObjectName("rr_log");
+    rr_log->setReadOnly(true);
+    rr_log->setPlaceholderText("Training progress will stream here...");
+    rr_log->setStyleSheet(output_ss());
+    rr_log->setMinimumHeight(140);
+    retrainvl->addWidget(rr_log, 1);
+
     auto* rr_exec = make_run_button("EXECUTE RETRAIN NOW", retrain_tab);
     connect(rr_exec, &QPushButton::clicked, this, [this]() {
+        const QString mid = text_inputs_["rr_exec_id"]->text().trimmed();
+        if (mid.isEmpty()) {
+            status_label_->setText("Model ID is required.");
+            return;
+        }
+        // Reset progress UI
+        if (auto* pb = this->findChild<QProgressBar*>("rr_progress")) {
+            pb->setValue(0);
+            pb->setFormat("Starting...");
+        }
+        if (auto* log = this->findChild<QTextEdit*>("rr_log"))
+            log->clear();
         status_label_->setText("Retraining...");
         QJsonObject params;
-        params["model_id"] = text_inputs_["rr_exec_id"]->text().trimmed();
+        params["model_id"] = mid;
         AIQuantLabService::instance().rolling_execute_retrain(params);
     });
     retrainvl->addWidget(rr_exec);
-    retrainvl->addStretch();
     tabs->addTab(retrain_tab, "Execute Retrain");
 
     vl->addWidget(tabs, 1);

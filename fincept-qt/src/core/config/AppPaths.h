@@ -15,7 +15,7 @@ namespace fincept {
 ///   logs/    — Application log files
 ///   files/   — User-managed file attachments
 ///   cache/   — Tile caches and other transient network data
-///   models/  — ML model files (Whisper, etc.)
+///   models/  — ML model files
 ///   runtime/ — Python interpreter, UV, virtual environments
 ///
 /// Call AppPaths::ensure_all() once at startup to create every sub-directory.

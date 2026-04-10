@@ -307,10 +307,37 @@ void AIQuantLabService::rolling_create_schedule(const QJsonObject& params) {
     run_module("rolling_retraining", "create", params);
 }
 void AIQuantLabService::rolling_execute_retrain(const QJsonObject& params) {
-    run_module("rolling_retraining", "retrain", params);
+    // Retrain emits multiple JSON lines (streaming progress events).
+    // We parse each line individually and emit result_ready per event.
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    QPointer<AIQuantLabService> self = this;
+    python::PythonRunner::instance().run(
+        "ai_quant_lab/qlib_rolling_retraining.py", {"retrain", json},
+        [self](python::PythonResult result) {
+            if (!self) return;
+            if (!result.success && result.output.isEmpty()) {
+                emit self->error_occurred("rolling_retraining", result.error);
+                return;
+            }
+            // Parse each JSON line and emit separately
+            const auto lines = result.output.split('\n', Qt::SkipEmptyParts);
+            for (const auto& line : lines) {
+                const auto trimmed = line.trimmed();
+                if (!trimmed.startsWith('{')) continue;
+                auto doc = QJsonDocument::fromJson(trimmed.toUtf8());
+                if (doc.isNull()) continue;
+                emit self->result_ready("rolling_retraining", "retrain", doc.object());
+            }
+        });
 }
 void AIQuantLabService::rolling_list_schedules() {
     run_python_cached("ai_quant_lab/qlib_rolling_retraining.py", {"list"}, "rolling_retraining", "list", kListTtlSec);
+}
+void AIQuantLabService::rolling_preview_tasks(const QJsonObject& params) {
+    run_module("rolling_retraining", "preview", params);
+}
+void AIQuantLabService::rolling_delete_schedule(const QJsonObject& params) {
+    run_module("rolling_retraining", "delete", params);
 }
 
 // ── Deep Agent (LangGraph multi-agent) ───────────────────────────────────────

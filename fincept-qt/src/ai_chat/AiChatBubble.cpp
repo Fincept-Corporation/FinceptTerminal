@@ -1,6 +1,6 @@
 #include "ai_chat/AiChatBubble.h"
 
-#include "services/stt/WhisperService.h"
+#include "services/stt/SpeechService.h"
 #include "storage/repositories/ChatRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -65,17 +65,11 @@ AiChatBubble::AiChatBubble(QWidget* parent) : QWidget(parent) {
     connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::finished_streaming, this,
             &AiChatBubble::on_streaming_done, Qt::UniqueConnection);
 
-    // ── WhisperService wiring ─────────────────────────────────────────────────
-    auto& stt = services::WhisperService::instance();
-    connect(&stt, &services::WhisperService::transcription_ready, this, &AiChatBubble::on_transcription);
-    connect(&stt, &services::WhisperService::listening_changed, this, &AiChatBubble::on_stt_listening_changed);
-    connect(&stt, &services::WhisperService::error_occurred, this, &AiChatBubble::on_stt_error);
-    connect(&stt, &services::WhisperService::model_download_progress, this, &AiChatBubble::on_model_download_progress);
-    connect(&stt, &services::WhisperService::model_ready, this, [this]() {
-        update_voice_status();
-        if (voice_mode_)
-            start_listening();
-    });
+    // ── SpeechService wiring ─────────────────────────────────────────────────
+    auto& stt = services::SpeechService::instance();
+    connect(&stt, &services::SpeechService::transcription_ready, this, &AiChatBubble::on_transcription);
+    connect(&stt, &services::SpeechService::listening_changed, this, &AiChatBubble::on_stt_listening_changed);
+    connect(&stt, &services::SpeechService::error_occurred, this, &AiChatBubble::on_stt_error);
 
     if (parent)
         parent->installEventFilter(this);
@@ -729,7 +723,7 @@ void AiChatBubble::update_unread(int delta) {
     }
 }
 
-// ── Voice input (STT — whisper.cpp offline, cross-platform) ──────────────────
+// ── Voice input (STT — Python speech_recognition + Google API) ───────────────
 
 void AiChatBubble::on_toggle_mic() {
     if (is_listening_)
@@ -741,13 +735,11 @@ void AiChatBubble::on_toggle_mic() {
 void AiChatBubble::start_listening() {
     if (is_listening_ || is_speaking_)
         return;
-    services::WhisperService::instance().start_listening();
-    // is_listening_ state is updated via on_stt_listening_changed signal.
+    services::SpeechService::instance().start_listening();
 }
 
 void AiChatBubble::stop_listening() {
-    services::WhisperService::instance().stop_listening();
-    // is_listening_ state is updated via on_stt_listening_changed signal.
+    services::SpeechService::instance().stop_listening();
 }
 
 void AiChatBubble::on_stt_listening_changed(bool active) {
@@ -767,19 +759,21 @@ void AiChatBubble::on_transcription(const QString& text) {
         return;
 
     input_box_->setPlainText(text);
-    if (voice_mode_)
+
+    // Stop mic after transcription in single-shot mic mode (not voice mode).
+    // In voice mode the mic restarts automatically after TTS completes.
+    if (!voice_mode_) {
+        stop_listening();
+        mic_btn_->setChecked(false);
+    } else {
         on_send();
+    }
     update_voice_status();
 }
 
 void AiChatBubble::on_stt_error(const QString& message) {
     if (voice_status_lbl_)
         voice_status_lbl_->setText(QStringLiteral("⚠ ") + message);
-}
-
-void AiChatBubble::on_model_download_progress(int percent) {
-    if (voice_status_lbl_)
-        voice_status_lbl_->setText(QStringLiteral("Downloading voice model… %1%").arg(percent));
 }
 
 // ── Voice mode ────────────────────────────────────────────────────────────────
@@ -894,23 +888,24 @@ void AiChatBubble::on_tts_media_status(QMediaPlayer::MediaStatus status) {
 
 // ── Voice status ──────────────────────────────────────────────────────────────
 void AiChatBubble::update_voice_status() {
-    if (!voice_mode_)
-        return;
     if (!voice_status_lbl_)
         return;
 
+    // Show status for both mic-only mode and full voice mode.
     if (is_speaking_) {
         voice_status_lbl_->setText("▶ AI speaking…");
         voice_status_lbl_->setStyleSheet(
             QString("color:%1;font-size:11px;font-style:italic;background:transparent;").arg(col::WARNING()));
     } else if (is_listening_) {
-        voice_status_lbl_->setText("● Listening…");
+        voice_status_lbl_->setText("● Listening — speak now…");
         voice_status_lbl_->setStyleSheet(
             QString("color:%1;font-size:11px;font-style:italic;background:transparent;").arg(col::POSITIVE()));
     } else if (streaming_) {
         voice_status_lbl_->setText("AI is thinking…");
         voice_status_lbl_->setStyleSheet(
             QString("color:%1;font-size:11px;font-style:italic;background:transparent;").arg(col::TEXT_DIM()));
+    } else {
+        voice_status_lbl_->clear();
     }
 }
 

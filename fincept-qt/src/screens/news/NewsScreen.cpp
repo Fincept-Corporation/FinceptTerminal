@@ -221,15 +221,18 @@ void NewsScreen::connect_signals() {
     auto& km = KeyConfigManager::instance();
 
     auto* act_next = km.action(KeyAction::NewsNext);
-    act_next->setParent(this);
+    act_next->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    addAction(act_next);
     connect(act_next, &QAction::triggered, this, [this]() { feed_panel_->select_next(); });
 
     auto* act_prev = km.action(KeyAction::NewsPrev);
-    act_prev->setParent(this);
+    act_prev->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    addAction(act_prev);
     connect(act_prev, &QAction::triggered, this, [this]() { feed_panel_->select_previous(); });
 
     auto* act_open = km.action(KeyAction::NewsOpen);
-    act_open->setParent(this);
+    act_open->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    addAction(act_open);
     connect(act_open, &QAction::triggered, this, [this]() {
         auto idx = feed_panel_->list_view()->currentIndex();
         if (idx.isValid()) {
@@ -240,7 +243,8 @@ void NewsScreen::connect_signals() {
     });
 
     auto* act_close = km.action(KeyAction::NewsClose);
-    act_close->setParent(this);
+    act_close->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    addAction(act_close);
     connect(act_close, &QAction::triggered, this, [this]() {
         if (detail_panel_->is_panel_open())
             detail_panel_->close_panel();
