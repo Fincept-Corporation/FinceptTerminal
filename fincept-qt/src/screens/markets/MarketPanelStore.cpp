@@ -32,6 +32,17 @@ QVector<MarketPanelConfig> MarketPanelStore::load() {
         cfg.show_name = obj["show_name"].toBool(false);
         for (const auto& s : obj["symbols"].toArray())
             cfg.symbols << s.toString();
+        if (obj.contains("column_order")) {
+            QStringList cols;
+            for (const auto& v : obj["column_order"].toArray())
+                cols << v.toString();
+            if (!cols.isEmpty())
+                cfg.column_order = cols;
+        }
+        if (cfg.column_order.isEmpty())
+            cfg.column_order = default_market_columns();
+        cfg.column_index   = obj["column_index"].toInt(0);
+        cfg.splitter_index = obj["splitter_index"].toInt(0);
         if (!cfg.id.isEmpty() && !cfg.title.isEmpty())
             panels.append(cfg);
     }
@@ -49,6 +60,12 @@ void MarketPanelStore::save(const QVector<MarketPanelConfig>& panels) {
         for (const auto& s : cfg.symbols)
             syms.append(s);
         obj["symbols"] = syms;
+        QJsonArray cols;
+        for (const auto& c : cfg.column_order)
+            cols.append(c);
+        obj["column_order"]    = cols;
+        obj["column_index"]    = cfg.column_index;
+        obj["splitter_index"]  = cfg.splitter_index;
         arr.append(obj);
     }
     SettingsRepository::instance().set(kSettingsKey,

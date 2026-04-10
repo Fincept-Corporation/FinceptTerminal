@@ -3,68 +3,68 @@
 #include "screens/markets/MarketPanelEditor.h"
 #include "screens/markets/MarketPanelStore.h"
 #include "services/markets/MarketDataService.h"
+#include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
 #include <QComboBox>
 #include <QDateTime>
-#include <QLineEdit>
 #include <QFrame>
-#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHideEvent>
 #include <QLabel>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
-#include <QScrollArea>
 #include <QShowEvent>
+#include <QSplitter>
+#include <QTimeZone>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
 
-static QString lbl_ss(const QString& color, bool bold = false) {
-    return QString("color:%1;background:transparent;%2").arg(color, bold ? "font-weight:bold;" : "");
+// ---------------------------------------------------------------------------
+// Helper
+// ---------------------------------------------------------------------------
+
+static QString lbl_ss(const QString& color, bool bold = false, int px = 12) {
+    return QString("color:%1;background:transparent;font-size:%2px;font-family:monospace;%3")
+        .arg(color).arg(px).arg(bold ? "font-weight:bold;" : "");
 }
+
+// ---------------------------------------------------------------------------
+// Constructor
+// ---------------------------------------------------------------------------
 
 MarketsScreen::MarketsScreen(QWidget* parent) : QWidget(parent) {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    header_widget_   = build_header();
-    controls_widget_ = build_controls();
-    root->addWidget(header_widget_);
-    root->addWidget(controls_widget_);
+    header_bar_ = build_header_bar();
+    root->addWidget(header_bar_);
 
-    auto* scroll = new QScrollArea;
-    scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(QString("QScrollArea{border:none;background:%1;}"
-                                  "QScrollBar:vertical{width:6px;background:transparent;}"
-                                  "QScrollBar::handle:vertical{background:%2;border-radius:3px;min-height:20px;}"
-                                  "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-                              .arg(ui::colors::BG_BASE(), ui::colors::BORDER_MED()));
-
-    grid_content_ = new QWidget;
-    auto* cvl = new QVBoxLayout(grid_content_);
-    cvl->setContentsMargins(6, 6, 6, 6);
-    cvl->setSpacing(8);
-
-    panel_grid_ = new QGridLayout;
-    panel_grid_->setSpacing(6);
-    panel_grid_->setContentsMargins(0, 0, 0, 0);
-    cvl->addLayout(panel_grid_);
-    cvl->addStretch();
-
-    scroll->setWidget(grid_content_);
-    root->addWidget(scroll, 1);
-
-    // Load configs and build initial grid
     configs_ = MarketPanelStore::instance().load();
-    build_panel_grid();
+    build_splitter_layout();
+    root->addWidget(h_splitter_, 1);
+    restore_splitter_state();
 
     auto_refresh_timer_ = new QTimer(this);
     auto_refresh_timer_->setInterval(update_interval_ms_);
     connect(auto_refresh_timer_, &QTimer::timeout, this, &MarketsScreen::refresh_all);
+
+    refresh_timeout_ = new QTimer(this);
+    refresh_timeout_->setSingleShot(true);
+    refresh_timeout_->setInterval(kRefreshTimeoutMs);
+    connect(refresh_timeout_, &QTimer::timeout, this, [this]() {
+        if (!refresh_in_progress_) return;
+        refresh_in_progress_ = false;
+        pending_refreshes_   = 0;
+        if (status_label_) {
+            status_label_->setText("● TIMEOUT");
+            status_label_->setStyleSheet(lbl_ss(ui::colors::NEGATIVE(), true));
+        }
+    });
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this](const ui::ThemeTokens&) { refresh_theme(); });
@@ -72,40 +72,133 @@ MarketsScreen::MarketsScreen(QWidget* parent) : QWidget(parent) {
 }
 
 // ---------------------------------------------------------------------------
-// Panel grid management
+// Splitter layout
 // ---------------------------------------------------------------------------
 
-void MarketsScreen::clear_panel_grid() {
-    for (auto* p : panels_)
-        p->deleteLater();
+void MarketsScreen::build_splitter_layout() {
+    h_splitter_ = new QSplitter(Qt::Horizontal, this);
+    h_splitter_->setHandleWidth(3);
+    h_splitter_->setChildrenCollapsible(false);
+
+    col_splitters_.clear();
     panels_.clear();
 
-    // Remove all items from the grid layout
-    QLayoutItem* item;
-    while ((item = panel_grid_->takeAt(0)) != nullptr) {
-        delete item;
+    for (int col = 0; col < kNumColumns; ++col) {
+        auto* vs = new QSplitter(Qt::Vertical);
+        vs->setHandleWidth(3);
+        vs->setChildrenCollapsible(false);
+        col_splitters_.append(vs);
+        h_splitter_->addWidget(vs);
     }
-}
 
-void MarketsScreen::build_panel_grid() {
-    clear_panel_grid();
-
-    constexpr int kCols = 3;
-    for (int i = 0; i < configs_.size(); ++i) {
-        auto* p = new MarketPanel(configs_[i], grid_content_);
+    // Place panels into their designated columns
+    for (const auto& cfg : configs_) {
+        int col = qBound(0, cfg.column_index, kNumColumns - 1);
+        auto* p = new MarketPanel(cfg, col_splitters_[col]);
         panels_.append(p);
-        panel_grid_->addWidget(p, i / kCols, i % kCols);
+        col_splitters_[col]->addWidget(p);
+        wire_panel(p);
+    }
 
-        connect(p, &MarketPanel::edit_requested,   this, &MarketsScreen::open_editor);
-        connect(p, &MarketPanel::delete_requested, this, &MarketsScreen::on_panel_delete);
+    // Ensure empty columns have a placeholder so they don't collapse
+    for (int col = 0; col < kNumColumns; ++col) {
+        bool has_panel = false;
+        for (int j = 0; j < col_splitters_[col]->count(); ++j) {
+            if (qobject_cast<MarketPanel*>(col_splitters_[col]->widget(j))) {
+                has_panel = true;
+                break;
+            }
+        }
+        if (!has_panel) {
+            auto* placeholder = new QWidget;
+            placeholder->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+            col_splitters_[col]->addWidget(placeholder);
+        }
+    }
+
+    refresh_theme();
+}
+
+void MarketsScreen::wire_panel(MarketPanel* p) {
+    connect(p, &MarketPanel::edit_requested,   this, &MarketsScreen::open_editor);
+    connect(p, &MarketPanel::delete_requested, this, &MarketsScreen::on_panel_delete);
+    connect(p, &MarketPanel::config_changed,   this, &MarketsScreen::on_panel_config_changed);
+}
+
+void MarketsScreen::rebuild_splitter_layout() {
+    if (h_splitter_) {
+        h_splitter_->setParent(nullptr);
+        h_splitter_->deleteLater();
+        h_splitter_ = nullptr;
+    }
+    panels_.clear();
+    col_splitters_.clear();
+
+    build_splitter_layout();
+
+    auto* root = qobject_cast<QVBoxLayout*>(layout());
+    root->insertWidget(1, h_splitter_, 1);
+    restore_splitter_state();
+}
+
+int MarketsScreen::column_with_fewest_panels() const {
+    int best = 0, count = INT_MAX;
+    for (int i = 0; i < kNumColumns; ++i) {
+        int c = 0;
+        for (int j = 0; j < col_splitters_[i]->count(); ++j) {
+            if (qobject_cast<MarketPanel*>(col_splitters_[i]->widget(j)))
+                ++c;
+        }
+        if (c < count) { count = c; best = i; }
+    }
+    return best;
+}
+
+void MarketsScreen::save_splitter_state() {
+    if (!h_splitter_) return;
+    QString state = QString::fromLatin1(h_splitter_->saveState().toBase64());
+    for (int i = 0; i < col_splitters_.size(); ++i) {
+        state += QString("|col%1:%2").arg(i).arg(
+            QString::fromLatin1(col_splitters_[i]->saveState().toBase64()));
+    }
+    SettingsRepository::instance().set("markets_splitter_state", state);
+}
+
+void MarketsScreen::restore_splitter_state() {
+    if (!h_splitter_) return;
+    auto res = SettingsRepository::instance().get("markets_splitter_state");
+    if (!res.is_ok() || res.value().isEmpty()) return;
+
+    const QString saved = res.value();
+    int sep = saved.indexOf('|');
+    if (sep < 0) {
+        h_splitter_->restoreState(QByteArray::fromBase64(saved.toLatin1()));
+        return;
+    }
+    h_splitter_->restoreState(QByteArray::fromBase64(saved.left(sep).toLatin1()));
+    const QStringList parts = saved.mid(sep + 1).split('|');
+    for (const QString& part : parts) {
+        if (!part.startsWith("col")) continue;
+        int colon = part.indexOf(':');
+        if (colon < 0) continue;
+        int idx = part.mid(3, colon - 3).toInt();
+        if (idx >= 0 && idx < col_splitters_.size()) {
+            col_splitters_[idx]->restoreState(
+                QByteArray::fromBase64(part.mid(colon + 1).toLatin1()));
+        }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Panel management
+// ---------------------------------------------------------------------------
 
 void MarketsScreen::open_editor(const QString& panel_id) {
     MarketPanelConfig cfg;
+    int target_col = column_with_fewest_panels();
     if (!panel_id.isEmpty()) {
         for (const auto& c : configs_) {
-            if (c.id == panel_id) { cfg = c; break; }
+            if (c.id == panel_id) { cfg = c; target_col = c.column_index; break; }
         }
     }
 
@@ -114,11 +207,11 @@ void MarketsScreen::open_editor(const QString& panel_id) {
         dlg->deleteLater();
         return;
     }
-    const MarketPanelConfig updated = dlg->result_config();
+    MarketPanelConfig updated = dlg->result_config();
     dlg->deleteLater();
+    updated.column_index = target_col;
 
     if (panel_id.isEmpty()) {
-        // New panel
         configs_.append(updated);
     } else {
         for (auto& c : configs_) {
@@ -127,7 +220,20 @@ void MarketsScreen::open_editor(const QString& panel_id) {
     }
 
     MarketPanelStore::instance().save(configs_);
-    build_panel_grid();
+    rebuild_splitter_layout();
+    refresh_all();
+}
+
+void MarketsScreen::open_editor_for_new_panel(int col_index) {
+    MarketPanelConfig cfg;
+    auto* dlg = new MarketPanelEditor(cfg, this);
+    if (dlg->exec() != QDialog::Accepted) { dlg->deleteLater(); return; }
+    MarketPanelConfig updated = dlg->result_config();
+    dlg->deleteLater();
+    updated.column_index = col_index;
+    configs_.append(updated);
+    MarketPanelStore::instance().save(configs_);
+    rebuild_splitter_layout();
     refresh_all();
 }
 
@@ -137,291 +243,189 @@ void MarketsScreen::on_panel_delete(const QString& panel_id) {
     mb.setText("Remove this panel?");
     mb.setStandardButtons(QMessageBox::Yes | QMessageBox::Cancel);
     mb.setDefaultButton(QMessageBox::Cancel);
-    mb.setStyleSheet(QString("background:%1;color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
-    if (mb.exec() != QMessageBox::Yes)
-        return;
+    mb.setStyleSheet(QString("background:%1;color:%2;")
+                         .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+    if (mb.exec() != QMessageBox::Yes) return;
 
     configs_.erase(std::remove_if(configs_.begin(), configs_.end(),
                                   [&](const MarketPanelConfig& c) { return c.id == panel_id; }),
                    configs_.end());
     MarketPanelStore::instance().save(configs_);
-    build_panel_grid();
+    rebuild_splitter_layout();
+}
+
+void MarketsScreen::on_panel_config_changed(const MarketPanelConfig& cfg) {
+    for (auto& c : configs_) {
+        if (c.id == cfg.id) { c = cfg; break; }
+    }
+    MarketPanelStore::instance().save(configs_);
 }
 
 // ---------------------------------------------------------------------------
-// Show / hide — timer lifecycle (P3)
+// Header bar (single 36px strip)
 // ---------------------------------------------------------------------------
 
-void MarketsScreen::showEvent(QShowEvent* event) {
-    QWidget::showEvent(event);
-    if (auto_update_ && auto_refresh_timer_)
-        auto_refresh_timer_->start();
-    if (session_timer_)
-        session_timer_->start();
-    if (clock_timer_)
-        clock_timer_->start();
-    bool needs_refresh = !last_refresh_time_.isValid() ||
-                         last_refresh_time_.secsTo(QDateTime::currentDateTime()) >= kMinRefreshIntervalSec;
-    if (needs_refresh)
-        refresh_all();
-}
-
-void MarketsScreen::hideEvent(QHideEvent* event) {
-    QWidget::hideEvent(event);
-    if (auto_refresh_timer_) auto_refresh_timer_->stop();
-    if (session_timer_)      session_timer_->stop();
-    if (clock_timer_)        clock_timer_->stop();
-}
-
-// ---------------------------------------------------------------------------
-// Header
-// ---------------------------------------------------------------------------
-
-QWidget* MarketsScreen::build_header() {
+QWidget* MarketsScreen::build_header_bar() {
     auto* w = new QWidget(this);
-    w->setFixedHeight(40);
+    w->setFixedHeight(36);
     auto* h = new QHBoxLayout(w);
-    h->setContentsMargins(14, 0, 14, 0);
+    h->setContentsMargins(12, 0, 12, 0);
     h->setSpacing(0);
 
-    auto* brand = new QLabel("FINCEPT");
-    brand->setStyleSheet(lbl_ss(ui::colors::AMBER(), true));
-    h->addWidget(brand);
-    auto* sub = new QLabel("  MARKETS");
-    sub->setStyleSheet(lbl_ss(ui::colors::TEXT_TERTIARY()));
-    h->addWidget(sub);
-
-    auto* sep1 = new QFrame;
-    sep1->setFrameShape(QFrame::VLine);
-    sep1->setFixedSize(1, 20);
-    sep1->setStyleSheet(QString("background:%1;margin:0 16px;").arg(ui::colors::BORDER_MED()));
-    h->addWidget(sep1);
-
-    auto* session_dot = new QLabel("●");
-    auto* session_lbl = new QLabel("NYSE  OPEN");
-    session_dot->setStyleSheet(lbl_ss(ui::colors::POSITIVE()));
-    session_lbl->setStyleSheet(lbl_ss(ui::colors::POSITIVE(), true));
-    h->addWidget(session_dot);
-    h->addWidget(new QLabel(" "));
-    h->addWidget(session_lbl);
-
-    auto update_session = [session_dot, session_lbl]() {
-        QDateTime utc = QDateTime::currentDateTimeUtc();
-        int day  = utc.date().dayOfWeek();
-        QDateTime et = utc.addSecs(-4 * 3600);
-        int hhmm = et.time().hour() * 100 + et.time().minute();
-        bool weekday = (day >= 1 && day <= 5);
-        QString label, color;
-        if (!weekday || hhmm < 400 || hhmm >= 2000) {
-            label = "NYSE  CLOSED";    color = ui::colors::TEXT_TERTIARY();
-        } else if (hhmm < 930) {
-            label = "NYSE  PRE-MKT";   color = ui::colors::AMBER();
-        } else if (hhmm < 1600) {
-            label = "NYSE  OPEN";      color = ui::colors::POSITIVE();
-        } else {
-            label = "NYSE  AFTER-HRS"; color = ui::colors::INFO();
-        }
-        session_dot->setStyleSheet(lbl_ss(color));
-        session_lbl->setStyleSheet(lbl_ss(color, true));
-        session_lbl->setText(label);
+    auto add_sep = [&]() {
+        auto* s = new QLabel("|");
+        s->setStyleSheet(lbl_ss(ui::colors::BORDER_DIM()));
+        s->setContentsMargins(10, 0, 10, 0);
+        h->addWidget(s);
     };
-    update_session();
+
+    // Branding
+    auto* brand = new QLabel("FINCEPT MARKETS");
+    brand->setStyleSheet(lbl_ss(ui::colors::TEXT_PRIMARY(), true));
+    h->addWidget(brand);
+
+    add_sep();
+
+    // Session status
+    session_label_ = new QLabel;
+    session_label_->setStyleSheet(lbl_ss(ui::colors::TEXT_DIM(), true, 11));
+    h->addWidget(session_label_);
+    update_session_status();
+
     session_timer_ = new QTimer(this);
     session_timer_->setInterval(60000);
-    connect(session_timer_, &QTimer::timeout, this, update_session);
+    connect(session_timer_, &QTimer::timeout, this, &MarketsScreen::update_session_status);
 
-    h->addStretch();
+    add_sep();
 
-    auto* ny_lbl  = new QLabel;
-    auto* lon_lbl = new QLabel;
-    auto* tok_lbl = new QLabel;
-    ny_lbl ->setStyleSheet(lbl_ss(ui::colors::TEXT_SECONDARY()));
-    lon_lbl->setStyleSheet(lbl_ss(ui::colors::TEXT_SECONDARY()));
-    tok_lbl->setStyleSheet(lbl_ss(ui::colors::TEXT_SECONDARY()));
-
-    auto update_clocks = [ny_lbl, lon_lbl, tok_lbl]() {
-        QDateTime utc = QDateTime::currentDateTimeUtc();
-        auto fmt = [](const QDateTime& dt, const QString& name) {
-            return QString("%1  %2").arg(name, dt.toString("HH:mm"));
-        };
-        ny_lbl ->setText(fmt(utc.addSecs(-4 * 3600), "NY"));
-        lon_lbl->setText(fmt(utc.addSecs( 1 * 3600), "LON"));
-        tok_lbl->setText(fmt(utc.addSecs( 9 * 3600), "TOK"));
-    };
+    // Clocks
+    ny_label_  = new QLabel;
+    lon_label_ = new QLabel;
+    tok_label_ = new QLabel;
+    for (auto* lbl : {ny_label_, lon_label_, tok_label_})
+        lbl->setStyleSheet(lbl_ss(ui::colors::TEXT_SECONDARY(), false, 11));
+    h->addWidget(ny_label_);
+    h->addWidget(new QLabel("   "));
+    h->addWidget(lon_label_);
+    h->addWidget(new QLabel("   "));
+    h->addWidget(tok_label_);
     update_clocks();
+
     clock_timer_ = new QTimer(this);
     clock_timer_->setInterval(1000);
-    connect(clock_timer_, &QTimer::timeout, this, update_clocks);
+    connect(clock_timer_, &QTimer::timeout, this, &MarketsScreen::update_clocks);
 
-    auto* dot1 = new QLabel("   ·   ");
-    auto* dot2 = new QLabel("   ·   ");
-    dot1->setStyleSheet(lbl_ss(ui::colors::BORDER_MED()));
-    dot2->setStyleSheet(lbl_ss(ui::colors::BORDER_MED()));
-    h->addWidget(ny_lbl);
-    h->addWidget(dot1);
-    h->addWidget(lon_lbl);
-    h->addWidget(dot2);
-    h->addWidget(tok_lbl);
+    add_sep();
 
-    return w;
-}
-
-// ---------------------------------------------------------------------------
-// Controls bar
-// ---------------------------------------------------------------------------
-
-QWidget* MarketsScreen::build_controls() {
-    auto* w = new QWidget(this);
-    w->setFixedHeight(32);
-    auto* h = new QHBoxLayout(w);
-    h->setContentsMargins(14, 0, 14, 0);
-    h->setSpacing(4);
-
-    auto make_btn = [](const QString& key, const QString& label) {
-        auto* btn = new QPushButton(QString("[%1] %2").arg(key, label));
-        btn->setFixedHeight(22);
-        btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(
-            QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 8px;font-weight:bold;}"
-                    "QPushButton:hover{background:%4;color:%5;border-color:%5;}")
-                .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(),
-                     ui::colors::BG_HOVER(), ui::colors::AMBER()));
-        return btn;
+    // Controls — all uniform dim style
+    auto make_ctrl_btn = [&](const QString& label) -> QPushButton* {
+        auto* b = new QPushButton(label);
+        b->setFixedHeight(24);
+        b->setCursor(Qt::PointingHandCursor);
+        b->setFlat(true);
+        b->setStyleSheet(
+            QString("QPushButton{background:transparent;color:%1;border:none;"
+                    "font-size:11px;font-family:monospace;padding:0 6px;}"
+                    "QPushButton:hover{color:%2;}")
+                .arg(ui::colors::TEXT_DIM(), ui::colors::TEXT_PRIMARY()));
+        return b;
     };
 
-    auto* refresh_btn = make_btn("F5", "REFRESH");
+    auto* refresh_btn = make_ctrl_btn("[F5] REFRESH");
     connect(refresh_btn, &QPushButton::clicked, this, &MarketsScreen::refresh_all);
     h->addWidget(refresh_btn);
 
-    auto* auto_btn = make_btn("F9", auto_update_ ? "AUTO ON" : "AUTO OFF");
+    // AUTO toggle — amber when ON
+    auto* auto_btn = make_ctrl_btn(auto_update_ ? "[F9] AUTO: ON" : "[F9] AUTO: OFF");
     auto update_auto_style = [this, auto_btn]() {
-        auto_btn->setText(QString("[F9] %1").arg(auto_update_ ? "AUTO ON" : "AUTO OFF"));
+        auto_btn->setText(auto_update_ ? "[F9] AUTO: ON" : "[F9] AUTO: OFF");
         auto_btn->setStyleSheet(
-            QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 8px;font-weight:bold;}"
-                    "QPushButton:hover{background:%4;border-color:%5;color:%5;}")
-                .arg(ui::colors::BG_RAISED(),
-                     auto_update_ ? ui::colors::POSITIVE() : ui::colors::TEXT_TERTIARY(),
-                     auto_update_ ? ui::colors::POSITIVE() : ui::colors::BORDER_DIM(),
-                     ui::colors::BG_HOVER(), ui::colors::AMBER()));
+            QString("QPushButton{background:transparent;color:%1;border:none;"
+                    "font-size:11px;font-family:monospace;padding:0 6px;}"
+                    "QPushButton:hover{color:%2;}")
+                .arg(auto_update_ ? ui::colors::AMBER() : ui::colors::TEXT_DIM(),
+                     ui::colors::TEXT_PRIMARY()));
     };
     update_auto_style();
     connect(auto_btn, &QPushButton::clicked, this, [this, update_auto_style]() {
         auto_update_ = !auto_update_;
         update_auto_style();
-        // Only touch the timer if the screen is currently visible (P3)
         if (!isVisible()) return;
         if (auto_update_) auto_refresh_timer_->start();
         else              auto_refresh_timer_->stop();
     });
     h->addWidget(auto_btn);
 
-    // Interval preset combo (non-editable, fixed presets)
+    // Interval combo
     auto* iv = new QComboBox;
-    iv->setFixedHeight(22);
-    iv->setFixedWidth(60);
-    iv->addItem("5m",   300000);
-    iv->addItem("10m",  600000);
-    iv->addItem("15m",  900000);
-    iv->addItem("30m",  1800000);
-    iv->addItem("1h",   3600000);
-    iv->addItem("4h",   14400000);
-    iv->addItem("1d",   86400000);
-    iv->addItem("custom", -1);
-    iv->setCurrentIndex(1); // default 10m
-    iv->setStyleSheet(QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:0 6px;}"
-                              "QComboBox::drop-down{border:none;width:14px;}"
-                              "QComboBox QAbstractItemView{background:%1;color:%2;border:1px solid %3;"
-                              "selection-background-color:%4;}")
-                          .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(),
-                               ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
-
-    // Custom interval input — shown only when "custom" is selected
-    auto* custom_iv = new QLineEdit;
-    custom_iv->setFixedHeight(22);
-    custom_iv->setFixedWidth(60);
-    custom_iv->setPlaceholderText("e.g. 45m");
-    custom_iv->setVisible(false);
-    custom_iv->setStyleSheet(
-        QString("QLineEdit{background:%1;color:%2;border:1px solid %3;padding:0 6px;}"
-                "QLineEdit:focus{border-color:%4;}")
-            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(),
-                 ui::colors::BORDER_MED(), ui::colors::AMBER()));
-
-    auto apply_custom = [this, custom_iv]() {
-        QString txt = custom_iv->text().trimmed().toLower();
-        if (txt.isEmpty()) return;
-        bool ok = false; int ms = 0;
-        if (txt.endsWith('h')) {
-            int hh = txt.chopped(1).toInt(&ok);
-            if (ok) ms = hh * 3600000;
-        } else {
-            QString num = txt.endsWith('m') ? txt.chopped(1) : txt;
-            int m = num.toInt(&ok);
-            if (ok) ms = m * 60000;
-        }
-        ms = qBound(60000, ms, 86400000);
-        if (ms > 0) {
-            update_interval_ms_ = ms;
-            auto_refresh_timer_->setInterval(ms);
-        }
-    };
-
-    connect(iv, &QComboBox::currentIndexChanged, this, [this, iv, custom_iv](int i) {
-        int ms = iv->itemData(i).toInt();
-        if (ms == -1) {
-            custom_iv->setVisible(true);
-            custom_iv->setFocus();
-        } else {
-            custom_iv->setVisible(false);
-            update_interval_ms_ = ms;
-            auto_refresh_timer_->setInterval(ms);
-        }
+    iv->setFixedHeight(24);
+    iv->setFixedWidth(56);
+    iv->addItem("5M",   300000);
+    iv->addItem("10M",  600000);
+    iv->addItem("15M",  900000);
+    iv->addItem("30M",  1800000);
+    iv->addItem("1H",   3600000);
+    iv->addItem("4H",   14400000);
+    iv->addItem("1D",   86400000);
+    iv->setCurrentIndex(1);
+    iv->setStyleSheet(
+        QString("QComboBox{background:transparent;color:%1;border:none;"
+                "font-size:11px;font-family:monospace;padding:0 4px;}"
+                "QComboBox::drop-down{border:none;width:12px;}"
+                "QComboBox QAbstractItemView{background:%2;color:%3;border:1px solid %4;"
+                "selection-background-color:%5;font-size:11px;font-family:monospace;}")
+            .arg(ui::colors::TEXT_DIM(), ui::colors::BG_RAISED(),
+                 ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
+    connect(iv, &QComboBox::currentIndexChanged, this, [this, iv](int i) {
+        update_interval_ms_ = iv->itemData(i).toInt();
+        auto_refresh_timer_->setInterval(update_interval_ms_);
     });
-    connect(custom_iv, &QLineEdit::editingFinished, this, [apply_custom]() { apply_custom(); });
-
     h->addWidget(iv);
-    h->addWidget(custom_iv);
 
-    // Add panel button
-    auto* add_btn = new QPushButton("[+] ADD PANEL");
-    add_btn->setFixedHeight(22);
-    add_btn->setCursor(Qt::PointingHandCursor);
-    add_btn->setStyleSheet(
-        QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 8px;font-weight:bold;}"
-                "QPushButton:hover{background:%4;color:%5;border-color:%5;}")
-            .arg(ui::colors::BG_RAISED(), ui::colors::POSITIVE(), ui::colors::POSITIVE(),
-                 ui::colors::BG_HOVER(), ui::colors::AMBER()));
-    connect(add_btn, &QPushButton::clicked, this, [this]() { open_editor({}); });
+    // [+] PANEL — column picker menu
+    auto* add_btn = make_ctrl_btn("[+] PANEL");
+    connect(add_btn, &QPushButton::clicked, this, [this, add_btn]() {
+        auto* menu = new QMenu(this);
+        menu->setStyleSheet(
+            QString("QMenu{background:%1;border:1px solid %2;color:%3;"
+                    "font-size:11px;font-family:monospace;}"
+                    "QMenu::item{padding:4px 16px;}"
+                    "QMenu::item:selected{background:%4;}")
+                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED(),
+                     ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER()));
+        for (int i = 0; i < kNumColumns; ++i) {
+            auto* act = menu->addAction(QString("ADD TO COL %1").arg(i + 1));
+            connect(act, &QAction::triggered, this, [this, i]() {
+                open_editor_for_new_panel(i);
+            });
+        }
+        menu->exec(add_btn->mapToGlobal(QPoint(0, add_btn->height())));
+        menu->deleteLater();
+    });
     h->addWidget(add_btn);
 
-    // Reset to defaults button
-    auto* reset_btn = new QPushButton("RESET");
-    reset_btn->setFixedHeight(22);
-    reset_btn->setCursor(Qt::PointingHandCursor);
-    reset_btn->setStyleSheet(
-        QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 8px;font-weight:bold;}"
-                "QPushButton:hover{background:%4;color:%5;border-color:%5;}")
-            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(),
-                 ui::colors::BG_HOVER(), ui::colors::AMBER()));
+    // RESET
+    auto* reset_btn = make_ctrl_btn("RESET");
     connect(reset_btn, &QPushButton::clicked, this, [this]() {
         QMessageBox mb(this);
         mb.setWindowTitle("Reset Panels");
         mb.setText("Reset all panels to defaults?");
         mb.setStandardButtons(QMessageBox::Yes | QMessageBox::Cancel);
-        mb.setStyleSheet(QString("background:%1;color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+        mb.setStyleSheet(QString("background:%1;color:%2;")
+                             .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
         if (mb.exec() != QMessageBox::Yes) return;
         MarketPanelStore::instance().reset_to_defaults();
         configs_ = MarketPanelStore::instance().load();
-        build_panel_grid();
+        rebuild_splitter_layout();
         refresh_all();
     });
     h->addWidget(reset_btn);
 
     h->addStretch();
 
-    last_update_label_ = new QLabel("LAST UPDATE  --:--:--");
-    last_update_label_->setStyleSheet(lbl_ss(ui::colors::TEXT_DIM()));
-    h->addWidget(last_update_label_);
+    last_upd_label_ = new QLabel("LAST UPDATE  --:--:--");
+    last_upd_label_->setStyleSheet(lbl_ss(ui::colors::TEXT_DIM(), false, 11));
+    h->addWidget(last_upd_label_);
 
     h->addWidget(new QLabel("   "));
 
@@ -433,49 +437,107 @@ QWidget* MarketsScreen::build_controls() {
 }
 
 // ---------------------------------------------------------------------------
+// Session status & clocks — DST-correct via QTimeZone
+// ---------------------------------------------------------------------------
+
+void MarketsScreen::update_session_status() {
+    QDateTime utc = QDateTime::currentDateTimeUtc();
+    QTimeZone ny_tz("America/New_York");
+    QDateTime et   = utc.toTimeZone(ny_tz);
+    int day  = et.date().dayOfWeek();
+    int hhmm = et.time().hour() * 100 + et.time().minute();
+    bool weekday = (day >= 1 && day <= 5);
+
+    QString label, color;
+    if (!weekday || hhmm < 400 || hhmm >= 2000) {
+        label = "NYSE: CLOSED";    color = ui::colors::TEXT_DIM();
+    } else if (hhmm < 930) {
+        label = "NYSE: PRE-MKT";   color = ui::colors::AMBER();
+    } else if (hhmm < 1600) {
+        label = "NYSE: OPEN";      color = ui::colors::POSITIVE();
+    } else {
+        label = "NYSE: AFTER-HRS"; color = ui::colors::AMBER();
+    }
+
+    if (session_label_) {
+        session_label_->setText(label);
+        session_label_->setStyleSheet(lbl_ss(color, true, 11));
+    }
+}
+
+void MarketsScreen::update_clocks() {
+    QDateTime utc = QDateTime::currentDateTimeUtc();
+    if (ny_label_)
+        ny_label_ ->setText(QString("NY %1").arg(
+            utc.toTimeZone(QTimeZone("America/New_York")).toString("HH:mm:ss")));
+    if (lon_label_)
+        lon_label_->setText(QString("LON %1").arg(
+            utc.toTimeZone(QTimeZone("Europe/London")).toString("HH:mm:ss")));
+    if (tok_label_)
+        tok_label_->setText(QString("TOK %1").arg(
+            utc.toTimeZone(QTimeZone("Asia/Tokyo")).toString("HH:mm:ss")));
+}
+
+// ---------------------------------------------------------------------------
+// Show / hide — timer lifecycle (P3)
+// ---------------------------------------------------------------------------
+
+void MarketsScreen::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    if (auto_update_ && auto_refresh_timer_) auto_refresh_timer_->start();
+    if (session_timer_) session_timer_->start();
+    if (clock_timer_)   clock_timer_->start();
+    bool needs_refresh = !last_refresh_time_.isValid() ||
+        last_refresh_time_.secsTo(QDateTime::currentDateTime()) >= kMinRefreshIntervalSec;
+    if (needs_refresh) refresh_all();
+}
+
+void MarketsScreen::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    if (auto_refresh_timer_) auto_refresh_timer_->stop();
+    if (session_timer_)      session_timer_->stop();
+    if (clock_timer_)        clock_timer_->stop();
+    save_splitter_state();
+}
+
+// ---------------------------------------------------------------------------
 // Refresh
 // ---------------------------------------------------------------------------
 
 void MarketsScreen::refresh_all() {
-    if (refresh_in_progress_)
-        return;
+    if (refresh_in_progress_) return;
+    if (panels_.isEmpty()) return;
     refresh_in_progress_ = true;
+    pending_refreshes_   = panels_.size();
 
     if (status_label_) {
         status_label_->setText("● LOADING");
         status_label_->setStyleSheet(lbl_ss(ui::colors::AMBER(), true));
     }
 
-    for (auto* p : panels_)
+    refresh_timeout_->start();
+
+    auto* counter = new QObject(this);
+    for (auto* p : panels_) {
         p->refresh();
-
-    const int total = panels_.size();
-    if (total == 0) {
-        refresh_in_progress_ = false;
-        return;
+        connect(p, &MarketPanel::refresh_finished, counter, [this, counter]() {
+            if (--pending_refreshes_ > 0) return;
+            refresh_timeout_->stop();
+            refresh_in_progress_ = false;
+            last_refresh_time_   = QDateTime::currentDateTime();
+            counter->deleteLater();
+            if (status_label_) {
+                status_label_->setText("● READY");
+                status_label_->setStyleSheet(lbl_ss(ui::colors::POSITIVE(), true));
+            }
+            if (last_upd_label_) {
+                last_upd_label_->setText(
+                    QString("LAST UPDATE  %1")
+                        .arg(QDateTime::currentDateTime().toString("HH:mm:ss")));
+                last_upd_label_->setStyleSheet(lbl_ss(ui::colors::TEXT_SECONDARY(), false, 11));
+            }
+        }, Qt::SingleShotConnection);
     }
-
-    auto* counter   = new QObject(this);
-    auto* remaining = new int(total);
-    auto finish = [this, counter, remaining]() {
-        if (--(*remaining) > 0)
-            return;
-        refresh_in_progress_ = false;
-        last_refresh_time_   = QDateTime::currentDateTime();
-        delete remaining;
-        counter->deleteLater();
-        if (status_label_) {
-            status_label_->setText("● READY");
-            status_label_->setStyleSheet(lbl_ss(ui::colors::POSITIVE(), true));
-        }
-        if (last_update_label_) {
-            last_update_label_->setText(
-                QString("LAST UPDATE  %1").arg(QDateTime::currentDateTime().toString("HH:mm:ss")));
-            last_update_label_->setStyleSheet(lbl_ss(ui::colors::TEXT_SECONDARY()));
-        }
-    };
-    for (auto* p : panels_)
-        connect(p, &MarketPanel::refresh_finished, counter, finish, Qt::SingleShotConnection);
 }
 
 // ---------------------------------------------------------------------------
@@ -484,12 +546,20 @@ void MarketsScreen::refresh_all() {
 
 void MarketsScreen::refresh_theme() {
     setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
-    if (header_widget_)
-        header_widget_->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                                          .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
-    if (controls_widget_)
-        controls_widget_->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                                            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+
+    const QString handle_ss =
+        QString("QSplitter::handle{background:%1;}").arg(ui::colors::BORDER_DIM());
+
+    if (header_bar_)
+        header_bar_->setStyleSheet(
+            QString("background:%1;border-bottom:1px solid %2;")
+                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+
+    if (h_splitter_)
+        h_splitter_->setStyleSheet(handle_ss);
+
+    for (auto* vs : col_splitters_)
+        vs->setStyleSheet(handle_ss);
 }
 
 } // namespace fincept::screens
