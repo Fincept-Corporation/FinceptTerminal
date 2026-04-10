@@ -250,19 +250,19 @@ void AIQuantLabService::signals_get_feature_importance(const QJsonObject& params
 
 // ── HFT ──────────────────────────────────────────────────────────────────────
 void AIQuantLabService::hft_create_orderbook(const QJsonObject& params) {
-    run_module("hft", "create_orderbook", params);
+    run_module("hft", "fetch_orderbook", params);   // live CCXT fetch
 }
 void AIQuantLabService::hft_snapshot(const QJsonObject& params) {
-    run_module("hft", "snapshot", params);
+    run_module("hft", "analyze", params);           // full analysis: book + trades + all metrics
 }
 void AIQuantLabService::hft_market_making_quotes(const QJsonObject& params) {
-    run_module("hft", "market_making_quotes", params);
+    run_module("hft", "market_making", params);     // live book → A-S quotes
 }
 void AIQuantLabService::hft_detect_toxic(const QJsonObject& params) {
-    run_module("hft", "detect_toxic", params);
+    run_module("hft", "toxic_flow", params);        // live trades → PIN score
 }
 void AIQuantLabService::hft_execute_order(const QJsonObject& params) {
-    run_module("hft", "execute_order", params);
+    run_module("hft", "slippage", params);          // order book walk → slippage estimate
 }
 
 // ── Meta Learning ────────────────────────────────────────────────────────────

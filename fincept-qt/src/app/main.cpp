@@ -7,6 +7,7 @@
 #include "core/config/AppConfig.h"
 #include "core/config/AppPaths.h"
 #include "core/config/ProfileManager.h"
+#include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/session/SessionManager.h"
@@ -324,6 +325,7 @@ int main(int argc, char* argv[]) {
             setup_screen->hide();
             setup_screen->deleteLater();
 
+            fincept::KeyConfigManager::instance(); // init before MainWindow registers shortcuts
             auto* window = new fincept::MainWindow(0); // primary window
             window->setAttribute(Qt::WA_DeleteOnClose);
             window->show();
@@ -348,6 +350,9 @@ int main(int argc, char* argv[]) {
 
         return app.exec();
     }
+
+    // Ensure KeyConfigManager is initialized before MainWindow registers shortcuts
+    fincept::KeyConfigManager::instance();
 
     // Python already set up — launch main window directly
     fincept::MainWindow window;

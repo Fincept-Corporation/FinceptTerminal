@@ -11,6 +11,7 @@
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "screens/settings/KeybindingsSection.h"
 #include "screens/settings/LlmConfigSection.h"
 #include "screens/settings/McpServersSection.h"
 #include "services/notifications/NotificationService.h"
@@ -158,6 +159,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     sections_->addWidget(build_logging());       // 7
     sections_->addWidget(build_security());      // 8
     sections_->addWidget(build_profiles());      // 9
+    sections_->addWidget(build_keybindings());   // 10
 
     QList<QPushButton*> nav_btns;
     auto make_btn = [&](const QString& text, int idx) {
@@ -191,6 +193,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     make_btn("Logging", 7);
     make_btn("Security", 8);
     make_btn("Profiles", 9);
+    make_btn("Keybindings", 10);
 
     first->setChecked(true);
 
@@ -2853,6 +2856,10 @@ void SettingsScreen::restore_state(const QVariantMap& state) {
     const int idx = state.value("section", 0).toInt();
     if (idx >= 0 && idx < sections_->count())
         sections_->setCurrentIndex(idx);
+}
+
+QWidget* SettingsScreen::build_keybindings() {
+    return new KeybindingsSection(this);
 }
 
 } // namespace fincept::screens

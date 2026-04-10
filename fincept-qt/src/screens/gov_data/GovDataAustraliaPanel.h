@@ -54,9 +54,6 @@ class GovDataAustraliaPanel : public QWidget {
     void update_toolbar_state();
     void update_breadcrumb();
 
-    // CSV export helper
-    void export_table_csv(QTableWidget* table, const QString& default_name);
-
     // ── Constants ────────────────────────────────────────────────────────────
     static constexpr const char* kScript = "datagov_au_api.py";
     static constexpr const char* kColor = "#0EA5E9";

@@ -4,6 +4,7 @@
 #include "storage/repositories/LlmProfileRepository.h"
 
 #include <QComboBox>
+#include <QDateEdit>
 #include <QDoubleSpinBox>
 #include <QHash>
 #include <QJsonObject>
@@ -64,6 +65,7 @@ class QuantModulePanel : public QWidget {
     QWidget* build_llm_picker(QWidget* parent, QComboBox** out_combo);
     QJsonObject llm_config_from_combo(QComboBox* combo) const;
     void display_result(const QJsonObject& data);
+    void display_backtest_result(const QJsonObject& data);
     void display_error(const QString& msg);
     void clear_results();
 
@@ -83,6 +85,7 @@ class QuantModulePanel : public QWidget {
     QHash<QString, QLineEdit*> text_inputs_;
     QHash<QString, QComboBox*> combo_inputs_;
     QHash<QString, QSpinBox*> int_inputs_;
+    QHash<QString, QDateEdit*> date_inputs_;
 };
 
 } // namespace fincept::screens

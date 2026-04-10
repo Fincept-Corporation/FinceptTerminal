@@ -8,8 +8,14 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QAreaSeries>
+#include <QChart>
+#include <QChartView>
 #include <QDateTime>
+#include <QDateTimeAxis>
 #include <QDesktopServices>
+#include <QLineSeries>
+#include <QValueAxis>
 #include <QFile>
 #include <QFileInfo>
 #include <QGridLayout>
@@ -635,16 +641,18 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
     text_inputs_["bt_instruments"] = instruments;
     vl->addWidget(build_input_row("Instruments", instruments, w));
 
-    auto* start_date = new QLineEdit(w);
-    start_date->setPlaceholderText("2020-01-01");
+    auto* start_date = new QDateEdit(QDate(2020, 1, 1), w);
+    start_date->setDisplayFormat("yyyy-MM-dd");
+    start_date->setCalendarPopup(true);
     start_date->setStyleSheet(input_ss());
-    text_inputs_["bt_start"] = start_date;
+    date_inputs_["bt_start"] = start_date;
     vl->addWidget(build_input_row("Start Date", start_date, w));
 
-    auto* end_date = new QLineEdit(w);
-    end_date->setPlaceholderText("2024-01-01");
+    auto* end_date = new QDateEdit(QDate(2024, 1, 1), w);
+    end_date->setDisplayFormat("yyyy-MM-dd");
+    end_date->setCalendarPopup(true);
     end_date->setStyleSheet(input_ss());
-    text_inputs_["bt_end"] = end_date;
+    date_inputs_["bt_end"] = end_date;
     vl->addWidget(build_input_row("End Date", end_date, w));
 
     auto* capital = make_double_spin(1000, 1e12, 1e6, 0, "", w);
@@ -674,8 +682,8 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
         params["strategy_config"] = strategy_config;
         QJsonObject dataset;
         dataset["instruments"] = text_inputs_["bt_instruments"]->text();
-        dataset["start_date"] = text_inputs_["bt_start"]->text();
-        dataset["end_date"] = text_inputs_["bt_end"]->text();
+        dataset["start_date"] = date_inputs_["bt_start"]->date().toString("yyyy-MM-dd");
+        dataset["end_date"] = date_inputs_["bt_end"]->date().toString("yyyy-MM-dd");
         params["dataset_config"] = dataset;
         QJsonObject portfolio;
         portfolio["initial_capital"] = double_inputs_["bt_capital"]->value();
@@ -1472,6 +1480,343 @@ static QString format_val(const QJsonValue& val) {
     return QString::fromUtf8("\u2014");
 }
 
+// ── Backtest Result Display ───────────────────────────────────────────────────
+
+void QuantModulePanel::display_backtest_result(const QJsonObject& data) {
+    clear_results();
+
+    if (!data["success"].toBool()) {
+        display_error(data["error"].toString("Unknown error"));
+        return;
+    }
+
+    const QJsonObject metrics = data["metrics"].toObject();
+    const QJsonArray  curve   = data["equity_curve"].toArray();
+    const QJsonObject costs   = data["execution_cost_estimate"].toObject();
+    const QStringList tickers = [&]() {
+        QStringList t;
+        for (const auto& v : data["tickers"].toArray())
+            t << v.toString();
+        return t;
+    }();
+
+    const QString strategy   = data["strategy"].toString();
+    const QString start_date = data["start_date"].toString();
+    const QString end_date   = data["end_date"].toString();
+
+    const QColor  accent      = module_.color;
+    const QString accent_hex  = accent.name();
+    const QColor  accent_dim  = accent.darker(160);
+    const QString green_hex   = ui::colors::POSITIVE();
+    const QString red_hex     = ui::colors::NEGATIVE();
+    const QString text_p      = ui::colors::TEXT_PRIMARY();
+    const QString text_s      = ui::colors::TEXT_SECONDARY();
+    const QString text_t      = ui::colors::TEXT_TERTIARY();
+    const QString bg_surface  = ui::colors::BG_SURFACE();
+    const QString bg_raised   = ui::colors::BG_RAISED();
+    const QString border_dim  = ui::colors::BORDER_DIM();
+    const QString border_med  = ui::colors::BORDER_MED();
+    const QString font_data   = ui::fonts::DATA_FAMILY;
+    const int     fs_sm       = ui::fonts::SMALL;
+    const int     fs_md       = ui::fonts::DATA;
+    const int     fs_lg       = ui::fonts::HEADER;
+
+    // ── 1. Header bar ──────────────────────────────────────────────────────
+    auto* header_w = new QWidget;
+    auto* header_h = new QHBoxLayout(header_w);
+    header_h->setContentsMargins(0, 0, 0, 8);
+    header_h->setSpacing(8);
+
+    auto* title_lbl = new QLabel("BACKTEST RESULTS");
+    title_lbl->setStyleSheet(
+        QString("color:%1; font-size:%2px; font-family:%3; font-weight:800; letter-spacing:2px;")
+            .arg(accent_hex).arg(fs_lg).arg(font_data));
+    header_h->addWidget(title_lbl);
+
+    header_h->addSpacing(16);
+
+    auto make_chip = [&](const QString& text, const QString& fg, const QString& bg_hex) -> QLabel* {
+        auto* c = new QLabel(text);
+        c->setStyleSheet(
+            QString("color:%1; background:%2; border-radius:3px; padding:2px 8px;"
+                    "font-size:%3px; font-family:%4; font-weight:600;")
+                .arg(fg, bg_hex).arg(fs_sm).arg(font_data));
+        return c;
+    };
+
+    QString strat_display = strategy;
+    strat_display.replace('_', ' ');
+    strat_display = strat_display.toUpper();
+    header_h->addWidget(make_chip(strat_display, accent_hex,
+                                  QColor(accent).darker(300).name() + "55"));
+
+    header_h->addWidget(make_chip(start_date + "  →  " + end_date,
+                                  text_s, bg_raised));
+
+    for (const auto& t : tickers)
+        header_h->addWidget(make_chip(t, text_p, bg_raised));
+
+    header_h->addStretch();
+    results_layout_->addWidget(header_w);
+
+    // ── 2. KPI cards row ──────────────────────────────────────────────────
+    struct KpiCard {
+        QString label;
+        QString value;
+        QString sub;
+        bool    positive = true;
+        bool    neutral  = false;
+    };
+
+    double total_ret  = metrics["total_return_pct"].toDouble();
+    double ann_ret    = metrics["annualised_return"].toDouble();
+    double ann_vol    = metrics["annualised_vol"].toDouble();
+    double sharpe     = metrics["sharpe_ratio"].toDouble();
+    double max_dd     = metrics["max_drawdown_pct"].toDouble();
+    double calmar     = metrics["calmar_ratio"].toDouble();
+    double win_rate   = metrics["win_rate_pct"].toDouble();
+    double final_val  = metrics["final_value"].toDouble();
+    double init_cap   = metrics["initial_capital"].toDouble();
+    int    t_days     = metrics["trading_days"].toInt();
+
+    auto fmt_pct = [](double v) { return QString("%1%2%").arg(v >= 0 ? "+" : "").arg(v, 0, 'f', 2); };
+    auto fmt_usd = [](double v) -> QString {
+        if (v >= 1e6) return QString("$%1M").arg(v / 1e6, 0, 'f', 2);
+        return QString("$%1K").arg(v / 1e3, 0, 'f', 0);
+    };
+
+    QList<KpiCard> kpis = {
+        {"TOTAL RETURN",   fmt_pct(total_ret),  fmt_usd(final_val) + " final",  total_ret >= 0, false},
+        {"ANN. RETURN",    fmt_pct(ann_ret),     QString("Vol: %1%").arg(ann_vol, 0, 'f', 1), ann_ret >= 0, false},
+        {"SHARPE RATIO",   QString::number(sharpe, 'f', 3),
+                           sharpe >= 1 ? "Excellent" : sharpe >= 0.5 ? "Good" : "Weak", sharpe >= 0.5, false},
+        {"MAX DRAWDOWN",   fmt_pct(max_dd),      QString("Calmar: %1").arg(calmar, 0, 'f', 3), false, false},
+        {"WIN RATE",       QString("%1%").arg(win_rate, 0, 'f', 1), QString("%1 days").arg(t_days), win_rate >= 50, false},
+        {"CAPITAL",        fmt_usd(init_cap),    "Initial capital",  true, true},
+    };
+
+    auto* cards_w  = new QWidget;
+    auto* cards_gl = new QGridLayout(cards_w);
+    cards_gl->setContentsMargins(0, 0, 0, 0);
+    cards_gl->setSpacing(8);
+
+    for (int i = 0; i < kpis.size(); ++i) {
+        const auto& k = kpis[i];
+        auto* card = new QWidget;
+        card->setObjectName("btKpiCard");
+        card->setStyleSheet(
+            QString("#btKpiCard { background:%1; border:1px solid %2; border-radius:4px; }")
+                .arg(bg_surface, border_dim));
+
+        auto* cl = new QVBoxLayout(card);
+        cl->setContentsMargins(12, 10, 12, 10);
+        cl->setSpacing(2);
+
+        auto* lbl = new QLabel(k.label);
+        lbl->setStyleSheet(
+            QString("color:%1; font-size:%2px; font-family:%3; font-weight:600; letter-spacing:1px;")
+                .arg(text_t).arg(fs_sm - 1).arg(font_data));
+
+        QString val_color = k.neutral ? text_s : (k.positive ? green_hex : red_hex);
+        auto* val = new QLabel(k.value);
+        val->setStyleSheet(
+            QString("color:%1; font-size:%2px; font-family:%3; font-weight:800;")
+                .arg(val_color).arg(fs_lg + 2).arg(font_data));
+
+        auto* sub = new QLabel(k.sub);
+        sub->setStyleSheet(
+            QString("color:%1; font-size:%2px; font-family:%3;")
+                .arg(text_t).arg(fs_sm - 1).arg(font_data));
+
+        cl->addWidget(lbl);
+        cl->addWidget(val);
+        cl->addWidget(sub);
+        cards_gl->addWidget(card, i / 3, i % 3);
+    }
+
+    results_layout_->addWidget(cards_w);
+
+    // ── 3. Equity curve chart ─────────────────────────────────────────────
+    if (!curve.isEmpty()) {
+        auto* port_series  = new QLineSeries;
+        auto* bm_series    = new QLineSeries;
+        auto* port_upper   = new QLineSeries;  // for area fill
+        auto* port_base    = new QLineSeries;  // baseline for area
+
+        port_series->setName("Portfolio");
+        bm_series->setName("Benchmark");
+
+        // Style lines
+        QPen port_pen(accent);
+        port_pen.setWidth(2);
+        port_series->setPen(port_pen);
+
+        {
+            QString bm_col_str = QString(text_t);
+            QPen bm_pen;
+            bm_pen.setColor(::QColor(bm_col_str));
+            bm_pen.setWidth(1);
+            bm_pen.setStyle(Qt::DashLine);
+            bm_series->setPen(bm_pen);
+        }
+
+        double min_val = 1e18, max_val = -1e18;
+
+        for (const auto& pt_val : curve) {
+            auto pt = pt_val.toObject();
+            QDateTime dt = QDateTime::fromString(pt["date"].toString(), "yyyy-MM-dd");
+            qint64 ms = dt.toMSecsSinceEpoch();
+            double pv = pt["portfolio"].toDouble();
+            double bv = pt["benchmark"].toDouble();
+            port_series->append(ms, pv);
+            bm_series->append(ms, bv);
+            port_upper->append(ms, pv);
+            port_base->append(ms, init_cap);
+            min_val = std::min({min_val, pv, bv});
+            max_val = std::max({max_val, pv, bv});
+        }
+
+        // Area series for portfolio fill
+        auto* area = new QAreaSeries(port_upper, port_base);
+        QColor fill_color = accent;
+        fill_color.setAlpha(30);
+        area->setBrush(fill_color);
+        QPen area_pen(Qt::transparent);
+        area->setPen(area_pen);
+
+        auto* chart = new QChart;
+        chart->addSeries(area);
+        chart->addSeries(port_series);
+        chart->addSeries(bm_series);
+        chart->setBackgroundBrush(QBrush(QColor(QString(bg_surface))));
+        chart->setBackgroundRoundness(0);
+        chart->setMargins(QMargins(4, 4, 4, 4));
+        chart->legend()->setLabelColor(QColor(QString(text_s)));
+        chart->legend()->setAlignment(Qt::AlignTop);
+        chart->setAnimationOptions(QChart::NoAnimation);
+        chart->setTitle("");
+
+        auto* x_axis = new QDateTimeAxis;
+        x_axis->setFormat("MMM yy");
+        x_axis->setLabelsColor(QColor(QString(text_t)));
+        x_axis->setGridLineColor(QColor(QString(border_dim)));
+        x_axis->setLinePen(QPen(QColor(QString(border_med))));
+        chart->addAxis(x_axis, Qt::AlignBottom);
+
+        auto* y_axis = new QValueAxis;
+        double padding = (max_val - min_val) * 0.05;
+        y_axis->setRange(min_val - padding, max_val + padding);
+        y_axis->setLabelFormat("$%.0f");
+        y_axis->setLabelsColor(QColor(QString(text_t)));
+        y_axis->setGridLineColor(QColor(QString(border_dim)));
+        y_axis->setLinePen(QPen(QColor(QString(border_med))));
+        chart->addAxis(y_axis, Qt::AlignLeft);
+
+        for (auto* s : chart->series()) {
+            s->attachAxis(x_axis);
+            s->attachAxis(y_axis);
+        }
+
+        auto* chart_view = new QChartView(chart);
+        chart_view->setRenderHint(QPainter::Antialiasing);
+        chart_view->setFixedHeight(280);
+        chart_view->setStyleSheet(
+            QString("background:%1; border:1px solid %2; border-radius:4px;")
+                .arg(bg_surface, border_dim));
+
+        // Chart title label above
+        auto* chart_title = new QLabel("EQUITY CURVE");
+        chart_title->setStyleSheet(
+            QString("color:%1; font-size:%2px; font-family:%3; font-weight:700;"
+                    "letter-spacing:1px; padding:8px 0 2px 0;")
+                .arg(text_s).arg(fs_sm).arg(font_data));
+        results_layout_->addWidget(chart_title);
+        results_layout_->addWidget(chart_view);
+    }
+
+    // ── 4. Execution cost strip ────────────────────────────────────────────
+    auto* cost_w = new QWidget;
+    cost_w->setStyleSheet(
+        QString("background:%1; border:1px solid %2; border-radius:4px;")
+            .arg(bg_surface, border_dim));
+    auto* cost_h = new QHBoxLayout(cost_w);
+    cost_h->setContentsMargins(16, 8, 16, 8);
+    cost_h->setSpacing(24);
+
+    auto add_cost_item = [&](const QString& lbl, const QString& val) {
+        auto* w = new QWidget;
+        auto* l = new QHBoxLayout(w);
+        l->setContentsMargins(0, 0, 0, 0);
+        l->setSpacing(6);
+        auto* k = new QLabel(lbl);
+        k->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
+                             .arg(text_t).arg(fs_sm).arg(font_data));
+        auto* v = new QLabel(val);
+        v->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; font-weight:700;")
+                             .arg(text_s).arg(fs_sm).arg(font_data));
+        l->addWidget(k);
+        l->addWidget(v);
+        cost_h->addWidget(w);
+    };
+
+    auto* cost_hdr = new QLabel("EXECUTION COSTS");
+    cost_hdr->setStyleSheet(
+        QString("color:%1; font-size:%2px; font-family:%3; font-weight:700; letter-spacing:1px;")
+            .arg(text_t).arg(fs_sm - 1).arg(font_data));
+    cost_h->addWidget(cost_hdr);
+    cost_h->addWidget([&]() {
+        auto* sep = new QFrame;
+        sep->setFrameShape(QFrame::VLine);
+        sep->setStyleSheet(QString("color:%1;").arg(border_dim));
+        return sep;
+    }());
+
+    add_cost_item("Commission",
+                  QString("%1 bps").arg(costs["commission_bps"].toDouble(), 0, 'f', 2));
+    add_cost_item("Expected Slippage",
+                  QString("%1 bps").arg(costs["expected_slippage_bps"].toDouble(), 0, 'f', 2));
+    cost_h->addStretch();
+    results_layout_->addWidget(cost_w);
+
+    // ── 5. Export button ───────────────────────────────────────────────────
+    auto* export_btn = new QPushButton("EXPORT JSON");
+    export_btn->setCursor(Qt::PointingHandCursor);
+    export_btn->setFixedHeight(28);
+    export_btn->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                "font-size:%3px; font-family:%4; padding:0 14px; border-radius:3px; }"
+                "QPushButton:hover { background:rgba(255,255,255,0.05); }")
+            .arg(accent_hex, border_dim).arg(fs_sm).arg(font_data));
+
+    QString json_str = QJsonDocument(data).toJson(QJsonDocument::Indented);
+    connect(export_btn, &QPushButton::clicked, this, [this, json_str]() {
+        QString safe = module_.label;
+        safe.replace(QRegularExpression("[^a-zA-Z0-9_\\-]"), "_");
+        QString fname = safe + "_" + QString::number(QDateTime::currentMSecsSinceEpoch()) + ".json";
+        QString dest  = services::FileManagerService::instance().storage_dir() + "/" + fname;
+        QFile f(dest);
+        if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            f.write(json_str.toUtf8());
+            f.close();
+            services::FileManagerService::instance().register_file(
+                fname, module_.label + "_backtest.json", QFileInfo(dest).size(),
+                "application/json", "ai_quant_lab");
+            LOG_INFO("AIQuantLab", "Backtest exported: " + fname);
+        }
+    });
+
+    auto* export_row = new QWidget;
+    auto* export_hl  = new QHBoxLayout(export_row);
+    export_hl->setContentsMargins(0, 4, 0, 0);
+    export_hl->addStretch();
+    export_hl->addWidget(export_btn);
+    results_layout_->addWidget(export_row);
+
+    status_label_->setText(QString("Done — %1% return  |  Sharpe %2")
+                               .arg(total_ret, 0, 'f', 2)
+                               .arg(sharpe, 0, 'f', 3));
+}
+
 void QuantModulePanel::display_result(const QJsonObject& data) {
     clear_results();
 
@@ -1554,11 +1899,6 @@ void QuantModulePanel::display_result(const QJsonObject& data) {
 void QuantModulePanel::on_result(const QString& module_id, const QString& command, const QJsonObject& data) {
     if (module_id != module_.id)
         return;
-
-    if (module_id != "deep_agent") {
-        display_result(data);
-        return;
-    }
 
     // ── LangGraph deep analysis result ───────────────────────────────────────
     if (command == "execute_task") {
@@ -1767,6 +2107,20 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         status_label_->setText(avail ? "MCP available" : "MCP not installed");
         if (rd_agent_output_)
             rd_agent_output_->setPlainText(info);
+        return;
+    }
+
+    // ── Backtesting ───────────────────────────────────────────────────────────
+    if (module_id == "backtesting") {
+        if (!data["success"].toBool()) {
+            display_error(data["error"].toString("Unknown error"));
+            return;
+        }
+        if (command == "run_backtest") {
+            display_backtest_result(data);
+            return;
+        }
+        display_result(data);
         return;
     }
 
@@ -2132,91 +2486,246 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             display_error(data["error"].toString());
             return;
         }
-        clear_results();
-        if (command == "create_orderbook") {
-            auto* lbl = new QLabel(QString("Order book created for %1  (depth: %2)")
-                                       .arg(data["symbol"].toString())
-                                       .arg(data["depth"].toInt(10)),
-                                   this);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText("Order book ready");
-            return;
-        }
-        if (command == "snapshot") {
-            auto bid = data["bids"].toArray();
-            auto ask = data["asks"].toArray();
-            auto mid = data["mid_price"];
-            auto spread = data["spread"];
-            QString out = QString("Symbol: %1\nMid: %2  |  Spread: %3\n\nTop Bids:\n")
-                              .arg(data["symbol"].toString())
-                              .arg(mid.isNull() ? "N/A" : QString::number(mid.toDouble(), 'f', 4))
-                              .arg(spread.isNull() ? "N/A" : QString::number(spread.toDouble(), 'f', 4));
-            for (int i = 0; i < qMin(5, (int)bid.size()); ++i) {
-                auto b = bid[i].toObject();
-                out +=
-                    QString("  %1 x %2\n").arg(b["price"].toDouble(), 0, 'f', 4).arg(b["size"].toDouble(), 0, 'f', 0);
+
+        // Helper: find a named child label in this panel and set its text
+        auto set_card = [this](const QString& name, const QString& text, const QString& color = {}) {
+            auto* lbl = this->findChild<QLabel*>(name);
+            if (!lbl) return;
+            lbl->setText(text);
+            if (!color.isEmpty())
+                lbl->setStyleSheet(
+                    QString("color:%1; font-size:13px; font-weight:700; font-family:'Courier New'; background:transparent;")
+                        .arg(color));
+        };
+
+        // Helper: populate a bid or ask QTableWidget from a JSON array [[price,size],...]
+        auto fill_book_table = [this](const QString& name, const QJsonArray& levels, bool is_bid) {
+            auto* tbl = this->findChild<QTableWidget*>(name);
+            if (!tbl) return;
+            const int n = qMin(levels.size(), 10);
+            tbl->setRowCount(n);
+            double cumulative = 0.0;
+            const QString price_col = is_bid ? QString(ui::colors::POSITIVE()) : QString(ui::colors::NEGATIVE());
+            for (int i = 0; i < n; ++i) {
+                const auto row = levels[i].toArray();
+                const double price = row.size() > 0 ? row[0].toDouble() : 0.0;
+                const double size  = row.size() > 1 ? row[1].toDouble() : 0.0;
+                cumulative += size;
+                auto* pi = new QTableWidgetItem(QString::number(price, 'f', 4));
+                pi->setForeground(QColor(price_col));
+                auto* si = new QTableWidgetItem(QString::number(size, 'g', 5));
+                si->setForeground(QColor(QString(ui::colors::TEXT_PRIMARY())));
+                auto* ci = new QTableWidgetItem(QString::number(cumulative, 'g', 6));
+                ci->setForeground(QColor(QString(ui::colors::TEXT_TERTIARY())));
+                tbl->setItem(i, 0, pi);
+                tbl->setItem(i, 1, si);
+                tbl->setItem(i, 2, ci);
+                tbl->setRowHeight(i, 22);
             }
-            out += "\nTop Asks:\n";
-            for (int i = 0; i < qMin(5, (int)ask.size()); ++i) {
-                auto a = ask[i].toObject();
-                out +=
-                    QString("  %1 x %2\n").arg(a["price"].toDouble(), 0, 'f', 4).arg(a["size"].toDouble(), 0, 'f', 0);
-            }
-            auto* lbl = new QLabel(out, this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
+        };
+
+        // ── fetch_orderbook ────────────────────────────────────────────────
+        if (command == "fetch_orderbook") {
+            const auto bids      = data["bids"].toArray();
+            const auto asks      = data["asks"].toArray();
+            const double mid     = data["mid_price"].toDouble();
+            const double spread_bps = data["spread_bps"].toDouble();
+            const double obi     = data["obi"].toDouble();
+            const QString pres   = data["pressure"].toString();
+            const double wmid    = data["weighted_mid"].toDouble();
+            const double lat     = data["latency_ms"].toDouble();
+
+            // Update latency badge
+            if (auto* lbl = this->findChild<QLabel*>("hftLatency"))
+                lbl->setText(QString("LATENCY  %1 ms").arg(lat, 0, 'f', 1));
+
+            // Metric cards
+            set_card("hft_mid_val",      QString::number(mid, 'f', 4));
+            set_card("hft_spread_val",   QString::number(spread_bps, 'f', 3) + " bps");
+            const QString obi_color = obi > 0.1 ? QString(ui::colors::POSITIVE())
+                                    : obi < -0.1 ? QString(ui::colors::NEGATIVE())
+                                    : QString(ui::colors::TEXT_PRIMARY());
+            set_card("hft_obi_val",      QString::number(obi, 'f', 4), obi_color);
+            const QString pres_color = pres == "BUY" ? QString(ui::colors::POSITIVE())
+                                     : pres == "SELL" ? QString(ui::colors::NEGATIVE())
+                                     : QString(ui::colors::TEXT_PRIMARY());
+            set_card("hft_pressure_val", pres, pres_color);
+            set_card("hft_wmid_val",     QString::number(wmid, 'f', 4));
+
+            fill_book_table("hft_bid_table", bids, true);
+            fill_book_table("hft_ask_table", asks, false);
+
             status_label_->setText(
-                QString("Spread: %1").arg(spread.isNull() ? "N/A" : QString::number(spread.toDouble(), 'f', 4)));
+                QString("%1  mid: %2  spread: %3 bps  OBI: %4")
+                    .arg(data["symbol"].toString())
+                    .arg(mid, 0, 'f', 4)
+                    .arg(spread_bps, 0, 'f', 3)
+                    .arg(obi, 0, 'f', 4));
             return;
         }
-        if (command == "market_making_quotes") {
-            auto bid_p = data["bid_price"].toDouble();
-            auto ask_p = data["ask_price"].toDouble();
-            auto spread = data["spread"].toDouble();
-            auto* lbl = new QLabel(QString("Market Making Quotes\nBid: %1  |  Ask: %2\nSpread: %3  |  Mid: %4")
-                                       .arg(bid_p, 0, 'f', 4)
-                                       .arg(ask_p, 0, 'f', 4)
-                                       .arg(spread, 0, 'f', 4)
-                                       .arg(data["mid_price"].toDouble(), 0, 'f', 4),
-                                   this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(QString("Bid: %1 / Ask: %2").arg(bid_p, 0, 'f', 4).arg(ask_p, 0, 'f', 4));
+
+        // ── market_making ─────────────────────────────────────────────────
+        if (command == "market_making") {
+            const auto mm = data["market_making"].toObject();
+            // Also update book metrics if present
+            if (data.contains("book_metrics")) {
+                const auto bm = data["book_metrics"].toObject();
+                set_card("hft_mid_val",    QString::number(bm["mid_price"].toDouble(), 'f', 4));
+                set_card("hft_spread_val", QString::number(bm["spread_bps"].toDouble(), 'f', 3) + " bps");
+            }
+            set_card("hft_mm_bid",     QString::number(mm["bid_price"].toDouble(), 'f', 4),
+                     QString(ui::colors::POSITIVE()));
+            set_card("hft_mm_ask",     QString::number(mm["ask_price"].toDouble(), 'f', 4),
+                     QString(ui::colors::NEGATIVE()));
+            set_card("hft_mm_qspread", QString::number(mm["quoted_spread_bps"].toDouble(), 'f', 3) + " bps");
+            set_card("hft_mm_edge",    QString::number(mm["edge_per_side_bps"].toDouble(), 'f', 3) + " bps");
+            const QString rec   = mm["recommendation"].toString();
+            const QString r_col = rec == "WIDEN" ? QString(ui::colors::WARNING())
+                                : rec == "TIGHTEN" ? QString(ui::colors::POSITIVE())
+                                : QString(ui::colors::TEXT_PRIMARY());
+            set_card("hft_mm_rec", rec, r_col);
+            status_label_->setText(
+                QString("Bid: %1  Ask: %2  Edge: %3 bps/side")
+                    .arg(mm["bid_price"].toDouble(), 0, 'f', 4)
+                    .arg(mm["ask_price"].toDouble(), 0, 'f', 4)
+                    .arg(mm["edge_per_side_bps"].toDouble(), 0, 'f', 3));
             return;
         }
-        if (command == "detect_toxic") {
-            auto is_toxic = data["is_toxic"].toBool();
-            auto pin = data["pin_score"].toDouble();
-            auto* lbl = new QLabel(QString("Toxic Flow: %1\nPIN Score: %2\nClassification: %3")
-                                       .arg(is_toxic ? "DETECTED" : "none")
-                                       .arg(pin, 0, 'f', 4)
-                                       .arg(data["classification"].toString("-")),
-                                   this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(
-                QString("color:%1;").arg(is_toxic ? ui::colors::NEGATIVE() : ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(is_toxic ? "⚠ Toxic flow detected" : "Flow normal");
+
+        // ── toxic_flow ────────────────────────────────────────────────────
+        if (command == "toxic_flow") {
+            const auto tf = data["toxic_flow"].toObject();
+            const bool   is_toxic = tf["is_toxic"].toBool();
+            const double score    = tf["toxicity_score"].toDouble();
+            const QString cls     = tf["classification"].toString();
+            const QString action  = tf["action"].toString();
+
+            const QString score_col = score > 60 ? QString(ui::colors::NEGATIVE())
+                                    : score > 30 ? QString(ui::colors::WARNING())
+                                    : QString(ui::colors::POSITIVE());
+            set_card("hft_tox_pin",    QString::number(score, 'f', 1), score_col);
+            set_card("hft_tox_vol",    QString::number(tf["vol_imbalance"].toDouble(), 'f', 4));
+            set_card("hft_tox_impact", QString::number(tf["price_impact_bps"].toDouble(), 'f', 2) + " bps");
+            const QString cls_col = cls == "HIGH_RISK" ? QString(ui::colors::NEGATIVE())
+                                  : cls == "ELEVATED"  ? QString(ui::colors::WARNING())
+                                  : QString(ui::colors::POSITIVE());
+            set_card("hft_tox_class",  cls, cls_col);
+            const QString act_col = action == "WIDEN_SPREADS" || action == "STEP_BACK"
+                                        ? QString(ui::colors::WARNING())
+                                        : QString(ui::colors::POSITIVE());
+            set_card("hft_tox_action", QString(action).replace('_', ' '), act_col);
+            status_label_->setText(
+                is_toxic ? QString("TOXIC FLOW DETECTED — score: %1 — %2").arg(score, 0, 'f', 1).arg(cls)
+                         : QString("Flow clean — score: %1 — %2").arg(score, 0, 'f', 1).arg(cls));
             return;
         }
-        if (command == "execute_order") {
-            auto fills = data["fills"].toArray();
-            auto filled_qty = data["filled_quantity"].toDouble();
-            auto avg_price = data["average_price"].toDouble();
-            auto* lbl = new QLabel(QString("Order Executed\nFilled: %1  |  Avg Price: %2\nFills: %3")
-                                       .arg(filled_qty, 0, 'f', 0)
-                                       .arg(avg_price, 0, 'f', 4)
-                                       .arg(fills.size()),
-                                   this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(QString("Filled %1 @ %2").arg(filled_qty, 0, 'f', 0).arg(avg_price, 0, 'f', 4));
+
+        // ── slippage ──────────────────────────────────────────────────────
+        if (command == "slippage") {
+            const auto sl = data;  // flat: average_price, slippage_bps, fills, etc at top level
+            const double avg_p   = sl["average_price"].toDouble();
+            const double sl_bps  = sl["slippage_bps"].toDouble();
+            const double cost    = sl["total_cost"].toDouble();
+            const int    n_fills = sl["fill_count"].toInt();
+            const bool   viable  = sl["viable"].toBool();
+
+            set_card("hft_slip_avgp",  QString::number(avg_p, 'f', 4));
+            const QString bps_col = sl_bps < 5  ? QString(ui::colors::POSITIVE())
+                                  : sl_bps < 20 ? QString(ui::colors::WARNING())
+                                  : QString(ui::colors::NEGATIVE());
+            set_card("hft_slip_bps",   QString::number(sl_bps, 'f', 4) + " bps", bps_col);
+            set_card("hft_slip_cost",  QString::number(cost, 'f', 4));
+            set_card("hft_slip_fills", QString::number(n_fills));
+            set_card("hft_slip_viable",
+                     viable ? "VIABLE" : "HIGH SLIP",
+                     viable ? QString(ui::colors::POSITIVE()) : QString(ui::colors::NEGATIVE()));
+
+            // Populate fills table
+            if (auto* tbl = this->findChild<QTableWidget*>("hft_slip_table")) {
+                const auto fills = sl["fills"].toArray();
+                tbl->setRowCount(fills.size());
+                for (int i = 0; i < fills.size(); ++i) {
+                    const auto f = fills[i].toObject();
+                    tbl->setItem(i, 0, new QTableWidgetItem(QString::number(f["price"].toDouble(), 'f', 4)));
+                    tbl->setItem(i, 1, new QTableWidgetItem(QString::number(f["quantity"].toDouble(), 'g', 6)));
+                    tbl->setItem(i, 2, new QTableWidgetItem(QString::number(f["cost"].toDouble(), 'f', 4)));
+                    tbl->setRowHeight(i, 20);
+                }
+            }
+            status_label_->setText(
+                QString("Avg fill: %1  |  Slippage: %2 bps  |  %3")
+                    .arg(avg_p, 0, 'f', 4)
+                    .arg(sl_bps, 0, 'f', 4)
+                    .arg(viable ? "VIABLE" : "HIGH SLIPPAGE"));
             return;
         }
+
+        // ── analyze (full analysis) ───────────────────────────────────────
+        if (command == "analyze") {
+            // Dispatch sub-results to each section
+            if (data.contains("bids")) {
+                const auto bids = data["bids"].toArray();
+                const auto asks = data["asks"].toArray();
+                fill_book_table("hft_bid_table", bids, true);
+                fill_book_table("hft_ask_table", asks, false);
+            }
+            if (data.contains("book_metrics")) {
+                const auto bm = data["book_metrics"].toObject();
+                set_card("hft_mid_val",    QString::number(bm["mid_price"].toDouble(), 'f', 4));
+                set_card("hft_spread_val", QString::number(bm["spread_bps"].toDouble(), 'f', 3) + " bps");
+                const double obi = bm["obi"].toDouble();
+                const QString obi_col = obi > 0.1 ? QString(ui::colors::POSITIVE())
+                                      : obi < -0.1 ? QString(ui::colors::NEGATIVE())
+                                      : QString(ui::colors::TEXT_PRIMARY());
+                set_card("hft_obi_val",      QString::number(obi, 'f', 4), obi_col);
+                const QString pres = bm["pressure"].toString();
+                const QString p_col = pres == "BUY" ? QString(ui::colors::POSITIVE())
+                                    : pres == "SELL" ? QString(ui::colors::NEGATIVE())
+                                    : QString(ui::colors::TEXT_PRIMARY());
+                set_card("hft_pressure_val", pres, p_col);
+                set_card("hft_wmid_val",     QString::number(bm["weighted_mid"].toDouble(), 'f', 4));
+            }
+            if (data.contains("market_making")) {
+                const auto mm = data["market_making"].toObject();
+                set_card("hft_mm_bid", QString::number(mm["bid_price"].toDouble(), 'f', 4),
+                         QString(ui::colors::POSITIVE()));
+                set_card("hft_mm_ask", QString::number(mm["ask_price"].toDouble(), 'f', 4),
+                         QString(ui::colors::NEGATIVE()));
+                set_card("hft_mm_qspread", QString::number(mm["quoted_spread_bps"].toDouble(), 'f', 3) + " bps");
+                set_card("hft_mm_edge",    QString::number(mm["edge_per_side_bps"].toDouble(), 'f', 3) + " bps");
+                set_card("hft_mm_rec",     mm["recommendation"].toString());
+            }
+            if (data.contains("toxic_flow")) {
+                const auto tf    = data["toxic_flow"].toObject();
+                const double sc  = tf["toxicity_score"].toDouble();
+                const QString col = sc > 60 ? QString(ui::colors::NEGATIVE())
+                                  : sc > 30 ? QString(ui::colors::WARNING())
+                                  : QString(ui::colors::POSITIVE());
+                set_card("hft_tox_pin",    QString::number(sc, 'f', 1), col);
+                set_card("hft_tox_vol",    QString::number(tf["vol_imbalance"].toDouble(), 'f', 4));
+                set_card("hft_tox_impact", QString::number(tf["price_impact_bps"].toDouble(), 'f', 2) + " bps");
+                set_card("hft_tox_class",  tf["classification"].toString());
+                set_card("hft_tox_action", QString(tf["action"].toString()).replace('_', ' '));
+            }
+            if (data.contains("slippage")) {
+                const auto sl = data["slippage"].toObject();
+                set_card("hft_slip_avgp",  QString::number(sl["average_price"].toDouble(), 'f', 4));
+                set_card("hft_slip_bps",   QString::number(sl["slippage_bps"].toDouble(), 'f', 4) + " bps");
+                set_card("hft_slip_cost",  QString::number(sl["total_cost"].toDouble(), 'f', 4));
+                set_card("hft_slip_fills", QString::number(sl["fill_count"].toInt()));
+                const bool v = sl["viable"].toBool();
+                set_card("hft_slip_viable", v ? "VIABLE" : "HIGH SLIP",
+                         v ? QString(ui::colors::POSITIVE()) : QString(ui::colors::NEGATIVE()));
+            }
+            if (auto* lat_lbl = this->findChild<QLabel*>("hftLatency"))
+                lat_lbl->setText(QString("LATENCY  %1 ms").arg(data["latency_ms"].toDouble(), 0, 'f', 1));
+
+            status_label_->setText(
+                QString("Full analysis complete — %1 @ %2")
+                    .arg(data["symbol"].toString(), data["timestamp"].toString().left(19)));
+            return;
+        }
+
         display_result(data);
         return;
     }
@@ -3707,149 +4216,440 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
 // HFT PANEL
 // ═══════════════════════════════════════════════════════════════════════════════
 QWidget* QuantModulePanel::build_hft_panel() {
-    auto* w = new QWidget(this);
+    const QString accent = module_.color.name();
+
+    auto* w  = new QWidget(this);
     auto* vl = new QVBoxLayout(w);
-    vl->setContentsMargins(16, 16, 16, 16);
-    vl->setSpacing(12);
+    vl->setContentsMargins(0, 0, 0, 0);
+    vl->setSpacing(0);
 
-    auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(tab_ss(module_.color.name()));
+    // ── Shared exchange/symbol bar ────────────────────────────────────────────
+    auto* top_bar = new QWidget(w);
+    top_bar->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
+                               .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    auto* top_hl = new QHBoxLayout(top_bar);
+    top_hl->setContentsMargins(12, 8, 12, 8);
+    top_hl->setSpacing(8);
 
-    // ── Order Book ──
-    auto* ob_tab = new QWidget(this);
-    auto* obvl = new QVBoxLayout(ob_tab);
-    obvl->setContentsMargins(12, 12, 12, 12);
-    obvl->setSpacing(8);
-    auto* hft_symbol = new QLineEdit(ob_tab);
-    hft_symbol->setPlaceholderText("Symbol (e.g. AAPL)");
+    auto* exch_lbl = new QLabel("EXCHANGE", top_bar);
+    exch_lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px;")
+                                .arg(ui::colors::TEXT_TERTIARY()));
+    auto* hft_exchange = new QComboBox(top_bar);
+    hft_exchange->addItems({"binance", "kraken", "coinbase", "bybit", "okx", "hyperliquid"});
+    hft_exchange->setStyleSheet(combo_ss());
+    hft_exchange->setFixedWidth(110);
+    combo_inputs_["hft_exchange"] = hft_exchange;
+
+    auto* sym_lbl = new QLabel("SYMBOL", top_bar);
+    sym_lbl->setStyleSheet(exch_lbl->styleSheet());
+    auto* hft_symbol = new QLineEdit(top_bar);
+    hft_symbol->setText("BTC/USDT");
+    hft_symbol->setFixedWidth(100);
     hft_symbol->setStyleSheet(input_ss());
+    hft_symbol->setToolTip("e.g. BTC/USDT, ETH/USDT");
     text_inputs_["hft_symbol"] = hft_symbol;
-    obvl->addWidget(build_input_row("Symbol", hft_symbol, ob_tab));
-    auto* ob_create = make_run_button("CREATE ORDER BOOK", ob_tab);
-    connect(ob_create, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Creating...");
-        QJsonObject params;
-        params["symbol"] = text_inputs_["hft_symbol"]->text().trimmed().toUpper();
-        AIQuantLabService::instance().hft_create_orderbook(params);
-    });
-    obvl->addWidget(ob_create);
-    auto* ob_snap = make_run_button("GET SNAPSHOT", ob_tab);
-    connect(ob_snap, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Fetching...");
-        QJsonObject params;
-        params["symbol"] = text_inputs_["hft_symbol"]->text().trimmed().toUpper();
-        AIQuantLabService::instance().hft_snapshot(params);
-    });
-    obvl->addWidget(ob_snap);
-    obvl->addStretch();
-    tabs->addTab(ob_tab, "Order Book");
 
-    // ── Market Making ──
-    auto* mm_tab = new QWidget(this);
-    auto* mmvl = new QVBoxLayout(mm_tab);
-    mmvl->setContentsMargins(12, 12, 12, 12);
-    mmvl->setSpacing(8);
-    auto* mm_sym = new QLineEdit(mm_tab);
-    mm_sym->setPlaceholderText("Symbol (e.g. AAPL)");
-    mm_sym->setStyleSheet(input_ss());
-    text_inputs_["hft_mm_symbol"] = mm_sym;
-    mmvl->addWidget(build_input_row("Symbol", mm_sym, mm_tab));
-    auto* mm_mid = new QLineEdit(mm_tab);
-    mm_mid->setPlaceholderText("Mid price (e.g. 150.0)");
-    mm_mid->setStyleSheet(input_ss());
-    text_inputs_["hft_mm_mid"] = mm_mid;
-    mmvl->addWidget(build_input_row("Mid Price", mm_mid, mm_tab));
-    auto* mm_spread = new QLineEdit(mm_tab);
-    mm_spread->setPlaceholderText("Spread multiplier (e.g. 0.02)");
-    mm_spread->setStyleSheet(input_ss());
-    text_inputs_["hft_mm_spread"] = mm_spread;
-    mmvl->addWidget(build_input_row("Spread Multiplier", mm_spread, mm_tab));
-    auto* mm_run = make_run_button("GET MARKET MAKING QUOTES", mm_tab);
+    auto* depth_lbl = new QLabel("DEPTH", top_bar);
+    depth_lbl->setStyleSheet(exch_lbl->styleSheet());
+    auto* hft_depth = new QComboBox(top_bar);
+    hft_depth->addItems({"10", "20", "50", "100"});
+    hft_depth->setCurrentIndex(1);
+    hft_depth->setFixedWidth(60);
+    hft_depth->setStyleSheet(combo_ss());
+    combo_inputs_["hft_depth"] = hft_depth;
+
+    top_hl->addWidget(exch_lbl);
+    top_hl->addWidget(hft_exchange);
+    top_hl->addWidget(sym_lbl);
+    top_hl->addWidget(hft_symbol);
+    top_hl->addWidget(depth_lbl);
+    top_hl->addWidget(hft_depth);
+    top_hl->addStretch();
+
+    // Live latency badge
+    auto* latency_lbl = new QLabel("LATENCY —", top_bar);
+    latency_lbl->setObjectName("hftLatency");
+    latency_lbl->setStyleSheet(QString("color:%1; font-size:9px; font-family:'Courier New'; background:transparent;")
+                                   .arg(ui::colors::TEXT_TERTIARY()));
+    top_hl->addWidget(latency_lbl);
+    vl->addWidget(top_bar);
+
+    // ── Tab widget ────────────────────────────────────────────────────────────
+    auto* tabs = new QTabWidget(w);
+    tabs->setStyleSheet(tab_ss(accent));
+
+    // ════════════════════════════════════════════════════════
+    // TAB 1 — LIVE ORDER BOOK
+    // ════════════════════════════════════════════════════════
+    auto* ob_tab  = new QWidget(this);
+    auto* ob_root = new QVBoxLayout(ob_tab);
+    ob_root->setContentsMargins(12, 10, 12, 10);
+    ob_root->setSpacing(8);
+
+    // Controls row
+    auto* ob_ctrl = new QHBoxLayout;
+    ob_ctrl->setSpacing(8);
+    auto* ob_fetch = make_run_button("FETCH LIVE ORDER BOOK", ob_tab);
+    connect(ob_fetch, &QPushButton::clicked, this, [this]() {
+        status_label_->setText("Fetching live order book...");
+        QJsonObject p;
+        p["exchange"] = combo_inputs_["hft_exchange"]->currentText();
+        p["symbol"]   = text_inputs_["hft_symbol"]->text().trimmed();
+        p["depth"]    = combo_inputs_["hft_depth"]->currentText().toInt();
+        AIQuantLabService::instance().hft_create_orderbook(p);
+    });
+    ob_ctrl->addWidget(ob_fetch);
+    ob_ctrl->addStretch();
+    ob_root->addLayout(ob_ctrl);
+
+    // Metrics row — 5 cards in a grid
+    auto* metrics_row = new QHBoxLayout;
+    metrics_row->setSpacing(6);
+
+    auto make_card = [&](const QString& label, QWidget* parent) -> QPair<QWidget*, QLabel*> {
+        auto* card = new QWidget(parent);
+        card->setStyleSheet(QString("background:%1; border:1px solid %2; border-radius:3px;")
+                                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        auto* cvl = new QVBoxLayout(card);
+        cvl->setContentsMargins(10, 6, 10, 6);
+        cvl->setSpacing(2);
+        auto* l = new QLabel(label, card);
+        l->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px; background:transparent;")
+                             .arg(ui::colors::TEXT_TERTIARY()));
+        auto* v = new QLabel("—", card);
+        v->setObjectName("hftCardVal");
+        v->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700; font-family:'Courier New'; background:transparent;")
+                             .arg(ui::colors::TEXT_PRIMARY()));
+        cvl->addWidget(l);
+        cvl->addWidget(v);
+        return {card, v};
+    };
+
+    auto [mid_card, mid_val]         = make_card("MID PRICE", ob_tab);
+    auto [spread_card, spread_val]   = make_card("SPREAD BPS", ob_tab);
+    auto [obi_card, obi_val]         = make_card("ORDER BOOK IMBALANCE", ob_tab);
+    auto [pressure_card, pres_val]   = make_card("PRESSURE", ob_tab);
+    auto [wmid_card, wmid_val]       = make_card("WEIGHTED MID", ob_tab);
+
+    // Store for result update
+    mid_val->setObjectName("hft_mid_val");
+    spread_val->setObjectName("hft_spread_val");
+    obi_val->setObjectName("hft_obi_val");
+    pres_val->setObjectName("hft_pressure_val");
+    wmid_val->setObjectName("hft_wmid_val");
+
+    metrics_row->addWidget(mid_card, 1);
+    metrics_row->addWidget(spread_card, 1);
+    metrics_row->addWidget(obi_card, 1);
+    metrics_row->addWidget(pressure_card, 1);
+    metrics_row->addWidget(wmid_card, 1);
+    ob_root->addLayout(metrics_row);
+
+    // Bid / Ask tables side by side
+    auto* books_row = new QHBoxLayout;
+    books_row->setSpacing(8);
+
+    // Bids
+    auto* bids_frame = new QWidget(ob_tab);
+    bids_frame->setStyleSheet(QString("background:%1; border:1px solid %2; border-radius:3px;")
+                                  .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+    auto* bids_vl = new QVBoxLayout(bids_frame);
+    bids_vl->setContentsMargins(0, 0, 0, 0);
+    bids_vl->setSpacing(0);
+    auto* bids_hdr = new QLabel("  BIDS", bids_frame);
+    bids_hdr->setFixedHeight(24);
+    bids_hdr->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1px;"
+                                    "background:%2; border-bottom:1px solid %3;")
+                                .arg(ui::colors::POSITIVE(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    auto* bid_table = new QTableWidget(10, 3, bids_frame);
+    bid_table->setObjectName("hft_bid_table");
+    bid_table->setHorizontalHeaderLabels({"Price", "Size", "Cumulative"});
+    bid_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    bid_table->verticalHeader()->setVisible(false);
+    bid_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    bid_table->setSelectionMode(QAbstractItemView::NoSelection);
+    bid_table->setShowGrid(false);
+    bid_table->setStyleSheet(
+        QString("QTableWidget { background:%1; border:none; }"
+                "QHeaderView::section { background:%2; color:%3; font-size:9px; font-weight:700;"
+                "  padding:3px 6px; border:none; border-bottom:1px solid %4; }"
+                "QTableWidget::item { padding:2px 6px; font-family:'Courier New'; font-size:10px; border:none; }")
+            .arg(ui::colors::BG_RAISED(), ui::colors::BG_SURFACE(),
+                 ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM()));
+    bids_vl->addWidget(bids_hdr);
+    bids_vl->addWidget(bid_table, 1);
+
+    // Asks
+    auto* asks_frame = new QWidget(ob_tab);
+    asks_frame->setStyleSheet(bids_frame->styleSheet());
+    auto* asks_vl = new QVBoxLayout(asks_frame);
+    asks_vl->setContentsMargins(0, 0, 0, 0);
+    asks_vl->setSpacing(0);
+    auto* asks_hdr = new QLabel("  ASKS", asks_frame);
+    asks_hdr->setFixedHeight(24);
+    asks_hdr->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1px;"
+                                    "background:%2; border-bottom:1px solid %3;")
+                                .arg(ui::colors::NEGATIVE(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    auto* ask_table = new QTableWidget(10, 3, asks_frame);
+    ask_table->setObjectName("hft_ask_table");
+    ask_table->setHorizontalHeaderLabels({"Price", "Size", "Cumulative"});
+    ask_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    ask_table->verticalHeader()->setVisible(false);
+    ask_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    ask_table->setSelectionMode(QAbstractItemView::NoSelection);
+    ask_table->setShowGrid(false);
+    ask_table->setStyleSheet(bid_table->styleSheet());
+    asks_vl->addWidget(asks_hdr);
+    asks_vl->addWidget(ask_table, 1);
+
+    books_row->addWidget(bids_frame, 1);
+    books_row->addWidget(asks_frame, 1);
+    ob_root->addLayout(books_row, 1);
+    tabs->addTab(ob_tab, "Live Order Book");
+
+    // ════════════════════════════════════════════════════════
+    // TAB 2 — MICROSTRUCTURE (Market Making + Toxic Flow)
+    // ════════════════════════════════════════════════════════
+    auto* micro_tab  = new QWidget(this);
+    auto* micro_root = new QVBoxLayout(micro_tab);
+    micro_root->setContentsMargins(12, 10, 12, 10);
+    micro_root->setSpacing(10);
+
+    // ─ Market Making section ─
+    auto* mm_section = new QWidget(micro_tab);
+    mm_section->setStyleSheet(QString("background:%1; border:1px solid %2; border-radius:3px;")
+                                  .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+    auto* mm_vl = new QVBoxLayout(mm_section);
+    mm_vl->setContentsMargins(12, 10, 12, 10);
+    mm_vl->setSpacing(8);
+
+    auto* mm_title = new QLabel("MARKET MAKING  —  Avellaneda-Stoikov Model", mm_section);
+    mm_title->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px; background:transparent;")
+                                .arg(accent));
+    mm_vl->addWidget(mm_title);
+
+    auto* mm_params = new QHBoxLayout;
+    mm_params->setSpacing(8);
+    auto* inv_spin = make_double_spin(-1000, 1000, 0.0, 4, " units", mm_section);
+    int_inputs_["hft_inventory"] = nullptr;
+    double_inputs_["hft_inventory_d"] = inv_spin;
+    mm_params->addWidget(build_input_row("Inventory", inv_spin, mm_section));
+    auto* spread_spin = make_double_spin(1.0, 10.0, 1.5, 2, "×", mm_section);
+    double_inputs_["hft_spread_mult"] = spread_spin;
+    mm_params->addWidget(build_input_row("Spread Mult", spread_spin, mm_section));
+    auto* risk_spin = make_double_spin(0.001, 0.1, 0.01, 3, "", mm_section);
+    double_inputs_["hft_risk_aversion"] = risk_spin;
+    mm_params->addWidget(build_input_row("Risk Aversion", risk_spin, mm_section));
+    mm_vl->addLayout(mm_params);
+
+    auto* mm_run = make_run_button("CALCULATE OPTIMAL QUOTES", mm_section);
     connect(mm_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Calculating...");
-        QJsonObject params;
-        params["symbol"] = text_inputs_["hft_mm_symbol"]->text().trimmed().toUpper();
-        params["mid_price"] = text_inputs_["hft_mm_mid"]->text().trimmed().toDouble();
-        params["spread_multiplier"] = text_inputs_["hft_mm_spread"]->text().trimmed().toDouble();
-        AIQuantLabService::instance().hft_market_making_quotes(params);
+        status_label_->setText("Fetching live data + computing quotes...");
+        QJsonObject p;
+        p["exchange"]         = combo_inputs_["hft_exchange"]->currentText();
+        p["symbol"]           = text_inputs_["hft_symbol"]->text().trimmed();
+        p["inventory"]        = double_inputs_["hft_inventory_d"]->value();
+        p["spread_multiplier"] = double_inputs_["hft_spread_mult"]->value();
+        p["risk_aversion"]    = double_inputs_["hft_risk_aversion"]->value();
+        AIQuantLabService::instance().hft_market_making_quotes(p);
     });
-    mmvl->addWidget(mm_run);
-    mmvl->addStretch();
-    tabs->addTab(mm_tab, "Market Making");
+    mm_vl->addWidget(mm_run);
 
-    // ── Toxic Flow Detection ──
-    auto* toxic_tab = new QWidget(this);
-    auto* toxicvl = new QVBoxLayout(toxic_tab);
-    toxicvl->setContentsMargins(12, 12, 12, 12);
-    toxicvl->setSpacing(8);
-    auto* tox_sym = new QLineEdit(toxic_tab);
-    tox_sym->setPlaceholderText("Symbol (e.g. AAPL)");
-    tox_sym->setStyleSheet(input_ss());
-    text_inputs_["hft_tox_symbol"] = tox_sym;
-    toxicvl->addWidget(build_input_row("Symbol", tox_sym, toxic_tab));
-    auto* tox_price = new QLineEdit(toxic_tab);
-    tox_price->setPlaceholderText("Trade price (e.g. 150.5)");
-    tox_price->setStyleSheet(input_ss());
-    text_inputs_["hft_tox_price"] = tox_price;
-    toxicvl->addWidget(build_input_row("Trade Price", tox_price, toxic_tab));
-    auto* tox_size = new QLineEdit(toxic_tab);
-    tox_size->setPlaceholderText("Trade size (e.g. 100)");
-    tox_size->setStyleSheet(input_ss());
-    text_inputs_["hft_tox_size"] = tox_size;
-    toxicvl->addWidget(build_input_row("Trade Size", tox_size, toxic_tab));
-    auto* tox_run = make_run_button("DETECT TOXIC FLOW", toxic_tab);
+    // MM result cards
+    auto* mm_results = new QHBoxLayout;
+    mm_results->setSpacing(6);
+    auto [bid_card, bid_val2] = make_card("BID QUOTE", mm_section);
+    auto [ask_card, ask_val2] = make_card("ASK QUOTE", mm_section);
+    auto [qs_card, qs_val]    = make_card("QUOTED SPREAD BPS", mm_section);
+    auto [edge_card, edge_val] = make_card("EDGE/SIDE BPS", mm_section);
+    auto [rec_card, rec_val]  = make_card("RECOMMENDATION", mm_section);
+    bid_val2->setObjectName("hft_mm_bid");
+    ask_val2->setObjectName("hft_mm_ask");
+    qs_val->setObjectName("hft_mm_qspread");
+    edge_val->setObjectName("hft_mm_edge");
+    rec_val->setObjectName("hft_mm_rec");
+    mm_results->addWidget(bid_card, 1);
+    mm_results->addWidget(ask_card, 1);
+    mm_results->addWidget(qs_card, 1);
+    mm_results->addWidget(edge_card, 1);
+    mm_results->addWidget(rec_card, 1);
+    mm_vl->addLayout(mm_results);
+    micro_root->addWidget(mm_section);
+
+    // ─ Toxic Flow section ─
+    auto* tox_section = new QWidget(micro_tab);
+    tox_section->setStyleSheet(mm_section->styleSheet());
+    auto* tox_vl = new QVBoxLayout(tox_section);
+    tox_vl->setContentsMargins(12, 10, 12, 10);
+    tox_vl->setSpacing(8);
+
+    auto* tox_title = new QLabel("TOXIC FLOW DETECTION  —  PIN Score Model", tox_section);
+    tox_title->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px; background:transparent;")
+                                 .arg(accent));
+    tox_vl->addWidget(tox_title);
+
+    auto* tox_params = new QHBoxLayout;
+    tox_params->setSpacing(8);
+    auto* tox_limit = new QComboBox(tox_section);
+    tox_limit->addItems({"50", "100", "200", "500"});
+    tox_limit->setCurrentIndex(2);
+    tox_limit->setStyleSheet(combo_ss());
+    combo_inputs_["hft_tox_limit"] = tox_limit;
+    tox_params->addWidget(build_input_row("Trade History", tox_limit, tox_section));
+    tox_params->addStretch();
+    tox_vl->addLayout(tox_params);
+
+    auto* tox_run = make_run_button("DETECT TOXIC FLOW", tox_section);
     connect(tox_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Detecting...");
-        QJsonObject params;
-        params["symbol"] = text_inputs_["hft_tox_symbol"]->text().trimmed().toUpper();
-        params["trade_price"] = text_inputs_["hft_tox_price"]->text().trimmed().toDouble();
-        params["trade_size"] = text_inputs_["hft_tox_size"]->text().trimmed().toDouble();
-        AIQuantLabService::instance().hft_detect_toxic(params);
+        status_label_->setText("Fetching trades + analyzing flow...");
+        QJsonObject p;
+        p["exchange"] = combo_inputs_["hft_exchange"]->currentText();
+        p["symbol"]   = text_inputs_["hft_symbol"]->text().trimmed();
+        p["limit"]    = combo_inputs_["hft_tox_limit"]->currentText().toInt();
+        AIQuantLabService::instance().hft_detect_toxic(p);
     });
-    toxicvl->addWidget(tox_run);
-    toxicvl->addStretch();
-    tabs->addTab(toxic_tab, "Toxic Flow");
+    tox_vl->addWidget(tox_run);
 
-    // ── Order Execution ──
-    auto* exec_tab = new QWidget(this);
-    auto* execvl = new QVBoxLayout(exec_tab);
-    execvl->setContentsMargins(12, 12, 12, 12);
-    execvl->setSpacing(8);
-    auto* exec_sym = new QLineEdit(exec_tab);
-    exec_sym->setPlaceholderText("Symbol (e.g. AAPL)");
-    exec_sym->setStyleSheet(input_ss());
-    text_inputs_["hft_exec_symbol"] = exec_sym;
-    execvl->addWidget(build_input_row("Symbol", exec_sym, exec_tab));
-    auto* exec_side = new QComboBox(exec_tab);
-    exec_side->setStyleSheet(combo_ss());
-    exec_side->addItems({"buy", "sell"});
-    combo_inputs_["hft_exec_side"] = exec_side;
-    execvl->addWidget(build_input_row("Side", exec_side, exec_tab));
-    auto* exec_qty = new QLineEdit(exec_tab);
-    exec_qty->setPlaceholderText("Quantity (e.g. 100)");
-    exec_qty->setStyleSheet(input_ss());
-    text_inputs_["hft_exec_qty"] = exec_qty;
-    execvl->addWidget(build_input_row("Quantity", exec_qty, exec_tab));
-    auto* exec_price = new QLineEdit(exec_tab);
-    exec_price->setPlaceholderText("Limit price (e.g. 150.0)");
-    exec_price->setStyleSheet(input_ss());
-    text_inputs_["hft_exec_price"] = exec_price;
-    execvl->addWidget(build_input_row("Limit Price", exec_price, exec_tab));
-    auto* exec_run = make_run_button("EXECUTE ORDER", exec_tab);
-    connect(exec_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Executing...");
-        QJsonObject params;
-        params["symbol"] = text_inputs_["hft_exec_symbol"]->text().trimmed().toUpper();
-        params["side"] = combo_inputs_["hft_exec_side"]->currentText();
-        params["quantity"] = text_inputs_["hft_exec_qty"]->text().trimmed().toDouble();
-        params["price"] = text_inputs_["hft_exec_price"]->text().trimmed().toDouble();
-        AIQuantLabService::instance().hft_execute_order(params);
+    auto* tox_results = new QHBoxLayout;
+    tox_results->setSpacing(6);
+    auto [pin_card, pin_val]      = make_card("PIN SCORE (0-100)", tox_section);
+    auto [vol_card, vol_val]      = make_card("VOLUME IMBALANCE", tox_section);
+    auto [impact_card, impact_val] = make_card("PRICE IMPACT BPS", tox_section);
+    auto [class_card, class_val]  = make_card("CLASSIFICATION", tox_section);
+    auto [action_card, action_val] = make_card("RECOMMENDED ACTION", tox_section);
+    pin_val->setObjectName("hft_tox_pin");
+    vol_val->setObjectName("hft_tox_vol");
+    impact_val->setObjectName("hft_tox_impact");
+    class_val->setObjectName("hft_tox_class");
+    action_val->setObjectName("hft_tox_action");
+    tox_results->addWidget(pin_card, 1);
+    tox_results->addWidget(vol_card, 1);
+    tox_results->addWidget(impact_card, 1);
+    tox_results->addWidget(class_card, 1);
+    tox_results->addWidget(action_card, 1);
+    tox_vl->addLayout(tox_results);
+    micro_root->addWidget(tox_section);
+    micro_root->addStretch();
+    tabs->addTab(micro_tab, "Microstructure");
+
+    // ════════════════════════════════════════════════════════
+    // TAB 3 — SLIPPAGE ESTIMATOR
+    // ════════════════════════════════════════════════════════
+    auto* slip_tab  = new QWidget(this);
+    auto* slip_root = new QVBoxLayout(slip_tab);
+    slip_root->setContentsMargins(12, 10, 12, 10);
+    slip_root->setSpacing(10);
+
+    auto* slip_section = new QWidget(slip_tab);
+    slip_section->setStyleSheet(QString("background:%1; border:1px solid %2; border-radius:3px;")
+                                    .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+    auto* slip_vl = new QVBoxLayout(slip_section);
+    slip_vl->setContentsMargins(12, 10, 12, 10);
+    slip_vl->setSpacing(8);
+
+    auto* slip_title = new QLabel("SLIPPAGE ESTIMATOR  —  Real Order Book Walk", slip_section);
+    slip_title->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px; background:transparent;")
+                                  .arg(accent));
+    slip_vl->addWidget(slip_title);
+
+    auto* slip_desc = new QLabel(
+        "Walks the live order book level-by-level to compute actual fill price and slippage for a given order size.", slip_section);
+    slip_desc->setWordWrap(true);
+    slip_desc->setStyleSheet(QString("color:%1; font-size:10px; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+    slip_vl->addWidget(slip_desc);
+
+    auto* slip_params = new QHBoxLayout;
+    slip_params->setSpacing(8);
+    auto* slip_side = new QComboBox(slip_section);
+    slip_side->addItems({"buy", "sell"});
+    slip_side->setStyleSheet(combo_ss());
+    combo_inputs_["hft_slip_side"] = slip_side;
+    slip_params->addWidget(build_input_row("Side", slip_side, slip_section));
+    auto* slip_qty = make_double_spin(0.0001, 1'000'000, 1.0, 6, "", slip_section);
+    double_inputs_["hft_slip_qty"] = slip_qty;
+    slip_params->addWidget(build_input_row("Quantity", slip_qty, slip_section));
+    slip_vl->addLayout(slip_params);
+
+    auto* slip_run = make_run_button("ESTIMATE SLIPPAGE", slip_section);
+    connect(slip_run, &QPushButton::clicked, this, [this]() {
+        status_label_->setText("Walking order book...");
+        QJsonObject p;
+        p["exchange"] = combo_inputs_["hft_exchange"]->currentText();
+        p["symbol"]   = text_inputs_["hft_symbol"]->text().trimmed();
+        p["side"]     = combo_inputs_["hft_slip_side"]->currentText();
+        p["quantity"] = double_inputs_["hft_slip_qty"]->value();
+        AIQuantLabService::instance().hft_execute_order(p);
     });
-    execvl->addWidget(exec_run);
-    execvl->addStretch();
-    tabs->addTab(exec_tab, "Order Execution");
+    slip_vl->addWidget(slip_run);
+
+    // Slippage result cards
+    auto* slip_results = new QHBoxLayout;
+    slip_results->setSpacing(6);
+    auto [avgp_card, avgp_val]     = make_card("AVG FILL PRICE", slip_section);
+    auto [slbps_card, slbps_val]   = make_card("SLIPPAGE BPS", slip_section);
+    auto [cost_card, cost_val]     = make_card("TOTAL COST", slip_section);
+    auto [fills_card, fills_val]   = make_card("FILL LEVELS", slip_section);
+    auto [viable_card, viable_val] = make_card("VIABILITY", slip_section);
+    avgp_val->setObjectName("hft_slip_avgp");
+    slbps_val->setObjectName("hft_slip_bps");
+    cost_val->setObjectName("hft_slip_cost");
+    fills_val->setObjectName("hft_slip_fills");
+    viable_val->setObjectName("hft_slip_viable");
+    slip_results->addWidget(avgp_card, 1);
+    slip_results->addWidget(slbps_card, 1);
+    slip_results->addWidget(cost_card, 1);
+    slip_results->addWidget(fills_card, 1);
+    slip_results->addWidget(viable_card, 1);
+    slip_vl->addLayout(slip_results);
+
+    // Fills table
+    auto* fills_table = new QTableWidget(0, 3, slip_section);
+    fills_table->setObjectName("hft_slip_table");
+    fills_table->setHorizontalHeaderLabels({"Fill Price", "Quantity", "Cost"});
+    fills_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    fills_table->verticalHeader()->setVisible(false);
+    fills_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    fills_table->setSelectionMode(QAbstractItemView::NoSelection);
+    fills_table->setShowGrid(false);
+    fills_table->setMaximumHeight(160);
+    fills_table->setStyleSheet(
+        QString("QTableWidget { background:%1; border:1px solid %2; }"
+                "QHeaderView::section { background:%3; color:%4; font-size:9px; font-weight:700;"
+                "  padding:3px 6px; border:none; border-bottom:1px solid %2; }"
+                "QTableWidget::item { padding:2px 6px; font-family:'Courier New'; font-size:10px; }")
+            .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(),
+                 ui::colors::BG_SURFACE(), ui::colors::TEXT_TERTIARY()));
+    slip_vl->addWidget(fills_table);
+
+    slip_root->addWidget(slip_section);
+    slip_root->addStretch();
+    tabs->addTab(slip_tab, "Slippage Estimator");
+
+    // ── Full Analyze button (bottom bar) ─────────────────────────────────────
+    auto* bottom_bar = new QWidget(w);
+    bottom_bar->setStyleSheet(QString("background:%1; border-top:1px solid %2;")
+                                  .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    auto* bot_hl = new QHBoxLayout(bottom_bar);
+    bot_hl->setContentsMargins(12, 6, 12, 6);
+    auto* analyze_btn = make_run_button("⚡ FULL ANALYSIS — FETCH ALL & COMPUTE", bottom_bar);
+    analyze_btn->setToolTip("Fetches live order book + trades, computes book metrics, market making quotes, toxic flow, and slippage in one call");
+    connect(analyze_btn, &QPushButton::clicked, this, [this]() {
+        status_label_->setText("Running full microstructure analysis...");
+        QJsonObject p;
+        p["exchange"]          = combo_inputs_["hft_exchange"]->currentText();
+        p["symbol"]            = text_inputs_["hft_symbol"]->text().trimmed();
+        p["depth"]             = combo_inputs_["hft_depth"]->currentText().toInt();
+        p["limit"]             = combo_inputs_["hft_tox_limit"]->currentText().toInt();
+        p["inventory"]         = double_inputs_["hft_inventory_d"]->value();
+        p["spread_multiplier"] = double_inputs_["hft_spread_mult"]->value();
+        p["quantity"]          = double_inputs_["hft_slip_qty"]->value();
+        AIQuantLabService::instance().hft_snapshot(p);
+    });
+    bot_hl->addWidget(analyze_btn, 1);
 
     vl->addWidget(tabs, 1);
+    vl->addWidget(bottom_bar);
+
     results_layout_ = new QVBoxLayout;
     vl->addLayout(results_layout_);
     return w;

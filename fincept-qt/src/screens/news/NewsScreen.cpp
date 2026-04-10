@@ -1,5 +1,6 @@
 #include "screens/news/NewsScreen.h"
 
+#include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "screens/news/NewsCommandBar.h"
@@ -216,15 +217,20 @@ void NewsScreen::connect_signals() {
                 apply_filters_async();
             });
 
-    // Keyboard shortcuts
-    auto* shortcut_j = new QShortcut(QKeySequence("J"), this);
-    connect(shortcut_j, &QShortcut::activated, this, [this]() { feed_panel_->select_next(); });
+    // Keyboard shortcuts via KeyConfigManager
+    auto& km = KeyConfigManager::instance();
 
-    auto* shortcut_k = new QShortcut(QKeySequence("K"), this);
-    connect(shortcut_k, &QShortcut::activated, this, [this]() { feed_panel_->select_previous(); });
+    auto* act_next = km.action(KeyAction::NewsNext);
+    act_next->setParent(this);
+    connect(act_next, &QAction::triggered, this, [this]() { feed_panel_->select_next(); });
 
-    auto* shortcut_enter = new QShortcut(QKeySequence(Qt::Key_Return), this);
-    connect(shortcut_enter, &QShortcut::activated, this, [this]() {
+    auto* act_prev = km.action(KeyAction::NewsPrev);
+    act_prev->setParent(this);
+    connect(act_prev, &QAction::triggered, this, [this]() { feed_panel_->select_previous(); });
+
+    auto* act_open = km.action(KeyAction::NewsOpen);
+    act_open->setParent(this);
+    connect(act_open, &QAction::triggered, this, [this]() {
         auto idx = feed_panel_->list_view()->currentIndex();
         if (idx.isValid()) {
             auto article = feed_panel_->model()->article_at(idx.row());
@@ -233,9 +239,9 @@ void NewsScreen::connect_signals() {
         }
     });
 
-    // Escape closes detail panel
-    auto* shortcut_esc = new QShortcut(QKeySequence(Qt::Key_Escape), this);
-    connect(shortcut_esc, &QShortcut::activated, this, [this]() {
+    auto* act_close = km.action(KeyAction::NewsClose);
+    act_close->setParent(this);
+    connect(act_close, &QAction::triggered, this, [this]() {
         if (detail_panel_->is_panel_open())
             detail_panel_->close_panel();
         else if (side_panel_->is_drawer_open())

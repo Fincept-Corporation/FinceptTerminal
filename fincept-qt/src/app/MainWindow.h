@@ -3,7 +3,6 @@
 #include "app/ScreenRouter.h"
 
 #include <QMainWindow>
-#include <QShortcut>
 #include <QStackedWidget>
 #include <QTimer>
 

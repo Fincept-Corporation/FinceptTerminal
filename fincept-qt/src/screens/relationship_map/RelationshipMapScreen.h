@@ -7,8 +7,10 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QTimer>
 #include <QWidget>
 
 namespace fincept::relmap {
@@ -33,10 +35,16 @@ class RelationshipMapScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    bool eventFilter(QObject* obj, QEvent* event) override;
 
   private:
     void build_ui();
     void on_search();
+    void on_search_text_changed(const QString& text);
+    void fire_asset_search(const QString& query);
+    void on_asset_results(const QJsonArray& results);
+    void show_dropdown();
+    void hide_dropdown();
     void on_data_ready(const fincept::relmap::RelationshipData& data);
     void on_fetch_failed(const QString& error);
     void on_progress(int percent, const QString& message);
@@ -53,6 +61,9 @@ class RelationshipMapScreen : public QWidget, public IStatefulScreen {
 
     // Header
     QLineEdit* search_input_ = nullptr;
+    QListWidget* search_dropdown_ = nullptr;
+    QTimer* search_debounce_ = nullptr;
+    QString pending_query_;
     QComboBox* layout_combo_ = nullptr;
     QPushButton* filter_btn_ = nullptr;
     QProgressBar* progress_bar_ = nullptr;
@@ -78,6 +89,8 @@ class RelationshipMapScreen : public QWidget, public IStatefulScreen {
     relmap::LayoutMode layout_mode_ = relmap::LayoutMode::Layered;
     relmap::RelationshipData current_data_;
     bool has_data_ = false;
+    QString loaded_ticker_;       // ticker currently shown in the graph
+    bool search_input_focused_ = false; // only show dropdown when user is actively typing
 };
 
 } // namespace fincept::screens

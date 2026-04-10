@@ -3,19 +3,18 @@
 // Categories use publishers command (normalized string array).
 // HK category_datasets may return empty — fall back to datasets_list + client-side filter.
 #include "screens/gov_data/GovDataHKPanel.h"
+#include "screens/gov_data/GovDataProviderPanel.h"
 
 #include "core/logging/Logger.h"
 #include "services/gov_data/GovDataService.h"
 #include "ui/theme/Theme.h"
 
 #include <QDesktopServices>
-#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QScrollArea>
-#include <QTextStream>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -27,81 +26,15 @@ static constexpr const char* kGovDataHKColor = "#F43F5E";
 
 using namespace fincept::ui;
 
-// ── Dynamic stylesheet ───────────────────────────────────────────────────────
-
-static QString build_hk_style() {
-    const auto& t = ui::ThemeManager::instance().tokens();
-    const auto cc = QColor(kGovDataHKColor);
-    const QString cr = QString::number(cc.red());
-    const QString cg = QString::number(cc.green());
-    const QString cb = QString::number(cc.blue());
-    const QString c = kGovDataHKColor;
-
-    QString s;
-    s += QString("#hkPanelToolbar { background:%1; border-bottom:1px solid %2; }").arg(t.bg_raised, t.border_dim);
-
-    s += QString("#hkTabBtn { background:transparent; color:%1; border:1px solid %2;"
-                 "  font-size:10px; font-weight:700; padding:4px 12px; letter-spacing:0.5px; }")
-             .arg(t.text_secondary, t.border_dim);
-    s += QString("#hkTabBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
-    s += QString("#hkTabBtn:checked { background:rgba(%1,%2,%3,0.12); color:%4;"
-                 "  border:1px solid %4; }")
-             .arg(cr, cg, cb, c);
-
-    s += QString("#hkBackBtn { background:transparent; color:%1; border:1px solid %2;"
-                 "  font-size:10px; font-weight:700; padding:4px 10px; }")
-             .arg(t.text_secondary, t.border_dim);
-    s += QString("#hkBackBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
-
-    s += QString("#hkFetchBtn { background:%1; color:%2; border:none;"
-                 "  font-size:10px; font-weight:700; padding:4px 14px; }")
-             .arg(c, t.bg_base);
-    s += QString("#hkFetchBtn:hover { background:%1; }").arg(cc.lighter(120).name());
-    s += QString("#hkFetchBtn:disabled { background:%1; color:%2; }").arg(t.border_dim, t.text_dim);
-
-    s += QString("#hkCsvBtn { background:transparent; color:%1; border:1px solid %2;"
-                 "  font-size:10px; font-weight:700; padding:4px 10px; }")
-             .arg(t.text_secondary, t.border_dim);
-    s += QString("#hkCsvBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
-
-    s += QString("#hkSearch { background:%1; color:%2; border:none;"
-                 "  border-bottom:1px solid %3; padding:4px 10px; font-size:11px; }")
-             .arg(t.bg_base, t.text_primary, t.border_dim);
-    s += QString("#hkSearch:focus { border-bottom:1px solid %1; }").arg(c);
-
-    s += QString("QTableWidget { background:%1; color:%2; border:none;"
-                 "  gridline-color:%3; font-size:11px; alternate-background-color:%4; }")
-             .arg(t.bg_base, t.text_primary, t.border_dim, t.bg_surface);
-    s += QString("QTableWidget::item { padding:5px 8px; border-bottom:1px solid %1; }").arg(t.border_dim);
-    s += QString("QTableWidget::item:selected { background:rgba(%1,%2,%3,0.10); color:%4; }").arg(cr, cg, cb, c);
-    s += QString("QHeaderView::section { background:%1; color:%2; border:none;"
-                 "  border-bottom:2px solid %3; border-right:1px solid %3;"
-                 "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }")
-             .arg(t.bg_raised, t.text_secondary, t.border_dim);
-
-    s += QString("#hkStatusPage { background:%1; }").arg(t.bg_base);
-    s += QString("#hkStatusMsg  { color:%1; font-size:13px; background:transparent; }").arg(t.text_secondary);
-    s += QString("#hkStatusErr  { color:%1; font-size:12px; background:transparent; }").arg(t.negative);
-
-    s += QString("#hkBreadcrumb { background:%1; border-bottom:1px solid %2; }").arg(t.bg_surface, t.border_dim);
-    s += QString("#hkBreadText  { color:%1; font-size:9px; background:transparent; }").arg(t.text_secondary);
-    s += QString("#hkBreadCount { color:%1; font-size:9px; background:transparent; }").arg(t.text_secondary);
-
-    s += QString("QScrollBar:vertical { background:%1; width:5px; }").arg(t.bg_base);
-    s += QString("QScrollBar::handle:vertical { background:%1; min-height:20px; }").arg(t.border_dim);
-    s += "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }";
-    return s;
-}
-
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 GovDataHKPanel::GovDataHKPanel(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(build_hk_style());
+    setStyleSheet(make_gov_panel_style(kGovDataHKColor));
     build_ui();
     connect(&services::GovDataService::instance(), &services::GovDataService::result_ready, this,
             &GovDataHKPanel::on_result);
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this]() { setStyleSheet(build_hk_style()); });
+            [this]() { setStyleSheet(make_gov_panel_style(kGovDataHKColor)); });
 }
 
 // ── Build UI ──────────────────────────────────────────────────────────────────
@@ -115,17 +48,17 @@ void GovDataHKPanel::build_ui() {
 
     // Breadcrumb bar
     breadcrumb_ = new QWidget(this);
-    breadcrumb_->setObjectName("hkBreadcrumb");
+    breadcrumb_->setObjectName("govBreadcrumb");
     breadcrumb_->setFixedHeight(24);
     auto* bcl = new QHBoxLayout(breadcrumb_);
     bcl->setContentsMargins(14, 0, 14, 0);
     bcl->setSpacing(4);
     breadcrumb_label_ = new QLabel("Categories");
-    breadcrumb_label_->setObjectName("hkBreadText");
+    breadcrumb_label_->setObjectName("govBreadcrumbText");
     bcl->addWidget(breadcrumb_label_);
     bcl->addStretch(1);
     row_count_label_ = new QLabel;
-    row_count_label_->setObjectName("hkBreadCount");
+    row_count_label_->setObjectName("govBreadcrumbActive");
     bcl->addWidget(row_count_label_);
     root->addWidget(breadcrumb_);
 
@@ -137,12 +70,7 @@ void GovDataHKPanel::build_ui() {
     categories_table_->setColumnCount(1);
     categories_table_->setHorizontalHeaderLabels({"CATEGORY"});
     categories_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    categories_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    categories_table_->setSelectionMode(QAbstractItemView::SingleSelection);
-    categories_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    categories_table_->verticalHeader()->setVisible(false);
-    categories_table_->setAlternatingRowColors(true);
-    categories_table_->setShowGrid(true);
+    configure_table(categories_table_);
     connect(categories_table_, &QTableWidget::cellDoubleClicked, this, &GovDataHKPanel::on_category_clicked);
     content_stack_->addWidget(categories_table_); // index 0
 
@@ -155,12 +83,7 @@ void GovDataHKPanel::build_ui() {
     datasets_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
     datasets_table_->setColumnWidth(1, 90);
     datasets_table_->setColumnWidth(2, 110);
-    datasets_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    datasets_table_->setSelectionMode(QAbstractItemView::SingleSelection);
-    datasets_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    datasets_table_->verticalHeader()->setVisible(false);
-    datasets_table_->setAlternatingRowColors(true);
-    datasets_table_->setShowGrid(true);
+    configure_table(datasets_table_);
     connect(datasets_table_, &QTableWidget::cellDoubleClicked, this, &GovDataHKPanel::on_dataset_clicked);
     content_stack_->addWidget(datasets_table_); // index 1
 
@@ -173,12 +96,7 @@ void GovDataHKPanel::build_ui() {
     resources_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
     resources_table_->setColumnWidth(1, 80);
     resources_table_->setColumnWidth(2, 110);
-    resources_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    resources_table_->setSelectionMode(QAbstractItemView::SingleSelection);
-    resources_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    resources_table_->verticalHeader()->setVisible(false);
-    resources_table_->setAlternatingRowColors(true);
-    resources_table_->setShowGrid(true);
+    configure_table(resources_table_);
 
     // OPEN button column
     connect(
@@ -199,11 +117,11 @@ void GovDataHKPanel::build_ui() {
 
     // Page 3 — Status
     auto* status_page = new QWidget(this);
-    status_page->setObjectName("hkStatusPage");
+    status_page->setObjectName("govStatusPage");
     auto* svl = new QVBoxLayout(status_page);
     svl->setAlignment(Qt::AlignCenter);
     status_label_ = new QLabel;
-    status_label_->setObjectName("hkStatusMsg");
+    status_label_->setObjectName("govStatusMsg");
     status_label_->setAlignment(Qt::AlignCenter);
     status_label_->setWordWrap(true);
     svl->addWidget(status_label_);
@@ -214,15 +132,15 @@ void GovDataHKPanel::build_ui() {
 
 QWidget* GovDataHKPanel::build_toolbar() {
     auto* bar = new QWidget(this);
-    bar->setObjectName("hkPanelToolbar");
-    bar->setFixedHeight(40);
+    bar->setObjectName("govPanelToolbar");
+    bar->setFixedHeight(36);
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(5);
 
     back_btn_ = new QPushButton("← BACK");
-    back_btn_->setObjectName("hkBackBtn");
+    back_btn_->setObjectName("govBackBtn");
     back_btn_->setVisible(false);
     back_btn_->setCursor(Qt::PointingHandCursor);
     connect(back_btn_, &QPushButton::clicked, this, &GovDataHKPanel::on_back);
@@ -231,7 +149,7 @@ QWidget* GovDataHKPanel::build_toolbar() {
     hl->addSpacing(4);
 
     categories_btn_ = new QPushButton("CATEGORIES");
-    categories_btn_->setObjectName("hkTabBtn");
+    categories_btn_->setObjectName("govTabBtn");
     categories_btn_->setCheckable(true);
     categories_btn_->setChecked(true);
     categories_btn_->setCursor(Qt::PointingHandCursor);
@@ -239,7 +157,7 @@ QWidget* GovDataHKPanel::build_toolbar() {
     hl->addWidget(categories_btn_);
 
     datasets_btn_ = new QPushButton("DATASETS");
-    datasets_btn_->setObjectName("hkTabBtn");
+    datasets_btn_->setObjectName("govTabBtn");
     datasets_btn_->setCheckable(true);
     datasets_btn_->setCursor(Qt::PointingHandCursor);
     connect(datasets_btn_, &QPushButton::clicked, this, [this]() { on_tab_changed(Datasets); });
@@ -248,7 +166,7 @@ QWidget* GovDataHKPanel::build_toolbar() {
     hl->addSpacing(10);
 
     search_input_ = new QLineEdit;
-    search_input_->setObjectName("hkSearch");
+    search_input_->setObjectName("govSearch");
     search_input_->setPlaceholderText("Filter datasets…");
     search_input_->setFixedWidth(210);
     search_input_->setFixedHeight(26);
@@ -256,7 +174,7 @@ QWidget* GovDataHKPanel::build_toolbar() {
     hl->addWidget(search_input_);
 
     fetch_btn_ = new QPushButton("FETCH");
-    fetch_btn_->setObjectName("hkFetchBtn");
+    fetch_btn_->setObjectName("govFetchBtn");
     fetch_btn_->setCursor(Qt::PointingHandCursor);
     connect(fetch_btn_, &QPushButton::clicked, this, &GovDataHKPanel::on_fetch);
     hl->addWidget(fetch_btn_);
@@ -264,7 +182,7 @@ QWidget* GovDataHKPanel::build_toolbar() {
     hl->addStretch(1);
 
     export_btn_ = new QPushButton("CSV");
-    export_btn_->setObjectName("hkCsvBtn");
+    export_btn_->setObjectName("govCsvBtn");
     export_btn_->setCursor(Qt::PointingHandCursor);
     connect(export_btn_, &QPushButton::clicked, this, &GovDataHKPanel::on_export_csv);
     hl->addWidget(export_btn_);
@@ -648,35 +566,7 @@ void GovDataHKPanel::on_export_csv() {
     if (!table)
         return;
 
-    QString path = QFileDialog::getSaveFileName(this, "Export CSV", def_name, "CSV Files (*.csv)");
-    if (path.isEmpty())
-        return;
-
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-        return;
-    QTextStream out(&file);
-
-    QStringList headers;
-    for (int c = 0; c < table->columnCount(); ++c) {
-        auto* h = table->horizontalHeaderItem(c);
-        headers << (h ? h->text() : QString::number(c));
-    }
-    out << headers.join(",") << "\n";
-
-    for (int r = 0; r < table->rowCount(); ++r) {
-        QStringList row;
-        for (int c = 0; c < table->columnCount(); ++c) {
-            auto* item = table->item(r, c);
-            QString val = item ? item->text() : "";
-            if (val.contains(',') || val.contains('"'))
-                val = "\"" + val.replace("\"", "\"\"") + "\"";
-            row << val;
-        }
-        out << row.join(",") << "\n";
-    }
-
-    LOG_INFO("GovHK", "Exported CSV: " + path);
+    export_table_to_csv(table, def_name, this);
 }
 
 } // namespace fincept::screens

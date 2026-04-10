@@ -1,6 +1,7 @@
 #include "ui/navigation/CommandBar.h"
 
 #include "core/events/EventBus.h"
+#include "core/keys/KeyConfigManager.h"
 #include "network/http/HttpClient.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -525,6 +526,75 @@ CommandBar::CommandBar(QWidget* parent) : QWidget(parent) {
 
     connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
             [this](const ThemeTokens&) { refresh_theme(); });
+
+    setup_key_actions();
+}
+
+void CommandBar::setup_key_actions() {
+    auto& km = KeyConfigManager::instance();
+
+    auto* act_down = km.action(KeyAction::NavNext);
+    connect(act_down, &QAction::triggered, this, [this]() {
+        const int count = list_->count();
+        if (count > 0)
+            list_->setCurrentRow((list_->currentRow() + 1) % count);
+    });
+
+    auto* act_up = km.action(KeyAction::NavPrev);
+    connect(act_up, &QAction::triggered, this, [this]() {
+        const int count = list_->count();
+        if (count > 0)
+            list_->setCurrentRow((list_->currentRow() - 1 + count) % count);
+    });
+
+    auto* act_tab = km.action(KeyAction::NavAccept);
+    connect(act_tab, &QAction::triggered, this, [this]() {
+        if (!list_->currentItem())
+            return;
+        const QString autocomplete = list_->currentItem()->data(Qt::UserRole + 1).toString();
+        if (mode_ == Mode::SlashPicker) {
+            input_->setText(autocomplete);
+            for (const auto& at : asset_types_) {
+                if (at.slash == autocomplete) {
+                    activate_asset_mode(at.api_type);
+                    input_->setText(autocomplete + " ");
+                    input_->setCursorPosition(input_->text().length());
+                    break;
+                }
+            }
+        } else if (mode_ == Mode::DockSecondary && !dock_primary_id_.isEmpty() && !dock_verb_.isEmpty()) {
+            const QString screen_id = list_->currentItem()->data(Qt::UserRole).toString();
+            if (!screen_id.isEmpty()) {
+                input_->setText(dock_primary_id_ + " " + dock_verb_ + " " + screen_id);
+                input_->setCursorPosition(input_->text().length());
+            }
+        } else if (mode_ == Mode::DockCommand && !dock_primary_id_.isEmpty()) {
+            const QString verb = list_->currentItem()->data(Qt::UserRole).toString();
+            dock_verb_ = verb;
+            if (verb == "remove") {
+                input_->setText(dock_primary_id_ + " remove");
+            } else {
+                mode_ = Mode::DockSecondary;
+                input_->setText(dock_primary_id_ + " " + verb + " ");
+            }
+            input_->setCursorPosition(input_->text().length());
+        } else {
+            input_->setText(autocomplete);
+            hide_dropdown();
+        }
+    });
+
+    auto* act_esc = km.action(KeyAction::NavEscape);
+    connect(act_esc, &QAction::triggered, this, [this]() {
+        input_->clear();
+        mode_ = Mode::Screen;
+        active_asset_type_.clear();
+        dock_primary_id_.clear();
+        dock_verb_.clear();
+        search_debounce_->stop();
+        hide_dropdown();
+        input_->clearFocus();
+    });
 }
 
 void CommandBar::refresh_theme() {
@@ -545,75 +615,7 @@ bool CommandBar::eventFilter(QObject* obj, QEvent* event) {
     auto* ke = static_cast<QKeyEvent*>(event);
     const int count = list_->count();
 
-    switch (ke->key()) {
-        case Qt::Key_Down:
-            if (count > 0) {
-                int next = (list_->currentRow() + 1) % count;
-                list_->setCurrentRow(next);
-            }
-            return true;
-
-        case Qt::Key_Up:
-            if (count > 0) {
-                int prev = (list_->currentRow() - 1 + count) % count;
-                list_->setCurrentRow(prev);
-            }
-            return true;
-
-        case Qt::Key_Tab:
-            if (list_->currentItem()) {
-                const QString autocomplete = list_->currentItem()->data(Qt::UserRole + 1).toString();
-                if (mode_ == Mode::SlashPicker) {
-                    // Autocomplete slash type and activate asset search
-                    input_->setText(autocomplete);
-                    for (const auto& at : asset_types_) {
-                        if (at.slash == autocomplete) {
-                            activate_asset_mode(at.api_type);
-                            input_->setText(autocomplete + " ");
-                            input_->setCursorPosition(input_->text().length());
-                            break;
-                        }
-                    }
-                } else if (mode_ == Mode::DockSecondary && !dock_primary_id_.isEmpty() && !dock_verb_.isEmpty()) {
-                    // Autocomplete the secondary screen into the full command
-                    const QString screen_id = list_->currentItem()->data(Qt::UserRole).toString();
-                    if (!screen_id.isEmpty()) {
-                        input_->setText(dock_primary_id_ + " " + dock_verb_ + " " + screen_id);
-                        input_->setCursorPosition(input_->text().length());
-                    }
-                } else if (mode_ == Mode::DockCommand && !dock_primary_id_.isEmpty()) {
-                    // Autocomplete the verb
-                    const QString verb = list_->currentItem()->data(Qt::UserRole).toString();
-                    dock_verb_ = verb;
-                    if (verb == "remove") {
-                        input_->setText(dock_primary_id_ + " remove");
-                    } else {
-                        mode_ = Mode::DockSecondary;
-                        input_->setText(dock_primary_id_ + " " + verb + " ");
-                    }
-                    input_->setCursorPosition(input_->text().length());
-                } else {
-                    // Normal screen mode — autocomplete with the alias
-                    input_->setText(autocomplete);
-                    hide_dropdown();
-                }
-            }
-            return true;
-
-        case Qt::Key_Escape:
-            input_->clear();
-            mode_ = Mode::Screen;
-            active_asset_type_.clear();
-            dock_primary_id_.clear();
-            dock_verb_.clear();
-            search_debounce_->stop();
-            hide_dropdown();
-            input_->clearFocus();
-            return true;
-
-        default:
-            break;
-    }
+    // Navigation keys are handled via KeyConfigManager QActions (connected in setup_key_actions)
     return QWidget::eventFilter(obj, event);
 }
 

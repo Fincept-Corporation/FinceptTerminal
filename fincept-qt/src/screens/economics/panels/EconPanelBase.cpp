@@ -9,6 +9,7 @@
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QListWidget>
 #include <QTextStream>
 #include <QVBoxLayout>
 
@@ -42,15 +43,20 @@ QString EconPanelBase::panel_style() const {
                    "QHeaderView::section { background:%5; color:%9; border:none;"
                    "  border-bottom:2px solid %6; border-right:1px solid %6;"
                    "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+                   "#econCardsRow  { background:%7; border-bottom:1px solid %6; }"
+                   "#econTitleBar  { background:%12; border-bottom:1px solid %6; }"
                    "#econStatCard { background:%12; border:1px solid %6; }"
                    "#econStatCard:hover { border-color:%13; }"
                    "#econStatLabel { color:%9; font-size:8px; font-weight:700;"
                    "  letter-spacing:1px; background:transparent; }"
-                   "#econStatVal { color:%1; font-size:15px; font-weight:700; background:transparent; }"
-                   "#econStatSub { color:%14; font-size:9px; background:transparent; }"
+                   "#econStatVal  { color:%1;  font-size:15px; font-weight:700; background:transparent; }"
+                   "#econStatPos  { color:%16; font-size:15px; font-weight:700; background:transparent; }"
+                   "#econStatNeg  { color:%15; font-size:15px; font-weight:700; background:transparent; }"
+                   "#econStatSub  { color:%14; font-size:9px;  background:transparent; }"
                    "#econEmptyPage { background:%7; }"
-                   "#econEmptyMsg { color:%9; font-size:13px; background:transparent; }"
-                   "#econErrMsg   { color:%15; font-size:12px; background:transparent; }"
+                   "#econEmptyMsg   { color:%9;  font-size:13px; background:transparent; }"
+                   "#econLoadingMsg { color:%1;  font-size:13px; background:transparent; }"
+                   "#econErrMsg     { color:%15; font-size:12px; background:transparent; }"
                    "#econTitleLbl { color:%10; font-size:11px; font-weight:700;"
                    "  background:transparent; }"
                    "#econRowCount { color:%14; font-size:9px; background:transparent; }"
@@ -74,7 +80,8 @@ QString EconPanelBase::panel_style() const {
         .arg(BG_SURFACE())     // %12
         .arg(BORDER_BRIGHT())  // %13
         .arg(TEXT_TERTIARY())  // %14
-        .arg(NEGATIVE());      // %15
+        .arg(NEGATIVE())       // %15
+        .arg(POSITIVE());      // %16
 }
 
 // ── Reusable token-based style helpers ────────────────────────────────────────
@@ -170,6 +177,7 @@ void EconPanelBase::build_base_ui(QWidget* container) {
 
     // Stat cards row
     cards_row_ = new QWidget(this);
+    cards_row_->setObjectName("econCardsRow");
     auto* crhl = new QHBoxLayout(cards_row_);
     crhl->setContentsMargins(10, 6, 10, 6);
     crhl->setSpacing(6);
@@ -200,6 +208,7 @@ void EconPanelBase::build_base_ui(QWidget* container) {
 
     // Title bar
     title_bar_ = new QWidget(this);
+    title_bar_->setObjectName("econTitleBar");
     auto* tbhl = new QHBoxLayout(title_bar_);
     tbhl->setContentsMargins(12, 4, 12, 4);
     title_lbl_ = new QLabel;
@@ -242,14 +251,8 @@ void EconPanelBase::build_base_ui(QWidget* container) {
 // ── Theme refresh ─────────────────────────────────────────────────────────────
 
 void EconPanelBase::refresh_panel_theme() {
-    using namespace ui::colors;
     if (container_)
         container_->setStyleSheet(panel_style());
-    if (cards_row_)
-        cards_row_->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;").arg(BG_BASE(), BORDER_DIM()));
-    if (title_bar_)
-        title_bar_->setStyleSheet(
-            QString("background:%1; border-bottom:1px solid %2;").arg(BG_SURFACE(), BORDER_DIM()));
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -257,7 +260,9 @@ void EconPanelBase::refresh_panel_theme() {
 void EconPanelBase::show_loading(const QString& msg) {
     if (!empty_lbl_)
         return;
-    empty_lbl_->setStyleSheet(QString("color:%1; font-size:13px; background:transparent;").arg(color_));
+    empty_lbl_->setObjectName("econLoadingMsg");
+    empty_lbl_->style()->unpolish(empty_lbl_);
+    empty_lbl_->style()->polish(empty_lbl_);
     empty_lbl_->setText(msg);
     stack_->setCurrentIndex(0);
     if (fetch_btn_)
@@ -265,10 +270,11 @@ void EconPanelBase::show_loading(const QString& msg) {
 }
 
 void EconPanelBase::show_error(const QString& msg) {
-    using namespace ui::colors;
     if (!empty_lbl_)
         return;
-    empty_lbl_->setStyleSheet(QString("color:%1; font-size:12px; background:transparent;").arg(NEGATIVE()));
+    empty_lbl_->setObjectName("econErrMsg");
+    empty_lbl_->style()->unpolish(empty_lbl_);
+    empty_lbl_->style()->polish(empty_lbl_);
     empty_lbl_->setText("Error: " + msg);
     stack_->setCurrentIndex(0);
     if (fetch_btn_)
@@ -276,10 +282,11 @@ void EconPanelBase::show_error(const QString& msg) {
 }
 
 void EconPanelBase::show_empty(const QString& msg) {
-    using namespace ui::colors;
     if (!empty_lbl_)
         return;
-    empty_lbl_->setStyleSheet(QString("color:%1; font-size:13px; background:transparent;").arg(TEXT_SECONDARY()));
+    empty_lbl_->setObjectName("econEmptyMsg");
+    empty_lbl_->style()->unpolish(empty_lbl_);
+    empty_lbl_->style()->polish(empty_lbl_);
     empty_lbl_->setText(msg);
     stack_->setCurrentIndex(0);
     if (fetch_btn_)
@@ -413,8 +420,9 @@ void EconPanelBase::update_stats(const QJsonArray& rows) {
         stat_latest_->setText(fmt(latest));
     if (stat_change_) {
         stat_change_->setText((change >= 0 ? "+" : "") + QString::number(change, 'f', 2) + "%");
-        stat_change_->setStyleSheet(QString("color:%1; font-size:15px; font-weight:700; background:transparent;")
-                                        .arg(change >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+        stat_change_->setObjectName(change >= 0 ? "econStatPos" : "econStatNeg");
+        stat_change_->style()->unpolish(stat_change_);
+        stat_change_->style()->polish(stat_change_);
     }
     if (stat_min_)
         stat_min_->setText(fmt(mn));
@@ -458,6 +466,17 @@ void EconPanelBase::export_csv() {
             row << val;
         }
         out << row.join(",") << "\n";
+    }
+}
+
+// ── Shared utilities ──────────────────────────────────────────────────────────
+
+void EconPanelBase::filter_list(QListWidget* list, const QString& text) {
+    if (!list)
+        return;
+    for (int i = 0; i < list->count(); ++i) {
+        auto* item = list->item(i);
+        item->setHidden(!item->text().contains(text, Qt::CaseInsensitive));
     }
 }
 

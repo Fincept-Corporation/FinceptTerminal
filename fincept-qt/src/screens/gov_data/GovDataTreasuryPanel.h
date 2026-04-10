@@ -32,6 +32,7 @@ class GovDataTreasuryPanel : public QWidget {
   private:
     void build_ui();
     QWidget* build_toolbar();
+    QWidget* build_filter_bar();
     void show_loading(const QString& message);
     void show_error(const QString& message);
     void populate_prices(const QJsonObject& data);

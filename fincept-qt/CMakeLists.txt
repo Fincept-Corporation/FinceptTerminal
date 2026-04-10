@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
 project(FinceptTerminal VERSION 4.0.0 LANGUAGES CXX)
-enable_testing()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -266,6 +265,7 @@ set(CORE_SOURCES
     src/core/events/EventBus.cpp
     src/core/session/SessionManager.cpp
     src/core/session/ScreenStateManager.cpp
+    src/core/keys/KeyConfigManager.cpp
 )
 
 # Network
@@ -568,6 +568,7 @@ set(SCREEN_SOURCES
     src/screens/settings/SettingsScreen.cpp
     src/screens/settings/LlmConfigSection.cpp
     src/screens/settings/McpServersSection.cpp
+    src/screens/settings/KeybindingsSection.cpp
     src/screens/about/AboutScreen.cpp
     src/screens/support/SupportScreen.cpp
     src/screens/trade_viz/TradeVizScreen.cpp
@@ -591,6 +592,8 @@ set(SCREEN_SOURCES
     src/services/relationship_map/RelationshipMapService.cpp
     src/screens/markets/MarketsScreen.cpp
     src/screens/markets/MarketPanel.cpp
+    src/screens/markets/MarketPanelStore.cpp
+    src/screens/markets/MarketPanelEditor.cpp
     src/screens/dashboard/DashboardScreen.cpp
     src/screens/dashboard/DashboardToolBar.cpp
     src/screens/dashboard/DashboardStatusBar.cpp
@@ -696,11 +699,8 @@ set(SCREEN_SOURCES
     src/screens/gov_data/GovDataProviderPanel.cpp
     src/screens/gov_data/GovDataTreasuryPanel.cpp
     src/screens/gov_data/GovDataCongressPanel.cpp
-    src/screens/gov_data/GovDataCanadaPanel.cpp
-    src/screens/gov_data/GovDataSwissPanel.cpp
     src/screens/gov_data/GovDataFrancePanel.cpp
     src/screens/gov_data/GovDataHKPanel.cpp
-    src/screens/gov_data/GovDataCKANPanel.cpp
     src/screens/gov_data/GovDataUKPanel.cpp
     src/screens/gov_data/GovDataAustraliaPanel.cpp
 
@@ -1004,11 +1004,8 @@ set_source_files_properties(
     src/screens/gov_data/GovDataProviderPanel.cpp
     src/screens/gov_data/GovDataScreen.cpp
     src/screens/gov_data/GovDataTreasuryPanel.cpp
-    src/screens/gov_data/GovDataCanadaPanel.cpp
-    src/screens/gov_data/GovDataSwissPanel.cpp
     src/screens/gov_data/GovDataFrancePanel.cpp
     src/screens/gov_data/GovDataHKPanel.cpp
-    src/screens/gov_data/GovDataCKANPanel.cpp
     src/screens/gov_data/GovDataUKPanel.cpp
     src/screens/gov_data/GovDataAustraliaPanel.cpp
     src/screens/info/ContactScreen.cpp
@@ -1020,6 +1017,8 @@ set_source_files_properties(
     src/screens/ma_analytics/MAModulePanel.cpp
     src/screens/maritime/MaritimeScreen.cpp
     src/screens/markets/MarketPanel.cpp
+    src/screens/markets/MarketPanelStore.cpp
+    src/screens/markets/MarketPanelEditor.cpp
     src/screens/markets/MarketsScreen.cpp
     src/screens/mcp_servers/McpServersScreen.cpp
     src/screens/news/NewsCommandBar.cpp
@@ -1077,6 +1076,7 @@ set_source_files_properties(
     src/screens/report_builder/DocumentCanvas.cpp
     src/screens/report_builder/PropertiesPanel.cpp
     src/screens/report_builder/ReportBuilderScreen.cpp
+    src/screens/settings/KeybindingsSection.cpp
     src/screens/settings/LlmConfigSection.cpp
     src/screens/settings/McpServersSection.cpp
     src/screens/settings/SettingsScreen.cpp
@@ -1521,14 +1521,6 @@ target_link_libraries(FinceptTerminal PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
 )
-
-add_executable(fincept_market_sentiment_support_test
-    tests/MarketSentimentSupportTest.cpp
-    src/services/equity/MarketSentimentSupport.cpp
-)
-target_include_directories(fincept_market_sentiment_support_test PRIVATE src)
-target_link_libraries(fincept_market_sentiment_support_test PRIVATE Qt6::Core)
-add_test(NAME fincept_market_sentiment_support_test COMMAND fincept_market_sentiment_support_test)
 
 # macOS: also link Security.framework for Keychain in SecureStorage
 if(APPLE)

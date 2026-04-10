@@ -1,7 +1,9 @@
 // src/screens/relationship_map/RelationshipMapScreen.cpp
 #include "screens/relationship_map/RelationshipMapScreen.h"
 
+#include "core/events/EventBus.h"
 #include "core/session/ScreenStateManager.h"
+#include "network/http/HttpClient.h"
 #include "screens/relationship_map/RelationshipGraphScene.h"
 #include "services/relationship_map/RelationshipMapService.h"
 #include "ui/theme/Theme.h"
@@ -9,6 +11,10 @@
 #include <QCheckBox>
 #include <QGraphicsItem>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QPointer>
 #include <QScrollArea>
 #include <QShowEvent>
 #include <QVBoxLayout>
@@ -20,6 +26,29 @@ using namespace fincept::relmap;
 
 static inline QString MF() {
     return QStringLiteral("font-family:'Consolas','Courier New',monospace;");
+}
+
+static constexpr int kSearchDebounceMs = 300;
+static constexpr int kMaxSearchResults = 10;
+
+/// Convert exchange + symbol to yfinance-compatible ticker.
+static QString to_yfinance_symbol(const QString& symbol, const QString& exchange, const QString& country = {}) {
+    if (exchange.toUpper() == "EURONEXT") {
+        static const QHash<QString, QString> m = {
+            {"FR", ".PA"}, {"NL", ".AS"}, {"BE", ".BR"}, {"PT", ".LS"}, {"IE", ".IR"},
+        };
+        auto it = m.find(country.toUpper());
+        return symbol + (it != m.end() ? it.value() : ".PA");
+    }
+    static const QHash<QString, QString> s = {
+        {"NSE", ".NS"}, {"BSE", ".BO"}, {"HKEX", ".HK"}, {"TSE", ".T"},
+        {"KRX", ".KS"}, {"SGX", ".SI"}, {"ASX", ".AX"}, {"IDX", ".JK"},
+        {"XETR", ".DE"}, {"FWB", ".F"}, {"LSE", ".L"}, {"BME", ".MC"},
+        {"MIL", ".MI"}, {"SIX", ".SW"}, {"VIE", ".VI"}, {"TSX", ".TO"},
+        {"TSXV", ".V"}, {"BMFBOVESPA", ".SA"}, {"BMV", ".MX"}, {"BIST", ".IS"},
+    };
+    auto it = s.find(exchange.toUpper());
+    return it != s.end() ? symbol + it.value() : symbol;
 }
 
 // ── Constructor ──────────────────────────────────────────────────────────────
@@ -35,10 +64,25 @@ RelationshipMapScreen::RelationshipMapScreen(QWidget* parent) : QWidget(parent) 
 
 void RelationshipMapScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
+    hide_dropdown();
 }
 
 void RelationshipMapScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+    hide_dropdown();
+}
+
+bool RelationshipMapScreen::eventFilter(QObject* obj, QEvent* event) {
+    if (obj == search_input_) {
+        if (event->type() == QEvent::FocusIn) {
+            search_input_focused_ = true;
+        } else if (event->type() == QEvent::FocusOut) {
+            search_input_focused_ = false;
+            // Small delay so a click on a dropdown item is registered first.
+            QTimer::singleShot(150, this, [this]() { hide_dropdown(); });
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }
 
 // ── Build UI ─────────────────────────────────────────────────────────────────
@@ -66,17 +110,57 @@ void RelationshipMapScreen::build_ui() {
                              .arg(colors::AMBER, MF()));
     hhl->addWidget(title);
 
-    // Search
+    // Search with autocomplete
     search_input_ = new QLineEdit;
-    search_input_->setPlaceholderText("Enter ticker (AAPL, MSFT, TSLA...)");
-    search_input_->setFixedWidth(280);
+    search_input_->setPlaceholderText("Search assets (AAPL, Tesla, RELIANCE...)");
+    search_input_->setFixedWidth(320);
     search_input_->setStyleSheet(
         QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
                 "padding: 4px 10px; font-size: 12px; %4 }"
                 "QLineEdit:focus { border-color: %5; }")
             .arg(colors::BG_SURFACE, colors::TEXT_PRIMARY, colors::BORDER_DIM, MF(), colors::AMBER));
     connect(search_input_, &QLineEdit::returnPressed, this, &RelationshipMapScreen::on_search);
+    connect(search_input_, &QLineEdit::textChanged, this, &RelationshipMapScreen::on_search_text_changed);
+    // Track focus via eventFilter — dropdown only appears when user is actively typing.
+    search_input_->installEventFilter(this);
     hhl->addWidget(search_input_);
+
+    // Autocomplete dropdown — child widget, no window flags that steal focus
+    search_dropdown_ = new QListWidget(this);
+    search_dropdown_->setFocusPolicy(Qt::NoFocus);
+    search_dropdown_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    search_dropdown_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    search_dropdown_->setStyleSheet(
+        QString("QListWidget { background: %1; border: 1px solid %2; font-size: 11px; %3 }"
+                "QListWidget::item { padding: 4px 8px; border-bottom: 1px solid %4; }"
+                "QListWidget::item:selected { background: %5; }"
+                "QListWidget::item:hover { background: %5; }")
+            .arg(colors::BG_SURFACE, colors::AMBER_DIM, MF(), colors::BORDER_DIM, colors::BG_RAISED));
+    search_dropdown_->setFixedWidth(420);
+    search_dropdown_->setMaximumHeight(320);
+    search_dropdown_->hide();
+    search_dropdown_->raise();
+    auto select_dropdown_item = [this](QListWidgetItem* item) {
+        if (!item) return;
+        QString symbol = item->data(Qt::UserRole).toString();
+        if (symbol.isEmpty()) return;
+        search_input_focused_ = false;
+        search_input_->blockSignals(true);
+        search_input_->setText(symbol);
+        search_input_->blockSignals(false);
+        hide_dropdown();
+        on_search();
+    };
+    connect(search_dropdown_, &QListWidget::itemClicked,    this, select_dropdown_item);
+    connect(search_dropdown_, &QListWidget::itemActivated,  this, select_dropdown_item);
+
+    // Debounce timer
+    search_debounce_ = new QTimer(this);
+    search_debounce_->setSingleShot(true);
+    connect(search_debounce_, &QTimer::timeout, this, [this]() {
+        if (!pending_query_.isEmpty())
+            fire_asset_search(pending_query_);
+    });
 
     auto* search_btn = new QPushButton("ANALYZE");
     search_btn->setCursor(Qt::PointingHandCursor);
@@ -90,6 +174,21 @@ void RelationshipMapScreen::build_ui() {
     hhl->addWidget(search_btn);
 
     hhl->addStretch();
+
+    // Fit / reset zoom button
+    auto* fit_btn = new QPushButton("FIT");
+    fit_btn->setCursor(Qt::PointingHandCursor);
+    fit_btn->setFixedHeight(28);
+    fit_btn->setToolTip("Fit graph to view (or press Home)");
+    fit_btn->setStyleSheet(
+        QString("QPushButton { background: transparent; color: %1; border: 1px solid %2; "
+                "padding: 0 10px; font-size: 10px; %3 }"
+                "QPushButton:hover { color: %4; border-color: %4; }")
+            .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM, MF(), colors::TEXT_PRIMARY));
+    connect(fit_btn, &QPushButton::clicked, this, [this]() {
+        if (view_) view_->fit_to_content();
+    });
+    hhl->addWidget(fit_btn);
 
     // Layout selector
     layout_combo_ = new QComboBox;
@@ -203,8 +302,12 @@ void RelationshipMapScreen::build_ui() {
 
     root->addWidget(status);
 
-    // Connect scene selection
-    connect(scene_, &QGraphicsScene::selectionChanged, this, &RelationshipMapScreen::on_node_selected);
+    // Center card click → navigate to equity research
+    connect(scene_, &relmap::RelationshipGraphScene::center_card_clicked,
+            this, [this](const QString& ticker) {
+                fincept::EventBus::instance().publish("equity_research.load_symbol",
+                    {{"symbol", ticker}, {"type", "equity"}});
+            });
 }
 
 // ── Filter Panel ─────────────────────────────────────────────────────────────
@@ -241,12 +344,15 @@ QWidget* RelationshipMapScreen::build_filter_panel() {
         vl->addWidget(cb);
     };
 
-    make_check("Peers", filters_.show_peers, NodeCategory::Peer);
-    make_check("Institutional", filters_.show_institutional, NodeCategory::Institutional);
-    make_check("Insiders", filters_.show_insiders, NodeCategory::Insider);
-    make_check("Events", filters_.show_events, NodeCategory::Event);
-    make_check("Metrics", filters_.show_metrics, NodeCategory::Metrics);
-    make_check("Supply Chain", filters_.show_supply_chain, NodeCategory::SupplyChain);
+    make_check("Peers",        filters_.show_peers,         NodeCategory::Peer);
+    make_check("Institutional",filters_.show_institutional, NodeCategory::Institutional);
+    make_check("Mutual Funds", filters_.show_institutional, NodeCategory::MutualFund);
+    make_check("Insiders",     filters_.show_insiders,      NodeCategory::Insider);
+    make_check("Officers",     filters_.show_officers,      NodeCategory::Officer);
+    make_check("Analysts",     filters_.show_analysts,      NodeCategory::Analyst);
+    make_check("Metrics",      filters_.show_metrics,       NodeCategory::Metrics);
+    make_check("Events",       filters_.show_events,        NodeCategory::Event);
+    make_check("Supply Chain", filters_.show_supply_chain,  NodeCategory::SupplyChain);
 
     vl->addStretch();
     return panel;
@@ -344,7 +450,14 @@ QWidget* RelationshipMapScreen::build_legend() {
     add_entry(NodeCategory::Company);
     add_entry(NodeCategory::Peer);
     add_entry(NodeCategory::Institutional);
+    add_entry(NodeCategory::MutualFund);
     add_entry(NodeCategory::Insider);
+    add_entry(NodeCategory::Officer);
+    add_entry(NodeCategory::Analyst);
+    add_entry(NodeCategory::Governance);
+    add_entry(NodeCategory::Technicals);
+    add_entry(NodeCategory::ShortInterest);
+    add_entry(NodeCategory::Earnings);
     add_entry(NodeCategory::Metrics);
     add_entry(NodeCategory::Event);
     add_entry(NodeCategory::SupplyChain);
@@ -355,11 +468,29 @@ QWidget* RelationshipMapScreen::build_legend() {
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 void RelationshipMapScreen::on_search() {
+    // If the autocomplete dropdown is open, prefer the selected/first result.
+    if (!search_dropdown_->isHidden() && search_dropdown_->count() > 0) {
+        QListWidgetItem* chosen = search_dropdown_->currentItem();
+        if (!chosen) chosen = search_dropdown_->item(0);
+        if (chosen) {
+            QString symbol = chosen->data(Qt::UserRole).toString();
+            if (!symbol.isEmpty()) {
+                search_input_->blockSignals(true);
+                search_input_->setText(symbol);
+                search_input_->blockSignals(false);
+            }
+        }
+    }
+    hide_dropdown();
+    search_input_focused_ = false;
+
     QString ticker = search_input_->text().trimmed().toUpper();
     if (ticker.isEmpty())
         return;
 
+    search_input_->blockSignals(true);
     search_input_->setText(ticker);
+    search_input_->blockSignals(false);
     progress_bar_->show();
     progress_bar_->setValue(0);
     detail_panel_->hide();
@@ -368,6 +499,143 @@ void RelationshipMapScreen::on_search() {
 
     services::RelationshipMapService::instance().fetch(ticker);
     ScreenStateManager::instance().notify_changed(this);
+}
+
+// ── Autocomplete search ─────────────────────────────────────────────────────
+
+void RelationshipMapScreen::on_search_text_changed(const QString& text) {
+    // Only show suggestions when the user is actively typing in the focused field.
+    // Never show suggestions if the text matches what's already loaded in the graph.
+    if (!search_input_focused_) {
+        hide_dropdown();
+        return;
+    }
+    QString query = text.trimmed();
+    if (query.length() < 2) {
+        hide_dropdown();
+        return;
+    }
+    // If the typed text exactly matches the currently loaded ticker, don't re-suggest.
+    if (!loaded_ticker_.isEmpty() && query.toUpper() == loaded_ticker_.toUpper()) {
+        hide_dropdown();
+        return;
+    }
+    pending_query_ = query;
+    search_debounce_->start(kSearchDebounceMs);
+}
+
+void RelationshipMapScreen::fire_asset_search(const QString& query) {
+    const QString url = QString("/market/search?q=%1&type=stock&limit=%2").arg(query).arg(kMaxSearchResults);
+
+    QPointer<RelationshipMapScreen> self = this;
+    fincept::HttpClient::instance().get(url, [self, query](Result<QJsonDocument> result) {
+        if (!self) return;
+        if (self->pending_query_ != query) return;
+        if (!result.is_ok()) return;
+
+        const auto doc = result.value();
+        QJsonArray arr;
+        if (doc.isArray()) {
+            arr = doc.array();
+        } else if (doc.isObject()) {
+            const auto obj = doc.object();
+            if (obj.contains("results")) arr = obj["results"].toArray();
+            else if (obj.contains("data")) arr = obj["data"].toArray();
+        }
+        self->on_asset_results(arr);
+    });
+}
+
+void RelationshipMapScreen::on_asset_results(const QJsonArray& results) {
+    search_dropdown_->clear();
+
+    if (results.isEmpty()) {
+        auto* item = new QListWidgetItem(search_dropdown_);
+        item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
+        auto* row = new QWidget;
+        row->setStyleSheet("background:transparent;");
+        auto* rl = new QHBoxLayout(row);
+        rl->setContentsMargins(8, 4, 8, 4);
+        auto* lbl = new QLabel("No results found");
+        lbl->setStyleSheet(QString("color:%1;font-size:11px;%2;background:transparent;")
+                               .arg(ui::colors::TEXT_TERTIARY.get(), MF()));
+        rl->addWidget(lbl);
+        item->setSizeHint(QSize(0, 28));
+        search_dropdown_->setItemWidget(item, row);
+        show_dropdown();
+        return;
+    }
+
+    for (const auto& val : results) {
+        auto obj = val.toObject();
+        QString symbol   = obj["symbol"].toString();
+        QString name     = obj["name"].toString();
+        QString exchange = obj["exchange"].toString();
+        QString country  = obj["country"].toString();
+        QString type     = obj["type"].toString("stock");
+
+        if (symbol.isEmpty()) continue;
+
+        QString yf_symbol = to_yfinance_symbol(symbol, exchange, country);
+
+        auto* item = new QListWidgetItem(search_dropdown_);
+        item->setData(Qt::UserRole, yf_symbol);
+
+        auto* row = new QWidget;
+        row->setStyleSheet("background:transparent;");
+        auto* hl = new QHBoxLayout(row);
+        hl->setContentsMargins(8, 3, 8, 3);
+        hl->setSpacing(8);
+
+        auto* sym_lbl = new QLabel(yf_symbol);
+        sym_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:700;%2;background:transparent;")
+                                   .arg(ui::colors::AMBER.get(), MF()));
+        sym_lbl->setFixedWidth(100);
+        hl->addWidget(sym_lbl);
+
+        auto* name_lbl = new QLabel(name);
+        name_lbl->setStyleSheet(QString("color:%1;font-size:11px;%2;background:transparent;")
+                                    .arg(ui::colors::TEXT_SECONDARY.get(), MF()));
+        name_lbl->setMaximumWidth(180);
+        hl->addWidget(name_lbl, 1);
+
+        if (!exchange.isEmpty()) {
+            auto* exch_lbl = new QLabel(exchange);
+            exch_lbl->setStyleSheet(QString("color:%1;font-size:9px;%2;background:transparent;")
+                                        .arg(ui::colors::TEXT_TERTIARY.get(), MF()));
+            hl->addWidget(exch_lbl);
+        }
+
+        auto* type_lbl = new QLabel(type.toUpper());
+        type_lbl->setStyleSheet(QString("color:%1;font-size:8px;font-weight:700;%2;"
+                                        "background:%3;padding:1px 4px;border-radius:2px;")
+                                    .arg(ui::colors::AMBER.get(), MF(), ui::colors::BG_RAISED.get()));
+        hl->addWidget(type_lbl);
+
+        item->setSizeHint(QSize(0, 30));
+        search_dropdown_->setItemWidget(item, row);
+    }
+
+    if (search_dropdown_->count() > 0)
+        search_dropdown_->setCurrentRow(0);
+    show_dropdown();
+}
+
+void RelationshipMapScreen::show_dropdown() {
+    if (search_dropdown_->count() == 0) { hide_dropdown(); return; }
+    // Position below the search input, as a child of this widget
+    QPoint pos = search_input_->mapTo(this, QPoint(0, search_input_->height()));
+    search_dropdown_->move(pos);
+    int h = 0;
+    for (int i = 0; i < search_dropdown_->count(); ++i)
+        h += search_dropdown_->sizeHintForRow(i);
+    search_dropdown_->setFixedHeight(qMin(h + 4, 320));
+    search_dropdown_->show();
+    search_dropdown_->raise();
+}
+
+void RelationshipMapScreen::hide_dropdown() {
+    search_dropdown_->hide();
 }
 
 void RelationshipMapScreen::on_progress(int percent, const QString& message) {
@@ -382,14 +650,21 @@ void RelationshipMapScreen::on_progress(int percent, const QString& message) {
 void RelationshipMapScreen::on_data_ready(const RelationshipData& data) {
     current_data_ = data;
     has_data_ = true;
+    loaded_ticker_ = data.company.ticker;
     progress_bar_->hide();
     progress_label_->setText("Complete");
     legend_widget_->show();
     rebuild_graph();
     update_status_bar();
 
-    // Fit view to content
-    view_->fitInView(scene_->sceneRect(), Qt::KeepAspectRatio);
+    // Update search field to show the loaded ticker without triggering autocomplete.
+    // Block signals so on_search_text_changed doesn't fire.
+    search_input_->blockSignals(true);
+    search_input_->setText(loaded_ticker_);
+    search_input_->blockSignals(false);
+    hide_dropdown();
+
+    view_->fit_to_content();
 }
 
 void RelationshipMapScreen::on_fetch_failed(const QString& error) {

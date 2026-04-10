@@ -209,14 +209,7 @@ QJsonArray ImfPanel::flatten_pivot(const QJsonObject& values, const QString& ind
 }
 
 void ImfPanel::on_indicator_filter(const QString& text) {
-    for (int i = 0; i < indicator_list_->count(); ++i) {
-        auto* item = indicator_list_->item(i);
-        item->setHidden(!item->text().contains(text, Qt::CaseInsensitive));
-    }
-}
-
-void ImfPanel::load_indicators() {
-    indicators_loaded_ = true;
+    filter_list(indicator_list_, text);
 }
 
 } // namespace fincept::screens

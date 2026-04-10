@@ -84,78 +84,222 @@ void RelationshipMapService::parse_result(const QString& json_output) {
 
     // ── Company ──────────────────────────────────────────────────────────
     QJsonObject co = root["company"].toObject();
-    data_.company.ticker = co["ticker"].toString();
-    data_.company.name = co["name"].toString();
-    data_.company.sector = co["sector"].toString();
-    data_.company.industry = co["industry"].toString();
-    data_.company.market_cap = co["market_cap"].toDouble();
-    data_.company.current_price = co["current_price"].toDouble();
-    data_.company.pe_ratio = co["pe_ratio"].toDouble();
-    data_.company.forward_pe = co["forward_pe"].toDouble();
-    data_.company.price_to_book = co["price_to_book"].toDouble();
-    data_.company.roe = co["roe"].toDouble();
-    data_.company.revenue_growth = co["revenue_growth"].toDouble();
-    data_.company.profit_margins = co["profit_margins"].toDouble();
-    data_.company.revenue = co["revenue"].toDouble();
-    data_.company.ebitda = co["ebitda"].toDouble();
-    data_.company.free_cashflow = co["free_cashflow"].toDouble();
-    data_.company.total_cash = co["total_cash"].toDouble();
-    data_.company.total_debt = co["total_debt"].toDouble();
-    data_.company.insider_percent = co["insider_percent"].toDouble();
-    data_.company.institutional_percent = co["institutional_percent"].toDouble();
-    data_.company.employees = co["employees"].toInt();
-    data_.company.recommendation = co["recommendation"].toString();
-    data_.company.target_price = co["target_price"].toDouble();
-    data_.company.analyst_count = co["analyst_count"].toInt();
+    data_.company.ticker               = co["ticker"].toString();
+    data_.company.name                 = co["name"].toString();
+    data_.company.sector               = co["sector"].toString();
+    data_.company.industry             = co["industry"].toString();
+    data_.company.website              = co["website"].toString();
+    data_.company.description          = co["description"].toString();
+    data_.company.country              = co["country"].toString();
+    data_.company.exchange             = co["exchange"].toString();
+    data_.company.currency             = co["currency"].toString();
+    data_.company.employees            = co["employees"].toInt();
+    data_.company.market_cap           = co["market_cap"].toDouble();
+    data_.company.current_price        = co["current_price"].toDouble();
+    data_.company.previous_close       = co["previous_close"].toDouble();
+    data_.company.day_change_pct       = co["day_change_pct"].toDouble();
+    data_.company.pe_ratio             = co["pe_ratio"].toDouble();
+    data_.company.forward_pe           = co["forward_pe"].toDouble();
+    data_.company.price_to_book        = co["price_to_book"].toDouble();
+    data_.company.roe                  = co["roe"].toDouble();
+    data_.company.roa                  = co["roa"].toDouble();
+    data_.company.revenue_growth       = co["revenue_growth"].toDouble();
+    data_.company.earnings_growth      = co["earnings_growth"].toDouble();
+    data_.company.profit_margins       = co["profit_margins"].toDouble();
+    data_.company.revenue              = co["revenue"].toDouble();
+    data_.company.ebitda               = co["ebitda"].toDouble();
+    data_.company.free_cashflow        = co["free_cashflow"].toDouble();
+    data_.company.operating_cashflow   = co["operating_cashflow"].toDouble();
+    data_.company.total_cash           = co["total_cash"].toDouble();
+    data_.company.total_debt           = co["total_debt"].toDouble();
+    data_.company.insider_percent      = co["insider_percent"].toDouble();
+    data_.company.institutional_percent= co["institutional_percent"].toDouble();
+    data_.company.recommendation       = co["recommendation"].toString();
+    data_.company.recommendation_mean  = co["recommendation_mean"].toDouble();
+    data_.company.target_high          = co["target_high"].toDouble();
+    data_.company.target_low           = co["target_low"].toDouble();
+    data_.company.target_mean          = co["target_mean"].toDouble();
+    data_.company.target_median        = co["target_median"].toDouble();
+    data_.company.analyst_count        = co["analyst_count"].toInt();
+    data_.company.dividend_yield       = co["dividend_yield"].toDouble();
+    data_.company.payout_ratio         = co["payout_ratio"].toDouble();
+    data_.company.trailing_eps         = co["trailing_eps"].toDouble();
+    data_.company.forward_eps          = co["forward_eps"].toDouble();
+    data_.company.shares_outstanding   = co["shares_outstanding"].toDouble();
 
-    // ── Institutional Holders ────────────────────────────────────────────
-    QJsonArray inst_arr = root["institutional_holders"].toArray();
-    for (const auto& v : inst_arr) {
+    // ── Governance ───────────────────────────────────────────────────────
+    QJsonObject gov = root["governance"].toObject();
+    data_.governance.audit_risk               = gov["audit_risk"].toInt();
+    data_.governance.board_risk               = gov["board_risk"].toInt();
+    data_.governance.compensation_risk        = gov["compensation_risk"].toInt();
+    data_.governance.shareholder_rights_risk  = gov["shareholder_rights_risk"].toInt();
+    data_.governance.overall_risk             = gov["overall_risk"].toInt();
+
+    // ── Technicals ───────────────────────────────────────────────────────
+    QJsonObject tech = root["technicals"].toObject();
+    data_.technicals.fifty_two_week_high   = tech["fifty_two_week_high"].toDouble();
+    data_.technicals.fifty_two_week_low    = tech["fifty_two_week_low"].toDouble();
+    data_.technicals.fifty_day_avg         = tech["fifty_day_avg"].toDouble();
+    data_.technicals.two_hundred_day_avg   = tech["two_hundred_day_avg"].toDouble();
+    data_.technicals.beta                  = tech["beta"].toDouble();
+    data_.technicals.week52_change_pct     = tech["week52_change_pct"].toDouble();
+    data_.technicals.sp500_52wk_change     = tech["sp500_52wk_change"].toDouble();
+    data_.technicals.avg_volume            = tech["avg_volume"].toInt();
+    data_.technicals.avg_volume_10d        = tech["avg_volume_10d"].toInt();
+
+    // ── Short Interest ────────────────────────────────────────────────────
+    QJsonObject si = root["short_interest"].toObject();
+    data_.short_interest.shares_short     = si["shares_short"].toDouble();
+    data_.short_interest.short_ratio      = si["short_ratio"].toDouble();
+    data_.short_interest.short_pct_float  = si["short_pct_float"].toDouble();
+    data_.short_interest.float_shares     = si["float_shares"].toDouble();
+
+    // ── Enterprise ────────────────────────────────────────────────────────
+    QJsonObject ent = root["enterprise"].toObject();
+    data_.enterprise.enterprise_value = ent["enterprise_value"].toDouble();
+    data_.enterprise.ev_to_revenue    = ent["ev_to_revenue"].toDouble();
+    data_.enterprise.ev_to_ebitda     = ent["ev_to_ebitda"].toDouble();
+    data_.enterprise.peg_ratio        = ent["peg_ratio"].toDouble();
+    data_.enterprise.price_to_sales   = ent["price_to_sales"].toDouble();
+    data_.enterprise.book_value       = ent["book_value"].toDouble();
+
+    // ── Margins & Debt ────────────────────────────────────────────────────
+    QJsonObject mg = root["margins"].toObject();
+    data_.margins.gross          = mg["gross"].toDouble();
+    data_.margins.operating      = mg["operating"].toDouble();
+    data_.margins.ebitda         = mg["ebitda"].toDouble();
+    data_.margins.net            = mg["net"].toDouble();
+    data_.margins.debt_to_equity = mg["debt_to_equity"].toDouble();
+    data_.margins.current_ratio  = mg["current_ratio"].toDouble();
+    data_.margins.quick_ratio    = mg["quick_ratio"].toDouble();
+
+    // ── Analyst Targets ───────────────────────────────────────────────────
+    QJsonObject at = root["analyst_targets"].toObject();
+    data_.analyst_targets.current = at["current"].toDouble();
+    data_.analyst_targets.high    = at["high"].toDouble();
+    data_.analyst_targets.low     = at["low"].toDouble();
+    data_.analyst_targets.mean    = at["mean"].toDouble();
+    data_.analyst_targets.median  = at["median"].toDouble();
+
+    // ── Recommendations Summary ───────────────────────────────────────────
+    for (const auto& v : root["recommendations_summary"].toArray()) {
+        QJsonObject r = v.toObject();
+        RecommendationSnapshot snap;
+        snap.period      = r["period"].toString();
+        snap.strong_buy  = r["strong_buy"].toInt();
+        snap.buy         = r["buy"].toInt();
+        snap.hold        = r["hold"].toInt();
+        snap.sell        = r["sell"].toInt();
+        snap.strong_sell = r["strong_sell"].toInt();
+        data_.recommendations.append(snap);
+    }
+
+    // ── Upgrades / Downgrades ─────────────────────────────────────────────
+    for (const auto& v : root["upgrades_downgrades"].toArray()) {
+        QJsonObject u = v.toObject();
+        AnalystUpgrade upg;
+        upg.date         = u["date"].toString();
+        upg.firm         = u["firm"].toString();
+        upg.to_grade     = u["to_grade"].toString();
+        upg.from_grade   = u["from_grade"].toString();
+        upg.action       = u["action"].toString();
+        upg.price_target = u["price_target"].toDouble();
+        upg.prior_target = u["prior_target"].toDouble();
+        data_.upgrades_downgrades.append(upg);
+    }
+
+    // ── Officers ──────────────────────────────────────────────────────────
+    for (const auto& v : root["officers"].toArray()) {
+        QJsonObject o = v.toObject();
+        CompanyOfficer off;
+        off.name      = o["name"].toString();
+        off.title     = o["title"].toString();
+        off.total_pay = o["total_pay"].toInt();
+        off.year_born = o["year_born"].toInt();
+        if (!off.name.isEmpty())
+            data_.officers.append(off);
+    }
+
+    // ── Calendar ──────────────────────────────────────────────────────────
+    QJsonObject cal = root["calendar"].toObject();
+    data_.calendar.earnings_date    = cal["earnings_date"].toString();
+    data_.calendar.earnings_avg     = cal["earnings_avg"].toDouble();
+    data_.calendar.earnings_low     = cal["earnings_low"].toDouble();
+    data_.calendar.earnings_high    = cal["earnings_high"].toDouble();
+    data_.calendar.revenue_avg      = cal["revenue_avg"].toDouble();
+    data_.calendar.revenue_low      = cal["revenue_low"].toDouble();
+    data_.calendar.revenue_high     = cal["revenue_high"].toDouble();
+    data_.calendar.ex_dividend_date = cal["ex_dividend_date"].toString();
+    data_.calendar.dividend_date    = cal["dividend_date"].toString();
+
+    // ── Institutional Holders ─────────────────────────────────────────────
+    for (const auto& v : root["institutional_holders"].toArray()) {
         QJsonObject h = v.toObject();
         InstitutionalHolder holder;
-        holder.name = h["name"].toString();
-        holder.shares = h["shares"].toDouble();
-        holder.value = h["value"].toDouble();
-        holder.percentage = h["percentage"].toDouble();
+        holder.name           = h["name"].toString();
+        holder.shares         = h["shares"].toDouble();
+        holder.value          = h["value"].toDouble();
+        holder.percentage     = h["percentage"].toDouble();
         holder.change_percent = h["change_percent"].toDouble();
-        holder.fund_family = h["fund_family"].toString();
+        holder.fund_family    = h["fund_family"].toString();
+        holder.type           = "institutional";
         if (!holder.name.isEmpty())
             data_.institutional_holders.append(holder);
     }
 
-    // ── Insider Holders ──────────────────────────────────────────────────
-    QJsonArray ins_arr = root["insider_holders"].toArray();
-    for (const auto& v : ins_arr) {
+    // ── Mutual Fund Holders ───────────────────────────────────────────────
+    for (const auto& v : root["mutualfund_holders"].toArray()) {
+        QJsonObject h = v.toObject();
+        InstitutionalHolder holder;
+        holder.name           = h["name"].toString();
+        holder.shares         = h["shares"].toDouble();
+        holder.value          = h["value"].toDouble();
+        holder.percentage     = h["percentage"].toDouble();
+        holder.change_percent = h["change_percent"].toDouble();
+        holder.fund_family    = h["fund_family"].toString();
+        holder.type           = "mutualfund";
+        if (!holder.name.isEmpty())
+            data_.mutualfund_holders.append(holder);
+    }
+
+    // ── Insider Holders ───────────────────────────────────────────────────
+    for (const auto& v : root["insider_holders"].toArray()) {
         QJsonObject h = v.toObject();
         InsiderHolder insider;
-        insider.name = h["name"].toString();
-        insider.title = h["title"].toString();
-        insider.shares = h["shares"].toDouble();
-        insider.percentage = h["percentage"].toDouble();
+        insider.name             = h["name"].toString();
+        insider.title            = h["title"].toString();
+        insider.shares           = h["shares"].toDouble();
+        insider.percentage       = h["percentage"].toDouble();
         insider.last_transaction = h["last_transaction"].toString();
         if (!insider.name.isEmpty())
             data_.insider_holders.append(insider);
     }
 
-    // ── Peers ────────────────────────────────────────────────────────────
-    QJsonArray peers_arr = root["peers"].toArray();
-    for (const auto& v : peers_arr) {
+    // ── Peers ─────────────────────────────────────────────────────────────
+    for (const auto& v : root["peers"].toArray()) {
         QJsonObject p = v.toObject();
         PeerCompany peer;
-        peer.ticker = p["ticker"].toString();
-        peer.name = p["name"].toString();
-        peer.market_cap = p["market_cap"].toDouble();
-        peer.pe_ratio = p["pe_ratio"].toDouble();
-        peer.roe = p["roe"].toDouble();
-        peer.revenue_growth = p["revenue_growth"].toDouble();
-        peer.profit_margins = p["profit_margins"].toDouble();
-        peer.current_price = p["current_price"].toDouble();
-        peer.sector = p["sector"].toString();
+        peer.ticker          = p["ticker"].toString();
+        peer.name            = p["name"].toString();
+        peer.market_cap      = p["market_cap"].toDouble();
+        peer.pe_ratio        = p["pe_ratio"].toDouble();
+        peer.forward_pe      = p["forward_pe"].toDouble();
+        peer.roe             = p["roe"].toDouble();
+        peer.revenue_growth  = p["revenue_growth"].toDouble();
+        peer.profit_margins  = p["profit_margins"].toDouble();
+        peer.gross_margins   = p["gross_margins"].toDouble();
+        peer.current_price   = p["current_price"].toDouble();
+        peer.sector          = p["sector"].toString();
+        peer.beta            = p["beta"].toDouble();
+        peer.ev_to_ebitda    = p["ev_to_ebitda"].toDouble();
+        peer.price_to_book   = p["price_to_book"].toDouble();
+        peer.week52_change   = p["week52_change"].toDouble();
+        peer.recommendation  = p["recommendation"].toString();
         if (!peer.ticker.isEmpty())
             data_.peers.append(peer);
     }
 
-    // ── Valuation Signal ─────────────────────────────────────────────────
+    // ── Valuation Signal ──────────────────────────────────────────────────
     data_.valuation = compute_valuation(data_.company, data_.peers);
 
     data_.data_quality = root["data_quality"].toInt();

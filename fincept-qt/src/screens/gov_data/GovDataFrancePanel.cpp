@@ -1,20 +1,17 @@
 // src/screens/gov_data/GovDataFrancePanel.cpp
 // France data.gouv.fr panel — Data Services | Datasets (search) | Geo Search
 #include "screens/gov_data/GovDataFrancePanel.h"
+#include "screens/gov_data/GovDataProviderPanel.h"
 
 #include "core/logging/Logger.h"
 #include "services/gov_data/GovDataService.h"
 #include "ui/theme/Theme.h"
 
-#include <QDesktopServices>
-#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QScrollArea>
-#include <QTextStream>
-#include <QUrl>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -25,81 +22,15 @@ static constexpr const char* kGovDataFranceColor = "#2563EB";
 
 using namespace fincept::ui;
 
-// ── Dynamic stylesheet ───────────────────────────────────────────────────────
-
-static QString build_france_style() {
-    const auto& t = ui::ThemeManager::instance().tokens();
-    const auto cc = QColor(kGovDataFranceColor);
-    const QString cr = QString::number(cc.red());
-    const QString cg = QString::number(cc.green());
-    const QString cb = QString::number(cc.blue());
-    const QString c = kGovDataFranceColor;
-
-    QString s;
-    s += QString("#frPanelToolbar { background:%1; border-bottom:1px solid %2; }").arg(t.bg_raised, t.border_dim);
-
-    s += QString("#frTabBtn { background:transparent; color:%1; border:1px solid %2;"
-                 "  font-size:10px; font-weight:700; padding:4px 12px; letter-spacing:0.5px; }")
-             .arg(t.text_secondary, t.border_dim);
-    s += QString("#frTabBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
-    s += QString("#frTabBtn:checked { background:rgba(%1,%2,%3,0.12); color:%4;"
-                 "  border:1px solid %4; }")
-             .arg(cr, cg, cb, c);
-
-    s += QString("#frBackBtn { background:transparent; color:%1; border:1px solid %2;"
-                 "  font-size:10px; font-weight:700; padding:4px 10px; }")
-             .arg(t.text_secondary, t.border_dim);
-    s += QString("#frBackBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
-
-    s += QString("#frFetchBtn { background:%1; color:%2; border:none;"
-                 "  font-size:10px; font-weight:700; padding:4px 14px; }")
-             .arg(c, t.bg_base);
-    s += QString("#frFetchBtn:hover { background:%1; }").arg(cc.lighter(120).name());
-    s += QString("#frFetchBtn:disabled { background:%1; color:%2; }").arg(t.border_dim, t.text_dim);
-
-    s += QString("#frCsvBtn { background:transparent; color:%1; border:1px solid %2;"
-                 "  font-size:10px; font-weight:700; padding:4px 10px; }")
-             .arg(t.text_secondary, t.border_dim);
-    s += QString("#frCsvBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
-
-    s += QString("#frSearch { background:%1; color:%2; border:none;"
-                 "  border-bottom:1px solid %3; padding:4px 10px; font-size:11px; }")
-             .arg(t.bg_base, t.text_primary, t.border_dim);
-    s += QString("#frSearch:focus { border-bottom:1px solid %1; }").arg(c);
-
-    s += QString("QTableWidget { background:%1; color:%2; border:none;"
-                 "  gridline-color:%3; font-size:11px; alternate-background-color:%4; }")
-             .arg(t.bg_base, t.text_primary, t.border_dim, t.bg_surface);
-    s += QString("QTableWidget::item { padding:5px 8px; border-bottom:1px solid %1; }").arg(t.border_dim);
-    s += QString("QTableWidget::item:selected { background:rgba(%1,%2,%3,0.10); color:%4; }").arg(cr, cg, cb, c);
-    s += QString("QHeaderView::section { background:%1; color:%2; border:none;"
-                 "  border-bottom:2px solid %3; border-right:1px solid %3;"
-                 "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }")
-             .arg(t.bg_raised, t.text_secondary, t.border_dim);
-
-    s += QString("#frStatusPage { background:%1; }").arg(t.bg_base);
-    s += QString("#frStatusMsg  { color:%1; font-size:13px; background:transparent; }").arg(t.text_secondary);
-    s += QString("#frStatusErr  { color:%1; font-size:12px; background:transparent; }").arg(t.negative);
-
-    s += QString("#frBreadcrumb { background:%1; border-bottom:1px solid %2; }").arg(t.bg_surface, t.border_dim);
-    s += QString("#frBreadText  { color:%1; font-size:9px; background:transparent; }").arg(t.text_secondary);
-    s += QString("#frBreadCount { color:%1; font-size:9px; background:transparent; }").arg(t.text_secondary);
-
-    s += QString("QScrollBar:vertical { background:%1; width:5px; }").arg(t.bg_base);
-    s += QString("QScrollBar::handle:vertical { background:%1; min-height:20px; }").arg(t.border_dim);
-    s += "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }";
-    return s;
-}
-
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 GovDataFrancePanel::GovDataFrancePanel(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(build_france_style());
+    setStyleSheet(make_gov_panel_style(kGovDataFranceColor));
     build_ui();
     connect(&services::GovDataService::instance(), &services::GovDataService::result_ready, this,
             &GovDataFrancePanel::on_result);
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this]() { setStyleSheet(build_france_style()); });
+            [this]() { setStyleSheet(make_gov_panel_style(kGovDataFranceColor)); });
 }
 
 // ── Build UI ──────────────────────────────────────────────────────────────────
@@ -113,17 +44,17 @@ void GovDataFrancePanel::build_ui() {
 
     // Breadcrumb bar
     breadcrumb_ = new QWidget(this);
-    breadcrumb_->setObjectName("frBreadcrumb");
+    breadcrumb_->setObjectName("govBreadcrumb");
     breadcrumb_->setFixedHeight(24);
     auto* bcl = new QHBoxLayout(breadcrumb_);
     bcl->setContentsMargins(14, 0, 14, 0);
     bcl->setSpacing(4);
     breadcrumb_label_ = new QLabel("Data Services");
-    breadcrumb_label_->setObjectName("frBreadText");
+    breadcrumb_label_->setObjectName("govBreadcrumbText");
     bcl->addWidget(breadcrumb_label_);
     bcl->addStretch(1);
     row_count_label_ = new QLabel;
-    row_count_label_->setObjectName("frBreadCount");
+    row_count_label_->setObjectName("govBreadcrumbActive");
     bcl->addWidget(row_count_label_);
     root->addWidget(breadcrumb_);
 
@@ -141,12 +72,7 @@ void GovDataFrancePanel::build_ui() {
     services_table_->setColumnWidth(1, 80);
     services_table_->setColumnWidth(2, 90);
     services_table_->setColumnWidth(3, 100);
-    services_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    services_table_->setSelectionMode(QAbstractItemView::SingleSelection);
-    services_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    services_table_->verticalHeader()->setVisible(false);
-    services_table_->setAlternatingRowColors(true);
-    services_table_->setShowGrid(true);
+    configure_table(services_table_);
     content_stack_->addWidget(services_table_); // index 0
 
     // Page 1 — Datasets table (search results)
@@ -162,12 +88,7 @@ void GovDataFrancePanel::build_ui() {
     datasets_table_->setColumnWidth(2, 130);
     datasets_table_->setColumnWidth(3, 55);
     datasets_table_->setColumnWidth(4, 100);
-    datasets_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    datasets_table_->setSelectionMode(QAbstractItemView::SingleSelection);
-    datasets_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    datasets_table_->verticalHeader()->setVisible(false);
-    datasets_table_->setAlternatingRowColors(true);
-    datasets_table_->setShowGrid(true);
+    configure_table(datasets_table_);
     connect(datasets_table_, &QTableWidget::cellDoubleClicked, this,
             &GovDataFrancePanel::on_dataset_row_double_clicked);
     content_stack_->addWidget(datasets_table_); // index 1
@@ -187,12 +108,7 @@ void GovDataFrancePanel::build_ui() {
     geo_table_->setColumnWidth(3, 55);
     geo_table_->setColumnWidth(4, 65);
     geo_table_->setColumnWidth(5, 95);
-    geo_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    geo_table_->setSelectionMode(QAbstractItemView::SingleSelection);
-    geo_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    geo_table_->verticalHeader()->setVisible(false);
-    geo_table_->setAlternatingRowColors(true);
-    geo_table_->setShowGrid(true);
+    configure_table(geo_table_);
     content_stack_->addWidget(geo_table_); // index 2
 
     // Page 3 — Resources / Column schema table
@@ -202,21 +118,16 @@ void GovDataFrancePanel::build_ui() {
     resources_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     resources_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     resources_table_->setColumnWidth(1, 120);
-    resources_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    resources_table_->setSelectionMode(QAbstractItemView::SingleSelection);
-    resources_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    resources_table_->verticalHeader()->setVisible(false);
-    resources_table_->setAlternatingRowColors(true);
-    resources_table_->setShowGrid(true);
+    configure_table(resources_table_);
     content_stack_->addWidget(resources_table_); // index 3
 
     // Page 4 — Status / loading / error
     auto* status_page = new QWidget(this);
-    status_page->setObjectName("frStatusPage");
+    status_page->setObjectName("govStatusPage");
     auto* svl = new QVBoxLayout(status_page);
     svl->setAlignment(Qt::AlignCenter);
     status_label_ = new QLabel;
-    status_label_->setObjectName("frStatusMsg");
+    status_label_->setObjectName("govStatusMsg");
     status_label_->setAlignment(Qt::AlignCenter);
     status_label_->setWordWrap(true);
     svl->addWidget(status_label_);
@@ -227,15 +138,15 @@ void GovDataFrancePanel::build_ui() {
 
 QWidget* GovDataFrancePanel::build_toolbar() {
     auto* bar = new QWidget(this);
-    bar->setObjectName("frPanelToolbar");
-    bar->setFixedHeight(40);
+    bar->setObjectName("govPanelToolbar");
+    bar->setFixedHeight(36);
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(5);
 
     back_btn_ = new QPushButton("← BACK");
-    back_btn_->setObjectName("frBackBtn");
+    back_btn_->setObjectName("govBackBtn");
     back_btn_->setVisible(false);
     back_btn_->setCursor(Qt::PointingHandCursor);
     connect(back_btn_, &QPushButton::clicked, this, &GovDataFrancePanel::on_back);
@@ -244,7 +155,7 @@ QWidget* GovDataFrancePanel::build_toolbar() {
     hl->addSpacing(4);
 
     services_btn_ = new QPushButton("DATA SERVICES");
-    services_btn_->setObjectName("frTabBtn");
+    services_btn_->setObjectName("govTabBtn");
     services_btn_->setCheckable(true);
     services_btn_->setChecked(true);
     services_btn_->setCursor(Qt::PointingHandCursor);
@@ -252,14 +163,14 @@ QWidget* GovDataFrancePanel::build_toolbar() {
     hl->addWidget(services_btn_);
 
     datasets_btn_ = new QPushButton("DATASETS");
-    datasets_btn_->setObjectName("frTabBtn");
+    datasets_btn_->setObjectName("govTabBtn");
     datasets_btn_->setCheckable(true);
     datasets_btn_->setCursor(Qt::PointingHandCursor);
     connect(datasets_btn_, &QPushButton::clicked, this, [this]() { on_tab_changed(Datasets); });
     hl->addWidget(datasets_btn_);
 
     geo_btn_ = new QPushButton("GEO SEARCH");
-    geo_btn_->setObjectName("frTabBtn");
+    geo_btn_->setObjectName("govTabBtn");
     geo_btn_->setCheckable(true);
     geo_btn_->setCursor(Qt::PointingHandCursor);
     connect(geo_btn_, &QPushButton::clicked, this, [this]() { on_tab_changed(Geo); });
@@ -268,7 +179,7 @@ QWidget* GovDataFrancePanel::build_toolbar() {
     hl->addSpacing(10);
 
     search_input_ = new QLineEdit;
-    search_input_->setObjectName("frSearch");
+    search_input_->setObjectName("govSearch");
     search_input_->setPlaceholderText("Search…");
     search_input_->setFixedWidth(210);
     search_input_->setFixedHeight(26);
@@ -276,7 +187,7 @@ QWidget* GovDataFrancePanel::build_toolbar() {
     hl->addWidget(search_input_);
 
     fetch_btn_ = new QPushButton("FETCH");
-    fetch_btn_->setObjectName("frFetchBtn");
+    fetch_btn_->setObjectName("govFetchBtn");
     fetch_btn_->setCursor(Qt::PointingHandCursor);
     connect(fetch_btn_, &QPushButton::clicked, this, &GovDataFrancePanel::on_fetch);
     hl->addWidget(fetch_btn_);
@@ -284,7 +195,7 @@ QWidget* GovDataFrancePanel::build_toolbar() {
     hl->addStretch(1);
 
     export_btn_ = new QPushButton("CSV");
-    export_btn_->setObjectName("frCsvBtn");
+    export_btn_->setObjectName("govCsvBtn");
     export_btn_->setCursor(Qt::PointingHandCursor);
     connect(export_btn_, &QPushButton::clicked, this, &GovDataFrancePanel::on_export_csv);
     hl->addWidget(export_btn_);
@@ -673,35 +584,7 @@ void GovDataFrancePanel::on_export_csv() {
     if (!table)
         return;
 
-    QString path = QFileDialog::getSaveFileName(this, "Export CSV", def_name, "CSV Files (*.csv)");
-    if (path.isEmpty())
-        return;
-
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-        return;
-    QTextStream out(&file);
-
-    QStringList headers;
-    for (int c = 0; c < table->columnCount(); ++c) {
-        auto* h = table->horizontalHeaderItem(c);
-        headers << (h ? h->text() : QString::number(c));
-    }
-    out << headers.join(",") << "\n";
-
-    for (int r = 0; r < table->rowCount(); ++r) {
-        QStringList row;
-        for (int c = 0; c < table->columnCount(); ++c) {
-            auto* item = table->item(r, c);
-            QString val = item ? item->text() : "";
-            if (val.contains(',') || val.contains('"'))
-                val = "\"" + val.replace("\"", "\"\"") + "\"";
-            row << val;
-        }
-        out << row.join(",") << "\n";
-    }
-
-    LOG_INFO("GovFrance", "Exported CSV: " + path);
+    export_table_to_csv(table, def_name, this);
 }
 
 } // namespace fincept::screens

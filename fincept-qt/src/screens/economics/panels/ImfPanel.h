@@ -23,7 +23,6 @@ class ImfPanel : public EconPanelBase {
     void on_result(const QString& request_id, const services::EconomicsResult& result) override;
 
   private:
-    void load_indicators();
     void on_indicator_filter(const QString& text);
     // Flatten nested pivot: values.INDICATOR.COUNTRY.YEAR -> rows
     QJsonArray flatten_pivot(const QJsonObject& values, const QString& indicator_code,
@@ -32,8 +31,6 @@ class ImfPanel : public EconPanelBase {
     QLineEdit* indicator_search_ = nullptr;
     QListWidget* indicator_list_ = nullptr;
     QComboBox* country_combo_ = nullptr;
-
-    bool indicators_loaded_ = false;
 };
 
 } // namespace fincept::screens

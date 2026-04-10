@@ -1,18 +1,17 @@
 // src/screens/gov_data/GovDataTreasuryPanel.cpp
 #include "screens/gov_data/GovDataTreasuryPanel.h"
+#include "screens/gov_data/GovDataProviderPanel.h"
 
 #include "core/logging/Logger.h"
 #include "services/gov_data/GovDataService.h"
 #include "ui/theme/Theme.h"
 
 #include <QDate>
-#include <QFileDialog>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonObject>
-#include <QTextStream>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -52,6 +51,12 @@ static QString build_treasury_style() {
                  "  font-size:10px; font-weight:700; padding:4px 10px; }")
              .arg(t.text_secondary, t.border_dim);
     s += QString("#govCsvBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
+
+    // Filter bar
+    s += QString("#govTreasuryFilterBar { background:%1; border-bottom:1px solid %2; }").arg(t.bg_surface, t.border_dim);
+    s += QString("#govTreasuryFilterLabel { color:%1; font-size:9px; font-weight:700;"
+                 "  letter-spacing:0.5px; background:transparent; }")
+             .arg(t.text_secondary);
 
     s += QString("QDateEdit { background:%1; color:%2; border:1px solid %3;"
                  "  font-size:11px; padding:2px 6px; }")
@@ -115,6 +120,7 @@ void GovDataTreasuryPanel::build_ui() {
     root->setSpacing(0);
 
     root->addWidget(build_toolbar());
+    root->addWidget(build_filter_bar());
 
     content_stack_ = new QStackedWidget;
 
@@ -123,11 +129,7 @@ void GovDataTreasuryPanel::build_ui() {
     prices_table_->setColumnCount(7);
     prices_table_->setHorizontalHeaderLabels({"CUSIP", "TYPE", "RATE %", "MATURITY", "BID", "OFFER", "EOD PRICE"});
     prices_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    prices_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    prices_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    prices_table_->verticalHeader()->setVisible(false);
-    prices_table_->setAlternatingRowColors(true);
-    prices_table_->setShowGrid(true);
+    configure_table(prices_table_);
     content_stack_->addWidget(prices_table_);
 
     // ── Page 1: Auctions table ──
@@ -136,11 +138,7 @@ void GovDataTreasuryPanel::build_ui() {
     auctions_table_->setHorizontalHeaderLabels(
         {"CUSIP", "TYPE", "TERM", "AUCTION DATE", "HIGH RATE", "HIGH PRICE", "BID/COVER", "OFFERING"});
     auctions_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    auctions_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    auctions_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    auctions_table_->verticalHeader()->setVisible(false);
-    auctions_table_->setAlternatingRowColors(true);
-    auctions_table_->setShowGrid(true);
+    configure_table(auctions_table_);
     content_stack_->addWidget(auctions_table_);
 
     // ── Page 2: Summary ──
@@ -224,7 +222,7 @@ void GovDataTreasuryPanel::build_ui() {
 QWidget* GovDataTreasuryPanel::build_toolbar() {
     auto* bar = new QWidget(this);
     bar->setObjectName("govTreasuryToolbar");
-    bar->setFixedHeight(40);
+    bar->setFixedHeight(36);
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(10, 0, 10, 0);
@@ -253,53 +251,6 @@ QWidget* GovDataTreasuryPanel::build_toolbar() {
     hl->addWidget(prices_btn_);
     hl->addWidget(auctions_btn_);
     hl->addWidget(summary_btn_);
-    hl->addSpacing(14);
-
-    // Date labels
-    auto lbl_style =
-        QString("color:%1; font-size:9px; font-weight:700; background:transparent;").arg(colors::TEXT_TERTIARY());
-    auto* from_lbl = new QLabel("FROM");
-    from_lbl->setStyleSheet(lbl_style);
-    hl->addWidget(from_lbl);
-
-    start_date_ = new QDateEdit(QDate::currentDate().addMonths(-1));
-    start_date_->setCalendarPopup(true);
-    start_date_->setDisplayFormat("yyyy-MM-dd");
-    start_date_->setFixedHeight(26);
-    hl->addWidget(start_date_);
-
-    auto* to_lbl = new QLabel("TO");
-    to_lbl->setStyleSheet(lbl_style);
-    hl->addWidget(to_lbl);
-
-    QDate end = QDate::currentDate().addDays(-1);
-    if (end.dayOfWeek() == 6)
-        end = end.addDays(-1);
-    if (end.dayOfWeek() == 7)
-        end = end.addDays(-2);
-    end_date_ = new QDateEdit(end);
-    end_date_->setCalendarPopup(true);
-    end_date_->setDisplayFormat("yyyy-MM-dd");
-    end_date_->setFixedHeight(26);
-    hl->addWidget(end_date_);
-
-    hl->addSpacing(10);
-
-    // Security type
-    auto* type_lbl = new QLabel("TYPE");
-    type_lbl->setStyleSheet(lbl_style);
-    hl->addWidget(type_lbl);
-
-    security_type_ = new QComboBox;
-    security_type_->addItem("All", "all");
-    security_type_->addItem("Bills", "bill");
-    security_type_->addItem("Notes", "note");
-    security_type_->addItem("Bonds", "bond");
-    security_type_->addItem("TIPS", "tips");
-    security_type_->addItem("FRN", "frn");
-    security_type_->setFixedHeight(26);
-    hl->addWidget(security_type_);
-
     hl->addStretch(1);
 
     fetch_btn_ = new QPushButton("FETCH");
@@ -313,6 +264,60 @@ QWidget* GovDataTreasuryPanel::build_toolbar() {
     export_btn_->setCursor(Qt::PointingHandCursor);
     connect(export_btn_, &QPushButton::clicked, this, &GovDataTreasuryPanel::on_export_csv);
     hl->addWidget(export_btn_);
+
+    return bar;
+}
+
+QWidget* GovDataTreasuryPanel::build_filter_bar() {
+    auto* bar = new QWidget(this);
+    bar->setObjectName("govTreasuryFilterBar");
+    bar->setFixedHeight(34);
+
+    auto* hl = new QHBoxLayout(bar);
+    hl->setContentsMargins(14, 0, 14, 0);
+    hl->setSpacing(8);
+
+    auto make_lbl = [&](const QString& text) -> QLabel* {
+        auto* l = new QLabel(text);
+        l->setObjectName("govTreasuryFilterLabel");
+        return l;
+    };
+
+    hl->addWidget(make_lbl("FROM"));
+
+    start_date_ = new QDateEdit(QDate::currentDate().addMonths(-1));
+    start_date_->setCalendarPopup(true);
+    start_date_->setDisplayFormat("yyyy-MM-dd");
+    start_date_->setFixedHeight(24);
+    hl->addWidget(start_date_);
+
+    hl->addWidget(make_lbl("TO"));
+
+    QDate end = QDate::currentDate().addDays(-1);
+    if (end.dayOfWeek() == 6)
+        end = end.addDays(-1);
+    if (end.dayOfWeek() == 7)
+        end = end.addDays(-2);
+    end_date_ = new QDateEdit(end);
+    end_date_->setCalendarPopup(true);
+    end_date_->setDisplayFormat("yyyy-MM-dd");
+    end_date_->setFixedHeight(24);
+    hl->addWidget(end_date_);
+
+    hl->addSpacing(16);
+    hl->addWidget(make_lbl("TYPE"));
+
+    security_type_ = new QComboBox;
+    security_type_->addItem("All", "all");
+    security_type_->addItem("Bills", "bill");
+    security_type_->addItem("Notes", "note");
+    security_type_->addItem("Bonds", "bond");
+    security_type_->addItem("TIPS", "tips");
+    security_type_->addItem("FRN", "frn");
+    security_type_->setFixedHeight(24);
+    hl->addWidget(security_type_);
+
+    hl->addStretch(1);
 
     return bar;
 }
@@ -501,36 +506,7 @@ void GovDataTreasuryPanel::on_export_csv() {
         table = auctions_table_;
     else
         table = type_breakdown_table_;
-    if (!table || table->rowCount() == 0)
-        return;
-
-    QString path = QFileDialog::getSaveFileName(this, "Export CSV", "treasury_data.csv", "CSV Files (*.csv)");
-    if (path.isEmpty())
-        return;
-
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-        return;
-    QTextStream out(&file);
-
-    QStringList headers;
-    for (int c = 0; c < table->columnCount(); ++c) {
-        auto* h = table->horizontalHeaderItem(c);
-        headers << (h ? h->text() : "");
-    }
-    out << headers.join(",") << "\n";
-
-    for (int r = 0; r < table->rowCount(); ++r) {
-        QStringList row;
-        for (int c = 0; c < table->columnCount(); ++c) {
-            auto* item = table->item(r, c);
-            QString val = item ? item->text() : "";
-            if (val.contains(',') || val.contains('"'))
-                val = "\"" + val.replace("\"", "\"\"") + "\"";
-            row << val;
-        }
-        out << row.join(",") << "\n";
-    }
+    export_table_to_csv(table, "treasury_data.csv", this);
 }
 
 } // namespace fincept::screens

@@ -3,6 +3,7 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QEnterEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QPointer>
@@ -11,8 +12,8 @@
 
 namespace fincept::screens {
 
-MarketPanel::MarketPanel(const QString& title, const QStringList& symbols, bool show_name, QWidget* parent)
-    : QWidget(parent), title_(title), symbols_(symbols), show_name_(show_name) {
+MarketPanel::MarketPanel(const MarketPanelConfig& config, QWidget* parent)
+    : QWidget(parent), config_(config) {
     setMinimumWidth(280);
     setMaximumWidth(520);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -26,9 +27,10 @@ MarketPanel::MarketPanel(const QString& title, const QStringList& symbols, bool 
     auto* header = new QWidget(this);
     header->setFixedHeight(32);
     auto* hhl = new QHBoxLayout(header);
-    hhl->setContentsMargins(10, 0, 8, 0);
+    hhl->setContentsMargins(10, 0, 6, 0);
+    hhl->setSpacing(4);
 
-    title_label_ = new QLabel(title.toUpper());
+    title_label_ = new QLabel(config_.title.toUpper());
     title_label_->setStyleSheet(
         QString("color:%1;font-weight:700;letter-spacing:1.2px;background:transparent;").arg(ui::colors::AMBER()));
     hhl->addWidget(title_label_);
@@ -37,6 +39,36 @@ MarketPanel::MarketPanel(const QString& title, const QStringList& symbols, bool 
     status_label_ = new QLabel;
     status_label_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
     hhl->addWidget(status_label_);
+
+    // Edit / delete buttons — hidden until hover
+    edit_btn_ = new QPushButton("✎");
+    edit_btn_->setFixedSize(20, 20);
+    edit_btn_->setCursor(Qt::PointingHandCursor);
+    edit_btn_->setToolTip("Edit panel");
+    edit_btn_->setVisible(false);
+    edit_btn_->setStyleSheet(
+        QString("QPushButton{background:transparent;color:%1;border:none;font-size:13px;}"
+                "QPushButton:hover{color:%2;}")
+            .arg(ui::colors::TEXT_TERTIARY(), ui::colors::AMBER()));
+    connect(edit_btn_, &QPushButton::clicked, this, [this]() {
+        emit edit_requested(config_.id);
+    });
+    hhl->addWidget(edit_btn_);
+
+    delete_btn_ = new QPushButton("✕");
+    delete_btn_->setFixedSize(20, 20);
+    delete_btn_->setCursor(Qt::PointingHandCursor);
+    delete_btn_->setToolTip("Remove panel");
+    delete_btn_->setVisible(false);
+    delete_btn_->setStyleSheet(
+        QString("QPushButton{background:transparent;color:%1;border:none;font-size:11px;font-weight:bold;}"
+                "QPushButton:hover{color:%2;}")
+            .arg(ui::colors::TEXT_TERTIARY(), ui::colors::NEGATIVE()));
+    connect(delete_btn_, &QPushButton::clicked, this, [this]() {
+        emit delete_requested(config_.id);
+    });
+    hhl->addWidget(delete_btn_);
+
     vl->addWidget(header);
 
     // Table
@@ -52,7 +84,7 @@ MarketPanel::MarketPanel(const QString& title, const QStringList& symbols, bool 
     table_->horizontalHeader()->setHighlightSections(false);
     table_->horizontalHeader()->setFixedHeight(18);
 
-    if (show_name_) {
+    if (config_.show_name) {
         table_->setColumnCount(6);
         table_->setHorizontalHeaderLabels({"SYM", "NAME", "LAST", "CHG", "CHG%", "VOL"});
         table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
@@ -79,7 +111,6 @@ void MarketPanel::refresh_theme() {
     setStyleSheet(
         QString("background:%1;border:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
-    // Header
     if (title_label_) {
         title_label_->parentWidget()->setStyleSheet(
             QString("background:%1;border-bottom:1px solid %2;border-left:2px solid %3;")
@@ -89,7 +120,6 @@ void MarketPanel::refresh_theme() {
         status_label_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
     }
 
-    // Table
     if (table_)
         table_->setStyleSheet(QString("QTableWidget{background:%1;alternate-background-color:%2;border:none;}"
                                       "QTableWidget::item{padding:0 6px;border-bottom:1px solid %3;}"
@@ -100,9 +130,16 @@ void MarketPanel::refresh_theme() {
                                        ui::colors::BG_HOVER(), ui::colors::BG_RAISED(), ui::colors::TEXT_DIM()));
 }
 
-void MarketPanel::set_symbols(const QStringList& s) {
-    symbols_ = s;
-    refresh();
+void MarketPanel::enterEvent(QEnterEvent* event) {
+    QWidget::enterEvent(event);
+    if (edit_btn_)   edit_btn_->setVisible(true);
+    if (delete_btn_) delete_btn_->setVisible(true);
+}
+
+void MarketPanel::leaveEvent(QEvent* event) {
+    QWidget::leaveEvent(event);
+    if (edit_btn_)   edit_btn_->setVisible(false);
+    if (delete_btn_) delete_btn_->setVisible(false);
 }
 
 void MarketPanel::refresh() {
@@ -111,7 +148,7 @@ void MarketPanel::refresh() {
     loading_overlay_->show_loading("LOADING\xe2\x80\xa6");
 
     QPointer<MarketPanel> self = this;
-    services::MarketDataService::instance().fetch_quotes(symbols_, [self](bool ok, QVector<services::QuoteData> q) {
+    services::MarketDataService::instance().fetch_quotes(config_.symbols, [self](bool ok, QVector<services::QuoteData> q) {
         if (!self)
             return;
         self->loading_overlay_->hide_loading();
@@ -146,19 +183,19 @@ void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {
             return i;
         };
         bool pos = q.change >= 0;
-        const QString cc = pos ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
+        const QString cc  = pos ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
         const QString arr = pos ? "▲" : "▼";
-        int prec = q.price > 100 ? 2 : (q.price > 1 ? 2 : 4);
-        int col = 0;
+        int prec = q.price > 1 ? 2 : 4;
+        int col  = 0;
         table_->setItem(row, col++, mk(q.symbol, ui::colors::TEXT_PRIMARY(), Qt::AlignLeft | Qt::AlignVCenter));
-        if (show_name_)
+        if (config_.show_name)
             table_->setItem(row, col++, mk(q.name, ui::colors::TEXT_TERTIARY(), Qt::AlignLeft | Qt::AlignVCenter));
         table_->setItem(row, col++, mk(QString::number(q.price, 'f', prec), ui::colors::AMBER()));
         table_->setItem(row, col++, mk(QString("%1 %2").arg(arr).arg(std::abs(q.change), 0, 'f', 2), cc));
         table_->setItem(row, col++, mk(QString("%1%2%").arg(arr).arg(std::abs(q.change_pct), 0, 'f', 2), cc));
-        if (!show_name_) {
+        if (!config_.show_name) {
             table_->setItem(row, col++, mk(QString::number(q.high, 'f', 2), ui::colors::TEXT_SECONDARY()));
-            table_->setItem(row, col++, mk(QString::number(q.low, 'f', 2), ui::colors::TEXT_SECONDARY()));
+            table_->setItem(row, col++, mk(QString::number(q.low, 'f', 2),  ui::colors::TEXT_SECONDARY()));
         }
         table_->setItem(row, col++, mk("--", ui::colors::TEXT_DIM()));
         table_->setRowHeight(row, 26);

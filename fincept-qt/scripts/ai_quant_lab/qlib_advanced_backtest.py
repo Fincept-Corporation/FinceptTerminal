@@ -653,6 +653,181 @@ class AdvancedBacktestEngine:
         }
 
 
+def run_backtest(params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Run a multi-strategy backtest using market data fetched via yfinance.
+
+    Expected params keys (all optional with defaults):
+        dataset_config.instruments  : comma-separated tickers, e.g. "AAPL,MSFT"
+        dataset_config.start_date   : "YYYY-MM-DD"
+        dataset_config.end_date     : "YYYY-MM-DD"
+        strategy_config.type        : "topk_dropout" | "weight_based" | "enhanced_indexing"
+        strategy_config.topk        : int (default 10)
+        portfolio_config.initial_capital : float (default 1_000_000)
+        portfolio_config.benchmark  : str ticker (default "SPY")
+    """
+    if not PANDAS_AVAILABLE:
+        return {"success": False, "error": "pandas/numpy not available"}
+
+    try:
+        import yfinance as yf
+    except ImportError:
+        return {"success": False, "error": "yfinance not installed. Run: pip install yfinance"}
+
+    # ── Parse params ────────────────────────────────────────────────────────
+    dataset_cfg   = params.get("dataset_config", {})
+    strategy_cfg  = params.get("strategy_config", {})
+    portfolio_cfg = params.get("portfolio_config", {})
+
+    raw_instruments = dataset_cfg.get("instruments", "AAPL,MSFT,GOOG,AMZN")
+    tickers    = [t.strip().upper() for t in raw_instruments.split(",") if t.strip()]
+    start_date = dataset_cfg.get("start_date", "2020-01-01")
+    end_date   = dataset_cfg.get("end_date",   "2024-01-01")
+
+    strategy_type = strategy_cfg.get("type", "topk_dropout")
+    topk          = int(strategy_cfg.get("topk", min(10, len(tickers))))
+
+    initial_capital = float(portfolio_cfg.get("initial_capital", 1_000_000))
+    benchmark_ticker = portfolio_cfg.get("benchmark", "SPY") or "SPY"
+
+    # ── Fetch price data ─────────────────────────────────────────────────────
+    all_tickers = list(set(tickers + [benchmark_ticker]))
+    raw = yf.download(all_tickers, start=start_date, end=end_date,
+                      auto_adjust=True, progress=False)
+
+    if raw.empty:
+        return {"success": False, "error": "No data returned from yfinance. Check tickers and date range."}
+
+    # Handle single vs multi ticker response
+    if isinstance(raw.columns, pd.MultiIndex):
+        close = raw["Close"].dropna(how="all")
+        volume = raw["Volume"].dropna(how="all")
+    else:
+        close = raw[["Close"]].rename(columns={"Close": tickers[0]}).dropna()
+        volume = raw[["Volume"]].rename(columns={"Volume": tickers[0]}).dropna()
+
+    # Drop benchmark from strategy tickers
+    strat_tickers = [t for t in tickers if t in close.columns]
+    if not strat_tickers:
+        return {"success": False, "error": f"None of the requested tickers had data: {tickers}"}
+
+    topk = min(topk, len(strat_tickers))
+
+    # ── Simple momentum strategy signal ──────────────────────────────────────
+    # Rank tickers by trailing 20-day return, hold top-K equally weighted
+    returns       = close[strat_tickers].pct_change()
+    momentum_20d  = close[strat_tickers].pct_change(20)
+
+    portfolio_returns = []
+    dates = returns.index[20:]  # skip warmup
+
+    for dt in dates:
+        row_mom = momentum_20d.loc[dt].dropna()
+        if row_mom.empty:
+            portfolio_returns.append(0.0)
+            continue
+
+        if strategy_type == "topk_dropout":
+            selected = row_mom.nlargest(topk).index.tolist()
+        elif strategy_type == "weight_based":
+            # weight proportional to momentum score (long only)
+            pos = row_mom[row_mom > 0]
+            selected = pos.nlargest(topk).index.tolist()
+        else:  # enhanced_indexing — equal weight all
+            selected = row_mom.index.tolist()
+
+        if not selected:
+            portfolio_returns.append(0.0)
+            continue
+
+        day_ret = returns.loc[dt, selected].mean()
+        portfolio_returns.append(float(day_ret) if not pd.isna(day_ret) else 0.0)
+
+    # ── Benchmark returns ────────────────────────────────────────────────────
+    bm_col = benchmark_ticker if benchmark_ticker in close.columns else None
+    if bm_col:
+        bm_returns = close[bm_col].pct_change().loc[dates].fillna(0.0).tolist()
+    else:
+        bm_returns = [0.0] * len(dates)
+
+    # ── Compute equity curve & metrics ───────────────────────────────────────
+    port_series = pd.Series(portfolio_returns, index=dates)
+    bm_series   = pd.Series(bm_returns,        index=dates)
+
+    port_cum = (1 + port_series).cumprod() * initial_capital
+    bm_cum   = (1 + bm_series).cumprod()   * initial_capital
+
+    # Annualised return
+    n_years = len(dates) / 252
+    final_val   = float(port_cum.iloc[-1]) if not port_cum.empty else initial_capital
+    total_ret   = (final_val - initial_capital) / initial_capital
+    ann_ret     = (1 + total_ret) ** (1 / n_years) - 1 if n_years > 0 else 0.0
+
+    # Volatility & Sharpe
+    ann_vol = float(port_series.std() * np.sqrt(252))
+    sharpe  = ann_ret / ann_vol if ann_vol > 0 else 0.0
+
+    # Max drawdown
+    running_max = port_cum.cummax()
+    drawdown    = (port_cum - running_max) / running_max
+    max_dd      = float(drawdown.min())
+
+    # Calmar
+    calmar = ann_ret / abs(max_dd) if max_dd != 0 else 0.0
+
+    # Win rate
+    win_rate = float((port_series > 0).mean())
+
+    # Transaction cost estimate (using AdvancedBacktestEngine)
+    engine = AdvancedBacktestEngine(initial_capital=initial_capital)
+    avg_price   = float(close[strat_tickers].iloc[-1].mean())
+    avg_vol_val = float(volume[strat_tickers].iloc[-20:].mean().mean()) if strat_tickers[0] in volume.columns else 1e6
+    sample_execution = engine.simulate_order(
+        strat_tickers[0], "buy", 1000, avg_price, avg_vol_val,
+        float(port_series.std()), "market"
+    )
+
+    # Equity curve (downsample to ~100 points for display)
+    step = max(1, len(port_cum) // 100)
+    equity_curve = [
+        {"date": str(d.date()), "portfolio": round(float(v), 2),
+         "benchmark": round(float(b), 2)}
+        for d, v, b in zip(port_cum.index[::step],
+                           port_cum.values[::step],
+                           bm_cum.values[::step])
+    ]
+
+    return {
+        "success": True,
+        "strategy": strategy_type,
+        "tickers": strat_tickers,
+        "start_date": start_date,
+        "end_date": end_date,
+        "metrics": {
+            "initial_capital":    round(initial_capital, 2),
+            "final_value":        round(final_val, 2),
+            "total_return_pct":   round(total_ret * 100, 2),
+            "annualised_return":  round(ann_ret * 100, 2),
+            "annualised_vol":     round(ann_vol * 100, 2),
+            "sharpe_ratio":       round(sharpe, 3),
+            "max_drawdown_pct":   round(max_dd * 100, 2),
+            "calmar_ratio":       round(calmar, 3),
+            "win_rate_pct":       round(win_rate * 100, 2),
+            "trading_days":       len(dates),
+        },
+        "execution_cost_estimate": {
+            "commission_bps":        round(sample_execution.get("market_impact_bps", 0), 2),
+            "expected_slippage_bps": round(sample_execution.get("expected_slippage_bps", 0), 2),
+        },
+        "equity_curve": equity_curve,
+    }
+
+
+def optimize_portfolio(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Placeholder for portfolio optimisation — returns not-yet-implemented."""
+    return {"success": False, "error": "optimize_portfolio not yet implemented"}
+
+
 def main():
     """CLI interface"""
     if len(sys.argv) < 2:
@@ -674,10 +849,24 @@ def main():
                     "VWAP execution",
                     "Implementation Shortfall",
                     "POV execution",
-                    "Transaction cost analysis"
+                    "Transaction cost analysis",
+                    "run_backtest (yfinance momentum strategy)",
                 ]
             }
             print(json.dumps(result))
+
+        elif command == "run_backtest":
+            raw = sys.argv[2] if len(sys.argv) > 2 else "{}"
+            params = json.loads(raw)
+            result = run_backtest(params)
+            print(json.dumps(result))
+
+        elif command == "optimize_portfolio":
+            raw = sys.argv[2] if len(sys.argv) > 2 else "{}"
+            params = json.loads(raw)
+            result = optimize_portfolio(params)
+            print(json.dumps(result))
+
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
             print(json.dumps(result))

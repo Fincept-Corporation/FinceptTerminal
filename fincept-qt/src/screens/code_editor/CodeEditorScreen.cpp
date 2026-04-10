@@ -3,6 +3,7 @@
 // Responsive cells, markdown rendering, keyboard shortcuts, collapsible output.
 #include "screens/code_editor/CodeEditorScreen.h"
 
+#include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "python/PythonRunner.h"
@@ -46,15 +47,16 @@ using namespace fincept::ui;
 CodeTextEdit::CodeTextEdit(QWidget* parent) : QTextEdit(parent) {}
 
 void CodeTextEdit::keyPressEvent(QKeyEvent* event) {
-    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
-        if (event->modifiers() & Qt::ControlModifier) {
-            emit run_shortcut();
-            return;
-        }
-        if (event->modifiers() & Qt::ShiftModifier) {
-            emit run_and_next();
-            return;
-        }
+    auto& km = KeyConfigManager::instance();
+    const QKeySequence pressed(event->keyCombination());
+
+    if (pressed == km.key(KeyAction::RunCell)) {
+        emit run_shortcut();
+        return;
+    }
+    if (pressed == km.key(KeyAction::RunAndNext)) {
+        emit run_and_next();
+        return;
     }
     // Tab inserts 4 spaces
     if (event->key() == Qt::Key_Tab && !(event->modifiers() & Qt::ShiftModifier)) {
@@ -750,8 +752,7 @@ CellNavigator::CellNavigator(QWidget* parent) : QWidget(parent) {
         }
     });
 
-    auto* rename_shortcut = new QAction("Rename Cell", this);
-    rename_shortcut->setShortcut(QKeySequence(Qt::Key_F2));
+    auto* rename_shortcut = KeyConfigManager::instance().action(KeyAction::RenameCell);
     rename_shortcut->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     list_->addAction(rename_shortcut);
     connect(rename_shortcut, &QAction::triggered, this, [this]() {

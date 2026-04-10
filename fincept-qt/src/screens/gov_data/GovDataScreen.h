@@ -29,6 +29,7 @@ class GovDataScreen : public QWidget, public IStatefulScreen {
 
   private slots:
     void on_provider_selected(int row);
+    void refresh_theme();
 
   private:
     void build_ui();
@@ -45,7 +46,10 @@ class GovDataScreen : public QWidget, public IStatefulScreen {
     QLabel* status_portal_ = nullptr;
     QLabel* status_country_ = nullptr;
     QLabel* status_datasets_ = nullptr;
+    QLabel* provider_badge_ = nullptr;
+    QLabel* sidebar_count_ = nullptr;
 
+    QString active_provider_color_;
     int active_index_ = -1;
     bool initial_load_done_ = false;
 };

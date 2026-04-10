@@ -11,6 +11,7 @@
 #include <QDate>
 #include <QJsonArray>
 #include <QLabel>
+#include <QListWidget>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTableWidget>
@@ -53,6 +54,10 @@ class EconPanelBase : public QWidget {
 
     /// Called when theme changes — re-applies panel_style(). Override for extra widgets.
     virtual void refresh_panel_theme();
+
+    // ── Shared utilities ──────────────────────────────────────────────────────
+    /// Filter a QListWidget by hiding items that don't contain text (case-insensitive).
+    static void filter_list(QListWidget* list, const QString& text);
 
     // ── Reusable token-based style helpers for sidebar panels ─────────────────
     static QString sidebar_style();      // left panel background + border

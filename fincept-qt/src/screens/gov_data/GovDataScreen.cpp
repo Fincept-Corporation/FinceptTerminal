@@ -4,13 +4,10 @@
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "screens/gov_data/GovDataAustraliaPanel.h"
-#include "screens/gov_data/GovDataCKANPanel.h"
-#include "screens/gov_data/GovDataCanadaPanel.h"
 #include "screens/gov_data/GovDataCongressPanel.h"
 #include "screens/gov_data/GovDataFrancePanel.h"
 #include "screens/gov_data/GovDataHKPanel.h"
 #include "screens/gov_data/GovDataProviderPanel.h"
-#include "screens/gov_data/GovDataSwissPanel.h"
 #include "screens/gov_data/GovDataTreasuryPanel.h"
 #include "screens/gov_data/GovDataUKPanel.h"
 #include "services/gov_data/GovDataService.h"
@@ -50,7 +47,7 @@ static QString build_screen_style() {
 
     // Toolbar
     s += QString("#govToolbar { background:%1; border-bottom:1px solid %2; }").arg(raised, bdim);
-    s += QString("#govToolbarTitle { color:%1; font-size:13px; font-weight:700;"
+    s += QString("#govToolbarTitle { color:%1; font-size:12px; font-weight:700;"
                  "  letter-spacing:1px; background:transparent; }")
              .arg(text);
     s += QString("#govToolbarSub { color:%1; font-size:10px; background:transparent; }").arg(sec);
@@ -62,7 +59,7 @@ static QString build_screen_style() {
                  "  letter-spacing:1px; background:transparent; }")
              .arg(sec);
     s += "#govProviderList { background:transparent; border:none; outline:none; }";
-    s += QString("#govProviderList::item { color:%1; padding:10px 14px;"
+    s += QString("#govProviderList::item { color:%1; padding:7px 14px;"
                  "  border-bottom:1px solid %2; font-size:11px; }")
              .arg(sec, bdim);
     s += QString("#govProviderList::item:hover { color:%1; background:%2; }").arg(text, hover);
@@ -88,11 +85,10 @@ static QString build_screen_style() {
 
 GovDataScreen::GovDataScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("govScreen");
-    setStyleSheet(build_screen_style());
     build_ui();
 
-    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
-            [this]() { setStyleSheet(build_screen_style()); });
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this, &GovDataScreen::refresh_theme);
+    refresh_theme();
 }
 
 // ── Show / Hide ──────────────────────────────────────────────────────────────
@@ -141,20 +137,29 @@ void GovDataScreen::build_ui() {
         } else if (prov.id == "us-congress") {
             panel = new GovDataCongressPanel(panel_stack_);
         } else if (prov.id == "canada-gov") {
-            panel = new GovDataCanadaPanel(panel_stack_);
+            panel = new GovDataProviderPanel(prov.script, prov.color, "Publishers", {}, panel_stack_);
         } else if (prov.id == "swiss") {
-            panel = new GovDataSwissPanel(panel_stack_);
+            GovProviderOptions swiss_opts;
+            swiss_opts.watermark_text = "\xF0\x9F\x87\xA8\xF0\x9F\x87\xAD opendata.swiss";
+            panel = new GovDataProviderPanel(prov.script, prov.color, "Publishers", swiss_opts, panel_stack_);
         } else if (prov.id == "france") {
             panel = new GovDataFrancePanel(panel_stack_);
         } else if (prov.id == "hk") {
             panel = new GovDataHKPanel(panel_stack_);
         } else if (prov.id == "universal-ckan") {
-            panel = new GovDataCKANPanel(panel_stack_);
+            GovProviderOptions ckan_opts;
+            ckan_opts.portal_combo_items = {"data.gov.uk", "open.canada.ca", "data.gov.au",
+                                            "data.gov.hk", "opendata.swiss", "data.gouv.fr",
+                                            "data.gov", "openafrica.net"};
+            ckan_opts.portal_combo_tooltip =
+                "This panel uses datagovuk_api.py which queries data.gov.uk.\n"
+                "The selector shows all CKAN portals covered by the universal provider.";
+            panel = new GovDataProviderPanel(prov.script, prov.color, "Publishers", ckan_opts, panel_stack_);
         } else if (prov.id == "australia") {
             panel = new GovDataAustraliaPanel(panel_stack_);
         } else {
             // openafrica, spain — still use generic until dedicated scripts exist
-            panel = new GovDataProviderPanel(prov.script, prov.color, "Organizations", panel_stack_);
+            panel = new GovDataProviderPanel(prov.script, prov.color, "Organizations", {}, panel_stack_);
         }
         panel_stack_->addWidget(panel);
     }
@@ -169,43 +174,37 @@ void GovDataScreen::build_ui() {
 QWidget* GovDataScreen::build_toolbar() {
     header_bar_ = new QWidget(this);
     header_bar_->setObjectName("govToolbar");
-    header_bar_->setFixedHeight(46);
+    header_bar_->setFixedHeight(38);
 
     auto* hl = new QHBoxLayout(header_bar_);
-    hl->setContentsMargins(16, 0, 16, 0);
-    hl->setSpacing(10);
-
-    // Title block
-    auto* col = new QWidget(this);
-    auto* cvl = new QVBoxLayout(col);
-    cvl->setContentsMargins(0, 0, 0, 0);
-    cvl->setSpacing(0);
+    hl->setContentsMargins(14, 0, 14, 0);
+    hl->setSpacing(8);
 
     header_title_ = new QLabel("GOVERNMENT DATA EXPLORER");
     header_title_->setObjectName("govToolbarTitle");
+    header_title_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    hl->addWidget(header_title_);
+
+    // Separator dot
+    auto* sep = new QLabel("·");
+    sep->setObjectName("govToolbarSub");
+    sep->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    hl->addWidget(sep);
 
     header_subtitle_ = new QLabel(
         QString("Open government portals · %1 sovereign sources").arg(services::GovDataService::providers().size()));
     header_subtitle_->setObjectName("govToolbarSub");
-
-    cvl->addWidget(header_title_);
-    cvl->addWidget(header_subtitle_);
-    hl->addWidget(col);
+    header_subtitle_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    hl->addWidget(header_subtitle_);
 
     hl->addStretch(1);
 
-    // Source count badge
+    // Source count badge — compact pill, stored as member for refresh_theme()
     const auto& providers = services::GovDataService::providers();
-    auto* badge = new QLabel(QString::number(providers.size()) + " PORTALS");
-    const auto& t = ThemeManager::instance().tokens();
-    auto bc = QColor(t.accent);
-    badge->setStyleSheet(QString("color:%1; background:rgba(%2,%3,%4,0.1); border:1px solid rgba(%2,%3,%4,0.3);"
-                                 " font-size:9px; font-weight:700; padding:3px 10px; letter-spacing:0.5px;")
-                             .arg(t.accent)
-                             .arg(bc.red())
-                             .arg(bc.green())
-                             .arg(bc.blue()));
-    hl->addWidget(badge);
+    provider_badge_ = new QLabel(QString::number(providers.size()) + " PORTALS");
+    provider_badge_->setFixedHeight(20);
+    provider_badge_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    hl->addWidget(provider_badge_);
 
     return header_bar_;
 }
@@ -224,26 +223,19 @@ QWidget* GovDataScreen::build_sidebar() {
     // Section header
     auto* hdr = new QWidget(this);
     hdr->setObjectName("govSidebarHeader");
-    hdr->setFixedHeight(30);
+    hdr->setFixedHeight(26);
     auto* hhl = new QHBoxLayout(hdr);
-    hhl->setContentsMargins(14, 0, 10, 0);
+    hhl->setContentsMargins(12, 0, 8, 0);
+    hhl->setSpacing(6);
     auto* htitle = new QLabel("SOVEREIGN PORTALS");
     htitle->setObjectName("govSidebarTitle");
     const auto& providers = services::GovDataService::providers();
-    auto* hcount = new QLabel(QString::number(providers.size()));
-    {
-        const auto& tk = ThemeManager::instance().tokens();
-        auto ac2 = QColor(tk.accent);
-        hcount->setStyleSheet(QString("color:%1; background:rgba(%2,%3,%4,0.12); font-size:9px;"
-                                      " font-weight:700; padding:1px 6px;")
-                                  .arg(tk.accent)
-                                  .arg(ac2.red())
-                                  .arg(ac2.green())
-                                  .arg(ac2.blue()));
-    }
+    sidebar_count_ = new QLabel(QString::number(providers.size()));
+    sidebar_count_->setFixedHeight(16);
+    sidebar_count_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     hhl->addWidget(htitle);
     hhl->addStretch(1);
-    hhl->addWidget(hcount);
+    hhl->addWidget(sidebar_count_);
     vl->addWidget(hdr);
 
     // Provider list
@@ -317,6 +309,47 @@ QWidget* GovDataScreen::build_status_bar() {
     return bar;
 }
 
+// ── Theme refresh ────────────────────────────────────────────────────────────
+
+void GovDataScreen::refresh_theme() {
+    setStyleSheet(build_screen_style());
+
+    const auto& t = ThemeManager::instance().tokens();
+    const QString accent_color = active_provider_color_.isEmpty()
+                                     ? QString::fromLatin1(t.accent)
+                                     : active_provider_color_;
+    const auto ac = QColor(accent_color);
+    const QString ar = QString("%1,%2,%3").arg(ac.red()).arg(ac.green()).arg(ac.blue());
+
+    // Re-style provider count badge (top-right pill)
+    if (provider_badge_) {
+        provider_badge_->setStyleSheet(
+            QString("color:%1; background:rgba(%2,0.1); border:1px solid rgba(%2,0.3);"
+                    " font-size:9px; font-weight:700; padding:2px 8px; letter-spacing:0.5px;")
+                .arg(accent_color, ar));
+    }
+
+    // Re-style sidebar count pill
+    if (sidebar_count_) {
+        const auto& tk = ThemeManager::instance().tokens();
+        const auto ac2 = QColor(tk.accent);
+        const QString ar2 = QString("%1,%2,%3").arg(ac2.red()).arg(ac2.green()).arg(ac2.blue());
+        sidebar_count_->setStyleSheet(
+            QString("color:%1; background:rgba(%2,0.12); font-size:9px;"
+                    " font-weight:700; padding:1px 5px;")
+                .arg(tk.accent, ar2));
+    }
+
+    // Re-apply provider-color accent on toolbar border + subtitle
+    if (!active_provider_color_.isEmpty() && header_bar_ && header_subtitle_) {
+        header_bar_->setStyleSheet(
+            QString("#govToolbar { background:%1; border-bottom:2px solid %2; }")
+                .arg(t.bg_raised, active_provider_color_));
+        header_subtitle_->setStyleSheet(
+            QString("color:%1; font-size:10px; background:transparent;").arg(active_provider_color_));
+    }
+}
+
 // ── Provider activation ──────────────────────────────────────────────────────
 
 void GovDataScreen::on_provider_selected(int row) {
@@ -334,12 +367,11 @@ void GovDataScreen::activate_provider(int index) {
     active_index_ = index;
     const auto& prov = providers[index];
 
-    // Update toolbar title/subtitle with provider color
+    // Store provider accent color so refresh_theme() can apply it
+    active_provider_color_ = prov.color;
+
+    // Update toolbar subtitle text
     header_subtitle_->setText(QString("%1  %2").arg(prov.flag, prov.full_name));
-    header_subtitle_->setStyleSheet(QString("color:%1; font-size:10px; background:transparent;").arg(prov.color));
-    const auto& tk = ThemeManager::instance().tokens();
-    header_bar_->setStyleSheet(
-        QString("#govToolbar { background:%1; border-bottom:2px solid %2; }").arg(tk.bg_raised, prov.color));
 
     // Status bar
     if (status_portal_)
@@ -350,14 +382,11 @@ void GovDataScreen::activate_provider(int index) {
     // Switch panel
     panel_stack_->setCurrentIndex(index);
 
-    // Trigger initial load
-    auto* widget = panel_stack_->currentWidget();
-    if (auto* ckan = qobject_cast<GovDataProviderPanel*>(widget))
-        ckan->load_initial_data();
-    else if (auto* treasury = qobject_cast<GovDataTreasuryPanel*>(widget))
-        treasury->load_initial_data();
-    else if (auto* congress = qobject_cast<GovDataCongressPanel*>(widget))
-        congress->load_initial_data();
+    // Re-apply theme so provider-color accents on toolbar/badge reflect new selection
+    refresh_theme();
+
+    // Trigger initial load — all panel types expose load_initial_data() as a public slot
+    QMetaObject::invokeMethod(panel_stack_->currentWidget(), "load_initial_data");
 
     LOG_INFO("GovDataScreen", "Activated: " + prov.id);
 }

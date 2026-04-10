@@ -217,17 +217,11 @@ void WorldBankPanel::on_result(const QString& request_id, const services::Econom
 // ── Filters ───────────────────────────────────────────────────────────────────
 
 void WorldBankPanel::on_country_filter(const QString& text) {
-    for (int i = 0; i < country_list_->count(); ++i) {
-        auto* item = country_list_->item(i);
-        item->setHidden(!item->text().contains(text, Qt::CaseInsensitive));
-    }
+    filter_list(country_list_, text);
 }
 
 void WorldBankPanel::on_indicator_filter(const QString& text) {
-    for (int i = 0; i < indicator_list_->count(); ++i) {
-        auto* item = indicator_list_->item(i);
-        item->setHidden(!item->text().contains(text, Qt::CaseInsensitive));
-    }
+    filter_list(indicator_list_, text);
 }
 
 } // namespace fincept::screens

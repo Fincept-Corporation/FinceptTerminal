@@ -1,17 +1,16 @@
 // src/screens/gov_data/GovDataCongressPanel.cpp
 #include "screens/gov_data/GovDataCongressPanel.h"
+#include "screens/gov_data/GovDataProviderPanel.h"
 
 #include "core/logging/Logger.h"
 #include "services/gov_data/GovDataService.h"
 #include "ui/theme/Theme.h"
 
-#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QRegularExpression>
-#include <QTextStream>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -21,42 +20,11 @@ using namespace fincept::ui;
 static const QString kGovDataCongressColor = "#8B5CF6";
 static const QString kGovDataCongressScript = "congress_gov_data.py";
 
-// ── Dynamic stylesheet ──────────────────────────────────────────────────────
+// ── Congress-specific extra styles (QSpinBox, QComboBox, QTextBrowser) ──────
 
-static QString build_congress_style() {
+static QString congress_extra_qss() {
     const auto& t = ThemeManager::instance().tokens();
-    const auto cc = QColor(kGovDataCongressColor);
-    const QString cr = QString::number(cc.red());
-    const QString cg = QString::number(cc.green());
-    const QString cb = QString::number(cc.blue());
-    const QString c = kGovDataCongressColor;
-
     QString s;
-    s += QString("#govCongressToolbar { background:%1; border-bottom:1px solid %2; }").arg(t.bg_raised, t.border_dim);
-
-    s += QString("#govCongressTab { background:transparent; color:%1; border:1px solid %2;"
-                 "  font-size:10px; font-weight:700; padding:4px 12px; letter-spacing:0.5px; }")
-             .arg(t.text_secondary, t.border_dim);
-    s += QString("#govCongressTab:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
-    s += QString("#govCongressTab:checked { background:rgba(%1,%2,%3,0.12); color:%4;"
-                 "  border:1px solid %4; }")
-             .arg(cr, cg, cb, c);
-
-    s += QString("#govBackBtn { background:transparent; color:%1; border:1px solid %2;"
-                 "  font-size:10px; font-weight:700; padding:4px 10px; }")
-             .arg(t.text_secondary, t.border_dim);
-    s += QString("#govBackBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
-
-    s += QString("#govFetchBtn { background:%1; color:%2; border:none;"
-                 "  font-size:10px; font-weight:700; padding:4px 14px; }")
-             .arg(c, t.bg_base);
-    s += QString("#govFetchBtn:hover { background:%1; }").arg(cc.lighter(120).name());
-    s += QString("#govFetchBtn:disabled { background:%1; color:%2; }").arg(t.border_dim, t.text_dim);
-    s += QString("#govCsvBtn { background:transparent; color:%1; border:1px solid %2;"
-                 "  font-size:10px; font-weight:700; padding:4px 10px; }")
-             .arg(t.text_secondary, t.border_dim);
-    s += QString("#govCsvBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
-
     s += QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
                  "  font-size:11px; padding:2px 6px; }")
              .arg(t.bg_base, t.text_primary, t.border_dim);
@@ -67,39 +35,20 @@ static QString build_congress_style() {
     s += "QComboBox::drop-down { border:none; }";
     s += QString("QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3; }")
              .arg(t.bg_raised, t.text_primary, t.border_dim);
-
-    s += QString("QTableWidget { background:%1; color:%2; border:none;"
-                 "  gridline-color:%3; font-size:11px; alternate-background-color:%4; }")
-             .arg(t.bg_base, t.text_primary, t.border_dim, t.bg_surface);
-    s += QString("QTableWidget::item { padding:5px 8px; border-bottom:1px solid %1; }").arg(t.border_dim);
-    s += QString("QTableWidget::item:selected { background:rgba(%1,%2,%3,0.1); color:%4; }").arg(cr, cg, cb, c);
-    s += QString("QHeaderView::section { background:%1; color:%2; border:none;"
-                 "  border-bottom:2px solid %3; border-right:1px solid %3;"
-                 "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }")
-             .arg(t.bg_raised, t.text_secondary, t.border_dim);
-
     s += QString("QTextBrowser { background:%1; color:%2; border:none; padding:16px; font-size:12px; }")
              .arg(t.bg_base, t.text_primary);
-
-    s += QString("#govStatusPage { background:%1; }").arg(t.bg_base);
-    s += QString("#govStatusMsg { color:%1; font-size:13px; background:transparent; }").arg(t.text_secondary);
-    s += QString("#govStatusErr { color:%1; font-size:12px; background:transparent; }").arg(t.negative);
-
-    s += QString("QScrollBar:vertical { background:%1; width:5px; }").arg(t.bg_base);
-    s += QString("QScrollBar::handle:vertical { background:%1; min-height:20px; }").arg(t.border_dim);
-    s += "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }";
     return s;
 }
 
 // ── Constructor ──────────────────────────────────────────────────────────────
 
 GovDataCongressPanel::GovDataCongressPanel(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(build_congress_style());
+    setStyleSheet(make_gov_panel_style(kGovDataCongressColor, congress_extra_qss()));
     build_ui();
     connect(&services::GovDataService::instance(), &services::GovDataService::result_ready, this,
             &GovDataCongressPanel::on_result);
     connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
-            [this]() { setStyleSheet(build_congress_style()); });
+            [this]() { setStyleSheet(make_gov_panel_style(kGovDataCongressColor, congress_extra_qss())); });
 }
 
 // ── Build UI ─────────────────────────────────────────────────────────────────
@@ -125,11 +74,7 @@ void GovDataCongressPanel::build_ui() {
     bills_table_->setColumnWidth(1, 60);
     bills_table_->setColumnWidth(2, 70);
     bills_table_->setColumnWidth(5, 100);
-    bills_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    bills_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    bills_table_->verticalHeader()->setVisible(false);
-    bills_table_->setAlternatingRowColors(true);
-    bills_table_->setShowGrid(true);
+    configure_table(bills_table_);
     connect(bills_table_, &QTableWidget::cellDoubleClicked, this, &GovDataCongressPanel::on_bill_clicked);
     content_stack_->addWidget(bills_table_);
 
@@ -166,8 +111,8 @@ void GovDataCongressPanel::build_ui() {
 
 QWidget* GovDataCongressPanel::build_toolbar() {
     auto* bar = new QWidget(this);
-    bar->setObjectName("govCongressToolbar");
-    bar->setFixedHeight(40);
+    bar->setObjectName("govPanelToolbar");
+    bar->setFixedHeight(36);
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(10, 0, 10, 0);
@@ -185,14 +130,14 @@ QWidget* GovDataCongressPanel::build_toolbar() {
 
     // View tabs
     bills_btn_ = new QPushButton("BILLS");
-    bills_btn_->setObjectName("govCongressTab");
+    bills_btn_->setObjectName("govTabBtn");
     bills_btn_->setCheckable(true);
     bills_btn_->setChecked(true);
     bills_btn_->setCursor(Qt::PointingHandCursor);
     connect(bills_btn_, &QPushButton::clicked, this, [this]() { on_view_changed(Bills); });
 
     summary_btn_ = new QPushButton("SUMMARY");
-    summary_btn_->setObjectName("govCongressTab");
+    summary_btn_->setObjectName("govTabBtn");
     summary_btn_->setCheckable(true);
     summary_btn_->setCursor(Qt::PointingHandCursor);
     connect(summary_btn_, &QPushButton::clicked, this, [this]() { on_view_changed(SummaryView); });
@@ -424,36 +369,7 @@ void GovDataCongressPanel::show_error(const QString& message) {
 
 void GovDataCongressPanel::on_export_csv() {
     QTableWidget* table = (current_view_ == SummaryView) ? summary_table_ : bills_table_;
-    if (!table || table->rowCount() == 0)
-        return;
-
-    QString path = QFileDialog::getSaveFileName(this, "Export CSV", "congress_data.csv", "CSV Files (*.csv)");
-    if (path.isEmpty())
-        return;
-
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-        return;
-    QTextStream out(&file);
-
-    QStringList headers;
-    for (int c = 0; c < table->columnCount(); ++c) {
-        auto* h = table->horizontalHeaderItem(c);
-        headers << (h ? h->text() : "");
-    }
-    out << headers.join(",") << "\n";
-
-    for (int r = 0; r < table->rowCount(); ++r) {
-        QStringList row;
-        for (int c = 0; c < table->columnCount(); ++c) {
-            auto* item = table->item(r, c);
-            QString val = item ? item->text() : "";
-            if (val.contains(',') || val.contains('"'))
-                val = "\"" + val.replace("\"", "\"\"") + "\"";
-            row << val;
-        }
-        out << row.join(",") << "\n";
-    }
+    export_table_to_csv(table, "congress_data.csv", this);
 }
 
 } // namespace fincept::screens

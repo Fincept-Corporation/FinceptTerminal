@@ -8,6 +8,7 @@
 #include "auth/PinManager.h"
 #include "core/config/ProfileManager.h"
 #include "core/events/EventBus.h"
+#include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/SessionManager.h"
 #include "screens/ComingSoonScreen.h"
@@ -255,19 +256,25 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
                 dock_router_, [this, screen_id]() { dock_router_->navigate(screen_id); }, Qt::QueuedConnection);
     });
 
-    auto* sc_chat = new QShortcut(QKeySequence(Qt::Key_F9), this);
-    connect(sc_chat, &QShortcut::activated, this, &MainWindow::toggle_chat_mode);
+    // ── Keyboard shortcuts via KeyConfigManager ───────────────────────────────
+    auto& km = KeyConfigManager::instance();
 
-    auto* sc_fullscreen = new QShortcut(QKeySequence(Qt::Key_F11), this);
-    connect(sc_fullscreen, &QShortcut::activated, this, [this]() {
+    auto* act_chat = km.action(KeyAction::ToggleChat);
+    act_chat->setParent(this);
+    connect(act_chat, &QAction::triggered, this, &MainWindow::toggle_chat_mode);
+
+    auto* act_fs = km.action(KeyAction::Fullscreen);
+    act_fs->setParent(this);
+    connect(act_fs, &QAction::triggered, this, [this]() {
         if (isFullScreen())
             showNormal();
         else
             showFullScreen();
     });
 
-    auto* sc_focus = new QShortcut(QKeySequence(Qt::Key_F10), this);
-    connect(sc_focus, &QShortcut::activated, this, [this]() {
+    auto* act_focus = km.action(KeyAction::FocusMode);
+    act_focus->setParent(this);
+    connect(act_focus, &QAction::triggered, this, [this]() {
         focus_mode_ = !focus_mode_;
         if (dock_toolbar_)
             dock_toolbar_->setVisible(!focus_mode_);
@@ -275,8 +282,9 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
             dock_status_bar_->setVisible(!focus_mode_);
     });
 
-    auto* sc_refresh = new QShortcut(QKeySequence(Qt::Key_F5), this);
-    connect(sc_refresh, &QShortcut::activated, this, [this]() {
+    auto* act_refresh = km.action(KeyAction::Refresh);
+    act_refresh->setParent(this);
+    connect(act_refresh, &QAction::triggered, this, [this]() {
         if (dock_manager_) {
             auto* focused = dock_manager_->focusedDockWidget();
             if (focused && focused->widget())
@@ -284,8 +292,9 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
         }
     });
 
-    auto* sc_screenshot = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_P), this);
-    connect(sc_screenshot, &QShortcut::activated, this, [this]() {
+    auto* act_screenshot = km.action(KeyAction::Screenshot);
+    act_screenshot->setParent(this);
+    connect(act_screenshot, &QAction::triggered, this, [this]() {
         QScreen* scr = this->screen();
         if (!scr)
             scr = QApplication::primaryScreen();

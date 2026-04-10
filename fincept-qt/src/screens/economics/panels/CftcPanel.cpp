@@ -194,8 +194,7 @@ void CftcPanel::build_sentiment_widget() {
         ttl->setStyleSheet(lbl_ss);
 
         bias_out = new QLabel("—");
-        bias_out->setStyleSheet(
-            QString("color:%1; font-size:18px; font-weight:700; background:transparent;").arg(TEXT_PRIMARY()));
+        bias_out->setObjectName("econStatVal");
 
         net_out = new QLabel("Net: —");
         net_out->setStyleSheet(QString("color:%1; font-size:10px; background:transparent;").arg(TEXT_TERTIARY()));
@@ -232,8 +231,7 @@ void CftcPanel::build_sentiment_widget() {
     auto* trend_lbl = new QLabel("OI TREND");
     trend_lbl->setStyleSheet(lbl_ss);
     sent_oi_trend_ = new QLabel("—");
-    sent_oi_trend_->setStyleSheet(
-        QString("color:%1; font-size:13px; font-weight:700; background:transparent;").arg(TEXT_PRIMARY()));
+    sent_oi_trend_->setObjectName("econStatVal");
 
     oi_hl->addWidget(oi_lbl);
     oi_hl->addWidget(sent_oi_lbl_);
@@ -348,21 +346,23 @@ void CftcPanel::show_sentiment(const QJsonObject& s) {
     const double oi = s["open_interest"].toDouble();
     sent_oi_lbl_->setText(oi > 0 ? QString::number(static_cast<qint64>(oi)) : "—");
 
-    using namespace ui::colors;
     const QString oi_trend = s["overall_sentiment"].toObject()["oi_trend"].toString();
     sent_oi_trend_->setText(oi_trend.isEmpty() ? "—" : oi_trend.toUpper());
-    sent_oi_trend_->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700; background:transparent;")
-                                      .arg(oi_trend == "increasing" ? POSITIVE() : NEGATIVE()));
+    sent_oi_trend_->setObjectName(oi_trend == "increasing" ? "econStatPos" : "econStatNeg");
+    sent_oi_trend_->style()->unpolish(sent_oi_trend_);
+    sent_oi_trend_->style()->polish(sent_oi_trend_);
 
     const QString comm_bias = s["overall_sentiment"].toObject()["commercial_bias"].toString();
     sent_comm_bias_->setText(comm_bias.isEmpty() ? "—" : comm_bias.toUpper());
-    sent_comm_bias_->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700; background:transparent;")
-                                       .arg(comm_bias == "bullish" ? POSITIVE() : NEGATIVE()));
+    sent_comm_bias_->setObjectName(comm_bias == "bullish" ? "econStatPos" : "econStatNeg");
+    sent_comm_bias_->style()->unpolish(sent_comm_bias_);
+    sent_comm_bias_->style()->polish(sent_comm_bias_);
 
     const QString noncomm_bias = s["overall_sentiment"].toObject()["non_commercial_bias"].toString();
     sent_noncomm_bias_->setText(noncomm_bias.isEmpty() ? "—" : noncomm_bias.toUpper());
-    sent_noncomm_bias_->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700; background:transparent;")
-                                          .arg(noncomm_bias == "bullish" ? POSITIVE() : NEGATIVE()));
+    sent_noncomm_bias_->setObjectName(noncomm_bias == "bullish" ? "econStatPos" : "econStatNeg");
+    sent_noncomm_bias_->style()->unpolish(sent_noncomm_bias_);
+    sent_noncomm_bias_->style()->polish(sent_noncomm_bias_);
 
     const QJsonObject comm = s["commercial_positions"].toObject();
     const double comm_net = comm["net"].toDouble();
