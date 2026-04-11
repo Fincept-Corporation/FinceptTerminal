@@ -4,80 +4,76 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-setup:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-22.04
-            platform: Linux
-            binary: fincept-qt/build/FinceptTerminal
+  # ── Test exact Cirrus CI Qt install commands on real macOS runner ──────────
+  # Run this job to validate .cirrus.yml commands before pushing to Cirrus.
+  # Uses macos-15 (Sequoia) — same OS as ghcr.io/cirruslabs/macos-runner:sequoia
+  test-cirrus-macos:
+    name: Test Cirrus Qt Install (macOS arm64)
+    runs-on: macos-15
 
-          - os: macos-14
-            platform: macOS
-            binary: fincept-qt/build/FinceptTerminal
-
-          - os: windows-2022
-            platform: Windows
-            binary: fincept-qt/build/Release/FinceptTerminal.exe
-
-    runs-on: ${{ matrix.os }}
-    name: ${{ matrix.platform }}
+    env:
+      QT_VERSION: "6.8.3"
+      QT_MODULES: "qtcharts qtwebsockets qtmultimedia"
+      QT_INSTALL_DIR: "$HOME/Qt"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      # ── Qt6 (Windows/macOS via installer action) ────────────
-      - name: Install Qt6 (Windows/macOS)
-        if: runner.os != 'Linux'
-        uses: jurplel/install-qt-action@v4
         with:
-          version: "6.8.3"
-          arch: ${{ runner.os == 'Windows' && 'win64_msvc2022_64' || 'clang_64' }}
-          modules: "qtcharts qtwebsockets qtsql"
-          cache: true
+          submodules: recursive
 
-      # ── Linux — install deps and build directly ─────────────
-      - name: Build (Linux)
-        if: runner.os == 'Linux'
+      # Step 1 — install build tools (mirrors brew_cache in .cirrus.yml)
+      - name: Install build tools via brew
+        run: brew install ccache ninja cmake python@3.12
+
+      # Step 2 — install Qt via aqtinstall (mirrors qt_cache in .cirrus.yml)
+      - name: Install aqtinstall
+        run: pip3 install --break-system-packages aqtinstall
+
+      - name: Install Qt ${{ env.QT_VERSION }} via aqt
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y \
-            cmake g++ python3 python3-pip \
-            qt6-base-dev libqt6charts6-dev qt6-tools-dev \
-            libqt6sql6-sqlite libqt6websockets6-dev \
-            libgl1-mesa-dev libglu1-mesa-dev pkg-config
-          cd fincept-qt
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --parallel
+          aqt install-qt --outputdir "$HOME/Qt" \
+            mac desktop ${{ env.QT_VERSION }} clang_64 \
+            -m ${{ env.QT_MODULES }}
 
-      # ── macOS — run setup.sh --ci ───────────────────────────
-      - name: Build (macOS)
-        if: runner.os == 'macOS'
+      - name: Verify Qt install
         run: |
-          chmod +x setup.sh
-          ./setup.sh --ci
+          QT_ROOT="$HOME/Qt/${{ env.QT_VERSION }}/macos"
+          echo "Qt root: $QT_ROOT"
+          ls "$QT_ROOT/bin/" | grep qmake
+          "$QT_ROOT/bin/qmake" --version
+          echo "Qt6::GuiPrivate check:"
+          ls "$QT_ROOT/include/QtGui/private/" | head -5
 
-      # ── Windows — build using MSVC environment ──────────────
-      - name: Build (Windows)
-        if: runner.os == 'Windows'
-        shell: cmd
+      # Step 3 — configure CMake (mirrors configure_script in .cirrus.yml)
+      - name: Configure CMake
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          cd fincept-qt
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --config Release --parallel
+          QT_ROOT="$HOME/Qt/${{ env.QT_VERSION }}/macos"
+          cmake -B fincept-qt/build \
+            -S fincept-qt \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT}" \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DFINCEPT_BUILD_INSTALLER=OFF \
+            -DDEPLOY_QT=OFF
 
-      # ── Verify binary exists ────────────────────────────────
+      # Step 4 — build (mirrors build_script in .cirrus.yml)
+      - name: Build
+        run: |
+          cmake --build fincept-qt/build \
+            --config Release \
+            --parallel $(sysctl -n hw.logicalcpu)
+
       - name: Verify binary
-        shell: bash
         run: |
-          if [ ! -f "${{ matrix.binary }}" ]; then
-            echo "ERROR: Binary not found at ${{ matrix.binary }}"
-            ls -la fincept-qt/build/ 2>/dev/null || true
-            ls -la fincept-qt/build/Release/ 2>/dev/null || true
+          EXE="fincept-qt/build/FinceptTerminal"
+          if [ ! -f "$EXE" ] && [ ! -d "fincept-qt/build/FinceptTerminal.app" ]; then
+            echo "ERROR: binary not found"
+            find fincept-qt/build -maxdepth 3 -name "FinceptTerminal*" || true
             exit 1
           fi
-          echo "Binary verified: ${{ matrix.binary }}"
-          ls -lh "${{ matrix.binary }}"
+          echo "Build succeeded"
+          file "$EXE" 2>/dev/null || file "fincept-qt/build/FinceptTerminal.app/Contents/MacOS/FinceptTerminal"
