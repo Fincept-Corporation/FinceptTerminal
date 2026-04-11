@@ -48,20 +48,9 @@ build_task:
     folder: "$HOME/.ccache"
     fingerprint_script: echo "${QT_VERSION}-$(git log --oneline -10 | shasum | cut -c1-16)"
 
-  # ── Checkout with submodules ───────────────────────────────────────────────
-  clone_script: |
-    if [ -z "$CIRRUS_PR" ]; then
-      git clone --recursive --depth=10 \
-        "https://x-access-token:${CIRRUS_REPO_CLONE_TOKEN}@github.com/${CIRRUS_REPO_FULL_NAME}.git" \
-        "$CIRRUS_WORKING_DIR"
-      git checkout "$CIRRUS_CHANGE_IN_REPO"
-    else
-      git clone --recursive --depth=10 \
-        "https://x-access-token:${CIRRUS_REPO_CLONE_TOKEN}@github.com/${CIRRUS_REPO_FULL_NAME}.git" \
-        "$CIRRUS_WORKING_DIR"
-      git fetch origin "pull/$CIRRUS_PR/head:pr"
-      git checkout pr
-    fi
+  # ── Init submodules (Cirrus clones the repo automatically) ───────────────
+  submodules_script: |
+    git submodule update --init --recursive
 
   # ── Resolve paths and export to env ───────────────────────────────────────
   setup_script: |
