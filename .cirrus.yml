@@ -26,9 +26,9 @@ build_task:
   # ── Homebrew tools cache (no Qt here — Qt installed via aqtinstall) ────────
   brew_cache:
     folder: "$HOME/Library/Caches/Homebrew"
-    fingerprint_script: echo "brew-tools-ccache-ninja-cmake-py312-$(date +%Y-%m)"
+    fingerprint_script: echo "brew-tools-ccache-ninja-cmake-py312-pipx-$(date +%Y-%m)"
     populate_script:
-      - brew install ccache ninja cmake python@3.12
+      - brew install ccache ninja cmake python@3.12 pipx
 
   # ── Qt cache — keyed to exact version + modules ───────────────────────────
   qt_cache:
@@ -40,8 +40,10 @@ build_task:
       # Syntax: aqt install-qt --outputdir <dir> <host> <target> <version> [arch] -m <modules...>
       # arch=clang_64 is the correct Qt 6 macOS identifier (universal binary, arm64+x86_64)
       # Install path will be: $HOME/Qt/6.8.3/macos/
-      - pip3 install aqtinstall
-      - aqt install-qt --outputdir "$HOME/Qt" mac desktop ${QT_VERSION} clang_64 -m ${QT_MODULES}
+      - brew install pipx
+      - pipx ensurepath
+      - pipx install aqtinstall
+      - pipx run aqt install-qt --outputdir "$HOME/Qt" mac desktop ${QT_VERSION} clang_64 -m ${QT_MODULES}
 
   # ── ccache build artifact cache ───────────────────────────────────────────
   ccache_cache:
