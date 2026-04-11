@@ -1,0 +1,156 @@
+name: Build macOS (Apple Silicon)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  BUILD_TYPE: Release
+  QT_VERSION: "6.8.3"
+  QT_MODULES: "qtcharts qtwebsockets qtmultimedia"
+  APP_NAME: FinceptTerminal
+
+jobs:
+  build:
+    name: macOS arm64
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # ── ccache ────────────────────────────────────────────────────────────
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: macos-arm64-${{ env.QT_VERSION }}
+          max-size: 500M
+
+      # ── Install build tools ───────────────────────────────────────────────
+      - name: Install build tools
+        run: brew install ninja cmake
+
+      # ── Install Qt 6.8.3 (official installer, includes private headers) ──
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: clang_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          cache-key-prefix: qt-macos-arm64
+
+      # ── Configure CMake ───────────────────────────────────────────────────
+      - name: Configure CMake
+        working-directory: fincept-qt
+        run: |
+          cmake -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DFINCEPT_BUILD_INSTALLER=OFF \
+            -DDEPLOY_QT=OFF
+
+      # ── Build ─────────────────────────────────────────────────────────────
+      - name: Build
+        working-directory: fincept-qt
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel $(sysctl -n hw.logicalcpu)
+
+      # ── Verify binary ─────────────────────────────────────────────────────
+      - name: Verify binary
+        working-directory: fincept-qt
+        run: |
+          if [ -f "build/${{ env.APP_NAME }}" ]; then
+            BINARY="build/${{ env.APP_NAME }}"
+          elif [ -f "build/${{ env.APP_NAME }}.app/Contents/MacOS/${{ env.APP_NAME }}" ]; then
+            BINARY="build/${{ env.APP_NAME }}.app/Contents/MacOS/${{ env.APP_NAME }}"
+          else
+            echo "ERROR: binary not found"
+            find build -maxdepth 3 -name "${{ env.APP_NAME }}*" || true
+            exit 1
+          fi
+          echo "Binary: $BINARY ($(du -sh "$BINARY" | cut -f1))"
+          file "$BINARY"
+          lipo -info "$BINARY"
+
+      # ── Package (macdeployqt + Python + resources) ────────────────────────
+      - name: Package
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          MACDEPLOYQT="${QT_ROOT_DIR}/bin/macdeployqt"
+          BUILD_DIR="build"
+          DIST_DIR="dist"
+          mkdir -p "${DIST_DIR}"
+
+          # Locate or create .app bundle
+          if [ -d "${BUILD_DIR}/${{ env.APP_NAME }}.app" ]; then
+            APP_BUNDLE="${BUILD_DIR}/${{ env.APP_NAME }}.app"
+          else
+            APP_BUNDLE="${BUILD_DIR}/${{ env.APP_NAME }}.app"
+            mkdir -p "${APP_BUNDLE}/Contents/MacOS"
+            cp "${BUILD_DIR}/${{ env.APP_NAME }}" "${APP_BUNDLE}/Contents/MacOS/${{ env.APP_NAME }}"
+            chmod +x "${APP_BUNDLE}/Contents/MacOS/${{ env.APP_NAME }}"
+            cat > "${APP_BUNDLE}/Contents/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key><string>FinceptTerminal</string>
+            <key>CFBundleIdentifier</key><string>in.fincept.terminal</string>
+            <key>CFBundleName</key><string>FinceptTerminal</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>4.0.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict></plist>
+          PLIST
+          fi
+
+          # macdeployqt — bundles all Qt frameworks + plugins + fixes rpaths
+          echo "Running macdeployqt..."
+          "${MACDEPLOYQT}" "${APP_BUNDLE}" -always-overwrite 2>&1 || true
+
+          # Embed Python 3.12 framework
+          PY_PREFIX="$(brew --prefix python@3.12 2>/dev/null || brew --prefix python3)"
+          PY_FRAMEWORK="${PY_PREFIX}/Frameworks/Python.framework"
+          BUNDLE_FRAMEWORKS="${APP_BUNDLE}/Contents/Frameworks"
+          mkdir -p "${BUNDLE_FRAMEWORKS}"
+          if [ -d "${PY_FRAMEWORK}" ]; then
+            echo "Embedding Python.framework..."
+            cp -R "${PY_FRAMEWORK}" "${BUNDLE_FRAMEWORKS}/"
+            ln -sf "../Frameworks/Python.framework/Versions/3.12/bin/python3.12" \
+                   "${APP_BUNDLE}/Contents/MacOS/python3" 2>/dev/null || true
+          else
+            echo "WARNING: Python.framework not found — skipping embed"
+          fi
+
+          # Copy resources and Python analytics scripts
+          cp -r resources "${APP_BUNDLE}/Contents/Resources/" 2>/dev/null || true
+          cp -r scripts   "${APP_BUNDLE}/Contents/Resources/scripts" 2>/dev/null || true
+
+          # Move bundle to dist/
+          cp -r "${APP_BUNDLE}" "${DIST_DIR}/"
+
+          # Diagnostics
+          BINARY="${DIST_DIR}/${{ env.APP_NAME }}.app/Contents/MacOS/${{ env.APP_NAME }}"
+          echo "=== Bundle size ===" && du -sh "${DIST_DIR}/${{ env.APP_NAME }}.app"
+          echo "=== Qt frameworks ===" && ls "${DIST_DIR}/${{ env.APP_NAME }}.app/Contents/Frameworks/" | grep -i qt || true
+          echo "=== Plugins ===" && find "${DIST_DIR}/${{ env.APP_NAME }}.app/Contents/PlugIns" -name "*.dylib" 2>/dev/null | sort || true
+
+          # Tar to preserve execute permissions
+          tar -czf dist.tar.gz -C "${DIST_DIR}" .
+          echo "Archive: dist.tar.gz ($(du -sh dist.tar.gz | cut -f1))"
+
+      # ── Upload artifact ───────────────────────────────────────────────────
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FinceptTerminal-macOS-arm64
+          path: fincept-qt/dist.tar.gz
+          retention-days: 30

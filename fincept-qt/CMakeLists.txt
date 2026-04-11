@@ -154,10 +154,16 @@ foreach(_pc md4c.pc md4c-html.pc)
 endforeach()
 
 # ── QGeoView (interactive map widget with OSM tiles) ─────────────────────────
+# PATCH_COMMAND removes -framework AGL which was deleted in macOS 14 (Sonoma).
+# QGeoView's CMakeLists links it unconditionally; we strip it before configure.
+# sed -i '' is macOS BSD sed syntax; on Linux sed -i (no argument) is used —
+# the || true ensures it is a no-op on platforms where the pattern isn't found.
 FetchContent_Declare(
     QGeoView
     GIT_REPOSITORY https://github.com/AmonRaNet/QGeoView.git
     GIT_TAG        master
+    PATCH_COMMAND
+        sed -i.bak "s/AGL//g" <SOURCE_DIR>/lib/CMakeLists.txt || true
 )
 set(QGV_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
 set(QGV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -165,20 +171,6 @@ set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(QGeoView)
 # QGeoView has anonymous-namespace symbol clashes under unity build
 set_target_properties(qgeoview PROPERTIES UNITY_BUILD OFF)
-# AGL framework was removed in macOS 14 (Sonoma). QGeoView links it unconditionally
-# which breaks builds on Sequoia+. Strip it from the target's link libraries.
-if(APPLE)
-    get_target_property(_qgv_libs qgeoview LINK_LIBRARIES)
-    if(_qgv_libs)
-        list(REMOVE_ITEM _qgv_libs "-framework AGL")
-        set_target_properties(qgeoview PROPERTIES LINK_LIBRARIES "${_qgv_libs}")
-    endif()
-    get_target_property(_qgv_iface_libs qgeoview INTERFACE_LINK_LIBRARIES)
-    if(_qgv_iface_libs)
-        list(REMOVE_ITEM _qgv_iface_libs "-framework AGL")
-        set_target_properties(qgeoview PROPERTIES INTERFACE_LINK_LIBRARIES "${_qgv_iface_libs}")
-    endif()
-endif()
 
 # ── SingleApplication (single-process enforcement + new-window IPC) ──────────
 # When the user re-launches the exe, the secondary instance sends "--new-window"
