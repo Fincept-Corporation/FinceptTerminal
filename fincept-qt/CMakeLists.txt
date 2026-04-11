@@ -165,6 +165,20 @@ set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(QGeoView)
 # QGeoView has anonymous-namespace symbol clashes under unity build
 set_target_properties(qgeoview PROPERTIES UNITY_BUILD OFF)
+# AGL framework was removed in macOS 14 (Sonoma). QGeoView links it unconditionally
+# which breaks builds on Sequoia+. Strip it from the target's link libraries.
+if(APPLE)
+    get_target_property(_qgv_libs qgeoview LINK_LIBRARIES)
+    if(_qgv_libs)
+        list(REMOVE_ITEM _qgv_libs "-framework AGL")
+        set_target_properties(qgeoview PROPERTIES LINK_LIBRARIES "${_qgv_libs}")
+    endif()
+    get_target_property(_qgv_iface_libs qgeoview INTERFACE_LINK_LIBRARIES)
+    if(_qgv_iface_libs)
+        list(REMOVE_ITEM _qgv_iface_libs "-framework AGL")
+        set_target_properties(qgeoview PROPERTIES INTERFACE_LINK_LIBRARIES "${_qgv_iface_libs}")
+    endif()
+endif()
 
 # ── SingleApplication (single-process enforcement + new-window IPC) ──────────
 # When the user re-launches the exe, the secondary instance sends "--new-window"
