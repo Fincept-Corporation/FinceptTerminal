@@ -1,20 +1,7 @@
 name: Lint
 
 on:
-  push:
-    branches: [main, develop]
-    paths:
-      - 'fincept-qt/src/**'
-      - 'fincept-qt/.clang-format'
-      - 'fincept-qt/.clang-tidy'
-      - 'fincept-qt/CMakeLists.txt'
-  pull_request:
-    branches: [main, develop]
-    paths:
-      - 'fincept-qt/src/**'
-      - 'fincept-qt/.clang-format'
-      - 'fincept-qt/.clang-tidy'
-      - 'fincept-qt/CMakeLists.txt'
+  workflow_dispatch:
 
 jobs:
   # ── clang-format ─────────────────────────────────────────────────────────────

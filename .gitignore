@@ -1,9 +1,6 @@
 # .gitignore — Fincept Terminal (Qt6 / C++20)
 # ============================================================
 
-# ── CI config (local only) ──────────────────────────────────
-.cirrus.yml
-
 # ── CMake build output ───────────────────────────────────────
 fincept-qt/build/
 fincept-qt/build-*/

@@ -1,0 +1,182 @@
+## Cirrus CI — macOS Apple Silicon build
+## Complements GitHub Actions (Linux + Windows).
+## Free for public repos: ~3,300 macOS CPU-minutes/month.
+## Runs on: push to main/develop, pull_request, tags (v*)
+
+build_task:
+  name: macOS arm64 (Apple Silicon)
+  timeout_in: 90m
+
+  only_if: $CIRRUS_BRANCH == 'main' || $CIRRUS_BRANCH == 'develop' || $CIRRUS_TAG != '' || $CIRRUS_PR != ''
+
+  macos_instance:
+    # Sequoia — matches GitHub Actions macos-15 runners
+    image: ghcr.io/cirruslabs/macos-runner:sequoia
+
+  env:
+    HOMEBREW_NO_AUTO_UPDATE: "1"
+    HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: "1"
+    BUILD_TYPE: Release
+    QT_VERSION: "6.8.3"
+    # App name — used throughout packaging steps
+    APP_NAME: FinceptTerminal
+
+  # ── Homebrew package cache — keyed to Qt version + month ──────────────────
+  brew_cache:
+    folder: "$HOME/Library/Caches/Homebrew"
+    fingerprint_script: echo "brew-qt683-py312-$(date +%Y-%m)"
+    populate_script:
+      # Install exact Qt version via brew formula pinning.
+      # qt@6 tracks the latest 6.x; for a specific patch we install from
+      # the versioned formula if available, otherwise accept latest 6.8.x.
+      - brew install ccache ninja cmake python@3.12
+      - brew install qt || brew install qt@6
+
+  # ── ccache build artifact cache — keyed to last 10 commits ───────────────
+  ccache_cache:
+    folder: "$HOME/.ccache"
+    fingerprint_script: echo "$QT_VERSION-$(git log --oneline -10 | sha256sum | cut -c1-16)"
+
+  # ── Checkout (with submodules, matching GitHub Actions) ───────────────────
+  clone_script: |
+    if [ -z "$CIRRUS_PR" ]; then
+      git clone --recursive --depth=10 "https://x-access-token:${CIRRUS_REPO_CLONE_TOKEN}@github.com/${CIRRUS_REPO_FULL_NAME}.git" "$CIRRUS_WORKING_DIR"
+      git checkout "$CIRRUS_CHANGE_IN_REPO"
+    else
+      git clone --recursive --depth=10 "https://x-access-token:${CIRRUS_REPO_CLONE_TOKEN}@github.com/${CIRRUS_REPO_FULL_NAME}.git" "$CIRRUS_WORKING_DIR"
+      git fetch origin "pull/$CIRRUS_PR/head:pr"
+      git checkout pr
+    fi
+
+  # ── Resolve Qt prefix ─────────────────────────────────────────────────────
+  setup_script: |
+    set -euo pipefail
+    QT_PREFIX="$(brew --prefix qt 2>/dev/null || brew --prefix qt@6)"
+    echo "QT_PREFIX=${QT_PREFIX}" >> $CIRRUS_ENV
+    echo "QT_ROOT_DIR=${QT_PREFIX}" >> $CIRRUS_ENV
+    echo "PATH=${QT_PREFIX}/bin:$(brew --prefix ccache)/bin:$PATH" >> $CIRRUS_ENV
+    echo "Qt prefix: ${QT_PREFIX}"
+    qmake --version || true
+
+  # ── Configure CMake ───────────────────────────────────────────────────────
+  configure_script: |
+    set -euo pipefail
+    cmake -B fincept-qt/build \
+      -S fincept-qt \
+      -G Ninja \
+      -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+      -DCMAKE_PREFIX_PATH="${QT_PREFIX}" \
+      -DCMAKE_OSX_ARCHITECTURES=arm64 \
+      -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+      -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+      -DFINCEPT_BUILD_INSTALLER=OFF \
+      -DDEPLOY_QT=OFF
+
+  # ── Build ─────────────────────────────────────────────────────────────────
+  build_script: |
+    set -euo pipefail
+    cmake --build fincept-qt/build \
+      --config ${BUILD_TYPE} \
+      --parallel $(sysctl -n hw.logicalcpu)
+
+  # ── Package — bundle all Qt frameworks, plugins, Python, resources ────────
+  package_script: |
+    set -euo pipefail
+    MACDEPLOYQT="${QT_PREFIX}/bin/macdeployqt"
+    BUILD_DIR="fincept-qt/build"
+    DIST_DIR="fincept-qt/dist"
+    mkdir -p "${DIST_DIR}"
+
+    # ── Locate the built product ─────────────────────────────────────────────
+    if [ -d "${BUILD_DIR}/${APP_NAME}.app" ]; then
+      APP_BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
+    else
+      # No .app produced — create a minimal bundle around the plain binary
+      APP_BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
+      mkdir -p "${APP_BUNDLE}/Contents/MacOS"
+      cp "${BUILD_DIR}/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
+      chmod +x "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
+      cat > "${APP_BUNDLE}/Contents/Info.plist" <<'PLIST'
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0"><dict>
+      <key>CFBundleExecutable</key><string>FinceptTerminal</string>
+      <key>CFBundleIdentifier</key><string>in.fincept.terminal</string>
+      <key>CFBundleName</key><string>FinceptTerminal</string>
+      <key>CFBundlePackageType</key><string>APPL</string>
+      <key>CFBundleShortVersionString</key><string>4.0.0</string>
+      <key>NSHighResolutionCapable</key><true/>
+    </dict></plist>
+    PLIST
+    fi
+
+    # ── macdeployqt — copies all Qt frameworks, plugins, and fixes rpaths ────
+    # This is the equivalent of windeployqt on macOS. It bundles:
+    #   - Qt*.framework (Core, Gui, Widgets, Charts, Network, Sql, WebSockets,
+    #     Multimedia, MultimediaWidgets, Concurrent, PrintSupport, Svg, Xml, etc.)
+    #   - plugins/ (platforms, imageformats, sqldrivers, tls, styles, etc.)
+    #   - Fixes all @rpath references to be self-contained
+    echo "Running macdeployqt..."
+    "${MACDEPLOYQT}" "${APP_BUNDLE}" \
+      -always-overwrite \
+      2>&1 || true
+
+    # ── Python 3.12 runtime — embed inside the bundle ────────────────────────
+    # The app spawns Python subprocesses; we need python3 available.
+    # Copy the brew Python 3.12 framework into the bundle's Frameworks dir.
+    PY_PREFIX="$(brew --prefix python@3.12)"
+    PY_FRAMEWORK="${PY_PREFIX}/Frameworks/Python.framework"
+    BUNDLE_FRAMEWORKS="${APP_BUNDLE}/Contents/Frameworks"
+    mkdir -p "${BUNDLE_FRAMEWORKS}"
+
+    if [ -d "${PY_FRAMEWORK}" ]; then
+      echo "Embedding Python.framework..."
+      cp -R "${PY_FRAMEWORK}" "${BUNDLE_FRAMEWORKS}/"
+      # Symlink python3 into MacOS so PythonRunner can find it via relative path
+      PY_BIN="${BUNDLE_FRAMEWORKS}/Python.framework/Versions/3.12/bin/python3.12"
+      ln -sf "../Frameworks/Python.framework/Versions/3.12/bin/python3.12" \
+             "${APP_BUNDLE}/Contents/MacOS/python3" 2>/dev/null || true
+      echo "Python.framework embedded"
+    else
+      # Fallback: copy just the python3.12 binary + stdlib zip
+      echo "::warning:: Python.framework not found — copying binary only"
+      PY_BIN="${PY_PREFIX}/bin/python3.12"
+      if [ -f "${PY_BIN}" ]; then
+        cp "${PY_BIN}" "${APP_BUNDLE}/Contents/MacOS/python3"
+        chmod +x "${APP_BUNDLE}/Contents/MacOS/python3"
+      fi
+    fi
+
+    # ── App resources and Python analytics scripts ───────────────────────────
+    cp -r fincept-qt/resources "${APP_BUNDLE}/Contents/Resources/" 2>/dev/null || true
+    cp -r fincept-qt/scripts   "${APP_BUNDLE}/Contents/Resources/scripts" 2>/dev/null || true
+
+    # ── Copy finished .app into dist/ ────────────────────────────────────────
+    cp -r "${APP_BUNDLE}" "${DIST_DIR}/"
+
+    # ── Diagnostic — verify binary architecture and list bundle contents ─────
+    BINARY="${DIST_DIR}/${APP_NAME}.app/Contents/MacOS/${APP_NAME}"
+    echo ""
+    echo "=== Binary info ==="
+    file "${BINARY}"
+    lipo -info "${BINARY}"
+    echo "Binary size: $(du -sh "${BINARY}" | cut -f1)"
+    echo ""
+    echo "=== Bundle size ==="
+    du -sh "${DIST_DIR}/${APP_NAME}.app"
+    echo ""
+    echo "=== Qt frameworks bundled ==="
+    ls "${DIST_DIR}/${APP_NAME}.app/Contents/Frameworks/" 2>/dev/null | grep -i qt || echo "(none — macdeployqt may have skipped non-tag build)"
+    echo ""
+    echo "=== Plugins bundled ==="
+    find "${DIST_DIR}/${APP_NAME}.app/Contents/PlugIns" -name "*.dylib" 2>/dev/null | sort || echo "(no plugins)"
+
+    # ── Tar to preserve execute permissions (zip strips them) ────────────────
+    tar -czf fincept-qt/dist.tar.gz -C "${DIST_DIR}" .
+    echo ""
+    echo "Archive: fincept-qt/dist.tar.gz ($(du -sh fincept-qt/dist.tar.gz | cut -f1))"
+
+  # ── Upload artifact ───────────────────────────────────────────────────────
+  dist_artifacts:
+    path: "fincept-qt/dist.tar.gz"
