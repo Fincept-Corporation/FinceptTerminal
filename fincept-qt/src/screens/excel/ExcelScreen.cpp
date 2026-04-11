@@ -16,7 +16,9 @@
 #include <QTabBar>
 #include <QVBoxLayout>
 
+#ifdef FINCEPT_HAS_QXLSX
 #include <xlsxdocument.h>
+#endif
 
 namespace fincept::screens {
 
@@ -190,6 +192,7 @@ void ExcelScreen::on_import() {
     if (path.isEmpty())
         return;
 
+#ifdef FINCEPT_HAS_QXLSX
     QXlsx::Document xlsx(path);
     QStringList sheet_names = xlsx.sheetNames();
     if (sheet_names.isEmpty()) {
@@ -240,6 +243,12 @@ void ExcelScreen::on_import() {
 
     // Register with File Manager so it appears in the Files tab
     services::FileManagerService::instance().import_file(path, "excel");
+#else
+    QMessageBox::information(this, "Excel Import",
+        "Excel (.xlsx) import requires Qt6 private headers.\n"
+        "This build was compiled without QXlsx support.\n\n"
+        "CSV files can still be imported via the toolbar.");
+#endif
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -247,6 +256,7 @@ void ExcelScreen::on_import() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void ExcelScreen::on_export() {
+#ifdef FINCEPT_HAS_QXLSX
     QString path = QFileDialog::getSaveFileName(this, "Export as XLSX", file_name_, "Excel Files (*.xlsx)");
     if (path.isEmpty())
         return;
@@ -300,6 +310,12 @@ void ExcelScreen::on_export() {
     } else {
         LOG_ERROR("ExcelScreen", "Failed to save XLSX file");
     }
+#else
+    QMessageBox::information(this, "Excel Export",
+        "Excel (.xlsx) export requires Qt6 private headers.\n"
+        "This build was compiled without QXlsx support.\n\n"
+        "CSV export is still available via the toolbar.");
+#endif
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

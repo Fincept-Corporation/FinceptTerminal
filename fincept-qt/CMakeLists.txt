@@ -89,36 +89,75 @@ endif()
 include(FetchContent)
 set(CMAKE_SKIP_INSTALL_RULES TRUE CACHE BOOL "" FORCE)
 
-# ── QXlsx (Excel file I/O) ────────────────────────────────────────────────────
-FetchContent_Declare(
-    QXlsx
-    GIT_REPOSITORY https://github.com/QtExcel/QXlsx.git
-    GIT_TAG        v1.4.9
-    SOURCE_SUBDIR  QXlsx
-)
-FetchContent_MakeAvailable(QXlsx)
-
-# QXlsx uses implicit const char* -> QString conversions which are banned by Qt6's
-# strict cast macros. Undefine them for this third-party target only (GCC/Clang: -U,
-# MSVC: /U). These macros are set by Qt6's cmake config, not by us globally.
-if(MSVC)
-    target_compile_options(QXlsx PRIVATE
-        /UQT_NO_CAST_FROM_ASCII /UQT_NO_CAST_FROM_BYTEARRAY
-        /UQT_NO_CAST_TO_ASCII   /UQT_NO_URL_CAST_FROM_STRING
-    )
+# ── Qt6::GuiPrivate availability check ───────────────────────────────────────
+# QXlsx requires Qt6::GuiPrivate (uses private/qzipreader_p.h internally).
+# The official Qt installer (jurplel/install-qt-action, aqtinstall) always
+# includes private headers. System Qt packages require an extra package:
+#   Ubuntu/Debian : sudo apt-get install qt6-base-private-dev
+#   Fedora        : sudo dnf install qt6-qtbase-private-devel
+#   Arch Linux    : qt6-base (private headers included by default)
+#   macOS Homebrew: included by default
+# When private headers are absent, QXlsx is disabled and Excel export shows
+# a "not available" message rather than crashing or failing to build.
+find_package(Qt6 QUIET COMPONENTS GuiPrivate)
+if(Qt6GuiPrivate_FOUND)
+    set(FINCEPT_HAS_PRIVATE_HEADERS TRUE)
 else()
-    target_compile_options(QXlsx PRIVATE
-        -UQT_NO_CAST_FROM_ASCII -UQT_NO_CAST_FROM_BYTEARRAY
-        -UQT_NO_CAST_TO_ASCII   -UQT_NO_URL_CAST_FROM_STRING
+    set(FINCEPT_HAS_PRIVATE_HEADERS FALSE)
+    message(WARNING
+        "\n"
+        "  Qt6::GuiPrivate not found — Excel export (QXlsx) will be disabled.\n"
+        "  To enable it, install Qt6 private headers:\n"
+        "    Ubuntu/Debian : sudo apt-get install qt6-base-private-dev\n"
+        "    Fedora        : sudo dnf install qt6-qtbase-private-devel\n"
+        "    Arch Linux    : qt6-base (already includes private headers)\n"
+        "    macOS Homebrew: already included\n"
+        "    CI/official   : jurplel/install-qt-action always includes them\n"
     )
 endif()
+
+# ── QXlsx (Excel file I/O) ────────────────────────────────────────────────────
+# Only fetched and built when Qt6::GuiPrivate is available.
+# A stub INTERFACE target is created when unavailable so all
+# target_link_libraries(... QXlsx::QXlsx) calls still compile cleanly.
+if(FINCEPT_HAS_PRIVATE_HEADERS)
+    FetchContent_Declare(
+        QXlsx
+        GIT_REPOSITORY https://github.com/QtExcel/QXlsx.git
+        GIT_TAG        3192b808a283f8eb18c97b9a087bf085054e9bb0  # v1.4.9
+        SOURCE_SUBDIR  QXlsx
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(QXlsx)
+
+    # QXlsx uses implicit const char* -> QString conversions which are banned
+    # by Qt6's strict cast macros. Undefine them for this target only.
+    if(MSVC)
+        target_compile_options(QXlsx PRIVATE
+            /UQT_NO_CAST_FROM_ASCII /UQT_NO_CAST_FROM_BYTEARRAY
+            /UQT_NO_CAST_TO_ASCII   /UQT_NO_URL_CAST_FROM_STRING
+        )
+    else()
+        target_compile_options(QXlsx PRIVATE
+            -UQT_NO_CAST_FROM_ASCII -UQT_NO_CAST_FROM_BYTEARRAY
+            -UQT_NO_CAST_TO_ASCII   -UQT_NO_URL_CAST_FROM_STRING
+        )
+    endif()
+else()
+    # Stub target — satisfies target_link_libraries without pulling in QXlsx
+    add_library(QXlsx_stub INTERFACE)
+    add_library(QXlsx::QXlsx ALIAS QXlsx_stub)
+endif()
+# NOTE: FINCEPT_HAS_QXLSX compile definition is applied to FinceptTerminal
+# after add_executable() — see the target_compile_definitions block below.
 
 # ── QSimpleUpdater (cross-platform auto-update) ──────────────────────────────
 set(QSIMPLE_UPDATER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
     QSimpleUpdater
     GIT_REPOSITORY https://github.com/alex-spataru/QSimpleUpdater.git
-    GIT_TAG        master
+    GIT_TAG        ff0cb7caae05ef381a09f212b90329ff7b7b9ab9  # master @ 2026-04-11
+    GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(QSimpleUpdater)
 # QSimpleUpdater's CMakeLists builds a proper STATIC library target with
@@ -128,7 +167,8 @@ FetchContent_MakeAvailable(QSimpleUpdater)
 FetchContent_Declare(
     md4c
     GIT_REPOSITORY https://github.com/mity/md4c.git
-    GIT_TAG        release-0.5.2
+    GIT_TAG        729e6b8b320caa96328968ab27d7db2235e4fb47  # release-0.5.2
+    GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(md4c)
 # md4c builds md4c (parser) and md4c-html (HTML renderer) as static libs.
@@ -155,15 +195,16 @@ endforeach()
 
 # ── QGeoView (interactive map widget with OSM tiles) ─────────────────────────
 # PATCH_COMMAND removes -framework AGL which was deleted in macOS 14 (Sonoma).
-# QGeoView's CMakeLists links it unconditionally; we strip it before configure.
-# sed -i '' is macOS BSD sed syntax; on Linux sed -i (no argument) is used —
-# the || true ensures it is a no-op on platforms where the pattern isn't found.
+# Uses a portable CMake script instead of sed (sed is unavailable in MSVC
+# Developer Command Prompt on Windows and is fragile across platforms).
 FetchContent_Declare(
     QGeoView
     GIT_REPOSITORY https://github.com/AmonRaNet/QGeoView.git
-    GIT_TAG        master
-    PATCH_COMMAND
-        sed -i.bak "s/AGL//g" <SOURCE_DIR>/lib/CMakeLists.txt || true
+    GIT_TAG        4b2c52c80940e1073c259ded1a57df83036ba1c9  # master @ 2026-04-11
+    GIT_SHALLOW    TRUE
+    PATCH_COMMAND  ${CMAKE_COMMAND}
+        -DFILE=<SOURCE_DIR>/lib/CMakeLists.txt
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/qgeoview_remove_agl.cmake"
 )
 set(QGV_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
 set(QGV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -182,7 +223,7 @@ set(QAPPLICATION_CLASS QApplication CACHE STRING "" FORCE)
 FetchContent_Declare(
     SingleApplication
     GIT_REPOSITORY https://github.com/itay-grudev/SingleApplication.git
-    GIT_TAG        v3.5.4
+    GIT_TAG        a8da87d78238ac9ac92d2cda41793d4879c188b3  # v3.5.4
     GIT_SHALLOW    TRUE
     UPDATE_DISCONNECTED TRUE
 )
@@ -200,7 +241,7 @@ set(QT_VERSION_MAJOR 6 CACHE STRING "" FORCE)
 FetchContent_Declare(
     QtADS
     GIT_REPOSITORY https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System.git
-    GIT_TAG        4.5.0
+    GIT_TAG        87cffe5d40307c61141c88b88c10c5e7d181d880  # 4.5.0
     GIT_SHALLOW    TRUE
     UPDATE_DISCONNECTED TRUE
 )
@@ -1528,6 +1569,11 @@ if(WIN32)
     endif()
 endif()
 
+# ── Optional feature compile definitions (applied after add_executable) ──────
+if(FINCEPT_HAS_PRIVATE_HEADERS)
+    target_compile_definitions(FinceptTerminal PRIVATE FINCEPT_HAS_QXLSX)
+endif()
+
 if(HAS_WEBSOCKETS)
     target_link_libraries(FinceptTerminal PRIVATE Qt6::WebSockets)
     target_compile_definitions(FinceptTerminal PRIVATE HAS_QT_WEBSOCKETS)
@@ -1842,3 +1888,26 @@ if(FINCEPT_BUILD_INSTALLER)
         DEPENDS "com.fincept.terminal.core")
 
 endif() # FINCEPT_BUILD_INSTALLER
+
+# ── Build configuration summary ──────────────────────────────────────────────
+message(STATUS "")
+message(STATUS "============================================================")
+message(STATUS "  Fincept Terminal ${CMAKE_PROJECT_VERSION} — build summary")
+message(STATUS "============================================================")
+message(STATUS "  Qt version        : ${Qt6Core_VERSION}")
+message(STATUS "  Build type        : ${CMAKE_BUILD_TYPE}")
+message(STATUS "  Platform          : ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}")
+message(STATUS "  Compiler          : ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+message(STATUS "------------------------------------------------------------")
+message(STATUS "  Excel export      : ${FINCEPT_HAS_PRIVATE_HEADERS}  (Qt6::GuiPrivate / QXlsx)")
+if(DEFINED HAS_WEBSOCKETS)
+message(STATUS "  WebSockets        : ${HAS_WEBSOCKETS}")
+endif()
+if(DEFINED HAS_MULTIMEDIA)
+message(STATUS "  Multimedia        : ${HAS_MULTIMEDIA}")
+endif()
+if(DEFINED HAS_TTS)
+message(STATUS "  TextToSpeech      : ${HAS_TTS}")
+endif()
+message(STATUS "============================================================")
+message(STATUS "")
