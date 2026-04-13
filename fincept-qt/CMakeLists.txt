@@ -7,6 +7,17 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+# ── macOS rpath configuration ────────────────────────────────────────────────
+# Set install rpaths so the binary looks inside its own bundle for frameworks.
+# Without this, CMake embeds build-tree rpaths (e.g. _deps/qgeoview-build/lib)
+# and CPack IFW fails trying to delete them after macdeployqt already rewrote them.
+if(APPLE)
+    set(CMAKE_MACOSX_RPATH ON)
+    set(CMAKE_INSTALL_RPATH "@executable_path/../Frameworks;@executable_path/../lib")
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
+    set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
+endif()
+
 # Export compile_commands.json for clang-tidy
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -91,6 +102,11 @@ set(CMAKE_SKIP_INSTALL_RULES TRUE CACHE BOOL "" FORCE)
 
 # ── Qt6::GuiPrivate availability check ───────────────────────────────────────
 # QXlsx requires Qt6::GuiPrivate (uses private/qzipreader_p.h internally).
+# The Qt6::GuiPrivate target is created as a side-effect of loading Qt6::Gui
+# (which is pulled in by Qt6::Widgets above). There is NO separate cmake
+# package called "Qt6GuiPrivate" — so find_package(Qt6 COMPONENTS GuiPrivate)
+# always fails. The correct check is: if(TARGET Qt6::GuiPrivate).
+#
 # The official Qt installer (jurplel/install-qt-action, aqtinstall) always
 # includes private headers. System Qt packages require an extra package:
 #   Ubuntu/Debian : sudo apt-get install qt6-base-private-dev
@@ -99,8 +115,7 @@ set(CMAKE_SKIP_INSTALL_RULES TRUE CACHE BOOL "" FORCE)
 #   macOS Homebrew: included by default
 # When private headers are absent, QXlsx is disabled and Excel export shows
 # a "not available" message rather than crashing or failing to build.
-find_package(Qt6 QUIET COMPONENTS GuiPrivate)
-if(Qt6GuiPrivate_FOUND)
+if(TARGET Qt6::GuiPrivate)
     set(FINCEPT_HAS_PRIVATE_HEADERS TRUE)
 else()
     set(FINCEPT_HAS_PRIVATE_HEADERS FALSE)
@@ -1318,8 +1333,18 @@ if(APPLE AND DEPLOY_QT)
         add_custom_command(TARGET FinceptTerminal POST_BUILD
             COMMAND "${MACDEPLOYQT_EXECUTABLE}"
                 "$<TARGET_BUNDLE_DIR:FinceptTerminal>"
-                -no-strip
+                -no-strip -always-overwrite
             COMMENT "Running macdeployqt to bundle Qt frameworks..."
+        )
+        # Remove unused SQL driver plugins that reference libraries not present
+        # on typical macOS installs (ODBC, PostgreSQL, Mimer). These cause
+        # harmless but noisy "ERROR: no file at ..." warnings from macdeployqt.
+        add_custom_command(TARGET FinceptTerminal POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E rm -f
+                "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/PlugIns/sqldrivers/libqsqlodbc.dylib"
+                "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/PlugIns/sqldrivers/libqsqlpsql.dylib"
+                "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/PlugIns/sqldrivers/libqsqlmimer.dylib"
+            COMMENT "Removing unused SQL driver plugins (ODBC/PostgreSQL/Mimer)..."
         )
     else()
         message(WARNING "macdeployqt not found — Qt frameworks will not be bundled. "
@@ -1876,14 +1901,14 @@ if(FINCEPT_BUILD_INSTALLER)
         VERSION "${CMAKE_PROJECT_VERSION}"
         SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/packaging/installer/packages/com.fincept.terminal.core/meta/installscript.qs"
         LICENSES "AGPL-3.0" "${CMAKE_CURRENT_SOURCE_DIR}/packaging/installer/packages/com.fincept.terminal.core/meta/license.txt"
-        PRIORITY 100
+        SORTING_PRIORITY 100
         DEFAULT TRUE
         FORCED_INSTALLATION)
 
     cpack_ifw_configure_component(scripts
         NAME "com.fincept.terminal.scripts"
         VERSION "${CMAKE_PROJECT_VERSION}"
-        PRIORITY 50
+        SORTING_PRIORITY 50
         DEFAULT TRUE
         DEPENDS "com.fincept.terminal.core")
 

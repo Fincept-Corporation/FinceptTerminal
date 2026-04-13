@@ -3,6 +3,9 @@ name: Lint
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # ── clang-format ─────────────────────────────────────────────────────────────
   clang-format:

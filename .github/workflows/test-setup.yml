@@ -3,6 +3,9 @@ name: Test Setup Scripts
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # ── Test exact Cirrus CI Qt install commands on real macOS runner ──────────
   # Run this job to validate .cirrus.yml commands before pushing to Cirrus.

@@ -13,6 +13,7 @@ env:
   QT_IFW_VERSION: "4.7"
   QT_IFW_TOOL: "tools_ifw"
   APP_NAME: FinceptTerminal
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
@@ -24,6 +25,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-tags: true
 
       # ── ccache ────────────────────────────────────────────────────────────
       - name: Set up ccache
@@ -34,7 +36,7 @@ jobs:
 
       # ── Install build tools ───────────────────────────────────────────────
       - name: Install build tools
-        run: brew install ninja cmake
+        run: brew install ninja cmake || brew upgrade ninja cmake || true
 
       # ── Install Qt 6.8.3 (official installer, includes private headers) ──
       - name: Install Qt ${{ env.QT_VERSION }}
@@ -45,6 +47,12 @@ jobs:
           modules: ${{ env.QT_MODULES }}
           cache: true
           cache-key-prefix: qt-macos-arm64-installer
+
+      # ── Ensure Python 3.12 is installed (for embedding) ──────────────────
+      - name: Install Python 3.12
+        run: |
+          brew install python@3.12 || brew upgrade python@3.12 || true
+          python3.12 --version
 
       # ── Install Qt Installer Framework ────────────────────────────────────
       # Uses --break-system-packages because macOS Sequoia (PEP 668) blocks
@@ -59,6 +67,36 @@ jobs:
           echo "PATH=${IFW_DIR}/bin:${PATH}" >> "$GITHUB_ENV"
           echo "QtIFW installed:"
           ls "${IFW_DIR}/bin/" || true
+
+      # ── Generate macOS .icns icon from .ico ────────────────────────────────
+      # CMake expects resources/fincept.icns for MACOSX_BUNDLE_ICON_FILE.
+      # The repo only has fincept.ico (Windows). Convert using sips + iconutil.
+      - name: Generate .icns icon
+        working-directory: fincept-qt
+        run: |
+          ICO="resources/fincept.ico"
+          ICNS="resources/fincept.icns"
+          if [ -f "${ICNS}" ]; then
+            echo ".icns already exists — skipping generation"
+          elif [ -f "${ICO}" ]; then
+            ICONSET="$(mktemp -d)/fincept.iconset"
+            mkdir -p "${ICONSET}"
+            # Extract the largest image from the .ico and resize to all required sizes
+            sips -s format png "${ICO}" --out "${ICONSET}/icon_512x512.png" --resampleHeightWidth 512 512 2>/dev/null
+            for size in 16 32 64 128 256; do
+              sips -z ${size} ${size} "${ICONSET}/icon_512x512.png" --out "${ICONSET}/icon_${size}x${size}.png" 2>/dev/null
+            done
+            # Retina variants (@2x)
+            cp "${ICONSET}/icon_512x512.png" "${ICONSET}/icon_256x256@2x.png"
+            sips -z 1024 1024 "${ICONSET}/icon_512x512.png" --out "${ICONSET}/icon_512x512@2x.png" 2>/dev/null
+            sips -z 64 64 "${ICONSET}/icon_512x512.png" --out "${ICONSET}/icon_32x32@2x.png" 2>/dev/null
+            sips -z 32 32 "${ICONSET}/icon_512x512.png" --out "${ICONSET}/icon_16x16@2x.png" 2>/dev/null
+            sips -z 256 256 "${ICONSET}/icon_512x512.png" --out "${ICONSET}/icon_128x128@2x.png" 2>/dev/null
+            iconutil -c icns -o "${ICNS}" "${ICONSET}"
+            echo "Generated ${ICNS} ($(du -sh "${ICNS}" | cut -f1))"
+          else
+            echo "WARNING: No source icon found — app will have generic icon"
+          fi
 
       # ── Configure CMake ───────────────────────────────────────────────────
       - name: Configure CMake
@@ -128,22 +166,38 @@ jobs:
           PLIST
           fi
 
-          # macdeployqt — bundles all Qt frameworks + plugins + fixes rpaths
-          echo "Running macdeployqt..."
-          "${MACDEPLOYQT}" "${APP_BUNDLE}" -always-overwrite 2>&1 || true
+          # NOTE: macdeployqt is NOT run here — it already ran as a CMake POST_BUILD
+          # command (DEPLOY_QT=ON). Running it twice causes rpath conflicts and
+          # duplicate "ERROR: no file at ..." noise. SQL plugin cleanup is also
+          # handled by the POST_BUILD step in CMakeLists.txt.
 
-          # Embed Python 3.12 framework
-          PY_PREFIX="$(brew --prefix python@3.12 2>/dev/null || brew --prefix python3)"
-          PY_FRAMEWORK="${PY_PREFIX}/Frameworks/Python.framework"
+          # Embed Python 3.12 framework.
+          # On macOS CI runners, Python.framework may live in several locations:
+          #   1. /Library/Frameworks/Python.framework  (system / python.org installer)
+          #   2. $(brew --prefix python@3.12)/Frameworks/Python.framework  (Homebrew)
+          # The GitHub Actions runner typically has the system framework at /Library/Frameworks.
+          PY_FRAMEWORK=""
+          for candidate in \
+            "/Library/Frameworks/Python.framework" \
+            "$(brew --prefix python@3.12 2>/dev/null)/Frameworks/Python.framework" \
+            "$(brew --prefix python3 2>/dev/null)/Frameworks/Python.framework"; do
+            if [ -d "${candidate}/Versions" ]; then
+              PY_FRAMEWORK="${candidate}"
+              break
+            fi
+          done
+
           BUNDLE_FRAMEWORKS="${APP_BUNDLE}/Contents/Frameworks"
           mkdir -p "${BUNDLE_FRAMEWORKS}"
-          if [ -d "${PY_FRAMEWORK}" ]; then
-            echo "Embedding Python.framework..."
+          if [ -n "${PY_FRAMEWORK}" ]; then
+            echo "Embedding Python.framework from: ${PY_FRAMEWORK}"
             cp -R "${PY_FRAMEWORK}" "${BUNDLE_FRAMEWORKS}/"
-            ln -sf "../Frameworks/Python.framework/Versions/3.12/bin/python3.12" \
+            PY_VER="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+            ln -sf "../Frameworks/Python.framework/Versions/${PY_VER}/bin/python${PY_VER}" \
                    "${APP_BUNDLE}/Contents/MacOS/python3" 2>/dev/null || true
+            echo "Python ${PY_VER} embedded successfully"
           else
-            echo "WARNING: Python.framework not found — skipping embed"
+            echo "WARNING: Python.framework not found — PythonRunner will require system Python"
           fi
 
           # Copy resources and Python analytics scripts
@@ -156,6 +210,8 @@ jobs:
           # Diagnostics
           echo "=== Bundle size ===" && du -sh "${DIST_DIR}/${{ env.APP_NAME }}.app"
           echo "=== Qt frameworks ===" && ls "${DIST_DIR}/${{ env.APP_NAME }}.app/Contents/Frameworks/" | grep -i qt || true
+          echo "=== SQL plugins (should have no odbc/psql/mimer) ===" \
+            && ls "${DIST_DIR}/${{ env.APP_NAME }}.app/Contents/PlugIns/sqldrivers/" 2>/dev/null || true
 
       # ── Generate installer via CPack IFW ──────────────────────────────────
       # Falls back to DMG if binarycreator is unavailable.

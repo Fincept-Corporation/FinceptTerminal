@@ -12,6 +12,7 @@ env:
   QT_MODULES: "qtcharts qtwebsockets qtmultimedia"
   QT_IFW_VERSION: "4.7"
   QT_IFW_TOOL: "tools_ifw"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-installer:
