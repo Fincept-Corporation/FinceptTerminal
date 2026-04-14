@@ -332,8 +332,8 @@ void SetupScreen::on_setup_done(bool success, const QString& error) {
         QTimer::singleShot(1500, this, [this]() { emit setup_complete(); });
     } else {
         // Stop all running pulses
-        for (auto [k, s] : steps_.asKeyValueRange())
-            stop_pulse(k);
+        for (auto it = steps_.keyBegin(); it != steps_.keyEnd(); ++it)
+            stop_pulse(*it);
 
         begin_btn_->setEnabled(true);
         begin_btn_->setText("RETRY SETUP");
@@ -348,8 +348,8 @@ void SetupScreen::on_skip_clicked() {
     LOG_INFO("SetupScreen", "User skipped setup — launching app");
     if (timeout_timer_)
         timeout_timer_->stop();
-    for (auto [k, s] : steps_.asKeyValueRange())
-        stop_pulse(k);
+    for (auto it = steps_.keyBegin(); it != steps_.keyEnd(); ++it)
+        stop_pulse(*it);
     emit setup_complete();
 }
 
