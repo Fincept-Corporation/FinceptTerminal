@@ -1,0 +1,250 @@
+name: Build Windows Installer (QtIFW)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  BUILD_TYPE: Release
+  QT_VERSION: "6.8.3"
+  QT_MODULES: "qtcharts qtwebsockets qtmultimedia"
+  QT_IFW_VERSION: "4.7"
+  QT_IFW_TOOL: "tools_ifw"
+  APP_NAME: FinceptTerminal
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    name: Windows x64 Installer
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-tags: true
+
+      # ── OpenSSL dev libs ──────────────────────────────────────────────────
+      # windows-2022 runners ship only the "Light" OpenSSL (no .lib files).
+      # vcpkg is pre-installed on every windows-2022 runner at C:\vcpkg.
+      - name: Install OpenSSL
+        shell: bash
+        run: |
+          set -euo pipefail
+          VCPKG_ROOT="${VCPKG_INSTALLATION_ROOT:-C:/vcpkg}"
+          echo "Using vcpkg at: $VCPKG_ROOT"
+          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows --no-print-usage
+          OPENSSL_DIR="$VCPKG_ROOT/installed/x64-windows"
+          echo "OPENSSL_ROOT_DIR=$OPENSSL_DIR" >> "$GITHUB_ENV"
+          echo "OpenSSL installed at: $OPENSSL_DIR"
+          ls "$OPENSSL_DIR/lib/libcrypto.lib" && echo "libcrypto.lib confirmed"
+
+      # ── Install Qt 6.8.3 ─────────────────────────────────────────────────
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          cache-key-prefix: qt-windows-x64-installer
+
+      # ── Install Qt Installer Framework ────────────────────────────────────
+      - name: Install Qt Installer Framework
+        shell: bash
+        run: |
+          pip install aqtinstall
+          aqt install-tool windows desktop ${{ env.QT_IFW_TOOL }} \
+            --outputdir "${{ runner.temp }}/qtifw"
+          IFW_DIR="${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}"
+          echo "QT_IFW_DIR=${IFW_DIR}" >> "$GITHUB_ENV"
+          echo "PATH=${IFW_DIR}/bin:${PATH}" >> "$GITHUB_ENV"
+          echo "QtIFW installed:"
+          ls "${IFW_DIR}/bin/" || true
+
+      # ── Configure CMake ───────────────────────────────────────────────────
+      - name: Configure CMake
+        shell: bash
+        working-directory: fincept-qt
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}" \
+            -DDEPLOY_QT=ON \
+            -DFINCEPT_BUILD_INSTALLER=ON
+
+      # ── Build ─────────────────────────────────────────────────────────────
+      - name: Build
+        shell: bash
+        working-directory: fincept-qt
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel 4
+
+      # ── Verify binary ─────────────────────────────────────────────────────
+      - name: Verify binary
+        shell: bash
+        working-directory: fincept-qt
+        run: |
+          BINARY="build/Release/${{ env.APP_NAME }}.exe"
+          if [ ! -f "$BINARY" ]; then
+            echo "::error::Binary not found at $BINARY"
+            find build -maxdepth 3 -name "${{ env.APP_NAME }}.exe" 2>/dev/null || true
+            exit 1
+          fi
+          echo "Binary: $BINARY ($(du -sh "$BINARY" | cut -f1))"
+
+      # ── Deploy Qt DLLs ────────────────────────────────────────────────────
+      - name: Deploy Qt DLLs (windeployqt)
+        shell: bash
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          BUILD_DIR="build/Release"
+          QT_BIN="${QT_ROOT_DIR}/bin"
+          QT_PLUGINS="${QT_ROOT_DIR}/plugins"
+
+          # windeployqt — handles the bulk of Qt DLL discovery
+          WDQT="${QT_BIN}/windeployqt.exe"
+          if [ -f "$WDQT" ]; then
+            echo "Running windeployqt..."
+            "$WDQT" \
+              --release \
+              --no-translations \
+              --compiler-runtime \
+              --include-soft-plugins \
+              --force \
+              "${BUILD_DIR}/${{ env.APP_NAME }}.exe"
+          else
+            echo "::warning::windeployqt not found at ${WDQT}"
+          fi
+
+          # Qt Core DLLs (belt+suspenders)
+          for qt_dll in \
+            Qt6Core.dll Qt6Gui.dll Qt6Widgets.dll \
+            Qt6Charts.dll Qt6PrintSupport.dll \
+            Qt6Network.dll Qt6Sql.dll Qt6Concurrent.dll \
+            Qt6WebSockets.dll Qt6Multimedia.dll Qt6MultimediaWidgets.dll \
+            Qt6OpenGL.dll Qt6OpenGLWidgets.dll \
+            Qt6Svg.dll Qt6Xml.dll Qt6TextToSpeech.dll; do
+            if [ -f "${QT_BIN}/${qt_dll}" ] && [ ! -f "${BUILD_DIR}/${qt_dll}" ]; then
+              cp "${QT_BIN}/${qt_dll}" "${BUILD_DIR}/"
+            fi
+          done
+
+          # OpenSSL DLLs — Qt ships them in its own bin/
+          for ssl_dll in \
+            libssl-3-x64.dll libcrypto-3-x64.dll \
+            libssl-3.dll libcrypto-3.dll; do
+            if [ -f "${QT_BIN}/${ssl_dll}" ] && [ ! -f "${BUILD_DIR}/${ssl_dll}" ]; then
+              cp "${QT_BIN}/${ssl_dll}" "${BUILD_DIR}/"
+              echo "Copied ${ssl_dll} from Qt bin"
+            fi
+          done
+          # Also check OPENSSL_ROOT_DIR bin/ if Qt didn't ship them
+          for ssl_dll in libssl-3-x64.dll libcrypto-3-x64.dll libssl-3.dll libcrypto-3.dll; do
+            if [ -f "${OPENSSL_ROOT_DIR}/bin/${ssl_dll}" ] && [ ! -f "${BUILD_DIR}/${ssl_dll}" ]; then
+              cp "${OPENSSL_ROOT_DIR}/bin/${ssl_dll}" "${BUILD_DIR}/"
+              echo "Copied ${ssl_dll} from OPENSSL_ROOT_DIR"
+            fi
+          done
+
+          # MSVC Runtime DLLs
+          for vcrt_dll in \
+            vcruntime140.dll vcruntime140_1.dll vcruntime140_2.dll \
+            msvcp140.dll msvcp140_1.dll msvcp140_2.dll \
+            concrt140.dll vccorlib140.dll; do
+            SYS32="/c/Windows/System32/${vcrt_dll}"
+            if [ -f "$SYS32" ] && [ ! -f "${BUILD_DIR}/${vcrt_dll}" ]; then
+              cp "$SYS32" "${BUILD_DIR}/"
+            fi
+          done
+
+          # Qt plugin directories
+          for plugin_dir in platforms sqldrivers imageformats iconengines styles tls \
+            multimedia texttospeech networkinformation platforminputcontexts \
+            printsupport generic; do
+            if [ -d "${QT_PLUGINS}/${plugin_dir}" ]; then
+              mkdir -p "${BUILD_DIR}/${plugin_dir}"
+              cp -n "${QT_PLUGINS}/${plugin_dir}/"*.dll "${BUILD_DIR}/${plugin_dir}/" 2>/dev/null || true
+            fi
+          done
+
+          # D3D / OpenGL fallback
+          for d3d_dll in d3dcompiler_47.dll opengl32sw.dll libEGL.dll libGLESv2.dll \
+            dxcompiler.dll dxil.dll; do
+            if [ -f "${QT_BIN}/${d3d_dll}" ] && [ ! -f "${BUILD_DIR}/${d3d_dll}" ]; then
+              cp "${QT_BIN}/${d3d_dll}" "${BUILD_DIR}/"
+            fi
+          done
+
+          # ICU DLLs
+          for icu_dll in "${QT_BIN}"/icu*.dll; do
+            base=$(basename "$icu_dll")
+            if [ -f "$icu_dll" ] && [ ! -f "${BUILD_DIR}/${base}" ]; then
+              cp "$icu_dll" "${BUILD_DIR}/"
+            fi
+          done
+
+          # Copy resources and Python analytics scripts
+          cp -r resources "${BUILD_DIR}/resources" 2>/dev/null || true
+          cp -r scripts   "${BUILD_DIR}/scripts"   2>/dev/null || true
+
+          printf '[Paths]\nPrefix = .\nPlugins = .\nLibraries = .\n' > "${BUILD_DIR}/qt.conf"
+          echo "=== Build dir: $(find "${BUILD_DIR}" -type f | wc -l) files ==="
+
+      # ── Generate installer via CPack IFW ──────────────────────────────────
+      - name: Generate Installer (CPack IFW)
+        shell: bash
+        working-directory: fincept-qt/build
+        run: |
+          set -euo pipefail
+          export PATH="${QT_IFW_DIR}/bin:${PATH}"
+
+          if command -v binarycreator &>/dev/null; then
+            echo "Running CPack IFW..."
+            cpack -G IFW -C ${{ env.BUILD_TYPE }} --verbose
+            echo "=== Generated IFW installer ==="
+            ls -lh ${{ env.APP_NAME }}-*-setup* 2>/dev/null || ls -lh *.exe 2>/dev/null || true
+          else
+            echo "::error::binarycreator not found — ensure QT_IFW_DIR is set correctly"
+            exit 1
+          fi
+
+      # ── Upload installer artifact ─────────────────────────────────────────
+      - name: Upload Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: FinceptTerminal-Windows-x64-installer
+          path: |
+            fincept-qt/build/FinceptTerminal-*-setup*
+            fincept-qt/build/FinceptTerminal-*.exe
+          retention-days: 30
+
+  # ── Release: attach installer to GitHub Release ──────────────────────────
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    name: Attach Windows Installer to Release
+    if: "!cancelled() && needs.build.result == 'success' && startsWith(github.ref, 'refs/tags/')"
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: FinceptTerminal-Windows-x64-installer
+          path: installer
+
+      - name: List installer files
+        run: find installer -type f | sort
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: installer/**
+          fail_on_unmatched_files: false
