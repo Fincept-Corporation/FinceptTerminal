@@ -43,6 +43,9 @@ class InstrumentRepository : public fincept::BaseRepository<Instrument> {
     /// Count rows for a broker (quick freshness check).
     int count(const QString& broker_id) const;
 
+    /// Map a positioned QSqlQuery row to an Instrument. Public for use by async loaders.
+    static Instrument map_row_static(QSqlQuery& q);
+
   private:
     InstrumentRepository() = default;
     static Instrument map_row(QSqlQuery& q);

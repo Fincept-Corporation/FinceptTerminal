@@ -9,6 +9,7 @@
 #include <QString>
 #include <QVector>
 
+#include <functional>
 #include <optional>
 
 namespace fincept::trading {
@@ -45,6 +46,12 @@ class InstrumentService : public QObject {
     /// Load instruments from DB into memory (no network call).
     /// Call this on startup after DB opens.
     void load_from_db(const QString& broker_id);
+
+    /// Load instruments from DB on a worker thread. Non-blocking.
+    /// On completion, invokes callback(count) on the UI thread.
+    /// If broker already loaded, callback fires immediately with cached count.
+    void load_from_db_async(const QString& broker_id,
+                            std::function<void(int)> callback = nullptr);
 
     // ── Lookups (synchronous, in-memory) ─────────────────────────────────────
 

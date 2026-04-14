@@ -28,6 +28,9 @@ class Database {
 
     QSqlDatabase& raw_db() { return db_; }
 
+    /// Returns the file path of the open database (empty if not open).
+    QString path() const { return db_.databaseName(); }
+
   private:
     Database() = default;
     Result<void> apply_pragmas();

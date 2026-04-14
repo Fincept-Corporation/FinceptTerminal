@@ -1,6 +1,7 @@
 #include "trading/instruments/InstrumentService.h"
 
 #include "core/logging/Logger.h"
+#include "storage/sqlite/Database.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/instruments/InstrumentRepository.h"
 #include "trading/instruments/ZerodhaInstrumentParser.h"
@@ -17,8 +18,12 @@
 #include <QNetworkRequest>
 #include <QPointer>
 #include <QRegularExpression>
+#include <QSqlDatabase>
+#include <QSqlError>
+#include <QSqlQuery>
 #include <QTimer>
 #include <QUrl>
+#include <QUuid>
 #include <QtConcurrent/QtConcurrent>
 
 namespace fincept::trading {
@@ -248,6 +253,84 @@ void InstrumentService::load_from_db(const QString& broker_id) {
     }
     build_cache(broker_id, all);
     LOG_INFO("InstrumentService", QString("Loaded %1 instruments from DB for %2").arg(all.size()).arg(broker_id));
+}
+
+void InstrumentService::load_from_db_async(const QString& broker_id,
+                                            std::function<void(int)> callback) {
+    // Fast path: if already loaded, fire callback immediately on UI thread.
+    if (is_loaded(broker_id)) {
+        int n = cached_count(broker_id);
+        LOG_INFO("InstrumentService",
+                 QString("load_from_db_async: %1 already loaded (%2 instruments)").arg(broker_id).arg(n));
+        if (callback)
+            callback(n);
+        return;
+    }
+
+    LOG_INFO("InstrumentService", QString("load_from_db_async: starting background load for %1").arg(broker_id));
+
+    QPointer<InstrumentService> self = this;
+    QString db_path = fincept::Database::instance().path(); // read path on UI thread before going async
+
+    QtConcurrent::run([self, broker_id, db_path, callback]() {
+        // Each worker thread needs its own named QSqlDatabase connection.
+        const QString conn_name =
+            "inst_async_" + broker_id + "_" + QUuid::createUuid().toString(QUuid::WithoutBraces);
+        QVector<Instrument> all;
+
+        {
+            QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", conn_name);
+            db.setDatabaseName(db_path);
+            if (!db.open()) {
+                LOG_ERROR("InstrumentService",
+                          QString("load_from_db_async: failed to open DB for %1: %2")
+                              .arg(broker_id, db.lastError().text()));
+            } else {
+                // Single query for all exchanges — faster than 9 per-exchange queries.
+                QSqlQuery q(db);
+                q.prepare("SELECT instrument_token, exchange_token, symbol, brsymbol, name, "
+                          "exchange, brexchange, expiry, strike, lot_size, instrument_type, "
+                          "tick_size, broker_id "
+                          "FROM instruments WHERE broker_id = ?");
+                q.addBindValue(broker_id);
+                if (q.exec()) {
+                    while (q.next())
+                        all.append(InstrumentRepository::map_row_static(q));
+                } else {
+                    LOG_ERROR("InstrumentService",
+                              QString("load_from_db_async: query failed for %1: %2")
+                                  .arg(broker_id, q.lastError().text()));
+                }
+                db.close();
+            }
+        }
+        QSqlDatabase::removeDatabase(conn_name);
+
+        if (!self)
+            return;
+
+        const int count = all.size();
+        QVector<Instrument> instruments = std::move(all);
+
+        QMetaObject::invokeMethod(
+            self,
+            [self, broker_id, instruments = std::move(instruments), count, callback]() mutable {
+                if (!self)
+                    return;
+                if (!instruments.isEmpty()) {
+                    self->build_cache(broker_id, instruments);
+                    LOG_INFO("InstrumentService",
+                             QString("load_from_db_async: loaded %1 instruments for %2").arg(count).arg(broker_id));
+                } else {
+                    LOG_WARN("InstrumentService",
+                             QString("load_from_db_async: no instruments found in DB for %1 — run refresh")
+                                 .arg(broker_id));
+                }
+                if (callback)
+                    callback(count);
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 // ── Lookups ───────────────────────────────────────────────────────────────────

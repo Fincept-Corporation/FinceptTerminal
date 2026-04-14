@@ -31,6 +31,10 @@ Instrument InstrumentRepository::map_row(QSqlQuery& q) {
     return i;
 }
 
+Instrument InstrumentRepository::map_row_static(QSqlQuery& q) {
+    return map_row(q);
+}
+
 // ── Write ─────────────────────────────────────────────────────────────────────
 
 fincept::Result<void> InstrumentRepository::replace_all(const QString& broker_id,
