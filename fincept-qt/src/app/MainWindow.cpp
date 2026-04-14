@@ -68,6 +68,7 @@
 #include "screens/watchlist/WatchlistScreen.h"
 #include "services/updater/UpdateService.h"
 #include "services/workspace/WorkspaceManager.h"
+#include "trading/instruments/InstrumentService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/navigation/DockStatusBar.h"
 #include "ui/navigation/DockToolBar.h"
@@ -482,6 +483,7 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
 
     // Toolbar plan label → pricing screen
     connect(toolbar, &ui::ToolBar::plan_clicked, this, [this]() {
+        set_shell_visible(false);
         stack_->setCurrentIndex(0);
         auth_stack_->setCurrentIndex(3); // PricingScreen
     });
@@ -499,12 +501,13 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
     if (!saved_state.isEmpty())
         restoreState(saved_state);
 
-    // Always ensure toolbar and status bar are visible after state restore.
-    // Focus mode and chat mode will hide them explicitly when toggled.
+    // Toolbar/status bar visibility is controlled by set_shell_visible() based on
+    // auth state. Start hidden — on_auth_state_changed() will show them if the user
+    // is already authenticated and lands on the app stack.
     if (dock_toolbar_)
-        dock_toolbar_->setVisible(true);
+        dock_toolbar_->setVisible(false);
     if (dock_status_bar_)
-        dock_status_bar_->setVisible(true);
+        dock_status_bar_->setVisible(false);
 
     // Restore ADS dock layout — must happen after all screens are registered
     // but BEFORE the initial navigate, so we don't create a widget that
@@ -566,6 +569,7 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
             on_auth_state_changed();
         } else {
             // Still loading — show app stack temporarily (loading state)
+            set_shell_visible(true);
             stack_->setCurrentIndex(1);
         }
         if (!dock_restored) {
@@ -672,6 +676,7 @@ void MainWindow::setup_auth_screens() {
     connect(reg, &screens::RegisterScreen::navigate_login, this, &MainWindow::show_login);
     connect(forgot, &screens::ForgotPasswordScreen::navigate_login, this, &MainWindow::show_login);
     connect(pricing, &screens::PricingScreen::navigate_dashboard, this, [this]() {
+        set_shell_visible(true);
         stack_->setCurrentIndex(1);
         dock_router_->navigate("dashboard");
     });
@@ -844,18 +849,25 @@ void MainWindow::on_auth_state_changed() {
 
         if (auth.session().has_paid_plan()) {
             // Paid user → straight to dashboard
+            set_shell_visible(true);
             stack_->setCurrentIndex(1);
             WorkspaceManager::instance().load_last_workspace();
             // Trigger silent update check after login (delayed so UI settles first)
             QTimer::singleShot(3000, this, []() { services::UpdateService::instance().check_for_updates(true); });
+            // Warm instrument cache in background — only loaded if not already cached.
+            // Runs concurrently while the user reads the dashboard (3-5s head start).
+            fincept::trading::InstrumentService::instance().load_from_db_async("zerodha");
+            fincept::trading::InstrumentService::instance().load_from_db_async("angelone");
         } else {
             // Free/no plan → show pricing gate
+            set_shell_visible(false);
             stack_->setCurrentIndex(0);
             auth_stack_->setCurrentIndex(3);
         }
     } else {
         // Disable inactivity guard when logged out
         auth::InactivityGuard::instance().set_enabled(false);
+        set_shell_visible(false);
         stack_->setCurrentIndex(0);
         auth_stack_->setCurrentIndex(0);
     }
@@ -932,12 +944,8 @@ void MainWindow::on_terminal_unlocked() {
     auth::PinManager::instance().reset_lockout();
 
     if (auth.session().has_paid_plan()) {
+        set_shell_visible(true);
         stack_->setCurrentIndex(1);
-        // Restore toolbar/statusbar
-        if (dock_toolbar_)
-            dock_toolbar_->setVisible(!focus_mode_ && !chat_mode_);
-        if (dock_status_bar_)
-            dock_status_bar_->setVisible(!focus_mode_ && !chat_mode_);
         // Restore chat bubble based on setting
         if (chat_bubble_) {
             auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
@@ -952,11 +960,25 @@ void MainWindow::on_terminal_unlocked() {
         QTimer::singleShot(3000, this, []() { services::UpdateService::instance().check_for_updates(true); });
     } else {
         // Free/no plan → pricing gate
+        set_shell_visible(false);
         stack_->setCurrentIndex(0);
         auth_stack_->setCurrentIndex(3);
     }
 
     emit auth.terminal_unlocked();
+}
+
+void MainWindow::set_shell_visible(bool visible) {
+    if (dock_toolbar_)
+        dock_toolbar_->setVisible(visible && !focus_mode_ && !chat_mode_);
+    if (dock_status_bar_)
+        dock_status_bar_->setVisible(visible && !focus_mode_ && !chat_mode_);
+    if (!visible) {
+        // Reset title to plain app name — no screen suffix while on auth screens
+        const QString profile = ProfileManager::instance().active();
+        setWindowTitle(profile == "default" ? "Fincept Terminal"
+                                            : QString("Fincept Terminal [%1]").arg(profile));
+    }
 }
 
 void MainWindow::update_window_title() {
