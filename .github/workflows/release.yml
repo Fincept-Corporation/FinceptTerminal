@@ -33,7 +33,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-tags: true
+          fetch-depth: 1
 
       # ── OpenSSL dev libs ──────────────────────────────────────────────────
       - name: Install OpenSSL
@@ -186,7 +186,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-tags: true
+          fetch-depth: 1
 
       - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1
@@ -306,7 +306,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-tags: true
+          fetch-depth: 1
 
       - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1
