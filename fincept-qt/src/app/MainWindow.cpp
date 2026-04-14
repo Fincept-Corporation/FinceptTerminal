@@ -749,13 +749,13 @@ void MainWindow::setup_dock_screens() {
     dock_router_->register_factory("forum", []() { return new screens::ForumScreen; });
     dock_router_->register_factory("watchlist", []() { return new screens::WatchlistScreen; });
 
-    // Eagerly constructed: lightweight screens with no data fetching or timers.
-    dock_router_->register_screen("report_builder", new screens::ReportBuilderScreen);
+    // Lazily constructed on first navigation — deferred to avoid startup cost.
+    dock_router_->register_factory("report_builder", []() { return new screens::ReportBuilderScreen; });
     dock_router_->register_factory("profile", []() { return new screens::ProfileScreen; });
-    dock_router_->register_screen("settings", new screens::SettingsScreen);
-    dock_router_->register_screen("about", new screens::AboutScreen);
-    dock_router_->register_screen("support", new screens::SupportScreen);
-    dock_router_->register_screen("notes", new screens::NotesScreen);
+    dock_router_->register_factory("settings", []() { return new screens::SettingsScreen; });
+    dock_router_->register_factory("about", []() { return new screens::AboutScreen; });
+    dock_router_->register_factory("support", []() { return new screens::SupportScreen; });
+    dock_router_->register_factory("notes", []() { return new screens::NotesScreen; });
 
     dock_router_->register_factory("portfolio", []() { return new screens::PortfolioScreen; });
     dock_router_->register_factory("ai_chat", []() { return new screens::AiChatScreen; });
