@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) {
                           profile_key.toUtf8());
     app.setApplicationName("FinceptTerminal");
     app.setOrganizationName("Fincept");
-    app.setApplicationVersion("4.0.0");
+    app.setApplicationVersion("4.0.1");
 
     // ── Secondary instance: signal primary to open a new window, then exit ───
     // The primary receives receivedMessage() and calls open_new_window().
@@ -157,7 +157,7 @@ int main(int argc, char* argv[]) {
                 log.set_tag_level(tag, lvl_map.value(level));
         }
     }
-    LOG_INFO("App", "Fincept Terminal v4.0.0 starting...");
+    LOG_INFO("App", "Fincept Terminal v4.0.1 starting...");
 
     // Theme is applied after DB is open so saved font/theme are respected from the start.
 
@@ -184,6 +184,7 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v014();
     fincept::register_migration_v015();
     fincept::register_migration_v016();
+    fincept::register_migration_v017();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";

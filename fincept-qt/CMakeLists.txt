@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(FinceptTerminal VERSION 4.0.0 LANGUAGES CXX)
+project(FinceptTerminal VERSION 4.0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -375,6 +375,7 @@ set(STORAGE_SOURCES
 
     # Multi-account broker support
     src/storage/sqlite/migrations/v016_broker_accounts.cpp
+    src/storage/sqlite/migrations/v017_perf_indexes.cpp
 )
 
 # Python runner
@@ -1146,6 +1147,7 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v014_llm_tools_toggle.cpp
     src/storage/sqlite/migrations/v015_screen_state.cpp
     src/storage/sqlite/migrations/v016_broker_accounts.cpp
+    src/storage/sqlite/migrations/v017_perf_indexes.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
