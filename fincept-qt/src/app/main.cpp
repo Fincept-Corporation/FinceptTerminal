@@ -20,7 +20,6 @@
 #include "storage/sqlite/CacheDatabase.h"
 #include "storage/sqlite/Database.h"
 #include "storage/sqlite/migrations/MigrationRunner.h"
-#include "trading/instruments/InstrumentService.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -30,6 +29,7 @@
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QStandardPaths>
+#include <QTimer>
 #include <QUuid>
 
 #include <singleapplication.h>
@@ -194,18 +194,18 @@ int main(int argc, char* argv[]) {
         // DB unavailable — apply theme with built-in defaults so the UI is at least styled
         fincept::ui::apply_global_stylesheet();
     } else {
-        // Warm InstrumentService cache from DB (non-blocking, no network).
-        // If the table is empty on first run, the first broker login triggers a refresh.
-        LOG_INFO("App", "Loading instruments from DB...");
-        fincept::trading::InstrumentService::instance().load_from_db("zerodha");
-        LOG_INFO("App", "Zerodha instruments loaded");
-        fincept::trading::InstrumentService::instance().load_from_db("angelone");
-        LOG_INFO("App", "AngelOne instruments loaded");
-
-        // Prune news articles older than 30 days to keep DB size bounded
-        int64_t news_cutoff = QDateTime::currentSecsSinceEpoch() - (30LL * 86400);
-        fincept::NewsArticleRepository::instance().prune_older_than(news_cutoff);
-        LOG_INFO("App", "News articles pruned (keeping 30 days)");
+        // Prune news articles older than 30 days — deferred to run after the event loop
+        // starts so the startup critical path is not blocked.
+        // NewsArticleRepository uses the main-thread DB connection (not thread-safe),
+        // so we must not run this on a worker thread — QTimer::singleShot(0) posts it
+        // to the main thread's event queue instead.
+        {
+            int64_t news_cutoff = QDateTime::currentSecsSinceEpoch() - (30LL * 86400);
+            QTimer::singleShot(0, [news_cutoff]() {
+                fincept::NewsArticleRepository::instance().prune_older_than(news_cutoff);
+                LOG_INFO("App", "News articles pruned (keeping 30 days)");
+            });
+        }
 
         // Load persisted font settings and apply before any window is shown
         // — eliminates flash/wrong-font-on-startup. Theme is always Obsidian.
