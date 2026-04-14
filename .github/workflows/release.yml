@@ -448,7 +448,13 @@ jobs:
           mkdir -p "${BUNDLE_FRAMEWORKS}"
           if [ -n "${PY_FRAMEWORK}" ]; then
             echo "Embedding Python.framework from: ${PY_FRAMEWORK}"
-            cp -R "${PY_FRAMEWORK}" "${BUNDLE_FRAMEWORKS}/"
+            # Use rsync to skip missing symlink targets (PrivateHeaders in Tk/Tcl
+            # sub-frameworks don't exist on CI runners — cp -R would abort on them).
+            rsync -a --copy-unsafe-links "${PY_FRAMEWORK}/" "${BUNDLE_FRAMEWORKS}/Python.framework/" 2>/dev/null || \
+              cp -R "${PY_FRAMEWORK}" "${BUNDLE_FRAMEWORKS}/" 2>/dev/null || true
+            # Remove any dangling PrivateHeaders symlinks that don't resolve
+            find "${BUNDLE_FRAMEWORKS}/Python.framework" -name "PrivateHeaders" -type l \
+              ! -exec test -e {} \; -delete 2>/dev/null || true
             PY_VER="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
             ln -sf "../Frameworks/Python.framework/Versions/${PY_VER}/bin/python${PY_VER}" \
                    "${APP_BUNDLE}/Contents/MacOS/python3" 2>/dev/null || true
