@@ -11,7 +11,7 @@ with open(out_path, 'w') as f:
             'X-API-Key': 'fk_user_vU20qwUxKtPmg0fWpriNBhcAnBVGgOtJxsKiiwfD9Qo',
             'Accept': 'application/json',
             'Content-Type': 'application/json',
-            'User-Agent': 'FinceptTerminal/4.0.0'
+            'User-Agent': 'FinceptTerminal/4.0.1'
         }
         body = {'amount': 100, 'from_currency': 'USD', 'to_currency': 'EUR', 'rate': 0.92}
         data = json.dumps(body).encode()

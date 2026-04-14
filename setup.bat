@@ -10,7 +10,7 @@ for %%A in (%*) do (
 
 echo.
 echo ================================================
-echo   Fincept Terminal v4.0.0 — Windows Setup
+echo   Fincept Terminal v4.0.1 — Windows Setup
 if "!CI_MODE!"=="true" echo   (CI mode -- skipping interactive steps)
 echo ================================================
 echo.

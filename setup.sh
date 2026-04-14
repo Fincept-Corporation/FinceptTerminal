@@ -21,7 +21,7 @@ info() { echo -e "  ${YELLOW}$1${NC}"; }
 
 echo ""
 echo "================================================"
-echo "  Fincept Terminal v4.0.0 — Setup"
+echo "  Fincept Terminal v4.0.1 — Setup"
 [ "$CI_MODE" = true ] && echo "  (CI mode — skipping interactive steps)"
 echo "================================================"
 echo ""

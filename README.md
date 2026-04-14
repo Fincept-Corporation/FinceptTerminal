@@ -45,18 +45,17 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 
 ## Installation
 
-### Option 1 — Download Pre-built Binary (Recommended)
+<!-- DOWNLOAD-TABLE-START -->
+### Option 1 — Download Installer (Recommended)
 
-Pre-built binaries are available on the [Releases page](https://github.com/Fincept-Corporation/FinceptTerminal/releases). No build tools required — just extract and run.
+Latest release: **v4.0.1** — [View all releases](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
 | Platform | Download | Run |
 |----------|----------|-----|
-| **Windows x64** | `FinceptTerminal-Windows-x64.zip` | Extract → `FinceptTerminal.exe` |
-| **Windows ARM64** | `FinceptTerminal-Windows-arm64.zip` | Extract → `FinceptTerminal.exe` |
-| **Linux x64** | `FinceptTerminal-Linux-x86_64.AppImage` | `chmod +x` → `./FinceptTerminal-Linux-x86_64.AppImage` |
-| **macOS (Apple Silicon)** | `FinceptTerminal-macOS-arm64.tar.gz` | Extract → `./FinceptTerminal` |
-| **macOS (Intel)** | `FinceptTerminal-macOS-x64.tar.gz` | Extract → `./FinceptTerminal` |
-| **macOS (Universal)** | `FinceptTerminal-macOS-universal.tar.gz` | Extract → `./FinceptTerminal` |
+| **Windows x64** | [FinceptTerminal-Windows-x64-setup.exe](https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest) | Run installer → launch `FinceptTerminal.exe` |
+| **Linux x64** | [FinceptTerminal-Linux-x64.run](https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest) | `chmod +x` → run installer |
+| **macOS Apple Silicon** | [FinceptTerminal-macOS-arm64.dmg](https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest) | Open DMG → drag to Applications |
+<!-- DOWNLOAD-TABLE-END -->
 
 ---
 

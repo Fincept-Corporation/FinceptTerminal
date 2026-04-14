@@ -5,7 +5,7 @@ BASE = 'https://api.fincept.in'
 HEADERS = {
     'X-API-Key': 'fk_user_vU20qwUxKtPmg0fWpriNBhcAnBVGgOtJxsKiiwfD9Qo',
     'Accept': 'application/json',
-    'User-Agent': 'FinceptTerminal/4.0.0'
+    'User-Agent': 'FinceptTerminal/4.0.1'
 }
 
 def get(path):

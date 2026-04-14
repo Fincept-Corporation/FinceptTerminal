@@ -81,6 +81,8 @@ class MainWindow : public QMainWindow {
     void show_lock_screen();
     void on_terminal_unlocked();
     void update_window_title();
+    /// Show or hide the toolbar/status bar shell (hidden during auth screens).
+    void set_shell_visible(bool visible);
 
     // Info screens stack (Contact, Terms, Privacy, Trademarks, Help)
     QStackedWidget* info_stack_ = nullptr;

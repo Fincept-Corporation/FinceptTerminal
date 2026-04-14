@@ -1,0 +1,760 @@
+name: Release — Build All Installers
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Triggered on:
+#   • git tag push  (v*)  → builds installers, creates GH Release, updates README
+#   • workflow_dispatch   → manual run (skips release + README update)
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+  QT_VERSION: "6.8.3"
+  QT_MODULES: "qtcharts qtwebsockets qtmultimedia"
+  QT_IFW_VERSION: "4.7"
+  QT_IFW_TOOL: "tools_ifw"
+  APP_NAME: FinceptTerminal
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+# ═════════════════════════════════════════════════════════════════════════════
+# JOB 1 — Windows x64 Installer (QtIFW .exe)
+# ═════════════════════════════════════════════════════════════════════════════
+jobs:
+  build-windows:
+    name: Windows x64 Installer
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-tags: true
+
+      # ── OpenSSL dev libs ──────────────────────────────────────────────────
+      - name: Install OpenSSL
+        shell: bash
+        run: |
+          set -euo pipefail
+          VCPKG_ROOT="${VCPKG_INSTALLATION_ROOT:-C:/vcpkg}"
+          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows --no-print-usage
+          OPENSSL_DIR="$VCPKG_ROOT/installed/x64-windows"
+          echo "OPENSSL_ROOT_DIR=$OPENSSL_DIR" >> "$GITHUB_ENV"
+          ls "$OPENSSL_DIR/lib/libcrypto.lib" && echo "libcrypto.lib confirmed"
+
+      # ── Qt ────────────────────────────────────────────────────────────────
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          cache-key-prefix: qt-windows-x64-release
+
+      # ── Qt Installer Framework ────────────────────────────────────────────
+      - name: Install Qt Installer Framework
+        shell: bash
+        run: |
+          pip install aqtinstall
+          aqt install-tool windows desktop ${{ env.QT_IFW_TOOL }} \
+            --outputdir "${{ runner.temp }}/qtifw"
+          IFW_DIR="${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}"
+          echo "QT_IFW_DIR=${IFW_DIR}" >> "$GITHUB_ENV"
+          echo "PATH=${IFW_DIR}/bin:${PATH}" >> "$GITHUB_ENV"
+
+      # ── Configure + Build ─────────────────────────────────────────────────
+      - name: Configure CMake
+        shell: bash
+        working-directory: fincept-qt
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}" \
+            -DDEPLOY_QT=ON \
+            -DFINCEPT_BUILD_INSTALLER=ON
+
+      - name: Build
+        shell: bash
+        working-directory: fincept-qt
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel 4
+
+      # ── Verify ───────────────────────────────────────────────────────────
+      - name: Verify binary
+        shell: bash
+        working-directory: fincept-qt
+        run: |
+          BINARY="build/Release/${{ env.APP_NAME }}.exe"
+          [ -f "$BINARY" ] || { echo "::error::Binary not found"; exit 1; }
+          echo "Binary: $BINARY ($(du -sh "$BINARY" | cut -f1))"
+
+      # ── Deploy Qt DLLs ────────────────────────────────────────────────────
+      - name: Deploy Qt DLLs (windeployqt)
+        shell: bash
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          BUILD_DIR="build/Release"
+          QT_BIN="${QT_ROOT_DIR}/bin"
+          QT_PLUGINS="${QT_ROOT_DIR}/plugins"
+
+          WDQT="${QT_BIN}/windeployqt.exe"
+          [ -f "$WDQT" ] && "$WDQT" --release --no-translations --compiler-runtime \
+            --include-soft-plugins --force "${BUILD_DIR}/${{ env.APP_NAME }}.exe"
+
+          for qt_dll in \
+            Qt6Core.dll Qt6Gui.dll Qt6Widgets.dll Qt6Charts.dll Qt6PrintSupport.dll \
+            Qt6Network.dll Qt6Sql.dll Qt6Concurrent.dll Qt6WebSockets.dll \
+            Qt6Multimedia.dll Qt6MultimediaWidgets.dll Qt6OpenGL.dll \
+            Qt6OpenGLWidgets.dll Qt6Svg.dll Qt6Xml.dll Qt6TextToSpeech.dll; do
+            [ -f "${QT_BIN}/${qt_dll}" ] && [ ! -f "${BUILD_DIR}/${qt_dll}" ] && \
+              cp "${QT_BIN}/${qt_dll}" "${BUILD_DIR}/" || true
+          done
+
+          for ssl_dll in libssl-3-x64.dll libcrypto-3-x64.dll libssl-3.dll libcrypto-3.dll; do
+            [ -f "${QT_BIN}/${ssl_dll}" ] && [ ! -f "${BUILD_DIR}/${ssl_dll}" ] && \
+              cp "${QT_BIN}/${ssl_dll}" "${BUILD_DIR}/" || true
+            [ -f "${OPENSSL_ROOT_DIR}/bin/${ssl_dll}" ] && [ ! -f "${BUILD_DIR}/${ssl_dll}" ] && \
+              cp "${OPENSSL_ROOT_DIR}/bin/${ssl_dll}" "${BUILD_DIR}/" || true
+          done
+
+          for vcrt_dll in vcruntime140.dll vcruntime140_1.dll msvcp140.dll msvcp140_1.dll \
+            msvcp140_2.dll concrt140.dll; do
+            SYS32="/c/Windows/System32/${vcrt_dll}"
+            [ -f "$SYS32" ] && [ ! -f "${BUILD_DIR}/${vcrt_dll}" ] && \
+              cp "$SYS32" "${BUILD_DIR}/" || true
+          done
+
+          for plugin_dir in platforms sqldrivers imageformats iconengines styles tls \
+            multimedia texttospeech networkinformation platforminputcontexts printsupport generic; do
+            [ -d "${QT_PLUGINS}/${plugin_dir}" ] && \
+              { mkdir -p "${BUILD_DIR}/${plugin_dir}"; \
+                cp -n "${QT_PLUGINS}/${plugin_dir}/"*.dll "${BUILD_DIR}/${plugin_dir}/" 2>/dev/null || true; }
+          done
+
+          for d3d_dll in d3dcompiler_47.dll opengl32sw.dll libEGL.dll libGLESv2.dll; do
+            [ -f "${QT_BIN}/${d3d_dll}" ] && [ ! -f "${BUILD_DIR}/${d3d_dll}" ] && \
+              cp "${QT_BIN}/${d3d_dll}" "${BUILD_DIR}/" || true
+          done
+
+          for icu_dll in "${QT_BIN}"/icu*.dll; do
+            base=$(basename "$icu_dll")
+            [ -f "$icu_dll" ] && [ ! -f "${BUILD_DIR}/${base}" ] && \
+              cp "$icu_dll" "${BUILD_DIR}/" || true
+          done
+
+          cp -r resources "${BUILD_DIR}/resources" 2>/dev/null || true
+          cp -r scripts   "${BUILD_DIR}/scripts"   2>/dev/null || true
+          printf '[Paths]\nPrefix = .\nPlugins = .\nLibraries = .\n' > "${BUILD_DIR}/qt.conf"
+          echo "=== $(find "${BUILD_DIR}" -type f | wc -l) files staged ==="
+
+      # ── Generate Installer ────────────────────────────────────────────────
+      - name: Generate Installer (CPack IFW)
+        shell: bash
+        working-directory: fincept-qt/build
+        run: |
+          set -euo pipefail
+          export PATH="${QT_IFW_DIR}/bin:${PATH}"
+          command -v binarycreator || { echo "::error::binarycreator not found"; exit 1; }
+          cpack -G IFW -C ${{ env.BUILD_TYPE }} --verbose
+          ls -lh ${{ env.APP_NAME }}-*-setup* 2>/dev/null || ls -lh *.exe 2>/dev/null || true
+
+      # ── Upload ────────────────────────────────────────────────────────────
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FinceptTerminal-Windows-x64-installer
+          path: |
+            fincept-qt/build/FinceptTerminal-*-setup*
+            fincept-qt/build/FinceptTerminal-*.exe
+          retention-days: 30
+
+# ═════════════════════════════════════════════════════════════════════════════
+# JOB 2 — Linux x64 Installer (QtIFW .run)
+# ═════════════════════════════════════════════════════════════════════════════
+  build-linux:
+    name: Linux x64 Installer
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-tags: true
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: linux-x64-release-${{ env.QT_VERSION }}
+          max-size: 500M
+          update-package-index: true
+
+      # ── System deps ───────────────────────────────────────────────────────
+      - name: Install system dependencies
+        run: |
+          sudo add-apt-repository universe -y
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            cmake ninja-build g++ \
+            libssl-dev \
+            qt6-base-dev qt6-base-private-dev \
+            qt6-tools-dev qt6-tools-dev-tools \
+            libqt6charts6-dev libqt6websockets6-dev \
+            qt6-multimedia-dev libqt6multimediawidgets6 \
+            libqt6svg6-dev libqt6concurrent6 \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libxkbcommon-dev libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-xinerama0 libxcb-xkb1 \
+            python3 python3-pip pkg-config zip
+
+      # ── Qt Installer Framework ────────────────────────────────────────────
+      - name: Install Qt Installer Framework
+        run: |
+          pip3 install aqtinstall
+          aqt install-tool linux desktop ${{ env.QT_IFW_TOOL }} \
+            --outputdir "${{ runner.temp }}/qtifw"
+          IFW_DIR="${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}"
+          echo "QT_IFW_DIR=${IFW_DIR}" >> "$GITHUB_ENV"
+          echo "PATH=${IFW_DIR}/bin:${PATH}" >> "$GITHUB_ENV"
+
+      # ── Configure + Build ─────────────────────────────────────────────────
+      - name: Configure CMake
+        working-directory: fincept-qt
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DDEPLOY_QT=ON \
+            -DFINCEPT_BUILD_INSTALLER=ON
+
+      - name: Build
+        working-directory: fincept-qt
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel $(nproc)
+
+      # ── Verify ───────────────────────────────────────────────────────────
+      - name: Verify binary
+        working-directory: fincept-qt
+        run: |
+          BINARY="build/${{ env.APP_NAME }}"
+          [ -f "$BINARY" ] || { echo "::error::Binary not found"; exit 1; }
+          echo "Binary: $BINARY ($(du -sh "$BINARY" | cut -f1))"
+          file "$BINARY"
+
+      # ── Stage package ─────────────────────────────────────────────────────
+      - name: Stage package contents
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          STAGE_DIR="build/stage"
+          mkdir -p "${STAGE_DIR}"
+          cp "build/${{ env.APP_NAME }}" "${STAGE_DIR}/"
+          chmod +x "${STAGE_DIR}/${{ env.APP_NAME }}"
+          cp -r resources "${STAGE_DIR}/resources" 2>/dev/null || true
+          cp -r scripts   "${STAGE_DIR}/scripts"   2>/dev/null || true
+
+          QT6_PLUGINS_DIR=$(qmake6 -query QT_INSTALL_PLUGINS 2>/dev/null || true)
+          if [ -n "${QT6_PLUGINS_DIR}" ]; then
+            for plugin_dir in platforms sqldrivers imageformats xcbglintegrations; do
+              mkdir -p "${STAGE_DIR}/plugins/${plugin_dir}"
+              cp -r "${QT6_PLUGINS_DIR}/${plugin_dir}/"*.so \
+                "${STAGE_DIR}/plugins/${plugin_dir}/" 2>/dev/null || true
+            done
+          fi
+
+          printf '[Paths]\nPrefix = .\nPlugins = plugins\nLibraries = .\n' \
+            > "${STAGE_DIR}/qt.conf"
+          echo "=== $(find "${STAGE_DIR}" -type f | wc -l) files staged ==="
+
+      # ── Generate Installer ────────────────────────────────────────────────
+      - name: Generate Installer (CPack IFW)
+        working-directory: fincept-qt/build
+        run: |
+          set -euo pipefail
+          export PATH="${QT_IFW_DIR}/bin:${PATH}"
+          command -v binarycreator || { echo "::error::binarycreator not found"; exit 1; }
+          cpack -G IFW --verbose
+          ls -lh ${{ env.APP_NAME }}-*-setup* 2>/dev/null || ls -lh *.run 2>/dev/null || true
+
+      # ── Upload ────────────────────────────────────────────────────────────
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FinceptTerminal-Linux-x64-installer
+          path: |
+            fincept-qt/build/FinceptTerminal-*-setup*
+            fincept-qt/build/FinceptTerminal-*.run
+          retention-days: 30
+
+# ═════════════════════════════════════════════════════════════════════════════
+# JOB 3 — macOS arm64 Installer (DMG via QtIFW or hdiutil fallback)
+# ═════════════════════════════════════════════════════════════════════════════
+  build-macos:
+    name: macOS arm64 Installer
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-tags: true
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: macos-arm64-release-${{ env.QT_VERSION }}
+          max-size: 500M
+
+      - name: Install build tools
+        run: brew install ninja cmake || brew upgrade ninja cmake || true
+
+      # ── Qt ────────────────────────────────────────────────────────────────
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: clang_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          cache-key-prefix: qt-macos-arm64-release
+
+      - name: Install Python 3.12
+        run: brew install python@3.12 || brew upgrade python@3.12 || true
+
+      # ── Qt Installer Framework ────────────────────────────────────────────
+      - name: Install Qt Installer Framework
+        run: |
+          pip3 install --break-system-packages aqtinstall
+          aqt install-tool mac desktop ${{ env.QT_IFW_TOOL }} \
+            --outputdir "${{ runner.temp }}/qtifw"
+          IFW_DIR="${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}"
+          echo "QT_IFW_DIR=${IFW_DIR}" >> "$GITHUB_ENV"
+          echo "PATH=${IFW_DIR}/bin:${PATH}" >> "$GITHUB_ENV"
+
+      # ── Icon ──────────────────────────────────────────────────────────────
+      - name: Generate .icns icon
+        working-directory: fincept-qt
+        run: |
+          ICO="resources/fincept.ico"
+          ICNS="resources/fincept.icns"
+          if [ -f "${ICNS}" ]; then
+            echo ".icns already exists"
+          elif [ -f "${ICO}" ]; then
+            ICONSET="$(mktemp -d)/fincept.iconset"
+            mkdir -p "${ICONSET}"
+            sips -s format png "${ICO}" --out "${ICONSET}/icon_512x512.png" \
+              --resampleHeightWidth 512 512 2>/dev/null
+            for size in 16 32 64 128 256; do
+              sips -z ${size} ${size} "${ICONSET}/icon_512x512.png" \
+                --out "${ICONSET}/icon_${size}x${size}.png" 2>/dev/null
+            done
+            cp "${ICONSET}/icon_512x512.png" "${ICONSET}/icon_256x256@2x.png"
+            sips -z 1024 1024 "${ICONSET}/icon_512x512.png" \
+              --out "${ICONSET}/icon_512x512@2x.png" 2>/dev/null
+            sips -z 64  64  "${ICONSET}/icon_512x512.png" \
+              --out "${ICONSET}/icon_32x32@2x.png" 2>/dev/null
+            sips -z 32  32  "${ICONSET}/icon_512x512.png" \
+              --out "${ICONSET}/icon_16x16@2x.png" 2>/dev/null
+            sips -z 256 256 "${ICONSET}/icon_512x512.png" \
+              --out "${ICONSET}/icon_128x128@2x.png" 2>/dev/null
+            iconutil -c icns -o "${ICNS}" "${ICONSET}"
+            echo "Generated ${ICNS}"
+          else
+            echo "WARNING: No source icon — app will use generic icon"
+          fi
+
+      # ── Configure + Build ─────────────────────────────────────────────────
+      - name: Configure CMake
+        working-directory: fincept-qt
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DFINCEPT_BUILD_INSTALLER=ON \
+            -DDEPLOY_QT=ON
+
+      - name: Build
+        working-directory: fincept-qt
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} \
+          --parallel $(sysctl -n hw.logicalcpu)
+
+      # ── Verify ───────────────────────────────────────────────────────────
+      - name: Verify binary
+        working-directory: fincept-qt
+        run: |
+          if [ -f "build/${{ env.APP_NAME }}" ]; then
+            BINARY="build/${{ env.APP_NAME }}"
+          elif [ -f "build/${{ env.APP_NAME }}.app/Contents/MacOS/${{ env.APP_NAME }}" ]; then
+            BINARY="build/${{ env.APP_NAME }}.app/Contents/MacOS/${{ env.APP_NAME }}"
+          else
+            echo "::error::Binary not found"
+            find build -maxdepth 3 -name "${{ env.APP_NAME }}*" || true
+            exit 1
+          fi
+          echo "Binary: $BINARY ($(du -sh "$BINARY" | cut -f1))"
+          lipo -info "$BINARY"
+
+      # ── Package .app bundle ───────────────────────────────────────────────
+      - name: Package .app bundle
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          BUILD_DIR="build"
+          DIST_DIR="dist"
+          mkdir -p "${DIST_DIR}"
+
+          if [ -d "${BUILD_DIR}/${{ env.APP_NAME }}.app" ]; then
+            APP_BUNDLE="${BUILD_DIR}/${{ env.APP_NAME }}.app"
+          else
+            APP_BUNDLE="${BUILD_DIR}/${{ env.APP_NAME }}.app"
+            mkdir -p "${APP_BUNDLE}/Contents/MacOS"
+            cp "${BUILD_DIR}/${{ env.APP_NAME }}" "${APP_BUNDLE}/Contents/MacOS/${{ env.APP_NAME }}"
+            chmod +x "${APP_BUNDLE}/Contents/MacOS/${{ env.APP_NAME }}"
+            cat > "${APP_BUNDLE}/Contents/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key><string>FinceptTerminal</string>
+            <key>CFBundleIdentifier</key><string>in.fincept.terminal</string>
+            <key>CFBundleName</key><string>FinceptTerminal</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>4.0.1</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict></plist>
+          PLIST
+          fi
+
+          # Embed Python 3.12
+          PY_FRAMEWORK=""
+          for candidate in \
+            "/Library/Frameworks/Python.framework" \
+            "$(brew --prefix python@3.12 2>/dev/null)/Frameworks/Python.framework" \
+            "$(brew --prefix python3 2>/dev/null)/Frameworks/Python.framework"; do
+            [ -d "${candidate}/Versions" ] && { PY_FRAMEWORK="${candidate}"; break; }
+          done
+
+          BUNDLE_FRAMEWORKS="${APP_BUNDLE}/Contents/Frameworks"
+          mkdir -p "${BUNDLE_FRAMEWORKS}"
+          if [ -n "${PY_FRAMEWORK}" ]; then
+            echo "Embedding Python.framework from: ${PY_FRAMEWORK}"
+            cp -R "${PY_FRAMEWORK}" "${BUNDLE_FRAMEWORKS}/"
+            PY_VER="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+            ln -sf "../Frameworks/Python.framework/Versions/${PY_VER}/bin/python${PY_VER}" \
+                   "${APP_BUNDLE}/Contents/MacOS/python3" 2>/dev/null || true
+            echo "Python ${PY_VER} embedded"
+          else
+            echo "WARNING: Python.framework not found"
+          fi
+
+          cp -r resources "${APP_BUNDLE}/Contents/Resources/" 2>/dev/null || true
+          cp -r scripts   "${APP_BUNDLE}/Contents/Resources/scripts" 2>/dev/null || true
+          cp -r "${APP_BUNDLE}" "${DIST_DIR}/"
+          echo "Bundle size: $(du -sh "${DIST_DIR}/${{ env.APP_NAME }}.app" | cut -f1)"
+
+      # ── Generate Installer (IFW → DMG fallback) ───────────────────────────
+      - name: Generate Installer
+        working-directory: fincept-qt/build
+        run: |
+          set -euo pipefail
+          export PATH="${QT_IFW_DIR}/bin:${PATH}"
+
+          if command -v binarycreator &>/dev/null; then
+            echo "Running CPack IFW..."
+            cpack -G IFW --verbose
+            ls -lh ${{ env.APP_NAME }}-*-setup* 2>/dev/null || ls -lh *.dmg 2>/dev/null || true
+          else
+            echo "::warning::binarycreator not found — falling back to DMG via hdiutil"
+            STAGING="$(mktemp -d)/dmg_staging"
+            mkdir -p "${STAGING}"
+            cp -r "../dist/${{ env.APP_NAME }}.app" "${STAGING}/"
+            hdiutil create \
+              -volname "${{ env.APP_NAME }}" \
+              -srcfolder "${STAGING}" \
+              -ov -format UDZO \
+              "${{ env.APP_NAME }}-macOS-arm64.dmg"
+            ls -lh ${{ env.APP_NAME }}-*.dmg
+          fi
+
+      # ── Upload ────────────────────────────────────────────────────────────
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FinceptTerminal-macOS-arm64-installer
+          path: |
+            fincept-qt/build/FinceptTerminal-*-setup*
+            fincept-qt/build/FinceptTerminal-*.dmg
+          retention-days: 30
+
+# ═════════════════════════════════════════════════════════════════════════════
+# JOB 4 — Create GitHub Release and attach all installers
+#          Only runs on tag push after all builds succeed
+# ═════════════════════════════════════════════════════════════════════════════
+  release:
+    name: Create GitHub Release
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    if: >-
+      !cancelled() &&
+      needs.build-windows.result == 'success' &&
+      needs.build-linux.result == 'success' &&
+      needs.build-macos.result == 'success' &&
+      startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    outputs:
+      # Pass the tag so update-readme can use it
+      tag: ${{ github.ref_name }}
+
+    steps:
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: FinceptTerminal-Windows-x64-installer
+          path: dist/windows
+
+      - name: Download Linux installer
+        uses: actions/download-artifact@v4
+        with:
+          name: FinceptTerminal-Linux-x64-installer
+          path: dist/linux
+
+      - name: Download macOS installer
+        uses: actions/download-artifact@v4
+        with:
+          name: FinceptTerminal-macOS-arm64-installer
+          path: dist/macos
+
+      - name: List release assets
+        run: find dist -type f | sort
+
+      - name: Create GitHub Release and attach installers
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Fincept Terminal ${{ github.ref_name }}"
+          body: |
+            ## Fincept Terminal ${{ github.ref_name }}
+
+            Native C++20 financial intelligence terminal — Qt6, embedded Python analytics, 50+ screens.
+
+            ### Downloads
+
+            | Platform | File | Notes |
+            |----------|------|-------|
+            | **Windows x64** | `FinceptTerminal-*-setup*.exe` | Run installer → `FinceptTerminal.exe` |
+            | **Linux x64** | `FinceptTerminal-*.run` | `chmod +x` → run installer |
+            | **macOS Apple Silicon** | `FinceptTerminal-*.dmg` or setup | Open DMG → drag to Applications |
+
+            ### Requirements
+            - Windows 10/11 x64
+            - Ubuntu 20.04+ / Debian 11+
+            - macOS 13+ (Apple Silicon)
+
+            See the [README](https://github.com/Fincept-Corporation/FinceptTerminal#readme) for full installation instructions.
+          files: |
+            dist/windows/**
+            dist/linux/**
+            dist/macos/**
+          fail_on_unmatched_files: false
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# JOB 5 — Update README with direct download links
+#          Runs after release, uses gh CLI to get actual asset URLs
+# ═════════════════════════════════════════════════════════════════════════════
+  update-readme:
+    name: Update README download links
+    needs: release
+    runs-on: ubuntu-latest
+    if: >-
+      !cancelled() &&
+      needs.release.result == 'success' &&
+      startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Use a token with write access so we can push the commit back
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+          # Checkout main branch (not the tag) so we can push a commit
+          ref: main
+
+      # ── Fetch release asset URLs via gh CLI ───────────────────────────────
+      # gh is pre-installed on all GitHub-hosted runners.
+      # We query the release created in the previous job and extract
+      # each installer's browser_download_url.
+      - name: Fetch release asset URLs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          echo "Fetching asset URLs for release ${TAG}..."
+
+          # Poll up to 60s for the release to be fully published
+          for i in $(seq 1 12); do
+            ASSETS=$(gh release view "${TAG}" --json assets --jq '.assets' 2>/dev/null || echo "[]")
+            COUNT=$(echo "$ASSETS" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+            echo "  attempt ${i}: ${COUNT} asset(s) found"
+            [ "$COUNT" -ge 1 ] && break
+            sleep 5
+          done
+
+          # Extract URLs for each platform (first match per pattern)
+          WIN_URL=$(gh release view "${TAG}" --json assets \
+            --jq '.assets[] | select(.name | test("(?i)windows.*\\.exe$|setup.*\\.exe$")) | .url' \
+            | head -1)
+          LIN_URL=$(gh release view "${TAG}" --json assets \
+            --jq '.assets[] | select(.name | test("\\.run$|linux.*setup")) | .url' \
+            | head -1)
+          MAC_URL=$(gh release view "${TAG}" --json assets \
+            --jq '.assets[] | select(.name | test("\\.dmg$|macos.*setup")) | .url' \
+            | head -1)
+
+          # Fallback: if browser_download_url not available via .url, try .browserDownloadUrl
+          [ -z "$WIN_URL" ] && WIN_URL=$(gh release view "${TAG}" --json assets \
+            --jq '.assets[] | select(.name | test("(?i)windows.*\\.exe$|setup.*\\.exe$")) | .browserDownloadUrl' \
+            | head -1) || true
+          [ -z "$LIN_URL" ] && LIN_URL=$(gh release view "${TAG}" --json assets \
+            --jq '.assets[] | select(.name | test("\\.run$|linux.*setup")) | .browserDownloadUrl' \
+            | head -1) || true
+          [ -z "$MAC_URL" ] && MAC_URL=$(gh release view "${TAG}" --json assets \
+            --jq '.assets[] | select(.name | test("\\.dmg$|macos.*setup")) | .browserDownloadUrl' \
+            | head -1) || true
+
+          # Release page URL as final fallback
+          RELEASE_URL="https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/${TAG}"
+          WIN_URL="${WIN_URL:-${RELEASE_URL}}"
+          LIN_URL="${LIN_URL:-${RELEASE_URL}}"
+          MAC_URL="${MAC_URL:-${RELEASE_URL}}"
+
+          echo "WIN_URL=${WIN_URL}" >> "$GITHUB_ENV"
+          echo "LIN_URL=${LIN_URL}" >> "$GITHUB_ENV"
+          echo "MAC_URL=${MAC_URL}" >> "$GITHUB_ENV"
+          echo "RELEASE_URL=${RELEASE_URL}" >> "$GITHUB_ENV"
+          echo "TAG=${TAG}" >> "$GITHUB_ENV"
+
+          echo "Windows  : ${WIN_URL}"
+          echo "Linux    : ${LIN_URL}"
+          echo "macOS    : ${MAC_URL}"
+
+      # ── Rewrite the download table in README.md ───────────────────────────
+      # Strategy: sed-replace a clearly-delimited block between two sentinel
+      # comments. This is the most robust approach — no regex on links needed.
+      # The sentinels already exist in the README (added below by this step on
+      # first run; subsequent runs just overwrite between them).
+      - name: Update README download table
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Sentinel markers in README — we replace everything between them.
+          START_MARKER="<!-- DOWNLOAD-TABLE-START -->"
+          END_MARKER="<!-- DOWNLOAD-TABLE-END -->"
+
+          NEW_BLOCK="${START_MARKER}
+          ### Option 1 — Download Installer (Recommended)
+
+          Latest release: **${TAG}** — [View all releases](${RELEASE_URL})
+
+          | Platform | Download | Run |
+          |----------|----------|-----|
+          | **Windows x64** | [FinceptTerminal-Windows-x64-setup.exe](${WIN_URL}) | Run installer → launch \`FinceptTerminal.exe\` |
+          | **Linux x64** | [FinceptTerminal-Linux-x64.run](${LIN_URL}) | \`chmod +x\` → run installer |
+          | **macOS Apple Silicon** | [FinceptTerminal-macOS-arm64.dmg](${MAC_URL}) | Open DMG → drag to Applications |
+          ${END_MARKER}"
+
+          README="README.md"
+
+          # If markers are already present, replace the block between them.
+          # If not, replace the old static "Option 1" section header line.
+          if grep -q "${START_MARKER}" "${README}"; then
+            # Use python for reliable multi-line replacement
+            python3 - <<PYEOF
+          import re, pathlib
+
+          readme = pathlib.Path("${README}")
+          content = readme.read_text(encoding="utf-8")
+
+          new_block = """${NEW_BLOCK}"""
+
+          pattern = re.compile(
+              r'<!-- DOWNLOAD-TABLE-START -->.*?<!-- DOWNLOAD-TABLE-END -->',
+              re.DOTALL
+          )
+          updated = pattern.sub(new_block, content)
+          readme.write_text(updated, encoding="utf-8")
+          print("README updated (existing markers replaced)")
+          PYEOF
+          else
+            # First run — insert markers by replacing the old "Option 1" heading
+            python3 - <<PYEOF
+          import re, pathlib
+
+          readme = pathlib.Path("${README}")
+          content = readme.read_text(encoding="utf-8")
+
+          new_block = """${NEW_BLOCK}"""
+
+          # Replace the "### Option 1 — Download Pre-built Binary" section
+          # up to (but not including) the next "### Option 2" or "---" line
+          pattern = re.compile(
+              r'### Option 1 — Download Pre-built Binary.*?(?=\n---|\n### Option 2)',
+              re.DOTALL
+          )
+          updated = pattern.sub(new_block, content)
+          if updated == content:
+              # Pattern didn't match — prepend before "## Installation"
+              updated = content.replace(
+                  "## Installation\n",
+                  "## Installation\n\n" + new_block + "\n"
+              )
+          readme.write_text(updated, encoding="utf-8")
+          print("README updated (sentinels inserted for first time)")
+          PYEOF
+          fi
+
+          echo "=== README diff preview (first 60 lines) ==="
+          git diff README.md | head -60 || true
+
+      # ── Commit and push ───────────────────────────────────────────────────
+      - name: Commit and push README update
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet README.md; then
+            echo "README unchanged — nothing to commit"
+            exit 0
+          fi
+
+          git add README.md
+          git commit -m "docs: update download links for ${TAG}
+
+          Auto-updated by release workflow after successful build.
+          Windows, Linux, macOS installer URLs reflect the ${TAG} release.
+
+          Co-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+
+          git push origin main
+          echo "README pushed to main"

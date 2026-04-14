@@ -28,7 +28,7 @@ def get_markets(limit=10):
         }
         headers = {
             "Accept": "application/json",
-            "User-Agent": "FinceptTerminal/4.0.0",
+            "User-Agent": "FinceptTerminal/4.0.1",
         }
         r = requests.get(url, params=params, headers=headers, timeout=15)
         r.raise_for_status()

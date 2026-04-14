@@ -220,5 +220,5 @@ Look for labels: `good first issue`, `help wanted`, `documentation`
 ---
 
 **Repository**: https://github.com/Fincept-Corporation/FinceptTerminal
-**Version**: 4.0.0
+**Version**: 4.0.1
 **License**: AGPL-3.0

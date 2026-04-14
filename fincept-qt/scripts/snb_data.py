@@ -139,7 +139,7 @@ class SNBWrapper:
         self.lang    = lang
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": "Fincept-Terminal/4.0.0 (SNB-wrapper)",
+            "User-Agent": "Fincept-Terminal/4.0.1 (SNB-wrapper)",
             "Accept":     "text/csv,text/plain,*/*",
         })
 

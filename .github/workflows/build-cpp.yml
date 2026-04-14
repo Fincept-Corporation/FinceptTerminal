@@ -535,7 +535,7 @@ jobs:
             <key>CFBundleIdentifier</key><string>in.fincept.terminal</string>
             <key>CFBundleName</key><string>FinceptTerminal</string>
             <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>4.0.0</string>
+            <key>CFBundleShortVersionString</key><string>4.0.1</string>
             <key>NSHighResolutionCapable</key><true/>
           </dict></plist>
           PLIST
