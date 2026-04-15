@@ -1,4 +1,6 @@
 #pragma once
+#include "screens/IStatefulScreen.h"
+
 #include <QComboBox>
 #include <QHideEvent>
 #include <QLabel>
@@ -11,10 +13,16 @@ namespace fincept::screens {
 
 /// Bloomberg ECTR-style Trade Flow visualization.
 /// Chord diagram showing bilateral trade flows + partner ranking table.
-class TradeVizScreen : public QWidget {
+class TradeVizScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit TradeVizScreen(QWidget* parent = nullptr);
+
+    // IStatefulScreen — persists the filter combo selections
+    // (country/order/period/year).
+    QVariantMap save_state() const override;
+    void restore_state(const QVariantMap& state) override;
+    QString state_key() const override { return "trade_viz"; }
 
   protected:
     void showEvent(QShowEvent* event) override;

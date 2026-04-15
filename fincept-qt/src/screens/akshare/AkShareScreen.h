@@ -1,4 +1,5 @@
 #pragma once
+#include "screens/IStatefulScreen.h"
 
 #include <QComboBox>
 #include <QHeaderView>
@@ -30,10 +31,16 @@ struct AkShareSource {
 /// Provides access to 26+ AkShare data sources with 1000+ endpoints.
 /// Users select a source, pick an endpoint, optionally set parameters,
 /// and view results in a table or raw JSON.
-class AkShareScreen : public QWidget {
+class AkShareScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit AkShareScreen(QWidget* parent = nullptr);
+
+    // IStatefulScreen — remembers active source, last endpoint, search text,
+    // and whether the user prefers table vs JSON view.
+    QVariantMap save_state() const override;
+    void restore_state(const QVariantMap& state) override;
+    QString state_key() const override { return "akshare"; }
 
   private slots:
     void on_source_clicked(int index);

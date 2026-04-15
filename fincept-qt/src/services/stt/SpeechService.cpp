@@ -22,6 +22,7 @@
 namespace fincept::services {
 
 static constexpr auto TAG = "SpeechService";
+static constexpr int kShutdownTimeoutMs = 2000;
 
 // ── Singleton ────────────────────────────────────────────────────────────────
 
@@ -96,8 +97,14 @@ void SpeechService::spawn_process() {
     env.insert("PYTHONUNBUFFERED", "1");
     env.insert("FINCEPT_DATA_DIR", python::PythonSetupManager::instance().install_dir());
 
-    QString existing_pypath = env.value("PYTHONPATH");
-    QString new_pypath = scripts_dir + (existing_pypath.isEmpty() ? "" : ";" + existing_pypath);
+    const QString existing_pypath = env.value("PYTHONPATH");
+#ifdef _WIN32
+    const QChar kPathSep = ';';
+#else
+    const QChar kPathSep = ':';
+#endif
+    const QString new_pypath =
+        existing_pypath.isEmpty() ? scripts_dir : (scripts_dir + kPathSep + existing_pypath);
     env.insert("PYTHONPATH", new_pypath);
 
     process_->setProcessEnvironment(env);
@@ -137,7 +144,7 @@ void SpeechService::kill_process() {
 
     if (process_->state() != QProcess::NotRunning) {
         process_->kill();
-        process_->waitForFinished(2000);
+        process_->waitForFinished(kShutdownTimeoutMs);
     }
     process_->deleteLater();
     process_ = nullptr;

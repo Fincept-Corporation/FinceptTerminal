@@ -1,6 +1,7 @@
 #include "screens/derivatives/DerivativesScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 #include "ui/theme/StyleSheets.h"
@@ -719,6 +720,8 @@ void DerivativesScreen::on_instrument_changed(int index) {
     const QStringList names = {"BONDS", "EQUITY OPTIONS", "FX OPTIONS", "IR SWAPS", "CREDIT"};
     status_instrument_->setText("INSTRUMENT: " + names[index]);
     LOG_INFO("Derivatives", "Switched to: " + names[index]);
+
+    fincept::ScreenStateManager::instance().notify_changed(this);
 }
 
 void DerivativesScreen::on_calculate() {
@@ -1115,6 +1118,19 @@ void DerivativesScreen::display_results(const QJsonObject& result) {
     results_container_->show();
 
     LOG_INFO("Derivatives", "Results displayed");
+}
+
+// ── IStatefulScreen ──────────────────────────────────────────────────────────
+
+QVariantMap DerivativesScreen::save_state() const {
+    return {{"instrument", active_instrument_}};
+}
+
+void DerivativesScreen::restore_state(const QVariantMap& state) {
+    const int idx = state.value("instrument", -1).toInt();
+    if (idx < 0 || idx >= instrument_btns_.size())
+        return;
+    on_instrument_changed(idx);
 }
 
 } // namespace fincept::screens

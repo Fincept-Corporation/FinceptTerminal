@@ -46,6 +46,7 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
     QWidget* build_security();
     QWidget* build_profiles();
     QWidget* build_keybindings();
+    QWidget* build_python_env();
 
     // ── Shared layout helper ──────────────────────────────────────────────────
     static QWidget* make_row(const QString& label, QWidget* control, const QString& description = {});

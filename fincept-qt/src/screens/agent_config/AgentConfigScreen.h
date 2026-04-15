@@ -1,5 +1,6 @@
 // src/screens/agent_config/AgentConfigScreen.h
 #pragma once
+#include "screens/IStatefulScreen.h"
 #include "services/agents/AgentTypes.h"
 
 #include <QLabel>
@@ -24,10 +25,16 @@ namespace fincept::screens {
 
 /// Main Agent Studio screen — 8-view navigation shell.
 /// Panels are constructed lazily on first navigation (P2 compliance).
-class AgentConfigScreen : public QWidget {
+class AgentConfigScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit AgentConfigScreen(QWidget* parent = nullptr);
+
+    // IStatefulScreen — persists the currently active sub-view so users
+    // return to the same panel after restart.
+    QVariantMap save_state() const override;
+    void restore_state(const QVariantMap& state) override;
+    QString state_key() const override { return "agent_config"; }
 
   protected:
     void showEvent(QShowEvent* event) override;

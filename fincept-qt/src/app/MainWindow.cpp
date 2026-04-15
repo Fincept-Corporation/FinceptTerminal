@@ -99,6 +99,7 @@
 #include <DockAreaWidget.h>
 #include <DockManager.h>
 #include <DockWidget.h>
+#include <FloatingDockContainer.h>
 
 namespace fincept {
 
@@ -204,7 +205,9 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
     // Tab bar navigation: open the selected screen exclusively — closes all other
     // panels and fills the full area. Each tab is a fresh independent screen,
     // not nested into whatever was previously open.
-    connect(tab_bar_, &ui::TabBar::tab_changed, this, [this](const QString& id) { dock_router_->navigate(id, true); });
+    connect(tab_bar_, &ui::TabBar::tab_changed, this, [this](const QString& id) {
+        if (!locked_) dock_router_->navigate(id, true);
+    });
     connect(dock_router_, &DockScreenRouter::screen_changed, tab_bar_, &ui::TabBar::set_active);
 
     // Update the main window title bar to reflect the current screen name.
@@ -237,16 +240,34 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
     });
 
     connect(toolbar, &ui::ToolBar::chat_mode_toggled, this, &MainWindow::toggle_chat_mode);
-    connect(toolbar, &ui::ToolBar::navigate_to, this, [this](const QString& id) { dock_router_->navigate(id, true); });
+    connect(toolbar, &ui::ToolBar::navigate_to, this, [this](const QString& id) {
+        if (!locked_) dock_router_->navigate(id, true);
+    });
+
+    // Debounced dock-layout save: ADS emits a burst of signals during
+    // add/replace/remove; coalesce into one write ~500 ms after the last change
+    // so rapid edits don't hammer QSettings and so crashes preserve layout.
+    dock_layout_save_timer_ = new QTimer(this);
+    dock_layout_save_timer_->setSingleShot(true);
+    dock_layout_save_timer_->setInterval(500);
+    connect(dock_layout_save_timer_, &QTimer::timeout, this, [this]() {
+        if (!dock_manager_)
+            return;
+        SessionManager::instance().save_dock_layout(window_id_, dock_manager_->saveState());
+        if (WorkspaceManager::instance().has_current_workspace())
+            WorkspaceManager::instance().save_workspace();
+    });
 
     connect(toolbar, &ui::ToolBar::dock_command, this,
             [this](const QString& action, const QString& primary, const QString& secondary) {
+                if (locked_) return;
                 if (action == "add")
                     dock_router_->add_alongside(primary, secondary);
                 else if (action == "remove")
                     dock_router_->remove_screen(primary);
                 else if (action == "replace")
                     dock_router_->replace_screen(primary, secondary);
+                schedule_dock_layout_save();
             });
 
     // MCP navigation tool → dock_router (cross-thread safe)
@@ -254,7 +275,9 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
         QString screen_id = data["screen_id"].toString();
         if (!screen_id.isEmpty())
             QMetaObject::invokeMethod(
-                dock_router_, [this, screen_id]() { dock_router_->navigate(screen_id); }, Qt::QueuedConnection);
+                dock_router_, [this, screen_id]() {
+                    if (!locked_) dock_router_->navigate(screen_id);
+                }, Qt::QueuedConnection);
     });
 
     // ── Keyboard shortcuts via KeyConfigManager ───────────────────────────────
@@ -263,7 +286,9 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
     auto* act_chat = km.action(KeyAction::ToggleChat);
     act_chat->setShortcutContext(Qt::WindowShortcut);
     addAction(act_chat);
-    connect(act_chat, &QAction::triggered, this, &MainWindow::toggle_chat_mode);
+    connect(act_chat, &QAction::triggered, this, [this]() {
+        if (!locked_) toggle_chat_mode();
+    });
 
     auto* act_fs = km.action(KeyAction::Fullscreen);
     act_fs->setShortcutContext(Qt::WindowShortcut);
@@ -279,6 +304,7 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
     act_focus->setShortcutContext(Qt::WindowShortcut);
     addAction(act_focus);
     connect(act_focus, &QAction::triggered, this, [this]() {
+        if (locked_) return;
         focus_mode_ = !focus_mode_;
         if (dock_toolbar_)
             dock_toolbar_->setVisible(!focus_mode_);
@@ -290,6 +316,7 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
     act_refresh->setShortcutContext(Qt::WindowShortcut);
     addAction(act_refresh);
     connect(act_refresh, &QAction::triggered, this, [this]() {
+        if (locked_) return;
         if (dock_manager_) {
             auto* focused = dock_manager_->focusedDockWidget();
             if (focused && focused->widget())
@@ -317,6 +344,7 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
 
     // Toolbar actions
     connect(toolbar, &ui::ToolBar::action_triggered, this, [this](const QString& action) {
+        if (locked_) return;
         if (action == "new_window") {
             auto* w = new MainWindow(MainWindow::next_window_id());
             w->setAttribute(Qt::WA_DeleteOnClose);
@@ -563,6 +591,8 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
         if (auth_mgr.is_authenticated() && auth::PinManager::instance().has_pin()) {
             LOG_INFO("MainWindow", "Session restored — showing PIN unlock");
             lock_screen_->show_unlock();
+            locked_ = true;
+            set_shell_visible(false);
             stack_->setCurrentIndex(3);
         } else if (auth_mgr.is_authenticated()) {
             // Authenticated but no PIN yet — will be caught by on_auth_state_changed
@@ -613,6 +643,7 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
 }
 
 void MainWindow::toggle_chat_mode() {
+    if (locked_) return;
     chat_mode_ = !chat_mode_;
 
     if (chat_mode_) {
@@ -739,6 +770,20 @@ void MainWindow::setup_docking_mode() {
     dock_manager_->setStyleSheet(ui::ThemeManager::instance().build_ads_qss());
     dock_layout->addWidget(dock_manager_);
 
+    // ── Layout mutation watchdog ──────────────────────────────────────────────
+    // Any ADS-level structural change (dock area created, widget added/removed,
+    // floating window created) persists within ~500 ms so a crash doesn't lose
+    // the user's layout. Per-widget signals (topLevelChanged, closeRequested)
+    // are wired in DockScreenRouter::create_dock_widget() so user-driven float
+    // or close is also captured.
+    connect(dock_manager_, &ads::CDockManager::dockAreaCreated, this,
+            [this](ads::CDockAreaWidget*) { schedule_dock_layout_save(); });
+    connect(dock_manager_, &ads::CDockManager::dockWidgetAdded, this,
+            [this](ads::CDockWidget*) { schedule_dock_layout_save(); });
+    connect(dock_manager_, &ads::CDockManager::dockWidgetRemoved, this,
+            [this](ads::CDockWidget*) { schedule_dock_layout_save(); });
+    connect(dock_manager_, &ads::CDockManager::floatingWidgetCreated, this,
+            [this](ads::CFloatingDockContainer*) { schedule_dock_layout_save(); });
 }
 
 void MainWindow::setup_dock_screens() {
@@ -809,6 +854,16 @@ void MainWindow::setup_navigation() {}
 void MainWindow::on_auth_state_changed() {
     auto& auth = auth::AuthManager::instance();
 
+    // If logged out while the lock screen is active (e.g. max PIN attempts → reauth),
+    // clear locked_ so the login screen can show. Otherwise stay on the lock screen.
+    if (locked_) {
+        if (!auth.is_authenticated()) {
+            locked_ = false; // fall through to show login screen
+        } else {
+            return; // still authenticated — stay on lock screen
+        }
+    }
+
     // Still validating saved session — don't flash the login screen.
     // Stay on whatever is currently shown until validation completes.
     if (auth.is_loading())
@@ -816,13 +871,38 @@ void MainWindow::on_auth_state_changed() {
 
     if (auth.is_authenticated()) {
         // Don't redirect if user is already on the app stack (dashboard/workspace
-        // at index 1, or chat mode at index 2) or is intentionally viewing the
-        // pricing screen from the toolbar.
+        // at index 1, or chat mode at index 2) — UNLESS the PIN gate hasn't been
+        // cleared yet (auth completed while loading state showed dashboard early).
+        //
+        // pin_gate_cleared_ is critical: once the user has entered their PIN this
+        // session, subsequent auth_state_changed events (periodic refresh_user_data,
+        // focus-driven applicationStateChanged refresh, subscription_fetched, etc.)
+        // must NOT re-lock the terminal. Without this guard, any auth refresh
+        // while the user is working on the dashboard will re-show the PIN prompt.
         if (stack_->currentIndex() == 1 || stack_->currentIndex() == 2) {
+            if (!pin_gate_cleared_) {
+                if (auth.needs_pin_setup()) {
+                    LOG_INFO("MainWindow", "Authenticated (on app stack) but no PIN — showing PIN setup");
+                    lock_screen_->show_setup();
+                    locked_ = true;
+                    set_shell_visible(false);
+                    stack_->setCurrentIndex(3);
+                    return;
+                }
+                if (auth::PinManager::instance().has_pin()) {
+                    LOG_INFO("MainWindow", "Authenticated (on app stack) with PIN — showing PIN unlock");
+                    lock_screen_->show_unlock();
+                    locked_ = true;
+                    set_shell_visible(false);
+                    stack_->setCurrentIndex(3);
+                    return;
+                }
+            }
             LOG_DEBUG("MainWindow", QString("on_auth_state_changed: skipping redirect, "
-                                            "stack index=%1, chat_mode=%2")
+                                            "stack index=%1, chat_mode=%2, gate_cleared=%3")
                                         .arg(stack_->currentIndex())
-                                        .arg(chat_mode_));
+                                        .arg(chat_mode_)
+                                        .arg(pin_gate_cleared_));
             return;
         }
         if (stack_->currentIndex() == 0 && auth_stack_->currentIndex() == 3)
@@ -836,12 +916,16 @@ void MainWindow::on_auth_state_changed() {
             if (auth.needs_pin_setup()) {
                 LOG_INFO("MainWindow", "Authenticated but no PIN — showing PIN setup");
                 lock_screen_->show_setup();
+                locked_ = true;
+                set_shell_visible(false);
                 stack_->setCurrentIndex(3);
                 return;
             }
             if (auth::PinManager::instance().has_pin()) {
                 LOG_INFO("MainWindow", "Authenticated with PIN — showing PIN unlock");
                 lock_screen_->show_unlock();
+                locked_ = true;
+                set_shell_visible(false);
                 stack_->setCurrentIndex(3);
                 return;
             }
@@ -867,6 +951,7 @@ void MainWindow::on_auth_state_changed() {
     } else {
         // Disable inactivity guard when logged out
         auth::InactivityGuard::instance().set_enabled(false);
+        pin_gate_cleared_ = false;
         set_shell_visible(false);
         stack_->setCurrentIndex(0);
         auth_stack_->setCurrentIndex(0);
@@ -917,13 +1002,10 @@ void MainWindow::show_lock_screen() {
 
     LOG_INFO("MainWindow", "Inactivity timeout — showing lock screen");
     lock_screen_->activate();
+    locked_ = true;
+    pin_gate_cleared_ = false;
+    set_shell_visible(false);
     stack_->setCurrentIndex(3);
-
-    // Hide toolbar/statusbar while locked
-    if (dock_toolbar_)
-        dock_toolbar_->setVisible(false);
-    if (dock_status_bar_)
-        dock_status_bar_->setVisible(false);
     if (chat_bubble_)
         chat_bubble_->setVisible(false);
 }
@@ -931,6 +1013,8 @@ void MainWindow::show_lock_screen() {
 void MainWindow::on_terminal_unlocked() {
     auto& auth = auth::AuthManager::instance();
     LOG_INFO("MainWindow", "Terminal unlocked via PIN");
+    locked_ = false;
+    pin_gate_cleared_ = true;
 
     // Enable/restart inactivity guard
     auto& guard = auth::InactivityGuard::instance();
@@ -1001,6 +1085,11 @@ void MainWindow::update_window_title() {
     }
 
     setWindowTitle(title);
+}
+
+void MainWindow::schedule_dock_layout_save() {
+    if (dock_layout_save_timer_)
+        dock_layout_save_timer_->start();
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

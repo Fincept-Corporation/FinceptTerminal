@@ -2,6 +2,7 @@
 #include "screens/agent_config/AgentConfigScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "screens/agent_config/AgentChatPanel.h"
 #include "screens/agent_config/AgentsViewPanel.h"
 #include "screens/agent_config/CreateAgentPanel.h"
@@ -290,6 +291,8 @@ void AgentConfigScreen::set_view(services::AgentViewMode mode) {
 
     for (int i = 0; i < nav_buttons_.size(); ++i)
         nav_buttons_[i]->setChecked(i == idx);
+
+    fincept::ScreenStateManager::instance().notify_changed(this);
 }
 
 // ── Service-level connections (global signals, no per-panel wiring) ──────────
@@ -343,6 +346,19 @@ void AgentConfigScreen::showEvent(QShowEvent* event) {
 
 void AgentConfigScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
+}
+
+// ── IStatefulScreen ──────────────────────────────────────────────────────────
+
+QVariantMap AgentConfigScreen::save_state() const {
+    return {{"view", static_cast<int>(current_view_)}};
+}
+
+void AgentConfigScreen::restore_state(const QVariantMap& state) {
+    const int v = state.value("view", -1).toInt();
+    if (v < 0)
+        return;
+    set_view(static_cast<services::AgentViewMode>(v));
 }
 
 } // namespace fincept::screens

@@ -12,6 +12,7 @@
 // Estimated setup time: 3-5 minutes (down from 10-20 minutes).
 #pragma once
 
+#include <QMap>
 #include <QObject>
 #include <QString>
 
@@ -21,20 +22,22 @@ namespace fincept::python {
 struct SetupStatus {
     bool uv_installed = false;
     bool python_installed = false;
-    bool venv_numpy1_ready = false;
+    bool venv_numpy1_created = false;   // venv directory and python exe exist
+    bool venv_numpy2_created = false;
+    bool venv_numpy1_ready = false;     // venv created AND current requirements hash matches marker
     bool venv_numpy2_ready = false;
     bool needs_setup = true;
-    bool needs_package_sync = false; // true if requirements files changed since last install
+    bool needs_package_sync = false;    // infra OK but ≥1 venv has a stale requirements hash
     QString python_version;
     QString install_dir;
 };
 
 /// Progress emitted during setup
 struct SetupProgress {
-    QString step; // "uv", "python", "venv", "packages-numpy1", "packages-numpy2", "complete"
-    int progress; // 0-100
+    QString step;       // "uv", "python", "venv", "packages-numpy1", "packages-numpy2", "complete"
+    int     progress = 0; // 0-100 — default-initialized to prevent garbage reads
     QString message;
-    bool is_error = false;
+    bool    is_error = false;
 };
 
 class PythonSetupManager : public QObject {
@@ -66,7 +69,7 @@ class PythonSetupManager : public QObject {
 
   private:
     explicit PythonSetupManager(QObject* parent = nullptr);
-    Q_DISABLE_COPY(PythonSetupManager)
+    Q_DISABLE_COPY_MOVE(PythonSetupManager)
 
     void emit_progress(const QString& step, int pct, const QString& msg, bool err = false);
 
@@ -89,14 +92,24 @@ class PythonSetupManager : public QObject {
     QStringList install_packages_individually(const QString& venv_name, const QStringList& packages,
                                               const QStringList& env_vars, const QString& step_key);
 
-    // Requirements hash tracking — detect when requirements change across app versions
+    // Hash-based marker helpers — marker stores the SHA-256 of the requirements
+    // file used for the last successful install; stale or absent → reinstall.
     QString compute_requirements_hash(const QString& filename) const;
-    QString load_stored_hash(const QString& venv_name) const;
-    void save_hash(const QString& venv_name, const QString& hash) const;
-    bool check_requirements_changed() const;
+    QString read_marker_hash(const QString& venv_name) const;
+    void    write_marker_hash(const QString& venv_name, const QString& req_hash) const;
+
+    // Slow-path package verification via `uv pip list` — checks every package
+    // in requirements_file is actually present in the given venv.
+    bool verify_packages_installed(const QString& venv_name,
+                                   const QString& requirements_file) const;
 
     static constexpr const char* kPythonVersion = "3.12";
     static constexpr const char* kUvVersion = "0.7.12";
+
+    // Session-lifetime caches — requirements files never change at runtime.
+    mutable QString cached_python_path_;                  // cleared after fresh Python install
+    mutable QMap<QString, QString> cached_req_paths_;     // filename → resolved absolute path
+    mutable QMap<QString, QString> cached_req_hashes_;    // filename → SHA-256 hex
 };
 
 } // namespace fincept::python

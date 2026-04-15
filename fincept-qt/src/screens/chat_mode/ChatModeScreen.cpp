@@ -44,6 +44,12 @@ void ChatModeScreen::build_ui() {
 void ChatModeScreen::wire_signals() {
     auto& svc = ChatModeService::instance();
 
+    // Draft + scroll persistence — debounced through ScreenStateManager.
+    connect(message_panel_, &ChatMessagePanel::draft_changed, this,
+            [this]() { fincept::ScreenStateManager::instance().notify_changed(this); });
+    connect(message_panel_, &ChatMessagePanel::scroll_changed, this,
+            [this]() { fincept::ScreenStateManager::instance().notify_changed(this); });
+
     // Session panel -> screen
     connect(session_panel_, &ChatSessionPanel::session_selected, this, &ChatModeScreen::on_session_selected);
     connect(session_panel_, &ChatSessionPanel::new_session_requested, this, &ChatModeScreen::on_new_session);
@@ -258,13 +264,38 @@ void ChatModeScreen::ensure_active_session(std::function<void(const QString&)> t
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap ChatModeScreen::save_state() const {
-    return {{"session_uuid", active_session_uuid_}};
+    QVariantMap s{{"session_uuid", active_session_uuid_}};
+    if (message_panel_) {
+        s.insert("draft", message_panel_->draft_text());
+        s.insert("scroll", message_panel_->scroll_position());
+    }
+    return s;
 }
 
 void ChatModeScreen::restore_state(const QVariantMap& state) {
     const QString uuid = state.value("session_uuid").toString();
     if (!uuid.isEmpty() && uuid != active_session_uuid_)
         on_session_selected(uuid);
+
+    if (!message_panel_)
+        return;
+
+    const QString draft = state.value("draft").toString();
+    if (!draft.isEmpty())
+        message_panel_->set_draft_text(draft);
+
+    // Scroll position is only meaningful after messages have loaded; the
+    // session fetch above is async, so defer with singleShot(0) which runs
+    // after the current event-loop turn and after QVBoxLayout has done its
+    // first layout pass on the newly loaded bubbles.
+    const int scroll = state.value("scroll", -1).toInt();
+    if (scroll >= 0) {
+        QPointer<ChatModeScreen> self = this;
+        QTimer::singleShot(150, this, [self, scroll]() {
+            if (self && self->message_panel_)
+                self->message_panel_->set_scroll_position(scroll);
+        });
+    }
 }
 
 } // namespace fincept::chat_mode

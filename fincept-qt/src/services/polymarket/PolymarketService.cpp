@@ -36,26 +36,26 @@ static QJsonArray parse_json_arr(const QJsonValue& val) {
 
 Market Market::from_json(const QJsonObject& obj) {
     Market m;
-    m.id = obj["id"].toVariant().toInt();
+    m.id = obj["id"].toInt();
     m.question = obj["question"].toString();
     m.slug = obj["slug"].toString();
     m.description = obj["description"].toString();
     m.condition_id = obj["conditionId"].toString();
     m.image = obj["image"].toString();
-    m.volume = obj["volume"].toVariant().toDouble();
-    m.liquidity = obj["liquidity"].toVariant().toDouble();
+    m.volume = obj["volume"].toDouble();
+    m.liquidity = obj["liquidity"].toDouble();
     m.active = obj["active"].toBool();
     m.closed = obj["closed"].toBool();
     m.end_date = obj["endDate"].toString();
     m.category = obj["category"].toString();
-    m.event_id = obj["eventId"].toVariant().toInt();
+    m.event_id = obj["eventId"].toInt();
 
     auto outcomes_arr = parse_json_arr(obj["outcomes"]);
     auto prices_arr = parse_json_arr(obj["outcomePrices"]);
     for (int i = 0; i < outcomes_arr.size(); ++i) {
         Outcome o;
         o.name = outcomes_arr[i].toString();
-        o.price = (i < prices_arr.size()) ? prices_arr[i].toVariant().toDouble() : 0.0;
+        o.price = (i < prices_arr.size()) ? prices_arr[i].toDouble() : 0.0;
         m.outcomes.append(o);
     }
 
@@ -80,13 +80,13 @@ Market Market::from_json(const QJsonObject& obj) {
 
 Event Event::from_json(const QJsonObject& obj) {
     Event e;
-    e.id = obj["id"].toVariant().toInt();
+    e.id = obj["id"].toInt();
     e.title = obj["title"].toString();
     e.slug = obj["slug"].toString();
     e.description = obj["description"].toString();
     e.image = obj["image"].toString();
-    e.volume = obj["volume"].toVariant().toDouble();
-    e.liquidity = obj["liquidity"].toVariant().toDouble();
+    e.volume = obj["volume"].toDouble();
+    e.liquidity = obj["liquidity"].toDouble();
     e.active = obj["active"].toBool();
     e.closed = obj["closed"].toBool();
     e.end_date = obj["endDate"].toString();
@@ -111,17 +111,17 @@ OrderBook OrderBook::from_json(const QJsonObject& obj) {
     OrderBook book;
     book.market = obj["market"].toString();
     book.asset_id = obj["asset_id"].toString();
-    book.tick_size = obj["tick_size"].toVariant().toDouble();
-    book.min_order_size = obj["min_order_size"].toVariant().toDouble();
+    book.tick_size = obj["tick_size"].toDouble();
+    book.min_order_size = obj["min_order_size"].toDouble();
     book.neg_risk = obj["neg_risk"].toBool();
 
     for (const auto& b : obj["bids"].toArray()) {
         auto bo = b.toObject();
-        book.bids.append({bo["price"].toVariant().toDouble(), bo["size"].toVariant().toDouble()});
+        book.bids.append({bo["price"].toDouble(), bo["size"].toDouble()});
     }
     for (const auto& a : obj["asks"].toArray()) {
         auto ao = a.toObject();
-        book.asks.append({ao["price"].toVariant().toDouble(), ao["size"].toVariant().toDouble()});
+        book.asks.append({ao["price"].toDouble(), ao["size"].toDouble()});
     }
     return book;
 }
@@ -134,7 +134,7 @@ PriceHistory PriceHistory::from_json(const QJsonObject& obj) {
         auto po = pt.toObject();
         PricePoint pp;
         pp.timestamp = static_cast<int64_t>(po["t"].toVariant().toLongLong());
-        pp.price = po["p"].toVariant().toDouble();
+        pp.price = po["p"].toDouble();
         ph.points.append(pp);
     }
     return ph;
@@ -143,8 +143,8 @@ PriceHistory PriceHistory::from_json(const QJsonObject& obj) {
 Trade Trade::from_json(const QJsonObject& obj) {
     Trade t;
     t.side = obj["side"].toString();
-    t.price = obj["price"].toVariant().toDouble();
-    t.size = obj["size"].toVariant().toDouble();
+    t.price = obj["price"].toDouble();
+    t.size = obj["size"].toDouble();
     t.timestamp = static_cast<int64_t>(obj["timestamp"].toVariant().toLongLong());
     t.condition_id = obj["conditionId"].toString();
     return t;
@@ -160,9 +160,9 @@ TopHolder TopHolder::from_json(const QJsonObject& obj) {
     h.display_name = obj["name"].toString();
     if (h.display_name.isEmpty() && !h.address.isEmpty())
         h.display_name = h.address.left(6) + "..." + h.address.right(4);
-    h.position_size = obj["size"].toVariant().toDouble();
-    h.entry_price = obj["avgPrice"].toVariant().toDouble();
-    h.rank = obj["rank"].toVariant().toInt();
+    h.position_size = obj["size"].toDouble();
+    h.entry_price = obj["avgPrice"].toDouble();
+    h.rank = obj["rank"].toInt();
     return h;
 }
 
@@ -177,12 +177,12 @@ LeaderboardEntry LeaderboardEntry::from_json(const QJsonObject& obj) {
     if (e.display_name.isEmpty() && !e.address.isEmpty())
         e.display_name = e.address.left(6) + "..." + e.address.right(4);
     e.profile_image = obj["profileImage"].toString();
-    e.pnl = obj["pnl"].toVariant().toDouble();
+    e.pnl = obj["pnl"].toDouble();
     if (e.pnl == 0)
-        e.pnl = obj["cashPnl"].toVariant().toDouble();
-    e.volume = obj["volume"].toVariant().toDouble();
-    e.num_trades = obj["numTrades"].toVariant().toInt();
-    e.rank = obj["rank"].toVariant().toInt();
+        e.pnl = obj["cashPnl"].toDouble();
+    e.volume = obj["volume"].toDouble();
+    e.num_trades = obj["numTrades"].toInt();
+    e.rank = obj["rank"].toInt();
     return e;
 }
 
@@ -192,9 +192,9 @@ Activity Activity::from_json(const QJsonObject& obj) {
     a.address = obj["proxyWallet"].toString();
     if (a.address.isEmpty())
         a.address = obj["address"].toString();
-    a.amount = obj["size"].toVariant().toDouble();
-    a.usdc_size = obj["usdcSize"].toVariant().toDouble();
-    a.price = obj["price"].toVariant().toDouble();
+    a.amount = obj["size"].toDouble();
+    a.usdc_size = obj["usdcSize"].toDouble();
+    a.price = obj["price"].toDouble();
     a.timestamp = static_cast<int64_t>(obj["timestamp"].toVariant().toLongLong());
     a.condition_id = obj["conditionId"].toString();
     a.title = obj["title"].toString();
@@ -204,7 +204,7 @@ Activity Activity::from_json(const QJsonObject& obj) {
 
 Comment Comment::from_json(const QJsonObject& obj) {
     Comment c;
-    c.id = obj["id"].toVariant().toInt();
+    c.id = obj["id"].toInt();
     c.body = obj["body"].toString();
     if (c.body.isEmpty())
         c.body = obj["content"].toString();
@@ -213,14 +213,14 @@ Comment Comment::from_json(const QJsonObject& obj) {
         c.author = obj["author"].toString();
     c.author_address = obj["address"].toString();
     c.created_at = static_cast<int64_t>(obj["createdAt"].toVariant().toLongLong());
-    c.parent_id = obj["parentId"].toVariant().toInt();
-    c.likes = obj["likes"].toVariant().toInt();
+    c.parent_id = obj["parentId"].toInt();
+    c.likes = obj["likes"].toInt();
     return c;
 }
 
 Series Series::from_json(const QJsonObject& obj) {
     Series s;
-    s.id = obj["id"].toVariant().toInt();
+    s.id = obj["id"].toInt();
     s.title = obj["title"].toString();
     s.slug = obj["slug"].toString();
     for (const auto& e : obj["events"].toArray()) {
@@ -243,9 +243,9 @@ OpenInterest OpenInterest::from_json(const QJsonObject& obj) {
     oi.condition_id = obj["conditionId"].toString();
     if (oi.condition_id.isEmpty())
         oi.condition_id = obj["market"].toString();
-    oi.open_interest = obj["openInterest"].toVariant().toDouble();
+    oi.open_interest = obj["openInterest"].toDouble();
     if (oi.open_interest == 0)
-        oi.open_interest = obj["value"].toVariant().toDouble();
+        oi.open_interest = obj["value"].toDouble();
     return oi;
 }
 
@@ -254,22 +254,22 @@ LiveVolume LiveVolume::from_json(const QJsonObject& obj) {
     lv.event_id = obj["eventId"].toString();
     if (lv.event_id.isEmpty())
         lv.event_id = obj["event_id"].toString();
-    lv.volume_24h = obj["volume"].toVariant().toDouble();
+    lv.volume_24h = obj["volume"].toDouble();
     return lv;
 }
 
 WsMarketUpdate WsMarketUpdate::from_json(const QJsonObject& obj) {
     WsMarketUpdate u;
     u.asset_id = obj["asset_id"].toString();
-    u.price = obj["price"].toVariant().toDouble();
+    u.price = obj["price"].toDouble();
     u.timestamp = static_cast<int64_t>(obj["timestamp"].toVariant().toLongLong());
     for (const auto& b : obj["bids"].toArray()) {
         auto bo = b.toObject();
-        u.bids.append({bo["price"].toVariant().toDouble(), bo["size"].toVariant().toDouble()});
+        u.bids.append({bo["price"].toDouble(), bo["size"].toDouble()});
     }
     for (const auto& a : obj["asks"].toArray()) {
         auto ao = a.toObject();
-        u.asks.append({ao["price"].toVariant().toDouble(), ao["size"].toVariant().toDouble()});
+        u.asks.append({ao["price"].toDouble(), ao["size"].toDouble()});
     }
     return u;
 }
@@ -636,7 +636,7 @@ void PolymarketService::fetch_price_summary(const QString& token_id) {
     get_clob(
         "/midpoint?token_id=" + token_id,
         [acc, maybe_emit](const QJsonDocument& doc) {
-            acc->summary.midpoint = doc.object()["mid"].toVariant().toDouble();
+            acc->summary.midpoint = doc.object()["mid"].toDouble();
             maybe_emit();
         },
         "Midpoint");
@@ -644,7 +644,7 @@ void PolymarketService::fetch_price_summary(const QString& token_id) {
     get_clob(
         "/spread?token_id=" + token_id,
         [acc, maybe_emit](const QJsonDocument& doc) {
-            acc->summary.spread = doc.object()["spread"].toVariant().toDouble();
+            acc->summary.spread = doc.object()["spread"].toDouble();
             maybe_emit();
         },
         "Spread");
@@ -652,7 +652,7 @@ void PolymarketService::fetch_price_summary(const QString& token_id) {
     get_clob(
         "/last-trade-price?token_id=" + token_id,
         [acc, maybe_emit](const QJsonDocument& doc) {
-            acc->summary.last_trade_price = doc.object()["price"].toVariant().toDouble();
+            acc->summary.last_trade_price = doc.object()["price"].toDouble();
             maybe_emit();
         },
         "LastTradePrice");
@@ -793,3 +793,4 @@ void PolymarketService::fetch_open_interest(const QStringList& condition_ids) {
 }
 
 } // namespace fincept::services::polymarket
+

@@ -1,6 +1,7 @@
 // Trade Visualization — Bloomberg ECTR Trade Flow style
 #include "screens/trade_viz/TradeVizScreen.h"
 
+#include "core/session/ScreenStateManager.h"
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
@@ -417,6 +418,14 @@ QWidget* TradeVizScreen::build_filter_bar() {
                                     .arg(ui::colors::TEXT_TERTIARY()));
     hl->addWidget(clock_label_);
 
+    // Persist filter selections so the user returns to the same country/period
+    // after restarting the app.
+    auto on_filter = [this]() { fincept::ScreenStateManager::instance().notify_changed(this); };
+    connect(country_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, on_filter);
+    connect(order_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, on_filter);
+    connect(period_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, on_filter);
+    connect(year_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, on_filter);
+
     return bar;
 }
 
@@ -544,6 +553,35 @@ void TradeVizScreen::setup_ui() {
     splitter->setStretchFactor(1, 2);
 
     root->addWidget(splitter, 1);
+}
+
+// ── IStatefulScreen ──────────────────────────────────────────────────────────
+
+QVariantMap TradeVizScreen::save_state() const {
+    QVariantMap s;
+    if (country_combo_)
+        s.insert("country", country_combo_->currentIndex());
+    if (order_combo_)
+        s.insert("order", order_combo_->currentIndex());
+    if (period_combo_)
+        s.insert("period", period_combo_->currentIndex());
+    if (year_combo_)
+        s.insert("year", year_combo_->currentIndex());
+    return s;
+}
+
+void TradeVizScreen::restore_state(const QVariantMap& state) {
+    auto apply = [&](QComboBox* box, const char* key) {
+        if (!box)
+            return;
+        const int v = state.value(key, -1).toInt();
+        if (v >= 0 && v < box->count())
+            box->setCurrentIndex(v);
+    };
+    apply(country_combo_, "country");
+    apply(order_combo_, "order");
+    apply(period_combo_, "period");
+    apply(year_combo_, "year");
 }
 
 } // namespace fincept::screens

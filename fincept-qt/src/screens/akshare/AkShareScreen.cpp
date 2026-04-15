@@ -1,6 +1,7 @@
 #include "screens/akshare/AkShareScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 #include "ui/theme/Theme.h"
@@ -9,6 +10,7 @@
 #include <QHBoxLayout>
 #include <QJsonDocument>
 #include <QPointer>
+#include <QTimer>
 #include <QScrollArea>
 #include <QVBoxLayout>
 
@@ -496,6 +498,8 @@ void AkShareScreen::on_source_clicked(int index) {
     } else {
         load_endpoints(sources_[index]);
     }
+
+    fincept::ScreenStateManager::instance().notify_changed(this);
 }
 
 void AkShareScreen::on_endpoint_clicked(QListWidgetItem* item) {
@@ -504,6 +508,8 @@ void AkShareScreen::on_endpoint_clicked(QListWidgetItem* item) {
     active_endpoint_ = item->data(Qt::UserRole).toString();
     status_endpoint_->setText(active_endpoint_);
     refresh_btn_->setEnabled(true);
+
+    fincept::ScreenStateManager::instance().notify_changed(this);
 
     // Auto-execute
     on_execute();
@@ -516,6 +522,7 @@ void AkShareScreen::on_search_changed(const QString& text) {
                      item->data(Qt::UserRole).toString().contains(text, Qt::CaseInsensitive);
         item->setHidden(!match);
     }
+    fincept::ScreenStateManager::instance().notify_changed(this);
 }
 
 void AkShareScreen::on_execute() {
@@ -541,6 +548,7 @@ void AkShareScreen::on_view_toggle() {
     is_table_view_ = !is_table_view_;
     view_stack_->setCurrentIndex(is_table_view_ ? 0 : 1);
     view_toggle_btn_->setText(is_table_view_ ? "JSON" : "TABLE");
+    fincept::ScreenStateManager::instance().notify_changed(this);
 }
 
 void AkShareScreen::on_refresh() {
@@ -854,6 +862,51 @@ void AkShareScreen::set_loading(bool loading) {
     refresh_btn_->setEnabled(!loading && !active_endpoint_.isEmpty());
     if (loading) {
         data_status_->setText("Loading...");
+    }
+}
+
+// ── IStatefulScreen ──────────────────────────────────────────────────────────
+
+QVariantMap AkShareScreen::save_state() const {
+    return {
+        {"source", active_source_},
+        {"endpoint", active_endpoint_},
+        {"search", search_input_ ? search_input_->text() : QString()},
+        {"table_view", is_table_view_},
+    };
+}
+
+void AkShareScreen::restore_state(const QVariantMap& state) {
+    const int src = state.value("source", -1).toInt();
+    if (src >= 0 && src < sources_.size())
+        on_source_clicked(src);
+
+    const QString search = state.value("search").toString();
+    if (search_input_ && !search.isEmpty())
+        search_input_->setText(search);
+
+    const bool table_view = state.value("table_view", true).toBool();
+    if (table_view != is_table_view_)
+        on_view_toggle();
+
+    // Endpoint selection requires the endpoint list to be populated first,
+    // which happens async after load_endpoints(). Defer restore.
+    const QString ep = state.value("endpoint").toString();
+    if (!ep.isEmpty() && endpoint_list_) {
+        QPointer<AkShareScreen> self = this;
+        QTimer::singleShot(500, this, [self, ep]() {
+            if (!self || !self->endpoint_list_)
+                return;
+            for (int i = 0; i < self->endpoint_list_->count(); ++i) {
+                auto* item = self->endpoint_list_->item(i);
+                if (item && item->data(Qt::UserRole).toString() == ep) {
+                    self->endpoint_list_->setCurrentItem(item);
+                    self->active_endpoint_ = ep;
+                    self->status_endpoint_->setText(ep);
+                    break;
+                }
+            }
+        });
     }
 }
 

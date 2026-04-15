@@ -13,9 +13,10 @@
 #include <QUrl>
 #include <QUrlQuery>
 
-static constexpr int kCategoriesTtlSec = 5 * 60;
-static constexpr int kStatsTtlSec = 2 * 60;
-static constexpr int kTrendingTtlSec = 2 * 60;
+static constexpr int kCategoriesTtlSec  = 5 * 60;
+static constexpr int kStatsTtlSec       = 2 * 60;
+static constexpr int kTrendingTtlSec    = 2 * 60;
+static constexpr int kTransferTimeoutMs = 10000; // 10s per API request
 
 namespace fincept::services {
 
@@ -38,7 +39,7 @@ void ForumService::get(const QString& path, std::function<void(bool, QJsonObject
     QNetworkRequest req(QUrl(QString(BASE) + path));
     req.setRawHeader("X-API-KEY", api_key().toUtf8());
     req.setRawHeader("Accept", "application/json");
-    req.setTransferTimeout(10000);
+    req.setTransferTimeout(kTransferTimeoutMs);
 
     auto* reply = nam_->get(req);
     connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
@@ -63,7 +64,7 @@ void ForumService::post_req(const QString& path, const QJsonObject& body, std::f
     QNetworkRequest req(QUrl(QString(BASE) + path));
     req.setRawHeader("X-API-KEY", api_key().toUtf8());
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    req.setTransferTimeout(10000);
+    req.setTransferTimeout(kTransferTimeoutMs);
 
     auto* reply = nam_->post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
     connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
@@ -83,7 +84,7 @@ void ForumService::put_req(const QString& path, const QJsonObject& body, std::fu
     QNetworkRequest req(QUrl(QString(BASE) + path));
     req.setRawHeader("X-API-KEY", api_key().toUtf8());
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    req.setTransferTimeout(10000);
+    req.setTransferTimeout(kTransferTimeoutMs);
 
     auto* reply = nam_->put(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
     connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
@@ -400,3 +401,4 @@ void ForumService::update_profile(const QString& display_name, const QString& bi
 }
 
 } // namespace fincept::services
+

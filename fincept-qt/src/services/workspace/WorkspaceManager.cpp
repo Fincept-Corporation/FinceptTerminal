@@ -345,9 +345,18 @@ void WorkspaceManager::apply_to_ui() {
         }
     }
 
-    // Restore window geometry — apply to primary window
-    if (!windows_.isEmpty() && !ws.window_geometry_base64.isEmpty())
-        windows_.first()->restoreGeometry(QByteArray::fromBase64(ws.window_geometry_base64.toLatin1()));
+    // Restore window geometry — apply to primary window, but never clobber
+    // the user's current maximized/fullscreen state. Workspace load is
+    // triggered after PIN unlock and on every auth refresh; if the user
+    // maximized the window before entering their PIN, blindly restoring a
+    // stale saved geometry would unexpectedly shrink the window back down.
+    if (!windows_.isEmpty() && !ws.window_geometry_base64.isEmpty()) {
+        auto* win = windows_.first();
+        const Qt::WindowStates st = win->windowState();
+        const bool preserve_size = st.testFlag(Qt::WindowMaximized) || st.testFlag(Qt::WindowFullScreen);
+        if (!preserve_size)
+            win->restoreGeometry(QByteArray::fromBase64(ws.window_geometry_base64.toLatin1()));
+    }
 
     // Navigate to active screen — apply to primary router
     if (!routers_.isEmpty() && !ws.active_screen.isEmpty())

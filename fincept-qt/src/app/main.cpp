@@ -26,6 +26,7 @@
 #include <QDir>
 #include <QFile>
 #include <QLockFile>
+#include <QPointer>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QStandardPaths>
@@ -309,22 +310,32 @@ int main(int argc, char* argv[]) {
     fincept::mcp::initialize_all_tools();
 
     // ── Python environment check ─────────────────────────────────────────────
-    // On first run, Python + venvs may not be installed. Show a setup screen
-    // that downloads and configures everything before launching the main app.
+    // check_status() fast path (sentinel + markers present) is synchronous and
+    // cheap. The slow path (first run) can spawn processes — but at this point
+    // no window is visible yet so the brief block is acceptable. The SetupScreen
+    // itself offloads prefill_completed_steps() to a background thread (P1).
     auto setup_status = fincept::python::PythonSetupManager::instance().check_status();
 
     if (setup_status.needs_setup) {
         LOG_INFO("App", "Python environment not ready — showing setup screen");
 
+        // Use QPointer so the setup_complete lambda is safe against double-fire
+        // (e.g. user somehow triggers it twice before the window is hidden).
         auto* setup_screen = new fincept::screens::SetupScreen;
+        QPointer<fincept::screens::SetupScreen> screen_guard(setup_screen);
         setup_screen->setWindowTitle("Fincept Terminal — First-Time Setup");
         setup_screen->resize(800, 600);
         setup_screen->show();
 
-        // When setup completes, hide setup screen and launch main window
-        QObject::connect(setup_screen, &fincept::screens::SetupScreen::setup_complete, [&app, setup_screen]() {
-            setup_screen->hide();
-            setup_screen->deleteLater();
+        // When setup completes, hide setup screen and launch main window.
+        // The connection uses Qt::SingleShotConnection (Qt 6.0+) so the lambda
+        // fires exactly once even if setup_complete is somehow emitted twice.
+        QObject::connect(setup_screen, &fincept::screens::SetupScreen::setup_complete,
+                         [&app, screen_guard]() {
+            if (!screen_guard)
+                return; // already cleaned up — ignore
+            screen_guard->hide();
+            screen_guard->deleteLater();
 
             fincept::KeyConfigManager::instance(); // init before MainWindow registers shortcuts
             auto* window = new fincept::MainWindow(0); // primary window
@@ -376,10 +387,19 @@ int main(int argc, char* argv[]) {
     QObject::connect(&app, &QApplication::lastWindowClosed, &app, &QApplication::quit);
 
     // If requirements files changed (app update), sync packages in background
-    // without blocking the user.
+    // without blocking the user. Connect setup_complete so failures are logged
+    // (no SetupScreen in this path, so we only log — don't show UI).
     if (setup_status.needs_package_sync) {
         LOG_INFO("App", "Requirements changed — syncing packages in background");
-        fincept::python::PythonSetupManager::instance().run_setup();
+        auto& mgr = fincept::python::PythonSetupManager::instance();
+        QObject::connect(&mgr, &fincept::python::PythonSetupManager::setup_complete,
+                         &mgr, [](bool success, const QString& error) {
+            if (success)
+                LOG_INFO("App", "Background package sync completed successfully");
+            else
+                LOG_WARN("App", "Background package sync failed (non-fatal): " + error);
+        }, Qt::SingleShotConnection);
+        mgr.run_setup();
     }
 
     if (!fincept::ai_chat::LlmService::instance().is_configured())

@@ -62,8 +62,19 @@ class MainWindow : public QMainWindow {
     bool focus_mode_ = false;
     bool chat_mode_ = false;
     bool always_on_top_ = false;
+    bool locked_ = false; ///< True while lock/PIN screen is active — blocks navigation.
+    bool pin_gate_cleared_ = false; ///< Set once the user has passed the PIN gate this session.
+                                    ///< Prevents subsequent auth_state_changed events (profile
+                                    ///< refresh, subscription fetch, focus refresh) from
+                                    ///< re-locking the terminal. Reset on lock / logout.
     AiChatBubble* chat_bubble_ = nullptr;
     QTimer* user_refresh_timer_ = nullptr;
+
+    // Debounced persistence of dock layout on add/replace/remove via command bar.
+    // Without this, layout changes only survive clean shutdown (closeEvent),
+    // so a crash or kill loses the user's dock setup.
+    QTimer* dock_layout_save_timer_ = nullptr;
+    void schedule_dock_layout_save();
 
     // Chat mode
     chat_mode::ChatModeScreen* chat_mode_screen_ = nullptr;

@@ -68,7 +68,8 @@ void SectorHeatmapWidget::populate(const QVector<services::QuoteData>& quotes) {
     // Clear grid
     QLayoutItem* item;
     while ((item = grid_->takeAt(0)) != nullptr) {
-        delete item->widget();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 

@@ -11,6 +11,7 @@
 #include <QPalette>
 #include <QScrollBar>
 #include <QSizePolicy>
+#include <QTextCursor>
 
 #include <algorithm>
 
@@ -151,6 +152,12 @@ QWidget* ChatMessagePanel::build_messages_area() {
     messages_layout_->addStretch(1);
 
     scroll_area_->setWidget(messages_container_);
+
+    // Scroll persistence signal — emitted when the user scrolls within the
+    // message history; ChatModeScreen listens and debounces a save.
+    if (auto* vbar = scroll_area_->verticalScrollBar())
+        connect(vbar, &QScrollBar::valueChanged, this, [this](int) { emit scroll_changed(); });
+
     return scroll_area_;
 }
 
@@ -271,6 +278,7 @@ QWidget* ChatMessagePanel::build_input_area() {
         char_lbl_->setText(QString("%1 / 4000").arg(text.length()));
         if (text.isEmpty()) {
             input_box_->setFixedHeight(36);
+            emit draft_changed();
             return;
         }
         auto* doc = input_box_->document();
@@ -279,6 +287,7 @@ QWidget* ChatMessagePanel::build_input_area() {
         const int h = (need < 36) ? 36 : (need > 160) ? 160 : need;
         if (input_box_->height() != h)
             input_box_->setFixedHeight(h);
+        emit draft_changed();
     });
 
     optimize_btn_ = new QPushButton("Optimize");
@@ -719,6 +728,37 @@ void ChatMessagePanel::on_typing_tick() {
     static const char* dots[] = {".", ". .", ". . ."};
     typing_dots_lbl_->setText(QLatin1String(dots[typing_step_ % 3]));
     ++typing_step_;
+}
+
+// ── Draft + scroll accessors (consumed by ChatModeScreen persistence) ───────
+
+QString ChatMessagePanel::draft_text() const {
+    return input_box_ ? input_box_->toPlainText() : QString();
+}
+
+void ChatMessagePanel::set_draft_text(const QString& text) {
+    if (!input_box_ || input_box_->toPlainText() == text)
+        return;
+    input_box_->setPlainText(text);
+    // Move cursor to end so the user can continue typing where they left off.
+    auto c = input_box_->textCursor();
+    c.movePosition(QTextCursor::End);
+    input_box_->setTextCursor(c);
+}
+
+int ChatMessagePanel::scroll_position() const {
+    if (!scroll_area_)
+        return 0;
+    auto* bar = scroll_area_->verticalScrollBar();
+    return bar ? bar->value() : 0;
+}
+
+void ChatMessagePanel::set_scroll_position(int pos) {
+    if (!scroll_area_)
+        return;
+    auto* bar = scroll_area_->verticalScrollBar();
+    if (bar)
+        bar->setValue(pos);
 }
 
 } // namespace fincept::chat_mode

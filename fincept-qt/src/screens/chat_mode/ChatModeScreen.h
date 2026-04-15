@@ -23,7 +23,8 @@ class ChatModeScreen : public QWidget, public fincept::screens::IStatefulScreen 
     void restore_state(const QVariantMap& state) override;
     QVariantMap save_state() const override;
     QString state_key() const override { return "chat_mode"; }
-    int state_version() const override { return 1; }
+    // v2 adds: draft composer text, scroll position.
+    int state_version() const override { return 2; }
 
   signals:
     void exit_requested();

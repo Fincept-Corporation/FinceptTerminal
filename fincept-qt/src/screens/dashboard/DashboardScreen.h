@@ -34,6 +34,7 @@ class DashboardScreen : public QWidget {
     void build_default_layout();
     void save_layout();
     void restore_layout();
+    void refresh_ticker();
 
     DashboardToolBar* toolbar_ = nullptr;
     TickerBar* ticker_bar_ = nullptr;
@@ -44,6 +45,7 @@ class DashboardScreen : public QWidget {
     DashboardStatusBar* status_bar_ = nullptr;
     fincept::ui::NotifToast* notif_toast_ = nullptr;
     QTimer* save_timer_ = nullptr;
+    QTimer* ticker_refresh_timer_ = nullptr;
     bool pulse_visible_ = true;
     bool layout_restored_ = false;
     bool split_sized_ = false;

@@ -14,6 +14,7 @@
 #include "screens/settings/KeybindingsSection.h"
 #include "screens/settings/LlmConfigSection.h"
 #include "screens/settings/McpServersSection.h"
+#include "screens/settings/PythonEnvSection.h"
 #include "services/notifications/NotificationService.h"
 #include "storage/StorageManager.h"
 #include "storage/cache/CacheManager.h"
@@ -160,6 +161,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     sections_->addWidget(build_security());      // 8
     sections_->addWidget(build_profiles());      // 9
     sections_->addWidget(build_keybindings());   // 10
+    sections_->addWidget(build_python_env());    // 11
 
     QList<QPushButton*> nav_btns;
     auto make_btn = [&](const QString& text, int idx) {
@@ -194,6 +196,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     make_btn("Security", 8);
     make_btn("Profiles", 9);
     make_btn("Keybindings", 10);
+    make_btn("Python Env", 11);
 
     first->setChecked(true);
 
@@ -2860,6 +2863,12 @@ void SettingsScreen::restore_state(const QVariantMap& state) {
 
 QWidget* SettingsScreen::build_keybindings() {
     return new KeybindingsSection(this);
+}
+
+// ── Python Env ────────────────────────────────────────────────────────────────
+
+QWidget* SettingsScreen::build_python_env() {
+    return new PythonEnvSection(this);
 }
 
 } // namespace fincept::screens

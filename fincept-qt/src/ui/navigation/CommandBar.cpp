@@ -2,6 +2,7 @@
 
 #include "core/events/EventBus.h"
 #include "core/keys/KeyConfigManager.h"
+#include "core/session/ScreenStateManager.h"
 #include "network/http/HttpClient.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -514,6 +515,7 @@ CommandBar::CommandBar(QWidget* parent) : QWidget(parent) {
     });
 
     connect(input_, &QLineEdit::textChanged, this, &CommandBar::on_text_changed);
+    connect(input_, &QLineEdit::textChanged, this, [this](const QString&) { schedule_draft_save(); });
     connect(input_, &QLineEdit::returnPressed, this, &CommandBar::on_return_pressed);
     connect(list_, &QListWidget::itemClicked, this, &CommandBar::on_item_clicked);
     connect(list_, &QListWidget::itemEntered, this, &CommandBar::on_item_entered);
@@ -528,6 +530,59 @@ CommandBar::CommandBar(QWidget* parent) : QWidget(parent) {
             [this](const ThemeTokens&) { refresh_theme(); });
 
     setup_key_actions();
+
+    // ── Draft persistence ────────────────────────────────────────────────────
+    // Debounce so every keystroke doesn't hit SQLite — 400 ms quiet period.
+    draft_save_timer_ = new QTimer(this);
+    draft_save_timer_->setSingleShot(true);
+    draft_save_timer_->setInterval(400);
+    connect(draft_save_timer_, &QTimer::timeout, this, &CommandBar::save_draft_now);
+
+    // Restore last draft after the full UI tree is wired up so text-changed
+    // logic (mode transitions, dropdown) re-establishes the right state.
+    QTimer::singleShot(0, this, &CommandBar::restore_draft);
+}
+
+// ── Draft persistence (cache.db screen_state[key="command_bar"]) ────────────
+
+void CommandBar::restore_draft() {
+    const QVariantMap s = ScreenStateManager::instance().load_direct("command_bar", kDraftStateVersion);
+    if (s.isEmpty())
+        return;
+
+    // Restore parser bookkeeping BEFORE setting text — on_text_changed() will
+    // see the right mode_ and dock_*/active_asset_type_ values.
+    active_asset_type_ = s.value("active_asset_type").toString();
+    dock_primary_id_ = s.value("dock_primary_id").toString();
+    dock_verb_ = s.value("dock_verb").toString();
+    mode_ = static_cast<Mode>(s.value("mode", static_cast<int>(Mode::Screen)).toInt());
+
+    const QString text = s.value("text").toString();
+    if (text.isEmpty())
+        return;
+
+    // QLineEdit::setText() fires textChanged() which re-runs the parser.
+    // That will rebuild the correct dropdown for the restored mode.
+    input_->setText(text);
+    input_->setCursorPosition(text.length());
+}
+
+void CommandBar::save_draft_now() {
+    if (!input_)
+        return;
+    const QVariantMap s{
+        {"text", input_->text()},
+        {"mode", static_cast<int>(mode_)},
+        {"active_asset_type", active_asset_type_},
+        {"dock_primary_id", dock_primary_id_},
+        {"dock_verb", dock_verb_},
+    };
+    ScreenStateManager::instance().save_direct("command_bar", s, kDraftStateVersion);
+}
+
+void CommandBar::schedule_draft_save() {
+    if (draft_save_timer_)
+        draft_save_timer_->start();
 }
 
 void CommandBar::setup_key_actions() {

@@ -23,6 +23,10 @@
 
 namespace fincept::services {
 
+static constexpr int kFeedTransferTimeoutMs = 5000;   // 5s per RSS feed request
+static constexpr int kWsReconnectDelayMs    = 10000;  // 10s before WebSocket reconnect
+static constexpr int kSummaryMaxChars       = 300;    // max chars for article summary
+
 // ── Singleton ───────────────────────────────────────────────────────────────
 
 NewsService& NewsService::instance() {
@@ -94,7 +98,7 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
         QNetworkRequest req(QUrl(feed.url));
         req.setHeader(QNetworkRequest::UserAgentHeader, "FinceptTerminal/4.0");
         req.setRawHeader("Accept", "application/rss+xml, application/xml, text/xml, */*");
-        req.setTransferTimeout(5000); // 5s timeout per feed — fail fast
+        req.setTransferTimeout(kFeedTransferTimeoutMs);
 
         auto* reply = nam_->get(req);
         connect(reply, &QNetworkReply::finished, this, [reply, feed, state]() {
@@ -222,7 +226,7 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
         QNetworkRequest req(QUrl(feed.url));
         req.setHeader(QNetworkRequest::UserAgentHeader, "FinceptTerminal/4.0");
         req.setRawHeader("Accept", "application/rss+xml, application/xml, text/xml, */*");
-        req.setTransferTimeout(5000);
+        req.setTransferTimeout(kFeedTransferTimeoutMs);
 
         auto* reply = nam_->get(req);
         connect(reply, &QNetworkReply::finished, this, [reply, feed, state, total, this]() {
@@ -417,8 +421,8 @@ void NewsService::connect_live_feed(const QString& ws_url) {
     connect(live_ws_, &QWebSocket::disconnected, this, [this]() {
         live_connected_ = false;
         LOG_WARN("NewsService", "WebSocket live feed disconnected");
-        // Auto-reconnect after 10s
-        QTimer::singleShot(10000, this, [this]() {
+        // Auto-reconnect after delay
+        QTimer::singleShot(kWsReconnectDelayMs, this, [this]() {
             if (live_ws_ && !live_connected_)
                 live_ws_->open(live_ws_->requestUrl());
         });
@@ -578,7 +582,7 @@ QVector<NewsArticle> NewsService::parse_rss_xml(const QByteArray& xml, const RSS
                 current.headline = text.left(200);
             } else if ((current_tag == "description" || current_tag == "summary" || current_tag == "encoded") &&
                        current.summary.isEmpty()) {
-                current.summary = strip_html(text).left(300);
+                current.summary = strip_html(text).left(kSummaryMaxChars);
             } else if (current_tag == "link" && current.link.isEmpty()) {
                 current.link = text.trimmed();
             } else if ((current_tag == "guid" || current_tag == "id") && current.link.isEmpty()) {

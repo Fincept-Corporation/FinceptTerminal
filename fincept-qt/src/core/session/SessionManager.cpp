@@ -34,12 +34,11 @@ void SessionManager::save_tab_state(const QString& tab_id, const QVariantMap& st
 
 QVariantMap SessionManager::load_tab_state(const QString& tab_id) const {
     QVariantMap result;
-    QSettings& s = const_cast<QSettings&>(settings_);
-    s.beginGroup("tab_state/" + tab_id);
-    for (const auto& key : s.childKeys()) {
-        result[key] = s.value(key);
+    settings_.beginGroup("tab_state/" + tab_id);
+    for (const auto& key : settings_.childKeys()) {
+        result[key] = settings_.value(key);
     }
-    s.endGroup();
+    settings_.endGroup();
     return result;
 }
 
@@ -97,29 +96,27 @@ int SessionManager::dock_layout_version(int window_id) const {
     return settings_.value(prefix + "dock_layout_version", 0).toInt();
 }
 
-void SessionManager::save_perspectives(const QSettings& source) {
+void SessionManager::save_perspectives(QSettings& source) {
     // Copy all keys from the source QSettings (written by ADS savePerspectives)
     // into our own settings_ under a "perspectives/" prefix.
-    QSettings& src = const_cast<QSettings&>(source);
-    src.beginGroup("Perspectives");
-    const QStringList keys = src.allKeys();
+    source.beginGroup("Perspectives");
+    const QStringList keys = source.allKeys();
     settings_.beginGroup("perspectives");
     settings_.remove(""); // clear previous
     for (const QString& k : keys)
-        settings_.setValue(k, src.value(k));
+        settings_.setValue(k, source.value(k));
     settings_.endGroup();
-    src.endGroup();
+    source.endGroup();
 }
 
 void SessionManager::load_perspectives(QSettings& target) const {
-    QSettings& s = const_cast<QSettings&>(settings_);
-    s.beginGroup("perspectives");
-    const QStringList keys = s.allKeys();
+    settings_.beginGroup("perspectives");
+    const QStringList keys = settings_.allKeys();
     target.beginGroup("Perspectives");
     for (const QString& k : keys)
-        target.setValue(k, s.value(k));
+        target.setValue(k, settings_.value(k));
     target.endGroup();
-    s.endGroup();
+    settings_.endGroup();
 }
 
 void SessionManager::set_last_screen(const QString& screen_id) {

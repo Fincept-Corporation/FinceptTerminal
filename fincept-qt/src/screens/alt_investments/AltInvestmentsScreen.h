@@ -1,4 +1,5 @@
 #pragma once
+#include "screens/IStatefulScreen.h"
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -42,10 +43,15 @@ struct AltField {
     bool divide_100 = false; // divide UI value by 100 before sending (for % fields)
 };
 
-class AltInvestmentsScreen : public QWidget {
+class AltInvestmentsScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit AltInvestmentsScreen(QWidget* parent = nullptr);
+
+    // IStatefulScreen — remembers which category + analyzer the user had open.
+    QVariantMap save_state() const override;
+    void restore_state(const QVariantMap& state) override;
+    QString state_key() const override { return "alt_investments"; }
 
   protected:
     void showEvent(QShowEvent* e) override;

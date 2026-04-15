@@ -24,6 +24,16 @@ class ChatMessagePanel : public QWidget {
     void set_stream_mode(StreamMode mode);
     StreamMode current_mode() const { return current_mode_; }
 
+    // Draft + scroll accessors used by ChatModeScreen for session persistence.
+    QString draft_text() const;
+    void set_draft_text(const QString& text);
+    int scroll_position() const;
+    void set_scroll_position(int pos);
+
+  signals:
+    void draft_changed();
+    void scroll_changed();
+
   signals:
     void send_requested(const QString& message, StreamMode mode);
     void mode_toggled(StreamMode mode);

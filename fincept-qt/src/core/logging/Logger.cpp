@@ -1,5 +1,8 @@
 #include "core/logging/Logger.h"
 
+#include <array>
+#include <cstddef>
+
 namespace fincept {
 
 Logger& Logger::instance() {
@@ -71,7 +74,9 @@ void Logger::write(LogLevel level, const QString& tag, const QString& msg) {
     if (level < effective)
         return;
 
-    static const char* names[] = {"DEBUG", "INFO", "WARN", "ERROR"};
+    static constexpr std::array<const char*, 4> names = {"DEBUG", "INFO", "WARN", "ERROR"};
+    static_assert(names.size() == static_cast<std::size_t>(LogLevel::Error) + 1,
+                  "LogLevel names array size must match LogLevel enum count");
     QString timestamp = QDateTime::currentDateTime().toString("HH:mm:ss.zzz");
     QString line = QString("[%1] [%2] [%3] %4").arg(timestamp, names[static_cast<int>(level)], tag, msg);
 

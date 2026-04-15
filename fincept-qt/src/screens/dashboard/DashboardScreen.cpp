@@ -4,6 +4,7 @@
 #include "screens/dashboard/canvas/DashboardTemplates.h"
 #include "screens/dashboard/canvas/TemplatePicker.h"
 #include "screens/dashboard/canvas/WidgetRegistry.h"
+#include "services/markets/MarketDataService.h"
 #include "services/notifications/NotificationService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
@@ -54,6 +55,8 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
     // ── Scrolling Ticker Bar ──
     ticker_bar_ = new TickerBar;
     vl->addWidget(ticker_bar_);
+    // When user saves a new symbol list, re-fetch quotes immediately.
+    connect(ticker_bar_, &TickerBar::symbols_changed, this, &DashboardScreen::refresh_ticker);
 
     // ── Main Content: Canvas (in scroll) + Market Pulse ──
     content_split_ = new QSplitter(Qt::Horizontal);
@@ -106,6 +109,11 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
     save_timer_->setSingleShot(true);
     save_timer_->setInterval(800);
     connect(save_timer_, &QTimer::timeout, this, &DashboardScreen::save_layout);
+
+    // ── Ticker refresh timer: 5-minute interval, started in showEvent (P3) ──
+    ticker_refresh_timer_ = new QTimer(this);
+    ticker_refresh_timer_->setInterval(5 * 60 * 1000);
+    connect(ticker_refresh_timer_, &QTimer::timeout, this, &DashboardScreen::refresh_ticker);
 
     // ── Canvas signals → toolbar/statusbar ──
     connect(canvas_, &DashboardCanvas::widget_count_changed, toolbar_, &DashboardToolBar::set_widget_count);
@@ -184,6 +192,11 @@ void DashboardScreen::showEvent(QShowEvent* event) {
     if (ticker_bar_)
         ticker_bar_->resume();
 
+    // Fetch live data for the ticker on first show, then every 5 minutes.
+    refresh_ticker();
+    if (ticker_refresh_timer_)
+        ticker_refresh_timer_->start();
+
     // Set splitter sizes on first show using actual pixel width.
     // Must be done here (not in constructor) because the widget has no size yet
     // during construction. MarketPulsePanel's large sizeHint otherwise causes it
@@ -207,6 +220,31 @@ void DashboardScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
     if (ticker_bar_)
         ticker_bar_->pause();
+    if (ticker_refresh_timer_)
+        ticker_refresh_timer_->stop();
+}
+
+// ── Ticker refresh ────────────────────────────────────────────────────────────
+
+void DashboardScreen::refresh_ticker() {
+    if (!ticker_bar_)
+        return;
+
+    const QStringList symbols = ticker_bar_->symbols();
+    if (symbols.isEmpty())
+        return;
+
+    QPointer<DashboardScreen> self = this;
+    services::MarketDataService::instance().fetch_quotes(symbols,
+        [self](bool ok, QVector<services::QuoteData> quotes) {
+            if (!self || !ok || quotes.isEmpty())
+                return;
+            QVector<TickerBar::Entry> entries;
+            entries.reserve(quotes.size());
+            for (const auto& q : quotes)
+                entries.append({q.symbol, q.price, q.change});
+            self->ticker_bar_->set_data(entries);
+        });
 }
 
 // ── Event filter: sync canvas width to scroll viewport ────────────────────────

@@ -1,5 +1,6 @@
 // src/screens/maritime/MaritimeScreen.h
 #pragma once
+#include "screens/IStatefulScreen.h"
 #include "services/maritime/MaritimeTypes.h"
 #include "ui/theme/Theme.h"
 
@@ -22,10 +23,16 @@ namespace fincept::screens {
 
 /// Maritime Intelligence screen — vessel tracking, trade routes, search.
 /// Layout: Left stats panel | Center content (tabs) | Right detail panel
-class MaritimeScreen : public QWidget {
+class MaritimeScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit MaritimeScreen(QWidget* parent = nullptr);
+
+    // IStatefulScreen — persists the IMO search text and the area-search
+    // bounds (common user inputs for vessel lookup).
+    QVariantMap save_state() const override;
+    void restore_state(const QVariantMap& state) override;
+    QString state_key() const override { return "maritime"; }
 
   protected:
     void showEvent(QShowEvent* event) override;

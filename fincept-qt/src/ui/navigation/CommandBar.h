@@ -99,6 +99,15 @@ class CommandBar : public QWidget {
     // ── Theme ─────────────────────────────────────────────────────────────────
     void refresh_theme();
 
+    // ── Draft persistence (cache.db screen_state[key="command_bar"]) ─────────
+    // Persists the in-progress command text and parser mode so a restart
+    // restores exactly what the user had typed before closing.
+    static constexpr int kDraftStateVersion = 1;
+    QTimer* draft_save_timer_ = nullptr;
+    void restore_draft();
+    void save_draft_now();
+    void schedule_draft_save();
+
     // ── Dropdown helpers ───────────────────────────────────────────────────────
     void show_dropdown();
     void hide_dropdown();

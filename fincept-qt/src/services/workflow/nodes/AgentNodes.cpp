@@ -167,11 +167,12 @@ void register_agent_nodes(NodeRegistry& registry) {
                 // QObject::connect with a lambda capture; the connection is
                 // stored and disconnected after first matching result.
                 struct Guard : QObject {
+                    explicit Guard(QObject* parent = nullptr) : QObject(parent) {}
                     std::function<void(bool, QJsonValue, QString)> cb;
                     QString req_id;
                     QMetaObject::Connection conn;
                 };
-                auto* guard = new Guard;
+                auto* guard = new Guard(&svc); // parent ensures cleanup if result never fires
                 guard->cb = cb;
                 guard->req_id = req_id;
                 guard->conn = QObject::connect(

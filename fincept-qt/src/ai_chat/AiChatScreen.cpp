@@ -411,6 +411,11 @@ void AiChatScreen::build_chat_area() {
     scroll_area_->setWidget(messages_container_);
     vl->addWidget(scroll_area_, 1);
 
+    // Debounced persistence when the user scrolls through chat history.
+    if (auto* vbar = scroll_area_->verticalScrollBar())
+        connect(vbar, &QScrollBar::valueChanged, this,
+                [this](int) { ScreenStateManager::instance().notify_changed(this); });
+
     // Typing indicator sits above input, inside chat area
     vl->addWidget(build_typing_indicator());
     vl->addWidget(build_input_area());
@@ -590,6 +595,7 @@ QWidget* AiChatScreen::build_input_area() {
     connect(input_box_, &QPlainTextEdit::textChanged, this, [this]() {
         const int lines = input_box_->document()->blockCount();
         input_box_->setFixedHeight(qMin(qMax(lines, 1), 6) * 24 + 20);
+        ScreenStateManager::instance().notify_changed(this);
     });
     hl->addWidget(input_box_, 1);
 
@@ -658,6 +664,7 @@ void AiChatScreen::on_search_changed(const QString& text) {
         auto* item = session_list_->item(i);
         item->setHidden(!filter.isEmpty() && !item->text().toLower().contains(filter));
     }
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 // ── Typing indicator slot ─────────────────────────────────────────────────────
@@ -820,6 +827,7 @@ void AiChatScreen::on_attach_file() {
     }
     if (attach_btn_)
         attach_btn_->setProperty("active", true);
+    ScreenStateManager::instance().notify_changed(this);
 }
 
 void AiChatScreen::on_send() {
@@ -1292,26 +1300,68 @@ void AiChatScreen::show_welcome(bool show) {
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap AiChatScreen::save_state() const {
-    return {
-        {"session_id", active_session_id_},
-    };
+    QVariantMap s{{"session_id", active_session_id_}};
+
+    if (input_box_)
+        s.insert("draft", input_box_->toPlainText());
+    if (search_edit_)
+        s.insert("search", search_edit_->text());
+    if (scroll_area_ && scroll_area_->verticalScrollBar())
+        s.insert("scroll", scroll_area_->verticalScrollBar()->value());
+    if (!attached_file_path_.isEmpty())
+        s.insert("attached_file", attached_file_path_);
+
+    return s;
 }
 
 void AiChatScreen::restore_state(const QVariantMap& state) {
     const QString sid = state.value("session_id").toString();
-    if (sid.isEmpty())
-        return;
 
-    // Find and select the matching row in the session list
-    for (int i = 0; i < session_list_->count(); ++i) {
-        auto* item = session_list_->item(i);
-        if (item && item->data(Qt::UserRole).toString() == sid) {
-            session_list_->setCurrentRow(i);
-            on_session_selected(i);
-            return;
+    // Session selection — find the matching row and select it.
+    if (!sid.isEmpty()) {
+        for (int i = 0; i < session_list_->count(); ++i) {
+            auto* item = session_list_->item(i);
+            if (item && item->data(Qt::UserRole).toString() == sid) {
+                session_list_->setCurrentRow(i);
+                on_session_selected(i);
+                break;
+            }
+        }
+        // Session not found (may have been deleted) — leave default selection
+    }
+
+    // Search box — apply before (or after) session restore; filter text is independent.
+    const QString search_text = state.value("search").toString();
+    if (search_edit_ && !search_text.isEmpty())
+        search_edit_->setText(search_text);
+
+    // Draft composer text — restore what the user was typing.
+    const QString draft = state.value("draft").toString();
+    if (input_box_ && !draft.isEmpty())
+        input_box_->setPlainText(draft);
+
+    // Attached file — restore the badge only if the file still exists on disk.
+    const QString attached = state.value("attached_file").toString();
+    if (!attached.isEmpty() && QFile::exists(attached)) {
+        attached_file_path_ = attached;
+        if (attach_badge_) {
+            attach_badge_->setText(QFileInfo(attached).fileName());
+            attach_badge_->setVisible(true);
         }
     }
-    // Session not found (may have been deleted) — leave default selection
+
+    // Scroll position — defer until after message_layout has laid out,
+    // otherwise the scrollbar max is still 0.
+    const int scroll = state.value("scroll", -1).toInt();
+    if (scroll >= 0 && scroll_area_) {
+        QPointer<AiChatScreen> self = this;
+        QTimer::singleShot(0, this, [self, scroll]() {
+            if (!self || !self->scroll_area_)
+                return;
+            if (auto* bar = self->scroll_area_->verticalScrollBar())
+                bar->setValue(scroll);
+        });
+    }
 }
 
 } // namespace fincept::screens

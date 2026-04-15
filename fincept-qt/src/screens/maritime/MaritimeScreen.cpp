@@ -2,6 +2,7 @@
 #include "screens/maritime/MaritimeScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "services/maritime/MaritimeService.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -436,6 +437,8 @@ QWidget* MaritimeScreen::build_right_panel() {
     imo_edit_->setPlaceholderText("e.g. 9344745");
     imo_edit_->setStyleSheet(input_ss());
     connect(imo_edit_, &QLineEdit::returnPressed, this, &MaritimeScreen::on_search_vessel);
+    connect(imo_edit_, &QLineEdit::textChanged, this,
+            [this](const QString&) { fincept::ScreenStateManager::instance().notify_changed(this); });
     vl->addWidget(imo_edit_);
 
     auto* track_btn = new QPushButton("TRACK", content);
@@ -842,6 +845,36 @@ void MaritimeScreen::on_vessel_history(QVector<VesselData> history) {
 
     set_status(QString("HISTORY: %1 — %2 positions").arg(vessel_name).arg(total), ui::colors::WARNING);
     LOG_INFO("Maritime", QString("Vessel history: %1 — %2 positions").arg(vessel_name).arg(total));
+}
+
+// ── IStatefulScreen ──────────────────────────────────────────────────────────
+
+QVariantMap MaritimeScreen::save_state() const {
+    QVariantMap s;
+    if (imo_edit_)
+        s.insert("imo", imo_edit_->text());
+    if (area_min_lat_)
+        s.insert("min_lat", area_min_lat_->value());
+    if (area_max_lat_)
+        s.insert("max_lat", area_max_lat_->value());
+    if (area_min_lng_)
+        s.insert("min_lng", area_min_lng_->value());
+    if (area_max_lng_)
+        s.insert("max_lng", area_max_lng_->value());
+    return s;
+}
+
+void MaritimeScreen::restore_state(const QVariantMap& state) {
+    if (imo_edit_)
+        imo_edit_->setText(state.value("imo").toString());
+    if (area_min_lat_ && state.contains("min_lat"))
+        area_min_lat_->setValue(state.value("min_lat").toDouble());
+    if (area_max_lat_ && state.contains("max_lat"))
+        area_max_lat_->setValue(state.value("max_lat").toDouble());
+    if (area_min_lng_ && state.contains("min_lng"))
+        area_min_lng_->setValue(state.value("min_lng").toDouble());
+    if (area_max_lng_ && state.contains("max_lng"))
+        area_max_lng_->setValue(state.value("max_lng").toDouble());
 }
 
 } // namespace fincept::screens

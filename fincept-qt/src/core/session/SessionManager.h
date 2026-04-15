@@ -38,7 +38,7 @@ class SessionManager : public QObject {
     int dock_layout_version(int window_id) const;
 
     // Named perspectives (Bloomberg-style saved layouts)
-    void save_perspectives(const QSettings& source);
+    void save_perspectives(QSettings& source);
     void load_perspectives(QSettings& target) const;
 
     // Last active screen
@@ -51,7 +51,7 @@ class SessionManager : public QObject {
   private:
     SessionManager() = default;
     QElapsedTimer elapsed_;
-    QSettings settings_{"Fincept", "FinceptTerminal"};
+    mutable QSettings settings_{"Fincept", "FinceptTerminal"};
 };
 
 } // namespace fincept

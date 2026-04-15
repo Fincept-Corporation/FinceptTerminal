@@ -587,6 +587,7 @@ set(SCREEN_SOURCES
     src/screens/settings/LlmConfigSection.cpp
     src/screens/settings/McpServersSection.cpp
     src/screens/settings/KeybindingsSection.cpp
+    src/screens/settings/PythonEnvSection.cpp
     src/screens/about/AboutScreen.cpp
     src/screens/support/SupportScreen.cpp
     src/screens/trade_viz/TradeVizScreen.cpp
@@ -1095,6 +1096,7 @@ set_source_files_properties(
     src/screens/report_builder/PropertiesPanel.cpp
     src/screens/report_builder/ReportBuilderScreen.cpp
     src/screens/settings/KeybindingsSection.cpp
+    src/screens/settings/PythonEnvSection.cpp
     src/screens/settings/LlmConfigSection.cpp
     src/screens/settings/McpServersSection.cpp
     src/screens/settings/SettingsScreen.cpp
@@ -1676,6 +1678,22 @@ add_custom_command(TARGET FinceptTerminal POST_BUILD
     COMMENT "Copying Python scripts to build output..."
 )
 
+# ── Copy requirements files to build output ──────────────────────────────────
+# PythonSetupManager::find_requirements_file() searches exe_dir/resources/ first.
+# Without this POST_BUILD step the files are only available via cmake --install,
+# causing setup to silently fail in dev/debug builds.
+add_custom_command(TARGET FinceptTerminal POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:FinceptTerminal>/resources"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy1.txt"
+        "$<TARGET_FILE_DIR:FinceptTerminal>/resources/requirements-numpy1.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy2.txt"
+        "$<TARGET_FILE_DIR:FinceptTerminal>/resources/requirements-numpy2.txt"
+    COMMENT "Copying requirements files to build output..."
+)
+
 # Bundle yt-dlp for dashboard YouTube playback on all platforms.
 # Override path with: -DFINCEPT_YTDLP_EXE=/abs/path/to/yt-dlp[.exe]
 set(FINCEPT_YTDLP_EXE "" CACHE FILEPATH "Path to yt-dlp executable to bundle with FinceptTerminal")
@@ -1734,10 +1752,22 @@ if(WIN32)
     install(TARGETS FinceptTerminal RUNTIME DESTINATION "." COMPONENT core)
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scripts/"
             DESTINATION "scripts" COMPONENT scripts)
+    # Requirements files — needed by PythonSetupManager at first run to install
+    # Python packages. Must be deployed beside the exe so find_requirements_file()
+    # can locate them at C:/Program Files/FinceptTerminal/resources/*.txt.
+    install(FILES
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy1.txt"
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy2.txt"
+            DESTINATION "resources" COMPONENT core)
 
 elseif(APPLE)
     # macOS: install the .app bundle
     install(TARGETS FinceptTerminal BUNDLE DESTINATION "." COMPONENT core)
+    # Requirements files — deployed beside the .app so PythonSetupManager finds them
+    install(FILES
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy1.txt"
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy2.txt"
+            DESTINATION "FinceptTerminal.app/Contents/Resources/resources" COMPONENT core)
 
 else()
     # Linux: FHS-compliant layout

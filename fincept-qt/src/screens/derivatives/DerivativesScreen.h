@@ -1,4 +1,5 @@
 #pragma once
+#include "screens/IStatefulScreen.h"
 
 #include <QComboBox>
 #include <QDateEdit>
@@ -15,10 +16,16 @@ namespace fincept::screens {
 /// Professional derivatives pricing screen.
 /// Supports: Bonds, Equity Options, FX Options, IR Swaps, Credit (CDS).
 /// Calculations run via PythonRunner (derivatives_pricing.py).
-class DerivativesScreen : public QWidget {
+class DerivativesScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit DerivativesScreen(QWidget* parent = nullptr);
+
+    // IStatefulScreen — persists which instrument the user last had open
+    // (bonds/equity/fx/swaps/credit).
+    QVariantMap save_state() const override;
+    void restore_state(const QVariantMap& state) override;
+    QString state_key() const override { return "derivatives"; }
 
   private slots:
     void on_instrument_changed(int index);

@@ -9,13 +9,12 @@ namespace fincept {
 
 QString AppPaths::root() {
 #ifdef _WIN32
-    // AppLocalDataLocation = %LOCALAPPDATA%\Fincept\FinceptTerminal
-    // Walk up two levels to reach %LOCALAPPDATA%, then append our app folder.
-    QString base = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
-    QDir d(base);
-    d.cdUp(); // %LOCALAPPDATA%\Fincept
-    d.cdUp(); // %LOCALAPPDATA%
-    return d.absolutePath() + "/com.fincept.terminal";
+    // Use GenericDataLocation which returns %LOCALAPPDATA% directly on Windows,
+    // avoiding the fragile double-cdUp() from AppLocalDataLocation.
+    // GenericDataLocation = %LOCALAPPDATA% on Windows (Qt docs: QStandardPaths).
+    const QString local_app_data =
+        QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    return local_app_data + "/com.fincept.terminal";
 #elif defined(__APPLE__)
     return QDir::homePath() + "/Library/Application Support/com.fincept.terminal";
 #else

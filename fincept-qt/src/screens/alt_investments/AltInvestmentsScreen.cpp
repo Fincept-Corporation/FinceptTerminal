@@ -1,6 +1,7 @@
 #include "screens/alt_investments/AltInvestmentsScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/session/ScreenStateManager.h"
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 #include "ui/theme/Theme.h"
@@ -841,6 +842,8 @@ void AltInvestmentsScreen::on_analyzer_changed(int index) {
     status_analyzer_->setText(ana.name.toUpper());
     analyzer_combo_->setCurrentIndex(index);
     rebuild_form(active_category_, index);
+
+    fincept::ScreenStateManager::instance().notify_changed(this);
 }
 
 void AltInvestmentsScreen::on_analyze() {
@@ -1173,6 +1176,25 @@ void AltInvestmentsScreen::set_loading(bool loading) {
     loading_ = loading;
     analyze_btn_->setEnabled(!loading);
     analyze_btn_->setText(loading ? "ANALYZING..." : "ANALYZE");
+}
+
+// ── IStatefulScreen ──────────────────────────────────────────────────────────
+
+QVariantMap AltInvestmentsScreen::save_state() const {
+    return {
+        {"category", active_category_},
+        {"analyzer", active_analyzer_},
+    };
+}
+
+void AltInvestmentsScreen::restore_state(const QVariantMap& state) {
+    const int cat = state.value("category", -1).toInt();
+    const int ana = state.value("analyzer", -1).toInt();
+    if (cat < 0 || cat >= categories_.size())
+        return;
+    on_category_changed(cat);
+    if (ana >= 0 && ana < categories_[cat].analyzers.size())
+        on_analyzer_changed(ana);
 }
 
 } // namespace fincept::screens

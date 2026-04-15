@@ -6,6 +6,8 @@
 #include <QCryptographicHash>
 #include <QRandomGenerator>
 
+#include <climits>
+
 namespace fincept::auth {
 
 PinManager& PinManager::instance() {
@@ -31,7 +33,9 @@ static QByteArray hmac_sha256(const QByteArray& key, const QByteArray& message) 
     while (k.size() < kBlockSize)
         k.append('\0');
 
-    // Step 2: Create inner/outer padded keys
+    // Step 2: Create inner/outer padded keys.
+    // 0x36 = ipad byte (RFC 2104 §2): XOR'd with key to form inner-hash input.
+    // 0x5C = opad byte (RFC 2104 §2): XOR'd with key to form outer-hash input.
     QByteArray ipad(kBlockSize, '\0');
     QByteArray opad(kBlockSize, '\0');
     for (int i = 0; i < kBlockSize; ++i) {
@@ -244,8 +248,8 @@ bool PinManager::is_locked_out() const {
 int PinManager::lockout_remaining_seconds() const {
     if (!lockout_until_.isValid())
         return 0;
-    int secs = static_cast<int>(QDateTime::currentDateTime().secsTo(lockout_until_));
-    return qMax(0, secs);
+    const qint64 secs = QDateTime::currentDateTime().secsTo(lockout_until_);
+    return static_cast<int>(qBound(qint64{0}, secs, qint64{INT_MAX}));
 }
 
 void PinManager::reset_lockout() {

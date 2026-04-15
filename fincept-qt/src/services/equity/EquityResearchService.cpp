@@ -321,8 +321,8 @@ StockInfo EquityResearchService::parse_info(const QJsonObject& o) const {
     s.exchange = o["exchange"].toString();
     s.employees = o["employees"].toInt();
 
-    s.market_cap = o["market_cap"].toVariant().toDouble();
-    s.enterprise_value = o["enterprise_value"].toVariant().toDouble();
+    s.market_cap = o["market_cap"].toDouble();
+    s.enterprise_value = o["enterprise_value"].toDouble();
     s.pe_ratio = o["pe_ratio"].toDouble();
     s.forward_pe = o["forward_pe"].toDouble();
     s.peg_ratio = o["peg_ratio"].toDouble();
@@ -340,17 +340,17 @@ StockInfo EquityResearchService::parse_info(const QJsonObject& o) const {
 
     s.book_value = o["book_value"].toDouble();
     s.revenue_per_share = o["revenue_per_share"].toDouble();
-    s.free_cashflow = o["free_cashflow"].toVariant().toDouble();
-    s.operating_cashflow = o["operating_cashflow"].toVariant().toDouble();
-    s.total_cash = o["total_cash"].toVariant().toDouble();
-    s.total_debt = o["total_debt"].toVariant().toDouble();
-    s.total_revenue = o["total_revenue"].toVariant().toDouble();
+    s.free_cashflow = o["free_cashflow"].toDouble();
+    s.operating_cashflow = o["operating_cashflow"].toDouble();
+    s.total_cash = o["total_cash"].toDouble();
+    s.total_debt = o["total_debt"].toDouble();
+    s.total_revenue = o["total_revenue"].toDouble();
 
     s.earnings_growth = o["earnings_growth"].toDouble();
     s.revenue_growth = o["revenue_growth"].toDouble();
 
-    s.shares_outstanding = o["shares_outstanding"].toVariant().toDouble();
-    s.float_shares = o["float_shares"].toVariant().toDouble();
+    s.shares_outstanding = o["shares_outstanding"].toDouble();
+    s.float_shares = o["float_shares"].toDouble();
     s.held_insiders_pct = o["held_percent_insiders"].toDouble();
     s.held_institutions_pct = o["held_percent_institutions"].toDouble();
     s.short_ratio = o["short_ratio"].toDouble();
@@ -675,3 +675,4 @@ QVector<NewsArticle> EquityResearchService::parse_news(const QJsonArray& arr) co
 }
 
 } // namespace fincept::services::equity
+

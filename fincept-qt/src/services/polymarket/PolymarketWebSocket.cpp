@@ -9,6 +9,8 @@
 
 namespace fincept::services::polymarket {
 
+static constexpr int kPingIntervalMs = 50000;
+
 PolymarketWebSocket& PolymarketWebSocket::instance() {
     static PolymarketWebSocket s;
     return s;
@@ -23,7 +25,7 @@ PolymarketWebSocket::PolymarketWebSocket() : QObject(nullptr) {
     connect(ws_, &WebSocketClient::error_occurred, this, &PolymarketWebSocket::on_ws_error);
 
     ping_timer_ = new QTimer(this);
-    ping_timer_->setInterval(50000);
+    ping_timer_->setInterval(kPingIntervalMs);
     connect(ping_timer_, &QTimer::timeout, this, &PolymarketWebSocket::send_ping);
 }
 
@@ -121,7 +123,7 @@ void PolymarketWebSocket::on_ws_message(const QString& msg) {
             continue;
 
         if (obj.contains("price")) {
-            double price = obj["price"].toVariant().toDouble();
+            double price = obj["price"].toDouble();
             if (price > 0)
                 emit price_updated(asset_id, price);
         }
@@ -131,11 +133,11 @@ void PolymarketWebSocket::on_ws_message(const QString& msg) {
             book.asset_id = asset_id;
             for (const auto& b : obj["bids"].toArray()) {
                 auto bo = b.toObject();
-                book.bids.append({bo["price"].toVariant().toDouble(), bo["size"].toVariant().toDouble()});
+                book.bids.append({bo["price"].toDouble(), bo["size"].toDouble()});
             }
             for (const auto& a : obj["asks"].toArray()) {
                 auto ao = a.toObject();
-                book.asks.append({ao["price"].toVariant().toDouble(), ao["size"].toVariant().toDouble()});
+                book.asks.append({ao["price"].toDouble(), ao["size"].toDouble()});
             }
             if (!book.bids.isEmpty() || !book.asks.isEmpty())
                 emit orderbook_updated(asset_id, book);
@@ -148,3 +150,4 @@ void PolymarketWebSocket::on_ws_error(const QString& error) {
 }
 
 } // namespace fincept::services::polymarket
+

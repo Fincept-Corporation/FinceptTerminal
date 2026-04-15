@@ -149,7 +149,8 @@ void BaseWidget::set_error(const QString& error) {
     // Clear content and show error
     QLayoutItem* item;
     while ((item = content_layout_->takeAt(0)) != nullptr) {
-        delete item->widget();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 

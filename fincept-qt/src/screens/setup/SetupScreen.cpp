@@ -8,10 +8,13 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
+#include <QMetaObject>
+#include <QPointer>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QtConcurrent>
 
 namespace fincept::screens {
 
@@ -204,7 +207,7 @@ QWidget* SetupScreen::build_step_row(const QString& key, const QString& label, c
 
     // Pulse timer — drives the indeterminate animation while step is in-flight
     auto* pulse = new QTimer(row);
-    pulse->setInterval(40); // ~25 fps — smooth but cheap
+    pulse->setInterval(100); // ~10 fps — imperceptible vs 25 fps for a progress bar
     pulse->setSingleShot(false);
 
     StepUI step;
@@ -374,40 +377,53 @@ void SetupScreen::mark_step_done(const QString& key) {
 }
 
 void SetupScreen::prefill_completed_steps() {
-    const auto status = python::PythonSetupManager::instance().check_status();
+    // check_status() slow path can spawn Python processes (up to ~15s on first run).
+    // Run it on a background thread and post results back to the UI thread — P1/P8.
+    QPointer<SetupScreen> self = this;
+    QtConcurrent::run([self]() {
+        const auto status = python::PythonSetupManager::instance().check_status();
+        QMetaObject::invokeMethod(self, [self, status]() {
+            if (!self)
+                return;
 
-    if (status.uv_installed)
-        mark_step_done("uv");
-    if (status.python_installed)
-        mark_step_done("python");
-    if (status.venv_numpy1_ready && status.venv_numpy2_ready)
-        mark_step_done("venv");
-    if (status.venv_numpy1_ready)
-        mark_step_done("packages-numpy1");
-    if (status.venv_numpy2_ready)
-        mark_step_done("packages-numpy2");
+            if (status.uv_installed)
+                self->mark_step_done("uv");
+            if (status.python_installed)
+                self->mark_step_done("python");
+            // "venv" step = both venv directories created (python exe present)
+            if (status.venv_numpy1_created && status.venv_numpy2_created)
+                self->mark_step_done("venv");
+            // package steps = packages actually installed (marker file present)
+            if (status.venv_numpy1_ready)
+                self->mark_step_done("packages-numpy1");
+            if (status.venv_numpy2_ready)
+                self->mark_step_done("packages-numpy2");
 
-    const bool any_done = status.uv_installed || status.python_installed || status.venv_numpy1_ready ||
-                          status.venv_numpy2_ready;
-    const bool all_done = status.uv_installed && status.python_installed && status.venv_numpy1_ready &&
-                          status.venv_numpy2_ready;
+            const bool any_done = status.uv_installed || status.python_installed ||
+                                  status.venv_numpy1_created || status.venv_numpy2_created ||
+                                  status.venv_numpy1_ready || status.venv_numpy2_ready;
+            const bool all_done = status.uv_installed && status.python_installed &&
+                                  status.venv_numpy1_ready && status.venv_numpy2_ready;
 
-    summary_lbl_->setText({});
+            self->summary_lbl_->setText({});
 
-    if (all_done) {
-        subtitle_lbl_->setText("Your workspace is fully configured");
-        begin_btn_->setEnabled(false);
-        begin_btn_->setText("ALREADY COMPLETE");
-        status_label_->setText("Everything is installed and ready to go.");
-    } else if (any_done) {
-        subtitle_lbl_->setText("Finishing your workspace setup");
-        begin_btn_->setText("CONTINUE SETUP");
-        status_label_->setText("Only the missing pieces will be downloaded. Needs an internet connection.");
-    } else {
-        subtitle_lbl_->setText("Getting your workspace ready");
-        begin_btn_->setText("BEGIN SETUP");
-        status_label_->setText("Takes about 3–5 minutes. Needs an internet connection.");
-    }
+            if (all_done) {
+                self->subtitle_lbl_->setText("Your workspace is fully configured");
+                self->begin_btn_->setEnabled(false);
+                self->begin_btn_->setText("ALREADY COMPLETE");
+                self->status_label_->setText("Everything is installed and ready to go.");
+            } else if (any_done) {
+                self->subtitle_lbl_->setText("Finishing your workspace setup");
+                self->begin_btn_->setText("CONTINUE SETUP");
+                self->status_label_->setText(
+                    "Only the missing pieces will be downloaded. Needs an internet connection.");
+            } else {
+                self->subtitle_lbl_->setText("Getting your workspace ready");
+                self->begin_btn_->setText("BEGIN SETUP");
+                self->status_label_->setText("Takes about 3–5 minutes. Needs an internet connection.");
+            }
+        }, Qt::QueuedConnection);
+    });
 }
 
 } // namespace fincept::screens

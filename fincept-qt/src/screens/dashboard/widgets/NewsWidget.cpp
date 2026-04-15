@@ -65,7 +65,8 @@ void NewsWidget::populate(const QJsonArray& articles) {
     // Clear old items (keep the stretch)
     while (news_layout_->count() > 1) {
         auto* item = news_layout_->takeAt(0);
-        delete item->widget();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 

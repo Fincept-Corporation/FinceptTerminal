@@ -28,7 +28,8 @@ class AiChatScreen : public QWidget, public IStatefulScreen {
     void restore_state(const QVariantMap& state) override;
     QVariantMap save_state() const override;
     QString state_key() const override { return "ai_chat"; }
-    int state_version() const override { return 1; }
+    // v2 adds: draft text, search text, scroll position, attached file path.
+    int state_version() const override { return 2; }
 
   protected:
     void showEvent(QShowEvent* e) override;

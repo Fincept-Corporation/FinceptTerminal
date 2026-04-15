@@ -11,6 +11,7 @@
 #include <QHash>
 #include <QProcessEnvironment>
 #include <QStandardPaths>
+#include <QUuid>
 
 namespace fincept::python {
 
@@ -284,8 +285,7 @@ void PythonRunner::start_next() {
                 if (arg.size() > kArgSpillThreshold) {
                     QString temp_dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
                     QString temp_path = temp_dir + "/fincept_arg_" +
-                                       QString::number(QDateTime::currentMSecsSinceEpoch()) + "_" +
-                                       QString::number(reinterpret_cast<quintptr>(proc)) + ".json";
+                                       QUuid::createUuid().toString(QUuid::WithoutBraces) + ".json";
                     QFile tf(temp_path);
                     if (tf.open(QIODevice::WriteOnly | QIODevice::Text)) {
                         tf.write(arg.toUtf8());
@@ -315,14 +315,20 @@ void PythonRunner::start_next() {
         env.insert("PYTHONUNBUFFERED", "1");
         env.insert("FINCEPT_DATA_DIR", PythonSetupManager::instance().install_dir());
 
-        QString existing_pypath = env.value("PYTHONPATH");
-        QString new_pypath = scripts_dir_ + (existing_pypath.isEmpty() ? "" : ";" + existing_pypath);
+        const QString existing_pypath = env.value("PYTHONPATH");
+#ifdef _WIN32
+        const QChar kPathSep = ';';
+#else
+        const QChar kPathSep = ':';
+#endif
+        QString new_pypath =
+            existing_pypath.isEmpty() ? scripts_dir_ : (scripts_dir_ + kPathSep + existing_pypath);
 
         if (!is_code && req.script.contains('/')) {
             QString script_dir = QFileInfo(scripts_dir_ + "/" + req.script).dir().absolutePath();
             QString parent_of_pkg = QFileInfo(script_dir).dir().absolutePath();
             if (parent_of_pkg != scripts_dir_ && !new_pypath.contains(parent_of_pkg))
-                new_pypath = parent_of_pkg + ";" + new_pypath;
+                new_pypath = parent_of_pkg + kPathSep + new_pypath;
         }
 
         env.insert("PYTHONPATH", new_pypath);
