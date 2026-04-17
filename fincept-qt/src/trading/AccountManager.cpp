@@ -11,6 +11,9 @@
 #include <QMutexLocker>
 #include <QUuid>
 
+#include <cmath>
+#include <exception>
+
 namespace fincept::trading {
 
 // ── Credential key helpers ──────────────────────────────────────────────────
@@ -141,17 +144,48 @@ BrokerAccount AccountManager::add_account(const QString& broker_id, const QStrin
     QString currency = "INR";
     if (broker) {
         const auto prof = broker->profile();
-        paper_balance = prof.default_paper_balance;
-        currency = prof.currency;
+        if (std::isfinite(prof.default_paper_balance) && prof.default_paper_balance > 0.0)
+            paper_balance = prof.default_paper_balance;
+        if (!prof.currency.isEmpty())
+            currency = prof.currency;
     }
 
-    auto portfolio = pt_create_portfolio(
-        display_name + " Paper", paper_balance, currency,
-        1.0, "cross", 0.001, account.account_id);
-    account.paper_portfolio_id = portfolio.id;
+    // pt_create_portfolio throws on invalid args or DB failure. Catch here so a
+    // throw does not propagate across the Qt signal/slot boundary and terminate
+    // the app. Account creation proceeds without a paper portfolio on failure.
+    try {
+        auto portfolio = pt_create_portfolio(
+            display_name + " Paper", paper_balance, currency,
+            1.0, "cross", 0.001, account.account_id);
+        account.paper_portfolio_id = portfolio.id;
+    } catch (const std::exception& e) {
+        LOG_ERROR("AccountManager",
+                  QString("Failed to create paper portfolio for %1 (%2): %3")
+                      .arg(broker_id, display_name, e.what()));
+        account.paper_portfolio_id.clear();
+    }
 
-    // Persist to DB
-    AccountRepository::instance().insert(account);
+    // Persist to DB. If the insert fails (e.g. FK violation, disk full), do NOT
+    // add the account to the in-memory cache — otherwise the UI would show a
+    // "connected" account that silently vanishes on the next app launch.
+    auto insert_result = AccountRepository::instance().insert(account);
+    if (insert_result.is_err()) {
+        LOG_ERROR("AccountManager",
+                  QString("Failed to persist account %1 (%2) for broker %3: %4")
+                      .arg(account.account_id, display_name, broker_id,
+                           QString::fromStdString(insert_result.error())));
+        // Clean up the orphaned paper portfolio we created above.
+        if (!account.paper_portfolio_id.isEmpty()) {
+            try {
+                pt_delete_portfolio(account.paper_portfolio_id);
+            } catch (const std::exception& e) {
+                LOG_WARN("AccountManager",
+                         QString("Could not clean up orphaned paper portfolio %1: %2")
+                             .arg(account.paper_portfolio_id, e.what()));
+            }
+        }
+        return {}; // empty BrokerAccount signals failure to caller
+    }
 
     // Add to in-memory cache
     {
@@ -286,6 +320,9 @@ bool AccountManager::has_account(const QString& account_id) const {
 
 // ── Credentials ─────────────────────────────────────────────────────────────
 
+// NOTE: creds.additional_data is an opaque JSON blob owned by the individual
+// broker dialog. E.g., Zerodha stores {"password":"...","totp_secret":"..."}.
+// AccountManager does not interpret it.
 void AccountManager::save_credentials(const QString& account_id, const BrokerCredentials& creds) {
     auto& secure = SecureStorage::instance();
     secure.store(acct_key(account_id, "api_key"), creds.api_key);

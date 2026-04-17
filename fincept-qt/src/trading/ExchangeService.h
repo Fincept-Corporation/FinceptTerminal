@@ -33,6 +33,19 @@ class ExchangeService : public QObject {
     QString get_exchange() const;
     void set_credentials(const ExchangeCredentials& creds);
 
+    // Daemon readiness — block (in background thread only!) up to `timeout_ms`
+    // for the persistent ccxt daemon to finish booting. Returns true if ready.
+    // Avoids per-call raw QProcess fallback when daemon is still starting.
+    bool wait_for_daemon_ready(int timeout_ms = 8000);
+
+  signals:
+    // Emitted (from main thread) when the ccxt daemon has finished booting and
+    // is ready to serve fetch requests. Subscribers can defer first data
+    // fetches until this fires to avoid racing the cold-boot path.
+    void daemon_ready();
+
+  public:
+
     // Price feed
     void watch_symbol(const QString& symbol, const QString& portfolio_id);
     void unwatch_symbol(const QString& symbol, const QString& portfolio_id);

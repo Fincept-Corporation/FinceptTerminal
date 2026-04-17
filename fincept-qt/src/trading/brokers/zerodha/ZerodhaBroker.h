@@ -2,6 +2,8 @@
 #include "trading/BrokerInterface.h"
 #include "trading/brokers/BrokerHttp.h"
 
+#include <functional>
+
 namespace fincept::trading {
 
 class ZerodhaBroker : public IBroker {
@@ -47,6 +49,17 @@ class ZerodhaBroker : public IBroker {
 
     TokenExchangeResponse exchange_token(const QString& api_key, const QString& api_secret,
                                          const QString& auth_code) override;
+
+    /// Returns the URL users visit to authenticate via Zerodha's web UI.
+    /// Pure string - safe from any thread.
+    static QString kite_login_url(const QString& api_key);
+
+    /// Runs the full headless TOTP auto-login chain. MUST be called from a
+    /// worker thread. Internally uses QEventLoop across 4 HTTP round-trips.
+    TokenExchangeResponse login_with_totp(const QString& user_id, const QString& password,
+                                          const QString& api_key, const QString& api_secret,
+                                          const QString& totp_secret,
+                                          std::function<void(const QString&)> progress = {});
     OrderPlaceResponse place_order(const BrokerCredentials& creds, const UnifiedOrder& order) override;
     ApiResponse<QJsonObject> modify_order(const BrokerCredentials& creds, const QString& order_id,
                                           const QJsonObject& mods) override;

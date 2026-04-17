@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/zerodha/ZerodhaAutoLogin.h"
 #include "trading/instruments/InstrumentService.h"
 
 #include <QCryptographicHash>
@@ -10,6 +11,19 @@
 #include <QJsonDocument>
 
 namespace fincept::trading {
+
+QString ZerodhaBroker::kite_login_url(const QString& api_key) {
+    return QStringLiteral("https://kite.zerodha.com/connect/login?v=3&api_key=%1").arg(api_key);
+}
+
+TokenExchangeResponse ZerodhaBroker::login_with_totp(const QString& user_id, const QString& password,
+                                                    const QString& api_key, const QString& api_secret,
+                                                    const QString& totp_secret,
+                                                    std::function<void(const QString&)> progress) {
+    auto result = zerodha::run_auto_login(user_id, password, api_key, api_secret, totp_secret,
+                                          std::move(progress));
+    return result.token;
+}
 
 static int64_t now_ts() {
     return QDateTime::currentSecsSinceEpoch();
@@ -94,13 +108,26 @@ TokenExchangeResponse ZerodhaBroker::exchange_token(const QString& api_key, cons
     QByteArray input = (api_key + request_token + api_secret).toUtf8();
     QString checksum = QCryptographicHash::hash(input, QCryptographicHash::Sha256).toHex();
 
+    LOG_INFO("Zerodha", QString("exchange_token: api_key=%1 req_token_len=%2 secret_len=%3")
+                            .arg(api_key).arg(request_token.length()).arg(api_secret.length()));
+
     QMap<QString, QString> params = {{"api_key", api_key}, {"request_token", request_token}, {"checksum", checksum}};
     QMap<QString, QString> headers = {{"X-Kite-Version", kite_api_version}};
     auto resp = BrokerHttp::instance().post_form(QString(base_url()) + "/session/token", params, headers);
 
+    LOG_INFO("Zerodha", QString("exchange_token HTTP %1 success=%2 body=%3")
+                            .arg(resp.status_code).arg(resp.success).arg(resp.raw_body.left(500)));
+
     TokenExchangeResponse result;
     if (!resp.success) {
-        result.error = resp.error;
+        // Surface Kite's error_type + message when available.
+        const QString kite_msg = resp.json.value("message").toString();
+        const QString kite_type = resp.json.value("error_type").toString();
+        if (!kite_msg.isEmpty())
+            result.error = kite_type.isEmpty() ? kite_msg : QString("%1: %2").arg(kite_type, kite_msg);
+        else
+            result.error = resp.error.isEmpty() ? QString("HTTP %1").arg(resp.status_code) : resp.error;
+        LOG_ERROR("Zerodha", QString("exchange_token failed: %1").arg(result.error));
         return result;
     }
     if (resp.json.value("status").toString() == "success") {
@@ -109,8 +136,10 @@ TokenExchangeResponse ZerodhaBroker::exchange_token(const QString& api_key, cons
         result.access_token = data.value("access_token").toString();
         result.refresh_token = data.value("refresh_token").toString();
         result.user_id = data.value("user_id").toString();
+        LOG_INFO("Zerodha", QString("exchange_token ok: user_id=%1").arg(result.user_id));
     } else {
         result.error = resp.json.value("message").toString("Token exchange failed");
+        LOG_ERROR("Zerodha", QString("exchange_token status!=success: %1").arg(result.error));
     }
     return result;
 }

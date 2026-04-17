@@ -942,6 +942,7 @@ void MainWindow::on_auth_state_changed() {
             // Runs concurrently while the user reads the dashboard (3-5s head start).
             fincept::trading::InstrumentService::instance().load_from_db_async("zerodha");
             fincept::trading::InstrumentService::instance().load_from_db_async("angelone");
+            fincept::trading::InstrumentService::instance().load_from_db_async("groww");
         } else {
             // Free/no plan → show pricing gate
             set_shell_visible(false);

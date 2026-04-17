@@ -1,5 +1,5 @@
 #pragma once
-// Data Sources Screen — Bloomberg-style data connector command center.
+// Data Sources Screen — data connector command center.
 
 #include "screens/IStatefulScreen.h"
 #include "screens/data_sources/DataSourceTypes.h"

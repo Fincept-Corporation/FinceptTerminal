@@ -13,7 +13,7 @@ class GraphNodeItem;
 class RelNode;
 
 /// Interactive graph scene for relationship map visualization.
-/// Force-directed layout with elastic nodes (Bloomberg-style).
+/// Force-directed layout with elastic nodes.
 class RelationshipGraphScene : public QGraphicsScene {
     Q_OBJECT
   public:

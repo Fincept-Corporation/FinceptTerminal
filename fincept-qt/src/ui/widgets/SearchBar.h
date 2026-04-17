@@ -5,7 +5,7 @@
 
 namespace fincept::ui {
 
-/// Bloomberg-style search/command input bar.
+/// Search/command input bar.
 class SearchBar : public QWidget {
     Q_OBJECT
   public:

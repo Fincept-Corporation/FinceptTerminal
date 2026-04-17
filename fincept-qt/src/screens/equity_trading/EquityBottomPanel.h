@@ -42,6 +42,7 @@ class EquityBottomPanel : public QWidget {
   signals:
     void cancel_order_requested(const QString& order_id);
     void modify_order_requested(const QString& order_id, double new_qty, double new_price);
+    void import_holdings_requested(const QVector<trading::BrokerHolding>& holdings);
 
   private:
     void setup_positions_tab();
@@ -59,6 +60,13 @@ class EquityBottomPanel : public QWidget {
 
     QTableWidget* positions_table_ = nullptr;
     QTableWidget* holdings_table_ = nullptr;
+    QLabel* holdings_invested_label_ = nullptr;
+    QLabel* holdings_current_label_ = nullptr;
+    QLabel* holdings_pnl_label_ = nullptr;
+    QLabel* holdings_pnl_pct_label_ = nullptr;
+    QLabel* holdings_count_label_ = nullptr;
+    class QPushButton* holdings_import_btn_ = nullptr;
+    QVector<trading::BrokerHolding> last_holdings_;
     QTableWidget* orders_table_ = nullptr;
     QTableWidget* calendar_table_ = nullptr;
     QTableWidget* time_sales_table_ = nullptr;

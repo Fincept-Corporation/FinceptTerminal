@@ -111,6 +111,10 @@ class PortfolioService : public QObject {
                        const portfolio::Portfolio& portfolio);
 
     // ── Summary cache (P11) ──────────────────────────────────────────────────
+    // In-memory (not CacheManager) intentionally: PortfolioSummary holds nested
+    // Portfolio + QVector<HoldingWithQuote>, which would require a large JSON
+    // (de)serializer to persist. The summary is cheap to recompute from quotes
+    // on restart, so durability gains nothing. Kept tight with a 5-min TTL.
     struct CachedSummary {
         portfolio::PortfolioSummary summary;
         qint64 timestamp = 0;

@@ -1,5 +1,5 @@
 #pragma once
-// Crypto Order Entry — Bloomberg-style BUY/SELL tabs with toggle type buttons
+// Crypto Order Entry — BUY/SELL tabs with toggle type buttons
 
 #include <QComboBox>
 #include <QLabel>

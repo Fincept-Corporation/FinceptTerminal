@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "storage/sqlite/Database.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/instruments/GrowwInstrumentParser.h"
 #include "trading/instruments/InstrumentRepository.h"
 #include "trading/instruments/ZerodhaInstrumentParser.h"
 
@@ -439,6 +440,8 @@ void InstrumentService::do_refresh(const QString& broker_id, const BrokerCredent
         payload = download_zerodha_csv(creds);
     } else if (broker_id == "angelone") {
         payload = download_angel_master_json();
+    } else if (broker_id == "groww") {
+        payload = download_groww_csv();
     } else {
         QMetaObject::invokeMethod(
             this,
@@ -472,6 +475,8 @@ void InstrumentService::do_refresh(const QString& broker_id, const BrokerCredent
         instruments = ZerodhaInstrumentParser::parse(payload);
     } else if (broker_id == "angelone") {
         instruments = parse_angel_master_json(payload);
+    } else if (broker_id == "groww") {
+        instruments = GrowwInstrumentParser::parse(payload);
     }
 
     if (instruments.isEmpty()) {
@@ -570,6 +575,47 @@ QByteArray InstrumentService::download_angel_master_json() {
     QByteArray data = reply->readAll();
     reply->deleteLater();
     LOG_INFO("InstrumentService", QString("Downloaded AngelOne master contract: %1 bytes").arg(data.size()));
+    return data;
+}
+
+QByteArray InstrumentService::download_groww_csv() {
+    // Public, unauthenticated CSV (~27MB) with the full equity + F&O + commodity master.
+    // Own QNAM (not BrokerHttp) because the download dominates the shared client's
+    // mutex for 10-30s on slow links and would starve concurrent quote/order calls.
+    static const QString kUrl = "https://growwapi-assets.groww.in/instruments/instrument.csv";
+
+    QNetworkAccessManager nam;
+    QNetworkRequest req{QUrl(kUrl)};
+    req.setRawHeader("Accept", "text/csv");
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+
+    QNetworkReply* reply = nam.get(req);
+
+    QEventLoop loop;
+    QTimer timer;
+    timer.setSingleShot(true);
+    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+    timer.start(60000); // 60s — ~27MB file on slow connection
+    loop.exec();
+
+    if (!timer.isActive()) {
+        reply->abort();
+        reply->deleteLater();
+        LOG_ERROR("InstrumentService", "Groww instrument CSV download timed out");
+        return {};
+    }
+    timer.stop();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        LOG_ERROR("InstrumentService", "Failed to download Groww instrument CSV: " + reply->errorString());
+        reply->deleteLater();
+        return {};
+    }
+
+    QByteArray data = reply->readAll();
+    reply->deleteLater();
+    LOG_INFO("InstrumentService", QString("Downloaded Groww instrument CSV: %1 bytes").arg(data.size()));
     return data;
 }
 

@@ -1,4 +1,4 @@
-// Trade Visualization — Bloomberg ECTR Trade Flow style
+// Trade Visualization — Trade Flow style
 #include "screens/trade_viz/TradeVizScreen.h"
 
 #include "core/session/ScreenStateManager.h"
@@ -139,7 +139,7 @@ class TradeFlowChordWidget : public QWidget {
 
             double strength = g_partners[i].imports / max_val;
 
-            // Draw multiple sub-arcs for thick "bundle" effect like Bloomberg
+            // Draw multiple sub-arcs for thick "bundle" effect
             int num_strands = 2 + static_cast<int>(4 * strength);
             for (int s = 0; s < num_strands; ++s) {
                 double offset = (s - num_strands / 2.0) * 3.0;
@@ -271,7 +271,7 @@ class TradeFlowChordWidget : public QWidget {
 };
 
 // ============================================================================
-// Tab bar — Bloomberg "21) Table  22) Settings  23) Export  24) Notes"
+// Tab bar — "21) Table  22) Settings  23) Export  24) Notes"
 // ============================================================================
 
 QWidget* TradeVizScreen::build_tab_bar() {
@@ -535,7 +535,7 @@ void TradeVizScreen::setup_ui() {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    // ── Tab bar (Bloomberg style) ────────────────────────────────────────────
+    // ── Tab bar ──────────────────────────────────────────────────────────────
     root->addWidget(build_tab_bar());
 
     // ── Filter bar ───────────────────────────────────────────────────────────

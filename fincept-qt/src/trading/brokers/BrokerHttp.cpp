@@ -5,10 +5,11 @@
 #include "core/logging/Logger.h"
 
 #include <QEventLoop>
-#include <QMutexLocker>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QThread>
+#include <QThreadStorage>
 #include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
@@ -99,10 +100,23 @@ BrokerHttpResponse BrokerHttp::put_raw(const QString& url, const QByteArray& bod
 
 BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url, const QByteArray& body,
                                        const QString& content_type, const QMap<QString, QString>& headers) {
-    QMutexLocker locker(&mutex_);
-    QNetworkAccessManager nam;
+    // One QNetworkAccessManager per worker thread so TLS/TCP connections are
+    // reused across calls (keep-alive), instead of being created and torn down
+    // for each request. Removed the global mutex — QNAM handles its own queueing
+    // and the previous serialization was causing broker calls to block one
+    // another, which made token exchange feel like it took "minutes".
+    static QThreadStorage<QNetworkAccessManager*> tls_nam;
+    if (!tls_nam.hasLocalData())
+        tls_nam.setLocalData(new QNetworkAccessManager);
+    QNetworkAccessManager& nam = *tls_nam.localData();
+
     QUrl req_url(url);
     QNetworkRequest req(req_url);
+    req.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);
+    req.setAttribute(QNetworkRequest::HttpPipeliningAllowedAttribute, true);
+    // Explicit per-request transfer timeout so a dead socket aborts fast instead
+    // of quietly draining the 8s budget. Qt >= 6.2.
+    req.setTransferTimeout(timeout_ms_);
 
     // Set headers
     for (auto it = headers.constBegin(); it != headers.constEnd(); ++it) {

@@ -25,7 +25,7 @@ struct AssetType {
     QString description; // e.g. "Search stocks by symbol or name"
 };
 
-/// Bloomberg-style command bar with live search and dropdown navigation.
+/// Command bar with live search and dropdown navigation.
 /// Type a command alias, screen name, or keyword — press Enter or click to navigate.
 /// Supports /type queries (e.g. "/stock AAPL") to search assets via API.
 class CommandBar : public QWidget {

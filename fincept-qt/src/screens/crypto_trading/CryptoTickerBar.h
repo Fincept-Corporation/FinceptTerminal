@@ -29,8 +29,19 @@ class CryptoTickerBar : public QWidget {
     QLabel* mark_price_label_ = nullptr;
     QLabel* index_price_label_ = nullptr;
 
-    // State cache — avoid redundant style updates
+    // State cache — avoid redundant setText calls at ticker rate. Values are
+    // rounded to the display precision before comparing so we only repaint on
+    // a pixel-visible change.
     bool last_positive_ = true;
+    double last_price_display_ = -1;
+    double last_change_display_ = 1e300;
+    double last_high_display_ = -1;
+    double last_low_display_ = -1;
+    double last_volume_display_ = -1;
+    int last_volume_unit_ = -1;  // 0=raw, 1=M, 2=B
+    double last_bid_display_ = -1;
+    double last_ask_display_ = -1;
+    double last_spread_display_ = -1;
 };
 
 } // namespace fincept::screens::crypto

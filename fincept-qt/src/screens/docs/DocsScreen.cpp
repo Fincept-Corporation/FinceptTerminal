@@ -233,7 +233,7 @@ QWidget* DocsScreen::page_welcome() {
                            "Fincept Terminal is a professional-grade desktop financial intelligence platform "
                            "built in native C++ with Qt6. It provides institutional-quality market data, "
                            "trading capabilities, quantitative research tools, and AI-powered analytics — "
-                           "all in a single Bloomberg Terminal-inspired interface.\n\n"
+                           "all in a single unified terminal interface.\n\n"
                            "With 45+ integrated screens, real-time WebSocket feeds, embedded Python analytics, "
                            "and support for 15+ broker integrations, Fincept Terminal bridges the gap between "
                            "retail and institutional tooling.",
@@ -556,7 +556,7 @@ QWidget* DocsScreen::page_crypto_trading() {
     vl->setSpacing(12);
 
     vl->addWidget(make_heading("CRYPTO TRADING"));
-    vl->addWidget(make_muted_label("Bloomberg-style multi-exchange crypto trading terminal"));
+    vl->addWidget(make_muted_label("Multi-exchange crypto trading terminal"));
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);

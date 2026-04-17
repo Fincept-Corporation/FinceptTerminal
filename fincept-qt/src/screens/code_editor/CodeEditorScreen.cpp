@@ -1,5 +1,5 @@
 // src/screens/code_editor/CodeEditorScreen.cpp
-// Bloomberg-style Python Colab — Obsidian design system implementation.
+// Python Colab — Obsidian design system implementation.
 // Responsive cells, markdown rendering, keyboard shortcuts, collapsible output.
 #include "screens/code_editor/CodeEditorScreen.h"
 

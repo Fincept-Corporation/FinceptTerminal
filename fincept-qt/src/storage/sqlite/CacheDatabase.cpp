@@ -2,6 +2,8 @@
 
 #include "core/logging/Logger.h"
 
+#include <QMutexLocker>
+
 namespace fincept {
 
 CacheDatabase& CacheDatabase::instance() {
@@ -21,7 +23,20 @@ Result<void> CacheDatabase::open(const QString& path) {
     if (pr.is_err())
         return pr;
 
-    return create_tables();
+    auto tr = create_tables();
+    if (tr.is_err())
+        return tr;
+
+    // One-shot startup sweep of expired rows — prevents unbounded growth of unified_cache
+    // across sessions. Cheap: idx_cache_expires makes this a range scan.
+    auto sweep = execute("DELETE FROM unified_cache WHERE expires_at < datetime('now')");
+    if (sweep.is_ok()) {
+        const int removed = sweep.value().numRowsAffected();
+        if (removed > 0)
+            LOG_INFO("CacheDB", QString("Startup sweep removed %1 expired cache rows").arg(removed));
+    }
+
+    return Result<void>::ok();
 }
 
 void CacheDatabase::close() {
@@ -34,6 +49,7 @@ bool CacheDatabase::is_open() const {
 }
 
 Result<QSqlQuery> CacheDatabase::execute(const QString& sql, const QVariantList& params) {
+    QMutexLocker lock(&mutex_);
     QSqlQuery query(db_);
     query.prepare(sql);
     for (int i = 0; i < params.size(); ++i) {
@@ -46,6 +62,7 @@ Result<QSqlQuery> CacheDatabase::execute(const QString& sql, const QVariantList&
 }
 
 Result<void> CacheDatabase::exec(const QString& sql) {
+    QMutexLocker lock(&mutex_);
     QSqlQuery query(db_);
     if (!query.exec(sql)) {
         return Result<void>::err(query.lastError().text().toStdString());
@@ -54,8 +71,11 @@ Result<void> CacheDatabase::exec(const QString& sql) {
 }
 
 Result<void> CacheDatabase::apply_pragmas() {
+    // synchronous=NORMAL under WAL is the standard safe/fast combo. OFF risked full DB
+    // corruption on power loss — now that cache.db also holds tab_sessions and
+    // screen_state, durability matters more than the marginal write gain of OFF.
     const char* pragmas[] = {
-        "PRAGMA journal_mode = WAL",  "PRAGMA synchronous = OFF",     "PRAGMA cache_size = -10000",
+        "PRAGMA journal_mode = WAL",  "PRAGMA synchronous = NORMAL",  "PRAGMA cache_size = -10000",
         "PRAGMA temp_store = MEMORY", "PRAGMA mmap_size = 134217728", "PRAGMA busy_timeout = 3000",
     };
     for (auto* p : pragmas) {

@@ -9,7 +9,7 @@
 
 namespace fincept::screens {
 
-/// Single market category panel — resizable Bloomberg-style workstation tile.
+/// Single market category panel — resizable workstation tile.
 /// Fills all height given by parent QSplitter.
 /// Dynamic row count: recalculated on resizeEvent().
 /// Per-panel column configuration via [COLS] inline dropdown.

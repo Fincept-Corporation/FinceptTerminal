@@ -20,19 +20,27 @@ trading::BrokerAccount AccountRepository::map_row(QSqlQuery& q) {
 }
 
 Result<void> AccountRepository::insert(const trading::BrokerAccount& account) {
+    // Bind NULL (not empty string) when no paper portfolio is linked — an empty
+    // TEXT value is not NULL and would violate the FK constraint against pt_portfolios(id).
+    const QVariant portfolio_bind = account.paper_portfolio_id.isEmpty()
+                                        ? QVariant(QMetaType(QMetaType::QString))
+                                        : QVariant(account.paper_portfolio_id);
     return exec_write(
         "INSERT INTO broker_accounts (id, broker_id, display_name, paper_portfolio_id, trading_mode, is_active, created_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
         {account.account_id, account.broker_id, account.display_name,
-         account.paper_portfolio_id, account.trading_mode,
+         portfolio_bind, account.trading_mode,
          account.is_active ? 1 : 0, account.created_at});
 }
 
 Result<void> AccountRepository::update(const trading::BrokerAccount& account) {
+    const QVariant portfolio_bind = account.paper_portfolio_id.isEmpty()
+                                        ? QVariant(QMetaType(QMetaType::QString))
+                                        : QVariant(account.paper_portfolio_id);
     return exec_write(
         "UPDATE broker_accounts SET broker_id = ?, display_name = ?, paper_portfolio_id = ?, "
         "trading_mode = ?, is_active = ? WHERE id = ?",
-        {account.broker_id, account.display_name, account.paper_portfolio_id,
+        {account.broker_id, account.display_name, portfolio_bind,
          account.trading_mode, account.is_active ? 1 : 0, account.account_id});
 }
 

@@ -1,4 +1,4 @@
-// CryptoBottomPanel.cpp — Bloomberg-style tabbed panel with Time&Sales and Depth Chart
+// CryptoBottomPanel.cpp — tabbed panel with Time&Sales and Depth Chart
 #include "screens/crypto_trading/CryptoBottomPanel.h"
 
 #include "screens/crypto_trading/CryptoDepthChart.h"
@@ -206,14 +206,21 @@ void CryptoBottomPanel::set_positions(const QVector<trading::PtPosition>& positi
         const auto& pos = positions[i];
         const QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
 
+        // Diff every attribute — this table updates at 10 Hz on the paper
+        // bookkeeping flush, and only P&L + current_price actually change per
+        // tick. Skipping untouched cells cuts the repaint footprint sharply.
         auto set = [&](int col, const QString& text, const QColor& fg = QColor(),
                        int align = Qt::AlignLeft | Qt::AlignVCenter) {
             auto* it = ensure_item(positions_table_, i, col);
-            it->setText(text);
-            if (fg.isValid())
+            if (it->text() != text)
+                it->setText(text);
+            const QColor cur_fg = it->foreground().color();
+            if (fg.isValid() && (it->foreground().style() == Qt::NoBrush || cur_fg != fg))
                 it->setForeground(fg);
-            it->setBackground(bg);
-            it->setTextAlignment(align);
+            if (it->background().color() != bg)
+                it->setBackground(bg);
+            if (it->textAlignment() != align)
+                it->setTextAlignment(align);
         };
 
         set(0, pos.symbol);

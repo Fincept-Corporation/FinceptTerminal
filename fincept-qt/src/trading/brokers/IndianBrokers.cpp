@@ -1,13 +1,12 @@
-// Indian Brokers — implementation for Zerodha, AngelOne, Upstox, Dhan, Kotak, Groww,
-// AliceBlue, 5Paisa, IIFL, Motilal, Shoonya
-// Each broker implements auth_headers + exchange_token + 10 trading API methods.
+// Indian Brokers — stub implementations for brokers not yet fully built out.
+// Groww and Zerodha have full implementations in their own broker-specific directories;
+// everyone else here gets auth_headers + placeholder trading-API stubs.
 
 #include "core/logging/Logger.h"
 #include "trading/brokers/AliceBlueBroker.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/DhanBroker.h"
 #include "trading/brokers/FivePaisaBroker.h"
-#include "trading/brokers/GrowwBroker.h"
 #include "trading/brokers/IIFLBroker.h"
 #include "trading/brokers/KotakBroker.h"
 #include "trading/brokers/MotilalBroker.h"
@@ -504,15 +503,7 @@ QMap<QString, QString> KotakBroker::auth_headers(const BrokerCredentials& creds)
 }
 IMPL_STUB_METHODS(KotakBroker)
 
-// ── Groww ──
-QMap<QString, QString> GrowwBroker::auth_headers(const BrokerCredentials& creds) const {
-    QMap<QString, QString> h;
-    h["Authorization"] = "Bearer " + creds.access_token;
-    h["Content-Type"] = "application/json";
-    h["Accept"] = "application/json";
-    return h;
-}
-IMPL_STUB_METHODS(GrowwBroker)
+// Groww is implemented in src/trading/brokers/groww/GrowwBroker.cpp (full, non-stub).
 
 // ── AliceBlue ──
 QMap<QString, QString> AliceBlueBroker::auth_headers(const BrokerCredentials& creds) const {

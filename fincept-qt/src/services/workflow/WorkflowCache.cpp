@@ -33,16 +33,25 @@ QJsonValue WorkflowCache::get(const QString& key) const {
         misses_++;
         return {};
     }
-    hits_++;
     // Values are stored as compact JSON strings
     const QByteArray raw = cv.toString().toUtf8();
     QJsonDocument doc = QJsonDocument::fromJson(raw);
+    if (doc.isNull()) {
+        // Corrupt or unparseable payload — treat as miss, don't inflate hit stats
+        misses_++;
+        return {};
+    }
+    hits_++;
     if (doc.isArray())
         return doc.array();
-    if (doc.isObject())
-        return doc.object();
-    // Scalar: stored as {"v": <value>}
-    return doc.object()["v"];
+    if (doc.isObject()) {
+        const QJsonObject obj = doc.object();
+        // Scalar was wrapped as {"v": <value>} — unwrap
+        if (obj.size() == 1 && obj.contains("v"))
+            return obj.value("v");
+        return obj;
+    }
+    return {};
 }
 
 bool WorkflowCache::has(const QString& key) const {

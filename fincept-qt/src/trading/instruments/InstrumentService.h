@@ -110,6 +110,7 @@ class InstrumentService : public QObject {
     void do_refresh(const QString& broker_id, const BrokerCredentials& creds);
     static QByteArray download_zerodha_csv(const BrokerCredentials& creds);
     static QByteArray download_angel_master_json();
+    static QByteArray download_groww_csv();
 };
 
 } // namespace fincept::trading

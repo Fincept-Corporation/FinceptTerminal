@@ -10,6 +10,7 @@
 #include <QHeaderView>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QScrollBar>
 #include <QVBoxLayout>
 
 namespace fincept::screens::equity {
@@ -67,17 +68,83 @@ void EquityBottomPanel::setup_positions_tab() {
 // ── Holdings Tab ───────────────────────────────────────────────────────────
 
 void EquityBottomPanel::setup_holdings_tab() {
+    auto* tab = new QWidget;
+    auto* v = new QVBoxLayout(tab);
+    v->setContentsMargins(0, 0, 0, 0);
+    v->setSpacing(0);
+
+    // Summary strip across the top of the Holdings tab.
+    auto* strip = new QWidget;
+    strip->setObjectName("eqHoldingsStrip");
+    strip->setStyleSheet(QString("#eqHoldingsStrip{background:%1;border-bottom:1px solid %2;}")
+                             .arg(fincept::ui::colors::PANEL(), fincept::ui::colors::BORDER()));
+    auto* strip_layout = new QHBoxLayout(strip);
+    strip_layout->setContentsMargins(12, 6, 12, 6);
+    strip_layout->setSpacing(24);
+
+    auto make_stat = [&](const QString& caption) -> QLabel* {
+        auto* cell = new QWidget;
+        auto* cv = new QVBoxLayout(cell);
+        cv->setContentsMargins(0, 0, 0, 0);
+        cv->setSpacing(1);
+        auto* cap = new QLabel(caption);
+        cap->setStyleSheet(QString("color:%1;font-size:10px;letter-spacing:0.5px;")
+                               .arg(fincept::ui::colors::TEXT_SECONDARY()));
+        auto* val = new QLabel("--");
+        val->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;")
+                               .arg(fincept::ui::colors::TEXT_PRIMARY()));
+        cv->addWidget(cap);
+        cv->addWidget(val);
+        strip_layout->addWidget(cell);
+        return val;
+    };
+    holdings_count_label_     = make_stat("HOLDINGS");
+    holdings_invested_label_  = make_stat("INVESTED");
+    holdings_current_label_   = make_stat("CURRENT");
+    holdings_pnl_label_       = make_stat("TOTAL P&L");
+    holdings_pnl_pct_label_   = make_stat("RETURN %");
+    strip_layout->addStretch(1);
+
+    holdings_import_btn_ = new QPushButton("IMPORT TO PORTFOLIO");
+    holdings_import_btn_->setCursor(Qt::PointingHandCursor);
+    holdings_import_btn_->setEnabled(false);
+    holdings_import_btn_->setStyleSheet(
+        QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:4px 12px;"
+                "font-size:11px;font-weight:700;letter-spacing:0.5px;}"
+                "QPushButton:hover{background:%4;color:#000;}"
+                "QPushButton:disabled{color:%5;border-color:%3;}")
+            .arg(fincept::ui::colors::PANEL(), fincept::ui::colors::ORANGE(),
+                 fincept::ui::colors::BORDER(), fincept::ui::colors::ORANGE(),
+                 fincept::ui::colors::TEXT_SECONDARY()));
+    connect(holdings_import_btn_, &QPushButton::clicked, this, [this]() {
+        if (!last_holdings_.isEmpty())
+            emit import_holdings_requested(last_holdings_);
+    });
+    strip_layout->addWidget(holdings_import_btn_);
+
+    v->addWidget(strip);
+
     holdings_table_ = new QTableWidget;
     holdings_table_->setObjectName("eqTable");
-    holdings_table_->setColumnCount(7);
-    holdings_table_->setHorizontalHeaderLabels({"Symbol", "Qty", "Avg Price", "LTP", "Invested", "Current", "P&L %"});
+    holdings_table_->setColumnCount(8);
+    holdings_table_->setHorizontalHeaderLabels(
+        {"Symbol", "Qty", "Avg Price", "LTP", "Invested", "Current", "P&L", "P&L %"});
     holdings_table_->verticalHeader()->setVisible(false);
     holdings_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     holdings_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     holdings_table_->setShowGrid(false);
     holdings_table_->horizontalHeader()->setStretchLastSection(true);
     holdings_table_->verticalHeader()->setDefaultSectionSize(22);
-    tabs_->addTab(holdings_table_, "HOLDINGS");
+    holdings_table_->setAlternatingRowColors(true);
+    holdings_table_->setSortingEnabled(true);
+    // Smooth pixel-based scrolling (default is per-item, which feels janky).
+    holdings_table_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    holdings_table_->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+    holdings_table_->verticalScrollBar()->setSingleStep(8);
+    holdings_table_->horizontalScrollBar()->setSingleStep(16);
+
+    v->addWidget(holdings_table_, 1);
+    tabs_->addTab(tab, "HOLDINGS");
 }
 
 // ── Orders Tab ─────────────────────────────────────────────────────────────
@@ -265,21 +332,75 @@ void EquityBottomPanel::set_positions(const QVector<trading::BrokerPosition>& po
 }
 
 void EquityBottomPanel::set_holdings(const QVector<trading::BrokerHolding>& holdings) {
+    last_holdings_ = holdings;
+    if (holdings_import_btn_)
+        holdings_import_btn_->setEnabled(!holdings.isEmpty());
+
+    // Disable sorting during population so setItem assignments stay at intended rows.
+    const bool was_sorting = holdings_table_->isSortingEnabled();
+    holdings_table_->setSortingEnabled(false);
     holdings_table_->setRowCount(holdings.size());
+
+    double total_invested = 0.0;
+    double total_current = 0.0;
+    double total_pnl = 0.0;
+
+    const QColor pos_color(fincept::ui::colors::POSITIVE());
+    const QColor neg_color(fincept::ui::colors::NEGATIVE());
+
+    auto set_num = [](QTableWidgetItem* it, double v, int precision) {
+        it->setData(Qt::DisplayRole, QString::number(v, 'f', precision));
+        it->setData(Qt::UserRole, v); // for potential custom sort; Display still orders alphabetically
+    };
+
     for (int i = 0; i < holdings.size(); ++i) {
         const auto& h = holdings[i];
         ensure_item(holdings_table_, i, 0)->setText(h.symbol);
-        ensure_item(holdings_table_, i, 1)->setText(QString::number(h.quantity, 'f', 0));
-        ensure_item(holdings_table_, i, 2)->setText(QString::number(h.avg_price, 'f', 2));
-        ensure_item(holdings_table_, i, 3)->setText(QString::number(h.ltp, 'f', 2));
-        ensure_item(holdings_table_, i, 4)->setText(QString::number(h.invested_value, 'f', 2));
-        ensure_item(holdings_table_, i, 5)->setText(QString::number(h.current_value, 'f', 2));
+        set_num(ensure_item(holdings_table_, i, 1), h.quantity, 0);
+        set_num(ensure_item(holdings_table_, i, 2), h.avg_price, 2);
+        set_num(ensure_item(holdings_table_, i, 3), h.ltp, 2);
+        set_num(ensure_item(holdings_table_, i, 4), h.invested_value, 2);
+        set_num(ensure_item(holdings_table_, i, 5), h.current_value, 2);
 
         auto* pnl_item = ensure_item(holdings_table_, i, 6);
-        pnl_item->setText(QString("%1%").arg(h.pnl_pct, 0, 'f', 2));
-        pnl_item->setForeground(h.pnl_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE())
-                                               : QColor(fincept::ui::colors::NEGATIVE()));
+        pnl_item->setText(QString::number(h.pnl, 'f', 2));
+        pnl_item->setForeground(h.pnl >= 0 ? pos_color : neg_color);
+
+        auto* pct_item = ensure_item(holdings_table_, i, 7);
+        pct_item->setText(QString("%1%").arg(h.pnl_pct, 0, 'f', 2));
+        pct_item->setForeground(h.pnl_pct >= 0 ? pos_color : neg_color);
+
+        total_invested += h.invested_value;
+        total_current  += h.current_value;
+        total_pnl      += h.pnl;
     }
+
+    const double total_pct = total_invested > 0 ? (total_pnl / total_invested) * 100.0 : 0.0;
+
+    if (holdings_count_label_)
+        holdings_count_label_->setText(QString::number(holdings.size()));
+    if (holdings_invested_label_)
+        holdings_invested_label_->setText(QString::number(total_invested, 'f', 2));
+    if (holdings_current_label_)
+        holdings_current_label_->setText(QString::number(total_current, 'f', 2));
+    if (holdings_pnl_label_) {
+        holdings_pnl_label_->setText(QString("%1%2")
+                                         .arg(total_pnl >= 0 ? "+" : "")
+                                         .arg(QString::number(total_pnl, 'f', 2)));
+        holdings_pnl_label_->setStyleSheet(
+            QString("color:%1;font-size:13px;font-weight:700;")
+                .arg(total_pnl >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
+    }
+    if (holdings_pnl_pct_label_) {
+        holdings_pnl_pct_label_->setText(QString("%1%2%")
+                                             .arg(total_pct >= 0 ? "+" : "")
+                                             .arg(QString::number(total_pct, 'f', 2)));
+        holdings_pnl_pct_label_->setStyleSheet(
+            QString("color:%1;font-size:13px;font-weight:700;")
+                .arg(total_pct >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
+    }
+
+    holdings_table_->setSortingEnabled(was_sorting);
 }
 
 void EquityBottomPanel::set_orders(const QVector<trading::BrokerOrderInfo>& orders) {

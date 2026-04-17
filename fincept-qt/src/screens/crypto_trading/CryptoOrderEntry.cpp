@@ -248,6 +248,8 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
 }
 
 void CryptoOrderEntry::set_buy_side(bool is_buy) {
+    if (is_buy == is_buy_side_)
+        return;  // no-op — avoids repoling children on redundant clicks
     is_buy_side_ = is_buy;
     buy_tab_->setProperty("active", is_buy);
     sell_tab_->setProperty("active", !is_buy);
@@ -257,19 +259,38 @@ void CryptoOrderEntry::set_buy_side(bool is_buy) {
     submit_btn_->setText(label);
     submit_btn_->setObjectName(is_buy ? "cryptoBuySubmit" : "cryptoSellSubmit");
 
-    // Single style refresh on the parent instead of 6 individual unpolish/polish calls
-    style()->unpolish(this);
-    style()->polish(this);
+    // Narrow style refresh — only the widgets whose dynamic property or
+    // objectName actually changed, not the entire order-entry subtree.
+    const auto repolish = [](QWidget* w) {
+        w->style()->unpolish(w);
+        w->style()->polish(w);
+    };
+    repolish(buy_tab_);
+    repolish(sell_tab_);
+    repolish(submit_btn_);
 }
 
 void CryptoOrderEntry::set_order_type(int idx) {
+    if (idx == active_type_) {
+        // Still update enabled state + cost preview for defensive callers
+        price_edit_->setEnabled(idx == 1 || idx == 3);
+        stop_price_edit_->setEnabled(idx == 2 || idx == 3);
+        update_cost_preview();
+        return;
+    }
+    const int prev = active_type_;
     active_type_ = idx;
     for (int i = 0; i < 4; ++i)
         type_btns_[i]->setProperty("active", i == idx);
 
-    // Single parent-level style refresh instead of 8 individual unpolish/polish calls
-    style()->unpolish(this);
-    style()->polish(this);
+    // Only repoll the two buttons whose "active" property changed.
+    const auto repolish = [](QWidget* w) {
+        w->style()->unpolish(w);
+        w->style()->polish(w);
+    };
+    if (prev >= 0 && prev < 4)
+        repolish(type_btns_[prev]);
+    repolish(type_btns_[idx]);
 
     price_edit_->setEnabled(idx == 1 || idx == 3);
     stop_price_edit_->setEnabled(idx == 2 || idx == 3);

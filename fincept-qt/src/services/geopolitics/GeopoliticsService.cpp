@@ -114,8 +114,19 @@ void GeopoliticsService::fetch_events(const QString& country, const QString& cit
 }
 
 void GeopoliticsService::fetch_unique_countries() {
-    if (fincept::CacheManager::instance().has("geo:countries"))
+    // Cache hit — deserialize and emit, otherwise go to network.
+    const QVariant cached = fincept::CacheManager::instance().get("geo:countries");
+    if (!cached.isNull()) {
+        const QJsonArray arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
+        QVector<UniqueCountry> countries;
+        countries.reserve(arr.size());
+        for (const auto& v : arr) {
+            const auto o = v.toObject();
+            countries.append({o["country"].toString(), o["event_count"].toInt()});
+        }
+        emit countries_loaded(countries);
         return;
+    }
 
     QPointer<GeopoliticsService> self = this;
     HttpClient::instance().get(
@@ -131,18 +142,38 @@ void GeopoliticsService::fetch_unique_countries() {
             auto arr = data["unique_countries"].toArray();
             QVector<UniqueCountry> countries;
             countries.reserve(arr.size());
+            QJsonArray to_cache;
             for (const auto& v : arr) {
                 auto o = v.toObject();
-                countries.append({o["country"].toString(), o["event_count"].toInt()});
+                const QString name = o["country"].toString();
+                const int count = o["event_count"].toInt();
+                countries.append({name, count});
+                QJsonObject entry;
+                entry["country"] = name;
+                entry["event_count"] = count;
+                to_cache.append(entry);
             }
-            fincept::CacheManager::instance().put("geo:countries", QVariant(true), kRefDataTtlSec, "geopolitics");
+            fincept::CacheManager::instance().put(
+                "geo:countries",
+                QVariant(QString::fromUtf8(QJsonDocument(to_cache).toJson(QJsonDocument::Compact))), kRefDataTtlSec,
+                "geopolitics");
             emit self->countries_loaded(countries);
         });
 }
 
 void GeopoliticsService::fetch_unique_categories() {
-    if (fincept::CacheManager::instance().has("geo:categories"))
+    const QVariant cached = fincept::CacheManager::instance().get("geo:categories");
+    if (!cached.isNull()) {
+        const QJsonArray arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
+        QVector<UniqueCategory> cats;
+        cats.reserve(arr.size());
+        for (const auto& v : arr) {
+            const auto o = v.toObject();
+            cats.append({o["event_category"].toString(), o["event_count"].toInt()});
+        }
+        emit categories_loaded(cats);
         return;
+    }
 
     QPointer<GeopoliticsService> self = this;
     HttpClient::instance().get(QString(kApiBase) + "?get_unique_categories=true", [self](Result<QJsonDocument> result) {
@@ -157,11 +188,21 @@ void GeopoliticsService::fetch_unique_categories() {
         auto arr = data["unique_categories"].toArray();
         QVector<UniqueCategory> cats;
         cats.reserve(arr.size());
+        QJsonArray to_cache;
         for (const auto& v : arr) {
             auto o = v.toObject();
-            cats.append({o["event_category"].toString(), o["event_count"].toInt()});
+            const QString name = o["event_category"].toString();
+            const int count = o["event_count"].toInt();
+            cats.append({name, count});
+            QJsonObject entry;
+            entry["event_category"] = name;
+            entry["event_count"] = count;
+            to_cache.append(entry);
         }
-        fincept::CacheManager::instance().put("geo:categories", QVariant(true), kRefDataTtlSec, "geopolitics");
+        fincept::CacheManager::instance().put(
+            "geo:categories",
+            QVariant(QString::fromUtf8(QJsonDocument(to_cache).toJson(QJsonDocument::Compact))), kRefDataTtlSec,
+            "geopolitics");
         emit self->categories_loaded(cats);
     });
 }

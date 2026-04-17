@@ -37,7 +37,7 @@ class SessionManager : public QObject {
     void set_dock_layout_version(int window_id, int version);
     int dock_layout_version(int window_id) const;
 
-    // Named perspectives (Bloomberg-style saved layouts)
+    // Named perspectives (saved layouts)
     void save_perspectives(QSettings& source);
     void load_perspectives(QSettings& target) const;
 

@@ -13,7 +13,7 @@
 
 namespace fincept::screens {
 
-/// Markets terminal — Bloomberg-style workstation with QSplitter panel layout.
+/// Markets terminal — workstation with QSplitter panel layout.
 /// Panels fill screen height; horizontal and vertical handles are user-resizable.
 /// Splitter state is persisted to SettingsRepository.
 class MarketsScreen : public QWidget {

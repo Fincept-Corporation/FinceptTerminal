@@ -11,7 +11,7 @@
 
 namespace fincept::screens {
 
-/// Bloomberg ECTR-style Trade Flow visualization.
+/// Trade Flow visualization.
 /// Chord diagram showing bilateral trade flows + partner ranking table.
 class TradeVizScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT

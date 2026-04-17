@@ -11,7 +11,7 @@ namespace fincept::screens {
 
 class PortfolioSparkline;
 
-/// 11-column sortable positions table matching Bloomberg blotter style.
+/// 11-column sortable positions table — blotter style.
 class PortfolioBlotter : public QWidget {
     Q_OBJECT
   public:

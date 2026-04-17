@@ -142,6 +142,7 @@ void CryptoChart::append_candle(const trading::Candle& candle) {
     const bool is_update = !candles_.isEmpty() && candles_.last().timestamp == candle.timestamp;
 
     if (is_update) {
+        const trading::Candle prev = candles_.last();
         candles_.last() = candle;
         if (!sets.isEmpty()) {
             auto* last_set = sets.last();
@@ -150,6 +151,16 @@ void CryptoChart::append_candle(const trading::Candle& candle) {
             last_set->setLow(candle.low);
             last_set->setClose(candle.close);
         }
+        // Intrabar update: if the replaced candle defined the current extreme,
+        // bounds may shrink — mark dirty. Otherwise cheap widen-only.
+        if (!bounds_dirty_) {
+            if (prev.high >= cached_max_price_ || prev.low <= cached_min_price_) {
+                bounds_dirty_ = true;
+            } else {
+                cached_max_price_ = std::max(cached_max_price_, candle.high);
+                cached_min_price_ = std::min(cached_min_price_, candle.low);
+            }
+        }
     } else {
         candles_.append(candle);
         if (candles_.size() > MAX_VISIBLE * 2) {
@@ -157,32 +168,62 @@ void CryptoChart::append_candle(const trading::Candle& candle) {
             rebuild_chart();
             return;
         }
-        if (sets.size() >= MAX_VISIBLE)
+        if (sets.size() >= MAX_VISIBLE) {
+            // Evicting the oldest set may drop the current extreme — mark dirty
+            // so we rescan exactly once on the next axis update.
+            const auto* oldest = sets.first();
+            if (!bounds_dirty_ &&
+                (oldest->low() <= cached_min_price_ || oldest->high() >= cached_max_price_)) {
+                bounds_dirty_ = true;
+            }
             series_->remove(sets.first());
+        }
         series_->append(new QCandlestickSet(candle.open, candle.high, candle.low, candle.close, candle.timestamp));
+
+        // Widen-only for new candle if bounds are clean.
+        if (!bounds_dirty_) {
+            cached_max_price_ = std::max(cached_max_price_, candle.high);
+            cached_min_price_ = std::min(cached_min_price_, candle.low);
+        }
     }
 
     const auto& visible_sets = series_->sets();
     if (visible_sets.isEmpty())
         return;
 
-    double min_price = 1e18, max_price = 0;
-    qint64 min_time = INT64_MAX, max_time = 0;
-    for (const auto* s : visible_sets) {
-        min_price = std::min(min_price, s->low());
-        max_price = std::max(max_price, s->high());
-        const qint64 ts = static_cast<qint64>(s->timestamp());
-        if (ts < min_time)
-            min_time = ts;
-        if (ts > max_time)
-            max_time = ts;
+    if (bounds_dirty_)
+        recompute_bounds();
+
+    // Time axis — min is O(1) from sets.first, max from last. Sets stay ordered
+    // by insertion which matches timestamp order for this use case.
+    const qint64 min_time = static_cast<qint64>(visible_sets.first()->timestamp());
+    const qint64 max_time = static_cast<qint64>(visible_sets.last()->timestamp());
+    update_axes(cached_min_price_, cached_max_price_, min_time, max_time);
+}
+
+void CryptoChart::recompute_bounds() {
+    const auto& sets = series_->sets();
+    if (sets.isEmpty()) {
+        cached_min_price_ = -1;
+        cached_max_price_ = -1;
+        bounds_dirty_ = false;
+        return;
     }
-    update_axes(min_price, max_price, min_time, max_time);
+    double mn = 1e18, mx = 0;
+    for (const auto* s : sets) {
+        mn = std::min(mn, s->low());
+        mx = std::max(mx, s->high());
+    }
+    cached_min_price_ = mn;
+    cached_max_price_ = mx;
+    bounds_dirty_ = false;
 }
 
 void CryptoChart::clear() {
     candles_.clear();
     series_->clear();
+    cached_min_price_ = cached_max_price_ = -1;
+    bounds_dirty_ = true;
 }
 
 void CryptoChart::update_axes(double min_price, double max_price, qint64 min_time, qint64 max_time) {
@@ -232,6 +273,8 @@ void CryptoChart::rebuild_chart() {
     series_->clear();
     last_min_price_ = last_max_price_ = -1;
     last_min_time_ = last_max_time_ = -1;
+    cached_min_price_ = cached_max_price_ = -1;
+    bounds_dirty_ = true;
 
     if (candles_.isEmpty())
         return;
@@ -254,6 +297,13 @@ void CryptoChart::rebuild_chart() {
             min_time = c.timestamp;
         if (c.timestamp > max_time)
             max_time = c.timestamp;
+    }
+
+    // Seed the incremental-bounds cache from this full scan.
+    if (min_price < max_price) {
+        cached_min_price_ = min_price;
+        cached_max_price_ = max_price;
+        bounds_dirty_ = false;
     }
 
     update_axes(min_price, max_price, min_time, max_time);

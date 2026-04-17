@@ -1,5 +1,5 @@
 #pragma once
-// Equity Trading Screen — Bloomberg-style multi-account coordinator.
+// Equity Trading Screen — multi-account coordinator.
 // Supports multiple broker accounts simultaneously via DataStreamManager.
 // Each account has its own data stream (WS/polling), portfolio, and credentials.
 
@@ -54,6 +54,7 @@ class EquityTradingScreen : public QWidget, public IWorkspaceParticipant {
     void on_order_submitted(const trading::UnifiedOrder& order);
     void on_cancel_order(const QString& order_id);
     void on_ob_price_clicked(double price);
+    void on_import_holdings_requested(const QVector<trading::BrokerHolding>& holdings);
 
     void refresh_candles();
     void update_clock();

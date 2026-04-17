@@ -1,5 +1,5 @@
 #pragma once
-// Crypto Trading Screen — Bloomberg-style coordinator
+// Crypto Trading Screen — coordinator
 
 #include "screens/IStatefulScreen.h"
 #include "screens/crypto_trading/CryptoTypes.h"
@@ -10,7 +10,6 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
-#include <QMutex>
 #include <QPushButton>
 #include <QShowEvent>
 #include <QStringList>
@@ -125,7 +124,18 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen {
 
     // Async fetch guards
     std::atomic<bool> candles_fetching_{false};
-    std::atomic<bool> live_fetching_{false};
+    std::atomic<int> live_inflight_{0};  // counts async_fetch_live_* tasks still running
+    std::atomic<bool> paper_bookkeeping_in_flight_{false};
+
+    // Startup gate — ensures daemon-dependent fetches fire exactly once,
+    // either via daemon_ready signal or via the 8s safety fallback timeout.
+    bool startup_fetches_done_ = false;
+
+    // WS/REST mode edge detection — when WS transitions online we stop REST
+    // polling; when it drops we restart it. tri-state: -1 = unknown.
+    int last_ws_state_ = -1;
+    int last_ws_status_label_state_ = -1;  // separate from last_ws_state_ since update_clock is 1Hz
+    void apply_feed_mode(bool ws_connected);
 
     QStringList watchlist_symbols_ = {
         "BTC/USDT",  "ETH/USDT",  "SOL/USDT",  "BNB/USDT",  "XRP/USDT",   "DOGE/USDT", "ADA/USDT",
@@ -134,14 +144,33 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen {
         "INJ/USDT",  "NEAR/USDT", "WIF/USDT",  "PEPE/USDT",
     };
 
-    QMutex data_mutex_;
     bool initialized_ = false;
+
+    // Cached market info — funding rate and open interest arrive on separate
+    // workers so we merge into this cache and emit the union to the bottom
+    // panel from each worker's return path (UI-thread — no lock needed).
+    crypto::MarketInfoData market_info_cache_;
 
     // ── WS update coalescing (10fps UI flush) ──
     QTimer* ws_flush_timer_ = nullptr;
     QHash<QString, trading::TickerData> pending_tickers_; // accumulated since last flush
     trading::TickerData pending_primary_ticker_;          // latest for selected symbol
     bool has_pending_primary_ = false;
+
+    // Orderbook coalescing — latest-wins. Raw bursts (~20 msgs/sec on busy
+    // symbols) collapse to one UI refresh per flush tick (10/sec).
+    trading::OrderBookData pending_orderbook_;
+    bool has_pending_orderbook_ = false;
+
+    // Candle coalescing — append closed candles in order, keep the latest
+    // in-progress candle separately so we render partial bars without
+    // flooding the chart on every tick.
+    QVector<trading::Candle> pending_candles_;
+
+    // Trade coalescing — batch recent trades so bottom_panel_ does one list
+    // append per flush tick instead of one per WS message.
+    QVector<crypto::TradeEntry> pending_trades_;
+
     void flush_ws_updates();
 };
 

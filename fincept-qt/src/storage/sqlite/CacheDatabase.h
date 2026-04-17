@@ -1,6 +1,7 @@
 #pragma once
 #include "core/result/Result.h"
 
+#include <QMutex>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -10,7 +11,10 @@
 namespace fincept {
 
 /// Separate SQLite database for ephemeral cache data.
-/// Uses synchronous=OFF for maximum write speed.
+/// Uses synchronous=NORMAL under WAL for safe, fast writes.
+/// A QMutex serializes access: Qt's QSqlDatabase connection is not thread-safe,
+/// and this cache is read/written from services whose callbacks may run on
+/// worker threads (HttpClient, PythonRunner finished signals).
 class CacheDatabase {
   public:
     static CacheDatabase& instance();
@@ -30,6 +34,7 @@ class CacheDatabase {
     Result<void> create_tables();
 
     QSqlDatabase db_;
+    mutable QMutex mutex_;
 };
 
 } // namespace fincept

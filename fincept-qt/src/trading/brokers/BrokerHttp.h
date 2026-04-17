@@ -7,7 +7,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMap>
-#include <QMutex>
 #include <QString>
 
 namespace fincept::trading {
@@ -55,15 +54,15 @@ class BrokerHttp {
     // Raw body PUT — caller provides pre-encoded body + headers (Tradier modify_order)
     BrokerHttpResponse put_raw(const QString& url, const QByteArray& body, const QMap<QString, QString>& headers = {});
 
-    // Timeout in ms (default 15s)
+    // Timeout in ms (default 8s — tight enough to surface network issues fast,
+    // long enough to tolerate a cold TLS handshake).
     void set_timeout(int ms) { timeout_ms_ = ms; }
 
   private:
     BrokerHttp() = default;
     BrokerHttpResponse execute(const QString& method, const QString& url, const QByteArray& body,
                                const QString& content_type, const QMap<QString, QString>& headers);
-    int timeout_ms_ = 15000;
-    QMutex mutex_; // guards concurrent calls from QtConcurrent worker threads
+    int timeout_ms_ = 8000;
 };
 
 } // namespace fincept::trading

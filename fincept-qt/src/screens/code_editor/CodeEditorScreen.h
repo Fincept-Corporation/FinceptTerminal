@@ -1,5 +1,5 @@
 // src/screens/code_editor/CodeEditorScreen.h
-// Bloomberg-style Python Colab — Jupyter notebook with Obsidian design system.
+// Python Colab — Jupyter notebook with Obsidian design system.
 // Responsive cells, markdown rendering, keyboard shortcuts, collapsible output.
 #pragma once
 

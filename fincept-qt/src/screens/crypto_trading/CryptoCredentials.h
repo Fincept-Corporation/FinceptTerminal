@@ -29,6 +29,7 @@ class CryptoCredentials : public QDialog {
 
   private:
     void refresh_totp();
+    void set_status(const QString& text, const QString& object_name);
 
     QLineEdit* key_edit_ = nullptr;
     QLineEdit* secret_edit_ = nullptr;

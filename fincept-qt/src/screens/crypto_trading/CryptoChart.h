@@ -48,11 +48,18 @@ class CryptoChart : public QWidget {
     QVector<trading::Candle> candles_;
     static constexpr int MAX_VISIBLE = 120;
 
-    // Axis range cache
+    // Axis range cache (padded values actually applied to the axis)
     double last_min_price_ = -1;
     double last_max_price_ = -1;
     qint64 last_min_time_ = -1;
     qint64 last_max_time_ = -1;
+
+    // Incremental price bounds over visible candle set — avoids O(N) rescans
+    // on every intrabar tick. -1 means "stale, recompute on next append".
+    double cached_min_price_ = -1;
+    double cached_max_price_ = -1;
+    bool bounds_dirty_ = true;
+    void recompute_bounds();
 
     // Pending timeframe request while a fetch is already in-flight
     // set_candles() will emit timeframe_changed again if this is set

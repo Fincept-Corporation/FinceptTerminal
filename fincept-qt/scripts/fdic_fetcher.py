@@ -129,8 +129,6 @@ class FDICWrapper:
         """Get summary demographic information."""
         return self._fetch_all("demographics", filters, max_records=max_records)
 
-# ===== TAURI CLI HANDLER =====
-
 def main():
     """CLI Entry point for C++. Outputs minified JSON to stdout."""
     if len(sys.argv) < 2:

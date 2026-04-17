@@ -61,9 +61,13 @@ set(CMAKE_UNITY_BUILD ON)
 # 32 was too large: one TU change forced a 32-file recompile; 14 limits blast radius.
 set(CMAKE_UNITY_BUILD_BATCH_SIZE 14)
 
-# FetchContent: after first successful download, never hit the network again.
-# Cuts configure time by 5-15s on incremental configures (no git fetch for 5 deps).
-set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "" FORCE)
+# FetchContent: default to skipping the update step after first download to cut
+# configure time by 5-15s on incremental configures. Not FORCEd so developers
+# can toggle it off (-DFETCHCONTENT_UPDATES_DISCONNECTED=OFF) when a GIT_TAG is
+# bumped to a commit not yet present in the local clone — otherwise the build
+# wedges with "Requested git ref ... is not present locally". CMake docs:
+# https://cmake.org/cmake/help/latest/module/FetchContent.html#variable:FETCHCONTENT_UPDATES_DISCONNECTED
+set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "Skip FetchContent update step after initial download")
 
 # MSVC compiler flags for maximum build throughput:
 #   /MP        — multi-processor compilation (uses all logical cores within one project)
@@ -112,11 +116,11 @@ endif()
 add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
 
 # ── Qt packages ──────────────────────────────────────────────────────────────
-# Qt is pinned to 6.7.2 (LTS track) across all platforms. Releases must build
+# Qt is pinned to 6.8.3 across all platforms. Releases must build
 # on exactly this version to guarantee binary/ABI stability of the shipped
 # installer. Developers may override for local experimentation with
 # -DFINCEPT_ALLOW_QT_DRIFT=ON (not for CI or release builds).
-set(FINCEPT_QT_VERSION 6.7.2)
+set(FINCEPT_QT_VERSION 6.8.3)
 if(FINCEPT_ALLOW_QT_DRIFT)
     find_package(Qt6 REQUIRED COMPONENTS
         Widgets Charts PrintSupport Network Sql Concurrent Multimedia)
@@ -299,7 +303,7 @@ if(MSVC)
     target_compile_options(SingleApplication PRIVATE /W0)
 endif()
 
-# ── Qt Advanced Docking System (Bloomberg-style detachable panels) ────────────
+# ── Qt Advanced Docking System (detachable panels) ───────────────────────────
 # Panels become CDockWidgets — drag to float, dock, move to any monitor.
 # LGPL — compatible with AGPL. Used in Qt Creator itself.
 set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -490,6 +494,9 @@ set(TRADING_SOURCES
     src/trading/websocket/AngelOneWebSocket.cpp
     # Indian brokers
     src/trading/brokers/zerodha/ZerodhaBroker.cpp
+    src/trading/brokers/zerodha/Totp.cpp
+    src/trading/brokers/zerodha/ZerodhaAutoLogin.cpp
+    src/trading/auth/RedirectServer.cpp
     src/trading/brokers/angelone/AngelOneBroker.cpp
     src/trading/brokers/fyers/FyersBroker.cpp
     src/trading/brokers/upstox/UpstoxBroker.cpp
@@ -510,6 +517,7 @@ set(TRADING_SOURCES
     # Instrument system (Phase 1)
     src/trading/instruments/InstrumentRepository.cpp
     src/trading/instruments/ZerodhaInstrumentParser.cpp
+    src/trading/instruments/GrowwInstrumentParser.cpp
     src/trading/instruments/InstrumentService.cpp
 )
 
@@ -729,7 +737,6 @@ set(SCREEN_SOURCES
     src/screens/equity_trading/EquityOrderEntry.cpp
     src/screens/equity_trading/EquityOrderBook.cpp
     src/screens/equity_trading/EquityBottomPanel.cpp
-    src/screens/equity_trading/EquityCredentials.cpp
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
     src/screens/data_sources/DataSourcesScreen.cpp
@@ -996,7 +1003,6 @@ set_source_files_properties(
     src/screens/equity_trading/EquityOrderEntry.cpp
     src/screens/equity_trading/EquityOrderBook.cpp
     src/screens/equity_trading/EquityBottomPanel.cpp
-    src/screens/equity_trading/EquityCredentials.cpp
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
     src/screens/data_sources/DataSourcesScreen.cpp
@@ -1217,6 +1223,9 @@ set_source_files_properties(
     src/trading/websocket/AngelOneWebSocket.cpp
     # Trading broker files — each defines static now_ts() in same namespace
     src/trading/brokers/zerodha/ZerodhaBroker.cpp
+    src/trading/brokers/zerodha/Totp.cpp
+    src/trading/brokers/zerodha/ZerodhaAutoLogin.cpp
+    src/trading/auth/RedirectServer.cpp
     src/trading/brokers/angelone/AngelOneBroker.cpp
     src/trading/brokers/fyers/FyersBroker.cpp
     src/trading/brokers/upstox/UpstoxBroker.cpp
@@ -1277,6 +1286,9 @@ set_source_files_properties(
 # ODR collision if batched, must stay excluded from unity
 set_source_files_properties(
     src/trading/brokers/zerodha/ZerodhaBroker.cpp
+    src/trading/brokers/zerodha/Totp.cpp
+    src/trading/brokers/zerodha/ZerodhaAutoLogin.cpp
+    src/trading/auth/RedirectServer.cpp
     src/trading/brokers/angelone/AngelOneBroker.cpp
     src/trading/brokers/fyers/FyersBroker.cpp
     src/trading/brokers/upstox/UpstoxBroker.cpp

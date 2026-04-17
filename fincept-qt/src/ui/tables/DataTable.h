@@ -5,7 +5,7 @@
 
 namespace fincept::ui {
 
-/// Reusable Bloomberg-style data table with alternating rows.
+/// Reusable data table with alternating rows.
 class DataTable : public QTableWidget {
     Q_OBJECT
   public:

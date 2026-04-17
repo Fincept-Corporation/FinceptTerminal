@@ -1,5 +1,5 @@
 #pragma once
-// Surface3DWidget — Bloomberg-style 3D surface renderer using QPainter
+// Surface3DWidget — 3D surface renderer using QPainter
 // Supports drag-to-rotate, scroll-to-zoom, color mapping (sequential + diverging)
 
 #include <QWidget>

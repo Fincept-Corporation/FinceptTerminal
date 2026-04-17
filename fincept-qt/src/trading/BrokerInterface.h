@@ -20,6 +20,9 @@ enum class CredentialField {
     AuthCode,    // "Auth Code" / "TOTP secret" (base32)
     Environment, // "Live / Paper" toggle — Alpaca only
     ClientCode,  // Secondary login ID (AngelOne: client code separate from API key)
+    Password,    // Zerodha login password (auto-login flow)
+    TotpSecret,  // Zerodha Base32 TOTP secret (auto-login flow)
+    UserId,      // Zerodha Kite user id (e.g., AB1234)
 };
 
 struct CredentialFieldDef {

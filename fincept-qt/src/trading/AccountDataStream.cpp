@@ -213,6 +213,7 @@ void AccountDataStream::async_fetch_positions() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
         auto creds = AccountManager::instance().load_credentials(acct_id);
+        if (creds.api_key.isEmpty()) return;
         auto result = broker->get_positions(creds);
         if (!result.success || !result.data) {
             if (result.error.startsWith("[TOKEN_EXPIRED]") && self)
@@ -238,6 +239,7 @@ void AccountDataStream::async_fetch_holdings() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
         auto creds = AccountManager::instance().load_credentials(acct_id);
+        if (creds.api_key.isEmpty()) return;
         auto result = broker->get_holdings(creds);
         if (!result.success || !result.data) {
             if (result.error.startsWith("[TOKEN_EXPIRED]") && self)
@@ -263,6 +265,7 @@ void AccountDataStream::async_fetch_orders() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
         auto creds = AccountManager::instance().load_credentials(acct_id);
+        if (creds.api_key.isEmpty()) return;
         auto result = broker->get_orders(creds);
         if (!result.success || !result.data) {
             if (result.error.startsWith("[TOKEN_EXPIRED]") && self)
@@ -288,6 +291,7 @@ void AccountDataStream::async_fetch_funds() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
         auto creds = AccountManager::instance().load_credentials(acct_id);
+        if (creds.api_key.isEmpty()) return;
         auto result = broker->get_funds(creds);
         if (!result.success || !result.data) {
             if (result.error.startsWith("[TOKEN_EXPIRED]") && self)

@@ -15,7 +15,7 @@ namespace fincept::screens {
 
 class MAModulePanel;
 
-/// M&A Analytics main screen — 3-panel Bloomberg-style layout.
+/// M&A Analytics main screen — 3-panel layout.
 /// Left: module navigation by category (CORE / SPECIALIZED / ANALYTICS)
 /// Center: active module content (stacked widget)
 /// Right: module info & capabilities sidebar

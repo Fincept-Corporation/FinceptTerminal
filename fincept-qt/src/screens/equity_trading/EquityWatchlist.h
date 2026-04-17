@@ -1,5 +1,5 @@
 #pragma once
-// Equity Watchlist — compact Bloomberg-style with change% coloring
+// Equity Watchlist — compact with change% coloring
 
 #include "trading/TradingTypes.h"
 

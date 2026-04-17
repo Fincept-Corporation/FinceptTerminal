@@ -8,7 +8,7 @@
 
 namespace fincept::ui {
 
-/// Bloomberg-style loading overlay with pulsing bar animation.
+/// Loading overlay with pulsing bar animation.
 /// Colors update automatically when the theme changes.
 /// Usage:
 ///   1. Create as child of the content widget: new LoadingOverlay(content_widget)

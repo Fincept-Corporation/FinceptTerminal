@@ -365,6 +365,33 @@ bool ExchangeService::is_daemon_running() const {
     return daemon_process_ && daemon_process_->state() == QProcess::Running && daemon_ready_.load();
 }
 
+bool ExchangeService::wait_for_daemon_ready(int timeout_ms) {
+    // Fast path — already up.
+    if (daemon_ready_.load())
+        return true;
+
+    // Kick the daemon start if the process hasn't been spawned yet. start_daemon
+    // must run on the main thread because it owns daemon_process_.
+    if (!daemon_process_) {
+        if (QThread::currentThread() == thread()) {
+            start_daemon();
+        } else {
+            QMetaObject::invokeMethod(this, [this]() { start_daemon(); }, Qt::QueuedConnection);
+        }
+    }
+
+    // Wait on the ready condition (signalled from drain_daemon_buffer when the
+    // __init__ line arrives). Safe to call from worker threads only.
+    QMutexLocker lock(&daemon_mutex_);
+    QElapsedTimer elapsed;
+    elapsed.start();
+    while (!daemon_ready_.load() && elapsed.elapsed() < timeout_ms) {
+        const int remaining = timeout_ms - static_cast<int>(elapsed.elapsed());
+        daemon_response_ready_.wait(&daemon_mutex_, std::max(remaining, 50));
+    }
+    return daemon_ready_.load();
+}
+
 void ExchangeService::drain_daemon_buffer() {
     if (!daemon_process_)
         return;
@@ -403,8 +430,9 @@ void ExchangeService::drain_daemon_buffer() {
                 daemon_process_->write(data);
                 credentials_sent_to_daemon_ = true;
             }
-            // Wake any thread waiting for daemon readiness
+            // Wake any thread waiting for daemon readiness and notify subscribers
             daemon_response_ready_.wakeAll();
+            emit daemon_ready();
             continue;
         }
 
@@ -419,25 +447,17 @@ void ExchangeService::drain_daemon_buffer() {
 
 QJsonObject ExchangeService::daemon_call(const QString& method, const QJsonObject& args, int timeout_ms) {
     // daemon_call() is called from background threads (QtConcurrent::run).
-    // The daemon process lives on the main thread, so all writes must go
-    // through invokeMethod. Responses arrive via drain_daemon_buffer() on
-    // the main thread and are stored in daemon_responses_ under mutex.
-    // We use QWaitCondition to sleep until our response arrives.
+    // The daemon process lives on the main thread, so all writes are marshalled
+    // there via a non-blocking queued invocation. Responses arrive via
+    // drain_daemon_buffer() on the main thread and are stored in
+    // daemon_responses_ under mutex. We sleep on a wait condition until our
+    // response arrives or `timeout_ms` elapses.
 
-    // Auto-start daemon if not running (must happen on main thread)
-    if (!is_daemon_running()) {
-        QMetaObject::invokeMethod(this, [this]() { start_daemon(); }, Qt::BlockingQueuedConnection);
-        // Wait for daemon_ready_ via wait condition
-        {
-            QMutexLocker lock(&daemon_mutex_);
-            QElapsedTimer wait;
-            wait.start();
-            while (!daemon_ready_.load() && wait.elapsed() < 5000) {
-                daemon_response_ready_.wait(&daemon_mutex_, 100);
-            }
-        }
-        if (!daemon_ready_.load()) {
-            LOG_WARN(TAG, "Daemon not ready after 5s, falling back to script");
+    // Auto-start + wait for ready. Uses QueuedConnection internally — never
+    // blocks a worker on the main event loop.
+    if (!daemon_ready_.load()) {
+        if (!wait_for_daemon_ready(std::min(timeout_ms, 8000))) {
+            LOG_WARN(TAG, "Daemon not ready, falling back to script for: " + method);
             return {{"error", "Daemon not ready"}};
         }
     }
@@ -453,7 +473,10 @@ QJsonObject ExchangeService::daemon_call(const QString& method, const QJsonObjec
     req["args"] = args;
     QByteArray data = QJsonDocument(req).toJson(QJsonDocument::Compact) + "\n";
 
-    // Send credentials if needed, then send the request — both on main thread
+    // Send credentials + request via QueuedConnection — returns immediately to
+    // the worker, which then sleeps on the wait condition below. Previously
+    // this used BlockingQueuedConnection, which stalled the worker waiting for
+    // the UI event loop to drain (H4).
     QMetaObject::invokeMethod(
         this,
         [this, data]() {
@@ -477,7 +500,7 @@ QJsonObject ExchangeService::daemon_call(const QString& method, const QJsonObjec
             }
             daemon_process_->write(data);
         },
-        Qt::BlockingQueuedConnection);
+        Qt::QueuedConnection);
 
     // Wait for response using QWaitCondition (proper cross-thread signaling)
     QMutexLocker lock(&daemon_mutex_);
@@ -866,7 +889,13 @@ QJsonObject ExchangeService::call_script(const QString& script, const QStringLis
 
     QProcess proc;
     proc.start(python_path, full_args);
-    proc.waitForFinished(30000);
+    const bool finished = proc.waitForFinished(30000);
+    if (!finished) {
+        LOG_WARN(TAG, QString("call_script timed out after 30s: %1").arg(script));
+        proc.kill();
+        proc.waitForFinished(500);
+        return {{"error", "Script timed out: " + script}};
+    }
 
     QString output = proc.readAllStandardOutput().trimmed();
     if (output.isEmpty()) {
@@ -1039,7 +1068,7 @@ MarketInfo ExchangeService::parse_market(const QJsonObject& j) {
 TickerData ExchangeService::fetch_ticker(const QString& symbol) {
     // Daemon path: ~100ms (reuses warm ccxt instance)
     // Legacy path: ~900ms (spawns Python, imports ccxt, creates exchange)
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         auto j = daemon_call("fetch_ticker", {{"symbol", symbol}});
         if (!j.contains("error"))
             return parse_ticker(j);
@@ -1052,7 +1081,7 @@ TickerData ExchangeService::fetch_ticker(const QString& symbol) {
 }
 
 QVector<TickerData> ExchangeService::fetch_tickers(const QStringList& symbols) {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         QJsonArray sym_arr;
         for (const auto& s : symbols)
             sym_arr.append(s);
@@ -1078,7 +1107,7 @@ QVector<TickerData> ExchangeService::fetch_tickers(const QStringList& symbols) {
 }
 
 OrderBookData ExchangeService::fetch_orderbook(const QString& symbol, int limit) {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         auto j = daemon_call("fetch_orderbook", {{"symbol", symbol}, {"limit", limit}});
         if (!j.contains("error"))
             return parse_orderbook(j);
@@ -1091,7 +1120,7 @@ OrderBookData ExchangeService::fetch_orderbook(const QString& symbol, int limit)
 }
 
 QVector<Candle> ExchangeService::fetch_ohlcv(const QString& symbol, const QString& timeframe, int limit) {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         auto j = daemon_call("fetch_ohlcv", {{"symbol", symbol}, {"timeframe", timeframe}, {"limit", limit}});
         if (!j.contains("error") && j.contains("candles")) {
             QVector<Candle> result;
@@ -1113,7 +1142,7 @@ QVector<Candle> ExchangeService::fetch_ohlcv(const QString& symbol, const QStrin
 }
 
 QVector<MarketInfo> ExchangeService::fetch_markets(const QString& type, const QString& query) {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         QJsonObject args;
         if (!type.isEmpty())
             args["type"] = type;
@@ -1145,7 +1174,7 @@ QVector<MarketInfo> ExchangeService::fetch_markets(const QString& type, const QS
 }
 
 QStringList ExchangeService::list_exchange_ids() {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         auto j = daemon_call("list_exchange_ids", {});
         if (!j.contains("error") && j.contains("exchanges")) {
             QStringList result;
@@ -1166,7 +1195,7 @@ QStringList ExchangeService::list_exchange_ids() {
 }
 
 QVector<TradeData> ExchangeService::fetch_trades(const QString& symbol, int limit) {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         auto j = daemon_call("fetch_trades", {{"symbol", symbol}, {"limit", limit}});
         if (!j.contains("error") && j.contains("trades")) {
             QVector<TradeData> result;
@@ -1207,7 +1236,7 @@ QVector<TradeData> ExchangeService::fetch_trades(const QString& symbol, int limi
 }
 
 FundingRateData ExchangeService::fetch_funding_rate(const QString& symbol) {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         auto j = daemon_call("fetch_funding_rate", {{"symbol", symbol}});
         if (!j.contains("error")) {
             FundingRateData fr;
@@ -1234,7 +1263,7 @@ FundingRateData ExchangeService::fetch_funding_rate(const QString& symbol) {
 }
 
 OpenInterestData ExchangeService::fetch_open_interest(const QString& symbol) {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         auto j = daemon_call("fetch_open_interest", {{"symbol", symbol}});
         if (!j.contains("error")) {
             OpenInterestData oi;
@@ -1257,7 +1286,7 @@ OpenInterestData ExchangeService::fetch_open_interest(const QString& symbol) {
 }
 
 QJsonObject ExchangeService::fetch_balance() {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         auto j = daemon_call("fetch_balance", {});
         if (!j.contains("error"))
             return j;
@@ -1267,7 +1296,7 @@ QJsonObject ExchangeService::fetch_balance() {
 
 QJsonObject ExchangeService::place_exchange_order(const QString& symbol, const QString& side, const QString& type,
                                                   double amount, double price) {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         QJsonObject args;
         args["symbol"] = symbol;
         args["side"] = side;
@@ -1287,7 +1316,7 @@ QJsonObject ExchangeService::place_exchange_order(const QString& symbol, const Q
 }
 
 QJsonObject ExchangeService::cancel_exchange_order(const QString& order_id, const QString& symbol) {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         auto j = daemon_call("cancel_order", {{"order_id", order_id}, {"symbol", symbol}});
         if (!j.contains("error"))
             return j;
@@ -1296,7 +1325,7 @@ QJsonObject ExchangeService::cancel_exchange_order(const QString& order_id, cons
 }
 
 QJsonObject ExchangeService::fetch_positions_live(const QString& symbol) {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         QJsonObject args;
         if (!symbol.isEmpty())
             args["symbol"] = symbol;
@@ -1311,7 +1340,7 @@ QJsonObject ExchangeService::fetch_positions_live(const QString& symbol) {
 }
 
 QJsonObject ExchangeService::fetch_open_orders_live(const QString& symbol) {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         QJsonObject args;
         if (!symbol.isEmpty())
             args["symbol"] = symbol;
@@ -1329,7 +1358,7 @@ MarkPriceData ExchangeService::fetch_mark_price(const QString& symbol) {
     MarkPriceData mp;
     mp.symbol = symbol;
     QJsonObject j;
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         j = daemon_call("fetch_mark_price", {{"symbol", symbol}});
         if (j.contains("error"))
             j = {};
@@ -1345,7 +1374,7 @@ MarkPriceData ExchangeService::fetch_mark_price(const QString& symbol) {
 }
 
 QJsonObject ExchangeService::fetch_my_trades(const QString& symbol, int limit) {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         auto j = daemon_call("fetch_my_trades", {{"symbol", symbol}, {"limit", limit}});
         if (!j.contains("error"))
             return j;
@@ -1355,7 +1384,7 @@ QJsonObject ExchangeService::fetch_my_trades(const QString& symbol, int limit) {
 }
 
 QJsonObject ExchangeService::fetch_trading_fees(const QString& symbol) {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         QJsonObject args;
         if (!symbol.isEmpty())
             args["symbol"] = symbol;
@@ -1371,7 +1400,7 @@ QJsonObject ExchangeService::fetch_trading_fees(const QString& symbol) {
 }
 
 QJsonObject ExchangeService::set_leverage(const QString& symbol, int leverage) {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         auto j = daemon_call("set_leverage", {{"symbol", symbol}, {"leverage", leverage}});
         if (!j.contains("error"))
             return j;
@@ -1381,7 +1410,7 @@ QJsonObject ExchangeService::set_leverage(const QString& symbol, int leverage) {
 }
 
 QJsonObject ExchangeService::set_margin_mode(const QString& symbol, const QString& mode) {
-    if (is_daemon_running()) {
+    if (wait_for_daemon_ready()) {
         auto j = daemon_call("set_margin_mode", {{"symbol", symbol}, {"mode", mode}});
         if (!j.contains("error"))
             return j;
