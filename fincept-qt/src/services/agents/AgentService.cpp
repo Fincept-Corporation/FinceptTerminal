@@ -159,8 +159,24 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
         }
     }
 
-    if (!params.isEmpty())
-        payload["params"] = params;
+    // Resolve user_id for per-persona SQLite isolation on the Python side.
+    // Priority: params["user_id"] (caller override) > config["user_id"] > session-derived.
+    // Session: user_info.id > 0 → QString::number(id); id == 0 (guest/unauth) → "guest".
+    QJsonObject enriched_params = params;
+    if (!enriched_params.contains("user_id") || enriched_params["user_id"].toString().isEmpty()) {
+        QString uid;
+        if (config.contains("user_id") && !config["user_id"].toString().isEmpty()) {
+            uid = config["user_id"].toString();
+        } else {
+            const auto& session = auth::AuthManager::instance().session();
+            uid = session.user_info.id > 0 ? QString::number(session.user_info.id)
+                                           : QStringLiteral("guest");
+        }
+        enriched_params["user_id"] = uid;
+    }
+
+    if (!enriched_params.isEmpty())
+        payload["params"] = enriched_params;
     if (!config.isEmpty())
         payload["config"] = config;
     return payload;
