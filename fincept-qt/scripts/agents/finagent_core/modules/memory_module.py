@@ -313,6 +313,7 @@ class AgenticMemoryModule:
     def __init__(
         self,
         user_id: str,
+        agent_id: str,
         db_path: Optional[str] = None,
         enable_auto_store: bool = True,
         max_memories: int = 1000
@@ -326,8 +327,12 @@ class AgenticMemoryModule:
             enable_auto_store: Allow agent to auto-store
             max_memories: Maximum memories to keep
         """
+        from finagent_core import resources
         self.user_id = user_id
-        self.db_path = db_path or f"./memories_{user_id}.db"
+        self.agent_id = agent_id
+        self.db_path = db_path or resources.agentic_memory_db(user_id, agent_id)
+        from pathlib import Path as _P
+        _P(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self.enable_auto_store = enable_auto_store
         self.max_memories = max_memories
 
@@ -603,8 +608,13 @@ class AgenticMemoryModule:
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> "AgenticMemoryModule":
         """Create from configuration."""
+        user_id = config.get("user_id", "default")
+        agent_id = config.get("agent_id")
+        if not agent_id:
+            raise ValueError("AgenticMemoryModule.from_config: 'agent_id' is required")
         return cls(
-            user_id=config.get("user_id", "default"),
+            user_id=user_id,
+            agent_id=agent_id,
             db_path=config.get("db_path"),
             enable_auto_store=config.get("enable_auto_store", True),
             max_memories=config.get("max_memories", 1000)
