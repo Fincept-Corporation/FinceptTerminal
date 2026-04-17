@@ -369,18 +369,21 @@ class CoreAgent:
     def setup_agentic_memory(self, config: Dict[str, Any] = None) -> "CoreAgent":
         """Deprecated: per-persona agentic memory now lives inside PersonaRuntime.
 
-        This shim remains for backward-compat with any direct caller that
-        pre-configures a top-level module, but requires agent_id in config.
-        Prefer passing memory config through CoreAgent.run() instead.
+        Shim kept for backward-compat with direct callers of store_memory /
+        recall_memories. When agent_id is missing from the config we default
+        to "default" and log a warning; prefer CoreAgent.run(..., agent_id=...)
+        which routes through PersonaRegistry for proper isolation.
         """
+        import logging
         from finagent_core.modules import AgenticMemoryModule
         cfg = dict(config or {})
         cfg.setdefault("user_id", self.user_id or "default")
         if "agent_id" not in cfg:
-            raise ValueError(
-                "CoreAgent.setup_agentic_memory: 'agent_id' is required in config. "
-                "Prefer CoreAgent.run(..., agent_id=...) which routes through PersonaRegistry."
+            logging.getLogger(__name__).warning(
+                "CoreAgent.setup_agentic_memory called without agent_id; "
+                "defaulting to 'default'. Prefer CoreAgent.run(..., agent_id=...)."
             )
+            cfg["agent_id"] = "default"
         self._agentic_memory = AgenticMemoryModule.from_config(cfg)
         self._modules["agentic_memory"] = self._agentic_memory
         return self

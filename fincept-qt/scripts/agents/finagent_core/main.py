@@ -112,6 +112,7 @@ def _setup_agent_modules(agent, config: Dict[str, Any], params: Dict[str, Any]):
     agentic_memory_cfg = config.get("agentic_memory") or params.get("agentic_memory")
     if agentic_memory_cfg:
         cfg = agentic_memory_cfg if isinstance(agentic_memory_cfg, dict) else {"user_id": params.get("user_id", "default")}
+        cfg.setdefault("agent_id", config.get("id") or config.get("agent_id") or "unnamed")
         agent.setup_agentic_memory(cfg)
 
     # Compression
@@ -722,7 +723,9 @@ def dispatch_action(
     if action == "store_memory":
         from finagent_core.core_agent import CoreAgent
         agent = CoreAgent(api_keys=api_keys, user_id=params.get("user_id"))
-        agent.setup_agentic_memory(params.get("agentic_memory") or config.get("agentic_memory") or {"user_id": params.get("user_id", "default")})
+        am_cfg = dict(params.get("agentic_memory") or config.get("agentic_memory") or {"user_id": params.get("user_id", "default")})
+        am_cfg.setdefault("agent_id", params.get("agent_id") or config.get("id") or config.get("agent_id") or "unnamed")
+        agent.setup_agentic_memory(am_cfg)
         content = params.get("content")
         if not content:
             return {"success": False, "error": "Missing 'content' in params"}
@@ -732,7 +735,9 @@ def dispatch_action(
     if action == "recall_memories":
         from finagent_core.core_agent import CoreAgent
         agent = CoreAgent(api_keys=api_keys, user_id=params.get("user_id"))
-        agent.setup_agentic_memory(params.get("agentic_memory") or config.get("agentic_memory") or {"user_id": params.get("user_id", "default")})
+        am_cfg = dict(params.get("agentic_memory") or config.get("agentic_memory") or {"user_id": params.get("user_id", "default")})
+        am_cfg.setdefault("agent_id", params.get("agent_id") or config.get("id") or config.get("agent_id") or "unnamed")
+        agent.setup_agentic_memory(am_cfg)
         memories = agent.recall_memories(params.get("query"), params.get("type"), params.get("limit", 5))
         return {"success": True, "memories": memories, "count": len(memories)}
 
