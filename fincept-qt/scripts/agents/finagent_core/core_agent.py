@@ -43,8 +43,6 @@ class CoreAgent:
 
         self.api_keys = api_keys or {}
         self.user_id = user_id
-        self._agent = None
-        self._current_config = None
         self._modules = {}
 
         # Advanced modules — kept as attrs for backward-compat with setup_* calls;
@@ -493,15 +491,6 @@ class CoreAgent:
         """Get a specific module instance."""
         return self._modules.get(name)
 
-    def _should_recreate_agent(self, config: Dict[str, Any]) -> bool:
-        """Check if agent needs to be recreated."""
-        if self._agent is None or self._current_config is None:
-            return True
-        for key in ["model", "instructions", "tools", "knowledge", "reasoning"]:
-            if self._current_config.get(key) != config.get(key):
-                return True
-        return False
-
     def _create_model(self, model_config: Dict[str, Any]) -> Any:
         """Create a model instance from config (used for team coordinator)."""
         from finagent_core.registries import ModelsRegistry
@@ -877,15 +866,6 @@ class CoreAgent:
         module = KnowledgeModule.from_config({**knowledge_config, "api_keys": self.api_keys})
         self._modules["knowledge"] = module
         return module.to_agent_config()
-
-    def _enhance_with_reasoning(self, instructions: str, reasoning_config: Dict[str, Any]) -> str:
-        """Enhance instructions with reasoning prompt."""
-        from finagent_core.modules import ReasoningModule
-        if isinstance(reasoning_config, bool):
-            reasoning_config = {"strategy": "chain_of_thought"}
-        module = ReasoningModule.from_config(reasoning_config)
-        return module.enhance_instructions(instructions)
-
 
 # =============================================================================
 # Builder Pattern
