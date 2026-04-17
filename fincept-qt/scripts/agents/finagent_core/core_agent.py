@@ -126,7 +126,7 @@ class CoreAgent:
 
         agents = []
         for agent_config in team_config.get("agents", team_config.get("members", [])):
-            agent = self._create_agent(agent_config)
+            agent = self._agno_for(agent_config)
             agents.append(agent)
 
         # Create coordinator model from team_config if specified
@@ -147,10 +147,31 @@ class CoreAgent:
 
         for step in workflow_config.get("steps", []):
             if step.get("agent_config"):
-                step["agent"] = self._create_agent(step["agent_config"])
+                step["agent"] = self._agno_for(step["agent_config"])
 
         workflow_module = WorkflowModule.from_config(workflow_config)
         return workflow_module.run(input_data)
+
+    def _agno_for(self, member_config: Dict[str, Any]) -> Any:
+        """Resolve an Agno Agent for a team member or workflow step via the registry.
+
+        Keying on (resolved_user_id, resolved_agent_id) — identical to solo run() —
+        so a team-member Buffett reuses the same PersonaRuntime as a solo Buffett
+        run, preserving memory/storage consistency across team/solo contexts.
+        """
+        resolved_user_id = self.user_id or member_config.get("user_id") or "default"
+        resolved_agent_id = (
+            member_config.get("agent_id")
+            or member_config.get("id")
+            or "unnamed"
+        )
+        runtime = self._registry.get_or_create(
+            user_id=resolved_user_id,
+            agent_id=resolved_agent_id,
+            config=member_config,
+            api_keys=self.api_keys,
+        )
+        return runtime.agno_agent
 
     def run_with_output_model(
         self,
