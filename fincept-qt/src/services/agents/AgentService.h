@@ -54,8 +54,10 @@ class AgentService : public QObject {
     QString execute_plan(const QJsonObject& plan, const QJsonObject& config = {});
 
     // ── Memory & Knowledge ───────────────────────────────────────────────────
-    void store_memory(const QString& content, const QString& memory_type = "general", const QJsonObject& metadata = {});
-    void recall_memories(const QString& query, const QString& memory_type = {}, int limit = 10);
+    void store_memory(const QString& content, const QString& memory_type = "general",
+                      const QJsonObject& metadata = {}, const QString& agent_id = {});
+    void recall_memories(const QString& query, const QString& memory_type = {}, int limit = 10,
+                         const QString& agent_id = {});
     void search_knowledge(const QString& query, int limit = 10);
     void save_memory_repo(const QString& content, const QString& agent_id = {}, const QJsonObject& options = {});
     void search_memories_repo(const QString& query, const QString& agent_id = {}, int limit = 10);

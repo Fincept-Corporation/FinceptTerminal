@@ -1306,12 +1306,15 @@ QString AgentService::create_portfolio_plan(const QJsonObject& goals, const QJso
 
 // ── Memory & Knowledge ───────────────────────────────────────────────────────
 
-void AgentService::store_memory(const QString& content, const QString& memory_type, const QJsonObject& metadata) {
+void AgentService::store_memory(const QString& content, const QString& memory_type,
+                                const QJsonObject& metadata, const QString& agent_id) {
     QJsonObject params;
     params["content"] = content;
     params["memory_type"] = memory_type;
     if (!metadata.isEmpty())
         params["metadata"] = metadata;
+    if (!agent_id.isEmpty())
+        params["agent_id"] = agent_id;
 
     QPointer<AgentService> self = this;
     run_python_stdin("store_memory", params, {}, [self](bool ok, QJsonObject result) {
@@ -1321,12 +1324,15 @@ void AgentService::store_memory(const QString& content, const QString& memory_ty
     });
 }
 
-void AgentService::recall_memories(const QString& query, const QString& memory_type, int limit) {
+void AgentService::recall_memories(const QString& query, const QString& memory_type, int limit,
+                                   const QString& agent_id) {
     QJsonObject params;
     params["query"] = query;
     if (!memory_type.isEmpty())
         params["memory_type"] = memory_type;
     params["limit"] = limit;
+    if (!agent_id.isEmpty())
+        params["agent_id"] = agent_id;
 
     QPointer<AgentService> self = this;
     run_python_stdin("recall_memories", params, {}, [self](bool ok, QJsonObject result) {
