@@ -52,6 +52,43 @@ QString PythonRunner::scripts_dir() const {
     return scripts_dir_;
 }
 
+// ── Standard Python environment ──────────────────────────────────────────────
+// Shared by PythonRunner::run() and external direct-QProcess callers
+// (e.g., AgentService's stdin/stream paths). Anything every Python spawn needs
+// — encoding pins, FINCEPT_DATA_DIR, FINAGENT_DATA_DIR, base PYTHONPATH — lives
+// here. Script-specific path additions (parent-of-pkg) stay in run().
+QProcessEnvironment PythonRunner::build_python_env() const {
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert("PYTHONIOENCODING", "utf-8");
+    env.insert("PYTHONDONTWRITEBYTECODE", "1");
+    env.insert("PYTHONUNBUFFERED", "1");
+
+    const QString install_dir = PythonSetupManager::instance().install_dir();
+    env.insert("FINCEPT_DATA_DIR", install_dir);
+
+    // FINAGENT_DATA_DIR: default to <FINCEPT_DATA_DIR>/finagent. Always overwrite
+    // so we match what resources.py expects regardless of what the user shell
+    // inherited — the app owns its own per-persona storage root.
+    env.insert("FINAGENT_DATA_DIR", install_dir + "/finagent");
+
+    // FINAGENT_RUNTIME_CACHE_SIZE: respect user override if already set; otherwise
+    // leave unset so persona_registry.py uses its own default (8).
+    // (No insert here by design.)
+
+    // Base PYTHONPATH: scripts_dir on front, preserve whatever the user had.
+#ifdef _WIN32
+    const QChar kPathSep = ';';
+#else
+    const QChar kPathSep = ':';
+#endif
+    const QString existing_pypath = env.value("PYTHONPATH");
+    QString new_pypath =
+        existing_pypath.isEmpty() ? scripts_dir_ : (scripts_dir_ + kPathSep + existing_pypath);
+    env.insert("PYTHONPATH", new_pypath);
+
+    return env;
+}
+
 // ── Venv routing ─────────────────────────────────────────────────────────────
 // Routes scripts to the correct venv based on their name.
 
@@ -308,30 +345,27 @@ void PythonRunner::start_next() {
             }
         }
 
-        // Set environment for clean Python execution
-        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-        env.insert("PYTHONIOENCODING", "utf-8");
-        env.insert("PYTHONDONTWRITEBYTECODE", "1");
-        env.insert("PYTHONUNBUFFERED", "1");
-        env.insert("FINCEPT_DATA_DIR", PythonSetupManager::instance().install_dir());
+        // Start from the shared base env (encoding pins, FINCEPT_DATA_DIR,
+        // FINAGENT_DATA_DIR, base PYTHONPATH = scripts_dir_).
+        QProcessEnvironment env = build_python_env();
 
-        const QString existing_pypath = env.value("PYTHONPATH");
-#ifdef _WIN32
-        const QChar kPathSep = ';';
-#else
-        const QChar kPathSep = ':';
-#endif
-        QString new_pypath =
-            existing_pypath.isEmpty() ? scripts_dir_ : (scripts_dir_ + kPathSep + existing_pypath);
-
+        // Script-specific: if the script is inside a sub-package (contains '/'),
+        // prepend the parent-of-pkg dir so relative imports resolve.
         if (!is_code && req.script.contains('/')) {
+#ifdef _WIN32
+            const QChar kPathSep = ';';
+#else
+            const QChar kPathSep = ':';
+#endif
             QString script_dir = QFileInfo(scripts_dir_ + "/" + req.script).dir().absolutePath();
             QString parent_of_pkg = QFileInfo(script_dir).dir().absolutePath();
-            if (parent_of_pkg != scripts_dir_ && !new_pypath.contains(parent_of_pkg))
-                new_pypath = parent_of_pkg + kPathSep + new_pypath;
+            QString pypath = env.value("PYTHONPATH");
+            if (parent_of_pkg != scripts_dir_ && !pypath.contains(parent_of_pkg)) {
+                pypath = parent_of_pkg + kPathSep + pypath;
+                env.insert("PYTHONPATH", pypath);
+            }
         }
 
-        env.insert("PYTHONPATH", new_pypath);
         proc->setProcessEnvironment(env);
         proc->setWorkingDirectory(scripts_dir_);
 

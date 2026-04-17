@@ -211,6 +211,16 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
 
     // Spawn QProcess directly for stdin writing (P4 exception like ExchangeService)
     auto* proc = new QProcess(this);
+    // Share the standard Python env + cwd + Windows console suppression with
+    // PythonRunner so every finagent spawn sees the same FINCEPT_DATA_DIR,
+    // FINAGENT_DATA_DIR, and PYTHONPATH.
+    proc->setProcessEnvironment(py.build_python_env());
+    proc->setWorkingDirectory(py.scripts_dir());
+#ifdef _WIN32
+    proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
+        cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
+    });
+#endif
     QPointer<AgentService> self = this;
     auto timer = std::make_shared<QElapsedTimer>();
     timer->start();
@@ -472,6 +482,16 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
     QString script_path = py.scripts_dir() + "/agents/finagent_core/main.py";
 
     auto* proc = new QProcess(this);
+    // Share the standard Python env + cwd + Windows console suppression with
+    // PythonRunner so every finagent spawn sees the same FINCEPT_DATA_DIR,
+    // FINAGENT_DATA_DIR, and PYTHONPATH.
+    proc->setProcessEnvironment(py.build_python_env());
+    proc->setWorkingDirectory(py.scripts_dir());
+#ifdef _WIN32
+    proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
+        cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
+    });
+#endif
     QPointer<AgentService> self = this;
     auto timer = std::make_shared<QElapsedTimer>();
     auto accumulated = std::make_shared<QString>();
@@ -656,6 +676,16 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
     QString script_path = py.scripts_dir() + "/agents/finagent_core/main.py";
 
     auto* proc = new QProcess(this);
+    // Share the standard Python env + cwd + Windows console suppression with
+    // PythonRunner so every finagent spawn sees the same FINCEPT_DATA_DIR,
+    // FINAGENT_DATA_DIR, and PYTHONPATH.
+    proc->setProcessEnvironment(py.build_python_env());
+    proc->setWorkingDirectory(py.scripts_dir());
+#ifdef _WIN32
+    proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
+        cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
+    });
+#endif
     QPointer<AgentService> self = this;
     auto timer = std::make_shared<QElapsedTimer>();
     auto accumulated = std::make_shared<QString>();
