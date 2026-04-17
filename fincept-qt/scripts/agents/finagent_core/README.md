@@ -124,3 +124,48 @@ python agent_manager.py execute_single_agent \
 1. Frontend sends config + query
 2. CoreAgent adapts and responds
 3. Tab-specific configs stored in DB (future)
+
+## Persona Isolation (2026-04-18)
+
+Each persona (Buffett, Ackman, Munger, etc.) runs inside its own
+`PersonaRuntime` with private SQLite files for sessions, memory, knowledge,
+and agentic memory. State never leaks across personas.
+
+### On-disk layout
+
+```
+<FINAGENT_DATA_DIR>/users/<user_id>/personas/<agent_id>/
+    ├── sessions.db         # Agno SqliteStorage
+    ├── memory.db           # Agno SqliteMemoryDb
+    ├── knowledge/          # vector store
+    └── agentic_memory.db   # AgenticMemoryModule SQLite
+```
+
+`FINAGENT_DATA_DIR` defaults to
+`%LOCALAPPDATA%/com.fincept.terminal/finagent` on Windows and
+`$XDG_DATA_HOME/com.fincept.terminal/finagent` (or `~/.local/share/...`)
+elsewhere.
+
+### Tuning
+
+- `FINAGENT_RUNTIME_CACHE_SIZE` — max `PersonaRuntime` instances kept in
+  memory (default 8). LRU-evicted when exceeded; DB files persist on disk.
+
+### Migration from the pre-2026-04-18 layout
+
+The old shared files at
+`<FINAGENT_DATA_DIR>/agent_memory.db` and `agent_storage.db` are **not read
+and not deleted** by the new code. They remain on disk for rollback safety.
+Delete them manually once you are happy with the new per-persona setup:
+
+```
+rm <FINAGENT_DATA_DIR>/agent_memory.db
+rm <FINAGENT_DATA_DIR>/agent_storage.db
+rm <current-working-dir>/memories_*.db
+```
+
+### JSON: no changes required
+
+Every persona JSON continues to work unchanged. If a persona specifies
+`memory.db_path`, `storage.db_path`, or `knowledge.path`, JSON wins. If it
+omits them, per-persona defaults are derived from `(user_id, agent_id)`.
