@@ -65,8 +65,13 @@ def test_close_is_idempotent(monkeypatch, tmp_path):
         mock_build.return_value = MagicMock()
         rt = PersonaRuntime.build("u", "a", _minimal_config(), api_keys={})
 
+    fake_backend = MagicMock()
+    rt.memory_backend = fake_backend
+    rt._closed = False  # force re-enable for this test after stubbed build
+
     rt.close()
-    rt.close()  # must not raise
+    rt.close()  # must not raise, must not double-close
+    assert fake_backend.close.call_count == 1
 
 
 def test_two_personas_same_user_use_different_paths(monkeypatch, tmp_path):

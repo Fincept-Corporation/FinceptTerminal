@@ -11,7 +11,7 @@ PersonaRegistry creates these, caches them, and closes them on eviction.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from finagent_core import resources
 
@@ -89,7 +89,16 @@ def build_agno_agent(config: Dict[str, Any],
     tmp._create_storage = lambda _cfg: storage_backend
     if knowledge_agent_kwargs is not None:
         tmp._setup_knowledge = lambda _cfg: knowledge_agent_kwargs
-    return tmp._create_agent(config)
+
+    # Ensure CoreAgent actually wires the storage/knowledge we built. Its
+    # _create_storage/_setup_knowledge gates on config keys — inject empty
+    # dicts so the gates open and our monkey-patches are used.
+    cfg = dict(config)
+    if storage_backend is not None and "storage" not in cfg and not cfg.get("session_id"):
+        cfg["storage"] = {}
+    if knowledge_agent_kwargs is not None and "knowledge" not in cfg:
+        cfg["knowledge"] = {}
+    return tmp._create_agent(cfg)
 
 
 class PersonaRuntime:
@@ -141,6 +150,11 @@ class PersonaRuntime:
                 create_user_memories=mc.get("create_user_memories", True),
                 create_session_summary=mc.get("create_session_summary", True),
             )
+            if memory_backend is None:
+                logger.error(
+                    f"Memory backend build returned None for persona "
+                    f"user_id={user_id!r} agent_id={agent_id!r}"
+                )
 
         storage_cfg = config.get("storage", {})
         storage_backend = None
@@ -150,6 +164,11 @@ class PersonaRuntime:
                 db_path=sc.get("db_path") or resources.sessions_db(user_id, agent_id),
                 table_name=sc.get("table_name", "agent_sessions"),
             )
+            if storage_backend is None:
+                logger.error(
+                    f"Storage backend build returned None for persona "
+                    f"user_id={user_id!r} agent_id={agent_id!r}"
+                )
 
         knowledge_module = None
         knowledge_agent_kwargs = None
@@ -158,6 +177,11 @@ class PersonaRuntime:
             knowledge_module = _build_knowledge_module(knowledge_cfg, user_id, agent_id, api_keys)
             if knowledge_module is not None:
                 knowledge_agent_kwargs = knowledge_module.to_agent_config()
+            if knowledge_module is None:
+                logger.error(
+                    f"Knowledge module build returned None for persona "
+                    f"user_id={user_id!r} agent_id={agent_id!r}"
+                )
 
         agno_agent = build_agno_agent(
             config=config,
