@@ -1,5 +1,3 @@
-import os
-
 import pytest
 
 from finagent_core.modules.memory_module import AgenticMemoryModule
@@ -46,5 +44,6 @@ def test_explicit_db_path_overrides_default(monkeypatch, tmp_path):
     mod = AgenticMemoryModule.from_config(
         {"user_id": "alice", "agent_id": "x", "db_path": str(custom)}
     )
+    assert mod.db_path == str(custom)
     mod.store("hello", memory_type="fact")
     assert custom.exists()

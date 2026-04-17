@@ -11,9 +11,12 @@ Provides:
 """
 
 from typing import Dict, Any, Optional, List, Callable
+from pathlib import Path
 import logging
 import json
 from datetime import datetime
+
+from finagent_core import resources
 
 logger = logging.getLogger(__name__)
 
@@ -323,16 +326,15 @@ class AgenticMemoryModule:
 
         Args:
             user_id: User ID
+            agent_id: Agent ID
             db_path: Database path
             enable_auto_store: Allow agent to auto-store
             max_memories: Maximum memories to keep
         """
-        from finagent_core import resources
         self.user_id = user_id
         self.agent_id = agent_id
         self.db_path = db_path or resources.agentic_memory_db(user_id, agent_id)
-        from pathlib import Path as _P
-        _P(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self.enable_auto_store = enable_auto_store
         self.max_memories = max_memories
 
