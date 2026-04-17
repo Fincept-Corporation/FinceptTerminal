@@ -138,6 +138,8 @@ void register_agent_nodes(NodeRegistry& registry) {
                 config["guardrails"] = params.value("guardrails").toBool(false);
                 config["tracing"] = false;
                 config["agentic_memory"] = false;
+                if (!agent_id.isEmpty())
+                    config["agent_id"] = agent_id;
 
                 // Build query — prepend upstream context if any
                 QString query;
