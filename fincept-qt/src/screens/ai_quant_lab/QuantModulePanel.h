@@ -81,6 +81,12 @@ class QuantModulePanel : public QWidget {
     QTextEdit* rd_agent_output_ = nullptr;  // rd_agent tab output
     QTableWidget* rd_task_table_ = nullptr; // rd_agent task monitor
 
+    // RL Trading subtab — live progress UI
+    class QProgressBar* rl_progress_bar_ = nullptr;
+    QLabel* rl_progress_stats_ = nullptr;
+    class QPlainTextEdit* rl_log_console_ = nullptr;
+    QPushButton* rl_train_button_ = nullptr;
+
     QHash<QString, QDoubleSpinBox*> double_inputs_;
     QHash<QString, QLineEdit*> text_inputs_;
     QHash<QString, QComboBox*> combo_inputs_;

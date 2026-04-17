@@ -25,6 +25,7 @@
 #include <QJsonDocument>
 #include <QRegularExpression>
 #include <QFrame>
+#include <QPlainTextEdit>
 #include <QProgressBar>
 #include <QScrollArea>
 #include <QTabWidget>
@@ -250,6 +251,29 @@ void QuantModulePanel::connect_service() {
     auto& svc = AIQuantLabService::instance();
     connect(&svc, &AIQuantLabService::result_ready, this, &QuantModulePanel::on_result);
     connect(&svc, &AIQuantLabService::error_occurred, this, &QuantModulePanel::on_error);
+
+    // RL Trading live-streaming signals. Filtered by module_id so only the RL panel
+    // updates its widgets; other panels ignore these.
+    connect(&svc, &AIQuantLabService::training_progress, this,
+            [this](const QString& module_id, int step, int total, double reward_mean, double loss) {
+                if (module_id != "rl_trading" || !rl_progress_bar_)
+                    return;
+                const int pct = (total > 0) ? qBound(0, int(100.0 * step / total), 100) : 0;
+                rl_progress_bar_->setValue(pct);
+                rl_progress_stats_->setText(QString("step %1 / %2 · reward %3 · loss %4")
+                                                .arg(step)
+                                                .arg(total)
+                                                .arg(reward_mean, 0, 'f', 3)
+                                                .arg(loss, 0, 'f', 4));
+            });
+
+    connect(&svc, &AIQuantLabService::training_log, this,
+            [this](const QString& module_id, const QString& line, bool is_stderr) {
+                if (module_id != "rl_trading" || !rl_log_console_)
+                    return;
+                const QString prefix = is_stderr ? QStringLiteral("[stderr] ") : QString();
+                rl_log_console_->appendPlainText(prefix + line);
+            });
 }
 
 void QuantModulePanel::build_ui() {
@@ -742,8 +766,16 @@ QWidget* QuantModulePanel::build_rl_trading_panel() {
     double_inputs_["rl_capital"] = capital;
     vl->addWidget(build_input_row("Initial Capital ($)", capital, w));
 
-    auto* train_run = make_run_button("TRAIN RL AGENT", w);
-    connect(train_run, &QPushButton::clicked, this, [this]() {
+    rl_train_button_ = make_run_button("TRAIN RL AGENT", w);
+    connect(rl_train_button_, &QPushButton::clicked, this, [this]() {
+        if (!rl_train_button_ || !rl_log_console_) return;
+        rl_log_console_->clear();
+        rl_progress_bar_->setValue(0);
+        rl_progress_bar_->setVisible(true);
+        rl_progress_stats_->setText("step 0 / — · reward — · loss —");
+        rl_progress_stats_->setVisible(true);
+        rl_log_console_->setVisible(true);
+        rl_train_button_->setEnabled(false);
         status_label_->setText("Training RL Agent...");
         QJsonObject params;
         params["algorithm"] = combo_inputs_["rl_algo"]->currentText();
@@ -753,7 +785,50 @@ QWidget* QuantModulePanel::build_rl_trading_panel() {
         params["initial_capital"] = double_inputs_["rl_capital"]->value();
         AIQuantLabService::instance().train_rl_agent(params);
     });
-    vl->addWidget(train_run);
+    vl->addWidget(rl_train_button_);
+
+    // Progress bar — hidden until training starts
+    rl_progress_bar_ = new QProgressBar(w);
+    rl_progress_bar_->setRange(0, 100);
+    rl_progress_bar_->setValue(0);
+    rl_progress_bar_->setTextVisible(true);
+    rl_progress_bar_->setFixedHeight(18);
+    rl_progress_bar_->setVisible(false);
+    rl_progress_bar_->setStyleSheet(
+        QString("QProgressBar { background:%1; border:1px solid %2; border-radius:2px; text-align:center; color:%3; }"
+                "QProgressBar::chunk { background:%4; }")
+            .arg(ui::colors::BG_RAISED())
+            .arg(ui::colors::BORDER_MED())
+            .arg(ui::colors::TEXT_PRIMARY())
+            .arg(module_.color.name()));
+    vl->addWidget(rl_progress_bar_);
+
+    // Stats label — hidden until training starts
+    rl_progress_stats_ = new QLabel(w);
+    rl_progress_stats_->setText("");
+    rl_progress_stats_->setVisible(false);
+    rl_progress_stats_->setStyleSheet(
+        QString("color:%1; background:transparent; font-family:%2; font-size:%3px;")
+            .arg(ui::colors::TEXT_SECONDARY())
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::fonts::SMALL));
+    vl->addWidget(rl_progress_stats_);
+
+    // Log console — hidden until training starts
+    rl_log_console_ = new QPlainTextEdit(w);
+    rl_log_console_->setReadOnly(true);
+    rl_log_console_->setMaximumBlockCount(5000);
+    rl_log_console_->setMinimumHeight(200);
+    rl_log_console_->setVisible(false);
+    rl_log_console_->setStyleSheet(
+        QString("QPlainTextEdit { background:%1; color:%2; border:1px solid %3; border-radius:2px;"
+                "font-family:%4; font-size:%5px; padding:6px; }")
+            .arg(ui::colors::BG_BASE())
+            .arg(ui::colors::TEXT_PRIMARY())
+            .arg(ui::colors::BORDER_MED())
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::fonts::SMALL));
+    vl->addWidget(rl_log_console_);
 
     auto* rc = new QWidget(w);
     results_layout_ = new QVBoxLayout(rc);
@@ -1902,6 +1977,14 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
     if (module_id != module_.id)
         return;
 
+    // RL Trading: training finished → re-enable button, keep progress/logs visible so
+    // the user can inspect the run. The generic result display below still runs.
+    if (module_id == "rl_trading" && command == "train" && rl_train_button_) {
+        rl_train_button_->setEnabled(true);
+        if (rl_progress_bar_)
+            rl_progress_bar_->setValue(100);
+    }
+
     // ── LangGraph deep analysis result ───────────────────────────────────────
     if (command == "execute_task") {
         if (!data["success"].toBool()) {
@@ -2985,8 +3068,12 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 }
 
 void QuantModulePanel::on_error(const QString& module_id, const QString& message) {
-    if (module_id == module_.id)
-        display_error(message);
+    if (module_id != module_.id)
+        return;
+    if (module_id == "rl_trading" && rl_train_button_) {
+        rl_train_button_->setEnabled(true);
+    }
+    display_error(message);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
