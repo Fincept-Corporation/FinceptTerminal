@@ -186,9 +186,10 @@ void AIQuantLabService::train_rl_agent(const QJsonObject& params) {
         } else {
             QString msg;
             if (found_result && !result.success) {
-                msg = QString("Training process exited abnormally (exit=%1) after emitting result: %2")
-                          .arg(result.exit_code)
-                          .arg(result.error);
+                msg = QString("Training process exited abnormally (exit=%1) after emitting result")
+                          .arg(result.exit_code);
+                if (!result.error.isEmpty())
+                    msg += QStringLiteral(": ") + result.error;
             } else if (!result.error.isEmpty()) {
                 msg = result.error;
             } else {
