@@ -17,11 +17,13 @@ def test_sanitize_replaces_unsafe_chars():
     assert resources.sanitize("spaces here") == "spaces_here"
 
 
-def test_sanitize_rejects_empty():
+def test_sanitize_rejects_empty_or_none():
     with pytest.raises(ValueError):
         resources.sanitize("")
     with pytest.raises(ValueError):
         resources.sanitize("   ")
+    with pytest.raises(ValueError):
+        resources.sanitize(None)
 
 
 def test_base_dir_respects_env_var(monkeypatch, tmp_path):
@@ -29,6 +31,13 @@ def test_base_dir_respects_env_var(monkeypatch, tmp_path):
     # Force re-read
     base = resources.base_dir()
     assert Path(base) == tmp_path
+
+
+def test_base_dir_expands_tilde(monkeypatch):
+    monkeypatch.setenv("FINAGENT_DATA_DIR", "~/finagent-test-xyz")
+    base = resources.base_dir()
+    assert "~" not in base
+    assert base.endswith("finagent-test-xyz")
 
 
 def test_persona_dir_structure(monkeypatch, tmp_path):
