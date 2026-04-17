@@ -181,7 +181,7 @@ QString PythonRunner::find_scripts_dir() const {
 
 // ── Run Script ───────────────────────────────────────────────────────────────
 
-void PythonRunner::run(const QString& script, const QStringList& args, Callback cb) {
+void PythonRunner::run(const QString& script, const QStringList& args, Callback cb, StreamCallback on_line) {
     if (python_init_done_ && python_path_.isEmpty()) {
         cb({false, {}, "Python not available — run first-time setup from the app", -1});
         return;
@@ -194,7 +194,7 @@ void PythonRunner::run(const QString& script, const QStringList& args, Callback 
     }
 
     // Queue the request and start if under concurrency limit
-    queue_.enqueue({script, args, std::move(cb)});
+    queue_.enqueue({script, args, std::move(cb), std::move(on_line)});
     start_next();
 }
 
@@ -341,14 +341,42 @@ void PythonRunner::start_next() {
         });
 #endif
 
-        // Initialize incremental output buffers
+        // Initialize incremental output buffers (carry stream callback from the request)
         proc_buffers_[proc] = {};
+        proc_buffers_[proc].on_line = req.on_line;
 
-        // Buffer stdout/stderr incrementally instead of reading all at once on finish
+        // Helper: drain complete \n-terminated lines from a buffer starting at `offset`,
+        // invoke `on_line(line, is_stderr)` per line, advance `offset`. Trailing
+        // partial line (no \n yet) stays in the buffer for the next read.
+        auto drain_lines = [this, proc](bool is_stderr) {
+            auto& bufs = proc_buffers_[proc];
+            if (!bufs.on_line) return;
+            QByteArray& buf = is_stderr ? bufs.stderr_buf : bufs.stdout_buf;
+            int& off = is_stderr ? bufs.stderr_streamed : bufs.stdout_streamed;
+            while (true) {
+                int nl = buf.indexOf('\n', off);
+                if (nl < 0) break;
+                // Line is buf[off..nl) — exclude the trailing \n; also trim \r for CRLF
+                QByteArray line = buf.mid(off, nl - off);
+                if (line.endsWith('\r')) line.chop(1);
+                off = nl + 1;
+                bufs.on_line(QString::fromUtf8(line), is_stderr);
+            }
+        };
+
+        // Buffer stdout/stderr incrementally. After each append, drain complete lines
+        // to the optional stream callback. The full buffer is still available for the
+        // `finished` handler's authoritative parse.
         connect(proc, &QProcess::readyReadStandardOutput, this,
-                [this, proc]() { proc_buffers_[proc].stdout_buf.append(proc->readAllStandardOutput()); });
+                [this, proc, drain_lines]() {
+                    proc_buffers_[proc].stdout_buf.append(proc->readAllStandardOutput());
+                    drain_lines(false);
+                });
         connect(proc, &QProcess::readyReadStandardError, this,
-                [this, proc]() { proc_buffers_[proc].stderr_buf.append(proc->readAllStandardError()); });
+                [this, proc, drain_lines]() {
+                    proc_buffers_[proc].stderr_buf.append(proc->readAllStandardError());
+                    drain_lines(true);
+                });
 
         auto cb = std::move(req.cb);
         auto script_name = std::move(req.script);
