@@ -177,13 +177,23 @@ void AIQuantLabService::train_rl_agent(const QJsonObject& params) {
                 found_result = true;
             }
         }
-        if (found_result) {
+        // Only trust a result event if the process also exited cleanly. A crash
+        // after the script emitted a result line would otherwise surface stale
+        // data as success — unsafe for a finance-critical training path.
+        if (found_result && result.success) {
             LOG_INFO("AIQuantLab", "[rl_trading/train] Result ready");
             emit self->result_ready("rl_trading", "train", final_result);
         } else {
-            const QString msg = result.error.isEmpty()
-                                    ? QStringLiteral("Training ended without result")
-                                    : result.error;
+            QString msg;
+            if (found_result && !result.success) {
+                msg = QString("Training process exited abnormally (exit=%1) after emitting result: %2")
+                          .arg(result.exit_code)
+                          .arg(result.error);
+            } else if (!result.error.isEmpty()) {
+                msg = result.error;
+            } else {
+                msg = QStringLiteral("Training ended without result");
+            }
             LOG_ERROR("AIQuantLab", QString("[rl_trading/train] Failed: %1").arg(msg));
             emit self->error_occurred("rl_trading", msg);
         }
