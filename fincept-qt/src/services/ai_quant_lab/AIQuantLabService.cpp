@@ -120,7 +120,77 @@ void AIQuantLabService::optimize_portfolio(const QJsonObject& params) {
 
 // ── RL Trading ───────────────────────────────────────────────────────────────
 void AIQuantLabService::train_rl_agent(const QJsonObject& params) {
-    run_module("rl_trading", "train", params);
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    QPointer<AIQuantLabService> self = this;
+
+    // Called per stdout/stderr line while the process runs — for live UX only.
+    auto on_line = [self](QString line, bool is_stderr) {
+        if (!self)
+            return;
+        const auto trimmed = line.trimmed();
+        if (trimmed.startsWith('{')) {
+            auto doc = QJsonDocument::fromJson(trimmed.toUtf8());
+            if (!doc.isNull() && doc.isObject()) {
+                auto obj = doc.object();
+                const auto event = obj.value("event").toString();
+                if (event == "progress") {
+                    emit self->training_progress(
+                        "rl_trading",
+                        obj.value("step").toInt(),
+                        obj.value("total").toInt(),
+                        obj.value("reward_mean").toDouble(),
+                        obj.value("loss").toDouble());
+                    return;
+                }
+                if (event == "log") {
+                    emit self->training_log(
+                        "rl_trading", obj.value("msg").toString(), is_stderr);
+                    return;
+                }
+                // "result" events are handled authoritatively in the finished callback.
+                if (event == "result")
+                    return;
+            }
+        }
+        // Non-JSON or untagged line → raw log entry (SB3 warnings, stack traces, etc).
+        emit self->training_log("rl_trading", line, is_stderr);
+    };
+
+    // Called once when the process ends — authoritative parse for the final result.
+    auto on_finished = [self](python::PythonResult result) {
+        if (!self)
+            return;
+        QJsonObject final_result;
+        bool found_result = false;
+        const auto lines = result.output.split('\n', Qt::SkipEmptyParts);
+        for (const auto& line : lines) {
+            const auto trimmed = line.trimmed();
+            if (!trimmed.startsWith('{'))
+                continue;
+            auto doc = QJsonDocument::fromJson(trimmed.toUtf8());
+            if (doc.isNull() || !doc.isObject())
+                continue;
+            auto obj = doc.object();
+            if (obj.value("event").toString() == "result") {
+                obj.remove("event");
+                final_result = obj;
+                found_result = true;
+            }
+        }
+        if (found_result) {
+            LOG_INFO("AIQuantLab", "[rl_trading/train] Result ready");
+            emit self->result_ready("rl_trading", "train", final_result);
+        } else {
+            const QString msg = result.error.isEmpty()
+                                    ? QStringLiteral("Training ended without result")
+                                    : result.error;
+            LOG_ERROR("AIQuantLab", QString("[rl_trading/train] Failed: %1").arg(msg));
+            emit self->error_occurred("rl_trading", msg);
+        }
+    };
+
+    python::PythonRunner::instance().run("ai_quant_lab/qlib_rl.py", {"train", json},
+                                         on_finished, on_line);
 }
 
 void AIQuantLabService::evaluate_rl_agent(const QJsonObject& params) {

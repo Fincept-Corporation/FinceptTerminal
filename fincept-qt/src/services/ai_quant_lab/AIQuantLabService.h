@@ -147,6 +147,10 @@ class AIQuantLabService : public QObject {
   signals:
     void result_ready(QString module_id, QString command, QJsonObject data);
     void error_occurred(QString module_id, QString message);
+    /// Emitted during a streaming training run (currently: rl_trading/train).
+    void training_progress(QString module_id, int step, int total,
+                           double reward_mean, double loss);
+    void training_log(QString module_id, QString line, bool is_stderr);
 
   private:
     explicit AIQuantLabService(QObject* parent = nullptr);
