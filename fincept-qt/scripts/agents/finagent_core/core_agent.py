@@ -39,19 +39,25 @@ class CoreAgent:
         api_keys: Optional[Dict[str, str]] = None,
         user_id: Optional[str] = None
     ):
+        from finagent_core.persona_registry import PersonaRegistry
+
         self.api_keys = api_keys or {}
         self.user_id = user_id
         self._agent = None
         self._current_config = None
         self._modules = {}
 
-        # Advanced modules
+        # Advanced modules — kept as attrs for backward-compat with setup_* calls;
+        # actual per-persona state lives inside PersonaRuntime instances.
         self._guardrails = None
         self._evaluation = None
         self._tracing = None
         self._compression = None
         self._hooks = None
         self._agentic_memory = None
+
+        # Per-persona runtime cache.
+        self._registry = PersonaRegistry()
 
     # ============================================================
     # Core Execution Methods
@@ -62,7 +68,9 @@ class CoreAgent:
         query: str,
         config: Dict[str, Any],
         session_id: Optional[str] = None,
-        stream: bool = False
+        stream: bool = False,
+        agent_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> Any:
         """
         Execute agent with given configuration.
@@ -79,32 +87,35 @@ class CoreAgent:
                 - markdown: Output format
             session_id: Session ID for memory persistence
             stream: Enable streaming response
+            agent_id: Persona identifier (falls back to config["agent_id"] or config["id"]).
+            user_id: User identifier (falls back to self.user_id or config["user_id"] or "default").
 
         Returns:
             Agent response
         """
-        # Inject session_id into config for storage setup
         if session_id:
             config = {**config, "session_id": session_id}
 
-        # Recreate agent if config changed
-        if self._should_recreate_agent(config):
-            self._agent = self._create_agent(config)
-            self._current_config = config
+        resolved_user_id = (
+            user_id
+            or self.user_id
+            or config.get("user_id")
+            or "default"
+        )
+        resolved_agent_id = (
+            agent_id
+            or config.get("agent_id")
+            or config.get("id")
+            or "unnamed"
+        )
 
-        # Build run kwargs
-        run_kwargs = {"input": query}  # Agno uses 'input' parameter
-
-        if session_id:
-            run_kwargs["session_id"] = session_id
-
-        if stream:
-            run_kwargs["stream"] = True
-            return self._agent.run(**run_kwargs)
-
-        # Non-streaming run
-        response = self._agent.run(**run_kwargs)
-        return response
+        runtime = self._registry.get_or_create(
+            user_id=resolved_user_id,
+            agent_id=resolved_agent_id,
+            config=config,
+            api_keys=self.api_keys,
+        )
+        return runtime.run(query, session_id=session_id, stream=stream)
 
     def run_team(
         self,
@@ -356,10 +367,21 @@ class CoreAgent:
         return self
 
     def setup_agentic_memory(self, config: Dict[str, Any] = None) -> "CoreAgent":
-        """Setup agentic memory."""
+        """Deprecated: per-persona agentic memory now lives inside PersonaRuntime.
+
+        This shim remains for backward-compat with any direct caller that
+        pre-configures a top-level module, but requires agent_id in config.
+        Prefer passing memory config through CoreAgent.run() instead.
+        """
         from finagent_core.modules import AgenticMemoryModule
-        user_id = config.get("user_id") if config else self.user_id or "default"
-        self._agentic_memory = AgenticMemoryModule.from_config({"user_id": user_id, **(config or {})})
+        cfg = dict(config or {})
+        cfg.setdefault("user_id", self.user_id or "default")
+        if "agent_id" not in cfg:
+            raise ValueError(
+                "CoreAgent.setup_agentic_memory: 'agent_id' is required in config. "
+                "Prefer CoreAgent.run(..., agent_id=...) which routes through PersonaRegistry."
+            )
+        self._agentic_memory = AgenticMemoryModule.from_config(cfg)
         self._modules["agentic_memory"] = self._agentic_memory
         return self
 
