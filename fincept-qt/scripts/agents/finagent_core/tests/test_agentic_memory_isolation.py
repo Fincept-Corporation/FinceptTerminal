@@ -47,3 +47,28 @@ def test_explicit_db_path_overrides_default(monkeypatch, tmp_path):
     assert mod.db_path == str(custom)
     mod.store("hello", memory_type="fact")
     assert custom.exists()
+
+
+def test_same_db_file_different_agent_id_is_isolated(tmp_path):
+    """Even if two modules share a db_path, agent_id column scopes rows."""
+    shared_db = tmp_path / "shared.db"
+
+    buffett = AgenticMemoryModule(
+        user_id="alice", agent_id="warren_buffett_agent",
+        db_path=str(shared_db),
+    )
+    ackman = AgenticMemoryModule(
+        user_id="alice", agent_id="bill_ackman_agent",
+        db_path=str(shared_db),
+    )
+
+    buffett.store("Coca-Cola has a moat", memory_type="fact")
+    ackman.store("Netflix is overvalued", memory_type="fact")
+
+    buffett_reads = [m["content"] for m in buffett.recall(limit=10)]
+    ackman_reads = [m["content"] for m in ackman.recall(limit=10)]
+
+    assert "Coca-Cola has a moat" in buffett_reads
+    assert "Coca-Cola has a moat" not in ackman_reads
+    assert "Netflix is overvalued" in ackman_reads
+    assert "Netflix is overvalued" not in buffett_reads

@@ -353,6 +353,7 @@ class AgenticMemoryModule:
                 CREATE TABLE IF NOT EXISTS memories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id TEXT,
+                    agent_id TEXT NOT NULL DEFAULT 'unnamed',
                     memory_type TEXT,
                     content TEXT,
                     metadata TEXT,
@@ -363,9 +364,25 @@ class AgenticMemoryModule:
                 )
             """)
 
+            # Backward-compat migration: add agent_id column if an older
+            # schema (pre-persona-isolation) created the table without it.
+            try:
+                cursor.execute(
+                    "ALTER TABLE memories "
+                    "ADD COLUMN agent_id TEXT NOT NULL DEFAULT 'unnamed'"
+                )
+            except sqlite3.OperationalError:
+                # Column already exists — nothing to do.
+                pass
+
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_user_type
                 ON memories(user_id, memory_type)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_agent
+                ON memories(user_id, agent_id)
             """)
 
             conn.commit()
@@ -403,10 +420,11 @@ class AgenticMemoryModule:
 
             cursor.execute("""
                 INSERT INTO memories
-                (user_id, memory_type, content, metadata, relevance_score, created_at, last_accessed)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (user_id, agent_id, memory_type, content, metadata, relevance_score, created_at, last_accessed)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 self.user_id,
+                self.agent_id,
                 memory_type,
                 content,
                 json.dumps(metadata or {}),
@@ -417,16 +435,20 @@ class AgenticMemoryModule:
 
             memory_id = cursor.lastrowid
 
-            # Enforce max memories
+            # Enforce max memories (scoped to this persona's rows).
             cursor.execute("""
                 DELETE FROM memories
-                WHERE user_id = ? AND id NOT IN (
+                WHERE user_id = ? AND agent_id = ? AND id NOT IN (
                     SELECT id FROM memories
-                    WHERE user_id = ?
+                    WHERE user_id = ? AND agent_id = ?
                     ORDER BY relevance_score DESC, last_accessed DESC
                     LIMIT ?
                 )
-            """, (self.user_id, self.user_id, self.max_memories))
+            """, (
+                self.user_id, self.agent_id,
+                self.user_id, self.agent_id,
+                self.max_memories,
+            ))
 
             conn.commit()
             conn.close()
@@ -461,8 +483,8 @@ class AgenticMemoryModule:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
-            sql = "SELECT * FROM memories WHERE user_id = ?"
-            params = [self.user_id]
+            sql = "SELECT * FROM memories WHERE user_id = ? AND agent_id = ?"
+            params = [self.user_id, self.agent_id]
 
             if memory_type:
                 sql += " AND memory_type = ?"
@@ -514,8 +536,9 @@ class AgenticMemoryModule:
             cursor = conn.cursor()
 
             cursor.execute("""
-                UPDATE memories SET relevance_score = ? WHERE id = ?
-            """, (relevance_score, memory_id))
+                UPDATE memories SET relevance_score = ?
+                WHERE id = ? AND user_id = ? AND agent_id = ?
+            """, (relevance_score, memory_id, self.user_id, self.agent_id))
 
             conn.commit()
             conn.close()
@@ -531,7 +554,11 @@ class AgenticMemoryModule:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
-            cursor.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+            cursor.execute(
+                "DELETE FROM memories "
+                "WHERE id = ? AND user_id = ? AND agent_id = ?",
+                (memory_id, self.user_id, self.agent_id),
+            )
 
             conn.commit()
             conn.close()
