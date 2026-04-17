@@ -47,6 +47,43 @@ except ImportError:
     pass
 
 
+if STABLE_BASELINES_AVAILABLE:
+    class ProgressCallback(BaseCallback):
+        """Emits newline-delimited JSON progress events during SB3 training."""
+
+        def __init__(self, total_timesteps: int, report_every: int = 256):
+            super().__init__(verbose=0)
+            self.total_timesteps = int(total_timesteps)
+            self.report_every = max(1, int(report_every))
+            self.last_report = 0
+
+        def _on_step(self) -> bool:
+            if self.num_timesteps - self.last_report < self.report_every:
+                return True
+            self.last_report = self.num_timesteps
+            reward_mean = 0.0
+            loss = 0.0
+            try:
+                buf = getattr(self.model, "ep_info_buffer", None)
+                if buf:
+                    rewards = [ep["r"] for ep in buf if "r" in ep]
+                    if rewards:
+                        reward_mean = float(sum(rewards) / len(rewards))
+                loss = float(self.logger.name_to_value.get("train/loss", 0.0))
+            except Exception:
+                pass
+            print(json.dumps({
+                "event": "progress",
+                "step": int(self.num_timesteps),
+                "total": self.total_timesteps,
+                "reward_mean": reward_mean,
+                "loss": loss,
+            }), flush=True)
+            return True
+else:
+    ProgressCallback = None  # type: ignore
+
+
 class TradingEnvironment(gym.Env if gym else object):
     """
     Custom Gym environment for trading using Qlib data
@@ -327,17 +364,23 @@ class RLTradingAgent:
 
             AlgoClass = algo_map[algorithm]
 
-            # Create model
+            # Create model with verbose=0 so SB3 doesn't emit its own rollout tables.
+            # Our ProgressCallback is the single source of structured progress events;
+            # any other stdout/stderr still flows to the UI as raw log lines.
             self.model = AlgoClass(
                 'MlpPolicy',
                 self.env,
                 learning_rate=learning_rate,
-                verbose=1,
+                verbose=0,
                 **kwargs
             )
 
+            # Report roughly 200 progress ticks regardless of run length.
+            report_every = max(256, total_timesteps // 200)
+            callback = ProgressCallback(total_timesteps, report_every) if ProgressCallback else None
+
             # Train
-            self.model.learn(total_timesteps=total_timesteps)
+            self.model.learn(total_timesteps=total_timesteps, callback=callback)
 
             return {
                 'success': True,
@@ -346,6 +389,16 @@ class RLTradingAgent:
                 'message': f'{algorithm} agent trained successfully'
             }
         except Exception as e:
+            # Emit an error log event so the UI log console sees it live,
+            # in addition to the final result payload.
+            try:
+                print(json.dumps({
+                    "event": "log",
+                    "level": "error",
+                    "msg": f"train_agent exception: {e}",
+                }), flush=True)
+            except Exception:
+                pass
             return {'success': False, 'error': str(e)}
 
     def evaluate_agent(self, n_episodes: int = 10) -> Dict[str, Any]:
@@ -497,7 +550,12 @@ def main():
     else:
         result = {'success': False, 'error': f'Unknown command: {command}'}
 
-    print(json.dumps(result, indent=2))
+    # Emit final result as a single-line "result" event so the C++ service can parse
+    # it reliably. Intermediate progress/log events are already printed from
+    # ProgressCallback during training.
+    payload = {"event": "result"}
+    payload.update(result)
+    print(json.dumps(payload), flush=True)
 
 
 if __name__ == '__main__':
