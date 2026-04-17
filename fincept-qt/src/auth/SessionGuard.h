@@ -6,7 +6,6 @@ namespace fincept::auth {
 
 /// Polls /user/validate-session every 30s.
 /// On 401/403 or valid=false → triggers auto-logout.
-/// Mirrors Tauri's SessionGuard.tsx.
 class SessionGuard : public QObject {
     Q_OBJECT
   public:

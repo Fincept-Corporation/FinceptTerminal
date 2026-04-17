@@ -77,7 +77,7 @@ void RecentFilesWidget::refresh_data() {
         auto* empty = new QLabel("No files yet");
         empty->setAlignment(Qt::AlignCenter);
         empty->setStyleSheet(
-            QString("color:%1;font-size:11px;background:transparent;padding:16px;%2").arg(colors::TEXT_DIM, MF));
+            QString("color:%1;font-size:11px;background:transparent;padding:16px;%2").arg(colors::TEXT_DIM(), MF));
         list_layout_->addWidget(empty);
         list_layout_->addStretch();
         return;
@@ -86,7 +86,7 @@ void RecentFilesWidget::refresh_data() {
     for (const QJsonObject& f : files) {
         auto* row = new QWidget(this);
         row->setStyleSheet(QString("background:%1;border:1px solid %2;border-radius:2px;")
-                               .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                               .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 5, 8, 5);
         rl->setSpacing(6);
@@ -98,13 +98,13 @@ void RecentFilesWidget::refresh_data() {
         badge->setFixedWidth(28);
         badge->setAlignment(Qt::AlignCenter);
         badge->setStyleSheet(
-            QString("color:%1;font-size:9px;font-weight:700;background:transparent;%2").arg(ui::colors::AMBER, MF));
+            QString("color:%1;font-size:9px;font-weight:700;background:transparent;%2").arg(ui::colors::AMBER(), MF));
         rl->addWidget(badge);
 
         // Name
         auto* name_lbl = new QLabel(f["originalName"].toString());
         name_lbl->setStyleSheet(
-            QString("color:%1;font-size:11px;background:transparent;%2").arg(ui::colors::TEXT_PRIMARY, MF));
+            QString("color:%1;font-size:11px;background:transparent;%2").arg(ui::colors::TEXT_PRIMARY(), MF));
         name_lbl->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         rl->addWidget(name_lbl, 1);
 
@@ -112,7 +112,7 @@ void RecentFilesWidget::refresh_data() {
         QString date_str =
             QDateTime::fromString(f["uploadedAt"].toString(), Qt::ISODate).toLocalTime().toString("MM/dd HH:mm");
         auto* date_lbl = new QLabel(date_str);
-        date_lbl->setStyleSheet(QString("color:%1;font-size:10px;background:transparent;%2").arg(colors::TEXT_DIM, MF));
+        date_lbl->setStyleSheet(QString("color:%1;font-size:10px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
         rl->addWidget(date_lbl);
 
         list_layout_->addWidget(row);
@@ -124,7 +124,7 @@ void RecentFilesWidget::refresh_data() {
 void RecentFilesWidget::apply_styles() {
     scroll_->setStyleSheet("QScrollArea{border:none;background:transparent;}"
                            "QScrollBar:vertical{background:transparent;width:4px;}" +
-                           QString("QScrollBar::handle:vertical{background:%1;}").arg(ui::colors::BORDER_MED));
+                           QString("QScrollBar::handle:vertical{background:%1;}").arg(ui::colors::BORDER_MED()));
 
     // Rows are built dynamically in refresh_data() using current tokens,
     // so re-running refresh_data() picks up the new theme.

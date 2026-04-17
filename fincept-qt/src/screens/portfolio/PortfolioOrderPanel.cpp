@@ -14,7 +14,7 @@ PortfolioOrderPanel::PortfolioOrderPanel(QWidget* parent) : QWidget(parent) {
 
 void PortfolioOrderPanel::build_ui() {
     setStyleSheet(
-        QString("background:%1; border-left:2px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::POSITIVE));
+        QString("background:%1; border-left:2px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::POSITIVE()));
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(8, 6, 8, 6);
@@ -24,7 +24,7 @@ void PortfolioOrderPanel::build_ui() {
     auto* header_row = new QHBoxLayout;
     auto* title = new QLabel("ORDER ENTRY");
     title->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::POSITIVE));
+        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::POSITIVE()));
     header_row->addWidget(title);
     header_row->addStretch();
 
@@ -33,7 +33,7 @@ void PortfolioOrderPanel::build_ui() {
     close_btn_->setCursor(Qt::PointingHandCursor);
     close_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:none; font-size:11px; }"
                                       "QPushButton:hover { color:%2; }")
-                                  .arg(ui::colors::TEXT_TERTIARY, ui::colors::TEXT_PRIMARY));
+                                  .arg(ui::colors::TEXT_TERTIARY(), ui::colors::TEXT_PRIMARY()));
     connect(close_btn_, &QPushButton::clicked, this, &PortfolioOrderPanel::close_requested);
     header_row->addWidget(close_btn_);
 
@@ -67,14 +67,14 @@ void PortfolioOrderPanel::build_ui() {
         buy_tab_->setStyleSheet(
             QString("QPushButton { background:%1; color:%2; border:none;"
                     "  font-size:10px; font-weight:700; }")
-                .arg(is_buy ? ui::colors::POSITIVE : ui::colors::BG_RAISED, is_buy ? "#000" : inactive_color));
+                .arg(is_buy ? ui::colors::POSITIVE() : ui::colors::BG_RAISED(), is_buy ? "#000" : inactive_color));
         sell_tab_->setStyleSheet(
             QString("QPushButton { background:%1; color:%2; border:none;"
                     "  font-size:10px; font-weight:700; }")
-                .arg(!is_buy ? ui::colors::NEGATIVE : ui::colors::BG_RAISED, !is_buy ? "#fff" : inactive_color));
+                .arg(!is_buy ? ui::colors::NEGATIVE() : ui::colors::BG_RAISED(), !is_buy ? "#fff" : inactive_color));
 
         // Update header and border color
-        setStyleSheet(QString("background:%1; border-left:2px solid %2;").arg(ui::colors::BG_SURFACE, active_color));
+        setStyleSheet(QString("background:%1; border-left:2px solid %2;").arg(ui::colors::BG_SURFACE(), active_color));
         auto* title_w = findChild<QLabel*>();
         if (title_w && title_w->text() == "ORDER ENTRY") {
             // skip — the title might have been found differently
@@ -94,17 +94,17 @@ void PortfolioOrderPanel::build_ui() {
 
     // Selected holding info
     symbol_label_ = new QLabel;
-    symbol_label_->setStyleSheet(QString("color:%1; font-size:16px; font-weight:700;").arg(ui::colors::CYAN));
+    symbol_label_->setStyleSheet(QString("color:%1; font-size:16px; font-weight:700;").arg(ui::colors::CYAN()));
     layout->addWidget(symbol_label_);
 
     auto add_info = [&](QLabel*& lbl, const QString& prefix) {
         auto* row = new QHBoxLayout;
         auto* lab = new QLabel(prefix);
-        lab->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
+        lab->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
         row->addWidget(lab);
         lbl = new QLabel("--");
         lbl->setAlignment(Qt::AlignRight);
-        lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY));
+        lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY()));
         row->addWidget(lbl);
         layout->addLayout(row);
     };
@@ -120,7 +120,7 @@ void PortfolioOrderPanel::build_ui() {
     submit_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
                                        "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
                                        "QPushButton:hover { opacity:0.9; }")
-                                   .arg(ui::colors::POSITIVE, ui::colors::BG_BASE));
+                                   .arg(ui::colors::POSITIVE(), ui::colors::BG_BASE()));
     connect(submit_btn_, &QPushButton::clicked, this, [this]() {
         if (side_ == "BUY")
             emit buy_submitted();
@@ -135,7 +135,7 @@ void PortfolioOrderPanel::build_ui() {
     auto* note = new QLabel("Orders are recorded\nin your portfolio");
     note->setWordWrap(true);
     note->setAlignment(Qt::AlignCenter);
-    note->setStyleSheet(QString("color:%1; font-size:8px;").arg(ui::colors::TEXT_TERTIARY));
+    note->setStyleSheet(QString("color:%1; font-size:8px;").arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(note);
 
     update_tabs();

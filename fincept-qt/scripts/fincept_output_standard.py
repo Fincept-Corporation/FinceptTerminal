@@ -544,7 +544,7 @@ def wrap_script_execution(func):
 class LegacyOutputHandler:
     """
     Handler for wrapping legacy script outputs without modifying the scripts
-    This can be used at the Rust level to intercept stdout
+    This can be used at the host level to intercept stdout
     """
 
     @staticmethod

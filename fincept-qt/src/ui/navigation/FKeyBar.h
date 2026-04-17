@@ -6,7 +6,7 @@
 
 namespace fincept::ui {
 
-/// Scrollable tab bar matching Tauri's tab navigation.
+/// Scrollable tab bar.
 /// Tabs: Dashboard, Markets, Portfolio, News, Report Builder,
 ///       Settings, Profile, About, Support
 class TabBar : public QWidget {

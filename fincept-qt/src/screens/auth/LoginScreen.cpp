@@ -15,7 +15,7 @@ namespace fincept::screens {
 // ── Obsidian Design System Styles ────────────────────────────────────────────
 
 static QString card_style() {
-    return QString("background: %1; border: 1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM);
+    return QString("background: %1; border: 1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM());
 }
 
 static QString input_style() {
@@ -28,8 +28,8 @@ static QString input_style() {
                    "}"
                    "QLineEdit:focus { border: 1px solid %6; }"
                    "QLineEdit::placeholder { color: %7; }")
-        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::AMBER,
-             ui::colors::BG_BASE, ui::colors::BORDER_BRIGHT, ui::colors::TEXT_DIM);
+        .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
+             ui::colors::BG_BASE(), ui::colors::BORDER_BRIGHT(), ui::colors::TEXT_DIM());
 }
 
 static QString btn_primary() {
@@ -41,8 +41,8 @@ static QString btn_primary() {
                    "}"
                    "QPushButton:hover { background: %1; color: %3; }"
                    "QPushButton:disabled { color: %4; background: %5; border-color: %6; }")
-        .arg(ui::colors::AMBER, ui::colors::AMBER_DIM, ui::colors::BG_BASE, ui::colors::TEXT_DIM, ui::colors::BG_RAISED,
-             ui::colors::BORDER_DIM);
+        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE(), ui::colors::TEXT_DIM(), ui::colors::BG_RAISED(),
+             ui::colors::BORDER_DIM());
 }
 
 static QString btn_standard() {
@@ -53,8 +53,8 @@ static QString btn_standard() {
                    "  font-family: 'Consolas','Courier New',monospace;"
                    "}"
                    "QPushButton:hover { color: %4; background: %5; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY,
-             ui::colors::BG_HOVER);
+        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(),
+             ui::colors::BG_HOVER());
 }
 
 static QString btn_danger() {
@@ -66,8 +66,8 @@ static QString btn_danger() {
                    "}"
                    "QPushButton:hover { background: %1; color: %2; }"
                    "QPushButton:disabled { color: %3; background: %4; border-color: %5; }")
-        .arg(ui::colors::NEGATIVE, ui::colors::TEXT_PRIMARY, ui::colors::TEXT_DIM, ui::colors::BG_RAISED,
-             ui::colors::BORDER_DIM);
+        .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_DIM(), ui::colors::BG_RAISED(),
+             ui::colors::BORDER_DIM());
 }
 
 static QString link_style() {
@@ -77,26 +77,26 @@ static QString link_style() {
                    "  font-family: 'Consolas','Courier New',monospace;"
                    "}"
                    "QPushButton:hover { color: %2; }")
-        .arg(ui::colors::TEXT_SECONDARY, ui::colors::TEXT_PRIMARY);
+        .arg(ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_PRIMARY());
 }
 
 static QString label_style() {
     return QString("color: %1; font-size: 13px; font-weight: 700;"
                    "background: transparent; letter-spacing: 0.5px;"
                    "font-family: 'Consolas','Courier New',monospace;")
-        .arg(ui::colors::TEXT_SECONDARY);
+        .arg(ui::colors::TEXT_SECONDARY());
 }
 
 static QString muted_style() {
     return QString("color: %1; font-size: 13px; background: transparent;"
                    "font-family: 'Consolas','Courier New',monospace;")
-        .arg(ui::colors::TEXT_TERTIARY);
+        .arg(ui::colors::TEXT_TERTIARY());
 }
 
 static QFrame* make_separator() {
     auto* sep = new QFrame;
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_DIM));
+    sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_DIM()));
     return sep;
 }
 
@@ -163,7 +163,7 @@ void LoginScreen::build_login_page() {
     // Header bar
     auto* header = new QWidget(this);
     header->setFixedHeight(38);
-    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED));
+    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED()));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
@@ -171,7 +171,7 @@ void LoginScreen::build_login_page() {
     title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
                                  "background: transparent; letter-spacing: 1px;"
                                  "font-family: 'Consolas','Courier New',monospace;")
-                             .arg(ui::colors::AMBER));
+                             .arg(ui::colors::AMBER()));
     hl->addWidget(title);
     hl->addStretch();
 
@@ -179,7 +179,7 @@ void LoginScreen::build_login_page() {
     brand->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
                                  "background: transparent; letter-spacing: 0.5px;"
                                  "font-family: 'Consolas','Courier New',monospace;")
-                             .arg(ui::colors::TEXT_DIM));
+                             .arg(ui::colors::TEXT_DIM()));
     hl->addWidget(brand);
     vl->addWidget(header);
 
@@ -236,7 +236,7 @@ void LoginScreen::build_login_page() {
                                         "background: rgba(220,38,38,0.08);"
                                         "border: 1px solid #7f1d1d; padding: 6px 8px;"
                                         "font-family: 'Consolas','Courier New',monospace;")
-                                    .arg(ui::colors::NEGATIVE));
+                                    .arg(ui::colors::NEGATIVE()));
     error_label_->hide();
     vl->addWidget(error_label_);
 
@@ -277,7 +277,7 @@ void LoginScreen::build_login_page() {
                                       "  font-size: 13px; font-weight: 700;"
                                       "  font-family: 'Consolas','Courier New',monospace; }"
                                       "QPushButton:hover { color: %2; }")
-                                  .arg(ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+                                  .arg(ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
     connect(signup_btn, &QPushButton::clicked, this, &LoginScreen::navigate_register);
     rrl->addWidget(signup_btn);
     vl->addWidget(reg_row);
@@ -300,7 +300,7 @@ void LoginScreen::build_mfa_page() {
 
     auto* header = new QWidget(this);
     header->setFixedHeight(38);
-    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED));
+    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED()));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
@@ -308,7 +308,7 @@ void LoginScreen::build_mfa_page() {
     title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
                                  "background: transparent; letter-spacing: 1px;"
                                  "font-family: 'Consolas','Courier New',monospace;")
-                             .arg(ui::colors::AMBER));
+                             .arg(ui::colors::AMBER()));
     hl->addWidget(title);
     hl->addStretch();
 
@@ -316,7 +316,7 @@ void LoginScreen::build_mfa_page() {
     indicator->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
                                      "background: transparent; letter-spacing: 0.5px;"
                                      "font-family: 'Consolas','Courier New',monospace;")
-                                 .arg(ui::colors::POSITIVE));
+                                 .arg(ui::colors::POSITIVE()));
     hl->addWidget(indicator);
     vl->addWidget(header);
 
@@ -344,8 +344,8 @@ void LoginScreen::build_mfa_page() {
                                       "  selection-background-color: %4; selection-color: %5;"
                                       "}"
                                       "QLineEdit:focus { border: 1px solid %6; }")
-                                  .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-                                       ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::BORDER_BRIGHT));
+                                  .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                                       ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::BORDER_BRIGHT()));
     vl->addWidget(mfa_input_);
 
     mfa_error_ = new QLabel;
@@ -354,7 +354,7 @@ void LoginScreen::build_mfa_page() {
                                       "background: rgba(220,38,38,0.08);"
                                       "border: 1px solid #7f1d1d; padding: 6px 8px;"
                                       "font-family: 'Consolas','Courier New',monospace;")
-                                  .arg(ui::colors::NEGATIVE));
+                                  .arg(ui::colors::NEGATIVE()));
     mfa_error_->hide();
     vl->addWidget(mfa_error_);
 
@@ -386,7 +386,7 @@ void LoginScreen::build_conflict_page() {
 
     auto* header = new QWidget(this);
     header->setFixedHeight(38);
-    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED));
+    header->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BG_RAISED()));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
@@ -394,7 +394,7 @@ void LoginScreen::build_conflict_page() {
     title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
                                  "background: transparent; letter-spacing: 1px;"
                                  "font-family: 'Consolas','Courier New',monospace;")
-                             .arg(ui::colors::WARNING));
+                             .arg(ui::colors::WARNING()));
     hl->addWidget(title);
     hl->addStretch();
 
@@ -402,7 +402,7 @@ void LoginScreen::build_conflict_page() {
     warn->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
                                 "background: transparent; letter-spacing: 0.5px;"
                                 "font-family: 'Consolas','Courier New',monospace;")
-                            .arg(ui::colors::WARNING));
+                            .arg(ui::colors::WARNING()));
     hl->addWidget(warn);
     vl->addWidget(header);
 
@@ -410,7 +410,7 @@ void LoginScreen::build_conflict_page() {
     conflict_msg_->setWordWrap(true);
     conflict_msg_->setStyleSheet(QString("color: %1; font-size: 14px; background: transparent;"
                                          "font-family: 'Consolas','Courier New',monospace;")
-                                     .arg(ui::colors::TEXT_SECONDARY));
+                                     .arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(conflict_msg_);
 
     vl->addWidget(make_separator());

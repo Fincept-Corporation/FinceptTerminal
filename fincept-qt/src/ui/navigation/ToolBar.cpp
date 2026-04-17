@@ -17,9 +17,9 @@ static QString menu_ss() {
     return QString("QMenuBar{background:transparent;color:%1;border:none;spacing:0;}"
                    "QMenuBar::item{background:transparent;padding:4px 10px;}"
                    "QMenuBar::item:selected{background:%2;color:%3;}")
-        .arg(colors::TEXT_SECONDARY)
-        .arg(colors::BG_RAISED)
-        .arg(colors::TEXT_PRIMARY);
+        .arg(colors::TEXT_SECONDARY())
+        .arg(colors::BG_RAISED())
+        .arg(colors::TEXT_PRIMARY());
 }
 
 static QString popup_ss() {
@@ -28,11 +28,11 @@ static QString popup_ss() {
                    "QMenu::item:selected{background:%4;}"
                    "QMenu::item:disabled{color:%5;}"
                    "QMenu::separator{background:%3;height:1px;margin:4px 8px;}")
-        .arg(colors::BG_SURFACE)
-        .arg(colors::TEXT_PRIMARY)
-        .arg(colors::BORDER_DIM)
-        .arg(colors::BG_RAISED)
-        .arg(colors::TEXT_DIM);
+        .arg(colors::BG_SURFACE())
+        .arg(colors::TEXT_PRIMARY())
+        .arg(colors::BORDER_DIM())
+        .arg(colors::BG_RAISED())
+        .arg(colors::TEXT_DIM());
 }
 
 ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
@@ -144,7 +144,7 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
 
 void ToolBar::refresh_theme() {
     // Bar background
-    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_BASE).arg(colors::BORDER_DIM));
+    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_BASE()).arg(colors::BORDER_DIM()));
     // Menu bar + popup menus
     if (menu_bar_) {
         menu_bar_->setStyleSheet(menu_ss());
@@ -154,7 +154,7 @@ void ToolBar::refresh_theme() {
     }
     // Separators
     for (auto* s : separators_)
-        s->setStyleSheet(QString("color:%1;background:transparent;padding:0 3px;").arg(colors::TEXT_DIM));
+        s->setStyleSheet(QString("color:%1;background:transparent;padding:0 3px;").arg(colors::TEXT_DIM()));
     // Branding labels
     auto lbl = [](QLabel* l, const QString& c, bool b = false) {
         if (l)
@@ -172,21 +172,21 @@ void ToolBar::refresh_theme() {
     if (plan_btn_)
         plan_btn_->setStyleSheet(QString("QPushButton{color:%1;background:transparent;border:none;padding:0 2px;}"
                                          "QPushButton:hover{color:%2;}")
-                                     .arg(colors::TEXT_PRIMARY)
-                                     .arg(colors::AMBER));
+                                     .arg(colors::TEXT_PRIMARY())
+                                     .arg(colors::AMBER()));
     if (chat_mode_btn_)
         chat_mode_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                                               "padding:0 8px;font-weight:700;}"
                                               "QPushButton:hover{background:%2;color:%3;border-color:%1;}")
-                                          .arg(colors::AMBER)
-                                          .arg(colors::AMBER_DIM)
-                                          .arg(colors::TEXT_PRIMARY));
+                                          .arg(colors::AMBER())
+                                          .arg(colors::AMBER_DIM())
+                                          .arg(colors::TEXT_PRIMARY()));
     if (logout_btn_)
         logout_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %1;"
                                            "padding:0 8px;font-weight:700;}"
                                            "QPushButton:hover{background:%1;color:%2;border-color:%1;}")
-                                       .arg(colors::NEGATIVE)
-                                       .arg(colors::TEXT_PRIMARY));
+                                       .arg(colors::NEGATIVE())
+                                       .arg(colors::TEXT_PRIMARY()));
 }
 
 void ToolBar::resizeEvent(QResizeEvent* e) {
@@ -289,11 +289,11 @@ QMenu* ToolBar::build_navigate_menu() {
                              "QMenu::separator{background:%3;height:1px;margin:2px 6px;}"
                              "QMenu::scroller{background:%1;height:14px;}"
                              "QMenu::scroller:hover{background:%4;}")
-                         .arg(colors::BG_SURFACE)
-                         .arg(colors::TEXT_PRIMARY)
-                         .arg(colors::BORDER_DIM)
-                         .arg(colors::BG_RAISED)
-                         .arg(colors::AMBER));
+                         .arg(colors::BG_SURFACE())
+                         .arg(colors::TEXT_PRIMARY())
+                         .arg(colors::BORDER_DIM())
+                         .arg(colors::BG_RAISED())
+                         .arg(colors::AMBER()));
 
     // Use submenus for each group — cleaner and no scroll needed
     auto add_sub = [&](const QString& title) -> QMenu* {

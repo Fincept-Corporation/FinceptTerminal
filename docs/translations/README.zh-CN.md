@@ -20,7 +20,7 @@
 
 ## 关于
 
-**Fincept终端vch**是一个纯原生 C++20 桌面应用程序——对之前的 Tauri/React/Rust 堆栈进行了完全重写。它使用**Qt6**用于 UI 和渲染，嵌入式**Python**用于分析，并在单个本机二进制文件中提供彭博终端级的性能。
+**Fincept终端vch**是一个纯原生 C++20 桌面应用程序。它使用**Qt6**用于 UI 和渲染，嵌入式**Python**用于分析，并在单个本机二进制文件中提供彭博终端级的性能。
 
 * * *
 
@@ -99,6 +99,25 @@ docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fincept-ter
 
 ### 选项 4 — 从源代码构建（手动）
 
+> **版本已锁定**（Qt 6.7.2、CMake 3.27.7、MSVC 19.38 / GCC 12.3 / Apple Clang 15.0、Python 3.11.9）。为避免翻译漂移，请遵循官方英文说明：
+>
+> 👉 **[README.md (English) — Build from Source](../../README.md#option-4--build-from-source-manual)**
+>
+> 使用 CMake 预设快速启动：
+> ```bash
+> ./setup.sh                                            # Linux / macOS — 自动化安装
+> setup.bat                                             # Windows（VS 2022 Developer Cmd）
+>
+> # 或手动：
+> cd FinceptTerminal/fincept-qt
+> cmake --preset linux-release   && cmake --build --preset linux-release
+> cmake --preset macos-release   && cmake --build --preset macos-release
+> cmake --preset win-release     && cmake --build --preset win-release
+> ```
+
+<details>
+<summary>原始说明（已过时 — 保留供参考）</summary>
+
 #### 先决条件
 
 | 工具         | 版本    | 视窗                                                       | Linux                 | macOS                              |
@@ -158,6 +177,8 @@ cmake --build build --config Release --parallel
 ./build/FinceptTerminal              # Linux / macOS
 .\build\Release\FinceptTerminal.exe  # Windows
 ```
+
+</details>
 
 * * *
 

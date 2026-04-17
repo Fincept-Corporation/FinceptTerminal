@@ -33,7 +33,7 @@ NodeCanvas::NodeCanvas(NodeScene* scene, QWidget* parent) : QGraphicsView(scene,
     setAcceptDrops(true);
     setTransformationAnchor(AnchorUnderMouse);
 
-    setStyleSheet(QString("QGraphicsView { background: %1; border: none; }").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("QGraphicsView { background: %1; border: none; }").arg(ui::colors::BG_BASE()));
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
         resetCachedContent(); // invalidate drawBackground cache

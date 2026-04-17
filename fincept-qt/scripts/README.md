@@ -40,7 +40,7 @@ scripts/
 | 📊 **Analytics** | 80+ modules - equity, portfolio, derivatives, economics | [Analytics/README.md](./Analytics/README.md) |
 | 🤖 **AI Agents** | 30+ agents - hedge funds, investors, geopolitics | [agents/README.md](./agents/README.md) |
 | 🔬 **AI Quant Lab** | Qlib + RDAgent - automated strategy research | [ai_quant_lab/README.md](./ai_quant_lab/README.md) |
-| 🚀 **Agno Trading** | Multi-agent trading system with debates | [agno_trading/README.md](./agno_trading/README.md) |
+| 🚀 **Agno Trading** | Multi-agent trading system with debates | `agno_trading/` |
 
 ## Key Features
 
@@ -75,17 +75,19 @@ scripts/
 
 ## Usage Pattern
 
-Scripts are invoked from the frontend via C++ commands:
+Scripts are invoked from the Qt/C++ application via `PythonRunner`:
 
-```typescript
-// Scripts are called via python_runner.cpp
+```cpp
+// Scripts are called via src/python/PythonRunner.cpp
 
 // Example: Fetch market data
-const data = await invoke('execute_python_command', {
-  script: 'yfinance_tools',
-  method: 'get_historical_data',
-  params: { ticker: 'AAPL', period: '1y' }
-});
+fincept::python::PythonRunner::instance().run(
+    "yfinance_data",
+    {"get_historical_data", "AAPL", "1y"},
+    [](const QString& json_result) {
+        // handle result
+    }
+);
 ```
 
 ## Development Guidelines
@@ -93,7 +95,7 @@ const data = await invoke('execute_python_command', {
 ### Adding New Data Sources
 1. Create `{source}_data.py` in scripts root
 2. Implement standardized response format
-3. Add Rust command in `src/screens/ (or relevant module)`
+3. Wire the script into the relevant Qt service (`src/services/`) or screen
 4. Update [DATA_SOURCES.md](./DATA_SOURCES.md)
 
 ### Adding Analytics Modules
@@ -112,17 +114,17 @@ const data = await invoke('execute_python_command', {
 
 - **Python Version**: 3.11+
 - **Execution**: Embedded Python runtime bundled with app
-- **IPC**: C++ command bridge (Rust ↔ Python)
+- **IPC**: Qt/C++ ↔ Python via `PythonRunner` (QProcess-based)
 - **Output Format**: JSON responses
 - **Error Handling**: Structured error objects
 
 ## Project Context
 
-Part of **Fincept Terminal** - a Fincept financial intelligence platform built with:
-- **Frontend**: C++20 + Dear ImGui
-- **Backend: C++20)
+Part of **Fincept Terminal** - a financial intelligence platform built with:
+- **UI**: C++20 + Qt6 Widgets
+- **Core**: C++20
 - **Analytics**: Python (embedded runtime)
-- **AI**: Ollama (local LLM), Langchain
+- **AI**: Ollama (local LLM), Langchain, multi-provider LLM
 
 ## Documentation
 
@@ -133,7 +135,7 @@ Part of **Fincept Terminal** - a Fincept financial intelligence platform built w
 
 ## Performance Notes
 
-- Scripts execute synchronously via Rust `std::process::Command`
+- Scripts execute via Qt `QProcess` through `PythonRunner` (max 3 concurrent)
 - Large datasets should stream or paginate results
 - Cache frequently accessed data when possible
 - Use async/await patterns in frontend for better UX

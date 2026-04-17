@@ -224,7 +224,7 @@ void EquityTechnicalsTab::set_symbol(const QString& symbol) {
 // ── build_ui ─────────────────────────────────────────────────────────────────
 
 void EquityTechnicalsTab::build_ui() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     loading_overlay_ = new ui::LoadingOverlay(this);
 
     auto* outer = new QVBoxLayout(this);
@@ -248,7 +248,7 @@ void EquityTechnicalsTab::build_ui() {
     auto* rating_panel = new QFrame;
     rating_panel->setFixedWidth(260);
     rating_panel->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}")
-                                    .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                                    .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* rp_vl = new QVBoxLayout(rating_panel);
     rp_vl->setContentsMargins(14, 10, 14, 10);
     rp_vl->setSpacing(10);
@@ -256,13 +256,13 @@ void EquityTechnicalsTab::build_ui() {
     auto* rp_title = new QLabel("TECHNICAL RATING");
     rp_title->setStyleSheet(
         QString("color:%1;font-size:12px;font-weight:700;letter-spacing:1px;background:transparent;border:0;")
-            .arg(ui::colors::AMBER));
+            .arg(ui::colors::AMBER()));
     rp_vl->addWidget(rp_title);
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background:%1;border:0;").arg(ui::colors::BORDER_DIM));
+    sep->setStyleSheet(QString("background:%1;border:0;").arg(ui::colors::BORDER_DIM()));
     rp_vl->addWidget(sep);
 
     rating_label_ = new QLabel("\xe2\x80\x94");
@@ -280,7 +280,7 @@ void EquityTechnicalsTab::build_ui() {
     gauge_bar_->setTextVisible(false);
     gauge_bar_->setStyleSheet(QString("QProgressBar{background:%1;border:1px solid %2;border-radius:0;}"
                                       "QProgressBar::chunk{background:%3;}")
-                                  .arg(ui::colors::NEGATIVE, ui::colors::BORDER_DIM, ui::colors::POSITIVE));
+                                  .arg(ui::colors::NEGATIVE(), ui::colors::BORDER_DIM(), ui::colors::POSITIVE()));
     rp_vl->addWidget(gauge_bar_);
 
     // Signal counts — 5 columns
@@ -289,7 +289,7 @@ void EquityTechnicalsTab::build_ui() {
 
     auto make_count = [&](const char* color, const QString& label, QLabel*& out) {
         auto* w = new QWidget(this);
-        w->setStyleSheet(QString("background:%1;border:0;").arg(ui::colors::BG_RAISED));
+        w->setStyleSheet(QString("background:%1;border:0;").arg(ui::colors::BG_RAISED()));
         auto* cvl = new QVBoxLayout(w);
         cvl->setContentsMargins(4, 4, 4, 4);
         cvl->setSpacing(1);
@@ -302,7 +302,7 @@ void EquityTechnicalsTab::build_ui() {
         lbl->setAlignment(Qt::AlignCenter);
         lbl->setStyleSheet(
             QString("color:%1;font-size:8px;font-weight:600;letter-spacing:0.5px;background:transparent;border:0;")
-                .arg(ui::colors::TEXT_TERTIARY));
+                .arg(ui::colors::TEXT_TERTIARY()));
         cvl->addWidget(out);
         cvl->addWidget(lbl);
         counts->addWidget(w, 1);
@@ -318,7 +318,7 @@ void EquityTechnicalsTab::build_ui() {
     total_label_ = new QLabel("0 INDICATORS");
     total_label_->setAlignment(Qt::AlignCenter);
     total_label_->setStyleSheet(QString("color:%1;font-size:10px;letter-spacing:1px;background:transparent;border:0;")
-                                    .arg(ui::colors::TEXT_TERTIARY));
+                                    .arg(ui::colors::TEXT_TERTIARY()));
     rp_vl->addWidget(total_label_);
     rp_vl->addStretch();
 
@@ -327,7 +327,7 @@ void EquityTechnicalsTab::build_ui() {
     // === KEY INDICATORS PANEL ===
     auto* key_panel = new QFrame;
     key_panel->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}")
-                                 .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                                 .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* kp_vl = new QVBoxLayout(key_panel);
     kp_vl->setContentsMargins(10, 10, 10, 10);
     kp_vl->setSpacing(6);
@@ -341,7 +341,7 @@ void EquityTechnicalsTab::build_ui() {
     auto* ksep = new QFrame;
     ksep->setFrameShape(QFrame::HLine);
     ksep->setFixedHeight(1);
-    ksep->setStyleSheet(QString("background:%1;border:0;").arg(ui::colors::BORDER_DIM));
+    ksep->setStyleSheet(QString("background:%1;border:0;").arg(ui::colors::BORDER_DIM()));
     kp_vl->addWidget(ksep);
 
     key_container_ = new QWidget(this);
@@ -444,7 +444,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
         const char* sc = signal_color(ti.signal);
         card->setStyleSheet(
             QString("QFrame{background:%1;border:1px solid %2;border-left:3px solid %3;border-radius:2px;}")
-                .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM, sc));
+                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), sc));
         auto* cl = new QVBoxLayout(card);
         cl->setContentsMargins(10, 6, 10, 6);
         cl->setSpacing(2);
@@ -453,7 +453,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
         auto* nm = new QLabel(ti.name.toUpper());
         nm->setStyleSheet(
             QString("color:%1;font-size:10px;font-weight:600;letter-spacing:0.5px;background:transparent;border:0;")
-                .arg(ui::colors::TEXT_SECONDARY));
+                .arg(ui::colors::TEXT_SECONDARY()));
         cl->addWidget(nm);
 
         // Value + signal row
@@ -462,7 +462,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
         auto* val = new QLabel(QString::number(ti.value, 'f', 2));
         val->setStyleSheet(QString("color:%1;font-size:16px;font-weight:700;font-family:'Consolas',monospace;"
                                    "background:transparent;border:0;")
-                               .arg(ui::colors::TEXT_PRIMARY));
+                               .arg(ui::colors::TEXT_PRIMARY()));
         auto* sig = new QLabel(signal_text(ti.signal));
         sig->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;background:transparent;border:0;").arg(sc));
         sig->setAlignment(Qt::AlignRight | Qt::AlignBottom);
@@ -481,7 +481,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
             auto* desc = new QLabel(interp);
             desc->setWordWrap(true);
             desc->setStyleSheet(
-                QString("color:%1;font-size:10px;background:transparent;border:0;").arg(ui::colors::TEXT_TERTIARY));
+                QString("color:%1;font-size:10px;background:transparent;border:0;").arg(ui::colors::TEXT_TERTIARY()));
             cl->addWidget(desc);
         }
 
@@ -526,7 +526,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
 
         auto* section = new QFrame;
         section->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}")
-                                   .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                                   .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         auto* svl = new QVBoxLayout(section);
         svl->setContentsMargins(0, 0, 0, 0);
         svl->setSpacing(0);
@@ -534,7 +534,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
         // Header
         auto* hdr = new QWidget(this);
         hdr->setStyleSheet(QString("background:%1;border:0;border-bottom:1px solid %2;")
-                               .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+                               .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
         auto* hl = new QHBoxLayout(hdr);
         hl->setContentsMargins(12, 8, 12, 8);
         hl->setSpacing(10);
@@ -547,7 +547,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
 
         auto* cnt = new QLabel(QString("%1 indicators").arg(cat.inds->size()));
         cnt->setStyleSheet(
-            QString("color:%1;font-size:10px;background:transparent;border:0;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color:%1;font-size:10px;background:transparent;border:0;").arg(ui::colors::TEXT_TERTIARY()));
         hl->addWidget(cnt);
         hl->addStretch();
 
@@ -569,7 +569,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
         // Table header
         auto* tbl_hdr = new QWidget(this);
         tbl_hdr->setStyleSheet(QString("background:%1;border:0;border-bottom:1px solid %2;")
-                                   .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
+                                   .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
         auto* thl = new QHBoxLayout(tbl_hdr);
         thl->setContentsMargins(12, 4, 12, 4);
         thl->setSpacing(0);
@@ -579,7 +579,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
             l->setAlignment(align | Qt::AlignVCenter);
             l->setStyleSheet(
                 QString("color:%1;font-size:10px;font-weight:600;letter-spacing:0.5px;background:transparent;border:0;")
-                    .arg(ui::colors::TEXT_TERTIARY));
+                    .arg(ui::colors::TEXT_TERTIARY()));
             thl->addWidget(l, stretch);
         };
         hdr_lbl("INDICATOR", 2);
@@ -595,7 +595,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
 
             auto* row = new QWidget(this);
             row->setStyleSheet(QString("background:%1;border:0;border-bottom:1px solid %2;")
-                                   .arg(alt ? ui::colors::BG_RAISED : ui::colors::BG_BASE, ui::colors::BORDER_DIM));
+                                   .arg(alt ? ui::colors::BG_RAISED() : ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
             auto* rl = new QHBoxLayout(row);
             rl->setContentsMargins(12, 5, 12, 5);
             rl->setSpacing(0);
@@ -603,7 +603,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
             // Name
             auto* name_lbl = new QLabel(ti.name);
             name_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;background:transparent;border:0;")
-                                        .arg(ui::colors::TEXT_PRIMARY));
+                                        .arg(ui::colors::TEXT_PRIMARY()));
             rl->addWidget(name_lbl, 2);
 
             // Value
@@ -611,7 +611,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
             val_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
             val_lbl->setStyleSheet(
                 QString("color:%1;font-size:12px;font-family:'Consolas',monospace;background:transparent;border:0;")
-                    .arg(ui::colors::TEXT_SECONDARY));
+                    .arg(ui::colors::TEXT_SECONDARY()));
             rl->addWidget(val_lbl, 1);
 
             // Signal badge
@@ -625,7 +625,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
             sig_lbl->setFixedWidth(90);
             sig_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;background:%2;"
                                            "border-radius:2px;padding:2px 6px;border:0;")
-                                       .arg(sc, ui::colors::BG_RAISED));
+                                       .arg(sc, ui::colors::BG_RAISED()));
             sig_hl->addWidget(sig_lbl);
             rl->addWidget(sig_w, 1);
 
@@ -658,7 +658,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
             auto* interp_lbl = new QLabel(interp.isEmpty() ? "\xe2\x80\x94" : interp);
             interp_lbl->setWordWrap(true);
             interp_lbl->setStyleSheet(
-                QString("color:%1;font-size:11px;background:transparent;border:0;").arg(ui::colors::TEXT_TERTIARY));
+                QString("color:%1;font-size:11px;background:transparent;border:0;").arg(ui::colors::TEXT_TERTIARY()));
             rl->addWidget(interp_lbl, 3);
 
             svl->addWidget(row);

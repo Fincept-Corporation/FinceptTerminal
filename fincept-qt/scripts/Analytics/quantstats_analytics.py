@@ -788,7 +788,7 @@ def main():
         import traceback
         sys.stderr.write(traceback.format_exc())
         print(json.dumps({"error": str(e), "success": False}))
-        # Exit 0 so Rust extracts our JSON error instead of wrapping it in "Script failed"
+        # Exit 0 so the host extracts our JSON error instead of wrapping it in "Script failed"
         sys.exit(0)
 
 

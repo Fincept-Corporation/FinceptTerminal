@@ -29,7 +29,7 @@ PolymarketLeaderboard::PolymarketLeaderboard(QWidget* parent) : QWidget(parent) 
     header->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700; "
                                   "letter-spacing: 0.5px; background: transparent; "
                                   "padding: 6px 8px; border-bottom: 1px solid %2;")
-                              .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM));
+                              .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM()));
     vl->addWidget(header);
 
     table_ = new QTableWidget;
@@ -44,7 +44,7 @@ PolymarketLeaderboard::PolymarketLeaderboard(QWidget* parent) : QWidget(parent) 
                 "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %3; }"
                 "QHeaderView::section { background: %4; color: %5; border: none; "
                 "  border-bottom: 1px solid %3; padding: 4px 6px; font-size: 10px; font-weight: 700; }")
-            .arg(colors::BG_BASE, colors::TEXT_PRIMARY, colors::BORDER_DIM, colors::BG_RAISED, colors::TEXT_SECONDARY));
+            .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), colors::BG_RAISED(), colors::TEXT_SECONDARY()));
     vl->addWidget(table_, 1);
 }
 

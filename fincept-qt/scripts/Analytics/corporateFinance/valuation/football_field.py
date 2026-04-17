@@ -292,7 +292,7 @@ def main():
 
     try:
         if command in ("generate", "football_field"):
-            # Rust sends: "football_field" valuation_methods_json shares_outstanding
+            # Host sends: "football_field" valuation_methods_json shares_outstanding
             if len(sys.argv) < 3:
                 raise ValueError("Valuation methods JSON required")
 

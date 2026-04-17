@@ -20,34 +20,34 @@ static QString SECTION_LABEL() {
     return QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; "
                    "text-transform: uppercase; background: transparent; "
                    "font-family: 'Consolas','Courier New',monospace;")
-        .arg(ui::colors::TEXT_SECONDARY);
+        .arg(ui::colors::TEXT_SECONDARY());
 }
 
 static QString BODY() {
     return QString("color: %1; font-size: 13px; background: transparent; "
                    "font-family: 'Consolas','Courier New',monospace;")
-        .arg(ui::colors::TEXT_PRIMARY);
+        .arg(ui::colors::TEXT_PRIMARY());
 }
 
 static QString MUTED() {
     return QString("color: %1; font-size: 12px; background: transparent; "
                    "font-family: 'Consolas','Courier New',monospace;")
-        .arg(ui::colors::TEXT_TERTIARY);
+        .arg(ui::colors::TEXT_TERTIARY());
 }
 
 static QString LINK_STYLE() {
     return QString("color: %1; font-size: 13px; background: transparent; "
                    "font-family: 'Consolas','Courier New',monospace;")
-        .arg(ui::colors::CYAN);
+        .arg(ui::colors::CYAN());
 }
 
 static QString PANEL() {
     return QString("background: %1; border: 1px solid %2; border-radius: 2px;")
-        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM);
+        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM());
 }
 
 static QString PANEL_HEADER() {
-    return QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM);
+    return QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM());
 }
 
 static QString LINK_BTN() {
@@ -55,7 +55,7 @@ static QString LINK_BTN() {
                    "border-radius: 2px; padding: 8px 12px; font-size: 12px; text-align: left; "
                    "font-family: 'Consolas','Courier New',monospace; }"
                    "QPushButton:hover { background: %4; color: #38bdf8; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::CYAN, ui::colors::BORDER_DIM, ui::colors::BG_HOVER);
+        .arg(ui::colors::BG_RAISED(), ui::colors::CYAN(), ui::colors::BORDER_DIM(), ui::colors::BG_HOVER());
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ static QLabel* makePanelHeader(const QString& icon, const QString& title, const 
     lbl->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; "
                                "background: %2; padding: 10px 14px; border-bottom: 1px solid %3; "
                                "font-family: 'Consolas','Courier New',monospace;")
-                           .arg(iconColor, ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+                           .arg(iconColor, ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     return lbl;
 }
 
@@ -79,7 +79,7 @@ static QLabel* makeBullet(const QString& text) {
     auto* lbl = new QLabel(QString("■  %1").arg(text));
     lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; "
                                "font-family: 'Consolas','Courier New',monospace;")
-                           .arg(ui::colors::TEXT_SECONDARY));
+                           .arg(ui::colors::TEXT_SECONDARY()));
     lbl->setWordWrap(true);
     return lbl;
 }
@@ -87,14 +87,14 @@ static QLabel* makeBullet(const QString& text) {
 static QWidget* makeSeparator() {
     auto* line = new QFrame;
     line->setFrameShape(QFrame::HLine);
-    line->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM));
+    line->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM()));
     return line;
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(QString("QWidget#AboutRoot { background: %1; }").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("QWidget#AboutRoot { background: %1; }").arg(ui::colors::BG_BASE()));
     setObjectName("AboutRoot");
 
     auto* root = new QVBoxLayout(this);
@@ -107,7 +107,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
     scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }");
 
     auto* page = new QWidget(this);
-    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
+    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(12);
@@ -131,7 +131,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         auto* name = new QLabel("Fincept Terminal");
         name->setStyleSheet(QString("color: %1; font-size: 15px; font-weight: bold; background: transparent; "
                                     "font-family: 'Consolas','Courier New',monospace;")
-                                .arg(ui::colors::TEXT_PRIMARY));
+                                .arg(ui::colors::TEXT_PRIMARY()));
         left->addWidget(name);
         auto* sub = new QLabel("NATIVE DESKTOP FINANCIAL INTELLIGENCE TERMINAL");
         sub->setStyleSheet(MUTED());
@@ -145,7 +145,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         auto* ver = new QLabel("v4.0.0");
         ver->setStyleSheet(QString("color: %1; font-size: 18px; font-weight: bold; background: transparent; "
                                    "font-family: 'Consolas','Courier New',monospace;")
-                               .arg(ui::colors::AMBER));
+                               .arg(ui::colors::AMBER()));
         ver->setAlignment(Qt::AlignRight);
         right->addWidget(ver);
         auto* bdate = new QLabel("Build: 2026-03-20");
@@ -161,7 +161,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         foot->setStyleSheet(QString("color: %1; font-size: 11px; background: %2; "
                                     "padding: 6px 14px; border-top: 1px solid %3; "
                                     "font-family: 'Consolas','Courier New',monospace;")
-                                .arg(ui::colors::TEXT_TERTIARY, ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+                                .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
         pvl->addWidget(foot);
 
         vl->addWidget(panel);
@@ -199,7 +199,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
             foot->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; "
                                         "padding: 6px 14px; border-top: 1px solid %2; "
                                         "font-family: 'Consolas','Courier New',monospace;")
-                                    .arg(ui::colors::CYAN, ui::colors::BORDER_DIM));
+                                    .arg(ui::colors::CYAN(), ui::colors::BORDER_DIM()));
             pvl->addWidget(foot);
 
             rl->addWidget(panel, 1);
@@ -229,7 +229,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
             foot->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; "
                                         "padding: 6px 14px; border-top: 1px solid %2; "
                                         "font-family: 'Consolas','Courier New',monospace;")
-                                    .arg(ui::colors::CYAN, ui::colors::BORDER_DIM));
+                                    .arg(ui::colors::CYAN(), ui::colors::BORDER_DIM()));
             pvl->addWidget(foot);
 
             rl->addWidget(panel, 1);

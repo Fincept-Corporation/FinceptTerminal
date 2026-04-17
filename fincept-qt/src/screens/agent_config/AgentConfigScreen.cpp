@@ -69,7 +69,7 @@ void AgentConfigScreen::build_nav_bar(QVBoxLayout* root) {
     nav_bar->setObjectName("AgentNavBar");
     nav_bar->setFixedHeight(40);
     nav_bar->setStyleSheet(QString("QWidget#AgentNavBar { background: %1; border-bottom: 1px solid %2; }")
-                               .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+                               .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(nav_bar);
     hl->setContentsMargins(12, 0, 12, 0);
@@ -77,12 +77,12 @@ void AgentConfigScreen::build_nav_bar(QVBoxLayout* root) {
 
     auto* title = new QLabel("AGENT STUDIO");
     title->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;padding-right:16px;")
-                             .arg(ui::colors::AMBER));
+                             .arg(ui::colors::AMBER()));
     hl->addWidget(title);
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::VLine);
-    sep->setStyleSheet(QString("color:%1;").arg(ui::colors::BORDER_MED));
+    sep->setStyleSheet(QString("color:%1;").arg(ui::colors::BORDER_MED()));
     sep->setFixedWidth(1);
     hl->addWidget(sep);
 
@@ -97,7 +97,7 @@ void AgentConfigScreen::build_nav_bar(QVBoxLayout* root) {
     agent_count_label_ = new QLabel;
     agent_count_label_->setStyleSheet(
         QString("color:%1;font-size:11px;padding:2px 8px;background:%2;border-radius:2px;")
-            .arg(ui::colors::AMBER, ui::colors::BG_SURFACE));
+            .arg(ui::colors::AMBER(), ui::colors::BG_SURFACE()));
     hl->addWidget(agent_count_label_);
 
     root->addWidget(nav_bar);
@@ -107,19 +107,19 @@ void AgentConfigScreen::build_status_bar(QVBoxLayout* root) {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(24);
     bar->setStyleSheet(
-        QString("background:%1;border-top:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+        QString("background:%1;border-top:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(12, 0, 12, 0);
 
     status_label_ = new QLabel("READY");
-    status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY));
+    status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     hl->addWidget(status_label_);
     hl->addStretch();
 
     auto* view_label = new QLabel;
     view_label->setObjectName("AgentStatusView");
-    view_label->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::AMBER));
+    view_label->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::AMBER()));
     hl->addWidget(view_label);
 
     root->addWidget(bar);
@@ -142,7 +142,7 @@ QPushButton* AgentConfigScreen::make_nav_btn(const QString& text, services::Agen
                 "letter-spacing: 1px; padding: 8px 12px; border: none; border-bottom: 2px solid transparent; }"
                 "QPushButton:hover { color: %2; }"
                 "QPushButton:checked { color: %2; border-bottom: 2px solid %2; }")
-            .arg(ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
+            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
 
     connect(btn, &QPushButton::clicked, this, [this, mode]() { set_view(mode); });
     return btn;
@@ -307,16 +307,16 @@ void AgentConfigScreen::setup_service_connections() {
 
     connect(&svc, &services::AgentService::error_occurred, this, [this](const QString& ctx, const QString& msg) {
         status_label_->setText(QString("ERROR [%1]: %2").arg(ctx, msg.left(60)));
-        status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE));
+        status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE()));
     });
 
     connect(&svc, &services::AgentService::agent_result, this, [this](services::AgentExecutionResult r) {
         if (r.success) {
             status_label_->setText(QString("DONE (%1ms)").arg(r.execution_time_ms));
-            status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::POSITIVE));
+            status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::POSITIVE()));
         } else {
             status_label_->setText(QString("FAILED: %1").arg(r.error.left(60)));
-            status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE));
+            status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE()));
         }
     });
 

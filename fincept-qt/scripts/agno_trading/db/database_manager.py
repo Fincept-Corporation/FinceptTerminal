@@ -14,7 +14,7 @@ class DatabaseManager:
     def __init__(self, db_path: Optional[str] = None):
         """Initialize database manager"""
         if db_path is None:
-            # Use FINCEPT_DATA_DIR env var if set by Rust, otherwise use platform-specific app data
+            # Use FINCEPT_DATA_DIR env var if set by host, otherwise use platform-specific app data
             data_dir = os.environ.get("FINCEPT_DATA_DIR")
             if data_dir:
                 db_dir = os.path.join(data_dir, 'alpha_arena')

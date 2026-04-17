@@ -288,7 +288,7 @@ def stats_json(zbcode: str, datestr: str, regcode: str = None,
                dbcode: str = 'hgyd') -> Dict[str, Any]:
     """
     JSON wrapper for stats function
-    Returns exact cnstats data in JSON format for Rust integration
+    Returns exact cnstats data in JSON format for Qt/C++ integration
 
     Args:
         zbcode: Statistical indicator code
@@ -624,7 +624,7 @@ def print_usage():
     print("  # List city region codes")
     print(f"  python {sys.argv[0]} --list-regcode --dbcode csnd")
     print()
-    print("JSON OUTPUT OPTIONS (for Rust integration):")
+    print("JSON OUTPUT OPTIONS (for Qt/C++ integration):")
     print("  # Get data in JSON format")
     print(f"  python {sys.argv[0]} --json --action stats --zbcode A0D01 --date 202201")
     print()
@@ -681,7 +681,7 @@ def main():
     parser.add_argument('--dbcode', nargs='?', const='hgyd', default='hgyd',
                        help='Database code, default: hgyd(macro monthly), options: hgjd(macro quarterly), hgnd(macro annual), fsyd(provincial monthly), fsjd(provincial quarterly), fsnd(provincial annual), csyd(city monthly), csjd(city quarterly), csnd(city annual)')
     parser.add_argument('--regcode', nargs='?', help='Region code, e.g.: 110000 is Beijing')
-    parser.add_argument('--json', action='store_true', help='Output JSON format (for Rust integration)')
+    parser.add_argument('--json', action='store_true', help='Output JSON format (for Qt/C++ integration)')
     parser.add_argument('--action', choices=['stats', 'tree', 'regions'],
                        help='JSON mode action: stats(statistical data), tree(indicator tree), regions(region codes)')
     parser.add_argument('--zbcode', help='Indicator code (JSON mode)')
@@ -695,7 +695,7 @@ def main():
 
     try:
         if json_mode:
-            # JSON MODE - for Rust integration
+            # JSON MODE - for Qt/C++ integration
             if not args.action:
                 print(json.dumps({"error": "--action is required in JSON mode"}))
                 sys.exit(1)

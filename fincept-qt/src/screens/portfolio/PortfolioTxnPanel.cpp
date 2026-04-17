@@ -15,7 +15,7 @@ PortfolioTxnPanel::PortfolioTxnPanel(QWidget* parent) : QWidget(parent) {
 }
 
 void PortfolioTxnPanel::build_ui() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -25,20 +25,20 @@ void PortfolioTxnPanel::build_ui() {
     auto* header = new QWidget(this);
     header->setFixedHeight(28);
     header->setStyleSheet(QString("background:%1; border-top:1px solid %2; border-bottom:1px solid %2;")
-                              .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                              .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(8);
 
     auto* title = new QLabel("TRANSACTION HISTORY");
     title->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(title);
 
     hl->addStretch();
 
     count_label_ = new QLabel;
-    count_label_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_TERTIARY));
+    count_label_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_TERTIARY()));
     hl->addWidget(count_label_);
 
     layout->addWidget(header);
@@ -73,9 +73,9 @@ void PortfolioTxnPanel::build_ui() {
                                   "QScrollBar:vertical { background:%1; width:5px; }"
                                   "QScrollBar::handle:vertical { background:%4; min-height:20px; }"
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0px; }")
-                              .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::fonts::DATA_FAMILY,
-                                   ui::colors::BORDER_DIM, ui::colors::BG_HOVER, ui::colors::BG_SURFACE,
-                                   ui::colors::TEXT_TERTIARY));
+                              .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::fonts::DATA_FAMILY,
+                                   ui::colors::BORDER_DIM(), ui::colors::BG_HOVER(), ui::colors::BG_SURFACE(),
+                                   ui::colors::TEXT_TERTIARY()));
 
     table_->verticalHeader()->setDefaultSectionSize(24);
 
@@ -159,7 +159,7 @@ void PortfolioTxnPanel::populate() {
 }
 
 void PortfolioTxnPanel::refresh_theme() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 
     const QString bsz = QString::number(ui::fonts::font_px(0));
     const QString hsz = QString::number(ui::fonts::font_px(-2));
@@ -181,9 +181,9 @@ void PortfolioTxnPanel::refresh_theme() {
                                   "QScrollBar:vertical { background:%1; width:5px; }"
                                   "QScrollBar::handle:vertical { background:%4; min-height:20px; }"
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0px; }")
-                              .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::fonts::DATA_FAMILY,
-                                   ui::colors::BORDER_DIM, ui::colors::BG_HOVER, ui::colors::BG_SURFACE,
-                                   ui::colors::TEXT_TERTIARY));
+                              .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::fonts::DATA_FAMILY,
+                                   ui::colors::BORDER_DIM(), ui::colors::BG_HOVER(), ui::colors::BG_SURFACE(),
+                                   ui::colors::TEXT_TERTIARY()));
 
     populate();
 }

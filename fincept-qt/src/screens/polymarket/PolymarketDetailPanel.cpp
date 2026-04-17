@@ -47,7 +47,7 @@ void PolymarketDetailPanel::build_ui() {
     auto* tab_bar = new QWidget(this);
     tab_bar->setFixedHeight(32);
     tab_bar->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_DIM));
+        QString("background: %1; border-bottom: 1px solid %2;").arg(colors::BG_RAISED(), colors::BORDER_DIM()));
     auto* thl = new QHBoxLayout(tab_bar);
     thl->setContentsMargins(8, 0, 8, 0);
     thl->setSpacing(0);
@@ -59,7 +59,7 @@ void PolymarketDetailPanel::build_ui() {
                                    "  border-bottom: 2px solid transparent; }"
                                    "QPushButton:hover { color: %2; }"
                                    "QPushButton[active=\"true\"] { color: %2; border-bottom-color: %3; }")
-                               .arg(colors::TEXT_SECONDARY, colors::TEXT_PRIMARY, colors::AMBER));
+                               .arg(colors::TEXT_SECONDARY(), colors::TEXT_PRIMARY(), colors::AMBER()));
         btn->setCursor(Qt::PointingHandCursor);
         btn->setProperty("active", i == 0);
         connect(btn, &QPushButton::clicked, this, [this, i]() { set_active_tab(i); });
@@ -102,7 +102,7 @@ QWidget* PolymarketDetailPanel::create_overview_page() {
 
     question_label_ = new QLabel("Select a market to view details");
     question_label_->setStyleSheet(
-        QString("color: %1; font-size: 14px; font-weight: 700; background: transparent;").arg(colors::TEXT_PRIMARY));
+        QString("color: %1; font-size: 14px; font-weight: 700; background: transparent;").arg(colors::TEXT_PRIMARY()));
     question_label_->setWordWrap(true);
     vl->addWidget(question_label_);
 
@@ -114,9 +114,9 @@ QWidget* PolymarketDetailPanel::create_overview_page() {
 
     auto lbl_style =
         QString("color: %1; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; background: transparent;")
-            .arg(colors::TEXT_SECONDARY);
+            .arg(colors::TEXT_SECONDARY());
     auto val_style =
-        QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;").arg(colors::CYAN);
+        QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;").arg(colors::CYAN());
 
     auto make_stat = [&](const QString& label, QLabel*& val_lbl) {
         auto* box = new QWidget(this);
@@ -155,7 +155,7 @@ QWidget* PolymarketDetailPanel::create_overview_page() {
     // Description
     description_label_ = new QLabel;
     description_label_->setStyleSheet(
-        QString("color: %1; font-size: 11px; background: transparent;").arg(colors::TEXT_SECONDARY));
+        QString("color: %1; font-size: 11px; background: transparent;").arg(colors::TEXT_SECONDARY()));
     description_label_->setWordWrap(true);
     vl->addWidget(description_label_);
 
@@ -177,7 +177,7 @@ QWidget* PolymarketDetailPanel::create_holders_page() {
                 "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %3; }"
                 "QHeaderView::section { background: %4; color: %5; border: none; "
                 "  border-bottom: 1px solid %3; padding: 4px 6px; font-size: 10px; font-weight: 700; }")
-            .arg(colors::BG_BASE, colors::TEXT_PRIMARY, colors::BORDER_DIM, colors::BG_RAISED, colors::TEXT_SECONDARY));
+            .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), colors::BG_RAISED(), colors::TEXT_SECONDARY()));
     return holders_table_;
 }
 
@@ -190,7 +190,7 @@ QWidget* PolymarketDetailPanel::create_comments_page() {
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(4);
     auto* empty = new QLabel("No comments yet");
-    empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::TEXT_DIM));
+    empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::TEXT_DIM()));
     empty->setAlignment(Qt::AlignCenter);
     vl->addWidget(empty);
     vl->addStretch(1);
@@ -207,7 +207,7 @@ QWidget* PolymarketDetailPanel::create_related_page() {
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(4);
     auto* empty = new QLabel("No related markets");
-    empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::TEXT_DIM));
+    empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::TEXT_DIM()));
     empty->setAlignment(Qt::AlignCenter);
     vl->addWidget(empty);
     vl->addStretch(1);
@@ -242,17 +242,17 @@ void PolymarketDetailPanel::set_market(const Market& market) {
         status_label_->setText("RESOLVED");
         status_label_->setStyleSheet(QString("color: %1; background: rgba(22,163,74,0.15); "
                                              "font-size: 9px; font-weight: 700; padding: 2px 6px;")
-                                         .arg(colors::POSITIVE));
+                                         .arg(colors::POSITIVE()));
     } else if (market.active) {
         status_label_->setText("ACTIVE");
         status_label_->setStyleSheet(QString("color: %1; background: rgba(217,119,6,0.15); "
                                              "font-size: 9px; font-weight: 700; padding: 2px 6px;")
-                                         .arg(colors::AMBER));
+                                         .arg(colors::AMBER()));
     } else {
         status_label_->setText("INACTIVE");
         status_label_->setStyleSheet(QString("color: %1; background: transparent; "
                                              "font-size: 9px; font-weight: 700; padding: 2px 6px;")
-                                         .arg(colors::TEXT_DIM));
+                                         .arg(colors::TEXT_DIM()));
     }
 
     // Outcomes
@@ -269,14 +269,14 @@ void PolymarketDetailPanel::set_market(const Market& market) {
         auto* row = new QWidget(this);
         QString color = (i < OUTCOME_COLORS.size()) ? OUTCOME_COLORS[i] : colors::TEXT_SECONDARY;
         row->setStyleSheet(QString("background: %1; border-left: 3px solid %2; padding: 4px 8px; margin: 2px 0;")
-                               .arg(colors::BG_RAISED, color));
+                               .arg(colors::BG_RAISED(), color));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
         rl->setSpacing(8);
 
         auto* name = new QLabel(outcome.name);
         name->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: 700; background: transparent;")
-                                .arg(colors::TEXT_PRIMARY));
+                                .arg(colors::TEXT_PRIMARY()));
         auto* price = new QLabel(fmt_price(outcome.price));
         price->setStyleSheet(
             QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;").arg(color));
@@ -347,7 +347,7 @@ void PolymarketDetailPanel::set_comments(const QVector<Comment>& comments) {
 
     if (comments.isEmpty()) {
         auto* empty = new QLabel("No comments yet");
-        empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::TEXT_DIM));
+        empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::TEXT_DIM()));
         empty->setAlignment(Qt::AlignCenter);
         layout->addWidget(empty);
     } else {
@@ -355,25 +355,25 @@ void PolymarketDetailPanel::set_comments(const QVector<Comment>& comments) {
             auto* card = new QWidget(this);
             card->setStyleSheet(QString("background: %1; padding: 8px; margin: 2px 0; "
                                         "border-left: 2px solid %2;")
-                                    .arg(colors::BG_RAISED, colors::BORDER_MED));
+                                    .arg(colors::BG_RAISED(), colors::BORDER_MED()));
             auto* cvl = new QVBoxLayout(card);
             cvl->setContentsMargins(8, 4, 8, 4);
             cvl->setSpacing(2);
 
             auto* author = new QLabel(c.author.isEmpty() ? c.author_address.left(10) + "..." : c.author);
             author->setStyleSheet(
-                QString("color: %1; font-size: 10px; font-weight: 700; background: transparent;").arg(colors::AMBER));
+                QString("color: %1; font-size: 10px; font-weight: 700; background: transparent;").arg(colors::AMBER()));
             cvl->addWidget(author);
 
             auto* body = new QLabel(c.body.left(300));
             body->setStyleSheet(
-                QString("color: %1; font-size: 11px; background: transparent;").arg(colors::TEXT_PRIMARY));
+                QString("color: %1; font-size: 11px; background: transparent;").arg(colors::TEXT_PRIMARY()));
             body->setWordWrap(true);
             cvl->addWidget(body);
 
             auto* meta = new QLabel(QDateTime::fromSecsSinceEpoch(c.created_at, Qt::UTC).toString("yyyy-MM-dd HH:mm") +
                                     (c.likes > 0 ? QString("  %1 likes").arg(c.likes) : ""));
-            meta->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(colors::TEXT_DIM));
+            meta->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(colors::TEXT_DIM()));
             cvl->addWidget(meta);
 
             layout->addWidget(card);
@@ -395,7 +395,7 @@ void PolymarketDetailPanel::set_related_markets(const QVector<Market>& markets) 
 
     if (markets.isEmpty()) {
         auto* empty = new QLabel("No related markets");
-        empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::TEXT_DIM));
+        empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::TEXT_DIM()));
         empty->setAlignment(Qt::AlignCenter);
         layout->addWidget(empty);
     } else {
@@ -405,8 +405,8 @@ void PolymarketDetailPanel::set_related_markets(const QVector<Market>& markets) 
             card->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
                                         "  text-align: left; padding: 8px; font-size: 11px; }"
                                         "QPushButton:hover { background: %4; color: %5; }")
-                                    .arg(colors::BG_RAISED, colors::TEXT_SECONDARY, colors::BORDER_DIM,
-                                         colors::BG_HOVER, colors::TEXT_PRIMARY));
+                                    .arg(colors::BG_RAISED(), colors::TEXT_SECONDARY(), colors::BORDER_DIM(),
+                                         colors::BG_HOVER(), colors::TEXT_PRIMARY()));
             card->setCursor(Qt::PointingHandCursor);
             connect(card, &QPushButton::clicked, this, [this, m]() { emit related_market_clicked(m); });
             layout->addWidget(card);

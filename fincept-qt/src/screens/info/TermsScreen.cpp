@@ -17,7 +17,7 @@ static QLabel* section_heading(const QString& number, const QString& title) {
     auto* lbl = new QLabel(QString("%1. %2").arg(number, title));
     lbl->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700; "
                                "background: transparent; margin-top: 8px; %2")
-                           .arg(colors::AMBER, MF));
+                           .arg(colors::AMBER(), MF));
     return lbl;
 }
 
@@ -25,7 +25,7 @@ static QLabel* body_text(const QString& text) {
     auto* lbl = new QLabel(text);
     lbl->setWordWrap(true);
     lbl->setStyleSheet(QString("color: %1; font-size: 12px; line-height: 1.5; background: transparent; %2")
-                           .arg(colors::TEXT_PRIMARY, MF));
+                           .arg(colors::TEXT_PRIMARY(), MF));
     return lbl;
 }
 
@@ -33,12 +33,12 @@ static QLabel* bullet(const QString& text) {
     auto* lbl = new QLabel(QString("  > %1").arg(text));
     lbl->setWordWrap(true);
     lbl->setStyleSheet(
-        QString("color: %1; font-size: 12px; background: transparent; %2").arg(colors::TEXT_SECONDARY, MF));
+        QString("color: %1; font-size: 12px; background: transparent; %2").arg(colors::TEXT_SECONDARY(), MF));
     return lbl;
 }
 
 TermsScreen::TermsScreen(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(QString("QWidget#TermsRoot { background: %1; }").arg(colors::BG_BASE));
+    setStyleSheet(QString("QWidget#TermsRoot { background: %1; }").arg(colors::BG_BASE()));
     setObjectName("TermsRoot");
 
     auto* root = new QVBoxLayout(this);
@@ -49,7 +49,7 @@ TermsScreen::TermsScreen(QWidget* parent) : QWidget(parent) {
     scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }");
 
     auto* page = new QWidget(this);
-    page->setStyleSheet(QString("background: %1;").arg(colors::BG_BASE));
+    page->setStyleSheet(QString("background: %1;").arg(colors::BG_BASE()));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(6);
@@ -59,7 +59,7 @@ TermsScreen::TermsScreen(QWidget* parent) : QWidget(parent) {
     back_btn->setCursor(Qt::PointingHandCursor);
     back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
                                     "font-size: 12px; %2 } QPushButton:hover { color: %3; }")
-                                .arg(colors::TEXT_SECONDARY, MF, colors::TEXT_PRIMARY));
+                                .arg(colors::TEXT_SECONDARY(), MF, colors::TEXT_PRIMARY()));
     connect(back_btn, &QPushButton::clicked, this, &TermsScreen::navigate_back);
     vl->addWidget(back_btn, 0, Qt::AlignLeft);
 
@@ -67,19 +67,19 @@ TermsScreen::TermsScreen(QWidget* parent) : QWidget(parent) {
     auto* title = new QLabel("TERMS OF SERVICE");
     title->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 700; letter-spacing: 1px; "
                                  "background: transparent; %2")
-                             .arg(colors::AMBER, MF));
+                             .arg(colors::AMBER(), MF));
     vl->addWidget(title);
 
     auto* updated = new QLabel("Last updated: January 1, 2026");
     updated->setStyleSheet(
-        QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY, MF));
+        QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY(), MF));
     vl->addWidget(updated);
     vl->addSpacing(12);
 
     // Panel container
     auto* panel = new QWidget(this);
     panel->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 2px;")
-                             .arg(colors::BG_SURFACE, colors::BORDER_DIM));
+                             .arg(colors::BG_SURFACE(), colors::BORDER_DIM()));
     auto* pvl = new QVBoxLayout(panel);
     pvl->setContentsMargins(20, 16, 20, 16);
     pvl->setSpacing(6);
@@ -155,7 +155,7 @@ TermsScreen::TermsScreen(QWidget* parent) : QWidget(parent) {
         btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
                                    "font-size: 12px; font-family:'Consolas','Courier New',monospace; }"
                                    "QPushButton:hover { color: #38bdf8; }")
-                               .arg(colors::CYAN));
+                               .arg(colors::CYAN()));
         return btn;
     };
 

@@ -431,7 +431,7 @@ QWidget* SettingsScreen::build_appearance() {
                                   "QScrollBar:vertical { background: %1; width: 6px; }"
                                   "QScrollBar::handle:vertical { background: %2; }"
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-                              .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_MED));
+                              .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_MED()));
 
     auto* page = new QWidget(this);
     auto* vl = new QVBoxLayout(page);

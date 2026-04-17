@@ -31,7 +31,7 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     title_bar_ = new QWidget(this);
     title_bar_->setFixedHeight(26);
     title_bar_->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+        QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(title_bar_);
     hl->setContentsMargins(8, 0, 4, 0);
@@ -52,7 +52,7 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     // Loading indicator
     loading_label_ = new QLabel("...");
     loading_label_->setStyleSheet(
-        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::AMBER));
+        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::AMBER()));
     loading_label_->setVisible(false);
     hl->addWidget(loading_label_);
 
@@ -70,8 +70,8 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
         QString("QPushButton { color: %1; background: %2; border: 1px solid %3; border-radius: 2px; "
                 "padding: 0px; }"
                 "QPushButton:hover { color: %4; border-color: %4; background: %5; }")
-            .arg(accent_color_, ui::colors::BG_SURFACE, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY,
-                 ui::colors::BG_HOVER));
+            .arg(accent_color_, ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(),
+                 ui::colors::BG_HOVER()));
     connect(refresh_btn_, &QPushButton::clicked, this, &BaseWidget::refresh_requested);
     hl->addWidget(refresh_btn_);
 
@@ -87,8 +87,8 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
         QString("QPushButton { color: %1; background: %2; border: 1px solid %3; border-radius: 2px; "
                 "padding: 0px; }"
                 "QPushButton:hover { color: %4; border-color: %4; background: %5; }")
-            .arg(ui::colors::TEXT_TERTIARY, ui::colors::BG_SURFACE, ui::colors::BORDER_DIM, ui::colors::NEGATIVE,
-                 ui::colors::BG_HOVER));
+            .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::NEGATIVE(),
+                 ui::colors::BG_HOVER()));
     connect(close_btn, &QPushButton::clicked, this, &BaseWidget::close_requested);
     hl->addWidget(close_btn);
 
@@ -158,7 +158,7 @@ void BaseWidget::set_error(const QString& error) {
     err_label->setAlignment(Qt::AlignCenter);
     err_label->setWordWrap(true);
     err_label->setStyleSheet(
-        QString("color: %1; font-size: 9px; padding: 16px; background: transparent;").arg(ui::colors::NEGATIVE));
+        QString("color: %1; font-size: 9px; padding: 16px; background: transparent;").arg(ui::colors::NEGATIVE()));
     content_layout_->addWidget(err_label);
 }
 

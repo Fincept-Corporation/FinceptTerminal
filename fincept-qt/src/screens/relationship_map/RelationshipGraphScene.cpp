@@ -599,7 +599,7 @@ RelationshipGraphView::RelationshipGraphView(QGraphicsScene* scene, QWidget* par
     setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
     setResizeAnchor(QGraphicsView::AnchorViewCenter);
     setViewportUpdateMode(QGraphicsView::BoundingRectViewportUpdate);
-    setStyleSheet(QString("QGraphicsView { border: none; background: %1; }").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("QGraphicsView { border: none; background: %1; }").arg(ui::colors::BG_BASE()));
     setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     horizontalScrollBar()->setStyleSheet(

@@ -1,7 +1,7 @@
 """
 World Bank WITS (World Integrated Trade Solution) API Wrapper
 Fetches international trade, tariff, and non-tariff data from World Bank WITS platform
-Returns JSON output for Rust integration
+Returns JSON output for Qt/C++ integration
 
 API Documentation: https://wits.worldbank.org/data/public/WITSAPI_UserGuide.pdf
 Base URL: https://wits.worldbank.org/API/V1/

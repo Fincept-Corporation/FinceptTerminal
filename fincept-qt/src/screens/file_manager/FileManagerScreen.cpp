@@ -350,7 +350,7 @@ QWidget* FileManagerScreen::build_preview_panel() {
                 "QHeaderView::section{background:%5;color:%6;border:none;"
                 "border-bottom:1px solid %3;padding:4px;font-size:10px;font-weight:700;%4}")
             .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), MF, colors::BG_SURFACE(),
-                 colors::TEXT_SECONDARY));
+                 colors::TEXT_SECONDARY()));
     preview_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     preview_table_->setSelectionMode(QAbstractItemView::SingleSelection);
     preview_table_->horizontalHeader()->setStretchLastSection(true);

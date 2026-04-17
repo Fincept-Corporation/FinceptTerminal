@@ -74,7 +74,7 @@ Loads and validates tab configurations (for future use).
 }
 ```
 
-## Usage from Rust/Frontend
+## Usage from the Qt/C++ app
 
 ```python
 # Via agent_manager.py

@@ -1,7 +1,7 @@
 """
-Paper Trading Bridge - Connects Alpha Arena to Rust paper trading module
+Paper Trading Bridge - Connects Alpha Arena to the host paper trading module
 
-Provides Python interface to the Rust paper trading commands via C++ IPC.
+Provides Python interface to the paper trading commands via C++ IPC.
 Used by AI agents to execute simulated trades.
 """
 
@@ -95,7 +95,7 @@ class Stats:
 
 class PaperTradingBridge:
     """
-    Bridge to Rust paper trading module.
+    Bridge to the host paper trading module.
 
     In C++ context, this calls the pt_* commands.
     For testing/standalone, can simulate locally.
@@ -106,7 +106,7 @@ class PaperTradingBridge:
         Initialize bridge.
 
         Args:
-            use_host_bridge: If True, calls Rust commands. If False, uses local simulation.
+            use_host_bridge: If True, calls host commands. If False, uses local simulation.
         """
         self.use_host_bridge = use_host_bridge
         self._local_portfolios: Dict[str, Portfolio] = {}
@@ -407,14 +407,14 @@ class PaperTradingBridge:
         In actual C++ context, this is handled via IPC.
         For Python-only execution, we simulate or raise.
         """
-        # This would be called from Rust via C++ host bridge
+        # This would be called from the host via C++ bridge
         # For now, log and simulate
         logger.debug(f"C++ invoke: {command} with args: {args}")
 
-        # In real implementation, Rust calls Python with the result
+        # In real implementation, the host calls Python with the result
         # For standalone Python testing, raise to indicate C++ host bridge needed
         raise NotImplementedError(
-            f"C++ command {command} requires Rust runtime. "
+            f"C++ command {command} requires host runtime. "
             "Use use_host_bridge=False for local simulation."
         )
 

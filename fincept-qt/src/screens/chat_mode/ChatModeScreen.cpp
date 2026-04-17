@@ -25,7 +25,7 @@ ChatModeScreen::ChatModeScreen(QWidget* parent) : QWidget(parent) {
 }
 
 void ChatModeScreen::build_ui() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 
     auto* hl = new QHBoxLayout(this);
     hl->setContentsMargins(0, 0, 0, 0);

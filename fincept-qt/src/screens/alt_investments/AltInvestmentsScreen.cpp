@@ -98,20 +98,20 @@ static const QString kStyle =
                    "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
                    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
                    "QScrollBar:horizontal { height: 0; }")
-        .arg(colors::BG_BASE)        // %1
-        .arg(colors::BG_RAISED)      // %2
-        .arg(colors::AMBER)          // %3
-        .arg(colors::TEXT_PRIMARY)   // %4
-        .arg(colors::TEXT_SECONDARY) // %5
-        .arg(colors::POSITIVE)       // %6
-        .arg(colors::BG_SURFACE)     // %7
-        .arg(colors::BORDER_DIM)     // %8
-        .arg(colors::BORDER_BRIGHT)  // %9
-        .arg(colors::AMBER_DIM)      // %10
-        .arg(colors::TEXT_DIM)       // %11
-        .arg(colors::BG_HOVER)       // %12
-        .arg(colors::CYAN)           // %13
-        .arg(colors::NEGATIVE)       // %14
+        .arg(colors::BG_BASE())        // %1
+        .arg(colors::BG_RAISED())      // %2
+        .arg(colors::AMBER())          // %3
+        .arg(colors::TEXT_PRIMARY())   // %4
+        .arg(colors::TEXT_SECONDARY()) // %5
+        .arg(colors::POSITIVE())       // %6
+        .arg(colors::BG_SURFACE())     // %7
+        .arg(colors::BORDER_DIM())     // %8
+        .arg(colors::BORDER_BRIGHT())  // %9
+        .arg(colors::AMBER_DIM())      // %10
+        .arg(colors::TEXT_DIM())       // %11
+        .arg(colors::BG_HOVER())       // %12
+        .arg(colors::CYAN())           // %13
+        .arg(colors::NEGATIVE())       // %14
     ;
 } // namespace
 
@@ -652,7 +652,7 @@ QWidget* AltInvestmentsScreen::create_right_panel() {
     verdict_badge_->setAlignment(Qt::AlignCenter);
     verdict_badge_->setStyleSheet(QString("color:%1; background:%2; font-size:11px; font-weight:700;"
                                           " padding:4px 14px; letter-spacing:0.5px;")
-                                      .arg(colors::TEXT_DIM, colors::BG_RAISED));
+                                      .arg(colors::TEXT_DIM(), colors::BG_RAISED()));
     val->addWidget(verdict_badge_);
 
     verdict_rating_ = new QLabel;
@@ -669,7 +669,7 @@ QWidget* AltInvestmentsScreen::create_right_panel() {
 
     auto* div = new QWidget(this);
     div->setFixedHeight(1);
-    div->setStyleSheet(QString("background:%1;").arg(colors::BORDER_DIM));
+    div->setStyleSheet(QString("background:%1;").arg(colors::BORDER_DIM()));
     vl->addWidget(div);
 
     // Scrollable metric rows
@@ -901,7 +901,7 @@ void AltInvestmentsScreen::run_analysis(const QString& command, const QJsonObjec
     verdict_badge_->setText("ANALYZING...");
     verdict_badge_->setStyleSheet(QString("color:%1; background:rgba(217,119,6,0.15);"
                                           " font-size:11px; font-weight:700; padding:4px 14px;")
-                                      .arg(colors::AMBER));
+                                      .arg(colors::AMBER()));
     verdict_rating_->clear();
     verdict_rec_->clear();
 
@@ -1159,7 +1159,7 @@ void AltInvestmentsScreen::display_error(const QString& error) {
     verdict_badge_->setText("ERROR");
     verdict_badge_->setStyleSheet(QString("color:%1; background:rgba(220,38,38,0.15);"
                                           " font-size:11px; font-weight:700; padding:4px 14px;")
-                                      .arg(colors::NEGATIVE));
+                                      .arg(colors::NEGATIVE()));
     verdict_rating_->clear();
     verdict_rec_->setText(error);
     while (metrics_layout_->count() > 0) {

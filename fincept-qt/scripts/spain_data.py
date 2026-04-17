@@ -1,7 +1,7 @@
 """
 Spain Open Data (datos.gob.es) Data Fetcher
 Access to Spanish government datasets through hierarchical catalogue → dataset → resources structure
-Returns JSON output for Rust integration
+Returns JSON output for Qt/C++ integration
 """
 
 import sys

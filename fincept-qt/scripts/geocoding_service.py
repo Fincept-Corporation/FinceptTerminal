@@ -1,7 +1,7 @@
 """
 Geocoding Service using geopy
 Provides location search, autocomplete, and reverse geocoding
-Returns JSON output for Rust integration
+Returns JSON output for Qt/C++ integration
 
 Uses Nominatim (OpenStreetMap) - no API key required
 Rate Limit: 1 request per second (handled with delays)

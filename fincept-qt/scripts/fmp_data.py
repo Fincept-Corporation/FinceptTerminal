@@ -738,10 +738,10 @@ def main(args=None):
     """Main function for CLI interface
 
     Args:
-        args: List of command-line arguments (when called from Rust).
+        args: List of command-line arguments (when called from the host).
               If None, will use sys.argv for standalone execution.
     """
-    # Handle both Rust invocation (args passed as parameter) and standalone CLI (sys.argv)
+    # Handle both host invocation (args passed as parameter) and standalone CLI (sys.argv)
     if args is None:
         args = sys.argv[1:]  # Skip script name
 
@@ -881,7 +881,7 @@ def main(args=None):
         else:
             result = {"error": FMPError(command, f"Unknown command: {command}").to_dict()}
 
-        # Return JSON string for Rust consumption
+        # Return JSON string for host consumption
         return json.dumps(result, indent=2)
 
     except Exception as e:

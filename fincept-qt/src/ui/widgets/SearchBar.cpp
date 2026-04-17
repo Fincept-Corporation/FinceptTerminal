@@ -17,7 +17,7 @@ SearchBar::SearchBar(QWidget* parent) : QWidget(parent) {
     input_->setStyleSheet(QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
                                   "padding: 4px 12px; font-size: 13px; } "
                                   "QLineEdit:focus { border-color: %4; }")
-                              .arg(colors::PANEL, colors::WHITE, colors::BORDER, colors::ORANGE));
+                              .arg(colors::PANEL(), colors::WHITE(), colors::BORDER(), colors::ORANGE()));
 
     connect(input_, &QLineEdit::returnPressed, this, [this]() { emit search_submitted(input_->text()); });
     connect(input_, &QLineEdit::textChanged, this, &SearchBar::text_changed);

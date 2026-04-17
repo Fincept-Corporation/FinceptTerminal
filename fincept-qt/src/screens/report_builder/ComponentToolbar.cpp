@@ -11,7 +11,7 @@ namespace fincept::screens {
 
 ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     setFixedWidth(240);
-    setStyleSheet(QString("background: %1; border-right: 1px solid %2;").arg(ui::colors::PANEL, ui::colors::BORDER));
+    setStyleSheet(QString("background: %1; border-right: 1px solid %2;").arg(ui::colors::PANEL(), ui::colors::BORDER()));
 
     // Wrap content in a scroll area so it doesn't clip on small displays
     auto* scroll = new QScrollArea(this);
@@ -30,7 +30,7 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
         auto* lbl = new QLabel(text);
         lbl->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent; "
                                    "padding-top: 6px;")
-                               .arg(ui::colors::MUTED));
+                               .arg(ui::colors::MUTED()));
         vl->addWidget(lbl);
     };
 
@@ -40,8 +40,8 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
         b->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
                                  "text-align: left; padding: 0 8px; font-size: 12px; }"
                                  "QPushButton:hover { background: %4; color: %5; }")
-                             .arg(ui::colors::BG_RAISED, ui::colors::AMBER, ui::colors::BORDER_MED,
-                                  ui::colors::BG_HOVER, ui::colors::WHITE));
+                             .arg(ui::colors::BG_RAISED(), ui::colors::AMBER(), ui::colors::BORDER_MED(),
+                                  ui::colors::BG_HOVER(), ui::colors::WHITE()));
         vl->addWidget(b);
         return b;
     };
@@ -69,7 +69,7 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     // Separator
     auto* sep0 = new QFrame;
     sep0->setFixedHeight(1);
-    sep0->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER));
+    sep0->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER()));
     vl->addWidget(sep0);
 
     // ── Add Component ─────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     // Separator
     auto* sep1 = new QFrame;
     sep1->setFixedHeight(1);
-    sep1->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER));
+    sep1->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER()));
     vl->addWidget(sep1);
 
     // ── Font Settings ─────────────────────────────────────────────────────────
@@ -147,7 +147,7 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     // Separator
     auto* sep2 = new QFrame;
     sep2->setFixedHeight(1);
-    sep2->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER));
+    sep2->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER()));
     vl->addWidget(sep2);
 
     // ── Document Structure ────────────────────────────────────────────────────
@@ -159,7 +159,7 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
         QString("QListWidget { background: %1; border: 1px solid %2; } "
                 "QListWidget::item { color: %3; padding: 3px; font-size: 11px; } "
                 "QListWidget::item:selected { background: %4; color: %5; }")
-            .arg(ui::colors::DARK, ui::colors::BORDER, ui::colors::GRAY, ui::colors::BG_RAISED, ui::colors::WHITE));
+            .arg(ui::colors::DARK(), ui::colors::BORDER(), ui::colors::GRAY(), ui::colors::BG_RAISED(), ui::colors::WHITE()));
     connect(structure_list_, &QListWidget::currentRowChanged, this, &ComponentToolbar::structure_selected);
     vl->addWidget(structure_list_, 1);
 
@@ -220,7 +220,7 @@ void ComponentToolbar::add_type_button(QVBoxLayout* layout, const QString& label
         QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
                 "text-align: left; padding: 0 8px; font-size: 12px; }"
                 "QPushButton:hover { background: %4; color: %5; }")
-            .arg(ui::colors::DARK, ui::colors::GRAY, ui::colors::BORDER, ui::colors::BG_RAISED, ui::colors::WHITE));
+            .arg(ui::colors::DARK(), ui::colors::GRAY(), ui::colors::BORDER(), ui::colors::BG_RAISED(), ui::colors::WHITE()));
     connect(btn, &QPushButton::clicked, this, [this, type]() { emit add_component(type); });
     layout->addWidget(btn);
 }

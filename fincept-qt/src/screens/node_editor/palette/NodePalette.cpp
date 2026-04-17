@@ -30,13 +30,13 @@ void NodePalette::build_ui() {
     // ── Header ─────────────────────────────────────────────────────
     auto* header = new QWidget(this);
     header->setFixedHeight(34);
-    header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_HOVER));
+    header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_HOVER()));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(10, 0, 10, 0);
     auto* title = new QLabel("NODES");
     title->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 12px;"
                                  "font-weight: bold; letter-spacing: 0.5px;")
-                             .arg(ui::colors::AMBER));
+                             .arg(ui::colors::AMBER()));
     hl->addWidget(title);
     hl->addStretch();
     root->addWidget(header);
@@ -44,12 +44,12 @@ void NodePalette::build_ui() {
     // ── Separator ──────────────────────────────────────────────────
     auto* sep = new QFrame;
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED));
+    sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED()));
     root->addWidget(sep);
 
     // ── Search bar ─────────────────────────────────────────────────
     auto* search_wrap = new QWidget(this);
-    search_wrap->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_SURFACE));
+    search_wrap->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_SURFACE()));
     auto* sl = new QHBoxLayout(search_wrap);
     sl->setContentsMargins(8, 6, 8, 6);
 
@@ -61,7 +61,7 @@ void NodePalette::build_ui() {
                 "  font-family: Consolas; font-size: 12px; padding: 4px 8px;"
                 "}"
                 "QLineEdit:focus { border: 1px solid %4; }")
-            .arg(ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED, ui::colors::AMBER));
+            .arg(ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
     sl->addWidget(search_input_);
     root->addWidget(search_wrap);
 
@@ -81,7 +81,7 @@ void NodePalette::build_ui() {
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
                                   "  height: 0; background: none;"
                                   "}")
-                              .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_DIM));
+                              .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_DIM()));
 
     categories_container_ = new QWidget(this);
     categories_layout_ = new QVBoxLayout(categories_container_);
@@ -127,7 +127,7 @@ void NodePalette::rebuild_categories(const QString& filter) {
         // Category header
         auto* cat_header = new QWidget(this);
         cat_header->setFixedHeight(26);
-        cat_header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_HOVER));
+        cat_header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_HOVER()));
         auto* chl = new QHBoxLayout(cat_header);
         chl->setContentsMargins(10, 0, 10, 0);
         auto* cat_label = new QLabel(cat.toUpper());
@@ -139,7 +139,7 @@ void NodePalette::rebuild_categories(const QString& filter) {
 
         auto* count_label = new QLabel(QString::number(filtered.size()));
         count_label->setStyleSheet(
-            QString("color: %1; font-family: Consolas; font-size: 10px;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color: %1; font-family: Consolas; font-size: 10px;").arg(ui::colors::TEXT_TERTIARY()));
         chl->addStretch();
         chl->addWidget(count_label);
 
@@ -160,7 +160,7 @@ void NodePalette::rebuild_categories(const QString& filter) {
                         "QPushButton:hover {"
                         "  background: %4; color: %2;"
                         "}")
-                    .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BG_HOVER, ui::colors::BG_HOVER));
+                    .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER(), ui::colors::BG_HOVER()));
 
             btn->setToolTip(n.description);
 
@@ -179,7 +179,7 @@ void NodePalette::rebuild_categories(const QString& filter) {
 
             auto* name = new QLabel(n.display_name);
             name->setStyleSheet(
-                QString("color: %1; font-family: Consolas; font-size: 11px;").arg(ui::colors::TEXT_PRIMARY));
+                QString("color: %1; font-family: Consolas; font-size: 11px;").arg(ui::colors::TEXT_PRIMARY()));
             name->setAttribute(Qt::WA_TransparentForMouseEvents);
             bl->addWidget(name, 1);
 

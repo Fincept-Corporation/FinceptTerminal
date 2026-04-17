@@ -50,12 +50,12 @@ void RiskManagementView::build_ui() {
                                  "  letter-spacing:1px; }"
                                  "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
                                  "QTabBar::tab:hover { color:%5; }")
-                             .arg(ui::colors::BG_BASE, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY,
-                                  ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+                             .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(),
+                                  ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
 
     // ── Risk Overview tab ────────────────────────────────────────────────────
     overview_panel_ = new QWidget(this);
-    overview_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    overview_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     tabs_->addTab(overview_panel_, "RISK OVERVIEW");
 
     // ── Stress Test tab ──────────────────────────────────────────────────────
@@ -65,11 +65,11 @@ void RiskManagementView::build_ui() {
 
     auto* stress_title = new QLabel("PORTFOLIO STRESS TESTING");
     stress_title->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     stress_layout->addWidget(stress_title);
 
     auto* stress_note = new QLabel("Estimated impact of historical and hypothetical market scenarios");
-    stress_note->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
+    stress_note->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
     stress_layout->addWidget(stress_note);
 
     stress_table_ = new QTableWidget;
@@ -89,8 +89,8 @@ void RiskManagementView::build_ui() {
                                          "QHeaderView::section { background:%4; color:%5; border:none;"
                                          "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px;"
                                          "  font-weight:700; letter-spacing:0.5px; }")
-                                     .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-                                          ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
+                                     .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                                          ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
     stress_layout->addWidget(stress_table_, 1);
     tabs_->addTab(stress_w, "STRESS TEST");
 
@@ -101,7 +101,7 @@ void RiskManagementView::build_ui() {
 
     auto* contrib_title = new QLabel("RISK CONTRIBUTION BY HOLDING");
     contrib_title->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     contrib_layout->addWidget(contrib_title);
 
     contrib_table_ = new QTableWidget;
@@ -118,8 +118,8 @@ void RiskManagementView::build_ui() {
                                           "QHeaderView::section { background:%4; color:%5; border:none;"
                                           "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px;"
                                           "  font-weight:700; letter-spacing:0.5px; }")
-                                      .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-                                           ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
+                                      .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                                           ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
     contrib_layout->addWidget(contrib_table_, 1);
     tabs_->addTab(contrib_w, "RISK CONTRIBUTION");
 
@@ -149,7 +149,7 @@ void RiskManagementView::update_overview() {
 
     auto* title = new QLabel("PORTFOLIO RISK OVERVIEW");
     title->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     layout->addWidget(title);
 
     // Compute basic risk metrics
@@ -198,14 +198,14 @@ void RiskManagementView::update_overview() {
                         const QString& sub = {}) {
         auto* card = new QWidget(this);
         card->setStyleSheet(
-            QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+            QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
         auto* cl = new QVBoxLayout(card);
         cl->setContentsMargins(12, 8, 12, 8);
         cl->setSpacing(2);
 
         auto* lbl = new QLabel(label);
         lbl->setStyleSheet(
-            QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY()));
         cl->addWidget(lbl);
 
         auto* val = new QLabel(value);
@@ -214,7 +214,7 @@ void RiskManagementView::update_overview() {
 
         if (!sub.isEmpty()) {
             auto* s = new QLabel(sub);
-            s->setStyleSheet(QString("color:%1; font-size:8px;").arg(ui::colors::TEXT_TERTIARY));
+            s->setStyleSheet(QString("color:%1; font-size:8px;").arg(ui::colors::TEXT_TERTIARY()));
             cl->addWidget(s);
         }
 

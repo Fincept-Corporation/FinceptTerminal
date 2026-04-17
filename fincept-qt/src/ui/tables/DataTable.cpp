@@ -19,7 +19,7 @@ DataTable::DataTable(QWidget* parent) : QTableWidget(parent) {
                           "gridline-color: %3; border: none; }"
                           "QTableWidget::item { padding: 4px 8px; height: 26px; }"
                           "QTableWidget::item:selected { background: #111111; }")
-                      .arg(colors::DARK, colors::ROW_ALT, colors::BORDER));
+                      .arg(colors::DARK(), colors::ROW_ALT(), colors::BORDER()));
 }
 
 void DataTable::set_headers(const QStringList& headers) {

@@ -135,7 +135,7 @@ void BacktestingScreen::build_ui() {
 
     auto* splitter = new QSplitter(Qt::Horizontal, this);
     splitter->setHandleWidth(1);
-    splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM));
+    splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM()));
     splitter->addWidget(build_left_panel());
     splitter->addWidget(build_center_panel());
     splitter->addWidget(build_right_panel());
@@ -150,7 +150,7 @@ void BacktestingScreen::build_ui() {
     root->addWidget(splitter, 1);
     root->addWidget(build_status_bar());
 
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 }
 
 // ── Top Bar: Provider tabs + Run button ──────────────────────────────────────
@@ -159,7 +159,7 @@ QWidget* BacktestingScreen::build_top_bar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(34);
     bar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(12, 0, 12, 0);
@@ -169,15 +169,15 @@ QWidget* BacktestingScreen::build_top_bar() {
     brand->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                  "padding:4px 12px; background:rgba(217,119,6,0.1);"
                                  "border:1px solid %4;")
-                             .arg(ui::colors::AMBER)
+                             .arg(ui::colors::AMBER())
                              .arg(ui::fonts::TINY)
                              .arg(ui::fonts::DATA_FAMILY)
-                             .arg(ui::colors::AMBER_DIM));
+                             .arg(ui::colors::AMBER_DIM()));
     hl->addWidget(brand);
 
     auto* div = new QWidget(bar);
     div->setFixedSize(1, 18);
-    div->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM));
+    div->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
     hl->addWidget(div);
 
     // Provider tabs
@@ -201,14 +201,14 @@ QWidget* BacktestingScreen::build_top_bar() {
                 "letter-spacing:1px; }"
                 "QPushButton:hover { background:%1; color:%5; }"
                 "QPushButton:disabled { background:%6; color:%7; border-color:%8; }")
-            .arg(ui::colors::AMBER)
+            .arg(ui::colors::AMBER())
             .arg(ui::fonts::DATA_FAMILY)
             .arg(ui::fonts::SMALL)
-            .arg(ui::colors::AMBER_DIM)
-            .arg(ui::colors::BG_BASE)
-            .arg(ui::colors::BG_RAISED)
-            .arg(ui::colors::TEXT_DIM)
-            .arg(ui::colors::BORDER_DIM));
+            .arg(ui::colors::AMBER_DIM())
+            .arg(ui::colors::BG_BASE())
+            .arg(ui::colors::BG_RAISED())
+            .arg(ui::colors::TEXT_DIM())
+            .arg(ui::colors::BORDER_DIM()));
     connect(run_button_, &QPushButton::clicked, this, &BacktestingScreen::on_run);
     hl->addWidget(run_button_);
 
@@ -217,7 +217,7 @@ QWidget* BacktestingScreen::build_top_bar() {
     status_dot_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                        "padding:3px 8px; background:rgba(22,163,74,0.08);"
                                        "border:1px solid rgba(22,163,74,0.25);")
-                                   .arg(ui::colors::POSITIVE)
+                                   .arg(ui::colors::POSITIVE())
                                    .arg(ui::fonts::TINY)
                                    .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(status_dot_);
@@ -232,7 +232,7 @@ QWidget* BacktestingScreen::build_left_panel() {
     panel->setMinimumWidth(180);
     panel->setMaximumWidth(320);
     panel->setStyleSheet(
-        QString("background:%1; border-right:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("background:%1; border-right:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     auto* scroll = new QScrollArea(panel);
     scroll->setWidgetResizable(true);
@@ -241,8 +241,8 @@ QWidget* BacktestingScreen::build_left_panel() {
                                   "QScrollBar::handle:vertical { background:%1; }"
                                   "QScrollBar::handle:vertical:hover { background:%2; }"
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
-                              .arg(ui::colors::BORDER_MED)
-                              .arg(ui::colors::BORDER_BRIGHT));
+                              .arg(ui::colors::BORDER_MED())
+                              .arg(ui::colors::BORDER_BRIGHT()));
 
     auto* content = new QWidget(scroll);
     auto* vl = new QVBoxLayout(content);
@@ -251,17 +251,17 @@ QWidget* BacktestingScreen::build_left_panel() {
 
     auto label_style = QString("color:%1; font-size:%2px; font-weight:700;"
                                "font-family:%3; letter-spacing:1px;")
-                           .arg(ui::colors::TEXT_TERTIARY)
+                           .arg(ui::colors::TEXT_TERTIARY())
                            .arg(ui::fonts::TINY)
                            .arg(ui::fonts::DATA_FAMILY);
 
     auto section_style = QString("color:%1; font-size:%2px; font-weight:700;"
                                  "font-family:%3; letter-spacing:1px; padding-bottom:4px;"
                                  "border-bottom:1px solid %4;")
-                             .arg(ui::colors::AMBER)
+                             .arg(ui::colors::AMBER())
                              .arg(ui::fonts::TINY)
                              .arg(ui::fonts::DATA_FAMILY)
-                             .arg(ui::colors::BORDER_DIM);
+                             .arg(ui::colors::BORDER_DIM());
 
     // ── Commands section ──
     auto* cmd_title = new QLabel("COMMANDS", content);
@@ -289,7 +289,7 @@ QWidget* BacktestingScreen::build_left_panel() {
                                "QComboBox::drop-down { border:none; }"
                                "QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3;"
                                "selection-background-color:rgba(217,119,6,0.15); }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                           .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                            .arg(ui::fonts::DATA_FAMILY)
                            .arg(ui::fonts::SMALL);
 
@@ -345,12 +345,12 @@ QWidget* BacktestingScreen::build_center_panel() {
     auto* header = new QWidget(panel);
     header->setFixedHeight(34);
     header->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(16, 0, 16, 0);
     auto* title = new QLabel("RESULTS", header);
     title->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
-                             .arg(ui::colors::AMBER)
+                             .arg(ui::colors::AMBER())
                              .arg(ui::fonts::TINY)
                              .arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(title);
@@ -362,10 +362,10 @@ QWidget* BacktestingScreen::build_center_panel() {
     export_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2; "
                                       "padding:0 10px; font-size:%3px; font-family:%4; }"
                                       "QPushButton:hover { color:%5; border-color:%5; }")
-                                  .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM)
+                                  .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM())
                                   .arg(ui::fonts::TINY)
                                   .arg(ui::fonts::DATA_FAMILY)
-                                  .arg(ui::colors::AMBER));
+                                  .arg(ui::colors::AMBER()));
     connect(export_btn, &QPushButton::clicked, this, [this]() {
         QString text = raw_json_edit_ ? raw_json_edit_->toPlainText() : QString();
         if (text.trimmed().isEmpty())
@@ -396,14 +396,14 @@ QWidget* BacktestingScreen::build_center_panel() {
                 "font-weight:600; padding:6px 14px; border:none; letter-spacing:0.5px; }"
                 "QTabBar::tab:selected { color:%5; background:%6; }"
                 "QTabBar::tab:hover { color:%7; background:%8; }")
-            .arg(ui::colors::BG_BASE)
-            .arg(ui::colors::TEXT_TERTIARY)
+            .arg(ui::colors::BG_BASE())
+            .arg(ui::colors::TEXT_TERTIARY())
             .arg(ui::fonts::DATA_FAMILY)
             .arg(ui::fonts::SMALL)
-            .arg(ui::colors::TEXT_PRIMARY)
-            .arg(ui::colors::ORANGE)
-            .arg(ui::colors::TEXT_SECONDARY)
-            .arg(ui::colors::BG_RAISED));
+            .arg(ui::colors::TEXT_PRIMARY())
+            .arg(ui::colors::ORANGE())
+            .arg(ui::colors::TEXT_SECONDARY())
+            .arg(ui::colors::BG_RAISED()));
 
     // SUMMARY tab
     auto* summary_scroll = new QScrollArea;
@@ -421,11 +421,11 @@ QWidget* BacktestingScreen::build_center_panel() {
     hint->setWordWrap(true);
     hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; line-height:1.6;"
                                 "padding:20px; background:%4; border:1px solid %5;")
-                            .arg(ui::colors::TEXT_SECONDARY)
+                            .arg(ui::colors::TEXT_SECONDARY())
                             .arg(ui::fonts::SMALL)
                             .arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::colors::BG_RAISED)
-                            .arg(ui::colors::BORDER_DIM));
+                            .arg(ui::colors::BG_RAISED())
+                            .arg(ui::colors::BORDER_DIM()));
     summary_layout_->addWidget(hint);
     summary_layout_->addStretch();
     summary_scroll->setWidget(summary_container_);
@@ -444,12 +444,12 @@ QWidget* BacktestingScreen::build_center_panel() {
                                           "QHeaderView::section { background:%6; color:%7; font-weight:700;"
                                           "padding:4px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
                                           "QTableWidget::item:alternate { background:%8; }")
-                                      .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
+                                      .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
                                       .arg(ui::fonts::DATA_FAMILY)
                                       .arg(ui::fonts::SMALL)
-                                      .arg(ui::colors::BG_RAISED)
-                                      .arg(ui::colors::TEXT_SECONDARY)
-                                      .arg(ui::colors::ROW_ALT));
+                                      .arg(ui::colors::BG_RAISED())
+                                      .arg(ui::colors::TEXT_SECONDARY())
+                                      .arg(ui::colors::ROW_ALT()));
     result_tabs_->addTab(metrics_table_, "METRICS");
 
     // TRADES tab
@@ -466,7 +466,7 @@ QWidget* BacktestingScreen::build_center_panel() {
     raw_json_edit_->setReadOnly(true);
     raw_json_edit_->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:none;"
                                           "font-family:%3; font-size:%4px; padding:12px; }")
-                                      .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY)
+                                      .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY())
                                       .arg(ui::fonts::DATA_FAMILY)
                                       .arg(ui::fonts::SMALL));
     result_tabs_->addTab(raw_json_edit_, "RAW JSON");
@@ -482,7 +482,7 @@ QWidget* BacktestingScreen::build_right_panel() {
     panel->setMinimumWidth(200);
     panel->setMaximumWidth(380);
     panel->setStyleSheet(
-        QString("background:%1; border-left:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("background:%1; border-left:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     auto* scroll = new QScrollArea(panel);
     scroll->setWidgetResizable(true);
@@ -491,8 +491,8 @@ QWidget* BacktestingScreen::build_right_panel() {
                                   "QScrollBar::handle:vertical { background:%1; }"
                                   "QScrollBar::handle:vertical:hover { background:%2; }"
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
-                              .arg(ui::colors::BORDER_MED)
-                              .arg(ui::colors::BORDER_BRIGHT));
+                              .arg(ui::colors::BORDER_MED())
+                              .arg(ui::colors::BORDER_BRIGHT()));
 
     auto* content = new QWidget(scroll);
     auto* vl = new QVBoxLayout(content);
@@ -501,33 +501,33 @@ QWidget* BacktestingScreen::build_right_panel() {
 
     auto label_style = QString("color:%1; font-size:%2px; font-weight:700;"
                                "font-family:%3; letter-spacing:1px;")
-                           .arg(ui::colors::TEXT_TERTIARY)
+                           .arg(ui::colors::TEXT_TERTIARY())
                            .arg(ui::fonts::TINY)
                            .arg(ui::fonts::DATA_FAMILY);
 
     auto section_style = QString("color:%1; font-size:%2px; font-weight:700;"
                                  "font-family:%3; letter-spacing:1px; padding-bottom:4px;"
                                  "border-bottom:1px solid %4;")
-                             .arg(ui::colors::AMBER)
+                             .arg(ui::colors::AMBER())
                              .arg(ui::fonts::TINY)
                              .arg(ui::fonts::DATA_FAMILY)
-                             .arg(ui::colors::BORDER_DIM);
+                             .arg(ui::colors::BORDER_DIM());
 
     auto input_style = QString("QLineEdit, QDoubleSpinBox, QSpinBox, QDateEdit { background:%1; color:%2;"
                                "border:1px solid %3; font-family:%4; font-size:%5px; padding:4px 6px; }"
                                "QLineEdit:focus, QDoubleSpinBox:focus, QSpinBox:focus, QDateEdit:focus"
                                "{ border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                           .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                            .arg(ui::fonts::DATA_FAMILY)
                            .arg(ui::fonts::SMALL)
-                           .arg(ui::colors::BORDER_BRIGHT);
+                           .arg(ui::colors::BORDER_BRIGHT());
 
     auto combo_style = QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
                                "font-family:%4; font-size:%5px; padding:4px 6px; }"
                                "QComboBox::drop-down { border:none; }"
                                "QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3;"
                                "selection-background-color:rgba(217,119,6,0.15); }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                           .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                            .arg(ui::fonts::DATA_FAMILY)
                            .arg(ui::fonts::SMALL);
 
@@ -657,12 +657,12 @@ QWidget* BacktestingScreen::build_right_panel() {
         QString("QCheckBox { color:%1; font-family:%2; font-size:%3px; spacing:6px; }"
                 "QCheckBox::indicator { width:14px; height:14px; border:1px solid %4; background:%5; }"
                 "QCheckBox::indicator:checked { background:%6; border-color:%6; }")
-            .arg(ui::colors::TEXT_SECONDARY)
+            .arg(ui::colors::TEXT_SECONDARY())
             .arg(ui::fonts::DATA_FAMILY)
             .arg(ui::fonts::SMALL)
-            .arg(ui::colors::BORDER_MED)
-            .arg(ui::colors::BG_RAISED)
-            .arg(ui::colors::AMBER));
+            .arg(ui::colors::BORDER_MED())
+            .arg(ui::colors::BG_RAISED())
+            .arg(ui::colors::AMBER()));
     vl->addWidget(allow_short_check_);
 
     auto* bm_lbl = new QLabel("BENCHMARK", content);
@@ -964,16 +964,16 @@ QWidget* BacktestingScreen::build_status_bar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(26);
     bar->setStyleSheet(
-        QString("background:%1; border-top:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+        QString("background:%1; border-top:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(16);
     auto s = QString("color:%1; font-size:%2px; font-family:%3;")
-                 .arg(ui::colors::TEXT_TERTIARY)
+                 .arg(ui::colors::TEXT_TERTIARY())
                  .arg(ui::fonts::TINY)
                  .arg(ui::fonts::DATA_FAMILY);
     auto bold = QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
-                    .arg(ui::colors::TEXT_PRIMARY)
+                    .arg(ui::colors::TEXT_PRIMARY())
                     .arg(ui::fonts::TINY)
                     .arg(ui::fonts::DATA_FAMILY);
 
@@ -994,7 +994,7 @@ QWidget* BacktestingScreen::build_status_bar() {
     hl->addStretch();
     status_label_ = new QLabel("READY", bar);
     status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
-                                     .arg(ui::colors::POSITIVE)
+                                     .arg(ui::colors::POSITIVE())
                                      .arg(ui::fonts::TINY)
                                      .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(status_label_);
@@ -1033,11 +1033,11 @@ void BacktestingScreen::update_provider_buttons() {
                     "padding:0 10px; border:1px solid %4;"
                     "background:%5; font-weight:%6; }"
                     "QPushButton:hover { background:rgba(%7,0.15); }")
-                .arg(active ? p.color.name() : ui::colors::TEXT_TERTIARY)
+                .arg(active ? p.color.name() : ui::colors::TEXT_TERTIARY())
                 .arg(ui::fonts::TINY)
                 .arg(ui::fonts::DATA_FAMILY)
                 .arg(active ? QString("rgba(%1,%2,%3,0.3)").arg(p.color.red()).arg(p.color.green()).arg(p.color.blue())
-                            : ui::colors::BORDER_DIM)
+                            : ui::colors::BORDER_DIM())
                 .arg(active ? QString("rgba(%1,%2,%3,0.12)").arg(p.color.red()).arg(p.color.green()).arg(p.color.blue())
                             : "transparent")
                 .arg(active ? "700" : "400")
@@ -1074,7 +1074,7 @@ void BacktestingScreen::update_command_buttons() {
                     "QPushButton:hover { background:rgba(%7,0.1); color:%8; }"
                     "QPushButton:disabled { color:%9; border-left-color:transparent; }")
                 .arg(active ? cmd.color.name() : "transparent")
-                .arg(active ? cmd.color.name() : ui::colors::TEXT_SECONDARY)
+                .arg(active ? cmd.color.name() : ui::colors::TEXT_SECONDARY())
                 .arg(ui::fonts::SMALL)
                 .arg(ui::fonts::DATA_FAMILY)
                 .arg(active ? "700" : "400")
@@ -1085,7 +1085,7 @@ void BacktestingScreen::update_command_buttons() {
                             : "transparent")
                 .arg(QString("%1,%2,%3").arg(cmd.color.red()).arg(cmd.color.green()).arg(cmd.color.blue()))
                 .arg(cmd.color.name())
-                .arg(ui::colors::TEXT_DIM));
+                .arg(ui::colors::TEXT_DIM()));
     }
 }
 
@@ -1134,13 +1134,13 @@ void BacktestingScreen::rebuild_strategy_params() {
     auto input_style = QString("QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
                                "font-family:%4; font-size:%5px; padding:3px 4px; }"
                                "QDoubleSpinBox:focus { border-color:%6; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                           .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                            .arg(ui::fonts::DATA_FAMILY)
                            .arg(ui::fonts::SMALL)
-                           .arg(ui::colors::BORDER_BRIGHT);
+                           .arg(ui::colors::BORDER_BRIGHT());
 
     auto label_style = QString("color:%1; font-size:%2px; font-family:%3;")
-                           .arg(ui::colors::TEXT_TERTIARY)
+                           .arg(ui::colors::TEXT_TERTIARY())
                            .arg(ui::fonts::TINY)
                            .arg(ui::fonts::DATA_FAMILY);
 
@@ -1376,14 +1376,14 @@ void BacktestingScreen::display_result(const QJsonObject& data) {
 
         auto* card = new QWidget(cards);
         card->setStyleSheet(
-            QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED).arg(ui::colors::BORDER_DIM));
+            QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED()).arg(ui::colors::BORDER_DIM()));
         auto* cvl = new QVBoxLayout(card);
         cvl->setContentsMargins(10, 8, 10, 8);
         cvl->setSpacing(2);
 
         auto* lbl = new QLabel(display_label.toUpper(), card);
         lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                               .arg(ui::colors::TEXT_TERTIARY)
+                               .arg(ui::colors::TEXT_TERTIARY())
                                .arg(ui::fonts::TINY)
                                .arg(ui::fonts::DATA_FAMILY));
         auto* val = new QLabel(fmt_metric(key, perf[key]), card);
@@ -1410,7 +1410,7 @@ void BacktestingScreen::display_result(const QJsonObject& data) {
         auto status = data["status"].toString();
         auto* status_lbl = new QLabel(QString("Status: %1").arg(status), summary_container_);
         status_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:8px;")
-                                      .arg(status == "success" ? ui::colors::POSITIVE : ui::colors::WARNING)
+                                      .arg(status == "success" ? ui::colors::POSITIVE() : ui::colors::WARNING())
                                       .arg(ui::fonts::SMALL)
                                       .arg(ui::fonts::DATA_FAMILY));
         summary_layout_->addWidget(status_lbl);
@@ -1482,7 +1482,7 @@ void BacktestingScreen::display_error(const QString& msg) {
     err->setWordWrap(true);
     err->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:12px;"
                                "background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.3);")
-                           .arg(ui::colors::NEGATIVE)
+                           .arg(ui::colors::NEGATIVE())
                            .arg(ui::fonts::SMALL)
                            .arg(ui::fonts::DATA_FAMILY));
     summary_layout_->addWidget(err);

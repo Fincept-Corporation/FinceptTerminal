@@ -103,7 +103,7 @@ AddWidgetDialog::AddWidgetDialog(QWidget* parent) : QDialog(parent) {
                 "QScrollBar::handle:vertical { background: %1; border-radius: 2px; min-height: 20px; }"
                 "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
                 "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }")
-            .arg(ui::colors::BORDER_BRIGHT));
+            .arg(ui::colors::BORDER_BRIGHT()));
 
     card_container_ = new QWidget(this);
     card_container_->setStyleSheet("background: transparent;");

@@ -104,7 +104,7 @@ void ScreenerWidget::apply_styles() {
         "QScrollArea { border: none; background: transparent; }"
         "QScrollBar:vertical { width: 4px; background: transparent; }" +
         QString("QScrollBar::handle:vertical { background: %1; border-radius: 2px; min-height: 20px; }")
-            .arg(ui::colors::BORDER_MED) +
+            .arg(ui::colors::BORDER_MED()) +
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
 
     // Re-render data rows with current tokens if data exists

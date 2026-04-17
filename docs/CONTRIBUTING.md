@@ -32,53 +32,77 @@ Welcome! Fincept Terminal is an open-source native C++20 financial intelligence 
 ## Tech Stack
 
 | Layer | Technologies |
-|-------|-------------|
-| **Language** | C++20 (MSVC / GCC / Clang) |
-| **UI** | Dear ImGui (docking) + ImPlot |
-| **Layout** | Yoga (Flexbox engine) |
-| **Rendering** | GLFW 3 + OpenGL 3.3+ |
-| **Networking** | libcurl + OpenSSL |
-| **Database** | SQLite 3 |
-| **JSON** | nlohmann/json |
-| **Analytics** | Embedded Python 3.11+ (100+ scripts) |
-| **Build** | CMake 3.20+ / vcpkg |
+|-------|--------------|
+| **Language** | C++20 — MSVC 19.38 (VS 2022 17.8) / GCC 12.3 / Apple Clang 15.0 |
+| **UI** | Qt 6.7.2 Widgets (pinned EXACT) |
+| **Charts** | Qt6 Charts |
+| **Networking** | Qt6 Network + Qt6 WebSockets |
+| **Database** | Qt6 Sql (SQLite) |
+| **Serialization** | QJsonDocument |
+| **Analytics** | Embedded Python 3.11.9 (1300+ scripts) |
+| **Build** | CMake 3.27.7 + Ninja 1.11.1 (pinned) |
 
 **Language-Specific Guides:**
-- [C++ Guide](../fincept-cpp/CONTRIBUTING.md) — screens, services, core infrastructure
+- [C++ Guide](./CPP_CONTRIBUTOR_GUIDE.md) — screens, services, core infrastructure
 - [Python Guide](./PYTHON_CONTRIBUTOR_GUIDE.md) — analytics modules, data fetchers
 
 ---
 
 ## Getting Started
 
-### Prerequisites
+### Prerequisites (pinned versions — enforced by CMake)
 
-- **CMake** 3.20+ — [cmake.org](https://cmake.org/download/)
-- **vcpkg** — [vcpkg.io](https://vcpkg.io/)
-- **C++20 compiler** — MSVC 2022, GCC 12+, or Clang 15+
-- **Python** 3.11+ (for analytics development)
-- **Git** — [git-scm.com](https://git-scm.com)
+| Tool | Version |
+|------|---------|
+| **C++ compiler** | MSVC 19.38 (VS 2022 17.8) / GCC 12.3 / Apple Clang 15.0 (Xcode 15.2) |
+| **CMake** | 3.27.7 — [cmake.org](https://cmake.org/download/) |
+| **Ninja** | 1.11.1 — [releases](https://github.com/ninja-build/ninja/releases) |
+| **Qt** | 6.7.2 (LTS) — [Qt Online Installer](https://www.qt.io/download-qt-installer) |
+| **Python** | 3.11.9 — [python.org](https://www.python.org/downloads/release/python-3119/) |
+| **Git** | latest — [git-scm.com](https://git-scm.com) |
 
-### Setup
+> The CMake build fails fast with a clear error message when toolchain versions don't match.
+
+### Setup (fastest — automated)
 
 ```bash
-# Clone repository
+# Clone + auto-install toolchain + Qt 6.7.2 + build
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal/fincept-cpp
+cd FinceptTerminal
+./setup.sh       # Linux / macOS
+setup.bat        # Windows (run from VS 2022 Developer Cmd)
+```
 
-# Build
-cmake --preset=default
-cmake --build build --config Release
+The setup script uses `aqtinstall` to fetch Qt 6.7.2 exactly.
+
+### Setup (manual — using CMake presets)
+
+```bash
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal/fincept-qt
+
+# Install Qt 6.7.2 first (Qt Online Installer or: pip install aqtinstall && aqt install-qt ...)
+
+# Configure + Build (pick your platform preset)
+cmake --preset win-release     && cmake --build --preset win-release     # Windows
+cmake --preset linux-release   && cmake --build --preset linux-release   # Linux
+cmake --preset macos-release   && cmake --build --preset macos-release   # macOS
 
 # Run
-./build/FinceptTerminal
+./build/linux-release/FinceptTerminal                                           # Linux
+./build/macos-release/FinceptTerminal.app/Contents/MacOS/FinceptTerminal        # macOS
+.\build\win-release\FinceptTerminal.exe                                         # Windows
 ```
 
 ### Verify Installation
 
 ```bash
-cmake --version     # 3.20+
-python --version    # 3.11+
+cmake --version     # 3.27.7
+python --version    # 3.11.9
+# Compiler:
+cl            /   # MSVC 19.38+ (Windows)
+g++ --version /   # 12.3+       (Linux)
+clang --version   # 15.0+       (macOS, Xcode 15.2)
 ```
 
 ---

@@ -1,11 +1,43 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.27)
 project(FinceptTerminal VERSION 4.0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
+
+# ── Pinned toolchain enforcement ─────────────────────────────────────────────
+# Fincept Terminal ships on 3 platforms and cannot tolerate compiler-version
+# drift. These checks fail the build early with an actionable message rather
+# than letting the user hit a cryptic template error 10 minutes into compile.
+if(MSVC AND MSVC_VERSION LESS 1938)
+    message(FATAL_ERROR
+        "MSVC 19.38 (Visual Studio 2022 17.8) or newer required.\n"
+        "Detected MSVC_VERSION: ${MSVC_VERSION}\n"
+        "Install VS 2022 17.8+ from https://visualstudio.microsoft.com/downloads/")
+endif()
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12.3)
+    message(FATAL_ERROR
+        "GCC 12.3 or newer required. Detected: ${CMAKE_CXX_COMPILER_VERSION}\n"
+        "Ubuntu 22.04+ / Debian 12+ ship a compatible GCC.")
+endif()
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 15.0)
+    message(FATAL_ERROR
+        "Clang 15.0 or newer required (Apple Clang 15.0 = Xcode 15.2).\n"
+        "Detected: ${CMAKE_CXX_COMPILER_VERSION}")
+endif()
+
+# ── Compiler cache (ccache / sccache) ────────────────────────────────────────
+# Detected at configure time. If present, routes every C/C++ compilation
+# through the cache. Cuts clean rebuilds by 5-20x when source hasn't changed.
+find_program(FINCEPT_CCACHE_PROGRAM NAMES ccache sccache)
+if(FINCEPT_CCACHE_PROGRAM)
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${FINCEPT_CCACHE_PROGRAM}")
+    set(CMAKE_C_COMPILER_LAUNCHER   "${FINCEPT_CCACHE_PROGRAM}")
+    message(STATUS "Compiler cache enabled: ${FINCEPT_CCACHE_PROGRAM}")
+endif()
 
 # ── macOS rpath configuration ────────────────────────────────────────────────
 # Set install rpaths so the binary looks inside its own bundle for frameworks.
@@ -41,7 +73,14 @@ set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "" FORCE)
 #   /bigobj    — allow >65535 sections (needed by large unity TUs and MOC output)
 #   /d2FuncCache7 — MSVC internal: increase function-level cache for template-heavy code
 if(MSVC)
-    add_compile_options(/MP /Z7 /Oi /bigobj)
+    # /permissive- : enforces ISO C++ conformance — catches MS-specific non-portable
+    #                code that would break on GCC/Clang (two-phase lookup, etc.)
+    # /W4          : level-4 warnings (highest practical without /Wall noise)
+    # /WX only in CI so local iteration isn't blocked by new warnings
+    add_compile_options(/MP /Z7 /Oi /bigobj /permissive- /W4)
+    if(DEFINED ENV{CI})
+        add_compile_options(/WX)
+    endif()
     # Replace /Zi and /ZI (shared PDB) with /Z7 in all configs
     foreach(flag_var
             CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELWITHDEBINFO
@@ -59,35 +98,48 @@ if(MSVC)
     endif()
 endif()
 
+# ── GCC / Clang warning flags ────────────────────────────────────────────────
+# Mirror MSVC /W4 + /permissive- behavior on Unix compilers.
+# -Werror only in CI so local iteration isn't blocked.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Wall -Wextra -Wpedantic)
+    if(DEFINED ENV{CI})
+        add_compile_options(-Werror)
+    endif()
+endif()
+
 # Suppress Windows min/max macros that break std::min/std::max in unity batches
 add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
 
 # ── Qt packages ──────────────────────────────────────────────────────────────
-find_package(Qt6 REQUIRED COMPONENTS
-    Widgets
-    Charts
-    PrintSupport
-    Network
-    Sql
-    Concurrent
-    Multimedia
-)
+# Qt is pinned to 6.7.2 (LTS track) across all platforms. Releases must build
+# on exactly this version to guarantee binary/ABI stability of the shipped
+# installer. Developers may override for local experimentation with
+# -DFINCEPT_ALLOW_QT_DRIFT=ON (not for CI or release builds).
+set(FINCEPT_QT_VERSION 6.7.2)
+if(FINCEPT_ALLOW_QT_DRIFT)
+    find_package(Qt6 REQUIRED COMPONENTS
+        Widgets Charts PrintSupport Network Sql Concurrent Multimedia)
+else()
+    find_package(Qt6 ${FINCEPT_QT_VERSION} EXACT REQUIRED COMPONENTS
+        Widgets Charts PrintSupport Network Sql Concurrent Multimedia)
+endif()
 
 # Optional: WebSockets (not always installed)
-find_package(Qt6 QUIET COMPONENTS WebSockets)
+find_package(Qt6 ${FINCEPT_QT_VERSION} EXACT QUIET COMPONENTS WebSockets)
 if(Qt6WebSockets_FOUND)
     set(HAS_WEBSOCKETS TRUE)
 endif()
 
 # Optional: MultimediaWidgets (for inline video/stream playback)
 # Qt6::Multimedia is already required above (needed for QMediaPlayer in AiChatBubble / VideoPlayerWidget).
-find_package(Qt6 QUIET COMPONENTS MultimediaWidgets)
+find_package(Qt6 ${FINCEPT_QT_VERSION} EXACT QUIET COMPONENTS MultimediaWidgets)
 if(Qt6MultimediaWidgets_FOUND)
     set(HAS_MULTIMEDIA TRUE)
 endif()
 
 # Optional: TextToSpeech (cross-platform TTS — SAPI/AVSpeech/speech-dispatcher)
-find_package(Qt6 QUIET COMPONENTS TextToSpeech)
+find_package(Qt6 ${FINCEPT_QT_VERSION} EXACT QUIET COMPONENTS TextToSpeech)
 if(Qt6TextToSpeech_FOUND)
     set(HAS_TTS TRUE)
 endif()

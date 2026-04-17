@@ -20,7 +20,7 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 
 ## Um
 
-**Fincept Terminal vch**ist eine rein native C++20-Desktopanwendung – eine komplette Neufassung des vorherigen Tauri/React/Rust-Stacks. Es nutzt**Qt6**für Benutzeroberfläche und Rendering, eingebettet**Python**für Analysen und liefert eine Leistung der Bloomberg-Terminal-Klasse in einer einzigen nativen Binärdatei.
+**Fincept Terminal vch**ist eine rein native C++20-Desktopanwendung. Es nutzt**Qt6**für Benutzeroberfläche und Rendering, eingebettet**Python**für Analysen und liefert eine Leistung der Bloomberg-Terminal-Klasse in einer einzigen nativen Binärdatei.
 
 * * *
 
@@ -99,65 +99,21 @@ docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fincept-ter
 
 ### Option 4 – Aus dem Quellcode erstellen (manuell)
 
-#### Voraussetzungen
-
-| Werkzeug         | Version | Windows                                                          | Linux                 | macOS                              |
-| ---------------- | ------- | ---------------------------------------------------------------- | --------------------- | ---------------------------------- |
-| **Git**          | letzte  | `winget install Git.Git`                                         | `apt install git`     | `brew install git`                 |
-| **CMake**        | 3.20+   | `winget install Kitware.CMake`                                   | `apt install cmake`   | `brew install cmake`               |
-| **C++-Compiler** | C++20   | MSVC 2022 ([Visual Studio](https://visualstudio.microsoft.com/)) | `apt install g++`     | Xcode-CLT:`xcode-select --install` |
-| **Qt6**          | 6.5+    | Siehe unten                                                      | Siehe unten           | Siehe unten                        |
-| **Python**       | 3.11+   | [python.org](https://www.python.org/downloads/)                  | `apt install python3` | `brew install python`              |
-
-#### Installieren Sie Qt6
-
-**Windows:**
-
-```powershell
-# Via Qt online installer (recommended — includes windeployqt)
-# Download from https://www.qt.io/download-qt-installer
-# Select: Qt 6.x > MSVC 2022 64-bit
-
-# Or via winget
-winget install Qt.QtCreator
-```
-
-**Linux (Ubuntu/Debian):**
-
-```bash
-sudo apt install -y \
-  qt6-base-dev qt6-charts-dev qt6-tools-dev \
-  libqt6sql6-sqlite libqt6websockets6-dev \
-  libgl1-mesa-dev libglu1-mesa-dev
-```
-
-**macOS:**
-
-```bash
-brew install qt
-```
-
-#### Bauen
-
-```bash
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal/fincept-qt
-
-# Linux / macOS
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
-
-# Windows (from Developer Command Prompt for VS 2022)
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="C:/Qt/6.x.x/msvc2022_64"
-cmake --build build --config Release --parallel
-```
-
-#### Laufen
-
-```bash
-./build/FinceptTerminal              # Linux / macOS
-.\build\Release\FinceptTerminal.exe  # Windows
-```
+> **Versionen sind gepinnt** (Qt 6.7.2, CMake 3.27.7, MSVC 19.38 / GCC 12.3 / Apple Clang 15.0, Python 3.11.9). Um Übersetzungsdrift zu vermeiden, folgen Sie der offiziellen englischen Anleitung:
+>
+> 👉 **[README.md (English) — Build from Source](../../README.md#option-4--build-from-source-manual)**
+>
+> Schnellstart mit CMake-Presets:
+> ```bash
+> ./setup.sh                                            # Linux / macOS — automatisiertes Setup
+> setup.bat                                             # Windows (VS 2022 Developer Cmd)
+>
+> # Oder manuell:
+> cd FinceptTerminal/fincept-qt
+> cmake --preset linux-release   && cmake --build --preset linux-release
+> cmake --preset macos-release   && cmake --build --preset macos-release
+> cmake --preset win-release     && cmake --build --preset win-release
+> ```
 
 * * *
 

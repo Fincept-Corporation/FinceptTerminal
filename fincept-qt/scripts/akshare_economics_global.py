@@ -1,7 +1,7 @@
 """
 AKShare Global Economics Data Wrapper
 Wrapper for global economic indicators
-Returns JSON output for Rust integration
+Returns JSON output for Qt/C++ integration
 
 NOTE: All 45 endpoints timeout or fail. File deprecated.
 All macro_usa_* and macro_bank_* endpoints are non-functional.

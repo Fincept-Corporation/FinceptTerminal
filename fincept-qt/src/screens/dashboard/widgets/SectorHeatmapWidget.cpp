@@ -85,7 +85,7 @@ void SectorHeatmapWidget::populate(const QVector<services::QuoteData>& quotes) {
         QString bg_color = tint.name(QColor::HexArgb);
 
         cell->setStyleSheet(
-            QString("background: %1; border: 1px solid %2; border-radius: 2px;").arg(bg_color, ui::colors::BORDER_DIM));
+            QString("background: %1; border: 1px solid %2; border-radius: 2px;").arg(bg_color, ui::colors::BORDER_DIM()));
 
         auto* cl = new QVBoxLayout(cell);
         cl->setContentsMargins(4, 2, 4, 2);
@@ -93,13 +93,13 @@ void SectorHeatmapWidget::populate(const QVector<services::QuoteData>& quotes) {
 
         auto* name = new QLabel(labels.value(q.symbol, q.symbol));
         name->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                                .arg(ui::colors::TEXT_PRIMARY));
+                                .arg(ui::colors::TEXT_PRIMARY()));
         name->setAlignment(Qt::AlignCenter);
         cl->addWidget(name);
 
         auto* chg = new QLabel(QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2));
         chg->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;")
-                               .arg(q.change_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
+                               .arg(q.change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
         chg->setAlignment(Qt::AlignCenter);
         cl->addWidget(chg);
 

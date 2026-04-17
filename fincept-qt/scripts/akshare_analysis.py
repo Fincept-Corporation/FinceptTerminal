@@ -1,7 +1,7 @@
 """
 AKShare Stock Analysis Wrapper
 Comprehensive wrapper for AKShare stock technical analysis, fund flow, and fundamental data
-Returns JSON output for Rust integration
+Returns JSON output for Qt/C++ integration
 Modular, fault-tolerant design - each endpoint works independently
 All endpoints are FREE - no API keys required
 """

@@ -49,7 +49,7 @@ static QLabel* make_sep(QWidget* parent) {
     auto* s = new QLabel("|", parent);
     s->setStyleSheet(QString("color:%1; font-size:11px; background:transparent;"
                              " font-family:%2;")
-                         .arg(colors::BORDER_MED)
+                         .arg(colors::BORDER_MED())
                          .arg(MONO));
     return s;
 }
@@ -59,13 +59,13 @@ static QString btn_inactive() {
                    " font-size:11px; font-weight:bold; font-family:%4;"
                    " padding:0 10px; }"
                    "QPushButton:hover { background:%5; color:%6; border-color:%7; }")
-        .arg(colors::BG_RAISED)
-        .arg(colors::BORDER_DIM)
-        .arg(colors::TEXT_SECONDARY)
+        .arg(colors::BG_RAISED())
+        .arg(colors::BORDER_DIM())
+        .arg(colors::TEXT_SECONDARY())
         .arg(MONO)
-        .arg(colors::BG_HOVER)
-        .arg(colors::TEXT_PRIMARY)
-        .arg(colors::BORDER_BRIGHT);
+        .arg(colors::BG_HOVER())
+        .arg(colors::TEXT_PRIMARY())
+        .arg(colors::BORDER_BRIGHT());
 }
 
 static QString btn_active_amber() {
@@ -73,10 +73,10 @@ static QString btn_active_amber() {
                    " font-size:11px; font-weight:bold; font-family:%3;"
                    " padding:0 10px; }"
                    "QPushButton:hover { background:%2; color:%4; }")
-        .arg(colors::AMBER_DIM)
-        .arg(colors::AMBER)
+        .arg(colors::AMBER_DIM())
+        .arg(colors::AMBER())
         .arg(MONO)
-        .arg(colors::BG_BASE);
+        .arg(colors::BG_BASE());
 }
 
 static QString btn_danger() {
@@ -84,10 +84,10 @@ static QString btn_danger() {
                    " font-size:11px; font-weight:bold; font-family:%3;"
                    " padding:0 10px; }"
                    "QPushButton:hover { background:%2; color:%4; }")
-        .arg(colors::NEGATIVE_DIM)
-        .arg(colors::NEGATIVE)
+        .arg(colors::NEGATIVE_DIM())
+        .arg(colors::NEGATIVE())
         .arg(MONO)
-        .arg(colors::TEXT_PRIMARY);
+        .arg(colors::TEXT_PRIMARY());
 }
 
 // ── Constructor ──────────────────────────────────────────────────────────────
@@ -102,8 +102,8 @@ SurfaceAnalyticsScreen::SurfaceAnalyticsScreen(QWidget* parent) : QWidget(parent
 // ── Layout ───────────────────────────────────────────────────────────────────
 void SurfaceAnalyticsScreen::setup_ui() {
     setStyleSheet(QString("QWidget { background:%1; color:%2; font-family:%3; }")
-                      .arg(colors::BG_BASE)
-                      .arg(colors::TEXT_PRIMARY)
+                      .arg(colors::BG_BASE())
+                      .arg(colors::TEXT_PRIMARY())
                       .arg(MONO));
 
     auto* root = new QVBoxLayout(this);
@@ -121,14 +121,14 @@ void SurfaceAnalyticsScreen::setup_ui() {
     // Content — metrics panel | chart area
     auto* splitter = new QSplitter(Qt::Horizontal, this);
     splitter->setHandleWidth(1);
-    splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(colors::BORDER_DIM));
+    splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(colors::BORDER_DIM()));
 
     metrics_panel_ = new SurfaceMetricsPanel(splitter);
     splitter->addWidget(metrics_panel_);
 
     // Right: view stack + databento panel
     auto* right = new QWidget(splitter);
-    right->setStyleSheet(QString("background:%1;").arg(colors::BG_BASE));
+    right->setStyleSheet(QString("background:%1;").arg(colors::BG_BASE()));
     auto* rvl = new QVBoxLayout(right);
     rvl->setContentsMargins(0, 0, 0, 0);
     rvl->setSpacing(0);
@@ -156,8 +156,8 @@ QWidget* SurfaceAnalyticsScreen::build_category_bar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(32);
     bar->setStyleSheet(QString("QWidget { background:%1; border-bottom:1px solid %2; }")
-                           .arg(colors::BG_SURFACE)
-                           .arg(colors::BORDER_DIM));
+                           .arg(colors::BG_SURFACE())
+                           .arg(colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(8, 0, 8, 0);
@@ -175,7 +175,7 @@ QWidget* SurfaceAnalyticsScreen::build_category_bar() {
                                        " padding:0 14px; font-size:11px; font-weight:bold;"
                                        " font-family:%3; }"
                                        "QPushButton:hover { background:#b45309; }")
-                                   .arg(colors::TEXT_PRIMARY)
+                                   .arg(colors::TEXT_PRIMARY())
                                    .arg(cat_hex(i))
                                    .arg(MONO));
         } else {
@@ -183,10 +183,10 @@ QWidget* SurfaceAnalyticsScreen::build_category_bar() {
                                        " border:none; padding:0 14px; font-size:11px;"
                                        " font-family:%2; }"
                                        "QPushButton:hover { background:%3; color:%4; }")
-                                   .arg(colors::TEXT_TERTIARY)
+                                   .arg(colors::TEXT_TERTIARY())
                                    .arg(MONO)
-                                   .arg(colors::BG_RAISED)
-                                   .arg(colors::TEXT_SECONDARY));
+                                   .arg(colors::BG_RAISED())
+                                   .arg(colors::TEXT_SECONDARY()));
         }
 
         btn->setProperty("cat_index", i);
@@ -242,8 +242,8 @@ QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(26);
     bar->setStyleSheet(QString("QWidget { background:%1; border-bottom:1px solid %2; }")
-                           .arg(colors::BG_SURFACE)
-                           .arg(colors::BORDER_DIM));
+                           .arg(colors::BG_SURFACE())
+                           .arg(colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(8, 0, 8, 0);
@@ -276,17 +276,17 @@ QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
             btn->setStyleSheet(QString("QPushButton { background:rgba(217,119,6,0.12); border:1px solid %1; color:%2;"
                                        " font-size:11px; font-weight:bold; font-family:%3; padding:0 8px; }"
                                        "QPushButton:hover { background:%2; color:%4; }")
-                                   .arg(colors::AMBER_DIM)
-                                   .arg(colors::AMBER)
+                                   .arg(colors::AMBER_DIM())
+                                   .arg(colors::AMBER())
                                    .arg(MONO)
-                                   .arg(colors::BG_BASE));
+                                   .arg(colors::BG_BASE()));
         } else {
             btn->setStyleSheet(QString("QPushButton { background:transparent; border:none; color:%1;"
                                        " font-size:11px; font-family:%2; padding:0 8px; }"
                                        "QPushButton:hover { color:%3; border-bottom:1px solid %4; }")
-                                   .arg(colors::TEXT_SECONDARY)
+                                   .arg(colors::TEXT_SECONDARY())
                                    .arg(MONO)
-                                   .arg(colors::TEXT_PRIMARY)
+                                   .arg(colors::TEXT_PRIMARY())
                                    .arg(acol));
         }
 
@@ -300,7 +300,7 @@ QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
     if (active_category_ == 0) {
         auto* sym_lbl = new QLabel("SYM:", bar);
         sym_lbl->setStyleSheet(QString("color:%1; font-size:11px; background:transparent; font-family:%2;")
-                                   .arg(colors::TEXT_SECONDARY)
+                                   .arg(colors::TEXT_SECONDARY())
                                    .arg(MONO));
         hl->addWidget(sym_lbl);
 
@@ -314,11 +314,11 @@ QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
                                              "QComboBox::drop-down { border:none; }"
                                              "QComboBox QAbstractItemView { background:%1; color:%2;"
                                              " border:1px solid %3; selection-background-color:%5; }")
-                                         .arg(colors::BG_RAISED)
-                                         .arg(colors::TEXT_PRIMARY)
-                                         .arg(colors::BORDER_DIM)
+                                         .arg(colors::BG_RAISED())
+                                         .arg(colors::TEXT_PRIMARY())
+                                         .arg(colors::BORDER_DIM())
                                          .arg(MONO)
-                                         .arg(colors::BG_HOVER));
+                                         .arg(colors::BG_HOVER()));
         connect(symbol_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
                 &SurfaceAnalyticsScreen::on_symbol_changed);
         hl->addWidget(symbol_combo_);

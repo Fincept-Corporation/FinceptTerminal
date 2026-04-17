@@ -194,7 +194,7 @@ void NodeEditorScreen::build_ui() {
     // ── Separator ──────────────────────────────────────────────────
     auto* sep = new QFrame(this);
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED));
+    sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED()));
     root->addWidget(sep);
 
     // ── 3-panel splitter ───────────────────────────────────────────
@@ -202,7 +202,7 @@ void NodeEditorScreen::build_ui() {
     splitter->setHandleWidth(1);
     splitter->setStyleSheet(QString("QSplitter::handle { background: %1; }"
                                     "QSplitter::handle:hover { background: %2; }")
-                                .arg(ui::colors::BORDER_MED, ui::colors::TEXT_DIM));
+                                .arg(ui::colors::BORDER_MED(), ui::colors::TEXT_DIM()));
 
     // Left: Node palette
     palette_ = new NodePalette(this);

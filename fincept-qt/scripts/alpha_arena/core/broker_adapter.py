@@ -390,7 +390,7 @@ class MultiExchangeDataProvider:
         else:
             raise RuntimeError(
                 f"Live market data not available for '{exchange}'. "
-                f"Stock brokers require Rust bridge integration. "
+                f"Stock brokers require host bridge integration. "
                 f"Supported crypto exchanges: kraken, binance, okx, coinbase, bybit, kucoin, gateio, hyperliquid."
             )
 
@@ -742,7 +742,7 @@ class BrokerAdapter:
 
         NOTE: Live trading requires proper API integration.
         This method would typically call C++ commands that
-        route to the TypeScript broker adapters.
+        route to the host broker adapters.
         """
         logger.warning(f"Live execution not implemented for {self.broker_id}")
         return OrderResult(

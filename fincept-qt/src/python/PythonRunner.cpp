@@ -15,7 +15,7 @@
 
 namespace fincept::python {
 
-// Scripts that require NumPy 1.x environment (same list as Tauri's python.rs)
+// Scripts that require NumPy 1.x environment
 static const QStringList kNumpy1Scripts = {
     "vectorbt", "backtesting", "gluonts", "functime", "pyportfolioopt", "financepy", "ffn", "ffn_wrapper",
 };

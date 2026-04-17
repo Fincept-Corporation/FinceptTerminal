@@ -66,8 +66,8 @@ TemplatePicker::TemplatePicker(QWidget* parent) : QDialog(parent) {
                           "QPushButton { background: %2; border: 1px solid %3; color: %4; "
                           "  padding: 4px 12px; font-size: 10px; }"
                           "QPushButton:hover { border-color: %5; color: %5; }")
-                      .arg(ui::colors::BG_BASE, ui::colors::BG_SURFACE, ui::colors::BORDER_MED,
-                           ui::colors::TEXT_PRIMARY, ui::colors::AMBER));
+                      .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::BORDER_MED(),
+                           ui::colors::TEXT_PRIMARY(), ui::colors::AMBER()));
 
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(16, 16, 16, 16);
@@ -75,11 +75,11 @@ TemplatePicker::TemplatePicker(QWidget* parent) : QDialog(parent) {
 
     auto* title = new QLabel("CHOOSE TEMPLATE");
     title->setStyleSheet(
-        QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 1px;").arg(ui::colors::AMBER));
+        QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 1px;").arg(ui::colors::AMBER()));
     vl->addWidget(title);
 
     auto* sub = new QLabel("Select a template to reset your dashboard. Current layout will be replaced.");
-    sub->setStyleSheet(QString("color: %1; font-size: 9px;").arg(ui::colors::TEXT_TERTIARY));
+    sub->setStyleSheet(QString("color: %1; font-size: 9px;").arg(ui::colors::TEXT_TERTIARY()));
     sub->setWordWrap(true);
     vl->addWidget(sub);
 
@@ -94,7 +94,7 @@ TemplatePicker::TemplatePicker(QWidget* parent) : QDialog(parent) {
         auto* card = new QFrame;
         card->setStyleSheet(QString("QFrame { background: %1; border: 1px solid %2; } "
                                     "QFrame:hover { border-color: %3; }")
-                                .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM, ui::colors::AMBER));
+                                .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
 
         auto* cl = new QVBoxLayout(card);
         cl->setContentsMargins(10, 8, 10, 8);
@@ -105,12 +105,12 @@ TemplatePicker::TemplatePicker(QWidget* parent) : QDialog(parent) {
 
         auto* name_lbl = new QLabel(tmpl.display_name);
         name_lbl->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                                    .arg(ui::colors::TEXT_PRIMARY));
+                                    .arg(ui::colors::TEXT_PRIMARY()));
         cl->addWidget(name_lbl);
 
         auto* desc_lbl = new QLabel(tmpl.description);
         desc_lbl->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_SECONDARY));
+            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
         desc_lbl->setWordWrap(true);
         cl->addWidget(desc_lbl);
 

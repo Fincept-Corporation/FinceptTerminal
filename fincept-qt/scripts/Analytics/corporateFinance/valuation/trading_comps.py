@@ -331,7 +331,7 @@ def main():
 
     try:
         if command == "trading_comps":
-            # Rust sends: "trading_comps" target_ticker comp_tickers_json
+            # Host sends: "trading_comps" target_ticker comp_tickers_json
             if len(sys.argv) < 4:
                 raise ValueError("Target ticker and comp tickers required")
 

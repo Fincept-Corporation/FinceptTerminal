@@ -28,14 +28,14 @@ inline QString kMonoFont() {
 inline QString kLabelStyle() {
     return QString("color: %1; font-size: %2px; font-weight: 700; letter-spacing: 0.5px; %3"
                    "background: transparent; border: none;")
-        .arg(fincept::ui::colors::TEXT_SECONDARY)
+        .arg(fincept::ui::colors::TEXT_SECONDARY())
         .arg(fincept::ui::fonts::TINY)
         .arg(kMonoFont());
 }
 inline QString kSectionLabel() {
     return QString("color: %1; font-size: %2px; font-weight: 700; letter-spacing: 0.5px; %3"
                    "background: transparent; border: none;")
-        .arg(fincept::ui::colors::AMBER)
+        .arg(fincept::ui::colors::AMBER())
         .arg(fincept::ui::fonts::TINY)
         .arg(kMonoFont());
 }
@@ -43,11 +43,11 @@ inline QString kInputStyle() {
     return QString("QLineEdit { background: %1; border: 1px solid %2; color: %3; padding: 4px 8px;"
                    " font-size: %4px; %5 }"
                    "QLineEdit:focus { border-color: %6; }")
-        .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_DIM,
-             fincept::ui::colors::TEXT_PRIMARY)
+        .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_DIM(),
+             fincept::ui::colors::TEXT_PRIMARY())
         .arg(fincept::ui::fonts::SMALL)
         .arg(kMonoFont())
-        .arg(fincept::ui::colors::BORDER_BRIGHT);
+        .arg(fincept::ui::colors::BORDER_BRIGHT());
 }
 inline QString kComboStyle() {
     return QString("QComboBox { background: %1; color: %2; border: 1px solid %3; padding: 4px 8px;"
@@ -55,18 +55,18 @@ inline QString kComboStyle() {
                    "QComboBox::drop-down { border: none; }"
                    "QComboBox QAbstractItemView { background: %1; color: %2; border: 1px solid %3;"
                    " selection-background-color: %6; %5 }")
-        .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::TEXT_PRIMARY,
-             fincept::ui::colors::BORDER_DIM)
+        .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(),
+             fincept::ui::colors::BORDER_DIM())
         .arg(fincept::ui::fonts::SMALL)
         .arg(kMonoFont())
-        .arg(fincept::ui::colors::BG_HOVER);
+        .arg(fincept::ui::colors::BG_HOVER());
 }
 inline QString kSpinStyle() {
     return QString("QDoubleSpinBox { background: %1; color: %2; border: 1px solid %3; padding: 4px 8px;"
                    " font-size: %4px; %5 }"
                    "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 14px; }")
-        .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::TEXT_PRIMARY,
-             fincept::ui::colors::BORDER_DIM)
+        .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(),
+             fincept::ui::colors::BORDER_DIM())
         .arg(fincept::ui::fonts::SMALL)
         .arg(kMonoFont());
 }
@@ -118,7 +118,7 @@ void StrategyBuilderPanel::connect_service() {
             status_label_->setText(QString("Strategy saved: %1").arg(id));
         status_label_->setStyleSheet(
             QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                .arg(fincept::ui::colors::POSITIVE)
+                .arg(fincept::ui::colors::POSITIVE())
                 .arg(fincept::ui::fonts::SMALL)
                 .arg(kMonoFont()));
     });
@@ -133,7 +133,7 @@ void StrategyBuilderPanel::connect_service() {
 QWidget* StrategyBuilderPanel::build_condition_row(QWidget* parent) {
     auto* row = new QWidget(parent);
     row->setStyleSheet(QString("background: %1; border: 1px solid %2;")
-                           .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_DIM));
+                           .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(6, 4, 6, 4);
     hl->setSpacing(4);
@@ -179,10 +179,10 @@ QWidget* StrategyBuilderPanel::build_condition_row(QWidget* parent) {
         QString("QPushButton { background: transparent; color: %1; border: 1px solid %2;"
                 " font-size: %3px; font-weight: 700; %4 }"
                 "QPushButton:hover { color: %5; border-color: %5; }")
-            .arg(fincept::ui::colors::TEXT_TERTIARY, fincept::ui::colors::BORDER_DIM)
+            .arg(fincept::ui::colors::TEXT_TERTIARY(), fincept::ui::colors::BORDER_DIM())
             .arg(fincept::ui::fonts::TINY)
             .arg(kMonoFont())
-            .arg(fincept::ui::colors::NEGATIVE));
+            .arg(fincept::ui::colors::NEGATIVE()));
     connect(rm_btn, &QPushButton::clicked, row, [row]() { row->deleteLater(); });
 
     hl->addWidget(ind_combo);
@@ -208,7 +208,7 @@ QWidget* StrategyBuilderPanel::build_left_pane() {
     auto* pane = new QWidget(this);
     pane->setStyleSheet(
         QString("background: %1; border-right: 1px solid %2;")
-            .arg(fincept::ui::colors::BG_BASE, fincept::ui::colors::BORDER_DIM));
+            .arg(fincept::ui::colors::BG_BASE(), fincept::ui::colors::BORDER_DIM()));
 
     auto* root_layout = new QVBoxLayout(pane);
     root_layout->setContentsMargins(0, 0, 0, 0);
@@ -222,10 +222,10 @@ QWidget* StrategyBuilderPanel::build_left_pane() {
                 "QScrollBar:vertical { background: %1; width: 6px; }"
                 "QScrollBar::handle:vertical { background: %2; }"
                 "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-            .arg(fincept::ui::colors::BG_BASE, fincept::ui::colors::BORDER_MED));
+            .arg(fincept::ui::colors::BG_BASE(), fincept::ui::colors::BORDER_MED()));
 
     auto* content = new QWidget;
-    content->setStyleSheet(QString("background: %1;").arg(fincept::ui::colors::BG_BASE));
+    content->setStyleSheet(QString("background: %1;").arg(fincept::ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(16, 12, 16, 12);
     vl->setSpacing(8);
@@ -295,10 +295,10 @@ QWidget* StrategyBuilderPanel::build_left_pane() {
         QString("QPushButton { background: transparent; color: %1; border: 1px dashed %2;"
                 " font-size: %3px; font-weight: 700; %4 }"
                 "QPushButton:hover { color: %5; border-color: %5; }")
-            .arg(fincept::ui::colors::TEXT_TERTIARY, fincept::ui::colors::BORDER_DIM)
+            .arg(fincept::ui::colors::TEXT_TERTIARY(), fincept::ui::colors::BORDER_DIM())
             .arg(fincept::ui::fonts::TINY)
             .arg(kMonoFont())
-            .arg(fincept::ui::colors::AMBER));
+            .arg(fincept::ui::colors::AMBER()));
     connect(add_entry_btn, &QPushButton::clicked, this, [this, entry_container]() {
         entry_conditions_layout_->addWidget(build_condition_row(entry_container));
     });
@@ -385,10 +385,10 @@ QWidget* StrategyBuilderPanel::build_left_pane() {
         QString("QPushButton { background: rgba(217,119,6,0.1); color: %1; border: 1px solid %1;"
                 " font-size: %2px; font-weight: 700; %3 padding: 6px 24px; }"
                 "QPushButton:hover { background: %1; color: %4; }")
-            .arg(fincept::ui::colors::AMBER)
+            .arg(fincept::ui::colors::AMBER())
             .arg(fincept::ui::fonts::DATA)
             .arg(kMonoFont())
-            .arg(fincept::ui::colors::BG_BASE));
+            .arg(fincept::ui::colors::BG_BASE()));
     connect(save_btn, &QPushButton::clicked, this, &StrategyBuilderPanel::on_save);
     vl->addWidget(save_btn);
 
@@ -401,7 +401,7 @@ QWidget* StrategyBuilderPanel::build_left_pane() {
 
 QWidget* StrategyBuilderPanel::build_right_pane() {
     auto* pane = new QWidget(this);
-    pane->setStyleSheet(QString("background: %1;").arg(fincept::ui::colors::BG_BASE));
+    pane->setStyleSheet(QString("background: %1;").arg(fincept::ui::colors::BG_BASE()));
 
     auto* root_layout = new QVBoxLayout(pane);
     root_layout->setContentsMargins(0, 0, 0, 0);
@@ -415,10 +415,10 @@ QWidget* StrategyBuilderPanel::build_right_pane() {
                 "QScrollBar:vertical { background: %1; width: 6px; }"
                 "QScrollBar::handle:vertical { background: %2; }"
                 "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-            .arg(fincept::ui::colors::BG_BASE, fincept::ui::colors::BORDER_MED));
+            .arg(fincept::ui::colors::BG_BASE(), fincept::ui::colors::BORDER_MED()));
 
     auto* content = new QWidget;
-    content->setStyleSheet(QString("background: %1;").arg(fincept::ui::colors::BG_BASE));
+    content->setStyleSheet(QString("background: %1;").arg(fincept::ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(16, 12, 16, 12);
     vl->setSpacing(8);
@@ -486,10 +486,10 @@ QWidget* StrategyBuilderPanel::build_right_pane() {
         QString("QPushButton { background: rgba(8,145,178,0.1); color: %1; border: 1px solid %1;"
                 " font-size: %2px; font-weight: 700; %3 padding: 6px 24px; }"
                 "QPushButton:hover { background: %1; color: %4; }")
-            .arg(fincept::ui::colors::CYAN)
+            .arg(fincept::ui::colors::CYAN())
             .arg(fincept::ui::fonts::DATA)
             .arg(kMonoFont())
-            .arg(fincept::ui::colors::BG_BASE));
+            .arg(fincept::ui::colors::BG_BASE()));
     connect(bt_btn, &QPushButton::clicked, this, &StrategyBuilderPanel::on_backtest);
     vl->addWidget(bt_btn);
 
@@ -498,7 +498,7 @@ QWidget* StrategyBuilderPanel::build_right_pane() {
     status_label_->setWordWrap(true);
     status_label_->setStyleSheet(
         QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-            .arg(fincept::ui::colors::TEXT_TERTIARY)
+            .arg(fincept::ui::colors::TEXT_TERTIARY())
             .arg(fincept::ui::fonts::SMALL)
             .arg(kMonoFont()));
     vl->addWidget(status_label_);
@@ -514,7 +514,7 @@ QWidget* StrategyBuilderPanel::build_right_pane() {
     bt_empty_label_->setAlignment(Qt::AlignCenter);
     bt_empty_label_->setStyleSheet(
         QString("color: %1; font-size: %2px; %3 background: transparent; border: none; padding: 24px;")
-            .arg(fincept::ui::colors::TEXT_TERTIARY)
+            .arg(fincept::ui::colors::TEXT_TERTIARY())
             .arg(fincept::ui::fonts::SMALL)
             .arg(kMonoFont()));
     results_layout_->addWidget(bt_empty_label_);
@@ -550,7 +550,7 @@ QWidget* StrategyBuilderPanel::build_right_pane() {
         card->setObjectName("btKpiCard");
         card->setStyleSheet(
             QString("#btKpiCard { background:%1; border:1px solid %2; border-radius:4px; }")
-                .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_DIM));
+                .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_DIM()));
 
         auto* cl = new QVBoxLayout(card);
         cl->setContentsMargins(12, 10, 12, 10);
@@ -560,7 +560,7 @@ QWidget* StrategyBuilderPanel::build_right_pane() {
         lbl->setStyleSheet(
             QString("color:%1; font-size:%2px; font-family:%3; font-weight:600; letter-spacing:1px;"
                     " background:transparent; border:none;")
-                .arg(fincept::ui::colors::TEXT_TERTIARY)
+                .arg(fincept::ui::colors::TEXT_TERTIARY())
                 .arg(fincept::ui::fonts::TINY)
                 .arg(fincept::ui::fonts::DATA_FAMILY));
         cl->addWidget(lbl);
@@ -569,7 +569,7 @@ QWidget* StrategyBuilderPanel::build_right_pane() {
         val->setStyleSheet(
             QString("color:%1; font-size:%2px; font-family:%3; font-weight:800;"
                     " background:transparent; border:none;")
-                .arg(fincept::ui::colors::TEXT_PRIMARY)
+                .arg(fincept::ui::colors::TEXT_PRIMARY())
                 .arg(fincept::ui::fonts::HEADER + 2)
                 .arg(fincept::ui::fonts::DATA_FAMILY));
         cl->addWidget(val);
@@ -579,7 +579,7 @@ QWidget* StrategyBuilderPanel::build_right_pane() {
         sub->setStyleSheet(
             QString("color:%1; font-size:%2px; font-family:%3;"
                     " background:transparent; border:none;")
-                .arg(fincept::ui::colors::TEXT_TERTIARY)
+                .arg(fincept::ui::colors::TEXT_TERTIARY())
                 .arg(fincept::ui::fonts::TINY)
                 .arg(fincept::ui::fonts::DATA_FAMILY));
         cl->addWidget(sub);
@@ -608,7 +608,7 @@ void StrategyBuilderPanel::build_ui() {
     splitter->setHandleWidth(4);
     splitter->setStyleSheet(
         QString("QSplitter::handle { background: %1; }")
-            .arg(fincept::ui::colors::BORDER_DIM));
+            .arg(fincept::ui::colors::BORDER_DIM()));
     splitter->addWidget(build_left_pane());
     splitter->addWidget(build_right_pane());
     splitter->setStretchFactor(0, 2); // left ~40%
@@ -688,7 +688,7 @@ void StrategyBuilderPanel::on_backtest_result(const QJsonObject& data) {
     status_label_->setText("Backtest complete.");
     status_label_->setStyleSheet(
         QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-            .arg(fincept::ui::colors::POSITIVE)
+            .arg(fincept::ui::colors::POSITIVE())
             .arg(fincept::ui::fonts::SMALL)
             .arg(kMonoFont()));
     display_backtest_result(data);
@@ -702,7 +702,7 @@ void StrategyBuilderPanel::on_save() {
         status_label_->setText("Strategy name is required.");
         status_label_->setStyleSheet(
             QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                .arg(fincept::ui::colors::NEGATIVE)
+                .arg(fincept::ui::colors::NEGATIVE())
                 .arg(fincept::ui::fonts::SMALL)
                 .arg(kMonoFont()));
         return;
@@ -724,7 +724,7 @@ void StrategyBuilderPanel::on_save() {
     status_label_->setText("Saving...");
     status_label_->setStyleSheet(
         QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-            .arg(fincept::ui::colors::TEXT_SECONDARY)
+            .arg(fincept::ui::colors::TEXT_SECONDARY())
             .arg(fincept::ui::fonts::SMALL)
             .arg(kMonoFont()));
 
@@ -776,7 +776,7 @@ void StrategyBuilderPanel::on_backtest() {
         status_label_->setText("Enter a symbol for backtesting.");
         status_label_->setStyleSheet(
             QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                .arg(fincept::ui::colors::NEGATIVE)
+                .arg(fincept::ui::colors::NEGATIVE())
                 .arg(fincept::ui::fonts::SMALL)
                 .arg(kMonoFont()));
         return;
@@ -785,7 +785,7 @@ void StrategyBuilderPanel::on_backtest() {
     status_label_->setText("Running backtest...");
     status_label_->setStyleSheet(
         QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-            .arg(fincept::ui::colors::CYAN)
+            .arg(fincept::ui::colors::CYAN())
             .arg(fincept::ui::fonts::SMALL)
             .arg(kMonoFont()));
 
@@ -808,7 +808,7 @@ void StrategyBuilderPanel::on_error(const QString& context, const QString& msg) 
         status_label_->setText(QString("Error [%1]: %2").arg(context, msg));
         status_label_->setStyleSheet(
             QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                .arg(fincept::ui::colors::NEGATIVE)
+                .arg(fincept::ui::colors::NEGATIVE())
                 .arg(fincept::ui::fonts::SMALL)
                 .arg(kMonoFont()));
     }

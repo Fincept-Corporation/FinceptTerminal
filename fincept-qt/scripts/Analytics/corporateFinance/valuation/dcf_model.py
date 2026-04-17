@@ -579,7 +579,7 @@ def main():
 
     try:
         if command in ("calculate", "dcf"):
-            # Rust sends: "dcf" wacc_inputs fcf_inputs growth_rates terminal_growth balance_sheet shares_outstanding
+            # Host sends: "dcf" wacc_inputs fcf_inputs growth_rates terminal_growth balance_sheet shares_outstanding
             if len(sys.argv) < 8:
                 raise ValueError("All DCF inputs required: wacc_inputs, fcf_inputs, growth_rates, terminal_growth, balance_sheet, shares")
 
@@ -607,7 +607,7 @@ def main():
             print(json.dumps(result))
 
         elif command == "sensitivity":
-            # Rust sends: "sensitivity" base_fcf growth_rates terminal_growth_scenarios wacc_scenarios balance_sheet shares_outstanding
+            # Host sends: "sensitivity" base_fcf growth_rates terminal_growth_scenarios wacc_scenarios balance_sheet shares_outstanding
             if len(sys.argv) < 8:
                 raise ValueError("Sensitivity inputs required: base_fcf, growth_rates, terminal_growth_scenarios, wacc_scenarios, balance_sheet, shares")
 

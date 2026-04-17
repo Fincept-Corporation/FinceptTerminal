@@ -37,7 +37,7 @@ PythonSetupManager& PythonSetupManager::instance() {
 PythonSetupManager::PythonSetupManager(QObject* parent) : QObject(parent) {}
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Install directory — matches Tauri's com.fincept.terminal location
+// Install directory — com.fincept.terminal
 // ─────────────────────────────────────────────────────────────────────────────
 
 QString PythonSetupManager::install_dir() const {

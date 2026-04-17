@@ -119,20 +119,20 @@ static const QString kStyle =
                    "QScrollBar:vertical { background: %1; width: 6px; }"
                    "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
                    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(colors::BG_BASE)        // %1
-        .arg(colors::BG_RAISED)      // %2
-        .arg(colors::AMBER)          // %3
-        .arg(colors::TEXT_PRIMARY)   // %4
-        .arg(colors::TEXT_SECONDARY) // %5
-        .arg(colors::POSITIVE)       // %6
-        .arg(colors::BG_SURFACE)     // %7
-        .arg(colors::BORDER_DIM)     // %8
-        .arg(colors::BORDER_BRIGHT)  // %9
-        .arg(colors::AMBER_DIM)      // %10
-        .arg(colors::TEXT_DIM)       // %11
-        .arg(colors::BG_HOVER)       // %12
-        .arg(colors::CYAN)           // %13
-        .arg(colors::NEGATIVE)       // %14
+        .arg(colors::BG_BASE())        // %1
+        .arg(colors::BG_RAISED())      // %2
+        .arg(colors::AMBER())          // %3
+        .arg(colors::TEXT_PRIMARY())   // %4
+        .arg(colors::TEXT_SECONDARY()) // %5
+        .arg(colors::POSITIVE())       // %6
+        .arg(colors::BG_SURFACE())     // %7
+        .arg(colors::BORDER_DIM())     // %8
+        .arg(colors::BORDER_BRIGHT())  // %9
+        .arg(colors::AMBER_DIM())      // %10
+        .arg(colors::TEXT_DIM())       // %11
+        .arg(colors::BG_HOVER())       // %12
+        .arg(colors::CYAN())           // %13
+        .arg(colors::NEGATIVE())       // %14
     ;
 } // namespace
 
@@ -1176,7 +1176,7 @@ QWidget* DataMappingScreen::create_cache_panel() {
     // Security info
     auto* sec_box = new QWidget(this);
     sec_box->setStyleSheet(
-        QString("background: rgba(22,163,74,0.05); border: 1px solid %1; padding: 8px;").arg(colors::BORDER_DIM));
+        QString("background: rgba(22,163,74,0.05); border: 1px solid %1; padding: 8px;").arg(colors::BORDER_DIM()));
     auto* sbl = new QVBoxLayout(sec_box);
     sbl->setSpacing(4);
     auto* sec_title = new QLabel("ENCRYPTION");
@@ -1635,12 +1635,12 @@ void DataMappingScreen::on_test_api() {
             sample_data_ = result.value();
             api_test_status_->setText("SUCCESS — Sample data received");
             api_test_status_->setStyleSheet(
-                QString("color: %1; font-size: 9px; background: transparent;").arg(colors::POSITIVE));
+                QString("color: %1; font-size: 9px; background: transparent;").arg(colors::POSITIVE()));
             LOG_INFO("DataMapping", "API test success");
         } else {
             api_test_status_->setText("FAILED — " + QString::fromStdString(result.error()));
             api_test_status_->setStyleSheet(
-                QString("color: %1; font-size: 9px; background: transparent;").arg(colors::NEGATIVE));
+                QString("color: %1; font-size: 9px; background: transparent;").arg(colors::NEGATIVE()));
             LOG_ERROR("DataMapping", "API test failed: " + QString::fromStdString(result.error()));
         }
     };
@@ -1719,13 +1719,13 @@ void DataMappingScreen::on_test_mapping() {
     if (success) {
         test_status_->setText("TEST PASSED");
         test_status_->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(colors::POSITIVE));
+            QString("color: %1; font-size: 9px; background: transparent;").arg(colors::POSITIVE()));
         save_btn_->setEnabled(true);
         right_test_info_->setText("Test: PASSED");
     } else {
         test_status_->setText("TEST FAILED — No field mappings configured");
         test_status_->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(colors::NEGATIVE));
+            QString("color: %1; font-size: 9px; background: transparent;").arg(colors::NEGATIVE()));
         save_btn_->setEnabled(false);
         right_test_info_->setText("Test: FAILED");
     }

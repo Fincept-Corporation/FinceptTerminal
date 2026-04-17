@@ -68,13 +68,13 @@ void TopMoversWidget::show_tab(bool gainers) {
 
     auto active_g = QString("QPushButton { background: %1; color: %2; border: none; "
                             "font-size: 9px; font-weight: bold; padding: 4px; }")
-                        .arg(ui::colors::POSITIVE, ui::colors::BG_BASE);
+                        .arg(ui::colors::POSITIVE(), ui::colors::BG_BASE());
     auto active_l = QString("QPushButton { background: %1; color: %2; border: none; "
                             "font-size: 9px; font-weight: bold; padding: 4px; }")
-                        .arg(ui::colors::NEGATIVE, ui::colors::BG_BASE);
+                        .arg(ui::colors::NEGATIVE(), ui::colors::BG_BASE());
     auto inactive = QString("QPushButton { background: %1; color: %2; border: none; "
                             "font-size: 9px; font-weight: bold; padding: 4px; }")
-                        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY);
+                        .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_TERTIARY());
 
     gainers_btn_->setStyleSheet(gainers ? active_g : inactive);
     losers_btn_->setStyleSheet(gainers ? inactive : active_l);

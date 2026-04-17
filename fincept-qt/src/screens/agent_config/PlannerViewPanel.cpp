@@ -24,7 +24,7 @@
 namespace {
 static const QString kIn =
     QString("background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:12px;")
-        .arg(fincept::ui::colors::BG_RAISED, fincept::ui::colors::TEXT_PRIMARY, fincept::ui::colors::BORDER_MED);
+        .arg(fincept::ui::colors::BG_RAISED(), fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::BORDER_MED());
 } // namespace
 
 namespace fincept::screens {
@@ -46,7 +46,7 @@ void PlannerViewPanel::build_ui() {
 
     auto* sp = new QSplitter(Qt::Horizontal);
     sp->setHandleWidth(1);
-    sp->setStyleSheet(QString("QSplitter::handle{background:%1;}").arg(ui::colors::BORDER_DIM));
+    sp->setStyleSheet(QString("QSplitter::handle{background:%1;}").arg(ui::colors::BORDER_DIM()));
     sp->addWidget(build_templates_panel());
     sp->addWidget(build_plan_editor());
     sp->addWidget(build_results_panel());
@@ -64,19 +64,19 @@ QWidget* PlannerViewPanel::build_templates_panel() {
     p->setMinimumWidth(200);
     p->setMaximumWidth(300);
     p->setStyleSheet(
-        QString("background:%1;border-right:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("background:%1;border-right:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
 
     auto* t = new QLabel("PLAN TEMPLATES");
-    t->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER));
+    t->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
     vl->addWidget(t);
 
     // ── LLM Profile picker ───────────────────────────────────────────────────
     auto* profile_lbl = new QLabel("LLM PROFILE:");
     profile_lbl->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(profile_lbl);
 
     llm_profile_combo_ = new QComboBox;
@@ -84,7 +84,7 @@ QWidget* PlannerViewPanel::build_templates_panel() {
     llm_profile_combo_->setStyleSheet(
         QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:11px;}"
                 "QComboBox::drop-down{border:none;}")
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED));
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED()));
     llm_profile_combo_->addItem("Default (Global)", QString{});
     {
         const auto pr = fincept::LlmProfileRepository::instance().list_profiles();
@@ -96,7 +96,7 @@ QWidget* PlannerViewPanel::build_templates_panel() {
 
     auto* pf_lbl = new QLabel("PORTFOLIO:");
     pf_lbl->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(pf_lbl);
 
     portfolio_combo_ = new QComboBox;
@@ -104,7 +104,7 @@ QWidget* PlannerViewPanel::build_templates_panel() {
     portfolio_combo_->setStyleSheet(
         QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:11px;}"
                 "QComboBox::drop-down{border:none;}")
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED));
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED()));
     portfolio_combo_->addItem("None", QString{});
     {
         auto& repo = fincept::PortfolioRepository::instance();
@@ -123,13 +123,13 @@ QWidget* PlannerViewPanel::build_templates_panel() {
                                           "QListWidget::item{padding:6px 8px;border-bottom:1px solid %2;}"
                                           "QListWidget::item:selected{background:%4;}"
                                           "QListWidget::item:hover{background:%5;}")
-                                      .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY,
-                                           ui::colors::AMBER_DIM, ui::colors::BG_HOVER));
+                                      .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(),
+                                           ui::colors::AMBER_DIM(), ui::colors::BG_HOVER()));
     vl->addWidget(template_list_);
 
     auto* cl = new QLabel("CUSTOM PLAN QUERY");
     cl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:8px;")
-                          .arg(ui::colors::TEXT_SECONDARY));
+                          .arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(cl);
 
     custom_query_ = new QPlainTextEdit;
@@ -144,15 +144,15 @@ QWidget* PlannerViewPanel::build_templates_panel() {
         QString("QPushButton{background:%1;color:%2;border:none;padding:8px;"
                 "font-size:11px;font-weight:700;letter-spacing:1px;}QPushButton:hover{background:%3;}"
                 "QPushButton:disabled{background:%4;color:%5;}")
-            .arg(ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::ORANGE, ui::colors::BG_RAISED,
-                 ui::colors::TEXT_TERTIARY));
+            .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::ORANGE(), ui::colors::BG_RAISED(),
+                 ui::colors::TEXT_TERTIARY()));
     vl->addWidget(generate_btn_);
 
     // History section
     history_header_ = new QLabel("PLAN HISTORY");
     history_header_->setStyleSheet(
         QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:12px;")
-            .arg(ui::colors::TEXT_SECONDARY));
+            .arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(history_header_);
 
     history_search_ = new QLineEdit;
@@ -166,7 +166,7 @@ QWidget* PlannerViewPanel::build_templates_panel() {
         QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:11px;}"
                 "QListWidget::item{padding:4px 6px;border-bottom:1px solid %2;}"
                 "QListWidget::item:selected{background:%4;}")
-            .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY, ui::colors::AMBER_DIM));
+            .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER_DIM()));
     vl->addWidget(history_list_);
 
     vl->addStretch();
@@ -177,7 +177,7 @@ QWidget* PlannerViewPanel::build_templates_panel() {
 
 QWidget* PlannerViewPanel::build_plan_editor() {
     auto* p = new QWidget(this);
-    p->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    p->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(12, 8, 12, 8);
     vl->setSpacing(6);
@@ -185,15 +185,15 @@ QWidget* PlannerViewPanel::build_plan_editor() {
     // Header
     auto* hdr = new QHBoxLayout;
     auto* t = new QLabel("EXECUTION PLAN");
-    t->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER));
+    t->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
     hdr->addWidget(t);
     plan_status_ = new QLabel;
     plan_status_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
-                                    .arg(ui::colors::TEXT_SECONDARY, ui::colors::BG_RAISED));
+                                    .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED()));
     hdr->addWidget(plan_status_);
     hdr->addStretch();
     progress_label_ = new QLabel;
-    progress_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY));
+    progress_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     hdr->addWidget(progress_label_);
     vl->addLayout(hdr);
 
@@ -203,7 +203,7 @@ QWidget* PlannerViewPanel::build_plan_editor() {
     progress_bar_->setTextVisible(false);
     progress_bar_->setStyleSheet(QString("QProgressBar{background:%1;border:none;}"
                                          "QProgressBar::chunk{background:%2;}")
-                                     .arg(ui::colors::BG_RAISED, ui::colors::AMBER));
+                                     .arg(ui::colors::BG_RAISED(), ui::colors::AMBER()));
     progress_bar_->setValue(0);
     vl->addWidget(progress_bar_);
 
@@ -225,8 +225,8 @@ QWidget* PlannerViewPanel::build_plan_editor() {
                 "QTableWidget::item:selected{background:%4;}"
                 "QHeaderView::section{background:%5;color:%6;border:none;padding:6px;"
                 "font-size:10px;font-weight:600;letter-spacing:1px;}")
-            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::AMBER_DIM,
-                 ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY));
+            .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(),
+                 ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY()));
     vl->addWidget(steps_table_, 1);
 
     // Step manipulation buttons
@@ -236,7 +236,7 @@ QWidget* PlannerViewPanel::build_plan_editor() {
         b->setCursor(Qt::PointingHandCursor);
         b->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;padding:4px 8px;"
                                  "font-size:9px;font-weight:600;}QPushButton:hover{background:%3;}")
-                             .arg(color, ui::colors::BORDER_MED, ui::colors::BG_HOVER));
+                             .arg(color, ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
         return b;
     };
 
@@ -259,7 +259,7 @@ QWidget* PlannerViewPanel::build_plan_editor() {
         QString("QPushButton{background:%1;color:%2;border:none;padding:10px;"
                 "font-size:11px;font-weight:700;letter-spacing:1px;}QPushButton:hover{background:%1;}"
                 "QPushButton:disabled{background:%3;color:%4;}")
-            .arg(ui::colors::POSITIVE, ui::colors::TEXT_PRIMARY, ui::colors::BG_RAISED, ui::colors::TEXT_TERTIARY));
+            .arg(ui::colors::POSITIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY()));
     vl->addWidget(execute_btn_);
     return p;
 }
@@ -271,7 +271,7 @@ QWidget* PlannerViewPanel::build_results_panel() {
     p->setMinimumWidth(260);
     p->setMaximumWidth(450);
     p->setStyleSheet(
-        QString("background:%1;border-left:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("background:%1;border-left:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(12, 8, 12, 8);
     vl->setSpacing(6);
@@ -279,14 +279,14 @@ QWidget* PlannerViewPanel::build_results_panel() {
     auto* hdr = new QHBoxLayout;
     result_header_ = new QLabel("STEP RESULT");
     result_header_->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     hdr->addWidget(result_header_);
     hdr->addStretch();
     copy_btn_ = new QPushButton("COPY");
     copy_btn_->setCursor(Qt::PointingHandCursor);
     copy_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;padding:2px 8px;"
                                      "font-size:9px;font-weight:600;}QPushButton:hover{background:%3;}")
-                                 .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::BG_HOVER));
+                                 .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
     hdr->addWidget(copy_btn_);
     vl->addLayout(hdr);
 
@@ -296,7 +296,7 @@ QWidget* PlannerViewPanel::build_results_panel() {
         QString("QTextEdit{background:%1;color:%2;border:1px solid %3;padding:8px;font-size:12px;}"
                 "QScrollBar:vertical{background:%1;width:6px;}"
                 "QScrollBar::handle:vertical{background:%4;min-height:20px;}")
-            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::BORDER_BRIGHT));
+            .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BORDER_BRIGHT()));
     vl->addWidget(result_display_, 1);
     return p;
 }
@@ -328,7 +328,7 @@ void PlannerViewPanel::setup_connections() {
         save_plan_to_history();
         plan_status_->setText("READY");
         plan_status_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
-                                        .arg(ui::colors::POSITIVE, ui::colors::BG_RAISED));
+                                        .arg(ui::colors::POSITIVE(), ui::colors::BG_RAISED()));
     });
 
     connect(&svc, &services::AgentService::plan_executed, this, [this](services::ExecutionPlan plan) {
@@ -343,7 +343,7 @@ void PlannerViewPanel::setup_connections() {
         plan_status_->setText(plan.has_failed ? "FAILED" : "COMPLETED");
         plan_status_->setStyleSheet(
             QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
-                .arg(plan.has_failed ? ui::colors::NEGATIVE : ui::colors::POSITIVE, ui::colors::BG_RAISED));
+                .arg(plan.has_failed ? ui::colors::NEGATIVE() : ui::colors::POSITIVE(), ui::colors::BG_RAISED()));
 
         int completed = 0;
         for (int i = 0; i < plan.steps.size() && i < steps_table_->rowCount(); ++i) {
@@ -374,7 +374,7 @@ void PlannerViewPanel::setup_connections() {
             plan_status_->setText("ERROR");
             plan_status_->setStyleSheet(
                 QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
-                    .arg(ui::colors::NEGATIVE, ui::colors::BG_RAISED));
+                    .arg(ui::colors::NEGATIVE(), ui::colors::BG_RAISED()));
             result_display_->setPlainText("Error: " + msg);
         }
     });
@@ -435,7 +435,7 @@ void PlannerViewPanel::generate_plan() {
     plan_status_->setText("GENERATING");
     loading_overlay_->show_loading("GENERATING PLAN…");
     plan_status_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
-                                    .arg(ui::colors::AMBER, ui::colors::BG_RAISED));
+                                    .arg(ui::colors::AMBER(), ui::colors::BG_RAISED()));
     QJsonObject cfg;
     if (llm_profile_combo_) {
         const QString pid = llm_profile_combo_->currentData().toString();
@@ -461,7 +461,7 @@ void PlannerViewPanel::execute_plan() {
     plan_status_->setText("EXECUTING");
     loading_overlay_->show_loading("EXECUTING PLAN…");
     plan_status_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
-                                    .arg(ui::colors::AMBER, ui::colors::BG_RAISED));
+                                    .arg(ui::colors::AMBER(), ui::colors::BG_RAISED()));
 
     QJsonObject pj;
     pj["id"] = current_plan_.id;

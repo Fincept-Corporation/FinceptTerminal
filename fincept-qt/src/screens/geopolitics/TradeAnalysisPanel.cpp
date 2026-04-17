@@ -41,7 +41,7 @@ static QString combo_style() {
                    "QComboBox::drop-down { border:none; width:18px; }"
                    "QComboBox QAbstractItemView { background:%1; color:%2; "
                    "selection-background-color:rgba(%7,0.15); border:1px solid %3; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
         .arg(ui::fonts::DATA_FAMILY)
         .arg(ui::fonts::SMALL)
         .arg(ui::colors::WARNING())
@@ -52,7 +52,7 @@ static QString spin_style() {
     return QString("QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
                    "font-family:%4; font-size:%5px; padding:4px 6px; }"
                    "QDoubleSpinBox:focus { border-color:%6; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
         .arg(ui::fonts::DATA_FAMILY)
         .arg(ui::fonts::SMALL)
         .arg(ui::colors::WARNING());
@@ -66,7 +66,7 @@ static QWidget* make_field(const QString& label_text, QWidget* input, QWidget* p
 
     auto* lbl = new QLabel(label_text, group);
     lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
-                           .arg(ui::colors::TEXT_TERTIARY)
+                           .arg(ui::colors::TEXT_TERTIARY())
                            .arg(ui::fonts::TINY)
                            .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(lbl);
@@ -77,7 +77,7 @@ static QWidget* make_field(const QString& label_text, QWidget* input, QWidget* p
     if (!hint.isEmpty()) {
         auto* h = new QLabel(hint, group);
         h->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                             .arg(ui::colors::TEXT_TERTIARY)
+                             .arg(ui::colors::TEXT_TERTIARY())
                              .arg(ui::fonts::TINY)
                              .arg(ui::fonts::DATA_FAMILY));
         h->setWordWrap(true);
@@ -95,7 +95,7 @@ void TradeAnalysisPanel::build_ui() {
     auto* header = new QWidget(this);
     header->setFixedHeight(48);
     header->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(16, 0, 16, 0);
     auto* title = new QLabel("TRADE GEOPOLITICS ANALYSIS", header);
@@ -107,7 +107,7 @@ void TradeAnalysisPanel::build_ui() {
     hhl->addStretch();
     status_label_ = new QLabel(header);
     status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                     .arg(ui::colors::TEXT_TERTIARY)
+                                     .arg(ui::colors::TEXT_TERTIARY())
                                      .arg(ui::fonts::SMALL)
                                      .arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(status_label_);
@@ -139,8 +139,8 @@ void TradeAnalysisPanel::build_ui() {
                                  "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
                                  "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
                                  "border-bottom:2px solid %7; }")
-                             .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-                             .arg(ui::colors::TEXT_SECONDARY)
+                             .arg(ui::colors::BORDER_DIM(), ui::colors::BG_SURFACE(), ui::colors::BG_RAISED())
+                             .arg(ui::colors::TEXT_SECONDARY())
                              .arg(ui::fonts::DATA_FAMILY)
                              .arg(ui::fonts::SMALL)
                              .arg(ui::colors::WARNING()));
@@ -156,7 +156,7 @@ void TradeAnalysisPanel::build_ui() {
         p0);
     hint0->setWordWrap(true);
     hint0->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                             .arg(ui::colors::TEXT_SECONDARY)
+                             .arg(ui::colors::TEXT_SECONDARY())
                              .arg(ui::fonts::SMALL)
                              .arg(ui::fonts::DATA_FAMILY));
     p0l->addWidget(hint0);
@@ -220,7 +220,7 @@ void TradeAnalysisPanel::build_ui() {
         new QLabel("Analyzes economic impact of tariffs, quotas, export subsidies, and non-tariff barriers.", p1);
     hint1->setWordWrap(true);
     hint1->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                             .arg(ui::colors::TEXT_SECONDARY)
+                             .arg(ui::colors::TEXT_SECONDARY())
                              .arg(ui::fonts::SMALL)
                              .arg(ui::fonts::DATA_FAMILY));
     p1l->addWidget(hint1);
@@ -299,7 +299,7 @@ void TradeAnalysisPanel::build_ui() {
         new QLabel("Analyzes trade creation vs. diversion effects for regional trade blocs and economic unions.", p2);
     hint2->setWordWrap(true);
     hint2->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                             .arg(ui::colors::TEXT_SECONDARY)
+                             .arg(ui::colors::TEXT_SECONDARY())
                              .arg(ui::fonts::SMALL)
                              .arg(ui::fonts::DATA_FAMILY));
     p2l->addWidget(hint2);
@@ -361,7 +361,7 @@ void TradeAnalysisPanel::build_ui() {
     auto* hint3 = new QLabel("Assesses FDI, employment, wage, and GDP impact of removing trade barriers.", p3);
     hint3->setWordWrap(true);
     hint3->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                             .arg(ui::colors::TEXT_SECONDARY)
+                             .arg(ui::colors::TEXT_SECONDARY())
                              .arg(ui::fonts::SMALL)
                              .arg(ui::fonts::DATA_FAMILY));
     p3l->addWidget(hint3);
@@ -441,7 +441,7 @@ void TradeAnalysisPanel::display_result(const QJsonObject& data) {
 
     auto* sep = new QWidget(this);
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM));
+    sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
     results_layout_->addWidget(sep);
 
     auto* hdr = new QLabel("ANALYSIS RESULTS");
@@ -490,12 +490,12 @@ void TradeAnalysisPanel::display_result(const QJsonObject& data) {
                                  "QHeaderView::section { background:%6; color:%7; font-weight:700;"
                                  "padding:4px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
                                  "QTableWidget::item:alternate { background:%8; }")
-                             .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
+                             .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
                              .arg(ui::fonts::DATA_FAMILY)
                              .arg(ui::fonts::SMALL)
-                             .arg(ui::colors::BG_RAISED)
-                             .arg(ui::colors::TEXT_SECONDARY)
-                             .arg(ui::colors::ROW_ALT));
+                             .arg(ui::colors::BG_RAISED())
+                             .arg(ui::colors::TEXT_SECONDARY())
+                             .arg(ui::colors::ROW_ALT()));
 
     for (int r = 0; r < rows.size(); ++r) {
         auto key = rows[r].first;

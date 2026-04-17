@@ -2,7 +2,7 @@
 """
 Fincept Terminal - Live Strategy Runner
 Manages strategy deployment for paper/live trading with SQLite persistence.
-All state is stored in SQLite only - no in-memory state in Rust.
+All state is stored in SQLite only - no in-memory state in the host.
 
 Price data comes from the main app's strategy_price_cache table (written by
 the WebSocket router on every tick). Falls back to yfinance if no cached price.
@@ -404,7 +404,7 @@ def cmd_deploy(deploy_id: str, strategy_id: str, params_json: str, db_path: str,
 def _fetch_price(symbol: str, asset_type: str, app_db_path: str = ""):
     """Fetch current market data from WebSocket price cache (main app DB).
 
-    The Rust WebSocket router writes every tick to strategy_price_cache in the
+    The host WebSocket router writes every tick to strategy_price_cache in the
     main fincept_terminal.db. This function reads from that table so strategies
     use the same real-time data as the rest of the app.
 

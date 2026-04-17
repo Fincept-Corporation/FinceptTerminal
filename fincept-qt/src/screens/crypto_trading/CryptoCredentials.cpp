@@ -19,7 +19,7 @@ static QString kInputStyle() {
     return QString("QLineEdit { background: %1; border: 1px solid %2; color: %3; padding: 6px; "
                    "font-size: 13px; font-family: 'Consolas', 'Courier New', monospace; }"
                    "QLineEdit:focus { border-color: %4; }")
-        .arg(colors::BG_SURFACE, colors::BORDER_DIM, colors::TEXT_PRIMARY, colors::BORDER_BRIGHT);
+        .arg(colors::BG_SURFACE(), colors::BORDER_DIM(), colors::TEXT_PRIMARY(), colors::BORDER_BRIGHT());
 }
 } // namespace
 
@@ -31,7 +31,7 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
     setMinimumWidth(400);
     setStyleSheet(QString("QDialog { background: %1; color: %2; "
                           "font-family: 'Consolas', 'Courier New', monospace; }")
-                      .arg(colors::BG_BASE, colors::TEXT_PRIMARY));
+                      .arg(colors::BG_BASE(), colors::TEXT_PRIMARY()));
 
     auto* layout = new QVBoxLayout(this);
     layout->setSpacing(8);
@@ -41,14 +41,14 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
     auto* title = new QLabel(QString("API CREDENTIALS  %1").arg(exchange_id.toUpper()));
     title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700; letter-spacing: 0.5px; "
                                  "font-family: 'Consolas', 'Courier New', monospace;")
-                             .arg(colors::AMBER));
+                             .arg(colors::AMBER()));
     layout->addWidget(title);
 
     auto* info = new QLabel("Enter your exchange API credentials for live trading.\n"
                             "Keys are stored locally in encrypted secure storage.");
     info->setStyleSheet(QString("color: %1; font-size: 12px; "
                                 "font-family: 'Consolas', 'Courier New', monospace;")
-                            .arg(colors::TEXT_SECONDARY));
+                            .arg(colors::TEXT_SECONDARY()));
     info->setWordWrap(true);
     layout->addWidget(info);
 
@@ -58,7 +58,7 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
     auto* key_lbl = new QLabel("API KEY");
     key_lbl->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; "
                                    "font-family: 'Consolas', 'Courier New', monospace;")
-                               .arg(colors::TEXT_SECONDARY));
+                               .arg(colors::TEXT_SECONDARY()));
     layout->addWidget(key_lbl);
     key_edit_ = new QLineEdit;
     key_edit_->setPlaceholderText("Enter API key");
@@ -70,7 +70,7 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
     auto* secret_lbl = new QLabel("API SECRET");
     secret_lbl->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; "
                                       "font-family: 'Consolas', 'Courier New', monospace;")
-                                  .arg(colors::TEXT_SECONDARY));
+                                  .arg(colors::TEXT_SECONDARY()));
     layout->addWidget(secret_lbl);
     secret_edit_ = new QLineEdit;
     secret_edit_->setPlaceholderText("Enter API secret");
@@ -83,7 +83,7 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
     auto* pw_lbl = new QLabel("PASSWORD (OKX/KUCOIN)");
     pw_lbl->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; "
                                   "font-family: 'Consolas', 'Courier New', monospace;")
-                              .arg(colors::TEXT_SECONDARY));
+                              .arg(colors::TEXT_SECONDARY()));
     layout->addWidget(pw_lbl);
     password_edit_ = new QLineEdit;
     password_edit_->setPlaceholderText("Optional");
@@ -97,7 +97,7 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
     auto* totp_lbl = new QLabel("TOTP SECRET (2FA)");
     totp_lbl->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; "
                                     "font-family: 'Consolas', 'Courier New', monospace;")
-                                .arg(colors::TEXT_SECONDARY));
+                                .arg(colors::TEXT_SECONDARY()));
     layout->addWidget(totp_lbl);
 
     totp_secret_edit_ = new QLineEdit;
@@ -113,13 +113,13 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
     totp_code_label_ = new QLabel("CODE: --");
     totp_code_label_->setStyleSheet(QString("color: %1; font-size: 18px; font-weight: 700; letter-spacing: 2px; "
                                             "font-family: 'Consolas', 'Courier New', monospace;")
-                                        .arg(colors::AMBER));
+                                        .arg(colors::AMBER()));
     totp_row->addWidget(totp_code_label_);
 
     totp_countdown_label_ = new QLabel("");
     totp_countdown_label_->setStyleSheet(
         QString("color: %1; font-size: 11px; font-family: 'Consolas', 'Courier New', monospace;")
-            .arg(colors::TEXT_TERTIARY));
+            .arg(colors::TEXT_TERTIARY()));
     totp_row->addWidget(totp_countdown_label_);
     totp_row->addStretch();
     layout->addLayout(totp_row);
@@ -151,7 +151,7 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
                                      "padding: 6px 16px; font-weight: 700; font-size: 12px; "
                                      "font-family: 'Consolas', 'Courier New', monospace; }"
                                      "QPushButton:hover { background: %1; color: %3; }")
-                                 .arg(colors::NEGATIVE, colors::NEGATIVE_DIM, colors::TEXT_PRIMARY));
+                                 .arg(colors::NEGATIVE(), colors::NEGATIVE_DIM(), colors::TEXT_PRIMARY()));
     connect(clear_btn, &QPushButton::clicked, this, &CryptoCredentials::on_clear);
     btn_row->addWidget(clear_btn);
 
@@ -162,7 +162,7 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
                                     "padding: 6px 16px; font-weight: 700; font-size: 12px; "
                                     "font-family: 'Consolas', 'Courier New', monospace; }"
                                     "QPushButton:hover { background: %1; color: %3; }")
-                                .arg(colors::AMBER, colors::AMBER_DIM, colors::BG_BASE));
+                                .arg(colors::AMBER(), colors::AMBER_DIM(), colors::BG_BASE()));
     connect(save_btn, &QPushButton::clicked, this, &CryptoCredentials::on_save);
     btn_row->addWidget(save_btn);
 
@@ -190,14 +190,14 @@ void CryptoCredentials::on_save() {
         status_label_->setText("API key and secret are required");
         status_label_->setStyleSheet(QString("color: %1; font-size: 12px; "
                                              "font-family: 'Consolas', 'Courier New', monospace;")
-                                         .arg(colors::NEGATIVE));
+                                         .arg(colors::NEGATIVE()));
         return;
     }
     emit credentials_saved(api_key(), api_secret(), password());
     status_label_->setText("Credentials saved");
     status_label_->setStyleSheet(QString("color: %1; font-size: 12px; "
                                          "font-family: 'Consolas', 'Courier New', monospace;")
-                                     .arg(colors::POSITIVE));
+                                     .arg(colors::POSITIVE()));
     accept();
 }
 
@@ -208,7 +208,7 @@ void CryptoCredentials::on_clear() {
     status_label_->setText("Credentials cleared");
     status_label_->setStyleSheet(QString("color: %1; font-size: 12px; "
                                          "font-family: 'Consolas', 'Courier New', monospace;")
-                                     .arg(colors::WARNING));
+                                     .arg(colors::WARNING()));
 }
 
 void CryptoCredentials::on_totp_tick() {

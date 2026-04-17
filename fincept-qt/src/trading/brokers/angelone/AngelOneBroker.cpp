@@ -256,7 +256,7 @@ TokenExchangeResponse AngelOneBroker::exchange_token(const QString& api_key, con
     result.success = true;
     result.access_token = data.value("jwtToken").toString();
     result.refresh_token = data.value("refreshToken").toString();
-    result.user_id = client_code; // use client_code as stable login ID (matches Rust impl)
+    result.user_id = client_code; // use client_code as stable login ID
 
     // Pack feed_token, client_code, totp_secret into additional_data JSON
     QJsonObject extra{
@@ -534,7 +534,7 @@ ApiResponse<QVector<BrokerQuote>> AngelOneBroker::get_quotes(const BrokerCredent
         return {false, std::nullopt, "No valid symbol tokens found", ts};
 
     // Build exchangeTokens as flat object: { "NSE": ["2885", "3045"], "BSE": [...] }
-    // This matches the Angel One Smart API v2 spec and the reference Rust implementation
+    // This matches the Angel One Smart API v2 spec
     QJsonObject exchange_tokens;
     for (auto it = by_exchange.constBegin(); it != by_exchange.constEnd(); ++it) {
         exchange_tokens[it.key()] = it.value();

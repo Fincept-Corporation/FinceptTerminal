@@ -27,7 +27,7 @@ WidgetRegistry& WidgetRegistry::instance() {
 }
 
 WidgetRegistry::WidgetRegistry() {
-    // 12-column grid: default_w, default_h, min_w, min_h (matching React)
+    // 12-column grid: default_w, default_h, min_w, min_h
 
     // ── Markets ───────────────────────────────────────────────────────────────
     register_widget({"indices", "Market Indices", "Markets", "Major global indices — SPY, QQQ, DIA, IWM", 4, 5, 3, 4,

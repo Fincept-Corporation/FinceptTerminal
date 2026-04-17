@@ -60,7 +60,7 @@ static void style_table(QTableWidget* t) {
                              "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px;"
                              "  font-weight:700; letter-spacing:0.5px; }")
                          .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
-                              ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER));
+                              ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
 }
 
 // Build a centred placeholder label inside a parent widget.
@@ -71,7 +71,7 @@ static QWidget* make_placeholder(const QString& msg, QWidget* parent = nullptr) 
     auto* lbl = new QLabel(msg);
     lbl->setAlignment(Qt::AlignCenter);
     lbl->setWordWrap(true);
-    lbl->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY));
+    lbl->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
     lay->addStretch();
     lay->addWidget(lbl);
     lay->addStretch();
@@ -95,7 +95,7 @@ void QuantStatsView::build_ui() {
     auto* header = new QWidget(this);
     header->setFixedHeight(36);
     header->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::AMBER));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::AMBER()));
 
     auto* h_lay = new QHBoxLayout(header);
     h_lay->setContentsMargins(12, 0, 12, 0);
@@ -103,12 +103,12 @@ void QuantStatsView::build_ui() {
 
     auto* title_lbl = new QLabel("QUANTSTATS ANALYSIS");
     title_lbl->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     h_lay->addWidget(title_lbl);
     h_lay->addStretch();
 
     qs_status_ = new QLabel;
-    qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
+    qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
     h_lay->addWidget(qs_status_);
 
     qs_run_btn_ = new QPushButton("\u25B6 RUN QUANTSTATS");
@@ -119,7 +119,7 @@ void QuantStatsView::build_ui() {
                 "  padding:0 12px; font-size:9px; font-weight:700; }"
                 "QPushButton:hover { background:%2; }"
                 "QPushButton:disabled { background:%3; color:%4; }")
-            .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY));
+            .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY()));
     connect(qs_run_btn_, &QPushButton::clicked, this, &QuantStatsView::run_quantstats);
     h_lay->addWidget(qs_run_btn_);
 
@@ -135,7 +135,7 @@ void QuantStatsView::build_ui() {
                                  "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
                                  "QTabBar::tab:hover { color:%5; }")
                              .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(),
-                                  ui::colors::AMBER(), ui::colors::TEXT_PRIMARY));
+                                  ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
 
     // ── METRICS tab ───────────────────────────────────────────────────────────
     {
@@ -146,7 +146,7 @@ void QuantStatsView::build_ui() {
 
         auto* section_lbl = new QLabel("KEY PERFORMANCE INDICATORS");
         section_lbl->setStyleSheet(
-            QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+            QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
         ml->addWidget(section_lbl);
 
         metrics_table_ = new QTableWidget;
@@ -163,7 +163,7 @@ void QuantStatsView::build_ui() {
     // ── RETURNS tab ───────────────────────────────────────────────────────────
     {
         auto* returns_w = new QWidget(this);
-        returns_w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+        returns_w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
         auto* rl = new QVBoxLayout(returns_w);
         rl->setContentsMargins(0, 0, 0, 0);
         rl->setSpacing(0);
@@ -179,7 +179,7 @@ void QuantStatsView::build_ui() {
     // ── DRAWDOWN tab ──────────────────────────────────────────────────────────
     {
         auto* dd_w = new QWidget(this);
-        dd_w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+        dd_w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
         auto* dl = new QVBoxLayout(dd_w);
         dl->setContentsMargins(0, 0, 0, 0);
         dl->setSpacing(0);
@@ -194,7 +194,7 @@ void QuantStatsView::build_ui() {
     // ── ROLLING tab ───────────────────────────────────────────────────────────
     {
         auto* roll_w = new QWidget(this);
-        roll_w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+        roll_w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
         auto* rll = new QVBoxLayout(roll_w);
         rll->setContentsMargins(0, 0, 0, 0);
         rll->setSpacing(0);
@@ -209,20 +209,20 @@ void QuantStatsView::build_ui() {
     // ── MONTE CARLO tab ───────────────────────────────────────────────────────
     {
         auto* mc_w = new QWidget(this);
-        mc_w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+        mc_w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
         auto* mcl = new QVBoxLayout(mc_w);
         mcl->setContentsMargins(16, 12, 16, 12);
         mcl->setSpacing(8);
 
         auto* mc_title = new QLabel("MONTE CARLO SIMULATION");
         mc_title->setStyleSheet(
-            QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+            QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
         mcl->addWidget(mc_title);
 
         auto* mc_desc = new QLabel("Simulate 1,000 portfolio return paths using GBM to estimate probability\n"
                                    "distributions of future returns, drawdowns, and terminal wealth.");
         mc_desc->setWordWrap(true);
-        mc_desc->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY));
+        mc_desc->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
         mcl->addWidget(mc_desc);
 
         // Button row
@@ -237,12 +237,12 @@ void QuantStatsView::build_ui() {
                     "  padding:0 16px; font-size:10px; font-weight:700; }"
                     "QPushButton:hover { background:%2; }"
                     "QPushButton:disabled { background:%3; color:%4; }")
-                .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY));
+                .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY()));
         connect(mc_run_btn_, &QPushButton::clicked, this, &QuantStatsView::run_monte_carlo);
         mc_btn_row->addWidget(mc_run_btn_);
 
         mc_status_ = new QLabel;
-        mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY));
+        mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
         mc_btn_row->addWidget(mc_status_);
         mc_btn_row->addStretch();
         mcl->addLayout(mc_btn_row);
@@ -474,14 +474,14 @@ void QuantStatsView::update_returns() {
     }
 
     auto* content = new QWidget(this);
-    content->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    content->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* cl = new QVBoxLayout(content);
     cl->setContentsMargins(16, 12, 16, 12);
     cl->setSpacing(12);
 
     auto* title = new QLabel("RETURN DISTRIBUTION");
     title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     cl->addWidget(title);
 
     // Win/loss summary cards — 2-column grid
@@ -522,14 +522,14 @@ void QuantStatsView::update_returns() {
 
         auto* card_w = new QWidget(this);
         card_w->setStyleSheet(
-            QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED));
+            QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED()));
         auto* card_l = new QVBoxLayout(card_w);
         card_l->setContentsMargins(12, 10, 12, 10);
         card_l->setSpacing(4);
 
         auto* lbl = new QLabel(c.label);
         lbl->setStyleSheet(
-            QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY()));
         card_l->addWidget(lbl);
 
         auto* val_lbl = new QLabel(c.value);
@@ -594,14 +594,14 @@ void QuantStatsView::update_drawdown() {
     }
 
     auto* content = new QWidget(this);
-    content->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    content->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* cl = new QVBoxLayout(content);
     cl->setContentsMargins(16, 12, 16, 12);
     cl->setSpacing(12);
 
     auto* title = new QLabel("DRAWDOWN & RISK METRICS");
     title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     cl->addWidget(title);
 
     // Prominent Max Drawdown display
@@ -610,19 +610,19 @@ void QuantStatsView::update_drawdown() {
 
     auto* hero_w = new QWidget(this);
     hero_w->setStyleSheet(
-        QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::NEGATIVE));
+        QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::NEGATIVE()));
     auto* hero_l = new QVBoxLayout(hero_w);
     hero_l->setContentsMargins(16, 12, 16, 12);
     hero_l->setSpacing(2);
 
     auto* hero_label = new QLabel("MAX DRAWDOWN");
     hero_label->setStyleSheet(
-        QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
     hero_l->addWidget(hero_label);
 
     auto* hero_value = new QLabel(pct_str(max_dd));
     hero_value->setStyleSheet(QString("color:%1; font-size:28px; font-weight:700;")
-                                  .arg(max_dd < 0 ? ui::colors::NEGATIVE() : ui::colors::POSITIVE));
+                                  .arg(max_dd < 0 ? ui::colors::NEGATIVE() : ui::colors::POSITIVE()));
     hero_l->addWidget(hero_value);
     cl->addWidget(hero_w);
 
@@ -679,14 +679,14 @@ void QuantStatsView::update_rolling() {
     }
 
     auto* content = new QWidget(this);
-    content->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    content->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* cl = new QVBoxLayout(content);
     cl->setContentsMargins(16, 12, 16, 12);
     cl->setSpacing(12);
 
     auto* title = new QLabel("RISK-ADJUSTED RATIOS & WIN/LOSS BREAKDOWN");
     title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     cl->addWidget(title);
 
     // Ratios table
@@ -728,7 +728,7 @@ void QuantStatsView::update_rolling() {
     auto* wl_title = new QLabel("WIN / LOSS BREAKDOWN");
     wl_title->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px;"
                                     " margin-top:8px;")
-                                .arg(ui::colors::TEXT_SECONDARY));
+                                .arg(ui::colors::TEXT_SECONDARY()));
     cl->addWidget(wl_title);
 
     const QJsonObject dist = qs_data_["distribution"].toObject();
@@ -781,7 +781,7 @@ void QuantStatsView::update_monte_carlo_chart() {
     }
 
     auto* content = new QWidget(this);
-    content->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    content->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* cl = new QVBoxLayout(content);
     cl->setContentsMargins(0, 0, 0, 0);
     cl->setSpacing(0);
@@ -790,7 +790,7 @@ void QuantStatsView::update_monte_carlo_chart() {
     auto* stats_bar = new QWidget(this);
     stats_bar->setFixedHeight(56);
     stats_bar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED()));
     auto* sb_lay = new QHBoxLayout(stats_bar);
     sb_lay->setContentsMargins(16, 4, 16, 4);
     sb_lay->setSpacing(24);
@@ -821,7 +821,7 @@ void QuantStatsView::update_monte_carlo_chart() {
         col_l->setSpacing(2);
         auto* lbl = new QLabel(s.label);
         lbl->setStyleSheet(
-            QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY()));
         col_l->addWidget(lbl);
         auto* val = new QLabel(s.value);
         val->setStyleSheet(QString("color:%1; font-size:14px; font-weight:700;").arg(s.color));
@@ -926,7 +926,7 @@ void QuantStatsView::update_monte_carlo_chart() {
 
     auto* chart_view = new QChartView(chart);
     chart_view->setRenderHint(QPainter::Antialiasing, false);
-    chart_view->setStyleSheet(QString("background:%1; border:none;").arg(ui::colors::BG_BASE));
+    chart_view->setStyleSheet(QString("background:%1; border:none;").arg(ui::colors::BG_BASE()));
     mc_chart_ = chart_view;
 
     cl->addWidget(chart_view, 1);
@@ -936,7 +936,7 @@ void QuantStatsView::update_monte_carlo_chart() {
     auto* caption = new QLabel(QString("Showing %1 of 1000 simulated paths over 252 trading days (GBM)."
                                        " Bright line = median path.")
                                    .arg(n_shown));
-    caption->setStyleSheet(QString("color:%1; font-size:9px; padding:4px 16px;").arg(ui::colors::TEXT_TERTIARY));
+    caption->setStyleSheet(QString("color:%1; font-size:9px; padding:4px 16px;").arg(ui::colors::TEXT_TERTIARY()));
     cl->addWidget(caption);
 
     mc_stack_->addWidget(content);
@@ -957,7 +957,7 @@ QChartView* QuantStatsView::make_chart_view(const QString& title) {
     }
     auto* view = new QChartView(chart, this);
     view->setRenderHint(QPainter::Antialiasing, false);
-    view->setStyleSheet(QString("background:%1; border:none;").arg(ui::colors::BG_BASE));
+    view->setStyleSheet(QString("background:%1; border:none;").arg(ui::colors::BG_BASE()));
     return view;
 }
 
@@ -969,7 +969,7 @@ void QuantStatsView::run_quantstats() {
     qs_running_ = true;
     qs_run_btn_->setEnabled(false);
     qs_status_->setText("Fetching 1-year price history...");
-    qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::AMBER));
+    qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::AMBER()));
 
     QStringList symbols;
     QJsonArray weights_arr;
@@ -997,7 +997,7 @@ void QuantStatsView::run_quantstats() {
 
                 if (!result.success || result.output.trimmed().isEmpty()) {
                     self->qs_status_->setText("QuantStats failed");
-                    self->qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
+                    self->qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
                     LOG_ERROR("QuantStats", "Script failed: " + result.error.left(200));
                     return;
                 }
@@ -1005,7 +1005,7 @@ void QuantStatsView::run_quantstats() {
                 const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8());
                 if (!doc.isObject()) {
                     self->qs_status_->setText("Invalid JSON response");
-                    self->qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
+                    self->qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
                     LOG_ERROR("QuantStats", "Bad JSON: " + result.output.left(200));
                     return;
                 }
@@ -1013,13 +1013,13 @@ void QuantStatsView::run_quantstats() {
                 const QJsonObject root = doc.object();
                 if (root.contains("error")) {
                     self->qs_status_->setText("Error: " + root["error"].toString());
-                    self->qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
+                    self->qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
                     return;
                 }
 
                 self->qs_data_ = root;
                 self->qs_status_->setText("Complete");
-                self->qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE));
+                self->qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE()));
                 self->update_metrics();
                 self->update_returns();
                 self->update_drawdown();
@@ -1037,7 +1037,7 @@ void QuantStatsView::run_monte_carlo() {
     mc_running_ = true;
     mc_run_btn_->setEnabled(false);
     mc_status_->setText("Running 1000 simulation paths...");
-    mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::AMBER));
+    mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::AMBER()));
 
     QStringList symbols;
     QJsonArray weights_arr;
@@ -1066,7 +1066,7 @@ void QuantStatsView::run_monte_carlo() {
 
                 if (!result.success || result.output.trimmed().isEmpty()) {
                     self->mc_status_->setText("Monte Carlo simulation failed.");
-                    self->mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE));
+                    self->mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE()));
                     LOG_ERROR("MonteCarlo", "Script failed: " + result.error.left(200));
                     return;
                 }
@@ -1074,7 +1074,7 @@ void QuantStatsView::run_monte_carlo() {
                 const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8());
                 if (!doc.isObject()) {
                     self->mc_status_->setText("Invalid JSON response");
-                    self->mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE));
+                    self->mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE()));
                     LOG_ERROR("MonteCarlo", "Bad JSON: " + result.output.left(200));
                     return;
                 }
@@ -1082,14 +1082,14 @@ void QuantStatsView::run_monte_carlo() {
                 const QJsonObject root = doc.object();
                 if (root.contains("error")) {
                     self->mc_status_->setText("Error: " + root["error"].toString());
-                    self->mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE));
+                    self->mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE()));
                     return;
                 }
 
                 self->mc_data_ = root;
                 self->mc_status_->setText(
                     QString("Complete — %1 paths simulated").arg(root["num_paths_shown"].toInt() > 0 ? "1000" : "0"));
-                self->mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE));
+                self->mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE()));
                 self->update_monte_carlo_chart();
             },
             Qt::QueuedConnection);

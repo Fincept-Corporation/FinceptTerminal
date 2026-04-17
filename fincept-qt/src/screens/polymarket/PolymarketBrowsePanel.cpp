@@ -25,7 +25,7 @@ PolymarketBrowsePanel::PolymarketBrowsePanel(QWidget* parent) : QWidget(parent) 
     header_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700; "
                                    "letter-spacing: 0.5px; background: transparent; "
                                    "padding: 6px 8px; border-bottom: 1px solid %2;")
-                               .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM));
+                               .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM()));
     vl->addWidget(header_);
 
     list_view_ = new QListView;
@@ -35,7 +35,7 @@ PolymarketBrowsePanel::PolymarketBrowsePanel(QWidget* parent) : QWidget(parent) 
     list_view_->setSelectionMode(QAbstractItemView::SingleSelection);
     list_view_->setStyleSheet(QString("QListView { background: %1; border: none; outline: none; }"
                                       "QListView::item { border: none; }")
-                                  .arg(colors::BG_BASE));
+                                  .arg(colors::BG_BASE()));
     connect(list_view_, &QListView::clicked, this, &PolymarketBrowsePanel::on_item_clicked);
     vl->addWidget(list_view_, 1);
 
@@ -43,7 +43,7 @@ PolymarketBrowsePanel::PolymarketBrowsePanel(QWidget* parent) : QWidget(parent) 
     auto* page_bar = new QWidget(this);
     page_bar->setFixedHeight(30);
     page_bar->setStyleSheet(
-        QString("background: %1; border-top: 1px solid %2;").arg(colors::BG_SURFACE, colors::BORDER_DIM));
+        QString("background: %1; border-top: 1px solid %2;").arg(colors::BG_SURFACE(), colors::BORDER_DIM()));
     auto* phl = new QHBoxLayout(page_bar);
     phl->setContentsMargins(8, 0, 8, 0);
     phl->setSpacing(6);
@@ -51,13 +51,13 @@ PolymarketBrowsePanel::PolymarketBrowsePanel(QWidget* parent) : QWidget(parent) 
     prev_btn_ = new QPushButton("PREV");
     prev_btn_->setStyleSheet(QString("background: %1; color: %2; border: 1px solid %3; "
                                      "padding: 3px 10px; font-size: 9px; font-weight: 700;")
-                                 .arg(colors::BG_SURFACE, colors::TEXT_SECONDARY, colors::BORDER_DIM));
+                                 .arg(colors::BG_SURFACE(), colors::TEXT_SECONDARY(), colors::BORDER_DIM()));
     prev_btn_->setCursor(Qt::PointingHandCursor);
     connect(prev_btn_, &QPushButton::clicked, this, &PolymarketBrowsePanel::on_prev);
 
     page_label_ = new QLabel("Page 1");
     page_label_->setStyleSheet(
-        QString("color: %1; font-size: 9px; background: transparent;").arg(colors::TEXT_SECONDARY));
+        QString("color: %1; font-size: 9px; background: transparent;").arg(colors::TEXT_SECONDARY()));
     page_label_->setAlignment(Qt::AlignCenter);
 
     next_btn_ = new QPushButton("NEXT");

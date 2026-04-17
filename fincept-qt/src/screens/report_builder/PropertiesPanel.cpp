@@ -29,7 +29,7 @@ namespace fincept::screens {
 
 PropertiesPanel::PropertiesPanel(QWidget* parent) : QWidget(parent) {
     setFixedWidth(280);
-    setStyleSheet(QString("background: %1; border-left: 1px solid %2;").arg(ui::colors::PANEL, ui::colors::BORDER));
+    setStyleSheet(QString("background: %1; border-left: 1px solid %2;").arg(ui::colors::PANEL(), ui::colors::BORDER()));
 
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(0, 0, 0, 0);
@@ -50,7 +50,7 @@ void PropertiesPanel::build_empty_page() {
 
     auto* lbl = new QLabel("Select a component\nto edit properties");
     lbl->setAlignment(Qt::AlignCenter);
-    lbl->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(ui::colors::MUTED));
+    lbl->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(ui::colors::MUTED()));
     vl->addWidget(lbl);
 
     stack_->addWidget(empty_widget_);
@@ -83,7 +83,7 @@ void PropertiesPanel::show_empty() {
 // Helper to add a styled label
 static QLabel* make_label(const QString& text) {
     auto* lbl = new QLabel(text);
-    lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::GRAY));
+    lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::GRAY()));
     return lbl;
 }
 
@@ -108,7 +108,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
     title->setAlignment(Qt::AlignCenter);
     title->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; background: %2; "
                                  "padding: 6px; border-bottom: 1px solid %3;")
-                             .arg(ui::colors::AMBER, ui::colors::BG_RAISED, ui::colors::BORDER));
+                             .arg(ui::colors::AMBER(), ui::colors::BG_RAISED(), ui::colors::BORDER()));
     editor_layout_->addWidget(title);
 
     // ── Text-based types ──────────────────────────────────────────────────────
@@ -160,7 +160,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
             QString("QTableWidget { background: %1; color: %2; border: 1px solid %3; font-size: 11px; }"
                     "QTableWidget::item { padding: 3px; } "
                     "QTableWidget::item:selected { background: %4; }")
-                .arg(ui::colors::DARK, ui::colors::GRAY, ui::colors::BORDER, ui::colors::BG_RAISED));
+                .arg(ui::colors::DARK(), ui::colors::GRAY(), ui::colors::BORDER(), ui::colors::BG_RAISED()));
 
         // Populate from saved JSON data
         QJsonObject cell_data;
@@ -255,7 +255,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         // Auto-fetch price history from ticker
         auto* sep_hist = new QFrame;
         sep_hist->setFixedHeight(1);
-        sep_hist->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER));
+        sep_hist->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER()));
         editor_layout_->addWidget(sep_hist);
 
         editor_layout_->addWidget(make_label("Fetch Price History:"));
@@ -274,7 +274,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         hist_btn->setStyleSheet(
             QString("QPushButton { background: %1; color: %2; font-weight: bold; border: 1px solid %3; }"
                     "QPushButton:hover { background: %4; }")
-                .arg(ui::colors::AMBER_DIM, ui::colors::WHITE, ui::colors::AMBER, ui::colors::AMBER));
+                .arg(ui::colors::AMBER_DIM(), ui::colors::WHITE(), ui::colors::AMBER(), ui::colors::AMBER()));
         hr_hl->addWidget(hist_btn);
         editor_layout_->addWidget(hist_row);
 
@@ -286,7 +286,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
 
         auto* hint = new QLabel("Tip: re-select component after\nediting data to re-render.");
         hint->setWordWrap(true);
-        hint->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::MUTED));
+        hint->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::MUTED()));
         editor_layout_->addWidget(hint);
     }
 
@@ -315,7 +315,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         fetch_stats_btn->setStyleSheet(
             QString("QPushButton { background: %1; color: %2; font-weight: bold; border: 1px solid %3; }"
                     "QPushButton:hover { background: %4; }")
-                .arg(ui::colors::AMBER_DIM, ui::colors::WHITE, ui::colors::AMBER, ui::colors::AMBER));
+                .arg(ui::colors::AMBER_DIM(), ui::colors::WHITE(), ui::colors::AMBER(), ui::colors::AMBER()));
         tr_hl->addWidget(fetch_stats_btn);
         editor_layout_->addWidget(ticker_row);
 
@@ -408,7 +408,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
 
         auto* hint = new QLabel("Tip: re-select after editing\ndata to refresh sparkline.");
         hint->setWordWrap(true);
-        hint->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::MUTED));
+        hint->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::MUTED()));
         editor_layout_->addWidget(hint);
     }
 
@@ -417,7 +417,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         editor_layout_->addWidget(make_label("Image File:"));
         auto* path_lbl = new QLabel(component->config.value("path", "(none)"));
         path_lbl->setWordWrap(true);
-        path_lbl->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::MUTED));
+        path_lbl->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::MUTED()));
         editor_layout_->addWidget(path_lbl);
 
         // Browse button
@@ -438,7 +438,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         paste_btn->setStyleSheet(
             QString("QPushButton { background: %1; color: %2; border: 1px solid %3; }"
                     "QPushButton:hover { background: %4; }")
-                .arg(ui::colors::BG_RAISED, ui::colors::AMBER, ui::colors::BORDER_MED, ui::colors::BG_HOVER));
+                .arg(ui::colors::BG_RAISED(), ui::colors::AMBER(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
         connect(paste_btn, &QPushButton::clicked, this, [this, path_lbl]() {
             const QClipboard* cb = QApplication::clipboard();
             const QMimeData* mime = cb->mimeData();
@@ -509,7 +509,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         auto* fetch_btn = new QPushButton("Fetch Price");
         fetch_btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; font-weight: bold; }"
                                          "QPushButton:hover { background: %3; }")
-                                     .arg(ui::colors::AMBER_DIM, ui::colors::WHITE, ui::colors::AMBER));
+                                     .arg(ui::colors::AMBER_DIM(), ui::colors::WHITE(), ui::colors::AMBER()));
         editor_layout_->addWidget(fetch_btn);
 
         // When fetch is clicked, update config symbol — ReportBuilderScreen will
@@ -531,14 +531,14 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         if (!component->config.value("price").isEmpty()) {
             auto* sep2 = new QFrame;
             sep2->setFixedHeight(1);
-            sep2->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER));
+            sep2->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER()));
             editor_layout_->addWidget(sep2);
 
             auto* price_row =
                 new QLabel(QString("Price: %1   Chg: %2%")
                                .arg(component->config.value("price"), component->config.value("change_pct")));
             price_row->setStyleSheet(
-                QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER));
+                QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER()));
             editor_layout_->addWidget(price_row);
         }
     }
@@ -547,7 +547,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
     if (component->type == "page_break") {
         auto* info = new QLabel("Inserts a page break\nin PDF/print output.");
         info->setAlignment(Qt::AlignCenter);
-        info->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::MUTED));
+        info->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::MUTED()));
         editor_layout_->addWidget(info);
     }
 
@@ -555,14 +555,14 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
     if (component->type == "toc") {
         auto* info = new QLabel("Auto-generated from\nHeading components.");
         info->setAlignment(Qt::AlignCenter);
-        info->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::MUTED));
+        info->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::MUTED()));
         editor_layout_->addWidget(info);
     }
 
     // ── Action buttons ────────────────────────────────────────────────────────
     auto* sep = new QFrame;
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER));
+    sep->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER()));
     editor_layout_->addWidget(sep);
 
     auto* dup_btn = new QPushButton("Duplicate");
@@ -572,7 +572,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
     auto* del_btn = new QPushButton("Delete");
     del_btn->setStyleSheet(QString("QPushButton { color: %1; border: 1px solid %1; }"
                                    "QPushButton:hover { background: %1; color: white; }")
-                               .arg(ui::colors::RED));
+                               .arg(ui::colors::RED()));
     connect(del_btn, &QPushButton::clicked, this, [this]() { emit delete_requested(current_index_); });
     editor_layout_->addWidget(del_btn);
 

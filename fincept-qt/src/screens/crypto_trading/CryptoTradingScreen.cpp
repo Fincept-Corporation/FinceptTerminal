@@ -161,7 +161,7 @@ void CryptoTradingScreen::setup_ui() {
     // WS status
     ws_status_ = new QLabel("REST");
     ws_status_->setObjectName("cryptoWsStatus");
-    ws_status_->setStyleSheet(QString("color: %1;").arg(ui::colors::WARNING));
+    ws_status_->setStyleSheet(QString("color: %1;").arg(ui::colors::WARNING()));
     cmd_layout->addWidget(ws_status_);
 
     // Clock
@@ -308,7 +308,7 @@ void CryptoTradingScreen::update_clock() {
     // Update WS status
     const bool connected = ExchangeService::instance().is_ws_connected();
     ws_status_->setText(connected ? "LIVE" : "REST");
-    ws_status_->setStyleSheet(QString("color: %1;").arg(connected ? ui::colors::POSITIVE : ui::colors::WARNING));
+    ws_status_->setStyleSheet(QString("color: %1;").arg(connected ? ui::colors::POSITIVE() : ui::colors::WARNING()));
 }
 
 // ============================================================================

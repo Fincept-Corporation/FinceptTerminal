@@ -2,7 +2,7 @@
 Grid Strategy Agent for Alpha Arena
 
 Implements rule-based grid trading strategy that doesn't require LLM.
-Uses the same grid calculation logic as the TypeScript GridEngine.
+Uses the same grid calculation logic as the host grid engine.
 """
 
 from typing import Dict, List, Optional, Any, AsyncGenerator

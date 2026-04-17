@@ -59,10 +59,10 @@ void PortfolioBlotter::build_ui() {
                                   "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
                                   "QScrollBar:vertical { width:5px; background:%1; }"
                                   "QScrollBar::handle:vertical { background:%4; min-height:20px; }")
-                              .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::fonts::DATA_FAMILY,
-                                   ui::colors::BORDER_DIM, ui::colors::AMBER_DIM, ui::colors::AMBER,
-                                   ui::colors::BG_HOVER, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY)
-                              .arg(ui::colors::AMBER));
+                              .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::fonts::DATA_FAMILY,
+                                   ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(), ui::colors::AMBER(),
+                                   ui::colors::BG_HOVER(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY())
+                              .arg(ui::colors::AMBER()));
 
     connect(hdr, &QHeaderView::sectionClicked, this, &PortfolioBlotter::on_header_clicked);
     connect(table_, &QTableWidget::cellClicked, this, &PortfolioBlotter::on_row_clicked);
@@ -375,8 +375,8 @@ void PortfolioBlotter::on_context_menu(const QPoint& pos) {
                                "QMenu::item { padding:6px 20px 6px 12px; font-size:11px; }"
                                "QMenu::item:selected { background:%4; color:%5; }"
                                "QMenu::separator { height:1px; background:%3; margin:3px 0; }")
-                           .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED,
-                                ui::colors::AMBER_DIM, ui::colors::AMBER));
+                           .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(),
+                                ui::colors::AMBER_DIM(), ui::colors::AMBER()));
 
     auto* sym_label = menu.addAction(symbol);
     sym_label->setEnabled(false);
@@ -397,7 +397,7 @@ void PortfolioBlotter::on_context_menu(const QPoint& pos) {
     // Style delete action in red
     delete_act->setData("danger");
     menu.setStyleSheet(menu.styleSheet() +
-                       QString("QMenu::item[data='danger'] { color:%1; }").arg(ui::colors::NEGATIVE));
+                       QString("QMenu::item[data='danger'] { color:%1; }").arg(ui::colors::NEGATIVE()));
 
     connect(edit_act, &QAction::triggered, this, [this, symbol]() { emit edit_transaction_requested(symbol); });
     connect(delete_act, &QAction::triggered, this, [this, symbol]() { emit delete_position_requested(symbol); });
@@ -422,10 +422,10 @@ void PortfolioBlotter::refresh_theme() {
                                   "px; font-weight:700; letter-spacing:0.5px; }"
                                   "QScrollBar:vertical { width:5px; background:%1; }"
                                   "QScrollBar::handle:vertical { background:%4; min-height:20px; }")
-                              .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::fonts::DATA_FAMILY,
-                                   ui::colors::BORDER_DIM, ui::colors::AMBER_DIM, ui::colors::AMBER,
-                                   ui::colors::BG_HOVER, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY)
-                              .arg(ui::colors::AMBER));
+                              .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::fonts::DATA_FAMILY,
+                                   ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(), ui::colors::AMBER(),
+                                   ui::colors::BG_HOVER(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY())
+                              .arg(ui::colors::AMBER()));
     populate_table();
 }
 

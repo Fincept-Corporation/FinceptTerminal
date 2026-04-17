@@ -24,7 +24,7 @@ inline QString kMonoFont() {
 inline QString kLabelStyle() {
     return QString("color: %1; font-size: %2px; font-weight: 700; letter-spacing: 0.5px; %3"
                    " background: transparent; border: none;")
-        .arg(fincept::ui::colors::TEXT_SECONDARY)
+        .arg(fincept::ui::colors::TEXT_SECONDARY())
         .arg(fincept::ui::fonts::TINY)
         .arg(kMonoFont());
 }
@@ -32,7 +32,7 @@ inline QString kLabelStyle() {
 inline QString kSectionLabel() {
     return QString("color: %1; font-size: %2px; font-weight: 700; letter-spacing: 0.5px; %3"
                    " background: transparent; border: none;")
-        .arg(fincept::ui::colors::AMBER)
+        .arg(fincept::ui::colors::AMBER())
         .arg(fincept::ui::fonts::TINY)
         .arg(kMonoFont());
 }
@@ -41,10 +41,10 @@ inline QString kInputStyle() {
     return QString("QLineEdit { background: %1; border: 1px solid %2; color: %3; padding: 4px 8px;"
                    " font-size: %4px; %5 }"
                    "QLineEdit:focus { border-color: %6; }")
-        .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_DIM, fincept::ui::colors::TEXT_PRIMARY)
+        .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_DIM(), fincept::ui::colors::TEXT_PRIMARY())
         .arg(fincept::ui::fonts::SMALL)
         .arg(kMonoFont())
-        .arg(fincept::ui::colors::BORDER_BRIGHT);
+        .arg(fincept::ui::colors::BORDER_BRIGHT());
 }
 
 inline QString kComboStyle() {
@@ -53,10 +53,10 @@ inline QString kComboStyle() {
                    "QComboBox::drop-down { border: none; }"
                    "QComboBox QAbstractItemView { background: %1; color: %2; border: 1px solid %3;"
                    " selection-background-color: %6; %5 }")
-        .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::TEXT_PRIMARY, fincept::ui::colors::BORDER_DIM)
+        .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::BORDER_DIM())
         .arg(fincept::ui::fonts::SMALL)
         .arg(kMonoFont())
-        .arg(fincept::ui::colors::BG_HOVER);
+        .arg(fincept::ui::colors::BG_HOVER());
 }
 
 inline QString kSpinStyle() {
@@ -66,7 +66,7 @@ inline QString kSpinStyle() {
                    "QSpinBox { background: %1; color: %2; border: 1px solid %3; padding: 4px 8px;"
                    " font-size: %4px; %5 }"
                    "QSpinBox::up-button, QSpinBox::down-button { width: 14px; }")
-        .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::TEXT_PRIMARY, fincept::ui::colors::BORDER_DIM)
+        .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::BORDER_DIM())
         .arg(fincept::ui::fonts::SMALL)
         .arg(kMonoFont());
 }
@@ -75,10 +75,10 @@ inline QString kTextEditStyle() {
     return QString("QTextEdit { background: %1; border: 1px solid %2; color: %3; padding: 6px;"
                    " font-size: %4px; %5 }"
                    "QTextEdit:focus { border-color: %6; }")
-        .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_DIM, fincept::ui::colors::TEXT_PRIMARY)
+        .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_DIM(), fincept::ui::colors::TEXT_PRIMARY())
         .arg(fincept::ui::fonts::SMALL)
         .arg(kMonoFont())
-        .arg(fincept::ui::colors::BORDER_BRIGHT);
+        .arg(fincept::ui::colors::BORDER_BRIGHT());
 }
 
 } // namespace
@@ -92,7 +92,7 @@ using namespace fincept::services::algo;
 static QWidget* build_condition_row(QVBoxLayout* owner_layout, QWidget* parent) {
     auto* row = new QWidget(parent);
     row->setStyleSheet(QString("background: %1; border: 1px solid %2;")
-                           .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_DIM));
+                           .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(6, 4, 6, 4);
     hl->setSpacing(4);
@@ -141,10 +141,10 @@ static QWidget* build_condition_row(QVBoxLayout* owner_layout, QWidget* parent) 
     rm_btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: 1px solid %2;"
                                   " font-size: %3px; font-weight: 700; %4 }"
                                   "QPushButton:hover { color: %5; border-color: %5; }")
-                              .arg(fincept::ui::colors::TEXT_TERTIARY, fincept::ui::colors::BORDER_DIM)
+                              .arg(fincept::ui::colors::TEXT_TERTIARY(), fincept::ui::colors::BORDER_DIM())
                               .arg(fincept::ui::fonts::TINY)
                               .arg(kMonoFont())
-                              .arg(fincept::ui::colors::NEGATIVE));
+                              .arg(fincept::ui::colors::NEGATIVE()));
     QObject::connect(rm_btn, &QPushButton::clicked, row, [row]() { row->deleteLater(); });
 
     hl->addWidget(ind_combo);
@@ -270,10 +270,10 @@ void ScannerPanel::build_ui() {
                                   "QScrollBar:vertical { background: %1; width: 6px; }"
                                   "QScrollBar::handle:vertical { background: %2; }"
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-                              .arg(fincept::ui::colors::BG_BASE, fincept::ui::colors::BORDER_MED));
+                              .arg(fincept::ui::colors::BG_BASE(), fincept::ui::colors::BORDER_MED()));
 
     auto* content = new QWidget(this);
-    content->setStyleSheet(QString("background: %1;").arg(fincept::ui::colors::BG_BASE));
+    content->setStyleSheet(QString("background: %1;").arg(fincept::ui::colors::BG_BASE()));
     auto* main_vl = new QVBoxLayout(content);
     main_vl->setContentsMargins(16, 12, 16, 12);
     main_vl->setSpacing(12);
@@ -337,10 +337,10 @@ void ScannerPanel::build_ui() {
     add_cond_btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: 1px dashed %2;"
                                         " font-size: %3px; font-weight: 700; %4 }"
                                         "QPushButton:hover { color: %5; border-color: %5; }")
-                                    .arg(fincept::ui::colors::TEXT_TERTIARY, fincept::ui::colors::BORDER_DIM)
+                                    .arg(fincept::ui::colors::TEXT_TERTIARY(), fincept::ui::colors::BORDER_DIM())
                                     .arg(fincept::ui::fonts::TINY)
                                     .arg(kMonoFont())
-                                    .arg(fincept::ui::colors::AMBER));
+                                    .arg(fincept::ui::colors::AMBER()));
     connect(add_cond_btn, &QPushButton::clicked, this, [this, cond_container]() {
         conditions_layout_->addWidget(build_condition_row(conditions_layout_, cond_container));
     });
@@ -381,10 +381,10 @@ void ScannerPanel::build_ui() {
         QString("QPushButton { background: %1; color: %2; border: 1px solid %3;"
                 " font-size: %4px; font-weight: 700; %5 padding: 2px 10px; }"
                 "QPushButton:hover { background: %6; color: %7; }")
-            .arg(fincept::ui::colors::BG_RAISED, fincept::ui::colors::TEXT_SECONDARY, fincept::ui::colors::BORDER_DIM)
+            .arg(fincept::ui::colors::BG_RAISED(), fincept::ui::colors::TEXT_SECONDARY(), fincept::ui::colors::BORDER_DIM())
             .arg(fincept::ui::fonts::TINY)
             .arg(kMonoFont())
-            .arg(fincept::ui::colors::BG_HOVER, fincept::ui::colors::TEXT_PRIMARY));
+            .arg(fincept::ui::colors::BG_HOVER(), fincept::ui::colors::TEXT_PRIMARY()));
     connect(nifty_btn, &QPushButton::clicked, this,
             [this]() { symbols_edit_->setPlainText(nifty50_symbols().join("\n")); });
     quick_row->addWidget(nifty_btn);
@@ -440,7 +440,7 @@ void ScannerPanel::build_ui() {
                                     "QPushButton:hover { background: #FFC400; color: %3; }")
                                 .arg(fincept::ui::fonts::DATA)
                                 .arg(kMonoFont())
-                                .arg(fincept::ui::colors::BG_BASE));
+                                .arg(fincept::ui::colors::BG_BASE()));
     connect(scan_btn, &QPushButton::clicked, this, &ScannerPanel::on_scan);
     main_vl->addWidget(scan_btn);
 
@@ -448,7 +448,7 @@ void ScannerPanel::build_ui() {
     status_label_ = new QLabel("", content);
     status_label_->setWordWrap(true);
     status_label_->setStyleSheet(QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                                     .arg(fincept::ui::colors::TEXT_TERTIARY)
+                                     .arg(fincept::ui::colors::TEXT_TERTIARY())
                                      .arg(fincept::ui::fonts::SMALL)
                                      .arg(kMonoFont()));
     main_vl->addWidget(status_label_);
@@ -484,14 +484,14 @@ void ScannerPanel::build_ui() {
                 " font-weight: 700; font-family: %4; padding: 4px 8px;"
                 " border: none; border-bottom: 1px solid %2; }"
                 "QTableWidget::item:selected { background: %9; color: %5; }")
-            .arg(fincept::ui::colors::BG_BASE, fincept::ui::colors::BORDER_DIM)
+            .arg(fincept::ui::colors::BG_BASE(), fincept::ui::colors::BORDER_DIM())
             .arg(fincept::ui::fonts::SMALL)
             .arg(fincept::ui::fonts::DATA_FAMILY)
-            .arg(fincept::ui::colors::TEXT_PRIMARY)
-            .arg(fincept::ui::colors::BG_SURFACE)
-            .arg(fincept::ui::colors::BG_RAISED)
-            .arg(fincept::ui::colors::TEXT_TERTIARY)
-            .arg(fincept::ui::colors::BG_HOVER));
+            .arg(fincept::ui::colors::TEXT_PRIMARY())
+            .arg(fincept::ui::colors::BG_SURFACE())
+            .arg(fincept::ui::colors::BG_RAISED())
+            .arg(fincept::ui::colors::TEXT_TERTIARY())
+            .arg(fincept::ui::colors::BG_HOVER()));
     main_vl->addWidget(results_table_);
     main_vl->addStretch();
 
@@ -506,7 +506,7 @@ void ScannerPanel::on_scan() {
     if (conditions.isEmpty()) {
         status_label_->setText("Add at least one scan condition.");
         status_label_->setStyleSheet(QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                                         .arg(fincept::ui::colors::NEGATIVE)
+                                         .arg(fincept::ui::colors::NEGATIVE())
                                          .arg(fincept::ui::fonts::SMALL)
                                          .arg(kMonoFont()));
         return;
@@ -517,7 +517,7 @@ void ScannerPanel::on_scan() {
     if (raw.isEmpty()) {
         status_label_->setText("Enter symbols to scan.");
         status_label_->setStyleSheet(QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                                         .arg(fincept::ui::colors::NEGATIVE)
+                                         .arg(fincept::ui::colors::NEGATIVE())
                                          .arg(fincept::ui::fonts::SMALL)
                                          .arg(kMonoFont()));
         return;
@@ -554,7 +554,7 @@ void ScannerPanel::on_scan_result(const QJsonObject& data) {
         QString("Scan complete: %1 matches out of %2 symbols").arg(matches.size()).arg(total_scanned));
     status_label_->setStyleSheet(
         QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-            .arg(fincept::ui::colors::POSITIVE)
+            .arg(fincept::ui::colors::POSITIVE())
             .arg(fincept::ui::fonts::SMALL)
             .arg(kMonoFont()));
 
@@ -638,7 +638,7 @@ void ScannerPanel::on_error(const QString& context, const QString& msg) {
     if (status_label_) {
         status_label_->setText(QString("Error [%1]: %2").arg(context, msg));
         status_label_->setStyleSheet(QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                                         .arg(fincept::ui::colors::NEGATIVE)
+                                         .arg(fincept::ui::colors::NEGATIVE())
                                          .arg(fincept::ui::fonts::SMALL)
                                          .arg(kMonoFont()));
     }

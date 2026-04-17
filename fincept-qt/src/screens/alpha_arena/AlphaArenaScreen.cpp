@@ -111,20 +111,20 @@ static const QString kStyle =
                    "QScrollBar:vertical { background: %1; width: 6px; }"
                    "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
                    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(colors::BG_BASE)        // %1
-        .arg(colors::BG_RAISED)      // %2
-        .arg(colors::AMBER)          // %3
-        .arg(colors::TEXT_PRIMARY)   // %4
-        .arg(colors::TEXT_SECONDARY) // %5
-        .arg(colors::POSITIVE)       // %6
-        .arg(colors::BG_SURFACE)     // %7
-        .arg(colors::BORDER_DIM)     // %8
-        .arg(colors::BORDER_BRIGHT)  // %9
-        .arg(colors::AMBER_DIM)      // %10
-        .arg(colors::TEXT_DIM)       // %11
-        .arg(colors::BG_HOVER)       // %12
-        .arg(colors::CYAN)           // %13
-        .arg(colors::NEGATIVE)       // %14
+        .arg(colors::BG_BASE())        // %1
+        .arg(colors::BG_RAISED())      // %2
+        .arg(colors::AMBER())          // %3
+        .arg(colors::TEXT_PRIMARY())   // %4
+        .arg(colors::TEXT_SECONDARY()) // %5
+        .arg(colors::POSITIVE())       // %6
+        .arg(colors::BG_SURFACE())     // %7
+        .arg(colors::BORDER_DIM())     // %8
+        .arg(colors::BORDER_BRIGHT())  // %9
+        .arg(colors::AMBER_DIM())      // %10
+        .arg(colors::TEXT_DIM())       // %11
+        .arg(colors::BG_HOVER())       // %12
+        .arg(colors::CYAN())           // %13
+        .arg(colors::NEGATIVE())       // %14
     ;
 
 // ── Trading symbols ─────────────────────────────────────────────────────────
@@ -220,7 +220,7 @@ QWidget* AlphaArenaScreen::create_header() {
     status_badge_->setObjectName("aaStatusBadge");
     status_badge_->setStyleSheet(QString("color: %1; background: rgba(217,119,6,0.15); "
                                          "font-size: 8px; font-weight: 700; padding: 2px 6px;")
-                                     .arg(colors::AMBER));
+                                     .arg(colors::AMBER()));
     hl->addWidget(status_badge_);
 
     cycle_label_ = new QLabel("CYCLE 0");
@@ -688,7 +688,7 @@ void AlphaArenaScreen::on_create_competition() {
         self->status_badge_->setText("CREATED");
         self->status_badge_->setStyleSheet(
             QString("color: %1; background: rgba(22,163,74,0.15); font-size: 8px; font-weight: 700; padding: 2px 6px;")
-                .arg(colors::POSITIVE));
+                .arg(colors::POSITIVE()));
         self->status_comp_->setText("COMP: " + self->competition_id_.left(8) + "...");
         self->status_models_->setText(QString::number(self->model_list_->selectedItems().size()) + " models");
         self->interval_label_->setText("INTERVAL: " + QString::number(self->comp_interval_->value()) + "s");
@@ -735,7 +735,7 @@ void AlphaArenaScreen::on_reset() {
     status_badge_->setText("READY");
     status_badge_->setStyleSheet(QString("color: %1; background: rgba(217,119,6,0.15); "
                                          "font-size: 8px; font-weight: 700; padding: 2px 6px;")
-                                     .arg(colors::AMBER));
+                                     .arg(colors::AMBER()));
     cycle_label_->setText("CYCLE 0");
     price_label_->hide();
     leaderboard_table_->setRowCount(0);
@@ -861,7 +861,7 @@ void AlphaArenaScreen::run_python_action(const QString& action, const QJsonObjec
                 self->status_badge_->setText("RUNNING");
                 self->status_badge_->setStyleSheet(QString("color: %1; background: rgba(22,163,74,0.15); "
                                                            "font-size: 8px; font-weight: 700; padding: 2px 6px;")
-                                                       .arg(colors::POSITIVE));
+                                                       .arg(colors::POSITIVE()));
 
                 if (obj.contains("leaderboard"))
                     self->update_leaderboard(obj["leaderboard"].toArray());

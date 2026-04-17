@@ -422,7 +422,7 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
     QString pcolor = services::priority_color(article.priority);
     priority_badge_->setText(pstr);
     priority_badge_->setStyleSheet(
-        QString("background: %1; color: %2; padding: 1px 6px;").arg(pcolor, ui::colors::TEXT_PRIMARY));
+        QString("background: %1; color: %2; padding: 1px 6px;").arg(pcolor, ui::colors::TEXT_PRIMARY()));
 
     // Sentiment badge
     QString sstr = services::sentiment_string(article.sentiment);
@@ -449,7 +449,7 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
     } else {
         source_label_->setText(article.source.toUpper());
         source_label_->setStyleSheet(
-            QString("color: %1; font-weight: 700; background: transparent;").arg(ui::colors::CYAN));
+            QString("color: %1; font-weight: 700; background: transparent;").arg(ui::colors::CYAN()));
     }
 
     // Threat classification in impact label

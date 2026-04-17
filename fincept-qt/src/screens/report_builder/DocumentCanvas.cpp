@@ -258,10 +258,10 @@ DocumentCanvas::DocumentCanvas(QWidget* parent) : QWidget(parent) {
                 "QScrollBar:horizontal { background: %2; height: 10px; }"
                 "QScrollBar::handle:horizontal { background: %3; border-radius: 5px; min-width: 20px; }"
                 "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }")
-            .arg(ui::colors::BORDER_DIM, ui::colors::BG_RAISED, ui::colors::BORDER_BRIGHT));
+            .arg(ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(), ui::colors::BORDER_BRIGHT()));
 
     container_ = new QWidget(this);
-    container_->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM));
+    container_->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
     pages_layout_ = new QVBoxLayout(container_);
     pages_layout_->setContentsMargins(40, 40, 40, 40);
     pages_layout_->setSpacing(24); // gap between pages

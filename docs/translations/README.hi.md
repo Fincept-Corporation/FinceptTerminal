@@ -99,6 +99,26 @@ docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fincept-ter
 
 ### विकल्प 4 - स्रोत से निर्माण (मैनुअल)
 
+> **संस्करण तय हैं** (Qt 6.7.2, CMake 3.27.7, MSVC 19.38 / GCC 12.3 / Apple Clang 15.0, Python 3.11.9)। अनुवाद विचलन से बचने के लिए, आधिकारिक अंग्रेज़ी निर्देशों का पालन करें:
+>
+> 👉 **[README.md (English) — Build from Source](../../README.md#option-4--build-from-source-manual)**
+>
+> CMake प्रीसेट के साथ त्वरित शुरुआत:
+> ```bash
+> ./setup.sh                                            # Linux / macOS — स्वचालित सेटअप
+> setup.bat                                             # Windows (VS 2022 Developer Cmd)
+>
+> # या मैन्युअल:
+> cd FinceptTerminal/fincept-qt
+> cmake --preset linux-release   && cmake --build --preset linux-release
+> cmake --preset macos-release   && cmake --build --preset macos-release
+> cmake --preset win-release     && cmake --build --preset win-release
+> ```
+
+<details>
+<summary>मूल निर्देश (पुराने - संदर्भ के लिए रखे गए)</summary>
+
+
 #### आवश्यक शर्तें
 
 | औजार             | संस्करण | खिड़कियाँ                                                              | लिनक्स                | मैक ओएस                                 |
@@ -158,6 +178,8 @@ cmake --build build --config Release --parallel
 ./build/FinceptTerminal              # Linux / macOS
 .\build\Release\FinceptTerminal.exe  # Windows
 ```
+
+</details>
 
 * * *
 

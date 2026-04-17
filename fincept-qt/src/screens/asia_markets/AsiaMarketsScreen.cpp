@@ -99,20 +99,20 @@ static const QString kStyle =
                    "QScrollBar:horizontal { background: %1; height: 6px; }"
                    "QScrollBar::handle:horizontal { background: %8; min-width: 20px; }"
                    "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }")
-        .arg(colors::BG_BASE)        // %1
-        .arg(colors::BG_RAISED)      // %2
-        .arg(colors::AMBER)          // %3
-        .arg(colors::TEXT_PRIMARY)   // %4
-        .arg(colors::TEXT_SECONDARY) // %5
-        .arg(colors::POSITIVE)       // %6  (unused but reserved)
-        .arg(colors::BG_SURFACE)     // %7
-        .arg(colors::BORDER_DIM)     // %8
-        .arg(colors::BORDER_BRIGHT)  // %9
-        .arg(colors::BG_HOVER)       // %10
-        .arg(colors::AMBER_DIM)      // %11
-        .arg(colors::TEXT_DIM)       // %12
-        .arg(colors::CYAN)           // %13
-        .arg(colors::NEGATIVE)       // %14
+        .arg(colors::BG_BASE())        // %1
+        .arg(colors::BG_RAISED())      // %2
+        .arg(colors::AMBER())          // %3
+        .arg(colors::TEXT_PRIMARY())   // %4
+        .arg(colors::TEXT_SECONDARY()) // %5
+        .arg(colors::POSITIVE())       // %6  (unused but reserved)
+        .arg(colors::BG_SURFACE())     // %7
+        .arg(colors::BORDER_DIM())     // %8
+        .arg(colors::BORDER_BRIGHT())  // %9
+        .arg(colors::BG_HOVER())       // %10
+        .arg(colors::AMBER_DIM())      // %11
+        .arg(colors::TEXT_DIM())       // %12
+        .arg(colors::CYAN())           // %13
+        .arg(colors::NEGATIVE())       // %14
     ;
 } // namespace
 

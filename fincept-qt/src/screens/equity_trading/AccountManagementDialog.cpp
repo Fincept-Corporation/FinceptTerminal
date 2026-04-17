@@ -54,8 +54,8 @@ AccountManagementDialog::AccountManagementDialog(QWidget* parent)
                           "QListWidget { background: %5; border: 1px solid %6; color: %2; font-size: 12px; }"
                           "QListWidget::item { padding: 6px 8px; }"
                           "QListWidget::item:selected { background: rgba(217,119,6,0.2); color: %4; }")
-                      .arg(colors::BG_SURFACE, colors::TEXT_PRIMARY, colors::TEXT_SECONDARY,
-                           colors::AMBER, colors::BG_BASE, colors::BORDER_MED, colors::BG_RAISED));
+                      .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::TEXT_SECONDARY(),
+                           colors::AMBER(), colors::BG_BASE(), colors::BORDER_MED(), colors::BG_RAISED()));
     setup_ui();
     refresh_account_list();
 }
@@ -98,13 +98,13 @@ void AccountManagementDialog::setup_ui() {
     auto* btn_row = new QHBoxLayout;
     add_btn_ = new QPushButton("+ ADD");
     add_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
-                                .arg(colors::AMBER, colors::BG_BASE));
+                                .arg(colors::AMBER(), colors::BG_BASE()));
     connect(add_btn_, &QPushButton::clicked, this, &AccountManagementDialog::on_add_account);
     btn_row->addWidget(add_btn_);
 
     remove_btn_ = new QPushButton("REMOVE");
     remove_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
-                                   .arg(colors::NEGATIVE, colors::TEXT_PRIMARY));
+                                   .arg(colors::NEGATIVE(), colors::TEXT_PRIMARY()));
     remove_btn_->setEnabled(false);
     connect(remove_btn_, &QPushButton::clicked, this, &AccountManagementDialog::on_remove_account);
     btn_row->addWidget(remove_btn_);
@@ -120,7 +120,7 @@ void AccountManagementDialog::setup_ui() {
     auto* empty_layout = new QVBoxLayout(empty_page_);
     auto* empty_label = new QLabel("Select an account to configure credentials");
     empty_label->setAlignment(Qt::AlignCenter);
-    empty_label->setStyleSheet(QString("color: %1; font-size: 12px;").arg(colors::TEXT_TERTIARY));
+    empty_label->setStyleSheet(QString("color: %1; font-size: 12px;").arg(colors::TEXT_TERTIARY()));
     empty_layout->addWidget(empty_label);
     right_stack_->addWidget(empty_page_);
 
@@ -151,13 +151,13 @@ void AccountManagementDialog::setup_ui() {
     auto* action_row = new QHBoxLayout;
     rename_btn_ = new QPushButton("RENAME");
     rename_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
-                                   .arg(colors::BG_RAISED, colors::TEXT_PRIMARY));
+                                   .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
     connect(rename_btn_, &QPushButton::clicked, this, &AccountManagementDialog::on_rename_account);
     action_row->addWidget(rename_btn_);
 
     connect_btn_ = new QPushButton("CONNECT");
     connect_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
-                                    .arg(colors::AMBER, colors::BG_BASE));
+                                    .arg(colors::AMBER(), colors::BG_BASE()));
     connect(connect_btn_, &QPushButton::clicked, this, &AccountManagementDialog::on_connect_account);
     action_row->addWidget(connect_btn_);
     form_layout->addLayout(action_row);
@@ -217,11 +217,11 @@ void AccountManagementDialog::on_account_selected(int row) {
     const QString state_str = connection_state_str(account.state);
     form_status_->setText(QString("Status: %1").arg(state_str));
     if (account.state == ConnectionState::Connected)
-        form_status_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE));
+        form_status_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
     else if (account.state == ConnectionState::Error || account.state == ConnectionState::TokenExpired)
-        form_status_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE));
+        form_status_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
     else
-        form_status_->setStyleSheet(QString("color: %1;").arg(colors::TEXT_SECONDARY));
+        form_status_->setStyleSheet(QString("color: %1;").arg(colors::TEXT_SECONDARY()));
 
     build_credential_form(prof);
     load_saved_credentials(selected_account_id_);
@@ -383,12 +383,12 @@ void AccountManagementDialog::on_connect_account() {
 
     // Attempt token exchange
     form_status_->setText("Connecting...");
-    form_status_->setStyleSheet(QString("color: %1;").arg(colors::AMBER));
+    form_status_->setStyleSheet(QString("color: %1;").arg(colors::AMBER()));
 
     auto result = broker->exchange_token(creds.api_key, creds.api_secret, auth_code);
     if (!result.success) {
         form_status_->setText(QString("Error: %1").arg(result.error));
-        form_status_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE));
+        form_status_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
         AccountManager::instance().set_connection_state(selected_account_id_, ConnectionState::Error, result.error);
         refresh_account_list();
         return;
@@ -412,7 +412,7 @@ void AccountManagementDialog::on_connect_account() {
     AccountManager::instance().set_connection_state(selected_account_id_, ConnectionState::Connected);
 
     form_status_->setText(QString("Connected as %1").arg(creds.user_id.isEmpty() ? creds.api_key.left(8) + "..." : creds.user_id));
-    form_status_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE));
+    form_status_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
     refresh_account_list();
 
     emit credentials_saved(selected_account_id_);

@@ -83,20 +83,20 @@ static const QString kScreenStyle =
                    "QScrollBar:vertical { background: %1; width: 6px; }"
                    "QScrollBar::handle:vertical { background: %9; min-height: 20px; }"
                    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(colors::BG_BASE)        // %1
-        .arg(colors::BG_RAISED)      // %2
-        .arg(colors::AMBER)          // %3
-        .arg(colors::TEXT_PRIMARY)   // %4
-        .arg(colors::TEXT_SECONDARY) // %5
-        .arg(colors::POSITIVE)       // %6
-        .arg(colors::BG_HOVER)       // %7
-        .arg(colors::BG_SURFACE)     // %8
-        .arg(colors::BORDER_DIM)     // %9
-        .arg(colors::BORDER_BRIGHT)  // %10
-        .arg(colors::AMBER_DIM)      // %11
-        .arg(colors::TEXT_DIM)       // %12
-        .arg(colors::CYAN)           // %13
-        .arg(colors::NEGATIVE)       // %14
+        .arg(colors::BG_BASE())        // %1
+        .arg(colors::BG_RAISED())      // %2
+        .arg(colors::AMBER())          // %3
+        .arg(colors::TEXT_PRIMARY())   // %4
+        .arg(colors::TEXT_SECONDARY()) // %5
+        .arg(colors::POSITIVE())       // %6
+        .arg(colors::BG_HOVER())       // %7
+        .arg(colors::BG_SURFACE())     // %8
+        .arg(colors::BORDER_DIM())     // %9
+        .arg(colors::BORDER_BRIGHT())  // %10
+        .arg(colors::AMBER_DIM())      // %11
+        .arg(colors::TEXT_DIM())       // %12
+        .arg(colors::CYAN())           // %13
+        .arg(colors::NEGATIVE())       // %14
     ;
 
 // ── Constructor ─────────────────────────────────────────────────────────────
@@ -162,7 +162,7 @@ QWidget* DerivativesScreen::create_header_bar() {
     hl->setContentsMargins(16, 0, 16, 0);
 
     auto* icon = new QLabel(QStringLiteral("\xF0\x9F\x93\x90")); // calculator emoji
-    icon->setStyleSheet(QString("color:%1;font-size:18px;background:transparent;").arg(colors::AMBER));
+    icon->setStyleSheet(QString("color:%1;font-size:18px;background:transparent;").arg(colors::AMBER()));
 
     auto* title_col = new QVBoxLayout;
     title_col->setSpacing(0);

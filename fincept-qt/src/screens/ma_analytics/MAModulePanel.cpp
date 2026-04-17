@@ -34,7 +34,7 @@ QDoubleSpinBox* MAModulePanel::make_double_spin(double min, double max, double v
     spin->setStyleSheet(QString("QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
                                 "font-family:%4; font-size:%5px; padding:4px 6px; }"
                                 "QDoubleSpinBox:focus { border-color:%6; }")
-                            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                             .arg(ui::fonts::DATA_FAMILY)
                             .arg(ui::fonts::SMALL)
                             .arg(module_.color.name()));
@@ -48,7 +48,7 @@ QSpinBox* MAModulePanel::make_int_spin(int min, int max, int val, QWidget* paren
     spin->setStyleSheet(QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
                                 "font-family:%4; font-size:%5px; padding:4px 6px; }"
                                 "QSpinBox:focus { border-color:%6; }")
-                            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                             .arg(ui::fonts::DATA_FAMILY)
                             .arg(ui::fonts::SMALL)
                             .arg(module_.color.name()));
@@ -64,7 +64,7 @@ QPushButton* MAModulePanel::make_run_button(const QString& text, QWidget* parent
                                "QPushButton:hover { background:%5; }"
                                "QPushButton:pressed { background:%6; }")
                            .arg(module_.color.name())
-                           .arg(ui::colors::BG_BASE)
+                           .arg(ui::colors::BG_BASE())
                            .arg(ui::fonts::DATA_FAMILY)
                            .arg(ui::fonts::SMALL)
                            .arg(module_.color.lighter(120).name())
@@ -80,7 +80,7 @@ QWidget* MAModulePanel::build_input_row(const QString& label, QWidget* input, QW
     auto* lbl = new QLabel(label, row);
     lbl->setFixedWidth(160);
     lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                           .arg(ui::colors::TEXT_SECONDARY)
+                           .arg(ui::colors::TEXT_SECONDARY())
                            .arg(ui::fonts::SMALL)
                            .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(lbl);
@@ -92,14 +92,14 @@ QWidget* MAModulePanel::build_metric_card(const QString& label, const QString& v
                                           QWidget* parent) {
     auto* card = new QWidget(parent);
     card->setStyleSheet(QString("background:%1; border:1px solid %2; padding:10px;")
-                            .arg(ui::colors::BG_RAISED)
-                            .arg(ui::colors::BORDER_DIM));
+                            .arg(ui::colors::BG_RAISED())
+                            .arg(ui::colors::BORDER_DIM()));
     auto* vl = new QVBoxLayout(card);
     vl->setContentsMargins(10, 8, 10, 8);
     vl->setSpacing(4);
     auto* lbl = new QLabel(label, card);
     lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; letter-spacing:1px;")
-                           .arg(ui::colors::TEXT_TERTIARY)
+                           .arg(ui::colors::TEXT_TERTIARY())
                            .arg(ui::fonts::TINY)
                            .arg(ui::fonts::DATA_FAMILY));
     auto* val = new QLabel(value, card);
@@ -431,7 +431,7 @@ QWidget* MAModulePanel::build_valuation_panel() {
         new QLabel("Sensitivity analysis varies entry multiple and exit multiple around base case.", lbo_sens);
     sens_hint->setWordWrap(true);
     sens_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                 .arg(ui::colors::TEXT_SECONDARY)
+                                 .arg(ui::colors::TEXT_SECONDARY())
                                  .arg(ui::fonts::SMALL)
                                  .arg(ui::fonts::DATA_FAMILY));
     sens_vl->addWidget(sens_hint);
@@ -476,7 +476,7 @@ QWidget* MAModulePanel::build_valuation_panel() {
 
     auto* comps_hint = new QLabel("Enter target ticker and comparable tickers (comma-separated):", comps);
     comps_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                  .arg(ui::colors::TEXT_SECONDARY)
+                                  .arg(ui::colors::TEXT_SECONDARY())
                                   .arg(ui::fonts::SMALL)
                                   .arg(ui::fonts::DATA_FAMILY));
     comps_vl->addWidget(comps_hint);
@@ -486,7 +486,7 @@ QWidget* MAModulePanel::build_valuation_panel() {
     comps_target->setPlaceholderText("Target ticker (e.g. AAPL)");
     comps_target->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
                                         "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                    .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                    .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                                     .arg(ui::fonts::DATA_FAMILY)
                                     .arg(ui::fonts::SMALL));
     combo_inputs_["comps_target"] = comps_target;
@@ -755,7 +755,7 @@ QWidget* MAModulePanel::build_merger_panel() {
     auto* contrib_hint = new QLabel("Calculates each party's % contribution to the combined entity.", contrib);
     contrib_hint->setWordWrap(true);
     contrib_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                    .arg(ui::colors::TEXT_SECONDARY)
+                                    .arg(ui::colors::TEXT_SECONDARY())
                                     .arg(ui::fonts::SMALL)
                                     .arg(ui::fonts::DATA_FAMILY));
     contrib_vl->addWidget(contrib_hint);
@@ -928,7 +928,7 @@ QWidget* MAModulePanel::build_merger_panel() {
     cvr_type->addItems({"milestone", "revenue", "regulatory"});
     cvr_type->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
                                     "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                                 .arg(ui::fonts::DATA_FAMILY)
                                 .arg(ui::fonts::SMALL));
     combo_inputs_["cvr_type"] = cvr_type;
@@ -1014,7 +1014,7 @@ QWidget* MAModulePanel::build_deals_panel() {
     search_box->setPlaceholderText("Search deals by target, acquirer, or industry...");
     search_box->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
                                       "font-family:%4; font-size:%5px; padding:6px 10px; }")
-                                  .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                  .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                                   .arg(ui::fonts::DATA_FAMILY)
                                   .arg(ui::fonts::SMALL));
     combo_inputs_["deal_search"] = search_box;
@@ -1090,7 +1090,7 @@ QWidget* MAModulePanel::build_startup_panel() {
     sc_stage->addItems({"seed", "early", "growth"});
     sc_stage->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
                                     "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                                 .arg(ui::fonts::DATA_FAMILY)
                                 .arg(ui::fonts::SMALL));
     combo_inputs_["sc_stage"] = sc_stage;
@@ -1242,7 +1242,7 @@ QWidget* MAModulePanel::build_startup_panel() {
     auto* comp_hint = new QLabel("Runs all 5 methods with current inputs and returns a consensus range.", comp);
     comp_hint->setWordWrap(true);
     comp_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                 .arg(ui::colors::TEXT_SECONDARY)
+                                 .arg(ui::colors::TEXT_SECONDARY())
                                  .arg(ui::fonts::SMALL)
                                  .arg(ui::fonts::DATA_FAMILY));
     comp_vl->addWidget(comp_hint);
@@ -1434,7 +1434,7 @@ QWidget* MAModulePanel::build_industry_panel() {
     tech_sector->addItems({"saas", "marketplace", "semiconductor"});
     tech_sector->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
                                        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                   .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                   .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                                    .arg(ui::fonts::DATA_FAMILY)
                                    .arg(ui::fonts::SMALL));
     combo_inputs_["tech_sector"] = tech_sector;
@@ -1682,7 +1682,7 @@ QWidget* MAModulePanel::build_advanced_panel() {
     reg_type->addItems({"OLS", "Multiple"});
     reg_type->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
                                     "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                                 .arg(ui::fonts::DATA_FAMILY)
                                 .arg(ui::fonts::SMALL));
     combo_inputs_["reg_type"] = reg_type;
@@ -1752,7 +1752,7 @@ QWidget* MAModulePanel::build_comparison_panel() {
                                 cmp);
     cmp_hint->setWordWrap(true);
     cmp_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                .arg(ui::colors::TEXT_SECONDARY)
+                                .arg(ui::colors::TEXT_SECONDARY())
                                 .arg(ui::fonts::SMALL)
                                 .arg(ui::fonts::DATA_FAMILY));
     cmp_vl->addWidget(cmp_hint);
@@ -1763,7 +1763,7 @@ QWidget* MAModulePanel::build_comparison_panel() {
     cmp_text->setMaximumHeight(120);
     cmp_text->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
                                     "font-family:%4; font-size:%5px; padding:8px; }")
-                                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                                 .arg(ui::fonts::DATA_FAMILY)
                                 .arg(ui::fonts::SMALL));
     cmp_vl->addWidget(cmp_text);
@@ -1790,7 +1790,7 @@ QWidget* MAModulePanel::build_comparison_panel() {
     rank_criteria->addItems({"premium", "deal_value", "ev_revenue", "ev_ebitda", "synergies"});
     rank_criteria->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
                                          "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                                     .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                     .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                                      .arg(ui::fonts::DATA_FAMILY)
                                      .arg(ui::fonts::SMALL));
     combo_inputs_["rank_criteria"] = rank_criteria;
@@ -1979,13 +1979,13 @@ static QTableWidget* build_json_table(const QJsonArray& arr, const QString& acce
                                  "QHeaderView::section { background:%7; color:%8; font-weight:700;"
                                  "padding:4px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
                                  "QTableWidget::item:alternate { background:%9; }")
-                             .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
+                             .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
                              .arg(ui::fonts::DATA_FAMILY)
                              .arg(ui::fonts::SMALL)
                              .arg(QString("rgba(%1,0.15)").arg(accent))
-                             .arg(ui::colors::BG_RAISED)
-                             .arg(ui::colors::TEXT_SECONDARY)
-                             .arg(ui::colors::ROW_ALT));
+                             .arg(ui::colors::BG_RAISED())
+                             .arg(ui::colors::TEXT_SECONDARY())
+                             .arg(ui::colors::ROW_ALT()));
 
     for (int r = 0; r < arr.size(); ++r) {
         auto obj = arr[r].toObject();
@@ -2023,13 +2023,13 @@ static QTableWidget* build_kv_table(const QJsonObject& obj, const QString& accen
                                  "QHeaderView::section { background:%7; color:%8; font-weight:700;"
                                  "padding:4px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
                                  "QTableWidget::item:alternate { background:%9; }")
-                             .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
+                             .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
                              .arg(ui::fonts::DATA_FAMILY)
                              .arg(ui::fonts::SMALL)
                              .arg(QString("rgba(%1,0.15)").arg(accent))
-                             .arg(ui::colors::BG_RAISED)
-                             .arg(ui::colors::TEXT_SECONDARY)
-                             .arg(ui::colors::ROW_ALT));
+                             .arg(ui::colors::BG_RAISED())
+                             .arg(ui::colors::TEXT_SECONDARY())
+                             .arg(ui::colors::ROW_ALT()));
 
     for (int r = 0; r < keys.size(); ++r) {
         auto label = keys[r];
@@ -2114,11 +2114,11 @@ void MAModulePanel::display_result(const QJsonObject& data) {
                 lbl->setWordWrap(true);
                 lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;"
                                            "padding:4px; background:%4; border:1px solid %5;")
-                                       .arg(ui::colors::TEXT_PRIMARY)
+                                       .arg(ui::colors::TEXT_PRIMARY())
                                        .arg(ui::fonts::SMALL)
                                        .arg(ui::fonts::DATA_FAMILY)
-                                       .arg(ui::colors::BG_RAISED)
-                                       .arg(ui::colors::BORDER_DIM));
+                                       .arg(ui::colors::BG_RAISED())
+                                       .arg(ui::colors::BORDER_DIM()));
                 results_layout_->addWidget(lbl);
             }
         } else if (it.value().isObject()) {
@@ -2147,11 +2147,11 @@ void MAModulePanel::display_result(const QJsonObject& data) {
     raw_btn->setStyleSheet(QString("QPushButton { color:%1; font-size:%2px; font-family:%3;"
                                    "background:transparent; border:1px solid %4; padding:4px 12px; }"
                                    "QPushButton:hover { background:%5; }")
-                               .arg(ui::colors::TEXT_SECONDARY)
+                               .arg(ui::colors::TEXT_SECONDARY())
                                .arg(ui::fonts::TINY)
                                .arg(ui::fonts::DATA_FAMILY)
-                               .arg(ui::colors::BORDER_DIM)
-                               .arg(ui::colors::BG_HOVER));
+                               .arg(ui::colors::BORDER_DIM())
+                               .arg(ui::colors::BG_HOVER()));
 
     auto* raw_text = new QTextEdit;
     raw_text->setReadOnly(true);
@@ -2160,7 +2160,7 @@ void MAModulePanel::display_result(const QJsonObject& data) {
     raw_text->setPlainText(QJsonDocument(data).toJson(QJsonDocument::Indented));
     raw_text->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
                                     "font-family:%4; font-size:%5px; padding:8px; }")
-                                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
+                                .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
                                 .arg(ui::fonts::DATA_FAMILY)
                                 .arg(ui::fonts::SMALL));
 

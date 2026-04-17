@@ -31,7 +31,7 @@ void PortfolioDetailWrapper::build_ui() {
     header->setFixedHeight(36);
     header->setStyleSheet(QString("background: qlineargradient(x1:0,x2:1, stop:0 %1, stop:1 %2);"
                                   "border-bottom:1px solid %3;")
-                              .arg(ui::colors::BG_RAISED, ui::colors::BG_SURFACE, ui::colors::AMBER));
+                              .arg(ui::colors::BG_RAISED(), ui::colors::BG_SURFACE(), ui::colors::AMBER()));
 
     auto* h_layout = new QHBoxLayout(header);
     h_layout->setContentsMargins(8, 0, 8, 0);
@@ -44,20 +44,20 @@ void PortfolioDetailWrapper::build_ui() {
     back_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                                      "  padding:0 10px; font-size:9px; font-weight:700; letter-spacing:0.5px; }"
                                      "QPushButton:hover { background:%1; color:#000; }")
-                                 .arg(ui::colors::AMBER));
+                                 .arg(ui::colors::AMBER()));
     connect(back_btn_, &QPushButton::clicked, this, &PortfolioDetailWrapper::back_requested);
     h_layout->addWidget(back_btn_);
 
     // Vertical divider
     auto* div = new QWidget(this);
     div->setFixedSize(1, 20);
-    div->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_MED));
+    div->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_MED()));
     h_layout->addWidget(div);
 
     // View title
     title_label_ = new QLabel;
     title_label_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     h_layout->addWidget(title_label_);
 
     h_layout->addStretch();
@@ -65,14 +65,14 @@ void PortfolioDetailWrapper::build_ui() {
     // Portfolio info (right side)
     portfolio_label_ = new QLabel;
     portfolio_label_->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::TEXT_SECONDARY()));
     h_layout->addWidget(portfolio_label_);
 
     layout->addWidget(header);
 
     // ── View stack ───────────────────────────────────────────────────────────
     view_stack_ = new QStackedWidget;
-    view_stack_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    view_stack_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     layout->addWidget(view_stack_, 1);
 }
 

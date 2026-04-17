@@ -1,7 +1,7 @@
 """
 AKShare China Economics Data Wrapper
 Wrapper for Chinese economic indicators and macro data
-Returns JSON output for Rust integration
+Returns JSON output for Qt/C++ integration
 
 NOTE: Contains 85 endpoints total.
 

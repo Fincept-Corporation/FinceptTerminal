@@ -267,7 +267,7 @@ Services exposed via C++ commands:
 - `qlib_advanced_models.py`: Advanced neural networks
 - `rd_agent_service.py`: RDAgent interface
 
-Called from Rust backend for frontend integration.
+Called from the Qt/C++ application via `PythonRunner`.
 
 ## New Features Summary (v2.0)
 

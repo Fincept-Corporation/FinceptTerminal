@@ -13,7 +13,7 @@ PortfolioStatusBar::PortfolioStatusBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(24);
     setObjectName("portfolioStatusBar");
     setStyleSheet(QString("#portfolioStatusBar { background:%1; border-top:1px solid %2; }")
-                      .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
+                      .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
 
     auto* layout = new QHBoxLayout(this);
     layout->setContentsMargins(8, 0, 8, 0);
@@ -30,7 +30,7 @@ PortfolioStatusBar::PortfolioStatusBar(QWidget* parent) : QWidget(parent) {
 
     auto add_divider = [&]() {
         auto* sep = new QLabel(" | ");
-        sep->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::BORDER_MED));
+        sep->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::BORDER_MED()));
         layout->addWidget(sep);
     };
 
@@ -110,7 +110,7 @@ void PortfolioStatusBar::set_summary(const portfolio::PortfolioSummary& s) {
     double pnl = s.total_unrealized_pnl;
     pnl_label_->setText(QString("P&L %1%2").arg(pnl >= 0 ? "+" : "").arg(fmt(pnl)));
     pnl_label_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;")
-                                  .arg(pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
+                                  .arg(pnl >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
 }
 
 } // namespace fincept::screens

@@ -62,7 +62,7 @@ void RelationshipPanel::build_ui() {
     auto* header = new QWidget(this);
     header->setFixedHeight(48);
     header->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(16, 0, 16, 0);
     hhl->setSpacing(12);
@@ -89,10 +89,10 @@ void RelationshipPanel::build_ui() {
         header);
     stats->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:2px 8px;"
                                  "background:rgba(255,255,255,0.04); border:1px solid %4;")
-                             .arg(ui::colors::TEXT_TERTIARY)
+                             .arg(ui::colors::TEXT_TERTIARY())
                              .arg(ui::fonts::TINY)
                              .arg(ui::fonts::DATA_FAMILY)
-                             .arg(ui::colors::BORDER_DIM));
+                             .arg(ui::colors::BORDER_DIM()));
     hhl->addWidget(stats);
     root->addWidget(header);
 
@@ -103,10 +103,10 @@ void RelationshipPanel::build_ui() {
                                   "QScrollBar:vertical { background:%1; width:6px; }"
                                   "QScrollBar::handle:vertical { background:%2; border-radius:3px; }"
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
-                              .arg(ui::colors::BG_BASE, ui::colors::BORDER_MED));
+                              .arg(ui::colors::BG_BASE(), ui::colors::BORDER_MED()));
 
     auto* content = new QWidget(scroll);
-    content->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    content->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* cvl = new QVBoxLayout(content);
     cvl->setContentsMargins(16, 16, 16, 16);
     cvl->setSpacing(16);
@@ -171,7 +171,7 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
     card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     card->setStyleSheet(QString("#nodeCard { background:%1; border:1px solid rgba(%2,0.25);"
                                 "border-left:3px solid %3; }")
-                            .arg(ui::colors::BG_RAISED)
+                            .arg(ui::colors::BG_RAISED())
                             .arg(col_rgb)
                             .arg(col_hex));
 
@@ -207,7 +207,7 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
     // Type label
     auto* type_lbl = new QLabel(node.type.toUpper(), card);
     type_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                .arg(ui::colors::TEXT_TERTIARY)
+                                .arg(ui::colors::TEXT_TERTIARY())
                                 .arg(ui::fonts::TINY)
                                 .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(type_lbl);
@@ -220,14 +220,14 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
 
     auto* ds_num = new QLabel(QString::number(node.dataset_count), ds_row);
     ds_num->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
-                              .arg(ui::colors::TEXT_PRIMARY)
+                              .arg(ui::colors::TEXT_PRIMARY())
                               .arg(ui::fonts::SMALL)
                               .arg(ui::fonts::DATA_FAMILY));
     ds_hl->addWidget(ds_num);
 
     auto* ds_lbl = new QLabel("datasets", ds_row);
     ds_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                              .arg(ui::colors::TEXT_TERTIARY)
+                              .arg(ui::colors::TEXT_TERTIARY())
                               .arg(ui::fonts::SMALL)
                               .arg(ui::fonts::DATA_FAMILY));
     ds_hl->addWidget(ds_lbl);
@@ -248,9 +248,9 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
             pill->setStyleSheet(QString("color:%1; font-size:%2px; padding:1px 6px;"
                                         "background:rgba(255,255,255,0.05); border:1px solid %3;"
                                         "border-radius:8px; font-family:%4;")
-                                    .arg(ui::colors::TEXT_SECONDARY)
+                                    .arg(ui::colors::TEXT_SECONDARY())
                                     .arg(ui::fonts::TINY)
-                                    .arg(ui::colors::BORDER_DIM)
+                                    .arg(ui::colors::BORDER_DIM())
                                     .arg(ui::fonts::DATA_FAMILY));
             pills_hl->addWidget(pill);
         }
@@ -260,9 +260,9 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
             more->setStyleSheet(QString("color:%1; font-size:%2px; padding:1px 6px;"
                                         "background:rgba(255,255,255,0.05); border:1px solid %3;"
                                         "border-radius:8px; font-family:%4;")
-                                    .arg(ui::colors::TEXT_TERTIARY)
+                                    .arg(ui::colors::TEXT_TERTIARY())
                                     .arg(ui::fonts::TINY)
-                                    .arg(ui::colors::BORDER_DIM)
+                                    .arg(ui::colors::BORDER_DIM())
                                     .arg(ui::fonts::DATA_FAMILY));
             pills_hl->addWidget(more);
         }

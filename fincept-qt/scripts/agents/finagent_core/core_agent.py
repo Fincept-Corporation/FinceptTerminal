@@ -584,7 +584,7 @@ class CoreAgent:
             mcp_tools = self._connect_mcp_servers(mcp_servers)
             all_tools.extend(mcp_tools)
 
-        # Terminal MCP bridge — TypeScript internal tools (navigation, market data, portfolio, etc.)
+        # Terminal MCP bridge — internal tools (navigation, market data, portfolio, etc.)
         # endpoint is injected by agents.rs when the bridge is running
         terminal_endpoint = config.get("terminal_mcp_endpoint")
         terminal_tool_defs = config.get("terminal_tools", [])
@@ -596,7 +596,7 @@ class CoreAgent:
                     tool_definitions=terminal_tool_defs,
                 )
                 all_tools.extend(terminal_toolkit.get_tools())
-                logger.info(f"TerminalToolkit: {len(terminal_toolkit.functions)} tools from TypeScript MCP")
+                logger.info(f"TerminalToolkit: {len(terminal_toolkit.functions)} tools from MCP")
             except Exception as e:
                 logger.warning(f"TerminalToolkit setup failed: {e}")
 

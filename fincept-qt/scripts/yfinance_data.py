@@ -1,7 +1,7 @@
 """
 YFinance Data Fetcher
 Fetches real-time stock quotes and historical data using yfinance
-Returns JSON output for Rust integration
+Returns JSON output for Qt/C++ integration
 """
 
 import sys
@@ -246,7 +246,7 @@ def get_batch_quotes(symbols):
     try:
         import io, contextlib
         # Suppress any stdout noise from yfinance (progress bars, deprecation notices)
-        # that would corrupt the JSON output parsed by Rust
+        # that would corrupt the JSON output parsed by the host
         _buf = io.StringIO()
         with contextlib.redirect_stdout(_buf):
             # Use 5d period to guarantee at least 2 trading days for futures/commodities
@@ -766,7 +766,7 @@ def main(args=None):
         result = {"error": f"Unknown command: {command}"}
 
     # Return JSON for worker pool, print for subprocess/CLI
-    # IMPORTANT: Do NOT use indent=2 here. The Rust subprocess parser
+    # IMPORTANT: Do NOT use indent=2 here. The host subprocess parser
     # looks for the last line starting with '{' or '[' to extract JSON.
     # Pretty-printed JSON puts '{' alone on the first line, breaking parsing.
     output = json.dumps(result)

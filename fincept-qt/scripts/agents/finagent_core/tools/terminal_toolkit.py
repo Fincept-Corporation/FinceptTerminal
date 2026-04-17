@@ -4,9 +4,9 @@ TerminalToolkit - Agno Toolkit that proxies calls to Fincept Terminal internal M
 When finagent_core runs as a Python subprocess, it cannot call C++ IPC directly.
 This toolkit bridges that gap via the local HTTP bridge (mcp_bridge.rs):
 
-  Python agent → POST http://127.0.0.1:{port}/tool → Rust bridge
+  Python agent → POST http://127.0.0.1:{port}/tool → host bridge
     → C++ MCP service call
-    → register_mcp_tool_result → Rust bridge → HTTP response → Python
+    → register_mcp_tool_result → host bridge → HTTP response → Python
 
 Usage:
     toolkit = TerminalToolkit(
@@ -31,11 +31,11 @@ logger = logging.getLogger(__name__)
 
 class TerminalToolkit:
     """
-    Agno-compatible toolkit that wraps Fincept Terminal's internal TypeScript MCP tools.
+    Agno-compatible toolkit that wraps Fincept Terminal's internal MCP tools.
 
     Each tool definition becomes a Python function registered with Agno so the LLM
     can call it. Calls are forwarded to the local HTTP bridge which routes them to
-    the TypeScript TerminalMCPProvider.
+    the host TerminalMCPProvider.
     """
 
     def __init__(
@@ -133,7 +133,7 @@ class TerminalToolkit:
 
     def _call_tool(self, tool_name: str, args: Dict[str, Any]) -> str:
         """
-        POST { id, tool, args } to the Rust HTTP bridge.
+        POST { id, tool, args } to the host HTTP bridge.
         Returns the tool result as a JSON string for the LLM.
         """
         call_id = str(uuid.uuid4())

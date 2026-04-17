@@ -585,7 +585,7 @@ def main():
             print(json.dumps(result, default=str))
 
         elif command == "valuation_multiples":
-            # Rust sends: "valuation_multiples" deals_json multiple_type
+            # Host sends: "valuation_multiples" deals_json multiple_type
             if len(sys.argv) < 3:
                 raise ValueError("Deals data required")
 
@@ -599,7 +599,7 @@ def main():
             print(json.dumps(result, default=str))
 
         elif command == "synergy_analysis":
-            # Rust sends: "synergy_analysis" deals_json
+            # Host sends: "synergy_analysis" deals_json
             if len(sys.argv) < 3:
                 raise ValueError("Deals data required")
 

@@ -128,7 +128,7 @@ void MaritimeScreen::connect_service() {
 
 // ── Theme apply (called on construction + theme_changed) ─────────────────────
 void MaritimeScreen::apply_theme() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 
     if (top_bar_)
         top_bar_->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
@@ -137,31 +137,31 @@ void MaritimeScreen::apply_theme() {
     if (brand_label_)
         brand_label_->setStyleSheet(
             QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:2px;")
-                .arg(ui::colors::AMBER)
+                .arg(ui::colors::AMBER())
                 .arg(ui::fonts::TINY)
                 .arg(ui::fonts::DATA_FAMILY));
 
     if (classified_label_)
         classified_label_->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2; letter-spacing:1px;")
-                                             .arg(ui::colors::TEXT_TERTIARY)
+                                             .arg(ui::colors::TEXT_TERTIARY())
                                              .arg(ui::fonts::DATA_FAMILY));
 
     if (threat_badge_)
         threat_badge_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
                                              "padding:3px 10px; background:%3; border:1px solid %4; border-radius:2px;")
-                                         .arg(ui::colors::POSITIVE)
+                                         .arg(ui::colors::POSITIVE())
                                          .arg(ui::fonts::DATA_FAMILY)
-                                         .arg(ui::colors::BG_SURFACE)
-                                         .arg(ui::colors::BORDER_MED));
+                                         .arg(ui::colors::BG_SURFACE())
+                                         .arg(ui::colors::BORDER_MED()));
 
     if (vessel_count_label_)
         vessel_count_label_->setStyleSheet(
             QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
                     "padding:3px 10px; background:%3; border:1px solid %4; border-radius:2px;")
-                .arg(ui::colors::INFO)
+                .arg(ui::colors::INFO())
                 .arg(ui::fonts::DATA_FAMILY)
-                .arg(ui::colors::BG_SURFACE)
-                .arg(ui::colors::BORDER_MED));
+                .arg(ui::colors::BG_SURFACE())
+                .arg(ui::colors::BORDER_MED()));
 
     if (left_panel_)
         left_panel_->setStyleSheet(QString("background:%1; border-right:1px solid %2;")
@@ -276,7 +276,7 @@ QWidget* MaritimeScreen::build_left_panel() {
 
     auto* intel_title = new QLabel("INTELLIGENCE", panel);
     intel_title->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2; letter-spacing:1px;")
-                                   .arg(ui::colors::AMBER)
+                                   .arg(ui::colors::AMBER())
                                    .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(intel_title);
 
@@ -292,7 +292,7 @@ QWidget* MaritimeScreen::build_left_panel() {
         bvl->setSpacing(2);
         auto* lbl = new QLabel(label, box);
         lbl->setStyleSheet(QString("color:%1; font-size:7px; font-family:%2;")
-                               .arg(ui::colors::TEXT_TERTIARY)
+                               .arg(ui::colors::TEXT_TERTIARY())
                                .arg(ui::fonts::DATA_FAMILY));
         auto* val = new QLabel(value, box);
         val->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700; font-family:%2;")
@@ -330,7 +330,7 @@ QWidget* MaritimeScreen::build_left_panel() {
     vl->addSpacing(8);
     auto* routes_title = new QLabel("TRADE CORRIDORS", panel);
     routes_title->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2; letter-spacing:1px;")
-                                    .arg(ui::colors::AMBER)
+                                    .arg(ui::colors::AMBER())
                                     .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(routes_title);
 
@@ -364,21 +364,21 @@ QWidget* MaritimeScreen::build_center_panel() {
     hhl->setContentsMargins(16, 0, 16, 0);
     auto* title = new QLabel("VESSEL TRACKING — AIS FEED", header);
     title->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
-                             .arg(ui::colors::AMBER)
+                             .arg(ui::colors::AMBER())
                              .arg(ui::fonts::TINY)
                              .arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(title);
     hhl->addStretch();
     auto* ais_badge = new QLabel("AIS: STREAMING", header);
     ais_badge->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2; font-weight:700;")
-                                 .arg(ui::colors::POSITIVE)
+                                 .arg(ui::colors::POSITIVE())
                                  .arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(ais_badge);
     vl->addWidget(header);
 
     auto* splitter = new QSplitter(Qt::Vertical, panel);
     splitter->setHandleWidth(2);
-    splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM));
+    splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM()));
 
     map_widget_ = new fincept::ui::WorldMapWidget(splitter);
     map_widget_->setMinimumHeight(160);
@@ -468,7 +468,7 @@ QWidget* MaritimeScreen::build_right_panel() {
 
     sr_name_ = new QLabel(search_result_card_);
     sr_name_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; font-family:%2;")
-                                .arg(ui::colors::INFO)
+                                .arg(ui::colors::INFO())
                                 .arg(ui::fonts::DATA_FAMILY));
     srvl->addWidget(sr_name_);
     sr_imo_ = new QLabel(search_result_card_);
@@ -490,7 +490,7 @@ QWidget* MaritimeScreen::build_right_panel() {
 
     search_result_label_ = new QLabel(content);
     search_result_label_->setStyleSheet(
-        QString("color:%1; font-size:9px; font-family:%2;").arg(ui::colors::NEGATIVE).arg(ui::fonts::DATA_FAMILY));
+        QString("color:%1; font-size:9px; font-family:%2;").arg(ui::colors::NEGATIVE()).arg(ui::fonts::DATA_FAMILY));
     search_result_label_->setVisible(false);
     vl->addWidget(search_result_label_);
 
@@ -542,13 +542,13 @@ QWidget* MaritimeScreen::build_right_panel() {
 
     auto* rd_title = new QLabel("SELECTED ROUTE", route_detail_);
     rd_title->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2; letter-spacing:1px;")
-                                .arg(ui::colors::AMBER)
+                                .arg(ui::colors::AMBER())
                                 .arg(ui::fonts::DATA_FAMILY));
     rdvl->addWidget(rd_title);
 
     rd_name_ = new QLabel(route_detail_);
     rd_name_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; font-family:%2;")
-                                .arg(ui::colors::INFO)
+                                .arg(ui::colors::INFO())
                                 .arg(ui::fonts::DATA_FAMILY));
     rdvl->addWidget(rd_name_);
     rd_value_ = new QLabel(route_detail_);
@@ -591,10 +591,10 @@ QWidget* MaritimeScreen::build_right_panel() {
     cls->setAlignment(Qt::AlignCenter);
     cls->setStyleSheet(QString("color:%1; font-size:8px; font-family:%2; font-weight:700;"
                                "padding:8px; border:1px solid %3; background:%4; border-radius:2px;")
-                           .arg(ui::colors::WARNING)
+                           .arg(ui::colors::WARNING())
                            .arg(ui::fonts::DATA_FAMILY)
-                           .arg(ui::colors::BORDER_MED)
-                           .arg(ui::colors::BG_SURFACE));
+                           .arg(ui::colors::BORDER_MED())
+                           .arg(ui::colors::BG_SURFACE()));
     vl->addWidget(cls);
 
     vl->addStretch();
@@ -616,9 +616,9 @@ QWidget* MaritimeScreen::build_status_bar() {
     hl->setSpacing(16);
 
     auto s =
-        QString("color:%1; font-size:8px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY);
+        QString("color:%1; font-size:8px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY()).arg(ui::fonts::DATA_FAMILY);
     auto sv = QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
-                  .arg(ui::colors::TEXT_PRIMARY)
+                  .arg(ui::colors::TEXT_PRIMARY())
                   .arg(ui::fonts::DATA_FAMILY);
 
     auto* lbl1 = new QLabel("SOURCE:", bar);

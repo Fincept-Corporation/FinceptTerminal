@@ -7,7 +7,7 @@
 
 namespace fincept::auth {
 
-/// Central auth state machine — mirrors Tauri's AuthContext.
+/// Central auth state machine.
 /// Manages login/signup/MFA flows, session persistence, and validation.
 class AuthManager : public QObject {
     Q_OBJECT

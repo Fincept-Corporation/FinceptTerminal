@@ -36,14 +36,14 @@ SurfaceTableWidget::SurfaceTableWidget(QWidget* parent) : QWidget(parent) {
                                   "QScrollBar:horizontal { height:5px; background:transparent; }"
                                   "QScrollBar::handle:horizontal { background:%7; }"
                                   "QScrollBar::handle:horizontal:hover { background:%8; }")
-                              .arg(colors::BG_BASE)
-                              .arg(colors::TEXT_PRIMARY)
-                              .arg(colors::BG_RAISED)
-                              .arg(colors::BG_SURFACE)
-                              .arg(colors::TEXT_DIM)
-                              .arg(colors::BORDER_DIM)
-                              .arg(colors::BORDER_MED)
-                              .arg(colors::BORDER_BRIGHT));
+                              .arg(colors::BG_BASE())
+                              .arg(colors::TEXT_PRIMARY())
+                              .arg(colors::BG_RAISED())
+                              .arg(colors::BG_SURFACE())
+                              .arg(colors::TEXT_DIM())
+                              .arg(colors::BORDER_DIM())
+                              .arg(colors::BORDER_MED())
+                              .arg(colors::BORDER_BRIGHT()));
     table_->horizontalHeader()->setDefaultSectionSize(72);
     table_->verticalHeader()->setDefaultSectionSize(22);
     table_->horizontalHeader()->setMinimumSectionSize(48);

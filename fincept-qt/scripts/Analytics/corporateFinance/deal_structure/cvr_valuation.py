@@ -304,7 +304,7 @@ def main():
             if len(sys.argv) < 3:
                 raise ValueError("CVR parameters required")
 
-            # Rust sends: "cvr" cvr_type cvr_params_json
+            # Host sends: "cvr" cvr_type cvr_params_json
             # OR legacy: "cvr" cvr_params_json (single JSON arg)
             # Detect format: if sys.argv[2] is valid JSON dict, it's legacy single-arg
             # If it's a plain string (e.g. "milestone"), sys.argv[3] has the JSON params

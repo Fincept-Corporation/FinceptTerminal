@@ -2,14 +2,13 @@
 //
 // First-run Python environment bootstrapping — UV-first approach.
 //
-// Optimized flow (vs Tauri version):
+// Flow:
 //   1. Download UV standalone binary (~13MB) — single download, no pip/get-pip.py
 //   2. uv python install 3.12                — UV handles Python download internally
 //   3. uv venv venv-numpy1 + venv-numpy2     — PARALLEL venv creation
 //   4. uv pip install requirements            — PARALLEL package install (UV is 10-100x faster than pip)
 //
-// Eliminates: get-pip.py download, pip bootstrap, "pip install uv" step.
-// Estimated setup time: 3-5 minutes (down from 10-20 minutes).
+// Estimated setup time: 3-5 minutes.
 #pragma once
 
 #include <QMap>

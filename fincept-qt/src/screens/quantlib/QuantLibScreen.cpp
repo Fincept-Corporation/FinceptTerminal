@@ -75,19 +75,19 @@ inline QString kStyle() {
                           "QScrollBar:vertical { background: %1; width: 6px; }"
                           "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
                           "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(colors::BG_BASE)        // %1
-        .arg(colors::BG_RAISED)      // %2
-        .arg(colors::AMBER)          // %3
-        .arg(colors::TEXT_PRIMARY)   // %4
-        .arg(colors::TEXT_SECONDARY) // %5
-        .arg(colors::POSITIVE)       // %6
-        .arg(colors::BG_SURFACE)     // %7
-        .arg(colors::BORDER_DIM)     // %8
-        .arg(colors::BORDER_BRIGHT)  // %9
-        .arg(colors::AMBER_DIM)      // %10
-        .arg(colors::TEXT_DIM)       // %11
-        .arg(colors::BG_HOVER)       // %12
-        .arg(colors::CYAN)           // %13
+        .arg(colors::BG_BASE())        // %1
+        .arg(colors::BG_RAISED())      // %2
+        .arg(colors::AMBER())          // %3
+        .arg(colors::TEXT_PRIMARY())   // %4
+        .arg(colors::TEXT_SECONDARY()) // %5
+        .arg(colors::POSITIVE())       // %6
+        .arg(colors::BG_SURFACE())     // %7
+        .arg(colors::BORDER_DIM())     // %8
+        .arg(colors::BORDER_BRIGHT())  // %9
+        .arg(colors::AMBER_DIM())      // %10
+        .arg(colors::TEXT_DIM())       // %11
+        .arg(colors::BG_HOVER())       // %12
+        .arg(colors::CYAN())           // %13
         ;
 }
 } // namespace
@@ -217,7 +217,7 @@ QWidget* QuantLibScreen::create_sidebar() {
     title->setStyleSheet(QString("color: %1; font-weight: 700; "
                                  "letter-spacing: 0.5px; background: transparent; "
                                  "padding: 8px 12px; border-bottom: 1px solid %2;")
-                             .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM));
+                             .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM()));
     vl->addWidget(title);
 
     module_tree_ = new QTreeWidget;
@@ -336,7 +336,7 @@ QWidget* QuantLibScreen::create_center_panel() {
             QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
                     "padding: 2px 8px; font-weight: 700; } "
                     "QPushButton:hover { color: %4; }")
-                .arg(colors::BG_SURFACE, colors::TEXT_SECONDARY, colors::BORDER_DIM, colors::TEXT_PRIMARY));
+                .arg(colors::BG_SURFACE(), colors::TEXT_SECONDARY(), colors::BORDER_DIM(), colors::TEXT_PRIMARY()));
         connect(btn, &QPushButton::clicked, param_input1_, [this, json_text]() { param_input1_->setText(json_text); });
         helpers->addWidget(btn);
     };

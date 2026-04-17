@@ -137,20 +137,20 @@ inline QString kStyle() {
                "QScrollBar::handle:vertical { background:%8; min-height:20px; }"
                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }"
                "QScrollArea { border:none; background:transparent; }")
-        .arg(colors::BG_BASE)        // %1
-        .arg(colors::BG_RAISED)      // %2
-        .arg(colors::AMBER)          // %3
-        .arg(colors::TEXT_PRIMARY)   // %4
-        .arg(colors::TEXT_SECONDARY) // %5
-        .arg(colors::POSITIVE)       // %6
-        .arg(colors::BG_SURFACE)     // %7
-        .arg(colors::BORDER_DIM)     // %8
-        .arg(colors::BORDER_BRIGHT)  // %9
-        .arg(colors::AMBER_DIM)      // %10
-        .arg(colors::TEXT_DIM)       // %11
-        .arg(colors::BG_HOVER)       // %12
-        .arg(colors::CYAN)           // %13
-        .arg(colors::NEGATIVE)       // %14
+        .arg(colors::BG_BASE())        // %1
+        .arg(colors::BG_RAISED())      // %2
+        .arg(colors::AMBER())          // %3
+        .arg(colors::TEXT_PRIMARY())   // %4
+        .arg(colors::TEXT_SECONDARY()) // %5
+        .arg(colors::POSITIVE())       // %6
+        .arg(colors::BG_SURFACE())     // %7
+        .arg(colors::BORDER_DIM())     // %8
+        .arg(colors::BORDER_BRIGHT())  // %9
+        .arg(colors::AMBER_DIM())      // %10
+        .arg(colors::TEXT_DIM())       // %11
+        .arg(colors::BG_HOVER())       // %12
+        .arg(colors::CYAN())           // %13
+        .arg(colors::NEGATIVE())       // %14
         ;
 }
 
@@ -321,7 +321,7 @@ QWidget* McpServersScreen::create_marketplace_view() {
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet(QString("color:%1;").arg(colors::BORDER_DIM));
+    sep->setStyleSheet(QString("color:%1;").arg(colors::BORDER_DIM()));
     svl->addWidget(sep);
 
     mkt_cat_list_ = new QListWidget;
@@ -337,7 +337,7 @@ QWidget* McpServersScreen::create_marketplace_view() {
     // Vertical separator
     auto* vsep = new QFrame;
     vsep->setFrameShape(QFrame::VLine);
-    vsep->setStyleSheet(QString("color:%1;").arg(colors::BORDER_DIM));
+    vsep->setStyleSheet(QString("color:%1;").arg(colors::BORDER_DIM()));
     hl->addWidget(vsep);
 
     // Card scroll area
@@ -499,7 +499,7 @@ void McpServersScreen::on_install_server(int index) {
     QList<QPair<QString, QLineEdit*>> env_fields;
     if (!e.env_keys.isEmpty()) {
         auto* env_header = new QLabel("Environment Variables");
-        env_header->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(colors::TEXT_SECONDARY));
+        env_header->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(colors::TEXT_SECONDARY()));
         form->addRow(env_header);
         for (int ki = 0; ki < e.env_keys.size(); ++ki) {
             const QString& key = e.env_keys[ki];

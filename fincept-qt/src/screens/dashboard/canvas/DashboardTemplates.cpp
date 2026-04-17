@@ -13,7 +13,7 @@ static GridItem gi(const char* id, int x, int y, int w, int h, int mw = 2, int m
 QVector<DashboardTemplate> all_dashboard_templates() {
     return {
 
-        // ── Portfolio Manager (matches React default layout) ──────────────────
+        // ── Portfolio Manager ────────────────────────────────────────────────
         {"portfolio_manager",
          "Portfolio Manager",
          "Holdings, performance, risk and watchlist",

@@ -11,7 +11,7 @@
 
 namespace fincept::screens {
 
-/// Profile & Account — 5 sections matching Tauri's ProfileTab.
+/// Profile & Account — 5 sections.
 /// Sections: Overview, Usage, Security, Billing, Support
 class ProfileScreen : public QWidget {
     Q_OBJECT

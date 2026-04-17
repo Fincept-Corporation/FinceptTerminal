@@ -24,7 +24,7 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 
 ## About
 
-**Fincept Terminal v4** is a pure native C++20 desktop application — a complete rewrite from the previous Tauri/React/Rust stack. It uses **Qt6** for UI and rendering, embedded **Python** for analytics, and delivers Bloomberg-terminal-class performance in a single native binary.
+**Fincept Terminal v4** is a pure native C++20 desktop application. It uses **Qt6** for UI and rendering, embedded **Python** for analytics, and delivers Bloomberg-terminal-class performance in a single native binary.
 
 ---
 
@@ -102,62 +102,75 @@ docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fincept-ter
 
 ### Option 4 — Build from Source (Manual)
 
-#### Prerequisites
+> **Versions are pinned.** Use the exact versions below. Newer or older versions are unsupported and may fail to build or produce unstable binaries.
 
-| Tool | Version | Windows | Linux | macOS |
-|------|---------|---------|-------|-------|
-| **Git** | latest | `winget install Git.Git` | `apt install git` | `brew install git` |
-| **CMake** | 3.20+ | `winget install Kitware.CMake` | `apt install cmake` | `brew install cmake` |
-| **C++ compiler** | C++20 | MSVC 2022 ([Visual Studio](https://visualstudio.microsoft.com/)) | `apt install g++` | Xcode CLT: `xcode-select --install` |
-| **Qt6** | 6.5+ | See below | See below | See below |
-| **Python** | 3.11+ | [python.org](https://www.python.org/downloads/) | `apt install python3` | `brew install python` |
+#### Prerequisites (exact versions)
 
-#### Install Qt6
+| Tool | Pinned Version | Notes |
+|------|----------------|-------|
+| **Git** | latest | — |
+| **CMake** | **3.27.7** | [Download](https://cmake.org/download/) |
+| **Ninja** | **1.11.1** | [Download](https://github.com/ninja-build/ninja/releases) |
+| **C++ compiler** | **MSVC 19.38** (VS 2022 17.8) / **GCC 12.3** / **Apple Clang 15.0** (Xcode 15.2) | C++20 required |
+| **Qt** | **6.7.2** (LTS) | [Qt Online Installer](https://www.qt.io/download-qt-installer) |
+| **Python** | **3.11.9** | [python.org](https://www.python.org/downloads/release/python-3119/) |
+| **Platform SDK** | Win10 SDK 10.0.22621.0 / macOS SDK 14.0 (deploy 11.0+) / glibc 2.31+ | — |
 
-**Windows:**
-```powershell
-# Via Qt online installer (recommended — includes windeployqt)
-# Download from https://www.qt.io/download-qt-installer
-# Select: Qt 6.x > MSVC 2022 64-bit
+#### Install Qt 6.7.2
 
-# Or via winget
-winget install Qt.QtCreator
-```
+**Windows:** Qt Online Installer → select `Qt 6.7.2 > MSVC 2022 64-bit` (install path: `C:/Qt/6.7.2/msvc2022_64`)
 
-**Linux (Ubuntu/Debian):**
-```bash
-sudo apt install -y \
-  qt6-base-dev qt6-charts-dev qt6-tools-dev \
-  libqt6sql6-sqlite libqt6websockets6-dev \
-  libgl1-mesa-dev libglu1-mesa-dev
-```
+**Linux:** Qt Online Installer → `Qt 6.7.2 > Desktop gcc 64-bit` (install path: `~/Qt/6.7.2/gcc_64`). **Or** for system packages, install `qt6-base-dev qt6-charts-dev qt6-tools-dev qt6-base-private-dev libqt6websockets6-dev libgl1-mesa-dev` — note system packages may be a different 6.x minor.
 
-**macOS:**
-```bash
-brew install qt
-```
+**macOS:** Qt Online Installer → `Qt 6.7.2 > macOS` (install path: `~/Qt/6.7.2/macos`)
 
-#### Build
+#### Build (using CMake presets — recommended)
 
 ```bash
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-qt
 
-# Linux / macOS
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
+# Configure + build (pick your platform)
+cmake --preset win-release     && cmake --build --preset win-release      # Windows (Dev Cmd for VS 2022)
+cmake --preset linux-release   && cmake --build --preset linux-release    # Linux
+cmake --preset macos-release   && cmake --build --preset macos-release    # macOS
+```
 
-# Windows (from Developer Command Prompt for VS 2022)
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="C:/Qt/6.x.x/msvc2022_64"
-cmake --build build --config Release --parallel
+Debug variants: `win-debug`, `linux-debug`, `macos-debug`.
+
+#### Build (manual — if presets can't resolve your Qt path)
+
+```bash
+# Windows (Developer Command Prompt for VS 2022)
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
+  -DCMAKE_PREFIX_PATH="C:/Qt/6.7.2/msvc2022_64"
+cmake --build build
+
+# Linux
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="$HOME/Qt/6.7.2/gcc_64"
+cmake --build build
+
+# macOS
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+  -DCMAKE_PREFIX_PATH="$HOME/Qt/6.7.2/macos"
+cmake --build build
 ```
 
 #### Run
 
 ```bash
-./build/FinceptTerminal              # Linux / macOS
-.\build\Release\FinceptTerminal.exe  # Windows
+./build/<preset>/FinceptTerminal         # Linux / macOS (preset build)
+.\build\<preset>\FinceptTerminal.exe     # Windows (preset build)
 ```
+
+#### Troubleshooting
+
+1. **"Could not find Qt6 6.7.2"** — verify `CMAKE_PREFIX_PATH` points to the Qt 6.7.2 install, not 6.5/6.6/6.8.
+2. **MSVC version error** — use VS 2022 17.8+ (MSVC 19.38+). Check with `cl /?`.
+3. **Need to unblock with a different Qt minor?** Pass `-DFINCEPT_ALLOW_QT_DRIFT=ON` (local testing only — never for releases or CI).
+4. Clean rebuild: delete `build/<preset>/` and re-run configure.
 
 ---
 

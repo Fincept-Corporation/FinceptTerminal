@@ -40,7 +40,7 @@ CrosshairChartView::CrosshairChartView(QChart* chart, QWidget* parent) : QChartV
     tooltip_->setWindowFlags(Qt::ToolTip);
     tooltip_->setStyleSheet(QString("QLabel { background:%1; color:%2; border:1px solid %3;"
                                     " font-size:10px; font-weight:600; padding:3px 6px; border-radius:3px; }")
-                                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED));
+                                .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED()));
     tooltip_->hide();
 }
 
@@ -121,7 +121,7 @@ PortfolioPerfChart::PortfolioPerfChart(QWidget* parent) : QWidget(parent) {
 }
 
 void PortfolioPerfChart::build_ui() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -133,7 +133,7 @@ void PortfolioPerfChart::build_ui() {
 
     auto* title = new QLabel("PERFORMANCE");
     title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1.5px;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1.5px;").arg(ui::colors::TEXT_SECONDARY()));
     header->addWidget(title);
     header->addStretch();
 
@@ -147,8 +147,8 @@ void PortfolioPerfChart::build_ui() {
                                    "QPushButton:checked { color:%4; background:%2;"
                                    "  border:1px solid %2; }"
                                    "QPushButton:hover:!checked { color:%3; border-color:%5; }")
-                               .arg(ui::colors::TEXT_TERTIARY, ui::colors::AMBER, ui::colors::TEXT_PRIMARY,
-                                    ui::colors::BG_BASE, ui::colors::BORDER_MED));
+                               .arg(ui::colors::TEXT_TERTIARY(), ui::colors::AMBER(), ui::colors::TEXT_PRIMARY(),
+                                    ui::colors::BG_BASE(), ui::colors::BORDER_MED()));
 
         if (p == current_period_)
             btn->setChecked(true);
@@ -170,7 +170,7 @@ void PortfolioPerfChart::build_ui() {
                 "  font-size:9px; font-weight:700; border-radius:2px; }"
                 "QPushButton:checked { color:%4; background:%2; border:1px solid %2; }"
                 "QPushButton:hover:!checked { color:%3; border-color:%3; }")
-            .arg(ui::colors::CYAN, ui::colors::CYAN, ui::colors::TEXT_PRIMARY, ui::colors::BG_BASE));
+            .arg(ui::colors::CYAN(), ui::colors::CYAN(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_BASE()));
     connect(benchmark_btn_, &QPushButton::clicked, this, [this]() {
         show_benchmark_ = benchmark_btn_->isChecked();
         update_chart();
@@ -187,24 +187,24 @@ void PortfolioPerfChart::build_ui() {
 
     period_change_label_ = new QLabel;
     period_change_label_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY));
+        QString("color:%1; font-size:11px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY()));
     info_bar->addWidget(period_change_label_);
 
     auto* sep1 = new QLabel("|");
-    sep1->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::BORDER_MED));
+    sep1->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::BORDER_MED()));
     info_bar->addWidget(sep1);
 
     total_return_label_ = new QLabel;
     total_return_label_->setStyleSheet(
-        QString("color:%1; font-size:14px; font-weight:700;").arg(ui::colors::TEXT_PRIMARY));
+        QString("color:%1; font-size:14px; font-weight:700;").arg(ui::colors::TEXT_PRIMARY()));
     info_bar->addWidget(total_return_label_);
 
     auto* sep2 = new QLabel("|");
-    sep2->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::BORDER_MED));
+    sep2->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::BORDER_MED()));
     info_bar->addWidget(sep2);
 
     nav_label_ = new QLabel;
-    nav_label_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(ui::colors::WARNING));
+    nav_label_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(ui::colors::WARNING()));
     info_bar->addWidget(nav_label_);
 
     info_bar->addStretch();
@@ -352,7 +352,7 @@ void PortfolioPerfChart::update_chart() {
         // Overlay a note inside the chart area
         period_change_label_->setText(QString("%1  — (no history yet, showing NAV only)").arg(current_period_));
         period_change_label_->setStyleSheet(
-            QString("color:%1; font-size:11px; font-weight:500;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color:%1; font-size:11px; font-weight:500;").arg(ui::colors::TEXT_TERTIARY()));
     }
 
     // ── Period P&L from the series endpoints ─────────────────────────────────
@@ -489,7 +489,7 @@ void PortfolioPerfChart::update_chart() {
 }
 
 void PortfolioPerfChart::refresh_theme() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 
     const QString bsz = QString::number(ui::fonts::font_px(-3));
     // Re-style period buttons
@@ -501,8 +501,8 @@ void PortfolioPerfChart::refresh_theme() {
                                    "QPushButton:checked { color:%4; background:%2;"
                                    "  border:1px solid %2; }"
                                    "QPushButton:hover:!checked { color:%3; border-color:%5; }")
-                               .arg(ui::colors::TEXT_TERTIARY, ui::colors::AMBER, ui::colors::TEXT_PRIMARY,
-                                    ui::colors::BG_BASE, ui::colors::BORDER_MED));
+                               .arg(ui::colors::TEXT_TERTIARY(), ui::colors::AMBER(), ui::colors::TEXT_PRIMARY(),
+                                    ui::colors::BG_BASE(), ui::colors::BORDER_MED()));
     }
     if (benchmark_btn_) {
         benchmark_btn_->setStyleSheet(
@@ -512,7 +512,7 @@ void PortfolioPerfChart::refresh_theme() {
                     "px; font-weight:700; border-radius:2px; }"
                     "QPushButton:checked { color:%4; background:%2; border:1px solid %2; }"
                     "QPushButton:hover:!checked { color:%3; border-color:%3; }")
-                .arg(ui::colors::CYAN, ui::colors::CYAN, ui::colors::TEXT_PRIMARY, ui::colors::BG_BASE));
+                .arg(ui::colors::CYAN(), ui::colors::CYAN(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_BASE()));
     }
 
     // Chart background

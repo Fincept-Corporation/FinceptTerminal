@@ -10,14 +10,14 @@ using namespace fincept::ui;
 
 PolymarketStatusBar::PolymarketStatusBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(22);
-    setStyleSheet(QString("background: %1; border-top: 1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_DIM));
+    setStyleSheet(QString("background: %1; border-top: 1px solid %2;").arg(colors::BG_RAISED(), colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(this);
     hl->setContentsMargins(16, 0, 16, 0);
     hl->setSpacing(12);
 
-    auto label_style = QString("color: %1; font-size: 9px; background: transparent;").arg(colors::TEXT_SECONDARY);
-    auto highlight_style = QString("color: %1; font-size: 9px; background: transparent;").arg(colors::CYAN);
+    auto label_style = QString("color: %1; font-size: 9px; background: transparent;").arg(colors::TEXT_SECONDARY());
+    auto highlight_style = QString("color: %1; font-size: 9px; background: transparent;").arg(colors::CYAN());
 
     auto* brand = new QLabel("POLYMARKET");
     brand->setStyleSheet(label_style);
@@ -61,10 +61,10 @@ void PolymarketStatusBar::set_ws_status(bool connected) {
     if (connected) {
         ws_label_->setText("WS: LIVE");
         ws_label_->setStyleSheet(
-            QString("color: %1; font-size: 9px; font-weight: 700; background: transparent;").arg(colors::POSITIVE));
+            QString("color: %1; font-size: 9px; font-weight: 700; background: transparent;").arg(colors::POSITIVE()));
     } else {
         ws_label_->setText("WS: OFF");
-        ws_label_->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(colors::TEXT_DIM));
+        ws_label_->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(colors::TEXT_DIM()));
     }
 }
 

@@ -23,7 +23,7 @@ using namespace fincept::screens::polymarket;
 
 PolymarketScreen::PolymarketScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("polyScreen");
-    setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
     build_ui();
     connect_service();
     connect_websocket();
@@ -71,7 +71,7 @@ void PolymarketScreen::build_ui() {
 
     auto* splitter = new QSplitter(Qt::Horizontal);
     splitter->setHandleWidth(1);
-    splitter->setStyleSheet(QString("QSplitter::handle { background: %1; }").arg(ui::colors::BORDER_DIM));
+    splitter->setStyleSheet(QString("QSplitter::handle { background: %1; }").arg(ui::colors::BORDER_DIM()));
 
     browse_panel_ = new PolymarketBrowsePanel;
     browse_panel_->setMinimumWidth(320);

@@ -326,7 +326,7 @@ def main(args=None):
         chunks = []
 
         def collect_callback(chunk_type: str, content: str, metadata: Optional[Dict] = None):
-            """Collect chunks and print with prefixes Rust execute_with_stream_callback expects."""
+            """Collect chunks and print with prefixes the host execute_with_stream_callback expects."""
             nonlocal full_response
             chunk = {
                 "stream_id": stream_id,
@@ -336,11 +336,12 @@ def main(args=None):
             }
             chunks.append(chunk)
             # Escape backslashes first, then newlines so each printed line is one
-            # logical chunk. Rust unescapes \n -> newline after stripping prefix.
+            # logical chunk. The host unescapes 
+ -> newline after stripping prefix.
             safe = content.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "")
             if chunk_type in ["token", "agent_token"]:
                 full_response += content
-                # Rust recognises TOKEN: prefix -> "token" chunk type
+                # Host recognises TOKEN: prefix -> "token" chunk type
                 print(f"TOKEN:{safe}", flush=True)
             elif chunk_type == "thinking":
                 print(f"THINKING:{safe}", flush=True)
@@ -353,7 +354,7 @@ def main(args=None):
             elif chunk_type == "error":
                 print(f"ERROR:{safe}", flush=True)
             else:
-                # Fallback: emit as token so Rust forwards it
+                # Fallback: emit as token so the host forwards it
                 print(f"TOKEN:{safe}", flush=True)
 
         agent = StreamingCoreAgent(

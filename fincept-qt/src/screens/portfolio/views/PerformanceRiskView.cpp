@@ -38,7 +38,7 @@ void PerformanceRiskView::build_ui() {
 
     auto* chart_title = new QLabel("NAV PERFORMANCE (FROM SNAPSHOTS)");
     chart_title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     period_bar->addWidget(chart_title);
     period_bar->addStretch();
 
@@ -51,7 +51,7 @@ void PerformanceRiskView::build_ui() {
                                    "  font-size:9px; font-weight:700; }"
                                    "QPushButton:checked { color:%2; border-bottom:2px solid %2; }"
                                    "QPushButton:hover { color:%3; }")
-                               .arg(ui::colors::TEXT_TERTIARY, ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+                               .arg(ui::colors::TEXT_TERTIARY(), ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
         if (p == current_period_)
             btn->setChecked(true);
         connect(btn, &QPushButton::clicked, this, [this, period = p]() { set_period(period); });
@@ -76,7 +76,7 @@ void PerformanceRiskView::build_ui() {
     // Separator
     auto* sep = new QWidget(this);
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM));
+    sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
     layout->addWidget(sep);
 
     // ── Risk metric cards ──────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ void PerformanceRiskView::build_ui() {
     metrics_header->setFixedHeight(24);
     metrics_header->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;"
                                           "letter-spacing:1px; background:%2;")
-                                      .arg(ui::colors::TEXT_SECONDARY, ui::colors::BG_SURFACE));
+                                      .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE()));
     layout->addWidget(metrics_header);
 
     auto* cards_layout = new QGridLayout;
@@ -111,7 +111,7 @@ PerformanceRiskView::MetricCard PerformanceRiskView::add_metric_card(QLayout* pa
 
     auto* card = new QWidget(this);
     card->setStyleSheet(
-        QString("background:%1; border:1px solid %2; padding:8px;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+        QString("background:%1; border:1px solid %2; padding:8px;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
 
     auto* cl = new QVBoxLayout(card);
     cl->setContentsMargins(10, 8, 10, 8);
@@ -122,7 +122,7 @@ PerformanceRiskView::MetricCard PerformanceRiskView::add_metric_card(QLayout* pa
     mc.title = new QLabel(title);
     mc.title->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700;"
                                     "letter-spacing:0.5px; border:none;")
-                                .arg(ui::colors::TEXT_TERTIARY));
+                                .arg(ui::colors::TEXT_TERTIARY()));
     cl->addWidget(mc.title);
 
     mc.value = new QLabel("--");
@@ -130,7 +130,7 @@ PerformanceRiskView::MetricCard PerformanceRiskView::add_metric_card(QLayout* pa
     cl->addWidget(mc.value);
 
     mc.desc = new QLabel(desc);
-    mc.desc->setStyleSheet(QString("color:%1; font-size:8px; border:none;").arg(ui::colors::TEXT_TERTIARY));
+    mc.desc->setStyleSheet(QString("color:%1; font-size:8px; border:none;").arg(ui::colors::TEXT_TERTIARY()));
     cl->addWidget(mc.desc);
 
     auto* grid = static_cast<QGridLayout*>(parent_layout);

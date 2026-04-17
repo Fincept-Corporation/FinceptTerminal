@@ -31,14 +31,14 @@ static const QString kBarStyle =
                    "#polyRefreshBtn:hover { color: %3; }"
                    "#polyWsIndicator { font-size: 8px; font-weight: 700; padding: 2px 6px; }"
                    "#polyCountLabel { color: %4; font-size: 9px; background: transparent; }")
-        .arg(colors::BG_RAISED)      // %1
-        .arg(colors::AMBER)          // %2
-        .arg(colors::TEXT_PRIMARY)   // %3
-        .arg(colors::TEXT_SECONDARY) // %4
-        .arg(colors::BORDER_DIM)     // %5
-        .arg(colors::BG_BASE)        // %6
-        .arg(colors::BORDER_BRIGHT)  // %7
-        .arg(colors::BG_SURFACE);    // %8
+        .arg(colors::BG_RAISED())      // %1
+        .arg(colors::AMBER())          // %2
+        .arg(colors::TEXT_PRIMARY())   // %3
+        .arg(colors::TEXT_SECONDARY()) // %4
+        .arg(colors::BORDER_DIM())     // %5
+        .arg(colors::BG_BASE())        // %6
+        .arg(colors::BORDER_BRIGHT())  // %7
+        .arg(colors::BG_SURFACE());    // %8
 
 PolymarketCommandBar::PolymarketCommandBar(QWidget* parent) : QWidget(parent) {
     setObjectName("polyCommandBar");
@@ -182,12 +182,12 @@ void PolymarketCommandBar::set_ws_status(bool connected) {
         ws_indicator_->setText("LIVE");
         ws_indicator_->setStyleSheet(QString("color: %1; background: rgba(22,163,74,0.2); "
                                              "font-size: 8px; font-weight: 700; padding: 2px 6px;")
-                                         .arg(colors::POSITIVE));
+                                         .arg(colors::POSITIVE()));
     } else {
         ws_indicator_->setText("OFFLINE");
         ws_indicator_->setStyleSheet(QString("color: %1; background: transparent; "
                                              "font-size: 8px; font-weight: 700; padding: 2px 6px;")
-                                         .arg(colors::TEXT_DIM));
+                                         .arg(colors::TEXT_DIM()));
     }
 }
 

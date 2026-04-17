@@ -1,8 +1,8 @@
 """
 Paper Trading Bridge for Alpha Arena
 
-This module bridges Alpha Arena's Python competition system with the main Rust paper trading module.
-It directly accesses the SQLite database used by Rust to ensure data persistence.
+This module bridges Alpha Arena's Python competition system with the main paper trading module.
+It directly accesses the SQLite database used by the host to ensure data persistence.
 """
 
 import sqlite3
@@ -168,7 +168,7 @@ class ConnectionManager:
 
 class PaperTradingBridge:
     """
-    Bridge to Rust paper trading module via SQLite.
+    Bridge to the host paper trading module via SQLite.
 
     This replaces the in-memory PaperTradingEngine with database-backed operations.
     """
@@ -193,7 +193,7 @@ class PaperTradingBridge:
         self._initialize_portfolio()
 
     def _ensure_tables(self):
-        """Ensure paper trading tables exist (they should be created by Rust)."""
+        """Ensure paper trading tables exist (they should be created by the host)."""
         conn = get_connection()
         try:
             # Check if pt_portfolios table exists

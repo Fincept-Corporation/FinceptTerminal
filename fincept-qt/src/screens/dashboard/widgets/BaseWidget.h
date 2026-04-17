@@ -10,7 +10,6 @@
 namespace fincept::screens::widgets {
 
 /// Reusable widget container — title bar with accent color, close/refresh buttons, content area.
-/// Matches the Tauri BaseWidget pattern.
 class BaseWidget : public QFrame {
     Q_OBJECT
   public:

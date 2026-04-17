@@ -19,7 +19,7 @@ namespace {
 QFrame* make_panel(const QString& title, const QString& accent_color) {
     auto* f = new QFrame;
     f->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2; border-radius:4px; }")
-                         .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                         .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* vl = new QVBoxLayout(f);
     vl->setContentsMargins(16, 14, 16, 16);
     vl->setSpacing(14);
@@ -58,7 +58,7 @@ QWidget* make_card(const QString& label, QLabel*& val_out, const QString& val_co
     auto* lbl = new QLabel(label);
     lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1px; "
                                "background:transparent; border:0;")
-                           .arg(ui::colors::TEXT_TERTIARY));
+                           .arg(ui::colors::TEXT_TERTIARY()));
     vl->addWidget(lbl);
 
     val_out = new QLabel("—");
@@ -87,7 +87,7 @@ void EquityAnalysisTab::set_symbol(const QString& symbol) {
 }
 
 void EquityAnalysisTab::build_ui() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     loading_overlay_ = new ui::LoadingOverlay(this);
 
     auto* scroll = new QScrollArea;

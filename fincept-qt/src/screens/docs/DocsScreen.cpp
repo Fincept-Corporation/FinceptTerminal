@@ -34,8 +34,8 @@ static QString SIDEBAR_SS() {
                    "QScrollBar::handle:vertical { background: %7; }"
                    "QScrollBar::handle:vertical:hover { background: %8; }"
                    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY,
-             ui::colors::BG_HOVER, ui::colors::AMBER, ui::colors::BORDER_MED, ui::colors::BORDER_BRIGHT);
+        .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
+             ui::colors::BG_HOVER(), ui::colors::AMBER(), ui::colors::BORDER_MED(), ui::colors::BORDER_BRIGHT());
 }
 
 static QString SCROLL_SS() {
@@ -44,7 +44,7 @@ static QString SCROLL_SS() {
                    "QScrollBar::handle:vertical { background: %1; }"
                    "QScrollBar::handle:vertical:hover { background: %2; }"
                    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(ui::colors::BORDER_MED, ui::colors::BORDER_BRIGHT);
+        .arg(ui::colors::BORDER_MED(), ui::colors::BORDER_BRIGHT());
 }
 
 // ============================================================================
@@ -56,7 +56,7 @@ QLabel* DocsScreen::make_heading(const QString& text) {
     lbl->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: bold; letter-spacing: 0.5px;"
                                " background: transparent; font-family: 'Consolas','Courier New',monospace;"
                                " padding: 4px 0;")
-                           .arg(ui::colors::AMBER));
+                           .arg(ui::colors::AMBER()));
     lbl->setWordWrap(true);
     return lbl;
 }
@@ -65,7 +65,7 @@ QLabel* DocsScreen::make_body_label(const QString& text) {
     auto* lbl = new QLabel(text);
     lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; line-height: 1.5;"
                                " font-family: 'Consolas','Courier New',monospace;")
-                           .arg(ui::colors::TEXT_PRIMARY));
+                           .arg(ui::colors::TEXT_PRIMARY()));
     lbl->setWordWrap(true);
     return lbl;
 }
@@ -74,7 +74,7 @@ QLabel* DocsScreen::make_muted_label(const QString& text) {
     auto* lbl = new QLabel(text);
     lbl->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;"
                                " font-family: 'Consolas','Courier New',monospace;")
-                           .arg(ui::colors::TEXT_SECONDARY));
+                           .arg(ui::colors::TEXT_SECONDARY()));
     lbl->setWordWrap(true);
     return lbl;
 }
@@ -83,7 +83,7 @@ QWidget* DocsScreen::make_section_panel(const QString& icon, const QString& titl
                                         const QString& accent_color) {
     auto* panel = new QWidget(this);
     panel->setStyleSheet(
-        QString("background: %1; border: 1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("background: %1; border: 1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
@@ -93,14 +93,14 @@ QWidget* DocsScreen::make_section_panel(const QString& icon, const QString& titl
     hdr->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 0.5px;"
                                " background: %2; padding: 8px 12px; border-bottom: 1px solid %3;"
                                " font-family: 'Consolas','Courier New',monospace;")
-                           .arg(accent_color, ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+                           .arg(accent_color, ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     vl->addWidget(hdr);
 
     // Body
     auto* content = new QLabel(body);
     content->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; padding: 10px 12px;"
                                    " font-family: 'Consolas','Courier New',monospace; line-height: 1.6;")
-                               .arg(ui::colors::TEXT_PRIMARY));
+                               .arg(ui::colors::TEXT_PRIMARY()));
     content->setWordWrap(true);
     vl->addWidget(content);
 
@@ -111,7 +111,7 @@ QWidget* DocsScreen::make_skill_panel(const QString& beginner, const QString& in
                                       const QString& pro) {
     auto* panel = new QWidget(this);
     panel->setStyleSheet(
-        QString("background: %1; border: 1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("background: %1; border: 1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
@@ -120,7 +120,7 @@ QWidget* DocsScreen::make_skill_panel(const QString& beginner, const QString& in
     hdr->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 0.5px;"
                                " background: %2; padding: 8px 12px; border-bottom: 1px solid %3;"
                                " font-family: 'Consolas','Courier New',monospace;")
-                           .arg(ui::colors::AMBER, ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+                           .arg(ui::colors::AMBER(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     vl->addWidget(hdr);
 
     struct Level {
@@ -137,7 +137,7 @@ QWidget* DocsScreen::make_skill_panel(const QString& beginner, const QString& in
 
     for (const auto& lvl : levels) {
         auto* row = new QWidget(this);
-        row->setStyleSheet(QString("background: transparent; border-bottom: 1px solid %1;").arg(ui::colors::BG_RAISED));
+        row->setStyleSheet(QString("background: transparent; border-bottom: 1px solid %1;").arg(ui::colors::BG_RAISED()));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(12, 8, 12, 8);
         rl->setSpacing(10);
@@ -152,7 +152,7 @@ QWidget* DocsScreen::make_skill_panel(const QString& beginner, const QString& in
         auto* desc = new QLabel(lvl.text);
         desc->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;"
                                     " font-family: 'Consolas','Courier New',monospace;")
-                                .arg(ui::colors::TEXT_PRIMARY));
+                                .arg(ui::colors::TEXT_PRIMARY()));
         desc->setWordWrap(true);
         rl->addWidget(desc, 1);
 
@@ -178,7 +178,7 @@ QWidget* DocsScreen::make_page(const QString& title, const QString& subtitle,
     scroll->setStyleSheet(SCROLL_SS());
 
     auto* page = new QWidget(this);
-    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
+    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(20, 16, 20, 20);
     vl->setSpacing(12);
@@ -192,7 +192,7 @@ QWidget* DocsScreen::make_page(const QString& title, const QString& subtitle,
     // Separator
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM));
+    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM()));
     vl->addWidget(sep);
 
     // Sections
@@ -215,7 +215,7 @@ QWidget* DocsScreen::page_welcome() {
     scroll->setStyleSheet(SCROLL_SS());
 
     auto* page = new QWidget(this);
-    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
+    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(20, 16, 20, 20);
     vl->setSpacing(12);
@@ -225,7 +225,7 @@ QWidget* DocsScreen::page_welcome() {
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM));
+    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM()));
     vl->addWidget(sep);
 
     vl->addWidget(
@@ -285,7 +285,7 @@ QWidget* DocsScreen::page_getting_started() {
     scroll->setStyleSheet(SCROLL_SS());
 
     auto* page = new QWidget(this);
-    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
+    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(20, 16, 20, 20);
     vl->setSpacing(12);
@@ -295,7 +295,7 @@ QWidget* DocsScreen::page_getting_started() {
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM));
+    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM()));
     vl->addWidget(sep);
 
     vl->addWidget(make_section_panel("1", "LAUNCH & LOGIN",
@@ -378,7 +378,7 @@ QWidget* DocsScreen::page_dashboard() {
     scroll->setStyleSheet(SCROLL_SS());
 
     auto* page = new QWidget(this);
-    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
+    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(20, 16, 20, 20);
     vl->setSpacing(12);
@@ -388,7 +388,7 @@ QWidget* DocsScreen::page_dashboard() {
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM));
+    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM()));
     vl->addWidget(sep);
 
     vl->addWidget(
@@ -445,7 +445,7 @@ QWidget* DocsScreen::page_markets() {
     scroll->setStyleSheet(SCROLL_SS());
 
     auto* page = new QWidget(this);
-    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
+    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(20, 16, 20, 20);
     vl->setSpacing(12);
@@ -455,7 +455,7 @@ QWidget* DocsScreen::page_markets() {
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM));
+    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM()));
     vl->addWidget(sep);
 
     vl->addWidget(make_section_panel("■", "OVERVIEW",
@@ -550,7 +550,7 @@ QWidget* DocsScreen::page_crypto_trading() {
     scroll->setStyleSheet(SCROLL_SS());
 
     auto* page = new QWidget(this);
-    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
+    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(20, 16, 20, 20);
     vl->setSpacing(12);
@@ -560,7 +560,7 @@ QWidget* DocsScreen::page_crypto_trading() {
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM));
+    sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM()));
     vl->addWidget(sep);
 
     vl->addWidget(make_section_panel("■", "OVERVIEW",
@@ -1450,7 +1450,7 @@ void DocsScreen::build_sidebar() {
 
 void DocsScreen::build_content_pages() {
     pages_ = new QStackedWidget;
-    pages_->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
+    pages_->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
 
     auto add = [&](const QString& id, QWidget* page) {
         int idx = pages_->addWidget(page);
@@ -1527,7 +1527,7 @@ void DocsScreen::navigate_to(const QString& section_id) {
 
 DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("docsScreen");
-    setStyleSheet(QString("QWidget#docsScreen { background: %1; }").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("QWidget#docsScreen { background: %1; }").arg(ui::colors::BG_BASE()));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -1536,7 +1536,7 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
     // ── Command bar ──────────────────────────────────────────────────────────
     auto* cmd = new QWidget(this);
     cmd->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     cmd->setFixedHeight(32);
     auto* cmd_hl = new QHBoxLayout(cmd);
     cmd_hl->setContentsMargins(10, 0, 10, 0);
@@ -1545,19 +1545,19 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
     auto* title = new QLabel("DOCUMENTATION");
     title->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; letter-spacing: 1px;"
                                  " background: transparent; font-family: 'Consolas','Courier New',monospace;")
-                             .arg(ui::colors::AMBER));
+                             .arg(ui::colors::AMBER()));
     cmd_hl->addWidget(title);
 
     auto* sep = new QLabel("|");
     sep->setStyleSheet(QString("color: %1; background: transparent; font-family: 'Consolas',monospace;")
-                           .arg(ui::colors::BORDER_BRIGHT));
+                           .arg(ui::colors::BORDER_BRIGHT()));
     cmd_hl->addWidget(sep);
 
     breadcrumb_ = new QLabel("FINCEPT TERMINAL v4.0.0");
     breadcrumb_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold;"
                                        " background: transparent; letter-spacing: 0.5px;"
                                        " font-family: 'Consolas','Courier New',monospace;")
-                                   .arg(ui::colors::TEXT_SECONDARY));
+                                   .arg(ui::colors::TEXT_SECONDARY()));
     cmd_hl->addWidget(breadcrumb_);
 
     cmd_hl->addStretch();
@@ -1565,7 +1565,7 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
     auto* count = new QLabel("35 TOPICS  |  9 CATEGORIES");
     count->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;"
                                  " font-family: 'Consolas','Courier New',monospace;")
-                             .arg(ui::colors::TEXT_TERTIARY));
+                             .arg(ui::colors::TEXT_TERTIARY()));
     cmd_hl->addWidget(count);
 
     root->addWidget(cmd);
@@ -1577,7 +1577,7 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
     auto* splitter = new QSplitter(Qt::Horizontal);
     splitter->setStyleSheet(QString("QSplitter { background: %1; }"
                                     "QSplitter::handle { background: %2; width: 1px; }")
-                                .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
+                                .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
     splitter->addWidget(sidebar_);
     splitter->addWidget(pages_);
     splitter->setStretchFactor(0, 0);

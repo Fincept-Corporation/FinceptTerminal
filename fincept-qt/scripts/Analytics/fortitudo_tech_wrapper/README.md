@@ -337,60 +337,9 @@ fortitudo_tech_wrapper/
 
 ## Integration with Fincept Terminal
 
-### C++ Command Example
+### Qt/C++ Integration
 
-```rust
-// C++ function
-pub async fn calculate_portfolio_risk(
-    returns_json: String,
-    weights_json: String,
-    alpha: f64
-) -> Result<String, String> {
-    let script = r#"
-import json
-import numpy as np
-import pandas as pd
-from fortitudo_tech_wrapper.functions import calculate_all_metrics
-
-returns = np.array(json.loads(input()))
-weights = np.array(json.loads(input()))
-alpha = float(input())
-
-metrics = calculate_all_metrics(weights, returns, alpha=alpha)
-print(json.dumps(metrics))
-"#;
-
-    // Execute Python script...
-}
-```
-
-### TypeScript Service Example
-
-```typescript
-// Scripts are called via python_runner.cpp
-
-export interface PortfolioMetrics {
-    expected_return: number;
-    volatility: number;
-    var: number;
-    cvar: number;
-    sharpe_ratio: number;
-    alpha: number;
-}
-
-export const calculatePortfolioRisk = async (
-    returns: number[][],
-    weights: number[],
-    alpha: number = 0.05
-): Promise<PortfolioMetrics> => {
-    const result = await invoke('calculate_portfolio_risk', {
-        returnsJson: JSON.stringify(returns),
-        weightsJson: JSON.stringify(weights),
-        alpha
-    });
-    return JSON.parse(result as string);
-};
-```
+Scripts are invoked from the Qt application via `PythonRunner` (see `src/python/PythonRunner.cpp`). The service layer (e.g. `src/services/`) calls the script with arguments and receives a JSON string back asynchronously.
 
 ---
 

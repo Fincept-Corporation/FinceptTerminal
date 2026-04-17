@@ -24,7 +24,7 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
 
     auto* lbl = new QLabel("INTERVAL");
     lbl->setStyleSheet(
-        QString("color: %1; font-size: 9px; font-weight: 700; background: transparent;").arg(colors::TEXT_SECONDARY));
+        QString("color: %1; font-size: 9px; font-weight: 700; background: transparent;").arg(colors::TEXT_SECONDARY()));
     toolbar->addWidget(lbl);
 
     interval_combo_ = new QComboBox;
@@ -54,7 +54,7 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
 
     price_label_ = new QLabel;
     price_label_->setStyleSheet(
-        QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;").arg(colors::AMBER));
+        QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;").arg(colors::AMBER()));
     toolbar->addWidget(price_label_);
 
     vl->addLayout(toolbar);
@@ -63,7 +63,7 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
     auto* ccl = new QVBoxLayout(chart_container_);
     ccl->setContentsMargins(0, 0, 0, 0);
     auto* empty = new QLabel("Select a market to view chart");
-    empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::TEXT_DIM));
+    empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::TEXT_DIM()));
     empty->setAlignment(Qt::AlignCenter);
     ccl->addWidget(empty);
     vl->addWidget(chart_container_, 1);
@@ -80,7 +80,7 @@ void PolymarketPriceChart::set_price_history(const PriceHistory& history) {
 
     if (history.points.isEmpty()) {
         auto* empty = new QLabel("No price history available");
-        empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::TEXT_DIM));
+        empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::TEXT_DIM()));
         empty->setAlignment(Qt::AlignCenter);
         layout->addWidget(empty);
         return;

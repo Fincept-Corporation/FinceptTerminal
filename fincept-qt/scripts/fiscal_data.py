@@ -1,7 +1,7 @@
 """
 U.S. Treasury FiscalData API Wrapper
 Fetches U.S. government financial data from the Treasury's FiscalData platform
-Returns JSON output for Rust integration
+Returns JSON output for Qt/C++ integration
 
 API Documentation: https://fiscaldata.treasury.gov/datasets/
 Base URL: https://api.fiscaldata.treasury.gov/services/api/fiscal_service/

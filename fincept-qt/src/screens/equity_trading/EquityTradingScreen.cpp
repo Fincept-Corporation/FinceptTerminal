@@ -222,7 +222,7 @@ void EquityTradingScreen::setup_ui() {
     // Connection status indicator (aggregate)
     conn_label_ = new QLabel("○ NO ACCOUNTS");
     conn_label_->setObjectName("eqConnLabel");
-    conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY));
+    conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY()));
     cmd_layout->addWidget(conn_label_);
 
     // Accounts management button (replaces api_btn_)
@@ -514,16 +514,16 @@ void EquityTradingScreen::update_connection_status() {
     }
     if (accounts.isEmpty()) {
         conn_label_->setText("○ NO ACCOUNTS");
-        conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY));
+        conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY()));
     } else if (connected == accounts.size()) {
         conn_label_->setText(QString("● %1/%2 CONNECTED").arg(connected).arg(accounts.size()));
-        conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::POSITIVE));
+        conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::POSITIVE()));
     } else if (connected > 0) {
         conn_label_->setText(QString("◐ %1/%2 CONNECTED").arg(connected).arg(accounts.size()));
-        conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::WARNING));
+        conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::WARNING()));
     } else {
         conn_label_->setText(QString("○ 0/%1 CONNECTED").arg(accounts.size()));
-        conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY));
+        conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY()));
     }
 }
 
@@ -800,7 +800,7 @@ void EquityTradingScreen::handle_token_expired(const QString& account_id) {
         return;
 
     conn_label_->setText(QString::fromUtf8("\xe2\x9a\xa0 TOKEN EXPIRED — click ACCOUNTS"));
-    conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::NEGATIVE));
+    conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::NEGATIVE()));
     LOG_WARN(TAG, QString("Access token expired for account %1 — user must re-authenticate").arg(account_id));
     update_connection_status();
 }

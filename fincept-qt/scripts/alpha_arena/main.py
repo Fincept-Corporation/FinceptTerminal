@@ -1030,7 +1030,7 @@ async def create_grid_agent_handler(params: Dict) -> Dict[str, Any]:
         name = params.get("name", "GridAgent")
         symbol = params.get("symbol", "BTC/USD")
 
-        # Grid configuration - support both flat params (from Rust) and nested grid_config
+        # Grid configuration - support both flat params (from host) and nested grid_config
         grid_params = params.get("grid_config", {})
         config = GridConfig(
             symbol=symbol,

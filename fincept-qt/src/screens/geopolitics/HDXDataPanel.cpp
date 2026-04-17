@@ -37,7 +37,7 @@ void HDXDataPanel::build_ui() {
     auto* header = new QWidget(this);
     header->setFixedHeight(48);
     header->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(16, 0, 16, 0);
     hhl->setSpacing(8);
@@ -51,7 +51,7 @@ void HDXDataPanel::build_ui() {
 
     auto* div = new QWidget(header);
     div->setFixedSize(1, 20);
-    div->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM));
+    div->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
     hhl->addWidget(div);
 
     auto rgb = cyan_rgb();
@@ -63,7 +63,7 @@ void HDXDataPanel::build_ui() {
                                    "padding:4px 12px; border:none; background:transparent;"
                                    "font-weight:400; }"
                                    "QPushButton:hover { color:%4; background:rgba(%5,0.04); }")
-                               .arg(ui::colors::TEXT_TERTIARY)
+                               .arg(ui::colors::TEXT_TERTIARY())
                                .arg(ui::fonts::TINY)
                                .arg(ui::fonts::DATA_FAMILY)
                                .arg(ui::colors::CYAN())
@@ -81,7 +81,7 @@ void HDXDataPanel::build_ui() {
     search_edit_->setStyleSheet(QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
                                         "font-family:%4; font-size:%5px; padding:4px 8px; }"
                                         "QLineEdit:focus { border-color:%6; }")
-                                    .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                    .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                                     .arg(ui::fonts::DATA_FAMILY)
                                     .arg(ui::fonts::SMALL)
                                     .arg(ui::colors::CYAN()));
@@ -131,13 +131,13 @@ void HDXDataPanel::build_ui() {
                                            "QHeaderView::section { background:%7; color:%8; font-weight:700;"
                                            "padding:5px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
                                            "QTableWidget::item:alternate { background:%9; }")
-                                       .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
+                                       .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
                                        .arg(ui::fonts::DATA_FAMILY)
                                        .arg(ui::fonts::SMALL)
                                        .arg(rgb)
-                                       .arg(ui::colors::BG_RAISED)
-                                       .arg(ui::colors::TEXT_SECONDARY)
-                                       .arg(ui::colors::ROW_ALT));
+                                       .arg(ui::colors::BG_RAISED())
+                                       .arg(ui::colors::TEXT_SECONDARY())
+                                       .arg(ui::colors::ROW_ALT()));
 
     // Loading overlay
     loading_label_ = new QLabel("Loading HDX data...", this);
@@ -146,7 +146,7 @@ void HDXDataPanel::build_ui() {
                                       .arg(ui::colors::CYAN())
                                       .arg(ui::fonts::DATA)
                                       .arg(ui::fonts::DATA_FAMILY)
-                                      .arg(ui::colors::BG_SURFACE));
+                                      .arg(ui::colors::BG_SURFACE()));
     loading_label_->hide();
     root->addWidget(loading_label_, 1);
     root->addWidget(datasets_table_, 1);
@@ -155,19 +155,19 @@ void HDXDataPanel::build_ui() {
     explorer_bar_ = new QWidget(this);
     explorer_bar_->setFixedHeight(44);
     explorer_bar_->setStyleSheet(
-        QString("background:%1; border-top:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+        QString("background:%1; border-top:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* ehl = new QHBoxLayout(explorer_bar_);
     ehl->setContentsMargins(16, 0, 16, 0);
     ehl->setSpacing(8);
 
     auto combo_style = QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
                                "font-family:%4; font-size:%5px; padding:4px 6px; }")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                           .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                            .arg(ui::fonts::DATA_FAMILY)
                            .arg(ui::fonts::SMALL);
 
     auto bar_label_style = QString("color:%1; font-size:%2px; font-family:%3; font-weight:700; letter-spacing:1px;")
-                               .arg(ui::colors::TEXT_TERTIARY)
+                               .arg(ui::colors::TEXT_TERTIARY())
                                .arg(ui::fonts::TINY)
                                .arg(ui::fonts::DATA_FAMILY);
 
@@ -245,7 +245,7 @@ void HDXDataPanel::on_view_changed(int index) {
                                                     "padding:4px 12px; border:none; background:transparent;"
                                                     "font-weight:400; }"
                                                     "QPushButton:hover { color:%4; background:rgba(%5,0.04); }")
-                                                .arg(ui::colors::TEXT_TERTIARY)
+                                                .arg(ui::colors::TEXT_TERTIARY())
                                                 .arg(ui::fonts::TINY)
                                                 .arg(ui::fonts::DATA_FAMILY)
                                                 .arg(ui::colors::CYAN())

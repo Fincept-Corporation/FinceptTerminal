@@ -186,7 +186,7 @@ Each agent must demonstrate ≥80% compliance with Brzezinski's core framework t
 2. **Set Up Environment**: Configure API keys and dependencies
 3. **Run Tests**: Validate agent functionality and compliance
 4. **Customize Analysis**: Adapt to specific regional or strategic interests
-5. **Deploy Integration**: Connect with C++ ImGui frontend and React interface
+5. **Deploy Integration**: Connect with the Qt/C++ application
 
 ## 📚 **Framework Foundations**
 

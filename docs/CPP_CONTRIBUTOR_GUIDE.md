@@ -6,6 +6,33 @@ This guide covers C++ development for Fincept Terminal — 40+ screens, core inf
 
 ---
 
+## Pinned Toolchain (non-negotiable)
+
+CMake enforces these versions with `FATAL_ERROR`. Use exactly these versions when developing, reviewing, or submitting patches:
+
+| Tool | Version |
+|------|---------|
+| C++ standard | C++20 |
+| MSVC (Windows) | 19.38 — VS 2022 17.8 |
+| GCC (Linux) | 12.3 |
+| Apple Clang (macOS) | 15.0 — Xcode 15.2 |
+| CMake | 3.27.7 |
+| Ninja | 1.11.1 |
+| Qt | 6.7.2 (LTS) — `find_package` uses `EXACT` |
+| Python | 3.11.9 |
+
+**Configure + build** via CMake presets:
+```bash
+cmake --preset <win-release|linux-release|macos-release>
+cmake --build --preset <same-preset>
+```
+
+Debug variants: `win-debug`, `linux-debug`, `macos-debug`. See `fincept-qt/CMakePresets.json`.
+
+**Emergency override only** — pass `-DFINCEPT_ALLOW_QT_DRIFT=ON` to bypass the Qt `EXACT` check for local experiments. Never commit work built this way; CI rejects it.
+
+---
+
 ## Overview
 
 The C++ codebase handles:

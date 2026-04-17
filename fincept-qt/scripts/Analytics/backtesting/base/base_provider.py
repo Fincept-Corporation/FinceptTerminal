@@ -1,7 +1,7 @@
 """
 Base Provider for Backtesting Engines
 Abstract base class that all Python backtesting providers must implement
-Mirrors the TypeScript IBacktestingProvider interface
+Mirrors the host IBacktestingProvider interface
 """
 
 from abc import ABC, abstractmethod
@@ -12,7 +12,7 @@ import json
 
 
 # ============================================================================
-# Data Classes (Python equivalents of TypeScript interfaces)
+# Data Classes (Python equivalents of host interfaces)
 # ============================================================================
 
 @dataclass

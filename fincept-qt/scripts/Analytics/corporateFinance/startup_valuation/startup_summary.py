@@ -312,7 +312,7 @@ def main():
 
     try:
         if command == "quick_pre_revenue":
-            # Rust sends: "quick_pre_revenue" idea_quality team_quality prototype_status market_size
+            # Host sends: "quick_pre_revenue" idea_quality team_quality prototype_status market_size
             if len(sys.argv) < 6:
                 raise ValueError("Quality scores required: idea_quality, team_quality, prototype_status, market_size")
 
@@ -345,7 +345,7 @@ def main():
             print(json.dumps(result))
 
         elif command == "comprehensive":
-            # Rust sends: "comprehensive" startup_name berkus_scores scorecard_inputs vc_inputs first_chicago_scenarios risk_factor_assessments
+            # Host sends: "comprehensive" startup_name berkus_scores scorecard_inputs vc_inputs first_chicago_scenarios risk_factor_assessments
             # Any of the optional args may be "null"
             if len(sys.argv) < 3:
                 raise ValueError("Startup name required")

@@ -1,7 +1,7 @@
 """
 Trading Economics Data Fetcher
 Fetches sovereign credit ratings and government bond yields from the Trading Economics API.
-Returns JSON output for Rust integration.
+Returns JSON output for Qt/C++ integration.
 """
 
 import sys

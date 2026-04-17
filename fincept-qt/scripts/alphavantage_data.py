@@ -1,7 +1,7 @@
 """
 Alpha Vantage Data Fetcher
 Fetches stock quotes and data from Alpha Vantage API
-Returns JSON output for Rust integration
+Returns JSON output for Qt/C++ integration
 """
 
 import sys

@@ -2,7 +2,7 @@
 """
 World Bank Data Fetcher
 Fetches economic, development, and commodity data from the World Bank Open Data API
-Returns JSON output for Rust integration
+Returns JSON output for Qt/C++ integration
 
 API Documentation:
 - Base URL: https://api.worldbank.org/v2

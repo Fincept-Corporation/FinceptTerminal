@@ -180,27 +180,8 @@ fincept-cpp/
             └── README.md
 ```
 
-### 2. Rust Integration
-Use the embedded Python interpreter to call the API functions:
-
-```rust
-// C++ python bridge
-use std::process::Command;
-
-fn optimize_portfolio(data: &str, params: &str) -> Result<String, String> {
-    let output = Command::new("python")
-        .arg("scripts/Analytics/skfolio_backend/skfolio_api.py")
-        .arg("optimize")
-        .arg("--data")
-        .arg(data)
-        .arg("--params")
-        .arg(params)
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    Ok(String::from_utf8_lossy(&output.stdout))
-}
-```
+### 2. Qt/C++ Integration
+Scripts are invoked from the Qt application via `PythonRunner` (see `src/python/PythonRunner.cpp`), which manages embedded Python subprocesses and returns JSON output asynchronously to the caller.
 
 ### 3. Data Flow
 

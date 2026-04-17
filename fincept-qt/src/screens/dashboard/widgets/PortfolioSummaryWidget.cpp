@@ -219,11 +219,11 @@ void PortfolioSummaryWidget::render(const QVector<Holding>& holdings, const QVec
 
     day_pnl_lbl_->setText(day_str);
     day_pnl_lbl_->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;")
-                                    .arg(day_pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
+                                    .arg(day_pnl >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
 
     total_pnl_lbl_->setText(tot_str);
     total_pnl_lbl_->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;")
-                                      .arg(total_pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
+                                      .arg(total_pnl >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
 }
 
 } // namespace fincept::screens::widgets

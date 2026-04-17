@@ -58,7 +58,7 @@ void TabBar::set_active(const QString& tab_id) {
 }
 
 void TabBar::refresh_theme() {
-    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_BASE).arg(colors::BORDER_DIM));
+    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_BASE()).arg(colors::BORDER_DIM()));
     update_styles();
 }
 
@@ -67,15 +67,15 @@ void TabBar::update_styles() {
         bool active = btn->property("tab_id").toString() == active_id_;
         btn->setStyleSheet(active ? QString("QPushButton{background:%1;color:%2;border:1px solid %3;"
                                             "padding:0 8px;font-weight:600;letter-spacing:0.5px;}")
-                                        .arg(colors::AMBER)
-                                        .arg(colors::TEXT_PRIMARY)
-                                        .arg(colors::AMBER_DIM)
+                                        .arg(colors::AMBER())
+                                        .arg(colors::TEXT_PRIMARY())
+                                        .arg(colors::AMBER_DIM())
                                   : QString("QPushButton{background:transparent;color:%1;border:none;"
                                             "padding:0 8px;letter-spacing:0.5px;}"
                                             "QPushButton:hover{color:%2;background:%3;}")
-                                        .arg(colors::TEXT_PRIMARY)
-                                        .arg(colors::AMBER)
-                                        .arg(colors::BG_RAISED));
+                                        .arg(colors::TEXT_PRIMARY())
+                                        .arg(colors::AMBER())
+                                        .arg(colors::BG_RAISED()));
     }
 }
 

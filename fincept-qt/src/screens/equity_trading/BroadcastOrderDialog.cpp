@@ -28,8 +28,8 @@ BroadcastOrderDialog::BroadcastOrderDialog(const trading::UnifiedOrder& order, Q
                           "QLabel#resultOk { color: %5; font-size: 11px; }"
                           "QLabel#resultErr { color: %6; font-size: 11px; }"
                           "QPushButton { padding: 8px 16px; font-weight: 700; font-size: 12px; border-radius: 2px; }")
-                      .arg(colors::BG_SURFACE, colors::TEXT_PRIMARY, colors::AMBER,
-                           colors::TEXT_SECONDARY, colors::POSITIVE, colors::NEGATIVE));
+                      .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::AMBER(),
+                           colors::TEXT_SECONDARY(), colors::POSITIVE(), colors::NEGATIVE()));
     setup_ui();
 }
 
@@ -57,12 +57,12 @@ void BroadcastOrderDialog::setup_ui() {
     // Separator
     auto* sep = new QWidget(this);
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1;").arg(colors::BORDER_MED));
+    sep->setStyleSheet(QString("background: %1;").arg(colors::BORDER_MED()));
     root->addWidget(sep);
 
     // Select All
     select_all_cb_ = new QCheckBox("Select All");
-    select_all_cb_->setStyleSheet(QString("QCheckBox { color: %1; font-weight: 700; }").arg(colors::AMBER));
+    select_all_cb_->setStyleSheet(QString("QCheckBox { color: %1; font-weight: 700; }").arg(colors::AMBER()));
     connect(select_all_cb_, &QCheckBox::toggled, this, &BroadcastOrderDialog::on_select_all);
     root->addWidget(select_all_cb_);
 
@@ -70,7 +70,7 @@ void BroadcastOrderDialog::setup_ui() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setStyleSheet(QString("QScrollArea { border: 1px solid %1; background: %2; }")
-                              .arg(colors::BORDER_MED, colors::BG_BASE));
+                              .arg(colors::BORDER_MED(), colors::BG_BASE()));
 
     auto* list_widget = new QWidget(this);
     auto* list_layout = new QVBoxLayout(list_widget);
@@ -87,9 +87,9 @@ void BroadcastOrderDialog::setup_ui() {
         auto* cb = new QCheckBox(text);
         // Color-code by connection state
         if (account.state == ConnectionState::Connected)
-            cb->setStyleSheet(QString("QCheckBox { color: %1; }").arg(colors::TEXT_PRIMARY));
+            cb->setStyleSheet(QString("QCheckBox { color: %1; }").arg(colors::TEXT_PRIMARY()));
         else
-            cb->setStyleSheet(QString("QCheckBox { color: %1; }").arg(colors::TEXT_TERTIARY));
+            cb->setStyleSheet(QString("QCheckBox { color: %1; }").arg(colors::TEXT_TERTIARY()));
 
         list_layout->addWidget(cb);
         account_cbs_.append(cb);
@@ -133,14 +133,14 @@ void BroadcastOrderDialog::setup_ui() {
 
     auto* cancel_btn = new QPushButton("CANCEL");
     cancel_btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
-                                  .arg(colors::BG_RAISED, colors::TEXT_PRIMARY));
+                                  .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
     connect(cancel_btn, &QPushButton::clicked, this, &QDialog::reject);
     btn_row->addWidget(cancel_btn);
 
     place_btn_ = new QPushButton(QString("PLACE %1").arg(order_.side == OrderSide::Buy ? "BUY" : "SELL"));
     place_btn_->setStyleSheet(
         QString("QPushButton { background: %1; color: %2; }")
-            .arg(order_.side == OrderSide::Buy ? colors::POSITIVE : colors::NEGATIVE, colors::BG_BASE));
+            .arg(order_.side == OrderSide::Buy ? colors::POSITIVE() : colors::NEGATIVE(), colors::BG_BASE()));
     connect(place_btn_, &QPushButton::clicked, this, &BroadcastOrderDialog::on_place_order);
     btn_row->addWidget(place_btn_);
 
@@ -162,7 +162,7 @@ void BroadcastOrderDialog::on_place_order() {
 
     if (selected.isEmpty()) {
         status_label_->setText("Select at least one account");
-        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE));
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
         return;
     }
 
@@ -173,7 +173,7 @@ void BroadcastOrderDialog::on_place_order() {
         cb->setEnabled(false);
 
     status_label_->setText(QString("Placing order across %1 account(s)...").arg(selected.size()));
-    status_label_->setStyleSheet(QString("color: %1;").arg(colors::AMBER));
+    status_label_->setStyleSheet(QString("color: %1;").arg(colors::AMBER()));
 
     // Run broadcast on background thread (P1: never block UI)
     QPointer<BroadcastOrderDialog> self = this;
@@ -231,13 +231,13 @@ void BroadcastOrderDialog::show_results(const QVector<UnifiedTrading::BroadcastR
     // Update status
     if (fail_count == 0) {
         status_label_->setText(QString("All %1 orders placed successfully").arg(success_count));
-        status_label_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE));
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
     } else if (success_count == 0) {
         status_label_->setText(QString("All %1 orders failed").arg(fail_count));
-        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE));
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
     } else {
         status_label_->setText(QString("%1 succeeded, %2 failed").arg(success_count).arg(fail_count));
-        status_label_->setStyleSheet(QString("color: %1;").arg(colors::WARNING));
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::WARNING()));
     }
 
     // Re-enable close

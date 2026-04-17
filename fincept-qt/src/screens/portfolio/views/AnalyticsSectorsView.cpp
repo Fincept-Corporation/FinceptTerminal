@@ -69,8 +69,8 @@ void AnalyticsSectorsView::build_ui() {
                                  "  letter-spacing:1px; text-transform:uppercase; }"
                                  "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
                                  "QTabBar::tab:hover { color:%5; }")
-                             .arg(ui::colors::BG_BASE, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY,
-                                  ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+                             .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(),
+                                  ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
 
     // ── Overview tab ─────────────────────────────────────────────────────────
     auto* overview_w = new QWidget(this);
@@ -103,20 +103,20 @@ void AnalyticsSectorsView::build_ui() {
                                          "QHeaderView::section { background:%4; color:%5; border:none;"
                                          "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px;"
                                          "  font-weight:700; letter-spacing:0.5px; }")
-                                     .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-                                          ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
+                                     .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                                          ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
     overview_layout->addWidget(sector_table_, 1);
 
     tabs_->addTab(overview_w, "OVERVIEW");
 
     // ── Analytics tab ────────────────────────────────────────────────────────
     analytics_panel_ = new QWidget(this);
-    analytics_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    analytics_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     tabs_->addTab(analytics_panel_, "ANALYTICS");
 
     // ── Correlation tab ──────────────────────────────────────────────────────
     corr_panel_ = new QWidget(this);
-    corr_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    corr_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     tabs_->addTab(corr_panel_, "CORRELATION");
 
     layout->addWidget(tabs_);
@@ -213,7 +213,7 @@ void AnalyticsSectorsView::update_analytics() {
 
     auto* title = new QLabel("SECTOR PERFORMANCE ANALYSIS");
     title->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     layout->addWidget(title);
 
     auto sectors = compute_sectors();
@@ -229,7 +229,7 @@ void AnalyticsSectorsView::update_analytics() {
 
         auto* name = new QLabel(s.name);
         name->setFixedWidth(150);
-        name->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY));
+        name->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY()));
         row->addWidget(name);
 
         // Weight bar
@@ -252,7 +252,7 @@ void AnalyticsSectorsView::update_analytics() {
         weight_lbl->setFixedWidth(50);
         weight_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         weight_lbl->setStyleSheet(
-            QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::TEXT_SECONDARY));
+            QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::TEXT_SECONDARY()));
         row->addWidget(weight_lbl);
 
         const char* pnl_color = s.pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
@@ -278,17 +278,17 @@ void AnalyticsSectorsView::update_correlation() {
 
     auto* title = new QLabel("FULL CORRELATION MATRIX");
     title->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     layout->addWidget(title);
 
     auto* note = new QLabel("Based on day-change proxy (requires historical data for precise calculation)");
-    note->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
+    note->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(note);
 
     if (summary_.holdings.size() < 2) {
         auto* msg = new QLabel("Need 2+ holdings for correlation analysis");
         msg->setAlignment(Qt::AlignCenter);
-        msg->setStyleSheet(QString("color:%1; font-size:12px; padding:40px;").arg(ui::colors::TEXT_TERTIARY));
+        msg->setStyleSheet(QString("color:%1; font-size:12px; padding:40px;").arg(ui::colors::TEXT_TERTIARY()));
         layout->addWidget(msg);
         return;
     }
@@ -308,13 +308,13 @@ void AnalyticsSectorsView::update_correlation() {
         auto* lbl = new QLabel(sorted[i].symbol.left(5));
         lbl->setAlignment(Qt::AlignCenter);
         lbl->setFixedHeight(22);
-        lbl->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY));
+        lbl->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
         grid->addWidget(lbl, 0, i + 1);
     }
 
     for (int r = 0; r < n; ++r) {
         auto* row_lbl = new QLabel(sorted[r].symbol.left(5));
-        row_lbl->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY));
+        row_lbl->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
         grid->addWidget(row_lbl, r + 1, 0);
 
         for (int c = 0; c < n; ++c) {

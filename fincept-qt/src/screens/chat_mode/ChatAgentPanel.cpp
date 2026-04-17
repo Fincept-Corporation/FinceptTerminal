@@ -23,20 +23,20 @@ static QString list_ss() {
                    "QScrollBar:vertical{background:transparent;width:4px;}"
                    "QScrollBar::handle:vertical{background:%6;border-radius:0px;}"
                    "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY, ui::colors::BG_RAISED,
-             ui::colors::AMBER, ui::colors::BORDER_MED, ui::colors::BG_HOVER);
+        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_RAISED(),
+             ui::colors::AMBER(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER());
 }
 
 static QString section_title_ss() {
     return QString("color:%1;font-size:11px;font-weight:700;letter-spacing:0.5px;"
                    "font-family:'Consolas','Courier New',monospace;background:transparent;")
-        .arg(ui::colors::TEXT_SECONDARY);
+        .arg(ui::colors::TEXT_SECONDARY());
 }
 
 static QString hint_ss() {
     return QString("color:%1;font-size:11px;"
                    "font-family:'Consolas','Courier New',monospace;background:transparent;")
-        .arg(ui::colors::TEXT_DIM);
+        .arg(ui::colors::TEXT_DIM());
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ ChatAgentPanel::ChatAgentPanel(QWidget* parent) : QWidget(parent) {
 void ChatAgentPanel::build_ui() {
     setFixedWidth(280);
     setStyleSheet(
-        QString("background:%1;border-left:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("background:%1;border-left:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(0, 0, 0, 0);
@@ -74,8 +74,8 @@ void ChatAgentPanel::build_ui() {
                                     "border:none;border-bottom:2px solid transparent;}"
                                     "QTabBar::tab:selected{color:%4;border-bottom:2px solid %4;}"
                                     "QTabBar::tab:hover{color:%5;}")
-                                .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM, ui::colors::TEXT_TERTIARY,
-                                     ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+                                .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_TERTIARY(),
+                                     ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
     connect(tab_bar_, &QTabBar::currentChanged, this, &ChatAgentPanel::on_tab_changed);
     vl->addWidget(tab_bar_);
 
@@ -97,9 +97,9 @@ QPushButton* ChatAgentPanel::make_btn(const QString& text, const QString& toolti
                                "font-family:'Consolas','Courier New',monospace;}"
                                "QPushButton:hover{background:%4;color:%5;border-color:%6;}"
                                "QPushButton:disabled{color:%7;border-color:%1;}")
-                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM,
-                                ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY, ui::colors::AMBER,
-                                ui::colors::BORDER_BRIGHT));
+                           .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
+                                ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER(),
+                                ui::colors::BORDER_BRIGHT()));
     return btn;
 }
 

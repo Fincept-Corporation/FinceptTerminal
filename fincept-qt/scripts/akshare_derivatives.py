@@ -1,7 +1,7 @@
 """
 AKShare Derivatives Data Wrapper
 Wrapper for options and derivatives market data
-Returns JSON output for Rust integration
+Returns JSON output for Qt/C++ integration
 
 NOTE: Cleaned to contain only VALID akshare option functions (46 total).
 """

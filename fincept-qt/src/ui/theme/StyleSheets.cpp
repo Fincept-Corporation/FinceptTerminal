@@ -6,46 +6,46 @@ namespace fincept::ui::styles {
 
 QString card_frame() {
     return QString("QFrame { background: %1; border: 1px solid %2; border-radius: 2px; }")
-        .arg(colors::CARD_BG, colors::BORDER);
+        .arg(colors::CARD_BG(), colors::BORDER());
 }
 
 QString card_title() {
-    return QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;").arg(colors::GRAY);
+    return QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;").arg(colors::GRAY());
 }
 
 QString card_close_button() {
     return QString("QPushButton { color: %1; background: transparent; border: none; font-size: 12px; }"
                    "QPushButton:hover { color: %2; }")
-        .arg(colors::MUTED, colors::GRAY);
+        .arg(colors::MUTED(), colors::GRAY());
 }
 
 QString section_header() {
     return QString("color: %1; font-size: 12px; font-weight: bold; "
                    "background: transparent; padding: 2px 0; "
                    "border-bottom: 1px solid %2;")
-        .arg(colors::MUTED, colors::BORDER);
+        .arg(colors::MUTED(), colors::BORDER());
 }
 
 QString data_label() {
-    return QString("color: %1; font-size: 13px; background: transparent;").arg(colors::GRAY);
+    return QString("color: %1; font-size: 13px; background: transparent;").arg(colors::GRAY());
 }
 
 QString data_value() {
-    return QString("color: %1; font-size: 13px; background: transparent;").arg(colors::WHITE);
+    return QString("color: %1; font-size: 13px; background: transparent;").arg(colors::WHITE());
 }
 
 QString accent_button() {
     return QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
                    "padding: 4px 12px; font-size: 12px; font-weight: bold; }"
                    "QPushButton:hover { background: %4; color: %2; }")
-        .arg(colors::PANEL, colors::ORANGE, colors::BORDER, colors::BG_RAISED);
+        .arg(colors::PANEL(), colors::ORANGE(), colors::BORDER(), colors::BG_RAISED());
 }
 
 QString muted_button() {
     return QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
                    "padding: 4px 12px; font-size: 12px; }"
                    "QPushButton:hover { background: %4; color: %5; }")
-        .arg(colors::PANEL, colors::MUTED, colors::BORDER, colors::BG_RAISED, colors::GRAY);
+        .arg(colors::PANEL(), colors::MUTED(), colors::BORDER(), colors::BG_RAISED(), colors::GRAY());
 }
 
 QString news_screen_styles() {
@@ -210,23 +210,23 @@ QString news_screen_styles() {
 
                /* ── Skeleton ── */
                "#newsSkeletonOverlay { background: %1; }")
-        .arg(colors::BG_BASE)        // %1
-        .arg(colors::BG_SURFACE)     // %2
-        .arg(colors::BORDER_DIM)     // %3
-        .arg(colors::TEXT_PRIMARY)   // %4
-        .arg(colors::BORDER_BRIGHT)  // %5
-        .arg(colors::TEXT_TERTIARY)  // %6
-        .arg(colors::TEXT_SECONDARY) // %7
-        .arg(colors::BG_RAISED)      // %8
-        .arg(colors::ORANGE)         // %9
-        .arg(colors::AMBER_DIM)      // %10
-        .arg(colors::NEGATIVE)       // %11
-        .arg(colors::AMBER)          // %12
-        .arg(colors::BG_HOVER)       // %13
-        .arg(colors::CYAN)           // %14
-        .arg(colors::POSITIVE)       // %15
-        .arg(colors::WARNING)        // %16
-        .arg(colors::NEGATIVE_BG)    // %17
+        .arg(colors::BG_BASE())        // %1
+        .arg(colors::BG_SURFACE())     // %2
+        .arg(colors::BORDER_DIM())     // %3
+        .arg(colors::TEXT_PRIMARY())   // %4
+        .arg(colors::BORDER_BRIGHT())  // %5
+        .arg(colors::TEXT_TERTIARY())  // %6
+        .arg(colors::TEXT_SECONDARY()) // %7
+        .arg(colors::BG_RAISED())      // %8
+        .arg(colors::ORANGE())         // %9
+        .arg(colors::AMBER_DIM())      // %10
+        .arg(colors::NEGATIVE())       // %11
+        .arg(colors::AMBER())          // %12
+        .arg(colors::BG_HOVER())       // %13
+        .arg(colors::CYAN())           // %14
+        .arg(colors::POSITIVE())       // %15
+        .arg(colors::WARNING())        // %16
+        .arg(colors::NEGATIVE_BG())    // %17
         ;
 }
 
@@ -411,26 +411,26 @@ QString crypto_trading_styles() {
 
                /* ── Depth Chart ── */
                "#cryptoDepthChart { background: %1; }")
-        .arg(colors::BG_BASE)        // %1
-        .arg(colors::BG_SURFACE)     // %2
-        .arg(colors::BORDER_DIM)     // %3
-        .arg(colors::TEXT_PRIMARY)   // %4
-        .arg(colors::BORDER_BRIGHT)  // %5
-        .arg(colors::TEXT_TERTIARY)  // %6
-        .arg(colors::TEXT_SECONDARY) // %7
-        .arg(colors::BG_RAISED)      // %8
-        .arg(colors::TEXT_DIM)       // %9
-        .arg(colors::AMBER_DIM)      // %10
-        .arg(colors::NEGATIVE)       // %11
-        .arg(colors::AMBER)          // %12
-        .arg(colors::BG_HOVER)       // %13
-        .arg(colors::CYAN)           // %14
-        .arg(colors::POSITIVE)       // %15
-        .arg(colors::ACCENT_BG)      // %16
-        .arg(colors::POSITIVE_BG)    // %17
-        .arg(colors::NEGATIVE_BG)    // %18
-        .arg(colors::POSITIVE_DIM)   // %19
-        .arg(colors::NEGATIVE_DIM)   // %20
+        .arg(colors::BG_BASE())        // %1
+        .arg(colors::BG_SURFACE())     // %2
+        .arg(colors::BORDER_DIM())     // %3
+        .arg(colors::TEXT_PRIMARY())   // %4
+        .arg(colors::BORDER_BRIGHT())  // %5
+        .arg(colors::TEXT_TERTIARY())  // %6
+        .arg(colors::TEXT_SECONDARY()) // %7
+        .arg(colors::BG_RAISED())      // %8
+        .arg(colors::TEXT_DIM())       // %9
+        .arg(colors::AMBER_DIM())      // %10
+        .arg(colors::NEGATIVE())       // %11
+        .arg(colors::AMBER())          // %12
+        .arg(colors::BG_HOVER())       // %13
+        .arg(colors::CYAN())           // %14
+        .arg(colors::POSITIVE())       // %15
+        .arg(colors::ACCENT_BG())      // %16
+        .arg(colors::POSITIVE_BG())    // %17
+        .arg(colors::NEGATIVE_BG())    // %18
+        .arg(colors::POSITIVE_DIM())   // %19
+        .arg(colors::NEGATIVE_DIM())   // %20
         ;
 }
 
@@ -585,26 +585,26 @@ QString equity_trading_styles() {
                "#eqTable::item { padding: 0 4px; border-bottom: 1px solid %3; }"
                "#eqTable QHeaderView::section { background: %2; color: %9; "
                "  font-size: 11px; font-weight: 700; border: none; border-bottom: 1px solid %3; padding: 0 4px; }")
-        .arg(colors::BG_BASE)        // %1
-        .arg(colors::BG_SURFACE)     // %2
-        .arg(colors::BORDER_DIM)     // %3
-        .arg(colors::TEXT_PRIMARY)   // %4
-        .arg(colors::BORDER_BRIGHT)  // %5
-        .arg(colors::TEXT_TERTIARY)  // %6
-        .arg(colors::TEXT_SECONDARY) // %7
-        .arg(colors::BG_RAISED)      // %8
-        .arg(colors::TEXT_DIM)       // %9
-        .arg(colors::AMBER_DIM)      // %10
-        .arg(colors::NEGATIVE)       // %11
-        .arg(colors::AMBER)          // %12
-        .arg(colors::BG_HOVER)       // %13
-        .arg(colors::CYAN)           // %14
-        .arg(colors::POSITIVE)       // %15
-        .arg(colors::ACCENT_BG)      // %16
-        .arg(colors::POSITIVE_BG)    // %17
-        .arg(colors::NEGATIVE_BG)    // %18
-        .arg(colors::POSITIVE_DIM)   // %19
-        .arg(colors::NEGATIVE_DIM)   // %20
+        .arg(colors::BG_BASE())        // %1
+        .arg(colors::BG_SURFACE())     // %2
+        .arg(colors::BORDER_DIM())     // %3
+        .arg(colors::TEXT_PRIMARY())   // %4
+        .arg(colors::BORDER_BRIGHT())  // %5
+        .arg(colors::TEXT_TERTIARY())  // %6
+        .arg(colors::TEXT_SECONDARY()) // %7
+        .arg(colors::BG_RAISED())      // %8
+        .arg(colors::TEXT_DIM())       // %9
+        .arg(colors::AMBER_DIM())      // %10
+        .arg(colors::NEGATIVE())       // %11
+        .arg(colors::AMBER())          // %12
+        .arg(colors::BG_HOVER())       // %13
+        .arg(colors::CYAN())           // %14
+        .arg(colors::POSITIVE())       // %15
+        .arg(colors::ACCENT_BG())      // %16
+        .arg(colors::POSITIVE_BG())    // %17
+        .arg(colors::NEGATIVE_BG())    // %18
+        .arg(colors::POSITIVE_DIM())   // %19
+        .arg(colors::NEGATIVE_DIM())   // %20
         ;
 }
 

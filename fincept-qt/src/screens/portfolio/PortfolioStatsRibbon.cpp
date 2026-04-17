@@ -16,7 +16,7 @@ PortfolioStatsRibbon::PortfolioStatsRibbon(QWidget* parent) : QWidget(parent) {
     setFixedHeight(52);
     setObjectName("portfolioStatsRibbon");
     setStyleSheet(QString("#portfolioStatsRibbon { background:%1; border-bottom:1px solid %2; }")
-                      .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                      .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     auto* outer = new QHBoxLayout(this);
     outer->setContentsMargins(0, 0, 0, 0);
@@ -110,7 +110,7 @@ PortfolioStatsRibbon::MetricCell PortfolioStatsRibbon::add_cell(const QString& l
 
     cell.label = new QLabel(label_text);
     cell.label->setStyleSheet(
-        QString("color:%1; font-size:8px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color:%1; font-size:8px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
     vlayout->addWidget(cell.label);
 
     cell.value = new QLabel("--");
@@ -119,11 +119,11 @@ PortfolioStatsRibbon::MetricCell PortfolioStatsRibbon::add_cell(const QString& l
     vlayout->addWidget(cell.value);
 
     cell.sub = new QLabel;
-    cell.sub->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
+    cell.sub->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
     vlayout->addWidget(cell.sub);
 
     // Right border separator
-    container->setStyleSheet(QString("border-right:1px solid %1;").arg(ui::colors::BORDER_DIM));
+    container->setStyleSheet(QString("border-right:1px solid %1;").arg(ui::colors::BORDER_DIM()));
 
     cells_layout_->addWidget(container, 1);
 
@@ -193,7 +193,7 @@ void PortfolioStatsRibbon::set_metrics(const portfolio::ComputedMetrics& m) {
 
 void PortfolioStatsRibbon::refresh_theme() {
     setStyleSheet(QString("#portfolioStatsRibbon { background:%1; border-bottom:1px solid %2; }")
-                      .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                      .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     const QString lsz = QString::number(ui::fonts::font_px(-4));
     const QString vsz = QString::number(ui::fonts::font_px(0));
@@ -202,11 +202,11 @@ void PortfolioStatsRibbon::refresh_theme() {
     auto refresh_cell = [&](MetricCell& c) {
         if (c.label)
             c.label->setStyleSheet(QString("color:%1; font-size:" + lsz + "px; font-weight:700; letter-spacing:1px;")
-                                       .arg(ui::colors::TEXT_TERTIARY));
+                                       .arg(ui::colors::TEXT_TERTIARY()));
         if (c.sub)
-            c.sub->setStyleSheet(QString("color:%1; font-size:" + ssz + "px;").arg(ui::colors::TEXT_TERTIARY));
+            c.sub->setStyleSheet(QString("color:%1; font-size:" + ssz + "px;").arg(ui::colors::TEXT_TERTIARY()));
         if (c.container)
-            c.container->setStyleSheet(QString("border-right:1px solid %1;").arg(ui::colors::BORDER_DIM));
+            c.container->setStyleSheet(QString("border-right:1px solid %1;").arg(ui::colors::BORDER_DIM()));
     };
 
     refresh_cell(total_value_);

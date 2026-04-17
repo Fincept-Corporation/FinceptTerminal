@@ -175,7 +175,7 @@ def _safe_float(val: Any) -> Optional[float]:
 # ---------------------------------------------------------------------------
 
 class ILOStatError:
-    """Structured error container for Rust JSON consumption."""
+    """Structured error container for host JSON consumption."""
 
     def __init__(self, endpoint: str, error: str, status_code: Optional[int] = None):
         self.endpoint    = endpoint

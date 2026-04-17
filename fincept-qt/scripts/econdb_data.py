@@ -1,7 +1,7 @@
 """
 EconDB Data Fetcher
 Fetches global economic indicators from EconDB (econdb.com)
-Returns JSON output for Rust integration
+Returns JSON output for Qt/C++ integration
 Based on OpenBB EconDB provider
 """
 

@@ -1,7 +1,7 @@
 """
 Algo Live Runner
 
-Long-running Python process spawned by Rust for strategy deployment.
+Long-running Python process spawned by the host for strategy deployment.
 Reads candle_cache, evaluates conditions, generates trade signals.
 
 Usage:
@@ -151,7 +151,7 @@ def record_trade(conn, deploy_id: str, symbol: str, side: str,
 
 def create_order_signal(conn, deploy_id: str, symbol: str, side: str,
                         quantity: float, order_type: str = 'MARKET', price: float = None):
-    """Write an order signal for Rust to execute (live mode)."""
+    """Write an order signal for the host to execute (live mode)."""
     signal_id = f"signal-{uuid.uuid4()}"
     _db_execute_with_retry(conn,
         "INSERT INTO algo_order_signals (id, deployment_id, symbol, side, quantity, order_type, price, status) "
@@ -255,7 +255,7 @@ def main():
     log.info(f"  pid        = {os.getpid()}")
     log.info("=" * 70)
 
-    # Open shared DB connection (WAL mode for concurrent Rust access)
+    # Open shared DB connection (WAL mode for concurrent host access)
     conn = open_db_connection(args.db)
     log.info("Shared DB connection opened (WAL mode)")
 

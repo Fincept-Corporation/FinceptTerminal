@@ -893,7 +893,7 @@ def dispatch_action_streaming(
 ) -> Dict[str, Any]:
     """
     Dispatch action with streaming output.
-    Prints chunks in real-time for Rust to capture and emit via C++ events.
+    Prints chunks in real-time for the host to capture and emit via C++ events.
     """
 
     # =========================================================================

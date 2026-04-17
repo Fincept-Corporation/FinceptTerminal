@@ -1,7 +1,7 @@
 """
 AKShare Expanded Funds Data Wrapper
 Comprehensive wrapper for enhanced fund market data and analysis
-Returns JSON output for Rust integration
+Returns JSON output for Qt/C++ integration
 
 NOTE: Refactored to contain only VALID akshare fund functions (70 total).
 """

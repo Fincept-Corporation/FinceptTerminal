@@ -29,7 +29,7 @@ void EquityPeersTab::set_symbol(const QString& symbol) {
 }
 
 void EquityPeersTab::build_ui() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     loading_overlay_ = new ui::LoadingOverlay(this);
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(12, 12, 12, 12);
@@ -38,7 +38,7 @@ void EquityPeersTab::build_ui() {
     // ── Controls row ──────────────────────────────────────────────────────────
     auto* ctrl = new QFrame;
     ctrl->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2; border-radius:4px; }")
-                            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(ctrl);
     hl->setContentsMargins(12, 8, 12, 8);
     hl->setSpacing(10);
@@ -46,7 +46,7 @@ void EquityPeersTab::build_ui() {
     auto* lbl = new QLabel("PEERS (comma-separated):");
     lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px; "
                                "background:transparent; border:0;")
-                           .arg(ui::colors::TEXT_SECONDARY));
+                           .arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(lbl);
 
     peers_edit_ = new QLineEdit;
@@ -54,14 +54,14 @@ void EquityPeersTab::build_ui() {
         QString("QLineEdit { background:%1; color:%2; border:1px solid %3; "
                 "border-radius:3px; padding:4px 10px; font-size:11px; }"
                 "QLineEdit:focus { border-color:%4; }")
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::AMBER));
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     hl->addWidget(peers_edit_, 1);
 
     auto* load_btn = new QPushButton("LOAD");
     load_btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:0; border-radius:3px; "
                                     "padding:5px 18px; font-size:10px; font-weight:700; }"
                                     "QPushButton:hover { background:#b45309; }")
-                                .arg(ui::colors::AMBER, ui::colors::BG_BASE));
+                                .arg(ui::colors::AMBER(), ui::colors::BG_BASE()));
     hl->addWidget(load_btn);
     connect(load_btn, &QPushButton::clicked, this, &EquityPeersTab::on_load_clicked);
     vl->addWidget(ctrl);
@@ -69,7 +69,7 @@ void EquityPeersTab::build_ui() {
     // ── Status ────────────────────────────────────────────────────────────────
     status_label_ = new QLabel("Loading peer data…");
     status_label_->setStyleSheet(
-        QString("color:%1; font-size:11px; padding:4px; background:transparent;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1; font-size:11px; padding:4px; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     status_label_->hide();
     vl->addWidget(status_label_);
 
@@ -87,8 +87,8 @@ void EquityPeersTab::build_ui() {
         }
         QTableWidget::item { padding:2px 6px; }
     )")
-                                   .arg(ui::colors::BG_SURFACE, ui::colors::BG_BASE, ui::colors::BORDER_DIM,
-                                        ui::colors::TEXT_PRIMARY, ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY));
+                                   .arg(ui::colors::BG_SURFACE(), ui::colors::BG_BASE(), ui::colors::BORDER_DIM(),
+                                        ui::colors::TEXT_PRIMARY(), ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY()));
     peer_table_->setAlternatingRowColors(true);
     peer_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     peer_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -108,7 +108,7 @@ void EquityPeersTab::build_ui() {
         dot->setStyleSheet(QString("color:%1; font-size:10px; background:transparent; border:0;").arg(color));
         auto* t = new QLabel(text);
         t->setStyleSheet(
-            QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
         leg_hl->addWidget(dot);
         leg_hl->addWidget(t);
     };

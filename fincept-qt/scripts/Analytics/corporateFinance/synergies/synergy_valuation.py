@@ -302,7 +302,7 @@ def main():
 
     try:
         if command in ("dcf", "synergy_valuation"):
-            # Rust sends: "dcf" revenue_synergies cost_synergies integration_costs discount_rate
+            # Host sends: "dcf" revenue_synergies cost_synergies integration_costs discount_rate
             if len(sys.argv) < 5:
                 raise ValueError("Revenue synergies, cost synergies, and integration costs required")
 
@@ -311,7 +311,7 @@ def main():
             integration_costs_raw = json.loads(sys.argv[4])
             discount_rate = float(sys.argv[5]) if len(sys.argv) > 5 else 0.10
 
-            # Ensure all inputs are lists (Rust may send scalar values)
+            # Ensure all inputs are lists (host may send scalar values)
             def ensure_list(val, years=10):
                 if isinstance(val, (int, float)):
                     return [val] * years

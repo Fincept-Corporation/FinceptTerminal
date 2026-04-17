@@ -9,7 +9,7 @@ RESOURCES_DIR = SCRIPTS_DIR.parent
 # Database path: Use FINCEPT_DATA_DIR env var if set, otherwise fall back to user data dir
 def get_database_dir() -> Path:
     """Get the database directory from environment or default user data location."""
-    # Check for environment variable passed from Rust
+    # Check for environment variable passed from host
     if data_dir := os.environ.get("FINCEPT_DATA_DIR"):
         return Path(data_dir)
 

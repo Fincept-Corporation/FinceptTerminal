@@ -14,8 +14,8 @@ static const char* MONO = "'Consolas','Courier New',monospace";
 SurfaceMetricsPanel::SurfaceMetricsPanel(QWidget* parent) : QWidget(parent) {
     setFixedWidth(190);
     setStyleSheet(QString("QWidget { background:%1; border-right:1px solid %2; }")
-                      .arg(colors::BG_SURFACE)
-                      .arg(colors::BORDER_DIM));
+                      .arg(colors::BG_SURFACE())
+                      .arg(colors::BORDER_DIM()));
     layout_ = new QVBoxLayout(this);
     layout_->setContentsMargins(0, 0, 0, 0);
     layout_->setSpacing(0);
@@ -39,8 +39,8 @@ void SurfaceMetricsPanel::add_section(const QString& title, const char* color) {
                                " border-bottom:1px solid %3;"
                                " font-family:%4;")
                            .arg(color)
-                           .arg(colors::BG_RAISED)
-                           .arg(colors::BORDER_DIM)
+                           .arg(colors::BG_RAISED())
+                           .arg(colors::BORDER_DIM())
                            .arg(MONO));
     layout_->addWidget(lbl);
 }
@@ -50,7 +50,7 @@ void SurfaceMetricsPanel::add_row(const QString& label, const QString& value, co
     auto* row = new QWidget(this);
     row->setFixedHeight(22);
     row->setStyleSheet(
-        QString("QWidget { background:transparent; border-bottom:1px solid %1; }").arg(colors::BG_RAISED));
+        QString("QWidget { background:transparent; border-bottom:1px solid %1; }").arg(colors::BG_RAISED()));
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(4);
@@ -58,7 +58,7 @@ void SurfaceMetricsPanel::add_row(const QString& label, const QString& value, co
     auto* lbl = new QLabel(label, row);
     lbl->setStyleSheet(QString("color:%1; font-size:11px; background:transparent;"
                                " font-family:%2; border:none;")
-                           .arg(colors::TEXT_SECONDARY)
+                           .arg(colors::TEXT_SECONDARY())
                            .arg(MONO));
 
     auto* val = new QLabel(value, row);

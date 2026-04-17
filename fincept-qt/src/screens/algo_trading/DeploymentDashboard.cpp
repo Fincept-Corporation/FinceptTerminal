@@ -24,7 +24,7 @@ inline QString kMonoFont() {
 inline QString kSectionLabel() {
     return QString("color: %1; font-size: %2px; font-weight: 700; letter-spacing: 0.5px; %3"
                    " background: transparent; border: none;")
-        .arg(fincept::ui::colors::AMBER)
+        .arg(fincept::ui::colors::AMBER())
         .arg(fincept::ui::fonts::TINY)
         .arg(kMonoFont());
 }
@@ -61,7 +61,7 @@ static QWidget* build_stat_card(const QString& label, const QString& value, cons
                                 QWidget* parent) {
     auto* card = new QWidget(parent);
     card->setStyleSheet(QString("background: %1; border: 1px solid %2;")
-                            .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_DIM));
+                            .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_DIM()));
     card->setMinimumHeight(64);
 
     auto* vl = new QVBoxLayout(card);
@@ -71,7 +71,7 @@ static QWidget* build_stat_card(const QString& label, const QString& value, cons
     auto* lbl = new QLabel(label, card);
     lbl->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; letter-spacing: 0.5px; %3"
                                " background: transparent; border: none;")
-                           .arg(fincept::ui::colors::TEXT_TERTIARY)
+                           .arg(fincept::ui::colors::TEXT_TERTIARY())
                            .arg(fincept::ui::fonts::TINY)
                            .arg(kMonoFont()));
     vl->addWidget(lbl);
@@ -93,7 +93,7 @@ static QWidget* build_stat_card(const QString& label, const QString& value, cons
 QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWidget* parent) {
     auto* card = new QWidget(parent);
     card->setStyleSheet(QString("background: %1; border: 1px solid %2;")
-                            .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_DIM));
+                            .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_DIM()));
 
     auto* vl = new QVBoxLayout(card);
     vl->setContentsMargins(12, 10, 12, 10);
@@ -106,7 +106,7 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
     auto* name_lbl = new QLabel(d.strategy_name, card);
     name_lbl->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
                                     " background: transparent; border: none;")
-                                .arg(fincept::ui::colors::AMBER)
+                                .arg(fincept::ui::colors::AMBER())
                                 .arg(fincept::ui::fonts::DATA)
                                 .arg(kMonoFont()));
     top->addWidget(name_lbl);
@@ -114,7 +114,7 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
     auto* sym_lbl = new QLabel(d.symbol, card);
     sym_lbl->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
                                    " background: transparent; border: none;")
-                               .arg(fincept::ui::colors::TEXT_PRIMARY)
+                               .arg(fincept::ui::colors::TEXT_PRIMARY())
                                .arg(fincept::ui::fonts::DATA)
                                .arg(kMonoFont()));
     top->addWidget(sym_lbl);
@@ -123,7 +123,7 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
     tf_lbl->setStyleSheet(QString("color: %1; font-size: %2px; %3"
                                   " padding: 2px 6px; background: rgba(8,145,178,0.08);"
                                   " border: 1px solid rgba(8,145,178,0.25);")
-                              .arg(fincept::ui::colors::CYAN)
+                              .arg(fincept::ui::colors::CYAN())
                               .arg(fincept::ui::fonts::TINY)
                               .arg(kMonoFont()));
     top->addWidget(tf_lbl);
@@ -134,7 +134,7 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
     mode_badge->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
                                       " padding: 2px 6px; background: rgba(%4,0.08);"
                                       " border: 1px solid rgba(%4,0.25);")
-                                  .arg(is_paper ? fincept::ui::colors::POSITIVE : fincept::ui::colors::AMBER)
+                                  .arg(is_paper ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::AMBER())
                                   .arg(fincept::ui::fonts::TINY)
                                   .arg(kMonoFont())
                                   .arg(is_paper ? "22,163,74" : "217,119,6"));
@@ -173,7 +173,7 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
         ml->setSpacing(0);
         auto* lbl = new QLabel(label, w);
         lbl->setStyleSheet(QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                               .arg(fincept::ui::colors::TEXT_TERTIARY)
+                               .arg(fincept::ui::colors::TEXT_TERTIARY())
                                .arg(fincept::ui::fonts::TINY)
                                .arg(kMonoFont()));
         auto* val = new QLabel(value, w);
@@ -227,7 +227,7 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
     win_bar->setStyleSheet(
         QString("QProgressBar { background: %1; border: none; border-radius: 2px; }"
                 "QProgressBar::chunk { background: %2; border-radius: 2px; }")
-            .arg(fincept::ui::colors::BG_RAISED, fincept::ui::colors::POSITIVE));
+            .arg(fincept::ui::colors::BG_RAISED(), fincept::ui::colors::POSITIVE()));
     vl->addWidget(win_bar);
 
     // ── Error message if any ────────────────────────────────────────────────
@@ -236,7 +236,7 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
         err->setWordWrap(true);
         err->setStyleSheet(QString("color: %1; font-size: %2px; %3 background: rgba(220,38,38,0.05);"
                                    " border: none; padding: 4px;")
-                               .arg(fincept::ui::colors::NEGATIVE)
+                               .arg(fincept::ui::colors::NEGATIVE())
                                .arg(fincept::ui::fonts::TINY)
                                .arg(kMonoFont()));
         vl->addWidget(err);
@@ -253,7 +253,7 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
         stop_btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: 1px solid %1;"
                                         " font-size: %2px; font-weight: 700; %3 padding: 2px 16px; }"
                                         "QPushButton:hover { background: rgba(220,38,38,0.1); }")
-                                    .arg(fincept::ui::colors::NEGATIVE)
+                                    .arg(fincept::ui::colors::NEGATIVE())
                                     .arg(fincept::ui::fonts::TINY)
                                     .arg(kMonoFont()));
         connect(stop_btn, &QPushButton::clicked, card, [dep_id = d.id]() {
@@ -298,7 +298,7 @@ void DeploymentDashboard::update_summary(const QVector<AlgoDeployment>& deployme
         total_pnl_->setText(QString("%1$%2").arg(pnl_sum >= 0 ? "+" : "-").arg(std::abs(pnl_sum), 0, 'f', 2));
         total_pnl_->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
                                           " background: transparent; border: none;")
-                                      .arg(pnl_sum >= 0 ? fincept::ui::colors::POSITIVE : fincept::ui::colors::NEGATIVE)
+                                      .arg(pnl_sum >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE())
                                       .arg(fincept::ui::fonts::TITLE)
                                       .arg(kMonoFont()));
     }
@@ -325,10 +325,10 @@ void DeploymentDashboard::build_ui() {
                                   "QScrollBar:vertical { background: %1; width: 6px; }"
                                   "QScrollBar::handle:vertical { background: %2; }"
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-                              .arg(fincept::ui::colors::BG_BASE, fincept::ui::colors::BORDER_MED));
+                              .arg(fincept::ui::colors::BG_BASE(), fincept::ui::colors::BORDER_MED()));
 
     auto* content = new QWidget(this);
-    content->setStyleSheet(QString("background: %1;").arg(fincept::ui::colors::BG_BASE));
+    content->setStyleSheet(QString("background: %1;").arg(fincept::ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(16, 12, 16, 12);
     vl->setSpacing(12);
@@ -353,7 +353,7 @@ void DeploymentDashboard::build_ui() {
     equity_placeholder_->setFrameShape(QFrame::NoFrame);
     equity_placeholder_->setStyleSheet(
         QString("QFrame { background: %1; border: 1px solid %2; }")
-            .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_DIM));
+            .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_DIM()));
     {
         auto* eq_vl = new QVBoxLayout(equity_placeholder_);
         eq_vl->setContentsMargins(12, 8, 12, 8);
@@ -372,7 +372,7 @@ void DeploymentDashboard::build_ui() {
         eq_hint->setAlignment(Qt::AlignCenter);
         eq_hint->setStyleSheet(
             QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                .arg(fincept::ui::colors::TEXT_TERTIARY)
+                .arg(fincept::ui::colors::TEXT_TERTIARY())
                 .arg(fincept::ui::fonts::SMALL)
                 .arg(kMonoFont()));
         eq_vl->addWidget(eq_hint);
@@ -391,10 +391,10 @@ void DeploymentDashboard::build_ui() {
         QString("QPushButton { background: %1; color: %2; border: 1px solid %3;"
                 " font-size: %4px; font-weight: 700; %5 padding: 4px 16px; }"
                 "QPushButton:hover { background: %6; color: %7; }")
-            .arg(fincept::ui::colors::BG_RAISED, fincept::ui::colors::TEXT_SECONDARY, fincept::ui::colors::BORDER_DIM)
+            .arg(fincept::ui::colors::BG_RAISED(), fincept::ui::colors::TEXT_SECONDARY(), fincept::ui::colors::BORDER_DIM())
             .arg(fincept::ui::fonts::TINY)
             .arg(kMonoFont())
-            .arg(fincept::ui::colors::BG_HOVER, fincept::ui::colors::TEXT_PRIMARY));
+            .arg(fincept::ui::colors::BG_HOVER(), fincept::ui::colors::TEXT_PRIMARY()));
     connect(refresh_btn, &QPushButton::clicked, this, []() { AlgoTradingService::instance().list_deployments(); });
     control_bar->addWidget(refresh_btn);
 
@@ -407,10 +407,10 @@ void DeploymentDashboard::build_ui() {
         QString("QPushButton { background: rgba(220,38,38,0.1); color: %1; border: 1px solid %1;"
                 " font-size: %2px; font-weight: 700; %3 padding: 4px 16px; }"
                 "QPushButton:hover { background: %1; color: %4; }")
-            .arg(fincept::ui::colors::NEGATIVE)
+            .arg(fincept::ui::colors::NEGATIVE())
             .arg(fincept::ui::fonts::TINY)
             .arg(kMonoFont())
-            .arg(fincept::ui::colors::TEXT_PRIMARY));
+            .arg(fincept::ui::colors::TEXT_PRIMARY()));
     connect(stop_all_btn, &QPushButton::clicked, this, []() {
         AlgoTradingService::instance().stop_all_deployments();
         LOG_INFO("AlgoTrading", "Stop all deployments requested");
@@ -427,7 +427,7 @@ void DeploymentDashboard::build_ui() {
     // Status label
     status_label_ = new QLabel("No deployments loaded.", content);
     status_label_->setStyleSheet(QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                                     .arg(fincept::ui::colors::TEXT_TERTIARY)
+                                     .arg(fincept::ui::colors::TEXT_TERTIARY())
                                      .arg(fincept::ui::fonts::SMALL)
                                      .arg(kMonoFont()));
     vl->addWidget(status_label_);
@@ -464,7 +464,7 @@ void DeploymentDashboard::on_deployments_loaded(QVector<AlgoDeployment> deployme
     } else {
         status_label_->setText(QString("%1 deployment(s)").arg(deployments.size()));
         status_label_->setStyleSheet(QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                                         .arg(fincept::ui::colors::TEXT_SECONDARY)
+                                         .arg(fincept::ui::colors::TEXT_SECONDARY())
                                          .arg(fincept::ui::fonts::SMALL)
                                          .arg(kMonoFont()));
     }
@@ -480,7 +480,7 @@ void DeploymentDashboard::on_error(const QString& context, const QString& msg) {
     if (status_label_) {
         status_label_->setText(QString("Error [%1]: %2").arg(context, msg));
         status_label_->setStyleSheet(QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                                         .arg(fincept::ui::colors::NEGATIVE)
+                                         .arg(fincept::ui::colors::NEGATIVE())
                                          .arg(fincept::ui::fonts::SMALL)
                                          .arg(kMonoFont()));
     }

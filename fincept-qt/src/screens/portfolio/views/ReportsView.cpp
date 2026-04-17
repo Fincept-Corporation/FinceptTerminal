@@ -30,12 +30,12 @@ void ReportsView::build_ui() {
                                  "  letter-spacing:0.5px; }"
                                  "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
                                  "QTabBar::tab:hover { color:%5; }")
-                             .arg(ui::colors::BG_BASE, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY,
-                                  ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+                             .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(),
+                                  ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
 
     // ── Portfolio Summary Report ─────────────────────────────────────────────
     summary_panel_ = new QWidget(this);
-    summary_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    summary_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     tabs_->addTab(summary_panel_, "SUMMARY");
 
     // ── Transaction History ──────────────────────────────────────────────────
@@ -45,7 +45,7 @@ void ReportsView::build_ui() {
 
     auto* txn_title = new QLabel("TRANSACTION HISTORY");
     txn_title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     txn_layout->addWidget(txn_title);
 
     txn_table_ = new QTableWidget;
@@ -67,8 +67,8 @@ void ReportsView::build_ui() {
                                       "QHeaderView::section { background:%4; color:%5; border:none;"
                                       "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px;"
                                       "  font-weight:700; letter-spacing:0.5px; }")
-                                  .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-                                       ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
+                                  .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                                       ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
     txn_layout->addWidget(txn_table_, 1);
     tabs_->addTab(txn_w, "TRANSACTIONS");
 
@@ -79,7 +79,7 @@ void ReportsView::build_ui() {
 
     auto* attr_title = new QLabel("PERFORMANCE ATTRIBUTION");
     attr_title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     attr_layout->addWidget(attr_title);
 
     attr_table_ = new QTableWidget;
@@ -95,8 +95,8 @@ void ReportsView::build_ui() {
                                        "QHeaderView::section { background:%4; color:%5; border:none;"
                                        "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px;"
                                        "  font-weight:700; letter-spacing:0.5px; }")
-                                   .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-                                        ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
+                                   .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                                        ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
     attr_layout->addWidget(attr_table_, 1);
     tabs_->addTab(attr_w, "ATTRIBUTION");
 
@@ -121,7 +121,7 @@ void ReportsView::update_summary() {
 
     auto* title = new QLabel("PORTFOLIO SUMMARY REPORT");
     title->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     layout->addWidget(title);
 
     auto* grid = new QGridLayout;
@@ -130,14 +130,14 @@ void ReportsView::update_summary() {
     auto add_card = [&](int r, int c, const QString& label, const QString& value, const char* color) {
         auto* card = new QWidget(this);
         card->setStyleSheet(
-            QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+            QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
         auto* cl = new QVBoxLayout(card);
         cl->setContentsMargins(12, 8, 12, 8);
         cl->setSpacing(2);
 
         auto* lbl = new QLabel(label);
         lbl->setStyleSheet(
-            QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY()));
         cl->addWidget(lbl);
 
         auto* val = new QLabel(value);
@@ -171,7 +171,7 @@ void ReportsView::update_summary() {
     // Holdings breakdown
     auto* breakdown_title = new QLabel("HOLDINGS BREAKDOWN");
     breakdown_title->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     layout->addWidget(breakdown_title);
 
     auto* breakdown = new QTableWidget;
@@ -187,8 +187,8 @@ void ReportsView::update_summary() {
                                      "QHeaderView::section { background:%4; color:%5; border:none;"
                                      "  border-bottom:1px solid %6; padding:3px 6px; font-size:9px;"
                                      "  font-weight:700; }")
-                                 .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-                                      ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
+                                 .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                                      ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
 
     auto sorted = summary_.holdings;
     std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.weight > b.weight; });

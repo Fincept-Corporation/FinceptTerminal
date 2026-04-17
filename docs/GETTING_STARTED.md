@@ -35,63 +35,75 @@ Fincept Terminal is an **open-source financial analysis platform** — a free, o
 
 ## Quick Setup
 
-### Prerequisites
+### Prerequisites (pinned versions — required)
+
+> **Use exactly these versions.** Fincept Terminal's CMake build enforces them with `FATAL_ERROR` checks. Newer/older versions will refuse to configure.
+
+| Tool | Pinned Version |
+|------|----------------|
+| **C++ compiler** | MSVC 19.38 (VS 2022 17.8) / GCC 12.3 / Apple Clang 15.0 (Xcode 15.2) |
+| **CMake** | 3.27.7 |
+| **Ninja** | 1.11.1 |
+| **Qt** | 6.7.2 (LTS) |
+| **Python** | 3.11.9 |
+| **Platform SDK** | Win10 SDK 10.0.22621.0 / macOS SDK 14.0 (deploy target 11.0) / glibc 2.31+ |
 
 #### 1. Install a C++20 compiler
 
-- **Windows**: Install [Visual Studio 2022](https://visualstudio.microsoft.com/) with "Desktop development with C++" workload
-- **Linux**: `sudo apt install -y g++ cmake`
-- **macOS**: `xcode-select --install && brew install cmake`
+- **Windows**: [Visual Studio 2022 17.8+](https://visualstudio.microsoft.com/) with "Desktop development with C++"
+- **Linux (Ubuntu 22.04+)**: `sudo apt install -y g++-12`
+- **macOS**: Xcode 15.2 — `xcode-select --install`
 
-#### 2. Install CMake 3.20+
+#### 2. Install CMake 3.27.7 + Ninja 1.11.1
 
-- **Windows**: `winget install Kitware.CMake`
-- **Linux/macOS**: included in step above
+- **Windows**: `winget install Kitware.CMake Ninja-build.Ninja`
+- **Linux**: `sudo apt install -y cmake ninja-build` (verify `cmake --version` ≥ 3.27.7; if not, download from [cmake.org](https://cmake.org/download/))
+- **macOS**: `brew install cmake ninja`
 
-#### 3. Install Qt6
+#### 3. Install Qt 6.7.2
 
-**Windows** — Qt online installer (recommended, includes `windeployqt`):
+**Windows / Linux / macOS** — Qt online installer (recommended):
 - Download from https://www.qt.io/download-qt-installer
-- Select: Qt 6.x → MSVC 2022 64-bit
+- Select exactly **Qt 6.7.2** → platform-appropriate kit (MSVC 2022 64-bit / Desktop gcc 64-bit / macOS)
+- Default install paths: `C:/Qt/6.7.2/msvc2022_64`, `~/Qt/6.7.2/gcc_64`, `~/Qt/6.7.2/macos`
 
-**Linux (Ubuntu/Debian):**
+**Linux system packages (alternative — may not be exactly 6.7.2):**
 ```bash
 sudo apt install -y \
-  qt6-base-dev qt6-charts-dev qt6-tools-dev \
+  qt6-base-dev qt6-charts-dev qt6-tools-dev qt6-base-private-dev \
   libqt6sql6-sqlite libqt6websockets6-dev \
   libgl1-mesa-dev libglu1-mesa-dev
 ```
 
-**macOS:**
-```bash
-brew install qt
-```
+#### 4. Install Python 3.11.9
 
-#### 4. Install Python 3.11+
+- **Windows**: [python.org 3.11.9](https://www.python.org/downloads/release/python-3119/) (check "Add to PATH")
+- **Linux**: `sudo apt install python3.11` (or build from source if your distro ships 3.10)
+- **macOS**: `brew install python@3.11`
 
-- **Windows**: [python.org](https://www.python.org/downloads/) (check "Add to PATH")
-- **Linux**: `sudo apt install python3`
-- **macOS**: `brew install python`
-
-### Setup in 4 Steps
+### Setup in 3 Steps (using CMake presets)
 
 ```bash
-# 1. Clone the repository
+# 1. Clone
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-qt
 
-# 2. Configure
-# Linux / macOS:
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-# Windows (Developer Command Prompt for VS 2022):
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="C:/Qt/6.x.x/msvc2022_64"
+# 2. Configure + Build (pick your platform)
+cmake --preset win-release     && cmake --build --preset win-release     # Windows (Dev Cmd for VS 2022)
+cmake --preset linux-release   && cmake --build --preset linux-release   # Linux
+cmake --preset macos-release   && cmake --build --preset macos-release   # macOS
 
-# 3. Build
-cmake --build build --config Release --parallel
+# 3. Run
+./build/linux-release/FinceptTerminal              # Linux
+./build/macos-release/FinceptTerminal.app/Contents/MacOS/FinceptTerminal   # macOS
+.\build\win-release\FinceptTerminal.exe            # Windows
+```
 
-# 4. Run
-./build/FinceptTerminal              # Linux / macOS
-.\build\Release\FinceptTerminal.exe  # Windows
+**If CMake presets can't resolve your Qt path**, use the manual configure:
+```bash
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="<path/to/Qt/6.7.2/<kit>>"
+cmake --build build
 ```
 
 **Expected Result:** Fincept Terminal window should open, showing the login screen.

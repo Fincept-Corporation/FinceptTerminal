@@ -11,17 +11,22 @@ Fincept Terminal is a native C++20/Qt6 desktop financial terminal. All contribut
 
 ## Getting Started
 
+**Pinned toolchain (enforced by CMake):** Qt 6.7.2 · CMake 3.27.7 · MSVC 19.38 / GCC 12.3 / Apple Clang 15.0 · Python 3.11.9. See [docs/CONTRIBUTING.md](../docs/CONTRIBUTING.md) for the full list.
+
 ```bash
 # Fork & clone
 git clone https://github.com/your-username/FinceptTerminal.git
-cd FinceptTerminal/fincept-qt
+cd FinceptTerminal
 
-# Build — Linux/macOS
-cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel
+# Automated setup (installs toolchain + Qt 6.7.2 via aqtinstall, then builds)
+./setup.sh       # Linux / macOS
+setup.bat        # Windows (run from VS 2022 Developer Cmd)
 
-# Build — Windows (VS 2022 Developer Command Prompt)
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="C:/Qt/6.x.x/msvc2022_64"
-cmake --build build --config Release
+# ── OR manual build via CMake presets ──
+cd fincept-qt
+cmake --preset linux-release   && cmake --build --preset linux-release     # Linux
+cmake --preset macos-release   && cmake --build --preset macos-release     # macOS
+cmake --preset win-release     && cmake --build --preset win-release       # Windows
 
 # Create a branch
 git checkout -b feature/your-feature

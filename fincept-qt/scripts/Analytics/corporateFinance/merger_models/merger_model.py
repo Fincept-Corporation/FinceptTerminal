@@ -266,7 +266,7 @@ def main():
             print(json.dumps(result))
 
         elif command == "accretion_dilution":
-            # Rust sends: "accretion_dilution" merger_model_data_json
+            # Host sends: "accretion_dilution" merger_model_data_json
             if len(sys.argv) < 3:
                 raise ValueError("Merger model data required")
 
@@ -289,7 +289,7 @@ def main():
             print(json.dumps(result))
 
         elif command == "pro_forma":
-            # Rust sends: "pro_forma" acquirer_data target_data year
+            # Host sends: "pro_forma" acquirer_data target_data year
             if len(sys.argv) < 5:
                 raise ValueError("Acquirer data, target data, and year required")
 

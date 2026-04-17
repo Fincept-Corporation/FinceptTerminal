@@ -17,8 +17,8 @@ static QString btn_style() {
                    "}"
                    "QPushButton:hover { color: %4; background: %5; }"
                    "QPushButton:disabled { color: %6; }")
-        .arg(ui::colors::BG_HOVER, ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::TEXT_PRIMARY,
-             ui::colors::BG_HOVER, ui::colors::TEXT_DIM);
+        .arg(ui::colors::BG_HOVER(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::TEXT_PRIMARY(),
+             ui::colors::BG_HOVER(), ui::colors::TEXT_DIM());
 }
 
 static QString accent_btn_style() {
@@ -28,7 +28,7 @@ static QString accent_btn_style() {
                    "  font-size: 11px; font-weight: bold; padding: 0 12px; min-height: 22px;"
                    "}"
                    "QPushButton:hover { background: %2; color: %4; }")
-        .arg(ui::colors::ACCENT_BG, ui::colors::AMBER, ui::colors::AMBER_DIM, ui::colors::BG_BASE);
+        .arg(ui::colors::ACCENT_BG(), ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE());
 }
 
 NodeEditorToolbar::NodeEditorToolbar(QWidget* parent) : QWidget(parent) {
@@ -74,14 +74,14 @@ void NodeEditorToolbar::set_executing(bool running) {
                                  "  font-size: 11px; font-weight: bold; padding: 0 12px; min-height: 22px;"
                                  "}"
                                  "QPushButton:hover { background: %2; color: %3; }")
-                             .arg(ui::colors::NEGATIVE_BG, ui::colors::NEGATIVE, ui::colors::TEXT_PRIMARY);
+                             .arg(ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY());
 
     execute_btn_->setText(running ? "STOP" : "EXECUTE");
     execute_btn_->setStyleSheet(running ? stop_style : accent_btn_style());
 }
 
 void NodeEditorToolbar::build_ui() {
-    setStyleSheet(QString("QWidget#nodeEditorToolbar { background: %1; }").arg(ui::colors::BG_HOVER));
+    setStyleSheet(QString("QWidget#nodeEditorToolbar { background: %1; }").arg(ui::colors::BG_HOVER()));
 
     auto* layout = new QHBoxLayout(this);
     layout->setContentsMargins(10, 0, 10, 0);
@@ -96,7 +96,7 @@ void NodeEditorToolbar::build_ui() {
                                       "  font-size: 13px; font-weight: bold; padding: 2px 4px;"
                                       "}"
                                       "QLineEdit:focus { border-bottom: 1px solid %3; }")
-                                  .arg(ui::colors::TEXT_PRIMARY, ui::colors::TEXT_DIM, ui::colors::AMBER));
+                                  .arg(ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_DIM(), ui::colors::AMBER()));
     layout->addWidget(name_edit_);
 
     connect(name_edit_, &QLineEdit::textChanged, this, &NodeEditorToolbar::name_changed);
@@ -105,7 +105,7 @@ void NodeEditorToolbar::build_ui() {
     auto* status = new QLabel("DRAFT");
     status->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;"
                                   "font-weight: bold; letter-spacing: 0.5px; padding: 0 6px;")
-                              .arg(ui::colors::TEXT_TERTIARY));
+                              .arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(status);
 
     layout->addStretch();
@@ -128,7 +128,7 @@ void NodeEditorToolbar::build_ui() {
     // ── Separator ──────────────────────────────────────────────────
     auto* sep1 = new QFrame;
     sep1->setFixedSize(1, 18);
-    sep1->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::TEXT_DIM));
+    sep1->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::TEXT_DIM()));
     layout->addWidget(sep1);
 
     // ── Save / Load / Clear ────────────────────────────────────────
@@ -152,7 +152,7 @@ void NodeEditorToolbar::build_ui() {
     // ── Separator ──────────────────────────────────────────────────
     auto* sep2 = new QFrame;
     sep2->setFixedSize(1, 18);
-    sep2->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::TEXT_DIM));
+    sep2->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::TEXT_DIM()));
     layout->addWidget(sep2);
 
     // ── Import / Export ────────────────────────────────────────────
@@ -169,7 +169,7 @@ void NodeEditorToolbar::build_ui() {
     // ── Separator ──────────────────────────────────────────────────
     auto* sep3 = new QFrame;
     sep3->setFixedSize(1, 18);
-    sep3->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::TEXT_DIM));
+    sep3->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::TEXT_DIM()));
     layout->addWidget(sep3);
 
     // ── Templates ──────────────────────────────────────────────────
@@ -187,7 +187,7 @@ void NodeEditorToolbar::build_ui() {
     // ── Separator ──────────────────────────────────────────────────
     auto* sep4 = new QFrame;
     sep4->setFixedSize(1, 18);
-    sep4->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::TEXT_DIM));
+    sep4->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::TEXT_DIM()));
     layout->addWidget(sep4);
 
     // ── Execute ────────────────────────────────────────────────────

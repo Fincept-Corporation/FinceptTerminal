@@ -1,7 +1,7 @@
 """
 AKShare Data Wrapper - COMPREHENSIVE VERSION
 Most comprehensive Chinese financial data API with 1,200+ endpoints
-Returns JSON output for Rust integration
+Returns JSON output for Qt/C++ integration
 Modular, fault-tolerant design with specialized wrappers
 All endpoints are FREE - no API keys required
 

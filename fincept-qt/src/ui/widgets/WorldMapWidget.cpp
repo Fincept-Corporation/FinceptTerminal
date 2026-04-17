@@ -48,7 +48,7 @@ WorldMapWidget::WorldMapWidget(QWidget* parent) : QWidget(parent) {
         view->setBackgroundBrush(QColor(0x08, 0x08, 0x08));
     }
 
-    // Use CartoDB Dark Matter tiles (same as the Tauri/React geopolitics map)
+    // Use CartoDB Dark Matter tiles
     auto* tiles = new QGVLayerOSM(QStringLiteral("https://basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png"));
     map_->addItem(tiles);
 

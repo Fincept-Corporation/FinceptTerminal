@@ -650,7 +650,7 @@ void NewsService::enrich_article(NewsArticle& article) {
     else if (text.contains("announce") || text.contains("report"))
         article.priority = Priority::BREAKING;
 
-    // Weighted sentiment — matching Tauri's word lists
+    // Weighted sentiment
     struct WordWeight {
         const char* word;
         int weight;
@@ -928,7 +928,7 @@ QString NewsService::source_flag_label(SourceFlag flag) {
     }
 }
 
-// ── Default RSS feeds — matching Tauri's 100+ feeds ─────────────────────────
+// ── Default RSS feeds ──────────────────────────────────────────────────────
 
 QVector<RSSFeed> NewsService::default_feeds() {
     return {

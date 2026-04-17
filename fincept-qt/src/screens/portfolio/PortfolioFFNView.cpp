@@ -73,7 +73,7 @@ void PortfolioFFNView::build_ui() {
     auto* header = new QWidget(this);
     header->setFixedHeight(36);
     header->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::AMBER));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::AMBER()));
 
     auto* h_layout = new QHBoxLayout(header);
     h_layout->setContentsMargins(8, 0, 8, 0);
@@ -85,24 +85,24 @@ void PortfolioFFNView::build_ui() {
     back_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                                      "  padding:0 10px; font-size:9px; font-weight:700; }"
                                      "QPushButton:hover { background:%1; color:%2; }")
-                                 .arg(ui::colors::AMBER, ui::colors::BG_BASE));
+                                 .arg(ui::colors::AMBER(), ui::colors::BG_BASE()));
     connect(back_btn_, &QPushButton::clicked, this, &PortfolioFFNView::back_requested);
     h_layout->addWidget(back_btn_);
 
     auto* sep = new QWidget(this);
     sep->setFixedSize(1, 20);
-    sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_MED));
+    sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_MED()));
     h_layout->addWidget(sep);
 
     auto* title = new QLabel("FFN ANALYTICS");
     title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     h_layout->addWidget(title);
 
     h_layout->addStretch();
 
     status_label_ = new QLabel;
-    status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
+    status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
     h_layout->addWidget(status_label_);
 
     run_btn_ = new QPushButton("RUN FFN ANALYSIS");
@@ -113,7 +113,7 @@ void PortfolioFFNView::build_ui() {
                 "  padding:0 12px; font-size:9px; font-weight:700; letter-spacing:0.5px; }"
                 "QPushButton:hover { background:%1; }"
                 "QPushButton:disabled { background:%2; color:%3; }")
-            .arg(ui::colors::POSITIVE, ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY, ui::colors::BG_BASE));
+            .arg(ui::colors::POSITIVE(), ui::colors::BG_SURFACE(), ui::colors::TEXT_TERTIARY(), ui::colors::BG_BASE()));
     connect(run_btn_, &QPushButton::clicked, this, &PortfolioFFNView::run_ffn);
     h_layout->addWidget(run_btn_);
 
@@ -128,16 +128,16 @@ void PortfolioFFNView::build_ui() {
                                  "  letter-spacing:0.5px; }"
                                  "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
                                  "QTabBar::tab:hover { color:%5; }")
-                             .arg(ui::colors::BG_BASE, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY,
-                                  ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+                             .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(),
+                                  ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
 
     const QString table_ss = QString("QTableWidget { background:%1; color:%2; border:none; font-size:11px; }"
                                      "QTableWidget::item { padding:3px 8px; border-bottom:1px solid %3; }"
                                      "QHeaderView::section { background:%4; color:%5; border:none;"
                                      "  border-bottom:2px solid %6; padding:3px 8px;"
                                      "  font-size:9px; font-weight:700; }")
-                                 .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-                                      ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER);
+                                 .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                                      ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER());
 
     // helper to create a configured QTableWidget
     auto make_table = [&](int cols, const QStringList& headers) -> QTableWidget* {
@@ -158,7 +158,7 @@ void PortfolioFFNView::build_ui() {
         auto* lbl = new QLabel(text);
         lbl->setAlignment(Qt::AlignCenter);
         lbl->setWordWrap(true);
-        lbl->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY));
+        lbl->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
         return lbl;
     };
 
@@ -170,7 +170,7 @@ void PortfolioFFNView::build_ui() {
 
         auto* lbl = new QLabel("PORTFOLIO METRICS OVERVIEW");
         lbl->setStyleSheet(
-            QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+            QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
         vl->addWidget(lbl);
 
         overview_table_ = make_table(3, {"METRIC", "PORTFOLIO", "BENCHMARK (SPY)"});
@@ -184,14 +184,14 @@ void PortfolioFFNView::build_ui() {
     // ── BENCHMARK tab ────────────────────────────────────────────────────────
     {
         benchmark_panel_ = new QWidget(this);
-        benchmark_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+        benchmark_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
         auto* vl = new QVBoxLayout(benchmark_panel_);
         vl->setContentsMargins(16, 12, 16, 12);
         vl->setSpacing(10);
 
         auto* hdr = new QLabel("BENCHMARK COMPARISON");
         hdr->setStyleSheet(
-            QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+            QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
         vl->addWidget(hdr);
 
         benchmark_table_ = make_table(3, {"METRIC", "PORTFOLIO", "BENCHMARK"});
@@ -203,7 +203,7 @@ void PortfolioFFNView::build_ui() {
                                            "Connect a live benchmark feed to populate the Benchmark column.");
         benchmark_info_label_->setWordWrap(true);
         benchmark_info_label_->setStyleSheet(
-            QString("color:%1; font-size:10px; padding:6px 0;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color:%1; font-size:10px; padding:6px 0;").arg(ui::colors::TEXT_TERTIARY()));
         vl->addWidget(benchmark_info_label_);
 
         vl->addStretch();
@@ -213,14 +213,14 @@ void PortfolioFFNView::build_ui() {
     // ── OPTIMISATION tab ─────────────────────────────────────────────────────
     {
         optimization_panel_ = new QWidget(this);
-        optimization_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+        optimization_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
         auto* vl = new QVBoxLayout(optimization_panel_);
         vl->setContentsMargins(12, 8, 12, 8);
         vl->setSpacing(10);
 
         auto* hdr = new QLabel("PORTFOLIO OPTIMISATION — WEIGHT COMPARISON");
         hdr->setStyleSheet(
-            QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+            QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
         vl->addWidget(hdr);
 
         opt_stack_ = new QStackedWidget;
@@ -241,7 +241,7 @@ void PortfolioFFNView::build_ui() {
 
         auto* weights_hdr = new QLabel("ALLOCATION WEIGHTS BY STRATEGY");
         weights_hdr->setStyleSheet(
-            QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY));
+            QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
         tvl->addWidget(weights_hdr);
 
         opt_weights_table_ = make_table(5, {"SYMBOL", "CURRENT", "ERC", "INV-VOL", "EQUAL"});
@@ -249,7 +249,7 @@ void PortfolioFFNView::build_ui() {
         tvl->addWidget(opt_weights_table_);
 
         auto* stats_hdr = new QLabel("STRATEGY PERFORMANCE STATS");
-        stats_hdr->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY));
+        stats_hdr->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
         tvl->addWidget(stats_hdr);
 
         opt_stats_table_ = make_table(5, {"STRATEGY", "TOTAL RETURN", "VOLATILITY", "SHARPE", "MAX DRAWDOWN"});
@@ -265,7 +265,7 @@ void PortfolioFFNView::build_ui() {
     // ── REBASED tab ───────────────────────────────────────────────────────────
     {
         rebased_panel_ = new QWidget(this);
-        rebased_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+        rebased_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
         auto* vl = new QVBoxLayout(rebased_panel_);
         vl->setContentsMargins(12, 8, 12, 8);
         vl->setSpacing(0);
@@ -290,7 +290,7 @@ void PortfolioFFNView::build_ui() {
     // ── DRAWDOWNS tab ─────────────────────────────────────────────────────────
     {
         drawdowns_panel_ = new QWidget(this);
-        drawdowns_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+        drawdowns_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
         auto* vl = new QVBoxLayout(drawdowns_panel_);
         vl->setContentsMargins(12, 8, 12, 8);
         vl->setSpacing(0);
@@ -313,7 +313,7 @@ void PortfolioFFNView::build_ui() {
     // ── ROLLING CORRELATIONS tab ──────────────────────────────────────────────
     {
         rolling_panel_ = new QWidget(this);
-        rolling_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+        rolling_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
         auto* vl = new QVBoxLayout(rolling_panel_);
         vl->setContentsMargins(12, 8, 12, 8);
         vl->setSpacing(0);
@@ -353,7 +353,7 @@ QChartView* PortfolioFFNView::make_chart_view(const QString& title) {
 
     auto* cv = new QChartView(chart);
     cv->setRenderHint(QPainter::Antialiasing, false);
-    cv->setStyleSheet(QString("background:%1; border:none;").arg(ui::colors::BG_BASE));
+    cv->setStyleSheet(QString("background:%1; border:none;").arg(ui::colors::BG_BASE()));
     return cv;
 }
 
@@ -854,7 +854,7 @@ void PortfolioFFNView::run_ffn() {
 
     run_btn_->setEnabled(false);
     status_label_->setText("Running FFN analysis...");
-    status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::AMBER));
+    status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::AMBER()));
 
     QStringList symbols;
     QJsonObject weights_obj;
@@ -882,7 +882,7 @@ void PortfolioFFNView::run_ffn() {
 
                 if (!result.success || result.output.trimmed().isEmpty()) {
                     self->status_label_->setText("FFN failed — check Python/yfinance");
-                    self->status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
+                    self->status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
                     LOG_ERROR("FFNView", "FFN script failed: " + result.error.left(300));
                     return;
                 }
@@ -890,7 +890,7 @@ void PortfolioFFNView::run_ffn() {
                 auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8());
                 if (!doc.isObject()) {
                     self->status_label_->setText("FFN returned invalid JSON");
-                    self->status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
+                    self->status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
                     LOG_ERROR("FFNView", "FFN JSON parse failed");
                     return;
                 }
@@ -907,7 +907,7 @@ void PortfolioFFNView::run_ffn() {
 
                 self->status_label_->setText(
                     QString("FFN complete — %1 symbol%2").arg(sym_count).arg(sym_count != 1 ? "s" : ""));
-                self->status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE));
+                self->status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE()));
 
                 LOG_INFO("FFNView", QString("FFN analysis complete for %1 symbol(s)").arg(sym_count));
 

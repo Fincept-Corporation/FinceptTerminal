@@ -1,7 +1,7 @@
 """
 Condition Evaluator Engine
 
-Short-lived subprocess called from Rust. Evaluates condition groups against candle data.
+Short-lived subprocess called from the host. Evaluates condition groups against candle data.
 
 Usage:
     python condition_evaluator.py --mode once --conditions <json> --symbol <sym> --timeframe <tf> --db <path>

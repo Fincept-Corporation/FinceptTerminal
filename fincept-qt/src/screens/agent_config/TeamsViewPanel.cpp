@@ -20,7 +20,7 @@
 namespace {
 static const QString kIn =
     QString("background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:11px;")
-        .arg(fincept::ui::colors::BG_RAISED, fincept::ui::colors::TEXT_PRIMARY, fincept::ui::colors::BORDER_MED);
+        .arg(fincept::ui::colors::BG_RAISED(), fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::BORDER_MED());
 } // namespace
 
 namespace fincept::screens {
@@ -53,7 +53,7 @@ void TeamsViewPanel::build_ui() {
     root->setSpacing(0);
     auto* sp = new QSplitter(Qt::Horizontal);
     sp->setHandleWidth(1);
-    sp->setStyleSheet(QString("QSplitter::handle{background:%1;}").arg(ui::colors::BORDER_DIM));
+    sp->setStyleSheet(QString("QSplitter::handle{background:%1;}").arg(ui::colors::BORDER_DIM()));
     sp->addWidget(build_team_panel());
     sp->addWidget(build_agents_panel());
     sp->addWidget(build_execution_panel());
@@ -69,25 +69,25 @@ QWidget* TeamsViewPanel::build_team_panel() {
     p->setMinimumWidth(200);
     p->setMaximumWidth(280);
     p->setStyleSheet(
-        QString("background:%1;border-right:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("background:%1;border-right:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
 
     auto* hdr = new QHBoxLayout;
     auto* t = new QLabel("TEAM");
-    t->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER));
+    t->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
     hdr->addWidget(t);
     team_count_ = new QLabel("0");
     team_count_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
-                                   .arg(ui::colors::CYAN, ui::colors::BG_RAISED));
+                                   .arg(ui::colors::CYAN(), ui::colors::BG_RAISED()));
     hdr->addWidget(team_count_);
     hdr->addStretch();
     vl->addLayout(hdr);
 
     // Mode
     auto* ml = new QLabel("Mode:");
-    ml->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_SECONDARY));
+    ml->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(ml);
     mode_combo_ = new QComboBox;
     mode_combo_->addItems({"coordinate", "route", "collaborate"});
@@ -97,12 +97,12 @@ QWidget* TeamsViewPanel::build_team_panel() {
     mode_desc_label_ = new QLabel(kModeDescriptions["coordinate"]);
     mode_desc_label_->setWordWrap(true);
     mode_desc_label_->setStyleSheet(
-        QString("color:%1;font-size:10px;font-style:italic;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color:%1;font-size:10px;font-style:italic;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
     vl->addWidget(mode_desc_label_);
 
     // Leader selector
     auto* ll = new QLabel("Leader:");
-    ll->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_SECONDARY));
+    ll->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(ll);
     leader_combo_ = new QComboBox;
     leader_combo_->setStyleSheet(QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(kIn));
@@ -110,7 +110,7 @@ QWidget* TeamsViewPanel::build_team_panel() {
 
     // Show member responses
     show_responses_check_ = new QCheckBox("Show member responses");
-    show_responses_check_->setStyleSheet(QString("QCheckBox{color:%1;font-size:10px;}").arg(ui::colors::TEXT_PRIMARY));
+    show_responses_check_->setStyleSheet(QString("QCheckBox{color:%1;font-size:10px;}").arg(ui::colors::TEXT_PRIMARY()));
     vl->addWidget(show_responses_check_);
 
     // Team list
@@ -119,15 +119,15 @@ QWidget* TeamsViewPanel::build_team_panel() {
                                       "QListWidget::item{padding:6px 8px;border-bottom:1px solid %2;}"
                                       "QListWidget::item:selected{background:%4;}"
                                       "QListWidget::item:hover{background:%5;}")
-                                  .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY,
-                                       ui::colors::AMBER_DIM, ui::colors::BG_HOVER));
+                                  .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(),
+                                       ui::colors::AMBER_DIM(), ui::colors::BG_HOVER()));
     vl->addWidget(team_list_, 1);
 
     auto* rb = new QPushButton("REMOVE");
     rb->setCursor(Qt::PointingHandCursor);
     rb->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %1;padding:5px;"
                               "font-size:10px;font-weight:600;}QPushButton:hover{background:%2;}")
-                          .arg(ui::colors::NEGATIVE, ui::colors::BG_HOVER));
+                          .arg(ui::colors::NEGATIVE(), ui::colors::BG_HOVER()));
     connect(rb, &QPushButton::clicked, this, [this]() {
         int row = team_list_->currentRow();
         if (row >= 0)
@@ -142,7 +142,7 @@ QWidget* TeamsViewPanel::build_agents_panel() {
     p->setMinimumWidth(220);
     p->setMaximumWidth(320);
     p->setStyleSheet(
-        QString("background:%1;border-right:1px solid %2;").arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
+        QString("background:%1;border-right:1px solid %2;").arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
@@ -150,11 +150,11 @@ QWidget* TeamsViewPanel::build_agents_panel() {
     auto* hdr = new QHBoxLayout;
     auto* t = new QLabel("AVAILABLE AGENTS");
     t->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     hdr->addWidget(t);
     available_count_ = new QLabel("0");
     available_count_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
-                                        .arg(ui::colors::CYAN, ui::colors::BG_RAISED));
+                                        .arg(ui::colors::CYAN(), ui::colors::BG_RAISED()));
     hdr->addWidget(available_count_);
     hdr->addStretch();
     vl->addLayout(hdr);
@@ -164,15 +164,15 @@ QWidget* TeamsViewPanel::build_agents_panel() {
                                            "QListWidget::item{padding:6px 8px;border-bottom:1px solid %2;}"
                                            "QListWidget::item:selected{background:%4;}"
                                            "QListWidget::item:hover{background:%5;}")
-                                       .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY,
-                                            ui::colors::AMBER_DIM, ui::colors::BG_HOVER));
+                                       .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(),
+                                            ui::colors::AMBER_DIM(), ui::colors::BG_HOVER()));
     vl->addWidget(available_list_, 1);
 
     auto* ab = new QPushButton("ADD TO TEAM");
     ab->setCursor(Qt::PointingHandCursor);
     ab->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:none;padding:6px;"
                               "font-size:10px;font-weight:700;letter-spacing:1px;}QPushButton:hover{background:%3;}")
-                          .arg(ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::ORANGE));
+                          .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::ORANGE()));
     connect(ab, &QPushButton::clicked, this, [this]() {
         int row = available_list_->currentRow();
         if (row >= 0 && row < all_agents_.size())
@@ -184,7 +184,7 @@ QWidget* TeamsViewPanel::build_agents_panel() {
 
 QWidget* TeamsViewPanel::build_execution_panel() {
     auto* p = new QWidget(this);
-    p->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    p->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(12, 8, 12, 8);
     vl->setSpacing(6);
@@ -192,7 +192,7 @@ QWidget* TeamsViewPanel::build_execution_panel() {
     // Coordinator LLM profile picker
     auto* llm_hdr = new QLabel("COORDINATOR LLM PROFILE");
     llm_hdr->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(llm_hdr);
 
     team_profile_combo_ = new QComboBox;
@@ -200,24 +200,24 @@ QWidget* TeamsViewPanel::build_execution_panel() {
     team_profile_combo_->setStyleSheet(
         QString("QComboBox{%1}QComboBox::drop-down{border:none;}"
                 "QComboBox QAbstractItemView{background:%2;color:%3;selection-background-color:%4;}")
-            .arg(kIn, ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::AMBER_DIM));
+            .arg(kIn, ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER_DIM()));
     vl->addWidget(team_profile_combo_);
 
     team_resolved_lbl_ = new QLabel;
-    team_resolved_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY));
+    team_resolved_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
     vl->addWidget(team_resolved_lbl_);
 
     // Query
     auto* qh = new QLabel("TEAM QUERY");
     qh->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;").arg(ui::colors::AMBER));
+        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;").arg(ui::colors::AMBER()));
     vl->addWidget(qh);
     query_input_ = new QPlainTextEdit;
     query_input_->setPlaceholderText("Enter a query for the team...");
     query_input_->setMaximumHeight(80);
     query_input_->setStyleSheet(
         QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;padding:8px;font-size:12px;}")
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED));
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED()));
     vl->addWidget(query_input_);
 
     run_btn_ = new QPushButton("RUN TEAM");
@@ -225,29 +225,29 @@ QWidget* TeamsViewPanel::build_execution_panel() {
     run_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:none;padding:8px;font-size:11px;"
                                     "font-weight:700;letter-spacing:1px;}QPushButton:hover{background:%3;}"
                                     "QPushButton:disabled{background:%4;color:%5;}")
-                                .arg(ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::ORANGE, ui::colors::BG_RAISED,
-                                     ui::colors::TEXT_TERTIARY));
+                                .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::ORANGE(), ui::colors::BG_RAISED(),
+                                     ui::colors::TEXT_TERTIARY()));
     vl->addWidget(run_btn_);
 
     exec_status_ = new QLabel;
-    exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY));
+    exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
     vl->addWidget(exec_status_);
 
     auto* lh = new QLabel("EXECUTION LOG");
     lh->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;")
-                          .arg(ui::colors::TEXT_SECONDARY));
+                          .arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(lh);
     log_display_ = new QTextEdit;
     log_display_->setReadOnly(true);
     log_display_->setMaximumHeight(120);
     log_display_->setStyleSheet(
         QString("QTextEdit{background:%1;color:%2;border:1px solid %3;padding:6px;font-size:11px;}")
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM));
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM()));
     vl->addWidget(log_display_);
 
     auto* rh = new QLabel("RESULT");
     rh->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;")
-                          .arg(ui::colors::TEXT_SECONDARY));
+                          .arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(rh);
     result_display_ = new QTextEdit;
     result_display_->setReadOnly(true);
@@ -255,7 +255,7 @@ QWidget* TeamsViewPanel::build_execution_panel() {
         QString("QTextEdit{background:%1;color:%2;border:1px solid %3;padding:8px;font-size:12px;}"
                 "QScrollBar:vertical{background:%1;width:6px;}"
                 "QScrollBar::handle:vertical{background:%4;min-height:20px;}")
-            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::BORDER_BRIGHT));
+            .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BORDER_BRIGHT()));
     result_display_->document()->setDefaultStyleSheet(
         QString("body { color: %1; background: %2; font-size: 12px; }"
                 "h1, h2, h3, h4 { color: %3; margin: 8px 0 4px 0; }"
@@ -268,8 +268,8 @@ QWidget* TeamsViewPanel::build_execution_panel() {
                 "a { color: %5; } ul, ol { margin: 4px 0; padding-left: 20px; }"
                 "li { margin: 2px 0; } strong { color: %1; }"
                 "hr { border: none; border-top: 1px solid %4; }")
-            .arg(ui::colors::TEXT_PRIMARY, ui::colors::BG_BASE, ui::colors::AMBER, ui::colors::BORDER_DIM,
-                 ui::colors::CYAN, ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::TEXT_SECONDARY));
+            .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_BASE(), ui::colors::AMBER(), ui::colors::BORDER_DIM(),
+                 ui::colors::CYAN(), ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_SECONDARY()));
     vl->addWidget(result_display_, 1);
     return p;
 }
@@ -291,12 +291,12 @@ void TeamsViewPanel::setup_connections() {
         if (r.success) {
             result_display_->setMarkdown(r.response);
             exec_status_->setText(QString("Completed in %1ms").arg(r.execution_time_ms));
-            exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE));
+            exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
             log_display_->append(QString("[DONE] Team completed (%1ms)").arg(r.execution_time_ms));
         } else {
             result_display_->setPlainText("Error: " + r.error);
             exec_status_->setText("FAILED");
-            exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
+            exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
             log_display_->append("[ERROR] " + r.error);
         }
     });
@@ -329,12 +329,12 @@ void TeamsViewPanel::setup_connections() {
         if (r.success) {
             result_display_->setMarkdown(r.response);
             exec_status_->setText(QString("Completed in %1ms").arg(r.execution_time_ms));
-            exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE));
+            exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
             log_display_->append(QString("[DONE] Team completed (%1ms)").arg(r.execution_time_ms));
         } else {
             result_display_->setPlainText("Error: " + r.error);
             exec_status_->setText("FAILED");
-            exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
+            exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
             log_display_->append("[ERROR] " + r.error);
         }
     });
@@ -354,7 +354,7 @@ void TeamsViewPanel::setup_connections() {
         run_btn_->setEnabled(true);
         run_btn_->setText("RUN TEAM");
         exec_status_->setText("ERROR");
-        exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
+        exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
         log_display_->append("[ERROR] " + msg);
     });
 
@@ -471,10 +471,10 @@ void TeamsViewPanel::refresh_team_llm_label() {
             text += " (inherited)";
         team_resolved_lbl_->setText(text);
         team_resolved_lbl_->setStyleSheet(
-            QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
     } else {
         team_resolved_lbl_->setText("No provider — go to Settings > LLM Config");
-        team_resolved_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
+        team_resolved_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
     }
 }
 
@@ -487,7 +487,7 @@ void TeamsViewPanel::run_team() {
     run_btn_->setText("RUNNING...");
     result_display_->clear();
     exec_status_->setText("Executing...");
-    exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::AMBER));
+    exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::AMBER()));
     log_display_->append(QString("[START] Running team (%1 members, mode: %2)")
                              .arg(team_members_.size())
                              .arg(mode_combo_->currentText()));

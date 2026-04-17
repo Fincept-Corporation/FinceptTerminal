@@ -38,7 +38,7 @@ Card::Card(const QString& title, QWidget* parent) : QFrame(parent) {
     // Separator
     auto* sep = new QFrame;
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1; border: none;").arg(colors::BORDER));
+    sep->setStyleSheet(QString("background: %1; border: none;").arg(colors::BORDER()));
     vl->addWidget(sep);
 
     // Content

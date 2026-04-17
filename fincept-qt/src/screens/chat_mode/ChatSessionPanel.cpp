@@ -23,7 +23,7 @@ ChatSessionPanel::ChatSessionPanel(QWidget* parent) : QWidget(parent) {
 void ChatSessionPanel::build_ui() {
     setFixedWidth(240);
     setStyleSheet(
-        QString("background:%1;border-right:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("background:%1;border-right:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(8, 8, 8, 8);
@@ -36,7 +36,7 @@ void ChatSessionPanel::build_ui() {
     title_lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;"
                                      "font-family:'Consolas','Courier New',monospace;"
                                      "background:transparent;letter-spacing:1px;")
-                                 .arg(ui::colors::AMBER));
+                                 .arg(ui::colors::AMBER()));
     header_row->addWidget(title_lbl);
     header_row->addStretch();
 
@@ -49,7 +49,7 @@ void ChatSessionPanel::build_ui() {
                                      "padding:0 8px;font-weight:700;font-size:10px;"
                                      "font-family:'Consolas','Courier New',monospace;}"
                                      "QPushButton:hover{background:%2;color:%3;border-color:%1;}")
-                                 .arg(ui::colors::AMBER, ui::colors::AMBER_DIM, ui::colors::TEXT_PRIMARY));
+                                 .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::TEXT_PRIMARY()));
     connect(exit_btn_, &QPushButton::clicked, this, &ChatSessionPanel::exit_chat_mode_requested);
     header_row->addWidget(exit_btn_);
     vl->addLayout(header_row);
@@ -63,7 +63,7 @@ void ChatSessionPanel::build_ui() {
                 "border-radius:0px;padding:4px 8px;font-size:12px;"
                 "font-family:'Consolas','Courier New',monospace;}"
                 "QLineEdit:focus{border:1px solid %4;}")
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::BORDER_BRIGHT));
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BORDER_BRIGHT()));
     connect(search_edit_, &QLineEdit::textChanged, this, &ChatSessionPanel::on_search_changed);
     vl->addWidget(search_edit_);
 
@@ -84,8 +84,8 @@ void ChatSessionPanel::build_ui() {
                                          "QScrollBar:vertical{background:transparent;width:4px;}"
                                          "QScrollBar::handle:vertical{background:%6;border-radius:0px;}"
                                          "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-                                     .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BG_RAISED,
-                                          ui::colors::AMBER, ui::colors::BG_HOVER, ui::colors::BORDER_MED));
+                                     .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_RAISED(),
+                                          ui::colors::AMBER(), ui::colors::BG_HOVER(), ui::colors::BORDER_MED()));
     session_list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     connect(session_list_, &QListWidget::itemClicked, this, &ChatSessionPanel::on_item_clicked);
     vl->addWidget(session_list_, 1);
@@ -94,7 +94,7 @@ void ChatSessionPanel::build_ui() {
     stats_lbl_ = new QLabel;
     stats_lbl_->setStyleSheet(QString("color:%1;font-size:11px;font-family:'Consolas','Courier New',monospace;"
                                       "background:transparent;")
-                                  .arg(ui::colors::TEXT_DIM));
+                                  .arg(ui::colors::TEXT_DIM()));
     stats_lbl_->setAlignment(Qt::AlignCenter);
     vl->addWidget(stats_lbl_);
 
@@ -108,9 +108,9 @@ void ChatSessionPanel::build_ui() {
                                    "font-family:'Consolas','Courier New',monospace;}"
                                    "QPushButton:hover{background:%4;color:%5;border-color:%6;}"
                                    "QPushButton:disabled{color:%7;border-color:%1;}")
-                               .arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM,
-                                    ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY, ui::colors::AMBER,
-                                    ui::colors::BORDER_BRIGHT));
+                               .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
+                                    ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER(),
+                                    ui::colors::BORDER_BRIGHT()));
         return btn;
     };
 

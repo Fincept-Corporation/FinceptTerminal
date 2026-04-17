@@ -33,7 +33,7 @@ void EquityNewsTab::set_symbol(const QString& symbol) {
 }
 
 void EquityNewsTab::build_ui() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     loading_overlay_ = new ui::LoadingOverlay(this);
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(0, 0, 0, 0);
@@ -42,7 +42,7 @@ void EquityNewsTab::build_ui() {
     // ── Header bar ────────────────────────────────────────────────────────────
     auto* hdr = new QWidget(this);
     hdr->setStyleSheet(
-        QString("background:%1; border-bottom:2px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::AMBER));
+        QString("background:%1; border-bottom:2px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::AMBER()));
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(14, 8, 14, 8);
     hl->setSpacing(12);
@@ -50,12 +50,12 @@ void EquityNewsTab::build_ui() {
     auto* title = new QLabel("LATEST NEWS");
     title->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; letter-spacing:2px; "
                                  "background:transparent; border:0;")
-                             .arg(ui::colors::AMBER));
+                             .arg(ui::colors::AMBER()));
     hl->addWidget(title);
 
     count_label_ = new QLabel("");
     count_label_->setStyleSheet(
-        QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
     hl->addWidget(count_label_);
 
     company_label_ = new QLabel("");
@@ -69,7 +69,7 @@ void EquityNewsTab::build_ui() {
     refresh_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2; "
                                        "border-radius:3px; padding:4px 12px; font-size:10px; font-weight:700; }"
                                        "QPushButton:hover { border-color:%3; color:%3; }")
-                                   .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, ui::colors::AMBER));
+                                   .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     connect(refresh_btn, &QPushButton::clicked, this, [this]() {
         if (!current_symbol_.isEmpty()) {
             clear_cards();
@@ -85,7 +85,7 @@ void EquityNewsTab::build_ui() {
     status_label_ = new QLabel("Search for a symbol to load news.");
     status_label_->setAlignment(Qt::AlignCenter);
     status_label_->setStyleSheet(
-        QString("color:%1; font-size:12px; padding:20px; background:transparent;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1; font-size:12px; padding:20px; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(status_label_);
 
     // ── Scrollable card list ──────────────────────────────────────────────────
@@ -129,7 +129,7 @@ void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& artic
         card->setStyleSheet(
             QString("QFrame { background:%1; border:1px solid %2; border-radius:4px; }"
                     "QFrame:hover { border-color:%3; background:%4; }")
-                .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM, ui::colors::AMBER, ui::colors::BG_RAISED));
+                .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::AMBER(), ui::colors::BG_RAISED()));
         card->setCursor(Qt::PointingHandCursor);
 
         auto* cl = new QVBoxLayout(card);
@@ -147,7 +147,7 @@ void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& artic
         title_lbl->setWordWrap(true);
         title_lbl->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700; line-height:1.4; "
                                          "background:transparent; border:0;")
-                                     .arg(ui::colors::TEXT_PRIMARY));
+                                     .arg(ui::colors::TEXT_PRIMARY()));
         text_col->addWidget(title_lbl);
 
         // Publisher + date
@@ -158,7 +158,7 @@ void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& artic
             QString("color:%1; font-size:10px; font-weight:700; background:transparent; border:0;").arg("#22d3ee"));
         auto* date_lbl = new QLabel(art.published_date.isEmpty() ? "" : art.published_date.left(10));
         date_lbl->setStyleSheet(
-            QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
         meta_hl->addWidget(pub_lbl);
         meta_hl->addWidget(date_lbl);
         meta_hl->addStretch();
@@ -173,7 +173,7 @@ void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& artic
             desc_lbl->setWordWrap(true);
             desc_lbl->setStyleSheet(QString("color:%1; font-size:10px; line-height:1.5; "
                                             "background:transparent; border:0;")
-                                        .arg(ui::colors::TEXT_SECONDARY));
+                                        .arg(ui::colors::TEXT_SECONDARY()));
             cl->addWidget(desc_lbl);
         }
 
@@ -182,7 +182,7 @@ void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& artic
             auto* read_lbl = new QLabel("READ FULL ARTICLE →");
             read_lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px; "
                                             "background:transparent; border:0;")
-                                        .arg(ui::colors::AMBER));
+                                        .arg(ui::colors::AMBER()));
             cl->addWidget(read_lbl);
 
             // Whole card opens URL

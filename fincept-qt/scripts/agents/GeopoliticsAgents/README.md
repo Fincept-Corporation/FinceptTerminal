@@ -192,7 +192,7 @@ python test_agents/westphalian_order_test.py
 3. **Implement Agent** - Use guide templates and production patterns
 4. **Validate Depth** - Ensure 70%+ compliance with author's core thesis
 5. **Test Integration** - Verify agent intercommunication and frontend connectivity
-6. **Production Deployment** - Integrate with C++ commands and React frontend
+6. **Production Deployment** - Integrate with the Qt/C++ application
 
 ## 🏗️ **Frontend Integration**
 
@@ -209,7 +209,7 @@ python test_agents/westphalian_order_test.py
 /worldorder compare westphalian chinese cyber-sovereignty
 ```
 
-### **React Components**
+### **Qt Screens**
 - `GeographyAgentAnalysis`: Display geographic determinants and historical patterns
 - `WorldOrderAgentAnalysis`: Display diplomatic frameworks and balance of power calculations
 

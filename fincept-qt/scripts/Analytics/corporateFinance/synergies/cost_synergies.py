@@ -408,7 +408,7 @@ def main():
 
     try:
         if command == "cost":
-            # Rust sends: "cost" synergy_type synergy_params_json
+            # Host sends: "cost" synergy_type synergy_params_json
             if len(sys.argv) < 4:
                 raise ValueError("Synergy type and params required")
 

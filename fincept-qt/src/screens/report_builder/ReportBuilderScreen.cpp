@@ -158,7 +158,7 @@ void ReportBuilderScreen::swap_components(int a, int b) {
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(QString("background: %1;").arg(ui::colors::DARK));
+    setStyleSheet(QString("background: %1;").arg(ui::colors::DARK()));
     metadata_.date = QDateTime::currentDateTime().toString("yyyy-MM-dd");
 
     // Create undo stack first — build_toolbar() connects to it
@@ -172,14 +172,14 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
 
     auto* sep = new QFrame;
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER));
+    sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER()));
     vl->addWidget(sep);
 
     splitter_ = new QSplitter(Qt::Horizontal);
     splitter_->setHandleWidth(1);
     splitter_->setStyleSheet(QString("QSplitter::handle { background: %1; }"
                                      "QSplitter::handle:hover { background: %2; }")
-                                 .arg(ui::colors::BORDER_DIM, ui::colors::BORDER_BRIGHT));
+                                 .arg(ui::colors::BORDER_DIM(), ui::colors::BORDER_BRIGHT()));
 
     comp_toolbar_ = new ComponentToolbar;
     canvas_ = new DocumentCanvas;
@@ -480,7 +480,7 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
 QWidget* ReportBuilderScreen::build_toolbar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(36);
-    bar->setStyleSheet(QString("background: %1;").arg(ui::colors::HEADER));
+    bar->setStyleSheet(QString("background: %1;").arg(ui::colors::HEADER()));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(8, 0, 8, 0);
@@ -488,7 +488,7 @@ QWidget* ReportBuilderScreen::build_toolbar() {
 
     auto* title = new QLabel("REPORT BUILDER");
     title->setStyleSheet(
-        QString("color: %1; font-size: 14px; font-weight: bold; background: transparent;").arg(ui::colors::AMBER));
+        QString("color: %1; font-size: 14px; font-weight: bold; background: transparent;").arg(ui::colors::AMBER()));
     hl->addWidget(title);
 
     hl->addStretch();
@@ -519,7 +519,7 @@ QWidget* ReportBuilderScreen::build_toolbar() {
     connect(save_btn, &QPushButton::clicked, this, &ReportBuilderScreen::on_save);
 
     auto* pdf_btn = make_btn("Export PDF");
-    pdf_btn->setStyleSheet(QString("QPushButton { color: %1; font-weight: bold; }").arg(ui::colors::AMBER));
+    pdf_btn->setStyleSheet(QString("QPushButton { color: %1; font-weight: bold; }").arg(ui::colors::AMBER()));
     connect(pdf_btn, &QPushButton::clicked, this, &ReportBuilderScreen::on_export_pdf);
 
     auto* preview_btn = make_btn("Preview");
@@ -733,11 +733,11 @@ void ReportBuilderScreen::show_recent_dialog() {
                 "QListWidget::item:selected { background: %5; }"
                 "QPushButton { background: %3; color: %2; border: 1px solid %4; padding: 6px 16px; }"
                 "QPushButton:hover { background: %5; }")
-            .arg(ui::colors::DARK, ui::colors::WHITE, ui::colors::PANEL, ui::colors::BORDER, ui::colors::BG_RAISED));
+            .arg(ui::colors::DARK(), ui::colors::WHITE(), ui::colors::PANEL(), ui::colors::BORDER(), ui::colors::BG_RAISED()));
 
     auto* vl = new QVBoxLayout(dlg);
     auto* lbl = new QLabel("Select a report to open:");
-    lbl->setStyleSheet(QString("color: %1;").arg(ui::colors::MUTED));
+    lbl->setStyleSheet(QString("color: %1;").arg(ui::colors::MUTED()));
     vl->addWidget(lbl);
 
     auto* list = new QListWidget;
@@ -853,8 +853,8 @@ void ReportBuilderScreen::show_template_dialog() {
                                "QPushButton:hover { background: %5; }"
                                "QLabel { background: transparent; }"
                                "QSplitter::handle { background: %4; }")
-                           .arg(ui::colors::DARK, ui::colors::WHITE, ui::colors::PANEL, ui::colors::BORDER,
-                                ui::colors::AMBER_DIM, ui::colors::AMBER, ui::colors::BG_RAISED));
+                           .arg(ui::colors::DARK(), ui::colors::WHITE(), ui::colors::PANEL(), ui::colors::BORDER(),
+                                ui::colors::AMBER_DIM(), ui::colors::AMBER(), ui::colors::BG_RAISED()));
 
     auto* hl = new QHBoxLayout(dlg);
     hl->setSpacing(0);
@@ -868,7 +868,7 @@ void ReportBuilderScreen::show_template_dialog() {
     lvl->setSpacing(6);
 
     auto* pick_lbl = new QLabel("Choose a template:");
-    pick_lbl->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold;").arg(ui::colors::MUTED));
+    pick_lbl->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold;").arg(ui::colors::MUTED()));
     lvl->addWidget(pick_lbl);
 
     auto* list = new QListWidget;
@@ -899,7 +899,7 @@ void ReportBuilderScreen::show_template_dialog() {
     // Separator
     auto* sep = new QFrame;
     sep->setFixedWidth(1);
-    sep->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER));
+    sep->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER()));
     hl->addWidget(sep);
 
     // Right: description + preview
@@ -910,14 +910,14 @@ void ReportBuilderScreen::show_template_dialog() {
     rvl->setSpacing(8);
 
     auto* tmpl_name_lbl = new QLabel("Select a template");
-    tmpl_name_lbl->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: bold;").arg(ui::colors::AMBER));
+    tmpl_name_lbl->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: bold;").arg(ui::colors::AMBER()));
     tmpl_name_lbl->setWordWrap(true);
     rvl->addWidget(tmpl_name_lbl);
 
     auto* desc_lbl = new QLabel("Pick a template from the list to see a description.");
     desc_lbl->setWordWrap(true);
     desc_lbl->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-    desc_lbl->setStyleSheet(QString("color: %1; font-size: 12px; line-height: 160%;").arg(ui::colors::GRAY));
+    desc_lbl->setStyleSheet(QString("color: %1; font-size: 12px; line-height: 160%;").arg(ui::colors::GRAY()));
     rvl->addWidget(desc_lbl, 1);
 
     auto* bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
@@ -974,7 +974,7 @@ void ReportBuilderScreen::show_theme_dialog() {
         QString("QDialog { background: %1; color: %2; }"
                 "QComboBox, QPushButton { background: %3; color: %2; border: 1px solid %4; padding: 4px 8px; }"
                 "QLabel { background: transparent; color: %2; }")
-            .arg(ui::colors::DARK, ui::colors::WHITE, ui::colors::PANEL, ui::colors::BORDER));
+            .arg(ui::colors::DARK(), ui::colors::WHITE(), ui::colors::PANEL(), ui::colors::BORDER()));
 
     auto* vl = new QVBoxLayout(dlg);
     vl->addWidget(new QLabel("Select a color theme for your report:"));
@@ -1028,7 +1028,7 @@ void ReportBuilderScreen::show_metadata_dialog() {
                 "QLabel { background: transparent; color: %2; }"
                 "QPushButton { background: %3; color: %2; border: 1px solid %4; padding: 6px 16px; }"
                 "QPushButton:hover { background: %5; }")
-            .arg(ui::colors::DARK, ui::colors::WHITE, ui::colors::PANEL, ui::colors::BORDER, ui::colors::BG_RAISED));
+            .arg(ui::colors::DARK(), ui::colors::WHITE(), ui::colors::PANEL(), ui::colors::BORDER(), ui::colors::BG_RAISED()));
 
     auto* vl = new QVBoxLayout(dlg);
     auto* form = new QFormLayout;
@@ -1040,7 +1040,7 @@ void ReportBuilderScreen::show_metadata_dialog() {
     auto* date_edit = new QLineEdit(metadata_.date);
     date_edit->setPlaceholderText("yyyy-MM-dd");
 
-    auto lbl_style = QString("color: %1;").arg(ui::colors::GRAY);
+    auto lbl_style = QString("color: %1;").arg(ui::colors::GRAY());
     auto* tl = new QLabel("Title:");
     tl->setStyleSheet(lbl_style);
     auto* al = new QLabel("Author:");
@@ -1059,7 +1059,7 @@ void ReportBuilderScreen::show_metadata_dialog() {
     // Header/Footer section
     auto* hf_lbl = new QLabel("HEADER / FOOTER");
     hf_lbl->setStyleSheet(
-        QString("color: %1; font-size: 11px; font-weight: bold; padding-top: 10px;").arg(ui::colors::MUTED));
+        QString("color: %1; font-size: 11px; font-weight: bold; padding-top: 10px;").arg(ui::colors::MUTED()));
     vl->addWidget(hf_lbl);
 
     auto* hf_form = new QFormLayout;

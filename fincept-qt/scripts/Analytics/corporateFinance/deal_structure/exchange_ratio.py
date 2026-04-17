@@ -241,7 +241,7 @@ def main():
             target_price = float(sys.argv[3])
             offer_premium_or_price = float(sys.argv[4])
 
-            # Rust sends offer_premium as a fraction (e.g. 0.30 for 30%).
+            # Host sends offer_premium as a fraction (e.g. 0.30 for 30%).
             # Detect: if value < target_price * 0.5, it's likely a premium fraction.
             # If value >= target_price * 0.5, it's likely an absolute price.
             if offer_premium_or_price < target_price * 0.5:

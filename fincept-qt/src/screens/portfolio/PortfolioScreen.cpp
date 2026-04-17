@@ -98,7 +98,7 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
 
 void PortfolioScreen::build_ui() {
     setObjectName("portfolioScreen");
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -243,25 +243,25 @@ void PortfolioScreen::build_ui() {
 
 QWidget* PortfolioScreen::build_empty_state() {
     auto* w = new QWidget(this);
-    w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* layout = new QVBoxLayout(w);
     layout->setAlignment(Qt::AlignCenter);
     layout->setSpacing(16);
 
     auto* icon = new QLabel("\U0001F4BC"); // briefcase emoji
     icon->setAlignment(Qt::AlignCenter);
-    icon->setStyleSheet(QString("font-size:36px; color:%1; opacity:0.2;").arg(ui::colors::TEXT_TERTIARY));
+    icon->setStyleSheet(QString("font-size:36px; color:%1; opacity:0.2;").arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(icon);
 
     auto* title = new QLabel("NO PORTFOLIO SELECTED");
     title->setAlignment(Qt::AlignCenter);
     title->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     layout->addWidget(title);
 
     auto* sub = new QLabel("Select a portfolio or create a new one");
     sub->setAlignment(Qt::AlignCenter);
-    sub->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY));
+    sub->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(sub);
 
     // Buttons row
@@ -275,7 +275,7 @@ QWidget* PortfolioScreen::build_empty_state() {
     create_btn->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
                                       "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
                                       "QPushButton:hover { background:%2; }")
-                                  .arg(ui::colors::AMBER, ui::colors::WARNING, ui::colors::BG_BASE));
+                                  .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_BASE()));
     connect(create_btn, &QPushButton::clicked, this, &PortfolioScreen::on_create_requested);
     btn_row->addWidget(create_btn);
 
@@ -286,7 +286,7 @@ QWidget* PortfolioScreen::build_empty_state() {
         QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                 "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
                 "QPushButton:hover { background:%3; color:%4; }")
-            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY));
+            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY()));
     connect(import_btn, &QPushButton::clicked, command_bar_, &PortfolioCommandBar::import_requested);
     btn_row->addWidget(import_btn);
 
@@ -296,7 +296,7 @@ QWidget* PortfolioScreen::build_empty_state() {
     demo_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                                     "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
                                     "QPushButton:hover { background:%1; color:#000; }")
-                                .arg(ui::colors::CYAN));
+                                .arg(ui::colors::CYAN()));
     connect(demo_btn, &QPushButton::clicked, this, [this]() { load_demo_portfolio(); });
     btn_row->addWidget(demo_btn);
 
@@ -306,20 +306,20 @@ QWidget* PortfolioScreen::build_empty_state() {
 
 QWidget* PortfolioScreen::build_loading_state() {
     auto* w = new QWidget(this);
-    w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* layout = new QVBoxLayout(w);
     layout->setAlignment(Qt::AlignCenter);
     layout->setSpacing(12);
 
     auto* spinner = new QLabel("\u23F3");
     spinner->setAlignment(Qt::AlignCenter);
-    spinner->setStyleSheet(QString("font-size:16px; color:%1;").arg(ui::colors::AMBER));
+    spinner->setStyleSheet(QString("font-size:16px; color:%1;").arg(ui::colors::AMBER()));
     layout->addWidget(spinner);
 
     auto* text = new QLabel("Loading portfolio data...");
     text->setAlignment(Qt::AlignCenter);
     text->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:600; letter-spacing:0.5px;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1; font-size:11px; font-weight:600; letter-spacing:0.5px;").arg(ui::colors::TEXT_SECONDARY()));
     layout->addWidget(text);
     return w;
 }
@@ -588,7 +588,7 @@ void PortfolioScreen::request_refresh() {
 
 QWidget* PortfolioScreen::build_main_view() {
     auto* w = new QWidget(this);
-    w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 
     auto* h_layout = new QHBoxLayout(w);
     h_layout->setContentsMargins(0, 0, 0, 0);
@@ -608,7 +608,7 @@ QWidget* PortfolioScreen::build_main_view() {
     // Top: perf chart + sector panel side by side
     auto* top_split = new QSplitter(Qt::Horizontal);
     top_split->setHandleWidth(1);
-    top_split->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM));
+    top_split->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM()));
 
     perf_chart_ = new PortfolioPerfChart;
     sector_panel_ = new PortfolioSectorPanel;
@@ -636,7 +636,7 @@ QWidget* PortfolioScreen::build_main_view() {
     // Separator
     auto* sep = new QWidget(this);
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM));
+    sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
     center_layout->addWidget(sep);
 
     // Filter bar above blotter
@@ -648,14 +648,14 @@ QWidget* PortfolioScreen::build_main_view() {
     auto* filter_row = new QWidget(this);
     filter_row->setFixedHeight(28);
     filter_row->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* filter_hl = new QHBoxLayout(filter_row);
     filter_hl->setContentsMargins(8, 2, 8, 2);
     filter_hl->setSpacing(6);
 
     auto* filter_icon = new QLabel("⌕");
     filter_icon->setStyleSheet(
-        QString("color:%1; font-size:13px; background:transparent;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color:%1; font-size:13px; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
     filter_hl->addWidget(filter_icon);
 
     auto* filter_edit = new QLineEdit;
@@ -663,7 +663,7 @@ QWidget* PortfolioScreen::build_main_view() {
     filter_edit->setStyleSheet(QString("QLineEdit { background:transparent; color:%1; border:none;"
                                        "  font-size:11px; font-family:%2; }"
                                        "QLineEdit:focus { color:%3; }")
-                                   .arg(ui::colors::TEXT_SECONDARY, ui::fonts::DATA_FAMILY, ui::colors::TEXT_PRIMARY));
+                                   .arg(ui::colors::TEXT_SECONDARY(), ui::fonts::DATA_FAMILY, ui::colors::TEXT_PRIMARY()));
     filter_hl->addWidget(filter_edit, 1);
 
     blotter_layout->addWidget(filter_row);
@@ -775,7 +775,7 @@ void PortfolioScreen::update_main_view_data() {
 }
 
 void PortfolioScreen::refresh_theme() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 
     if (command_bar_)
         command_bar_->refresh_theme();

@@ -45,14 +45,14 @@ static QString table_style() {
                    "QTableWidget::item:selected { background:%4; color:%5; }"
                    "QHeaderView::section { background:%6; color:%7; border:none;"
                    "  border-bottom:2px solid %8; padding:4px 8px; font-size:9px; font-weight:700; }")
-        .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::AMBER_DIM,
-             ui::colors::AMBER, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER);
+        .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(),
+             ui::colors::AMBER(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER());
 }
 
 static QString input_style() {
     return QString("QLineEdit { background:%1; color:%2; border:1px solid %3; padding:0 8px; font-size:10px; }"
                    "QLineEdit:focus { border-color:%4; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::AMBER);
+        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER());
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -76,8 +76,8 @@ void CustomIndexView::build_ui() {
                                  "  letter-spacing:0.5px; }"
                                  "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
                                  "QTabBar::tab:hover { color:%5; }")
-                             .arg(ui::colors::BG_BASE, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY,
-                                  ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+                             .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(),
+                                  ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
 
     tabs_->addTab(build_create_panel(), "CREATE INDEX");
     tabs_->addTab(build_index_list_panel(), "MY INDICES");
@@ -94,7 +94,7 @@ QWidget* CustomIndexView::build_create_panel() {
 
     auto* title = new QLabel("CREATE CUSTOM INDEX");
     title->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     layout->addWidget(title);
 
     // Config row
@@ -103,7 +103,7 @@ QWidget* CustomIndexView::build_create_panel() {
 
     auto add_field = [&](const QString& label, QWidget* widget) {
         auto* lbl = new QLabel(label);
-        lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700;").arg(ui::colors::TEXT_TERTIARY));
+        lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700;").arg(ui::colors::TEXT_TERTIARY()));
         config->addWidget(lbl);
         config->addWidget(widget);
     };
@@ -121,7 +121,7 @@ QWidget* CustomIndexView::build_create_panel() {
         QString("QComboBox { background:%1; color:%2; border:1px solid %3; padding:0 8px; font-size:10px; }"
                 "QComboBox::drop-down { border:none; }"
                 "QComboBox QAbstractItemView { background:%1; color:%2; }")
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM));
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM()));
     add_field("METHOD:", method_cb_);
 
     base_edit_ = new QLineEdit("1000");
@@ -137,7 +137,7 @@ QWidget* CustomIndexView::build_create_panel() {
     create_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
                                        "  padding:0 16px; font-size:10px; font-weight:700; }"
                                        "QPushButton:hover { background:%2; }")
-                                   .arg(ui::colors::AMBER, ui::colors::WARNING, ui::colors::BG_BASE));
+                                   .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_BASE()));
     connect(create_btn_, &QPushButton::clicked, this, &CustomIndexView::create_index);
     config->addWidget(create_btn_);
 
@@ -145,7 +145,7 @@ QWidget* CustomIndexView::build_create_panel() {
 
     // Method description
     auto* method_desc = new QLabel(kMethodDescriptions[0]);
-    method_desc->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
+    method_desc->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
     connect(method_cb_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [method_desc](int idx) {
         if (idx >= 0 && idx < kMethodDescriptions.size())
             method_desc->setText(kMethodDescriptions[idx]);
@@ -154,14 +154,14 @@ QWidget* CustomIndexView::build_create_panel() {
 
     // Status label
     create_status_ = new QLabel;
-    create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE));
+    create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE()));
     create_status_->hide();
     layout->addWidget(create_status_);
 
     // Constituents table header
     auto* const_title = new QLabel("CONSTITUENTS (from portfolio holdings)");
     const_title->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_SECONDARY()));
     layout->addWidget(const_title);
 
     const_table_ = new QTableWidget;
@@ -188,7 +188,7 @@ QWidget* CustomIndexView::build_index_list_panel() {
     auto* header_row = new QHBoxLayout;
     auto* title = new QLabel("MY CUSTOM INDICES");
     title->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     header_row->addWidget(title);
     header_row->addStretch();
 
@@ -198,7 +198,7 @@ QWidget* CustomIndexView::build_index_list_panel() {
     delete_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
                                        "  padding:0 14px; font-size:9px; font-weight:700; }"
                                        "QPushButton:hover { background:%1; }")
-                                   .arg(ui::colors::NEGATIVE, ui::colors::TEXT_PRIMARY));
+                                   .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
     connect(delete_btn_, &QPushButton::clicked, this, &CustomIndexView::delete_selected_index);
     header_row->addWidget(delete_btn_);
     layout->addLayout(header_row);
@@ -228,7 +228,7 @@ QWidget* CustomIndexView::build_index_list_panel() {
     list_empty_msg_ =
         new QLabel("No custom indices created yet.\nGo to CREATE INDEX tab to build one from your portfolio.");
     list_empty_msg_->setAlignment(Qt::AlignCenter);
-    list_empty_msg_->setStyleSheet(QString("color:%1; font-size:11px; padding:40px;").arg(ui::colors::TEXT_TERTIARY));
+    list_empty_msg_->setStyleSheet(QString("color:%1; font-size:11px; padding:40px;").arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(list_empty_msg_);
 
     return w;
@@ -242,7 +242,7 @@ QWidget* CustomIndexView::build_performance_panel() {
 
     perf_title_ = new QLabel("INDEX PERFORMANCE");
     perf_title_->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     layout->addWidget(perf_title_);
 
     perf_stack_ = new QStackedWidget;
@@ -250,7 +250,7 @@ QWidget* CustomIndexView::build_performance_panel() {
     // Page 0 — placeholder
     auto* placeholder = new QLabel("Select an index from MY INDICES to see its performance.");
     placeholder->setAlignment(Qt::AlignCenter);
-    placeholder->setStyleSheet(QString("color:%1; font-size:11px; padding:40px;").arg(ui::colors::TEXT_TERTIARY));
+    placeholder->setStyleSheet(QString("color:%1; font-size:11px; padding:40px;").arg(ui::colors::TEXT_TERTIARY()));
     perf_stack_->addWidget(placeholder);
 
     // Page 1 — chart
@@ -325,7 +325,7 @@ void CustomIndexView::create_index() {
     const double base = base_edit_->text().toDouble();
     if (base <= 0.0) {
         create_status_->setText("Base value must be positive.");
-        create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
+        create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
         create_status_->show();
         return;
     }
@@ -356,7 +356,7 @@ void CustomIndexView::create_index() {
 
     if (constituents.isEmpty()) {
         create_status_->setText("Select at least one constituent.");
-        create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
+        create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
         create_status_->show();
         return;
     }
@@ -373,7 +373,7 @@ void CustomIndexView::create_index() {
         const QString msg = QString::fromStdString(result.error());
         LOG_ERROR("CustomIndex", "Failed to create index: " + msg);
         create_status_->setText("Error: " + msg);
-        create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
+        create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
         create_status_->show();
         return;
     }
@@ -388,7 +388,7 @@ void CustomIndexView::create_index() {
     CustomIndexRepository::instance().save_value(index_id, today, current_val);
 
     create_status_->setText(QString("Index '%1' created successfully.").arg(name));
-    create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE));
+    create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE()));
     create_status_->show();
     name_edit_->clear();
 

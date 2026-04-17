@@ -85,7 +85,7 @@ void CryptoTickerBar::update_data(double price, double change_pct, double high, 
     if (positive != last_positive_) {
         change_label_->setStyleSheet(
             QString("color: %1; font-size: 12px; font-weight: 700; background: transparent; border: none;")
-                .arg(positive ? colors::POSITIVE : colors::NEGATIVE));
+                .arg(positive ? colors::POSITIVE() : colors::NEGATIVE()));
         last_positive_ = positive;
     }
 

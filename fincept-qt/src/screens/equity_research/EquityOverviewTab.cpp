@@ -36,7 +36,7 @@ namespace {
 QFrame* make_panel(const QString& title, const char* title_color) {
     auto* f = new QFrame;
     f->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}")
-                         .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                         .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* vl = new QVBoxLayout(f);
     vl->setContentsMargins(10, 7, 10, 7);
     vl->setSpacing(4);
@@ -51,7 +51,7 @@ QFrame* make_panel(const QString& title, const char* title_color) {
         auto* sep = new QFrame;
         sep->setFrameShape(QFrame::HLine);
         sep->setFixedHeight(1);
-        sep->setStyleSheet(QString("border:0;background:%1;").arg(ui::colors::BORDER_DIM));
+        sep->setStyleSheet(QString("border:0;background:%1;").arg(ui::colors::BORDER_DIM()));
         vl->addWidget(sep);
     }
     return f;
@@ -64,7 +64,7 @@ QLabel* add_row(QFrame* panel, const QString& key, const char* val_color) {
 
     auto* k = new QLabel(key);
     k->setStyleSheet(QString("color:%1;font-size:%2px;background:transparent;border:0;")
-                         .arg(ui::colors::TEXT_SECONDARY)
+                         .arg(ui::colors::TEXT_SECONDARY())
                          .arg(FONT_KEY));
 
     auto* v = new QLabel("\xe2\x80\x94");
@@ -278,7 +278,7 @@ void EquityOverviewTab::set_symbol(const QString& symbol) {
 // ── Build UI ──────────────────────────────────────────────────────────────────
 
 void EquityOverviewTab::build_ui() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 
     loading_overlay_ = new ui::LoadingOverlay(this);
 
@@ -376,7 +376,7 @@ QWidget* EquityOverviewTab::build_share_stats_panel() {
 QWidget* EquityOverviewTab::build_chart_panel() {
     auto* p = new QFrame;
     p->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}")
-                         .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                         .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     auto* vl = new QVBoxLayout(p);
     vl->setContentsMargins(8, 6, 8, 6);
@@ -389,19 +389,19 @@ QWidget* EquityOverviewTab::build_chart_panel() {
 
     auto* period_lbl = new QLabel("PERIOD");
     period_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;background:transparent;border:0;")
-                                  .arg(ui::colors::TEXT_SECONDARY));
+                                  .arg(ui::colors::TEXT_SECONDARY()));
     btn_row->addWidget(period_lbl);
 
     auto btn_style_inactive =
         QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                 "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}"
                 "QPushButton:hover{border-color:%3;background:%4;}")
-            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, ui::colors::AMBER, ui::colors::BG_RAISED);
+            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER(), ui::colors::BG_RAISED());
 
     auto btn_style_active =
         QString("QPushButton{background:%1;color:%2;border:1px solid %1;"
                 "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}")
-            .arg(ui::colors::AMBER, ui::colors::BG_BASE);
+            .arg(ui::colors::AMBER(), ui::colors::BG_BASE());
 
     auto make_btn = [&](const QString& label, QPushButton*& out, const QString& period) {
         out = new QPushButton(label);
@@ -438,12 +438,12 @@ void EquityOverviewTab::switch_period(QPushButton* btn, const QString& period) {
         QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                 "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}"
                 "QPushButton:hover{border-color:%3;background:%4;}")
-            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM, ui::colors::AMBER, ui::colors::BG_RAISED);
+            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER(), ui::colors::BG_RAISED());
 
     auto active =
         QString("QPushButton{background:%1;color:%2;border:1px solid %1;"
                 "border-radius:2px;padding:3px 10px;font-size:12px;font-weight:700;font-family:'Consolas',monospace;}")
-            .arg(ui::colors::AMBER, ui::colors::BG_BASE);
+            .arg(ui::colors::AMBER(), ui::colors::BG_BASE());
 
     for (auto* b : {btn_1m_, btn_3m_, btn_6m_, btn_1y_, btn_5y_})
         b->setStyleSheet(b == btn ? active : inactive);
@@ -479,7 +479,7 @@ QWidget* EquityOverviewTab::build_analyst_panel() {
     rec_key_label_->setAlignment(Qt::AlignCenter);
     rec_key_label_->setStyleSheet(QString("background:%1;color:%2;border-radius:2px;padding:3px 8px;"
                                           "font-size:12px;font-weight:700;")
-                                      .arg(ui::colors::BG_RAISED, ui::colors::TEXT_SECONDARY));
+                                      .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY()));
     static_cast<QVBoxLayout*>(p->layout())->addWidget(rec_key_label_);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
@@ -540,7 +540,7 @@ QWidget* EquityOverviewTab::build_company_desc_panel() {
     company_desc_->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     company_desc_->setStyleSheet(QString("color:%1;font-size:%2px;line-height:1.5;"
                                          "background:transparent;border:0;")
-                                     .arg(ui::colors::TEXT_PRIMARY)
+                                     .arg(ui::colors::TEXT_PRIMARY())
                                      .arg(FONT_DESC));
     company_desc_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     static_cast<QVBoxLayout*>(p->layout())->addWidget(company_desc_);
@@ -641,7 +641,7 @@ void EquityOverviewTab::on_info_loaded(services::equity::StockInfo info) {
     rec_key_label_->setText(rec.isEmpty() ? "\xe2\x80\x94" : rec);
     rec_key_label_->setStyleSheet(QString("background:%1;color:%2;border-radius:2px;padding:3px 8px;"
                                           "font-size:12px;font-weight:700;")
-                                      .arg(ui::colors::BG_RAISED, rec_color));
+                                      .arg(ui::colors::BG_RAISED(), rec_color));
 
     // Profitability
     gross_margin_val_->setText(fmt_pct(info.gross_margins));

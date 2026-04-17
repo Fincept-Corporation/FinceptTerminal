@@ -529,7 +529,7 @@ TradeVizScreen::TradeVizScreen(QWidget* parent) : QWidget(parent) {
 
 void TradeVizScreen::setup_ui() {
     setObjectName("tradeVizScreen");
-    setStyleSheet(QString("QWidget#tradeVizScreen { background: %1; }").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("QWidget#tradeVizScreen { background: %1; }").arg(ui::colors::BG_BASE()));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);

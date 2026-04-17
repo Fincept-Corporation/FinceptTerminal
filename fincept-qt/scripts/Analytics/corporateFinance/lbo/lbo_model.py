@@ -277,7 +277,7 @@ def main():
             print(json.dumps(result))
 
         elif command == "sensitivity":
-            # Rust sends: "sensitivity" base_case revenue_growth_scenarios exit_multiple_scenarios
+            # Host sends: "sensitivity" base_case revenue_growth_scenarios exit_multiple_scenarios
             if len(sys.argv) < 5:
                 raise ValueError("Base case, revenue growth scenarios, and exit multiple scenarios required")
 

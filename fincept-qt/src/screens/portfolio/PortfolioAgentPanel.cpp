@@ -23,7 +23,7 @@ PortfolioAgentPanel::PortfolioAgentPanel(QWidget* parent) : QWidget(parent) {
 }
 
 void PortfolioAgentPanel::build_ui() {
-    setStyleSheet(QString("background:%1; border:1px solid #00D4AA;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1; border:1px solid #00D4AA;").arg(ui::colors::BG_BASE()));
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -33,7 +33,7 @@ void PortfolioAgentPanel::build_ui() {
     auto* header = new QWidget(this);
     header->setFixedHeight(32);
     header->setStyleSheet(
-        QString("background:rgba(0,212,170,0.07); border-bottom:1px solid %1;").arg(ui::colors::BORDER_MED));
+        QString("background:rgba(0,212,170,0.07); border-bottom:1px solid %1;").arg(ui::colors::BORDER_MED()));
 
     auto* h_layout = new QHBoxLayout(header);
     h_layout->setContentsMargins(12, 0, 8, 0);
@@ -58,7 +58,7 @@ void PortfolioAgentPanel::build_ui() {
     close_btn_->setCursor(Qt::PointingHandCursor);
     close_btn_->setStyleSheet(QString("QPushButton { background:none; border:none; color:%1; font-size:11px; }"
                                       "QPushButton:hover { color:%2; }")
-                                  .arg(ui::colors::TEXT_SECONDARY, ui::colors::TEXT_PRIMARY));
+                                  .arg(ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_PRIMARY()));
     connect(close_btn_, &QPushButton::clicked, this, [this]() {
         hide();
         emit close_requested();
@@ -70,14 +70,14 @@ void PortfolioAgentPanel::build_ui() {
     // ── Agent selector ───────────────────────────────────────────────────────
     auto* selector = new QWidget(this);
     selector->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     auto* sel_layout = new QVBoxLayout(selector);
     sel_layout->setContentsMargins(12, 8, 12, 8);
     sel_layout->setSpacing(4);
 
     auto* sel_label = new QLabel("SELECT AGENT");
     sel_label->setStyleSheet(
-        QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY()));
     sel_layout->addWidget(sel_label);
 
     agent_cb_ = new QComboBox;
@@ -86,7 +86,7 @@ void PortfolioAgentPanel::build_ui() {
                                      "  padding:0 8px; font-size:10px; }"
                                      "QComboBox::drop-down { border:none; }"
                                      "QComboBox QAbstractItemView { background:%1; color:%2; }")
-                                 .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED));
+                                 .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED()));
     connect(agent_cb_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
         QString id = agent_cb_->currentData().toString();
         if (result_cache_.contains(id))
@@ -105,7 +105,7 @@ void PortfolioAgentPanel::build_ui() {
                                     "  letter-spacing:0.5px; margin-top:6px; }"
                                     "QPushButton:hover { background:rgba(0,212,170,0.22); }"
                                     "QPushButton:disabled { color:%1; }")
-                                .arg(ui::colors::TEXT_TERTIARY));
+                                .arg(ui::colors::TEXT_TERTIARY()));
     connect(run_btn_, &QPushButton::clicked, this, [this]() { run_agent(true); });
     sel_layout->addWidget(run_btn_);
 
@@ -116,7 +116,7 @@ void PortfolioAgentPanel::build_ui() {
     content_->setOpenExternalLinks(true);
     content_->setStyleSheet(QString("QTextBrowser { background:%1; color:%2; border:none; padding:12px;"
                                     "  font-size:11px; line-height:1.6; }")
-                                .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY));
+                                .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
     content_->setPlaceholderText("Select an agent above and click Run.");
     layout->addWidget(content_, 1);
 }
@@ -240,7 +240,7 @@ void PortfolioAgentPanel::run_agent(bool force) {
                     static const QRegularExpression bold_re("\\*\\*(.+?)\\*\\*");
                     html.replace(bold_re, "<b>\\1</b>");
                     html = QString("<div style='font-size:11px; line-height:1.6; color:%1;'>%2</div>")
-                               .arg(ui::colors::TEXT_PRIMARY)
+                               .arg(ui::colors::TEXT_PRIMARY())
                                .arg(html);
 
                     self->result_cache_[agent_id] = html;

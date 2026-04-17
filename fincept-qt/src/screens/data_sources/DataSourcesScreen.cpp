@@ -492,22 +492,22 @@ void DataSourcesScreen::setup_ui() {
 
     // Apply stylesheet
     const QString style = kScreenStylesheet
-                              .arg(col::BG_BASE)        // %1
-                              .arg(col::BG_SURFACE)     // %2
-                              .arg(col::BG_RAISED)      // %3
-                              .arg(col::BORDER_DIM)     // %4
-                              .arg(col::AMBER)          // %5
-                              .arg(col::TEXT_SECONDARY) // %6
-                              .arg(col::BORDER_MED)     // %7
-                              .arg(col::TEXT_TERTIARY)  // %8
-                              .arg(col::BG_HOVER)       // %9
-                              .arg(col::TEXT_PRIMARY)   // %10
-                              .arg(col::BORDER_BRIGHT)  // %11
-                              .arg(col::AMBER_DIM)      // %12
-                              .arg(col::POSITIVE)       // %13
-                              .arg(col::NEGATIVE)       // %14
-                              .arg(col::NEGATIVE_DIM)   // %15
-                              .arg(col::POSITIVE_DIM);  // %16
+                              .arg(col::BG_BASE())        // %1
+                              .arg(col::BG_SURFACE())     // %2
+                              .arg(col::BG_RAISED())      // %3
+                              .arg(col::BORDER_DIM())     // %4
+                              .arg(col::AMBER())          // %5
+                              .arg(col::TEXT_SECONDARY()) // %6
+                              .arg(col::BORDER_MED())     // %7
+                              .arg(col::TEXT_TERTIARY())  // %8
+                              .arg(col::BG_HOVER())       // %9
+                              .arg(col::TEXT_PRIMARY())   // %10
+                              .arg(col::BORDER_BRIGHT())  // %11
+                              .arg(col::AMBER_DIM())      // %12
+                              .arg(col::POSITIVE())       // %13
+                              .arg(col::NEGATIVE())       // %14
+                              .arg(col::NEGATIVE_DIM())   // %15
+                              .arg(col::POSITIVE_DIM());  // %16
     setStyleSheet(style);
 
     auto* root = new QVBoxLayout(this);
@@ -560,7 +560,7 @@ QWidget* DataSourcesScreen::build_screen_header() {
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::VLine);
     sep->setFixedWidth(1);
-    sep->setStyleSheet(QString("background:%1;margin:8px 12px;").arg(col::BORDER_DIM));
+    sep->setStyleSheet(QString("background:%1;margin:8px 12px;").arg(col::BORDER_DIM()));
     hl->addWidget(sep);
 
     auto* subtitle = new QLabel(QString("%1 CONNECTORS").arg(ConnectorRegistry::instance().count()));
@@ -608,7 +608,7 @@ QWidget* DataSourcesScreen::build_screen_header() {
     auto* sep2 = new QFrame;
     sep2->setFrameShape(QFrame::VLine);
     sep2->setFixedWidth(1);
-    sep2->setStyleSheet(QString("background:%1;margin:8px 0;").arg(col::BORDER_DIM));
+    sep2->setStyleSheet(QString("background:%1;margin:8px 0;").arg(col::BORDER_DIM()));
     hl->addWidget(sep2);
     hl->addSpacing(12);
 
@@ -858,7 +858,7 @@ QWidget* DataSourcesScreen::build_connector_panel() {
     connector_table_->horizontalHeader()->setHighlightSections(false);
     connector_table_->setAlternatingRowColors(true);
     connector_table_->setStyleSheet(connector_table_->styleSheet() +
-                                    QString("QTableWidget { alternate-background-color: %1; }").arg(col::ROW_ALT));
+                                    QString("QTableWidget { alternate-background-color: %1; }").arg(col::ROW_ALT()));
     connect(connector_table_, &QTableWidget::itemSelectionChanged, this,
             &DataSourcesScreen::on_connector_selection_changed);
     connect(connector_table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
@@ -900,10 +900,10 @@ QWidget* DataSourcesScreen::build_detail_panel() {
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setStyleSheet(QString("QScrollArea { background:%1; border:none; }").arg(col::BG_SURFACE));
+    scroll->setStyleSheet(QString("QScrollArea { background:%1; border:none; }").arg(col::BG_SURFACE()));
 
     auto* body = new QWidget(this);
-    body->setStyleSheet(QString("background:%1;").arg(col::BG_SURFACE));
+    body->setStyleSheet(QString("background:%1;").arg(col::BG_SURFACE()));
     auto* body_vl = new QVBoxLayout(body);
     body_vl->setContentsMargins(0, 0, 0, 0);
     body_vl->setSpacing(0);
@@ -1159,7 +1159,7 @@ QWidget* DataSourcesScreen::build_connections_page() {
     connections_table_->horizontalHeader()->setHighlightSections(false);
     connections_table_->setAlternatingRowColors(true);
     connections_table_->setStyleSheet(connections_table_->styleSheet() +
-                                      QString("QTableWidget { alternate-background-color: %1; }").arg(col::ROW_ALT));
+                                      QString("QTableWidget { alternate-background-color: %1; }").arg(col::ROW_ALT()));
     connect(connections_table_, &QTableWidget::itemSelectionChanged, this,
             &DataSourcesScreen::on_connection_selection_changed);
 
@@ -1221,7 +1221,7 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config, const 
                 "QCheckBox { color:%2; font-size:13px; font-family:'Consolas','Courier New',monospace; }"
                 "QPushButton { padding:7px 18px; font-size:12px; font-weight:700;"
                 "  font-family:'Consolas','Courier New',monospace; }")
-            .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::TEXT_SECONDARY, col::BG_BASE, col::BORDER_DIM, col::AMBER));
+            .arg(col::BG_SURFACE(), col::TEXT_PRIMARY(), col::TEXT_SECONDARY(), col::BG_BASE(), col::BORDER_DIM(), col::AMBER()));
 
     auto* root_vl = new QVBoxLayout(&dlg);
     root_vl->setContentsMargins(0, 0, 0, 0);
@@ -1230,7 +1230,7 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config, const 
     // Dialog header
     auto* dlg_hdr = new QWidget(this);
     dlg_hdr->setFixedHeight(56);
-    dlg_hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(col::BG_RAISED, col::BORDER_DIM));
+    dlg_hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(col::BG_RAISED(), col::BORDER_DIM()));
     auto* dlg_hdr_hl = new QHBoxLayout(dlg_hdr);
     dlg_hdr_hl->setContentsMargins(16, 0, 16, 0);
     dlg_hdr_hl->setSpacing(12);
@@ -1240,7 +1240,7 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config, const 
     code_lbl->setFixedSize(36, 36);
     code_lbl->setStyleSheet(QString("background:%1;color:%2;border:1px solid %3;font-size:14px;"
                                     "font-weight:700;")
-                                .arg(config.color, col::TEXT_PRIMARY, col::BORDER_DIM));
+                                .arg(config.color, col::TEXT_PRIMARY(), col::BORDER_DIM()));
     dlg_hdr_hl->addWidget(code_lbl);
 
     auto* title_vl = new QVBoxLayout;
@@ -1251,12 +1251,12 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config, const 
                                  : duplicate ? QString("Clone  %1").arg(config.name)
                                              : config.name);
     dlg_title->setStyleSheet(
-        QString("color:%1;font-size:14px;font-weight:700;background:transparent;").arg(col::AMBER));
+        QString("color:%1;font-size:14px;font-weight:700;background:transparent;").arg(col::AMBER()));
     title_vl->addWidget(dlg_title);
 
     auto* dlg_sub = new QLabel(config.description);
     dlg_sub->setWordWrap(true);
-    dlg_sub->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;").arg(col::TEXT_SECONDARY));
+    dlg_sub->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;").arg(col::TEXT_SECONDARY()));
     title_vl->addWidget(dlg_sub);
 
     dlg_hdr_hl->addLayout(title_vl, 1);
@@ -1266,7 +1266,7 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config, const 
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setStyleSheet(QString("QScrollArea { background:%1; border:none; }").arg(col::BG_SURFACE));
+    scroll->setStyleSheet(QString("QScrollArea { background:%1; border:none; }").arg(col::BG_SURFACE()));
 
     auto* body = new QWidget(this);
     auto* body_vl = new QVBoxLayout(body);
@@ -1370,7 +1370,7 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config, const 
     auto* note = new QLabel("Fields marked with * are required.");
     note->setWordWrap(true);
     note->setStyleSheet(
-        QString("color:%1;font-size:11px;font-style:italic;background:transparent;").arg(col::TEXT_TERTIARY));
+        QString("color:%1;font-size:11px;font-style:italic;background:transparent;").arg(col::TEXT_TERTIARY()));
     body_vl->addWidget(note);
     body_vl->addStretch();
 
@@ -1380,20 +1380,20 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config, const 
     // Dialog footer
     auto* footer = new QWidget(this);
     footer->setFixedHeight(54);
-    footer->setStyleSheet(QString("background:%1;border-top:1px solid %2;").arg(col::BG_RAISED, col::BORDER_DIM));
+    footer->setStyleSheet(QString("background:%1;border-top:1px solid %2;").arg(col::BG_RAISED(), col::BORDER_DIM()));
     auto* footer_hl = new QHBoxLayout(footer);
     footer_hl->setContentsMargins(16, 0, 16, 0);
     footer_hl->setSpacing(8);
 
     auto* status = new QLabel;
-    status->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(col::TEXT_SECONDARY));
+    status->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(col::TEXT_SECONDARY()));
     footer_hl->addWidget(status, 1);
 
     auto* cancel = new QPushButton("Cancel");
     cancel->setCursor(Qt::PointingHandCursor);
     cancel->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;}"
                                   "QPushButton:hover{background:%3;color:%4;}")
-                              .arg(col::BG_BASE, col::TEXT_SECONDARY, col::BORDER_MED, col::TEXT_PRIMARY));
+                              .arg(col::BG_BASE(), col::TEXT_SECONDARY(), col::BORDER_MED(), col::TEXT_PRIMARY()));
     footer_hl->addWidget(cancel);
 
     auto* save = new QPushButton(editing ? "Update Connection" : "Save Connection");
@@ -1402,7 +1402,7 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config, const 
     save->setAutoDefault(true);
     save->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.12);color:%1;border:1px solid %2;}"
                                 "QPushButton:hover{background:%1;color:%3;}")
-                            .arg(col::AMBER, col::AMBER_DIM, col::BG_BASE));
+                            .arg(col::AMBER(), col::AMBER_DIM(), col::BG_BASE()));
     footer_hl->addWidget(save);
 
     root_vl->addWidget(footer);
@@ -1436,7 +1436,7 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config, const 
             if (field.required && field.type != FieldType::Checkbox && text_value.isEmpty()) {
                 status->setText("Missing required field: " + field.label);
                 status->setStyleSheet(
-                    QString("color:%1;font-size:12px;font-weight:700;background:transparent;").arg(col::NEGATIVE));
+                    QString("color:%1;font-size:12px;font-weight:700;background:transparent;").arg(col::NEGATIVE()));
                 return;
             }
         }
@@ -1458,7 +1458,7 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config, const 
         if (result.is_err()) {
             status->setText("Failed to save: " + QString::fromStdString(result.error()));
             status->setStyleSheet(
-                QString("color:%1;font-size:12px;font-weight:700;background:transparent;").arg(col::NEGATIVE));
+                QString("color:%1;font-size:12px;font-weight:700;background:transparent;").arg(col::NEGATIVE()));
             return;
         }
 
@@ -1692,10 +1692,10 @@ void DataSourcesScreen::update_stats_strip() {
     // Highlight active stat filter
     auto reset_color = [](QLabel* v) {
         v->setStyleSheet(
-            QString("color:%1;font-size:22px;font-weight:700;background:transparent;").arg(col::TEXT_PRIMARY));
+            QString("color:%1;font-size:22px;font-weight:700;background:transparent;").arg(col::TEXT_PRIMARY()));
     };
     auto set_amber = [](QLabel* v) {
-        v->setStyleSheet(QString("color:%1;font-size:22px;font-weight:700;background:transparent;").arg(col::AMBER));
+        v->setStyleSheet(QString("color:%1;font-size:22px;font-weight:700;background:transparent;").arg(col::AMBER()));
     };
 
     reset_color(universe_stat_value_);
@@ -1770,7 +1770,7 @@ void DataSourcesScreen::update_detail_panel() {
         detail_symbol_->setStyleSheet(QString("min-width:38px;max-width:38px;min-height:38px;max-height:38px;"
                                               "font-size:13px;font-weight:700;color:%1;background:%2;"
                                               "border:1px solid %1;")
-                                          .arg(col::AMBER, col::BG_BASE));
+                                          .arg(col::AMBER(), col::BG_BASE()));
         detail_title_->setText("Select a connector");
         detail_description_->setText("Double-click any row to configure");
         detail_category_value_->setText("--");
@@ -1798,7 +1798,7 @@ void DataSourcesScreen::update_detail_panel() {
     detail_symbol_->setText(connector_code(*cfg));
     detail_symbol_->setStyleSheet(QString("min-width:38px;max-width:38px;min-height:38px;max-height:38px;"
                                           "font-size:13px;font-weight:700;color:%1;background:%2;border:1px solid %1;")
-                                      .arg(cfg->color, col::BG_BASE));
+                                      .arg(cfg->color, col::BG_BASE()));
     detail_title_->setText(cfg->name);
     detail_description_->setText(cfg->description);
 
@@ -2338,13 +2338,13 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
                     "QPushButton{background:%3;color:%2;border:1px solid %4;"
                     "padding:6px 18px;font-size:12px;font-weight:700;}"
                     "QPushButton:hover{background:%4;}")
-                .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::BG_RAISED, col::BORDER_DIM));
+                .arg(col::BG_SURFACE(), col::TEXT_PRIMARY(), col::BG_RAISED(), col::BORDER_DIM()));
         auto* vl = new QVBoxLayout(&result_dlg);
         vl->setContentsMargins(24, 20, 24, 16);
         vl->setSpacing(10);
         auto* lbl = new QLabel("This connector does not support connectivity testing.");
         lbl->setWordWrap(true);
-        lbl->setStyleSheet(QString("color:%1;font-size:13px;background:transparent;").arg(col::TEXT_SECONDARY));
+        lbl->setStyleSheet(QString("color:%1;font-size:13px;background:transparent;").arg(col::TEXT_SECONDARY()));
         vl->addWidget(lbl);
         vl->addStretch();
         auto* btn = new QPushButton("Close");
@@ -2504,14 +2504,14 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
                     "QPushButton{background:%3;color:%2;border:1px solid %4;"
                     "padding:6px 18px;font-size:12px;font-weight:700;}"
                     "QPushButton:hover{background:%4;}")
-                .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::BG_RAISED, col::BORDER_DIM));
+                .arg(col::BG_SURFACE(), col::TEXT_PRIMARY(), col::BG_RAISED(), col::BORDER_DIM()));
         auto* vl = new QVBoxLayout(&result_dlg);
         vl->setContentsMargins(24, 20, 24, 16);
         vl->setSpacing(10);
         auto* lbl = new QLabel("No testable endpoint found in the saved configuration.\n"
                                "Ensure required fields (URL, host, or API key) are filled in.");
         lbl->setWordWrap(true);
-        lbl->setStyleSheet(QString("color:%1;font-size:13px;background:transparent;").arg(col::TEXT_SECONDARY));
+        lbl->setStyleSheet(QString("color:%1;font-size:13px;background:transparent;").arg(col::TEXT_SECONDARY()));
         vl->addWidget(lbl);
         vl->addStretch();
         auto* btn = new QPushButton("Close");
@@ -2583,7 +2583,7 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
                                 "QPushButton{background:%3;color:%2;border:1px solid %4;"
                                 "padding:6px 18px;font-size:12px;font-weight:700;}"
                                 "QPushButton:hover{background:%4;}")
-                            .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::BG_RAISED, col::BORDER_DIM));
+                            .arg(col::BG_SURFACE(), col::TEXT_PRIMARY(), col::BG_RAISED(), col::BORDER_DIM()));
 
                     auto* vl = new QVBoxLayout(&result_dlg);
                     vl->setContentsMargins(24, 20, 24, 16);
@@ -2598,7 +2598,7 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
                     auto* msg_lbl = new QLabel(message);
                     msg_lbl->setWordWrap(true);
                     msg_lbl->setStyleSheet(
-                        QString("color:%1;font-size:12px;background:transparent;").arg(col::TEXT_SECONDARY));
+                        QString("color:%1;font-size:12px;background:transparent;").arg(col::TEXT_SECONDARY()));
                     vl->addWidget(msg_lbl);
 
                     if (success) {
@@ -2606,7 +2606,7 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
                             new QLabel("Note: TCP reachability confirmed. API key validity is not verified here.");
                         note->setWordWrap(true);
                         note->setStyleSheet(QString("color:%1;font-size:11px;font-style:italic;background:transparent;")
-                                                .arg(col::TEXT_TERTIARY));
+                                                .arg(col::TEXT_TERTIARY()));
                         vl->addWidget(note);
                     }
                     vl->addStretch();
@@ -2802,7 +2802,7 @@ void DataSourcesScreen::on_bulk_delete_selected() {
                 "QPushButton { background:%3; color:%2; border:1px solid %4;"
                 " padding:6px 18px; font-size:12px; font-weight:700; }"
                 "QPushButton:hover { background:%4; }")
-            .arg(col::BG_SURFACE, col::TEXT_PRIMARY, col::BG_RAISED, col::BORDER_DIM));
+            .arg(col::BG_SURFACE(), col::TEXT_PRIMARY(), col::BG_RAISED(), col::BORDER_DIM()));
     if (confirm.exec() != QMessageBox::Yes)
         return;
 

@@ -30,21 +30,21 @@ void DBnomicsDataTable::build_ui() {
                                         "font-family: 'Consolas','Courier New',monospace; "
                                         "padding: 6px 12px; background: %2; "
                                         "border-bottom: 1px solid %3;")
-                                    .arg(ui::colors::AMBER)
-                                    .arg(ui::colors::BG_RAISED)
-                                    .arg(ui::colors::BORDER_DIM));
+                                    .arg(ui::colors::AMBER())
+                                    .arg(ui::colors::BG_RAISED())
+                                    .arg(ui::colors::BORDER_DIM()));
     root->addWidget(header_label);
 
     stack_ = new QStackedWidget(this);
 
     // ── Page 0: loading spinner ───────────────────────────────────────────────
     auto* loading_page = new QWidget(stack_);
-    loading_page->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    loading_page->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* loading_vl = new QVBoxLayout(loading_page);
     spin_label_ = new QLabel(loading_page);
     spin_label_->setAlignment(Qt::AlignCenter);
     spin_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:13px; background:transparent;")
-                                   .arg(ui::colors::TEXT_TERTIARY)
+                                   .arg(ui::colors::TEXT_TERTIARY())
                                    .arg(ui::fonts::DATA_FAMILY));
     loading_vl->addWidget(spin_label_);
     stack_->addWidget(loading_page); // index 0
@@ -76,13 +76,13 @@ void DBnomicsDataTable::build_ui() {
                                   "QScrollBar:horizontal { background: %1; height: 8px; border: none; }"
                                   "QScrollBar::handle:horizontal { background: %3; border-radius: 4px; }"
                                   "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }")
-                              .arg(ui::colors::BG_BASE)        // %1
-                              .arg(ui::colors::TEXT_PRIMARY)   // %2
-                              .arg(ui::colors::BORDER_DIM)     // %3
-                              .arg(ui::colors::BG_HOVER)       // %4
-                              .arg(ui::colors::BG_RAISED)      // %5
-                              .arg(ui::colors::TEXT_SECONDARY) // %6
-                              .arg(ui::colors::BG_SURFACE));   // %7 alternate row
+                              .arg(ui::colors::BG_BASE())        // %1
+                              .arg(ui::colors::TEXT_PRIMARY())   // %2
+                              .arg(ui::colors::BORDER_DIM())     // %3
+                              .arg(ui::colors::BG_HOVER())       // %4
+                              .arg(ui::colors::BG_RAISED())      // %5
+                              .arg(ui::colors::TEXT_SECONDARY()) // %6
+                              .arg(ui::colors::BG_SURFACE()));   // %7 alternate row
     stack_->addWidget(table_);                                 // index 1
 
     stack_->setCurrentIndex(1);

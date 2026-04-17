@@ -83,12 +83,12 @@ void DBnomicsChartWidget::build_ui() {
 
     // ── Page 0: loading spinner ───────────────────────────────────────────────
     auto* loading_page = new QWidget(stack_);
-    loading_page->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    loading_page->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* loading_vl = new QVBoxLayout(loading_page);
     spin_label_ = new QLabel(loading_page);
     spin_label_->setAlignment(Qt::AlignCenter);
     spin_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:16px; background:transparent;")
-                                   .arg(ui::colors::AMBER)
+                                   .arg(ui::colors::AMBER())
                                    .arg(ui::fonts::DATA_FAMILY));
     loading_vl->addWidget(spin_label_);
     stack_->addWidget(loading_page); // index 0

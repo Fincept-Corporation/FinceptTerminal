@@ -100,7 +100,7 @@ void DBnomicsScreen::hideEvent(QHideEvent* event) {
 // ─────────────────────────────────────────────────────────────────────────────
 void DBnomicsScreen::build_ui() {
     setStyleSheet(
-        QString("QWidget { background:%1; color:%2; }").arg(ui::colors::BG_BASE).arg(ui::colors::TEXT_PRIMARY));
+        QString("QWidget { background:%1; color:%2; }").arg(ui::colors::BG_BASE()).arg(ui::colors::TEXT_PRIMARY()));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -131,7 +131,7 @@ void DBnomicsScreen::build_ui() {
     auto* toggle_bar = new QWidget(right_widget);
     toggle_bar->setFixedHeight(36);
     toggle_bar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED).arg(ui::colors::BORDER_MED));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED()).arg(ui::colors::BORDER_MED()));
 
     auto* toggle_hl = new QHBoxLayout(toggle_bar);
     toggle_hl->setContentsMargins(8, 0, 8, 0);
@@ -140,18 +140,18 @@ void DBnomicsScreen::build_ui() {
     auto btn_style_checked = QString("QPushButton { background:rgba(217,119,6,0.15); color:%1; border:1px solid %2;"
                                      " font-family:%3; font-size:12px; font-weight:700; padding:0 12px; height:26px; }"
                                      "QPushButton:hover { background:rgba(217,119,6,0.25); }")
-                                 .arg(ui::colors::AMBER)
-                                 .arg(ui::colors::AMBER_DIM)
+                                 .arg(ui::colors::AMBER())
+                                 .arg(ui::colors::AMBER_DIM())
                                  .arg(ui::fonts::DATA_FAMILY);
 
     auto btn_style_unchecked =
         QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                 " font-family:%3; font-size:12px; font-weight:700; padding:0 12px; height:26px; }"
                 "QPushButton:hover { background:%4; }")
-            .arg(ui::colors::TEXT_SECONDARY)
-            .arg(ui::colors::BORDER_DIM)
+            .arg(ui::colors::TEXT_SECONDARY())
+            .arg(ui::colors::BORDER_DIM())
             .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::colors::BG_HOVER);
+            .arg(ui::colors::BG_HOVER());
 
     single_btn_ = new QPushButton("SINGLE", toggle_bar);
     single_btn_->setCheckable(true);
@@ -187,7 +187,7 @@ void DBnomicsScreen::build_ui() {
 
     auto* chart_type_label = new QLabel("CHART:", toggle_bar);
     chart_type_label->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px; font-weight:600;")
-                                        .arg(ui::colors::TEXT_TERTIARY)
+                                        .arg(ui::colors::TEXT_TERTIARY())
                                         .arg(ui::fonts::DATA_FAMILY));
 
     chart_type_combo_ = new QComboBox(toggle_bar);
@@ -198,9 +198,9 @@ void DBnomicsScreen::build_ui() {
                 " font-family:%4; font-size:11px; padding:0 6px; }"
                 "QComboBox::drop-down { border:none; }"
                 "QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3; }")
-            .arg(ui::colors::BG_HOVER)
-            .arg(ui::colors::TEXT_PRIMARY)
-            .arg(ui::colors::BORDER_MED)
+            .arg(ui::colors::BG_HOVER())
+            .arg(ui::colors::TEXT_PRIMARY())
+            .arg(ui::colors::BORDER_MED())
             .arg(ui::fonts::DATA_FAMILY));
 
     connect(chart_type_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -227,7 +227,7 @@ void DBnomicsScreen::build_ui() {
                                            "  background: %1; height: 5px;"
                                            "  border-top: 1px solid %2; border-bottom: 1px solid %2; }"
                                            "QSplitter::handle:vertical:hover { background: %3; }")
-                                       .arg(ui::colors::BORDER_DIM, ui::colors::BORDER_MED, ui::colors::AMBER));
+                                       .arg(ui::colors::BORDER_DIM(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
 
     chart_widget_ = new DBnomicsChartWidget(single_splitter);
     data_table_ = new DBnomicsDataTable(single_splitter);
@@ -245,7 +245,7 @@ void DBnomicsScreen::build_ui() {
 
     // Page 1: comparison view (scrollable slot cards)
     auto* compare_page = new QWidget(view_stack_);
-    compare_page->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    compare_page->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* compare_vl = new QVBoxLayout(compare_page);
     compare_vl->setContentsMargins(0, 0, 0, 0);
     compare_vl->setSpacing(0);
@@ -257,11 +257,11 @@ void DBnomicsScreen::build_ui() {
                                           "QScrollBar:vertical { background: %1; width: 6px; }"
                                           "QScrollBar::handle:vertical { background: %2; }"
                                           "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-                                      .arg(ui::colors::BG_BASE)
-                                      .arg(ui::colors::BORDER_DIM));
+                                      .arg(ui::colors::BG_BASE())
+                                      .arg(ui::colors::BORDER_DIM()));
 
     comparison_content_ = new QWidget(compare_scroll);
-    comparison_content_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    comparison_content_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     comparison_layout_ = new QVBoxLayout(comparison_content_);
     comparison_layout_->setContentsMargins(8, 8, 8, 8);
     comparison_layout_->setSpacing(8);
@@ -272,7 +272,7 @@ void DBnomicsScreen::build_ui() {
     init_placeholder->setAlignment(Qt::AlignCenter);
     init_placeholder->setWordWrap(true);
     init_placeholder->setStyleSheet(QString("color:%1; font-family:%2; font-size:13px;")
-                                        .arg(ui::colors::TEXT_TERTIARY)
+                                        .arg(ui::colors::TEXT_TERTIARY())
                                         .arg(ui::fonts::DATA_FAMILY));
     comparison_layout_->addWidget(init_placeholder);
     comparison_layout_->addStretch();
@@ -291,7 +291,7 @@ void DBnomicsScreen::build_ui() {
     auto* status_bar = new QWidget(this);
     status_bar->setFixedHeight(28);
     status_bar->setStyleSheet(
-        QString("background:%1; border-top:1px solid %2;").arg(ui::colors::BG_RAISED).arg(ui::colors::BORDER_DIM));
+        QString("background:%1; border-top:1px solid %2;").arg(ui::colors::BG_RAISED()).arg(ui::colors::BORDER_DIM()));
 
     auto* status_hl = new QHBoxLayout(status_bar);
     status_hl->setContentsMargins(12, 0, 12, 0);
@@ -299,12 +299,12 @@ void DBnomicsScreen::build_ui() {
 
     status_label_ = new QLabel("Ready", status_bar);
     status_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px;")
-                                     .arg(ui::colors::TEXT_SECONDARY)
+                                     .arg(ui::colors::TEXT_SECONDARY())
                                      .arg(ui::fonts::DATA_FAMILY));
 
     stats_label_ = new QLabel("", status_bar);
     stats_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px;")
-                                    .arg(ui::colors::TEXT_TERTIARY)
+                                    .arg(ui::colors::TEXT_TERTIARY())
                                     .arg(ui::fonts::DATA_FAMILY));
     stats_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
@@ -322,7 +322,7 @@ QWidget* DBnomicsScreen::build_toolbar() {
     auto* toolbar = new QWidget(this);
     toolbar->setFixedHeight(44);
     toolbar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED).arg(ui::colors::BORDER_MED));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED()).arg(ui::colors::BORDER_MED()));
 
     auto* hl = new QHBoxLayout(toolbar);
     hl->setContentsMargins(12, 0, 12, 0);
@@ -330,7 +330,7 @@ QWidget* DBnomicsScreen::build_toolbar() {
 
     auto* title = new QLabel("DBNOMICS TERMINAL", toolbar);
     title->setStyleSheet(QString("color:%1; font-family:%2; font-size:14px; font-weight:700;")
-                             .arg(ui::colors::AMBER)
+                             .arg(ui::colors::AMBER())
                              .arg(ui::fonts::DATA_FAMILY));
 
     hl->addWidget(title);
@@ -341,8 +341,8 @@ QWidget* DBnomicsScreen::build_toolbar() {
                                       " padding:0 10px; height:28px; }"
                                       "QPushButton:hover { background:rgba(217,119,6,0.2); }"
                                       "QPushButton:pressed { background:rgba(217,119,6,0.3); }")
-                                  .arg(ui::colors::AMBER)
-                                  .arg(ui::colors::AMBER_DIM)
+                                  .arg(ui::colors::AMBER())
+                                  .arg(ui::colors::AMBER_DIM())
                                   .arg(ui::fonts::DATA_FAMILY);
 
     auto* fetch_btn = new QPushButton("FETCH", toolbar);
@@ -735,7 +735,7 @@ void DBnomicsScreen::rebuild_comparison_view() {
         placeholder->setAlignment(Qt::AlignCenter);
         placeholder->setWordWrap(true);
         placeholder->setStyleSheet(QString("color:%1; font-family:%2; font-size:13px;")
-                                       .arg(ui::colors::TEXT_TERTIARY)
+                                       .arg(ui::colors::TEXT_TERTIARY())
                                        .arg(ui::fonts::DATA_FAMILY));
         comparison_layout_->addWidget(placeholder);
         comparison_layout_->addStretch();
@@ -744,7 +744,7 @@ void DBnomicsScreen::rebuild_comparison_view() {
 
     // ── 2-column grid: up to 2 rows × 2 cols fit on screen without scrolling ─
     auto* grid_widget = new QWidget(comparison_content_);
-    grid_widget->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    grid_widget->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* grid = new QGridLayout(grid_widget);
     grid->setContentsMargins(6, 6, 6, 6);
     grid->setSpacing(6);
@@ -765,7 +765,7 @@ void DBnomicsScreen::rebuild_comparison_view() {
         card->setMinimumWidth(320); // ensure Y-axis labels always have room
         card->setObjectName("slotCard");
         card->setStyleSheet(QString("QWidget#slotCard { background:%1; border:1px solid %2; }")
-                                .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                                .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
         auto* card_vl = new QVBoxLayout(card);
         card_vl->setContentsMargins(0, 0, 0, 0);
@@ -776,7 +776,7 @@ void DBnomicsScreen::rebuild_comparison_view() {
         header->setFixedHeight(32);
         header->setObjectName("cardHeader");
         header->setStyleSheet(QString("QWidget#cardHeader { background:%1; border-bottom:1px solid %2; }")
-                                  .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+                                  .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
 
         auto* header_hl = new QHBoxLayout(header);
         header_hl->setContentsMargins(10, 0, 8, 0);
@@ -785,14 +785,14 @@ void DBnomicsScreen::rebuild_comparison_view() {
         auto* slot_label = new QLabel(QString("SLOT %1").arg(i + 1), header);
         slot_label->setStyleSheet(QString("color:%1; font-family:%2; font-size:12px; font-weight:700;"
                                           " background:transparent; border:none;")
-                                      .arg(ui::colors::AMBER)
+                                      .arg(ui::colors::AMBER())
                                       .arg(ui::fonts::DATA_FAMILY));
         header_hl->addWidget(slot_label);
 
         auto* count_label = new QLabel(QString("(%1 series)").arg(slot.series.size()), header);
         count_label->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px;"
                                            " background:transparent; border:none;")
-                                       .arg(ui::colors::TEXT_TERTIARY)
+                                       .arg(ui::colors::TEXT_TERTIARY())
                                        .arg(ui::fonts::DATA_FAMILY));
         header_hl->addWidget(count_label);
         header_hl->addStretch();
@@ -806,9 +806,9 @@ void DBnomicsScreen::rebuild_comparison_view() {
                     " font-family:%4; font-size:10px; padding:0 4px; }"
                     "QComboBox::drop-down { border:none; }"
                     "QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3; }")
-                .arg(ui::colors::BG_HOVER)
-                .arg(ui::colors::TEXT_PRIMARY)
-                .arg(ui::colors::BORDER_MED)
+                .arg(ui::colors::BG_HOVER())
+                .arg(ui::colors::TEXT_PRIMARY())
+                .arg(ui::colors::BORDER_MED())
                 .arg(ui::fonts::DATA_FAMILY));
         header_hl->addWidget(chart_combo);
         card_vl->addWidget(header);
@@ -819,7 +819,7 @@ void DBnomicsScreen::rebuild_comparison_view() {
         card_splitter->setChildrenCollapsible(false);
         card_splitter->setStyleSheet(QString("QSplitter::handle:vertical { background:%1; height:4px; }"
                                              "QSplitter::handle:vertical:hover { background:%2; }")
-                                         .arg(ui::colors::BORDER_DIM, ui::colors::AMBER));
+                                         .arg(ui::colors::BORDER_DIM(), ui::colors::AMBER()));
 
         auto* chart = new DBnomicsChartWidget(card_splitter);
         chart->set_compact(true); // tighter margins + no legend for grid slots

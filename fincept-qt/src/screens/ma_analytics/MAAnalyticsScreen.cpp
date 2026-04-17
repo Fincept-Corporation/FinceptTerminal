@@ -332,7 +332,7 @@ void MAAnalyticsScreen::update_sidebar_selection() {
                                                   "QPushButton:hover { background:rgba(%7,0.1); color:%8;"
                                                   "border-left:2px solid %8; }")
                                               .arg(active ? mod.color.name() : "transparent")
-                                              .arg(active ? mod.color.name() : ui::colors::TEXT_SECONDARY)
+                                              .arg(active ? mod.color.name() : ui::colors::TEXT_SECONDARY())
                                               .arg(ui::fonts::SMALL)
                                               .arg(ui::fonts::DATA_FAMILY)
                                               .arg(active ? "700" : "400")
@@ -350,7 +350,7 @@ void MAAnalyticsScreen::update_sidebar_selection() {
                                                  "padding:4px 8px; border:1px solid %4;"
                                                  "background:%5; font-weight:%6; }"
                                                  "QPushButton:hover { background:rgba(%7,0.1); color:%8; }")
-                                             .arg(active ? mod.color.name() : ui::colors::TEXT_TERTIARY)
+                                             .arg(active ? mod.color.name() : ui::colors::TEXT_TERTIARY())
                                              .arg(ui::fonts::TINY)
                                              .arg(ui::fonts::DATA_FAMILY)
                                              .arg(active ? QString("rgba(%1,0.3)").arg(rgb) : "transparent")
@@ -372,7 +372,7 @@ void MAAnalyticsScreen::update_right_panel() {
                                     .arg(ui::fonts::DATA_FAMILY));
     right_category_->setText(mod.category + " module");
     right_category_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                       .arg(ui::colors::TEXT_SECONDARY)
+                                       .arg(ui::colors::TEXT_SECONDARY())
                                        .arg(ui::fonts::TINY)
                                        .arg(ui::fonts::DATA_FAMILY));
 
@@ -396,7 +396,7 @@ void MAAnalyticsScreen::update_right_panel() {
         auto* row = new QLabel(QString("> %1").arg(cap));
         row->setWordWrap(true);
         row->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                               .arg(ui::colors::TEXT_PRIMARY)
+                               .arg(ui::colors::TEXT_PRIMARY())
                                .arg(ui::fonts::TINY)
                                .arg(ui::fonts::DATA_FAMILY));
         capabilities_layout_->addWidget(row);

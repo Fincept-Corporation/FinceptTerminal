@@ -60,15 +60,15 @@ EquityCredentials::EquityCredentials(const QString& broker_id, const trading::Br
                           "QComboBox QAbstractItemView { background: %9; color: %2;"
                           "  selection-background-color: rgba(217,119,6,0.3); }"
                           "QPushButton { padding: 8px 16px; font-weight: 700; font-size: 12px; border-radius: 2px; }")
-                      .arg(colors::BG_SURFACE)
-                      .arg(colors::TEXT_PRIMARY)
-                      .arg(colors::TEXT_SECONDARY)
-                      .arg(colors::AMBER)
-                      .arg(colors::TEXT_TERTIARY)
-                      .arg(colors::POSITIVE)
-                      .arg(colors::BG_BASE)
-                      .arg(colors::BORDER_MED)
-                      .arg(colors::BG_RAISED));
+                      .arg(colors::BG_SURFACE())
+                      .arg(colors::TEXT_PRIMARY())
+                      .arg(colors::TEXT_SECONDARY())
+                      .arg(colors::AMBER())
+                      .arg(colors::TEXT_TERTIARY())
+                      .arg(colors::POSITIVE())
+                      .arg(colors::BG_BASE())
+                      .arg(colors::BORDER_MED())
+                      .arg(colors::BG_RAISED()));
 
     auto* root = new QVBoxLayout(this);
     root->setSpacing(8);
@@ -114,16 +114,16 @@ EquityCredentials::EquityCredentials(const QString& broker_id, const trading::Br
 
         auto* live_btn = new QPushButton("CONNECT LIVE");
         live_btn->setStyleSheet(QString("background: rgba(217,119,6,0.15); color: %1; border: 1px solid %2;")
-                                    .arg(colors::AMBER)
-                                    .arg(colors::AMBER_DIM));
+                                    .arg(colors::AMBER())
+                                    .arg(colors::AMBER_DIM()));
         live_btn->setCursor(Qt::PointingHandCursor);
         connect(live_btn, &QPushButton::clicked, this, [this]() { on_connect("live"); });
         live_lay->addWidget(live_btn);
 
         auto* live_clear = new QPushButton("CLEAR");
         live_clear->setStyleSheet(QString("background: rgba(220,38,38,0.1); color: %1; border: 1px solid %2;")
-                                      .arg(colors::NEGATIVE)
-                                      .arg(colors::NEGATIVE_DIM));
+                                      .arg(colors::NEGATIVE())
+                                      .arg(colors::NEGATIVE_DIM()));
         live_clear->setCursor(Qt::PointingHandCursor);
         connect(live_clear, &QPushButton::clicked, this, [this]() { on_clear("live"); });
         live_lay->addWidget(live_clear);
@@ -153,8 +153,8 @@ EquityCredentials::EquityCredentials(const QString& broker_id, const trading::Br
 
         auto* paper_clear = new QPushButton("CLEAR");
         paper_clear->setStyleSheet(QString("background: rgba(220,38,38,0.1); color: %1; border: 1px solid %2;")
-                                       .arg(colors::NEGATIVE)
-                                       .arg(colors::NEGATIVE_DIM));
+                                       .arg(colors::NEGATIVE())
+                                       .arg(colors::NEGATIVE_DIM()));
         paper_clear->setCursor(Qt::PointingHandCursor);
         connect(paper_clear, &QPushButton::clicked, this, [this]() { on_clear("paper"); });
         paper_lay->addWidget(paper_clear);
@@ -242,15 +242,15 @@ EquityCredentials::EquityCredentials(const QString& broker_id, const trading::Br
         auto* btn_row = new QHBoxLayout;
         auto* save_btn = new QPushButton("CONNECT");
         save_btn->setStyleSheet(QString("background: rgba(217,119,6,0.15); color: %1; border: 1px solid %2;")
-                                    .arg(colors::AMBER)
-                                    .arg(colors::AMBER_DIM));
+                                    .arg(colors::AMBER())
+                                    .arg(colors::AMBER_DIM()));
         save_btn->setCursor(Qt::PointingHandCursor);
         connect(save_btn, &QPushButton::clicked, this, [this]() { on_connect(""); });
 
         auto* clear_btn = new QPushButton("CLEAR");
         clear_btn->setStyleSheet(QString("background: rgba(220,38,38,0.1); color: %1; border: 1px solid %2;")
-                                     .arg(colors::NEGATIVE)
-                                     .arg(colors::NEGATIVE_DIM));
+                                     .arg(colors::NEGATIVE())
+                                     .arg(colors::NEGATIVE_DIM()));
         clear_btn->setCursor(Qt::PointingHandCursor);
         connect(clear_btn, &QPushButton::clicked, this, [this]() { on_clear(""); });
 
@@ -299,18 +299,18 @@ void EquityCredentials::on_connect(const QString& env) {
 
     if (key.isEmpty()) {
         status_label_->setText("API Key is required");
-        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE));
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
         return;
     }
     if (secret.isEmpty() && (field_secret_ || field_live_secret_ || field_paper_secret_)) {
         status_label_->setText("API Secret is required");
-        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE));
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
         return;
     }
 
     emit credentials_saved(broker_id_, key, secret, auth);
     status_label_->setText("Connecting...");
-    status_label_->setStyleSheet(QString("color: %1;").arg(colors::WARNING));
+    status_label_->setStyleSheet(QString("color: %1;").arg(colors::WARNING()));
     // Don't close — let the screen update the status label and close when done
 }
 
@@ -338,7 +338,7 @@ void EquityCredentials::on_clear(const QString& env) {
             field_auth_->clear();
     }
     status_label_->setText("Cleared");
-    status_label_->setStyleSheet(QString("color: %1;").arg(colors::WARNING));
+    status_label_->setStyleSheet(QString("color: %1;").arg(colors::WARNING()));
 }
 
 void EquityCredentials::mark_connected(const QString& env, const QString& account_id) {
@@ -349,12 +349,12 @@ void EquityCredentials::mark_connected(const QString& env, const QString& accoun
         paper_status_->setText(label);
     }
     status_label_->setText("Connected successfully");
-    status_label_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE));
+    status_label_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
 }
 
 void EquityCredentials::mark_error(const QString& error) {
     status_label_->setText(QString("Error: %1").arg(error));
-    status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE));
+    status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
 }
 
 } // namespace fincept::screens::equity

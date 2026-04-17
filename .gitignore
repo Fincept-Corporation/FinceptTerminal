@@ -92,7 +92,7 @@ logs/
 *.rar
 *.7z
 
-# ── Legacy (Tauri / React / Rust era — no longer in repo) ────
+# ── Legacy / non-C++ build artifacts (defensive ignores) ─────
 fincept-terminal-desktop/
 fincept-cpp/
 **/target/

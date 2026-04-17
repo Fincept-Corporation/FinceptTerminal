@@ -861,7 +861,7 @@ COMMANDS = {
 
 
 def main(args: list) -> str:
-    """Main entry point called by Rust via subprocess"""
+    """Main entry point called by the host via subprocess"""
     try:
         if len(args) < 1:
             return serialize_result({"success": False, "error": "No command specified"})

@@ -47,7 +47,7 @@ SetupScreen::SetupScreen(QWidget* parent) : QWidget(parent) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void SetupScreen::build_ui() {
-    setStyleSheet(QString("QWidget { background:%1; color:%2; }").arg(colors::BG_BASE, colors::TEXT_PRIMARY));
+    setStyleSheet(QString("QWidget { background:%1; color:%2; }").arg(colors::BG_BASE(), colors::TEXT_PRIMARY()));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -70,7 +70,7 @@ void SetupScreen::build_ui() {
     subtitle_lbl_ = new QLabel("Getting your workspace ready", center);
     subtitle_lbl_->setAlignment(Qt::AlignCenter);
     subtitle_lbl_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:13px;").arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
+        QString("color:%1; font-family:%2; font-size:13px;").arg(colors::TEXT_SECONDARY(), fonts::DATA_FAMILY));
     cl->addWidget(subtitle_lbl_);
 
     // Brief plain-English explanation
@@ -80,13 +80,13 @@ void SetupScreen::build_ui() {
     intro->setAlignment(Qt::AlignCenter);
     intro->setWordWrap(true);
     intro->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; margin-top:4px; margin-bottom:12px;")
-                             .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+                             .arg(colors::TEXT_TERTIARY(), fonts::DATA_FAMILY));
     cl->addWidget(intro);
 
     // ── Divider ───────────────────────────────────────────────────────────────
     auto* divider = new QFrame(center);
     divider->setFrameShape(QFrame::HLine);
-    divider->setStyleSheet(QString("color:%1;").arg(colors::BORDER_DIM));
+    divider->setStyleSheet(QString("color:%1;").arg(colors::BORDER_DIM()));
     cl->addWidget(divider);
     cl->addSpacing(4);
 
@@ -113,7 +113,7 @@ void SetupScreen::build_ui() {
                 " font-family:%3; font-size:14px; font-weight:700; letter-spacing:2px; border-radius:3px; }"
                 "QPushButton:hover { background:#b45309; }"
                 "QPushButton:disabled { background:%4; color:%5; border-radius:3px; }")
-            .arg(kAccent, colors::TEXT_PRIMARY, fonts::DATA_FAMILY, colors::BG_RAISED, colors::TEXT_TERTIARY));
+            .arg(kAccent, colors::TEXT_PRIMARY(), fonts::DATA_FAMILY, colors::BG_RAISED(), colors::TEXT_TERTIARY()));
     connect(begin_btn_, &QPushButton::clicked, this, &SetupScreen::on_begin_setup);
     cl->addWidget(begin_btn_);
 
@@ -122,14 +122,14 @@ void SetupScreen::build_ui() {
     status_label_->setAlignment(Qt::AlignCenter);
     status_label_->setWordWrap(true);
     status_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;")
-                                     .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+                                     .arg(colors::TEXT_TERTIARY(), fonts::DATA_FAMILY));
     cl->addWidget(status_label_);
 
     summary_lbl_ = new QLabel({}, center);
     summary_lbl_->setAlignment(Qt::AlignCenter);
     summary_lbl_->setWordWrap(true);
     summary_lbl_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:10px;").arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+        QString("color:%1; font-family:%2; font-size:10px;").arg(colors::TEXT_TERTIARY(), fonts::DATA_FAMILY));
     cl->addWidget(summary_lbl_);
 
     // Skip button
@@ -141,7 +141,7 @@ void SetupScreen::build_ui() {
         QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                 " font-family:%2; font-size:12px; font-weight:600; letter-spacing:1px; border-radius:3px; }"
                 "QPushButton:hover { background:%3; }")
-            .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY, colors::BG_RAISED));
+            .arg(colors::TEXT_SECONDARY(), fonts::DATA_FAMILY, colors::BG_RAISED()));
     connect(skip_btn_, &QPushButton::clicked, this, &SetupScreen::on_skip_clicked);
     cl->addWidget(skip_btn_);
 
@@ -149,7 +149,7 @@ void SetupScreen::build_ui() {
     auto* dir_label = new QLabel("Installing to: " + python::PythonSetupManager::instance().install_dir(), center);
     dir_label->setAlignment(Qt::AlignCenter);
     dir_label->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:9px; margin-top:6px;").arg(colors::TEXT_DIM, fonts::DATA_FAMILY));
+        QString("color:%1; font-family:%2; font-size:9px; margin-top:6px;").arg(colors::TEXT_DIM(), fonts::DATA_FAMILY));
     cl->addWidget(dir_label);
 
     auto* hcenter = new QHBoxLayout();
@@ -176,12 +176,12 @@ QWidget* SetupScreen::build_step_row(const QString& key, const QString& label, c
 
     auto* lbl = new QLabel(label, label_col);
     lbl->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px; font-weight:600;")
-                           .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
+                           .arg(colors::TEXT_SECONDARY(), fonts::DATA_FAMILY));
     label_vl->addWidget(lbl);
 
     auto* sub = new QLabel(sublabel, label_col);
     sub->setWordWrap(true);
-    sub->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;").arg(colors::TEXT_DIM, fonts::DATA_FAMILY));
+    sub->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;").arg(colors::TEXT_DIM(), fonts::DATA_FAMILY));
     label_vl->addWidget(sub);
 
     hl->addWidget(label_col);
@@ -194,7 +194,7 @@ QWidget* SetupScreen::build_step_row(const QString& key, const QString& label, c
     bar->setFixedHeight(10);
     bar->setStyleSheet(QString("QProgressBar { background:%1; border:1px solid %2; border-radius:5px; }"
                                "QProgressBar::chunk { background:%3; border-radius:5px; }")
-                           .arg(colors::BG_RAISED, colors::BORDER_DIM, kAccent));
+                           .arg(colors::BG_RAISED(), colors::BORDER_DIM(), kAccent));
     hl->addWidget(bar, 1);
 
     // Right: status badge
@@ -202,7 +202,7 @@ QWidget* SetupScreen::build_step_row(const QString& key, const QString& label, c
     status->setFixedWidth(72);
     status->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     status->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:9px;").arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+        QString("color:%1; font-family:%2; font-size:9px;").arg(colors::TEXT_TERTIARY(), fonts::DATA_FAMILY));
     hl->addWidget(status);
 
     // Pulse timer — drives the indeterminate animation while step is in-flight
@@ -296,7 +296,7 @@ void SetupScreen::on_progress(const python::SetupProgress& progress) {
             s.bar->setValue(s.pulse_val > 0 ? s.pulse_val : 0);
             s.status->setText("FAILED");
             s.status->setStyleSheet(
-                QString("color:%1; font-family:%2; font-size:9px;").arg(colors::RED, fonts::DATA_FAMILY));
+                QString("color:%1; font-family:%2; font-size:9px;").arg(colors::RED(), fonts::DATA_FAMILY));
         } else if (progress.progress == 0) {
             // Step just started — kick off the pulse animation
             mark_step_active(key);
@@ -328,7 +328,7 @@ void SetupScreen::on_setup_done(bool success, const QString& error) {
         LOG_INFO("SetupScreen", "Python setup completed — all steps done");
         status_label_->setText("Everything is ready! Launching Fincept Terminal...");
         status_label_->setStyleSheet(
-            QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;").arg(colors::GREEN, fonts::DATA_FAMILY));
+            QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;").arg(colors::GREEN(), fonts::DATA_FAMILY));
         begin_btn_->setText("LAUNCH");
         if (timeout_timer_)
             timeout_timer_->stop();
@@ -342,7 +342,7 @@ void SetupScreen::on_setup_done(bool success, const QString& error) {
         begin_btn_->setText("RETRY SETUP");
         status_label_->setText("Something went wrong during setup. Check your internet connection and try again.");
         status_label_->setStyleSheet(
-            QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;").arg(colors::RED, fonts::DATA_FAMILY));
+            QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;").arg(colors::RED(), fonts::DATA_FAMILY));
         LOG_ERROR("SetupScreen", "Setup failed: " + error);
     }
 }
@@ -361,7 +361,7 @@ void SetupScreen::on_setup_timeout() {
     status_label_->setText("Setup is taking longer than expected — possibly a slow internet connection.\n"
                            "You can wait or skip and continue with limited functionality.");
     status_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;")
-                                     .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+                                     .arg(colors::TEXT_TERTIARY(), fonts::DATA_FAMILY));
     if (skip_btn_)
         skip_btn_->setVisible(true);
 }
@@ -373,7 +373,7 @@ void SetupScreen::mark_step_done(const QString& key) {
     auto& s = steps_[key];
     s.bar->setValue(100);
     s.status->setText("DONE");
-    s.status->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;").arg(colors::GREEN, fonts::DATA_FAMILY));
+    s.status->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;").arg(colors::GREEN(), fonts::DATA_FAMILY));
 }
 
 void SetupScreen::prefill_completed_steps() {

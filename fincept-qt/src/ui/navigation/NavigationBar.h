@@ -7,7 +7,7 @@
 
 namespace fincept::ui {
 
-/// Top menu bar matching Tauri's header — branding, time, version, user, logout.
+/// Top menu bar — branding, time, version, user, logout.
 class NavigationBar : public QWidget {
     Q_OBJECT
   public:

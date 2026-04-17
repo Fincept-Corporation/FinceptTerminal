@@ -32,8 +32,8 @@ static QWidget* make_faq(const QString& question, const QString& answer, const Q
                                  " padding: 11px 14px; text-align: left;"
                                  " font-size: 12px; font-weight: 600; %4 }"
                                  "QPushButton:hover { background: %5; border-color: %6; color: %7; }")
-                             .arg(colors::TEXT_PRIMARY, colors::BG_SURFACE, colors::BORDER_DIM, MF, colors::BG_RAISED,
-                                  colors::AMBER, colors::AMBER));
+                             .arg(colors::TEXT_PRIMARY(), colors::BG_SURFACE(), colors::BORDER_DIM(), MF, colors::BG_RAISED(),
+                                  colors::AMBER(), colors::AMBER()));
 
     auto* a_lbl = new QLabel(answer);
     a_lbl->setWordWrap(true);
@@ -41,7 +41,7 @@ static QWidget* make_faq(const QString& question, const QString& answer, const Q
                                  " border: 1px solid %3; border-top: none;"
                                  " border-left: 3px solid %4;"
                                  " padding: 12px 16px 12px 18px; %5")
-                             .arg(colors::TEXT_SECONDARY, colors::BG_SURFACE, colors::BORDER_DIM, colors::AMBER, MF));
+                             .arg(colors::TEXT_SECONDARY(), colors::BG_SURFACE(), colors::BORDER_DIM(), colors::AMBER(), MF));
     a_lbl->setVisible(false);
 
     QObject::connect(q_btn, &QPushButton::clicked, a_lbl, [a_lbl, q_btn, question, icon]() {
@@ -56,8 +56,8 @@ static QWidget* make_faq(const QString& question, const QString& answer, const Q
                     " padding: 11px 14px; text-align: left;"
                     " font-size: 12px; font-weight: 600; font-family:'Consolas','Courier New',monospace; }"
                     "QPushButton:hover { background: %4; }")
-                .arg(show ? colors::AMBER : colors::TEXT_PRIMARY, show ? colors::BG_RAISED : colors::BG_SURFACE,
-                     show ? colors::AMBER : colors::BORDER_DIM, colors::BG_RAISED));
+                .arg(show ? colors::AMBER() : colors::TEXT_PRIMARY(), show ? colors::BG_RAISED() : colors::BG_SURFACE(),
+                     show ? colors::AMBER() : colors::BORDER_DIM(), colors::BG_RAISED()));
         Q_UNUSED(arrow);
     });
 
@@ -78,13 +78,13 @@ static QWidget* section_header(const QString& title, const QString& subtitle = {
     auto* t = new QLabel(title);
     t->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 1px;"
                              " background: transparent; %2")
-                         .arg(colors::AMBER, MF));
+                         .arg(colors::AMBER(), MF));
     vl->addWidget(t);
 
     if (!subtitle.isEmpty()) {
         auto* s = new QLabel(subtitle);
         s->setStyleSheet(
-            QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY, MF));
+            QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY(), MF));
         vl->addWidget(s);
     }
     return w;
@@ -93,7 +93,7 @@ static QWidget* section_header(const QString& title, const QString& subtitle = {
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(QString("QWidget#HelpRoot { background: %1; }").arg(colors::BG_BASE));
+    setStyleSheet(QString("QWidget#HelpRoot { background: %1; }").arg(colors::BG_BASE()));
     setObjectName("HelpRoot");
 
     auto* root = new QVBoxLayout(this);
@@ -104,7 +104,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
     scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }");
 
     auto* page = new QWidget(this);
-    page->setStyleSheet(QString("background: %1;").arg(colors::BG_BASE));
+    page->setStyleSheet(QString("background: %1;").arg(colors::BG_BASE()));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(28, 24, 28, 32);
     vl->setSpacing(0);
@@ -113,7 +113,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
     {
         auto* hero = new QWidget(this);
         hero->setStyleSheet(QString("background: %1; border: 1px solid %2; border-left: 4px solid %3;")
-                                .arg(colors::BG_SURFACE, colors::BORDER_DIM, colors::AMBER));
+                                .arg(colors::BG_SURFACE(), colors::BORDER_DIM(), colors::AMBER()));
         auto* hl = new QHBoxLayout(hero);
         hl->setContentsMargins(20, 18, 20, 18);
         hl->setSpacing(16);
@@ -124,12 +124,12 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
         auto* title = new QLabel("HELP CENTER");
         title->setStyleSheet(QString("color: %1; font-size: 22px; font-weight: 700; letter-spacing: 2px;"
                                      " background: transparent; %2")
-                                 .arg(colors::AMBER, MF));
+                                 .arg(colors::AMBER(), MF));
         text_vl->addWidget(title);
 
         auto* sub = new QLabel("Find answers, get support, and connect with the Fincept community.");
         sub->setStyleSheet(
-            QString("color: %1; font-size: 12px; background: transparent; %2").arg(colors::TEXT_SECONDARY, MF));
+            QString("color: %1; font-size: 12px; background: transparent; %2").arg(colors::TEXT_SECONDARY(), MF));
         text_vl->addWidget(sub);
 
         hl->addLayout(text_vl, 1);
@@ -199,8 +199,8 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
             btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: 1px solid %3;"
                                        " text-align: left; padding: 0; }"
                                        "QPushButton:hover { background: %4; border-color: %5; }")
-                                   .arg(colors::BG_SURFACE, colors::TEXT_PRIMARY, colors::BORDER_DIM, colors::BG_RAISED,
-                                        colors::AMBER));
+                                   .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), colors::BG_RAISED(),
+                                        colors::AMBER()));
 
             auto* bl = new QVBoxLayout(btn);
             bl->setContentsMargins(12, 8, 12, 8);
@@ -213,7 +213,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
             auto* name_lbl = new QLabel(a.label);
             name_lbl->setStyleSheet(QString("background: transparent; color: %1; font-size: 12px;"
                                             " font-weight: bold; %2")
-                                        .arg(colors::TEXT_PRIMARY, MF));
+                                        .arg(colors::TEXT_PRIMARY(), MF));
             top->addWidget(icon_lbl);
             top->addWidget(name_lbl);
             top->addStretch();
@@ -221,7 +221,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
 
             auto* desc_lbl = new QLabel(a.desc);
             desc_lbl->setStyleSheet(
-                QString("background: transparent; color: %1; font-size: 10px; %2").arg(colors::TEXT_TERTIARY, MF));
+                QString("background: transparent; color: %1; font-size: 10px; %2").arg(colors::TEXT_TERTIARY(), MF));
             bl->addWidget(desc_lbl);
 
             if (col == 3) {
@@ -318,7 +318,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
 
         auto* steps_widget = new QWidget(this);
         steps_widget->setStyleSheet(
-            QString("background: %1; border: 1px solid %2;").arg(colors::BG_SURFACE, colors::BORDER_DIM));
+            QString("background: %1; border: 1px solid %2;").arg(colors::BG_SURFACE(), colors::BORDER_DIM()));
         auto* swl = new QVBoxLayout(steps_widget);
         swl->setContentsMargins(0, 0, 0, 0);
         swl->setSpacing(0);
@@ -328,7 +328,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
             auto* row = new QWidget(this);
             bool last = (i == 3);
             row->setStyleSheet(QString("background: transparent; border-bottom: %1;")
-                                   .arg(last ? "none" : QString("1px solid %1;").arg(colors::BORDER_DIM)));
+                                   .arg(last ? "none" : QString("1px solid %1;").arg(colors::BORDER_DIM())));
             auto* rl = new QHBoxLayout(row);
             rl->setContentsMargins(16, 12, 16, 12);
             rl->setSpacing(14);
@@ -338,7 +338,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
             num->setAlignment(Qt::AlignCenter);
             num->setStyleSheet(QString("background: %1; color: %2; font-size: 12px; font-weight: bold;"
                                        " border-radius: 13px; %3")
-                                   .arg(colors::AMBER, colors::BG_BASE, MF));
+                                   .arg(colors::AMBER(), colors::BG_BASE(), MF));
             rl->addWidget(num);
 
             auto* txt_vl = new QVBoxLayout;
@@ -346,10 +346,10 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
             auto* ttl = new QLabel(s.title);
             ttl->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold;"
                                        " background: transparent; %2")
-                                   .arg(colors::TEXT_PRIMARY, MF));
+                                   .arg(colors::TEXT_PRIMARY(), MF));
             auto* det = new QLabel(s.detail);
             det->setStyleSheet(
-                QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_SECONDARY, MF));
+                QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_SECONDARY(), MF));
             det->setWordWrap(true);
             txt_vl->addWidget(ttl);
             txt_vl->addWidget(det);
@@ -388,7 +388,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
         for (const auto& c : contacts) {
             auto* card = new QWidget(this);
             card->setStyleSheet(
-                QString("background: %1; border: 1px solid %2;").arg(colors::BG_SURFACE, colors::BORDER_DIM));
+                QString("background: %1; border: 1px solid %2;").arg(colors::BG_SURFACE(), colors::BORDER_DIM()));
             auto* cl = new QHBoxLayout(card);
             cl->setContentsMargins(14, 12, 14, 12);
             cl->setSpacing(10);
@@ -401,7 +401,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
             tvl->setSpacing(2);
             auto* lbl = new QLabel(c.label);
             lbl->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent; %2")
-                                   .arg(colors::TEXT_TERTIARY, MF));
+                                   .arg(colors::TEXT_TERTIARY(), MF));
 
             auto* val = new QPushButton(c.value);
             val->setFlat(true);
@@ -430,7 +430,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
 
     // ── Theme wiring ──────────────────────────────────────────────────────────
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
-        setStyleSheet(QString("QWidget#HelpRoot { background: %1; }").arg(colors::BG_BASE));
+        setStyleSheet(QString("QWidget#HelpRoot { background: %1; }").arg(colors::BG_BASE()));
     });
 }
 

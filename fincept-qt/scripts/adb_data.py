@@ -1,7 +1,7 @@
 """
 Asian Development Bank (ADB) Key Indicators Database (KIDB) Data Fetcher
 Fetches macroeconomic and social indicators from Asia-Pacific region
-Returns JSON output for Rust integration
+Returns JSON output for Qt/C++ integration
 
 API Documentation: https://kidb.adb.org/api
 Rate Limit: 30 queries per minute

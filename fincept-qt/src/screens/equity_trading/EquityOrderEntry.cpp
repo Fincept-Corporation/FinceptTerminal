@@ -41,7 +41,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
 
     mode_label_ = new QLabel("PAPER");
     mode_label_->setObjectName("eqOeMode");
-    mode_label_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE));
+    mode_label_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
     h_layout->addWidget(mode_label_);
 
     layout->addWidget(header);
@@ -114,7 +114,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     // Brokerage info
     brokerage_label_ = new QLabel("");
     brokerage_label_->setObjectName("eqOeBrokerage");
-    brokerage_label_->setStyleSheet(QString("color: %1; font-size: 10px;").arg(colors::TEXT_TERTIARY));
+    brokerage_label_->setStyleSheet(QString("color: %1; font-size: 10px;").arg(colors::TEXT_TERTIARY()));
     form->addWidget(brokerage_label_);
 
     form->addSpacing(2);
@@ -236,12 +236,12 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     broadcast_btn_->setStyleSheet(
         QString("QPushButton { background: %1; color: %2; font-weight: 700; font-size: 11px; border-radius: 2px; }"
                 "QPushButton:hover { background: %3; }")
-            .arg(colors::BG_RAISED, colors::AMBER, colors::BORDER_MED));
+            .arg(colors::BG_RAISED(), colors::AMBER(), colors::BORDER_MED()));
     connect(broadcast_btn_, &QPushButton::clicked, this, [this]() {
         const double qty = qty_edit_->text().toDouble();
         if (qty <= 0) {
             status_label_->setText("Enter a valid quantity");
-            status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE));
+            status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
             return;
         }
         trading::UnifiedOrder order;
@@ -391,7 +391,7 @@ void EquityOrderEntry::on_submit() {
     const double qty = qty_edit_->text().toDouble();
     if (qty <= 0) {
         status_label_->setText("Enter a valid quantity");
-        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE));
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
         return;
     }
 
@@ -500,7 +500,7 @@ void EquityOrderEntry::fetch_margin_async() {
                     const auto& m = *result.data;
                     const QString sym = currency_symbol(self->current_currency_);
                     self->margin_label_->setText(QString("Margin: %1%2").arg(sym).arg(m.total, 0, 'f', 2));
-                    self->margin_label_->setStyleSheet(QString("color: %1; font-size: 10px;").arg(colors::AMBER));
+                    self->margin_label_->setStyleSheet(QString("color: %1; font-size: 10px;").arg(colors::AMBER()));
                     self->margin_label_->show();
                 } else {
                     self->margin_label_->hide();

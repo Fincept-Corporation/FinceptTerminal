@@ -29,11 +29,11 @@ void EconomicsView::build_ui() {
 
     auto* ind_title = new QLabel("PORTFOLIO ECONOMICS OVERVIEW");
     ind_title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     ind_layout->addWidget(ind_title);
 
     auto* ind_note = new QLabel("Per-holding contribution to portfolio value, P&L, and risk");
-    ind_note->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
+    ind_note->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
     ind_layout->addWidget(ind_note);
 
     indicators_table_ = new QTableWidget;
@@ -56,15 +56,15 @@ void EconomicsView::build_ui() {
                                              "QHeaderView::section { background:%4; color:%5; border:none;"
                                              "  border-bottom:2px solid %6; padding:3px 8px; font-size:9px;"
                                              "  font-weight:700; letter-spacing:0.5px; }")
-                                         .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-                                              ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
+                                         .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                                              ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
     ind_layout->addWidget(indicators_table_, 1);
     layout->addWidget(ind_section, 6);
 
     // Separator
     auto* sep = new QWidget(this);
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM));
+    sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
     layout->addWidget(sep);
 
     // ── Bottom: Portfolio Factor Sensitivity ──────────────────────────────────
@@ -75,11 +75,11 @@ void EconomicsView::build_ui() {
 
     auto* sens_title = new QLabel("PORTFOLIO FACTOR SENSITIVITY");
     sens_title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     sens_layout->addWidget(sens_title);
 
     auto* sens_note = new QLabel("Estimated portfolio impact from macro factor shocks, weighted by holdings");
-    sens_note->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
+    sens_note->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
     sens_layout->addWidget(sens_note);
 
     sensitivity_table_ = new QTableWidget;

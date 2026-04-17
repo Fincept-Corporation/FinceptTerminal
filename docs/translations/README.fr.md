@@ -20,7 +20,7 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 ## À propos
 
-**Fincept Terminal vch**est une application de bureau C++20 purement native – une réécriture complète de la précédente pile Tauri/React/Rust. Il utilise**Qt6**pour l'interface utilisateur et le rendu, intégré**Python**pour l'analyse et offre des performances de classe terminal Bloomberg dans un seul binaire natif.
+**Fincept Terminal vch**est une application de bureau C++20 purement native. Il utilise**Qt6**pour l'interface utilisateur et le rendu, intégré**Python**pour l'analyse et offre des performances de classe terminal Bloomberg dans un seul binaire natif.
 
 * * *
 
@@ -99,6 +99,25 @@ docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fincept-ter
 
 ### Option 4 — Construire à partir de la source (manuel)
 
+> **Les versions sont épinglées** (Qt 6.7.2, CMake 3.27.7, MSVC 19.38 / GCC 12.3 / Apple Clang 15.0, Python 3.11.9). Pour éviter la dérive de traduction, suivez les instructions officielles en anglais :
+>
+> 👉 **[README.md (English) — Build from Source](../../README.md#option-4--build-from-source-manual)**
+>
+> Démarrage rapide avec les presets CMake :
+> ```bash
+> ./setup.sh                                            # Linux / macOS — installation automatisée
+> setup.bat                                             # Windows (VS 2022 Developer Cmd)
+>
+> # Ou manuellement :
+> cd FinceptTerminal/fincept-qt
+> cmake --preset linux-release   && cmake --build --preset linux-release
+> cmake --preset macos-release   && cmake --build --preset macos-release
+> cmake --preset win-release     && cmake --build --preset win-release
+> ```
+
+<details>
+<summary>Instructions originales (obsolètes — conservées pour référence)</summary>
+
 #### Conditions préalables
 
 | Outil               | Version | Fenêtres                                                        | Linux                 | macOS                              |
@@ -158,6 +177,8 @@ cmake --build build --config Release --parallel
 ./build/FinceptTerminal              # Linux / macOS
 .\build\Release\FinceptTerminal.exe  # Windows
 ```
+
+</details>
 
 * * *
 

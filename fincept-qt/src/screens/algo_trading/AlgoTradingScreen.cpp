@@ -75,7 +75,7 @@ void AlgoTradingScreen::build_ui() {
     root->addWidget(content_stack_, 1);
 
     root->addWidget(build_status_bar());
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 }
 
 QWidget* AlgoTradingScreen::build_top_bar() {
@@ -142,24 +142,24 @@ QWidget* AlgoTradingScreen::build_status_bar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(24);
     bar->setStyleSheet(
-        QString("background:%1; border-top:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+        QString("background:%1; border-top:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(16);
     auto s =
-        QString("color:%1; font-size:8px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY);
+        QString("color:%1; font-size:8px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY()).arg(ui::fonts::DATA_FAMILY);
     auto* l1 = new QLabel("ENGINE:", bar);
     l1->setStyleSheet(s);
     auto* v1 = new QLabel("ALGO v1.0", bar);
     v1->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
-                          .arg(ui::colors::TEXT_PRIMARY)
+                          .arg(ui::colors::TEXT_PRIMARY())
                           .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(l1);
     hl->addWidget(v1);
     hl->addStretch();
     status_label_ = new QLabel("IDLE", bar);
     status_label_->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
-                                     .arg(ui::colors::POSITIVE)
+                                     .arg(ui::colors::POSITIVE())
                                      .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(status_label_);
     return bar;
