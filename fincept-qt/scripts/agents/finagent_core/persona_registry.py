@@ -4,6 +4,11 @@ PersonaRegistry — LRU cache of PersonaRuntime instances.
 Keyed by (user_id, agent_id). Cap default 8, tunable via
 FINAGENT_RUNTIME_CACHE_SIZE env var. When full, evicts least-recently-used
 runtime and calls its close() before dropping the reference.
+
+Not thread-safe. Caller is expected to run a single event loop per Python
+process (today: one QProcess per invocation from the C++ side). If future
+code runs async tasks or a thread pool sharing one registry, wrap
+get_or_create/clear mutations in a lock.
 """
 
 from __future__ import annotations
@@ -11,7 +16,7 @@ from __future__ import annotations
 import logging
 import os
 from collections import OrderedDict
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from finagent_core.persona_runtime import PersonaRuntime
 
@@ -21,13 +26,20 @@ logger = logging.getLogger(__name__)
 class PersonaRegistry:
     """LRU cache of PersonaRuntime objects."""
 
-    def __init__(self, cap: int = None):
+    def __init__(self, cap: Optional[int] = None):
         if cap is None:
+            raw = os.getenv("FINAGENT_RUNTIME_CACHE_SIZE", "8")
             try:
-                cap = int(os.getenv("FINAGENT_RUNTIME_CACHE_SIZE", "8"))
+                cap = int(raw)
             except ValueError:
+                logger.warning(
+                    f"FINAGENT_RUNTIME_CACHE_SIZE={raw!r} not an int; using 8"
+                )
                 cap = 8
-        self.cap = max(1, cap)
+        if cap < 1:
+            logger.warning(f"PersonaRegistry cap {cap} < 1; clamping to 1")
+            cap = 1
+        self.cap = cap
         self._items: "OrderedDict[Tuple[str, str], PersonaRuntime]" = OrderedDict()
 
     def get_or_create(self,
