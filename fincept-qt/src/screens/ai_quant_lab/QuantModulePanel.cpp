@@ -256,7 +256,7 @@ void QuantModulePanel::connect_service() {
     // updates its widgets; other panels ignore these.
     connect(&svc, &AIQuantLabService::training_progress, this,
             [this](const QString& module_id, int step, int total, double reward_mean, double loss) {
-                if (module_id != "rl_trading" || !rl_progress_bar_)
+                if (module_id != "rl_trading" || !rl_progress_bar_ || !rl_progress_stats_)
                     return;
                 const int pct = (total > 0) ? qBound(0, int(100.0 * step / total), 100) : 0;
                 rl_progress_bar_->setValue(pct);
