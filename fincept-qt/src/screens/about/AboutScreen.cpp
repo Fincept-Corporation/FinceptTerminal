@@ -1,7 +1,9 @@
 #include "screens/about/AboutScreen.h"
 
+#include "services/updater/UpdateService.h"
 #include "ui/theme/Theme.h"
 
+#include <QApplication>
 #include <QDesktopServices>
 #include <QFrame>
 #include <QGridLayout>
@@ -142,16 +144,33 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         auto* right = new QVBoxLayout;
         right->setSpacing(4);
         right->setAlignment(Qt::AlignRight);
-        auto* ver = new QLabel("v4.0.0");
+        auto* ver = new QLabel(QStringLiteral("v%1").arg(QApplication::applicationVersion()));
         ver->setStyleSheet(QString("color: %1; font-size: 18px; font-weight: bold; background: transparent; "
                                    "font-family: 'Consolas','Courier New',monospace;")
                                .arg(ui::colors::AMBER()));
         ver->setAlignment(Qt::AlignRight);
         right->addWidget(ver);
-        auto* bdate = new QLabel("Build: 2026-03-20");
-        bdate->setStyleSheet(MUTED());
-        bdate->setAlignment(Qt::AlignRight);
-        right->addWidget(bdate);
+
+        // Check-for-updates button — user-initiated, always shows a result dialog.
+        auto* check_btn = new QPushButton(QStringLiteral("Check for Updates"));
+        check_btn->setStyleSheet(LINK_BTN());
+        check_btn->setCursor(Qt::PointingHandCursor);
+        connect(check_btn, &QPushButton::clicked, this, [this, check_btn]() {
+            check_btn->setEnabled(false);
+            check_btn->setText(QStringLiteral("Checking…"));
+            auto& svc = services::UpdateService::instance();
+            svc.set_dialog_parent(window());
+            // Re-enable the button when the check completes. Using a unique
+            // connection is fine since the service is a long-lived singleton.
+            connect(&svc, &services::UpdateService::check_finished, check_btn,
+                    [check_btn](bool /*found*/) {
+                        check_btn->setEnabled(true);
+                        check_btn->setText(QStringLiteral("Check for Updates"));
+                    },
+                    Qt::SingleShotConnection);
+            svc.check_for_updates(/*silent=*/false);
+        });
+        right->addWidget(check_btn);
         bhl->addLayout(right);
 
         pvl->addWidget(body);

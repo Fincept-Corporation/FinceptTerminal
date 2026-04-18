@@ -28,9 +28,9 @@
     <binary>FinceptTerminal</binary>
   </provides>
   <releases>
-    <release version="4.0.1" date="2026-04-14">
+    <release version="4.0.2" date="2026-04-14">
       <description>
-        <p>Version 4.0.1 — Patch release.</p>
+        <p>Version 4.0.2 — Patch release.</p>
       </description>
     </release>
     <release version="4.0.0" date="2025-01-01">

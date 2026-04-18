@@ -405,14 +405,16 @@ jobs:
           echo "Binary: $BINARY ($(du -sh "$BINARY" | cut -f1))"
           lipo -info "$BINARY"
 
-      # ── Package .app bundle ───────────────────────────────────────────────
-      - name: Package .app bundle
+      # ── Stage .app bundle contents (Python + resources FIRST) ─────────────
+      # Order is critical: Python.framework and resources must be in the bundle
+      # BEFORE macdeployqt / codesign run. If we embed after signing, dyld on
+      # macOS 14+ kills the process with SIGKILL (Code Signature Invalid)
+      # because the added framework pages have no signature. See issue #139.
+      - name: Stage .app bundle contents
         working-directory: fincept-qt
         run: |
           set -euo pipefail
           BUILD_DIR="build"
-          DIST_DIR="dist"
-          mkdir -p "${DIST_DIR}"
 
           if [ -d "${BUILD_DIR}/${{ env.APP_NAME }}.app" ]; then
             APP_BUNDLE="${BUILD_DIR}/${{ env.APP_NAME }}.app"
@@ -426,16 +428,18 @@ jobs:
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
             <key>CFBundleExecutable</key><string>FinceptTerminal</string>
-            <key>CFBundleIdentifier</key><string>in.fincept.terminal</string>
+            <key>CFBundleIdentifier</key><string>com.fincept.terminal</string>
             <key>CFBundleName</key><string>FinceptTerminal</string>
             <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>4.0.1</string>
+            <key>CFBundleShortVersionString</key><string>4.0.2</string>
+            <key>CFBundleVersion</key><string>4.0.2</string>
+            <key>LSMinimumSystemVersion</key><string>13.0</string>
             <key>NSHighResolutionCapable</key><true/>
           </dict></plist>
           PLIST
           fi
 
-          # Embed Python 3.12
+          # Embed Python framework (before codesign so it gets signed with the bundle)
           PY_FRAMEWORK=""
           for candidate in \
             "/Library/Frameworks/Python.framework" \
@@ -463,10 +467,89 @@ jobs:
             echo "WARNING: Python.framework not found"
           fi
 
+          # Copy app resources + Python analytics scripts into bundle
+          mkdir -p "${APP_BUNDLE}/Contents/Resources"
           cp -r resources "${APP_BUNDLE}/Contents/Resources/" 2>/dev/null || true
           cp -r scripts   "${APP_BUNDLE}/Contents/Resources/scripts" 2>/dev/null || true
-          cp -r "${APP_BUNDLE}" "${DIST_DIR}/"
-          echo "Bundle size: $(du -sh "${DIST_DIR}/${{ env.APP_NAME }}.app" | cut -f1)"
+
+          echo "Bundle staged at: ${APP_BUNDLE}"
+          echo "Pre-sign size: $(du -sh "${APP_BUNDLE}" | cut -f1)"
+
+      # ── Run macdeployqt on the fully staged bundle ────────────────────────
+      # macdeployqt copies Qt frameworks, fixes rpaths, and signs everything
+      # it touches. It must run AFTER Python.framework + resources are in place
+      # so those get correct rpath treatment.
+      - name: Run macdeployqt
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          APP_BUNDLE="build/${{ env.APP_NAME }}.app"
+          MACDEPLOYQT="${QT_ROOT_DIR}/bin/macdeployqt"
+          if [ -x "${MACDEPLOYQT}" ]; then
+            echo "Running macdeployqt on ${APP_BUNDLE}"
+            "${MACDEPLOYQT}" "${APP_BUNDLE}" -verbose=1 || \
+              echo "::warning::macdeployqt exited non-zero — continuing to explicit codesign"
+          else
+            echo "::warning::macdeployqt not found at ${MACDEPLOYQT}"
+          fi
+
+      # ── Deep ad-hoc re-sign the entire bundle ─────────────────────────────
+      # This is the fix for issue #139. macdeployqt's signing of nested
+      # frameworks is unreliable (known Qt bug — see GDATASoftwareAG fork).
+      # We strip every existing signature and re-sign the whole bundle from
+      # leaves to root with a single identity (`-` = ad-hoc). On macOS 14+
+      # on Apple Silicon this is what prevents dyld from killing the process
+      # with SIGKILL Code Signature Invalid at launch.
+      #
+      # Until Apple Developer ID cert + notarization is added (Tier 2),
+      # users will still see "unidentified developer" on first launch and
+      # must right-click → Open (or `xattr -d com.apple.quarantine`).
+      - name: Deep ad-hoc codesign bundle
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          APP_BUNDLE="build/${{ env.APP_NAME }}.app"
+
+          echo "Removing existing signatures (leaves first)..."
+          # Strip signatures from every Mach-O in the bundle. Must be done
+          # leaf-to-root so nested frameworks are unsigned before we re-sign
+          # their parents.
+          find "${APP_BUNDLE}" -type f \( -name "*.dylib" -o -name "*.so" -o -perm +111 \) 2>/dev/null | \
+            while read -r f; do
+              if file "$f" 2>/dev/null | grep -q "Mach-O"; then
+                codesign --remove-signature "$f" 2>/dev/null || true
+              fi
+            done
+          codesign --remove-signature "${APP_BUNDLE}" 2>/dev/null || true
+
+          echo "Re-signing bundle ad-hoc (deep)..."
+          # Ad-hoc sign ("-"): do NOT pass --preserve-metadata — the bundle has
+          # no prior entitlements/requirements to preserve, and the flag will
+          # fail with "resource fork, Finder information, or similar detritus
+          # not allowed" on fresh macdeployqt output. Entitlements are only
+          # needed with a real Developer ID cert + hardened runtime (Tier 2).
+          codesign --force --deep --sign - \
+                   --timestamp=none \
+                   "${APP_BUNDLE}"
+
+          echo "Verifying signature..."
+          codesign --verify --deep --strict --verbose=2 "${APP_BUNDLE}" || {
+            echo "::error::Bundle verification failed"
+            codesign --display --deep --verbose=4 "${APP_BUNDLE}" || true
+            exit 1
+          }
+
+          echo "Signature OK:"
+          codesign --display --verbose=2 "${APP_BUNDLE}" 2>&1 | head -20
+
+      # ── Copy signed bundle to dist/ ───────────────────────────────────────
+      - name: Finalize dist
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp -R "build/${{ env.APP_NAME }}.app" "dist/"
+          echo "Final bundle size: $(du -sh "dist/${{ env.APP_NAME }}.app" | cut -f1)"
 
       # ── Generate Installer (IFW → DMG fallback) ───────────────────────────
       - name: Generate Installer
@@ -483,7 +566,7 @@ jobs:
             echo "::warning::binarycreator not found — falling back to DMG via hdiutil"
             STAGING="$(mktemp -d)/dmg_staging"
             mkdir -p "${STAGING}"
-            cp -r "../dist/${{ env.APP_NAME }}.app" "${STAGING}/"
+            cp -R "../dist/${{ env.APP_NAME }}.app" "${STAGING}/"
             hdiutil create \
               -volname "${{ env.APP_NAME }}" \
               -srcfolder "${STAGING}" \
@@ -763,3 +846,146 @@ jobs:
 
           git push origin main
           echo "README pushed to main"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# JOB 6 — Regenerate updates.json (auto-updater manifest)
+#
+# Reads the published GitHub Release, computes sha256 for each installer
+# asset, writes a per-platform/per-arch manifest that the in-app updater
+# consumes (see fincept-qt/src/services/updater/UpdateService.cpp).
+#
+# Platform key scheme — must match UpdateService::current_platform_key():
+#   windows-x64 / windows-arm64 / linux-x64 / macos-arm64 / macos-x64
+#
+# Asset filename scheme — must match CPACK_PACKAGE_FILE_NAME in CMakeLists.txt:
+#   FinceptTerminal-<version>-<platform>-<arch>-setup.<ext>
+# ═════════════════════════════════════════════════════════════════════════════
+  update-manifest:
+    name: Regenerate updates.json
+    needs: release
+    runs-on: ubuntu-latest
+    if: >-
+      !cancelled() &&
+      needs.release.result == 'success' &&
+      startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+          ref: main
+
+      - name: Regenerate updates.json from release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Strip leading 'v' from tag so "v4.0.2" → "4.0.2" for latest-version
+          VERSION="${TAG#v}"
+          RELEASE_URL="https://github.com/${REPO}/releases/tag/${TAG}"
+
+          # Poll up to 60s for the release to be fully published
+          for i in $(seq 1 12); do
+            if gh release view "${TAG}" --json assets >/dev/null 2>&1; then
+              break
+            fi
+            echo "  attempt ${i}: release not yet visible, sleeping..."
+            sleep 5
+          done
+
+          WORK="$(mktemp -d)"
+          echo "Downloading release assets to ${WORK}..."
+          gh release download "${TAG}" --dir "${WORK}" --pattern "FinceptTerminal-*setup*" || true
+
+          # Export shell-side vars so the embedded python can read them via os.environ
+          export WORK VERSION TAG REPO
+
+          # Map platform key → (filename-glob, asset download url template)
+          python3 <<'PYEOF' > updates.json
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import re
+
+          work = pathlib.Path(os.environ["WORK"]) if os.environ.get("WORK") else pathlib.Path.cwd()
+          version = os.environ["VERSION"]
+          tag = os.environ["TAG"]
+          repo = os.environ["REPO"]
+          release_url = f"https://github.com/{repo}/releases/tag/{tag}"
+
+          # Supported platform keys and the regex that matches their installer filename.
+          # Order matters: more specific keys first.
+          platforms = [
+              ("windows-x64",   re.compile(rf"FinceptTerminal-{re.escape(version)}-windows-x64-setup\.exe$")),
+              ("windows-arm64", re.compile(rf"FinceptTerminal-{re.escape(version)}-windows-arm64-setup\.exe$")),
+              ("linux-x64",     re.compile(rf"FinceptTerminal-{re.escape(version)}-linux-x64-setup\.run$")),
+              ("linux-arm64",   re.compile(rf"FinceptTerminal-{re.escape(version)}-linux-arm64-setup\.run$")),
+              ("macos-arm64",   re.compile(rf"FinceptTerminal-{re.escape(version)}-macos-arm64-setup\.(dmg|exe)$")),
+              ("macos-x64",     re.compile(rf"FinceptTerminal-{re.escape(version)}-macos-x64-setup\.(dmg|exe)$")),
+              ("macos-universal", re.compile(rf"FinceptTerminal-{re.escape(version)}-macos-universal-setup\.(dmg|exe)$")),
+          ]
+
+          # Scan downloaded files
+          files = {p.name: p for p in work.iterdir() if p.is_file()}
+          print(f"# Found {len(files)} asset file(s): {sorted(files)}", flush=True)
+
+          updates = {}
+          for key, pattern in platforms:
+              match = next((f for f in files if pattern.match(f)), None)
+              if not match:
+                  print(f"# No asset matches {key} — skipping", flush=True)
+                  continue
+
+              path = files[match]
+              sha = hashlib.sha256(path.read_bytes()).hexdigest()
+              url = f"https://github.com/{repo}/releases/download/{tag}/{match}"
+              updates[key] = {
+                  "latest-version": version,
+                  "download-url": url,
+                  "sha256": sha,
+                  "open-url": release_url,
+                  "changelog": f"Fincept Terminal v{version} — see release notes at {release_url}",
+              }
+              print(f"# {key}: {match} sha256={sha[:16]}...", flush=True)
+
+          manifest = {
+              "_comment": "Auto-generated by .github/workflows/release.yml on every tag push. Do not edit by hand.",
+              "schema-version": 2,
+              "updates": updates,
+          }
+          print(json.dumps(manifest, indent=2))
+          PYEOF
+
+          echo "=== updates.json diff ==="
+          git diff updates.json | head -80 || true
+
+      - name: Commit and push updates.json
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet updates.json; then
+            echo "updates.json unchanged — nothing to commit"
+            exit 0
+          fi
+
+          git add updates.json
+          git commit -m "chore(release): regenerate updates.json for ${TAG}
+
+          Auto-generated by release workflow. sha256 computed from release assets.
+
+          Co-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+
+          git push origin main
+          echo "updates.json pushed to main"

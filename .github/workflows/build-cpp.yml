@@ -502,49 +502,117 @@ jobs:
           echo "=== dist/ contents ($(find dist -type f | wc -l) files) ==="
           find dist -type f | sort
 
-      # ---- Package: macOS (macdeployqt) ----
-      # Note: upload-artifact strips execute bits (zip limitation).
-      # We tar the dist/ contents so permissions are preserved on download.
-      # macdeployqt (copies ~300MB of Qt frameworks) only runs on tag builds;
-      # push/workflow_dispatch builds skip it to save ~3-5 minutes per job.
+      # ---- Package: macOS ----
+      # Order is critical (see issue #139): Python.framework + resources must
+      # be placed INSIDE the .app BEFORE macdeployqt / codesign run. If we
+      # copy them as siblings of the .app (old behavior) the bundle can't find
+      # them at runtime; if we embed after signing, dyld on macOS 14+ kills
+      # the process with SIGKILL (Code Signature Invalid).
+      #
+      # On tag / workflow_dispatch: full stage -> macdeployqt -> deep ad-hoc
+      # codesign -> verify. On push builds: stage + skip macdeployqt/codesign
+      # (saves ~3-5 min; the resulting bundle won't run on stock macOS but is
+      # fine as a CI artifact for inspection).
+      #
+      # upload-artifact strips execute bits (zip limitation) so we tar dist/.
       - name: Package (macOS)
         if: runner.os == 'macOS'
         working-directory: fincept-qt
         run: |
+          set -euo pipefail
           mkdir -p dist
           MACDEPLOYQT="${QT_ROOT_DIR}/bin/macdeployqt"
-          APP="build/${{ matrix.exe }}.app"
           IS_TAG="${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}"
-          if [ -d "$APP" ]; then
-            # .app bundle exists — run macdeployqt only on tag builds
-            if [ "$IS_TAG" = "true" ]; then
-              "$MACDEPLOYQT" "$APP" 2>/dev/null || true
-            fi
-            cp -r "$APP" dist/
+
+          # ── Locate or synthesize .app bundle ──────────────────────────────
+          if [ -d "build/${{ matrix.exe }}.app" ]; then
+            APP_BUNDLE="build/${{ matrix.exe }}.app"
           else
-            # Plain binary — create a minimal .app bundle manually
-            BUNDLE="dist/${{ matrix.exe }}.app"
-            mkdir -p "$BUNDLE/Contents/MacOS"
-            cp "build/${{ matrix.exe }}" "$BUNDLE/Contents/MacOS/${{ matrix.exe }}"
-            chmod +x "$BUNDLE/Contents/MacOS/${{ matrix.exe }}"
-            cat > "$BUNDLE/Contents/Info.plist" <<'PLIST'
+            APP_BUNDLE="build/${{ matrix.exe }}.app"
+            mkdir -p "${APP_BUNDLE}/Contents/MacOS"
+            cp "build/${{ matrix.exe }}" "${APP_BUNDLE}/Contents/MacOS/${{ matrix.exe }}"
+            chmod +x "${APP_BUNDLE}/Contents/MacOS/${{ matrix.exe }}"
+            cat > "${APP_BUNDLE}/Contents/Info.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
             <key>CFBundleExecutable</key><string>FinceptTerminal</string>
-            <key>CFBundleIdentifier</key><string>in.fincept.terminal</string>
+            <key>CFBundleIdentifier</key><string>com.fincept.terminal</string>
             <key>CFBundleName</key><string>FinceptTerminal</string>
             <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>4.0.1</string>
+            <key>CFBundleShortVersionString</key><string>4.0.2</string>
+            <key>CFBundleVersion</key><string>4.0.2</string>
+            <key>LSMinimumSystemVersion</key><string>13.0</string>
             <key>NSHighResolutionCapable</key><true/>
           </dict></plist>
           PLIST
-            if [ "$IS_TAG" = "true" ]; then
-              "$MACDEPLOYQT" "$BUNDLE" 2>/dev/null || true
+          fi
+
+          # ── Stage resources INSIDE the bundle (not as siblings) ───────────
+          mkdir -p "${APP_BUNDLE}/Contents/Resources"
+          cp -r resources "${APP_BUNDLE}/Contents/Resources/" 2>/dev/null || true
+          cp -r scripts   "${APP_BUNDLE}/Contents/Resources/scripts" 2>/dev/null || true
+
+          # ── Embed Python.framework (tag builds only — skip on push) ───────
+          if [ "$IS_TAG" = "true" ]; then
+            PY_FRAMEWORK=""
+            for candidate in \
+              "/Library/Frameworks/Python.framework" \
+              "$(brew --prefix python@3.12 2>/dev/null)/Frameworks/Python.framework" \
+              "$(brew --prefix python3 2>/dev/null)/Frameworks/Python.framework"; do
+              [ -d "${candidate}/Versions" ] && { PY_FRAMEWORK="${candidate}"; break; }
+            done
+            BUNDLE_FRAMEWORKS="${APP_BUNDLE}/Contents/Frameworks"
+            mkdir -p "${BUNDLE_FRAMEWORKS}"
+            if [ -n "${PY_FRAMEWORK}" ]; then
+              echo "Embedding Python.framework from: ${PY_FRAMEWORK}"
+              rsync -a --copy-unsafe-links "${PY_FRAMEWORK}/" "${BUNDLE_FRAMEWORKS}/Python.framework/" 2>/dev/null || \
+                cp -R "${PY_FRAMEWORK}" "${BUNDLE_FRAMEWORKS}/" 2>/dev/null || true
+              find "${BUNDLE_FRAMEWORKS}/Python.framework" -name "PrivateHeaders" -type l \
+                ! -exec test -e {} \; -delete 2>/dev/null || true
+              PY_VER="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+              ln -sf "../Frameworks/Python.framework/Versions/${PY_VER}/bin/python${PY_VER}" \
+                     "${APP_BUNDLE}/Contents/MacOS/python3" 2>/dev/null || true
+            else
+              echo "::warning::Python.framework not found — bundle will rely on system python"
             fi
           fi
-          cp -r resources dist/resources 2>/dev/null || true
-          cp -r scripts dist/scripts 2>/dev/null || true
+
+          # ── Run macdeployqt on the fully staged bundle (tag builds only) ──
+          if [ "$IS_TAG" = "true" ] && [ -x "$MACDEPLOYQT" ]; then
+            echo "Running macdeployqt on ${APP_BUNDLE}"
+            "$MACDEPLOYQT" "${APP_BUNDLE}" -verbose=1 || \
+              echo "::warning::macdeployqt exited non-zero — continuing to codesign"
+          fi
+
+          # ── Deep ad-hoc codesign (tag builds only) — fix for issue #139 ───
+          # Strip every signature leaf-to-root, then re-sign whole bundle with
+          # the ad-hoc identity ("-"). Do NOT pass --preserve-metadata: there
+          # are no prior entitlements to preserve on a fresh bundle and the
+          # flag errors out on resource-fork detritus left by macdeployqt.
+          if [ "$IS_TAG" = "true" ]; then
+            echo "Stripping existing signatures..."
+            find "${APP_BUNDLE}" -type f \( -name "*.dylib" -o -name "*.so" -o -perm +111 \) 2>/dev/null | \
+              while read -r f; do
+                if file "$f" 2>/dev/null | grep -q "Mach-O"; then
+                  codesign --remove-signature "$f" 2>/dev/null || true
+                fi
+              done
+            codesign --remove-signature "${APP_BUNDLE}" 2>/dev/null || true
+
+            echo "Re-signing bundle ad-hoc (deep)..."
+            codesign --force --deep --sign - --timestamp=none "${APP_BUNDLE}"
+
+            echo "Verifying signature..."
+            codesign --verify --deep --strict --verbose=2 "${APP_BUNDLE}" || {
+              echo "::error::Bundle verification failed"
+              codesign --display --deep --verbose=4 "${APP_BUNDLE}" || true
+              exit 1
+            }
+          fi
+
+          # ── Copy signed bundle to dist/ ──────────────────────────────────
+          cp -R "${APP_BUNDLE}" dist/
           # Tar to preserve execute permissions (upload-artifact uses zip which strips them)
           tar -czf dist.tar.gz -C dist .
 

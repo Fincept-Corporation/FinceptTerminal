@@ -936,8 +936,13 @@ void MainWindow::on_auth_state_changed() {
             set_shell_visible(true);
             stack_->setCurrentIndex(1);
             WorkspaceManager::instance().load_last_workspace();
-            // Trigger silent update check after login (delayed so UI settles first)
-            QTimer::singleShot(3000, this, []() { services::UpdateService::instance().check_for_updates(true); });
+            // Trigger silent update check after login (delayed so UI settles first).
+            // UpdateService de-dupes silent checks across the session, so the
+            // post-PIN-unlock path below won't fire a second request.
+            QTimer::singleShot(3000, this, [this]() {
+                services::UpdateService::instance().set_dialog_parent(this);
+                services::UpdateService::instance().check_for_updates(true);
+            });
             // Warm instrument cache in background — only loaded if not already cached.
             // Runs concurrently while the user reads the dashboard (3-5s head start).
             fincept::trading::InstrumentService::instance().load_from_db_async("zerodha");
@@ -1042,7 +1047,12 @@ void MainWindow::on_terminal_unlocked() {
             }
         }
         WorkspaceManager::instance().load_last_workspace();
-        QTimer::singleShot(3000, this, []() { services::UpdateService::instance().check_for_updates(true); });
+        // Silent update check — UpdateService de-dupes across call sites so
+        // the login path + this post-unlock path won't fire two requests.
+        QTimer::singleShot(3000, this, [this]() {
+            services::UpdateService::instance().set_dialog_parent(this);
+            services::UpdateService::instance().check_for_updates(true);
+        });
     } else {
         // Free/no plan → pricing gate
         set_shell_visible(false);

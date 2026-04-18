@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.27)
-project(FinceptTerminal VERSION 4.0.1 LANGUAGES CXX)
+project(FinceptTerminal VERSION 4.0.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -228,17 +228,10 @@ endif()
 # NOTE: FINCEPT_HAS_QXLSX compile definition is applied to FinceptTerminal
 # after add_executable() — see the target_compile_definitions block below.
 
-# ── QSimpleUpdater (cross-platform auto-update) ──────────────────────────────
-set(QSIMPLE_UPDATER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-    QSimpleUpdater
-    GIT_REPOSITORY https://github.com/alex-spataru/QSimpleUpdater.git
-    GIT_TAG        ff0cb7caae05ef381a09f212b90329ff7b7b9ab9  # master @ 2026-04-11
-    GIT_SHALLOW    TRUE
-)
-FetchContent_MakeAvailable(QSimpleUpdater)
-# QSimpleUpdater's CMakeLists builds a proper STATIC library target with
-# AUTOMOC — we just link against it and add its include dir.
+# ── Auto-update service ─────────────────────────────────────────────────────
+# The updater is implemented in-tree (src/services/updater/UpdateService.cpp)
+# using Qt6::Network directly — no third-party dependency. See the class
+# docstring for the manifest schema.
 
 # ── md4c (fast CommonMark markdown parser → HTML) ────────────────────────────
 FetchContent_Declare(
@@ -289,6 +282,21 @@ set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(QGeoView)
 # QGeoView has anonymous-namespace symbol clashes under unity build
 set_target_properties(qgeoview PROPERTIES UNITY_BUILD OFF)
+
+# Qt 6.8.3's QtGui on macOS carries a transitive "-framework AGL" in its link
+# interface. Apple removed AGL in macOS 14 (Sonoma), so the link fails on 14+
+# with: ld: framework 'AGL' not found. Scrub AGL from qgeoview's resolved link
+# libraries on Apple — OpenGL framework (also in Qt's interface) is sufficient.
+# See GitHub issue #140.
+if(APPLE)
+    foreach(_prop LINK_LIBRARIES INTERFACE_LINK_LIBRARIES)
+        get_target_property(_libs qgeoview ${_prop})
+        if(_libs)
+            list(REMOVE_ITEM _libs "-framework AGL" "AGL")
+            set_target_properties(qgeoview PROPERTIES ${_prop} "${_libs}")
+        endif()
+    endforeach()
+endif()
 
 # ── SingleApplication (single-process enforcement + new-window IPC) ──────────
 # When the user re-launches the exe, the secondary instance sends "--new-window"
@@ -1652,7 +1660,6 @@ target_link_libraries(FinceptTerminal PRIVATE
     Qt6::Multimedia
     QXlsx::QXlsx
     qgeoview
-    QSimpleUpdater
     md4c
     md4c-html
     SingleApplication::SingleApplication
@@ -1710,6 +1717,12 @@ if(WIN32)
         message(WARNING "OpenSSL DLLs not found for POST_BUILD copy — deploy manually")
     endif()
 endif()
+
+# ── Application version (single source of truth) ─────────────────────────────
+# FINCEPT_VERSION_STRING is consumed by main.cpp so QApplication::applicationVersion()
+# always matches the project() VERSION declared at the top of this file.
+target_compile_definitions(FinceptTerminal PRIVATE
+    FINCEPT_VERSION_STRING="${CMAKE_PROJECT_VERSION}")
 
 # ── Optional feature compile definitions (applied after add_executable) ──────
 if(FINCEPT_HAS_PRIVATE_HEADERS)
@@ -1939,6 +1952,17 @@ if(FINCEPT_BUILD_INSTALLER)
                 COMPONENT core
                 FILES_MATCHING
                 PATTERN "*.dll")
+        # Python analytics scripts (4000+ files) — required at runtime by
+        # PythonRunner / ExchangeService. Without this the Crypto tab and all
+        # Python-backed screens crash on an installed build.
+        install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scripts/"
+                DESTINATION "scripts" COMPONENT scripts)
+        # Requirements files — read by PythonSetupManager::install_packages()
+        # during first-run setup. Missing files → setup fails on installed build.
+        install(FILES
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy1.txt"
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy2.txt"
+                DESTINATION "resources" COMPONENT core)
         # Qt plugin directories
         install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/platforms"
                 DESTINATION "." COMPONENT core OPTIONAL)
@@ -2013,17 +2037,50 @@ if(FINCEPT_BUILD_INSTALLER)
         set(CPACK_IFW_TARGET_DIRECTORY "@HomeDir@/FinceptTerminal")
     endif()
 
-    # Output file naming
+    # Output file naming — arch-aware so the auto-updater manifest can point
+    # at predictable, stable URLs. Scheme:
+    #   FinceptTerminal-<version>-<platform>-<arch>-setup
+    # Platform: windows | linux | macos
+    # Arch:     x64 | arm64
+    # The CPack IFW generator appends .exe on Windows, .app on macOS, .run on Linux.
     if(WIN32)
+        # CMAKE_SYSTEM_PROCESSOR on Windows is "AMD64" for x64 and "ARM64" for arm64.
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|aarch64")
+            set(_FINCEPT_PKG_ARCH "arm64")
+        else()
+            set(_FINCEPT_PKG_ARCH "x64")
+        endif()
         set(CPACK_PACKAGE_FILE_NAME
-            "FinceptTerminal-${CMAKE_PROJECT_VERSION}-win64-setup")
+            "FinceptTerminal-${CMAKE_PROJECT_VERSION}-windows-${_FINCEPT_PKG_ARCH}-setup")
     elseif(APPLE)
+        # On macOS CMAKE_OSX_ARCHITECTURES is the authoritative source
+        # (it drives the actual binary slice). Fall back to host processor.
+        if(CMAKE_OSX_ARCHITECTURES)
+            list(LENGTH CMAKE_OSX_ARCHITECTURES _osx_arch_count)
+            if(_osx_arch_count GREATER 1)
+                set(_FINCEPT_PKG_ARCH "universal")
+            elseif("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "arm64")
+                set(_FINCEPT_PKG_ARCH "arm64")
+            else()
+                set(_FINCEPT_PKG_ARCH "x64")
+            endif()
+        elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+            set(_FINCEPT_PKG_ARCH "arm64")
+        else()
+            set(_FINCEPT_PKG_ARCH "x64")
+        endif()
         set(CPACK_PACKAGE_FILE_NAME
-            "FinceptTerminal-${CMAKE_PROJECT_VERSION}-macOS-setup")
+            "FinceptTerminal-${CMAKE_PROJECT_VERSION}-macos-${_FINCEPT_PKG_ARCH}-setup")
     else()
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+            set(_FINCEPT_PKG_ARCH "arm64")
+        else()
+            set(_FINCEPT_PKG_ARCH "x64")
+        endif()
         set(CPACK_PACKAGE_FILE_NAME
-            "FinceptTerminal-${CMAKE_PROJECT_VERSION}-linux-x64-setup")
+            "FinceptTerminal-${CMAKE_PROJECT_VERSION}-linux-${_FINCEPT_PKG_ARCH}-setup")
     endif()
+    message(STATUS "  Installer filename: ${CPACK_PACKAGE_FILE_NAME}")
 
     # ── Include CPack + IFW module ───────────────────────────────────────────
     include(CPack)

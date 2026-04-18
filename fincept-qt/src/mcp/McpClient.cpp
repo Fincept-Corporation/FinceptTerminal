@@ -168,7 +168,7 @@ Result<QJsonObject> McpClient::initialize() {
 
     QJsonObject client_info;
     client_info["name"] = "FinceptTerminal";
-    client_info["version"] = "4.0.1";
+    client_info["version"] = "4.0.2";
     params["clientInfo"] = client_info;
 
     QJsonObject capabilities;
