@@ -5,6 +5,9 @@
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QJsonDocument>
 #include <QJsonParseError>
 
@@ -78,6 +81,9 @@ void GovDataService::execute(const QString& script, const QString& command, cons
                              const QString& request_id) {
     const QString key = cache_key(script, command, args);
 
+    const QString topic = hub_topic(script, request_id);
+    dispatch_records_.insert(topic, DispatchRecord{script, command, args, request_id});
+
     // Serve from cache if fresh
     const QVariant cached = fincept::CacheManager::instance().get(key);
     if (!cached.isNull()) {
@@ -86,6 +92,8 @@ void GovDataService::execute(const QString& script, const QString& command, cons
         result.success = true;
         result.data = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
         emit result_ready(request_id, result);
+        if (hub_registered_)
+            fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(result));
         return;
     }
 
@@ -97,7 +105,7 @@ void GovDataService::execute(const QString& script, const QString& command, cons
     LOG_INFO("GovDataService", QString("Executing %1 %2 [%3]").arg(script, command, args.join(", ")));
 
     QPointer<GovDataService> self = this;
-    python::PythonRunner::instance().run(script, full_args, [self, request_id, key](python::PythonResult py_result) {
+    python::PythonRunner::instance().run(script, full_args, [self, script, request_id, key](python::PythonResult py_result) {
         if (!self)
             return;
 
@@ -142,7 +150,69 @@ void GovDataService::execute(const QString& script, const QString& command, cons
 
         LOG_INFO("GovDataService", QString("Result ready: %1").arg(request_id));
         emit self->result_ready(request_id, result);
+        if (self->hub_registered_) {
+            const QString topic = GovDataService::hub_topic(script, request_id);
+            fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(result));
+        }
     });
+}
+
+// ── DataHub producer wiring ─────────────────────────────────────────────────
+
+QString GovDataService::hub_topic(const QString& script, const QString& request_id) {
+    // Map script filename → provider id when possible; fall back to the
+    // script name stripped of extension.
+    QString provider_key;
+    for (const auto& p : kProviders) {
+        if (p.script == script) {
+            provider_key = p.id;
+            break;
+        }
+    }
+    if (provider_key.isEmpty()) {
+        provider_key = script;
+        if (provider_key.endsWith(QLatin1String(".py")))
+            provider_key.chop(3);
+    }
+    return QStringLiteral("govdata:") + provider_key + QLatin1Char(':') + request_id;
+}
+
+QStringList GovDataService::topic_patterns() const {
+    return {QStringLiteral("govdata:*")};
+}
+
+void GovDataService::refresh(const QStringList& topics) {
+    for (const auto& topic : topics) {
+        auto it = dispatch_records_.constFind(topic);
+        if (it == dispatch_records_.constEnd()) {
+            LOG_DEBUG("GovDataService",
+                      "refresh() for unknown topic (no prior execute): " + topic);
+            continue;
+        }
+        const DispatchRecord rec = it.value();
+        fincept::CacheManager::instance().remove(cache_key(rec.script, rec.command, rec.args));
+        execute(rec.script, rec.command, rec.args, rec.request_id);
+    }
+}
+
+int GovDataService::max_requests_per_sec() const {
+    return 2;
+}
+
+void GovDataService::ensure_registered_with_hub() {
+    if (hub_registered_) return;
+    auto& hub = fincept::datahub::DataHub::instance();
+    hub.register_producer(this);
+
+    // 1-hour TTL, 60s min_interval — same as economics (govdata updates slowly).
+    fincept::datahub::TopicPolicy policy;
+    policy.ttl_ms = 60 * 60 * 1000;
+    policy.min_interval_ms = 60 * 1000;
+    policy.push_only = false;
+    hub.set_policy_pattern(QStringLiteral("govdata:*"), policy);
+
+    hub_registered_ = true;
+    LOG_INFO("GovDataService", "Registered with DataHub (govdata:*)");
 }
 
 } // namespace fincept::services

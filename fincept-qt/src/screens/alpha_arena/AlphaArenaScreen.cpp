@@ -2,7 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
-#include "python/PythonRunner.h"
+#include "services/alpha_arena/AlphaArenaService.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
 #include "ui/theme/Theme.h"
@@ -651,34 +651,17 @@ void AlphaArenaScreen::on_create_competition() {
     payload["params"] = params;
     payload["api_keys"] = api_keys;
 
-    QString json_arg = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
-
     QPointer<AlphaArenaScreen> self = this;
-    python::PythonRunner::instance().run("alpha_arena/main.py", {json_arg}, [self](const python::PythonResult& result) {
+    services::alpha_arena::AlphaArenaService::instance().run_action(
+        payload, [self](const services::alpha_arena::ActionResult& r) {
         if (!self)
             return;
         self->set_loading(false);
-        if (!result.success) {
-            self->status_info_->setText("Error: " + result.error.left(60));
-            LOG_ERROR("AlphaArena", QString("create_competition failed: ") + result.error);
+        if (!r.success) {
+            self->status_info_->setText("Error: " + r.error.left(60));
             return;
         }
-        QString json_str = python::extract_json(result.output);
-        if (json_str.isEmpty()) {
-            self->status_info_->setText("No response from engine");
-            return;
-        }
-        QJsonParseError err;
-        auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
-        if (doc.isNull() || !doc.isObject()) {
-            self->status_info_->setText("Invalid response");
-            return;
-        }
-        auto obj = doc.object();
-        if (!obj.value("success").toBool(false)) {
-            self->status_info_->setText("Error: " + obj.value("error").toString().left(60));
-            return;
-        }
+        const QJsonObject obj = r.data;
         // Python returns competition_id at top level
         self->competition_id_ = obj["competition_id"].toString();
         self->competition_status_ = "created";
@@ -816,40 +799,20 @@ void AlphaArenaScreen::run_python_action(const QString& action, const QJsonObjec
     payload["action"] = action;
     payload["params"] = params;
 
-    QString json_arg = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
-
     QPointer<AlphaArenaScreen> self = this;
 
-    python::PythonRunner::instance().run(
-        "alpha_arena/main.py", {json_arg}, [self, action](const python::PythonResult& result) {
+    services::alpha_arena::AlphaArenaService::instance().run_action(
+        payload, [self, action](const services::alpha_arena::ActionResult& r) {
             if (!self)
                 return;
             self->set_loading(false);
 
-            if (!result.success) {
-                self->status_info_->setText("Error: " + result.error.left(60));
-                LOG_ERROR("AlphaArena", action + " failed: " + result.error);
+            if (!r.success) {
+                self->status_info_->setText("Error: " + r.error.left(60));
                 return;
             }
 
-            QString json_str = python::extract_json(result.output);
-            if (json_str.isEmpty()) {
-                self->status_info_->setText("No response from engine");
-                return;
-            }
-
-            QJsonParseError err;
-            auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
-            if (doc.isNull() || !doc.isObject()) {
-                self->status_info_->setText("Invalid response");
-                return;
-            }
-
-            auto obj = doc.object();
-            if (!obj.value("success").toBool(false)) {
-                self->status_info_->setText("Error: " + obj.value("error").toString().left(60));
-                return;
-            }
+            const QJsonObject obj = r.data;
 
             // Python returns fields at top level, not nested under "data"
             if (action == "run_cycle") {

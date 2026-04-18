@@ -69,3 +69,6 @@ struct DbnSlot {
 };
 
 } // namespace fincept::services
+
+#include <QMetaType>
+Q_DECLARE_METATYPE(fincept::services::DbnDataPoint)

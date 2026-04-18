@@ -372,3 +372,6 @@ inline QString layout_label(LayoutMode m) {
 }
 
 } // namespace fincept::relmap
+
+#include <QMetaType>
+Q_DECLARE_METATYPE(fincept::relmap::RelationshipData)

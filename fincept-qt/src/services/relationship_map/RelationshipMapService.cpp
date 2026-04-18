@@ -5,6 +5,9 @@
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -308,6 +311,12 @@ void RelationshipMapService::parse_result(const QString& json_output) {
     emit progress_changed(100, "Complete");
     emit data_ready(data_);
 
+    if (hub_registered_ && !data_.company.ticker.isEmpty()) {
+        fincept::datahub::DataHub::instance().publish(
+            QStringLiteral("geopolitics:relationship_graph:") + data_.company.ticker,
+            QVariant::fromValue(data_));
+    }
+
     LOG_INFO("RelMapService", QString("Loaded %1: %2 inst, %3 insiders, %4 peers, quality=%5%")
                                   .arg(data_.company.ticker)
                                   .arg(data_.institutional_holders.size())
@@ -383,6 +392,43 @@ ValuationSignal RelationshipMapService::compute_valuation(const CompanyInfo& co,
     }
 
     return sig;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DATAHUB PRODUCER — geopolitics:relationship_graph:<ticker>
+// ═══════════════════════════════════════════════════════════════════════════════
+
+QStringList RelationshipMapService::topic_patterns() const {
+    return {QStringLiteral("geopolitics:relationship_graph:*")};
+}
+
+void RelationshipMapService::refresh(const QStringList& topics) {
+    for (const auto& topic : topics) {
+        const QStringList parts = topic.split(QLatin1Char(':'));
+        // geopolitics:relationship_graph:<ticker>
+        if (parts.size() != 3) continue;
+        fetch(parts[2]);
+    }
+}
+
+int RelationshipMapService::max_requests_per_sec() const {
+    return 1;  // Heavy yfinance aggregation per call; cap at 1/sec.
+}
+
+void RelationshipMapService::ensure_registered_with_hub() {
+    if (hub_registered_) return;
+    auto& hub = fincept::datahub::DataHub::instance();
+    hub.register_producer(this);
+
+    // Matches kRelMapTtlSec (10 min). Min 2 min between refreshes — the Python
+    // fetch is slow (~5-15 s) and consumers are dashboards, not tickers.
+    fincept::datahub::TopicPolicy policy;
+    policy.ttl_ms = kRelMapTtlSec * 1000;
+    policy.min_interval_ms = 2 * 60 * 1000;
+    hub.set_policy_pattern(QStringLiteral("geopolitics:relationship_graph:*"), policy);
+
+    hub_registered_ = true;
+    LOG_INFO("RelMapService", "Registered with DataHub (geopolitics:relationship_graph:*)");
 }
 
 } // namespace fincept::services

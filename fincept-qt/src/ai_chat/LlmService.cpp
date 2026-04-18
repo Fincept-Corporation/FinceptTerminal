@@ -11,8 +11,12 @@
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/SettingsRepository.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/TopicPolicy.h"
+
 #include <QEventLoop>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QJsonValue>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -21,6 +25,8 @@
 #include <QRegularExpression>
 #include <QThread>
 #include <QTimer>
+#include <QUuid>
+#include <QVariant>
 #include <QtConcurrent/QtConcurrent>
 
 namespace fincept::ai_chat {
@@ -1867,12 +1873,46 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
     std::vector<ConversationMessage> history_copy = history;
 
     QPointer<LlmService> self = this;
+    // Phase 9: shadow-publish every stream chunk to the DataHub under a
+    // per-stream session id. Subscribers (future observer panels, LLM
+    // diagnostics, agent MCP bridges) can tail `llm:session:*:stream`
+    // without being wired into the original caller. Push-only, coalesced
+    // at the policy layer so a token firehose doesn't spam subscribers.
+    const QString stream_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    const QString stream_topic = QStringLiteral("llm:session:") + stream_id + QStringLiteral(":stream");
+    // One-shot pattern registration — LlmService is not a Producer (no
+    // pull semantics), just a publisher. The policy caps cached state
+    // and applies coalescing across the topic family.
+    [[maybe_unused]] static bool policy_once = []() {
+        auto& hub = fincept::datahub::DataHub::instance();
+        fincept::datahub::TopicPolicy policy;
+        policy.push_only = true;
+        policy.coalesce_within_ms = 50;
+        policy.ttl_ms = 5 * 60 * 1000;
+        hub.set_policy_pattern(QStringLiteral("llm:session:*"), policy);
+        LOG_INFO("LlmService", "Registered DataHub policy for llm:session:*");
+        return true;
+    }();
     // Guard on_chunk: if LlmService is destroyed before a chunk arrives,
     // skip the callback entirely rather than invoking into a dead context.
-    StreamCallback guarded_chunk = [self, on_chunk](const QString& chunk, bool done) {
+    StreamCallback guarded_chunk = [self, on_chunk
+        , stream_id, stream_topic
+    ](const QString& chunk, bool done) {
         if (!self)
             return;
         on_chunk(chunk, done);
+        QJsonObject payload{
+            {"session_id", stream_id},
+            {"chunk", chunk},
+            {"done", done},
+        };
+        auto& hub = fincept::datahub::DataHub::instance();
+        hub.publish(stream_topic, QVariant(payload));
+        if (done) {
+            // Retire the per-session topic; subscribers remain attached
+            // but cached state is discarded. Phase 9.
+            hub.retire_topic(stream_topic);
+        }
     };
     QtConcurrent::run(
         [self, p, k, b, m, sp, t, mx, user_message, history_copy, guarded_chunk, use_tools, saved_tools]() {

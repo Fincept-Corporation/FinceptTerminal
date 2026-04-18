@@ -2,16 +2,35 @@
 #pragma once
 #include "services/dbnomics/DBnomicsModels.h"
 
+#include <QHash>
 #include <QJsonDocument>
 #include <QObject>
 #include <QTimer>
 
+#    include "datahub/Producer.h"
+
 namespace fincept::services {
 
-class DBnomicsService : public QObject {
+/// Phase 6 — DataHub producer for `dbnomics:<provider>:<dataset>:<series>`
+/// observation topics. Provider/dataset/series catalogue endpoints stay
+/// signal-driven (structural, not price-like); only observation fetches
+/// (the hot path for chart panels) fan out to the hub. Dual-fire — the
+/// existing `observations_loaded` signal still emits alongside hub
+/// publishes, so panels can migrate incrementally.
+class DBnomicsService : public QObject
+    , public fincept::datahub::Producer
+{
     Q_OBJECT
   public:
     static DBnomicsService& instance();
+
+    /// Register with the hub + install dbnomics:* policies. Idempotent.
+    void ensure_registered_with_hub();
+
+    // ── fincept::datahub::Producer ────────────────────────────────────────
+    QStringList topic_patterns() const override;
+    void refresh(const QStringList& topics) override;
+    int max_requests_per_sec() const override;  // 3 — DBnomics REST
 
     // ── API methods (all async, result via signals) ───────────────────────────
     void fetch_providers();
@@ -55,6 +74,9 @@ class DBnomicsService : public QObject {
     QString pending_search_q_;
 
     QString build_url(const QString& path) const;
+
+    static QString hub_topic(const QString& provider, const QString& dataset, const QString& series);
+    bool hub_registered_ = false;
 };
 
 } // namespace fincept::services

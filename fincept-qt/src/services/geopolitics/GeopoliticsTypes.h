@@ -95,3 +95,13 @@ inline QStringList event_categories() {
 }
 
 } // namespace fincept::services::geo
+
+#include <QMetaType>
+Q_DECLARE_METATYPE(fincept::services::geo::NewsEvent)
+Q_DECLARE_METATYPE(fincept::services::geo::HDXDataset)
+Q_DECLARE_METATYPE(fincept::services::geo::UniqueCountry)
+Q_DECLARE_METATYPE(fincept::services::geo::UniqueCategory)
+Q_DECLARE_METATYPE(QVector<fincept::services::geo::NewsEvent>)
+Q_DECLARE_METATYPE(QVector<fincept::services::geo::HDXDataset>)
+Q_DECLARE_METATYPE(QVector<fincept::services::geo::UniqueCountry>)
+Q_DECLARE_METATYPE(QVector<fincept::services::geo::UniqueCategory>)

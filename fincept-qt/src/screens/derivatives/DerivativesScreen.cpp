@@ -2,7 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
-#include "python/PythonRunner.h"
+#include "services/python_cli/PythonCliService.h"
 #include "storage/cache/CacheManager.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
@@ -892,41 +892,25 @@ void DerivativesScreen::run_pricing(const QString& command, const QStringList& a
 
     QPointer<DerivativesScreen> self = this;
 
-    python::PythonRunner::instance().run(
-        "derivatives_pricing.py", full_args, [self, cache_key](const python::PythonResult& result) {
+    services::python_cli::PythonCliService::instance().run(
+        QStringLiteral("derivatives_pricing.py"), full_args,
+        [self, cache_key](const services::python_cli::CliResult& r) {
             if (!self)
                 return;
 
             self->loading_ = false;
 
-            if (!result.success) {
-                self->display_error(result.error.isEmpty() ? "Python execution failed" : result.error);
+            if (!r.success) {
+                self->display_error(r.error.isEmpty() ? "Pricing failed" : r.error);
                 return;
             }
 
-            // Extract JSON from output
-            QString json_str = python::extract_json(result.output);
-            if (json_str.isEmpty()) {
-                self->display_error("No JSON output from pricing engine");
-                return;
-            }
-
-            QJsonParseError err;
-            auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
-            if (doc.isNull()) {
-                self->display_error("JSON parse error: " + err.errorString());
-                return;
-            }
-
-            auto obj = doc.object();
-            if (obj.contains("error")) {
-                self->display_error(obj["error"].toString());
-                return;
-            }
+            const QJsonObject obj = r.data;
 
             fincept::CacheManager::instance().put(
-                cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), 10 * 60,
-                "derivatives");
+                cache_key,
+                QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
+                10 * 60, "derivatives");
 
             self->display_results(obj);
         });

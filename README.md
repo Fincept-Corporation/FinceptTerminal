@@ -42,9 +42,9 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 | **Feature** | **Description** |
 |-------------|-----------------|
 | 📊 **CFA-Level Analytics** | DCF models, portfolio optimization, risk metrics (VaR, Sharpe), derivatives pricing via embedded Python |
-| 🤖 **AI Agents** | 20+ investor personas (Buffett, Dalio, Graham), hedge fund strategies, local LLM support, multi-provider (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama) |
+| 🤖 **AI Agents** | 37 agents across Trader/Investor (Buffett, Graham, Lynch, Munger, Klarman, Marks…), Economic, and Geopolitics frameworks; local LLM support; multi-provider (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama) |
 | 🌐 **100+ Data Connectors** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, IMF, World Bank, AkShare, government APIs, plus optional alternative-data overlays such as Adanos market sentiment for equity research |
-| 📈 **Real-Time Trading** | Crypto (Kraken/HyperLiquid WebSocket), equity, algo trading, paper trading engine |
+| 📈 **Real-Time Trading** | Crypto (Kraken/HyperLiquid WebSocket), equity, algo trading, paper trading engine, 16 broker integrations (Zerodha, Angel One, Upstox, Fyers, Dhan, Groww, Kotak, IIFL, 5paisa, AliceBlue, Shoonya, Motilal, IBKR, Alpaca, Tradier, Saxo) |
 | 🔬 **QuantLib Suite** | 18 quantitative analysis modules — pricing, risk, stochastic, volatility, fixed income |
 | 🚢 **Global Intelligence** | Maritime tracking, geopolitical analysis, relationship mapping, satellite data |
 | 🎨 **Visual Workflows** | Node editor for automation pipelines, MCP tool integration |
@@ -121,17 +121,17 @@ docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fincept-ter
 | **CMake** | **3.27.7** | [Download](https://cmake.org/download/) |
 | **Ninja** | **1.11.1** | [Download](https://github.com/ninja-build/ninja/releases) |
 | **C++ compiler** | **MSVC 19.38** (VS 2022 17.8) / **GCC 12.3** / **Apple Clang 15.0** (Xcode 15.2) | C++20 required |
-| **Qt** | **6.7.2** (LTS) | [Qt Online Installer](https://www.qt.io/download-qt-installer) |
+| **Qt** | **6.8.3** | [Qt Online Installer](https://www.qt.io/download-qt-installer) |
 | **Python** | **3.11.9** | [python.org](https://www.python.org/downloads/release/python-3119/) |
 | **Platform SDK** | Win10 SDK 10.0.22621.0 / macOS SDK 14.0 (deploy 11.0+) / glibc 2.31+ | — |
 
-#### Install Qt 6.7.2
+#### Install Qt 6.8.3
 
-**Windows:** Qt Online Installer → select `Qt 6.7.2 > MSVC 2022 64-bit` (install path: `C:/Qt/6.7.2/msvc2022_64`)
+**Windows:** Qt Online Installer → select `Qt 6.8.3 > MSVC 2022 64-bit` (install path: `C:/Qt/6.8.3/msvc2022_64`)
 
-**Linux:** Qt Online Installer → `Qt 6.7.2 > Desktop gcc 64-bit` (install path: `~/Qt/6.7.2/gcc_64`). **Or** for system packages, install `qt6-base-dev qt6-charts-dev qt6-tools-dev qt6-base-private-dev libqt6websockets6-dev libgl1-mesa-dev` — note system packages may be a different 6.x minor.
+**Linux:** Qt Online Installer → `Qt 6.8.3 > Desktop gcc 64-bit` (install path: `~/Qt/6.8.3/gcc_64`). **Or** for system packages, install `qt6-base-dev qt6-charts-dev qt6-tools-dev qt6-base-private-dev libqt6websockets6-dev libgl1-mesa-dev` — note system packages may be a different 6.x minor.
 
-**macOS:** Qt Online Installer → `Qt 6.7.2 > macOS` (install path: `~/Qt/6.7.2/macos`)
+**macOS:** Qt Online Installer → `Qt 6.8.3 > macOS` (install path: `~/Qt/6.8.3/macos`)
 
 #### Build (using CMake presets — recommended)
 
@@ -152,18 +152,18 @@ Debug variants: `win-debug`, `linux-debug`, `macos-debug`.
 ```bash
 # Windows (Developer Command Prompt for VS 2022)
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
-  -DCMAKE_PREFIX_PATH="C:/Qt/6.7.2/msvc2022_64"
+  -DCMAKE_PREFIX_PATH="C:/Qt/6.8.3/msvc2022_64"
 cmake --build build
 
 # Linux
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_PREFIX_PATH="$HOME/Qt/6.7.2/gcc_64"
+  -DCMAKE_PREFIX_PATH="$HOME/Qt/6.8.3/gcc_64"
 cmake --build build
 
 # macOS
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-  -DCMAKE_PREFIX_PATH="$HOME/Qt/6.7.2/macos"
+  -DCMAKE_PREFIX_PATH="$HOME/Qt/6.8.3/macos"
 cmake --build build
 ```
 
@@ -176,7 +176,7 @@ cmake --build build
 
 #### Troubleshooting
 
-1. **"Could not find Qt6 6.7.2"** — verify `CMAKE_PREFIX_PATH` points to the Qt 6.7.2 install, not 6.5/6.6/6.8.
+1. **"Could not find Qt6 6.8.3"** — verify `CMAKE_PREFIX_PATH` points to the Qt 6.8.3 install, not 6.5/6.6/6.8.
 2. **MSVC version error** — use VS 2022 17.8+ (MSVC 19.38+). Check with `cl /?`.
 3. **Need to unblock with a different Qt minor?** Pass `-DFINCEPT_ALLOW_QT_DRIFT=ON` (local testing only — never for releases or CI).
 4. Clean rebuild: delete `build/<preset>/` and re-run configure.
@@ -201,7 +201,7 @@ Recent builds also support optional **Adanos Market Sentiment** connectivity in 
 
 | Timeline | Milestone |
 |----------|-----------|
-| **Q1 2026** | Real-time streaming, advanced backtesting, broker integrations |
+| **Shipped** | Real-time streaming, 16 broker integrations, multi-account trading, PIN authentication, theme system |
 | **Q2 2026** | Options strategy builder, multi-portfolio management, 50+ AI agents |
 | **Q3 2026** | Programmatic API, ML training UI, institutional features |
 | **Future** | Mobile companion, cloud sync, community marketplace |

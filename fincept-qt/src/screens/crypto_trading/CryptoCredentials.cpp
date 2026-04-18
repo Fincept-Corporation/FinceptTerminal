@@ -1,12 +1,11 @@
 #include "screens/crypto_trading/CryptoCredentials.h"
 
-#include "python/PythonRunner.h"
+#include "services/crypto/TotpService.h"
 #include "ui/theme/Theme.h"
 
 #include <QGroupBox>
 #include <QHBoxLayout>
-#include <QJsonDocument>
-#include <QJsonObject>
+#include <QPointer>
 #include <QPushButton>
 #include <QStyle>
 #include <QTimer>
@@ -228,25 +227,19 @@ void CryptoCredentials::refresh_totp() {
     if (secret.isEmpty())
         return;
 
-    const QString script = python::PythonRunner::instance().scripts_dir() + "/exchange/totp_gen.py";
-
     QPointer<CryptoCredentials> self = this;
-    python::PythonRunner::instance().run(script, {secret}, [self](const python::PythonResult& result) {
-        if (!self)
-            return;
-        if (!result.success) {
-            self->totp_code_label_->setText("CODE: ERR");
-            self->totp_countdown_label_->setText("");
-            return;
-        }
-        const auto doc = QJsonDocument::fromJson(result.output.toUtf8());
-        const auto obj = doc.object();
-        if (obj.contains("code")) {
-            self->totp_code_label_->setText(QString("CODE: %1").arg(obj.value("code").toString()));
-            const int valid_for = obj.value("valid_for").toInt();
-            self->totp_countdown_label_->setText(QString("(%1s)").arg(valid_for));
-        }
-    });
+    services::crypto::TotpService::instance().generate(
+        secret, [self](const services::crypto::TotpResult& r) {
+            if (!self)
+                return;
+            if (!r.success) {
+                self->totp_code_label_->setText("CODE: ERR");
+                self->totp_countdown_label_->setText("");
+                return;
+            }
+            self->totp_code_label_->setText(QString("CODE: %1").arg(r.code));
+            self->totp_countdown_label_->setText(QString("(%1s)").arg(r.valid_for));
+        });
 }
 
 } // namespace fincept::screens::crypto

@@ -3,6 +3,9 @@
 #include "core/logging/Logger.h"
 #include "network/websocket/WebSocketClient.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -124,8 +127,10 @@ void PolymarketWebSocket::on_ws_message(const QString& msg) {
 
         if (obj.contains("price")) {
             double price = obj["price"].toDouble();
-            if (price > 0)
+            if (price > 0) {
                 emit price_updated(asset_id, price);
+                publish_price_to_hub(asset_id, price);
+            }
         }
 
         if (obj.contains("bids") || obj.contains("asks")) {
@@ -139,14 +144,57 @@ void PolymarketWebSocket::on_ws_message(const QString& msg) {
                 auto ao = a.toObject();
                 book.asks.append({ao["price"].toDouble(), ao["size"].toDouble()});
             }
-            if (!book.bids.isEmpty() || !book.asks.isEmpty())
+            if (!book.bids.isEmpty() || !book.asks.isEmpty()) {
                 emit orderbook_updated(asset_id, book);
+                publish_orderbook_to_hub(asset_id, book);
+            }
         }
     }
 }
 
 void PolymarketWebSocket::on_ws_error(const QString& error) {
     LOG_ERROR("Polymarket WS", "Error: " + error);
+}
+
+QStringList PolymarketWebSocket::topic_patterns() const {
+    return {"polymarket:price:*", "polymarket:orderbook:*"};
+}
+
+void PolymarketWebSocket::refresh(const QStringList& /*topics*/) {
+    // push_only: scheduler never calls this.
+}
+
+int PolymarketWebSocket::max_requests_per_sec() const {
+    return 10;  // CLOB REST cap — informational; refresh() is a no-op anyway
+}
+
+void PolymarketWebSocket::ensure_registered_with_hub() {
+    if (hub_registered_) return;
+    auto& hub = fincept::datahub::DataHub::instance();
+    hub.register_producer(this);
+
+    fincept::datahub::TopicPolicy push_only;
+    push_only.push_only = true;
+    push_only.ttl_ms = 0;
+    push_only.min_interval_ms = 0;
+
+    hub.set_policy_pattern("polymarket:price:*", push_only);
+    hub.set_policy_pattern("polymarket:orderbook:*", push_only);
+
+    hub_registered_ = true;
+    LOG_INFO("Polymarket WS", "Registered with DataHub (polymarket:price:*, polymarket:orderbook:*)");
+}
+
+void PolymarketWebSocket::publish_price_to_hub(const QString& asset_id, double price) {
+    if (asset_id.isEmpty()) return;
+    const QString topic = QStringLiteral("polymarket:price:") + asset_id;
+    fincept::datahub::DataHub::instance().publish(topic, QVariant(price));
+}
+
+void PolymarketWebSocket::publish_orderbook_to_hub(const QString& asset_id, const OrderBook& book) {
+    if (asset_id.isEmpty()) return;
+    const QString topic = QStringLiteral("polymarket:orderbook:") + asset_id;
+    fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(book));
 }
 
 } // namespace fincept::services::polymarket

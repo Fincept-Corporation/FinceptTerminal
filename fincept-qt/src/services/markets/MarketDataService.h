@@ -1,6 +1,8 @@
 #pragma once
 #include "core/result/Result.h"
 
+#    include "datahub/Producer.h"
+
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QObject>
@@ -73,14 +75,30 @@ struct RegionalMarket {
 /// Features:
 ///   - Request batching: collects symbols over a 100ms window, deduplicates, single Python call
 ///   - Quote caching: returns cached data immediately, refreshes in background
-class MarketDataService : public QObject {
+///   - DataHub producer: owns the `market:quote:*` topic family. Phase 2 —
+///     see fincept-qt/docs/datahub-phases/phase-02-market-data-pilot.md.
+class MarketDataService : public QObject
+    , public fincept::datahub::Producer
+{
     Q_OBJECT
   public:
     using QuoteCallback = std::function<void(bool, QVector<QuoteData>)>;
 
     static MarketDataService& instance();
 
+    /// Register this service as a DataHub producer + install the default
+    /// `market:quote:*` policy. Idempotent — safe if called more than once.
+    /// Called from main.cpp after `datahub::register_metatypes()`.
+    void ensure_registered_with_hub();
+
+    // ── fincept::datahub::Producer ────────────────────────────────────────
+    QStringList topic_patterns() const override;
+    void refresh(const QStringList& topics) override;
+    int max_requests_per_sec() const override;
+
     /// Fetch quotes — batched and cached. Callback receives filtered results for requested symbols.
+    /// Phase 3+: prefer `DataHub::subscribe(this, "market:quote:<sym>", ...)` for streaming widgets.
+    /// This callback API remains for one-shot reads (e.g. report builder snapshots).
     void fetch_quotes(const QStringList& symbols, QuoteCallback cb);
 
     using NewsCallback = std::function<void(bool, QJsonArray)>;
@@ -92,11 +110,14 @@ class MarketDataService : public QObject {
 
     /// Fetch historical OHLCV data. period: "1mo","3mo","6mo","1y","2y","5y"
     /// interval: "1d","1wk","1mo"
+    /// Phase 3+: prefer `DataHub::subscribe(this, "market:history:<sym>:<period>:<interval>", ...)`
+    /// for streaming chart widgets. Callback API remains for one-shot reads.
     using HistoryCallback = std::function<void(bool, QVector<HistoryPoint>)>;
     void fetch_history(const QString& symbol, const QString& period, const QString& interval, HistoryCallback cb);
 
     /// Fetch 5-day hourly sparkline data for multiple symbols in one Python call.
     /// Callback: map of symbol -> list of close prices (chronological).
+    /// Phase 3+: prefer `DataHub::subscribe(this, "market:sparkline:<sym>", ...)` for live tables.
     using SparklineCallback = std::function<void(bool, QHash<QString, QVector<double>>)>;
     void fetch_sparklines(const QStringList& symbols, SparklineCallback cb);
 
@@ -115,6 +136,13 @@ class MarketDataService : public QObject {
     MarketDataService();
     void flush_batch();
 
+    /// Internal: publish the per-symbol result to the hub and clear
+    /// in_flight for the matching topic. Called from inside `flush_batch`.
+    void publish_quote_to_hub(const QuoteData& q);
+    void publish_history_to_hub(const QString& symbol, const QString& period, const QString& interval,
+                                const QVector<HistoryPoint>& points);
+    void publish_sparkline_to_hub(const QString& symbol, const QVector<double>& points);
+
     // ── Batching ──
     struct PendingRequest {
         QStringList symbols;
@@ -122,6 +150,8 @@ class MarketDataService : public QObject {
     };
     QVector<PendingRequest> pending_;
     bool batch_scheduled_ = false;
+
+    bool hub_registered_ = false;
 
     // ── Caching — delegated to CacheManager ──
     static constexpr int kQuoteCacheTtlSec = 30;

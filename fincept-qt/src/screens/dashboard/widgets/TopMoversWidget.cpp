@@ -2,6 +2,9 @@
 
 #include "ui/theme/Theme.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 namespace fincept::screens::widgets {
 
 TopMoversWidget::TopMoversWidget(QWidget* parent) : BaseWidget("TOP MOVERS", parent) {
@@ -33,7 +36,8 @@ TopMoversWidget::TopMoversWidget(QWidget* parent) : BaseWidget("TOP MOVERS", par
 
     apply_styles();
     set_loading(true);
-    refresh_data();
+
+    symbols_ = services::MarketDataService::mover_symbols();
 }
 
 void TopMoversWidget::apply_styles() {
@@ -45,23 +49,61 @@ void TopMoversWidget::on_theme_changed() {
     apply_styles();
 }
 
-void TopMoversWidget::refresh_data() {
-    set_loading(true);
-
-    services::MarketDataService::instance().fetch_quotes(
-        services::MarketDataService::mover_symbols(), [this](bool ok, QVector<services::QuoteData> quotes) {
-            set_loading(false);
-            if (!ok || quotes.isEmpty())
-                return;
-
-            all_quotes_ = quotes;
-            // Sort by change_pct descending
-            std::sort(all_quotes_.begin(), all_quotes_.end(),
-                      [](const auto& a, const auto& b) { return a.change_pct > b.change_pct; });
-
-            show_tab(showing_gainers_);
-        });
+void TopMoversWidget::showEvent(QShowEvent* e) {
+    BaseWidget::showEvent(e);
+    if (!hub_active_)
+        hub_subscribe_all();
 }
+
+void TopMoversWidget::hideEvent(QHideEvent* e) {
+    BaseWidget::hideEvent(e);
+    if (hub_active_)
+        hub_unsubscribe_all();
+}
+
+void TopMoversWidget::refresh_data() {
+    auto& hub = datahub::DataHub::instance();
+    QStringList topics;
+    topics.reserve(symbols_.size());
+    for (const auto& sym : symbols_)
+        topics.append(QStringLiteral("market:quote:") + sym);
+    hub.request(topics);
+}
+
+
+void TopMoversWidget::hub_subscribe_all() {
+    auto& hub = datahub::DataHub::instance();
+    for (const auto& sym : symbols_) {
+        const QString topic = QStringLiteral("market:quote:") + sym;
+        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+            if (!v.canConvert<services::QuoteData>())
+                return;
+            row_cache_.insert(sym, v.value<services::QuoteData>());
+            set_loading(false);
+            rebuild_from_cache();
+        });
+    }
+    hub_active_ = true;
+}
+
+void TopMoversWidget::hub_unsubscribe_all() {
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+}
+
+void TopMoversWidget::rebuild_from_cache() {
+    all_quotes_.clear();
+    all_quotes_.reserve(row_cache_.size());
+    for (const auto& sym : symbols_) {
+        auto it = row_cache_.constFind(sym);
+        if (it != row_cache_.constEnd())
+            all_quotes_.append(it.value());
+    }
+    std::sort(all_quotes_.begin(), all_quotes_.end(),
+              [](const auto& a, const auto& b) { return a.change_pct > b.change_pct; });
+    show_tab(showing_gainers_);
+}
+
 
 void TopMoversWidget::show_tab(bool gainers) {
     showing_gainers_ = gainers;

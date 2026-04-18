@@ -20,7 +20,7 @@
 namespace fincept::screens {
 
 /// FFN (Financial Functions) analytics view with 6 sub-tabs.
-/// Uses Python ffn library via PythonRunner for calculations.
+/// Uses Python ffn library via PortfolioAnalyticsService (D1/P6 compliant).
 class PortfolioFFNView : public QWidget {
     Q_OBJECT
   public:

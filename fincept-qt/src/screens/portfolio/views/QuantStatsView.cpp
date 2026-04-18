@@ -2,7 +2,7 @@
 #include "screens/portfolio/views/QuantStatsView.h"
 
 #include "core/logging/Logger.h"
-#include "python/PythonRunner.h"
+#include "services/portfolio/PortfolioAnalyticsService.h"
 #include "ui/theme/Theme.h"
 
 #include <QBarSeries>
@@ -25,8 +25,8 @@
 #include <algorithm>
 #include <cmath>
 
-using fincept::python::PythonResult;
-using fincept::python::PythonRunner;
+using fincept::services::AnalyticsResult;
+using fincept::services::PortfolioAnalyticsService;
 
 namespace fincept::screens {
 
@@ -972,61 +972,43 @@ void QuantStatsView::run_quantstats() {
     qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::AMBER()));
 
     QStringList symbols;
-    QJsonArray weights_arr;
+    QList<double> weights;
     for (const auto& h : summary_.holdings) {
         symbols.append(h.symbol);
-        weights_arr.append(h.weight / 100.0);
+        weights.append(h.weight / 100.0);
     }
 
-    QJsonObject args;
-    args["symbols"] = QJsonArray::fromStringList(symbols);
-    args["weights"] = weights_arr;
-    const QString args_str = QJsonDocument(args).toJson(QJsonDocument::Compact);
-
     QPointer<QuantStatsView> self = this;
-    PythonRunner::instance().run("quantstats_analysis", {args_str}, [self](PythonResult result) {
-        if (!self)
-            return;
-        QMetaObject::invokeMethod(
-            self,
-            [self, result]() {
-                if (!self)
-                    return;
-                self->qs_running_ = false;
-                self->qs_run_btn_->setEnabled(true);
+    PortfolioAnalyticsService::instance().run_quantstats(
+        symbols, weights, [self](const AnalyticsResult& r) {
+            if (!self)
+                return;
+            QMetaObject::invokeMethod(
+                self,
+                [self, r]() {
+                    if (!self)
+                        return;
+                    self->qs_running_ = false;
+                    self->qs_run_btn_->setEnabled(true);
 
-                if (!result.success || result.output.trimmed().isEmpty()) {
-                    self->qs_status_->setText("QuantStats failed");
-                    self->qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
-                    LOG_ERROR("QuantStats", "Script failed: " + result.error.left(200));
-                    return;
-                }
+                    if (!r.success) {
+                        self->qs_status_->setText(QString("QuantStats: %1").arg(r.error));
+                        self->qs_status_->setStyleSheet(
+                            QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
+                        return;
+                    }
 
-                const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8());
-                if (!doc.isObject()) {
-                    self->qs_status_->setText("Invalid JSON response");
-                    self->qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
-                    LOG_ERROR("QuantStats", "Bad JSON: " + result.output.left(200));
-                    return;
-                }
-
-                const QJsonObject root = doc.object();
-                if (root.contains("error")) {
-                    self->qs_status_->setText("Error: " + root["error"].toString());
-                    self->qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
-                    return;
-                }
-
-                self->qs_data_ = root;
-                self->qs_status_->setText("Complete");
-                self->qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE()));
-                self->update_metrics();
-                self->update_returns();
-                self->update_drawdown();
-                self->update_rolling();
-            },
-            Qt::QueuedConnection);
-    });
+                    self->qs_data_ = r.data;
+                    self->qs_status_->setText("Complete");
+                    self->qs_status_->setStyleSheet(
+                        QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE()));
+                    self->update_metrics();
+                    self->update_returns();
+                    self->update_drawdown();
+                    self->update_rolling();
+                },
+                Qt::QueuedConnection);
+        });
 }
 
 // ── run_monte_carlo ───────────────────────────────────────────────────────────
@@ -1040,60 +1022,42 @@ void QuantStatsView::run_monte_carlo() {
     mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::AMBER()));
 
     QStringList symbols;
-    QJsonArray weights_arr;
+    QList<double> weights;
     for (const auto& h : summary_.holdings) {
         symbols.append(h.symbol);
-        weights_arr.append(h.weight / 100.0);
+        weights.append(h.weight / 100.0);
     }
 
-    QJsonObject args;
-    args["symbols"] = QJsonArray::fromStringList(symbols);
-    args["weights"] = weights_arr;
-    args["num_simulations"] = 1000;
-    const QString args_str = QJsonDocument(args).toJson(QJsonDocument::Compact);
-
     QPointer<QuantStatsView> self = this;
-    PythonRunner::instance().run("quantstats_monte_carlo", {args_str}, [self](PythonResult result) {
-        if (!self)
-            return;
-        QMetaObject::invokeMethod(
-            self,
-            [self, result]() {
-                if (!self)
-                    return;
-                self->mc_running_ = false;
-                self->mc_run_btn_->setEnabled(true);
+    PortfolioAnalyticsService::instance().run_monte_carlo(
+        symbols, weights, /*num_simulations=*/1000, [self](const AnalyticsResult& r) {
+            if (!self)
+                return;
+            QMetaObject::invokeMethod(
+                self,
+                [self, r]() {
+                    if (!self)
+                        return;
+                    self->mc_running_ = false;
+                    self->mc_run_btn_->setEnabled(true);
 
-                if (!result.success || result.output.trimmed().isEmpty()) {
-                    self->mc_status_->setText("Monte Carlo simulation failed.");
-                    self->mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE()));
-                    LOG_ERROR("MonteCarlo", "Script failed: " + result.error.left(200));
-                    return;
-                }
+                    if (!r.success) {
+                        self->mc_status_->setText(QString("Monte Carlo: %1").arg(r.error));
+                        self->mc_status_->setStyleSheet(
+                            QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE()));
+                        return;
+                    }
 
-                const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8());
-                if (!doc.isObject()) {
-                    self->mc_status_->setText("Invalid JSON response");
-                    self->mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE()));
-                    LOG_ERROR("MonteCarlo", "Bad JSON: " + result.output.left(200));
-                    return;
-                }
-
-                const QJsonObject root = doc.object();
-                if (root.contains("error")) {
-                    self->mc_status_->setText("Error: " + root["error"].toString());
-                    self->mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE()));
-                    return;
-                }
-
-                self->mc_data_ = root;
-                self->mc_status_->setText(
-                    QString("Complete — %1 paths simulated").arg(root["num_paths_shown"].toInt() > 0 ? "1000" : "0"));
-                self->mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE()));
-                self->update_monte_carlo_chart();
-            },
-            Qt::QueuedConnection);
-    });
+                    self->mc_data_ = r.data;
+                    self->mc_status_->setText(
+                        QString("Complete — %1 paths simulated")
+                            .arg(r.data["num_paths_shown"].toInt() > 0 ? "1000" : "0"));
+                    self->mc_status_->setStyleSheet(
+                        QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE()));
+                    self->update_monte_carlo_chart();
+                },
+                Qt::QueuedConnection);
+        });
 }
 
 } // namespace fincept::screens

@@ -11,6 +11,9 @@
 #include "ui/theme/ThemeManager.h"
 #include "ui/widgets/NotifToast.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QDataStream>
 #include <QEvent>
 #include <QHideEvent>
@@ -110,10 +113,6 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
     save_timer_->setInterval(800);
     connect(save_timer_, &QTimer::timeout, this, &DashboardScreen::save_layout);
 
-    // ── Ticker refresh timer: 5-minute interval, started in showEvent (P3) ──
-    ticker_refresh_timer_ = new QTimer(this);
-    ticker_refresh_timer_->setInterval(5 * 60 * 1000);
-    connect(ticker_refresh_timer_, &QTimer::timeout, this, &DashboardScreen::refresh_ticker);
 
     // ── Canvas signals → toolbar/statusbar ──
     connect(canvas_, &DashboardCanvas::widget_count_changed, toolbar_, &DashboardToolBar::set_widget_count);
@@ -192,10 +191,8 @@ void DashboardScreen::showEvent(QShowEvent* event) {
     if (ticker_bar_)
         ticker_bar_->resume();
 
-    // Fetch live data for the ticker on first show, then every 5 minutes.
-    refresh_ticker();
-    if (ticker_refresh_timer_)
-        ticker_refresh_timer_->start();
+    // Subscribe to current ticker symbols — hub schedules refreshes per TopicPolicy.
+    hub_resubscribe_ticker();
 
     // Set splitter sizes on first show using actual pixel width.
     // Must be done here (not in constructor) because the widget has no size yet
@@ -220,8 +217,7 @@ void DashboardScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
     if (ticker_bar_)
         ticker_bar_->pause();
-    if (ticker_refresh_timer_)
-        ticker_refresh_timer_->stop();
+    hub_unsubscribe_ticker();
 }
 
 // ── Ticker refresh ────────────────────────────────────────────────────────────
@@ -234,18 +230,65 @@ void DashboardScreen::refresh_ticker() {
     if (symbols.isEmpty())
         return;
 
-    QPointer<DashboardScreen> self = this;
-    services::MarketDataService::instance().fetch_quotes(symbols,
-        [self](bool ok, QVector<services::QuoteData> quotes) {
-            if (!self || !ok || quotes.isEmpty())
-                return;
-            QVector<TickerBar::Entry> entries;
-            entries.reserve(quotes.size());
-            for (const auto& q : quotes)
-                entries.append({q.symbol, q.price, q.change});
-            self->ticker_bar_->set_data(entries);
-        });
+    // Hub path: user edited symbols → drop old subs, attach to new set,
+    // kick the hub so consumers see data immediately.
+    hub_resubscribe_ticker();
 }
+
+
+void DashboardScreen::rebuild_ticker_from_cache() {
+    if (!ticker_bar_)
+        return;
+    QVector<TickerBar::Entry> entries;
+    entries.reserve(ticker_subscribed_.size());
+    for (const auto& sym : ticker_subscribed_) {
+        if (!ticker_cache_.contains(sym))
+            continue;
+        const auto& q = ticker_cache_.value(sym);
+        entries.append({q.symbol, q.price, q.change});
+    }
+    if (!entries.isEmpty())
+        ticker_bar_->set_data(entries);
+}
+
+void DashboardScreen::hub_resubscribe_ticker() {
+    if (!ticker_bar_)
+        return;
+
+    auto& hub = datahub::DataHub::instance();
+    // Drop any prior subscriptions owned by this screen, since the symbol
+    // set may have changed (user edited ticker symbols).
+    hub.unsubscribe(this);
+    hub_active_ = false;
+    ticker_cache_.clear();
+
+    ticker_subscribed_ = ticker_bar_->symbols();
+    if (ticker_subscribed_.isEmpty())
+        return;
+
+    QStringList topics;
+    topics.reserve(ticker_subscribed_.size());
+    for (const QString& sym : ticker_subscribed_) {
+        const QString topic = QStringLiteral("market:quote:") + sym;
+        topics.append(topic);
+        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+            if (!v.canConvert<services::QuoteData>())
+                return;
+            ticker_cache_.insert(sym, v.value<services::QuoteData>());
+            rebuild_ticker_from_cache();
+        });
+    }
+    hub.request(topics);
+    hub_active_ = true;
+}
+
+void DashboardScreen::hub_unsubscribe_ticker() {
+    if (!hub_active_)
+        return;
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+}
+
 
 // ── Event filter: sync canvas width to scroll viewport ────────────────────────
 

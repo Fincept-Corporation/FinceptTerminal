@@ -3,7 +3,10 @@
 #include "core/config/ProfileManager.h"
 
 #include <QDir>
+#include <QFileInfo>
 #include <QStandardPaths>
+
+#include <cstdio>
 
 namespace fincept {
 
@@ -51,14 +54,29 @@ QString AppPaths::workspaces() {
 }
 
 void AppPaths::ensure_all() {
-    QDir().mkpath(root());
-    QDir().mkpath(data());
-    QDir().mkpath(logs());
-    QDir().mkpath(files());
-    QDir().mkpath(cache());
-    QDir().mkpath(models());
-    QDir().mkpath(runtime());
-    QDir().mkpath(workspaces());
+    // Use fprintf to stderr (not qWarning) — main.cpp installs a Qt message
+    // handler that routes qWarning into Logger, but Logger's file isn't open
+    // yet when ensure_all() runs during startup. Raw stderr is the safe channel.
+    const auto try_mkpath = [](const QString& p) {
+        if (p.isEmpty()) {
+            fprintf(stderr, "[AppPaths] empty path — skipping mkpath\n");
+            return;
+        }
+        if (QDir().mkpath(p))
+            return;
+        const QFileInfo info(p);
+        fprintf(stderr,
+                "[AppPaths] mkpath failed: %s exists=%d isDir=%d writable=%d\n",
+                qUtf8Printable(p), info.exists(), info.isDir(), info.isWritable());
+    };
+    try_mkpath(root());
+    try_mkpath(data());
+    try_mkpath(logs());
+    try_mkpath(files());
+    try_mkpath(cache());
+    try_mkpath(models());
+    try_mkpath(runtime());
+    try_mkpath(workspaces());
 }
 
 } // namespace fincept

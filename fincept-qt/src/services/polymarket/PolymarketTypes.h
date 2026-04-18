@@ -227,3 +227,6 @@ struct WsMarketUpdate {
 };
 
 } // namespace fincept::services::polymarket
+
+#include <QMetaType>
+Q_DECLARE_METATYPE(fincept::services::polymarket::OrderBook)

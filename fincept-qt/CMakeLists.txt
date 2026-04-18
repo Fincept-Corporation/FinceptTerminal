@@ -115,6 +115,12 @@ endif()
 # Suppress Windows min/max macros that break std::min/std::max in unity batches
 add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
 
+# ── Test suite (opt-in) ──────────────────────────────────────────────────────
+# OFF by default so a normal build is unchanged. Turn on with
+# -DFINCEPT_BUILD_TESTS=ON to compile the Qt Test executables under
+# fincept-qt/tests/. Run via `ctest` in the build directory.
+option(FINCEPT_BUILD_TESTS "Build the Fincept Terminal test suite" OFF)
+
 # ── Qt packages ──────────────────────────────────────────────────────────────
 # Qt is pinned to 6.8.3 across all platforms. Releases must build
 # on exactly this version to guarantee binary/ABI stability of the shipped
@@ -348,6 +354,14 @@ set(NETWORK_SOURCES
 # WebSocketClient is always compiled; it stubs out when HAS_QT_WEBSOCKETS is not defined
 list(APPEND NETWORK_SOURCES src/network/websocket/WebSocketClient.cpp)
 
+# DataHub (Phase 0 scaffolding — see fincept-qt/DATAHUB_ARCHITECTURE.md)
+# Headers are always built so Q_OBJECT MOC runs; the .cpp bodies are only
+# active when the feature flag is ON. Phase 1 will flesh out the stub.
+set(DATAHUB_SOURCES
+    src/datahub/DataHub.cpp
+    src/datahub/DataHubMetaTypes.cpp
+)
+
 # Auth
 set(AUTH_SOURCES
     src/auth/AuthManager.cpp
@@ -432,6 +446,7 @@ set(STORAGE_SOURCES
     # Multi-account broker support
     src/storage/sqlite/migrations/v016_broker_accounts.cpp
     src/storage/sqlite/migrations/v017_perf_indexes.cpp
+    src/storage/sqlite/migrations/v018_widget_config.cpp
 )
 
 # Python runner
@@ -476,6 +491,7 @@ set(MCP_SOURCES
     src/mcp/tools/SettingsTools.cpp
     src/mcp/tools/PythonTools.cpp
     src/mcp/tools/SystemTools.cpp
+    src/mcp/tools/DataHubTools.cpp
 )
 
 # Trading
@@ -523,6 +539,11 @@ set(TRADING_SOURCES
 
 # Services
 set(SERVICE_SOURCES
+    src/services/akshare/AkShareService.cpp
+    src/services/alpha_arena/AlphaArenaService.cpp
+    src/services/asia_markets/AsiaMarketsService.cpp
+    src/services/crypto/TotpService.cpp
+    src/services/python_cli/PythonCliService.cpp
     src/services/markets/MarketDataService.cpp
     src/services/data_normalization/DataNormalizationService.cpp
     src/services/news/NewsService.cpp
@@ -543,6 +564,7 @@ set(SERVICE_SOURCES
     src/services/backtesting/BacktestingService.cpp
     src/services/algo_trading/AlgoTradingService.cpp
     src/services/portfolio/PortfolioService.cpp
+    src/services/portfolio/PortfolioAnalyticsService.cpp
     src/services/quantlib/QuantLibClient.cpp
     src/services/economics/EconomicsService.cpp
     src/services/agents/AgentService.cpp
@@ -642,6 +664,7 @@ set(SCREEN_SOURCES
     src/screens/auth/ForgotPasswordScreen.cpp
     src/screens/auth/PricingScreen.cpp
     src/screens/auth/LockScreen.cpp
+    src/screens/devtools/DataHubInspector.cpp
     src/screens/profile/ProfileScreen.cpp
     src/screens/settings/SettingsScreen.cpp
     src/screens/settings/LlmConfigSection.cpp
@@ -699,6 +722,18 @@ set(SCREEN_SOURCES
     src/screens/dashboard/widgets/RiskMetricsWidget.cpp
     src/screens/dashboard/widgets/PortfolioSummaryWidget.cpp
     src/screens/dashboard/widgets/QuickTradeWidget.cpp
+    src/screens/dashboard/widgets/OpenPositionsWidget.cpp
+    src/screens/dashboard/widgets/OrderBookMiniWidget.cpp
+    src/screens/dashboard/widgets/MarginUsageWidget.cpp
+    src/screens/dashboard/widgets/TodayPnLWidget.cpp
+    src/screens/dashboard/widgets/BrokerHoldingsWidget.cpp
+    src/screens/dashboard/widgets/MarketQuoteStripWidget.cpp
+    src/screens/dashboard/widgets/CryptoTickerWidget.cpp
+    src/screens/dashboard/widgets/PolymarketPriceWidget.cpp
+    src/screens/dashboard/widgets/AgentErrorsWidget.cpp
+    src/screens/dashboard/widgets/SparklineStripWidget.cpp
+    src/screens/dashboard/widgets/TradeTapeWidget.cpp
+    src/screens/dashboard/widgets/NewsCategoryWidget.cpp
     src/screens/dashboard/widgets/RecentFilesWidget.cpp
     src/screens/dashboard/widgets/VideoPlayerWidget.cpp
     src/screens/report_builder/ReportBuilderScreen.cpp
@@ -1037,6 +1072,18 @@ set_source_files_properties(
     src/screens/dashboard/widgets/PerformanceWidget.cpp
     src/screens/dashboard/widgets/PortfolioSummaryWidget.cpp
     src/screens/dashboard/widgets/QuickTradeWidget.cpp
+    src/screens/dashboard/widgets/OpenPositionsWidget.cpp
+    src/screens/dashboard/widgets/OrderBookMiniWidget.cpp
+    src/screens/dashboard/widgets/MarginUsageWidget.cpp
+    src/screens/dashboard/widgets/TodayPnLWidget.cpp
+    src/screens/dashboard/widgets/BrokerHoldingsWidget.cpp
+    src/screens/dashboard/widgets/MarketQuoteStripWidget.cpp
+    src/screens/dashboard/widgets/CryptoTickerWidget.cpp
+    src/screens/dashboard/widgets/PolymarketPriceWidget.cpp
+    src/screens/dashboard/widgets/AgentErrorsWidget.cpp
+    src/screens/dashboard/widgets/SparklineStripWidget.cpp
+    src/screens/dashboard/widgets/TradeTapeWidget.cpp
+    src/screens/dashboard/widgets/NewsCategoryWidget.cpp
     src/screens/dashboard/widgets/QuoteTableWidget.cpp
     src/screens/dashboard/widgets/RiskMetricsWidget.cpp
     src/screens/dashboard/widgets/ScreenerWidget.cpp
@@ -1208,6 +1255,7 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v015_screen_state.cpp
     src/storage/sqlite/migrations/v016_broker_accounts.cpp
     src/storage/sqlite/migrations/v017_perf_indexes.cpp
+    src/storage/sqlite/migrations/v018_widget_config.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
@@ -1350,6 +1398,7 @@ endif()
 add_executable(FinceptTerminal ${_FINCEPT_EXE_FLAGS}
     ${CORE_SOURCES}
     ${NETWORK_SOURCES}
+    ${DATAHUB_SOURCES}
     ${AUTH_SOURCES}
     ${STORAGE_SOURCES}
     ${PYTHON_SOURCES}
@@ -2030,5 +2079,11 @@ endif()
 if(DEFINED HAS_TTS)
 message(STATUS "  TextToSpeech      : ${HAS_TTS}")
 endif()
+message(STATUS "  Tests             : ${FINCEPT_BUILD_TESTS}")
 message(STATUS "============================================================")
 message(STATUS "")
+
+# ── Test suite (opt-in; see fincept-qt/tests/CMakeLists.txt) ─────────────────
+if(FINCEPT_BUILD_TESTS)
+    add_subdirectory(tests)
+endif()

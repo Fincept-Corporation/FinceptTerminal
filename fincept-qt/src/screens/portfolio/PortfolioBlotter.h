@@ -43,6 +43,11 @@ class PortfolioBlotter : public QWidget {
 
     void fetch_sparklines();
 
+    void hub_resubscribe_sparklines();
+    void hub_unsubscribe_all();
+    void repaint_sparkline_cells();
+    bool hub_active_ = false;
+
     QVector<portfolio::HoldingWithQuote> holdings_;
     QVector<portfolio::HoldingWithQuote> sorted_;
     QString selected_symbol_;

@@ -109,3 +109,7 @@ struct AreaSearchParams {
 };
 
 } // namespace fincept::services::maritime
+
+#include <QMetaType>
+Q_DECLARE_METATYPE(fincept::services::maritime::VesselData)
+Q_DECLARE_METATYPE(QVector<fincept::services::maritime::VesselData>)

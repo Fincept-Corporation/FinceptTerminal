@@ -3,6 +3,8 @@
 #include "services/agents/AgentTypes.h"
 #include "storage/repositories/AgentConfigRepository.h"
 
+#    include "datahub/Producer.h"
+
 #include <QJsonObject>
 #include <QObject>
 
@@ -12,10 +14,18 @@ namespace fincept::services {
 /// Delegates to Python finagent_core/main.py via PythonRunner (lightweight calls)
 /// or custom QProcess + stdin (large payloads like agent execution).
 /// All results emitted as signals on the Qt event loop.
-class AgentService : public QObject {
+class AgentService : public QObject
+    , public fincept::datahub::Producer
+{
     Q_OBJECT
   public:
     static AgentService& instance();
+
+    // ── Producer interface ──────────────────────────────────────────────────
+    QStringList topic_patterns() const override;
+    void refresh(const QStringList& topics) override;
+    int max_requests_per_sec() const override;
+    void ensure_registered_with_hub();
 
     // ── Agent discovery & listing ────────────────────────────────────────────
     void discover_agents();
@@ -136,6 +146,18 @@ class AgentService : public QObject {
     QString make_cache_key(const QString& action, const QJsonObject& params) const;
     bool get_cached_response(const QString& key, QJsonObject& out) const;
     void set_cached_response(const QString& key, const QJsonObject& data);
+
+    // ── Hub publishing helpers ──────────────────────────────────────────────
+    // AgentService is a push-only producer — it publishes run outputs, stream
+    // tokens, status, routing, and errors but never pulls on `refresh()`.
+    // `agent:output:<run_id>` is retired at run completion to avoid unbounded
+    // hub memory growth from disposable per-run topics.
+    void publish_agent_result(const AgentExecutionResult& r, bool final);
+    void publish_agent_token(const QString& run_id, const QString& token);
+    void publish_agent_status(const QString& run_id, const QString& status);
+    void publish_routing_result(const RoutingResult& r);
+    void publish_agent_error(const QString& context, const QString& message);
+    bool hub_registered_ = false;
 };
 
 } // namespace fincept::services

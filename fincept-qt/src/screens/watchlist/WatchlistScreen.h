@@ -4,6 +4,7 @@
 #include "storage/repositories/WatchlistRepository.h"
 #include "ui/tables/DataTable.h"
 
+#include <QHash>
 #include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -50,6 +51,10 @@ class WatchlistScreen : public QWidget, public IStatefulScreen {
     void fetch_quotes();
     void populate_table(const QVector<services::QuoteData>& quotes);
 
+    void hub_resubscribe_stocks();
+    void hub_unsubscribe_all();
+    void rebuild_from_cache();
+
     // Data
     QVector<fincept::Watchlist> watchlists_;
     QVector<fincept::WatchlistStock> stocks_;
@@ -76,8 +81,10 @@ class WatchlistScreen : public QWidget, public IStatefulScreen {
     QPushButton* add_btn_ = nullptr;
     QPushButton* remove_btn_ = nullptr;
     ui::DataTable* table_ = nullptr;
-    QTimer* refresh_timer_ = nullptr;
     QSplitter* splitter_ = nullptr;
+
+    QHash<QString, services::QuoteData> row_cache_;
+    bool hub_active_ = false;
 };
 
 } // namespace fincept::screens

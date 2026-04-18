@@ -2,7 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
-#include "python/PythonRunner.h"
+#include "services/python_cli/PythonCliService.h"
 #include "storage/cache/CacheManager.h"
 #include "ui/theme/Theme.h"
 
@@ -915,40 +915,25 @@ void AltInvestmentsScreen::run_analysis(const QString& command, const QJsonObjec
 
     QPointer<AltInvestmentsScreen> self = this;
 
-    python::PythonRunner::instance().run(
-        "Analytics/alternateInvestment/cli.py", {command, "--data", data_json},
-        [self, command, cache_key](const python::PythonResult& result) {
+    services::python_cli::PythonCliService::instance().run(
+        QStringLiteral("Analytics/alternateInvestment/cli.py"),
+        {command, QStringLiteral("--data"), data_json},
+        [self, command, cache_key](const services::python_cli::CliResult& r) {
             if (!self)
                 return;
             self->set_loading(false);
 
-            if (!result.success) {
-                self->display_error(result.error.isEmpty() ? "Python process failed" : result.error);
+            if (!r.success) {
+                self->display_error(r.error.isEmpty() ? "Analysis failed" : r.error);
                 return;
             }
 
-            const QString json_str = python::extract_json(result.output);
-            if (json_str.isEmpty()) {
-                self->display_error("No JSON output from analyzer");
-                return;
-            }
-
-            QJsonParseError perr;
-            auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &perr);
-            if (doc.isNull() || !doc.isObject()) {
-                self->display_error("Invalid JSON: " + perr.errorString());
-                return;
-            }
-
-            auto obj = doc.object();
-            if (!obj.value("success").toBool(true) && obj.contains("error")) {
-                self->display_error(obj["error"].toString("Analysis failed"));
-                return;
-            }
+            const QJsonObject obj = r.data;
 
             fincept::CacheManager::instance().put(
-                cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), 10 * 60,
-                "alt_investments");
+                cache_key,
+                QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
+                10 * 60, "alt_investments");
 
             self->display_verdict(obj, command);
             LOG_INFO("AltInvestments", "Analysis complete: " + command);

@@ -58,6 +58,24 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
 
     hl->addStretch();
 
+    // Config (gear) button — hidden by default until subclass calls set_configurable(true)
+    config_btn_ = new QPushButton;
+    config_btn_->setFixedSize(20, 20);
+    config_btn_->setText("");
+    config_btn_->setIcon(style()->standardIcon(QStyle::SP_FileDialogDetailedView));
+    config_btn_->setIconSize(QSize(12, 12));
+    config_btn_->setToolTip("Configure widget");
+    config_btn_->setCursor(Qt::PointingHandCursor);
+    config_btn_->setVisible(false);
+    config_btn_->setStyleSheet(
+        QString("QPushButton { color: %1; background: %2; border: 1px solid %3; border-radius: 2px; "
+                "padding: 0px; }"
+                "QPushButton:hover { color: %4; border-color: %4; background: %5; }")
+            .arg(accent_color_, ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(),
+                 ui::colors::BG_HOVER()));
+    connect(config_btn_, &QPushButton::clicked, this, &BaseWidget::on_config_clicked);
+    hl->addWidget(config_btn_);
+
     // Refresh button
     refresh_btn_ = new QPushButton;
     refresh_btn_->setFixedSize(20, 20);
@@ -164,6 +182,21 @@ void BaseWidget::set_error(const QString& error) {
 
 void BaseWidget::set_title(const QString& title) {
     title_label_->setText(title);
+}
+
+void BaseWidget::set_configurable(bool configurable) {
+    if (config_btn_)
+        config_btn_->setVisible(configurable);
+}
+
+void BaseWidget::on_config_clicked() {
+    QDialog* dlg = make_config_dialog(this);
+    if (!dlg)
+        return;
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    // Subclasses are expected to emit config_changed() inside the dialog's
+    // accept flow; BaseWidget just opens the dialog modally.
+    dlg->exec();
 }
 
 } // namespace fincept::screens::widgets

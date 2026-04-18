@@ -2,6 +2,9 @@
 
 #include "ui/theme/Theme.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QFrame>
 
 namespace fincept::screens::widgets {
@@ -82,7 +85,7 @@ StockQuoteWidget::StockQuoteWidget(const QString& symbol, QWidget* parent)
 
     apply_styles();
     set_loading(true);
-    refresh_data();
+
 }
 
 void StockQuoteWidget::apply_styles() {
@@ -109,25 +112,50 @@ void StockQuoteWidget::on_theme_changed() {
     apply_styles();
 }
 
+void StockQuoteWidget::showEvent(QShowEvent* e) {
+    BaseWidget::showEvent(e);
+    if (!hub_active_)
+        hub_resubscribe();
+}
+
+void StockQuoteWidget::hideEvent(QHideEvent* e) {
+    BaseWidget::hideEvent(e);
+    if (hub_active_)
+        hub_unsubscribe_all();
+}
+
 void StockQuoteWidget::set_symbol(const QString& symbol) {
     symbol_ = symbol.toUpper();
     set_title(QString("QUOTE: %1").arg(symbol_));
-    refresh_data();
+    // Re-subscribe to the new topic; old sub for previous symbol is
+    // dropped wholesale by `unsubscribe(this)` inside hub_resubscribe().
+    if (isVisible())
+        hub_resubscribe();
 }
 
 void StockQuoteWidget::refresh_data() {
-    set_loading(true);
-
-    services::MarketDataService::instance().fetch_quotes({symbol_},
-                                                         [this](bool ok, QVector<services::QuoteData> quotes) {
-                                                             set_loading(false);
-                                                             if (!ok || quotes.isEmpty()) {
-                                                                 set_error(QString("No data for %1").arg(symbol_));
-                                                                 return;
-                                                             }
-                                                             populate(quotes.first());
-                                                         });
+    datahub::DataHub::instance().request(QStringLiteral("market:quote:") + symbol_);
 }
+
+
+void StockQuoteWidget::hub_resubscribe() {
+    auto& hub = datahub::DataHub::instance();
+    hub.unsubscribe(this);
+    const QString topic = QStringLiteral("market:quote:") + symbol_;
+    hub.subscribe(this, topic, [this](const QVariant& v) {
+        if (!v.canConvert<services::QuoteData>())
+            return;
+        set_loading(false);
+        populate(v.value<services::QuoteData>());
+    });
+    hub_active_ = true;
+}
+
+void StockQuoteWidget::hub_unsubscribe_all() {
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+}
+
 
 void StockQuoteWidget::populate(const services::QuoteData& q) {
     price_label_->setText(QString("$%1").arg(q.price, 0, 'f', 2));

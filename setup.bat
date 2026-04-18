@@ -3,7 +3,7 @@ setlocal EnableDelayedExpansion
 title Fincept Terminal - Setup
 
 :: ── Pinned versions (must match CMakeLists.txt) ─────────────
-set "QT_VERSION=6.7.2"
+set "QT_VERSION=6.8.3"
 set "QT_ARCH=win64_msvc2022_64"
 set "QT_KIT_DIR=msvc2022_64"
 set "MSVC_MIN=19.38"
@@ -132,14 +132,14 @@ if defined Qt6_DIR (
     )
 )
 
-:: Check default Qt Online Installer location (C:\Qt\6.7.2\msvc2022_64)
+:: Check default Qt Online Installer location (C:\Qt\6.8.3\msvc2022_64)
 if exist "C:\Qt\%QT_VERSION%\%QT_KIT_DIR%\lib\cmake\Qt6\Qt6Config.cmake" (
     set "QT_PREFIX=C:\Qt\%QT_VERSION%\%QT_KIT_DIR%"
     echo   Found Qt at !QT_PREFIX!
     goto :qt_ready
 )
 
-:: Check aqtinstall location (%SCRIPT_DIR%.qt\6.7.2\msvc2022_64)
+:: Check aqtinstall location (%SCRIPT_DIR%.qt\6.8.3\msvc2022_64)
 if exist "%QT_PREFIX%\lib\cmake\Qt6\Qt6Config.cmake" (
     echo   Found Qt at !QT_PREFIX!
     goto :qt_ready

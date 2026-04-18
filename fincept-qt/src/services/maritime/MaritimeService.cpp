@@ -5,12 +5,21 @@
 #include "network/http/HttpClient.h"
 #include "storage/cache/CacheManager.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPointer>
 
 namespace fincept::services::maritime {
+
+namespace {
+inline void publish_to_hub(const QString& topic, const QVariant& value) {
+    fincept::datahub::DataHub::instance().publish(topic, value);
+}
+}  // namespace
 
 static constexpr const char* kMarineBase = "https://api.fincept.in/marine";
 static constexpr int kVesselTtlSec = 60;      // position data: 1 min
@@ -89,8 +98,10 @@ void MaritimeService::get_vessel_position(const QString& imo) {
     body["imo"] = imo.trimmed();
 
     QPointer<MaritimeService> self = this;
+    const QString imo_trimmed = imo.trimmed();
     HttpClient::instance().post(
-        QString(kMarineBase) + "/vessel/position", body, [self, cache_key](Result<QJsonDocument> result) {
+        QString(kMarineBase) + "/vessel/position", body,
+        [self, cache_key, imo_trimmed](Result<QJsonDocument> result) {
             if (!self)
                 return;
             if (!result.is_ok()) {
@@ -106,6 +117,8 @@ void MaritimeService::get_vessel_position(const QString& imo) {
             auto vessel = self->parse_vessel(vessel_obj);
             LOG_INFO("Maritime", QString("Found vessel: %1 [%2]").arg(vessel.name, vessel.imo));
             emit self->vessel_found(vessel);
+            if (self->hub_registered_)
+                publish_to_hub(QStringLiteral("maritime:vessel:") + imo_trimmed, QVariant::fromValue(vessel));
         });
 }
 
@@ -153,6 +166,8 @@ void MaritimeService::get_multi_vessel_positions(const QStringList& imos) {
             int total = data["found_count"].toInt(vessels.size());
             LOG_INFO("Maritime", QString("Multi vessel: %1 found").arg(vessels.size()));
             emit self->vessels_loaded(vessels, total);
+            if (self->hub_registered_)
+                publish_to_hub(QStringLiteral("maritime:vessels:multi"), QVariant::fromValue(vessels));
         });
 }
 
@@ -174,8 +189,10 @@ void MaritimeService::get_vessel_history(const QString& imo) {
     body["imo"] = imo.trimmed();
 
     QPointer<MaritimeService> self = this;
+    const QString imo_trimmed = imo.trimmed();
     HttpClient::instance().post(
-        QString(kMarineBase) + "/vessel/history", body, [self, cache_key](Result<QJsonDocument> result) {
+        QString(kMarineBase) + "/vessel/history", body,
+        [self, cache_key, imo_trimmed](Result<QJsonDocument> result) {
             if (!self)
                 return;
             if (!result.is_ok()) {
@@ -194,6 +211,9 @@ void MaritimeService::get_vessel_history(const QString& imo) {
             for (const auto& v : arr)
                 history.append(self->parse_vessel(v.toObject()));
             emit self->vessel_history_loaded(history);
+            if (self->hub_registered_)
+                publish_to_hub(QStringLiteral("maritime:history:") + imo_trimmed,
+                               QVariant::fromValue(history));
         });
 }
 
@@ -207,8 +227,67 @@ void MaritimeService::check_health() {
             emit self->error_occurred("health", QString::fromStdString(result.error()));
             return;
         }
-        emit self->health_loaded(result.value().object());
+        const auto obj = result.value().object();
+        emit self->health_loaded(obj);
+        if (self->hub_registered_)
+            publish_to_hub(QStringLiteral("maritime:health"), QVariant(obj));
     });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DATAHUB PRODUCER — maritime:*
+// ═══════════════════════════════════════════════════════════════════════════════
+
+QStringList MaritimeService::topic_patterns() const {
+    return {QStringLiteral("maritime:*")};
+}
+
+void MaritimeService::refresh(const QStringList& topics) {
+    for (const auto& topic : topics) {
+        const QStringList parts = topic.split(QLatin1Char(':'));
+        if (parts.size() >= 3 && parts[1] == QStringLiteral("vessel")) {
+            get_vessel_position(parts[2]);
+        } else if (parts.size() >= 3 && parts[1] == QStringLiteral("history")) {
+            get_vessel_history(parts[2]);
+        } else if (parts.size() == 3 && parts[1] == QStringLiteral("vessels") &&
+                   parts[2] == QStringLiteral("multi")) {
+            search_vessels_by_area({});
+        } else if (topic == QStringLiteral("maritime:health")) {
+            check_health();
+        }
+    }
+}
+
+int MaritimeService::max_requests_per_sec() const {
+    return 2;  // Fincept marine API — conservative
+}
+
+void MaritimeService::ensure_registered_with_hub() {
+    if (hub_registered_) return;
+    auto& hub = fincept::datahub::DataHub::instance();
+    hub.register_producer(this);
+
+    // Position data: 1 min TTL matches kVesselTtlSec; min 30s between refreshes.
+    fincept::datahub::TopicPolicy vessel_policy;
+    vessel_policy.ttl_ms = kVesselTtlSec * 1000;
+    vessel_policy.min_interval_ms = 30 * 1000;
+    hub.set_policy_pattern(QStringLiteral("maritime:vessel:*"), vessel_policy);
+    hub.set_policy_pattern(QStringLiteral("maritime:vessels:*"), vessel_policy);
+
+    // History: 5 min TTL.
+    fincept::datahub::TopicPolicy history_policy;
+    history_policy.ttl_ms = kHistoryTtlSec * 1000;
+    history_policy.min_interval_ms = 60 * 1000;
+    hub.set_policy_pattern(QStringLiteral("maritime:history:*"), history_policy);
+
+    // Health: 5 min TTL, non-urgent.
+    fincept::datahub::TopicPolicy health_policy;
+    health_policy.ttl_ms = 5 * 60 * 1000;
+    health_policy.min_interval_ms = 60 * 1000;
+    hub.set_policy_pattern(QStringLiteral("maritime:health"), health_policy);
+
+    hub_registered_ = true;
+    LOG_INFO("MaritimeService", "Registered with DataHub (maritime:*)");
 }
 
 } // namespace fincept::services::maritime

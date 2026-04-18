@@ -2,7 +2,17 @@
 
 #include "ui/theme/Theme.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 namespace fincept::screens::widgets {
+
+namespace {
+inline const QStringList kSentimentSymbols = {
+    "^VIX", "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "NFLX",
+    "AMD",  "INTC", "JPM",  "GS",    "BAC",  "WMT",  "DIS",  "BA",   "XOM",
+    "CVX",  "COIN", "PLTR", "SOFI",  "NKE",  "PFE",  "PYPL"};
+}
 
 MarketSentimentWidget::MarketSentimentWidget(QWidget* parent) : BaseWidget("MARKET SENTIMENT", parent) {
     auto* vl = content_layout();
@@ -107,7 +117,7 @@ MarketSentimentWidget::MarketSentimentWidget(QWidget* parent) : BaseWidget("MARK
 
     apply_styles();
     set_loading(true);
-    refresh_data();
+
 }
 
 void MarketSentimentWidget::apply_styles() {
@@ -147,21 +157,60 @@ void MarketSentimentWidget::on_theme_changed() {
     apply_styles();
 }
 
-void MarketSentimentWidget::refresh_data() {
-    set_loading(true);
-
-    // Fetch a broad basket: VIX + 24 liquid stocks for breadth
-    QStringList syms = {"^VIX", "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "NFLX",
-                        "AMD",  "INTC", "JPM",  "GS",    "BAC",  "WMT",  "DIS",  "BA",   "XOM",
-                        "CVX",  "COIN", "PLTR", "SOFI",  "NKE",  "PFE",  "PYPL"};
-
-    services::MarketDataService::instance().fetch_quotes(syms, [this](bool ok, QVector<services::QuoteData> quotes) {
-        set_loading(false);
-        if (!ok || quotes.isEmpty())
-            return;
-        populate(quotes);
-    });
+void MarketSentimentWidget::showEvent(QShowEvent* e) {
+    BaseWidget::showEvent(e);
+    if (!hub_active_)
+        hub_subscribe_all();
 }
+
+void MarketSentimentWidget::hideEvent(QHideEvent* e) {
+    BaseWidget::hideEvent(e);
+    if (hub_active_)
+        hub_unsubscribe_all();
+}
+
+void MarketSentimentWidget::refresh_data() {
+    auto& hub = datahub::DataHub::instance();
+    QStringList topics;
+    topics.reserve(kSentimentSymbols.size());
+    for (const auto& sym : kSentimentSymbols)
+        topics.append(QStringLiteral("market:quote:") + sym);
+    hub.request(topics);
+}
+
+
+void MarketSentimentWidget::hub_subscribe_all() {
+    auto& hub = datahub::DataHub::instance();
+    for (const auto& sym : kSentimentSymbols) {
+        const QString topic = QStringLiteral("market:quote:") + sym;
+        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+            if (!v.canConvert<services::QuoteData>())
+                return;
+            row_cache_.insert(sym, v.value<services::QuoteData>());
+            set_loading(false);
+            rebuild_from_cache();
+        });
+    }
+    hub_active_ = true;
+}
+
+void MarketSentimentWidget::hub_unsubscribe_all() {
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+}
+
+void MarketSentimentWidget::rebuild_from_cache() {
+    QVector<services::QuoteData> quotes;
+    quotes.reserve(row_cache_.size());
+    for (const auto& sym : kSentimentSymbols) {
+        auto it = row_cache_.constFind(sym);
+        if (it != row_cache_.constEnd())
+            quotes.append(it.value());
+    }
+    if (!quotes.isEmpty())
+        populate(quotes);
+}
+
 
 void MarketSentimentWidget::populate(const QVector<services::QuoteData>& quotes) {
     int bullish = 0, bearish = 0, neutral = 0;

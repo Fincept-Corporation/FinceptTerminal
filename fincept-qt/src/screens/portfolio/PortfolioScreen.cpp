@@ -22,10 +22,13 @@
 #include "ui/theme/Theme.h"
 
 #include <QFileDialog>
+#include <QFrame>
+#include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPropertyAnimation>
 #include <QPushButton>
 #include <QSplitter>
 #include <QVBoxLayout>
@@ -220,16 +223,18 @@ void PortfolioScreen::build_ui() {
         if (!summary_loaded_)
             return;
         ai_panel_->set_summary(current_summary_);
-        ai_panel_->move(width() - 492, 42);
-        ai_panel_->setFixedHeight(height() - 100);
+        const int top = command_bar_->height() + 6;
+        ai_panel_->move(width() - 492, top);
+        ai_panel_->setFixedHeight(height() - top - 60);
         ai_panel_->show_panel();
     });
     connect(command_bar_, &PortfolioCommandBar::agent_run_requested, this, [this]() {
         if (!summary_loaded_)
             return;
         agent_panel_->set_summary(current_summary_);
-        agent_panel_->move(width() - 984, 42);
-        agent_panel_->setFixedHeight(height() - 100);
+        const int top = command_bar_->height() + 6;
+        agent_panel_->move(width() - 984, top);
+        agent_panel_->setFixedHeight(height() - top - 60);
         agent_panel_->show_panel();
     });
 
@@ -241,86 +246,192 @@ void PortfolioScreen::build_ui() {
             });
 }
 
+// Build one CTA card used in the empty state. Each card is a clickable,
+// equal-weight tile: icon, title, subtitle, accent bar at the bottom.
+static QPushButton* make_cta_card(const QString& glyph, const QString& title, const QString& subtitle,
+                                  const QString& accent_hex, QWidget* parent) {
+    auto* btn = new QPushButton(parent);
+    btn->setCursor(Qt::PointingHandCursor);
+    btn->setFixedSize(220, 140);
+    btn->setObjectName("pfCtaCard");
+    btn->setProperty("accent", accent_hex);
+    btn->setStyleSheet(
+        QString("QPushButton#pfCtaCard { background:%1; color:%2; border:1px solid %3; border-radius:4px;"
+                "  text-align:left; padding:16px; }"
+                "QPushButton#pfCtaCard:hover { border-color:%4; background:%5; }")
+            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), accent_hex,
+                 ui::colors::BG_HOVER()));
+
+    auto* v = new QVBoxLayout(btn);
+    v->setContentsMargins(0, 0, 0, 0);
+    v->setSpacing(6);
+    v->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+
+    auto* icon = new QLabel(glyph);
+    icon->setStyleSheet(QString("color:%1; font-size:22px; background:transparent; border:none;").arg(accent_hex));
+    v->addWidget(icon);
+
+    v->addSpacing(4);
+
+    auto* h = new QLabel(title);
+    h->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700; letter-spacing:0.5px;"
+                             " background:transparent; border:none;")
+                         .arg(ui::colors::TEXT_PRIMARY()));
+    v->addWidget(h);
+
+    auto* p = new QLabel(subtitle);
+    p->setWordWrap(true);
+    p->setStyleSheet(QString("color:%1; font-size:11px; line-height:1.4; background:transparent; border:none;")
+                         .arg(ui::colors::TEXT_TERTIARY()));
+    v->addWidget(p);
+
+    v->addStretch(1);
+
+    // Accent bar at bottom
+    auto* bar = new QWidget;
+    bar->setFixedHeight(2);
+    bar->setStyleSheet(QString("background:%1; border:none;").arg(accent_hex));
+    v->addWidget(bar);
+
+    return btn;
+}
+
 QWidget* PortfolioScreen::build_empty_state() {
     auto* w = new QWidget(this);
-    w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
-    auto* layout = new QVBoxLayout(w);
+    w->setObjectName("pfEmptyState");
+    w->setStyleSheet(QString("#pfEmptyState { background:%1; }").arg(ui::colors::BG_BASE()));
+
+    auto* outer = new QVBoxLayout(w);
+    outer->setAlignment(Qt::AlignCenter);
+    outer->setContentsMargins(24, 24, 24, 24);
+    outer->setSpacing(0);
+
+    // Inner content block (keeps width capped so it doesn't stretch)
+    auto* content = new QWidget(w);
+    content->setStyleSheet("background:transparent;");
+    auto* layout = new QVBoxLayout(content);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(6);
     layout->setAlignment(Qt::AlignCenter);
-    layout->setSpacing(16);
 
-    auto* icon = new QLabel("\U0001F4BC"); // briefcase emoji
-    icon->setAlignment(Qt::AlignCenter);
-    icon->setStyleSheet(QString("font-size:36px; color:%1; opacity:0.2;").arg(ui::colors::TEXT_TERTIARY()));
-    layout->addWidget(icon);
+    auto* accent_dot = new QLabel("\u25C6"); // diamond
+    accent_dot->setAlignment(Qt::AlignCenter);
+    accent_dot->setStyleSheet(QString("color:%1; font-size:14px; letter-spacing:4px;").arg(ui::colors::AMBER()));
+    layout->addWidget(accent_dot);
 
-    auto* title = new QLabel("NO PORTFOLIO SELECTED");
+    auto* title = new QLabel("PORTFOLIO WORKSPACE");
     title->setAlignment(Qt::AlignCenter);
     title->setStyleSheet(
-        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
+        QString("color:%1; font-size:18px; font-weight:700; letter-spacing:2px;").arg(ui::colors::TEXT_PRIMARY()));
     layout->addWidget(title);
 
-    auto* sub = new QLabel("Select a portfolio or create a new one");
+    auto* sub = new QLabel("Create, import, or explore a sample portfolio to get started.");
     sub->setAlignment(Qt::AlignCenter);
-    sub->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
+    sub->setStyleSheet(QString("color:%1; font-size:12px; letter-spacing:0.2px;").arg(ui::colors::TEXT_SECONDARY()));
     layout->addWidget(sub);
 
-    // Buttons row
-    auto* btn_row = new QHBoxLayout;
-    btn_row->setAlignment(Qt::AlignCenter);
-    btn_row->setSpacing(12);
+    layout->addSpacing(24);
 
-    auto* create_btn = new QPushButton("CREATE NEW");
-    create_btn->setFixedSize(120, 32);
-    create_btn->setCursor(Qt::PointingHandCursor);
-    create_btn->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
-                                      "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
-                                      "QPushButton:hover { background:%2; }")
-                                  .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_BASE()));
-    connect(create_btn, &QPushButton::clicked, this, &PortfolioScreen::on_create_requested);
-    btn_row->addWidget(create_btn);
+    // CTA card row: Create / Import / Demo — equal weight
+    auto* card_row = new QHBoxLayout;
+    card_row->setAlignment(Qt::AlignCenter);
+    card_row->setSpacing(14);
 
-    auto* import_btn = new QPushButton("IMPORT JSON");
-    import_btn->setFixedSize(120, 32);
-    import_btn->setCursor(Qt::PointingHandCursor);
-    import_btn->setStyleSheet(
-        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
-                "QPushButton:hover { background:%3; color:%4; }")
-            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY()));
-    connect(import_btn, &QPushButton::clicked, command_bar_, &PortfolioCommandBar::import_requested);
-    btn_row->addWidget(import_btn);
+    auto* create_card = make_cta_card("\u25A2", "CREATE NEW",
+                                      "Start a fresh portfolio. Name it, pick a currency, "
+                                      "and add holdings one at a time.",
+                                      ui::colors::AMBER(), content);
+    connect(create_card, &QPushButton::clicked, this, &PortfolioScreen::on_create_requested);
 
-    auto* demo_btn = new QPushButton("LOAD DEMO PORTFOLIO");
-    demo_btn->setFixedSize(160, 32);
-    demo_btn->setCursor(Qt::PointingHandCursor);
-    demo_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
-                                    "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
-                                    "QPushButton:hover { background:%1; color:#000; }")
-                                .arg(ui::colors::CYAN()));
-    connect(demo_btn, &QPushButton::clicked, this, [this]() { load_demo_portfolio(); });
-    btn_row->addWidget(demo_btn);
+    auto* import_card = make_cta_card("\u2913", "IMPORT JSON",
+                                      "Load an existing portfolio from an exported JSON file. "
+                                      "Merge into an existing portfolio or create a new one.",
+                                      ui::colors::CYAN(), content);
+    connect(import_card, &QPushButton::clicked, command_bar_, &PortfolioCommandBar::import_requested);
 
-    layout->addLayout(btn_row);
+    auto* demo_card = make_cta_card("\u25B6", "LOAD DEMO",
+                                    "Preview the workspace with a sample diversified portfolio "
+                                    "of 12 major equities.",
+                                    ui::colors::POSITIVE(), content);
+    connect(demo_card, &QPushButton::clicked, this, [this]() { load_demo_portfolio(); });
+
+    card_row->addWidget(create_card);
+    card_row->addWidget(import_card);
+    card_row->addWidget(demo_card);
+    layout->addLayout(card_row);
+
+    outer->addWidget(content, 0, Qt::AlignCenter);
     return w;
 }
 
 QWidget* PortfolioScreen::build_loading_state() {
     auto* w = new QWidget(this);
-    w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
-    auto* layout = new QVBoxLayout(w);
-    layout->setAlignment(Qt::AlignCenter);
-    layout->setSpacing(12);
+    w->setObjectName("pfLoadingState");
+    w->setStyleSheet(QString("#pfLoadingState { background:%1; }").arg(ui::colors::BG_BASE()));
 
-    auto* spinner = new QLabel("\u23F3");
-    spinner->setAlignment(Qt::AlignCenter);
-    spinner->setStyleSheet(QString("font-size:16px; color:%1;").arg(ui::colors::AMBER()));
-    layout->addWidget(spinner);
+    auto* outer = new QVBoxLayout(w);
+    outer->setAlignment(Qt::AlignCenter);
+    outer->setContentsMargins(24, 24, 24, 24);
+    outer->setSpacing(14);
 
-    auto* text = new QLabel("Loading portfolio data...");
+    // Animated bar skeleton — three stacked pills hinting at the ribbon/chart/table layout.
+    auto make_bar = [](int h, int w_px, const QString& color, QWidget* parent) {
+        auto* bar = new QFrame(parent);
+        bar->setFixedSize(w_px, h);
+        bar->setStyleSheet(QString("background:%1; border-radius:3px;").arg(color));
+        return bar;
+    };
+
+    auto* bar1 = make_bar(14, 360, ui::colors::BG_HOVER(), w);
+    auto* bar2 = make_bar(86, 360, ui::colors::BG_SURFACE(), w);
+    auto* bar3 = make_bar(14, 280, ui::colors::BG_HOVER(), w);
+    auto* bar4 = make_bar(14, 220, ui::colors::BG_HOVER(), w);
+
+    auto* row1 = new QHBoxLayout;
+    row1->setAlignment(Qt::AlignCenter);
+    row1->addWidget(bar1);
+    outer->addLayout(row1);
+
+    auto* row2 = new QHBoxLayout;
+    row2->setAlignment(Qt::AlignCenter);
+    row2->addWidget(bar2);
+    outer->addLayout(row2);
+
+    auto* row3 = new QHBoxLayout;
+    row3->setAlignment(Qt::AlignCenter);
+    row3->addWidget(bar3);
+    outer->addLayout(row3);
+
+    auto* row4 = new QHBoxLayout;
+    row4->setAlignment(Qt::AlignCenter);
+    row4->addWidget(bar4);
+    outer->addLayout(row4);
+
+    // Subtle label beneath skeleton
+    auto* text = new QLabel("Loading portfolio data…");
     text->setAlignment(Qt::AlignCenter);
     text->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:600; letter-spacing:0.5px;").arg(ui::colors::TEXT_SECONDARY()));
-    layout->addWidget(text);
+        QString("color:%1; font-size:11px; font-weight:600; letter-spacing:0.8px;").arg(ui::colors::AMBER()));
+    outer->addWidget(text);
+
+    // Pulsing opacity animation for the skeleton group (subtle, ≤20 fps per P9)
+    auto* effect = new QGraphicsOpacityEffect(w);
+    effect->setOpacity(1.0);
+    w->setGraphicsEffect(effect);
+    auto* anim = new QPropertyAnimation(effect, "opacity", w);
+    anim->setDuration(1200);
+    anim->setStartValue(0.55);
+    anim->setEndValue(1.0);
+    anim->setLoopCount(-1);
+    anim->setEasingCurve(QEasingCurve::InOutSine);
+    // Ping-pong: swap start/end each loop
+    connect(anim, &QPropertyAnimation::finished, anim, [anim]() {
+        auto s = anim->startValue();
+        anim->setStartValue(anim->endValue());
+        anim->setEndValue(s);
+    });
+    anim->start();
+
     return w;
 }
 
@@ -639,23 +750,61 @@ QWidget* PortfolioScreen::build_main_view() {
     sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
     center_layout->addWidget(sep);
 
-    // Filter bar above blotter
+    // Positions section header: title + count badge + filter field
     auto* blotter_section = new QWidget(this);
     auto* blotter_layout = new QVBoxLayout(blotter_section);
     blotter_layout->setContentsMargins(0, 0, 0, 0);
     blotter_layout->setSpacing(0);
 
-    auto* filter_row = new QWidget(this);
-    filter_row->setFixedHeight(28);
-    filter_row->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
-    auto* filter_hl = new QHBoxLayout(filter_row);
-    filter_hl->setContentsMargins(8, 2, 8, 2);
+    auto* header_row = new QWidget(this);
+    header_row->setFixedHeight(32);
+    header_row->setObjectName("pfPositionsHeader");
+    header_row->setStyleSheet(QString("#pfPositionsHeader { background:%1; border-bottom:1px solid %2; }")
+                                  .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    auto* header_hl = new QHBoxLayout(header_row);
+    header_hl->setContentsMargins(12, 0, 10, 0);
+    header_hl->setSpacing(8);
+
+    // Accent tick + section title
+    auto* title_tick = new QLabel;
+    title_tick->setFixedSize(3, 14);
+    title_tick->setStyleSheet(QString("background:%1; border-radius:1px;").arg(ui::colors::AMBER()));
+    header_hl->addWidget(title_tick);
+
+    auto* title = new QLabel("POSITIONS");
+    title->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1.2px; background:transparent;")
+                             .arg(ui::colors::TEXT_PRIMARY()));
+    header_hl->addWidget(title);
+
+    // Count badge
+    positions_count_label_ = new QLabel("0");
+    positions_count_label_->setAlignment(Qt::AlignCenter);
+    positions_count_label_->setMinimumWidth(22);
+    positions_count_label_->setFixedHeight(16);
+    positions_count_label_->setStyleSheet(
+        QString("color:%1; background:%2; border:1px solid %3; border-radius:8px;"
+                "  font-size:10px; font-weight:700; padding:0 6px;")
+            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+    header_hl->addWidget(positions_count_label_);
+
+    header_hl->addStretch(1);
+
+    // Filter field — right-aligned, framed so it reads as an input, not a label
+    auto* filter_wrap = new QWidget(this);
+    filter_wrap->setFixedHeight(22);
+    filter_wrap->setMinimumWidth(200);
+    filter_wrap->setObjectName("pfFilterWrap");
+    filter_wrap->setStyleSheet(
+        QString("#pfFilterWrap { background:%1; border:1px solid %2; border-radius:2px; }"
+                "#pfFilterWrap:focus-within { border-color:%3; }")
+            .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+    auto* filter_hl = new QHBoxLayout(filter_wrap);
+    filter_hl->setContentsMargins(8, 0, 8, 0);
     filter_hl->setSpacing(6);
 
-    auto* filter_icon = new QLabel("⌕");
+    auto* filter_icon = new QLabel("\u2315"); // ⌕ search glyph
     filter_icon->setStyleSheet(
-        QString("color:%1; font-size:13px; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
+        QString("color:%1; font-size:12px; background:transparent; border:none;").arg(ui::colors::TEXT_TERTIARY()));
     filter_hl->addWidget(filter_icon);
 
     auto* filter_edit = new QLineEdit;
@@ -666,7 +815,9 @@ QWidget* PortfolioScreen::build_main_view() {
                                    .arg(ui::colors::TEXT_SECONDARY(), ui::fonts::DATA_FAMILY, ui::colors::TEXT_PRIMARY()));
     filter_hl->addWidget(filter_edit, 1);
 
-    blotter_layout->addWidget(filter_row);
+    header_hl->addWidget(filter_wrap);
+
+    blotter_layout->addWidget(header_row);
 
     // Bottom: positions blotter
     blotter_ = new PortfolioBlotter;
@@ -721,11 +872,13 @@ QWidget* PortfolioScreen::build_main_view() {
 
     center_layout->addWidget(blotter_section, 60); // 60% of vertical space
 
-    h_layout->addWidget(center, 1); // center takes remaining space
+    h_layout->addWidget(center, 1); // center takes full remaining space
 
-    // Right: Order panel (hidden by default)
-    order_panel_ = new PortfolioOrderPanel;
+    // Order panel is a floating overlay (parented to PortfolioScreen, not in layout)
+    // so BUY/SELL slides in from the right edge without reflowing the main grid.
+    order_panel_ = new PortfolioOrderPanel(this);
     order_panel_->setVisible(false);
+    order_panel_->raise();
     connect(order_panel_, &PortfolioOrderPanel::close_requested, this, &PortfolioScreen::on_order_panel_close);
     connect(order_panel_, &PortfolioOrderPanel::buy_submitted, this, [this]() {
         AddAssetDialog dlg(this);
@@ -742,7 +895,10 @@ QWidget* PortfolioScreen::build_main_view() {
             services::PortfolioService::instance().sell_asset(selected_id_, h->symbol, dlg.quantity(), dlg.price());
         }
     });
-    h_layout->addWidget(order_panel_);
+
+    order_panel_anim_ = new QPropertyAnimation(order_panel_, "geometry", this);
+    order_panel_anim_->setDuration(180);
+    order_panel_anim_->setEasingCurve(QEasingCurve::OutCubic);
 
     return w;
 }
@@ -763,6 +919,8 @@ void PortfolioScreen::update_main_view_data() {
     sector_panel_->set_currency(currency);
 
     blotter_->set_holdings(current_summary_.holdings);
+    if (positions_count_label_)
+        positions_count_label_->setText(QString::number(current_summary_.holdings.size()));
 
     order_panel_->set_currency(currency);
 
@@ -803,19 +961,61 @@ void PortfolioScreen::on_symbol_selected(const QString& symbol) {
 
 void PortfolioScreen::on_buy_requested() {
     order_panel_visible_ = true;
-    order_panel_->setVisible(true);
     order_panel_->set_side("BUY");
+    animate_order_panel_in();
 }
 
 void PortfolioScreen::on_sell_requested() {
     order_panel_visible_ = true;
-    order_panel_->setVisible(true);
     order_panel_->set_side("SELL");
+    animate_order_panel_in();
 }
 
 void PortfolioScreen::on_order_panel_close() {
     order_panel_visible_ = false;
     order_panel_->setVisible(false);
+}
+
+// ── Order panel overlay helpers ──────────────────────────────────────────────
+
+void PortfolioScreen::reposition_order_panel() {
+    if (!order_panel_ || !order_panel_visible_)
+        return;
+
+    const int panel_w = order_panel_->width();
+    // Anchor below command bar + stats ribbon; stop above status bar.
+    const int top = command_bar_->height() + (stats_ribbon_->isVisible() ? stats_ribbon_->height() : 0);
+    const int bottom = status_bar_->isVisible() ? status_bar_->height() : 0;
+    const int h = height() - top - bottom;
+    order_panel_->setGeometry(width() - panel_w, top, panel_w, h);
+    order_panel_->raise();
+}
+
+void PortfolioScreen::animate_order_panel_in() {
+    if (!order_panel_)
+        return;
+
+    const int panel_w = order_panel_->width();
+    const int top = command_bar_->height() + (stats_ribbon_->isVisible() ? stats_ribbon_->height() : 0);
+    const int bottom = status_bar_->isVisible() ? status_bar_->height() : 0;
+    const int h = height() - top - bottom;
+
+    if (!order_panel_->isVisible()) {
+        // Start fully off-screen to the right, then slide into place.
+        order_panel_->setGeometry(width(), top, panel_w, h);
+        order_panel_->setVisible(true);
+    }
+    order_panel_->raise();
+
+    order_panel_anim_->stop();
+    order_panel_anim_->setStartValue(order_panel_->geometry());
+    order_panel_anim_->setEndValue(QRect(width() - panel_w, top, panel_w, h));
+    order_panel_anim_->start();
+}
+
+void PortfolioScreen::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    reposition_order_panel();
 }
 
 const portfolio::HoldingWithQuote* PortfolioScreen::find_holding(const QString& symbol) const {

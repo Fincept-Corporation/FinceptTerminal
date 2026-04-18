@@ -2,6 +2,9 @@
 
 #include "ui/theme/Theme.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QLabel>
 
 namespace fincept::screens::widgets {
@@ -34,7 +37,10 @@ WatchlistWidget::WatchlistWidget(QWidget* parent)
             if (!trimmed.isEmpty())
                 symbols_ << trimmed;
         }
-        refresh_data();
+        // Dynamic symbol set: drop any cached rows for symbols no longer
+        // tracked, then rewire subscriptions to the new set.
+        row_cache_.clear();
+        hub_resubscribe();
     });
     irl->addWidget(go_btn_);
 
@@ -50,7 +56,7 @@ WatchlistWidget::WatchlistWidget(QWidget* parent)
 
     apply_styles();
     set_loading(true);
-    refresh_data();
+
 }
 
 void WatchlistWidget::apply_styles() {
@@ -71,22 +77,69 @@ void WatchlistWidget::on_theme_changed() {
     apply_styles();
 }
 
+void WatchlistWidget::showEvent(QShowEvent* e) {
+    BaseWidget::showEvent(e);
+    if (!hub_active_)
+        hub_resubscribe();
+}
+
+void WatchlistWidget::hideEvent(QHideEvent* e) {
+    BaseWidget::hideEvent(e);
+    if (hub_active_)
+        hub_unsubscribe_all();
+}
+
 void WatchlistWidget::refresh_data() {
     if (symbols_.isEmpty())
         return;
-    set_loading(true);
-
-    services::MarketDataService::instance().fetch_quotes(symbols_,
-                                                         [this](bool ok, QVector<services::QuoteData> quotes) {
-                                                             set_loading(false);
-                                                             if (!ok || quotes.isEmpty()) {
-                                                                 if (table_->rowCount() == 0)
-                                                                     set_error("Failed to fetch watchlist data.");
-                                                                 return;
-                                                             }
-                                                             populate(quotes);
-                                                         });
+    // User-triggered refresh: force-kick the hub for each current symbol.
+    auto& hub = datahub::DataHub::instance();
+    QStringList topics;
+    topics.reserve(symbols_.size());
+    for (const auto& sym : symbols_)
+        topics.append(QStringLiteral("market:quote:") + sym);
+    hub.request(topics);
 }
+
+
+void WatchlistWidget::hub_resubscribe() {
+    auto& hub = datahub::DataHub::instance();
+    // Drop old subscriptions wholesale — symbol set may have changed.
+    hub.unsubscribe(this);
+    for (const auto& sym : symbols_) {
+        const QString topic = QStringLiteral("market:quote:") + sym;
+        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+            if (!v.canConvert<services::QuoteData>())
+                return;
+            row_cache_.insert(sym, v.value<services::QuoteData>());
+            set_loading(false);
+            render_from_cache();
+        });
+    }
+    hub_active_ = true;
+}
+
+void WatchlistWidget::hub_unsubscribe_all() {
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+}
+
+void WatchlistWidget::render_from_cache() {
+    table_->clear_data();
+    for (const auto& sym : symbols_) {
+        auto it = row_cache_.constFind(sym);
+        if (it == row_cache_.constEnd())
+            continue;
+        const auto& q = it.value();
+        table_->add_row({q.symbol, QString("$%1").arg(q.price, 0, 'f', 2),
+                         QString("%1%2").arg(q.change >= 0 ? "+" : "").arg(q.change, 0, 'f', 2),
+                         QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2)});
+        int row = table_->rowCount() - 1;
+        table_->set_cell_color(row, 2, ui::change_color(q.change_pct));
+        table_->set_cell_color(row, 3, ui::change_color(q.change_pct));
+    }
+}
+
 
 void WatchlistWidget::populate(const QVector<services::QuoteData>& quotes) {
     table_->clear_data();

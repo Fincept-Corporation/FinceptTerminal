@@ -2,6 +2,9 @@
 
 #include "ui/theme/Theme.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QMessageBox>
@@ -150,7 +153,19 @@ QuickTradeWidget::QuickTradeWidget(QWidget* parent) : BaseWidget("QUICK TRADE", 
 
     // Initial lookup
     set_loading(true);
-    lookup_symbol();
+    // Hub path: initial lookup happens from showEvent.
+}
+
+void QuickTradeWidget::showEvent(QShowEvent* e) {
+    BaseWidget::showEvent(e);
+    if (!hub_active_)
+        lookup_symbol();
+}
+
+void QuickTradeWidget::hideEvent(QHideEvent* e) {
+    BaseWidget::hideEvent(e);
+    if (hub_active_)
+        hub_unsubscribe_all();
 }
 
 void QuickTradeWidget::apply_styles() {
@@ -205,42 +220,54 @@ void QuickTradeWidget::lookup_symbol() {
         return;
     }
 
+    current_symbol_ = sym;
+    auto& hub = datahub::DataHub::instance();
+    // Swap subscription to the new symbol; drop the old one first.
+    hub.unsubscribe(this);
+    const QString topic = QStringLiteral("market:quote:") + sym;
+    hub.subscribe(this, topic, [this](const QVariant& v) {
+        if (!v.canConvert<services::QuoteData>())
+            return;
+        set_loading(false);
+        apply_quote(v.value<services::QuoteData>());
+    });
+    // Kick a fresh fetch so the card updates immediately even if the
+    // cached TTL hasn't expired.
+    hub.request(topic);
+    hub_active_ = true;
     set_loading(true);
-    services::MarketDataService::instance().fetch_quotes(
-        {sym}, [this, sym](bool ok, QVector<services::QuoteData> quotes) {
-            set_loading(false);
-            if (!ok || quotes.isEmpty()) {
-                sym_label_->setText(sym);
-                price_label_->setText("N/A");
-                change_label_->setText("Symbol not found");
-                return;
-            }
-            const auto& q = quotes.first();
-            current_price_ = q.price;
-            current_symbol_ = q.symbol;
-
-            sym_label_->setText(q.symbol.isEmpty() ? sym : q.symbol);
-            price_label_->setText(QString("$%1").arg(q.price, 0, 'f', 2));
-
-            double chg = q.change_pct;
-            QString chg_str = QString("%1%2%").arg(chg >= 0 ? "▲ +" : "▼ ").arg(chg, 0, 'f', 2);
-            QString chg_col = chg > 0   ? ui::colors::POSITIVE()
-                              : chg < 0 ? ui::colors::NEGATIVE()
-                                        : ui::colors::TEXT_SECONDARY();
-            change_label_->setText(chg_str);
-            change_label_->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(chg_col));
-
-            // Approximate bid/ask from spread (±0.05% of price)
-            double spread = q.price * 0.0005;
-            bid_label_->setText(QString("BID %1").arg(q.price - spread, 0, 'f', 2));
-            ask_label_->setText(QString("ASK %1").arg(q.price + spread, 0, 'f', 2));
-
-            // Update estimated total
-            double qty = qty_input_->text().toDouble();
-            if (qty > 0)
-                est_total_->setText(QString("EST. TOTAL  $%1").arg(qty * q.price, 0, 'f', 2));
-        });
 }
+
+
+void QuickTradeWidget::apply_quote(const services::QuoteData& q) {
+    current_price_ = q.price;
+    current_symbol_ = q.symbol.isEmpty() ? current_symbol_ : q.symbol;
+
+    sym_label_->setText(current_symbol_);
+    price_label_->setText(QString("$%1").arg(q.price, 0, 'f', 2));
+
+    double chg = q.change_pct;
+    QString chg_str = QString("%1%2%").arg(chg >= 0 ? "▲ +" : "▼ ").arg(chg, 0, 'f', 2);
+    QString chg_col = chg > 0   ? ui::colors::POSITIVE()
+                      : chg < 0 ? ui::colors::NEGATIVE()
+                                : ui::colors::TEXT_SECONDARY();
+    change_label_->setText(chg_str);
+    change_label_->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(chg_col));
+
+    double spread = q.price * 0.0005;
+    bid_label_->setText(QString("BID %1").arg(q.price - spread, 0, 'f', 2));
+    ask_label_->setText(QString("ASK %1").arg(q.price + spread, 0, 'f', 2));
+
+    double qty = qty_input_->text().toDouble();
+    if (qty > 0)
+        est_total_->setText(QString("EST. TOTAL  $%1").arg(qty * q.price, 0, 'f', 2));
+}
+
+void QuickTradeWidget::hub_unsubscribe_all() {
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+}
+
 
 void QuickTradeWidget::on_side_changed(int idx) {
     // BUY = green, SELL/SHORT = red

@@ -2,6 +2,9 @@
 
 #include "ui/theme/Theme.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QFrame>
 #include <QLabel>
 
@@ -33,7 +36,7 @@ SectorHeatmapWidget::SectorHeatmapWidget(QWidget* parent) : BaseWidget("SECTOR H
 
     apply_styles();
     set_loading(true);
-    refresh_data();
+
 }
 
 void SectorHeatmapWidget::apply_styles() {
@@ -49,20 +52,59 @@ void SectorHeatmapWidget::on_theme_changed() {
         refresh_data();
 }
 
-void SectorHeatmapWidget::refresh_data() {
-    set_loading(true);
-
-    services::MarketDataService::instance().fetch_quotes(sector_symbols(),
-                                                         [this](bool ok, QVector<services::QuoteData> quotes) {
-                                                             set_loading(false);
-                                                             if (!ok || quotes.isEmpty()) {
-                                                                 if (grid_->count() == 0)
-                                                                     set_error("Failed to fetch sector data.");
-                                                                 return;
-                                                             }
-                                                             populate(quotes);
-                                                         });
+void SectorHeatmapWidget::showEvent(QShowEvent* e) {
+    BaseWidget::showEvent(e);
+    if (!hub_active_)
+        hub_subscribe_all();
 }
+
+void SectorHeatmapWidget::hideEvent(QHideEvent* e) {
+    BaseWidget::hideEvent(e);
+    if (hub_active_)
+        hub_unsubscribe_all();
+}
+
+void SectorHeatmapWidget::refresh_data() {
+    auto& hub = datahub::DataHub::instance();
+    QStringList topics;
+    for (const auto& sym : sector_symbols())
+        topics.append(QStringLiteral("market:quote:") + sym);
+    hub.request(topics);
+}
+
+
+void SectorHeatmapWidget::hub_subscribe_all() {
+    auto& hub = datahub::DataHub::instance();
+    for (const auto& sym : sector_symbols()) {
+        const QString topic = QStringLiteral("market:quote:") + sym;
+        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+            if (!v.canConvert<services::QuoteData>())
+                return;
+            row_cache_.insert(sym, v.value<services::QuoteData>());
+            set_loading(false);
+            rebuild_from_cache();
+        });
+    }
+    hub_active_ = true;
+}
+
+void SectorHeatmapWidget::hub_unsubscribe_all() {
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+}
+
+void SectorHeatmapWidget::rebuild_from_cache() {
+    QVector<services::QuoteData> quotes;
+    quotes.reserve(row_cache_.size());
+    for (const auto& sym : sector_symbols()) {
+        auto it = row_cache_.constFind(sym);
+        if (it != row_cache_.constEnd())
+            quotes.append(it.value());
+    }
+    if (!quotes.isEmpty())
+        populate(quotes);
+}
+
 
 void SectorHeatmapWidget::populate(const QVector<services::QuoteData>& quotes) {
     // Clear grid

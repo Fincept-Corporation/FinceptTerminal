@@ -4,6 +4,9 @@
 #include "network/http/HttpClient.h"
 #include "storage/cache/CacheManager.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QAtomicInt>
 #include <QDateTime>
 #include <QJsonDocument>
@@ -73,6 +76,7 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
                 articles.append(a);
             }
             cb(true, articles);
+            publish_articles_to_hub(articles);
             return;
         }
     }
@@ -161,6 +165,7 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
 
                 state->callback(true, all);
                 emit state->service->articles_updated(all);
+                state->service->publish_articles_to_hub(all);
             }
         });
     }
@@ -200,6 +205,7 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
             }
             final_cb(true, articles);
             emit articles_partial(articles, feed_count_, feed_count_);
+            publish_articles_to_hub(articles);
             return;
         }
     }
@@ -251,6 +257,10 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
             std::sort(snapshot.begin(), snapshot.end(),
                       [](const NewsArticle& a, const NewsArticle& b) { return a.sort_ts > b.sort_ts; });
             emit articles_partial(snapshot, feeds_done, total);
+            // Progressive publish — each chunk fans out the accumulated
+            // list. Hub's per-topic coalescing (news:general at 250ms)
+            // throttles the UI repaint storm on cold-cache fills.
+            publish_articles_to_hub(snapshot);
 
             if (state->remaining.fetchAndSubRelaxed(1) == 1) {
                 // All feeds done — finalize cache
@@ -296,6 +306,7 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
 
                 state->callback(true, all);
                 emit state->service->articles_updated(all);
+                state->service->publish_articles_to_hub(all);
             }
         });
     }
@@ -1214,6 +1225,105 @@ Impact impact_from_string(const QString& s) {
     if (s == "MEDIUM")
         return Impact::MEDIUM;
     return Impact::LOW;
+}
+
+// ── DataHub producer wiring ─────────────────────────────────────────────────
+
+QStringList NewsService::topic_patterns() const {
+    return {QStringLiteral("news:general"),
+            QStringLiteral("news:symbol:*"),
+            QStringLiteral("news:category:*"),
+            QStringLiteral("news:cluster:*")};
+}
+
+void NewsService::refresh(const QStringList& topics) {
+    // Cluster topics are push-only — producer never pulls them.
+    bool needs_general = false;
+    for (const auto& t : topics) {
+        if (t == QLatin1String("news:general") ||
+            t.startsWith(QLatin1String("news:symbol:")) ||
+            t.startsWith(QLatin1String("news:category:"))) {
+            needs_general = true;
+            break;
+        }
+    }
+    if (!needs_general) return;
+
+    // All non-cluster topics derive from the general feed; one fetch
+    // fans out via publish_articles_to_hub.
+    fetch_all_news_progressive(/*force=*/true, [](bool, QVector<NewsArticle>) {});
+}
+
+int NewsService::max_requests_per_sec() const {
+    return 2;  // RSS aggregator pacing — generous but avoids request storms
+}
+
+void NewsService::ensure_registered_with_hub() {
+    if (hub_registered_) return;
+    auto& hub = fincept::datahub::DataHub::instance();
+    hub.register_producer(this);
+
+    // General feed — cache 5m, min refresh interval 30s, coalesce
+    // progressive chunks to 250ms so cold-cache fills don't repaint in
+    // a tight loop. `coalesce_within_ms` field arrived in Phase 4.
+    fincept::datahub::TopicPolicy general;
+    general.ttl_ms = 5 * 60 * 1000;
+    general.min_interval_ms = 30 * 1000;
+    general.coalesce_within_ms = 250;
+    general.push_only = false;
+    hub.set_policy_pattern(QStringLiteral("news:general"), general);
+
+    // Per-symbol / per-category slices share the same TTL; they derive
+    // from the same fetch so min_interval keeps producer pacing sane.
+    fincept::datahub::TopicPolicy derived = general;
+    hub.set_policy_pattern(QStringLiteral("news:symbol:*"), derived);
+    hub.set_policy_pattern(QStringLiteral("news:category:*"), derived);
+
+    // Server-assigned clusters — push-only, no scheduled refresh.
+    fincept::datahub::TopicPolicy cluster_policy;
+    cluster_policy.push_only = true;
+    cluster_policy.ttl_ms = 0;
+    cluster_policy.min_interval_ms = 0;
+    hub.set_policy_pattern(QStringLiteral("news:cluster:*"), cluster_policy);
+
+    hub_registered_ = true;
+    LOG_INFO("NewsService",
+             "Registered with DataHub (news:general, news:symbol:*, "
+             "news:category:*, news:cluster:*)");
+}
+
+void NewsService::publish_articles_to_hub(const QVector<NewsArticle>& accumulated) {
+    if (!hub_registered_) return;
+    auto& hub = fincept::datahub::DataHub::instance();
+
+    // Single canonical publish — the whole accumulated list on news:general.
+    hub.publish(QStringLiteral("news:general"), QVariant::fromValue(accumulated));
+
+    // Fan out per-symbol and per-category slices, but only for topics
+    // that currently have subscribers — the hub is the authority on
+    // who's listening. For now publish unconditionally; the hub's
+    // push_only policy on symbol/category patterns caches last-known-
+    // good even with no live subscribers, so future mounts get the
+    // snapshot via peek(). This is cheap: lists are small and the
+    // string splits are linear in article count.
+    QHash<QString, QVector<NewsArticle>> by_symbol;
+    QHash<QString, QVector<NewsArticle>> by_category;
+    for (const auto& a : accumulated) {
+        for (const auto& sym : a.tickers) {
+            if (!sym.isEmpty())
+                by_symbol[sym].append(a);
+        }
+        if (!a.category.isEmpty())
+            by_category[a.category].append(a);
+    }
+    for (auto it = by_symbol.constBegin(); it != by_symbol.constEnd(); ++it) {
+        hub.publish(QStringLiteral("news:symbol:") + it.key(),
+                    QVariant::fromValue(it.value()));
+    }
+    for (auto it = by_category.constBegin(); it != by_category.constEnd(); ++it) {
+        hub.publish(QStringLiteral("news:category:") + it.key(),
+                    QVariant::fromValue(it.value()));
+    }
 }
 
 } // namespace fincept::services

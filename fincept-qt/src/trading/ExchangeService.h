@@ -4,6 +4,8 @@
 
 #include "trading/TradingTypes.h"
 
+#    include "datahub/Producer.h"
+
 #include <QElapsedTimer>
 #include <QHash>
 #include <QMutex>
@@ -23,10 +25,30 @@ using OrderBookCallback = std::function<void(const QString& symbol, const OrderB
 using CandleCallback = std::function<void(const QString& symbol, const Candle& candle)>;
 using TradeCallback = std::function<void(const QString& symbol, const TradeData& trade)>;
 
-class ExchangeService : public QObject {
+/// ExchangeService streams Kraken / HyperLiquid / broker WS data via a
+/// Python subprocess. Phase 4 — DataHub producer for the `ws:*` topic
+/// family. See fincept-qt/docs/datahub-phases/phase-04-websocket-producers.md.
+///
+/// The WS subprocess model predates the hub: one subprocess per exchange
+/// kick-started via `start_ws_stream()`. For now the producer *publishes
+/// alongside* the existing callbacks (dual-fire). Consumers migrate one
+/// at a time; legacy callback API stays alive for a grace release.
+class ExchangeService : public QObject
+    , public fincept::datahub::Producer
+{
     Q_OBJECT
   public:
     static ExchangeService& instance();
+
+    /// Register this service as a DataHub producer + install default
+    /// `ws:kraken:*` / `ws:hyperliquid:*` policies. Idempotent.
+    /// Called from main.cpp after `datahub::register_metatypes()`.
+    void ensure_registered_with_hub();
+
+    // ── fincept::datahub::Producer ────────────────────────────────────────
+    QStringList topic_patterns() const override;
+    void refresh(const QStringList& topics) override;  // no-op: push_only
+    int max_requests_per_sec() const override;         // 0 (unlimited: WS)
 
     // Configuration
     void set_exchange(const QString& exchange_id);
@@ -108,6 +130,18 @@ class ExchangeService : public QObject {
     ~ExchangeService();
 
     void poll_prices();
+
+    /// Publish a ticker/orderbook/candle/trade to the hub alongside the
+    /// existing callback fan-out. Called from `handle_ws_line`.
+    void publish_ticker_to_hub(const QString& exchange, const QString& pair,
+                               const TickerData& ticker);
+    void publish_orderbook_to_hub(const QString& exchange, const QString& pair,
+                                  const OrderBookData& ob);
+    void publish_trade_to_hub(const QString& exchange, const QString& pair,
+                              const TradeData& trade);
+    void publish_candle_to_hub(const QString& exchange, const QString& pair,
+                               const QString& interval, const Candle& candle);
+    bool hub_registered_ = false;
 
     // Legacy one-shot script calls (fallback if daemon is unavailable)
     QJsonObject call_script(const QString& script, const QStringList& args);

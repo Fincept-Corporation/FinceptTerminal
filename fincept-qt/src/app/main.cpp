@@ -11,10 +11,24 @@
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/session/SessionManager.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "mcp/McpInit.h"
 #include "network/http/HttpClient.h"
 #include "python/PythonSetupManager.h"
 #include "screens/setup/SetupScreen.h"
+#include "services/agents/AgentService.h"
+#include "services/dbnomics/DBnomicsService.h"
+#include "services/economics/EconomicsService.h"
+#include "services/geopolitics/GeopoliticsService.h"
+#include "services/gov_data/GovDataService.h"
+#include "services/ma_analytics/MAAnalyticsService.h"
+#include "services/maritime/MaritimeService.h"
+#include "services/markets/MarketDataService.h"
+#include "services/news/NewsService.h"
+#include "services/polymarket/PolymarketWebSocket.h"
+#include "services/relationship_map/RelationshipMapService.h"
+#include "trading/DataStreamManager.h"
+#include "trading/ExchangeService.h"
 #include "storage/repositories/NewsArticleRepository.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "storage/sqlite/CacheDatabase.h"
@@ -87,6 +101,36 @@ int main(int argc, char* argv[]) {
 
     // ── Primary instance from here on ────────────────────────────────────────
 
+    // Register DataHub payload meta-types (QuoteData, HistoryPoint, InfoData,
+    // NewsArticle, EconomicsResult) so they can flow through QVariant-keyed
+    // topics and cross-thread queued signals. Phase 0 — see
+    // fincept-qt/DATAHUB_ARCHITECTURE.md.
+    // Phase 2: register MarketDataService as the `market:quote:*` producer.
+    fincept::datahub::register_metatypes();
+    fincept::services::MarketDataService::instance().ensure_registered_with_hub();
+    // Phase 4: ExchangeService as the ws:kraken:* / ws:hyperliquid:* producer.
+    fincept::trading::ExchangeService::instance().ensure_registered_with_hub();
+    // Phase 4: PolymarketWebSocket as the polymarket:* producer.
+    fincept::services::polymarket::PolymarketWebSocket::instance().ensure_registered_with_hub();
+    // Phase 5: NewsService as the news:general / news:symbol:* /
+    // news:category:* / news:cluster:* producer.
+    fincept::services::NewsService::instance().ensure_registered_with_hub();
+    // Phase 6: Economics + DBnomics + GovData producers.
+    fincept::services::EconomicsService::instance().ensure_registered_with_hub();
+    fincept::services::DBnomicsService::instance().ensure_registered_with_hub();
+    fincept::services::GovDataService::instance().ensure_registered_with_hub();
+    // Phase 7: DataStreamManager as the broker:* producer (positions,
+    // orders, balance, holdings, quote, ticks). Per-account topic shape
+    // `broker:<id>:<account_id>:<channel>`.
+    fincept::trading::DataStreamManager::instance().ensure_registered_with_hub();
+    // Phase 8: Geopolitics / Maritime / RelationshipMap / MAAnalytics.
+    fincept::services::geo::GeopoliticsService::instance().ensure_registered_with_hub();
+    fincept::services::maritime::MaritimeService::instance().ensure_registered_with_hub();
+    fincept::services::RelationshipMapService::instance().ensure_registered_with_hub();
+    fincept::services::ma::MAAnalyticsService::instance().ensure_registered_with_hub();
+    // Phase 9: AgentService as agent:* push-only producer (output/stream/status/routing/error).
+    fincept::services::AgentService::instance().ensure_registered_with_hub();
+
     // Create all application directories under %LOCALAPPDATA%\com.fincept.terminal\
     fincept::AppPaths::ensure_all();
 
@@ -137,17 +181,38 @@ int main(int argc, char* argv[]) {
     }
 
     fincept::Logger::instance().set_file(fincept::AppPaths::logs() + "/fincept.log");
+
+    // P3.18 — route Qt's own qDebug/qWarning/qCritical messages into our log
+    // file so framework/3rd-party warnings are visible in Release builds.
+    qInstallMessageHandler([](QtMsgType type, const QMessageLogContext& ctx, const QString& msg) {
+        const char* category = (ctx.category && *ctx.category) ? ctx.category : "Qt";
+        switch (type) {
+        case QtDebugMsg:    fincept::Logger::instance().debug(category, msg); break;
+        case QtInfoMsg:     fincept::Logger::instance().info(category, msg); break;
+        case QtWarningMsg:  fincept::Logger::instance().warn(category, msg); break;
+        case QtCriticalMsg: fincept::Logger::instance().error(category, msg); break;
+        case QtFatalMsg:
+            fincept::Logger::instance().error(category, msg);
+            fincept::Logger::instance().flush_and_close();
+            break;
+        }
+    });
     {
         auto& log = fincept::Logger::instance();
         auto& cfg = fincept::AppConfig::instance();
 
         // Global level
         const QString gl = cfg.get("log/global_level", "Info").toString();
-        const QHash<QString, fincept::LogLevel> lvl_map = {{"Debug", fincept::LogLevel::Debug},
+        const QHash<QString, fincept::LogLevel> lvl_map = {{"Trace", fincept::LogLevel::Trace},
+                                                           {"Debug", fincept::LogLevel::Debug},
                                                            {"Info", fincept::LogLevel::Info},
                                                            {"Warn", fincept::LogLevel::Warn},
-                                                           {"Error", fincept::LogLevel::Error}};
+                                                           {"Error", fincept::LogLevel::Error},
+                                                           {"Fatal", fincept::LogLevel::Fatal}};
         log.set_level(lvl_map.value(gl, fincept::LogLevel::Info));
+
+        // JSON output mode (persisted in Settings → Logging)
+        log.set_json_mode(cfg.get("log/json_mode", false).toBool());
 
         // Per-tag overrides
         const int count = cfg.get("log/tag_count", 0).toInt();
@@ -186,6 +251,7 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v015();
     fincept::register_migration_v016();
     fincept::register_migration_v017();
+    fincept::register_migration_v018();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";

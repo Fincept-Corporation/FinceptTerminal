@@ -5,6 +5,9 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QHBoxLayout>
 #include <QHideEvent>
 #include <QInputDialog>
@@ -98,10 +101,6 @@ WatchlistScreen::WatchlistScreen(QWidget* parent) : QWidget(parent) {
     build_ui();
     load_watchlists();
 
-    // Auto-refresh every 30 seconds — starts via showEvent, not eagerly
-    refresh_timer_ = new QTimer(this);
-    connect(refresh_timer_, &QTimer::timeout, this, &WatchlistScreen::on_refresh);
-    refresh_timer_->setInterval(30000);
 
     connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
             [this](const ThemeTokens&) { refresh_theme(); });
@@ -110,15 +109,13 @@ WatchlistScreen::WatchlistScreen(QWidget* parent) : QWidget(parent) {
 
 void WatchlistScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    if (refresh_timer_)
-        refresh_timer_->start();
-    on_refresh();
+    if (!current_wl_id_.isEmpty() && !stocks_.isEmpty())
+        hub_resubscribe_stocks();
 }
 
 void WatchlistScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
-    if (refresh_timer_)
-        refresh_timer_->stop();
+    hub_unsubscribe_all();
 }
 
 void WatchlistScreen::build_ui() {
@@ -403,26 +400,67 @@ void WatchlistScreen::load_stocks() {
 void WatchlistScreen::fetch_quotes() {
     if (stocks_.isEmpty()) {
         table_->clear_data();
+        hub_unsubscribe_all();
         return;
     }
 
-    QStringList symbols;
-    for (const auto& s : stocks_) {
-        symbols << s.symbol;
-    }
-
-    services::MarketDataService::instance().fetch_quotes(symbols, [this](bool ok, QVector<services::QuoteData> quotes) {
-        if (!ok || quotes.isEmpty()) {
-            // Show symbols without price data
-            table_->clear_data();
-            for (const auto& s : stocks_) {
-                table_->add_row({s.symbol, s.name, "--", "--", "--", "--", "--", "--"});
-            }
-            return;
-        }
-        populate_table(quotes);
-    });
+    hub_resubscribe_stocks();
 }
+
+
+void WatchlistScreen::rebuild_from_cache() {
+    QVector<services::QuoteData> quotes;
+    quotes.reserve(stocks_.size());
+    for (const auto& s : stocks_) {
+        if (row_cache_.contains(s.symbol))
+            quotes.append(row_cache_.value(s.symbol));
+    }
+    if (quotes.isEmpty()) {
+        // No data yet — show placeholder rows.
+        table_->clear_data();
+        for (const auto& s : stocks_) {
+            table_->add_row({s.symbol, s.name, "--", "--", "--", "--", "--", "--"});
+        }
+        return;
+    }
+    populate_table(quotes);
+}
+
+void WatchlistScreen::hub_resubscribe_stocks() {
+    auto& hub = datahub::DataHub::instance();
+    // Stocks set is dynamic (user selected another watchlist or added/removed
+    // a stock). Drop every prior subscription owned by this screen.
+    hub.unsubscribe(this);
+    hub_active_ = false;
+    row_cache_.clear();
+
+    if (stocks_.isEmpty())
+        return;
+
+    QStringList topics;
+    topics.reserve(stocks_.size());
+    for (const auto& s : stocks_) {
+        const QString sym = s.symbol;
+        const QString topic = QStringLiteral("market:quote:") + sym;
+        topics.append(topic);
+        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+            if (!v.canConvert<services::QuoteData>())
+                return;
+            row_cache_.insert(sym, v.value<services::QuoteData>());
+            rebuild_from_cache();
+        });
+    }
+    hub.request(topics);
+    hub_active_ = true;
+}
+
+void WatchlistScreen::hub_unsubscribe_all() {
+    if (!hub_active_)
+        return;
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+}
+
 
 void WatchlistScreen::populate_table(const QVector<services::QuoteData>& quotes) {
     table_->clear_data();

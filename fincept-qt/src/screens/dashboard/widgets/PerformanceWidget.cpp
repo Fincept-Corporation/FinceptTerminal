@@ -2,9 +2,16 @@
 
 #include "ui/theme/Theme.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QFrame>
 
 #include <cmath>
+
+namespace {
+inline const QStringList kPerfSymbols = {"^GSPC", "^IXIC", "^DJI", "^RUT", "^VIX", "GC=F"};
+}
 
 namespace fincept::screens::widgets {
 
@@ -42,7 +49,7 @@ PerformanceWidget::PerformanceWidget(QWidget* parent)
 
     apply_styles();
     set_loading(true);
-    refresh_data();
+
 }
 
 void PerformanceWidget::apply_styles() {
@@ -61,19 +68,60 @@ void PerformanceWidget::on_theme_changed() {
     apply_styles();
 }
 
-void PerformanceWidget::refresh_data() {
-    set_loading(true);
-
-    // Fetch benchmark ETFs + VIX + Gold
-    QStringList syms = {"^GSPC", "^IXIC", "^DJI", "^RUT", "^VIX", "GC=F"};
-
-    services::MarketDataService::instance().fetch_quotes(syms, [this](bool ok, QVector<services::QuoteData> quotes) {
-        set_loading(false);
-        if (!ok || quotes.isEmpty())
-            return;
-        populate(quotes);
-    });
+void PerformanceWidget::showEvent(QShowEvent* e) {
+    BaseWidget::showEvent(e);
+    if (!hub_active_)
+        hub_subscribe_all();
 }
+
+void PerformanceWidget::hideEvent(QHideEvent* e) {
+    BaseWidget::hideEvent(e);
+    if (hub_active_)
+        hub_unsubscribe_all();
+}
+
+void PerformanceWidget::refresh_data() {
+    auto& hub = datahub::DataHub::instance();
+    QStringList topics;
+    topics.reserve(kPerfSymbols.size());
+    for (const auto& sym : kPerfSymbols)
+        topics.append(QStringLiteral("market:quote:") + sym);
+    hub.request(topics);
+}
+
+
+void PerformanceWidget::hub_subscribe_all() {
+    auto& hub = datahub::DataHub::instance();
+    for (const auto& sym : kPerfSymbols) {
+        const QString topic = QStringLiteral("market:quote:") + sym;
+        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+            if (!v.canConvert<services::QuoteData>())
+                return;
+            row_cache_.insert(sym, v.value<services::QuoteData>());
+            set_loading(false);
+            rebuild_from_cache();
+        });
+    }
+    hub_active_ = true;
+}
+
+void PerformanceWidget::hub_unsubscribe_all() {
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+}
+
+void PerformanceWidget::rebuild_from_cache() {
+    QVector<services::QuoteData> quotes;
+    quotes.reserve(row_cache_.size());
+    for (const auto& sym : kPerfSymbols) {
+        auto it = row_cache_.constFind(sym);
+        if (it != row_cache_.constEnd())
+            quotes.append(it.value());
+    }
+    if (!quotes.isEmpty())
+        populate(quotes);
+}
+
 
 void PerformanceWidget::populate(const QVector<services::QuoteData>& quotes) {
     // Build lookup by symbol

@@ -2,12 +2,12 @@
 #include "screens/portfolio/views/PortfolioOptimizationView.h"
 
 #include "core/logging/Logger.h"
-#include "python/PythonRunner.h"
+#include "services/portfolio/PortfolioAnalyticsService.h"
 #include "storage/cache/CacheManager.h"
 #include "ui/theme/Theme.h"
 
-using fincept::python::PythonResult;
-using fincept::python::PythonRunner;
+using fincept::services::AnalyticsResult;
+using fincept::services::PortfolioAnalyticsService;
 
 #define QT_CHARTS_USE_NAMESPACE
 #include <QChart>
@@ -370,22 +370,16 @@ void PortfolioOptimizationView::run_optimization() {
     if (!cached.isNull()) {
         auto cached_doc = QJsonDocument::fromJson(cached.toString().toUtf8());
         if (!cached_doc.isNull() && cached_doc.isObject()) {
-            // Replay display logic with cached JSON as if it came from Python
-            PythonResult fake_result;
-            fake_result.success = true;
-            fake_result.output = QString::fromUtf8(cached_doc.toJson(QJsonDocument::Compact));
+            const QJsonObject cached_root = cached_doc.object();
             QPointer<PortfolioOptimizationView> self = this;
             QMetaObject::invokeMethod(
                 this,
-                [self, fake_result, cache_key]() {
+                [self, cached_root, cache_key]() {
                     if (!self)
                         return;
                     self->running_ = false;
                     self->run_btn_->setEnabled(true);
-                    const auto doc = QJsonDocument::fromJson(fake_result.output.trimmed().toUtf8());
-                    if (!doc.isObject())
-                        return;
-                    const auto root = doc.object();
+                    const auto& root = cached_root;
                     const auto opt_weights = root["weights"].toObject();
                     const double ret = root["expected_annual_return"].toDouble();
                     const double vol = root["annual_volatility"].toDouble();
@@ -433,88 +427,91 @@ void PortfolioOptimizationView::run_optimization() {
 
     QPointer<PortfolioOptimizationView> self = this;
 
-    PythonRunner::instance().run("optimize_portfolio_weights", {args_str}, [self, cache_key](PythonResult result) {
-        if (!self)
-            return;
-        QMetaObject::invokeMethod(
-            self,
-            [self, result, cache_key]() {
-                if (!self)
-                    return;
-                self->running_ = false;
-                self->run_btn_->setEnabled(true);
+    PortfolioAnalyticsService::instance().optimize_weights(
+        args_str, [self, cache_key](const AnalyticsResult& r) {
+            if (!self)
+                return;
+            QMetaObject::invokeMethod(
+                self,
+                [self, r, cache_key]() {
+                    if (!self)
+                        return;
+                    self->running_ = false;
+                    self->run_btn_->setEnabled(true);
 
-                if (!result.success || result.output.trimmed().isEmpty()) {
-                    self->status_label_->setText("Optimization failed — check Python environment.");
-                    self->status_label_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE()));
-                    LOG_ERROR("PortfolioOpt", "Optimization failed: " + result.error.left(300));
-                    return;
-                }
+                    if (!r.success) {
+                        self->status_label_->setText(
+                            QString("Optimization: %1").arg(r.error));
+                        self->status_label_->setStyleSheet(
+                            QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE()));
+                        return;
+                    }
 
-                const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8());
-                if (!doc.isObject()) {
-                    self->status_label_->setText("Invalid response from optimizer.");
-                    self->status_label_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE()));
-                    return;
-                }
+                    const auto root = r.data;
+                    const auto opt_weights = root["weights"].toObject();
+                    const double ret = root["expected_annual_return"].toDouble();
+                    const double vol = root["annual_volatility"].toDouble();
+                    const double sharpe = root["sharpe_ratio"].toDouble();
 
-                const auto root = doc.object();
-                const auto opt_weights = root["weights"].toObject();
-                const double ret = root["expected_annual_return"].toDouble();
-                const double vol = root["annual_volatility"].toDouble();
-                const double sharpe = root["sharpe_ratio"].toDouble();
+                    // ── Status label ──────────────────────────────────────────
+                    self->status_label_->setText(
+                        QString("Done — %1 | Exp. Return: %2%  Vol: %3%  Sharpe: %4")
+                            .arg(self->method_cb_->currentText())
+                            .arg(ret * 100.0, 0, 'f', 1)
+                            .arg(vol * 100.0, 0, 'f', 1)
+                            .arg(sharpe, 0, 'f', 2));
+                    self->status_label_->setStyleSheet(
+                        QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE()));
 
-                // ── Status label ──────────────────────────────────────────────
-                self->status_label_->setText(QString("Done — %1 | Exp. Return: %2%  Vol: %3%  Sharpe: %4")
-                                                 .arg(self->method_cb_->currentText())
-                                                 .arg(ret * 100.0, 0, 'f', 1)
-                                                 .arg(vol * 100.0, 0, 'f', 1)
-                                                 .arg(sharpe, 0, 'f', 2));
-                self->status_label_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE()));
+                    // ── OPTIMIZE results table ────────────────────────────────
+                    self->result_table_->setRowCount(
+                        static_cast<int>(self->summary_.holdings.size()));
+                    for (int r = 0; r < static_cast<int>(self->summary_.holdings.size()); ++r) {
+                        const auto& h = self->summary_.holdings[r];
+                        const double cw = h.weight;
+                        const double ow = opt_weights.value(h.symbol).toDouble(cw / 100.0) * 100.0;
+                        const double ch = ow - cw;
 
-                // ── OPTIMIZE results table ────────────────────────────────────
-                self->result_table_->setRowCount(static_cast<int>(self->summary_.holdings.size()));
-                for (int r = 0; r < static_cast<int>(self->summary_.holdings.size()); ++r) {
-                    const auto& h = self->summary_.holdings[r];
-                    const double cw = h.weight;
-                    const double ow = opt_weights.value(h.symbol).toDouble(cw / 100.0) * 100.0;
-                    const double ch = ow - cw;
+                        self->result_table_->setRowHeight(r, 28);
 
-                    self->result_table_->setRowHeight(r, 28);
+                        auto set = [&](int col, const QString& text,
+                                       const char* color = nullptr) {
+                            auto* item = new QTableWidgetItem(text);
+                            item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter)
+                                                            : (Qt::AlignRight | Qt::AlignVCenter));
+                            if (color)
+                                item->setForeground(QColor(color));
+                            self->result_table_->setItem(r, col, item);
+                        };
 
-                    auto set = [&](int col, const QString& text, const char* color = nullptr) {
-                        auto* item = new QTableWidgetItem(text);
-                        item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter)
-                                                        : (Qt::AlignRight | Qt::AlignVCenter));
-                        if (color)
-                            item->setForeground(QColor(color));
-                        self->result_table_->setItem(r, col, item);
-                    };
+                        set(0, h.symbol, ui::colors::CYAN);
+                        set(1, QString("%1%").arg(cw, 0, 'f', 1));
+                        set(2, QString("%1%").arg(ow, 0, 'f', 1), ui::colors::AMBER);
+                        set(3, QString("%1%2%").arg(ch >= 0.0 ? "+" : "").arg(ch, 0, 'f', 1),
+                            ch >= 0.0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
 
-                    set(0, h.symbol, ui::colors::CYAN);
-                    set(1, QString("%1%").arg(cw, 0, 'f', 1));
-                    set(2, QString("%1%").arg(ow, 0, 'f', 1), ui::colors::AMBER);
-                    set(3, QString("%1%2%").arg(ch >= 0.0 ? "+" : "").arg(ch, 0, 'f', 1),
-                        ch >= 0.0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+                        const QString action = std::abs(ch) < 0.5 ? "HOLD"
+                                               : ch > 0.0        ? "INCREASE"
+                                                                 : "DECREASE";
+                        const char* ac = action == "HOLD"       ? ui::colors::TEXT_TERTIARY
+                                         : action == "INCREASE" ? ui::colors::POSITIVE
+                                                                : ui::colors::NEGATIVE;
+                        set(4, action, ac);
+                    }
 
-                    const QString action = std::abs(ch) < 0.5 ? "HOLD" : ch > 0.0 ? "INCREASE" : "DECREASE";
-                    const char* ac = action == "HOLD"       ? ui::colors::TEXT_TERTIARY
-                                     : action == "INCREASE" ? ui::colors::POSITIVE
-                                                            : ui::colors::NEGATIVE;
-                    set(4, action, ac);
-                }
+                    // ── Frontier, Strategies, Compare ─────────────────────────
+                    self->update_frontier(root["frontier"].toArray());
+                    self->update_strategies(root["comparison"].toObject());
+                    self->update_compare(root["comparison"].toObject());
 
-                // ── Frontier, Strategies, Compare ─────────────────────────────
-                self->update_frontier(root["frontier"].toArray());
-                self->update_strategies(root["comparison"].toObject());
-                self->update_compare(root["comparison"].toObject());
-
-                fincept::CacheManager::instance().put(
-                    cache_key, QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))), 10 * 60,
-                    "portfolio_opt");
-            },
-            Qt::QueuedConnection);
-    });
+                    fincept::CacheManager::instance().put(
+                        cache_key,
+                        QVariant(QString::fromUtf8(
+                            QJsonDocument(root).toJson(QJsonDocument::Compact))),
+                        10 * 60, "portfolio_opt");
+                },
+                Qt::QueuedConnection);
+        });
 }
 
 // ── Allocation donut ──────────────────────────────────────────────────────────

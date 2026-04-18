@@ -2,7 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
-#include "python/PythonRunner.h"
+#include "services/asia_markets/AsiaMarketsService.h"
 #include "storage/cache/CacheManager.h"
 #include "ui/theme/Theme.h"
 
@@ -507,35 +507,22 @@ void AsiaMarketsScreen::load_endpoints(int cat_index) {
 
     QPointer<AsiaMarketsScreen> self = this;
 
-    python::PythonRunner::instance().run(
-        script, {"get_all_endpoints"}, [self, script, cache_key](const python::PythonResult& result) {
+    services::asia_markets::AsiaMarketsService::instance().fetch_endpoints(
+        script, [self, script, cache_key](const services::asia_markets::EndpointsResult& r) {
             if (!self)
                 return;
             self->set_loading(false);
 
-            if (!result.success) {
+            if (!r.success) {
                 self->data_status_->setText("Failed to load endpoints");
-                LOG_ERROR("AsiaMarkets", "Endpoint load failed: " + result.error);
                 return;
             }
 
-            QString json_str = python::extract_json(result.output);
-            if (json_str.isEmpty()) {
-                self->data_status_->setText("No endpoint data");
-                return;
-            }
-
-            QJsonParseError err;
-            auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
-            if (doc.isNull() || !doc.isObject()) {
-                self->data_status_->setText("Invalid endpoint data");
-                return;
-            }
-
-            auto obj = doc.object();
+            const QJsonObject obj = r.data;
             fincept::CacheManager::instance().put(
-                cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), 60 * 60,
-                "asia_markets");
+                cache_key,
+                QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
+                60 * 60, "asia_markets");
             self->endpoint_cache_[script] = obj;
             self->populate_endpoint_list(obj);
         });
@@ -642,77 +629,40 @@ void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList
 
     QPointer<AsiaMarketsScreen> self = this;
 
-    python::PythonRunner::instance().run(script, args, [self, endpoint, cache_key](const python::PythonResult& result) {
-        if (!self)
-            return;
-        self->set_loading(false);
+    services::asia_markets::AsiaMarketsService::instance().query(
+        script, endpoint, extra_args,
+        [self, endpoint, cache_key](const services::asia_markets::QueryResult& r) {
+            if (!self)
+                return;
+            self->set_loading(false);
 
-        if (!result.success) {
-            self->display_error(result.error.isEmpty() ? "Query failed" : result.error);
-            return;
-        }
-
-        QString json_str = python::extract_json(result.output);
-        if (json_str.isEmpty()) {
-            self->display_error("No data from " + endpoint);
-            return;
-        }
-
-        QJsonParseError err;
-        auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
-        if (doc.isNull()) {
-            self->display_error("JSON parse error: " + err.errorString());
-            return;
-        }
-
-        auto obj = doc.isObject() ? doc.object() : QJsonObject();
-
-        if (obj.contains("error")) {
-            self->display_error(obj["error"].toString());
-            return;
-        }
-        if (obj.contains("success") && !obj["success"].toBool()) {
-            self->display_error(obj.value("error").toString("Query returned failure"));
-            return;
-        }
-
-        // Extract data array
-        QJsonArray data_array;
-        if (obj.contains("data")) {
-            if (obj["data"].isArray()) {
-                data_array = obj["data"].toArray();
-            } else if (obj["data"].isObject()) {
-                data_array.append(obj["data"]);
-            } else {
-                QJsonObject wrapper;
-                wrapper["value"] = obj["data"];
-                data_array.append(wrapper);
+            if (!r.success) {
+                self->display_error(r.error.isEmpty() ? "Query failed" : r.error);
+                return;
             }
-        } else if (doc.isArray()) {
-            data_array = doc.array();
-        } else {
-            data_array.append(obj);
-        }
 
-        int count = data_array.size();
-        self->record_count_->setText(QString::number(count) + " records");
-        self->record_count_->show();
-        self->data_status_->setText(endpoint);
+            const QJsonArray data_array = r.rows;
+            const int count = data_array.size();
+            self->record_count_->setText(QString::number(count) + " records");
+            self->record_count_->show();
+            self->data_status_->setText(endpoint);
 
-        if (!data_array.isEmpty()) {
-            fincept::CacheManager::instance().put(
-                cache_key, QVariant(QString::fromUtf8(QJsonDocument(data_array).toJson(QJsonDocument::Compact))),
-                2 * 60, "asia_markets");
-        }
+            if (!data_array.isEmpty()) {
+                fincept::CacheManager::instance().put(
+                    cache_key,
+                    QVariant(QString::fromUtf8(
+                        QJsonDocument(data_array).toJson(QJsonDocument::Compact))),
+                    2 * 60, "asia_markets");
+            }
 
-        self->last_data_ = data_array;
-        self->json_view_->clear();
-        self->display_table(data_array);
-        if (!self->is_table_view_)
-            self->display_json(data_array);
+            self->last_data_ = data_array;
+            self->json_view_->clear();
+            self->display_table(data_array);
+            if (!self->is_table_view_)
+                self->display_json(data_array);
 
-        LOG_INFO("AsiaMarkets", endpoint + ": " + QString::number(count) + " records");
-    });
+            LOG_INFO("AsiaMarkets", endpoint + ": " + QString::number(count) + " records");
+        });
 }
 
 // ── Display ─────────────────────────────────────────────────────────────────

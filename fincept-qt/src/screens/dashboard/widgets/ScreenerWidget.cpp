@@ -2,6 +2,9 @@
 
 #include "ui/theme/Theme.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QFrame>
 #include <QHBoxLayout>
 
@@ -75,7 +78,7 @@ ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget("STOCK SCREENER", p
 
     apply_styles();
     set_loading(true);
-    refresh_data();
+
 }
 
 void ScreenerWidget::apply_styles() {
@@ -116,17 +119,59 @@ void ScreenerWidget::on_theme_changed() {
     apply_styles();
 }
 
-void ScreenerWidget::refresh_data() {
-    set_loading(true);
-    services::MarketDataService::instance().fetch_quotes(kScreenerSymbols,
-                                                         [this](bool ok, QVector<services::QuoteData> quotes) {
-                                                             set_loading(false);
-                                                             if (!ok || quotes.isEmpty())
-                                                                 return;
-                                                             all_quotes_ = std::move(quotes);
-                                                             apply_filter();
-                                                         });
+void ScreenerWidget::showEvent(QShowEvent* e) {
+    BaseWidget::showEvent(e);
+    if (!hub_active_)
+        hub_subscribe_all();
 }
+
+void ScreenerWidget::hideEvent(QHideEvent* e) {
+    BaseWidget::hideEvent(e);
+    if (hub_active_)
+        hub_unsubscribe_all();
+}
+
+void ScreenerWidget::refresh_data() {
+    auto& hub = datahub::DataHub::instance();
+    QStringList topics;
+    topics.reserve(kScreenerSymbols.size());
+    for (const auto& sym : kScreenerSymbols)
+        topics.append(QStringLiteral("market:quote:") + sym);
+    hub.request(topics);
+}
+
+
+void ScreenerWidget::hub_subscribe_all() {
+    auto& hub = datahub::DataHub::instance();
+    for (const auto& sym : kScreenerSymbols) {
+        const QString topic = QStringLiteral("market:quote:") + sym;
+        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+            if (!v.canConvert<services::QuoteData>())
+                return;
+            row_cache_.insert(sym, v.value<services::QuoteData>());
+            set_loading(false);
+            rebuild_all_quotes();
+        });
+    }
+    hub_active_ = true;
+}
+
+void ScreenerWidget::hub_unsubscribe_all() {
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+}
+
+void ScreenerWidget::rebuild_all_quotes() {
+    all_quotes_.clear();
+    all_quotes_.reserve(row_cache_.size());
+    for (const auto& sym : kScreenerSymbols) {
+        auto it = row_cache_.constFind(sym);
+        if (it != row_cache_.constEnd())
+            all_quotes_.append(it.value());
+    }
+    apply_filter();
+}
+
 
 void ScreenerWidget::apply_filter() {
     if (all_quotes_.isEmpty())

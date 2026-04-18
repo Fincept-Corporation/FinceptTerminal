@@ -15,7 +15,7 @@ namespace fincept::screens {
 
 /// Professional derivatives pricing screen.
 /// Supports: Bonds, Equity Options, FX Options, IR Swaps, Credit (CDS).
-/// Calculations run via PythonRunner (derivatives_pricing.py).
+/// Calculations run via PythonCliService (derivatives_pricing.py) — D1/P6 compliant.
 class DerivativesScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:

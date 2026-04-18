@@ -1,4 +1,7 @@
 #pragma once
+#include "services/markets/MarketDataService.h"
+
+#include <QHash>
 #include <QLabel>
 #include <QScrollArea>
 #include <QTimer>
@@ -9,8 +12,15 @@ class QFrame;
 
 namespace fincept::screens {
 
-/// Right-side market pulse panel — Fear/Greed, breadth, top movers, global snapshot, market hours.
-/// All data is live via MarketDataService. Refreshes every 60s when visible.
+/// Right-side market pulse panel — Fear/Greed, breadth, top movers, global
+/// snapshot, market hours.
+///
+/// Subscribes to `market:quote:<sym>` on the DataHub for the union of
+/// breadth + mover + snapshot symbol sets. Each delivery updates the
+/// matching row cache and triggers the relevant `rebuild_*_from_cache()`
+/// to re-render that section. The hub scheduler owns data-refresh cadence;
+/// `hours_timer_` is retained only because it drives wall-clock status
+/// labels.
 class MarketPulsePanel : public QWidget {
     Q_OBJECT
   public:
@@ -114,7 +124,16 @@ class MarketPulsePanel : public QWidget {
     };
     QVector<HoursRow> hours_rows_;
 
-    QTimer* refresh_timer_ = nullptr;
+    void hub_subscribe_all();
+    void hub_unsubscribe_all();
+    void rebuild_breadth_from_cache();
+    void rebuild_movers_from_cache();
+    void rebuild_snapshot_from_cache();
+
+    QHash<QString, services::QuoteData> breadth_cache_;
+    QHash<QString, services::QuoteData> movers_cache_;
+    QHash<QString, services::QuoteData> snapshot_cache_;
+    bool hub_active_ = false;
     QTimer* hours_timer_ = nullptr;
 };
 

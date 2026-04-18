@@ -2,8 +2,10 @@
 #include "screens/markets/MarketPanelConfig.h"
 #include "services/markets/MarketDataService.h"
 
+#include <QHash>
 #include <QLabel>
 #include <QPushButton>
+#include <QSet>
 #include <QTableWidget>
 #include <QWidget>
 
@@ -15,6 +17,12 @@ namespace fincept::screens {
 /// Per-panel column configuration via [COLS] inline dropdown.
 /// Always-visible [EDIT] [DEL] text buttons.
 /// Inline error/retry state.
+///
+/// `refresh()` re-subscribes the panel to `market:quote:<sym>` on the
+/// DataHub for each configured symbol, then force-kicks the hub. Each
+/// delivery updates `row_cache_` and re-renders.
+/// `refresh_finished` is emitted once the initial set of quotes has arrived
+/// (or on timeout) so the parent `MarketsScreen::refresh_all()` counter drains.
 class MarketPanel : public QWidget {
     Q_OBJECT
   public:
@@ -46,10 +54,19 @@ class MarketPanel : public QWidget {
     void refresh_theme();
     void open_cols_dropdown();
 
+    void hub_resubscribe();
+    void hub_unsubscribe_all();
+    void rebuild_from_cache();
+
     MarketPanelConfig              config_;
     QVector<services::QuoteData>   cached_quotes_;  // all fetched data; display subset shown
     bool has_data_    = false;
     bool fetch_failed_ = false;
+
+    QHash<QString, services::QuoteData> row_cache_;
+    QSet<QString> pending_initial_;  // symbols awaiting first delivery for refresh_finished
+    bool refresh_inflight_ = false;
+    bool hub_active_ = false;
 
     // Header widgets (28px)
     QWidget*     header_      = nullptr;

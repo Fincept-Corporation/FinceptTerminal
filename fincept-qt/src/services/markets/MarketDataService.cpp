@@ -4,9 +4,14 @@
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+#    include "datahub/TopicPolicy.h"
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QPointer>
 #include <QSet>
 
 #include <memory>
@@ -19,6 +24,135 @@ MarketDataService& MarketDataService::instance() {
 }
 
 MarketDataService::MarketDataService() {}
+
+
+// ── DataHub Producer integration ────────────────────────────────────────────
+
+QStringList MarketDataService::topic_patterns() const {
+    return {QStringLiteral("market:quote:*"), QStringLiteral("market:sparkline:*"),
+            QStringLiteral("market:history:*")};
+}
+
+int MarketDataService::max_requests_per_sec() const {
+    // PythonRunner caps at 3 concurrent processes; a batched-quote fetch
+    // is 2–3 s typical. Capping hub-driven refreshes at 2/s keeps at
+    // least one PythonRunner slot for non-quote work.
+    return 2;
+}
+
+void MarketDataService::refresh(const QStringList& topics) {
+    // Hub guarantees `topics` all match one of our patterns. Route each
+    // topic family to the matching fetcher.
+    static const QString kQuote = QStringLiteral("market:quote:");
+    static const QString kSpark = QStringLiteral("market:sparkline:");
+    static const QString kHist  = QStringLiteral("market:history:");
+
+    QStringList quote_syms;
+    QStringList spark_syms;
+    QStringList hist_topics;  // keep raw — history is parameterised by period/interval
+    for (const auto& t : topics) {
+        if (t.startsWith(kQuote))
+            quote_syms.append(t.mid(kQuote.size()));
+        else if (t.startsWith(kSpark))
+            spark_syms.append(t.mid(kSpark.size()));
+        else if (t.startsWith(kHist))
+            hist_topics.append(t);
+    }
+
+    if (!quote_syms.isEmpty()) {
+        LOG_INFO("DataHub", QString("refresh market:quote batch=%1").arg(quote_syms.size()));
+        // Routed through batched fetch path. Per-symbol publish happens in
+        // flush_batch() so consumers see each result as soon as it resolves.
+        fetch_quotes(quote_syms, [](bool, QVector<QuoteData>) {});
+    }
+
+    if (!spark_syms.isEmpty()) {
+        LOG_INFO("DataHub", QString("refresh market:sparkline batch=%1").arg(spark_syms.size()));
+        // Sparkline fetcher returns QHash<symbol, prices>; fan out to hub.
+        QPointer<MarketDataService> self = this;
+        fetch_sparklines(spark_syms, [self](bool ok, QHash<QString, QVector<double>> data) {
+            if (!self || !ok)
+                return;
+            for (auto it = data.cbegin(); it != data.cend(); ++it)
+                self->publish_sparkline_to_hub(it.key(), it.value());
+        });
+    }
+
+    if (!hist_topics.isEmpty()) {
+        // History topics are parameterised: `market:history:<sym>:<period>:<interval>`.
+        // Dispatch one fetch per unique topic.
+        LOG_INFO("DataHub", QString("refresh market:history batch=%1").arg(hist_topics.size()));
+        QPointer<MarketDataService> self = this;
+        for (const QString& topic : hist_topics) {
+            // Strip the prefix and split "<sym>:<period>:<interval>".
+            const QString tail = topic.mid(kHist.size());
+            const QStringList parts = tail.split(QLatin1Char(':'));
+            if (parts.size() != 3)
+                continue;
+            const QString sym = parts.at(0);
+            const QString period = parts.at(1);
+            const QString interval = parts.at(2);
+            fetch_history(sym, period, interval,
+                          [self, sym, period, interval](bool ok, QVector<HistoryPoint> points) {
+                              if (!self || !ok)
+                                  return;
+                              self->publish_history_to_hub(sym, period, interval, points);
+                          });
+        }
+    }
+}
+
+void MarketDataService::publish_quote_to_hub(const QuoteData& q) {
+    datahub::DataHub::instance().publish(
+        QStringLiteral("market:quote:") + q.symbol,
+        QVariant::fromValue(q));
+}
+
+void MarketDataService::publish_history_to_hub(const QString& symbol, const QString& period,
+                                               const QString& interval,
+                                               const QVector<HistoryPoint>& points) {
+    const QString topic = QStringLiteral("market:history:") + symbol + QLatin1Char(':') + period +
+                          QLatin1Char(':') + interval;
+    datahub::DataHub::instance().publish(topic, QVariant::fromValue(points));
+}
+
+void MarketDataService::publish_sparkline_to_hub(const QString& symbol, const QVector<double>& points) {
+    datahub::DataHub::instance().publish(QStringLiteral("market:sparkline:") + symbol,
+                                         QVariant::fromValue(points));
+}
+
+void MarketDataService::ensure_registered_with_hub() {
+    if (hub_registered_)
+        return;
+    auto& hub = datahub::DataHub::instance();
+    hub.register_producer(this);
+
+    // Quotes: 30s TTL, 5s min interval (matches Phase 2 pilot).
+    datahub::TopicPolicy quote_p;
+    quote_p.ttl_ms = 30'000;
+    quote_p.min_interval_ms = 5'000;
+    hub.set_policy_pattern(QStringLiteral("market:quote:*"), quote_p);
+
+    // Sparklines: 5-day hourly data, changes slowly — cache 10 minutes, refresh at most
+    // every 60s so a dashboard with 20 holdings doesn't hammer the sparkline script.
+    datahub::TopicPolicy spark_p;
+    spark_p.ttl_ms = 10 * 60'000;
+    spark_p.min_interval_ms = 60'000;
+    hub.set_policy_pattern(QStringLiteral("market:sparkline:*"), spark_p);
+
+    // History: OHLCV series. One-shot per chart; policies are conservative to
+    // avoid re-fetching for every open of the same chart. 30 min TTL, 5 min
+    // min-interval so a user flipping periods still triggers a fresh fetch.
+    datahub::TopicPolicy hist_p;
+    hist_p.ttl_ms = 30 * 60'000;
+    hist_p.min_interval_ms = 5 * 60'000;
+    hub.set_policy_pattern(QStringLiteral("market:history:*"), hist_p);
+
+    hub_registered_ = true;
+    LOG_INFO("DataHub",
+             "MarketDataService registered as producer for market:quote:*, market:sparkline:*, market:history:*");
+}
+
 
 // ── Batched + Cached fetch_quotes ───────────────────────────────────────────
 
@@ -125,6 +259,7 @@ void MarketDataService::flush_batch() {
                         auto quote = parse_quote(q);
                         all_quotes.append(quote);
                         store_quote(quote);
+                        publish_quote_to_hub(quote);
                     }
                 } else if (doc.isObject()) {
                     auto obj = doc.object();
@@ -132,6 +267,7 @@ void MarketDataService::flush_batch() {
                         auto quote = parse_quote(obj);
                         all_quotes.append(quote);
                         store_quote(quote);
+                        publish_quote_to_hub(quote);
                     }
                 }
 

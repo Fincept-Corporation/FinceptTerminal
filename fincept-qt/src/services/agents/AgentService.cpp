@@ -8,6 +8,9 @@
 #include "storage/cache/CacheManager.h"
 #include "storage/repositories/LlmConfigRepository.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/TopicPolicy.h"
+
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QJsonArray>
@@ -15,6 +18,7 @@
 #include <QPointer>
 #include <QProcess>
 #include <QUuid>
+#include <QVariant>
 
 #include <memory>
 
@@ -468,6 +472,7 @@ QString AgentService::run_agent(const QString& query, const QJsonObject& config)
         }
 
         emit self->agent_result(r);
+        self->publish_agent_result(r, /*final=*/true);
     });
     return req_id;
 }
@@ -485,6 +490,7 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
         r.success = false;
         r.error = "Python not available";
         emit agent_stream_done(r);
+        publish_agent_result(r, /*final=*/true);
         return req_id;
     }
 
@@ -543,12 +549,19 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
                         QString token = extract(line, "TOKEN:");
                         *accumulated += token;
                         emit self->agent_stream_token(req_id, token);
+                        self->publish_agent_token(req_id, token);
                     } else if (line.startsWith("THINKING:")) {
-                        emit self->agent_stream_thinking(req_id, extract(line, "THINKING:"));
+                        QString status = extract(line, "THINKING:");
+                        emit self->agent_stream_thinking(req_id, status);
+                        self->publish_agent_status(req_id, status);
                     } else if (line.startsWith("TOOL:")) {
-                        emit self->agent_stream_thinking(req_id, "Tool: " + extract(line, "TOOL:"));
+                        QString status = "Tool: " + extract(line, "TOOL:");
+                        emit self->agent_stream_thinking(req_id, status);
+                        self->publish_agent_status(req_id, status);
                     } else if (line.startsWith("TOOL_RESULT:")) {
-                        emit self->agent_stream_thinking(req_id, "Result: " + extract(line, "TOOL_RESULT:"));
+                        QString status = "Result: " + extract(line, "TOOL_RESULT:");
+                        emit self->agent_stream_thinking(req_id, status);
+                        self->publish_agent_status(req_id, status);
                     } else if (line.startsWith("DONE:")) {
                         // DONE carries the full cleaned response — use it if accumulated is empty
                         QString done_content = extract(line, "DONE:");
@@ -562,6 +575,7 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
                             r.success = false;
                             r.error = extract(line, "ERROR:");
                             emit self->agent_stream_done(r);
+                            self->publish_agent_result(r, /*final=*/true);
                         }
                     }
                 }
@@ -607,6 +621,7 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
 
             LOG_INFO("AgentService", QString("Streaming completed in %1ms").arg(elapsed));
             emit self->agent_stream_done(r);
+            self->publish_agent_result(r, /*final=*/true);
         });
 
     connect(proc, &QProcess::errorOccurred, this,
@@ -621,6 +636,7 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
                 r.success = false;
                 r.error = "Process error: " + err;
                 emit self->agent_stream_done(r);
+                self->publish_agent_result(r, /*final=*/true);
             });
 
     LOG_INFO("AgentService", QString("Starting streaming agent (%1 bytes payload)").arg(payload_bytes.size()));
@@ -656,6 +672,7 @@ QString AgentService::route_query(const QString& query) {
             r.matched_keywords.append(k.toString());
 
         emit self->routing_result(r);
+        self->publish_routing_result(r);
     });
     return req_id;
 }
@@ -673,6 +690,7 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
         r.success = false;
         r.error = "Python not available";
         emit agent_stream_done(r);
+        publish_agent_result(r, /*final=*/true);
         return req_id;
     }
 
@@ -732,10 +750,15 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
                         QString token = extract(line, "TOKEN:");
                         *accumulated += token;
                         emit self->agent_stream_token(req_id, token);
+                        self->publish_agent_token(req_id, token);
                     } else if (line.startsWith("THINKING:")) {
-                        emit self->agent_stream_thinking(req_id, extract(line, "THINKING:"));
+                        QString status = extract(line, "THINKING:");
+                        emit self->agent_stream_thinking(req_id, status);
+                        self->publish_agent_status(req_id, status);
                     } else if (line.startsWith("TOOL:")) {
-                        emit self->agent_stream_thinking(req_id, "Tool: " + extract(line, "TOOL:"));
+                        QString status = "Tool: " + extract(line, "TOOL:");
+                        emit self->agent_stream_thinking(req_id, status);
+                        self->publish_agent_status(req_id, status);
                     } else if (line.startsWith("DONE:")) {
                         QString done_content = extract(line, "DONE:");
                         if (accumulated->trimmed().isEmpty() && !done_content.isEmpty())
@@ -748,6 +771,7 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
                             r.success = false;
                             r.error = extract(line, "ERROR:");
                             emit self->agent_stream_done(r);
+                            self->publish_agent_result(r, /*final=*/true);
                         }
                     }
                 }
@@ -789,6 +813,7 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
 
                 LOG_INFO("AgentService", QString("Team completed in %1ms").arg(elapsed));
                 emit self->agent_stream_done(r);
+                self->publish_agent_result(r, /*final=*/true);
             });
 
     connect(proc, &QProcess::errorOccurred, this, [self, proc, done_emitted, timer, req_id](QProcess::ProcessError) {
@@ -802,6 +827,7 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
         r.success = false;
         r.error = "Process error: " + err;
         emit self->agent_stream_done(r);
+        self->publish_agent_result(r, /*final=*/true);
     });
 
     LOG_INFO("AgentService", QString("Starting team stream (%1 bytes payload, %2 members)")
@@ -834,6 +860,7 @@ QString AgentService::run_workflow(const QString& workflow_type, const QJsonObje
                                                  : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
+        self->publish_agent_result(r, /*final=*/true);
     });
     return req_id;
 }
@@ -1103,6 +1130,7 @@ QString AgentService::run_agent_structured(const QString& query, const QJsonObje
                                                  : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
+        self->publish_agent_result(r, /*final=*/true);
     });
     return req_id;
 }
@@ -1127,6 +1155,7 @@ void AgentService::execute_routed_query(const QString& query, const QJsonObject&
                                                  : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
+        self->publish_agent_result(r, /*final=*/true);
     });
 }
 
@@ -1167,6 +1196,7 @@ void AgentService::run_stock_analysis(const QString& symbol, const QJsonObject& 
                                                  : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
+        self->publish_agent_result(r, /*final=*/true);
     });
 }
 
@@ -1187,6 +1217,7 @@ void AgentService::run_portfolio_rebalancing(const QJsonObject& portfolio_data) 
                                                  : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
+        self->publish_agent_result(r, /*final=*/true);
     });
 }
 
@@ -1207,6 +1238,7 @@ void AgentService::run_risk_assessment(const QJsonObject& portfolio_data) {
                                                  : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
+        self->publish_agent_result(r, /*final=*/true);
     });
 }
 
@@ -1228,6 +1260,7 @@ void AgentService::run_portfolio_analysis(const QString& analysis_type, const QJ
                                                  : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
+        self->publish_agent_result(r, /*final=*/true);
     });
 }
 
@@ -1550,5 +1583,124 @@ QJsonObject AgentService::get_cache_stats() const {
     stats["total_entries"] = fincept::CacheManager::instance().entry_count();
     return stats;
 }
+
+// ── DataHub integration (Phase 9) ─────────────────────────────────────────────
+
+QStringList AgentService::topic_patterns() const {
+    // AgentService is push-only: it owns these families but never services a
+    // pull-through `refresh()`. Patterns are declared so set_policy_pattern()
+    // entries bind to this producer for introspection/stats.
+    return {
+        QStringLiteral("agent:output:*"),
+        QStringLiteral("agent:stream:*"),
+        QStringLiteral("agent:status:*"),
+        QStringLiteral("agent:routing:*"),
+        QStringLiteral("agent:error:*"),
+    };
+}
+
+void AgentService::refresh(const QStringList& /*topics*/) {
+    // Push-only — no pull semantics. Run outputs materialise when a caller
+    // triggers run_agent/run_team/run_workflow.
+}
+
+int AgentService::max_requests_per_sec() const {
+    return 0; // push-only, no outbound rate cap
+}
+
+void AgentService::ensure_registered_with_hub() {
+    if (hub_registered_) return;
+    auto& hub = fincept::datahub::DataHub::instance();
+    hub.register_producer(this);
+
+    // Output: short-lived per-run topic, retired on completion.
+    fincept::datahub::TopicPolicy output_policy;
+    output_policy.push_only = true;
+    output_policy.ttl_ms = 10 * 60 * 1000; // safety net if retire_topic is missed
+    hub.set_policy_pattern(QStringLiteral("agent:output:*"), output_policy);
+
+    // Stream: token firehose — coalesce at 50ms so subscribers don't drown.
+    fincept::datahub::TopicPolicy stream_policy;
+    stream_policy.push_only = true;
+    stream_policy.coalesce_within_ms = 50;
+    stream_policy.ttl_ms = 5 * 60 * 1000;
+    hub.set_policy_pattern(QStringLiteral("agent:stream:*"), stream_policy);
+
+    // Status: thinking/tool narration — same shape as stream.
+    fincept::datahub::TopicPolicy status_policy;
+    status_policy.push_only = true;
+    status_policy.coalesce_within_ms = 100;
+    status_policy.ttl_ms = 5 * 60 * 1000;
+    hub.set_policy_pattern(QStringLiteral("agent:status:*"), status_policy);
+
+    // Routing: one-shot decision per run.
+    fincept::datahub::TopicPolicy routing_policy;
+    routing_policy.push_only = true;
+    routing_policy.ttl_ms = 10 * 60 * 1000;
+    hub.set_policy_pattern(QStringLiteral("agent:routing:*"), routing_policy);
+
+    // Error: rare but important — keep briefly for late subscribers.
+    fincept::datahub::TopicPolicy error_policy;
+    error_policy.push_only = true;
+    error_policy.ttl_ms = 2 * 60 * 1000;
+    hub.set_policy_pattern(QStringLiteral("agent:error:*"), error_policy);
+
+    hub_registered_ = true;
+    LOG_INFO("AgentService", "Registered with DataHub (agent:*)");
+}
+
+void AgentService::publish_agent_result(const AgentExecutionResult& r, bool final) {
+    if (!hub_registered_ || r.request_id.isEmpty()) return;
+    QJsonObject obj{
+        {"request_id", r.request_id},
+        {"success", r.success},
+        {"response", r.response},
+        {"error", r.error},
+        {"execution_time_ms", r.execution_time_ms},
+        {"final", final},
+    };
+    const QString topic = QStringLiteral("agent:output:") + r.request_id;
+    fincept::datahub::DataHub::instance().publish(topic, QVariant(obj));
+    if (final) {
+        // Disposable per-run topic — drop cached state to bound hub memory.
+        // Subscribers still pinned via owner remain attached.
+        fincept::datahub::DataHub::instance().retire_topic(topic);
+    }
+}
+
+void AgentService::publish_agent_token(const QString& run_id, const QString& token) {
+    if (!hub_registered_ || run_id.isEmpty()) return;
+    QJsonObject obj{{"request_id", run_id}, {"token", token}};
+    fincept::datahub::DataHub::instance().publish(
+        QStringLiteral("agent:stream:") + run_id, QVariant(obj));
+}
+
+void AgentService::publish_agent_status(const QString& run_id, const QString& status) {
+    if (!hub_registered_ || run_id.isEmpty()) return;
+    QJsonObject obj{{"request_id", run_id}, {"status", status}};
+    fincept::datahub::DataHub::instance().publish(
+        QStringLiteral("agent:status:") + run_id, QVariant(obj));
+}
+
+void AgentService::publish_routing_result(const RoutingResult& r) {
+    if (!hub_registered_ || r.request_id.isEmpty()) return;
+    QJsonObject obj{
+        {"request_id", r.request_id},
+        {"success", r.success},
+        {"agent_id", r.agent_id},
+        {"intent", r.intent},
+        {"confidence", r.confidence},
+    };
+    fincept::datahub::DataHub::instance().publish(
+        QStringLiteral("agent:routing:") + r.request_id, QVariant(obj));
+}
+
+void AgentService::publish_agent_error(const QString& context, const QString& message) {
+    if (!hub_registered_) return;
+    QJsonObject obj{{"context", context}, {"message", message}};
+    fincept::datahub::DataHub::instance().publish(
+        QStringLiteral("agent:error:") + context, QVariant(obj));
+}
+
 
 } // namespace fincept::services

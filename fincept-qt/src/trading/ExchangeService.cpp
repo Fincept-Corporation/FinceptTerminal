@@ -10,6 +10,9 @@
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QCoreApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -740,6 +743,7 @@ void ExchangeService::handle_ws_line(const QString& line) {
                 LOG_WARN("ExchangeService", "Price callback threw an exception for " + ticker.symbol);
             }
         }
+        publish_ticker_to_hub(exchange_id_, ticker.symbol, ticker);
         return;
     }
 
@@ -759,6 +763,7 @@ void ExchangeService::handle_ws_line(const QString& line) {
                 LOG_WARN("ExchangeService", "Orderbook callback threw an exception for " + ob.symbol);
             }
         }
+        publish_orderbook_to_hub(exchange_id_, ob.symbol, ob);
         return;
     }
 
@@ -782,6 +787,10 @@ void ExchangeService::handle_ws_line(const QString& line) {
                 LOG_WARN("ExchangeService", "Candle callback threw an exception for " + sym);
             }
         }
+        // Interval is not currently emitted by ws_stream.py — default to "1m".
+        // When ws_stream starts publishing `interval` in the message, read it here.
+        const QString interval = msg.value("interval").toString("1m");
+        publish_candle_to_hub(exchange_id_, sym, interval, c);
         return;
     }
 
@@ -840,6 +849,11 @@ void ExchangeService::handle_ws_line(const QString& line) {
                              "Price callback (from trade) threw an exception for " + fast_ticker.symbol);
                 }
             }
+        }
+        if (!td.symbol.isEmpty()) {
+            publish_trade_to_hub(exchange_id_, td.symbol, td);
+            if (emit_price)
+                publish_ticker_to_hub(exchange_id_, fast_ticker.symbol, fast_ticker);
         }
     }
 }
@@ -1427,5 +1441,82 @@ TickerData ExchangeService::get_cached_price(const QString& symbol) const {
     QMutexLocker lock(&mutex_);
     return price_cache_.value(symbol);
 }
+
+// ── DataHub producer wiring ────────────────────────────────────────────────
+
+QStringList ExchangeService::topic_patterns() const {
+    return {"ws:kraken:*", "ws:hyperliquid:*"};
+}
+
+void ExchangeService::refresh(const QStringList& /*topics*/) {
+    // push_only: scheduler never calls this. Fan-out happens in handle_ws_line.
+}
+
+int ExchangeService::max_requests_per_sec() const {
+    return 0;  // unlimited — push only, no REST pacing
+}
+
+void ExchangeService::ensure_registered_with_hub() {
+    if (hub_registered_) return;
+    auto& hub = fincept::datahub::DataHub::instance();
+    hub.register_producer(this);
+
+    fincept::datahub::TopicPolicy push_only;
+    push_only.push_only = true;
+    push_only.ttl_ms = 0;
+    push_only.min_interval_ms = 0;
+
+    fincept::datahub::TopicPolicy coalesced_ticker = push_only;
+    coalesced_ticker.coalesce_within_ms = 50;  // cap fan-out at 20 Hz
+
+    // Ticker families — coalesced (high-rate feeds)
+    hub.set_policy_pattern("ws:kraken:ticker:*", coalesced_ticker);
+    hub.set_policy_pattern("ws:hyperliquid:ticker:*", coalesced_ticker);
+
+    // Orderbook / trades / ohlc — push-only, no coalescing
+    hub.set_policy_pattern("ws:kraken:orderbook:*", push_only);
+    hub.set_policy_pattern("ws:kraken:trades:*", push_only);
+    hub.set_policy_pattern("ws:kraken:ohlc:*", push_only);
+    hub.set_policy_pattern("ws:hyperliquid:orderbook:*", push_only);
+    hub.set_policy_pattern("ws:hyperliquid:trades:*", push_only);
+    hub.set_policy_pattern("ws:hyperliquid:ohlc:*", push_only);
+
+    hub_registered_ = true;
+    LOG_INFO("ExchangeService", "Registered with DataHub (ws:kraken:*, ws:hyperliquid:*)");
+}
+
+static bool hub_exchange_supported(const QString& id) {
+    return id == QLatin1String("kraken") || id == QLatin1String("hyperliquid");
+}
+
+void ExchangeService::publish_ticker_to_hub(const QString& exchange, const QString& pair,
+                                            const TickerData& ticker) {
+    if (!hub_exchange_supported(exchange) || pair.isEmpty()) return;
+    const QString topic = QStringLiteral("ws:") + exchange + QStringLiteral(":ticker:") + pair;
+    fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(ticker));
+}
+
+void ExchangeService::publish_orderbook_to_hub(const QString& exchange, const QString& pair,
+                                               const OrderBookData& ob) {
+    if (!hub_exchange_supported(exchange) || pair.isEmpty()) return;
+    const QString topic = QStringLiteral("ws:") + exchange + QStringLiteral(":orderbook:") + pair;
+    fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(ob));
+}
+
+void ExchangeService::publish_trade_to_hub(const QString& exchange, const QString& pair,
+                                           const TradeData& trade) {
+    if (!hub_exchange_supported(exchange) || pair.isEmpty()) return;
+    const QString topic = QStringLiteral("ws:") + exchange + QStringLiteral(":trades:") + pair;
+    fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(trade));
+}
+
+void ExchangeService::publish_candle_to_hub(const QString& exchange, const QString& pair,
+                                            const QString& interval, const Candle& candle) {
+    if (!hub_exchange_supported(exchange) || pair.isEmpty()) return;
+    const QString topic = QStringLiteral("ws:") + exchange + QStringLiteral(":ohlc:") + pair +
+                          QLatin1Char(':') + interval;
+    fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(candle));
+}
+
 
 } // namespace fincept::trading

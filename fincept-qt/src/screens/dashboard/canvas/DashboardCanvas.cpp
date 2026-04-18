@@ -102,7 +102,7 @@ void DashboardCanvas::load_layout(const GridLayout& layout) {
             LOG_WARN("Canvas", QString("Unknown widget type: %1").arg(item.id));
             continue;
         }
-        auto* widget = meta->factory();
+        auto* widget = meta->factory(item.config);
         auto* tile = new WidgetTile(item.instance_id, widget, this);
         connect_tile(tile);
         tiles_.append(tile);
@@ -160,7 +160,7 @@ void DashboardCanvas::add_widget(const QString& widget_type_id) {
     layout_.items.append(item);
     layout_.items = compact_vertical(layout_.items);
 
-    auto* widget = meta->factory();
+    auto* widget = meta->factory(item.config);
     auto* tile = new WidgetTile(item.instance_id, widget, this);
     connect_tile(tile);
     tiles_.append(tile);
@@ -564,6 +564,19 @@ void DashboardCanvas::connect_tile(WidgetTile* tile) {
     connect(tile, &WidgetTile::resize_moved, this, &DashboardCanvas::on_resize_moved);
     connect(tile, &WidgetTile::resize_released, this, &DashboardCanvas::on_resize_released);
     connect(tile, &WidgetTile::close_requested, this, &DashboardCanvas::on_tile_close);
+
+    // Per-instance widget config changes (gear-icon dialog) — persist into GridItem
+    // and emit layout_changed so the DashboardScreen writes it through to sqlite.
+    if (auto* content = tile->content_widget()) {
+        const QString instance_id = tile->instance_id();
+        connect(content, &widgets::BaseWidget::config_changed, this,
+                [this, instance_id](const QJsonObject& cfg) {
+                    if (auto* item = item_for_id(instance_id)) {
+                        item->config = cfg;
+                        emit layout_changed(layout_);
+                    }
+                });
+    }
 }
 
 WidgetTile* DashboardCanvas::tile_for_id(const QString& instance_id) const {

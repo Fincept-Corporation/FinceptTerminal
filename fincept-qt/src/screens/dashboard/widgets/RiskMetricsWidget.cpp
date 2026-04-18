@@ -2,6 +2,9 @@
 
 #include "ui/theme/Theme.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QFrame>
 #include <QHBoxLayout>
 
@@ -119,7 +122,7 @@ RiskMetricsWidget::RiskMetricsWidget(QWidget* parent) : BaseWidget("RISK METRICS
 
     apply_styles();
     set_loading(true);
-    refresh_data();
+
 }
 
 void RiskMetricsWidget::apply_styles() {
@@ -180,16 +183,60 @@ void RiskMetricsWidget::on_theme_changed() {
     apply_styles();
 }
 
-void RiskMetricsWidget::refresh_data() {
-    set_loading(true);
-    services::MarketDataService::instance().fetch_quotes(kRiskSymbols,
-                                                         [this](bool ok, QVector<services::QuoteData> quotes) {
-                                                             set_loading(false);
-                                                             if (!ok || quotes.isEmpty())
-                                                                 return;
-                                                             populate(quotes);
-                                                         });
+void RiskMetricsWidget::showEvent(QShowEvent* e) {
+    BaseWidget::showEvent(e);
+    if (!hub_active_)
+        hub_subscribe_all();
 }
+
+void RiskMetricsWidget::hideEvent(QHideEvent* e) {
+    BaseWidget::hideEvent(e);
+    if (hub_active_)
+        hub_unsubscribe_all();
+}
+
+void RiskMetricsWidget::refresh_data() {
+    auto& hub = datahub::DataHub::instance();
+    QStringList topics;
+    topics.reserve(kRiskSymbols.size());
+    for (const auto& sym : kRiskSymbols)
+        topics.append(QStringLiteral("market:quote:") + sym);
+    hub.request(topics);
+}
+
+
+void RiskMetricsWidget::hub_subscribe_all() {
+    auto& hub = datahub::DataHub::instance();
+    for (const auto& sym : kRiskSymbols) {
+        const QString topic = QStringLiteral("market:quote:") + sym;
+        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+            if (!v.canConvert<services::QuoteData>())
+                return;
+            row_cache_.insert(sym, v.value<services::QuoteData>());
+            set_loading(false);
+            rebuild_from_cache();
+        });
+    }
+    hub_active_ = true;
+}
+
+void RiskMetricsWidget::hub_unsubscribe_all() {
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+}
+
+void RiskMetricsWidget::rebuild_from_cache() {
+    QVector<services::QuoteData> quotes;
+    quotes.reserve(row_cache_.size());
+    for (const auto& sym : kRiskSymbols) {
+        auto it = row_cache_.constFind(sym);
+        if (it != row_cache_.constEnd())
+            quotes.append(it.value());
+    }
+    if (!quotes.isEmpty())
+        populate(quotes);
+}
+
 
 void RiskMetricsWidget::populate(const QVector<services::QuoteData>& quotes) {
     QMap<QString, const services::QuoteData*> map;

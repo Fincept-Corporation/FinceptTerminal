@@ -18,28 +18,44 @@ class PortfolioStatsRibbon : public QWidget {
     void refresh_theme();
 
   private:
-    struct MetricCell {
+    // Hero cell — primary row. Large value, label above, sub below.
+    struct HeroCell {
         QWidget* container = nullptr;
         QLabel* label = nullptr;
         QLabel* value = nullptr;
         QLabel* sub = nullptr;
     };
 
-    MetricCell add_cell(const QString& label_text, const char* value_color);
+    // Compact cell — secondary row. Single-line "LABEL  value" chip.
+    struct ChipCell {
+        QWidget* container = nullptr;
+        QLabel* label = nullptr;
+        QLabel* value = nullptr;
+    };
 
-    QHBoxLayout* cells_layout_ = nullptr;
-    MetricCell total_value_;
-    MetricCell pnl_;
-    MetricCell day_change_;
-    MetricCell cost_basis_;
-    MetricCell positions_;
-    MetricCell concentration_;
-    MetricCell sharpe_;
-    MetricCell beta_;
-    MetricCell volatility_;
-    MetricCell max_drawdown_;
-    MetricCell risk_score_;
-    MetricCell var95_;
+    HeroCell add_hero(QHBoxLayout* row, const QString& label_text, const char* value_color);
+    ChipCell add_chip(QHBoxLayout* row, const QString& label_text, const char* value_color);
+    void apply_hero_styles(HeroCell& c, const char* value_color);
+    void apply_chip_styles(ChipCell& c, const char* value_color);
+
+    QWidget* primary_row_ = nullptr;   // hero KPIs
+    QWidget* secondary_row_ = nullptr; // risk chips
+
+    // Primary (hero) cells
+    HeroCell total_value_;
+    HeroCell pnl_;
+    HeroCell day_change_;
+    HeroCell positions_;
+
+    // Secondary (chip) cells
+    ChipCell cost_basis_;
+    ChipCell concentration_;
+    ChipCell sharpe_;
+    ChipCell beta_;
+    ChipCell volatility_;
+    ChipCell max_drawdown_;
+    ChipCell var95_;
+    ChipCell risk_score_;
 };
 
 } // namespace fincept::screens

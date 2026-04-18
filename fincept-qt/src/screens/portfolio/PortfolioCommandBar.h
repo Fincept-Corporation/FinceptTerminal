@@ -7,7 +7,9 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
 #include <QPushButton>
+#include <QToolButton>
 #include <QWidget>
 
 namespace fincept::screens {
@@ -46,11 +48,18 @@ class PortfolioCommandBar : public QWidget {
 
   private:
     void build_ui();
-    void build_portfolio_selector(QHBoxLayout* layout);
-    void build_action_buttons(QHBoxLayout* layout);
-    void build_detail_buttons(QHBoxLayout* layout);
+    void build_row1(QHBoxLayout* layout);
+    void build_row2(QHBoxLayout* layout);
+    void build_portfolio_selector();
+    void build_stats_cluster(QHBoxLayout* layout);
+    void build_trade_cluster(QHBoxLayout* layout);
+    void build_detail_tabs(QHBoxLayout* layout);
+    void build_tools_cluster(QHBoxLayout* layout);
+    void build_overflow_menu();
     void toggle_dropdown();
     void update_selector_label();
+    void apply_row1_styles();
+    void apply_row2_styles();
 
     // Portfolio selector
     QPushButton* selector_btn_ = nullptr;
@@ -67,17 +76,25 @@ class PortfolioCommandBar : public QWidget {
     // Action buttons
     QPushButton* buy_btn_ = nullptr;
     QPushButton* sell_btn_ = nullptr;
+    QPushButton* div_btn_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;
     QComboBox* interval_cb_ = nullptr;
-    QPushButton* ffn_btn_ = nullptr;
+    QToolButton* overflow_btn_ = nullptr;
+    QMenu* overflow_menu_ = nullptr;
+    QAction* ffn_action_ = nullptr;
+    QPushButton* ai_btn_ = nullptr;
+    QPushButton* agent_btn_ = nullptr;
 
-    // Detail view buttons
+    // Detail view buttons (neutral pill tabs)
     QVector<QPushButton*> detail_btns_;
 
     // Containers for show/hide
-    QWidget* actions_container_ = nullptr; // BUY/SELL/REFRESH/interval/exports/FFN
-    QWidget* details_container_ = nullptr; // 9 detail view buttons + AI/AGENT
-    QWidget* stats_container_ = nullptr;   // inline NAV/PNL/DAY/POS
+    QWidget* row1_ = nullptr;            // selector + stats + refresh/interval/overflow
+    QWidget* row2_ = nullptr;            // BUY/SELL/DIV | detail tabs | AI/AGENT
+    QWidget* stats_container_ = nullptr; // inline NAV/PNL/DAY/POS
+    QWidget* trade_cluster_ = nullptr;   // BUY/SELL/DIV
+    QWidget* tabs_container_ = nullptr;  // 9 detail view pills
+    QWidget* tools_cluster_ = nullptr;   // AI/AGENT
 
     // State
     QVector<portfolio::Portfolio> portfolios_;

@@ -8,6 +8,7 @@
 #include "mcp/tools/AiChatTools.h"
 #include "mcp/tools/AltInvestmentsTools.h"
 #include "mcp/tools/CryptoTradingTools.h"
+#include "mcp/tools/DataHubTools.h"
 #include "mcp/tools/DataSourcesTools.h"
 #include "mcp/tools/EdgarTools.h"
 #include "mcp/tools/FileManagerTools.h"
@@ -84,6 +85,9 @@ void initialize_all_tools() {
     provider.register_tools(tools::get_settings_tools());
     provider.register_tools(tools::get_python_tools());
     provider.register_tools(tools::get_system_tools());
+
+    // datahub introspection (Phase 9)
+    provider.register_tools(tools::get_datahub_tools());
 
     LOG_INFO(TAG, QString("Registered %1 internal MCP tools").arg(provider.tool_count()));
 

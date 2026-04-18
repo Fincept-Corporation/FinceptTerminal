@@ -2,7 +2,7 @@
 #include "screens/portfolio/PortfolioFFNView.h"
 
 #include "core/logging/Logger.h"
-#include "python/PythonRunner.h"
+#include "services/portfolio/PortfolioAnalyticsService.h"
 #include "ui/theme/Theme.h"
 
 #include <QAreaSeries>
@@ -11,8 +11,6 @@
 #include <QDateTimeAxis>
 #include <QHBoxLayout>
 #include <QHeaderView>
-#include <QJsonArray>
-#include <QJsonDocument>
 #include <QJsonObject>
 #include <QLineSeries>
 #include <QStackedWidget>
@@ -22,8 +20,8 @@
 #include <algorithm>
 #include <cmath>
 
-using fincept::python::PythonResult;
-using fincept::python::PythonRunner;
+using fincept::services::AnalyticsResult;
+using fincept::services::PortfolioAnalyticsService;
 
 namespace fincept::screens {
 
@@ -863,39 +861,27 @@ void PortfolioFFNView::run_ffn() {
         weights_obj[h.symbol] = h.weight / 100.0;
     }
 
-    QJsonObject args;
-    args["symbols"] = QJsonArray::fromStringList(symbols);
-    args["weights"] = weights_obj;
-    QString args_str = QJsonDocument(args).toJson(QJsonDocument::Compact);
-
     QPointer<PortfolioFFNView> self = this;
-    PythonRunner::instance().run("ffn_analysis", {args_str}, [self](PythonResult result) {
+    PortfolioAnalyticsService::instance().run_ffn(
+        symbols, weights_obj, [self](const AnalyticsResult& r) {
         if (!self)
             return;
         QMetaObject::invokeMethod(
             self,
-            [self, result]() {
+            [self, r]() {
                 if (!self)
                     return;
 
                 self->run_btn_->setEnabled(true);
 
-                if (!result.success || result.output.trimmed().isEmpty()) {
+                if (!r.success) {
                     self->status_label_->setText("FFN failed — check Python/yfinance");
                     self->status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
-                    LOG_ERROR("FFNView", "FFN script failed: " + result.error.left(300));
+                    LOG_ERROR("FFNView", "FFN script failed: " + r.error.left(300));
                     return;
                 }
 
-                auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8());
-                if (!doc.isObject()) {
-                    self->status_label_->setText("FFN returned invalid JSON");
-                    self->status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
-                    LOG_ERROR("FFNView", "FFN JSON parse failed");
-                    return;
-                }
-
-                self->ffn_data_ = doc.object();
+                self->ffn_data_ = r.data;
 
                 // Count only per-symbol keys (exclude the section keys)
                 static const QStringList k_section_keys = {"rebased", "drawdown_series", "rolling_corr", "optimization",

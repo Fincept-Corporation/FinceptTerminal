@@ -1,6 +1,8 @@
 #include "screens/report_builder/ReportBuilderScreen.h"
 
 #include "core/session/ScreenStateManager.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "services/file_manager/FileManagerService.h"
 #include "services/markets/MarketDataService.h"
 #include "ui/theme/Theme.h"
@@ -338,94 +340,127 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
                 return;
             }
 
-            // ── chart: fetch real price history via get_historical_period ──
+            // ── chart: hub-driven 6mo/1d history fetch ─────────────────────
             if (components_[idx].type == "chart" && key == "fetch_history") {
                 QString sym = val;
                 components_[idx].config["fetch_history"] = "";
                 components_[idx].config["data"] = ""; // clear stale data
                 refresh_canvas();
+
+                // Use 6-month daily history by default. Topic format:
+                //   market:history:<sym>:<period>:<interval>
+                const QString topic =
+                    QStringLiteral("market:history:") + sym + QStringLiteral(":6mo:1d");
+                auto& hub = fincept::datahub::DataHub::instance();
+
+                // Rendering helper — writes the chart data into components_[idx]
+                // from a HistoryPoint vector.
                 QPointer<ReportBuilderScreen> self = this;
-                // Use 6-month daily history by default
-                fincept::services::MarketDataService::instance().fetch_history(
-                    sym, "6mo", "1d", [self, idx, sym](bool ok, QVector<fincept::services::HistoryPoint> history) {
+                auto apply = [self, idx, sym](const QVector<fincept::services::HistoryPoint>& history) {
+                    if (!self || idx >= self->components_.size())
+                        return;
+                    if (history.isEmpty()) {
+                        self->components_[idx].config["data"] = "";
+                        self->refresh_canvas();
+                        return;
+                    }
+                    QStringList pts, lbls;
+                    int step = qMax(1, history.size() / 20); // max ~20 points
+                    for (int i = 0; i < history.size(); i += step) {
+                        const auto& pt = history[i];
+                        pts << QString::number(pt.close, 'f', 2);
+                        QDateTime dt = QDateTime::fromSecsSinceEpoch(pt.timestamp);
+                        lbls << dt.toString("MMM d");
+                    }
+                    if ((history.size() - 1) % step != 0) {
+                        pts << QString::number(history.last().close, 'f', 2);
+                        lbls << QDateTime::fromSecsSinceEpoch(history.last().timestamp)
+                                    .toString("MMM d");
+                    }
+                    self->components_[idx].config["data"] = pts.join(",");
+                    self->components_[idx].config["labels"] = lbls.join(",");
+                    if (self->components_[idx].config.value("title").isEmpty() ||
+                        self->components_[idx].config.value("title") == "Chart")
+                        self->components_[idx].config["title"] = sym + " (6mo)";
+                    self->refresh_canvas();
+                    if (self->selected_ == idx)
+                        self->properties_->show_properties(&self->components_[idx], idx);
+                };
+
+                // Cached snapshot first (instant render if data is fresh on the hub).
+                QVariant cached = hub.peek(topic);
+                if (cached.isValid() && cached.canConvert<QVector<fincept::services::HistoryPoint>>()) {
+                    apply(cached.value<QVector<fincept::services::HistoryPoint>>());
+                    return;
+                }
+
+                // Otherwise: subscribe-once, force-kick the producer. The first
+                // delivery renders then tears down the subscription so the
+                // report-builder doesn't keep receiving updates it doesn't want.
+                hub.subscribe<QVector<fincept::services::HistoryPoint>>(
+                    this, topic,
+                    [self, topic, apply](const QVector<fincept::services::HistoryPoint>& history) {
                         if (!self)
                             return;
-                        QMetaObject::invokeMethod(
-                            self,
-                            [self, idx, sym, ok, history]() {
-                                if (!self || idx >= self->components_.size())
-                                    return;
-                                if (!ok || history.isEmpty()) {
-                                    self->components_[idx].config["data"] = "";
-                                    self->refresh_canvas();
-                                    return;
-                                }
-                                // Build CSV of close prices and date labels (every ~4th point)
-                                QStringList pts, lbls;
-                                int step = qMax(1, history.size() / 20); // max ~20 points
-                                for (int i = 0; i < history.size(); i += step) {
-                                    const auto& pt = history[i];
-                                    pts << QString::number(pt.close, 'f', 2);
-                                    QDateTime dt = QDateTime::fromSecsSinceEpoch(pt.timestamp);
-                                    lbls << dt.toString("MMM d");
-                                }
-                                // Always include last point
-                                if ((history.size() - 1) % step != 0) {
-                                    pts << QString::number(history.last().close, 'f', 2);
-                                    lbls << QDateTime::fromSecsSinceEpoch(history.last().timestamp).toString("MMM d");
-                                }
-                                self->components_[idx].config["data"] = pts.join(",");
-                                self->components_[idx].config["labels"] = lbls.join(",");
-                                if (self->components_[idx].config.value("title").isEmpty() ||
-                                    self->components_[idx].config.value("title") == "Chart")
-                                    self->components_[idx].config["title"] = sym + " (6mo)";
-                                self->components_[idx].config["fetch_history"] = "";
-                                self->refresh_canvas();
-                                if (self->selected_ == idx)
-                                    self->properties_->show_properties(&self->components_[idx], idx);
-                            },
-                            Qt::QueuedConnection);
+                        apply(history);
+                        fincept::datahub::DataHub::instance().unsubscribe(self, topic);
                     });
+                hub.request(topic, /*force=*/true);
                 return;
             }
 
-            // For market_data "status=loading", trigger a live fetch
+            // For market_data "status=loading", trigger a hub-driven quote fetch.
             if (components_[idx].type == "market_data" && key == "status" && val == "loading") {
                 QString sym = components_[idx].config.value("symbol", "");
-                if (!sym.isEmpty()) {
-                    components_[idx].config["status"] = "loading";
-                    refresh_canvas();
-                    QPointer<ReportBuilderScreen> self = this;
-                    fincept::services::MarketDataService::instance().fetch_quotes(
-                        {sym}, [self, idx](bool ok, QVector<fincept::services::QuoteData> quotes) {
-                            if (!self || !ok || quotes.isEmpty())
-                                return;
-                            QMetaObject::invokeMethod(
-                                self,
-                                [self, idx, quotes]() {
-                                    if (!self || idx >= self->components_.size())
-                                        return;
-                                    const auto& q = quotes.first();
-                                    self->components_[idx].config["price"] = QString::number(q.price, 'f', 2);
-                                    self->components_[idx].config["change"] = QString::number(q.change, 'f', 2);
-                                    self->components_[idx].config["change_pct"] = QString::number(q.change_pct, 'f', 2);
-                                    self->components_[idx].config["name"] = q.name;
-                                    self->components_[idx].config["high"] =
-                                        q.high > 0 ? QString::number(q.high, 'f', 2) : "";
-                                    self->components_[idx].config["low"] =
-                                        q.low > 0 ? QString::number(q.low, 'f', 2) : "";
-                                    self->components_[idx].config["volume"] =
-                                        q.volume > 0 ? QString::number(q.volume, 'f', 0) : "";
-                                    self->components_[idx].config["status"] = "ok";
-                                    self->refresh_canvas();
-                                    // Re-show properties with updated data
-                                    if (self->selected_ == idx) {
-                                        self->properties_->show_properties(&self->components_[idx], idx);
-                                    }
-                                },
-                                Qt::QueuedConnection);
-                        });
+                if (sym.isEmpty()) {
+                    return; // don't push undo for status change
                 }
+                components_[idx].config["status"] = "loading";
+                refresh_canvas();
+
+                const QString topic = QStringLiteral("market:quote:") + sym;
+                auto& hub = fincept::datahub::DataHub::instance();
+                QPointer<ReportBuilderScreen> self = this;
+
+                auto apply = [self, idx](const fincept::services::QuoteData& q) {
+                    if (!self || idx >= self->components_.size())
+                        return;
+                    self->components_[idx].config["price"] = QString::number(q.price, 'f', 2);
+                    self->components_[idx].config["change"] = QString::number(q.change, 'f', 2);
+                    self->components_[idx].config["change_pct"] =
+                        QString::number(q.change_pct, 'f', 2);
+                    self->components_[idx].config["name"] = q.name;
+                    self->components_[idx].config["high"] =
+                        q.high > 0 ? QString::number(q.high, 'f', 2) : "";
+                    self->components_[idx].config["low"] =
+                        q.low > 0 ? QString::number(q.low, 'f', 2) : "";
+                    self->components_[idx].config["volume"] =
+                        q.volume > 0 ? QString::number(q.volume, 'f', 0) : "";
+                    self->components_[idx].config["status"] = "ok";
+                    self->refresh_canvas();
+                    if (self->selected_ == idx) {
+                        self->properties_->show_properties(&self->components_[idx], idx);
+                    }
+                };
+
+                // Fast path: render from cached quote if fresh on the hub.
+                QVariant cached = hub.peek(topic);
+                if (cached.isValid() && cached.canConvert<fincept::services::QuoteData>()) {
+                    apply(cached.value<fincept::services::QuoteData>());
+                    return; // don't push undo for status change
+                }
+
+                // Otherwise: subscribe-once then tear down — this is a
+                // one-shot user refresh, not a live ticker.
+                hub.subscribe<fincept::services::QuoteData>(
+                    this, topic,
+                    [self, topic, apply](const fincept::services::QuoteData& q) {
+                        if (!self)
+                            return;
+                        apply(q);
+                        fincept::datahub::DataHub::instance().unsubscribe(self, topic);
+                    });
+                hub.request(topic, /*force=*/true);
                 return; // don't push undo for status change
             }
 

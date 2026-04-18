@@ -3,6 +3,9 @@
 #include "storage/repositories/PortfolioHoldingsRepository.h"
 #include "ui/theme/Theme.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QScrollArea>
@@ -81,7 +84,19 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
 
     apply_styles();
     set_loading(true);
-    load_holdings();
+
+}
+
+void PortfolioSummaryWidget::showEvent(QShowEvent* e) {
+    BaseWidget::showEvent(e);
+    if (!hub_active_)
+        load_holdings();
+}
+
+void PortfolioSummaryWidget::hideEvent(QHideEvent* e) {
+    BaseWidget::hideEvent(e);
+    if (hub_active_)
+        hub_unsubscribe_all();
 }
 
 void PortfolioSummaryWidget::apply_styles() {
@@ -135,18 +150,48 @@ void PortfolioSummaryWidget::load_holdings() {
 }
 
 void PortfolioSummaryWidget::fetch_prices(const QVector<Holding>& holdings) {
-    QStringList symbols;
-    for (const auto& h : holdings)
-        symbols << h.symbol;
-
-    services::MarketDataService::instance().fetch_quotes(
-        symbols, [this, holdings](bool ok, QVector<services::QuoteData> quotes) {
-            set_loading(false);
-            if (!ok || quotes.isEmpty())
-                return;
-            render(holdings, quotes);
-        });
+    last_holdings_ = holdings;
+    hub_resubscribe(holdings);
 }
+
+
+void PortfolioSummaryWidget::hub_resubscribe(const QVector<Holding>& holdings) {
+    auto& hub = datahub::DataHub::instance();
+    // Holdings set may have changed since last subscribe — wipe all and
+    // re-register so we don't leave stale topic subs behind.
+    hub.unsubscribe(this);
+    row_cache_.clear();
+    for (const auto& h : holdings) {
+        const QString sym = h.symbol;
+        const QString topic = QStringLiteral("market:quote:") + sym;
+        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+            if (!v.canConvert<services::QuoteData>())
+                return;
+            row_cache_.insert(sym, v.value<services::QuoteData>());
+            set_loading(false);
+            rebuild_from_cache();
+        });
+    }
+    hub_active_ = true;
+}
+
+void PortfolioSummaryWidget::hub_unsubscribe_all() {
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+}
+
+void PortfolioSummaryWidget::rebuild_from_cache() {
+    QVector<services::QuoteData> quotes;
+    quotes.reserve(row_cache_.size());
+    for (const auto& h : last_holdings_) {
+        auto it = row_cache_.constFind(h.symbol);
+        if (it != row_cache_.constEnd())
+            quotes.append(it.value());
+    }
+    if (!quotes.isEmpty())
+        render(last_holdings_, quotes);
+}
+
 
 void PortfolioSummaryWidget::render(const QVector<Holding>& holdings, const QVector<services::QuoteData>& quotes) {
     last_holdings_ = holdings;

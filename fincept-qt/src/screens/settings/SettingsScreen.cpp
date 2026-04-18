@@ -7,10 +7,12 @@
 #include "auth/InactivityGuard.h"
 #include "auth/PinManager.h"
 #include "core/config/AppConfig.h"
+#include "core/config/AppPaths.h"
 #include "core/config/ProfileManager.h"
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "screens/devtools/DataHubInspector.h"
 #include "screens/settings/KeybindingsSection.h"
 #include "screens/settings/LlmConfigSection.h"
 #include "screens/settings/McpServersSection.h"
@@ -26,9 +28,13 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QApplication>
 #include <QCheckBox>
+#include <QClipboard>
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QDesktopServices>
+#include <QDir>
 #include <QFontDatabase>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -44,6 +50,7 @@
 #include <QSqlQuery>
 #include <QSqlRecord>
 #include <QTimer>
+#include <QUrl>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -162,6 +169,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     sections_->addWidget(build_profiles());      // 9
     sections_->addWidget(build_keybindings());   // 10
     sections_->addWidget(build_python_env());    // 11
+    sections_->addWidget(build_developer());     // 12
 
     QList<QPushButton*> nav_btns;
     auto make_btn = [&](const QString& text, int idx) {
@@ -197,6 +205,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     make_btn("Profiles", 9);
     make_btn("Keybindings", 10);
     make_btn("Python Env", 11);
+    make_btn("Developer", 12);
 
     first->setChecked(true);
 
@@ -2294,12 +2303,12 @@ QWidget* SettingsScreen::build_mcp_servers() {
 // ── Logging ───────────────────────────────────────────────────────────────────
 
 QWidget* SettingsScreen::build_logging() {
-    static const QStringList LEVEL_NAMES = {"Debug", "Info", "Warn", "Error"};
+    // Full level range — matches LogLevel enum in core/logging/Logger.h.
+    static const QStringList LEVEL_NAMES = {"Trace", "Debug", "Info", "Warn", "Error", "Fatal"};
 
     auto level_to_idx = [](const QString& s) -> int {
-        const QStringList names = {"Debug", "Info", "Warn", "Error"};
-        int i = names.indexOf(s);
-        return i >= 0 ? i : 1; // default Info
+        int i = LEVEL_NAMES.indexOf(s);
+        return i >= 0 ? i : LEVEL_NAMES.indexOf("Info"); // default Info
     };
 
     auto* scroll = new QScrollArea;
@@ -2336,6 +2345,62 @@ QWidget* SettingsScreen::build_logging() {
     log_global_level_->setCurrentIndex(level_to_idx(saved_global));
 
     vl->addWidget(log_global_level_);
+    vl->addWidget(make_sep());
+
+    // ── Output format ────────────────────────────────────────────────────────
+    auto* fmt_title = new QLabel("Output Format");
+    fmt_title->setStyleSheet(sub_title_ss());
+    vl->addWidget(fmt_title);
+
+    auto* fmt_desc = new QLabel(
+        "Plain text is human-readable; JSON emits one structured object per line (easier to parse with tooling).");
+    fmt_desc->setStyleSheet(label_ss());
+    fmt_desc->setWordWrap(true);
+    vl->addWidget(fmt_desc);
+
+    log_json_mode_ = new QCheckBox("Emit structured JSON lines");
+    log_json_mode_->setChecked(AppConfig::instance().get("log/json_mode", false).toBool());
+    vl->addWidget(log_json_mode_);
+    vl->addWidget(make_sep());
+
+    // ── Log file location ────────────────────────────────────────────────────
+    auto* path_title = new QLabel("Log File");
+    path_title->setStyleSheet(sub_title_ss());
+    vl->addWidget(path_title);
+
+    const QString log_path = AppPaths::logs() + "/fincept.log";
+    log_path_label_ = new QLabel(QDir::toNativeSeparators(log_path));
+    log_path_label_->setStyleSheet(label_ss());
+    log_path_label_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    log_path_label_->setWordWrap(true);
+    vl->addWidget(log_path_label_);
+
+    auto* path_row = new QWidget(this);
+    auto* path_rl = new QHBoxLayout(path_row);
+    path_rl->setContentsMargins(0, 0, 0, 0);
+    path_rl->setSpacing(8);
+
+    auto* open_folder_btn = new QPushButton("Open Log Folder");
+    open_folder_btn->setStyleSheet(btn_secondary_ss());
+    open_folder_btn->setFixedHeight(30);
+    open_folder_btn->setFixedWidth(160);
+    connect(open_folder_btn, &QPushButton::clicked, this, []() {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(AppPaths::logs()));
+    });
+
+    auto* copy_path_btn = new QPushButton("Copy Path");
+    copy_path_btn->setStyleSheet(btn_secondary_ss());
+    copy_path_btn->setFixedHeight(30);
+    copy_path_btn->setFixedWidth(120);
+    connect(copy_path_btn, &QPushButton::clicked, this, [this]() {
+        if (log_path_label_)
+            QApplication::clipboard()->setText(log_path_label_->text());
+    });
+
+    path_rl->addWidget(open_folder_btn);
+    path_rl->addWidget(copy_path_btn);
+    path_rl->addStretch();
+    vl->addWidget(path_row);
     vl->addWidget(make_sep());
 
     // ── Per-tag overrides ────────────────────────────────────────────────────
@@ -2417,9 +2482,15 @@ QWidget* SettingsScreen::build_logging() {
         // Save + apply global level
         const QString gl = log_global_level_->currentText();
         cfg.set("log/global_level", gl);
-        const QHash<QString, LogLevel> lvl_map = {
-            {"Debug", LogLevel::Debug}, {"Info", LogLevel::Info}, {"Warn", LogLevel::Warn}, {"Error", LogLevel::Error}};
+        const QHash<QString, LogLevel> lvl_map = {{"Trace", LogLevel::Trace}, {"Debug", LogLevel::Debug},
+                                                  {"Info", LogLevel::Info},   {"Warn", LogLevel::Warn},
+                                                  {"Error", LogLevel::Error}, {"Fatal", LogLevel::Fatal}};
         log.set_level(lvl_map.value(gl, LogLevel::Info));
+
+        // Save + apply JSON output mode
+        const bool json_on = log_json_mode_ && log_json_mode_->isChecked();
+        cfg.set("log/json_mode", json_on);
+        log.set_json_mode(json_on);
 
         // Save + apply per-tag overrides
         log.clear_all_tag_levels();
@@ -2869,6 +2940,31 @@ QWidget* SettingsScreen::build_keybindings() {
 
 QWidget* SettingsScreen::build_python_env() {
     return new PythonEnvSection(this);
+}
+
+// ── Developer ─────────────────────────────────────────────────────────────────
+
+QWidget* SettingsScreen::build_developer() {
+    auto* page = new QWidget(this);
+    auto* vl = new QVBoxLayout(page);
+    vl->setContentsMargins(16, 16, 16, 16);
+    vl->setSpacing(12);
+
+    auto* title = new QLabel("DataHub Inspector");
+    title->setStyleSheet(section_title_ss());
+    vl->addWidget(title);
+
+    auto* desc = new QLabel(
+        "Live view over the in-process pub/sub layer. Shows every active topic, its "
+        "subscriber count, total publishes, and time since last publish. Refreshes "
+        "once per second while this tab is visible.");
+    desc->setWordWrap(true);
+    desc->setStyleSheet(QString("color:%1;font-size:11px;")
+                            .arg(ui::colors::TEXT_SECONDARY()));
+    vl->addWidget(desc);
+
+    vl->addWidget(new devtools::DataHubInspector(page), 1);
+    return page;
 }
 
 } // namespace fincept::screens

@@ -9,6 +9,8 @@
 #include <QTimer>
 #include <QVector>
 
+#    include "datahub/Producer.h"
+
 class QWebSocket;
 
 #include <atomic>
@@ -110,7 +112,13 @@ struct HeadlineSummary {
 
 // ── Service ─────────────────────────────────────────────────────────────────
 
-class NewsService : public QObject {
+/// Phase 5 — DataHub producer for `news:general`, `news:symbol:*`,
+/// `news:category:*`, `news:cluster:*`. Existing `articles_updated`
+/// / `articles_partial` Qt signals remain live in parallel with hub
+/// publishes so consumers can migrate incrementally.
+class NewsService : public QObject
+    , public fincept::datahub::Producer
+{
     Q_OBJECT
   public:
     using ArticlesCallback = std::function<void(bool ok, QVector<NewsArticle>)>;
@@ -118,6 +126,18 @@ class NewsService : public QObject {
     using SummaryCallback = std::function<void(bool ok, QString summary)>;
 
     static NewsService& instance();
+
+    /// Register with the hub + install news:* policies. Idempotent.
+    /// Called from main.cpp after `datahub::register_metatypes()`.
+    void ensure_registered_with_hub();
+
+    // ── fincept::datahub::Producer ────────────────────────────────────────
+    QStringList topic_patterns() const override;
+    /// Refresh splits by prefix: `news:general` → fetch_all_news(true);
+    /// `news:symbol:<sym>` / `news:category:<cat>` derive from the
+    /// general fetch + filter; `news:cluster:*` is push-only.
+    void refresh(const QStringList& topics) override;
+    int max_requests_per_sec() const override;  // RSS — cap at 2/s
 
     void fetch_all_news(bool force, ArticlesCallback cb);
     void analyze_article(const QString& url, AnalysisCallback cb);
@@ -172,6 +192,15 @@ class NewsService : public QObject {
     // WebSocket live feed
     QWebSocket* live_ws_ = nullptr;
     bool live_connected_ = false;
+
+    /// Publish `news:general` + fan out `news:symbol:<sym>` and
+    /// `news:category:<cat>` derived slices. Called from both the
+    /// progressive partial-snapshot path and the final fetch path —
+    /// subscribers see the same accumulated list each time, so the
+    /// progressive-publish pattern (see DATAHUB_ARCHITECTURE.md §11)
+    /// collapses to a series of full-list republishes.
+    void publish_articles_to_hub(const QVector<NewsArticle>& accumulated);
+    bool hub_registered_ = false;
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -191,3 +220,7 @@ Sentiment sentiment_from_string(const QString& s);
 Impact impact_from_string(const QString& s);
 
 } // namespace fincept::services
+
+#include <QMetaType>
+Q_DECLARE_METATYPE(fincept::services::NewsArticle)
+Q_DECLARE_METATYPE(QVector<fincept::services::NewsArticle>)

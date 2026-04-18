@@ -6,14 +6,24 @@
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointer>
 #include <QUrlQuery>
+#include <QVariant>
 
 namespace fincept::services::geo {
 
 static constexpr const char* kApiBase = "https://api.fincept.in/research/news-events";
+
+namespace {
+inline void publish_to_hub(const QString& topic, const QVariant& value) {
+    fincept::datahub::DataHub::instance().publish(topic, value);
+}
+}  // namespace
 
 // ── Singleton ────────────────────────────────────────────────────────────────
 GeopoliticsService& GeopoliticsService::instance() {
@@ -110,6 +120,8 @@ void GeopoliticsService::fetch_events(const QString& country, const QString& cit
                                               kEventsTtlSec, "geopolitics");
         LOG_INFO("Geopolitics", QString("Loaded %1 events").arg(events.size()));
         emit self->events_loaded(events, total);
+        if (self->hub_registered_)
+            publish_to_hub(QStringLiteral("geopolitics:events"), QVariant::fromValue(events));
     });
 }
 
@@ -158,6 +170,8 @@ void GeopoliticsService::fetch_unique_countries() {
                 QVariant(QString::fromUtf8(QJsonDocument(to_cache).toJson(QJsonDocument::Compact))), kRefDataTtlSec,
                 "geopolitics");
             emit self->countries_loaded(countries);
+            if (self->hub_registered_)
+                publish_to_hub(QStringLiteral("geopolitics:countries"), QVariant::fromValue(countries));
         });
 }
 
@@ -204,6 +218,8 @@ void GeopoliticsService::fetch_unique_categories() {
             QVariant(QString::fromUtf8(QJsonDocument(to_cache).toJson(QJsonDocument::Compact))), kRefDataTtlSec,
             "geopolitics");
         emit self->categories_loaded(cats);
+        if (self->hub_registered_)
+            publish_to_hub(QStringLiteral("geopolitics:categories"), QVariant::fromValue(cats));
     });
 }
 
@@ -226,6 +242,8 @@ void GeopoliticsService::fetch_unique_cities() {
                 cities.append(city);
         }
         emit self->cities_loaded(cities);
+        if (self->hub_registered_)
+            publish_to_hub(QStringLiteral("geopolitics:cities"), QVariant::fromValue(cities));
     });
 }
 
@@ -274,13 +292,17 @@ static QVector<HDXDataset> parse_hdx_results(const QString& output) {
     return datasets;
 }
 
+static inline void publish_hdx(GeopoliticsService* self, const QString& context, const QVector<HDXDataset>& datasets);
+
 void GeopoliticsService::search_hdx_conflicts() {
     run_python("hdx_data.py", {"search_conflict", "", "20"}, "hdx_conflicts", [this](bool ok, const QString& out) {
         if (!ok) {
             emit error_occurred("hdx_conflicts", out);
             return;
         }
-        emit hdx_results_loaded("conflicts", parse_hdx_results(out));
+        const auto datasets = parse_hdx_results(out);
+        emit hdx_results_loaded("conflicts", datasets);
+        publish_hdx_result(QStringLiteral("conflicts"), datasets);
     });
 }
 
@@ -291,39 +313,48 @@ void GeopoliticsService::search_hdx_humanitarian() {
                        emit error_occurred("hdx_humanitarian", out);
                        return;
                    }
-                   emit hdx_results_loaded("humanitarian", parse_hdx_results(out));
+                   const auto datasets = parse_hdx_results(out);
+                   emit hdx_results_loaded("humanitarian", datasets);
+                   publish_hdx_result(QStringLiteral("humanitarian"), datasets);
                });
 }
 
 void GeopoliticsService::search_hdx_by_country(const QString& country) {
-    run_python("hdx_data.py", {"search_by_country", country}, "hdx_country", [this](bool ok, const QString& out) {
+    run_python("hdx_data.py", {"search_by_country", country}, "hdx_country", [this, country](bool ok, const QString& out) {
         if (!ok) {
             emit error_occurred("hdx_country", out);
             return;
         }
-        emit hdx_results_loaded("country", parse_hdx_results(out));
+        const auto datasets = parse_hdx_results(out);
+        emit hdx_results_loaded("country", datasets);
+        publish_hdx_result(QStringLiteral("country:") + country, datasets);
     });
 }
 
 void GeopoliticsService::search_hdx_by_topic(const QString& topic) {
-    run_python("hdx_data.py", {"search_by_topic", topic}, "hdx_topic", [this](bool ok, const QString& out) {
+    run_python("hdx_data.py", {"search_by_topic", topic}, "hdx_topic", [this, topic](bool ok, const QString& out) {
         if (!ok) {
             emit error_occurred("hdx_topic", out);
             return;
         }
-        emit hdx_results_loaded("topic", parse_hdx_results(out));
+        const auto datasets = parse_hdx_results(out);
+        emit hdx_results_loaded("topic", datasets);
+        publish_hdx_result(QStringLiteral("topic:") + topic, datasets);
     });
 }
 
 void GeopoliticsService::search_hdx_advanced(const QString& query) {
     // Use search_datasets for free-text queries (advanced_search expects key:value pairs)
-    run_python("hdx_data.py", {"search_datasets", query, "20"}, "hdx_search", [this](bool ok, const QString& out) {
-        if (!ok) {
-            emit error_occurred("hdx_search", out);
-            return;
-        }
-        emit hdx_results_loaded("search", parse_hdx_results(out));
-    });
+    run_python("hdx_data.py", {"search_datasets", query, "20"}, "hdx_search",
+               [this, query](bool ok, const QString& out) {
+                   if (!ok) {
+                       emit error_occurred("hdx_search", out);
+                       return;
+                   }
+                   const auto datasets = parse_hdx_results(out);
+                   emit hdx_results_loaded("search", datasets);
+                   publish_hdx_result(QStringLiteral("search:") + query, datasets);
+               });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -339,7 +370,10 @@ void GeopoliticsService::analyze_trade_benefits(const QJsonObject& params) {
                        return;
                    }
                    auto doc = QJsonDocument::fromJson(python::extract_json(out).toUtf8());
-                   emit trade_result_ready("trade_benefits", doc.object());
+                   const auto obj = doc.object();
+                   emit trade_result_ready("trade_benefits", obj);
+                   if (hub_registered_)
+                       publish_to_hub(QStringLiteral("geopolitics:trade:benefits"), QVariant(obj));
                });
 }
 
@@ -352,7 +386,10 @@ void GeopoliticsService::analyze_trade_restrictions(const QJsonObject& params) {
                        return;
                    }
                    auto doc = QJsonDocument::fromJson(python::extract_json(out).toUtf8());
-                   emit trade_result_ready("trade_restrictions", doc.object());
+                   const auto obj = doc.object();
+                   emit trade_result_ready("trade_restrictions", obj);
+                   if (hub_registered_)
+                       publish_to_hub(QStringLiteral("geopolitics:trade:restrictions"), QVariant(obj));
                });
 }
 
@@ -369,8 +406,82 @@ void GeopoliticsService::extract_geolocations(const QStringList& headlines) {
                        return;
                    }
                    auto doc = QJsonDocument::fromJson(python::extract_json(out).toUtf8());
-                   emit geolocation_ready(doc.object());
+                   const auto obj = doc.object();
+                   emit geolocation_ready(obj);
+                   if (hub_registered_)
+                       publish_to_hub(QStringLiteral("geopolitics:geolocation"), QVariant(obj));
                });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DATAHUB PRODUCER — geopolitics:*
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void GeopoliticsService::publish_hdx_result(const QString& context, const QVector<HDXDataset>& datasets) {
+    if (!hub_registered_) return;
+    publish_to_hub(QStringLiteral("geopolitics:hdx:") + context, QVariant::fromValue(datasets));
+}
+
+QStringList GeopoliticsService::topic_patterns() const {
+    return {QStringLiteral("geopolitics:*")};
+}
+
+void GeopoliticsService::refresh(const QStringList& topics) {
+    // Hub-driven refresh for the lightweight reference endpoints. Anything
+    // parameterised (events:<filters>, hdx:*, trade:*, geolocation) is
+    // user-invoked and not driven through the hub scheduler.
+    for (const auto& topic : topics) {
+        if (topic == QStringLiteral("geopolitics:events")) {
+            fetch_events();
+        } else if (topic == QStringLiteral("geopolitics:countries")) {
+            fetch_unique_countries();
+        } else if (topic == QStringLiteral("geopolitics:categories")) {
+            fetch_unique_categories();
+        } else if (topic == QStringLiteral("geopolitics:cities")) {
+            fetch_unique_cities();
+        }
+    }
+}
+
+int GeopoliticsService::max_requests_per_sec() const {
+    return 2;  // Fincept research API + HDX Python — conservative
+}
+
+void GeopoliticsService::ensure_registered_with_hub() {
+    if (hub_registered_) return;
+    auto& hub = fincept::datahub::DataHub::instance();
+    hub.register_producer(this);
+
+    // Events — 2 min TTL (matches kEventsTtlSec), 30s min_interval.
+    fincept::datahub::TopicPolicy events_policy;
+    events_policy.ttl_ms = kEventsTtlSec * 1000;
+    events_policy.min_interval_ms = 30 * 1000;
+    hub.set_policy_pattern(QStringLiteral("geopolitics:events"), events_policy);
+
+    // Reference data (countries/categories/cities) — 10 min TTL.
+    fincept::datahub::TopicPolicy ref_policy;
+    ref_policy.ttl_ms = kRefDataTtlSec * 1000;
+    ref_policy.min_interval_ms = 60 * 1000;
+    hub.set_policy_pattern(QStringLiteral("geopolitics:countries"), ref_policy);
+    hub.set_policy_pattern(QStringLiteral("geopolitics:categories"), ref_policy);
+    hub.set_policy_pattern(QStringLiteral("geopolitics:cities"), ref_policy);
+
+    // HDX datasets — 1 hour TTL (humanitarian data refresh cadence).
+    fincept::datahub::TopicPolicy hdx_policy;
+    hdx_policy.ttl_ms = 60 * 60 * 1000;
+    hdx_policy.min_interval_ms = 60 * 1000;
+    hub.set_policy_pattern(QStringLiteral("geopolitics:hdx:*"), hdx_policy);
+
+    // Trade analysis + geolocation — user-invoked, treat as push-only so the
+    // hub caches the most recent result without scheduling a refresh.
+    fincept::datahub::TopicPolicy push_policy;
+    push_policy.push_only = true;
+    push_policy.ttl_ms = 15 * 60 * 1000;
+    hub.set_policy_pattern(QStringLiteral("geopolitics:trade:*"), push_policy);
+    hub.set_policy_pattern(QStringLiteral("geopolitics:geolocation"), push_policy);
+
+    hub_registered_ = true;
+    LOG_INFO("GeopoliticsService", "Registered with DataHub (geopolitics:*)");
 }
 
 } // namespace fincept::services::geo

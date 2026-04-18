@@ -1,4 +1,5 @@
 #pragma once
+#include <QJsonObject>
 #include <QMap>
 #include <QString>
 #include <QVector>
@@ -11,7 +12,9 @@ class BaseWidget;
 
 namespace fincept::screens {
 
-using WidgetFactory = std::function<widgets::BaseWidget*()>;
+/// Factory receives the tile's persisted config (empty object for fresh widgets).
+/// Widgets that don't need per-instance config can ignore it.
+using WidgetFactory = std::function<widgets::BaseWidget*(const QJsonObject&)>;
 
 struct WidgetMeta {
     QString type_id;

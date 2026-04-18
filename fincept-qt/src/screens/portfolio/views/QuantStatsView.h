@@ -20,7 +20,7 @@ namespace fincept::screens {
 
 /// QuantStats analytics view — 5 tabs: METRICS, RETURNS, DRAWDOWN, ROLLING, MONTE CARLO.
 /// Calls quantstats_analysis.py automatically on set_data(), and quantstats_monte_carlo.py
-/// on user request. All Python calls are async via PythonRunner (P8 compliant).
+/// on user request. All Python calls go through PortfolioAnalyticsService (D1/P6/P8).
 class QuantStatsView : public QWidget {
     Q_OBJECT
   public:

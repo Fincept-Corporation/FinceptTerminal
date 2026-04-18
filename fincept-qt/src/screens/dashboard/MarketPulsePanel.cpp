@@ -4,6 +4,10 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+#    include <QSet>
+
 #include <QDateTime>
 #include <QFrame>
 #include <QPalette>
@@ -117,9 +121,6 @@ MarketPulsePanel::MarketPulsePanel(QWidget* parent) : QWidget(parent) {
     vl->addWidget(scroll_area_, 1);
 
     // ── Timers ──
-    refresh_timer_ = new QTimer(this);
-    refresh_timer_->setInterval(600000); // 10 min
-    connect(refresh_timer_, &QTimer::timeout, this, &MarketPulsePanel::refresh_data);
 
     hours_timer_ = new QTimer(this);
     hours_timer_->setInterval(60000); // 1 min — market open/close status
@@ -277,22 +278,25 @@ void MarketPulsePanel::refresh_theme() {
 
     // Mover rows (gainers/losers) are fully rebuilt by refresh_data().
     // Trigger a refresh so they pick up new theme colors.
-    if (isVisible())
-        refresh_data();
+    if (isVisible()) {
+        rebuild_breadth_from_cache();
+        rebuild_movers_from_cache();
+        rebuild_snapshot_from_cache();
+    }
 }
 
 void MarketPulsePanel::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     refresh_theme();
-    refresh_data();
+    if (!hub_active_)
+        hub_subscribe_all();
     refresh_market_hours();
-    refresh_timer_->start();
     hours_timer_->start();
 }
 
 void MarketPulsePanel::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
-    refresh_timer_->stop();
+    hub_unsubscribe_all();
     hours_timer_->stop();
 }
 
@@ -741,220 +745,254 @@ void MarketPulsePanel::refresh_market_hours() {
     }
 }
 
-void MarketPulsePanel::refresh_data() {
-    // ── 1. Breadth + Fear/Greed basket ────────────────────────────────────────
-    QPointer<MarketPulsePanel> self = this;
-    services::MarketDataService::instance().fetch_quotes(kBreadthSymbols, [self](bool ok,
-                                                                                 QVector<services::QuoteData> quotes) {
-        if (!self || !ok || quotes.isEmpty())
-            return;
 
-        // Classify stocks
-        // We'll partition the basket into 3 groups mirroring real exchange composition:
-        // NYSE-heavy = financials/energy/consumer/industrials (last 20 in kBreadthSymbols)
-        // NASDAQ-heavy = tech (middle 10)
-        // S&P 500 proxy = first 10 large-caps
-        int sp500_adv = 0, sp500_dec = 0;
-        int nasdaq_adv = 0, nasdaq_dec = 0;
-        int nyse_adv = 0, nyse_dec = 0;
+void MarketPulsePanel::rebuild_breadth_from_cache() {
+    if (breadth_cache_.isEmpty())
+        return;
 
-        double vix = -1;
-        int bullish = 0, bearish = 0, neutral_count = 0;
+    // Classify basket into 3 groups mirroring real exchange composition.
+    int sp500_adv = 0, sp500_dec = 0;
+    int nasdaq_adv = 0, nasdaq_dec = 0;
+    int nyse_adv = 0, nyse_dec = 0;
+    double vix = -1;
+    int bullish = 0, bearish = 0, neutral_count = 0;
 
-        for (const auto& q : quotes) {
-            if (q.symbol == "^VIX") {
-                vix = q.price;
-                continue;
-            }
+    const QStringList sp500_set = {"AAPL",  "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA",
+                                   "BRK-B", "JPM",  "UNH",   "V",    "XOM",  "LLY",  "JNJ",
+                                   "WMT",   "MA",   "PG",    "HD",   "CVX",  "MRK"};
+    const QStringList nasdaq_set = {"NFLX", "AMD",  "INTC", "QCOM", "ADBE",
+                                    "CSCO", "ORCL", "CRM",  "AVGO", "TXN"};
 
-            // S&P 500 proxy: AAPL..MRK (indices 1-10 in kBreadthSymbols, 0=^VIX)
-            const QStringList sp500_set = {"AAPL",  "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA",
-                                           "BRK-B", "JPM",  "UNH",   "V",    "XOM",  "LLY",  "JNJ",
-                                           "WMT",   "MA",   "PG",    "HD",   "CVX",  "MRK"};
-            const QStringList nasdaq_set = {"NFLX", "AMD",  "INTC", "QCOM", "ADBE",
-                                            "CSCO", "ORCL", "CRM",  "AVGO", "TXN"};
-
-            bool in_sp = sp500_set.contains(q.symbol);
-            bool in_nq = nasdaq_set.contains(q.symbol);
-            // rest is NYSE proxy
-
-            if (q.change_pct > 0.3) {
-                if (in_sp)
-                    ++sp500_adv;
-                else if (in_nq)
-                    ++nasdaq_adv;
-                else
-                    ++nyse_adv;
-                ++bullish;
-            } else if (q.change_pct < -0.3) {
-                if (in_sp)
-                    ++sp500_dec;
-                else if (in_nq)
-                    ++nasdaq_dec;
-                else
-                    ++nyse_dec;
-                ++bearish;
-            } else {
-                ++neutral_count;
-            }
+    for (const auto& sym : kBreadthSymbols) {
+        if (!breadth_cache_.contains(sym))
+            continue;
+        const auto& q = breadth_cache_.value(sym);
+        if (q.symbol == "^VIX") {
+            vix = q.price;
+            continue;
         }
-
-        // ── Update breadth bars ──
-        auto update_row = [](MarketPulsePanel::BreadthRow& row, int adv, int dec) {
-            if (!row.adv)
-                return;
-            row.adv->setText(QString::number(adv));
-            row.dec->setText(QString::number(dec));
-            int total = adv + dec;
-            if (total == 0)
-                total = 1;
-            int adv_pct = static_cast<int>((double(adv) / total) * 100);
-            auto* layout = qobject_cast<QHBoxLayout*>(row.green->parentWidget()->layout());
-            if (layout) {
-                layout->setStretch(0, adv_pct);
-                layout->setStretch(1, 100 - adv_pct);
-            }
-        };
-
-        update_row(self->nyse_row_, nyse_adv, nyse_dec);
-        update_row(self->nasdaq_row_, nasdaq_adv, nasdaq_dec);
-        update_row(self->sp500_row_, sp500_adv, sp500_dec);
-
-        // ── Fear & Greed score (0-100 scale) ──
-        int total_stocks = bullish + bearish + neutral_count;
-        if (total_stocks == 0)
-            total_stocks = 1;
-        // Start at 50 (neutral), scale by breadth
-        int score = 50 + static_cast<int>(((bullish - bearish) / static_cast<double>(total_stocks)) * 50);
-
-        if (vix > 0) {
-            if (vix > 30)
-                score -= 20;
-            else if (vix > 25)
-                score -= 10;
-            else if (vix < 15)
-                score += 10;
-        }
-        score = qBound(0, score, 100);
-
-        QString sentiment_text, sentiment_color;
-        if (score <= 20) {
-            sentiment_text = "EXTREME FEAR";
-            sentiment_color = ui::colors::NEGATIVE();
-        } else if (score <= 40) {
-            sentiment_text = "FEAR";
-            sentiment_color = ui::colors::WARNING();
-        } else if (score <= 60) {
-            sentiment_text = "NEUTRAL";
-            sentiment_color = ui::colors::WARNING();
-        } else if (score <= 80) {
-            sentiment_text = "GREED";
-            sentiment_color = ui::colors::POSITIVE();
+        bool in_sp = sp500_set.contains(q.symbol);
+        bool in_nq = nasdaq_set.contains(q.symbol);
+        if (q.change_pct > 0.3) {
+            if (in_sp)
+                ++sp500_adv;
+            else if (in_nq)
+                ++nasdaq_adv;
+            else
+                ++nyse_adv;
+            ++bullish;
+        } else if (q.change_pct < -0.3) {
+            if (in_sp)
+                ++sp500_dec;
+            else if (in_nq)
+                ++nasdaq_dec;
+            else
+                ++nyse_dec;
+            ++bearish;
         } else {
-            sentiment_text = "EXTREME GREED";
-            sentiment_color = ui::colors::POSITIVE();
+            ++neutral_count;
         }
+    }
 
-        if (self->fg_score_val_) {
-            self->fg_score_val_->setText(QString::number(score));
-            self->fg_score_val_->setStyleSheet(
-                QString("color: %1; font-size: 18px; font-weight: bold; background: transparent;")
-                    .arg(sentiment_color));
-        }
-        if (self->fg_sentiment_) {
-            self->fg_sentiment_->setText(sentiment_text);
-            self->fg_sentiment_->setStyleSheet(
-                QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
-                    .arg(sentiment_color));
-        }
-    });
-
-    // ── 2. Top Movers ─────────────────────────────────────────────────────────
-    services::MarketDataService::instance().fetch_quotes(kMoverSymbols, [self](bool ok,
-                                                                               QVector<services::QuoteData> quotes) {
-        if (!self || !ok || quotes.isEmpty())
+    auto update_row = [](MarketPulsePanel::BreadthRow& row, int adv, int dec) {
+        if (!row.adv)
             return;
-
-        // Sort by change_pct descending
-        std::sort(quotes.begin(), quotes.end(),
-                  [](const auto& a, const auto& b) { return a.change_pct > b.change_pct; });
-
-        // Clear old rows
-        auto clear_layout = [](QVBoxLayout* layout) {
-            while (layout->count()) {
-                auto* item = layout->takeAt(0);
-                if (item->widget())
-                    item->widget()->deleteLater();
-                delete item;
-            }
-        };
-        clear_layout(self->gainers_layout_);
-        clear_layout(self->losers_layout_);
-
-        // Top 3 gainers
-        int gainers_added = 0;
-        for (const auto& q : quotes) {
-            if (q.change_pct <= 0 || gainers_added >= 3)
-                break;
-            self->gainers_layout_->addWidget(self->build_mover_row(q.symbol, q.change_pct, format_volume(q.volume)));
-            ++gainers_added;
+        row.adv->setText(QString::number(adv));
+        row.dec->setText(QString::number(dec));
+        int total = adv + dec;
+        if (total == 0)
+            total = 1;
+        int adv_pct = static_cast<int>((double(adv) / total) * 100);
+        auto* layout = qobject_cast<QHBoxLayout*>(row.green->parentWidget()->layout());
+        if (layout) {
+            layout->setStretch(0, adv_pct);
+            layout->setStretch(1, 100 - adv_pct);
         }
+    };
+    update_row(nyse_row_, nyse_adv, nyse_dec);
+    update_row(nasdaq_row_, nasdaq_adv, nasdaq_dec);
+    update_row(sp500_row_, sp500_adv, sp500_dec);
 
-        // Top 3 losers (worst first)
-        int losers_added = 0;
-        for (int i = quotes.size() - 1; i >= 0 && losers_added < 3; --i) {
-            if (quotes[i].change_pct >= 0)
-                continue;
-            self->losers_layout_->addWidget(
-                self->build_mover_row(quotes[i].symbol, quotes[i].change_pct, format_volume(quotes[i].volume)));
-            ++losers_added;
+    // ── Fear & Greed score ──
+    int total_stocks = bullish + bearish + neutral_count;
+    if (total_stocks == 0)
+        total_stocks = 1;
+    int score = 50 + static_cast<int>(((bullish - bearish) / static_cast<double>(total_stocks)) * 50);
+    if (vix > 0) {
+        if (vix > 30)
+            score -= 20;
+        else if (vix > 25)
+            score -= 10;
+        else if (vix < 15)
+            score += 10;
+    }
+    score = qBound(0, score, 100);
+
+    QString sentiment_text, sentiment_color;
+    if (score <= 20) {
+        sentiment_text = "EXTREME FEAR";
+        sentiment_color = ui::colors::NEGATIVE();
+    } else if (score <= 40) {
+        sentiment_text = "FEAR";
+        sentiment_color = ui::colors::WARNING();
+    } else if (score <= 60) {
+        sentiment_text = "NEUTRAL";
+        sentiment_color = ui::colors::WARNING();
+    } else if (score <= 80) {
+        sentiment_text = "GREED";
+        sentiment_color = ui::colors::POSITIVE();
+    } else {
+        sentiment_text = "EXTREME GREED";
+        sentiment_color = ui::colors::POSITIVE();
+    }
+
+    if (fg_score_val_) {
+        fg_score_val_->setText(QString::number(score));
+        fg_score_val_->setStyleSheet(
+            QString("color: %1; font-size: 18px; font-weight: bold; background: transparent;").arg(sentiment_color));
+    }
+    if (fg_sentiment_) {
+        fg_sentiment_->setText(sentiment_text);
+        fg_sentiment_->setStyleSheet(
+            QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
+                .arg(sentiment_color));
+    }
+}
+
+void MarketPulsePanel::rebuild_movers_from_cache() {
+    if (movers_cache_.isEmpty() || !gainers_layout_ || !losers_layout_)
+        return;
+
+    QVector<services::QuoteData> quotes;
+    quotes.reserve(movers_cache_.size());
+    for (const auto& sym : kMoverSymbols) {
+        if (movers_cache_.contains(sym))
+            quotes.append(movers_cache_.value(sym));
+    }
+    std::sort(quotes.begin(), quotes.end(),
+              [](const auto& a, const auto& b) { return a.change_pct > b.change_pct; });
+
+    auto clear_layout = [](QVBoxLayout* layout) {
+        while (layout->count()) {
+            auto* item = layout->takeAt(0);
+            if (item->widget())
+                item->widget()->deleteLater();
+            delete item;
         }
-    });
+    };
+    clear_layout(gainers_layout_);
+    clear_layout(losers_layout_);
 
-    // ── 3. Global Snapshot ────────────────────────────────────────────────────
-    services::MarketDataService::instance().fetch_quotes(
-        kSnapshotSymbols, [self](bool ok, QVector<services::QuoteData> quotes) {
-            if (!self || !ok || quotes.isEmpty())
+    int gainers_added = 0;
+    for (const auto& q : quotes) {
+        if (q.change_pct <= 0 || gainers_added >= 3)
+            break;
+        gainers_layout_->addWidget(build_mover_row(q.symbol, q.change_pct, format_volume(q.volume)));
+        ++gainers_added;
+    }
+    int losers_added = 0;
+    for (int i = quotes.size() - 1; i >= 0 && losers_added < 3; --i) {
+        if (quotes[i].change_pct >= 0)
+            continue;
+        losers_layout_->addWidget(
+            build_mover_row(quotes[i].symbol, quotes[i].change_pct, format_volume(quotes[i].volume)));
+        ++losers_added;
+    }
+}
+
+void MarketPulsePanel::rebuild_snapshot_from_cache() {
+    auto fmt_price = [](const services::QuoteData& q) -> QString {
+        if (q.price >= 1000)
+            return QString("$%1K").arg(q.price / 1000.0, 0, 'f', 1);
+        return QString("%1").arg(q.price, 0, 'f', 2);
+    };
+    auto fmt_chg = [](const services::QuoteData& q) -> QString {
+        return QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2);
+    };
+    auto update_stat = [&](const QString& sym, StatRow& row) {
+        if (!snapshot_cache_.contains(sym) || !row.val)
+            return;
+        const auto& q = snapshot_cache_.value(sym);
+        row.val->setText(fmt_price(q));
+        row.chg->setText(fmt_chg(q));
+        QString chg_color = q.change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
+        row.chg->setStyleSheet(
+            QString("color: %1; font-size: 8px; font-weight: bold; background: transparent;").arg(chg_color));
+    };
+    update_stat("^VIX", vix_row_);
+    update_stat("^TNX", us10y_row_);
+    update_stat("DX-Y.NYB", dxy_row_);
+    update_stat("GC=F", gold_row_);
+    update_stat("CL=F", oil_row_);
+    update_stat("BTC-USD", btc_row_);
+}
+
+void MarketPulsePanel::hub_subscribe_all() {
+    auto& hub = datahub::DataHub::instance();
+
+    // Union of all three symbol sets — but dispatch per-set so each cache
+    // only holds its own universe (keeps rebuild_* loops cheap).
+    QSet<QString> all_syms;
+    for (const auto& s : kBreadthSymbols)
+        all_syms.insert(s);
+    for (const auto& s : kMoverSymbols)
+        all_syms.insert(s);
+    for (const auto& s : kSnapshotSymbols)
+        all_syms.insert(s);
+
+    for (const QString& sym : all_syms) {
+        const QString topic = QStringLiteral("market:quote:") + sym;
+        const bool in_breadth = kBreadthSymbols.contains(sym);
+        const bool in_movers = kMoverSymbols.contains(sym);
+        const bool in_snapshot = kSnapshotSymbols.contains(sym);
+
+        hub.subscribe(this, topic, [this, sym, in_breadth, in_movers, in_snapshot](const QVariant& v) {
+            if (!v.canConvert<services::QuoteData>())
                 return;
-
-            // Map symbol -> quote for quick lookup
-            QHash<QString, services::QuoteData> qmap;
-            for (const auto& q : quotes)
-                qmap[q.symbol] = q;
-
-            // Helper to format price display
-            auto fmt_price = [](const services::QuoteData& q) -> QString {
-                if (q.price >= 1000)
-                    return QString("$%1K").arg(q.price / 1000.0, 0, 'f', 1);
-                if (q.price >= 100)
-                    return QString("%1").arg(q.price, 0, 'f', 2);
-                return QString("%1").arg(q.price, 0, 'f', 2);
-            };
-
-            auto fmt_chg = [](const services::QuoteData& q) -> QString {
-                return QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2);
-            };
-
-            auto update_stat = [&](const QString& sym, StatRow& row) {
-                if (!qmap.contains(sym) || !row.val)
-                    return;
-                const auto& q = qmap[sym];
-                row.val->setText(fmt_price(q));
-                QString chg_text = fmt_chg(q);
-                row.chg->setText(chg_text);
-                QString chg_color = q.change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
-                row.chg->setStyleSheet(
-                    QString("color: %1; font-size: 8px; font-weight: bold; background: transparent;").arg(chg_color));
-            };
-
-            // global_snapshot_symbols() returns: ^VIX, ^TNX, DX-Y.NYB, GC=F, CL=F, BTC-USD
-            update_stat("^VIX", self->vix_row_);
-            update_stat("^TNX", self->us10y_row_);
-            update_stat("DX-Y.NYB", self->dxy_row_);
-            update_stat("GC=F", self->gold_row_);
-            update_stat("CL=F", self->oil_row_);
-            update_stat("BTC-USD", self->btc_row_);
+            const auto q = v.value<services::QuoteData>();
+            if (in_breadth) {
+                breadth_cache_.insert(sym, q);
+                rebuild_breadth_from_cache();
+            }
+            if (in_movers) {
+                movers_cache_.insert(sym, q);
+                rebuild_movers_from_cache();
+            }
+            if (in_snapshot) {
+                snapshot_cache_.insert(sym, q);
+                rebuild_snapshot_from_cache();
+            }
         });
+    }
+    hub_active_ = true;
+}
+
+void MarketPulsePanel::hub_unsubscribe_all() {
+    if (!hub_active_)
+        return;
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+}
+
+
+void MarketPulsePanel::refresh_data() {
+    // Hub owns cadence. Force a kick so consumers see data immediately
+    // (e.g., on theme-triggered refresh while visible).
+    auto& hub = datahub::DataHub::instance();
+    QStringList topics;
+    QSet<QString> seen;
+    auto push = [&](const QStringList& syms) {
+        for (const auto& s : syms) {
+            if (seen.contains(s))
+                continue;
+            seen.insert(s);
+            topics.append(QStringLiteral("market:quote:") + s);
+        }
+    };
+    push(kBreadthSymbols);
+    push(kMoverSymbols);
+    push(kSnapshotSymbols);
+    hub.request(topics);
 }
 
 } // namespace fincept::screens

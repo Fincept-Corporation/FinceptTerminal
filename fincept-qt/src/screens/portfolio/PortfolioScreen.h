@@ -4,6 +4,8 @@
 #include "screens/portfolio/PortfolioTypes.h"
 
 #include <QHideEvent>
+#include <QPropertyAnimation>
+#include <QResizeEvent>
 #include <QShowEvent>
 #include <QStackedWidget>
 #include <QTimer>
@@ -39,6 +41,7 @@ class PortfolioScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
   private slots:
     void on_portfolios_loaded(QVector<portfolio::Portfolio> portfolios);
@@ -69,6 +72,8 @@ class PortfolioScreen : public QWidget, public IStatefulScreen {
     void update_main_view_data();
     void request_refresh();
     void load_demo_portfolio();
+    void reposition_order_panel();
+    void animate_order_panel_in();
     const portfolio::HoldingWithQuote* find_holding(const QString& symbol) const;
 
     // Sub-widgets
@@ -108,6 +113,12 @@ class PortfolioScreen : public QWidget, public IStatefulScreen {
     // Refresh timer (P3)
     QTimer* refresh_timer_ = nullptr;
     int refresh_interval_ms_ = 60000;
+
+    // Order panel slide-in animation
+    QPropertyAnimation* order_panel_anim_ = nullptr;
+
+    // Positions section header — count badge updates with holdings
+    QLabel* positions_count_label_ = nullptr;
 };
 
 } // namespace fincept::screens

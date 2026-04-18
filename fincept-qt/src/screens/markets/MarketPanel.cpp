@@ -3,6 +3,9 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QMenu>
@@ -194,28 +197,74 @@ void MarketPanel::refresh() {
     fetch_failed_ = false;
     title_label_->setText(config_.title.toUpper() + "  ...");
 
-    QPointer<MarketPanel> self = this;
-    services::MarketDataService::instance().fetch_quotes(
-        config_.symbols, [self](bool ok, QVector<services::QuoteData> q) {
-            if (!self) return;
-            if (!ok) {
-                self->fetch_failed_ = true;
-                if (self->has_data_) {
-                    // Show stale data with STALE badge
-                    self->title_label_->setText(self->config_.title.toUpper() + "  [STALE]");
-                } else {
-                    self->show_error("FETCH FAILED");
-                }
-                emit self->refresh_finished();
-                return;
-            }
-            self->title_label_->setText(self->config_.title.toUpper());
-            self->cached_quotes_ = q;
-            self->has_data_      = true;
-            self->show_data();
-            emit self->refresh_finished();
-        });
+    hub_resubscribe();
 }
+
+
+void MarketPanel::rebuild_from_cache() {
+    cached_quotes_.clear();
+    cached_quotes_.reserve(config_.symbols.size());
+    for (const auto& sym : config_.symbols) {
+        if (row_cache_.contains(sym))
+            cached_quotes_.append(row_cache_.value(sym));
+    }
+    if (cached_quotes_.isEmpty())
+        return;
+    has_data_ = true;
+    title_label_->setText(config_.title.toUpper());
+    show_data();
+}
+
+void MarketPanel::hub_resubscribe() {
+    auto& hub = datahub::DataHub::instance();
+
+    if (config_.symbols.isEmpty()) {
+        hub.unsubscribe(this);
+        hub_active_ = false;
+        emit refresh_finished();
+        return;
+    }
+
+    // Fresh subscribe if never active or symbol set was reconfigured.
+    // Cheaper to always re-wire since MarketsScreen rarely calls refresh()
+    // outside of user action / auto-refresh tick, and the hub dedupes topics.
+    hub.unsubscribe(this);
+    row_cache_.clear();
+    pending_initial_.clear();
+    for (const auto& sym : config_.symbols)
+        pending_initial_.insert(sym);
+    refresh_inflight_ = true;
+
+    QStringList topics;
+    topics.reserve(config_.symbols.size());
+    for (const QString& sym : config_.symbols) {
+        const QString topic = QStringLiteral("market:quote:") + sym;
+        topics.append(topic);
+        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+            if (!v.canConvert<services::QuoteData>())
+                return;
+            row_cache_.insert(sym, v.value<services::QuoteData>());
+            rebuild_from_cache();
+            // Drain the initial-set counter on first delivery for this symbol.
+            if (refresh_inflight_ && pending_initial_.remove(sym) && pending_initial_.isEmpty()) {
+                refresh_inflight_ = false;
+                emit refresh_finished();
+            }
+        });
+    }
+    hub.request(topics);
+    hub_active_ = true;
+}
+
+void MarketPanel::hub_unsubscribe_all() {
+    if (!hub_active_)
+        return;
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+    refresh_inflight_ = false;
+    pending_initial_.clear();
+}
+
 
 void MarketPanel::show_data() {
     error_widget_->setVisible(false);

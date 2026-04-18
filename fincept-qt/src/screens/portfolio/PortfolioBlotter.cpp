@@ -5,6 +5,9 @@
 #include "services/markets/MarketDataService.h"
 #include "ui/theme/Theme.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QAction>
 #include <QHeaderView>
 #include <QJsonArray>
@@ -83,60 +86,73 @@ void PortfolioBlotter::fetch_sparklines() {
     if (holdings_.isEmpty())
         return;
 
-    // Mark all symbols as pending before the async call
+    // Mark all symbols as pending before the fetch.
     for (const auto& h : holdings_)
         sparkline_state_[h.symbol] = SparklineState::Pending;
 
-    QStringList symbols;
-    for (const auto& h : holdings_)
-        symbols.append(h.symbol);
-
-    QPointer<PortfolioBlotter> self = this;
-    services::MarketDataService::instance().fetch_sparklines(
-        symbols, [self](bool ok, QHash<QString, QVector<double>> data) {
-            QMetaObject::invokeMethod(
-                self,
-                [self, ok, data]() {
-                    if (!self)
-                        return;
-
-                    // Mark loaded/failed per symbol
-                    for (auto it = self->sparkline_state_.begin(); it != self->sparkline_state_.end(); ++it) {
-                        if (ok && data.contains(it.key()))
-                            it.value() = SparklineState::Loaded;
-                        else
-                            it.value() = SparklineState::Failed;
-                    }
-                    if (ok && !data.isEmpty())
-                        self->sparkline_cache_.insert(data);
-
-                    // Repaint only TREND column without full table rebuild
-                    for (int r = 0; r < self->table_->rowCount(); ++r) {
-                        auto* item = self->table_->item(r, 0);
-                        if (!item)
-                            continue;
-                        const QString sym = item->text();
-                        auto* w = qobject_cast<PortfolioSparkline*>(self->table_->cellWidget(r, 9));
-                        if (!w)
-                            continue;
-
-                        const auto state = self->sparkline_state_.value(sym, SparklineState::Failed);
-                        if (state == SparklineState::Loaded && self->sparkline_cache_.contains(sym)) {
-                            const auto& prices = self->sparkline_cache_[sym];
-                            w->set_data(prices);
-                            bool up = prices.size() >= 2 ? prices.last() >= prices.first() : true;
-                            w->set_color(QColor(up ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
-                        } else {
-                            // Failed or still pending — show flat dash line in muted color
-                            QVector<double> dash(6, 0.0);
-                            w->set_data(dash);
-                            w->set_color(QColor(ui::colors::BORDER_MED()));
-                        }
-                    }
-                },
-                Qt::QueuedConnection);
-        });
+    hub_resubscribe_sparklines();
 }
+
+
+void PortfolioBlotter::repaint_sparkline_cells() {
+    for (int r = 0; r < table_->rowCount(); ++r) {
+        auto* item = table_->item(r, 0);
+        if (!item)
+            continue;
+        const QString sym = item->text();
+        auto* w = qobject_cast<PortfolioSparkline*>(table_->cellWidget(r, 9));
+        if (!w)
+            continue;
+
+        const auto state = sparkline_state_.value(sym, SparklineState::Failed);
+        if (state == SparklineState::Loaded && sparkline_cache_.contains(sym)) {
+            const auto& prices = sparkline_cache_[sym];
+            w->set_data(prices);
+            bool up = prices.size() >= 2 ? prices.last() >= prices.first() : true;
+            w->set_color(QColor(up ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+        } else {
+            QVector<double> dash(6, 0.0);
+            w->set_data(dash);
+            w->set_color(QColor(ui::colors::BORDER_MED()));
+        }
+    }
+}
+
+void PortfolioBlotter::hub_resubscribe_sparklines() {
+    auto& hub = datahub::DataHub::instance();
+    // Holdings set is dynamic (portfolio edits replace it wholesale).
+    hub.unsubscribe(this);
+    hub_active_ = false;
+
+    if (holdings_.isEmpty())
+        return;
+
+    QStringList topics;
+    topics.reserve(holdings_.size());
+    for (const auto& h : holdings_) {
+        const QString sym = h.symbol;
+        const QString topic = QStringLiteral("market:sparkline:") + sym;
+        topics.append(topic);
+        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+            if (!v.canConvert<QVector<double>>())
+                return;
+            const auto prices = v.value<QVector<double>>();
+            sparkline_cache_.insert(sym, prices);
+            sparkline_state_[sym] = SparklineState::Loaded;
+            repaint_sparkline_cells();
+        });
+    }
+    hub.request(topics);
+    hub_active_ = true;
+}
+
+void PortfolioBlotter::hub_unsubscribe_all() {
+    if (!hub_active_)
+        return;
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+}
+
 
 void PortfolioBlotter::set_selected_symbol(const QString& symbol) {
     selected_symbol_ = symbol;

@@ -3,7 +3,7 @@
   "name": "Renaissance Technologies Medallion Fund",
   "description": "Multi-agent quantitative hedge fund system inspired by RenTech's systematic approach. Features 10 specialized agents, 4 teams, signal discovery, risk assessment, IC deliberation, and execution workflows.",
   "category": "hedgeFundAgents",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "provider": "local",
   "capabilities": [
     "signal_discovery",

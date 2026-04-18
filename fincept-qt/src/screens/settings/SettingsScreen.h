@@ -47,6 +47,7 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
     QWidget* build_profiles();
     QWidget* build_keybindings();
     QWidget* build_python_env();
+    QWidget* build_developer();
 
     // ── Shared layout helper ──────────────────────────────────────────────────
     static QWidget* make_row(const QString& label, QWidget* control, const QString& description = {});
@@ -107,6 +108,8 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
     QComboBox* log_global_level_ = nullptr;
     QWidget* log_tag_list_ = nullptr; // VBox container for tag rows
     QVBoxLayout* log_tag_layout_ = nullptr;
+    QCheckBox* log_json_mode_ = nullptr;
+    QLabel* log_path_label_ = nullptr;
 
     // ── Security state ──────────────────────────────────────────────────────────
     QLabel* sec_pin_status_ = nullptr;

@@ -2,6 +2,24 @@ name: Lint
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'fincept-qt/src/**'
+      - 'fincept-qt/.clang-tidy'
+      - 'fincept-qt/.clang-format'
+      - 'fincept-qt/.cppcheck-suppressions'
+      - 'fincept-qt/CMakeLists.txt'
+      - '.github/workflows/lint.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'fincept-qt/src/**'
+      - 'fincept-qt/.clang-tidy'
+      - 'fincept-qt/.clang-format'
+      - 'fincept-qt/.cppcheck-suppressions'
+      - 'fincept-qt/CMakeLists.txt'
+      - '.github/workflows/lint.yml'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -75,6 +93,56 @@ jobs:
               --extra-arg=-std=c++20 \
               2>&1
           echo "clang-tidy complete."
+
+  # ── datahub-discipline ───────────────────────────────────────────────────────
+  # Enforces DataHub rules D1 and D4 (see fincept-qt/CLAUDE.md §D):
+  #   D1 — screens must not spawn Python directly.
+  #   D4 — consumers must not call service fetch_* callbacks.
+  # If this step fails, route the offending code through DataHub. See
+  # fincept-qt/DATAHUB_ARCHITECTURE.md §4 and docs/DATAHUB_TOPICS.md for the
+  # producer + topic you should be using instead.
+  datahub-discipline:
+    name: datahub-discipline
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check screens/ does not call PythonRunner directly
+        working-directory: fincept-qt
+        run: |
+          if grep -rn --include='*.cpp' --include='*.h' \
+              'PythonRunner::instance()\.run(' src/screens/; then
+            echo ""
+            echo "::error::D1 violation — screens must not call PythonRunner directly."
+            echo "Route through a Producer registered with DataHub."
+            echo "See fincept-qt/DATAHUB_ARCHITECTURE.md §4."
+            exit 1
+          fi
+          echo "D1 — screens are clean."
+
+      - name: Check screens/ does not call deprecated service fetch_* APIs
+        working-directory: fincept-qt
+        run: |
+          # D4 exempts one-shot catalog/info APIs that have no hub topic:
+          #   MarketDataService::fetch_info, MarketDataService::fetch_news,
+          #   DBnomicsService::fetch_providers / fetch_datasets / fetch_series /
+          #   fetch_observations. See fincept-qt/CLAUDE.md §D4 for the rule.
+          # Match any streaming fetch_* call, then grep -v the allowed ones.
+          violations=$(grep -rnE --include='*.cpp' --include='*.h' \
+              '(MarketDataService|NewsService|EconomicsService|DBnomicsService|GovDataService)::instance\(\)\.fetch_' \
+              src/screens/ \
+            | grep -vE 'MarketDataService::instance\(\)\.fetch_(info|news)\b' \
+            | grep -vE 'DBnomicsService::instance\(\)\.fetch_(providers|datasets|series|observations)\b' \
+            || true)
+          if [ -n "$violations" ]; then
+            echo "$violations"
+            echo ""
+            echo "::error::D4 violation — consumers must not call streaming fetch_* APIs."
+            echo "Use DataHub::subscribe() for live data, DataHub::peek() for snapshots."
+            echo "See fincept-qt/DATAHUB_ARCHITECTURE.md §4 and docs/DATAHUB_TOPICS.md."
+            exit 1
+          fi
+          echo "D4 — screens are clean."
 
   # ── cppcheck ─────────────────────────────────────────────────────────────────
   cppcheck:

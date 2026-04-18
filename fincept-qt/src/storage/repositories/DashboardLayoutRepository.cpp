@@ -2,6 +2,8 @@
 
 #include "core/logging/Logger.h"
 
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSqlQuery>
 #include <QUuid>
 
@@ -34,7 +36,7 @@ Result<screens::GridLayout> DashboardLayoutRepository::load_layout(const QString
     }
 
     // Load widget instances
-    auto r2 = db().execute("SELECT instance_id, widget_type, grid_x, grid_y, grid_w, grid_h, min_w, min_h "
+    auto r2 = db().execute("SELECT instance_id, widget_type, grid_x, grid_y, grid_w, grid_h, min_w, min_h, config_json "
                            "FROM dashboard_widget_instances WHERE layout_id = ? ORDER BY sort_order ASC",
                            {layout_id});
     if (r2.is_err())
@@ -51,6 +53,12 @@ Result<screens::GridLayout> DashboardLayoutRepository::load_layout(const QString
         item.cell.h = q2.value(5).toInt();
         item.cell.min_w = q2.value(6).toInt();
         item.cell.min_h = q2.value(7).toInt();
+        const QString cfg_text = q2.value(8).toString();
+        if (!cfg_text.isEmpty()) {
+            const auto doc = QJsonDocument::fromJson(cfg_text.toUtf8());
+            if (doc.isObject())
+                item.config = doc.object();
+        }
         layout.items.append(item);
     }
 
@@ -85,12 +93,14 @@ Result<void> DashboardLayoutRepository::save_layout(const screens::GridLayout& l
     // Insert new instances
     int sort = 0;
     for (const auto& item : layout.items) {
+        const QString cfg_json =
+            QString::fromUtf8(QJsonDocument(item.config).toJson(QJsonDocument::Compact));
         auto ri = exec_write(
             "INSERT INTO dashboard_widget_instances "
-            "(instance_id, layout_id, widget_type, grid_x, grid_y, grid_w, grid_h, min_w, min_h, sort_order) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "(instance_id, layout_id, widget_type, grid_x, grid_y, grid_w, grid_h, min_w, min_h, sort_order, config_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             {item.instance_id, layout_id, item.id, item.cell.x, item.cell.y, item.cell.w, item.cell.h, item.cell.min_w,
-             item.cell.min_h, sort++});
+             item.cell.min_h, sort++, cfg_json});
         if (ri.is_err())
             return ri;
     }

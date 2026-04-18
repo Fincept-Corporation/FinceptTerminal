@@ -5,11 +5,21 @@
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointer>
 
 namespace fincept::services::ma {
+
+namespace {
+inline void publish_ma_result(bool hub_registered, const QString& context, const QJsonObject& obj) {
+    if (!hub_registered) return;
+    fincept::datahub::DataHub::instance().publish(QStringLiteral("ma:") + context, QVariant(obj));
+}
+}  // namespace
 
 // ── Singleton ────────────────────────────────────────────────────────────────
 MAAnalyticsService& MAAnalyticsService::instance() {
@@ -40,6 +50,7 @@ void MAAnalyticsService::run_python(const QString& script, const QStringList& ar
         auto obj = doc.object();
         LOG_INFO("MAAnalytics", QString("Result ready [%1]").arg(context));
         emit self->result_ready(context, obj);
+        publish_ma_result(self->hub_registered_, context, obj);
     });
 }
 
@@ -53,7 +64,9 @@ void MAAnalyticsService::run_python_json(const QString& script, const QString& c
         auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
         if (!doc.isNull()) {
             LOG_DEBUG("MAAnalytics", QString("Cache hit [%1]").arg(context));
-            emit result_ready(context, doc.object());
+            const auto obj = doc.object();
+            emit result_ready(context, obj);
+            publish_ma_result(hub_registered_, context, obj);
             return;
         }
     }
@@ -82,6 +95,7 @@ void MAAnalyticsService::run_python_json(const QString& script, const QString& c
             "ma_analytics");
         LOG_INFO("MAAnalytics", QString("Result ready [%1]").arg(context));
         emit self->result_ready(context, obj);
+        publish_ma_result(self->hub_registered_, context, obj);
     });
 }
 
@@ -310,6 +324,44 @@ void MAAnalyticsService::analyze_payment_structures(const QJsonObject& params) {
 void MAAnalyticsService::analyze_industry_deals(const QJsonObject& params) {
     run_python_json("Analytics/corporateFinance/deal_comparison/deal_comparator.py", "industry", params,
                     "industry_deals");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DATAHUB PRODUCER — ma:*
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// All M&A methods funnel through run_python / run_python_json which emit
+// `result_ready(context, obj)` and publish to `ma:<context>` in parallel.
+// Because every analytic takes a caller-supplied `params` payload, the hub
+// can't schedule a refresh without knowing the parameters — so topics are
+// push-only. The hub still caches the most recent result for subscribers
+// who join late, but won't drive new fetches.
+
+QStringList MAAnalyticsService::topic_patterns() const {
+    return {QStringLiteral("ma:*")};
+}
+
+void MAAnalyticsService::refresh(const QStringList& topics) {
+    // All ma:* topics are push-only (params-dependent). Log advisory only.
+    Q_UNUSED(topics);
+}
+
+int MAAnalyticsService::max_requests_per_sec() const {
+    return 1;  // Heavy Python analytics; callers drive their own cadence.
+}
+
+void MAAnalyticsService::ensure_registered_with_hub() {
+    if (hub_registered_) return;
+    auto& hub = fincept::datahub::DataHub::instance();
+    hub.register_producer(this);
+
+    fincept::datahub::TopicPolicy policy;
+    policy.push_only = true;
+    policy.ttl_ms = kResultTtlSec * 1000;  // 2 min cache for latecomers.
+    hub.set_policy_pattern(QStringLiteral("ma:*"), policy);
+
+    hub_registered_ = true;
+    LOG_INFO("MAAnalyticsService", "Registered with DataHub (ma:*)");
 }
 
 } // namespace fincept::services::ma

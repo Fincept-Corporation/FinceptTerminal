@@ -5,6 +5,9 @@
 #include "network/http/HttpClient.h"
 #include "storage/cache/CacheManager.h"
 
+#    include "datahub/DataHub.h"
+#    include "datahub/DataHubMetaTypes.h"
+
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QUrl>
@@ -228,7 +231,7 @@ void DBnomicsService::fetch_observations(const QString& provider_code, const QSt
     const QString full_id = QString("%1/%2/%3").arg(provider_code).arg(dataset_code).arg(series_code);
     LOG_INFO("DBnomicsService", QString("Fetching observations for %1").arg(full_id));
 
-    fincept::HttpClient::instance().get(build_url(path), [this, full_id,
+    fincept::HttpClient::instance().get(build_url(path), [this, full_id, provider_code, dataset_code,
                                                           series_code](fincept::Result<QJsonDocument> result) {
         if (result.is_err()) {
             emit error_occurred("observations", QString::fromStdString(result.error()));
@@ -266,6 +269,10 @@ void DBnomicsService::fetch_observations(const QString& provider_code, const QSt
         // color will be assigned by DBnomicsScreen::assign_series_colors()
         LOG_INFO("DBnomicsService", QString("Loaded %1 observations for %2").arg(dp.observations.size()).arg(full_id));
         emit observations_loaded(dp);
+        if (hub_registered_) {
+            const QString topic = hub_topic(provider_code, dataset_code, series_code);
+            fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(dp));
+        }
     });
 }
 
@@ -318,6 +325,48 @@ QColor DBnomicsService::chart_color(int index) {
     };
     static const int n = static_cast<int>(std::size(palette));
     return palette[index % n];
+}
+
+// ── DataHub producer wiring ─────────────────────────────────────────────────
+
+QString DBnomicsService::hub_topic(const QString& provider, const QString& dataset, const QString& series) {
+    return QStringLiteral("dbnomics:") + provider + QLatin1Char(':') + dataset +
+           QLatin1Char(':') + series;
+}
+
+QStringList DBnomicsService::topic_patterns() const {
+    return {QStringLiteral("dbnomics:*")};
+}
+
+void DBnomicsService::refresh(const QStringList& topics) {
+    // Split `dbnomics:<provider>:<dataset>:<series>` and dispatch to the
+    // existing observation fetcher. Anything that doesn't match the
+    // 4-segment shape is silently skipped.
+    for (const auto& topic : topics) {
+        const QStringList parts = topic.split(QLatin1Char(':'));
+        if (parts.size() != 4) continue;
+        fetch_observations(parts[1], parts[2], parts[3]);
+    }
+}
+
+int DBnomicsService::max_requests_per_sec() const {
+    return 3;  // DBnomics REST — conservative default
+}
+
+void DBnomicsService::ensure_registered_with_hub() {
+    if (hub_registered_) return;
+    auto& hub = fincept::datahub::DataHub::instance();
+    hub.register_producer(this);
+
+    // 1-hour TTL, 60s min_interval — DBnomics series are daily-or-slower.
+    fincept::datahub::TopicPolicy policy;
+    policy.ttl_ms = 60 * 60 * 1000;
+    policy.min_interval_ms = 60 * 1000;
+    policy.push_only = false;
+    hub.set_policy_pattern(QStringLiteral("dbnomics:*"), policy);
+
+    hub_registered_ = true;
+    LOG_INFO("DBnomicsService", "Registered with DataHub (dbnomics:*)");
 }
 
 } // namespace fincept::services

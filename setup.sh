@@ -10,7 +10,7 @@ for arg in "$@"; do
 done
 
 # ── Pinned versions (must match CMakeLists.txt) ─────────────
-QT_VERSION="6.7.2"
+QT_VERSION="6.8.3"
 PYTHON_MIN="3.11"
 CMAKE_MIN="3.27"
 GCC_MIN="12.3"
@@ -147,7 +147,7 @@ cd "$APP_DIR"
 
 echo "[6/7] Configuring (preset: $PRESET)..."
 # Override the preset's default CMAKE_PREFIX_PATH with the one we just set,
-# so the build picks up the aqtinstall location rather than ~/Qt/6.7.2/...
+# so the build picks up the aqtinstall location rather than ~/Qt/6.8.3/...
 cmake --preset "$PRESET" -DCMAKE_PREFIX_PATH="$QT_PREFIX" \
     || fail "CMake configure failed. See error above."
 ok
