@@ -1,0 +1,90 @@
+{
+  "$schema": "https://fundingjson.org/schema/v1.1.0.json",
+  "version": "v1.1.0",
+
+  "entity": {
+    "type": "organisation",
+    "role": "owner",
+    "name": "Fincept Corporation",
+    "description": "Open-source financial intelligence and analytics tools.",
+    "webpageUrl": {
+      "url": "https://github.com/Fincept-Corporation/FinceptTerminal"
+    }
+  },
+
+  "projects": [
+    {
+      "guid": "fincept-terminal",
+      "name": "Fincept Terminal",
+      "description": "Open-source Bloomberg-style financial intelligence terminal built in C++20 with AI analytics, data connectors, and workflow automation.",
+      "repositoryUrl": {
+        "url": "https://github.com/Fincept-Corporation/FinceptTerminal"
+      },
+      "licenses": ["spdx:AGPL-3.0"],
+      "tags": [
+        "finance",
+        "ai",
+        "trading",
+        "analytics",
+        "data-visualization",
+        "portfolio-management",
+        "cpp",
+        "python",
+        "open-source"
+      ]
+    }
+  ],
+
+  "funding": {
+    "channels": [
+      {
+        "guid": "github-sponsors",
+        "type": "payment-provider",
+        "address": "https://github.com/sponsors/tilakpatel22"
+      },
+      {
+        "guid": "open-collective",
+        "type": "payment-provider",
+        "address": "https://opencollective.com/fincept"
+      },
+      {
+        "guid": "buy-me-a-coffee",
+        "type": "payment-provider",
+        "address": "https://www.buymeacoffee.com/fincept"
+      }
+    ],
+
+    "plans": [
+      {
+        "guid": "supporter",
+        "status": "active",
+        "name": "Supporter",
+        "description": "Help maintain and improve the project.",
+        "amount": 5,
+        "currency": "USD",
+        "frequency": "monthly",
+        "channels": ["github-sponsors"]
+      },
+      {
+        "guid": "sponsor",
+        "status": "active",
+        "name": "Project Sponsor",
+        "description": "Support feature development and infrastructure.",
+        "amount": 25,
+        "currency": "USD",
+        "frequency": "monthly",
+        "channels": ["github-sponsors"]
+      },
+      {
+        "guid": "enterprise-grant",
+        "status": "active",
+        "name": "Enterprise Development Grant",
+        "description": "Fund major features, AI agents, and data connectors.",
+        "amount": 10000,
+        "currency": "USD",
+        "frequency": "one-time",
+        "channels": ["github-sponsors"]
+      }
+    ]
+  }
+}
