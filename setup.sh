@@ -38,7 +38,7 @@ echo ""
 OS="$(uname -s)"
 case "$OS" in
     Linux*)  PLATFORM="linux" ; QT_KIT="gcc_64"     ; PRESET="linux-release" ;;
-    Darwin*) PLATFORM="macos" ; QT_KIT="clang_64"   ; PRESET="macos-release" ;;
+    Darwin*) PLATFORM="macos" ; QT_KIT="macos"      ; PRESET="macos-release" ;;
     *)       fail "Unsupported OS: $OS" ;;
 esac
 echo "Platform: $OS"
@@ -68,7 +68,7 @@ elif [ "$PLATFORM" = "macos" ]; then
         info "Homebrew not found. Installing..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
-    brew install cmake ninja python@3.11
+    brew install cmake ninja python@3.11 openssl@3 yt-dlp
 fi
 ok
 
@@ -148,7 +148,12 @@ cd "$APP_DIR"
 echo "[6/7] Configuring (preset: $PRESET)..."
 # Override the preset's default CMAKE_PREFIX_PATH with the one we just set,
 # so the build picks up the aqtinstall location rather than ~/Qt/6.8.3/...
-cmake --preset "$PRESET" -DCMAKE_PREFIX_PATH="$QT_PREFIX" \
+EXTRA_ARGS=""
+if [ "$PLATFORM" = "macos" ] && [ -d "/opt/homebrew/opt/openssl@3" ]; then
+    EXTRA_ARGS="-DOPENSSL_ROOT_DIR=/opt/homebrew/opt/openssl@3"
+fi
+
+cmake --preset "$PRESET" -DCMAKE_PREFIX_PATH="$QT_PREFIX" $EXTRA_ARGS \
     || fail "CMake configure failed. See error above."
 ok
 
