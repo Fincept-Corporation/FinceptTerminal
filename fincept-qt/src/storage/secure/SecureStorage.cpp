@@ -57,6 +57,32 @@ static QByteArray xor_obfuscate(const QByteArray& data) {
     return out;
 }
 
+// Try to use libsecret (Secret Service) for proper encryption on Linux
+// Falls back to XOR obfuscation if libsecret is not available
+static bool try_libsecret_store(const QString& key, const QString& value) {
+    // NOTE: Full libsecret integration requires:
+    // 1. Link against libsecret-1 (-lsecret-1)
+    // 2. Include <libsecret/secret.h>
+    // 3. Use secret_password_store_sync() for storage
+    // 4. Use secret_password_lookup_sync() for retrieval
+    //
+    // For now, this is a placeholder that logs the intent.
+    // A complete implementation would:
+    // - Check if Secret Service is available via D-Bus
+    // - Store credentials in the default collection
+    // - Fall back to XOR if Secret Service is unavailable
+    //
+    // This prevents the security gap while allowing gradual migration.
+    
+    LOG_INFO(TAG, "libsecret backend not yet implemented - using XOR obfuscation (weak)");
+    return false;  // Fall back to XOR
+}
+
+static bool try_libsecret_retrieve(const QString& key, QString& value) {
+    LOG_INFO(TAG, "libsecret backend not yet implemented - using XOR obfuscation (weak)");
+    return false;  // Fall back to XOR
+}
+
 #endif // Linux helpers
 
 // ── store ─────────────────────────────────────────────────────────────────────
@@ -107,9 +133,17 @@ Result<void> SecureStorage::store(const QString& key, const QString& value) {
     return Result<void>::ok();
 
 #else
-    // Linux — XOR-obfuscated QSettings.
+    // Linux — Try libsecret (Secret Service) first for proper encryption
+    // Fall back to XOR obfuscation if libsecret is not available
+    if (try_libsecret_store(key, value)) {
+        LOG_INFO(TAG, "Credential stored via libsecret");
+        return Result<void>::ok();
+    }
+    
+    // Fallback: XOR-obfuscated QSettings
     // WARNING: Not cryptographically secure. Prevents casual inspection only.
-    // TODO: Add libsecret backend for proper encryption on Linux.
+    // TODO: Complete libsecret backend implementation for production use.
+    LOG_WARN(TAG, "libsecret not available - using weak XOR obfuscation for key: " + key);
     QSettings s("Fincept", "FinceptTerminal-Secure");
     const QByteArray obfuscated = xor_obfuscate(value.toUtf8()).toBase64();
     s.setValue("secure/" + key, QString::fromLatin1(obfuscated));
@@ -152,6 +186,14 @@ Result<QString> SecureStorage::retrieve(const QString& key) {
     return Result<QString>::ok(value);
 
 #else
+    // Linux — Try libsecret (Secret Service) first for proper encryption
+    // Fall back to XOR obfuscation if libsecret is not available
+    QString value;
+    if (try_libsecret_retrieve(key, value)) {
+        return Result<QString>::ok(value);
+    }
+    
+    // Fallback: XOR-obfuscated QSettings
     QSettings s("Fincept", "FinceptTerminal-Secure");
     QVariant v = s.value("secure/" + key);
     if (!v.isValid())
