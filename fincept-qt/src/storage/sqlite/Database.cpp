@@ -81,17 +81,36 @@ Result<void> Database::rollback() {
 }
 
 Result<void> Database::apply_pragmas() {
-    const char* pragmas[] = {
-        "PRAGMA journal_mode = WAL",  "PRAGMA synchronous = NORMAL",  "PRAGMA cache_size = -20000",
-        "PRAGMA temp_store = MEMORY", "PRAGMA mmap_size = 268435456", "PRAGMA foreign_keys = ON",
+    // Critical pragmas that MUST succeed for database integrity
+    const char* critical_pragmas[] = {
+        "PRAGMA foreign_keys = ON",
+        "PRAGMA journal_mode = WAL",
+    };
+    
+    for (auto* p : critical_pragmas) {
+        auto r = exec(p);
+        if (r.is_err()) {
+            LOG_ERROR("DB", QString("CRITICAL PRAGMA failed: %1 — %2").arg(p, QString::fromStdString(r.error())));
+            return Result<void>::err(std::string("PRAGMA failed: ") + p);
+        }
+    }
+    
+    // Non-critical pragmas (log warnings but continue)
+    const char* optional_pragmas[] = {
+        "PRAGMA synchronous = NORMAL",
+        "PRAGMA cache_size = -20000",
+        "PRAGMA temp_store = MEMORY",
+        "PRAGMA mmap_size = 268435456",
         "PRAGMA busy_timeout = 5000",
     };
-    for (auto* p : pragmas) {
+    
+    for (auto* p : optional_pragmas) {
         auto r = exec(p);
         if (r.is_err()) {
             LOG_WARN("DB", QString("PRAGMA failed: %1 — %2").arg(p, QString::fromStdString(r.error())));
         }
     }
+    
     LOG_INFO("DB", "PRAGMAs applied (WAL, foreign_keys, cache_size=20MB)");
     return Result<void>::ok();
 }
