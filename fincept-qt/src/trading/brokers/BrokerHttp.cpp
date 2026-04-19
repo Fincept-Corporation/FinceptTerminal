@@ -163,10 +163,17 @@ BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url
     if (timer.isActive()) {
         timer.stop();
     } else {
-        // Timeout
-        reply->abort();
-        reply->deleteLater();
+        // Timeout occurred
+        if (reply) {
+            reply->abort();
+            reply->deleteLater();
+        }
         return {false, 0, {}, "", "Request timed out"};
+    }
+
+    // Verify reply is still valid after event loop
+    if (!reply) {
+        return {false, 0, {}, "", "Reply object became invalid"};
     }
 
     result.status_code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
