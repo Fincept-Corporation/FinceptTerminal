@@ -622,11 +622,13 @@ void ExchangeService::start_ws_stream(const QString& primary_symbol, const QStri
 void ExchangeService::stop_ws_stream() {
     if (ws_process_) {
         auto* proc = ws_process_;
+        
+        // Disconnect all signals FIRST to prevent stale reads during cleanup
+        proc->disconnect(this);
+        
+        // Set pointer to nullptr AFTER disconnect to prevent race conditions
         ws_process_ = nullptr;
         ws_connected_ = false;
-
-        // Disconnect all signals BEFORE cleanup to prevent stale reads
-        proc->disconnect(this);
 
         proc->terminate();
         // Non-blocking cleanup: kill after timeout if still running, then deleteLater
