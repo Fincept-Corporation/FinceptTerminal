@@ -414,18 +414,39 @@ void PythonRunner::start_next() {
 
         auto cb = std::move(req.cb);
         auto script_name = std::move(req.script);
+        
+        // Use QPointer to guard against use-after-free if process pointer is reused
+        // by Qt's memory allocator after deleteLater()
+        auto proc_ptr = QPointer<QProcess>(proc);
 
         connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-                [this, proc, cb = std::move(cb), script_name, is_code, temp_file](int exit_code, QProcess::ExitStatus) {
+                [this, proc_ptr, cb = std::move(cb), script_name, is_code, temp_file](int exit_code, QProcess::ExitStatus) {
+                    // Guard against use-after-free: verify process still exists
+                    if (!proc_ptr) {
+                        LOG_WARN("Python", "Process pointer became invalid during cleanup");
+                        cb({false, {}, "Process cleanup error", -1});
+                        return;
+                    }
+                    
+                    QProcess* proc = proc_ptr.data();
+                    
                     // Collect any remaining buffered data
-                    auto& bufs = proc_buffers_[proc];
+                    auto it = proc_buffers_.find(proc);
+                    if (it == proc_buffers_.end()) {
+                        LOG_WARN("Python", "Process buffers not found during cleanup");
+                        proc->deleteLater();
+                        return;
+                    }
+                    
+                    auto& bufs = it.value();
                     bufs.stdout_buf.append(proc->readAllStandardOutput());
                     bufs.stderr_buf.append(proc->readAllStandardError());
 
                     QString stdout_str = QString::fromUtf8(bufs.stdout_buf);
                     QString stderr_str = QString::fromUtf8(bufs.stderr_buf);
 
-                    proc_buffers_.remove(proc);
+                    // Remove from map BEFORE deleteLater to ensure atomic cleanup
+                    proc_buffers_.erase(it);
                     proc->deleteLater();
 
                     // Clean up temp file for inline code
@@ -462,16 +483,33 @@ void PythonRunner::start_next() {
                     start_next(); // drain queue
                 });
 
-        connect(proc, &QProcess::errorOccurred, this, [this, proc, cb, is_code, temp_file](QProcess::ProcessError) {
+        connect(proc, &QProcess::errorOccurred, this, [this, proc_ptr, cb, is_code, temp_file](QProcess::ProcessError) {
+            // Guard against use-after-free
+            if (!proc_ptr) {
+                LOG_WARN("Python", "Process pointer became invalid during error handling");
+                cb({false, {}, "Process error: pointer invalid", -1});
+                return;
+            }
+            
+            QProcess* proc = proc_ptr.data();
             QString error_msg = proc->errorString();
-            proc_buffers_.remove(proc);
+            
+            // Remove from map BEFORE deleteLater
+            auto it = proc_buffers_.find(proc);
+            if (it != proc_buffers_.end()) {
+                proc_buffers_.erase(it);
+            }
+            
             // Clean up any spilled arg temp files
             auto spilled = proc->property("spilled_files").toStringList();
             for (const QString& f : spilled)
                 QFile::remove(f);
+            
             proc->deleteLater();
+            
             if (is_code && !temp_file.isEmpty())
                 QFile::remove(temp_file);
+            
             cb({false, {}, "Process error: " + error_msg, -1});
 
             --active_count_;
