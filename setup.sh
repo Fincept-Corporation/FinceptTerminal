@@ -38,7 +38,7 @@ echo ""
 OS="$(uname -s)"
 case "$OS" in
     Linux*)  PLATFORM="linux" ; QT_KIT="gcc_64"     ; PRESET="linux-release" ;;
-    Darwin*) PLATFORM="macos" ; QT_KIT="clang_64"   ; PRESET="macos-release" ;;
+    Darwin*) PLATFORM="macos" ; QT_KIT="macos"       ; PRESET="macos-release" ;;
     *)       fail "Unsupported OS: $OS" ;;
 esac
 echo "Platform: $OS"
