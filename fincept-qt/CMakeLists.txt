@@ -1894,9 +1894,6 @@ if(WIN32)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${QT_CONSISTENT_PLUGINS}/sqldrivers/qsqlite.dll"
                 "$<TARGET_FILE_DIR:FinceptTerminal>/sqldrivers/qsqlite.dll"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${QT_CONSISTENT_PLUGINS}/sqldrivers/qsqlmimer.dll"
-                "$<TARGET_FILE_DIR:FinceptTerminal>/sqldrivers/qsqlmimer.dll"
             COMMENT "Overwriting sqldrivers with consistent Qt_temp plugins..."
         )
     endif()

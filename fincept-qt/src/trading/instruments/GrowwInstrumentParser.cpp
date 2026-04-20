@@ -197,14 +197,12 @@ QVector<Instrument> GrowwInstrumentParser::parse(const QByteArray& csv_data) {
     QString header = stream.readLine();
     Q_UNUSED(header)
 
-    int row = 1;
     int skipped = 0;
     results.reserve(250000); // Groww has ~200k rows (equity + full F&O chain)
     while (!stream.atEnd()) {
         QString line = stream.readLine();
         if (line.isEmpty())
             continue;
-        ++row;
 
         // Groww CSV has no quoted fields with commas — simple split is safe.
         QStringList cols = line.split(',');

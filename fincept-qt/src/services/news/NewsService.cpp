@@ -394,7 +394,7 @@ void NewsService::summarize_headlines(const QVector<NewsArticle>& articles, int 
     body["headlines"] = headline_array;
     body["count"] = count;
 
-    HttpClient::instance().post("/news/summarize", body, [this, cb, sig](Result<QJsonDocument> result) {
+    HttpClient::instance().post("/news/summarize", body, [cb, sig](Result<QJsonDocument> result) {
         if (result.is_err()) {
             LOG_WARN("NewsService", "Summarization failed: " + QString::fromStdString(result.error()));
             cb(false, {});
@@ -760,7 +760,7 @@ void NewsService::enrich_article(NewsArticle& article) {
 
     // Language detection — check for CJK, Cyrillic, Arabic, Devanagari characters
     auto detect_lang = [](const QString& s) -> QString {
-        int cjk = 0, cyrillic = 0, arabic = 0, devanagari = 0, latin = 0;
+        int cjk = 0, cyrillic = 0, arabic = 0, devanagari = 0;
         for (const auto& ch : s) {
             ushort u = ch.unicode();
             if (u >= 0x4e00 && u <= 0x9fff)
@@ -775,8 +775,6 @@ void NewsService::enrich_article(NewsArticle& article) {
                 arabic++;
             else if (u >= 0x0900 && u <= 0x097f)
                 devanagari++;
-            else if ((u >= 0x41 && u <= 0x5a) || (u >= 0x61 && u <= 0x7a))
-                latin++;
         }
         int total = s.size();
         if (total == 0)

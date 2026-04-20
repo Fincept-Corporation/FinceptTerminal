@@ -385,6 +385,18 @@ jobs:
           export PATH="${QT_ROOT_DIR}/bin:${PATH}"
           export LD_LIBRARY_PATH="${QT_ROOT_DIR}/lib:${LD_LIBRARY_PATH:-}"
 
+          # ── Strip unused Qt SQL driver plugins ───────────────────────────
+          # We only use SQLite. linuxdeploy-plugin-qt walks every plugin in
+          # Qt's sqldrivers/ folder and tries to resolve its dependencies —
+          # the Mimer plugin pulls in libmimerapi.so, which isn't installed
+          # on the runner and causes the deploy step to fail.
+          if [ -d "${QT_ROOT_DIR}/plugins/sqldrivers" ]; then
+            rm -f "${QT_ROOT_DIR}/plugins/sqldrivers/libqsqlmimer.so" \
+                  "${QT_ROOT_DIR}/plugins/sqldrivers/libqsqlodbc.so" \
+                  "${QT_ROOT_DIR}/plugins/sqldrivers/libqsqlpsql.so" \
+                  "${QT_ROOT_DIR}/plugins/sqldrivers/libqsqlmysql.so"
+          fi
+
           # Filename must match the regex in update-manifest:
           #   FinceptTerminal-<version>-linux-x64-setup.run
           # where <version> is CMAKE_PROJECT_VERSION (e.g. 4.0.2), NOT the

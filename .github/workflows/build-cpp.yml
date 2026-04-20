@@ -666,6 +666,19 @@ jobs:
             touch AppDir/usr/share/icons/hicolor/256x256/apps/fincept-terminal.png
           fi
 
+          # ── Strip unused Qt SQL driver plugins ───────────────────────────
+          # We only use SQLite. linuxdeploy-plugin-qt walks every plugin in
+          # Qt's sqldrivers/ folder and tries to resolve its dependencies —
+          # the Mimer plugin pulls in libmimerapi.so, which isn't installed
+          # on the runner and causes the deploy step to fail.
+          QT_SQLDRIVERS="${QT_ROOT_DIR:-$(dirname $(which qmake6 2>/dev/null || which qmake))/..}/plugins/sqldrivers"
+          if [ -d "${QT_SQLDRIVERS}" ]; then
+            rm -f "${QT_SQLDRIVERS}/libqsqlmimer.so" \
+                  "${QT_SQLDRIVERS}/libqsqlodbc.so" \
+                  "${QT_SQLDRIVERS}/libqsqlpsql.so" \
+                  "${QT_SQLDRIVERS}/libqsqlmysql.so"
+          fi
+
           # ── Build AppImage ────────────────────────────────────────────────
           # UPDATE_INFORMATION embeds zsync update URL so AppImageUpdate can
           # fetch deltas automatically from the GitHub release.
