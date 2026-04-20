@@ -320,10 +320,9 @@ FetchContent_MakeAvailable(QGeoView)
 # QGeoView has anonymous-namespace symbol clashes under unity build
 set_target_properties(qgeoview PROPERTIES UNITY_BUILD OFF)
 
-# Qt 6.8.3's QtGui on macOS carries a transitive "-framework AGL" in its link
-# interface. Apple removed AGL in macOS 14 (Sonoma), so the link fails on 14+
-# with: ld: framework 'AGL' not found. Scrub AGL from qgeoview's resolved link
-# libraries on Apple — OpenGL framework (also in Qt's interface) is sufficient.
+# Qt 6.8.3's FindWrapOpenGL.cmake adds "-framework AGL" which was removed in
+# macOS 14 (Sonoma). The patch in setup.sh fixes this at the Qt install level.
+# As a safety net, scrub AGL from qgeoview's resolved link libraries too.
 # See GitHub issue #140.
 if(APPLE)
     foreach(_prop LINK_LIBRARIES INTERFACE_LINK_LIBRARIES)
@@ -350,6 +349,18 @@ FetchContent_Declare(
     UPDATE_DISCONNECTED TRUE
 )
 FetchContent_MakeAvailable(SingleApplication)
+# ── Patch SingleApplication for Qt 6.8 QSharedMemory compat ────────────────────
+# Qt 6.8 changed the default QSharedMemory backend to PosixRealtime, but macOS's
+# shm_open rejects the keys that SingleApplication generates ("bad name").
+# Fix: use SystemV type which works on macOS (and Linux) with Qt 6.6+.
+if(UNIX)
+    file(READ ${SingleApplication_SOURCE_DIR}/singleapplication.cpp _sa_src)
+    string(REPLACE
+        "d->memory = new QSharedMemory( QNativeIpcKey( d->blockServerName ) );"
+        "d->memory = new QSharedMemory(); d->memory->setNativeKey(d->blockServerName, QNativeIpcKey::Type::SystemV);"
+        _sa_src "${_sa_src}")
+    file(WRITE ${SingleApplication_SOURCE_DIR}/singleapplication.cpp "${_sa_src}")
+endif()
 if(MSVC)
     target_compile_options(SingleApplication PRIVATE /W0)
 endif()
