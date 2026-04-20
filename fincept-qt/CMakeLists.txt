@@ -154,6 +154,22 @@ if(Qt6TextToSpeech_FOUND)
     set(HAS_TTS TRUE)
 endif()
 
+# macOS 14+ / Xcode 15+ removes the AGL framework. Qt6's WrapOpenGL target (pulled in
+# by Qt6::Gui) hardcodes a fallback to `-framework AGL` if it isn't found on the system.
+# We strip it from the INTERFACE_LINK_LIBRARIES to prevent `ld: framework 'AGL' not found`.
+if(APPLE AND TARGET WrapOpenGL::WrapOpenGL)
+    get_target_property(_gl_libs WrapOpenGL::WrapOpenGL INTERFACE_LINK_LIBRARIES)
+    if(_gl_libs)
+        set(_new_gl_libs "")
+        foreach(_lib IN LISTS _gl_libs)
+            if(NOT _lib MATCHES "AGL")
+                list(APPEND _new_gl_libs "${_lib}")
+            endif()
+        endforeach()
+        set_target_properties(WrapOpenGL::WrapOpenGL PROPERTIES INTERFACE_LINK_LIBRARIES "${_new_gl_libs}")
+    endif()
+endif()
+
 # ── FetchContent dependencies ─────────────────────────────────────────────────
 # Guard: prevent all FetchContent subdirectories from registering install()
 # rules that would pollute CPack and cause "file not found" errors on packaging.
