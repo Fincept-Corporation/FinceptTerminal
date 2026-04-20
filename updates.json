@@ -3,25 +3,25 @@
   "schema-version": 2,
   "updates": {
     "windows-x64": {
-      "latest-version": "4.0.2",
-      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.0.2/FinceptTerminal-4.0.2-windows-x64-setup.exe",
+      "latest-version": "4.0.1",
+      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.0.1/FinceptTerminal-4.0.1-windows-x64-setup.exe",
       "sha256": "",
-      "open-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.0.2",
-      "changelog": "Fincept Terminal v4.0.2 — see release notes."
+      "open-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.0.1",
+      "changelog": "Fincept Terminal v4.0.1 — see release notes."
     },
     "linux-x64": {
-      "latest-version": "4.0.2",
-      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.0.2/FinceptTerminal-4.0.2-linux-x64-setup.run",
+      "latest-version": "4.0.1",
+      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.0.1/FinceptTerminal-4.0.1-linux-x64-setup.run",
       "sha256": "",
-      "open-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.0.2",
-      "changelog": "Fincept Terminal v4.0.2 — see release notes."
+      "open-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.0.1",
+      "changelog": "Fincept Terminal v4.0.1 — see release notes."
     },
     "macos-arm64": {
-      "latest-version": "4.0.2",
-      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.0.2/FinceptTerminal-4.0.2-macos-arm64-setup.dmg",
+      "latest-version": "4.0.1",
+      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.0.1/FinceptTerminal-4.0.1-macos-arm64-setup.dmg",
       "sha256": "",
-      "open-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.0.2",
-      "changelog": "Fincept Terminal v4.0.2 — see release notes."
+      "open-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.0.1",
+      "changelog": "Fincept Terminal v4.0.1 — see release notes."
     }
   }
 }

@@ -431,8 +431,8 @@ jobs:
             <key>CFBundleIdentifier</key><string>com.fincept.terminal</string>
             <key>CFBundleName</key><string>FinceptTerminal</string>
             <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>4.0.2</string>
-            <key>CFBundleVersion</key><string>4.0.2</string>
+            <key>CFBundleShortVersionString</key><string>4.0.1</string>
+            <key>CFBundleVersion</key><string>4.0.1</string>
             <key>LSMinimumSystemVersion</key><string>13.0</string>
             <key>NSHighResolutionCapable</key><true/>
           </dict></plist>
@@ -887,7 +887,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Strip leading 'v' from tag so "v4.0.2" → "4.0.2" for latest-version
+          # Strip leading 'v' from tag so "v4.0.1" → "4.0.1" for latest-version
           VERSION="${TAG#v}"
           RELEASE_URL="https://github.com/${REPO}/releases/tag/${TAG}"
 

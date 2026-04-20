@@ -28,7 +28,7 @@ info() { echo -e "  ${YELLOW}$1${NC}"; }
 
 echo ""
 echo "================================================"
-echo "  Fincept Terminal v4.0.2 — Setup"
+echo "  Fincept Terminal v4.0.1 — Setup"
 echo "  Pinned: Qt ${QT_VERSION} | CMake ${CMAKE_MIN}+ | Python ${PYTHON_MIN}+"
 [ "$CI_MODE" = true ] && echo "  (CI mode — skipping interactive steps)"
 echo "================================================"

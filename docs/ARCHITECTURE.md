@@ -300,5 +300,5 @@ No external package manager required — Qt6 provides all core dependencies.
 
 ---
 
-**Version**: 4.0.2
+**Version**: 4.0.1
 **Last Updated**: March 2026
