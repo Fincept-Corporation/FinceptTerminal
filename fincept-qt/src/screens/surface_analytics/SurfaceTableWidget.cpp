@@ -199,10 +199,16 @@ void SurfaceTableWidget::show_yield(const YieldCurveData& d) {
             mx = std::max(mx, v);
         }
     std::vector<std::string> r_labels, c_labels;
-    for (int t : d.time_points)
-        r_labels.push_back("D" + std::to_string(t));
-    for (int m : d.maturities)
-        c_labels.push_back(std::to_string(m) + "M");
+    for (int t : d.time_points) {
+        std::string s = "D";
+        s += std::to_string(t);
+        r_labels.push_back(std::move(s));
+    }
+    for (int m : d.maturities) {
+        std::string s = std::to_string(m);
+        s += "M";
+        c_labels.push_back(std::move(s));
+    }
     show_generic_matrix(r_labels, c_labels, d.z, mn, mx, false);
 }
 

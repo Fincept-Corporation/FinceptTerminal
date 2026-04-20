@@ -235,7 +235,7 @@ void ChatModeScreen::on_rename_session(const QString& uuid, const QString& title
 void ChatModeScreen::on_send_requested(const QString& message, StreamMode mode) {
     LOG_INFO("ChatModeScreen",
              QString("Send [%1]: \"%2\"").arg(mode == StreamMode::Deep ? "deep" : "lite").arg(message.left(60)));
-    ensure_active_session([this, message, mode](const QString& uuid) {
+    ensure_active_session([message, mode](const QString& uuid) {
         ChatModeService::instance().stream_message(message, uuid, mode);
     });
 }

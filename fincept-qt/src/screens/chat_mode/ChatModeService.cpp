@@ -351,7 +351,7 @@ void ChatModeService::optimize_prompt(const QString& prompt, const QString& mode
     });
     timer->start();
 
-    connect(reply, &QNetworkReply::finished, this, [this, reply, cb = std::move(cb)]() mutable {
+    connect(reply, &QNetworkReply::finished, this, [reply, cb = std::move(cb)]() mutable {
         const QByteArray data = reply->readAll();
         const auto net_err = reply->error();
         reply->deleteLater();

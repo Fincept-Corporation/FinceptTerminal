@@ -84,7 +84,7 @@ void TerminalToolBridge::register_tools() {
 
     QPointer<TerminalToolBridge> self = this;
     ChatModeService::instance().register_terminal_tools(
-        tools_json, "4.0.0", count, [self, gen, count](bool ok, int registered, QString err) {
+        tools_json, "4.0.0", count, [self, gen](bool ok, int registered, QString err) {
             if (!self)
                 return;
             if (!ok) {
