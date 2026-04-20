@@ -28,14 +28,14 @@ using namespace fincept::ui::colors;
 
 static QString input_style() {
     return QString("background:%1;color:%2;border:1px solid %3;padding:3px 6px;font-size:12px;")
-        .arg(BG_RAISED, TEXT_PRIMARY, BORDER_MED);
+        .arg(BG_RAISED(), TEXT_PRIMARY(), BORDER_MED());
 }
 
 static QString combo_style() {
     return QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:3px 6px;font-size:12px;}"
                    "QComboBox::drop-down{border:none;}"
                    "QComboBox QAbstractItemView{background:%1;color:%2;selection-background-color:%4;}")
-        .arg(BG_RAISED, TEXT_PRIMARY, BORDER_MED, AMBER_DIM);
+        .arg(BG_RAISED(), TEXT_PRIMARY(), BORDER_MED(), AMBER_DIM());
 }
 
 static QString list_style() {
@@ -43,20 +43,20 @@ static QString list_style() {
                    "QListWidget::item{padding:3px 6px;border-bottom:1px solid %2;}"
                    "QListWidget::item:selected{background:%4;color:%3;}"
                    "QListWidget::item:hover{background:%5;}")
-        .arg(BG_BASE, BORDER_DIM, TEXT_PRIMARY, AMBER_DIM, BG_HOVER);
+        .arg(BG_BASE(), BORDER_DIM(), TEXT_PRIMARY(), AMBER_DIM(), BG_HOVER());
 }
 
 static QLabel* section_label(const QString& text) {
     auto* l = new QLabel(text);
     l->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;"
                              "padding:8px 0 3px 0;border-bottom:1px solid %2;margin-bottom:2px;")
-                         .arg(AMBER, BORDER_DIM));
+                         .arg(AMBER(), BORDER_DIM()));
     return l;
 }
 
 static QLabel* field_lbl(const QString& text) {
     auto* l = new QLabel(text);
-    l->setStyleSheet(QString("color:%1;font-size:10px;min-width:80px;").arg(TEXT_SECONDARY));
+    l->setStyleSheet(QString("color:%1;font-size:10px;min-width:80px;").arg(TEXT_SECONDARY()));
     return l;
 }
 
