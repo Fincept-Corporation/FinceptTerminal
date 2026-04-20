@@ -127,6 +127,27 @@ option(FINCEPT_BUILD_TESTS "Build the Fincept Terminal test suite" OFF)
 # installer. Developers may override for local experimentation with
 # -DFINCEPT_ALLOW_QT_DRIFT=ON (not for CI or release builds).
 set(FINCEPT_QT_VERSION 6.8.3)
+
+# Qt 6.8 FindWrapOpenGL.cmake hard-codes "-framework AGL" as a fallback when
+# find_library(AGL) fails. Apple removed AGL in macOS 14+ (Sonoma), causing
+# linker errors on modern SDKs. Pre-create WrapOpenGL::WrapOpenGL without AGL
+# so Qt's FindWrapOpenGL takes its early-return path (target already exists).
+if(APPLE AND NOT TARGET WrapOpenGL::WrapOpenGL)
+    find_package(OpenGL QUIET)
+    if(OpenGL_FOUND)
+        add_library(WrapOpenGL::WrapOpenGL INTERFACE IMPORTED)
+        get_target_property(_fincept_ogl_loc OpenGL::GL IMPORTED_LOCATION)
+        if(_fincept_ogl_loc AND NOT _fincept_ogl_loc MATCHES "/([^/]+)\\.framework$")
+            get_filename_component(_fincept_ogl_path "${_fincept_ogl_loc}" DIRECTORY)
+        endif()
+        if(NOT _fincept_ogl_path)
+            set(_fincept_ogl_path "-framework OpenGL")
+        endif()
+        target_link_libraries(WrapOpenGL::WrapOpenGL INTERFACE "${_fincept_ogl_path}")
+        set(WrapOpenGL_FOUND ON)
+    endif()
+endif()
+
 if(FINCEPT_ALLOW_QT_DRIFT)
     find_package(Qt6 REQUIRED COMPONENTS
         Widgets Charts PrintSupport Network Sql Concurrent Multimedia)
