@@ -44,10 +44,18 @@ endif()
 # Without this, CMake embeds build-tree rpaths (e.g. _deps/qgeoview-build/lib)
 # and CPack IFW fails trying to delete them after macdeployqt already rewrote them.
 if(APPLE)
+    # If not explicitly provided by the caller/preset, pin the minimum
+    # supported macOS version so builds on newer runners do not accidentally
+    # produce bundles that require that newer host OS at runtime.
+    if(NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET OR CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING
+            "Minimum macOS version supported by Fincept Terminal" FORCE)
+    endif()
     set(CMAKE_MACOSX_RPATH ON)
     set(CMAKE_INSTALL_RPATH "@executable_path/../Frameworks;@executable_path/../lib")
     set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
     set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
+    message(STATUS "macOS deployment target: ${CMAKE_OSX_DEPLOYMENT_TARGET}")
 endif()
 
 # Export compile_commands.json for clang-tidy

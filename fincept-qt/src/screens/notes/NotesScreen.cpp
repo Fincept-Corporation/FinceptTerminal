@@ -116,7 +116,7 @@ static QString priority_color(const QString& p) {
 // ── Constructor ──────────────────────────────────────────────────────────────
 
 NotesScreen::NotesScreen(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(QString("background: %1;").arg(BG_BASE));
+    setStyleSheet(QString("background: %1;").arg(BG_BASE()));
     build_ui();
     load_notes();
 }
@@ -143,7 +143,7 @@ void NotesScreen::build_ui() {
 QWidget* NotesScreen::build_category_sidebar() {
     auto* panel = new QWidget(this);
     panel->setFixedWidth(200);
-    panel->setStyleSheet(QString("background: %1; border-right: 1px solid %2;").arg(BG_SURFACE, BORDER_DIM));
+    panel->setStyleSheet(QString("background: %1; border-right: 1px solid %2;").arg(BG_SURFACE(), BORDER_DIM()));
 
     auto* lay = new QVBoxLayout(panel);
     lay->setContentsMargins(0, 0, 0, 0);
@@ -155,7 +155,7 @@ QWidget* NotesScreen::build_category_sidebar() {
     header->setStyleSheet(QString("background: %1; color: %2; font-size: 12px; font-weight: 700; "
                                   "letter-spacing: 0.5px; border-bottom: 1px solid %3; padding-left: 12px; "
                                   "font-family: 'Consolas','Courier New',monospace;")
-                              .arg(BG_RAISED, AMBER, BORDER_DIM));
+                              .arg(BG_RAISED(), AMBER(), BORDER_DIM()));
     lay->addWidget(header);
 
     // Category list
@@ -174,7 +174,7 @@ QWidget* NotesScreen::build_category_sidebar() {
     stats_label_->setAlignment(Qt::AlignCenter);
     stats_label_->setStyleSheet(QString("background: %1; color: %2; font-size: 11px; border-top: 1px solid %3; "
                                         "font-family: 'Consolas','Courier New',monospace;")
-                                    .arg(BG_SURFACE, TEXT_SECONDARY, BORDER_DIM));
+                                    .arg(BG_SURFACE(), TEXT_SECONDARY(), BORDER_DIM()));
     lay->addWidget(stats_label_);
 
     return panel;
@@ -185,7 +185,7 @@ QWidget* NotesScreen::build_category_sidebar() {
 QWidget* NotesScreen::build_notes_list_panel() {
     auto* panel = new QWidget(this);
     panel->setMinimumWidth(280);
-    panel->setStyleSheet(QString("background: %1;").arg(BG_SURFACE));
+    panel->setStyleSheet(QString("background: %1;").arg(BG_SURFACE()));
 
     auto* lay = new QVBoxLayout(panel);
     lay->setContentsMargins(0, 0, 0, 0);
@@ -194,7 +194,7 @@ QWidget* NotesScreen::build_notes_list_panel() {
     // Header with search + new button
     auto* toolbar = new QWidget(this);
     toolbar->setFixedHeight(34);
-    toolbar->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;").arg(BG_RAISED, BORDER_DIM));
+    toolbar->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;").arg(BG_RAISED(), BORDER_DIM()));
     auto* tl = new QHBoxLayout(toolbar);
     tl->setContentsMargins(8, 0, 8, 0);
     tl->setSpacing(6);
@@ -226,7 +226,7 @@ QWidget* NotesScreen::build_notes_list_panel() {
     count_label_->setAlignment(Qt::AlignCenter);
     count_label_->setStyleSheet(QString("background: %1; color: %2; font-size: 11px; border-top: 1px solid %3; "
                                         "font-family: 'Consolas','Courier New',monospace;")
-                                    .arg(BG_SURFACE, TEXT_TERTIARY, BORDER_DIM));
+                                    .arg(BG_SURFACE(), TEXT_TERTIARY(), BORDER_DIM()));
     lay->addWidget(count_label_);
 
     return panel;
@@ -239,18 +239,18 @@ QWidget* NotesScreen::build_editor_panel() {
 
     // ── Page 0: Empty state ──────────────────────────────────────────────────
     auto* empty = new QWidget(this);
-    empty->setStyleSheet(QString("background: %1;").arg(BG_BASE));
+    empty->setStyleSheet(QString("background: %1;").arg(BG_BASE()));
     auto* el = new QVBoxLayout(empty);
     el->setAlignment(Qt::AlignCenter);
     auto* empty_label = new QLabel("Select a note or create a new one");
     empty_label->setStyleSheet(
-        QString("color: %1; font-size: 14px; font-family: 'Consolas','Courier New',monospace;").arg(TEXT_TERTIARY));
+        QString("color: %1; font-size: 14px; font-family: 'Consolas','Courier New',monospace;").arg(TEXT_TERTIARY()));
     el->addWidget(empty_label, 0, Qt::AlignCenter);
     right_stack_->addWidget(empty); // index 0
 
     // ── Page 1: View mode ────────────────────────────────────────────────────
     auto* view_page = new QWidget(this);
-    view_page->setStyleSheet(QString("background: %1;").arg(BG_BASE));
+    view_page->setStyleSheet(QString("background: %1;").arg(BG_BASE() ));
     auto* vl = new QVBoxLayout(view_page);
     vl->setContentsMargins(14, 14, 14, 14);
     vl->setSpacing(10);
@@ -283,19 +283,19 @@ QWidget* NotesScreen::build_editor_panel() {
     view_title_ = new QLabel;
     view_title_->setStyleSheet(
         QString("color: %1; font-size: 20px; font-weight: bold; font-family: 'Consolas','Courier New',monospace;")
-            .arg(TEXT_PRIMARY));
+            .arg(TEXT_PRIMARY()));
     view_title_->setWordWrap(true);
     vl->addWidget(view_title_);
 
     view_meta_ = new QLabel;
     view_meta_->setStyleSheet(
-        QString("color: %1; font-size: 11px; font-family: 'Consolas','Courier New',monospace;").arg(TEXT_SECONDARY));
+        QString("color: %1; font-size: 11px; font-family: 'Consolas','Courier New',monospace;").arg(TEXT_SECONDARY()));
     view_meta_->setWordWrap(true);
     vl->addWidget(view_meta_);
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet(QString("color: %1;").arg(BORDER_DIM));
+    sep->setStyleSheet(QString("color: %1;").arg(BORDER_DIM()));
     vl->addWidget(sep);
 
     // Scroll area for content
@@ -305,7 +305,7 @@ QWidget* NotesScreen::build_editor_panel() {
     view_content_ = new QLabel;
     view_content_->setStyleSheet(QString("color: %1; font-size: 14px; font-family: 'Consolas','Courier New',monospace; "
                                          "line-height: 1.6; background: transparent; padding: 4px;")
-                                     .arg(TEXT_PRIMARY));
+                                     .arg(TEXT_PRIMARY()));
     view_content_->setWordWrap(true);
     view_content_->setTextFormat(Qt::PlainText);
     view_content_->setAlignment(Qt::AlignTop | Qt::AlignLeft);
@@ -316,7 +316,7 @@ QWidget* NotesScreen::build_editor_panel() {
 
     // ── Page 2: Edit mode ────────────────────────────────────────────────────
     auto* edit_page = new QWidget(this);
-    edit_page->setStyleSheet(QString("background: %1;").arg(BG_BASE));
+    edit_page->setStyleSheet(QString("background: %1;").arg(BG_BASE()));
     auto* edl = new QVBoxLayout(edit_page);
     edl->setContentsMargins(14, 14, 14, 14);
     edl->setSpacing(10);
@@ -363,7 +363,7 @@ QWidget* NotesScreen::build_editor_panel() {
     auto make_label = [](const QString& text) {
         auto* l = new QLabel(text);
         l->setStyleSheet(QString("color: %1; font-size: 11px; font-family: 'Consolas','Courier New',monospace;")
-                             .arg(TEXT_SECONDARY));
+                             .arg(TEXT_SECONDARY()));
         return l;
     };
 

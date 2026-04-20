@@ -201,7 +201,7 @@ void MaritimeScreen::set_status(const QString& text, const ui::ColorToken& color
         return;
     status_label_->setText(text);
     status_label_->setStyleSheet(
-        QString("color:%1; font-size:8px; font-weight:700; font-family:%2;").arg(color).arg(ui::fonts::DATA_FAMILY));
+        QString("color:%1; font-size:8px; font-weight:700; font-family:%2;").arg(C(color) ).arg(ui::fonts::DATA_FAMILY));
 }
 
 // ── Build UI ─────────────────────────────────────────────────────────────────
@@ -296,7 +296,7 @@ QWidget* MaritimeScreen::build_left_panel() {
                                .arg(ui::fonts::DATA_FAMILY));
         auto* val = new QLabel(value, box);
         val->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700; font-family:%2;")
-                               .arg(val_color)
+                               .arg(C(val_color))
                                .arg(ui::fonts::DATA_FAMILY));
         val->setObjectName(label);
         bvl->addWidget(lbl);
