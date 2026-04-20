@@ -26,6 +26,10 @@
 #include "services/markets/MarketDataService.h"
 #include "services/news/NewsService.h"
 #include "services/polymarket/PolymarketWebSocket.h"
+#include "services/prediction/PredictionCredentialStore.h"
+#include "services/prediction/PredictionExchangeRegistry.h"
+#include "services/prediction/kalshi/KalshiAdapter.h"
+#include "services/prediction/polymarket/PolymarketAdapter.h"
 #include "services/relationship_map/RelationshipMapService.h"
 #include "trading/DataStreamManager.h"
 #include "trading/ExchangeService.h"
@@ -46,6 +50,8 @@
 #include <QStandardPaths>
 #include <QTimer>
 #include <QUuid>
+
+#include <memory>
 
 #include <singleapplication.h>
 
@@ -113,8 +119,31 @@ int main(int argc, char* argv[]) {
     fincept::services::MarketDataService::instance().ensure_registered_with_hub();
     // Phase 4: ExchangeService as the ws:kraken:* / ws:hyperliquid:* producer.
     fincept::trading::ExchangeService::instance().ensure_registered_with_hub();
-    // Phase 4: PolymarketWebSocket as the polymarket:* producer.
+    // Prediction Markets — multi-exchange tab (Polymarket, Kalshi, …).
+    // PolymarketWebSocket is the hub producer for `prediction:polymarket:*`;
+    // the adapter layer translates exchange-local types into the unified
+    // prediction::* data model for the screen.
     fincept::services::polymarket::PolymarketWebSocket::instance().ensure_registered_with_hub();
+    {
+        auto& reg = fincept::services::prediction::PredictionExchangeRegistry::instance();
+        reg.register_adapter(
+            std::make_unique<fincept::services::prediction::polymarket_ns::PolymarketAdapter>());
+        reg.register_adapter(
+            std::make_unique<fincept::services::prediction::kalshi_ns::KalshiAdapter>());
+
+        // Hydrate credentials from SecureStorage if previously saved. This
+        // has to happen after registration so the adapters exist.
+        if (auto* pm = dynamic_cast<fincept::services::prediction::polymarket_ns::PolymarketAdapter*>(
+                reg.adapter(QStringLiteral("polymarket")))) {
+            pm->reload_credentials();
+        }
+        if (auto* ks = dynamic_cast<fincept::services::prediction::kalshi_ns::KalshiAdapter*>(
+                reg.adapter(QStringLiteral("kalshi")))) {
+            if (auto creds = fincept::services::prediction::PredictionCredentialStore::load_kalshi()) {
+                ks->set_credentials(*creds);
+            }
+        }
+    }
     // Phase 5: NewsService as the news:general / news:symbol:* /
     // news:category:* / news:cluster:* producer.
     fincept::services::NewsService::instance().ensure_registered_with_hub();

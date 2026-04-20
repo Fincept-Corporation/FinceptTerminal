@@ -9,7 +9,7 @@
 namespace fincept::screens::polymarket {
 
 using namespace fincept::ui;
-using namespace fincept::services::polymarket;
+using namespace fincept::services::prediction;
 
 PolymarketBrowsePanel::PolymarketBrowsePanel(QWidget* parent) : QWidget(parent) {
     setObjectName("polyBrowsePanel");
@@ -73,14 +73,14 @@ PolymarketBrowsePanel::PolymarketBrowsePanel(QWidget* parent) : QWidget(parent) 
     vl->addWidget(page_bar);
 }
 
-void PolymarketBrowsePanel::set_markets(const QVector<Market>& markets) {
+void PolymarketBrowsePanel::set_markets(const QVector<PredictionMarket>& markets) {
     current_page_ = 0;
     model_->set_markets(markets);
     header_->setText(QString("MARKETS (%1)").arg(markets.size()));
     update_page();
 }
 
-void PolymarketBrowsePanel::set_events(const QVector<Event>& events) {
+void PolymarketBrowsePanel::set_events(const QVector<PredictionEvent>& events) {
     current_page_ = 0;
     model_->set_events(events);
     header_->setText(QString("EVENTS (%1)").arg(events.size()));
@@ -90,6 +90,17 @@ void PolymarketBrowsePanel::set_events(const QVector<Event>& events) {
 void PolymarketBrowsePanel::set_loading(bool loading) {
     if (loading)
         header_->setText("LOADING...");
+}
+
+void PolymarketBrowsePanel::clear() {
+    model_->set_markets({});
+    header_->setText("MARKETS");
+    current_page_ = 0;
+    update_page();
+}
+
+void PolymarketBrowsePanel::set_presentation(const ExchangePresentation& p) {
+    if (model_) model_->set_presentation(p);
 }
 
 void PolymarketBrowsePanel::on_item_clicked(const QModelIndex& index) {

@@ -8,6 +8,8 @@
 #include <QTimer>
 #include <QtConcurrent/QtConcurrent>
 
+#include <tuple>
+
 namespace fincept {
 
 // ── Singleton ────────────────────────────────────────────────────────────────
@@ -140,7 +142,7 @@ void ScreenStateManager::flush_pending() {
 void ScreenStateManager::write_async(const QString& key, const QVariantMap& state, int version,
                                      const QString& session_id) {
     // Capture by value — no raw 'this', no widget pointers (P8 compliant).
-    QtConcurrent::run([key, state, version, session_id]() {
+    std::ignore = QtConcurrent::run([key, state, version, session_id]() {
         // Convert QVariantMap → QJsonObject
         QJsonObject obj;
         for (auto it = state.constBegin(); it != state.constEnd(); ++it)

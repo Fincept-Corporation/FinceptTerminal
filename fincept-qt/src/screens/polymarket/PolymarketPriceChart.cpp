@@ -9,7 +9,7 @@
 namespace fincept::screens::polymarket {
 
 using namespace fincept::ui;
-using namespace fincept::services::polymarket;
+using namespace fincept::services::prediction;
 
 static const QStringList INTERVAL_LABELS = {"1H", "6H", "1D", "1W", "1M", "ALL"};
 static const QStringList INTERVAL_VALUES = {"1h", "6h", "1d", "1w", "1m", "max"};
@@ -43,9 +43,10 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
     olbl->setStyleSheet(lbl->styleSheet());
     toolbar->addWidget(olbl);
 
+    // Outcome combo is populated dynamically via set_outcome_labels() when
+    // a market is selected — no hardcoded YES/NO.
     outcome_combo_ = new QComboBox;
-    outcome_combo_->addItems({"YES", "NO"});
-    outcome_combo_->setFixedWidth(70);
+    outcome_combo_->setFixedWidth(90);
     connect(outcome_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &PolymarketPriceChart::outcome_changed);
     toolbar->addWidget(outcome_combo_);
@@ -70,6 +71,9 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
 }
 
 void PolymarketPriceChart::set_price_history(const PriceHistory& history) {
+    last_history_ = history;
+    has_last_history_ = true;
+
     auto* layout = chart_container_->layout();
     while (layout->count() > 0) {
         auto* item = layout->takeAt(0);
@@ -86,23 +90,37 @@ void PolymarketPriceChart::set_price_history(const PriceHistory& history) {
         return;
     }
 
-    QVector<ChartFactory::DataPoint> data;
-    data.reserve(history.points.size());
+    QVector<ChartFactory::DataPoint> points;
+    points.reserve(history.points.size());
     for (const auto& pt : history.points) {
-        data.append({static_cast<double>(pt.timestamp), pt.price * 100.0}); // scale to cents
+        // prediction::PricePoint is always in ts_ms + 0..1 probability space
+        // (Kalshi cents are divided by 100 in the adapter type map). Y-axis
+        // is rendered as 0–100 cents regardless so the chart scale is
+        // consistent; the axis *label* comes from the presentation.
+        points.append({static_cast<double>(pt.ts_ms), pt.price * 100.0});
     }
 
-    auto* chart_view = ChartFactory::line_chart("PROBABILITY", data, colors::AMBER);
+    // Accent-colored series ties the chart back to the active exchange.
+    auto* chart_view = ChartFactory::line_chart(presentation_.chart_y_label, points,
+                                                presentation_.accent.name());
     layout->addWidget(chart_view);
 }
 
 void PolymarketPriceChart::set_current_price(double price) {
-    price_label_->setText(QString("%1c").arg(qRound(price * 100)));
+    price_label_->setText(presentation_.format_price(price));
 }
 
-void PolymarketPriceChart::set_token_labels(const QStringList& labels) {
+void PolymarketPriceChart::set_presentation(const ExchangePresentation& p) {
+    presentation_ = p;
+    if (has_last_history_) set_price_history(last_history_);
+}
+
+void PolymarketPriceChart::set_outcome_labels(const QStringList& labels) {
+    const QSignalBlocker block(outcome_combo_);
     outcome_combo_->clear();
     outcome_combo_->addItems(labels);
+    if (!labels.isEmpty())
+        outcome_combo_->setCurrentIndex(0);
 }
 
 } // namespace fincept::screens::polymarket

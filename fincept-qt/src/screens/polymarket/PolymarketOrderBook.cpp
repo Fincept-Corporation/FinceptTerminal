@@ -12,7 +12,7 @@
 namespace fincept::screens::polymarket {
 
 using namespace fincept::ui;
-using namespace fincept::services::polymarket;
+using namespace fincept::services::prediction;
 
 PolymarketOrderBook::PolymarketOrderBook(QWidget* parent) : QWidget(parent) {
     setMinimumHeight(200);
@@ -32,7 +32,7 @@ PolymarketOrderBook::PolymarketOrderBook(QWidget* parent) : QWidget(parent) {
     });
 }
 
-void PolymarketOrderBook::set_data(const OrderBook& book) {
+void PolymarketOrderBook::set_data(const PredictionOrderBook& book) {
     QMutexLocker lock(&mutex_);
     bids_ = book.bids;
     asks_ = book.asks;

@@ -7,16 +7,15 @@
 namespace fincept::screens::polymarket {
 
 using namespace fincept::ui;
-using namespace fincept::services::polymarket;
+using namespace fincept::services::prediction;
 
-static QString fmt_vol(double v) {
-    if (v >= 1e9)
-        return QString("$%1B").arg(v / 1e9, 0, 'f', 1);
-    if (v >= 1e6)
-        return QString("$%1M").arg(v / 1e6, 0, 'f', 1);
-    if (v >= 1e3)
-        return QString("$%1K").arg(v / 1e3, 0, 'f', 1);
-    return QString("$%1").arg(v, 0, 'f', 0);
+// Outcome palette for multi-outcome markets. Slots 0–1 are the primary
+// yes/no pair and are accent-colored dynamically at paint time; slots 2+
+// are fallbacks used only for 3+-way Polymarket markets.
+static const char* OUTCOME_BAR_COLORS[] = {"#00D66F", "#FF3B3B", "#FF8800", "#4F8EF7", "#A855F7"};
+
+static QChar outcome_initial(const QString& name) {
+    return name.isEmpty() ? QChar('?') : name.at(0).toUpper();
 }
 
 // ── Model ───────────────────────────────────────────────────────────────────
@@ -39,16 +38,18 @@ QVariant PolymarketMarketCardModel::data(const QModelIndex& index, int role) con
     return {};
 }
 
-void PolymarketMarketCardModel::set_markets(const QVector<Market>& markets) {
+void PolymarketMarketCardModel::set_markets(const QVector<PredictionMarket>& markets) {
     beginResetModel();
     markets_ = markets;
+    events_.clear();
     view_mode_ = "markets";
     endResetModel();
 }
 
-void PolymarketMarketCardModel::set_events(const QVector<Event>& events) {
+void PolymarketMarketCardModel::set_events(const QVector<PredictionEvent>& events) {
     beginResetModel();
     events_ = events;
+    markets_.clear();
     view_mode_ = "events";
     endResetModel();
 }
@@ -57,14 +58,23 @@ void PolymarketMarketCardModel::set_view_mode(const QString& mode) {
     view_mode_ = mode;
 }
 
-const Market* PolymarketMarketCardModel::market_at(int row) const {
-    if (row >= 0 && row < markets_.size())
+void PolymarketMarketCardModel::set_presentation(const ExchangePresentation& p) {
+    presentation_ = p;
+    // Full reset — the delegate re-paints from scratch and picks up the
+    // new accent/formatter. A targeted dataChanged(0..N) would be cheaper
+    // but the list is bounded (20/page) so the difference is invisible.
+    beginResetModel();
+    endResetModel();
+}
+
+const PredictionMarket* PolymarketMarketCardModel::market_at(int row) const {
+    if (view_mode_ == "markets" && row >= 0 && row < markets_.size())
         return &markets_[row];
     return nullptr;
 }
 
-const Event* PolymarketMarketCardModel::event_at(int row) const {
-    if (row >= 0 && row < events_.size())
+const PredictionEvent* PolymarketMarketCardModel::event_at(int row) const {
+    if (view_mode_ == "events" && row >= 0 && row < events_.size())
         return &events_[row];
     return nullptr;
 }
@@ -86,7 +96,6 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
     bool selected = option.state & QStyle::State_Selected;
     bool hovered = option.state & QStyle::State_MouseOver;
 
-    // Background
     if (selected) {
         painter->fillRect(r, QColor(colors::AMBER()).darker(400));
         painter->setPen(QPen(QColor(colors::AMBER()), 2));
@@ -97,7 +106,6 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
         painter->fillRect(r, QColor(colors::BG_BASE()));
     }
 
-    // Bottom border
     painter->setPen(QColor(colors::BORDER_DIM()));
     painter->drawLine(r.left(), r.bottom(), r.right(), r.bottom());
 
@@ -106,18 +114,20 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
         painter->restore();
         return;
     }
+    const auto& pres = model->presentation();
 
     int row = index.row();
     int x = r.left() + 10;
     int y = r.top() + 8;
     int w = r.width() - 20;
 
-    const Market* mkt = model->market_at(row);
-    const Event* evt = model->event_at(row);
+    const PredictionMarket* mkt = model->market_at(row);
+    const PredictionEvent* evt = model->event_at(row);
 
     QString title;
     double vol = 0;
     QVector<Outcome> outcomes;
+    int sub_market_count = 0;
 
     if (mkt) {
         title = mkt->question;
@@ -126,6 +136,7 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
     } else if (evt) {
         title = evt->title;
         vol = evt->volume;
+        sub_market_count = evt->markets.size();
         if (!evt->markets.isEmpty())
             outcomes = evt->markets[0].outcomes;
     } else {
@@ -133,51 +144,52 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
         return;
     }
 
-    // Title (2 lines max)
+    // Title (2 lines max). Selected row gets painted in the exchange accent.
     QFont font(fonts::DATA_FAMILY, 11);
     font.setWeight(QFont::Bold);
     painter->setFont(font);
-    painter->setPen(QColor(selected ? colors::AMBER() : colors::TEXT_PRIMARY()));
+    painter->setPen(QColor(selected ? pres.accent : QColor(colors::TEXT_PRIMARY())));
     QRect title_rect(x, y, w, 30);
     painter->drawText(title_rect, Qt::AlignLeft | Qt::TextWordWrap, title.left(80));
     y += 32;
 
-    // Probability bars
-    if (outcomes.size() >= 2) {
-        double yes_pct = outcomes[0].price;
-        double no_pct = outcomes[1].price;
-        int bar_w = w - 60;
-        int bar_h = 14;
-
-        // YES bar
-        int yes_w = static_cast<int>(bar_w * yes_pct);
-        painter->fillRect(x, y, yes_w, bar_h, QColor("#00D66F"));
-        painter->fillRect(x + yes_w, y, bar_w - yes_w, bar_h, QColor(colors::BG_RAISED()));
-
+    // Dynamic outcome bars — read names/prices from prediction::Outcome so
+    // Polymarket (Yes/No), Kalshi (yes/no), and custom multi-outcome markets
+    // all render without code changes. Render up to 2 rows. Price labels
+    // are formatted by the presentation (cents suffix on Polymarket,
+    // dollars on Kalshi).
+    const int bars_to_draw = qMin(2, outcomes.size());
+    if (bars_to_draw >= 2) {
+        const int bar_w = w - 80;  // wider right gutter for "$0.52" vs "Y 52¢"
+        const int bar_h = 14;
         QFont small_font(fonts::DATA_FAMILY, 9);
         small_font.setWeight(QFont::Bold);
-        painter->setFont(small_font);
-        painter->setPen(QColor(colors::TEXT_PRIMARY()));
-        painter->drawText(x + bar_w + 4, y, 52, bar_h, Qt::AlignLeft | Qt::AlignVCenter,
-                          QString("Y %1c").arg(qRound(yes_pct * 100)));
-        y += bar_h + 2;
 
-        // NO bar
-        int no_w = static_cast<int>(bar_w * no_pct);
-        painter->fillRect(x, y, no_w, bar_h, QColor("#FF3B3B"));
-        painter->fillRect(x + no_w, y, bar_w - no_w, bar_h, QColor(colors::BG_RAISED()));
-        painter->drawText(x + bar_w + 4, y, 52, bar_h, Qt::AlignLeft | Qt::AlignVCenter,
-                          QString("N %1c").arg(qRound(no_pct * 100)));
+        for (int i = 0; i < bars_to_draw; ++i) {
+            const auto& o = outcomes[i];
+            const double pct = qBound(0.0, o.price, 1.0);
+            const int filled = static_cast<int>(bar_w * pct);
+            // Slot 0 tracks the exchange accent; slot 1 stays red so the
+            // primary/secondary outcome split remains readable even when
+            // the accent itself shifts.
+            QColor bar_color = (i == 0) ? pres.accent : QColor(OUTCOME_BAR_COLORS[qMin(i, 4)]);
+            painter->fillRect(x, y, filled, bar_h, bar_color);
+            painter->fillRect(x + filled, y, bar_w - filled, bar_h, QColor(colors::BG_RAISED()));
+
+            painter->setFont(small_font);
+            painter->setPen(QColor(colors::TEXT_PRIMARY()));
+            painter->drawText(x + bar_w + 4, y, 72, bar_h, Qt::AlignLeft | Qt::AlignVCenter,
+                              QString("%1 %2").arg(outcome_initial(o.name)).arg(pres.format_price(pct)));
+            y += bar_h + 2;
+        }
     } else {
-        // Volume line for events without outcomes
         QFont small_font(fonts::DATA_FAMILY, 10);
         painter->setFont(small_font);
         painter->setPen(QColor(colors::TEXT_SECONDARY()));
-        painter->drawText(x, y, w, 16, Qt::AlignLeft | Qt::AlignVCenter, fmt_vol(vol));
-
-        if (evt) {
+        painter->drawText(x, y, w, 16, Qt::AlignLeft | Qt::AlignVCenter, pres.format_volume(vol));
+        if (evt && sub_market_count > 0) {
             painter->drawText(x + 80, y, w - 80, 16, Qt::AlignLeft | Qt::AlignVCenter,
-                              QString("%1 markets").arg(evt->markets.size()));
+                              QString("%1 markets").arg(sub_market_count));
         }
     }
 

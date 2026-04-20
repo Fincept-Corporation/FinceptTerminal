@@ -335,8 +335,8 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         auto res = fincept::LlmProfileRepository::instance().list_profiles();
         if (res.is_ok()) {
             for (const auto& p : res.value()) {
-                QString label = p.name + "  [" + p.provider + " / " + p.model_id + "]";
-                combo->addItem(label, p.id);
+                QString display = p.name + "  [" + p.provider + " / " + p.model_id + "]";
+                combo->addItem(display, p.id);
                 if (p.id == saved)
                     combo->setCurrentIndex(combo->count() - 1);
             }

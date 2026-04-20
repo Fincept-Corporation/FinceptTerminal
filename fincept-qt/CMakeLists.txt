@@ -610,6 +610,16 @@ set(SERVICE_SOURCES
     src/services/polymarket/PolymarketService.cpp
     src/services/polymarket/PolymarketWebSocket.cpp
 
+    # Prediction Markets — exchange-agnostic abstraction (Polymarket, Kalshi, …)
+    src/services/prediction/PredictionExchangeAdapter.cpp
+    src/services/prediction/PredictionExchangeRegistry.cpp
+    src/services/prediction/PredictionCredentialStore.cpp
+    src/services/prediction/polymarket/PolymarketTypeMap.cpp
+    src/services/prediction/polymarket/PolymarketAdapter.cpp
+    src/services/prediction/kalshi/KalshiRestClient.cpp
+    src/services/prediction/kalshi/KalshiWsClient.cpp
+    src/services/prediction/kalshi/KalshiAdapter.cpp
+
     # Speech-to-text service (Python speech_recognition + Google API)
     src/services/stt/SpeechService.cpp
 
@@ -896,7 +906,7 @@ set(SCREEN_SOURCES
     src/screens/economics/panels/BeaPanel.cpp
     src/screens/economics/panels/FinceptMacroPanel.cpp
 
-    # Polymarket
+    # Polymarket / Prediction Markets
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
     src/screens/polymarket/PolymarketMarketCard.cpp
@@ -907,6 +917,8 @@ set(SCREEN_SOURCES
     src/screens/polymarket/PolymarketLeaderboard.cpp
     src/screens/polymarket/PolymarketActivityFeed.cpp
     src/screens/polymarket/PolymarketStatusBar.cpp
+    src/screens/polymarket/PredictionAccountDialog.cpp
+    src/screens/polymarket/ExchangePresentation.cpp
 
     # Alpha Arena
     src/screens/alpha_arena/AlphaArenaScreen.cpp
@@ -1275,6 +1287,7 @@ set_source_files_properties(
     src/screens/polymarket/PolymarketLeaderboard.cpp
     src/screens/polymarket/PolymarketActivityFeed.cpp
     src/screens/polymarket/PolymarketStatusBar.cpp
+    src/screens/polymarket/PredictionAccountDialog.cpp
     src/trading/websocket/ZerodhaWebSocket.cpp
     src/trading/websocket/AngelOneWebSocket.cpp
     # Trading broker files — each defines static now_ts() in same namespace

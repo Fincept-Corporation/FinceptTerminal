@@ -259,6 +259,15 @@ QWidget* ProfileScreen::build_overview() {
             .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
     connect(lb, &QPushButton::clicked, this, &ProfileScreen::show_logout_confirm);
     arl->addWidget(lb);
+    auto* dab = new QPushButton("DELETE ACCOUNT");
+    dab->setFixedHeight(26);
+    dab->setStyleSheet(
+        QString("QPushButton{background:rgba(220,38,38,0.15);color:%1;border:1px solid #7f1d1d;padding:0 12px;"
+                "font-size:11px;font-weight:700;font-family:'Consolas',monospace;}QPushButton:hover{background:%1;"
+                "color:%2;}")
+            .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+    connect(dab, &QPushButton::clicked, this, &ProfileScreen::show_delete_account_dialog);
+    arl->addWidget(dab);
     arl->addStretch();
     act_vl->addWidget(ar);
     grid->addWidget(actions, 1, 0, 1, 2);
@@ -760,6 +769,85 @@ void ProfileScreen::show_regen_confirm() {
             }
         });
     }
+}
+
+void ProfileScreen::show_delete_account_dialog() {
+    const auto& s = auth::AuthManager::instance().session();
+    const QString email = s.user_info.email;
+
+    // First confirmation
+    auto first = QMessageBox::warning(
+        this, "Delete Account",
+        QString("This will permanently delete your Fincept account (%1) and all associated data.\n\n"
+                "This action CANNOT be undone. Are you sure?").arg(email),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (first != QMessageBox::Yes)
+        return;
+
+    // Second confirmation — type email to confirm
+    auto* dlg = new QDialog(this);
+    dlg->setWindowTitle("Confirm Account Deletion");
+    dlg->setFixedSize(400, 200);
+    dlg->setStyleSheet(QString("background:%1;color:%2;font-family:'Consolas',monospace;")
+                           .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY()));
+    auto* vl = new QVBoxLayout(dlg);
+    vl->setContentsMargins(20, 16, 20, 16);
+    vl->setSpacing(10);
+
+    auto* warn = new QLabel("TYPE YOUR EMAIL ADDRESS TO CONFIRM:");
+    warn->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;background:transparent;").arg(ui::colors::NEGATIVE()));
+    vl->addWidget(warn);
+
+    auto* hint = new QLabel(email);
+    hint->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+    vl->addWidget(hint);
+
+    auto* input = new QLineEdit;
+    input->setFixedHeight(28);
+    input->setPlaceholderText(email);
+    vl->addWidget(input);
+
+    auto* brl = new QHBoxLayout;
+    brl->addStretch();
+    auto* cancel = new QPushButton("CANCEL");
+    cancel->setFixedHeight(26);
+    connect(cancel, &QPushButton::clicked, dlg, &QDialog::reject);
+    brl->addWidget(cancel);
+
+    auto* confirm = new QPushButton("DELETE MY ACCOUNT");
+    confirm->setFixedHeight(26);
+    confirm->setEnabled(false);
+    confirm->setStyleSheet(
+        QString("QPushButton{background:%1;color:%2;border:none;padding:0 14px;"
+                "font-size:11px;font-weight:700;font-family:'Consolas',monospace;}"
+                "QPushButton:disabled{background:#3f1515;color:#7f3333;}")
+            .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+    connect(input, &QLineEdit::textChanged, this, [confirm, email](const QString& text) {
+        confirm->setEnabled(text.trimmed() == email);
+    });
+
+    QPointer<ProfileScreen> self = this;
+    QPointer<QDialog> dlg_ptr = dlg;
+    connect(confirm, &QPushButton::clicked, this, [self, dlg_ptr]() {
+        if (!self) return;
+        if (dlg_ptr) dlg_ptr->accept();
+        auth::UserApi::instance().delete_user_account([self](auth::ApiResponse r) {
+            if (!self) return;
+            if (r.success) {
+                LOG_INFO("Profile", "Account deleted successfully");
+                auth::AuthManager::instance().logout();
+            } else {
+                LOG_ERROR("Profile", "Account deletion failed: " + r.error);
+                QMessageBox::critical(self, "Delete Failed",
+                                      "Account deletion failed: " + r.error + "\n\nPlease contact support@fincept.in");
+            }
+        });
+    });
+    brl->addWidget(confirm);
+    vl->addLayout(brl);
+
+    dlg->exec();
+    dlg->deleteLater();
 }
 
 } // namespace fincept::screens

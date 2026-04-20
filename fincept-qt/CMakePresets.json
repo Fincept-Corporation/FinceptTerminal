@@ -15,56 +15,56 @@
 
     {
       "name": "win-release",
-      "displayName": "Windows Release (MSVC 2022, Qt 6.7.2)",
+      "displayName": "Windows Release (MSVC 2022, Qt 6.8.3)",
       "description": "Pinned Release build for Windows x64",
       "inherits": "base",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
       "architecture": { "value": "x64", "strategy": "external" },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_PREFIX_PATH": "C:/Qt/6.7.2/msvc2022_64"
+        "CMAKE_PREFIX_PATH": "C:/Qt/6.8.3/msvc2022_64"
       }
     },
     {
       "name": "win-debug",
-      "displayName": "Windows Debug (MSVC 2022, Qt 6.7.2)",
+      "displayName": "Windows Debug (MSVC 2022, Qt 6.8.3)",
       "inherits": "win-release",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
     },
 
     {
       "name": "linux-release",
-      "displayName": "Linux Release (GCC 12.3, Qt 6.7.2)",
+      "displayName": "Linux Release (GCC 12.3, Qt 6.8.3)",
       "description": "Pinned Release build for Linux x86_64",
       "inherits": "base",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_PREFIX_PATH": "$env{HOME}/Qt/6.7.2/gcc_64"
+        "CMAKE_PREFIX_PATH": "$env{HOME}/Qt/6.8.3/gcc_64"
       }
     },
     {
       "name": "linux-debug",
-      "displayName": "Linux Debug (GCC 12.3, Qt 6.7.2)",
+      "displayName": "Linux Debug (GCC 12.3, Qt 6.8.3)",
       "inherits": "linux-release",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
     },
 
     {
       "name": "macos-release",
-      "displayName": "macOS Release (Apple Clang 15.0, Qt 6.7.2)",
+      "displayName": "macOS Release (Apple Clang 15.0, Qt 6.8.3)",
       "description": "Pinned Release build for macOS 11.0+",
       "inherits": "base",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0",
-        "CMAKE_PREFIX_PATH": "$env{HOME}/Qt/6.7.2/macos"
+        "CMAKE_PREFIX_PATH": "$env{HOME}/Qt/6.8.3/macos"
       }
     },
     {
       "name": "macos-debug",
-      "displayName": "macOS Debug (Apple Clang 15.0, Qt 6.7.2)",
+      "displayName": "macOS Debug (Apple Clang 15.0, Qt 6.8.3)",
       "inherits": "macos-release",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
     }

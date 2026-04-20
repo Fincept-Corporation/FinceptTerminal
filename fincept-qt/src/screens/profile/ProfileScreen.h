@@ -84,6 +84,7 @@ class ProfileScreen : public QWidget {
     void show_edit_profile_dialog();
     void show_logout_confirm();
     void show_regen_confirm();
+    void show_delete_account_dialog();
 
   private slots:
     void on_section_changed(int index);

@@ -79,14 +79,9 @@ cd FinceptTerminal
 chmod +x setup.sh && ./setup.sh
 ```
 
-```bat
-# Windows — run from Developer Command Prompt for VS 2022
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal
-setup.bat
-```
-
 The script handles: compiler check, CMake, Qt6, Python, build, and launch.
+
+> **Windows:** No setup script — use the manual build steps in Option 4 below. It's just two commands.
 
 ---
 
@@ -138,33 +133,47 @@ docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fincept-ter
 ```bash
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-qt
-
-# Configure + build (pick your platform)
-cmake --preset win-release     && cmake --build --preset win-release      # Windows (Dev Cmd for VS 2022)
-cmake --preset linux-release   && cmake --build --preset linux-release    # Linux
-cmake --preset macos-release   && cmake --build --preset macos-release    # macOS
 ```
 
-Debug variants: `win-debug`, `linux-debug`, `macos-debug`.
+**Step 1 — Configure** (one-time, or after `CMakeLists.txt` changes):
+```powershell
+cmake --preset win-release      # Windows (PowerShell)
+cmake --preset linux-release    # Linux
+cmake --preset macos-release    # macOS
+```
+
+**Step 2 — Compile** (run this for every code change):
+```powershell
+cmake --build --preset win-release      # Windows
+cmake --build --preset linux-release    # Linux
+cmake --build --preset macos-release    # macOS
+```
+
+Debug variants: replace `release` with `debug` (e.g. `win-debug`, `linux-debug`, `macos-debug`).
+
+> **Windows prerequisite:** The PowerShell profile at `~/Documents/PowerShell/Microsoft.PowerShell_profile.ps1`
+> auto-initializes VS 2022 on every new terminal — open a fresh PowerShell and cmake works directly.
 
 #### Build (manual — if presets can't resolve your Qt path)
 
-```bash
-# Windows (Developer Command Prompt for VS 2022)
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
+```powershell
+# Windows (PowerShell)
+cmake -B build/win-release -G Ninja -DCMAKE_BUILD_TYPE=Release `
   -DCMAKE_PREFIX_PATH="C:/Qt/6.8.3/msvc2022_64"
-cmake --build build
+cmake --build build/win-release
+```
 
+```bash
 # Linux
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+cmake -B build/linux-release -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_PREFIX_PATH="$HOME/Qt/6.8.3/gcc_64"
-cmake --build build
+cmake --build build/linux-release
 
 # macOS
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+cmake -B build/macos-release -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
   -DCMAKE_PREFIX_PATH="$HOME/Qt/6.8.3/macos"
-cmake --build build
+cmake --build build/macos-release
 ```
 
 #### Run

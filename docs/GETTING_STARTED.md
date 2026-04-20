@@ -44,7 +44,7 @@ Fincept Terminal is an **open-source financial analysis platform** — a free, o
 | **C++ compiler** | MSVC 19.38 (VS 2022 17.8) / GCC 12.3 / Apple Clang 15.0 (Xcode 15.2) |
 | **CMake** | 3.27.7 |
 | **Ninja** | 1.11.1 |
-| **Qt** | 6.7.2 (LTS) |
+| **Qt** | 6.8.3 |
 | **Python** | 3.11.9 |
 | **Platform SDK** | Win10 SDK 10.0.22621.0 / macOS SDK 14.0 (deploy target 11.0) / glibc 2.31+ |
 
@@ -60,14 +60,14 @@ Fincept Terminal is an **open-source financial analysis platform** — a free, o
 - **Linux**: `sudo apt install -y cmake ninja-build` (verify `cmake --version` ≥ 3.27.7; if not, download from [cmake.org](https://cmake.org/download/))
 - **macOS**: `brew install cmake ninja`
 
-#### 3. Install Qt 6.7.2
+#### 3. Install Qt 6.8.3
 
 **Windows / Linux / macOS** — Qt online installer (recommended):
 - Download from https://www.qt.io/download-qt-installer
-- Select exactly **Qt 6.7.2** → platform-appropriate kit (MSVC 2022 64-bit / Desktop gcc 64-bit / macOS)
-- Default install paths: `C:/Qt/6.7.2/msvc2022_64`, `~/Qt/6.7.2/gcc_64`, `~/Qt/6.7.2/macos`
+- Select exactly **Qt 6.8.3** → platform-appropriate kit (MSVC 2022 64-bit / Desktop gcc 64-bit / macOS)
+- Default install paths: `C:/Qt/6.8.3/msvc2022_64`, `~/Qt/6.8.3/gcc_64`, `~/Qt/6.8.3/macos`
 
-**Linux system packages (alternative — may not be exactly 6.7.2):**
+**Linux system packages (alternative — may not be exactly 6.8.3):**
 ```bash
 sudo apt install -y \
   qt6-base-dev qt6-charts-dev qt6-tools-dev qt6-base-private-dev \
@@ -102,7 +102,7 @@ cmake --preset macos-release   && cmake --build --preset macos-release   # macOS
 **If CMake presets can't resolve your Qt path**, use the manual configure:
 ```bash
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_PREFIX_PATH="<path/to/Qt/6.7.2/<kit>>"
+  -DCMAKE_PREFIX_PATH="<path/to/Qt/6.8.3/<kit>>"
 cmake --build build
 ```
 

@@ -25,6 +25,7 @@
 #include "services/markets/MarketDataService.h"         // QuoteData, HistoryPoint, InfoData
 #include "services/news/NewsService.h"                  // NewsArticle
 #include "services/polymarket/PolymarketTypes.h"        // OrderBook
+#include "services/prediction/PredictionTypes.h"        // PredictionOrderBook, PredictionMarket, …
 #include "trading/TradingTypes.h"                       // TickerData, OrderBookData, Candle, TradeData, Broker*
 
 #include <QMetaType>

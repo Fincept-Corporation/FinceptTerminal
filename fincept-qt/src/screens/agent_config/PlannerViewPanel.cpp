@@ -89,8 +89,8 @@ QWidget* PlannerViewPanel::build_templates_panel() {
     {
         const auto pr = fincept::LlmProfileRepository::instance().list_profiles();
         const auto profiles = pr.is_ok() ? pr.value() : QVector<fincept::LlmProfile>{};
-        for (const auto& p : profiles)
-            llm_profile_combo_->addItem(p.is_default ? p.name + " [default]" : p.name, p.id);
+        for (const auto& prof : profiles)
+            llm_profile_combo_->addItem(prof.is_default ? prof.name + " [default]" : prof.name, prof.id);
     }
     vl->addWidget(llm_profile_combo_);
 

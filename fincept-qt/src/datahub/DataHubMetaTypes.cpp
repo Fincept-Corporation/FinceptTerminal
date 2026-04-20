@@ -18,6 +18,23 @@ void register_metatypes() {
     qRegisterMetaType<fincept::trading::Candle>("fincept::trading::Candle");
     qRegisterMetaType<fincept::trading::TradeData>("fincept::trading::TradeData");
     qRegisterMetaType<fincept::services::polymarket::OrderBook>("fincept::services::polymarket::OrderBook");
+
+    // Prediction Markets (Polymarket, Kalshi, …)
+    qRegisterMetaType<fincept::services::prediction::MarketKey>("fincept::services::prediction::MarketKey");
+    qRegisterMetaType<fincept::services::prediction::PredictionMarket>("fincept::services::prediction::PredictionMarket");
+    qRegisterMetaType<fincept::services::prediction::PredictionEvent>("fincept::services::prediction::PredictionEvent");
+    qRegisterMetaType<fincept::services::prediction::PredictionOrderBook>("fincept::services::prediction::PredictionOrderBook");
+    qRegisterMetaType<fincept::services::prediction::PriceHistory>("fincept::services::prediction::PriceHistory");
+    qRegisterMetaType<fincept::services::prediction::PredictionTrade>("fincept::services::prediction::PredictionTrade");
+    qRegisterMetaType<fincept::services::prediction::PredictionPosition>("fincept::services::prediction::PredictionPosition");
+    qRegisterMetaType<fincept::services::prediction::OpenOrder>("fincept::services::prediction::OpenOrder");
+    qRegisterMetaType<fincept::services::prediction::OrderResult>("fincept::services::prediction::OrderResult");
+    qRegisterMetaType<fincept::services::prediction::AccountBalance>("fincept::services::prediction::AccountBalance");
+    qRegisterMetaType<QVector<fincept::services::prediction::PredictionMarket>>("QVector<fincept::services::prediction::PredictionMarket>");
+    qRegisterMetaType<QVector<fincept::services::prediction::PredictionEvent>>("QVector<fincept::services::prediction::PredictionEvent>");
+    qRegisterMetaType<QVector<fincept::services::prediction::PredictionTrade>>("QVector<fincept::services::prediction::PredictionTrade>");
+    qRegisterMetaType<QVector<fincept::services::prediction::PredictionPosition>>("QVector<fincept::services::prediction::PredictionPosition>");
+    qRegisterMetaType<QVector<fincept::services::prediction::OpenOrder>>("QVector<fincept::services::prediction::OpenOrder>");
     qRegisterMetaType<fincept::services::DbnDataPoint>("fincept::services::DbnDataPoint");
     qRegisterMetaType<fincept::services::GovDataResult>("fincept::services::GovDataResult");
     qRegisterMetaType<fincept::trading::BrokerPosition>("fincept::trading::BrokerPosition");

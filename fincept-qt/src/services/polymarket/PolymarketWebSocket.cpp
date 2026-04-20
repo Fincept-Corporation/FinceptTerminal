@@ -157,7 +157,7 @@ void PolymarketWebSocket::on_ws_error(const QString& error) {
 }
 
 QStringList PolymarketWebSocket::topic_patterns() const {
-    return {"polymarket:price:*", "polymarket:orderbook:*"};
+    return {"prediction:polymarket:price:*", "prediction:polymarket:orderbook:*"};
 }
 
 void PolymarketWebSocket::refresh(const QStringList& /*topics*/) {
@@ -178,22 +178,22 @@ void PolymarketWebSocket::ensure_registered_with_hub() {
     push_only.ttl_ms = 0;
     push_only.min_interval_ms = 0;
 
-    hub.set_policy_pattern("polymarket:price:*", push_only);
-    hub.set_policy_pattern("polymarket:orderbook:*", push_only);
+    hub.set_policy_pattern("prediction:polymarket:price:*", push_only);
+    hub.set_policy_pattern("prediction:polymarket:orderbook:*", push_only);
 
     hub_registered_ = true;
-    LOG_INFO("Polymarket WS", "Registered with DataHub (polymarket:price:*, polymarket:orderbook:*)");
+    LOG_INFO("Polymarket WS", "Registered with DataHub (prediction:polymarket:price:*, prediction:polymarket:orderbook:*)");
 }
 
 void PolymarketWebSocket::publish_price_to_hub(const QString& asset_id, double price) {
     if (asset_id.isEmpty()) return;
-    const QString topic = QStringLiteral("polymarket:price:") + asset_id;
+    const QString topic = QStringLiteral("prediction:polymarket:price:") + asset_id;
     fincept::datahub::DataHub::instance().publish(topic, QVariant(price));
 }
 
 void PolymarketWebSocket::publish_orderbook_to_hub(const QString& asset_id, const OrderBook& book) {
     if (asset_id.isEmpty()) return;
-    const QString topic = QStringLiteral("polymarket:orderbook:") + asset_id;
+    const QString topic = QStringLiteral("prediction:polymarket:orderbook:") + asset_id;
     fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(book));
 }
 

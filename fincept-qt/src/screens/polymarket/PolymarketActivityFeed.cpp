@@ -9,7 +9,7 @@
 namespace fincept::screens::polymarket {
 
 using namespace fincept::ui;
-using namespace fincept::services::polymarket;
+using namespace fincept::services::prediction;
 
 PolymarketActivityFeed::PolymarketActivityFeed(QWidget* parent) : QWidget(parent) {
     auto* vl = new QVBoxLayout(this);
@@ -31,47 +31,27 @@ PolymarketActivityFeed::PolymarketActivityFeed(QWidget* parent) : QWidget(parent
     vl->addWidget(table_);
 }
 
-void PolymarketActivityFeed::set_activities(const QVector<Activity>& activities) {
+void PolymarketActivityFeed::set_trades(const QVector<PredictionTrade>& trades) {
+    last_trades_ = trades;
     table_->setSortingEnabled(false);
-    table_->setRowCount(qMin(activities.size(), 200));
+    const int count = qMin(trades.size(), 200);
+    table_->setRowCount(count);
 
-    for (int i = 0; i < qMin(activities.size(), 200); ++i) {
-        const auto& a = activities[i];
-        QString time = QDateTime::fromSecsSinceEpoch(a.timestamp, Qt::UTC).toString("HH:mm:ss");
-        table_->setItem(i, 0, new QTableWidgetItem(time));
-        table_->setItem(i, 1, new QTableWidgetItem(a.type));
-
-        auto* side_item = new QTableWidgetItem(a.outcome);
-        table_->setItem(i, 2, side_item);
-
-        auto* price_item = new QTableWidgetItem(QString::number(a.price, 'f', 4));
-        price_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        price_item->setForeground(QColor(colors::CYAN()));
-        table_->setItem(i, 3, price_item);
-
-        auto* size_item = new QTableWidgetItem(QString::number(a.amount, 'f', 2));
-        size_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        table_->setItem(i, 4, size_item);
-    }
-    table_->resizeColumnsToContents();
-    table_->setSortingEnabled(true);
-}
-
-void PolymarketActivityFeed::set_trades(const QVector<Trade>& trades) {
-    table_->setSortingEnabled(false);
-    table_->setRowCount(qMin(trades.size(), 200));
-
-    for (int i = 0; i < qMin(trades.size(), 200); ++i) {
+    const int price_decimals = qBound(0, presentation_.price_decimal_places, 6);
+    for (int i = 0; i < count; ++i) {
         const auto& t = trades[i];
-        QString time = QDateTime::fromSecsSinceEpoch(t.timestamp, Qt::UTC).toString("HH:mm:ss");
+        // prediction::PredictionTrade uses ts_ms (milliseconds since epoch).
+        QString time = QDateTime::fromMSecsSinceEpoch(t.ts_ms, Qt::UTC).toString("HH:mm:ss");
         table_->setItem(i, 0, new QTableWidgetItem(time));
         table_->setItem(i, 1, new QTableWidgetItem("TRADE"));
 
         auto* side_item = new QTableWidgetItem(t.side);
-        side_item->setForeground(QColor(t.side == "BUY" ? colors::POSITIVE() : colors::NEGATIVE()));
+        side_item->setForeground(QColor(t.side.compare("BUY", Qt::CaseInsensitive) == 0
+                                            ? colors::POSITIVE()
+                                            : colors::NEGATIVE()));
         table_->setItem(i, 2, side_item);
 
-        auto* price_item = new QTableWidgetItem(QString::number(t.price, 'f', 4));
+        auto* price_item = new QTableWidgetItem(QString::number(t.price, 'f', price_decimals));
         price_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         price_item->setForeground(QColor(colors::CYAN()));
         table_->setItem(i, 3, price_item);
@@ -85,7 +65,14 @@ void PolymarketActivityFeed::set_trades(const QVector<Trade>& trades) {
 }
 
 void PolymarketActivityFeed::clear() {
+    last_trades_.clear();
     table_->setRowCount(0);
+}
+
+void PolymarketActivityFeed::set_presentation(const ExchangePresentation& p) {
+    const bool decimals_changed = p.price_decimal_places != presentation_.price_decimal_places;
+    presentation_ = p;
+    if (decimals_changed && !last_trades_.isEmpty()) set_trades(last_trades_);
 }
 
 } // namespace fincept::screens::polymarket

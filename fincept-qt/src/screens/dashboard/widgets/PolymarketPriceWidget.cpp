@@ -108,7 +108,7 @@ void PolymarketPriceWidget::hub_resubscribe() {
     auto& hub = datahub::DataHub::instance();
     hub.unsubscribe(this);
     for (const auto& e : entries_) {
-        const QString topic = QStringLiteral("polymarket:price:") + e.asset_id;
+        const QString topic = QStringLiteral("prediction:polymarket:price:") + e.asset_id;
         const QString asset_copy = e.asset_id;
         hub.subscribe(this, topic, [this, asset_copy](const QVariant& v) {
             bool ok = false;

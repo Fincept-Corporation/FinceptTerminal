@@ -21,8 +21,10 @@ Topic segments separate with `:`. The first segment is the domain; subsequent se
 | `ws:kraken:trades:<pair>` | `ExchangeService` | push-only | |
 | `ws:kraken:ohlc:<pair>:<interval>` | `ExchangeService` | push-only | |
 | `ws:hyperliquid:*` | `ExchangeService` | push-only | Same sub-families as Kraken |
-| `polymarket:price:<asset_id>` | `PolymarketWebSocket` | push-only | |
-| `polymarket:orderbook:<asset_id>` | `PolymarketWebSocket` | push-only | |
+| `prediction:polymarket:price:<asset_id>` | `PolymarketWebSocket` | push-only | Was `polymarket:price:*` before the prediction-markets refactor |
+| `prediction:polymarket:orderbook:<asset_id>` | `PolymarketWebSocket` | push-only | Was `polymarket:orderbook:*` before the prediction-markets refactor |
+| `prediction:kalshi:price:<ticker>:<side>` | `KalshiWsClient` | push-only | `<side>` is `yes` or `no`. Requires credentials — streaming activates in Phase 7 |
+| `prediction:kalshi:orderbook:<ticker>:<side>` | `KalshiWsClient` | push-only | Kalshi REST returns yes+no bids only; asks synthesised client-side |
 
 ## News (Phase 5)
 

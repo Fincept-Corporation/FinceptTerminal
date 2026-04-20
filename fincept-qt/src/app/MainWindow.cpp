@@ -271,8 +271,8 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
             });
 
     // MCP navigation tool → dock_router (cross-thread safe)
-    EventBus::instance().subscribe("nav.switch_screen", [this](const QVariantMap& data) {
-        QString screen_id = data["screen_id"].toString();
+    EventBus::instance().subscribe("nav.switch_screen", [this](const QVariantMap& nav_data) {
+        QString screen_id = nav_data["screen_id"].toString();
         if (!screen_id.isEmpty())
             QMetaObject::invokeMethod(
                 dock_router_, [this, screen_id]() {

@@ -32,6 +32,14 @@ static QJsonArray parse_json_arr(const QJsonValue& val) {
     return {};
 }
 
+// CLOB API returns numeric prices/sizes as JSON strings, while Gamma/Data
+// generally return real numbers. This helper accepts either form.
+static double num_or_str(const QJsonValue& v) {
+    if (v.isString())
+        return v.toString().toDouble();
+    return v.toDouble();
+}
+
 // ── Existing type parsing ───────────────────────────────────────────────────
 
 Market Market::from_json(const QJsonObject& obj) {
@@ -111,17 +119,19 @@ OrderBook OrderBook::from_json(const QJsonObject& obj) {
     OrderBook book;
     book.market = obj["market"].toString();
     book.asset_id = obj["asset_id"].toString();
-    book.tick_size = obj["tick_size"].toDouble();
-    book.min_order_size = obj["min_order_size"].toDouble();
+    // CLOB returns tick_size and min_order_size as strings (e.g. "0.01").
+    book.tick_size = num_or_str(obj["tick_size"]);
+    book.min_order_size = num_or_str(obj["min_order_size"]);
     book.neg_risk = obj["neg_risk"].toBool();
 
+    // Bid/ask price + size are JSON strings on CLOB — coerce both forms.
     for (const auto& b : obj["bids"].toArray()) {
         auto bo = b.toObject();
-        book.bids.append({bo["price"].toDouble(), bo["size"].toDouble()});
+        book.bids.append({num_or_str(bo["price"]), num_or_str(bo["size"])});
     }
     for (const auto& a : obj["asks"].toArray()) {
         auto ao = a.toObject();
-        book.asks.append({ao["price"].toDouble(), ao["size"].toDouble()});
+        book.asks.append({num_or_str(ao["price"]), num_or_str(ao["size"])});
     }
     return book;
 }
@@ -157,10 +167,16 @@ TopHolder TopHolder::from_json(const QJsonObject& obj) {
     h.address = obj["proxyWallet"].toString();
     if (h.address.isEmpty())
         h.address = obj["address"].toString();
+    // Data API returns `pseudonym`/`name`; prefer the displayable one.
     h.display_name = obj["name"].toString();
+    if (h.display_name.isEmpty())
+        h.display_name = obj["pseudonym"].toString();
     if (h.display_name.isEmpty() && !h.address.isEmpty())
         h.display_name = h.address.left(6) + "..." + h.address.right(4);
-    h.position_size = obj["size"].toDouble();
+    // /holders returns `amount` (token balance). `size` is a legacy fallback.
+    h.position_size = obj["amount"].toDouble();
+    if (h.position_size == 0.0)
+        h.position_size = obj["size"].toDouble();
     h.entry_price = obj["avgPrice"].toDouble();
     h.rank = obj["rank"].toInt();
     return h;
@@ -168,10 +184,13 @@ TopHolder TopHolder::from_json(const QJsonObject& obj) {
 
 LeaderboardEntry LeaderboardEntry::from_json(const QJsonObject& obj) {
     LeaderboardEntry e;
-    e.address = obj["address"].toString();
+    // /v1/leaderboard returns proxyWallet + userName; fall back to legacy keys.
+    e.address = obj["proxyWallet"].toString();
     if (e.address.isEmpty())
-        e.address = obj["proxyWallet"].toString();
-    e.display_name = obj["name"].toString();
+        e.address = obj["address"].toString();
+    e.display_name = obj["userName"].toString();
+    if (e.display_name.isEmpty())
+        e.display_name = obj["name"].toString();
     if (e.display_name.isEmpty())
         e.display_name = obj["pseudonym"].toString();
     if (e.display_name.isEmpty() && !e.address.isEmpty())
@@ -180,7 +199,10 @@ LeaderboardEntry LeaderboardEntry::from_json(const QJsonObject& obj) {
     e.pnl = obj["pnl"].toDouble();
     if (e.pnl == 0)
         e.pnl = obj["cashPnl"].toDouble();
-    e.volume = obj["volume"].toDouble();
+    // /v1/leaderboard uses `vol`; legacy `volume` retained for safety.
+    e.volume = obj["vol"].toDouble();
+    if (e.volume == 0)
+        e.volume = obj["volume"].toDouble();
     e.num_trades = obj["numTrades"].toInt();
     e.rank = obj["rank"].toInt();
     return e;
@@ -636,7 +658,8 @@ void PolymarketService::fetch_price_summary(const QString& token_id) {
     get_clob(
         "/midpoint?token_id=" + token_id,
         [acc, maybe_emit](const QJsonDocument& doc) {
-            acc->summary.midpoint = doc.object()["mid"].toDouble();
+            // CLOB returns { "mid_price": "0.52" } as a string.
+            acc->summary.midpoint = num_or_str(doc.object()["mid_price"]);
             maybe_emit();
         },
         "Midpoint");
@@ -644,7 +667,7 @@ void PolymarketService::fetch_price_summary(const QString& token_id) {
     get_clob(
         "/spread?token_id=" + token_id,
         [acc, maybe_emit](const QJsonDocument& doc) {
-            acc->summary.spread = doc.object()["spread"].toDouble();
+            acc->summary.spread = num_or_str(doc.object()["spread"]);
             maybe_emit();
         },
         "Spread");
@@ -652,7 +675,7 @@ void PolymarketService::fetch_price_summary(const QString& token_id) {
     get_clob(
         "/last-trade-price?token_id=" + token_id,
         [acc, maybe_emit](const QJsonDocument& doc) {
-            acc->summary.last_trade_price = doc.object()["price"].toDouble();
+            acc->summary.last_trade_price = num_or_str(doc.object()["price"]);
             maybe_emit();
         },
         "LastTradePrice");
@@ -678,22 +701,26 @@ void PolymarketService::fetch_trades(const QString& condition_id, int limit) {
 }
 
 void PolymarketService::fetch_top_holders(const QString& condition_id, int limit) {
-    QString path = "/top-holders?market=" + condition_id + "&limit=" + QString::number(limit);
+    // Data API caps `limit` at 20 for /holders.
+    const int capped = qBound(1, limit, 20);
+    QString path = "/holders?market=" + condition_id + "&limit=" + QString::number(capped);
 
     get_data(
         path,
         [this](const QJsonDocument& doc) {
             QVector<TopHolder> result;
-            QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
-            // Some endpoints wrap in data object
-            if (arr.isEmpty() && doc.isObject() && doc.object().contains("data"))
-                arr = doc.object()["data"].toArray();
-            int rank = 1;
-            for (const auto& v : arr) {
-                auto h = TopHolder::from_json(v.toObject());
-                if (h.rank == 0)
-                    h.rank = rank++;
-                result.append(h);
+            // Response shape: [{ token, holders:[ { proxyWallet, amount, ... } ] }, ...]
+            // One entry per asset/outcome (YES/NO). Flatten and rank by amount.
+            QJsonArray top = doc.isArray() ? doc.array() : QJsonArray();
+            for (const auto& bucket : top) {
+                auto holders_arr = bucket.toObject().value("holders").toArray();
+                int rank = 1;
+                for (const auto& v : holders_arr) {
+                    auto h = TopHolder::from_json(v.toObject());
+                    if (h.rank == 0)
+                        h.rank = rank++;
+                    result.append(h);
+                }
             }
             LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " top holders");
             emit top_holders_ready(result);
@@ -718,7 +745,11 @@ void PolymarketService::fetch_leaderboard(int limit) {
         return;
     }
 
-    QString path = "/leaderboard?limit=" + QString::number(limit);
+    // Data API: /v1/leaderboard?category=OVERALL&timePeriod=ALL&orderBy=PNL&limit=N
+    // Fields on each entry: rank, proxyWallet, userName, vol, pnl, profileImage.
+    const int capped = qBound(1, limit, 50);
+    QString path = "/v1/leaderboard?category=OVERALL&timePeriod=ALL&orderBy=PNL&limit=" +
+                   QString::number(capped);
 
     get_data(
         path,

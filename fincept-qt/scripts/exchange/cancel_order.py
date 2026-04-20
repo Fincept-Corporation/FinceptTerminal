@@ -35,14 +35,20 @@ def main():
     credentials = parse_credentials_from_stdin()
     if not credentials.get("api_key"):
         output_error("API key required. Pass credentials via stdin JSON.", "AUTH_ERROR")
+    if not credentials.get("secret"):
+        output_error("API secret required. Pass credentials via stdin JSON.", "AUTH_ERROR")
 
     exchange = make_exchange(exchange_id, credentials)
     result = exchange.cancel_order(order_id, symbol)
 
+    status = result.get("status", "")
+    if status not in ("canceled", "cancelled"):
+        output_error(f"Order cancellation not confirmed — exchange returned status: '{status}'", "CANCEL_FAILED")
+
     output_success({
         "id": result.get("id", order_id),
         "symbol": result.get("symbol", symbol),
-        "status": result.get("status", "canceled"),
+        "status": status or "canceled",
         "exchange": exchange_id,
     })
 

@@ -114,6 +114,13 @@ rdagent==0.8.0
 deepagents==0.4.12
 gs-quant==1.4.67
 
+# Prediction Markets — Polymarket + Kalshi trading (Phase 6/7)
+# Polymarket uses EIP-712 signing via py_clob_client (Polygon wallet);
+# Kalshi uses RSA-PSS signing via the `cryptography` package.
+py-clob-client>=0.22.0
+eth-account>=0.10.0
+cryptography>=42.0.0
+
 # Visualization
 plotly>=6.0.0
 matplotlib>=3.9.3,<4.0

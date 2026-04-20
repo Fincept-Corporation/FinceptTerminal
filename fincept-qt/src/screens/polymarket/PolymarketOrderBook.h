@@ -1,6 +1,6 @@
 #pragma once
 
-#include "services/polymarket/PolymarketTypes.h"
+#include "services/prediction/PredictionTypes.h"
 
 #include <QLabel>
 #include <QMutex>
@@ -17,7 +17,7 @@ class PolymarketOrderBook : public QWidget {
   public:
     explicit PolymarketOrderBook(QWidget* parent = nullptr);
 
-    void set_data(const services::polymarket::OrderBook& book);
+    void set_data(const fincept::services::prediction::PredictionOrderBook& book);
     void clear();
 
   signals:
@@ -33,8 +33,8 @@ class PolymarketOrderBook : public QWidget {
   private:
     void rebuild_cache();
 
-    QVector<services::polymarket::OrderLevel> bids_;
-    QVector<services::polymarket::OrderLevel> asks_;
+    QVector<fincept::services::prediction::OrderLevel> bids_;
+    QVector<fincept::services::prediction::OrderLevel> asks_;
     double spread_ = 0.0;
     QMutex mutex_;
     QPixmap cache_;

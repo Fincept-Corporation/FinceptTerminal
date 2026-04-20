@@ -1415,7 +1415,7 @@ void DocsScreen::build_sidebar() {
     auto* geo = add_category("GEOPOLITICS & ALT");
     add_item(geo, "Geopolitics", "geopolitics");
     add_item(geo, "Maritime", "maritime");
-    add_item(geo, "Polymarket", "polymarket");
+    add_item(geo, "Prediction Markets", "polymarket");
     add_item(geo, "Alt Investments", "alt_investments");
 
     // ── Tools ────────────────────────────────────────────────────────────────
