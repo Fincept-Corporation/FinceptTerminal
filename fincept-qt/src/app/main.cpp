@@ -168,7 +168,7 @@ int main(int argc, char* argv[]) {
     // Phase 9: AgentService as agent:* push-only producer (output/stream/status/routing/error).
     fincept::services::AgentService::instance().ensure_registered_with_hub();
 
-    // Create all application directories under %LOCALAPPDATA%\com.fincept.terminal\
+    // Create all application directories under %LOCALAPPDATA%/com.fincept.terminal
     fincept::AppPaths::ensure_all();
 
     // ── One-time migration from legacy %APPDATA% location ─────────────────

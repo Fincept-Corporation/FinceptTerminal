@@ -251,8 +251,11 @@ jobs:
       # ── System deps ───────────────────────────────────────────────────────
       # ubuntu-22.04 ships g++ 11.4 by default, but CMakeLists.txt enforces
       # GCC 12.3+. Install gcc-12/g++-12 and pin CC/CXX for the rest of the job.
-      # wget/fuse are required for the linuxdeploy AppImage and the installer
-      # bundling step below.
+      # We intentionally do NOT install apt Qt packages — ubuntu-22.04 ships
+      # Qt 6.2 and CMakeLists pins Qt 6.8.3 EXACT. Qt is installed via
+      # jurplel/install-qt-action below, matching the Windows and macOS jobs.
+      # We still need the XCB / GL system libs so Qt's xcb platform plugin
+      # can link at build time and load at runtime.
       - name: Install system dependencies
         run: |
           sudo add-apt-repository universe -y
@@ -260,20 +263,34 @@ jobs:
           sudo apt-get install -y \
             cmake ninja-build gcc-12 g++-12 \
             libssl-dev \
-            qt6-base-dev qt6-base-private-dev \
-            qt6-tools-dev qt6-tools-dev-tools \
-            libqt6charts6-dev libqt6websockets6-dev \
-            qt6-multimedia-dev libqt6multimediawidgets6 \
-            libqt6svg6-dev libqt6concurrent6 \
             libgl1-mesa-dev libglu1-mesa-dev \
             libxkbcommon-dev libxkbcommon-x11-0 \
-            libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
-            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
-            libxcb-xinerama0 libxcb-xkb1 \
+            libxcb-cursor0 libxcb-cursor-dev \
+            libxcb-icccm4 libxcb-icccm4-dev \
+            libxcb-image0  libxcb-image0-dev \
+            libxcb-keysyms1 libxcb-keysyms1-dev \
+            libxcb-randr0 \
+            libxcb-render-util0 libxcb-render-util0-dev \
+            libxcb-shape0-dev \
+            libxcb-sync-dev \
+            libxcb-xfixes0-dev \
+            libxcb-xinerama0 libxcb-xinerama0-dev \
+            libxcb-xkb1 libxkbcommon-x11-dev \
+            libdbus-1-dev libfontconfig1-dev libfreetype6-dev \
             python3 python3-pip pkg-config zip \
             wget file libfuse2 patchelf
           echo "CC=gcc-12"  >> "$GITHUB_ENV"
           echo "CXX=g++-12" >> "$GITHUB_ENV"
+
+      # ── Qt 6.8.3 (matches CMakeLists' Qt6 EXACT pin) ──────────────────────
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: linux_gcc_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          cache-key-prefix: qt-linux-x64-release
 
       # ── Configure + Build ─────────────────────────────────────────────────
       # No FINCEPT_BUILD_INSTALLER / no QtIFW on Linux — we ship an AppImage
@@ -283,6 +300,8 @@ jobs:
         run: |
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DOPENSSL_ROOT_DIR=/usr \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -360,6 +379,12 @@ jobs:
           wget -q "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
           chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
 
+          # linuxdeploy-plugin-qt uses qmake to locate Qt. Point it at the
+          # jurplel-installed Qt 6.8.3 rather than the (absent) apt qmake6.
+          # Without this the plugin either no-ops or picks up system Qt.
+          export PATH="${QT_ROOT_DIR}/bin:${PATH}"
+          export LD_LIBRARY_PATH="${QT_ROOT_DIR}/lib:${LD_LIBRARY_PATH:-}"
+
           # Filename must match the regex in update-manifest:
           #   FinceptTerminal-<version>-linux-x64-setup.run
           # where <version> is CMAKE_PROJECT_VERSION (e.g. 4.0.2), NOT the
@@ -376,7 +401,7 @@ jobs:
           # (platforms, sqldrivers, imageformats, tls, iconengines, svg, etc.)
           # in addition to the core Qt libs. UPDATE_INFORMATION embeds the
           # zsync update URL so AppImageUpdate can fetch deltas later.
-          export QMAKE=$(which qmake6 || which qmake)
+          export QMAKE="${QT_ROOT_DIR}/bin/qmake"
           export OUTPUT="FinceptTerminal-${VERSION}-linux-x64-setup.run"
           export UPDATE_INFORMATION="gh-releases-zsync|Fincept-Corporation|FinceptTerminal|latest|FinceptTerminal-*-linux-x64-setup.run.zsync"
 
