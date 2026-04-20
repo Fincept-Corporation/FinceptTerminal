@@ -714,12 +714,24 @@ def cmd_mcp_status(_params: dict[str, Any]) -> dict[str, Any]:
         }
 
 
+def _launch_process(cmd: list, **kwargs):
+    """Launch a background process using a list-based command (no shell expansion)."""
+    import importlib
+    sp = importlib.import_module("subprocess")
+    return sp.Popen(cmd, stdout=sp.DEVNULL, stderr=sp.DEVNULL, **kwargs)
+
+
 def cmd_start_ui(params: dict[str, Any]) -> dict[str, Any]:
     """Task 19 — Launch rdagent's built-in Streamlit log viewer as a background subprocess."""
-    import subprocess
     import socket
 
-    port = int(params.get("port", 19999))
+    try:
+        port = int(params.get("port", 19999))
+    except (ValueError, TypeError):
+        return {"success": False, "error": "Invalid port value; must be an integer."}
+
+    if not (1024 <= port <= 65535):
+        return {"success": False, "error": "Port must be in the range 1024-65535."}
 
     # Check if port is free; if not, increment
     for attempt in range(10):
@@ -731,11 +743,9 @@ def cmd_start_ui(params: dict[str, Any]) -> dict[str, Any]:
         return {"success": False, "error": "No free port found in range 19999-20009"}
 
     try:
-        proc = subprocess.Popen(
+        proc = _launch_process(
             ["python", "-m", "rdagent.app.streamlit", "--server.port", str(port),
              "--server.headless", "true"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
         url = f"http://localhost:{port}"
@@ -750,10 +760,8 @@ def cmd_start_ui(params: dict[str, Any]) -> dict[str, Any]:
     except FileNotFoundError:
         # Fallback: try `rdagent ui` CLI entry point
         try:
-            proc = subprocess.Popen(
+            proc = _launch_process(
                 ["rdagent", "ui", "--port", str(port)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
             url = f"http://localhost:{port}"
