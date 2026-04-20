@@ -74,6 +74,15 @@ Latest release: **v4.0.2** — [View all releases](https://github.com/Fincept-Co
 | **macOS Apple Silicon** | [FinceptTerminal-macOS-arm64.dmg](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.0.2/FinceptTerminal-4.0.2-macOS-setup.dmg) | Open DMG → drag to Applications |
 <!-- DOWNLOAD-TABLE-END -->
 
+## ⚠️ Verification Code Issue
+
+If you do not receive a verification code after registration:
+
+- Please continue the registration process using the official website: https://fincept.in  
+- Some users may not receive codes directly in the app due to current limitations  
+
+> Note: This is a temporary workaround until the issue is resolved.
+
 ---
 
 ### Option 2 — Quick Start (One-Click Build)
