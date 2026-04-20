@@ -6,6 +6,7 @@
 #include "datahub/TopicPolicy.h"
 #include "network/websocket/WebSocketClient.h"
 
+#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -96,8 +97,16 @@ void KalshiWsClient::ensure_connected() {
 void KalshiWsClient::send_subscribe(const QStringList& tickers) {
     QJsonObject params;
     QJsonArray channels;
+    // Kalshi v2 (Apr 2026):
+    //   - `ticker` is the current L1 channel (yes_bid_dollars, *_size_fp).
+    //   - `orderbook_delta` + `orderbook_snapshot` for L2 book state.
+    //   - `trade` streams the public trade tape.
+    //   - `market_lifecycle_v2` notifies when markets open/close/settle
+    //     (the v1 `market_lifecycle` channel has been superseded).
     channels.append("orderbook_delta");
     channels.append("ticker");
+    channels.append("trade");
+    channels.append("market_lifecycle_v2");
     params.insert("channels", channels);
     QJsonArray tarr;
     for (const auto& t : tickers) tarr.append(t);
@@ -150,23 +159,51 @@ void KalshiWsClient::on_message(const QString& msg) {
     if (doc.isNull()) return;
     const auto obj = doc.object();
     const QString type = obj.value("type").toString();
-    if (type != QStringLiteral("orderbook_snapshot") &&
-        type != QStringLiteral("orderbook_delta") &&
-        type != QStringLiteral("ticker")) {
-        return;
-    }
-
     const auto payload = obj.value("msg").toObject();
     const QString ticker = payload.value("market_ticker").toString();
-    if (ticker.isEmpty()) return;
 
     if (type == QStringLiteral("ticker")) {
+        if (ticker.isEmpty()) return;
         const double yes_price = kalshi_fp_to_double(payload.value("yes_bid_dollars"));
         if (yes_price > 0) publish_price(ticker + QStringLiteral(":yes"), yes_price);
         const double no_price = kalshi_fp_to_double(payload.value("no_bid_dollars"));
         if (no_price > 0) publish_price(ticker + QStringLiteral(":no"), no_price);
         return;
     }
+
+    if (type == QStringLiteral("trade")) {
+        if (ticker.isEmpty()) return;
+        pr::PredictionTrade t;
+        t.asset_id = ticker + QStringLiteral(":yes");
+        const QString ts_side = payload.value("taker_side").toString().toLower();
+        t.side = (ts_side == QStringLiteral("no")) ? QStringLiteral("SELL")
+                                                   : QStringLiteral("BUY");
+        t.price = kalshi_fp_to_double(payload.value("yes_price_dollars"));
+        t.size = kalshi_fp_to_double(payload.value("count_fp"));
+        const QString iso = payload.value("created_time").toString();
+        t.ts_ms = iso.isEmpty()
+            ? qint64(payload.value("ts").toVariant().toLongLong()) * 1000
+            : QDateTime::fromString(iso, Qt::ISODate).toMSecsSinceEpoch();
+        emit trade_received(t);
+        fincept::datahub::DataHub::instance().publish(
+            QStringLiteral("prediction:kalshi:trade:") + ticker,
+            QVariant::fromValue(t));
+        return;
+    }
+
+    if (type == QStringLiteral("market_lifecycle_v2") ||
+        type == QStringLiteral("market_lifecycle")) {
+        if (ticker.isEmpty()) return;
+        const QString status = payload.value("status").toString();
+        emit market_lifecycle_changed(ticker, status);
+        return;
+    }
+
+    if (type != QStringLiteral("orderbook_snapshot") &&
+        type != QStringLiteral("orderbook_delta")) {
+        return;
+    }
+    if (ticker.isEmpty()) return;
 
     // Snapshot / delta path — callers should rebuild their local book from
     // the snapshot then apply deltas. Phase 4 ships only the transport;

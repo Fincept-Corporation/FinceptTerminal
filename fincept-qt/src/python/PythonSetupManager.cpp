@@ -21,6 +21,7 @@
 #include <QThread>
 #include <QtConcurrent>
 
+#include <algorithm>
 #include <atomic>
 
 namespace fincept::python {
@@ -102,6 +103,33 @@ QString PythonSetupManager::python_path(const QString& venv_name) const {
 #else
     return install_dir() + "/" + venv_name + "/bin/python3";
 #endif
+}
+
+// Shared UV env — applied to every `uv` invocation so download/install behaviour
+// is consistent across platforms. See header for per-var rationale.
+//
+// Concurrency is clamped on both ends so the same defaults are safe on a 2-core
+// / 4 GB netbook and a 32-core workstation:
+//   - installs:  floor 2  (so single-core CPUs still parallelise I/O), ceiling 8
+//                (more workers don't help — install is disk-bound — but they
+//                 do consume RAM unpacking torch/catboost wheels in parallel).
+//   - downloads: ceiling 8 too. UV's own default is 50; capping prevents a
+//                slow / metered connection on a low-end machine from opening
+//                dozens of TLS sockets at once.
+QStringList PythonSetupManager::uv_env_extra() const {
+    const QString root = install_dir();
+    const int cores = QThread::idealThreadCount();
+    const int installs = std::clamp(cores, 2, 8);
+    const int downloads = std::clamp(cores * 2, 4, 8);
+    return {
+        "UV_PYTHON_INSTALL_DIR=" + root + "/python",
+        "UV_CACHE_DIR=" + root + "/uv-cache",
+        "UV_LINK_MODE=hardlink",
+        "UV_COMPILE_BYTECODE=1",
+        "UV_CONCURRENT_DOWNLOADS=" + QString::number(downloads),
+        "UV_CONCURRENT_INSTALLS=" + QString::number(installs),
+        "UV_HTTP_TIMEOUT=120",
+    };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -706,10 +734,8 @@ bool PythonSetupManager::download_uv() {
 bool PythonSetupManager::install_python_via_uv() {
     emit_progress("python", 20, "UV is downloading Python 3.12...");
 
-    // Tell UV where to install Python
-    QStringList env = {
-        "UV_PYTHON_INSTALL_DIR=" + install_dir() + "/python",
-    };
+    // Shared UV env (cache dir, hardlinks, bytecode compile, concurrency, timeout).
+    QStringList env = uv_env_extra();
 
     if (!run_command(uv_path(), {"python", "install", kPythonVersion}, env)) {
         LOG_ERROR("PythonSetup", "uv python install failed");
@@ -748,9 +774,7 @@ bool PythonSetupManager::create_venv(const QString& venv_name) {
         QDir(venv_path).removeRecursively();
     }
 
-    QStringList env = {
-        "UV_PYTHON_INSTALL_DIR=" + install_dir() + "/python",
-    };
+    QStringList env = uv_env_extra();
 
     if (run_command(uv_path(), {"venv", venv_path, "--python", kPythonVersion}, env)) {
         LOG_INFO("PythonSetup", "Created venv: " + venv_name);
@@ -793,11 +817,11 @@ bool PythonSetupManager::install_packages(const QString& venv_name, const QStrin
 
     const QString venv_python = python_path(venv_name);
 
-    QStringList env = {
-        "UV_PYTHON_INSTALL_DIR=" + install_dir() + "/python",
-        "PEEWEE_NO_SQLITE_EXTENSIONS=1",
-        "PEEWEE_NO_C_EXTENSION=1",
-    };
+    // Shared UV env + peewee build flags (peewee is a transitive dep that fails
+    // to build its C extension under the embedded Python on some platforms).
+    QStringList env = uv_env_extra();
+    env << "PEEWEE_NO_SQLITE_EXTENSIONS=1"
+        << "PEEWEE_NO_C_EXTENSION=1";
 
     // ── Pass 1: try installing everything at once (fast path) ────────────────
     // This succeeds on most machines and is 10-100x faster than one-by-one.

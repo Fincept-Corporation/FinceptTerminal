@@ -3,6 +3,7 @@
 #include "services/prediction/PredictionExchangeAdapter.h"
 #include "services/prediction/kalshi/KalshiCredentials.h"
 
+#include <QHash>
 #include <QJsonObject>
 #include <QString>
 #include <QStringList>
@@ -67,6 +68,70 @@ class KalshiAdapter : public fincept::services::prediction::PredictionExchangeAd
     // Credential injection (Phase 5 will wire this via the account dialog).
     void set_credentials(const KalshiCredentials& creds);
 
+    // ── Kalshi-specific public reads (pass through to REST client) ──────
+
+    /// GET /exchange/status + /exchange/schedule. Results arrive on the
+    /// exchange_* signals below.
+    void fetch_exchange_status();
+    void fetch_exchange_schedule();
+    /// GET /markets/candlesticks (batch). Results arrive on batch_candles_ready.
+    void fetch_batch_candles(const QStringList& tickers, int period_interval_min,
+                             qint64 start_ts, qint64 end_ts);
+    /// GET /series/{series_ticker}. Result arrives on series_detail_ready.
+    /// Cached per ticker — repeat calls are free.
+    void fetch_series_detail(const QString& series_ticker);
+    /// Lookup a cached series fee config without refetching. Returns an
+    /// empty object if we haven't fetched this series yet.
+    QJsonObject cached_series(const QString& series_ticker) const;
+    /// GET /historical/markets / candlesticks / trades.
+    void fetch_historical_markets(const QString& series_ticker = QString(),
+                                  int limit = 100,
+                                  const QString& cursor = QString());
+    void fetch_historical_candles(const QString& ticker, int period_interval_min,
+                                  qint64 start_ts, qint64 end_ts);
+    void fetch_historical_trades(const QString& ticker = QString(),
+                                 int limit = 100,
+                                 const QString& cursor = QString());
+
+    // ── Kalshi-specific trading (pass through to Python bridge) ─────────
+
+    /// POST /portfolio/orders/{order_id}/amend.
+    /// price_cents 1-99. `side` is the resting side ("yes" or "no") — the
+    /// caller passes the order's current side so we target the right price
+    /// field.
+    void amend_order(const QString& order_id, const QString& side, int price_cents,
+                     const QString& client_order_id = QString());
+    /// GET /portfolio/orders/{order_id}. Result arrives on single_order_ready.
+    void fetch_order(const QString& order_id);
+    /// DELETE /portfolio/orders/batched. Result arrives on orders_batch_cancelled.
+    void cancel_orders_batch(const QStringList& order_ids);
+
+  signals:
+    // Kalshi-specific extensions (not on the base adapter interface).
+    // Consumers cast to KalshiAdapter* to connect.
+    void ws_trade_received(const fincept::services::prediction::PredictionTrade& trade);
+    void ws_market_lifecycle_changed(const QString& ticker, const QString& status);
+
+    void exchange_status_ready(const QJsonObject& status);
+    void exchange_schedule_ready(const QJsonObject& schedule);
+    void batch_candles_ready(
+        const QHash<QString, fincept::services::prediction::PriceHistory>& histories);
+    void series_detail_ready(const QString& series_ticker, const QJsonObject& series);
+
+    void historical_markets_ready(
+        const QVector<fincept::services::prediction::PredictionMarket>& markets,
+        const QString& next_cursor);
+    void historical_candles_ready(
+        const fincept::services::prediction::PriceHistory& history, const QString& ticker);
+    void historical_trades_ready(
+        const QVector<fincept::services::prediction::PredictionTrade>& trades,
+        const QString& next_cursor);
+
+    void order_amended(const QString& order_id, bool ok, const QString& error);
+    void single_order_ready(const QJsonObject& order);
+    void orders_batch_cancelled(const QStringList& order_ids, bool ok,
+                                const QString& error);
+
   private:
     void wire();
     void stub_unsupported(const QString& ctx);
@@ -91,6 +156,19 @@ class KalshiAdapter : public fincept::services::prediction::PredictionExchangeAd
     // can attach it to the emitted PriceHistory (Kalshi REST only returns
     // YES-side candles).
     QString last_history_asset_id_;
+
+    // Set to true while a search() call is in-flight so the markets_ready
+    // handler can emit search_results_ready instead of markets_ready.
+    bool search_pending_ = false;
+
+    // Market ticker → series_ticker cache populated from markets_ready /
+    // events_ready. Used by fetch_price_history to build the
+    // /series/{s}/markets/{t}/candlesticks path without string heuristics.
+    QHash<QString, QString> series_by_market_;
+
+    // Cached /series/{ticker} responses. Keyed by series ticker. Populated
+    // via fetch_series_detail; repeat fetches hit the cache.
+    QHash<QString, QJsonObject> series_cache_;
 };
 
 } // namespace fincept::services::prediction::kalshi_ns

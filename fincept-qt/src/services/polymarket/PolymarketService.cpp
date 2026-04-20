@@ -44,26 +44,31 @@ static double num_or_str(const QJsonValue& v) {
 
 Market Market::from_json(const QJsonObject& obj) {
     Market m;
-    m.id = obj["id"].toInt();
+    // Gamma API returns numeric IDs as JSON strings — accept both forms.
+    const QJsonValue id_val = obj["id"];
+    m.id = id_val.isString() ? id_val.toString().toInt() : id_val.toInt();
     m.question = obj["question"].toString();
     m.slug = obj["slug"].toString();
     m.description = obj["description"].toString();
     m.condition_id = obj["conditionId"].toString();
     m.image = obj["image"].toString();
-    m.volume = obj["volume"].toDouble();
-    m.liquidity = obj["liquidity"].toDouble();
+    // volume / liquidity come back as JSON strings from Gamma ("1567632.01").
+    m.volume = num_or_str(obj["volume"]);
+    m.liquidity = num_or_str(obj["liquidity"]);
     m.active = obj["active"].toBool();
     m.closed = obj["closed"].toBool();
     m.end_date = obj["endDate"].toString();
     m.category = obj["category"].toString();
-    m.event_id = obj["eventId"].toInt();
+    const QJsonValue eid_val = obj["eventId"];
+    m.event_id = eid_val.isString() ? eid_val.toString().toInt() : eid_val.toInt();
 
     auto outcomes_arr = parse_json_arr(obj["outcomes"]);
     auto prices_arr = parse_json_arr(obj["outcomePrices"]);
     for (int i = 0; i < outcomes_arr.size(); ++i) {
         Outcome o;
         o.name = outcomes_arr[i].toString();
-        o.price = (i < prices_arr.size()) ? prices_arr[i].toDouble() : 0.0;
+        // outcomePrices are JSON strings ("0.535") — use num_or_str.
+        o.price = (i < prices_arr.size()) ? num_or_str(prices_arr[i]) : 0.0;
         m.outcomes.append(o);
     }
 
@@ -88,23 +93,27 @@ Market Market::from_json(const QJsonObject& obj) {
 
 Event Event::from_json(const QJsonObject& obj) {
     Event e;
-    e.id = obj["id"].toInt();
+    const QJsonValue id_val = obj["id"];
+    e.id = id_val.isString() ? id_val.toString().toInt() : id_val.toInt();
     e.title = obj["title"].toString();
     e.slug = obj["slug"].toString();
     e.description = obj["description"].toString();
     e.image = obj["image"].toString();
-    e.volume = obj["volume"].toDouble();
-    e.liquidity = obj["liquidity"].toDouble();
+    e.volume = num_or_str(obj["volume"]);
+    e.liquidity = num_or_str(obj["liquidity"]);
     e.active = obj["active"].toBool();
     e.closed = obj["closed"].toBool();
     e.end_date = obj["endDate"].toString();
 
+    // Events carry a direct "category" field ("Sports", "Politics", etc.).
+    // Fall back to first tag label if absent.
+    e.category = obj["category"].toString();
     auto tags_arr = obj["tags"].toArray();
     for (const auto& t : tags_arr) {
         auto tag_obj = t.toObject();
         e.tags.append(tag_obj["label"].toString());
     }
-    if (!e.tags.isEmpty())
+    if (e.category.isEmpty() && !e.tags.isEmpty())
         e.category = e.tags.first();
 
     auto markets_arr = obj["markets"].toArray();
@@ -144,7 +153,8 @@ PriceHistory PriceHistory::from_json(const QJsonObject& obj) {
         auto po = pt.toObject();
         PricePoint pp;
         pp.timestamp = static_cast<int64_t>(po["t"].toVariant().toLongLong());
-        pp.price = po["p"].toDouble();
+        // CLOB returns price "p" as a JSON string.
+        pp.price = num_or_str(po["p"]);
         ph.points.append(pp);
     }
     return ph;
@@ -153,8 +163,9 @@ PriceHistory PriceHistory::from_json(const QJsonObject& obj) {
 Trade Trade::from_json(const QJsonObject& obj) {
     Trade t;
     t.side = obj["side"].toString();
-    t.price = obj["price"].toDouble();
-    t.size = obj["size"].toDouble();
+    // CLOB and Data APIs return price/size as JSON strings.
+    t.price = num_or_str(obj["price"]);
+    t.size = num_or_str(obj["size"]);
     t.timestamp = static_cast<int64_t>(obj["timestamp"].toVariant().toLongLong());
     t.condition_id = obj["conditionId"].toString();
     return t;
@@ -174,11 +185,12 @@ TopHolder TopHolder::from_json(const QJsonObject& obj) {
     if (h.display_name.isEmpty() && !h.address.isEmpty())
         h.display_name = h.address.left(6) + "..." + h.address.right(4);
     // /holders returns `amount` (token balance). `size` is a legacy fallback.
-    h.position_size = obj["amount"].toDouble();
+    h.position_size = num_or_str(obj["amount"]);
     if (h.position_size == 0.0)
-        h.position_size = obj["size"].toDouble();
-    h.entry_price = obj["avgPrice"].toDouble();
-    h.rank = obj["rank"].toInt();
+        h.position_size = num_or_str(obj["size"]);
+    h.entry_price = num_or_str(obj["avgPrice"]);
+    const QJsonValue rv = obj["rank"];
+    h.rank = rv.isString() ? rv.toString().toInt() : rv.toInt();
     return h;
 }
 
@@ -196,15 +208,17 @@ LeaderboardEntry LeaderboardEntry::from_json(const QJsonObject& obj) {
     if (e.display_name.isEmpty() && !e.address.isEmpty())
         e.display_name = e.address.left(6) + "..." + e.address.right(4);
     e.profile_image = obj["profileImage"].toString();
-    e.pnl = obj["pnl"].toDouble();
+    e.pnl = num_or_str(obj["pnl"]);
     if (e.pnl == 0)
-        e.pnl = obj["cashPnl"].toDouble();
+        e.pnl = num_or_str(obj["cashPnl"]);
     // /v1/leaderboard uses `vol`; legacy `volume` retained for safety.
-    e.volume = obj["vol"].toDouble();
+    e.volume = num_or_str(obj["vol"]);
     if (e.volume == 0)
-        e.volume = obj["volume"].toDouble();
+        e.volume = num_or_str(obj["volume"]);
     e.num_trades = obj["numTrades"].toInt();
-    e.rank = obj["rank"].toInt();
+    // API returns rank as string ("1", "2") — accept both.
+    const QJsonValue rv = obj["rank"];
+    e.rank = rv.isString() ? rv.toString().toInt() : rv.toInt();
     return e;
 }
 
@@ -214,9 +228,9 @@ Activity Activity::from_json(const QJsonObject& obj) {
     a.address = obj["proxyWallet"].toString();
     if (a.address.isEmpty())
         a.address = obj["address"].toString();
-    a.amount = obj["size"].toDouble();
-    a.usdc_size = obj["usdcSize"].toDouble();
-    a.price = obj["price"].toDouble();
+    a.amount = num_or_str(obj["size"]);
+    a.usdc_size = num_or_str(obj["usdcSize"]);
+    a.price = num_or_str(obj["price"]);
     a.timestamp = static_cast<int64_t>(obj["timestamp"].toVariant().toLongLong());
     a.condition_id = obj["conditionId"].toString();
     a.title = obj["title"].toString();
@@ -283,15 +297,16 @@ LiveVolume LiveVolume::from_json(const QJsonObject& obj) {
 WsMarketUpdate WsMarketUpdate::from_json(const QJsonObject& obj) {
     WsMarketUpdate u;
     u.asset_id = obj["asset_id"].toString();
-    u.price = obj["price"].toDouble();
+    // WS messages return price as a string.
+    u.price = num_or_str(obj["price"]);
     u.timestamp = static_cast<int64_t>(obj["timestamp"].toVariant().toLongLong());
     for (const auto& b : obj["bids"].toArray()) {
         auto bo = b.toObject();
-        u.bids.append({bo["price"].toDouble(), bo["size"].toDouble()});
+        u.bids.append({num_or_str(bo["price"]), num_or_str(bo["size"])});
     }
     for (const auto& a : obj["asks"].toArray()) {
         auto ao = a.toObject();
-        u.asks.append({ao["price"].toDouble(), ao["size"].toDouble()});
+        u.asks.append({num_or_str(ao["price"]), num_or_str(ao["size"])});
     }
     return u;
 }
@@ -443,7 +458,7 @@ void PolymarketService::search_markets(const QString& query, int limit) {
             for (const auto& v : arr)
                 result.append(Market::from_json(v.toObject()));
             LOG_INFO("Polymarket", "Search returned " + QString::number(result.size()) + " markets");
-            emit markets_ready(result);
+            emit search_results_ready(result, {});
         },
         "SearchMarkets");
 }
@@ -578,8 +593,9 @@ void PolymarketService::fetch_tags() {
         "FetchTags");
 }
 
-void PolymarketService::fetch_comments(const QString& market_slug, int limit) {
-    QString path = "/comments?asset=" + QUrl::toPercentEncoding(market_slug) + "&limit=" + QString::number(limit);
+void PolymarketService::fetch_comments(const QString& condition_id, int limit) {
+    // Gamma /comments requires conditionId (0x hex), not the slug.
+    QString path = "/comments?conditionId=" + QUrl::toPercentEncoding(condition_id) + "&limit=" + QString::number(limit);
 
     get_gamma(
         path,

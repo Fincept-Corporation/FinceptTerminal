@@ -30,7 +30,7 @@ class PolymarketService : public QObject {
     void fetch_event_by_id(int id);
     void fetch_related_markets(int event_id);
     void fetch_tags();
-    void fetch_comments(const QString& market_slug, int limit = 50);
+    void fetch_comments(const QString& condition_id, int limit = 50);
     void fetch_teams(const QString& league = "");
 
     // ── CLOB API ─────────────────────────────────────────────────────────

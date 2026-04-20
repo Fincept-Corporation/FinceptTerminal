@@ -25,7 +25,7 @@ QString ExchangePresentation::format_price(double prob) const {
 }
 
 QString ExchangePresentation::format_volume(double v) const {
-    const QString sym = currency_symbol == QStringLiteral("$") ? QStringLiteral("$") : QStringLiteral("$");
+    const QString sym = currency_symbol.isEmpty() ? QStringLiteral("$") : currency_symbol;
     // Currency badges like "USDC" are shown separately (account chip + stats
     // label) so volume formatting always uses a dollar-sign prefix; injecting
     // "USDC" into every cell would be noisy.
@@ -46,38 +46,58 @@ ExchangePresentation::StatusBadge ExchangePresentation::status_badge(
 
     using namespace fincept::ui;
 
-    // Kalshi lifecycle is richer than Polymarket's binary active/closed.
-    // The adapter stashes the raw status string in extras["status"] so we
-    // can surface "DETERMINED" (contest over, awaiting settlement) vs
-    // "SETTLED" cleanly. Polymarket doesn't populate extras["status"] — we
-    // fall back to the active/closed bools.
+    // Kalshi v2 statuses (Apr 2026): unopened, open, paused, closed, settled.
+    // The adapter stashes the raw status string in extras["status"]. Polymarket
+    // doesn't populate extras["status"] — fall back to the active/closed bools.
     const QString kalshi_status = market.extras.value(QStringLiteral("status")).toString().toLower();
 
+    auto accent_bg = QColor(accent.red(), accent.green(), accent.blue(), 38);
+
     if (exchange_id == QStringLiteral("kalshi") && !kalshi_status.isEmpty()) {
-        if (kalshi_status == QStringLiteral("settled") || kalshi_status == QStringLiteral("finalized")) {
-            return {QStringLiteral("SETTLED"), QColor(colors::POSITIVE()), QColor(22, 163, 74, 38)};
-        }
-        if (kalshi_status == QStringLiteral("determined")) {
-            return {QStringLiteral("DETERMINED"), accent, QColor(accent.red(), accent.green(), accent.blue(), 38)};
+        if (kalshi_status == QStringLiteral("settled")) {
+            return {QStringLiteral("SETTLED"), QColor(colors::POSITIVE()),
+                    QColor(22, 163, 74, 38),
+                    QStringLiteral("Market has been settled. Final outcome "
+                                   "determined and payouts processed.")};
         }
         if (kalshi_status == QStringLiteral("closed")) {
-            return {QStringLiteral("CLOSED"), QColor(colors::TEXT_SECONDARY()), QColor(0, 0, 0, 0)};
+            return {QStringLiteral("CLOSED"), accent, accent_bg,
+                    QStringLiteral("Trading halted. Awaiting settlement from "
+                                   "Kalshi's source-of-truth resolution.")};
+        }
+        if (kalshi_status == QStringLiteral("paused")) {
+            return {QStringLiteral("PAUSED"), QColor(colors::TEXT_SECONDARY()),
+                    QColor(0, 0, 0, 0),
+                    QStringLiteral("Trading temporarily halted by the exchange. "
+                                   "Orders cannot be placed until reopened.")};
         }
         if (kalshi_status == QStringLiteral("open")) {
-            return {QStringLiteral("OPEN"), accent, QColor(accent.red(), accent.green(), accent.blue(), 38)};
+            QString tip = QStringLiteral("Market is open for trading.");
+            if (!market.end_date_iso.isEmpty())
+                tip += QStringLiteral(" Closes ") + market.end_date_iso + QStringLiteral(".");
+            return {QStringLiteral("OPEN"), accent, accent_bg, tip};
         }
-        if (kalshi_status == QStringLiteral("initialized")) {
-            return {QStringLiteral("PENDING"), QColor(colors::TEXT_DIM()), QColor(0, 0, 0, 0)};
+        if (kalshi_status == QStringLiteral("unopened")) {
+            QString tip = QStringLiteral("Market has not yet opened for trading.");
+            if (!market.end_date_iso.isEmpty())
+                tip += QStringLiteral(" Close time: ") + market.end_date_iso + QStringLiteral(".");
+            return {QStringLiteral("PENDING"), QColor(colors::TEXT_DIM()),
+                    QColor(0, 0, 0, 0), tip};
         }
     }
 
     if (market.closed) {
-        return {QStringLiteral("RESOLVED"), QColor(colors::POSITIVE()), QColor(22, 163, 74, 38)};
+        return {QStringLiteral("RESOLVED"), QColor(colors::POSITIVE()),
+                QColor(22, 163, 74, 38),
+                QStringLiteral("Market has resolved. No further trading.")};
     }
     if (market.active) {
-        return {QStringLiteral("ACTIVE"), accent, QColor(accent.red(), accent.green(), accent.blue(), 38)};
+        return {QStringLiteral("ACTIVE"), accent, accent_bg,
+                QStringLiteral("Market is accepting orders.")};
     }
-    return {QStringLiteral("INACTIVE"), QColor(colors::TEXT_DIM()), QColor(0, 0, 0, 0)};
+    return {QStringLiteral("INACTIVE"), QColor(colors::TEXT_DIM()),
+            QColor(0, 0, 0, 0),
+            QStringLiteral("Market not currently trading.")};
 }
 
 // ── Factories ───────────────────────────────────────────────────────────────
@@ -119,14 +139,17 @@ ExchangePresentation ExchangePresentation::for_kalshi() {
     p.price_style = PriceStyle::Dollars;
     p.price_decimal_places = 2;
     p.view_names = {QStringLiteral("MARKETS"), QStringLiteral("EVENTS"),
-                    QStringLiteral("SETTLED")};
+                    QStringLiteral("SETTLED"), QStringLiteral("HISTORY")};
     p.default_view = QStringLiteral("MARKETS");
     // Kalshi's series catalog can exceed 100 entries — a chip row doesn't
     // scale. Drop into a dropdown so users can scan + filter.
     p.category_mode = CategoryMode::ComboBox;
     p.category_visible_cap = 0;  // unused in combobox mode
     p.chart_y_label = QStringLiteral("PRICE");
-    p.has_open_interest = false;      // Kalshi REST doesn't expose OI per market
+    // Kalshi exposes open_interest_fp per market — surface it. Polymarket
+    // also has it via a separate data endpoint; the detail panel renders
+    // both through the same OI box.
+    p.has_open_interest = true;
     p.has_polymarket_extras = false;  // no holders / comments / related
     p.has_leaderboard = false;
     return p;

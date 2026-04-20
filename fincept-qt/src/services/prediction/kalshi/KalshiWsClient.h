@@ -67,6 +67,8 @@ class KalshiWsClient : public QObject, public fincept::datahub::Producer {
     void price_updated(const QString& asset_id, double price);
     void orderbook_updated(const QString& asset_id,
                            const fincept::services::prediction::PredictionOrderBook& book);
+    void trade_received(const fincept::services::prediction::PredictionTrade& trade);
+    void market_lifecycle_changed(const QString& ticker, const QString& status);
     void connection_status_changed(bool connected);
 
   private slots:

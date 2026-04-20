@@ -17,6 +17,10 @@ class PolymarketActivityFeed : public QWidget {
     explicit PolymarketActivityFeed(QWidget* parent = nullptr);
 
     void set_trades(const QVector<fincept::services::prediction::PredictionTrade>& trades);
+    /// Prepend a live trade (e.g. from a WebSocket feed). Keeps the cap at
+    /// 200 rows; older trades fall off the bottom. Flashes the new row
+    /// briefly in the exchange accent to draw the eye.
+    void append_trade(const fincept::services::prediction::PredictionTrade& trade);
     void clear();
 
     /// Per-exchange number formatting (decimals on the price column).

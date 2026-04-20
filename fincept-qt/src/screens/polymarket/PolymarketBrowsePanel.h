@@ -26,6 +26,10 @@ class PolymarketBrowsePanel : public QWidget {
     void set_loading(bool loading);
     void clear();
 
+    /// Replace a single market row in place (e.g. after a Kalshi lifecycle
+    /// event refetched one market). No-op if the ticker isn't in the list.
+    void update_market_row(const fincept::services::prediction::PredictionMarket& market);
+
     /// Forwarded to the model so the delegate paints with the active
     /// exchange's accent and price formatter.
     void set_presentation(const ExchangePresentation& p);
@@ -51,6 +55,7 @@ class PolymarketBrowsePanel : public QWidget {
     QLabel* page_label_ = nullptr;
 
     int current_page_ = 0;
+    bool events_mode_ = false;
     static constexpr int PAGE_SIZE = 20;
 };
 

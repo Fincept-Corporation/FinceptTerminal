@@ -33,6 +33,7 @@
 #include "services/relationship_map/RelationshipMapService.h"
 #include "trading/DataStreamManager.h"
 #include "trading/ExchangeService.h"
+#include "trading/ExchangeSessionManager.h"
 #include "storage/repositories/NewsArticleRepository.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "storage/sqlite/CacheDatabase.h"
@@ -117,8 +118,12 @@ int main(int argc, char* argv[]) {
     // Phase 2: register MarketDataService as the `market:quote:*` producer.
     fincept::datahub::register_metatypes();
     fincept::services::MarketDataService::instance().ensure_registered_with_hub();
-    // Phase 4: ExchangeService as the ws:kraken:* / ws:hyperliquid:* producer.
-    fincept::trading::ExchangeService::instance().ensure_registered_with_hub();
+    // Phase 2 (multi-broker refactor): ExchangeSessionManager is the hub
+    // producer for `ws:kraken:*` / `ws:hyperliquid:*`. Individual sessions
+    // (created lazily by the manager) publish through its SessionPublisher
+    // seam. ExchangeService keeps a back-compat shim but no longer registers
+    // itself with the hub.
+    fincept::trading::ExchangeSessionManager::instance().ensure_registered_with_hub();
     // Prediction Markets — multi-exchange tab (Polymarket, Kalshi, …).
     // PolymarketWebSocket is the hub producer for `prediction:polymarket:*`;
     // the adapter layer translates exchange-local types into the unified
@@ -255,7 +260,7 @@ int main(int argc, char* argv[]) {
                 log.set_tag_level(tag, lvl_map.value(level));
         }
     }
-    LOG_INFO("App", "Fincept Terminal v4.0.2 starting...");
+    LOG_INFO("App", "Fincept Terminal v4.0.1 starting...");
 
     // Theme is applied after DB is open so saved font/theme are respected from the start.
 

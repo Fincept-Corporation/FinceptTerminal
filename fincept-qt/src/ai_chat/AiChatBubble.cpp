@@ -611,31 +611,33 @@ void AiChatBubble::add_bubble(const QString& role, const QString& text) {
     cvl->addWidget(role_lbl);
 
     // Bubble — use QTextEdit for consistent markdown rendering
-    auto* bubble_frame = new QWidget;
-    bubble_frame->setStyleSheet(QString("background:%1;border:1px solid %2;border-radius:0px;padding:0px;")
-                                    .arg(is_user ? "rgba(120,53,15,0.45)" : col::BG_SURFACE(),
-                                         is_user ? "rgba(217,119,6,0.28)" : col::BORDER_DIM()));
-
-    auto* bvl = new QVBoxLayout(bubble_frame);
-    bvl->setContentsMargins(8, 6, 8, 6);
-    bvl->setSpacing(0);
-
     auto* body = new QTextEdit;
     body->setReadOnly(true);
     body->setFrameShape(QFrame::NoFrame);
     body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-    body->document()->setDocumentMargin(2);
+    body->document()->setDocumentMargin(0);
     body->document()->setDefaultStyleSheet(bubble_panel_md_css(is_user ? "#fff7ed" : col::TEXT_PRIMARY()));
     apply_obsidian_palette(body);
     body->setMarkdown(text);
     body->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     body->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    body->setStyleSheet(QString("QTextEdit{background:transparent;color:%1;border:none;font-size:13px;}")
+    // inner_w = max bubble width minus h-padding (8px each side)
+    const int inner_w = static_cast<int>(PANEL_W * 0.82) - 16;
+    body->document()->setTextWidth(inner_w);
+    body->setStyleSheet(QString("QTextEdit{background:transparent;color:%1;border:none;"
+                                "font-size:13px;padding:0px;}")
                             .arg(is_user ? "#fff7ed" : col::TEXT_PRIMARY()));
-    // Size to content
-    body->document()->setTextWidth(static_cast<int>(PANEL_W * 0.82) - 20);
+    // Use ideal height — document already laid out at inner_w, no extra fudge needed
     const int doc_h = static_cast<int>(body->document()->size().height());
-    body->setFixedHeight(qMax(doc_h + 8, 24));
+    body->setFixedHeight(qMax(doc_h, 18));
+
+    auto* bubble_frame = new QWidget;
+    bubble_frame->setStyleSheet(QString("background:%1;border:1px solid %2;border-radius:0px;")
+                                    .arg(is_user ? "rgba(120,53,15,0.45)" : col::BG_SURFACE(),
+                                         is_user ? "rgba(217,119,6,0.28)" : col::BORDER_DIM()));
+    auto* bvl = new QVBoxLayout(bubble_frame);
+    bvl->setContentsMargins(8, 5, 8, 5);
+    bvl->setSpacing(0);
     bvl->addWidget(body);
     cvl->addWidget(bubble_frame);
 
@@ -670,21 +672,22 @@ QTextEdit* AiChatBubble::add_streaming_bubble() {
     body->setReadOnly(false);
     body->setFrameShape(QFrame::NoFrame);
     body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    body->document()->setDocumentMargin(4);
+    body->document()->setDocumentMargin(0);
     body->document()->setDefaultStyleSheet(bubble_panel_md_css(col::TEXT_PRIMARY()));
     apply_obsidian_palette(body);
-    body->setFixedHeight(32);
+    body->setFixedHeight(20);
     body->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     body->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     body->setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
     body->setStyleSheet(QString("QTextEdit{background:%1;color:%2;border:1px solid %3;"
-                                "border-radius:0px;padding:8px 12px;font-size:13px;}")
+                                "border-radius:0px;padding:5px 8px;font-size:13px;}")
                             .arg(col::BG_SURFACE(), col::TEXT_PRIMARY(), col::BORDER_DIM()));
 
-    // Dynamic height as content streams in
+    // Dynamic height as content streams in — recalc at viewport width, no fudge factor
     connect(body->document(), &QTextDocument::contentsChanged, body, [body, col_w, row]() {
-        body->document()->setTextWidth(body->viewport()->width() > 0 ? body->viewport()->width() : 300);
-        const int h = qMax(static_cast<int>(body->document()->size().height()) + 8, 32);
+        const int vw = body->viewport()->width() > 0 ? body->viewport()->width() : (static_cast<int>(PANEL_W * 0.82) - 16);
+        body->document()->setTextWidth(vw);
+        const int h = qMax(static_cast<int>(body->document()->size().height()), 20);
         body->setFixedHeight(h);
         col_w->adjustSize();
         row->adjustSize();

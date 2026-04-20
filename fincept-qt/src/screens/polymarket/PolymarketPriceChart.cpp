@@ -15,38 +15,55 @@ static const QStringList INTERVAL_LABELS = {"1H", "6H", "1D", "1W", "1M", "ALL"}
 static const QStringList INTERVAL_VALUES = {"1h", "6h", "1d", "1w", "1m", "max"};
 
 PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
+    setStyleSheet(QString("background: %1;").arg(colors::BG_BASE()));
     auto* vl = new QVBoxLayout(this);
-    vl->setContentsMargins(8, 8, 8, 8);
-    vl->setSpacing(4);
+    vl->setContentsMargins(0, 0, 0, 0);
+    vl->setSpacing(0);
 
-    auto* toolbar = new QHBoxLayout;
-    toolbar->setSpacing(6);
+    // ── Toolbar ───────────────────────────────────────────────────────────
+    auto* toolbar_widget = new QWidget(this);
+    toolbar_widget->setFixedHeight(36);
+    toolbar_widget->setStyleSheet(
+        QString("background: %1; border-bottom: 1px solid %2;")
+            .arg(colors::BG_RAISED(), colors::BORDER_DIM()));
+    auto* toolbar = new QHBoxLayout(toolbar_widget);
+    toolbar->setContentsMargins(12, 0, 12, 0);
+    toolbar->setSpacing(8);
+
+    const QString combo_css =
+        QString("QComboBox { background: %1; color: %2; border: 1px solid %3; "
+                "  padding: 2px 6px; font-size: 9px; font-weight: 600; }"
+                "QComboBox::drop-down { border: none; width: 12px; }"
+                "QComboBox QAbstractItemView { background: %1; color: %2; border: 1px solid %3; }")
+            .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_MED());
 
     auto* lbl = new QLabel("INTERVAL");
     lbl->setStyleSheet(
-        QString("color: %1; font-size: 9px; font-weight: 700; background: transparent;").arg(colors::TEXT_SECONDARY()));
+        QString("color: %1; font-size: 8px; font-weight: 700; letter-spacing: 0.5px; "
+                "background: transparent;")
+            .arg(colors::TEXT_SECONDARY()));
     toolbar->addWidget(lbl);
 
     interval_combo_ = new QComboBox;
     interval_combo_->addItems(INTERVAL_LABELS);
-    interval_combo_->setCurrentIndex(2); // 1D default
-    interval_combo_->setFixedWidth(70);
+    interval_combo_->setCurrentIndex(2);
+    interval_combo_->setFixedSize(62, 24);
+    interval_combo_->setStyleSheet(combo_css);
     connect(interval_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         if (idx >= 0 && idx < INTERVAL_VALUES.size())
             emit interval_changed(INTERVAL_VALUES[idx]);
     });
     toolbar->addWidget(interval_combo_);
 
-    toolbar->addSpacing(12);
+    toolbar->addSpacing(10);
 
     auto* olbl = new QLabel("OUTCOME");
     olbl->setStyleSheet(lbl->styleSheet());
     toolbar->addWidget(olbl);
 
-    // Outcome combo is populated dynamically via set_outcome_labels() when
-    // a market is selected — no hardcoded YES/NO.
     outcome_combo_ = new QComboBox;
-    outcome_combo_->setFixedWidth(90);
+    outcome_combo_->setFixedSize(100, 24);
+    outcome_combo_->setStyleSheet(combo_css);
     connect(outcome_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &PolymarketPriceChart::outcome_changed);
     toolbar->addWidget(outcome_combo_);
@@ -55,16 +72,19 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
 
     price_label_ = new QLabel;
     price_label_->setStyleSheet(
-        QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;").arg(colors::AMBER()));
+        QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;")
+            .arg(colors::AMBER()));
     toolbar->addWidget(price_label_);
 
-    vl->addLayout(toolbar);
+    vl->addWidget(toolbar_widget);
 
     chart_container_ = new QWidget(this);
+    chart_container_->setStyleSheet(QString("background: %1;").arg(colors::BG_BASE()));
     auto* ccl = new QVBoxLayout(chart_container_);
-    ccl->setContentsMargins(0, 0, 0, 0);
-    auto* empty = new QLabel("Select a market to view chart");
-    empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::TEXT_DIM()));
+    ccl->setContentsMargins(8, 8, 8, 8);
+    auto* empty = new QLabel("Select a market to view its price chart");
+    empty->setStyleSheet(
+        QString("color: %1; font-size: 12px; background: transparent;").arg(colors::TEXT_DIM()));
     empty->setAlignment(Qt::AlignCenter);
     ccl->addWidget(empty);
     vl->addWidget(chart_container_, 1);
@@ -112,6 +132,13 @@ void PolymarketPriceChart::set_current_price(double price) {
 
 void PolymarketPriceChart::set_presentation(const ExchangePresentation& p) {
     presentation_ = p;
+    // Price readout tracks the exchange accent so the header colour doesn't
+    // stay amber after a swap to Kalshi (teal) / vice versa.
+    if (price_label_) {
+        price_label_->setStyleSheet(
+            QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;")
+                .arg(presentation_.accent.name()));
+    }
     if (has_last_history_) set_price_history(last_history_);
 }
 

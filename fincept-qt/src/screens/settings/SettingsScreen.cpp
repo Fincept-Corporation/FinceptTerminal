@@ -17,7 +17,9 @@
 #include "screens/settings/LlmConfigSection.h"
 #include "screens/settings/McpServersSection.h"
 #include "screens/settings/PythonEnvSection.h"
+#include "screens/settings/VoiceConfigSection.h"
 #include "services/notifications/NotificationService.h"
+#include "services/stt/SpeechService.h"
 #include "storage/StorageManager.h"
 #include "storage/cache/CacheManager.h"
 #include "storage/repositories/DataSourceRepository.h"
@@ -170,6 +172,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     sections_->addWidget(build_keybindings());   // 10
     sections_->addWidget(build_python_env());    // 11
     sections_->addWidget(build_developer());     // 12
+    sections_->addWidget(new VoiceConfigSection); // 13
 
     QList<QPushButton*> nav_btns;
     auto make_btn = [&](const QString& text, int idx) {
@@ -206,6 +209,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     make_btn("Keybindings", 10);
     make_btn("Python Env", 11);
     make_btn("Developer", 12);
+    make_btn("Voice", 13);
 
     first->setChecked(true);
 
@@ -217,6 +221,12 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     if (auto* llm = qobject_cast<LlmConfigSection*>(sections_->widget(5))) {
         connect(llm, &LlmConfigSection::config_changed, this,
                 []() { ai_chat::LlmService::instance().reload_config(); });
+    }
+
+    // Wire Voice config changes → reload STT service (picks up provider / API key / model)
+    if (auto* voice = qobject_cast<VoiceConfigSection*>(sections_->widget(13))) {
+        connect(voice, &VoiceConfigSection::config_changed, this,
+                []() { fincept::services::SpeechService::instance().reload_config(); });
     }
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,

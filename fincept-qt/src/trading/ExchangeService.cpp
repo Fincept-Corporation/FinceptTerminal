@@ -1,59 +1,27 @@
-// ExchangeService — Bridge between Python ccxt and C++ paper trading engine
-// Uses QProcess for subprocess management
+// ExchangeService — facade over ExchangeSessionManager (Phase 2).
+//
+// See header for design notes. This file intentionally contains no WS /
+// daemon / cache state of its own — every non-trivial call is a one-line
+// forward to the active session.
 
 #include "trading/ExchangeService.h"
 
-#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
-#include "python/PythonRunner.h"
-#include "trading/BrokerRegistry.h"
+#include "trading/ExchangeDaemonPool.h"
+#include "trading/ExchangeSession.h"
+#include "trading/ExchangeSessionManager.h"
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
 
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
-
-#include <QCoreApplication>
-#include <QJsonArray>
-#include <QJsonDocument>
 #include <QMutexLocker>
-#include <QThread>
+#include <QPointer>
 #include <QtConcurrent/QtConcurrent>
-
-// Adapter: PythonRunner uses scripts_dir(), not resolve_script()
-namespace {
-QString resolve_script_path(const QString& relative) {
-    QString dir = fincept::python::PythonRunner::instance().scripts_dir();
-    if (dir.isEmpty())
-        return {};
-    return dir + "/" + relative;
-}
-
-bool is_broker_stream(const QString& id) {
-    return fincept::trading::BrokerRegistry::instance().has(id);
-}
-
-QStringList to_broker_symbol_args(const QStringList& symbols) {
-    QStringList out;
-    out.reserve(symbols.size());
-    for (const auto& s : symbols) {
-        QString sym = s.trimmed();
-        if (sym.isEmpty())
-            continue;
-        QString exchange = "NSE";
-        if (sym.contains(':')) {
-            exchange = sym.section(':', 0, 0).trimmed().toUpper();
-            sym = sym.section(':', 1).trimmed();
-        }
-        out << (sym + ":" + exchange + ":0");
-    }
-    return out;
-}
-} // anonymous namespace
 
 namespace fincept::trading {
 
-static const QString TAG = "ExchangeService";
+namespace {
+const QString kServiceTag = "ExchangeService";
+} // namespace
 
 // ============================================================================
 // Singleton
@@ -68,29 +36,47 @@ ExchangeService::ExchangeService() {
     feed_timer_ = new QTimer(this);
     connect(feed_timer_, &QTimer::timeout, this, &ExchangeService::poll_prices);
 
-    // Pre-warm daemon in background so it's ready by the time the user opens Crypto Trading.
-    // QTimer::singleShot(0) defers until after QApplication::exec() is running so PythonRunner
-    // is fully initialised before we spawn the daemon process.
-    QTimer::singleShot(0, this, [this]() {
-        if (!is_daemon_running())
-            start_daemon();
-    });
+    // Re-emit the pool's ready() signal as our own daemon_ready() so existing
+    // consumers (e.g. CryptoTradingScreen) need no changes.
+    connect(&ExchangeDaemonPool::instance(), &ExchangeDaemonPool::ready, this,
+            [this]() { emit daemon_ready(); });
 }
 
 ExchangeService::~ExchangeService() {
-    stop_ws_stream();
-    stop_price_feed();
-    stop_daemon();
+    // Session lifecycles are owned by ExchangeSessionManager. Nothing to do.
+    if (feed_timer_)
+        feed_timer_->stop();
+}
+
+// ============================================================================
+// Session resolution
+// ============================================================================
+
+ExchangeSession* ExchangeService::active_session() const {
+    QString id;
+    {
+        QMutexLocker lock(&mutex_);
+        id = exchange_id_;
+    }
+    return ExchangeSessionManager::instance().session(id);
 }
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
+void ExchangeService::ensure_registered_with_hub() {
+    ExchangeSessionManager::instance().ensure_registered_with_hub();
+}
+
 void ExchangeService::set_exchange(const QString& exchange_id) {
-    QMutexLocker lock(&mutex_);
-    exchange_id_ = exchange_id;
-    LOG_INFO(TAG, "Exchange set to: " + exchange_id);
+    {
+        QMutexLocker lock(&mutex_);
+        exchange_id_ = exchange_id;
+    }
+    // Touch the session so it exists by the time subsequent calls arrive.
+    ExchangeSessionManager::instance().session(exchange_id);
+    LOG_INFO(kServiceTag, "Exchange set to: " + exchange_id);
 }
 
 QString ExchangeService::get_exchange() const {
@@ -99,9 +85,11 @@ QString ExchangeService::get_exchange() const {
 }
 
 void ExchangeService::set_credentials(const ExchangeCredentials& creds) {
-    QMutexLocker lock(&mutex_);
-    credentials_ = creds;
-    credentials_sent_to_daemon_ = false; // Will be sent on next daemon_call()
+    active_session()->set_credentials(creds);
+}
+
+bool ExchangeService::wait_for_daemon_ready(int timeout_ms) {
+    return ExchangeDaemonPool::instance().wait_for_ready(timeout_ms);
 }
 
 // ============================================================================
@@ -109,29 +97,22 @@ void ExchangeService::set_credentials(const ExchangeCredentials& creds) {
 // ============================================================================
 
 void ExchangeService::watch_symbol(const QString& symbol, const QString& portfolio_id) {
-    QMutexLocker lock(&mutex_);
-    watched_[symbol].insert(portfolio_id);
+    active_session()->watch_symbol(symbol, portfolio_id);
 }
 
 void ExchangeService::unwatch_symbol(const QString& symbol, const QString& portfolio_id) {
-    QMutexLocker lock(&mutex_);
-    auto it = watched_.find(symbol);
-    if (it != watched_.end()) {
-        it->remove(portfolio_id);
-        if (it->isEmpty())
-            watched_.erase(it);
-    }
+    active_session()->unwatch_symbol(symbol, portfolio_id);
 }
 
 // ============================================================================
-// Price Feed (polling via QTimer)
+// Price Feed (polling)
 // ============================================================================
 
 void ExchangeService::start_price_feed(int interval_seconds) {
     feed_interval_ = interval_seconds;
     feed_running_ = true;
     feed_timer_->start(interval_seconds * 1000);
-    LOG_INFO(TAG, QString("Price feed started (interval=%1s)").arg(interval_seconds));
+    LOG_INFO(kServiceTag, QString("Price feed started (interval=%1s)").arg(interval_seconds));
 }
 
 void ExchangeService::stop_price_feed() {
@@ -145,1060 +126,119 @@ bool ExchangeService::is_feed_running() const {
 }
 
 void ExchangeService::poll_prices() {
-    // Guard: skip if a previous poll is still running (avoid piling up threads)
     if (poll_in_progress_.exchange(true))
         return;
 
-    QMutexLocker lock(&mutex_);
-    if (watched_.isEmpty()) {
+    ExchangeSession* sess = active_session();
+    const auto watched = sess->snapshot_watched();
+    if (watched.isEmpty()) {
         poll_in_progress_ = false;
         return;
     }
 
     QStringList symbols;
-    // Snapshot watched portfolios per symbol for use after mutex release
-    QHash<QString, QSet<QString>> watched_snapshot = watched_;
-    for (auto it = watched_snapshot.constBegin(); it != watched_snapshot.constEnd(); ++it)
+    symbols.reserve(watched.size());
+    for (auto it = watched.constBegin(); it != watched.constEnd(); ++it)
         symbols.append(it.key());
-    QString exchange_id = exchange_id_;
-    lock.unlock();
 
-    // Run the blocking fetch_tickers() in a background thread (P1: never block UI)
     QPointer<ExchangeService> self = this;
-    QtConcurrent::run([self, symbols, watched_snapshot, exchange_id]() {
+    QPointer<ExchangeSession> session_ptr = sess;
+    QtConcurrent::run([self, session_ptr, symbols, watched]() {
+        if (!self || !session_ptr)
+            return;
+        auto tickers = session_ptr->fetch_tickers(symbols);
         if (!self)
             return;
 
-        // fetch_tickers uses call_script which does blocking QProcess — safe in background thread
-        auto tickers = self->fetch_tickers(symbols);
-
-        if (!self)
-            return;
-
-        // Process results: update cache and feed OrderMatcher (all outside UI thread)
-        // Collect callbacks to invoke on UI thread
-        struct TickerResult {
-            TickerData ticker;
-            QVector<QString> portfolio_ids;
-        };
-        QVector<TickerResult> results;
-        results.reserve(tickers.size());
-
+        // Feed paper-trading engine with fresh prices (worker thread — these
+        // are SQLite writes; keeping them off the UI thread is P1).
         for (const auto& ticker : tickers) {
-            TickerResult r;
-            r.ticker = ticker;
-
-            auto it = watched_snapshot.find(ticker.symbol);
-            if (it != watched_snapshot.end()) {
-                PriceData pd;
-                pd.last = ticker.last;
-                pd.bid = ticker.bid;
-                pd.ask = ticker.ask;
-                pd.high = ticker.high;
-                pd.low = ticker.low;
-                pd.volume = ticker.base_volume;
-                pd.change = ticker.change;
-                pd.change_percent = ticker.percentage;
-                pd.timestamp = ticker.timestamp;
-
-                for (const auto& portfolio_id : *it) {
-                    OrderMatcher::instance().check_orders(ticker.symbol, pd, portfolio_id);
-                    OrderMatcher::instance().check_sl_tp_triggers(portfolio_id, ticker.symbol, ticker.last);
-                    pt_update_position_price(portfolio_id, ticker.symbol, ticker.last);
-                    r.portfolio_ids.append(portfolio_id);
-                }
+            auto it = watched.find(ticker.symbol);
+            if (it == watched.end())
+                continue;
+            PriceData pd;
+            pd.last = ticker.last;
+            pd.bid = ticker.bid;
+            pd.ask = ticker.ask;
+            pd.high = ticker.high;
+            pd.low = ticker.low;
+            pd.volume = ticker.base_volume;
+            pd.change = ticker.change;
+            pd.change_percent = ticker.percentage;
+            pd.timestamp = ticker.timestamp;
+            for (const auto& portfolio_id : *it) {
+                OrderMatcher::instance().check_orders(ticker.symbol, pd, portfolio_id);
+                OrderMatcher::instance().check_sl_tp_triggers(portfolio_id, ticker.symbol, ticker.last);
+                pt_update_position_price(portfolio_id, ticker.symbol, ticker.last);
             }
-            results.append(std::move(r));
         }
 
-        if (!self)
-            return;
-
-        // Post cache update + callback invocation back to UI thread
-        QMetaObject::invokeMethod(
-            self,
-            [self, results]() {
-                if (!self)
-                    return;
-
-                for (const auto& r : results) {
-                    {
-                        QMutexLocker lock(&self->mutex_);
-                        self->price_cache_[r.ticker.symbol] = r.ticker;
-                    }
-
-                    // Copy callbacks out, release mutex, then invoke
-                    QVector<PriceUpdateCallback> cbs;
-                    {
-                        QMutexLocker lock(&self->mutex_);
-                        cbs.reserve(self->price_callbacks_.size());
-                        for (auto cb_it = self->price_callbacks_.constBegin();
-                             cb_it != self->price_callbacks_.constEnd(); ++cb_it)
-                            cbs.append(cb_it.value());
-                    }
-                    for (const auto& cb : cbs) {
-                        try {
-                            cb(r.ticker.symbol, r.ticker);
-                        } catch (...) {
-                            LOG_WARN("ExchangeService", "Price update callback threw an exception");
-                        }
-                    }
-                }
-
-                LOG_DEBUG("ExchangeService", QString("Poll complete: %1 tickers updated").arg(results.size()));
-                self->poll_in_progress_ = false;
-            },
-            Qt::QueuedConnection);
+        // Poll results land in the session's WS price_cache_ on subsequent
+        // pushes from WS; we intentionally do NOT stuff them into the
+        // session's cache here (the cache is authoritative for WS, polling
+        // is a fallback for when WS isn't up).
+        if (self)
+            self->poll_in_progress_ = false;
     });
 }
 
 // ============================================================================
-// Callbacks
+// WebSocket streaming — delegated
 // ============================================================================
 
-int ExchangeService::on_price_update(PriceUpdateCallback callback) {
-    QMutexLocker lock(&mutex_);
-    int id = next_callback_id_++;
-    price_callbacks_[id] = std::move(callback);
-    return id;
-}
-
-void ExchangeService::remove_price_callback(int id) {
-    QMutexLocker lock(&mutex_);
-    price_callbacks_.remove(id);
-}
-
-int ExchangeService::on_orderbook_update(OrderBookCallback callback) {
-    QMutexLocker lock(&mutex_);
-    int id = next_callback_id_++;
-    orderbook_callbacks_[id] = std::move(callback);
-    return id;
-}
-
-void ExchangeService::remove_orderbook_callback(int id) {
-    QMutexLocker lock(&mutex_);
-    orderbook_callbacks_.remove(id);
-}
-
-int ExchangeService::on_candle_update(CandleCallback callback) {
-    QMutexLocker lock(&mutex_);
-    int id = next_callback_id_++;
-    candle_callbacks_[id] = std::move(callback);
-    return id;
-}
-
-void ExchangeService::remove_candle_callback(int id) {
-    QMutexLocker lock(&mutex_);
-    candle_callbacks_.remove(id);
-}
-
-int ExchangeService::on_trade_update(TradeCallback callback) {
-    QMutexLocker lock(&mutex_);
-    int id = next_callback_id_++;
-    trade_callbacks_[id] = std::move(callback);
-    return id;
-}
-
-void ExchangeService::remove_trade_callback(int id) {
-    QMutexLocker lock(&mutex_);
-    trade_callbacks_.remove(id);
-}
-
-// ============================================================================
-// Persistent Daemon (eliminates 600-1200ms Python startup per request)
-// ============================================================================
-
-void ExchangeService::start_daemon() {
-    if (daemon_process_ && daemon_process_->state() == QProcess::Running)
-        return;
-
-    QString python_path = python::PythonRunner::instance().python_path();
-    QString script_path = resolve_script_path("exchange/exchange_daemon.py");
-
-    if (python_path.isEmpty() || script_path.isEmpty()) {
-        LOG_WARN(TAG, "Cannot start daemon: Python or script not found");
-        return;
-    }
-
-    daemon_process_ = new QProcess(this);
-    daemon_process_->setProcessChannelMode(QProcess::SeparateChannels);
-
-    connect(daemon_process_, &QProcess::readyReadStandardOutput, this, &ExchangeService::drain_daemon_buffer);
-    connect(daemon_process_, &QProcess::readyReadStandardError, this, [this]() {
-        if (daemon_process_) {
-            QString err = QString::fromUtf8(daemon_process_->readAllStandardError()).trimmed();
-            if (!err.isEmpty())
-                LOG_DEBUG(TAG, "Daemon stderr: " + err);
-        }
-    });
-    connect(daemon_process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-            [this](int code, QProcess::ExitStatus status) {
-                LOG_WARN(
-                    TAG,
-                    QString("Daemon exited (code=%1, status=%2), will restart on next call").arg(code).arg(status));
-                daemon_ready_ = false;
-                if (daemon_process_) {
-                    daemon_process_->deleteLater();
-                    daemon_process_ = nullptr;
-                }
-            });
-
-    QStringList args;
-    args << "-u" << "-B" << script_path;
-    daemon_process_->start(python_path, args);
-    LOG_INFO(TAG, "Exchange daemon starting...");
-}
-
-void ExchangeService::stop_daemon() {
-    if (daemon_process_) {
-        daemon_ready_ = false;
-        daemon_process_->closeWriteChannel();
-        // Give it a moment to exit cleanly, then force kill
-        auto* proc = daemon_process_;
-        daemon_process_ = nullptr;
-        connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), proc, &QObject::deleteLater);
-        QTimer::singleShot(2000, proc, [proc]() {
-            if (proc->state() != QProcess::NotRunning)
-                proc->kill();
-        });
-    }
-}
-
-bool ExchangeService::is_daemon_running() const {
-    return daemon_process_ && daemon_process_->state() == QProcess::Running && daemon_ready_.load();
-}
-
-bool ExchangeService::wait_for_daemon_ready(int timeout_ms) {
-    // Fast path — already up.
-    if (daemon_ready_.load())
-        return true;
-
-    // Kick the daemon start if the process hasn't been spawned yet. start_daemon
-    // must run on the main thread because it owns daemon_process_.
-    if (!daemon_process_) {
-        if (QThread::currentThread() == thread()) {
-            start_daemon();
-        } else {
-            QMetaObject::invokeMethod(this, [this]() { start_daemon(); }, Qt::QueuedConnection);
-        }
-    }
-
-    // Wait on the ready condition (signalled from drain_daemon_buffer when the
-    // __init__ line arrives). Safe to call from worker threads only.
-    QMutexLocker lock(&daemon_mutex_);
-    QElapsedTimer elapsed;
-    elapsed.start();
-    while (!daemon_ready_.load() && elapsed.elapsed() < timeout_ms) {
-        const int remaining = timeout_ms - static_cast<int>(elapsed.elapsed());
-        daemon_response_ready_.wait(&daemon_mutex_, std::max(remaining, 50));
-    }
-    return daemon_ready_.load();
-}
-
-void ExchangeService::drain_daemon_buffer() {
-    if (!daemon_process_)
-        return;
-    while (daemon_process_->canReadLine()) {
-        QString line = QString::fromUtf8(daemon_process_->readLine()).trimmed();
-        if (line.isEmpty() || line[0] != '{')
-            continue;
-
-        QJsonParseError err;
-        auto doc = QJsonDocument::fromJson(line.toUtf8(), &err);
-        if (err.error != QJsonParseError::NoError)
-            continue;
-
-        auto obj = doc.object();
-        QString id = obj.value("id").toString();
-
-        // Handle the init response
-        if (id == "__init__") {
-            daemon_ready_ = true;
-            LOG_INFO(TAG, "Exchange daemon ready (pid=" +
-                              obj.value("data").toObject().value("pid").toVariant().toString() + ")");
-            // Send credentials if we have them
-            if (!credentials_.api_key.isEmpty()) {
-                QJsonObject creds;
-                creds["api_key"] = credentials_.api_key;
-                creds["secret"] = credentials_.secret;
-                if (!credentials_.password.isEmpty())
-                    creds["password"] = credentials_.password;
-
-                QJsonObject req;
-                req["id"] = "__creds__";
-                req["method"] = "set_credentials";
-                req["exchange"] = exchange_id_;
-                req["args"] = creds;
-                QByteArray data = QJsonDocument(req).toJson(QJsonDocument::Compact) + "\n";
-                daemon_process_->write(data);
-                credentials_sent_to_daemon_ = true;
-            }
-            // Wake any thread waiting for daemon readiness and notify subscribers
-            daemon_response_ready_.wakeAll();
-            emit daemon_ready();
-            continue;
-        }
-
-        // Store response and wake waiting thread
-        {
-            QMutexLocker lock(&daemon_mutex_);
-            daemon_responses_[id] = obj;
-        }
-        daemon_response_ready_.wakeAll();
-    }
-}
-
-QJsonObject ExchangeService::daemon_call(const QString& method, const QJsonObject& args, int timeout_ms) {
-    // daemon_call() is called from background threads (QtConcurrent::run).
-    // The daemon process lives on the main thread, so all writes are marshalled
-    // there via a non-blocking queued invocation. Responses arrive via
-    // drain_daemon_buffer() on the main thread and are stored in
-    // daemon_responses_ under mutex. We sleep on a wait condition until our
-    // response arrives or `timeout_ms` elapses.
-
-    // Auto-start + wait for ready. Uses QueuedConnection internally — never
-    // blocks a worker on the main event loop.
-    if (!daemon_ready_.load()) {
-        if (!wait_for_daemon_ready(std::min(timeout_ms, 8000))) {
-            LOG_WARN(TAG, "Daemon not ready, falling back to script for: " + method);
-            return {{"error", "Daemon not ready"}};
-        }
-    }
-
-    // Generate unique request ID (atomic, safe from any thread)
-    QString req_id = QString("r_%1").arg(daemon_req_id_.fetch_add(1));
-
-    // Build request JSON
-    QJsonObject req;
-    req["id"] = req_id;
-    req["method"] = method;
-    req["exchange"] = exchange_id_;
-    req["args"] = args;
-    QByteArray data = QJsonDocument(req).toJson(QJsonDocument::Compact) + "\n";
-
-    // Send credentials + request via QueuedConnection — returns immediately to
-    // the worker, which then sleeps on the wait condition below. Previously
-    // this used BlockingQueuedConnection, which stalled the worker waiting for
-    // the UI event loop to drain (H4).
-    QMetaObject::invokeMethod(
-        this,
-        [this, data]() {
-            if (!daemon_process_)
-                return;
-            // Send credentials if not yet sent
-            if (!credentials_sent_to_daemon_ && !credentials_.api_key.isEmpty()) {
-                QJsonObject creds;
-                creds["api_key"] = credentials_.api_key;
-                creds["secret"] = credentials_.secret;
-                if (!credentials_.password.isEmpty())
-                    creds["password"] = credentials_.password;
-
-                QJsonObject cred_req;
-                cred_req["id"] = "__creds__";
-                cred_req["method"] = "set_credentials";
-                cred_req["exchange"] = exchange_id_;
-                cred_req["args"] = creds;
-                daemon_process_->write(QJsonDocument(cred_req).toJson(QJsonDocument::Compact) + "\n");
-                credentials_sent_to_daemon_ = true;
-            }
-            daemon_process_->write(data);
-        },
-        Qt::QueuedConnection);
-
-    // Wait for response using QWaitCondition (proper cross-thread signaling)
-    QMutexLocker lock(&daemon_mutex_);
-    QElapsedTimer elapsed;
-    elapsed.start();
-    while (elapsed.elapsed() < timeout_ms) {
-        auto it = daemon_responses_.find(req_id);
-        if (it != daemon_responses_.end()) {
-            QJsonObject resp = it.value();
-            daemon_responses_.erase(it);
-            lock.unlock();
-
-            // Unwrap: {"id":"...", "success":true, "data":{...}}
-            if (resp.value("success").toBool(false) && resp.contains("data")) {
-                auto d = resp.value("data");
-                if (d.isObject())
-                    return d.toObject();
-            }
-            if (resp.contains("error"))
-                return resp;
-            return resp;
-        }
-        // Sleep until signaled or 50ms timeout (re-check elapsed)
-        daemon_response_ready_.wait(&daemon_mutex_, 50);
-    }
-    lock.unlock();
-
-    LOG_WARN(TAG, "Daemon call timed out: " + method);
-    return {{"error", "Daemon call timed out: " + method}};
-}
-
-// ============================================================================
-// WebSocket Stream (QProcess-based)
-// ============================================================================
-
-void ExchangeService::start_ws_stream(const QString& primary_symbol, const QStringList& all_symbols) {
-    stop_ws_stream();
-
-    ws_primary_symbol_ = primary_symbol;
-    ws_all_symbols_ = all_symbols;
-
-    // Find Python and script paths via PythonRunner
-    QString python_path = python::PythonRunner::instance().python_path();
-    QString script_path;
-    QStringList args;
-
-    if (is_broker_stream(exchange_id_)) {
-        script_path = resolve_script_path("exchange/broker_ws_bridge.py");
-        if (python_path.isEmpty() || script_path.isEmpty()) {
-            LOG_ERROR(TAG, "Python or broker_ws_bridge.py not found");
-            return;
-        }
-
-        auto* broker = BrokerRegistry::instance().get(exchange_id_);
-        if (!broker) {
-            LOG_ERROR(TAG, "Broker stream requested but broker is not registered: " + exchange_id_);
-            return;
-        }
-
-        auto creds = broker->load_credentials();
-        if (creds.api_key.isEmpty() || creds.access_token.isEmpty()) {
-            LOG_ERROR(TAG, "Broker stream credentials missing for " + exchange_id_);
-            return;
-        }
-
-        QString feed_token;
-        QString user_id = creds.user_id;
-        if (!creds.additional_data.isEmpty()) {
-            auto ad = QJsonDocument::fromJson(creds.additional_data.toUtf8()).object();
-            if (user_id.isEmpty())
-                user_id = ad.value("client_code").toString();
-            feed_token = ad.value("feed_token").toString();
-        }
-        if (user_id.isEmpty())
-            user_id = creds.api_key;
-
-        QStringList broker_symbols = to_broker_symbol_args(all_symbols);
-        if (broker_symbols.isEmpty())
-            broker_symbols = to_broker_symbol_args({primary_symbol});
-        if (broker_symbols.isEmpty()) {
-            LOG_ERROR(TAG, "No symbols provided for broker websocket stream");
-            return;
-        }
-
-        args << "-u" << "-B" << script_path << exchange_id_ << creds.api_key << creds.access_token << user_id;
-        if (!feed_token.isEmpty())
-            args << "--feed-token" << feed_token;
-        args << "--symbols";
-        args.append(broker_symbols);
-    } else {
-        script_path = resolve_script_path("exchange/ws_stream.py");
-        if (python_path.isEmpty() || script_path.isEmpty()) {
-            LOG_ERROR(TAG, "Python or ws_stream.py not found");
-            return;
-        }
-
-        args << "-u" << "-B" << script_path << exchange_id_;
-        for (const auto& sym : all_symbols)
-            args << sym;
-    }
-
-    ws_process_ = new QProcess(this);
-    // Throttle: process max 8 lines per event loop cycle via drain_ws_buffer()
-    // This prevents 50+ synchronous JSON parses from starving the event loop
-    connect(ws_process_, &QProcess::readyReadStandardOutput, this, &ExchangeService::drain_ws_buffer);
-    connect(ws_process_, &QProcess::readyReadStandardError, this, [this]() {
-        QString err = QString::fromUtf8(ws_process_->readAllStandardError()).trimmed();
-        if (!err.isEmpty())
-            LOG_WARN(TAG, "WS stderr: " + err);
-    });
-
-    ws_process_->start(python_path, args);
-    LOG_INFO(TAG, "WS stream started for " + primary_symbol);
+bool ExchangeService::start_ws_stream(const QString& primary_symbol, const QStringList& all_symbols) {
+    return active_session()->start_ws(primary_symbol, all_symbols);
 }
 
 void ExchangeService::stop_ws_stream() {
-    if (ws_process_) {
-        auto* proc = ws_process_;
-        ws_process_ = nullptr;
-        ws_connected_ = false;
-
-        // Disconnect all signals BEFORE cleanup to prevent stale reads
-        proc->disconnect(this);
-
-        proc->terminate();
-        // Non-blocking cleanup: kill after timeout if still running, then deleteLater
-        connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), proc, &QObject::deleteLater);
-        // If terminate doesn't work within 3s, force kill
-        QTimer::singleShot(3000, proc, [proc]() {
-            if (proc->state() != QProcess::NotRunning) {
-                proc->kill();
-            }
-        });
-    }
-    ws_connected_ = false;
+    active_session()->stop_ws();
 }
 
 bool ExchangeService::is_ws_connected() const {
-    return ws_connected_.load();
+    return active_session()->is_ws_connected();
+}
+
+bool ExchangeService::is_ws_active() const {
+    return active_session()->is_ws_active();
 }
 
 void ExchangeService::set_ws_primary_symbol(const QString& symbol) {
-    QMutexLocker lock(&mutex_);
-    ws_primary_symbol_ = symbol;
+    active_session()->set_ws_primary_symbol(symbol);
 }
 
 QString ExchangeService::get_ws_primary_symbol() const {
-    QMutexLocker lock(&mutex_);
-    return ws_primary_symbol_;
-}
-
-void ExchangeService::handle_ws_line(const QString& line) {
-    if (line.isEmpty() || line[0] != '{')
-        return;
-
-    QJsonParseError err;
-    auto doc = QJsonDocument::fromJson(line.toUtf8(), &err);
-    if (err.error != QJsonParseError::NoError)
-        return;
-
-    auto msg = doc.object();
-    QString type = msg.value("type").toString();
-
-    if (type == "status") {
-        ws_connected_ = msg.value("connected").toBool(false);
-        if (!msg.value("connected").toBool(false)) {
-            // Clear symbol map on disconnect so stale remaps don't persist
-            QMutexLocker lock(&mutex_);
-            ws_symbol_map_.clear();
-        }
-        return;
-    }
-
-    if (type == "symbol_map") {
-        // ws_stream.py emits this after resolving symbols — e.g. BTC/USDT → BTC/USDC:USDC
-        // on Hyperliquid. Store the reverse map so incoming tickers get remapped to the
-        // originally requested symbol before going into price_cache_.
-        QMutexLocker lock(&mutex_);
-        ws_symbol_map_.clear();
-        const auto map_obj = msg.value("map").toObject();
-        for (auto it = map_obj.constBegin(); it != map_obj.constEnd(); ++it)
-            ws_symbol_map_[it.key()] = it.value().toString();
-        LOG_INFO(TAG, QString("Symbol map updated: %1 remaps").arg(ws_symbol_map_.size()));
-        return;
-    }
-
-    if (type == "ticker" || type == "tick") {
-        TickerData ticker;
-        if (type == "tick") {
-            // broker_ws_bridge.py emits "tick" with equity field names.
-            ticker.symbol = msg.value("symbol").toString();
-            ticker.last = msg.value("ltp").toDouble();
-            ticker.bid = msg.value("bid").toDouble();
-            ticker.ask = msg.value("ask").toDouble();
-            ticker.high = msg.value("high").toDouble();
-            ticker.low = msg.value("low").toDouble();
-            ticker.open = msg.value("open").toDouble();
-            ticker.close = msg.value("close").toDouble();
-            ticker.base_volume = msg.value("volume").toDouble();
-            ticker.timestamp = msg.value("timestamp").toVariant().toLongLong();
-        } else {
-            // ws_stream.py emits snake_case fields; REST parse_ticker uses camelCase
-            QJsonObject normalised = msg;
-            if (!msg.contains("baseVolume") && msg.contains("base_volume"))
-                normalised["baseVolume"] = msg.value("base_volume");
-            if (!msg.contains("quoteVolume") && msg.contains("quote_volume"))
-                normalised["quoteVolume"] = msg.value("quote_volume");
-            ticker = parse_ticker(normalised);
-        }
-
-        if (ticker.symbol.isEmpty() || ticker.last <= 0.0)
-            return;
-
-        // Remap exchange symbol → originally requested symbol.
-        // e.g. on Hyperliquid: "BTC/USDC:USDC" → "BTC/USDT"
-        // ws_stream.py emits a "symbol_map" message after resolution that populates ws_symbol_map_.
-        {
-            QMutexLocker lock(&mutex_);
-            auto it = ws_symbol_map_.constFind(ticker.symbol);
-            if (it != ws_symbol_map_.constEnd())
-                ticker.symbol = it.value();
-        }
-
-        // Copy callbacks out, then release mutex BEFORE firing
-        QVector<PriceUpdateCallback> cbs;
-        {
-            QMutexLocker lock(&mutex_);
-            price_cache_[ticker.symbol] = ticker;
-            cbs.reserve(price_callbacks_.size());
-            for (auto it = price_callbacks_.constBegin(); it != price_callbacks_.constEnd(); ++it)
-                cbs.append(it.value());
-        }
-        for (const auto& cb : cbs) {
-            try {
-                cb(ticker.symbol, ticker);
-            } catch (...) {
-                LOG_WARN("ExchangeService", "Price callback threw an exception for " + ticker.symbol);
-            }
-        }
-        publish_ticker_to_hub(exchange_id_, ticker.symbol, ticker);
-        return;
-    }
-
-    if (type == "orderbook") {
-        OrderBookData ob = parse_orderbook(msg);
-        QVector<OrderBookCallback> cbs;
-        {
-            QMutexLocker lock(&mutex_);
-            cbs.reserve(orderbook_callbacks_.size());
-            for (auto it = orderbook_callbacks_.constBegin(); it != orderbook_callbacks_.constEnd(); ++it)
-                cbs.append(it.value());
-        }
-        for (const auto& cb : cbs) {
-            try {
-                cb(ob.symbol, ob);
-            } catch (...) {
-                LOG_WARN("ExchangeService", "Orderbook callback threw an exception for " + ob.symbol);
-            }
-        }
-        publish_orderbook_to_hub(exchange_id_, ob.symbol, ob);
-        return;
-    }
-
-    if (type == "candle" || type == "ohlcv") {
-        QJsonObject candle_obj = (type == "ohlcv") ? msg.value("candle").toObject() : msg;
-        Candle c = parse_candle(candle_obj);
-        QString sym = msg.value("symbol").toString();
-        if (sym.isEmpty() || c.timestamp == 0)
-            return;
-        QVector<CandleCallback> cbs;
-        {
-            QMutexLocker lock(&mutex_);
-            cbs.reserve(candle_callbacks_.size());
-            for (auto it = candle_callbacks_.constBegin(); it != candle_callbacks_.constEnd(); ++it)
-                cbs.append(it.value());
-        }
-        for (const auto& cb : cbs) {
-            try {
-                cb(sym, c);
-            } catch (...) {
-                LOG_WARN("ExchangeService", "Candle callback threw an exception for " + sym);
-            }
-        }
-        // Interval is not currently emitted by ws_stream.py — default to "1m".
-        // When ws_stream starts publishing `interval` in the message, read it here.
-        const QString interval = msg.value("interval").toString("1m");
-        publish_candle_to_hub(exchange_id_, sym, interval, c);
-        return;
-    }
-
-    if (type == "trade") {
-        TradeData td;
-        td.symbol = msg.value("symbol").toString();
-        td.side = msg.value("side").toString();
-        td.price = msg.value("price").toDouble();
-        td.amount = msg.value("amount").toDouble();
-        td.timestamp = msg.value("timestamp").toVariant().toLongLong();
-
-        QVector<TradeCallback> trade_cbs;
-        QVector<PriceUpdateCallback> price_cbs;
-        TickerData fast_ticker;
-        bool emit_price = false;
-
-        {
-            QMutexLocker lock(&mutex_);
-            // Use trade price to keep price_cache_ current — this is the fast path
-            // for exchanges where watch_ticker is slow (e.g. Kraken spot ~2/15s).
-            if (!td.symbol.isEmpty() && td.price > 0.0) {
-                auto& cached = price_cache_[td.symbol];
-                cached.symbol = td.symbol;
-                cached.last = td.price;
-                if (cached.bid <= 0.0)
-                    cached.bid = td.price;
-                if (cached.ask <= 0.0)
-                    cached.ask = td.price;
-                fast_ticker = cached;
-                emit_price = true;
-            }
-            trade_cbs.reserve(trade_callbacks_.size());
-            for (auto it = trade_callbacks_.constBegin(); it != trade_callbacks_.constEnd(); ++it)
-                trade_cbs.append(it.value());
-            if (emit_price) {
-                price_cbs.reserve(price_callbacks_.size());
-                for (auto it = price_callbacks_.constBegin(); it != price_callbacks_.constEnd(); ++it)
-                    price_cbs.append(it.value());
-            }
-        }
-
-        for (const auto& cb : trade_cbs) {
-            try {
-                cb(td.symbol, td);
-            } catch (...) {
-                LOG_WARN("ExchangeService", "Trade callback threw an exception for " + td.symbol);
-            }
-        }
-        // Fire price callbacks so the ticker bar and order entry update on every trade
-        if (emit_price) {
-            for (const auto& cb : price_cbs) {
-                try {
-                    cb(fast_ticker.symbol, fast_ticker);
-                } catch (...) {
-                    LOG_WARN("ExchangeService",
-                             "Price callback (from trade) threw an exception for " + fast_ticker.symbol);
-                }
-            }
-        }
-        if (!td.symbol.isEmpty()) {
-            publish_trade_to_hub(exchange_id_, td.symbol, td);
-            if (emit_price)
-                publish_ticker_to_hub(exchange_id_, fast_ticker.symbol, fast_ticker);
-        }
-    }
-}
-
-void ExchangeService::drain_ws_buffer() {
-    if (!ws_process_)
-        return;
-
-    // Process up to 50 lines OR 4ms, whichever comes first.
-    // Old limit of 8 lines caused unbounded buffer buildup during volatility.
-    // The 4ms time cap prevents UI starvation if lines are expensive to parse.
-    int processed = 0;
-    constexpr int MAX_LINES_PER_CYCLE = 50;
-    constexpr qint64 MAX_MS_PER_CYCLE = 4;
-    QElapsedTimer elapsed;
-    elapsed.start();
-
-    while (ws_process_->canReadLine() && processed < MAX_LINES_PER_CYCLE) {
-        QString line = QString::fromUtf8(ws_process_->readLine()).trimmed();
-        if (!line.isEmpty())
-            handle_ws_line(line);
-        ++processed;
-        if (elapsed.elapsed() >= MAX_MS_PER_CYCLE)
-            break;
-    }
-    // Reschedule if more data remains — use singleShot(1ms) instead of 0ms
-    // to yield one event loop iteration for UI repaints
-    if (ws_process_ && ws_process_->canReadLine())
-        QTimer::singleShot(1, this, &ExchangeService::drain_ws_buffer);
+    return active_session()->get_ws_primary_symbol();
 }
 
 // ============================================================================
-// Python Script Calls
+// One-shot fetches — delegated
 // ============================================================================
-
-QJsonObject ExchangeService::call_script(const QString& script, const QStringList& args) {
-    QString python_path = python::PythonRunner::instance().python_path();
-    QString script_path = resolve_script_path(script);
-
-    if (python_path.isEmpty() || script_path.isEmpty()) {
-        return {{"error", "Python or script not found: " + script}};
-    }
-
-    QStringList full_args;
-    full_args << "-u" << "-B" << script_path << exchange_id_;
-    full_args.append(args);
-
-    QProcess proc;
-    proc.start(python_path, full_args);
-    const bool finished = proc.waitForFinished(30000);
-    if (!finished) {
-        LOG_WARN(TAG, QString("call_script timed out after 30s: %1").arg(script));
-        proc.kill();
-        proc.waitForFinished(500);
-        return {{"error", "Script timed out: " + script}};
-    }
-
-    QString output = proc.readAllStandardOutput().trimmed();
-    if (output.isEmpty()) {
-        QString err = proc.readAllStandardError().trimmed();
-        return {{"error", err.isEmpty() ? "No output from script" : err}};
-    }
-
-    QJsonParseError parseErr;
-    auto doc = QJsonDocument::fromJson(output.toUtf8(), &parseErr);
-    if (parseErr.error != QJsonParseError::NoError) {
-        return {{"error", "JSON parse error: " + parseErr.errorString()}};
-    }
-
-    auto obj = doc.object();
-
-    // Python scripts wrap output as {"success": true, "data": {...}}.
-    // Unwrap the "data" layer so callers can access keys directly.
-    if (obj.value("success").toBool(false) && obj.contains("data")) {
-        auto data = obj.value("data");
-        if (data.isObject())
-            return data.toObject();
-    }
-
-    // If there was an error, propagate it directly
-    if (obj.contains("error"))
-        return obj;
-
-    // Fallback: return as-is (e.g. scripts that don't use output_success wrapper)
-    return obj;
-}
-
-QJsonObject ExchangeService::call_script_with_credentials(const QString& script, const QStringList& args) {
-    // Authenticated scripts expect credentials via stdin JSON, not command-line flags.
-    // Build the credentials JSON to pipe to the process.
-    QMutexLocker lock(&mutex_);
-    QJsonObject creds_json;
-    if (!credentials_.api_key.isEmpty()) {
-        creds_json["api_key"] = credentials_.api_key;
-        creds_json["secret"] = credentials_.secret;
-        if (!credentials_.password.isEmpty())
-            creds_json["password"] = credentials_.password;
-    }
-    lock.unlock();
-
-    QString python_path = python::PythonRunner::instance().python_path();
-    QString script_path = resolve_script_path(script);
-
-    if (python_path.isEmpty() || script_path.isEmpty()) {
-        return {{"error", "Python or script not found: " + script}};
-    }
-
-    QStringList full_args;
-    full_args << "-u" << "-B" << script_path << exchange_id_;
-    full_args.append(args);
-
-    QProcess proc;
-    proc.start(python_path, full_args);
-    proc.waitForStarted(5000);
-
-    // Write credentials to stdin
-    if (!creds_json.isEmpty()) {
-        QByteArray creds_data = QJsonDocument(creds_json).toJson(QJsonDocument::Compact);
-        proc.write(creds_data);
-    }
-    proc.closeWriteChannel();
-
-    proc.waitForFinished(30000);
-
-    QString output = proc.readAllStandardOutput().trimmed();
-    if (output.isEmpty()) {
-        QString err = proc.readAllStandardError().trimmed();
-        return {{"error", err.isEmpty() ? "No output from script" : err}};
-    }
-
-    QJsonParseError parseErr;
-    auto doc = QJsonDocument::fromJson(output.toUtf8(), &parseErr);
-    if (parseErr.error != QJsonParseError::NoError) {
-        return {{"error", "JSON parse error: " + parseErr.errorString()}};
-    }
-
-    auto obj = doc.object();
-    if (obj.value("success").toBool(false) && obj.contains("data")) {
-        auto data = obj.value("data");
-        if (data.isObject())
-            return data.toObject();
-    }
-    if (obj.contains("error"))
-        return obj;
-    return obj;
-}
-
-// ============================================================================
-// One-shot Fetches
-// ============================================================================
-
-TickerData ExchangeService::parse_ticker(const QJsonObject& j) {
-    TickerData t;
-    t.symbol = j.value("symbol").toString();
-    t.last = j.value("last").toDouble();
-    t.bid = j.value("bid").toDouble();
-    t.ask = j.value("ask").toDouble();
-    t.high = j.value("high").toDouble();
-    t.low = j.value("low").toDouble();
-    t.open = j.value("open").toDouble();
-    t.close = j.value("close").toDouble();
-    t.change = j.value("change").toDouble();
-    t.percentage = j.value("percentage").toDouble();
-    t.base_volume = j.value("baseVolume").toDouble();
-    t.quote_volume = j.value("quoteVolume").toDouble();
-    t.timestamp = j.value("timestamp").toVariant().toLongLong();
-    return t;
-}
-
-OrderBookData ExchangeService::parse_orderbook(const QJsonObject& j) {
-    OrderBookData ob;
-    ob.symbol = j.value("symbol").toString();
-
-    auto bids = j.value("bids").toArray();
-    for (const auto& b : bids) {
-        auto arr = b.toArray();
-        if (arr.size() >= 2) {
-            ob.bids.append({arr[0].toDouble(), arr[1].toDouble()});
-        }
-    }
-
-    auto asks = j.value("asks").toArray();
-    for (const auto& a : asks) {
-        auto arr = a.toArray();
-        if (arr.size() >= 2) {
-            ob.asks.append({arr[0].toDouble(), arr[1].toDouble()});
-        }
-    }
-
-    if (!ob.bids.isEmpty())
-        ob.best_bid = ob.bids.first().first;
-    if (!ob.asks.isEmpty())
-        ob.best_ask = ob.asks.first().first;
-    if (ob.best_bid > 0 && ob.best_ask > 0) {
-        ob.spread = ob.best_ask - ob.best_bid;
-        ob.spread_pct = (ob.spread / ob.best_ask) * 100.0;
-    }
-    return ob;
-}
-
-Candle ExchangeService::parse_candle(const QJsonObject& j) {
-    Candle c;
-    c.timestamp = j.value("timestamp").toVariant().toLongLong();
-    c.open = j.value("open").toDouble();
-    c.high = j.value("high").toDouble();
-    c.low = j.value("low").toDouble();
-    c.close = j.value("close").toDouble();
-    c.volume = j.value("volume").toDouble();
-    return c;
-}
-
-MarketInfo ExchangeService::parse_market(const QJsonObject& j) {
-    MarketInfo m;
-    m.symbol = j.value("symbol").toString();
-    m.base = j.value("base").toString();
-    m.quote = j.value("quote").toString();
-    m.type = j.value("type").toString();
-    m.active = j.value("active").toBool(true);
-    m.maker_fee = j.value("maker").toDouble();
-    m.taker_fee = j.value("taker").toDouble();
-    m.min_amount = j.value("minAmount").toDouble();
-    m.min_cost = j.value("minCost").toDouble();
-    return m;
-}
 
 TickerData ExchangeService::fetch_ticker(const QString& symbol) {
-    // Daemon path: ~100ms (reuses warm ccxt instance)
-    // Legacy path: ~900ms (spawns Python, imports ccxt, creates exchange)
-    if (wait_for_daemon_ready()) {
-        auto j = daemon_call("fetch_ticker", {{"symbol", symbol}});
-        if (!j.contains("error"))
-            return parse_ticker(j);
-        LOG_WARN(TAG, "Daemon fetch_ticker failed, falling back to script");
-    }
-    auto j = call_script("exchange/fetch_ticker.py", {symbol});
-    if (j.contains("error"))
-        return {};
-    return parse_ticker(j);
+    return active_session()->fetch_ticker(symbol);
 }
-
 QVector<TickerData> ExchangeService::fetch_tickers(const QStringList& symbols) {
-    if (wait_for_daemon_ready()) {
-        QJsonArray sym_arr;
-        for (const auto& s : symbols)
-            sym_arr.append(s);
-        auto j = daemon_call("fetch_tickers", {{"symbols", sym_arr}});
-        if (!j.contains("error") && j.contains("tickers")) {
-            QVector<TickerData> result;
-            auto arr = j.value("tickers").toArray();
-            for (const auto& item : arr)
-                result.append(parse_ticker(item.toObject()));
-            return result;
-        }
-        LOG_WARN(TAG, "Daemon fetch_tickers failed, falling back to script");
-    }
-    QStringList args = symbols;
-    auto j = call_script("exchange/fetch_tickers.py", args);
-    QVector<TickerData> result;
-    if (j.contains("tickers")) {
-        auto arr = j.value("tickers").toArray();
-        for (const auto& item : arr)
-            result.append(parse_ticker(item.toObject()));
-    }
-    return result;
+    return active_session()->fetch_tickers(symbols);
 }
-
 OrderBookData ExchangeService::fetch_orderbook(const QString& symbol, int limit) {
-    if (wait_for_daemon_ready()) {
-        auto j = daemon_call("fetch_orderbook", {{"symbol", symbol}, {"limit", limit}});
-        if (!j.contains("error"))
-            return parse_orderbook(j);
-        LOG_WARN(TAG, "Daemon fetch_orderbook failed, falling back to script");
-    }
-    auto j = call_script("exchange/fetch_orderbook.py", {symbol, QString::number(limit)});
-    if (j.contains("error"))
-        return {};
-    return parse_orderbook(j);
+    return active_session()->fetch_orderbook(symbol, limit);
 }
-
 QVector<Candle> ExchangeService::fetch_ohlcv(const QString& symbol, const QString& timeframe, int limit) {
-    if (wait_for_daemon_ready()) {
-        auto j = daemon_call("fetch_ohlcv", {{"symbol", symbol}, {"timeframe", timeframe}, {"limit", limit}});
-        if (!j.contains("error") && j.contains("candles")) {
-            QVector<Candle> result;
-            auto arr = j.value("candles").toArray();
-            for (const auto& item : arr)
-                result.append(parse_candle(item.toObject()));
-            return result;
-        }
-        LOG_WARN(TAG, "Daemon fetch_ohlcv failed, falling back to script");
-    }
-    auto j = call_script("exchange/fetch_ohlcv.py", {symbol, timeframe, QString::number(limit)});
-    QVector<Candle> result;
-    if (j.contains("candles")) {
-        auto arr = j.value("candles").toArray();
-        for (const auto& item : arr)
-            result.append(parse_candle(item.toObject()));
-    }
-    return result;
+    return active_session()->fetch_ohlcv(symbol, timeframe, limit);
 }
-
 QVector<MarketInfo> ExchangeService::fetch_markets(const QString& type, const QString& query) {
-    if (wait_for_daemon_ready()) {
-        QJsonObject args;
-        if (!type.isEmpty())
-            args["type"] = type;
-        if (!query.isEmpty()) {
-            args["query"] = query;
-            args["limit"] = 100; // server-side cap when filtering
-        }
-        auto j = daemon_call("fetch_markets", args);
-        if (!j.contains("error") && j.contains("markets")) {
-            QVector<MarketInfo> result;
-            auto arr = j.value("markets").toArray();
-            for (const auto& item : arr)
-                result.append(parse_market(item.toObject()));
-            return result;
-        }
-        LOG_WARN(TAG, "Daemon fetch_markets failed, falling back to script");
-    }
-    QStringList args;
-    if (!type.isEmpty())
-        args << type;
-    auto j = call_script("exchange/fetch_markets.py", args);
-    QVector<MarketInfo> result;
-    if (j.contains("markets")) {
-        auto arr = j.value("markets").toArray();
-        for (const auto& item : arr)
-            result.append(parse_market(item.toObject()));
-    }
-    return result;
+    return active_session()->fetch_markets(type, query);
 }
 
 QStringList ExchangeService::list_exchange_ids() {
-    if (wait_for_daemon_ready()) {
-        auto j = daemon_call("list_exchange_ids", {});
-        if (!j.contains("error") && j.contains("exchanges")) {
-            QStringList result;
-            auto arr = j.value("exchanges").toArray();
-            for (const auto& item : arr)
-                result.append(item.toString());
-            return result;
-        }
-    }
-    auto j = call_script("exchange/list_exchanges.py", {});
+    // Exchange-agnostic daemon call — list_exchange_ids returns the ccxt
+    // library's exchange directory, independent of any session.
+    if (!ExchangeDaemonPool::instance().wait_for_ready(8000))
+        return {};
+    // Reuse the active session's exchange id as a dummy; the daemon
+    // doesn't actually use it for list_exchange_ids.
+    const QString exchange = get_exchange();
+    auto j = ExchangeDaemonPool::instance().call(exchange, "list_exchange_ids", {}, {}, 15000);
     QStringList result;
     if (j.contains("exchanges")) {
         auto arr = j.value("exchanges").toArray();
@@ -1209,314 +249,53 @@ QStringList ExchangeService::list_exchange_ids() {
 }
 
 QVector<TradeData> ExchangeService::fetch_trades(const QString& symbol, int limit) {
-    if (wait_for_daemon_ready()) {
-        auto j = daemon_call("fetch_trades", {{"symbol", symbol}, {"limit", limit}});
-        if (!j.contains("error") && j.contains("trades")) {
-            QVector<TradeData> result;
-            auto arr = j.value("trades").toArray();
-            for (const auto& item : arr) {
-                auto o = item.toObject();
-                TradeData td;
-                td.id = o.value("id").toString();
-                td.symbol = o.value("symbol").toString();
-                td.side = o.value("side").toString();
-                td.price = o.value("price").toDouble();
-                td.amount = o.value("amount").toDouble();
-                td.cost = o.value("cost").toDouble();
-                td.timestamp = o.value("timestamp").toVariant().toLongLong();
-                result.append(td);
-            }
-            return result;
-        }
-    }
-    auto j = call_script("exchange/fetch_trades.py", {symbol, QString::number(limit)});
-    QVector<TradeData> result;
-    if (j.contains("trades")) {
-        auto arr = j.value("trades").toArray();
-        for (const auto& item : arr) {
-            auto o = item.toObject();
-            TradeData td;
-            td.id = o.value("id").toString();
-            td.symbol = o.value("symbol").toString();
-            td.side = o.value("side").toString();
-            td.price = o.value("price").toDouble();
-            td.amount = o.value("amount").toDouble();
-            td.cost = o.value("cost").toDouble();
-            td.timestamp = o.value("timestamp").toVariant().toLongLong();
-            result.append(td);
-        }
-    }
-    return result;
+    return active_session()->fetch_trades(symbol, limit);
 }
-
 FundingRateData ExchangeService::fetch_funding_rate(const QString& symbol) {
-    if (wait_for_daemon_ready()) {
-        auto j = daemon_call("fetch_funding_rate", {{"symbol", symbol}});
-        if (!j.contains("error")) {
-            FundingRateData fr;
-            fr.symbol = j.value("symbol").toString();
-            fr.funding_rate = j.value("funding_rate").toDouble();
-            fr.mark_price = j.value("mark_price").toDouble();
-            fr.index_price = j.value("index_price").toDouble();
-            fr.funding_timestamp = j.value("funding_timestamp").toVariant().toLongLong();
-            fr.next_funding_timestamp = j.value("next_funding_timestamp").toVariant().toLongLong();
-            return fr;
-        }
-    }
-    auto j = call_script("exchange/fetch_funding_rate.py", {symbol});
-    FundingRateData fr;
-    if (!j.contains("error")) {
-        fr.symbol = j.value("symbol").toString();
-        fr.funding_rate = j.value("funding_rate").toDouble();
-        fr.mark_price = j.value("mark_price").toDouble();
-        fr.index_price = j.value("index_price").toDouble();
-        fr.funding_timestamp = j.value("funding_timestamp").toVariant().toLongLong();
-        fr.next_funding_timestamp = j.value("next_funding_timestamp").toVariant().toLongLong();
-    }
-    return fr;
+    return active_session()->fetch_funding_rate(symbol);
 }
-
 OpenInterestData ExchangeService::fetch_open_interest(const QString& symbol) {
-    if (wait_for_daemon_ready()) {
-        auto j = daemon_call("fetch_open_interest", {{"symbol", symbol}});
-        if (!j.contains("error")) {
-            OpenInterestData oi;
-            oi.symbol = j.value("symbol").toString();
-            oi.open_interest = j.value("open_interest").toDouble();
-            oi.open_interest_value = j.value("open_interest_value").toDouble();
-            oi.timestamp = j.value("timestamp").toVariant().toLongLong();
-            return oi;
-        }
-    }
-    auto j = call_script("exchange/fetch_open_interest.py", {symbol});
-    OpenInterestData oi;
-    if (!j.contains("error")) {
-        oi.symbol = j.value("symbol").toString();
-        oi.open_interest = j.value("open_interest").toDouble();
-        oi.open_interest_value = j.value("open_interest_value").toDouble();
-        oi.timestamp = j.value("timestamp").toVariant().toLongLong();
-    }
-    return oi;
+    return active_session()->fetch_open_interest(symbol);
 }
 
 QJsonObject ExchangeService::fetch_balance() {
-    if (wait_for_daemon_ready()) {
-        auto j = daemon_call("fetch_balance", {});
-        if (!j.contains("error"))
-            return j;
-    }
-    return call_script_with_credentials("exchange/fetch_balance.py", {});
+    return active_session()->fetch_balance();
 }
-
 QJsonObject ExchangeService::place_exchange_order(const QString& symbol, const QString& side, const QString& type,
                                                   double amount, double price) {
-    if (wait_for_daemon_ready()) {
-        QJsonObject args;
-        args["symbol"] = symbol;
-        args["side"] = side;
-        args["type"] = type;
-        args["amount"] = amount;
-        if (price > 0)
-            args["price"] = price;
-        auto j = daemon_call("place_order", args);
-        if (!j.contains("error"))
-            return j;
-        LOG_WARN(TAG, "Daemon place_order failed, falling back to script");
-    }
-    QStringList args = {symbol, side, type, QString::number(amount, 'f', 8)};
-    if (price > 0)
-        args << QString::number(price, 'f', 8);
-    return call_script_with_credentials("exchange/place_order.py", args);
+    return active_session()->place_exchange_order(symbol, side, type, amount, price);
 }
-
 QJsonObject ExchangeService::cancel_exchange_order(const QString& order_id, const QString& symbol) {
-    if (wait_for_daemon_ready()) {
-        auto j = daemon_call("cancel_order", {{"order_id", order_id}, {"symbol", symbol}});
-        if (!j.contains("error"))
-            return j;
-    }
-    return call_script_with_credentials("exchange/cancel_order.py", {order_id, symbol});
+    return active_session()->cancel_exchange_order(order_id, symbol);
 }
-
 QJsonObject ExchangeService::fetch_positions_live(const QString& symbol) {
-    if (wait_for_daemon_ready()) {
-        QJsonObject args;
-        if (!symbol.isEmpty())
-            args["symbol"] = symbol;
-        auto j = daemon_call("fetch_positions", args);
-        if (!j.contains("error"))
-            return j;
-    }
-    QStringList args;
-    if (!symbol.isEmpty())
-        args << symbol;
-    return call_script_with_credentials("exchange/fetch_positions.py", args);
+    return active_session()->fetch_positions_live(symbol);
 }
-
 QJsonObject ExchangeService::fetch_open_orders_live(const QString& symbol) {
-    if (wait_for_daemon_ready()) {
-        QJsonObject args;
-        if (!symbol.isEmpty())
-            args["symbol"] = symbol;
-        auto j = daemon_call("fetch_open_orders", args);
-        if (!j.contains("error"))
-            return j;
-    }
-    QStringList args;
-    if (!symbol.isEmpty())
-        args << symbol;
-    return call_script_with_credentials("exchange/fetch_open_orders.py", args);
+    return active_session()->fetch_open_orders_live(symbol);
 }
-
-MarkPriceData ExchangeService::fetch_mark_price(const QString& symbol) {
-    MarkPriceData mp;
-    mp.symbol = symbol;
-    QJsonObject j;
-    if (wait_for_daemon_ready()) {
-        j = daemon_call("fetch_mark_price", {{"symbol", symbol}});
-        if (j.contains("error"))
-            j = {};
-    }
-    if (j.isEmpty())
-        j = call_script("exchange/fetch_mark_price.py", {symbol});
-    if (!j.isEmpty()) {
-        mp.mark_price = j.value("mark_price").toDouble();
-        mp.index_price = j.value("index_price").toDouble();
-        mp.timestamp = j.value("timestamp").toVariant().toLongLong();
-    }
-    return mp;
-}
-
 QJsonObject ExchangeService::fetch_my_trades(const QString& symbol, int limit) {
-    if (wait_for_daemon_ready()) {
-        auto j = daemon_call("fetch_my_trades", {{"symbol", symbol}, {"limit", limit}});
-        if (!j.contains("error"))
-            return j;
-        LOG_WARN(TAG, "Daemon fetch_my_trades failed, falling back to script");
-    }
-    return call_script_with_credentials("exchange/fetch_my_trades.py", {symbol, QString::number(limit)});
+    return active_session()->fetch_my_trades(symbol, limit);
 }
-
 QJsonObject ExchangeService::fetch_trading_fees(const QString& symbol) {
-    if (wait_for_daemon_ready()) {
-        QJsonObject args;
-        if (!symbol.isEmpty())
-            args["symbol"] = symbol;
-        auto j = daemon_call("fetch_trading_fees", args);
-        if (!j.contains("error"))
-            return j;
-        LOG_WARN(TAG, "Daemon fetch_trading_fees failed, falling back to script");
-    }
-    QStringList args;
-    if (!symbol.isEmpty())
-        args << symbol;
-    return call_script("exchange/fetch_trading_fees.py", args);
+    return active_session()->fetch_trading_fees(symbol);
 }
-
 QJsonObject ExchangeService::set_leverage(const QString& symbol, int leverage) {
-    if (wait_for_daemon_ready()) {
-        auto j = daemon_call("set_leverage", {{"symbol", symbol}, {"leverage", leverage}});
-        if (!j.contains("error"))
-            return j;
-        LOG_WARN(TAG, "Daemon set_leverage failed, falling back to script");
-    }
-    return call_script_with_credentials("exchange/set_leverage.py", {symbol, QString::number(leverage)});
+    return active_session()->set_leverage(symbol, leverage);
 }
-
 QJsonObject ExchangeService::set_margin_mode(const QString& symbol, const QString& mode) {
-    if (wait_for_daemon_ready()) {
-        auto j = daemon_call("set_margin_mode", {{"symbol", symbol}, {"mode", mode}});
-        if (!j.contains("error"))
-            return j;
-        LOG_WARN(TAG, "Daemon set_margin_mode failed, falling back to script");
-    }
-    return call_script_with_credentials("exchange/set_margin_mode.py", {symbol, mode});
+    return active_session()->set_margin_mode(symbol, mode);
+}
+MarkPriceData ExchangeService::fetch_mark_price(const QString& symbol) {
+    return active_session()->fetch_mark_price(symbol);
 }
 
-const QHash<QString, TickerData>& ExchangeService::get_price_cache() const {
-    return price_cache_;
-}
+// ============================================================================
+// Cache
+// ============================================================================
 
 TickerData ExchangeService::get_cached_price(const QString& symbol) const {
-    QMutexLocker lock(&mutex_);
-    return price_cache_.value(symbol);
+    return active_session()->get_cached_price(symbol);
 }
-
-// ── DataHub producer wiring ────────────────────────────────────────────────
-
-QStringList ExchangeService::topic_patterns() const {
-    return {"ws:kraken:*", "ws:hyperliquid:*"};
-}
-
-void ExchangeService::refresh(const QStringList& /*topics*/) {
-    // push_only: scheduler never calls this. Fan-out happens in handle_ws_line.
-}
-
-int ExchangeService::max_requests_per_sec() const {
-    return 0;  // unlimited — push only, no REST pacing
-}
-
-void ExchangeService::ensure_registered_with_hub() {
-    if (hub_registered_) return;
-    auto& hub = fincept::datahub::DataHub::instance();
-    hub.register_producer(this);
-
-    fincept::datahub::TopicPolicy push_only;
-    push_only.push_only = true;
-    push_only.ttl_ms = 0;
-    push_only.min_interval_ms = 0;
-
-    fincept::datahub::TopicPolicy coalesced_ticker = push_only;
-    coalesced_ticker.coalesce_within_ms = 50;  // cap fan-out at 20 Hz
-
-    // Ticker families — coalesced (high-rate feeds)
-    hub.set_policy_pattern("ws:kraken:ticker:*", coalesced_ticker);
-    hub.set_policy_pattern("ws:hyperliquid:ticker:*", coalesced_ticker);
-
-    // Orderbook / trades / ohlc — push-only, no coalescing
-    hub.set_policy_pattern("ws:kraken:orderbook:*", push_only);
-    hub.set_policy_pattern("ws:kraken:trades:*", push_only);
-    hub.set_policy_pattern("ws:kraken:ohlc:*", push_only);
-    hub.set_policy_pattern("ws:hyperliquid:orderbook:*", push_only);
-    hub.set_policy_pattern("ws:hyperliquid:trades:*", push_only);
-    hub.set_policy_pattern("ws:hyperliquid:ohlc:*", push_only);
-
-    hub_registered_ = true;
-    LOG_INFO("ExchangeService", "Registered with DataHub (ws:kraken:*, ws:hyperliquid:*)");
-}
-
-static bool hub_exchange_supported(const QString& id) {
-    return id == QLatin1String("kraken") || id == QLatin1String("hyperliquid");
-}
-
-void ExchangeService::publish_ticker_to_hub(const QString& exchange, const QString& pair,
-                                            const TickerData& ticker) {
-    if (!hub_exchange_supported(exchange) || pair.isEmpty()) return;
-    const QString topic = QStringLiteral("ws:") + exchange + QStringLiteral(":ticker:") + pair;
-    fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(ticker));
-}
-
-void ExchangeService::publish_orderbook_to_hub(const QString& exchange, const QString& pair,
-                                               const OrderBookData& ob) {
-    if (!hub_exchange_supported(exchange) || pair.isEmpty()) return;
-    const QString topic = QStringLiteral("ws:") + exchange + QStringLiteral(":orderbook:") + pair;
-    fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(ob));
-}
-
-void ExchangeService::publish_trade_to_hub(const QString& exchange, const QString& pair,
-                                           const TradeData& trade) {
-    if (!hub_exchange_supported(exchange) || pair.isEmpty()) return;
-    const QString topic = QStringLiteral("ws:") + exchange + QStringLiteral(":trades:") + pair;
-    fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(trade));
-}
-
-void ExchangeService::publish_candle_to_hub(const QString& exchange, const QString& pair,
-                                            const QString& interval, const Candle& candle) {
-    if (!hub_exchange_supported(exchange) || pair.isEmpty()) return;
-    const QString topic = QStringLiteral("ws:") + exchange + QStringLiteral(":ohlc:") + pair +
-                          QLatin1Char(':') + interval;
-    fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(candle));
-}
-
 
 } // namespace fincept::trading

@@ -11,6 +11,7 @@
 #include <QMenu>
 #include <QPointer>
 #include <QResizeEvent>
+#include <QStackedWidget>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -94,6 +95,7 @@ void MarketPanel::build_ui() {
     // causing the first panel in each column to grab disproportionate space.
     table_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Ignored);
     setup_table_columns();
+    table_->setVisible(false);  // hidden until first data arrives
     bl->addWidget(table_);
 
     // Error state (hidden by default)
@@ -110,6 +112,19 @@ void MarketPanel::build_ui() {
     el->addWidget(retry_btn_);
     error_widget_->setVisible(false);
     bl->addWidget(error_widget_);
+
+    // Loading overlay (visible until first data)
+    loading_widget_ = new QWidget(body_);
+    auto* ll = new QVBoxLayout(loading_widget_);
+    ll->setAlignment(Qt::AlignCenter);
+    loading_label_ = new QLabel("  ⠋  LOADING");
+    loading_label_->setAlignment(Qt::AlignCenter);
+    ll->addWidget(loading_label_);
+    bl->addWidget(loading_widget_);
+
+    loading_timer_ = new QTimer(this);
+    loading_timer_->setInterval(120);
+    connect(loading_timer_, &QTimer::timeout, this, &MarketPanel::tick_loading_anim);
 
     vl->addWidget(body_, 1);
 }
@@ -197,6 +212,9 @@ void MarketPanel::refresh() {
     fetch_failed_ = false;
     title_label_->setText(config_.title.toUpper() + "  ...");
 
+    if (!has_data_)
+        show_loading();
+
     hub_resubscribe();
 }
 
@@ -210,8 +228,11 @@ void MarketPanel::rebuild_from_cache() {
     }
     if (cached_quotes_.isEmpty())
         return;
+    const bool first_data = !has_data_;
     has_data_ = true;
     title_label_->setText(config_.title.toUpper());
+    if (first_data)
+        hide_loading();
     show_data();
 }
 
@@ -265,6 +286,29 @@ void MarketPanel::hub_unsubscribe_all() {
     pending_initial_.clear();
 }
 
+
+void MarketPanel::show_loading() {
+    loading_frame_ = 0;
+    loading_widget_->setVisible(true);
+    table_->setVisible(false);
+    error_widget_->setVisible(false);
+    loading_timer_->start();
+}
+
+void MarketPanel::hide_loading() {
+    loading_timer_->stop();
+    loading_widget_->setVisible(false);
+}
+
+void MarketPanel::tick_loading_anim() {
+    // Braille spinner: ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏
+    static const char* const kFrames[] = {
+        "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"
+    };
+    constexpr int kCount = 10;
+    loading_frame_ = (loading_frame_ + 1) % kCount;
+    loading_label_->setText(QString("  %1  LOADING").arg(kFrames[loading_frame_]));
+}
 
 void MarketPanel::show_data() {
     error_widget_->setVisible(false);
@@ -393,6 +437,15 @@ void MarketPanel::refresh_theme() {
         error_label_->setStyleSheet(
             QString("color:%1;font-size:%2px;font-family:'%3';background:transparent;")
                 .arg(ui::colors::NEGATIVE()).arg(fdata).arg(ff));
+
+    if (loading_label_)
+        loading_label_->setStyleSheet(
+            QString("color:%1;font-size:%2px;font-family:'%3';background:transparent;letter-spacing:2px;")
+                .arg(ui::colors::TEXT_DIM()).arg(fdata).arg(ff));
+
+    if (loading_widget_)
+        loading_widget_->setStyleSheet(
+            QString("background:%1;").arg(ui::colors::BG_BASE()));
 
     if (retry_btn_)
         retry_btn_->setStyleSheet(

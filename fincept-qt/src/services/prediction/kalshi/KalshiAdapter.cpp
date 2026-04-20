@@ -86,6 +86,7 @@ void KalshiAdapter::search(const QString& query, int limit) {
     // treat the query as a series_ticker filter. If the user enters a
     // full ticker like "KXPRES" it'll pull matching markets. For richer
     // search we'd need to list + client-side filter, which is Phase 8.
+    search_pending_ = true;
     rest_->fetch_markets(QStringLiteral("open"), QString(), query.toUpper(), QString(), limit, QString());
 }
 
@@ -147,11 +148,16 @@ void KalshiAdapter::fetch_price_history(const QString& asset_id, const QString& 
     else if (interval == QStringLiteral("6h")) start = end - (6 * 3600);
     else if (interval == QStringLiteral("1h")) start = end - 3600;
 
-    // Kalshi candlestick endpoint requires the series ticker. For tickers
-    // of the form "KXFOO-23DEC-T3.00", the series is the prefix before
-    // the first dash (e.g. "KXFOO"). Fallback to the whole ticker.
-    const int dash = ticker.indexOf('-');
-    const QString series = (dash > 0) ? ticker.left(dash) : ticker;
+    // Kalshi candlestick endpoint requires the series ticker. Prefer the
+    // cached mapping populated from markets_ready/events_ready responses;
+    // fall back to the prefix-before-first-dash heuristic for tickers we
+    // haven't seen. Many Kalshi tickers have multi-segment structure (e.g.
+    // KXPRES-24-DJT) so the heuristic is best-effort, not authoritative.
+    QString series = series_by_market_.value(ticker);
+    if (series.isEmpty()) {
+        const int dash = ticker.indexOf('-');
+        series = (dash > 0) ? ticker.left(dash) : ticker;
+    }
 
     rest_->fetch_candlesticks(series, ticker, period, start, end);
 }
@@ -203,6 +209,12 @@ QString KalshiAdapter::account_label() const {
 void KalshiAdapter::stub_unsupported(const QString& ctx) {
     emit error_occurred(ctx, QStringLiteral("Kalshi adapter: not supported in this call"));
 }
+
+// prediction_kalshi.py also exposes `settlements` and `decrease_order`
+// commands. They're reachable directly via PythonRunner for scripted
+// testing but intentionally not surfaced on the adapter because no UI
+// currently consumes a settlements view or a decrease-order control.
+// Wire an adapter method here when that UI lands.
 
 QJsonObject KalshiAdapter::creds_to_json() const {
     QJsonObject o;
@@ -385,8 +397,9 @@ void KalshiAdapter::cancel_order(const QString& order_id) {
 }
 
 void KalshiAdapter::cancel_all_for_market(const pr::MarketKey& key, const QString& /*asset_id*/) {
-    // Kalshi has no single bulk-cancel-by-market endpoint; iterate open
-    // orders filtered by ticker and cancel each.
+    // Fetch the ticker-filtered open orders and cancel them in one batched
+    // DELETE /portfolio/orders/batched round-trip (instead of N individual
+    // cancels). Empty result set is a silent success.
     if (key.market_id.isEmpty()) {
         emit error_occurred(QStringLiteral("cancel_all_for_market"),
                             QStringLiteral("Kalshi cancel-all requires a ticker"));
@@ -399,13 +412,109 @@ void KalshiAdapter::cancel_all_for_market(const pr::MarketKey& key, const QStrin
     run_py(QStringLiteral("open_orders"), extra,
            [self](const QJsonObject& resp) {
                if (!self) return;
+               QStringList ids;
                const auto arr = resp.value("orders").toArray();
+               ids.reserve(arr.size());
                for (const auto& v : arr) {
                    const QString oid = v.toObject().value("order_id").toString();
-                   if (!oid.isEmpty()) self->cancel_order(oid);
+                   if (!oid.isEmpty()) ids.push_back(oid);
                }
+               if (!ids.isEmpty()) self->cancel_orders_batch(ids);
            },
            QStringLiteral("cancel_all_for_market"));
+}
+
+// ── Kalshi-specific public reads ────────────────────────────────────────────
+
+void KalshiAdapter::fetch_exchange_status() { rest_->fetch_exchange_status(); }
+void KalshiAdapter::fetch_exchange_schedule() { rest_->fetch_exchange_schedule(); }
+
+void KalshiAdapter::fetch_batch_candles(const QStringList& tickers, int period_interval_min,
+                                        qint64 start_ts, qint64 end_ts) {
+    rest_->fetch_batch_candlesticks(tickers, period_interval_min, start_ts, end_ts);
+}
+
+void KalshiAdapter::fetch_series_detail(const QString& series_ticker) {
+    if (series_ticker.isEmpty()) return;
+    // If cached, re-emit synchronously so consumers don't have to track
+    // "did I already fetch this?" — they can just call the method.
+    const auto it = series_cache_.constFind(series_ticker);
+    if (it != series_cache_.constEnd()) {
+        QMetaObject::invokeMethod(this, [this, series_ticker]() {
+            emit series_detail_ready(series_ticker, series_cache_.value(series_ticker));
+        }, Qt::QueuedConnection);
+        return;
+    }
+    rest_->fetch_series_detail(series_ticker);
+}
+
+QJsonObject KalshiAdapter::cached_series(const QString& series_ticker) const {
+    return series_cache_.value(series_ticker);
+}
+
+void KalshiAdapter::fetch_historical_markets(const QString& series_ticker, int limit,
+                                             const QString& cursor) {
+    rest_->fetch_historical_markets(series_ticker, limit, cursor);
+}
+
+void KalshiAdapter::fetch_historical_candles(const QString& ticker, int period_interval_min,
+                                             qint64 start_ts, qint64 end_ts) {
+    rest_->fetch_historical_candlesticks(ticker, period_interval_min, start_ts, end_ts);
+}
+
+void KalshiAdapter::fetch_historical_trades(const QString& ticker, int limit,
+                                            const QString& cursor) {
+    rest_->fetch_historical_trades(ticker, limit, cursor);
+}
+
+// ── Kalshi-specific trading ─────────────────────────────────────────────────
+
+void KalshiAdapter::amend_order(const QString& order_id, const QString& side,
+                                int price_cents, const QString& client_order_id) {
+    const int p = qBound(1, price_cents, 99);
+    QJsonObject extra;
+    extra.insert("order_id", order_id);
+    if (side.toLower() == QStringLiteral("yes"))
+        extra.insert("yes_price_cents", p);
+    else
+        extra.insert("no_price_cents", p);
+    if (!client_order_id.isEmpty()) extra.insert("client_order_id", client_order_id);
+    const QString oid = order_id;
+    QPointer<KalshiAdapter> self = this;
+    run_py(QStringLiteral("amend_order"), extra,
+           [self, oid](const QJsonObject& /*resp*/) {
+               if (!self) return;
+               emit self->order_amended(oid, true, QString());
+           },
+           QStringLiteral("amend_order"));
+}
+
+void KalshiAdapter::fetch_order(const QString& order_id) {
+    QJsonObject extra;
+    extra.insert("order_id", order_id);
+    QPointer<KalshiAdapter> self = this;
+    run_py(QStringLiteral("get_order"), extra,
+           [self](const QJsonObject& resp) {
+               if (!self) return;
+               emit self->single_order_ready(resp.value("order").toObject());
+           },
+           QStringLiteral("fetch_order"));
+}
+
+void KalshiAdapter::cancel_orders_batch(const QStringList& order_ids) {
+    if (order_ids.isEmpty()) return;
+    QJsonObject extra;
+    QJsonArray ids;
+    for (const auto& id : order_ids) ids.append(id);
+    extra.insert("order_ids", ids);
+    const QStringList ids_copy = order_ids;
+    QPointer<KalshiAdapter> self = this;
+    run_py(QStringLiteral("cancel_orders_batch"), extra,
+           [self, ids_copy](const QJsonObject& /*resp*/) {
+               if (!self) return;
+               emit self->orders_batch_cancelled(ids_copy, true, QString());
+           },
+           QStringLiteral("cancel_orders_batch"));
 }
 
 // ── Credentials plumbing ────────────────────────────────────────────────────
@@ -428,19 +537,45 @@ void KalshiAdapter::ensure_registered_with_hub() {
 // ── Signal wiring ───────────────────────────────────────────────────────────
 
 void KalshiAdapter::wire() {
-    // REST → adapter signal forwarding.
+    // REST → adapter signal forwarding. Also harvests market→series
+    // mappings so fetch_price_history can hit the correct endpoint.
     connect(rest_.get(), &KalshiRestClient::markets_ready, this,
             [this](const QVector<pr::PredictionMarket>& markets, const QString& /*cursor*/) {
-                emit markets_ready(markets);
+                for (const auto& m : markets) {
+                    const QString s = m.extras.value(QStringLiteral("series_ticker")).toString();
+                    if (!s.isEmpty()) series_by_market_.insert(m.key.market_id, s);
+                }
+                if (search_pending_) {
+                    search_pending_ = false;
+                    emit search_results_ready(markets, {});
+                } else {
+                    emit markets_ready(markets);
+                }
             });
     connect(rest_.get(), &KalshiRestClient::events_ready, this,
             [this](const QVector<pr::PredictionEvent>& events, const QString& /*cursor*/) {
+                for (const auto& e : events) {
+                    for (const auto& m : e.markets) {
+                        const QString s = m.extras.value(QStringLiteral("series_ticker")).toString();
+                        if (!s.isEmpty()) series_by_market_.insert(m.key.market_id, s);
+                    }
+                }
                 emit events_ready(events);
             });
-    connect(rest_.get(), &KalshiRestClient::market_detail_ready,
-            this, &KalshiAdapter::market_detail_ready);
-    connect(rest_.get(), &KalshiRestClient::event_detail_ready,
-            this, &KalshiAdapter::event_detail_ready);
+    connect(rest_.get(), &KalshiRestClient::market_detail_ready, this,
+            [this](const pr::PredictionMarket& m) {
+                const QString s = m.extras.value(QStringLiteral("series_ticker")).toString();
+                if (!s.isEmpty()) series_by_market_.insert(m.key.market_id, s);
+                emit market_detail_ready(m);
+            });
+    connect(rest_.get(), &KalshiRestClient::event_detail_ready, this,
+            [this](const pr::PredictionEvent& e) {
+                for (const auto& m : e.markets) {
+                    const QString s = m.extras.value(QStringLiteral("series_ticker")).toString();
+                    if (!s.isEmpty()) series_by_market_.insert(m.key.market_id, s);
+                }
+                emit event_detail_ready(e);
+            });
     connect(rest_.get(), &KalshiRestClient::tags_ready,
             this, &KalshiAdapter::tags_ready);
     connect(rest_.get(), &KalshiRestClient::trades_ready,
@@ -466,11 +601,37 @@ void KalshiAdapter::wire() {
                 emit price_history_ready(out);
             });
 
+    // Kalshi-specific REST signal forwards.
+    connect(rest_.get(), &KalshiRestClient::exchange_status_ready,
+            this, &KalshiAdapter::exchange_status_ready);
+    connect(rest_.get(), &KalshiRestClient::exchange_schedule_ready,
+            this, &KalshiAdapter::exchange_schedule_ready);
+    connect(rest_.get(), &KalshiRestClient::batch_candlesticks_ready,
+            this, &KalshiAdapter::batch_candles_ready);
+    connect(rest_.get(), &KalshiRestClient::historical_markets_ready,
+            this, &KalshiAdapter::historical_markets_ready);
+    connect(rest_.get(), &KalshiRestClient::historical_trades_ready,
+            this, &KalshiAdapter::historical_trades_ready);
+    connect(rest_.get(), &KalshiRestClient::historical_candlesticks_ready,
+            this, &KalshiAdapter::historical_candles_ready);
+
+    // Series detail — cache before emitting so sync consumers can read.
+    connect(rest_.get(), &KalshiRestClient::series_detail_ready, this,
+            [this](const QJsonObject& series) {
+                const QString t = series.value(QStringLiteral("ticker")).toString();
+                if (!t.isEmpty()) series_cache_.insert(t, series);
+                emit series_detail_ready(t, series);
+            });
+
     // WebSocket → adapter.
     connect(ws_.get(), &KalshiWsClient::price_updated,
             this, &KalshiAdapter::ws_price_updated);
     connect(ws_.get(), &KalshiWsClient::orderbook_updated,
             this, &KalshiAdapter::ws_orderbook_updated);
+    connect(ws_.get(), &KalshiWsClient::trade_received,
+            this, &KalshiAdapter::ws_trade_received);
+    connect(ws_.get(), &KalshiWsClient::market_lifecycle_changed,
+            this, &KalshiAdapter::ws_market_lifecycle_changed);
     connect(ws_.get(), &KalshiWsClient::connection_status_changed,
             this, &KalshiAdapter::ws_connection_changed);
 }

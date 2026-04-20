@@ -2,8 +2,12 @@
 #include "screens/setup/SetupScreen.h"
 
 #include "core/logging/Logger.h"
+#include "core/net/NetSpeedMeter.h"
 #include "python/PythonSetupManager.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/SpeedSparkline.h"
+
+#include <QDateTime>
 
 #include <QHBoxLayout>
 #include <QLabel>
@@ -40,6 +44,17 @@ SetupScreen::SetupScreen(QWidget* parent) : QWidget(parent) {
     timeout_timer_->setSingleShot(true);
     timeout_timer_->setInterval(15 * 60 * 1000);
     connect(timeout_timer_, &QTimer::timeout, this, &SetupScreen::on_setup_timeout);
+
+    // Liveness: system-wide network throughput meter (starts when user clicks
+    // BEGIN SETUP, stops on completion/skip/timeout).
+    net_meter_ = new fincept::net::NetSpeedMeter(this);
+    connect(net_meter_, &fincept::net::NetSpeedMeter::speed_changed,
+            this, &SetupScreen::on_net_speed);
+
+    // Elapsed-time ticker, drives the "Elapsed: Xm Ys" label once per second.
+    elapsed_timer_ = new QTimer(this);
+    elapsed_timer_->setInterval(1000);
+    connect(elapsed_timer_, &QTimer::timeout, this, &SetupScreen::on_elapsed_tick);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -124,6 +139,41 @@ void SetupScreen::build_ui() {
     status_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;")
                                      .arg(colors::TEXT_TERTIARY(), fonts::DATA_FAMILY));
     cl->addWidget(status_label_);
+
+    // ── Liveness row: elapsed time + ↓/↑ network speed + sparkline ───────────
+    // Hidden until BEGIN SETUP is pressed so it doesn't clutter the idle view.
+    live_row_ = new QWidget(center);
+    live_row_->setVisible(false);
+    auto* live_hl = new QHBoxLayout(live_row_);
+    live_hl->setContentsMargins(0, 4, 0, 0);
+    live_hl->setSpacing(12);
+
+    const QString stat_css = QString("color:%1; font-family:%2; font-size:10px;")
+                                 .arg(colors::TEXT_SECONDARY(), fonts::DATA_FAMILY);
+    elapsed_lbl_ = new QLabel("Elapsed: 0s", live_row_);
+    elapsed_lbl_->setStyleSheet(stat_css);
+    elapsed_lbl_->setFixedWidth(120);
+    live_hl->addWidget(elapsed_lbl_);
+
+    down_lbl_ = new QLabel("\u2193 0 B/s", live_row_);
+    down_lbl_->setStyleSheet(stat_css);
+    down_lbl_->setFixedWidth(110);
+    live_hl->addWidget(down_lbl_);
+
+    up_lbl_ = new QLabel("\u2191 0 B/s", live_row_);
+    up_lbl_->setStyleSheet(stat_css);
+    up_lbl_->setFixedWidth(110);
+    live_hl->addWidget(up_lbl_);
+
+    sparkline_ = new fincept::ui::SpeedSparkline(live_row_);
+    sparkline_->setMinimumHeight(18);
+    sparkline_->set_line_color(QColor(kAccent));
+    QColor accent_fill(kAccent);
+    accent_fill.setAlpha(48);
+    sparkline_->set_fill_color(accent_fill);
+    live_hl->addWidget(sparkline_, 1);
+
+    cl->addWidget(live_row_);
 
     summary_lbl_ = new QLabel({}, center);
     summary_lbl_->setAlignment(Qt::AlignCenter);
@@ -279,9 +329,45 @@ void SetupScreen::on_begin_setup() {
     status_label_->setStyleSheet(
         QString("color:%1; font-family:%2; font-size:10px; margin-top:6px;").arg(kAccent, fonts::DATA_FAMILY));
 
+    // Show liveness row and start throughput + elapsed meters.
+    setup_started_ms_ = QDateTime::currentMSecsSinceEpoch();
+    if (live_row_)
+        live_row_->setVisible(true);
+    if (elapsed_lbl_)
+        elapsed_lbl_->setText("Elapsed: 0s");
+    if (down_lbl_)
+        down_lbl_->setText(QStringLiteral("\u2193 0 B/s"));
+    if (up_lbl_)
+        up_lbl_->setText(QStringLiteral("\u2191 0 B/s"));
+    if (net_meter_)
+        net_meter_->start(1000);
+    if (elapsed_timer_)
+        elapsed_timer_->start();
+
     if (timeout_timer_)
         timeout_timer_->start();
     python::PythonSetupManager::instance().run_setup();
+}
+
+void SetupScreen::on_net_speed(qint64 down_bps, qint64 up_bps) {
+    if (down_lbl_)
+        down_lbl_->setText(QStringLiteral("\u2193 ") + fincept::net::NetSpeedMeter::format_bps(down_bps));
+    if (up_lbl_)
+        up_lbl_->setText(QStringLiteral("\u2191 ") + fincept::net::NetSpeedMeter::format_bps(up_bps));
+    if (sparkline_)
+        sparkline_->push(down_bps);
+}
+
+void SetupScreen::on_elapsed_tick() {
+    if (!elapsed_lbl_ || setup_started_ms_ == 0)
+        return;
+    const qint64 secs = (QDateTime::currentMSecsSinceEpoch() - setup_started_ms_) / 1000;
+    QString text;
+    if (secs < 60)
+        text = QString("Elapsed: %1s").arg(secs);
+    else
+        text = QString("Elapsed: %1m %2s").arg(secs / 60).arg(secs % 60);
+    elapsed_lbl_->setText(text);
 }
 
 void SetupScreen::on_progress(const python::SetupProgress& progress) {
@@ -324,6 +410,12 @@ void SetupScreen::on_progress(const python::SetupProgress& progress) {
 }
 
 void SetupScreen::on_setup_done(bool success, const QString& error) {
+    // Stop liveness meters regardless of outcome.
+    if (net_meter_)
+        net_meter_->stop();
+    if (elapsed_timer_)
+        elapsed_timer_->stop();
+
     if (success) {
         LOG_INFO("SetupScreen", "Python setup completed — all steps done");
         status_label_->setText("Everything is ready! Launching Fincept Terminal...");
@@ -351,6 +443,10 @@ void SetupScreen::on_skip_clicked() {
     LOG_INFO("SetupScreen", "User skipped setup — launching app");
     if (timeout_timer_)
         timeout_timer_->stop();
+    if (net_meter_)
+        net_meter_->stop();
+    if (elapsed_timer_)
+        elapsed_timer_->stop();
     for (auto it = steps_.keyBegin(); it != steps_.keyEnd(); ++it)
         stop_pulse(*it);
     emit setup_complete();

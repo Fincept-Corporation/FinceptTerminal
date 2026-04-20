@@ -14,13 +14,18 @@ Topic segments separate with `:`. The first segment is the domain; subsequent se
 
 ## WebSocket streams (Phase 4)
 
+Producer changed to `ExchangeSessionManager` with the multi-broker refactor
+(Phase 2). Sessions (one per exchange, kept warm for the app lifetime) hand
+fan-out data to the manager via `SessionPublisher`; the manager is the sole
+hub registrant for `ws:<exchange>:*`.
+
 | Pattern | Producer | TTL | Notes |
 |---|---|---|---|
-| `ws:kraken:ticker:<pair>` | `ExchangeService` | push-only | Coalesced 50 ms |
-| `ws:kraken:orderbook:<pair>` | `ExchangeService` | push-only | |
-| `ws:kraken:trades:<pair>` | `ExchangeService` | push-only | |
-| `ws:kraken:ohlc:<pair>:<interval>` | `ExchangeService` | push-only | |
-| `ws:hyperliquid:*` | `ExchangeService` | push-only | Same sub-families as Kraken |
+| `ws:kraken:ticker:<pair>` | `ExchangeSessionManager` | push-only | Coalesced 50 ms |
+| `ws:kraken:orderbook:<pair>` | `ExchangeSessionManager` | push-only | |
+| `ws:kraken:trades:<pair>` | `ExchangeSessionManager` | push-only | |
+| `ws:kraken:ohlc:<pair>:<interval>` | `ExchangeSessionManager` | push-only | |
+| `ws:hyperliquid:*` | `ExchangeSessionManager` | push-only | Same sub-families as Kraken |
 | `prediction:polymarket:price:<asset_id>` | `PolymarketWebSocket` | push-only | Was `polymarket:price:*` before the prediction-markets refactor |
 | `prediction:polymarket:orderbook:<asset_id>` | `PolymarketWebSocket` | push-only | Was `polymarket:orderbook:*` before the prediction-markets refactor |
 | `prediction:kalshi:price:<ticker>:<side>` | `KalshiWsClient` | push-only | `<side>` is `yes` or `no`. Requires credentials — streaming activates in Phase 7 |

@@ -71,7 +71,8 @@ struct ExchangePresentation {
     struct StatusBadge {
         QString text;
         QColor fg;
-        QColor bg;  // may be transparent
+        QColor bg;       // may be transparent
+        QString tooltip; // optional long-form description for hover
     };
     StatusBadge status_badge(const fincept::services::prediction::PredictionMarket& market) const;
 

@@ -94,7 +94,7 @@ class HNBWrapper:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": "Fincept-Terminal/4.0.2",
+            "User-Agent": "Fincept-Terminal/4.0.1",
             "Accept":     "application/json",
         })
 

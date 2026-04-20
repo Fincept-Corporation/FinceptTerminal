@@ -159,6 +159,8 @@ def cmd_positions(payload: dict) -> None:
     positions = []
     # As of Mar 12, 2026 Kalshi removed integer cent fields from responses.
     # Use position_fp (signed contract count, 2dp) and *_dollars (decimal $).
+    # Kalshi does not expose unrealized PnL directly — the UI shows 0 rather
+    # than the cumulative traded notional (which was mislabeled previously).
     for p in data.get("market_positions", []) or []:
         position_fp = _to_float(p.get("position_fp"))
         market_exposure = _to_float(p.get("market_exposure_dollars"))
@@ -171,8 +173,10 @@ def cmd_positions(payload: dict) -> None:
             "size": size,
             "avg_price": avg_price,
             "realized_pnl": _to_float(p.get("realized_pnl_dollars")),
-            "unrealized_pnl": _to_float(p.get("total_traded_dollars")),
+            "unrealized_pnl": 0.0,
             "current_value": market_exposure,
+            "total_traded_dollars": _to_float(p.get("total_traded_dollars")),
+            "fees_paid_dollars": _to_float(p.get("fees_paid_dollars")),
         })
     _emit({"ok": True, "positions": positions})
 
@@ -232,7 +236,35 @@ def cmd_fills(payload: dict) -> None:
     if not ok:
         _fail(f"HTTP {code}", detail=data)
         return
-    _emit({"ok": True, "fills": data.get("fills", []) or []})
+    # Normalize Kalshi fills to a shape consumers can render without
+    # knowing Kalshi-specific field names. ts_ms is epoch ms; price is
+    # decimal dollars; side is YES/NO.
+    fills_out = []
+    for f in data.get("fills", []) or []:
+        side = (f.get("side") or "").lower()
+        ts_ms = 0
+        ct = f.get("created_time") or ""
+        if ct:
+            try:
+                ts_ms = int(datetime.datetime.fromisoformat(
+                    ct.replace("Z", "+00:00")).timestamp() * 1000)
+            except ValueError:
+                ts_ms = 0
+        fills_out.append({
+            "type": "FILL",
+            "fill_id": f.get("fill_id", ""),
+            "trade_id": f.get("trade_id", ""),
+            "order_id": f.get("order_id", ""),
+            "market_id": f.get("ticker") or f.get("market_ticker", ""),
+            "side": side.upper(),
+            "action": (f.get("action") or "").upper(),
+            "size": _to_float(f.get("count_fp")),
+            "price": _to_float(f.get("yes_price_dollars") if side == "yes"
+                               else f.get("no_price_dollars")),
+            "is_taker": bool(f.get("is_taker", False)),
+            "ts_ms": ts_ms,
+        })
+    _emit({"ok": True, "fills": fills_out})
 
 
 def cmd_settlements(payload: dict) -> None:
@@ -298,6 +330,146 @@ def cmd_decrease_order(payload: dict) -> None:
     _emit({"ok": True, "raw": data})
 
 
+def cmd_get_order(payload: dict) -> None:
+    order_id = str(payload["order_id"])
+    ok, code, data = _request(payload, "GET", f"/portfolio/orders/{order_id}")
+    if not ok:
+        _fail(f"HTTP {code}", detail=data)
+        return
+    _emit({"ok": True, "order": data.get("order", data)})
+
+
+def cmd_amend_order(payload: dict) -> None:
+    """POST /portfolio/orders/{order_id}/amend
+
+    Kalshi accepts a price change (cents integer OR *_dollars string on
+    request) + an updated buy_max_cost in cents. Only include fields the
+    caller provided so we don't accidentally reset other constraints.
+    """
+    order_id = str(payload["order_id"])
+    body = {}
+    if "yes_price_cents" in payload:
+        body["yes_price"] = int(payload["yes_price_cents"])
+    elif "no_price_cents" in payload:
+        body["no_price"] = int(payload["no_price_cents"])
+    if "buy_max_cost" in payload:
+        body["buy_max_cost"] = int(payload["buy_max_cost"])
+    if "client_order_id" in payload:
+        body["client_order_id"] = str(payload["client_order_id"])
+
+    if not body:
+        _fail("amend_order requires yes_price_cents, no_price_cents, "
+              "or buy_max_cost")
+        return
+
+    ok, code, data = _request(payload, "POST",
+                              f"/portfolio/orders/{order_id}/amend", body=body)
+    if not ok:
+        _fail(f"HTTP {code}", detail=data)
+        return
+    _emit({"ok": True, "order": data.get("order", data)})
+
+
+def cmd_place_orders_batch(payload: dict) -> None:
+    """POST /portfolio/orders/batched
+
+    `orders` is a list of order dicts with the same shape accepted by
+    `cmd_place_order`. Kalshi returns {orders: [...]} with per-order
+    success/error; we surface the whole array for the caller to inspect.
+    """
+    orders_in = payload.get("orders") or []
+    if not isinstance(orders_in, list) or not orders_in:
+        _fail("place_orders_batch requires a non-empty `orders` list")
+        return
+
+    body = {"orders": []}
+    for o in orders_in:
+        entry = {
+            "ticker": o["ticker"],
+            "action": str(o.get("action", "buy")).lower(),
+            "side": str(o.get("side", "yes")).lower(),
+            "count": int(o["count"]),
+            "type": str(o.get("order_type", "limit")).lower(),
+            "client_order_id": o.get("client_order_id") or str(uuid.uuid4()),
+        }
+        if entry["type"] == "limit":
+            if "yes_price_cents" in o:
+                entry["yes_price"] = int(o["yes_price_cents"])
+            elif "no_price_cents" in o:
+                entry["no_price"] = int(o["no_price_cents"])
+        if o.get("expiration_ts"):
+            entry["expiration_ts"] = int(o["expiration_ts"])
+        body["orders"].append(entry)
+
+    ok, code, data = _request(payload, "POST", "/portfolio/orders/batched",
+                              body=body)
+    if not ok:
+        _fail(f"HTTP {code}", detail=data)
+        return
+    _emit({"ok": True, "orders": data.get("orders", []) or [], "raw": data})
+
+
+def cmd_cancel_orders_batch(payload: dict) -> None:
+    """DELETE /portfolio/orders/batched
+
+    Kalshi expects the order_ids in the body on DELETE. Sends a single
+    round-trip regardless of list size.
+    """
+    ids = payload.get("order_ids") or []
+    if not ids:
+        _fail("cancel_orders_batch requires `order_ids`")
+        return
+    body = {"order_ids": [str(i) for i in ids]}
+    ok, code, data = _request(payload, "DELETE", "/portfolio/orders/batched",
+                              body=body)
+    if not ok:
+        _fail(f"HTTP {code}", detail=data)
+        return
+    _emit({"ok": True, "results": data.get("orders", []) or [], "raw": data})
+
+
+def cmd_historical_fills(payload: dict) -> None:
+    params = {"limit": int(payload.get("limit", 200))}
+    if payload.get("cursor"):
+        params["cursor"] = str(payload["cursor"])
+    if payload.get("ticker"):
+        params["ticker"] = str(payload["ticker"])
+    if payload.get("min_ts"):
+        params["min_ts"] = int(payload["min_ts"])
+    if payload.get("max_ts"):
+        params["max_ts"] = int(payload["max_ts"])
+    ok, code, data = _request(payload, "GET", "/historical/fills",
+                              params=params)
+    if not ok:
+        _fail(f"HTTP {code}", detail=data)
+        return
+    _emit({
+        "ok": True,
+        "fills": data.get("fills", []) or [],
+        "cursor": data.get("cursor", ""),
+    })
+
+
+def cmd_historical_orders(payload: dict) -> None:
+    params = {"limit": int(payload.get("limit", 200))}
+    if payload.get("cursor"):
+        params["cursor"] = str(payload["cursor"])
+    if payload.get("ticker"):
+        params["ticker"] = str(payload["ticker"])
+    if payload.get("status"):
+        params["status"] = str(payload["status"])
+    ok, code, data = _request(payload, "GET", "/historical/orders",
+                              params=params)
+    if not ok:
+        _fail(f"HTTP {code}", detail=data)
+        return
+    _emit({
+        "ok": True,
+        "orders": data.get("orders", []) or [],
+        "cursor": data.get("cursor", ""),
+    })
+
+
 COMMANDS = {
     "balance": cmd_balance,
     "positions": cmd_positions,
@@ -307,6 +479,12 @@ COMMANDS = {
     "place_order": cmd_place_order,
     "cancel_order": cmd_cancel_order,
     "decrease_order": cmd_decrease_order,
+    "get_order": cmd_get_order,
+    "amend_order": cmd_amend_order,
+    "place_orders_batch": cmd_place_orders_batch,
+    "cancel_orders_batch": cmd_cancel_orders_batch,
+    "historical_fills": cmd_historical_fills,
+    "historical_orders": cmd_historical_orders,
 }
 
 

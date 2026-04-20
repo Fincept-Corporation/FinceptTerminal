@@ -2,6 +2,9 @@
 
 #include "services/prediction/PredictionTypes.h"
 
+#include <QHash>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -65,6 +68,48 @@ class KalshiRestClient : public QObject {
     void fetch_market_trades(const QString& ticker, int limit = 100,
                              const QString& cursor = QString());
 
+    // ── Exchange metadata ────────────────────────────────────────────────
+
+    /// GET /exchange/status — is the exchange accepting trades right now.
+    void fetch_exchange_status();
+    /// GET /exchange/schedule — trading calendar.
+    void fetch_exchange_schedule();
+
+    // ── Series metadata ──────────────────────────────────────────────────
+
+    /// GET /series/{series_ticker} — single series detail (fees, frequency).
+    void fetch_series_detail(const QString& series_ticker);
+    /// GET /series/fee_changes — upcoming fee adjustments.
+    void fetch_series_fee_changes();
+
+    // ── Batch market data ────────────────────────────────────────────────
+
+    /// GET /markets/candlesticks — batched across tickers. Returns a map
+    /// of ticker → PriceHistory.
+    void fetch_batch_candlesticks(const QStringList& tickers, int period_interval_min,
+                                  qint64 start_ts, qint64 end_ts);
+
+    // ── Historical data (public slice) ───────────────────────────────────
+
+    /// GET /historical/markets — archived markets, paginated.
+    void fetch_historical_markets(const QString& series_ticker = QString(),
+                                  int limit = 100,
+                                  const QString& cursor = QString());
+    /// GET /historical/markets/{ticker}/candlesticks — archived candles.
+    void fetch_historical_candlesticks(const QString& ticker, int period_interval_min,
+                                       qint64 start_ts, qint64 end_ts);
+    /// GET /historical/trades — archived trade tape.
+    void fetch_historical_trades(const QString& ticker = QString(),
+                                 int limit = 100,
+                                 const QString& cursor = QString());
+
+    // ── Search / filter metadata ─────────────────────────────────────────
+
+    /// GET /search/tags_by_categories — tag taxonomy for browse filters.
+    void fetch_search_tags_by_categories();
+    /// GET /search/filters_by_sport — sport-specific filter options.
+    void fetch_search_filters_by_sport(const QString& sport);
+
   signals:
     // Each signal carries (markets, cursor) so callers can paginate.
     void markets_ready(const QVector<fincept::services::prediction::PredictionMarket>& markets,
@@ -80,6 +125,29 @@ class KalshiRestClient : public QObject {
     void price_history_ready(const fincept::services::prediction::PriceHistory& yes_history,
                              const QString& ticker);
     void trades_ready(const QVector<fincept::services::prediction::PredictionTrade>& trades);
+
+    // Exchange / series / search metadata — raw JSON pass-through since
+    // these are low-use endpoints without a frontend struct yet.
+    void exchange_status_ready(const QJsonObject& status);
+    void exchange_schedule_ready(const QJsonObject& schedule);
+    void series_detail_ready(const QJsonObject& series);
+    void series_fee_changes_ready(const QJsonArray& fee_changes);
+    void search_tags_ready(const QJsonObject& tags_by_categories);
+    void search_filters_ready(const QJsonObject& filters);
+
+    // Batch candlesticks: map of ticker → history.
+    void batch_candlesticks_ready(
+        const QHash<QString, fincept::services::prediction::PriceHistory>& histories);
+
+    // Historical (matches the live counterparts).
+    void historical_markets_ready(
+        const QVector<fincept::services::prediction::PredictionMarket>& markets,
+        const QString& next_cursor);
+    void historical_candlesticks_ready(
+        const fincept::services::prediction::PriceHistory& history, const QString& ticker);
+    void historical_trades_ready(
+        const QVector<fincept::services::prediction::PredictionTrade>& trades,
+        const QString& next_cursor);
 
     void request_error(const QString& context, const QString& message);
 

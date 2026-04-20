@@ -5,6 +5,8 @@
 #include "services/polymarket/PolymarketTypes.h"
 #include "services/prediction/PredictionTypes.h"
 
+#include <QHash>
+#include <QJsonObject>
 #include <QList>
 #include <QMetaObject>
 #include <QTimer>
@@ -17,6 +19,7 @@ class PolymarketCommandBar;
 class PolymarketBrowsePanel;
 class PolymarketDetailPanel;
 class PolymarketLeaderboard;
+class PolymarketOrderBlotter;
 class PolymarketStatusBar;
 } // namespace fincept::screens::polymarket
 
@@ -93,6 +96,24 @@ class PolymarketScreen : public QWidget, public fincept::screens::IStatefulScree
     void on_comments_received(const QVector<fincept::services::polymarket::Comment>& comments);
     void on_related_markets_received(const QVector<fincept::services::polymarket::Market>& markets);
 
+    // Kalshi-only enrichments (surfaced via KalshiAdapter-specific signals).
+    void on_kalshi_exchange_status(const QJsonObject& status);
+    void on_kalshi_exchange_schedule(const QJsonObject& schedule);
+    void on_kalshi_ws_trade(const fincept::services::prediction::PredictionTrade& trade);
+    void on_kalshi_market_lifecycle(const QString& ticker, const QString& status);
+    void on_kalshi_batch_candles(
+        const QHash<QString, fincept::services::prediction::PriceHistory>& histories);
+    void on_kalshi_market_detail(const fincept::services::prediction::PredictionMarket& market);
+    void on_kalshi_series_detail(const QString& series_ticker, const QJsonObject& series);
+
+    // Open-orders blotter.
+    void on_open_orders_ready(const QVector<fincept::services::prediction::OpenOrder>& orders);
+    void on_order_refresh_requested(const QString& order_id);
+    void on_order_amend_requested(const QString& order_id, const QString& side, double price);
+    void on_order_cancel_requested(const QString& order_id);
+    void on_orders_cancel_all_requested(const QStringList& order_ids);
+    void on_kalshi_single_order(const QJsonObject& order);
+
   private:
     void build_ui();
     void connect_active_adapter();
@@ -112,6 +133,7 @@ class PolymarketScreen : public QWidget, public fincept::screens::IStatefulScree
     polymarket::PolymarketBrowsePanel* browse_panel_ = nullptr;
     polymarket::PolymarketDetailPanel* detail_panel_ = nullptr;
     polymarket::PolymarketLeaderboard* leaderboard_ = nullptr;
+    polymarket::PolymarketOrderBlotter* order_blotter_ = nullptr;
     polymarket::PolymarketStatusBar* status_bar_ = nullptr;
 
     // State
@@ -136,6 +158,10 @@ class PolymarketScreen : public QWidget, public fincept::screens::IStatefulScree
     QList<QMetaObject::Connection> adapter_connections_;
     QList<QMetaObject::Connection> polymarket_extras_connections_;
     QString wired_adapter_id_;
+
+    // Batch-candles cache for Kalshi browse panel sparklines. Populated in
+    // on_markets_ready (Kalshi only). Keyed by market_id.
+    QHash<QString, fincept::services::prediction::PriceHistory> batch_candles_cache_;
 };
 
 } // namespace fincept::screens

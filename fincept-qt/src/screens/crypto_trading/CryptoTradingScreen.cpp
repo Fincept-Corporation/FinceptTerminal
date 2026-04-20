@@ -3,6 +3,8 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "screens/crypto_trading/CryptoBottomPanel.h"
 #include "screens/crypto_trading/CryptoChart.h"
 #include "screens/crypto_trading/CryptoCredentials.h"
@@ -37,20 +39,17 @@ static const QString TAG = "CryptoTrading";
 // ============================================================================
 
 CryptoTradingScreen::CryptoTradingScreen(QWidget* parent) : QWidget(parent) {
+    LOG_INFO(TAG, "Constructing CryptoTradingScreen");
     setup_ui();
     setup_timers();
+    LOG_INFO(TAG, "CryptoTradingScreen construction complete");
 }
 
 CryptoTradingScreen::~CryptoTradingScreen() {
-    auto& es = ExchangeService::instance();
-    if (ws_price_cb_id_ >= 0)
-        es.remove_price_callback(ws_price_cb_id_);
-    if (ws_ob_cb_id_ >= 0)
-        es.remove_orderbook_callback(ws_ob_cb_id_);
-    if (ws_candle_cb_id_ >= 0)
-        es.remove_candle_callback(ws_candle_cb_id_);
-    if (ws_trade_cb_id_ >= 0)
-        es.remove_trade_callback(ws_trade_cb_id_);
+    LOG_INFO(TAG, "Destroying CryptoTradingScreen");
+    // Drop hub subscriptions owned by this screen. DataHub::unsubscribe is
+    // also safe if no sub exists (e.g. constructor threw before init).
+    fincept::datahub::DataHub::instance().unsubscribe(this);
 }
 
 // ============================================================================
@@ -148,8 +147,12 @@ void CryptoTradingScreen::setup_ui() {
     exchange_btn_->setFixedHeight(22);
     exchange_btn_->setCursor(Qt::PointingHandCursor);
     exchange_menu_ = new QMenu(exchange_btn_);
-    for (const auto& ex :
-         {"kraken", "binance", "bybit", "okx", "coinbase", "bitget", "gate", "kucoin", "mexc", "htx"}) {
+    // Only exchanges registered as DataHub producers (see
+    // ExchangeSessionManager::topic_patterns) can be consumed by this screen
+    // post-Phase 6. Adding a new exchange here is a two-step job: add the
+    // topic patterns on the manager AND register the C++ metatypes with the
+    // hub, then add it to this list.
+    for (const auto& ex : {"kraken", "hyperliquid"}) {
         exchange_menu_->addAction(ex, this, [this, ex]() { on_exchange_changed(ex); });
     }
     exchange_btn_->setMenu(exchange_menu_);
@@ -295,7 +298,9 @@ void CryptoTradingScreen::setup_timers() {
 
     watchlist_timer_ = new QTimer(this);
     connect(watchlist_timer_, &QTimer::timeout, this, &CryptoTradingScreen::refresh_watchlist);
-    watchlist_timer_->setInterval(15000);
+    // 10 s — the watchlist is always polled in parallel with the WS stream
+    // (see apply_feed_mode) because illiquid tickers don't tick often on WS.
+    watchlist_timer_->setInterval(10000);
 
     market_info_timer_ = new QTimer(this);
     connect(market_info_timer_, &QTimer::timeout, this, &CryptoTradingScreen::refresh_market_info);
@@ -376,6 +381,101 @@ void CryptoTradingScreen::update_clock() {
 // Init
 // ============================================================================
 
+// ============================================================================
+// DataHub subscription path (the only path since Phase 6 removed the legacy
+// callback fallback). Every supported exchange must be a DataHub producer
+// registered via ExchangeSessionManager::topic_patterns().
+// ============================================================================
+
+void CryptoTradingScreen::hub_subscribe_topics() {
+    auto& hub = fincept::datahub::DataHub::instance();
+
+    // Always drop our prior subscriptions wholesale before re-subscribing —
+    // cheaper than deltas and leaves no room for stale topics to leak.
+    hub.unsubscribe(this);
+
+    const QString exch = exchange_id_;
+    const QString primary = selected_symbol_;
+
+    // 1. Primary-symbol ticker → ticker bar + order entry + paper bookkeeping.
+    //    Uses the coalesced ticker policy (50 ms window).
+    const QString ticker_topic = QStringLiteral("ws:") + exch + QStringLiteral(":ticker:") + primary;
+    QPointer<CryptoTradingScreen> self = this;
+    hub.subscribe(this, ticker_topic, [self, primary](const QVariant& v) {
+        if (!self || !v.canConvert<fincept::trading::TickerData>())
+            return;
+        const auto t = v.value<fincept::trading::TickerData>();
+        self->pending_tickers_[t.symbol.isEmpty() ? primary : t.symbol] = t;
+        if (self->selected_symbol_ == primary) {
+            self->pending_primary_ticker_ = t;
+            self->has_pending_primary_ = true;
+        }
+    });
+
+    // 2. Primary-symbol orderbook.
+    const QString ob_topic = QStringLiteral("ws:") + exch + QStringLiteral(":orderbook:") + primary;
+    hub.subscribe(this, ob_topic, [self, primary](const QVariant& v) {
+        if (!self || self->selected_symbol_ != primary)
+            return;
+        if (!v.canConvert<fincept::trading::OrderBookData>())
+            return;
+        self->pending_orderbook_ = v.value<fincept::trading::OrderBookData>();
+        self->has_pending_orderbook_ = true;
+    });
+
+    // 3. Primary-symbol trades → time & sales + fast-path ticker update.
+    const QString trades_topic = QStringLiteral("ws:") + exch + QStringLiteral(":trades:") + primary;
+    hub.subscribe(this, trades_topic, [self, primary](const QVariant& v) {
+        if (!self || self->selected_symbol_ != primary)
+            return;
+        if (!v.canConvert<fincept::trading::TradeData>())
+            return;
+        const auto td = v.value<fincept::trading::TradeData>();
+        crypto::TradeEntry e;
+        e.side = td.side;
+        e.price = td.price;
+        e.amount = td.amount;
+        self->pending_trades_.append(e);
+    });
+
+    // 4. Watchlist tickers — pattern subscribe to ws:<exch>:ticker:* so new
+    //    symbols added to the watchlist later don't need extra wiring. The
+    //    pattern matches the primary topic too, but duplicate delivery is
+    //    harmless (pending_tickers_ is latest-wins per symbol).
+    const QString ticker_pattern = QStringLiteral("ws:") + exch + QStringLiteral(":ticker:*");
+    hub.subscribe_pattern(this, ticker_pattern,
+                          [self](const QString& /*topic*/, const QVariant& v) {
+                              if (!self || !v.canConvert<fincept::trading::TickerData>())
+                                  return;
+                              const auto t = v.value<fincept::trading::TickerData>();
+                              if (t.symbol.isEmpty())
+                                  return;
+                              self->pending_tickers_[t.symbol] = t;
+                          });
+
+    // 5. Candles — subscribe pattern for the primary symbol across all
+    //    intervals (the chart's current timeframe may change during the
+    //    session; a pattern sub avoids having to resubscribe on every
+    //    timeframe change). Filter by the exact symbol in the slot.
+    const QString ohlc_pattern = QStringLiteral("ws:") + exch + QStringLiteral(":ohlc:") + primary +
+                                 QStringLiteral(":*");
+    hub.subscribe_pattern(this, ohlc_pattern,
+                          [self, primary](const QString& /*topic*/, const QVariant& v) {
+                              if (!self || self->selected_symbol_ != primary)
+                                  return;
+                              if (!v.canConvert<fincept::trading::Candle>())
+                                  return;
+                              self->pending_candles_.append(v.value<fincept::trading::Candle>());
+                          });
+
+    LOG_INFO(TAG, QString("DataHub subscriptions attached: %1 / %2").arg(exch, primary));
+}
+
+void CryptoTradingScreen::hub_unsubscribe_topics() {
+    fincept::datahub::DataHub::instance().unsubscribe(this);
+    LOG_INFO(TAG, "DataHub subscriptions detached");
+}
+
 void CryptoTradingScreen::init_exchange() {
     auto& es = ExchangeService::instance();
     es.set_exchange(exchange_id_);
@@ -383,87 +483,74 @@ void CryptoTradingScreen::init_exchange() {
     if (!es.is_feed_running())
         es.start_price_feed(5);
 
-    es.start_ws_stream(selected_symbol_, watchlist_symbols_);
+    // Phase 3: only spawn the WS subprocess if this session doesn't already
+    // have one running. On switch-back to a warm exchange, the session's WS
+    // is still up (ExchangeSessionManager keeps sessions warm for the app
+    // lifetime) and we should just attach our callbacks to its live stream.
+    if (!es.is_ws_active()) {
+        const bool ws_spawned = es.start_ws_stream(selected_symbol_, watchlist_symbols_);
+        if (!ws_spawned) {
+            // WS failed to launch (bad paths, missing broker creds, etc.). Surface
+            // the state on the status label and keep REST polling so the screen
+            // still displays data via scripts.
+            LOG_ERROR(TAG, "WS stream failed to start — remaining on REST polling for " + exchange_id_);
+            if (ws_status_) {
+                ws_status_->setText("REST");
+                ws_status_->setStyleSheet(QString("color: %1;").arg(ui::colors::WARNING()));
+            }
+            last_ws_status_label_state_ = 0;
+        }
+    } else {
+        LOG_INFO(TAG, "WS already active for " + exchange_id_ + " — attaching to warm session");
+    }
 
-    // WS price callback → accumulate into pending buffers (flushed at 10fps by ws_flush_timer_)
-    // This coalesces ~50 msgs/sec into ~10 UI updates/sec.
-    // QPointer guard: callbacks are invoked from the WS reader thread, so the
-    // widget could be torn down between dispatch and our lambda body running.
-    QPointer<CryptoTradingScreen> self = this;
-    ws_price_cb_id_ = es.on_price_update([self](const QString& symbol, const TickerData& ticker) {
-        if (!self) return;
-        QMetaObject::invokeMethod(
-            self.data(),
-            [self, symbol, ticker]() {
-                if (!self) return;
-                self->pending_tickers_[symbol] = ticker; // latest wins per symbol
-                if (symbol == self->selected_symbol_) {
-                    self->pending_primary_ticker_ = ticker;
-                    self->has_pending_primary_ = true;
-                }
-            },
-            Qt::QueuedConnection);
-    });
-
-    // WS orderbook callback → buffer latest; flushed at 10fps by ws_flush_timer_
-    ws_ob_cb_id_ = es.on_orderbook_update([self](const QString& symbol, const OrderBookData& ob) {
-        if (!self || symbol != self->selected_symbol_)
-            return;
-        QMetaObject::invokeMethod(
-            self.data(),
-            [self, ob]() {
-                if (!self) return;
-                self->pending_orderbook_ = ob;
-                self->has_pending_orderbook_ = true;
-            },
-            Qt::QueuedConnection);
-    });
-
-    // WS candle callback → buffer pending candles; flushed at 10fps by ws_flush_timer_
-    ws_candle_cb_id_ = es.on_candle_update([self](const QString& symbol, const Candle& candle) {
-        if (!self || symbol != self->selected_symbol_)
-            return;
-        QMetaObject::invokeMethod(
-            self.data(),
-            [self, candle]() {
-                if (!self) return;
-                self->pending_candles_.append(candle);
-            },
-            Qt::QueuedConnection);
-    });
-
-    // WS trade callback → buffer trade entries; flushed at 10fps by ws_flush_timer_
-    ws_trade_cb_id_ = es.on_trade_update([self](const QString& symbol, const TradeData& trade) {
-        if (!self || symbol != self->selected_symbol_)
-            return;
-        TradeEntry entry;
-        entry.side = trade.side;
-        entry.price = trade.price;
-        entry.amount = trade.amount;
-        QMetaObject::invokeMethod(
-            self.data(),
-            [self, entry]() {
-                if (!self) return;
-                self->pending_trades_.append(entry);
-            },
-            Qt::QueuedConnection);
-    });
-
+    // Hub is the only consumer path. Every exchange shown in the dropdown
+    // must have a matching producer registered on ExchangeSessionManager.
+    hub_subscribe_topics();
     initialized_ = true;
+    LOG_INFO(TAG, QString("Exchange initialised via hub: %1 / %2").arg(exchange_id_, selected_symbol_));
 }
 
 void CryptoTradingScreen::load_portfolio() {
-    auto existing = pt_find_portfolio("Crypto Paper", exchange_id_);
-    if (existing) {
-        portfolio_ = *existing;
-        portfolio_id_ = portfolio_.id;
-    } else {
-        portfolio_ =
-            pt_create_portfolio("Crypto Paper", DEFAULT_PAPER_BALANCE, "USD", 1.0, "cross", 0.001, exchange_id_);
-        portfolio_id_ = portfolio_.id;
-    }
-    ExchangeService::instance().watch_symbol(selected_symbol_, portfolio_id_);
-    refresh_portfolio();
+    // pt_find_portfolio / pt_create_portfolio hit SQLite. Run on a worker so
+    // the UI thread isn't blocked on exchange-switch or cold boot. Capture the
+    // exchange id by value — if the user switches again before the worker
+    // returns, the result will be applied under the *new* id, which is fine
+    // because watch_symbol is called under the then-current selected_symbol_.
+    QPointer<CryptoTradingScreen> self = this;
+    const QString exch = exchange_id_;
+    QtConcurrent::run([self, exch]() {
+        if (!self)
+            return;
+        trading::PtPortfolio portfolio;
+        try {
+            auto existing = pt_find_portfolio("Crypto Paper", exch);
+            if (existing) {
+                portfolio = *existing;
+            } else {
+                portfolio = pt_create_portfolio("Crypto Paper", DEFAULT_PAPER_BALANCE, "USD", 1.0, "cross", 0.001, exch);
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR("CryptoTradingScreen", QString("load_portfolio failed: %1").arg(e.what()));
+            return;
+        } catch (...) {
+            LOG_ERROR("CryptoTradingScreen", "load_portfolio failed: unknown exception");
+            return;
+        }
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, portfolio]() {
+                if (!self)
+                    return;
+                self->portfolio_ = portfolio;
+                self->portfolio_id_ = portfolio.id;
+                ExchangeService::instance().watch_symbol(self->selected_symbol_, self->portfolio_id_);
+                self->refresh_portfolio();
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 // ============================================================================
@@ -559,18 +646,18 @@ void CryptoTradingScreen::async_fetch_live_balance() {
 void CryptoTradingScreen::on_exchange_changed(const QString& exchange) {
     if (exchange == exchange_id_)
         return;
+    LOG_INFO(TAG, QString("Exchange changed: %1 → %2").arg(exchange_id_, exchange));
     exchange_id_ = exchange;
     exchange_btn_->setText(exchange.toUpper());
 
     auto& es = ExchangeService::instance();
 
-    // Tear down current WS stream + drop stale callbacks so ticks from the
-    // previous exchange can't race into buffers post-switch.
-    es.stop_ws_stream();
-    if (ws_price_cb_id_ >= 0) { es.remove_price_callback(ws_price_cb_id_); ws_price_cb_id_ = -1; }
-    if (ws_ob_cb_id_ >= 0) { es.remove_orderbook_callback(ws_ob_cb_id_); ws_ob_cb_id_ = -1; }
-    if (ws_candle_cb_id_ >= 0) { es.remove_candle_callback(ws_candle_cb_id_); ws_candle_cb_id_ = -1; }
-    if (ws_trade_cb_id_ >= 0) { es.remove_trade_callback(ws_trade_cb_id_); ws_trade_cb_id_ = -1; }
+    // Phase 3: sessions stay warm for the app lifetime. Do NOT stop the old
+    // exchange's WS — `ExchangeSessionManager` keeps it running so switching
+    // back is instant. Dropping our hub subscriptions is enough to stop the
+    // old exchange's ticks landing in our pending_* buffers; the session
+    // keeps updating its cache and publishing to the hub in the background.
+    hub_unsubscribe_topics();
 
     // Clear accumulated buffers — stale data from the old exchange is useless.
     pending_tickers_.clear();
@@ -582,14 +669,32 @@ void CryptoTradingScreen::on_exchange_changed(const QString& exchange) {
     pending_trades_.clear();
     last_ws_state_ = -1;  // re-evaluate feed mode after new stream connects
 
+    // Reset fetch guards — a prior in-flight fetch from the old exchange must
+    // not suppress the first fetch against the new exchange.
+    candles_fetching_.store(false);
+    live_inflight_.store(0);
+
     es.set_exchange(exchange_id_);
 
-    // Re-initialize — this re-registers all four WS callbacks + starts the stream.
+    // Re-initialize — re-registers the four WS callbacks on the NEW session.
+    // If that session's WS is already warm (we visited it earlier), init_exchange
+    // skips the start_ws_stream() call, so there's no second handshake.
     initialized_ = false;
     init_exchange();
 
     load_portfolio();
+
+    // Prime the screen with data from the new exchange immediately rather than
+    // waiting for the WS to connect or the 3s polling timer to tick — otherwise
+    // ticker / orderbook / chart stay blank for seconds after every switch.
+    // On switch-back to a warm session the session's cache is already populated,
+    // so refresh_ticker / refresh_orderbook hit it immediately.
     async_fetch_candles(selected_symbol_, chart_->current_timeframe());
+    refresh_ticker();
+    refresh_orderbook();
+    refresh_watchlist();
+    refresh_market_info();
+
     ScreenStateManager::instance().notify_changed(this);
 }
 
@@ -601,6 +706,7 @@ void CryptoTradingScreen::on_symbol_selected(const QString& symbol) {
 }
 
 void CryptoTradingScreen::switch_symbol(const QString& symbol) {
+    LOG_INFO(TAG, QString("Symbol changed: %1 → %2").arg(selected_symbol_, symbol));
     auto& es = ExchangeService::instance();
     es.unwatch_symbol(selected_symbol_, portfolio_id_);
     selected_symbol_ = symbol;
@@ -620,6 +726,13 @@ void CryptoTradingScreen::switch_symbol(const QString& symbol) {
 
     es.watch_symbol(selected_symbol_, portfolio_id_);
     es.set_ws_primary_symbol(symbol);
+
+    // Three of the five subscriptions (ticker/orderbook/trades + ohlc
+    // pattern) are primary-symbol-specific and need to be re-bound to the
+    // new symbol. The watchlist ticker pattern doesn't change. Simpler to
+    // resubscribe wholesale than diff.
+    hub_subscribe_topics();
+
     refresh_ticker();
     refresh_orderbook();
     async_fetch_candles(selected_symbol_, chart_->current_timeframe());
@@ -653,6 +766,7 @@ void CryptoTradingScreen::on_api_clicked() {
                 creds.secret = secret;
                 creds.password = pw;
                 ExchangeService::instance().set_credentials(creds);
+                LOG_INFO(TAG, "Credentials saved for " + exchange_id_);
             });
     dlg->exec();
     dlg->deleteLater();
@@ -660,6 +774,9 @@ void CryptoTradingScreen::on_api_clicked() {
 
 void CryptoTradingScreen::on_order_submitted(const QString& side, const QString& order_type, double qty, double price,
                                              double stop_price, double sl, double tp) {
+    LOG_INFO(TAG, QString("Order submit: mode=%1 %2 %3 qty=%4 px=%5 stop=%6 sl=%7 tp=%8 sym=%9")
+                      .arg(trading_mode_ == TradingMode::Paper ? "PAPER" : "LIVE", side, order_type)
+                      .arg(qty).arg(price).arg(stop_price).arg(sl).arg(tp).arg(selected_symbol_));
     try {
         if (trading_mode_ == TradingMode::Paper) {
             auto ticker = ExchangeService::instance().get_cached_price(selected_symbol_);
@@ -705,6 +822,7 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
 }
 
 void CryptoTradingScreen::on_cancel_order(const QString& order_id) {
+    LOG_INFO(TAG, QString("Cancel order: %1 (%2)").arg(order_id, trading_mode_ == TradingMode::Paper ? "paper" : "live"));
     if (trading_mode_ == TradingMode::Paper) {
         try {
             pt_cancel_order(order_id);
@@ -762,8 +880,16 @@ void CryptoTradingScreen::on_search_requested(const QString& filter) {
 // ============================================================================
 
 void CryptoTradingScreen::apply_feed_mode(bool ws_connected) {
-    // Called on WS-state edge transitions. When WS is live we can stop REST
-    // polling; when it drops we must restart so the screen keeps updating.
+    // Called on WS-state edge transitions. When WS is live we can stop the
+    // primary-symbol pollers (the WS ticker / orderbook stream covers them
+    // at high rate); when it drops we must restart so the screen keeps
+    // updating.
+    //
+    // The watchlist timer is an intentional exception: WS only pushes a
+    // symbol's ticker when its price moves, so illiquid rows (WIF, PEPE,
+    // etc.) can sit silent for minutes and display "--". Keeping the 15 s
+    // REST refresh running in parallel guarantees every row in the watchlist
+    // shows a price even when the market is quiet.
     const int desired = ws_connected ? 1 : 0;
     if (desired == last_ws_state_)
         return;
@@ -772,14 +898,12 @@ void CryptoTradingScreen::apply_feed_mode(bool ws_connected) {
     if (ws_connected) {
         if (ticker_timer_ && ticker_timer_->isActive()) ticker_timer_->stop();
         if (ob_timer_ && ob_timer_->isActive()) ob_timer_->stop();
-        if (watchlist_timer_ && watchlist_timer_->isActive()) watchlist_timer_->stop();
         if (portfolio_timer_ && portfolio_timer_->isActive()) portfolio_timer_->stop();
-        LOG_INFO(TAG, "WS connected — REST polling paused");
+        LOG_INFO(TAG, "WS connected — REST polling paused (watchlist poll kept running)");
     } else {
         if (isVisible()) {
             if (ticker_timer_ && !ticker_timer_->isActive()) ticker_timer_->start();
             if (ob_timer_ && !ob_timer_->isActive()) ob_timer_->start();
-            if (watchlist_timer_ && !watchlist_timer_->isActive()) watchlist_timer_->start();
             if (portfolio_timer_ && !portfolio_timer_->isActive()) portfolio_timer_->start();
             LOG_WARN(TAG, "WS disconnected — REST polling resumed");
         }
@@ -909,14 +1033,44 @@ void CryptoTradingScreen::flush_ws_updates() {
 void CryptoTradingScreen::refresh_ticker() {
     if (!initialized_)
         return;
-    const auto cached = ExchangeService::instance().get_cached_price(selected_symbol_);
+    auto& es = ExchangeService::instance();
+    const auto cached = es.get_cached_price(selected_symbol_);
     if (cached.last > 0) {
         ticker_bar_->update_data(cached.last, cached.percentage, cached.high, cached.low, cached.base_volume,
-                                 ExchangeService::instance().is_ws_connected());
+                                 es.is_ws_connected());
         if (cached.bid > 0 && cached.ask > 0)
             ticker_bar_->update_bid_ask(cached.bid, cached.ask, std::abs(cached.ask - cached.bid));
         order_entry_->set_current_price(cached.last);
+        return;
     }
+
+    // Cache miss + WS not connected — prime the ticker on a worker so the UI
+    // doesn't stay empty waiting for the first WS tick after an exchange
+    // switch or cold start. Skip if the WS is live: the tick will arrive.
+    if (es.is_ws_connected())
+        return;
+    QPointer<CryptoTradingScreen> self = this;
+    const QString symbol = selected_symbol_;
+    QtConcurrent::run([self, symbol]() {
+        if (!self)
+            return;
+        auto ticker = ExchangeService::instance().fetch_ticker(symbol);
+        if (!self || ticker.last <= 0)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, symbol, ticker]() {
+                if (!self || self->selected_symbol_ != symbol)
+                    return;
+                auto& es = ExchangeService::instance();
+                self->ticker_bar_->update_data(ticker.last, ticker.percentage, ticker.high, ticker.low,
+                                               ticker.base_volume, es.is_ws_connected());
+                if (ticker.bid > 0 && ticker.ask > 0)
+                    self->ticker_bar_->update_bid_ask(ticker.bid, ticker.ask, std::abs(ticker.ask - ticker.bid));
+                self->order_entry_->set_current_price(ticker.last);
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 void CryptoTradingScreen::refresh_orderbook() {

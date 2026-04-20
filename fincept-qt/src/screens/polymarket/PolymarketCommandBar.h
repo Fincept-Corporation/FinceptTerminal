@@ -33,6 +33,7 @@ class PolymarketCommandBar : public QWidget {
     void set_loading(bool loading);
     void set_ws_status(bool connected);
     void set_market_count(int count);
+    void set_search_text(const QString& text) { if (search_input_) search_input_->setText(text); }
 
     /// Populate the exchange dropdown. `ids` are adapter ids from
     /// PredictionExchangeRegistry (e.g. ["polymarket", "kalshi"]); `labels`

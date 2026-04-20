@@ -14,6 +14,14 @@ namespace fincept::python {
 struct SetupProgress;
 }
 
+namespace fincept::net {
+class NetSpeedMeter;
+}
+
+namespace fincept::ui {
+class SpeedSparkline;
+}
+
 namespace fincept::screens {
 
 class SetupScreen : public QWidget {
@@ -30,6 +38,8 @@ class SetupScreen : public QWidget {
     void on_setup_done(bool success, const QString& error);
     void on_skip_clicked();  // user-initiated skip
     void on_setup_timeout(); // overall 15-min timeout fired
+    void on_net_speed(qint64 down_bps, qint64 up_bps);
+    void on_elapsed_tick();
 
   private:
     void build_ui();
@@ -46,6 +56,17 @@ class SetupScreen : public QWidget {
     QLabel* subtitle_lbl_ = nullptr;
     QLabel* summary_lbl_ = nullptr;
     QTimer* timeout_timer_ = nullptr; // 15-min overall timeout
+
+    // Liveness indicator — shown while setup is running so users can see
+    // network activity even during long silent package installs.
+    QWidget* live_row_ = nullptr;
+    QLabel* down_lbl_ = nullptr;
+    QLabel* up_lbl_ = nullptr;
+    QLabel* elapsed_lbl_ = nullptr;
+    fincept::ui::SpeedSparkline* sparkline_ = nullptr;
+    fincept::net::NetSpeedMeter* net_meter_ = nullptr;
+    QTimer* elapsed_timer_ = nullptr;
+    qint64 setup_started_ms_ = 0;
 
     // Step progress bars (keyed by step name)
     struct StepUI {

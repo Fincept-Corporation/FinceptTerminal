@@ -7,6 +7,7 @@
 #include <QPushButton>
 #include <QSet>
 #include <QTableWidget>
+#include <QTimer>
 #include <QWidget>
 
 namespace fincept::screens {
@@ -51,6 +52,9 @@ class MarketPanel : public QWidget {
     void update_visible_rows();
     void show_error(const QString& msg);
     void show_data();
+    void show_loading();
+    void hide_loading();
+    void tick_loading_anim();
     void refresh_theme();
     void open_cols_dropdown();
 
@@ -76,11 +80,17 @@ class MarketPanel : public QWidget {
     QPushButton* delete_btn_  = nullptr;
 
     // Body: data table or error state
-    QWidget*      body_         = nullptr;
-    QTableWidget* table_        = nullptr;
-    QWidget*      error_widget_ = nullptr;
-    QLabel*       error_label_  = nullptr;
-    QPushButton*  retry_btn_    = nullptr;
+    QWidget*      body_           = nullptr;
+    QTableWidget* table_          = nullptr;
+    QWidget*      error_widget_   = nullptr;
+    QLabel*       error_label_    = nullptr;
+    QPushButton*  retry_btn_      = nullptr;
+
+    // Loading overlay (shown until first data arrives)
+    QWidget*      loading_widget_ = nullptr;
+    QLabel*       loading_label_  = nullptr;
+    QTimer*       loading_timer_  = nullptr;
+    int           loading_frame_  = 0;
 
     static constexpr int kHeaderH    = 28;
     static constexpr int kColHeaderH = 22;

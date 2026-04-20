@@ -81,6 +81,12 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen {
     void async_set_leverage(int leverage);
     void async_set_margin_mode(const QString& mode);
 
+    // ── DataHub subscription lifecycle (the only data path since Phase 6) ─
+    // Only exchanges registered as DataHub producers via
+    // ExchangeSessionManager::topic_patterns() can appear in the dropdown.
+    void hub_subscribe_topics();
+    void hub_unsubscribe_topics();
+
     // ── Command bar widgets ──
     QPushButton* exchange_btn_ = nullptr;
     QMenu* exchange_menu_ = nullptr;
@@ -116,11 +122,6 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen {
     QString portfolio_id_;
     trading::PtPortfolio portfolio_;
 
-    // WS callbacks
-    int ws_price_cb_id_ = -1;
-    int ws_ob_cb_id_ = -1;
-    int ws_candle_cb_id_ = -1;
-    int ws_trade_cb_id_ = -1;
 
     // Async fetch guards
     std::atomic<bool> candles_fetching_{false};

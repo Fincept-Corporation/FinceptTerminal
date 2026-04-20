@@ -25,6 +25,10 @@ class PolymarketMarketCardModel : public QAbstractListModel {
     void set_view_mode(const QString& mode); // "markets" or "events"
     void set_presentation(const ExchangePresentation& p);
 
+    /// Replace a single market by key.market_id without rebuilding the
+    /// whole list. Returns true if the row existed and was updated.
+    bool update_market(const fincept::services::prediction::PredictionMarket& market);
+
     const fincept::services::prediction::PredictionMarket* market_at(int row) const;
     const fincept::services::prediction::PredictionEvent* event_at(int row) const;
     const ExchangePresentation& presentation() const { return presentation_; }
