@@ -126,7 +126,7 @@ else
     if [ "$PLATFORM" = "linux" ]; then
         AQT_HOST="linux"   ; AQT_TARGET="desktop" ; AQT_ARCH="gcc_64"
     else
-        AQT_HOST="mac"     ; AQT_TARGET="desktop" ; AQT_ARCH="clang_64"
+        AQT_HOST="mac"     ; AQT_TARGET="desktop" ; AQT_ARCH="macos"
     fi
     # Modules required to compile Fincept (match find_package COMPONENTS)
     AQT_MODULES="qtcharts qtwebsockets qtmultimedia qtspeech"
