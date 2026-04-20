@@ -5,12 +5,14 @@
 
 #include <QAreaSeries>
 #include <QChart>
+#include <QDateTime>
 #include <QDateTimeAxis>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLineSeries>
 #include <QMouseEvent>
 #include <QScreen>
+#include <QTimeZone>
 #include <QVBoxLayout>
 #include <QValueAxis>
 
@@ -443,7 +445,7 @@ void PortfolioPerfChart::update_chart() {
                     const QDate d = QDate::fromString(spy_dates_[i], Qt::ISODate);
                     if (d > end_date)
                         break;
-                    const qint64 ms = QDateTime(d, QTime(), Qt::UTC).toMSecsSinceEpoch();
+                    const qint64 ms = QDateTime(d, QTime(), QTimeZone::UTC).toMSecsSinceEpoch();
                     const double val = first_val * (spy_closes_[i] / spy_base);
                     spy_line->append(ms, val);
                     spy_min = std::min(spy_min, val);

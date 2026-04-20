@@ -158,7 +158,7 @@ void NewsScreen::connect_signals() {
         const QSet<QString> ids = std::move(pending_seen_ids_);
         pending_seen_ids_.clear();
         QPointer<NewsScreen> self = this;
-        QtConcurrent::run([ids, self]() {
+        (void)QtConcurrent::run([ids, self]() {
             for (const auto& id : ids)
                 fincept::NewsArticleRepository::instance().mark_seen(id);
             if (self) {
@@ -562,7 +562,7 @@ void NewsScreen::apply_filters_async() {
         }
     }
 
-    QtConcurrent::run([self, gen, articles_copy = std::move(articles_copy), category, time_range, search_lower, sort,
+    (void)QtConcurrent::run([self, gen, articles_copy = std::move(articles_copy), category, time_range, search_lower, sort,
                        variant, visible_count]() {
         int64_t window_sec = 0;
         if (time_range == "1H")

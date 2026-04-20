@@ -184,7 +184,7 @@ void OrderBookMiniWidget::cancel_order(const QString& order_id) {
     // BrokerHttp blocking trap (P1) — always wrap live broker calls in QtConcurrent::run.
     const QString acct_id = account_id_;
     QPointer<OrderBookMiniWidget> self = this;
-    QtConcurrent::run([self, acct_id, order_id]() {
+    (void)QtConcurrent::run([self, acct_id, order_id]() {
         if (!self)
             return;
         trading::UnifiedTrading::instance().cancel_order(acct_id, order_id);

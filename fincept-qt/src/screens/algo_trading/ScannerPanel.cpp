@@ -89,7 +89,7 @@ using namespace fincept::services::algo;
 
 // ── Helper: build a condition row ───────────────────────────────────────────
 
-static QWidget* build_condition_row(QVBoxLayout* owner_layout, QWidget* parent) {
+static QWidget* build_condition_row(QVBoxLayout* /*owner_layout*/, QWidget* parent) {
     auto* row = new QWidget(parent);
     row->setStyleSheet(QString("background: %1; border: 1px solid %2;")
                            .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_DIM()));
@@ -542,13 +542,13 @@ void ScannerPanel::on_scan() {
              QString("Scan started: %1 conditions, %2 symbols").arg(conditions.size()).arg(symbols.size()));
 }
 
-void ScannerPanel::on_scan_result(const QJsonObject& data) {
+void ScannerPanel::on_scan_result(const QJsonObject& payload) {
     results_table_->setSortingEnabled(false);
     results_table_->setRowCount(0);
 
-    QJsonArray matches         = data.value("matches").toArray();
-    int        total_scanned   = data.value("total_scanned").toInt();
-    int        condition_count = data.value("condition_count").toInt();
+    QJsonArray matches         = payload.value("matches").toArray();
+    int        total_scanned   = payload.value("total_scanned").toInt();
+    int        condition_count = payload.value("condition_count").toInt();
 
     status_label_->setText(
         QString("Scan complete: %1 matches out of %2 symbols").arg(matches.size()).arg(total_scanned));

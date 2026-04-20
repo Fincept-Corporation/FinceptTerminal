@@ -949,7 +949,7 @@ void SupportScreen::load_tickets() {
             const QString body_c = obj["description"].toString();
             const bool demo_c = is_demo;
 
-            connect(btn, &QPushButton::clicked, this, [=]() {
+            connect(btn, &QPushButton::clicked, this, [=, this]() {
                 select_ticket_row(btn);
 
                 selected_ticket_id_ = id_int;

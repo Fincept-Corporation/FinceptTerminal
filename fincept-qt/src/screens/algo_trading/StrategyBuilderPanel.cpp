@@ -626,17 +626,17 @@ void StrategyBuilderPanel::clear_results() {
 
 // ── display_backtest_result — Quant Lab KPI card style ───────────────────────
 
-void StrategyBuilderPanel::display_backtest_result(const QJsonObject& data) {
+void StrategyBuilderPanel::display_backtest_result(const QJsonObject& payload) {
     bt_empty_label_->setVisible(false);
     kpi_grid_widget_->setVisible(true);
 
-    double total_return  = data.value("total_return").toDouble();
-    double sharpe        = data.value("sharpe_ratio").toDouble();
-    double max_dd        = data.value("max_drawdown").toDouble();
-    int    total_trades  = data.value("total_trades").toInt();
-    double win_rate      = data.value("win_rate").toDouble();
-    double profit_factor = data.value("profit_factor").toDouble();
-    double final_val     = data.value("final_value").toDouble();
+    double total_return  = payload.value("total_return").toDouble();
+    double sharpe        = payload.value("sharpe_ratio").toDouble();
+    double max_dd        = payload.value("max_drawdown").toDouble();
+    int    total_trades  = payload.value("total_trades").toInt();
+    double win_rate      = payload.value("win_rate").toDouble();
+    double profit_factor = payload.value("profit_factor").toDouble();
+    double final_val     = payload.value("final_value").toDouble();
 
     auto set_kpi = [](QLabel* lbl, const QString& text, const QString& color) {
         lbl->setText(text);
@@ -684,14 +684,14 @@ void StrategyBuilderPanel::display_backtest_result(const QJsonObject& data) {
 
 // ── on_backtest_result ───────────────────────────────────────────────────────
 
-void StrategyBuilderPanel::on_backtest_result(const QJsonObject& data) {
+void StrategyBuilderPanel::on_backtest_result(const QJsonObject& payload) {
     status_label_->setText("Backtest complete.");
     status_label_->setStyleSheet(
         QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
             .arg(fincept::ui::colors::POSITIVE())
             .arg(fincept::ui::fonts::SMALL)
             .arg(kMonoFont()));
-    display_backtest_result(data);
+    display_backtest_result(payload);
     LOG_INFO("AlgoTrading", "Backtest result displayed");
 }
 

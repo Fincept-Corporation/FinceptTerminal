@@ -79,17 +79,6 @@ static QString btn_active_amber() {
         .arg(colors::BG_BASE());
 }
 
-static QString btn_danger() {
-    return QString("QPushButton { background:rgba(220,38,38,0.08); border:1px solid %1; color:%2;"
-                   " font-size:11px; font-weight:bold; font-family:%3;"
-                   " padding:0 10px; }"
-                   "QPushButton:hover { background:%2; color:%4; }")
-        .arg(colors::NEGATIVE_DIM())
-        .arg(colors::NEGATIVE())
-        .arg(MONO)
-        .arg(colors::TEXT_PRIMARY());
-}
-
 // ── Constructor ──────────────────────────────────────────────────────────────
 SurfaceAnalyticsScreen::SurfaceAnalyticsScreen(QWidget* parent) : QWidget(parent) {
     srand((unsigned)time(nullptr));

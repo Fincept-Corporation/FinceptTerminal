@@ -23,6 +23,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTimeZone>
 
 namespace fincept::trading {
 
@@ -350,7 +351,7 @@ AoTick AngelOneWebSocket::parse_tick(const QByteArray& data) const {
         return tick; // need at least to LTP
 
     tick.sequence_number = read_i64_le(buf + 27);
-    tick.exchange_timestamp = QDateTime::fromMSecsSinceEpoch(read_i64_le(buf + 35), Qt::UTC);
+    tick.exchange_timestamp = QDateTime::fromMSecsSinceEpoch(read_i64_le(buf + 35), QTimeZone::UTC);
     tick.ltp = paise_to_rupees(read_i64_le(buf + 43));
 
     if (tick.mode == AoSubMode::LTP)

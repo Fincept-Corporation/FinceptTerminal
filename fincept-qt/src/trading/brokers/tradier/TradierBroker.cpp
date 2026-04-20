@@ -3,6 +3,7 @@
 #include "trading/brokers/BrokerHttp.h"
 
 #include <QDateTime>
+#include <QTimeZone>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QUrlQuery>
@@ -86,7 +87,7 @@ QMap<QString, QString> TradierBroker::auth_headers(const BrokerCredentials& cred
 TokenExchangeResponse TradierBroker::exchange_token(const QString& api_key, const QString& api_secret,
                                                     const QString& /*auth_code*/) {
     if (api_key.trimmed().isEmpty())
-        return {false, "", "", "", "Access token is required"};
+        return {false, "", "", "", "Access token is required", ""};
 
     QString env_base = (api_secret.trimmed().toLower() == "sandbox" || api_secret.trimmed().toLower() == "paper")
                            ? "https://sandbox.tradier.com"
@@ -98,17 +99,17 @@ TokenExchangeResponse TradierBroker::exchange_token(const QString& api_key, cons
 
     if (!resp.success) {
         if (resp.status_code == 401)
-            return {false, "", "", "", "[TOKEN_EXPIRED] Access token is invalid or expired"};
-        return {false, "", "", "", "Profile fetch failed: " + resp.error};
+            return {false, "", "", "", "[TOKEN_EXPIRED] Access token is invalid or expired", ""};
+        return {false, "", "", "", "Profile fetch failed: " + resp.error, ""};
     }
 
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
     if (!doc.isObject())
-        return {false, "", "", "", "Profile: invalid response"};
+        return {false, "", "", "", "Profile: invalid response", ""};
 
     QJsonObject profile = doc.object().value("profile").toObject();
     if (profile.isEmpty())
-        return {false, "", "", "", "Profile: missing profile object"};
+        return {false, "", "", "", "Profile: missing profile object", ""};
 
     // account may be object (single) or array (multiple) — take first
     QString account_id;
@@ -120,9 +121,9 @@ TokenExchangeResponse TradierBroker::exchange_token(const QString& api_key, cons
     }
 
     if (account_id.isEmpty())
-        return {false, "", "", "", "Profile: could not find account_number"};
+        return {false, "", "", "", "Profile: could not find account_number", ""};
 
-    return {true, api_key, "", account_id, ""};
+    return {true, api_key, "", account_id, "", ""};
 }
 
 // ---------- place_order ----------
@@ -568,7 +569,7 @@ ApiResponse<QVector<BrokerCandle>> TradierBroker::get_history(const BrokerCreden
             // date is "YYYY-MM-DD" string — convert to epoch ms
             QDate d = QDate::fromString(o.value("date").toString(), "yyyy-MM-dd");
             c.timestamp = d.isValid()
-                              ? static_cast<int64_t>(QDateTime(d, QTime(0, 0, 0), Qt::UTC).toSecsSinceEpoch()) * 1000LL
+                              ? static_cast<int64_t>(QDateTime(d, QTime(0, 0, 0), QTimeZone::UTC).toSecsSinceEpoch()) * 1000LL
                               : 0LL;
             c.open = o.value("open").toDouble();
             c.high = o.value("high").toDouble();

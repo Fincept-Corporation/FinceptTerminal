@@ -947,7 +947,7 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
         const QString acct_id = focused_account_id_;
         QPointer<EquityTradingScreen> self = this;
         auto order_copy = order;
-        QtConcurrent::run([self, acct_id, order_copy]() {
+        (void)QtConcurrent::run([self, acct_id, order_copy]() {
             if (!self)
                 return;
             auto result = UnifiedTrading::instance().place_order(acct_id, order_copy);
@@ -997,7 +997,7 @@ void EquityTradingScreen::on_cancel_order(const QString& order_id) {
     } else {
         const QString acct_id = focused_account_id_;
         QPointer<EquityTradingScreen> self = this;
-        QtConcurrent::run([self, acct_id, order_id]() {
+        (void)QtConcurrent::run([self, acct_id, order_id]() {
             if (!self)
                 return;
             UnifiedTrading::instance().cancel_order(acct_id, order_id);
@@ -1018,7 +1018,7 @@ void EquityTradingScreen::refresh_candles() {
 void EquityTradingScreen::async_modify_order(const QString& order_id, double qty, double price) {
     const QString acct_id = focused_account_id_;
     QPointer<EquityTradingScreen> self = this;
-    QtConcurrent::run([self, acct_id, order_id, qty, price]() {
+    (void)QtConcurrent::run([self, acct_id, order_id, qty, price]() {
         if (!self)
             return;
         QJsonObject mods;

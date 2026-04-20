@@ -212,7 +212,7 @@ void PortfolioAiPanel::run_analysis(bool force) {
     QString type = current_type_;
     QPointer<PortfolioAiPanel> self = this;
 
-    QtConcurrent::run([self, prompt, type]() {
+    (void)QtConcurrent::run([self, prompt, type]() {
         auto response = ai_chat::LlmService::instance().chat(prompt, {});
 
         if (!self)

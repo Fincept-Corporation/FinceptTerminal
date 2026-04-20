@@ -60,7 +60,7 @@ WorldBankPanel::WorldBankPanel(QWidget* parent) : EconPanelBase(kWorldBankSource
     lvl->setContentsMargins(0, 0, 0, 0);
     lvl->setSpacing(0);
 
-    auto section_header = [this](const QString& text) {
+    auto section_header = [](const QString& text) {
         auto* lbl = new QLabel(text);
         lbl->setStyleSheet(section_lbl_style() + section_hdr_style());
         return lbl;

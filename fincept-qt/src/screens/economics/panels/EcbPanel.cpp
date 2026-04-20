@@ -51,7 +51,7 @@ void EcbPanel::activate() {
 }
 
 void EcbPanel::build_controls(QHBoxLayout* thl) {
-    auto lbl = [this](const QString& t) {
+    auto lbl = [](const QString& t) {
         auto* l = new QLabel(t);
         l->setStyleSheet(ctrl_label_style());
         return l;
@@ -68,7 +68,6 @@ void EcbPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void EcbPanel::on_fetch() {
-    const QString data = series_combo_->currentData().toString();
     const int idx = series_combo_->currentIndex();
     const auto& series = kEcbSeries[idx];
 

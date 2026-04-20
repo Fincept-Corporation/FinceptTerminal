@@ -392,20 +392,20 @@ void EquityTechnicalsTab::clear_sections() {
 
 // ── populate ─────────────────────────────────────────────────────────────────
 
-void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data) {
+void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& payload) {
     clear_sections();
 
     // Flatten all
     QVector<services::equity::TechIndicator> all;
-    all << data.trend << data.momentum << data.volatility << data.volume;
+    all << payload.trend << payload.momentum << payload.volatility << payload.volume;
 
     // ── Rating ───────────────────────────────────────────────────────────────
-    int sb = data.strong_buy, b = data.buy, n = data.neutral, s = data.sell, ss = data.strong_sell;
+    int sb = payload.strong_buy, b = payload.buy, n = payload.neutral, s = payload.sell, ss = payload.strong_sell;
     int total = sb + b + n + s + ss;
 
     const char* rec_color = GRAY;
-    QString rec_text = signal_text(data.overall_signal);
-    rec_color = signal_color(data.overall_signal);
+    QString rec_text = signal_text(payload.overall_signal);
+    rec_color = signal_color(payload.overall_signal);
 
     rating_label_->setText(rec_text);
     rating_label_->setStyleSheet(
@@ -502,10 +502,10 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
         const char* color;
     };
     QList<CatDef> cats = {
-        {"TREND INDICATORS", &data.trend, CYAN},
-        {"MOMENTUM INDICATORS", &data.momentum, ui::colors::POSITIVE},
-        {"VOLATILITY INDICATORS", &data.volatility, YELLOW},
-        {"VOLUME INDICATORS", &data.volume, BLUE},
+        {"TREND INDICATORS", &payload.trend, CYAN},
+        {"MOMENTUM INDICATORS", &payload.momentum, ui::colors::POSITIVE},
+        {"VOLATILITY INDICATORS", &payload.volatility, YELLOW},
+        {"VOLUME INDICATORS", &payload.volume, BLUE},
     };
 
     for (const auto& cat : cats) {
@@ -671,11 +671,11 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& data)
 
 // ── on_technicals_loaded ─────────────────────────────────────────────────────
 
-void EquityTechnicalsTab::on_technicals_loaded(services::equity::TechnicalsData data) {
-    if (data.symbol != current_symbol_)
+void EquityTechnicalsTab::on_technicals_loaded(services::equity::TechnicalsData payload) {
+    if (payload.symbol != current_symbol_)
         return;
     loading_overlay_->hide_loading();
-    populate(data);
+    populate(payload);
 }
 
 } // namespace fincept::screens

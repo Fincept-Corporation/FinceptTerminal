@@ -210,7 +210,7 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
     connect(comp_toolbar_, &ComponentToolbar::font_changed, this,
             [this](const QString& family, int size, bool bold, bool italic) {
                 QTextCharFormat fmt;
-                fmt.setFontFamily(family);
+                fmt.setFontFamilies({family});
                 fmt.setFontPointSize(size);
                 fmt.setFontWeight(bold ? QFont::Bold : QFont::Normal);
                 fmt.setFontItalic(italic);

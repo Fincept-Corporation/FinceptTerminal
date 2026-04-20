@@ -1559,31 +1559,30 @@ static QString format_val(const QJsonValue& val) {
 
 // ── Backtest Result Display ───────────────────────────────────────────────────
 
-void QuantModulePanel::display_backtest_result(const QJsonObject& data) {
+void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
     clear_results();
 
-    if (!data["success"].toBool()) {
-        display_error(data["error"].toString("Unknown error"));
+    if (!payload["success"].toBool()) {
+        display_error(payload["error"].toString("Unknown error"));
         return;
     }
 
-    const QJsonObject metrics = data["metrics"].toObject();
-    const QJsonArray  curve   = data["equity_curve"].toArray();
-    const QJsonObject costs   = data["execution_cost_estimate"].toObject();
+    const QJsonObject metrics = payload["metrics"].toObject();
+    const QJsonArray  curve   = payload["equity_curve"].toArray();
+    const QJsonObject costs   = payload["execution_cost_estimate"].toObject();
     const QStringList tickers = [&]() {
         QStringList t;
-        for (const auto& v : data["tickers"].toArray())
+        for (const auto& v : payload["tickers"].toArray())
             t << v.toString();
         return t;
     }();
 
-    const QString strategy   = data["strategy"].toString();
-    const QString start_date = data["start_date"].toString();
-    const QString end_date   = data["end_date"].toString();
+    const QString strategy   = payload["strategy"].toString();
+    const QString start_date = payload["start_date"].toString();
+    const QString end_date   = payload["end_date"].toString();
 
     const QColor  accent      = module_.color;
     const QString accent_hex  = accent.name();
-    const QColor  accent_dim  = accent.darker(160);
     const QString green_hex   = ui::colors::POSITIVE();
     const QString red_hex     = ui::colors::NEGATIVE();
     const QString text_p      = ui::colors::TEXT_PRIMARY();
@@ -1595,7 +1594,6 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& data) {
     const QString border_med  = ui::colors::BORDER_MED();
     const QString font_data   = ui::fonts::DATA_FAMILY;
     const int     fs_sm       = ui::fonts::SMALL;
-    const int     fs_md       = ui::fonts::DATA;
     const int     fs_lg       = ui::fonts::HEADER;
 
     // ── 1. Header bar ──────────────────────────────────────────────────────
@@ -1865,7 +1863,7 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& data) {
                 "QPushButton:hover { background:rgba(255,255,255,0.05); }")
             .arg(accent_hex, border_dim).arg(fs_sm).arg(font_data));
 
-    QString json_str = QJsonDocument(data).toJson(QJsonDocument::Indented);
+    QString json_str = QJsonDocument(payload).toJson(QJsonDocument::Indented);
     connect(export_btn, &QPushButton::clicked, this, [this, json_str]() {
         QString safe = module_.label;
         safe.replace(QRegularExpression("[^a-zA-Z0-9_\\-]"), "_");
@@ -1894,7 +1892,7 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& data) {
                                .arg(sharpe, 0, 'f', 3));
 }
 
-void QuantModulePanel::display_result(const QJsonObject& data) {
+void QuantModulePanel::display_result(const QJsonObject& payload) {
     clear_results();
 
     auto* header = new QLabel("RESULTS");
@@ -1905,7 +1903,7 @@ void QuantModulePanel::display_result(const QJsonObject& data) {
 
     // Key-value table for scalar fields
     QStringList keys;
-    for (auto it = data.begin(); it != data.end(); ++it)
+    for (auto it = payload.begin(); it != payload.end(); ++it)
         if (!it.value().isObject() && !it.value().isArray())
             keys.append(it.key());
 
@@ -1923,7 +1921,7 @@ void QuantModulePanel::display_result(const QJsonObject& data) {
             auto label = keys[r];
             label.replace('_', ' ');
             table->setItem(r, 0, new QTableWidgetItem(label.toUpper()));
-            auto* vi = new QTableWidgetItem(format_val(data[keys[r]]));
+            auto* vi = new QTableWidgetItem(format_val(payload[keys[r]]));
             vi->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             table->setItem(r, 1, vi);
         }
@@ -1935,7 +1933,7 @@ void QuantModulePanel::display_result(const QJsonObject& data) {
     auto* raw = new QTextEdit;
     raw->setReadOnly(true);
     raw->setMaximumHeight(200);
-    raw->setPlainText(QJsonDocument(data).toJson(QJsonDocument::Indented));
+    raw->setPlainText(QJsonDocument(payload).toJson(QJsonDocument::Indented));
     raw->setStyleSheet(output_ss());
     results_layout_->addWidget(raw);
 
@@ -1949,7 +1947,7 @@ void QuantModulePanel::display_result(const QJsonObject& data) {
                                   .arg(module_.color.name(), ui::colors::BORDER_DIM())
                                   .arg(ui::fonts::SMALL)
                                   .arg(ui::fonts::DATA_FAMILY));
-    QString json_str = QJsonDocument(data).toJson(QJsonDocument::Indented);
+    QString json_str = QJsonDocument(payload).toJson(QJsonDocument::Indented);
     connect(export_btn, &QPushButton::clicked, this, [this, json_str]() {
         QString safe_name = module_.label;
         safe_name.replace(QRegularExpression("[^a-zA-Z0-9_\\-]"), "_");
@@ -1973,7 +1971,7 @@ void QuantModulePanel::display_result(const QJsonObject& data) {
 
 // ── Signal handlers ──────────────────────────────────────────────────────────
 
-void QuantModulePanel::on_result(const QString& module_id, const QString& command, const QJsonObject& data) {
+void QuantModulePanel::on_result(const QString& module_id, const QString& command, const QJsonObject& payload) {
     if (module_id != module_.id)
         return;
 
@@ -1987,24 +1985,24 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
     // ── LangGraph deep analysis result ───────────────────────────────────────
     if (command == "execute_task") {
-        if (!data["success"].toBool()) {
-            display_error(data["error"].toString("Unknown error"));
+        if (!payload["success"].toBool()) {
+            display_error(payload["error"].toString("Unknown error"));
             return;
         }
-        auto text = data["result"].toString();
+        auto text = payload["result"].toString();
         if (text.isEmpty())
-            text = QJsonDocument(data).toJson(QJsonDocument::Indented);
+            text = QJsonDocument(payload).toJson(QJsonDocument::Indented);
         if (agent_output_)
             agent_output_->setPlainText(text);
-        auto tid = data["thread_id"].toString();
+        auto tid = payload["thread_id"].toString();
         status_label_->setText(tid.isEmpty() ? "Done" : QString("Done — thread: %1").arg(tid));
         return;
     }
 
     // ── RD-Agent: check_status ────────────────────────────────────────────────
     if (command == "check_status") {
-        auto ver = data["rdagent_version"].toString("?");
-        auto avail = data["availability"].toObject();
+        auto ver = payload["rdagent_version"].toString("?");
+        auto avail = payload["availability"].toObject();
         QStringList flags;
         for (auto it = avail.begin(); it != avail.end(); ++it)
             if (it.value().toBool())
@@ -2016,12 +2014,12 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
     // ── RD-Agent: task started (factor_mining / model_optimization / quant_research) ──
     if (command == "start_factor_mining" || command == "start_model_optimization" ||
         command == "start_quant_research") {
-        if (!data["success"].toBool()) {
-            display_error(data["error"].toString("Unknown error"));
+        if (!payload["success"].toBool()) {
+            display_error(payload["error"].toString("Unknown error"));
             return;
         }
-        auto task_id = data["task_id"].toString();
-        auto est = data["estimated_time"].toString();
+        auto task_id = payload["task_id"].toString();
+        auto est = payload["estimated_time"].toString();
         status_label_->setText(QString("Task %1 started").arg(task_id));
         if (rd_agent_output_)
             rd_agent_output_->setPlainText(
@@ -2032,7 +2030,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
     // ── RD-Agent: list_tasks ──────────────────────────────────────────────────
     if (command == "list_tasks" && rd_task_table_) {
-        auto tasks = data["tasks"].toArray();
+        auto tasks = payload["tasks"].toArray();
         rd_task_table_->setRowCount(0);
         for (const auto& t : tasks) {
             auto obj = t.toObject();
@@ -2062,36 +2060,36 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
     // ── RD-Agent: get_task_status ─────────────────────────────────────────────
     if (command == "get_task_status") {
-        if (!data["success"].toBool()) {
-            display_error(data["error"].toString());
+        if (!payload["success"].toBool()) {
+            display_error(payload["error"].toString());
             return;
         }
-        auto task_id = data["task_id"].toString();
-        auto progress = data["progress"].toDouble() * 100;
-        auto step = data["current_step"].toString();
-        auto ic = data["best_ic"];
+        auto task_id = payload["task_id"].toString();
+        auto progress = payload["progress"].toDouble() * 100;
+        auto step = payload["current_step"].toString();
+        auto ic = payload["best_ic"];
         status_label_->setText(QString("Task %1 — %2% — %3").arg(task_id).arg(progress, 0, 'f', 0).arg(step));
         if (rd_agent_output_) {
             rd_agent_output_->setPlainText(
                 QString(
                     "Task ID:    %1\nStatus:     %2\nProgress:   %3%\nStep:       %4\nBest IC:    %5\nElapsed:    %6")
-                    .arg(task_id, data["status"].toString())
+                    .arg(task_id, payload["status"].toString())
                     .arg(progress, 0, 'f', 0)
                     .arg(step)
                     .arg(ic.isNull() ? "N/A" : QString::number(ic.toDouble(), 'f', 4))
-                    .arg(data["elapsed_time"].toString("-")));
+                    .arg(payload["elapsed_time"].toString("-")));
         }
         return;
     }
 
     // ── RD-Agent: get_discovered_factors ──────────────────────────────────────
     if (command == "get_discovered_factors" && rd_agent_output_) {
-        if (!data["success"].toBool()) {
-            display_error(data["error"].toString());
+        if (!payload["success"].toBool()) {
+            display_error(payload["error"].toString());
             return;
         }
-        auto factors = data["factors"].toArray();
-        auto best_ic = data["best_ic"];
+        auto factors = payload["factors"].toArray();
+        auto best_ic = payload["best_ic"];
         QString out = QString("Discovered Factors: %1  |  Best IC: %2\n\n")
                           .arg(factors.size())
                           .arg(best_ic.isNull() ? "N/A" : QString::number(best_ic.toDouble(), 'f', 4));
@@ -2112,11 +2110,11 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
     // ── RD-Agent: get_optimized_model ─────────────────────────────────────────
     if (command == "get_optimized_model" && rd_agent_output_) {
-        if (!data["success"].toBool()) {
-            display_error(data["error"].toString());
+        if (!payload["success"].toBool()) {
+            display_error(payload["error"].toString());
             return;
         }
-        auto models = data["models"].toArray();
+        auto models = payload["models"].toArray();
         QString out = QString("Optimized Models: %1\n\n").arg(models.size());
         int idx = 1;
         for (const auto& m : models) {
@@ -2133,15 +2131,15 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
     // ── RD-Agent: stop_task / resume_task ────────────────────────────────────
     if (command == "stop_task" || command == "resume_task") {
-        status_label_->setText(data["message"].toString(command));
+        status_label_->setText(payload["message"].toString(command));
         if (rd_agent_output_)
-            rd_agent_output_->setPlainText(data["message"].toString());
+            rd_agent_output_->setPlainText(payload["message"].toString());
         return;
     }
 
     // ── RD-Agent: start_ui ───────────────────────────────────────────────────
     if (command == "start_ui") {
-        auto url = data["url"].toString();
+        auto url = payload["url"].toString();
         if (!url.isEmpty()) {
             status_label_->setText(QString("Log viewer: %1").arg(url));
             QDesktopServices::openUrl(QUrl(url));
@@ -2151,18 +2149,18 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
     // ── RD-Agent: start_mcp_server ────────────────────────────────────────────
     if (command == "start_mcp_server") {
-        if (!data["success"].toBool()) {
+        if (!payload["success"].toBool()) {
             status_label_->setText("MCP server failed");
             if (rd_agent_output_)
                 rd_agent_output_->setPlainText(
                     QString("MCP server failed to start:\n%1\n\nInstall: %2")
-                        .arg(data["error"].toString())
-                        .arg(data["install"].toString("pip install 'mcp[cli]' 'pydantic-ai[mcp]' yfinance")));
+                        .arg(payload["error"].toString())
+                        .arg(payload["install"].toString("pip install 'mcp[cli]' 'pydantic-ai[mcp]' yfinance")));
             return;
         }
-        auto url = data["url"].toString();
-        auto port = data["port"].toInt();
-        auto tools = data["tools"].toArray();
+        auto url = payload["url"].toString();
+        auto port = payload["port"].toInt();
+        auto tools = payload["tools"].toArray();
         QStringList tool_names;
         for (const auto& t : tools)
             tool_names << t.toString();
@@ -2177,9 +2175,9 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
     // ── RD-Agent: mcp_status ─────────────────────────────────────────────────
     if (command == "mcp_status") {
-        auto avail = data["mcp_server_available"].toBool();
-        auto pai_mcp = data["pydantic_ai_mcp"].toBool();
-        auto ports = data["running_ports"].toArray();
+        auto avail = payload["mcp_server_available"].toBool();
+        auto pai_mcp = payload["pydantic_ai_mcp"].toBool();
+        auto ports = payload["running_ports"].toArray();
         QString info = QString("MCP server available: %1\npydantic-ai MCP: %2\nRunning ports: %3")
                            .arg(avail ? "yes" : "no")
                            .arg(pai_mcp ? "yes" : "no")
@@ -2197,27 +2195,27 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
     // ── Backtesting ───────────────────────────────────────────────────────────
     if (module_id == "backtesting") {
-        if (!data["success"].toBool()) {
-            display_error(data["error"].toString("Unknown error"));
+        if (!payload["success"].toBool()) {
+            display_error(payload["error"].toString("Unknown error"));
             return;
         }
         if (command == "run_backtest") {
-            display_backtest_result(data);
+            display_backtest_result(payload);
             return;
         }
-        display_result(data);
+        display_result(payload);
         return;
     }
 
     // ── Factor Discovery ─────────────────────────────────────────────────────
     if (module_id == "factor_discovery") {
-        if (!data["success"].toBool()) {
-            display_error(data["error"].toString());
+        if (!payload["success"].toBool()) {
+            display_error(payload["error"].toString());
             return;
         }
         clear_results();
         if (command == "get_factor_library") {
-            auto factors = data["factors"].toArray();
+            auto factors = payload["factors"].toArray();
             QString out = QString("Factor Library — %1 factors\n\n").arg(factors.size());
             for (const auto& f : factors) {
                 auto obj = f.toObject();
@@ -2232,9 +2230,9 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             return;
         }
         if (command == "get_data") {
-            auto total = data["total_records"].toInt();
-            auto range = data["date_range"].toObject();
-            auto warning = data["warning"].toString();
+            auto total = payload["total_records"].toInt();
+            auto range = payload["date_range"].toObject();
+            auto warning = payload["warning"].toString();
             QString summary = QString("Data fetched — %1 records  |  %2 → %3")
                                   .arg(total)
                                   .arg(range["start"].toString())
@@ -2249,7 +2247,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             return;
         }
         if (command == "get_instruments") {
-            auto instruments = data["instruments"].toArray();
+            auto instruments = payload["instruments"].toArray();
             QStringList names;
             for (const auto& i : instruments)
                 names << i.toString();
@@ -2260,19 +2258,19 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             status_label_->setText(QString("%1 instruments").arg(names.size()));
             return;
         }
-        display_result(data);
+        display_result(payload);
         return;
     }
 
     // ── Model Library ────────────────────────────────────────────────────────
     if (module_id == "model_library") {
-        if (!data["success"].toBool()) {
-            display_error(data["error"].toString());
+        if (!payload["success"].toBool()) {
+            display_error(payload["error"].toString());
             return;
         }
         clear_results();
         if (command == "list_models") {
-            auto models = data["models"].toArray();
+            auto models = payload["models"].toArray();
             QString out = QString("Available Models (%1)\n\n").arg(models.size());
             for (const auto& m : models) {
                 auto obj = m.toObject();
@@ -2289,8 +2287,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             return;
         }
         if (command == "check_status") {
-            auto qlib_ok = data["qlib_available"].toBool();
-            auto models_avail = data["models_available"].toObject();
+            auto qlib_ok = payload["qlib_available"].toBool();
+            auto models_avail = payload["models_available"].toObject();
             QStringList available, unavailable;
             for (auto it = models_avail.begin(); it != models_avail.end(); ++it)
                 (it.value().toBool() ? available : unavailable) << it.key();
@@ -2306,8 +2304,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             return;
         }
         if (command == "train_model") {
-            auto model_id = data["model_id"].toString();
-            auto metrics = data["metrics"].toObject();
+            auto model_id = payload["model_id"].toString();
+            auto metrics = payload["metrics"].toObject();
             QString out = QString("Model Trained: %1\n").arg(model_id);
             for (auto it = metrics.begin(); it != metrics.end(); ++it)
                 out += QString("  %1: %2\n").arg(it.key()).arg(it.value().toDouble(), 0, 'f', 4);
@@ -2318,22 +2316,22 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             status_label_->setText(QString("Trained: %1").arg(model_id));
             return;
         }
-        display_result(data);
+        display_result(payload);
         return;
     }
 
     // ── Live Signals ─────────────────────────────────────────────────────────
     if (module_id == "live_signals") {
-        if (!data["success"].toBool()) {
-            display_error(data["error"].toString());
+        if (!payload["success"].toBool()) {
+            display_error(payload["error"].toString());
             return;
         }
         clear_results();
         if (command == "get_data") {
-            auto total = data["total_records"].toInt();
-            auto range = data["date_range"].toObject();
-            auto warning = data["warning"].toString();
-            auto instr = data["instruments"].toArray();
+            auto total = payload["total_records"].toInt();
+            auto range = payload["date_range"].toObject();
+            auto warning = payload["warning"].toString();
+            auto instr = payload["instruments"].toArray();
             QStringList names;
             for (const auto& i : instr)
                 names << i.toString();
@@ -2352,7 +2350,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             return;
         }
         if (command == "get_factor_analysis") {
-            auto factors = data["factors"].toArray();
+            auto factors = payload["factors"].toArray();
             QString out = QString("Factor Analysis — %1 factors\n\n").arg(factors.size());
             for (const auto& f : factors) {
                 auto obj = f.toObject();
@@ -2369,7 +2367,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             return;
         }
         if (command == "get_feature_importance") {
-            auto features = data["feature_importance"].toObject();
+            auto features = payload["feature_importance"].toObject();
             QString out = "Feature Importance\n\n";
             QVector<QPair<QString, double>> sorted;
             for (auto it = features.begin(); it != features.end(); ++it)
@@ -2384,20 +2382,20 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             status_label_->setText("Feature importance loaded");
             return;
         }
-        display_result(data);
+        display_result(payload);
         return;
     }
 
     // ── Online Learning ──────────────────────────────────────────────────────
     if (module_id == "online_learning") {
-        if (!data["success"].toBool()) {
-            display_error(data["error"].toString());
+        if (!payload["success"].toBool()) {
+            display_error(payload["error"].toString());
             return;
         }
         clear_results();
         if (command == "list_models") {
-            auto models = data["models"].toArray();
-            auto river = data["river_available"].toBool();
+            auto models = payload["models"].toArray();
+            auto river = payload["river_available"].toBool();
             QString out = QString("Online Models (%1)  |  River: %2\n\n")
                               .arg(models.size())
                               .arg(river ? "available" : "not installed");
@@ -2417,17 +2415,17 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         }
         if (command == "create_model") {
             auto* lbl = new QLabel(
-                QString("Created: %1  [%2]").arg(data["model_id"].toString(), data["model_type"].toString()), this);
+                QString("Created: %1  [%2]").arg(payload["model_id"].toString(), payload["model_type"].toString()), this);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(lbl);
             status_label_->setText("Model created");
             return;
         }
         if (command == "train") {
-            auto mae = data["current_mae"].toDouble();
-            auto samples = data["samples_trained"].toInt();
-            auto drift = data["drift_detected"].toBool();
-            auto pred = data["prediction"];
+            auto mae = payload["current_mae"].toDouble();
+            auto samples = payload["samples_trained"].toInt();
+            auto drift = payload["drift_detected"].toBool();
+            auto pred = payload["prediction"];
             QString out = QString("Trained — Samples: %1  |  MAE: %2\nDrift: %3")
                               .arg(samples)
                               .arg(mae, 0, 'f', 6)
@@ -2435,8 +2433,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             if (!pred.isNull())
                 out += QString("\nPrediction: %1  →  Actual: %2  |  Error: %3")
                            .arg(pred.toDouble(), 0, 'f', 6)
-                           .arg(data["actual"].toDouble(), 0, 'f', 6)
-                           .arg(data["error"].toDouble(), 0, 'f', 6);
+                           .arg(payload["actual"].toDouble(), 0, 'f', 6)
+                           .arg(payload["error"].toDouble(), 0, 'f', 6);
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(drift ? ui::colors::NEGATIVE() : ui::colors::TEXT_PRIMARY()));
@@ -2445,7 +2443,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             return;
         }
         if (command == "predict") {
-            auto pred = data["prediction"];
+            auto pred = payload["prediction"];
             auto* lbl = new QLabel(
                 QString("Prediction: %1").arg(pred.isNull() ? "N/A" : QString::number(pred.toDouble(), 'f', 6)), this);
             lbl->setStyleSheet(QString("color:%1; font-weight:700;").arg(module_.color.name()));
@@ -2454,15 +2452,15 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             return;
         }
         if (command == "performance") {
-            auto mae = data["current_mae"].toDouble();
-            auto samples = data["samples_trained"].toInt();
-            auto drift = data["drift_detected"].toBool();
+            auto mae = payload["current_mae"].toDouble();
+            auto samples = payload["samples_trained"].toInt();
+            auto drift = payload["drift_detected"].toBool();
             auto* lbl = new QLabel(QString("Model: %1  [%2]\nSamples: %3  |  MAE: %4\nDrift: %5\nLast updated: %6")
-                                       .arg(data["model_id"].toString(), data["model_type"].toString())
+                                       .arg(payload["model_id"].toString(), payload["model_type"].toString())
                                        .arg(samples)
                                        .arg(mae, 0, 'f', 6)
                                        .arg(drift ? "DETECTED" : "none")
-                                       .arg(data["last_updated"].isNull() ? "never" : data["last_updated"].toString()),
+                                       .arg(payload["last_updated"].isNull() ? "never" : payload["last_updated"].toString()),
                                    this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
@@ -2470,19 +2468,19 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             status_label_->setText(QString("MAE: %1").arg(mae, 0, 'f', 4));
             return;
         }
-        display_result(data);
+        display_result(payload);
         return;
     }
 
     // ── Meta Learning ────────────────────────────────────────────────────────
     if (module_id == "meta_learning") {
-        if (!data["success"].toBool()) {
-            display_error(data["error"].toString());
+        if (!payload["success"].toBool()) {
+            display_error(payload["error"].toString());
             return;
         }
         clear_results();
         if (command == "list_models") {
-            auto models = data["models"].toArray();
+            auto models = payload["models"].toArray();
             QString out = QString("Available Models (%1)\n\n").arg(models.size());
             for (const auto& m : models) {
                 auto obj = m.toObject();
@@ -2498,9 +2496,9 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             return;
         }
         if (command == "run_selection") {
-            auto best = data["best_model"].toString();
-            auto trained = data["trained_count"].toInt();
-            auto ranking = data["ranking"].toArray();
+            auto best = payload["best_model"].toString();
+            auto trained = payload["trained_count"].toInt();
+            auto ranking = payload["ranking"].toArray();
             QString out = QString("Best Model: %1  |  Trained: %2\n\nRanking:\n").arg(best).arg(trained);
             int rank = 1;
             for (const auto& r : ranking) {
@@ -2521,8 +2519,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         }
         if (command == "create_ensemble") {
             auto* lbl = new QLabel(QString("Ensemble: %1  [%2]\nModels: %3")
-                                       .arg(data["ensemble_id"].toString("-"), data["method"].toString("-"))
-                                       .arg(data["models"].toArray().size()),
+                                       .arg(payload["ensemble_id"].toString("-"), payload["method"].toString("-"))
+                                       .arg(payload["models"].toArray().size()),
                                    this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
@@ -2531,8 +2529,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             return;
         }
         if (command == "tune_hyperparameters") {
-            auto best_params = data["best_params"].toObject();
-            auto best_score = data["best_score"].toDouble();
+            auto best_params = payload["best_params"].toObject();
+            auto best_score = payload["best_score"].toDouble();
             QString out = QString("Best score: %1\nBest params:\n").arg(best_score, 0, 'f', 4);
             for (auto it = best_params.begin(); it != best_params.end(); ++it)
                 out += QString("  %1: %2\n").arg(it.key()).arg(it.value().toVariant().toString());
@@ -2544,7 +2542,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             return;
         }
         if (command == "get_results") {
-            auto results = data["results"].toObject();
+            auto results = payload["results"].toObject();
             QString out = QString("All Results (%1)\n\n").arg(results.size());
             for (auto it = results.begin(); it != results.end(); ++it) {
                 auto obj = it.value().toObject();
@@ -2561,14 +2559,14 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             status_label_->setText(QString("%1 result(s)").arg(results.size()));
             return;
         }
-        display_result(data);
+        display_result(payload);
         return;
     }
 
     // ── HFT ──────────────────────────────────────────────────────────────────
     if (module_id == "hft") {
-        if (!data["success"].toBool()) {
-            display_error(data["error"].toString());
+        if (!payload["success"].toBool()) {
+            display_error(payload["error"].toString());
             return;
         }
 
@@ -2611,14 +2609,14 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
         // ── fetch_orderbook ────────────────────────────────────────────────
         if (command == "fetch_orderbook") {
-            const auto bids      = data["bids"].toArray();
-            const auto asks      = data["asks"].toArray();
-            const double mid     = data["mid_price"].toDouble();
-            const double spread_bps = data["spread_bps"].toDouble();
-            const double obi     = data["obi"].toDouble();
-            const QString pres   = data["pressure"].toString();
-            const double wmid    = data["weighted_mid"].toDouble();
-            const double lat     = data["latency_ms"].toDouble();
+            const auto bids      = payload["bids"].toArray();
+            const auto asks      = payload["asks"].toArray();
+            const double mid     = payload["mid_price"].toDouble();
+            const double spread_bps = payload["spread_bps"].toDouble();
+            const double obi     = payload["obi"].toDouble();
+            const QString pres   = payload["pressure"].toString();
+            const double wmid    = payload["weighted_mid"].toDouble();
+            const double lat     = payload["latency_ms"].toDouble();
 
             // Update latency badge
             if (auto* lbl = this->findChild<QLabel*>("hftLatency"))
@@ -2642,7 +2640,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
             status_label_->setText(
                 QString("%1  mid: %2  spread: %3 bps  OBI: %4")
-                    .arg(data["symbol"].toString())
+                    .arg(payload["symbol"].toString())
                     .arg(mid, 0, 'f', 4)
                     .arg(spread_bps, 0, 'f', 3)
                     .arg(obi, 0, 'f', 4));
@@ -2651,10 +2649,10 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
         // ── market_making ─────────────────────────────────────────────────
         if (command == "market_making") {
-            const auto mm = data["market_making"].toObject();
+            const auto mm = payload["market_making"].toObject();
             // Also update book metrics if present
-            if (data.contains("book_metrics")) {
-                const auto bm = data["book_metrics"].toObject();
+            if (payload.contains("book_metrics")) {
+                const auto bm = payload["book_metrics"].toObject();
                 set_card("hft_mid_val",    QString::number(bm["mid_price"].toDouble(), 'f', 4));
                 set_card("hft_spread_val", QString::number(bm["spread_bps"].toDouble(), 'f', 3) + " bps");
             }
@@ -2679,7 +2677,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
         // ── toxic_flow ────────────────────────────────────────────────────
         if (command == "toxic_flow") {
-            const auto tf = data["toxic_flow"].toObject();
+            const auto tf = payload["toxic_flow"].toObject();
             const bool   is_toxic = tf["is_toxic"].toBool();
             const double score    = tf["toxicity_score"].toDouble();
             const QString cls     = tf["classification"].toString();
@@ -2707,7 +2705,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
         // ── slippage ──────────────────────────────────────────────────────
         if (command == "slippage") {
-            const auto sl = data;  // flat: average_price, slippage_bps, fills, etc at top level
+            const auto sl = payload;  // flat: average_price, slippage_bps, fills, etc at top level
             const double avg_p   = sl["average_price"].toDouble();
             const double sl_bps  = sl["slippage_bps"].toDouble();
             const double cost    = sl["total_cost"].toDouble();
@@ -2748,14 +2746,14 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         // ── analyze (full analysis) ───────────────────────────────────────
         if (command == "analyze") {
             // Dispatch sub-results to each section
-            if (data.contains("bids")) {
-                const auto bids = data["bids"].toArray();
-                const auto asks = data["asks"].toArray();
+            if (payload.contains("bids")) {
+                const auto bids = payload["bids"].toArray();
+                const auto asks = payload["asks"].toArray();
                 fill_book_table("hft_bid_table", bids, true);
                 fill_book_table("hft_ask_table", asks, false);
             }
-            if (data.contains("book_metrics")) {
-                const auto bm = data["book_metrics"].toObject();
+            if (payload.contains("book_metrics")) {
+                const auto bm = payload["book_metrics"].toObject();
                 set_card("hft_mid_val",    QString::number(bm["mid_price"].toDouble(), 'f', 4));
                 set_card("hft_spread_val", QString::number(bm["spread_bps"].toDouble(), 'f', 3) + " bps");
                 const double obi = bm["obi"].toDouble();
@@ -2770,8 +2768,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                 set_card("hft_pressure_val", pres, p_col);
                 set_card("hft_wmid_val",     QString::number(bm["weighted_mid"].toDouble(), 'f', 4));
             }
-            if (data.contains("market_making")) {
-                const auto mm = data["market_making"].toObject();
+            if (payload.contains("market_making")) {
+                const auto mm = payload["market_making"].toObject();
                 set_card("hft_mm_bid", QString::number(mm["bid_price"].toDouble(), 'f', 4),
                          QString(ui::colors::POSITIVE()));
                 set_card("hft_mm_ask", QString::number(mm["ask_price"].toDouble(), 'f', 4),
@@ -2780,8 +2778,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                 set_card("hft_mm_edge",    QString::number(mm["edge_per_side_bps"].toDouble(), 'f', 3) + " bps");
                 set_card("hft_mm_rec",     mm["recommendation"].toString());
             }
-            if (data.contains("toxic_flow")) {
-                const auto tf    = data["toxic_flow"].toObject();
+            if (payload.contains("toxic_flow")) {
+                const auto tf    = payload["toxic_flow"].toObject();
                 const double sc  = tf["toxicity_score"].toDouble();
                 const QString col = sc > 60 ? QString(ui::colors::NEGATIVE())
                                   : sc > 30 ? QString(ui::colors::WARNING())
@@ -2792,8 +2790,8 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                 set_card("hft_tox_class",  tf["classification"].toString());
                 set_card("hft_tox_action", QString(tf["action"].toString()).replace('_', ' '));
             }
-            if (data.contains("slippage")) {
-                const auto sl = data["slippage"].toObject();
+            if (payload.contains("slippage")) {
+                const auto sl = payload["slippage"].toObject();
                 set_card("hft_slip_avgp",  QString::number(sl["average_price"].toDouble(), 'f', 4));
                 set_card("hft_slip_bps",   QString::number(sl["slippage_bps"].toDouble(), 'f', 4) + " bps");
                 set_card("hft_slip_cost",  QString::number(sl["total_cost"].toDouble(), 'f', 4));
@@ -2803,73 +2801,73 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                          v ? QString(ui::colors::POSITIVE()) : QString(ui::colors::NEGATIVE()));
             }
             if (auto* lat_lbl = this->findChild<QLabel*>("hftLatency"))
-                lat_lbl->setText(QString("LATENCY  %1 ms").arg(data["latency_ms"].toDouble(), 0, 'f', 1));
+                lat_lbl->setText(QString("LATENCY  %1 ms").arg(payload["latency_ms"].toDouble(), 0, 'f', 1));
 
             status_label_->setText(
                 QString("Full analysis complete — %1 @ %2")
-                    .arg(data["symbol"].toString(), data["timestamp"].toString().left(19)));
+                    .arg(payload["symbol"].toString(), payload["timestamp"].toString().left(19)));
             return;
         }
 
-        display_result(data);
+        display_result(payload);
         return;
     }
 
     // ── Rolling Retraining ───────────────────────────────────────────────────
     if (module_id == "rolling_retraining") {
         // ── Streaming events from retrain command ────────────────────────────
-        const QString event = data["event"].toString();
+        const QString event = payload["event"].toString();
         if (!event.isEmpty()) {
             auto* pb  = this->findChild<QProgressBar*>("rr_progress");
             auto* log = this->findChild<QTextEdit*>("rr_log");
 
             if (event == "start") {
-                const int total = data["total_windows"].toInt();
+                const int total = payload["total_windows"].toInt();
                 if (pb) { pb->setRange(0, total); pb->setValue(0); pb->setFormat("0 / %v windows"); }
                 if (log) log->append(QString("Starting retrain: %1  |  %2 windows")
-                                         .arg(data["model_id"].toString()).arg(total));
+                                         .arg(payload["model_id"].toString()).arg(total));
                 status_label_->setText(QString("Retraining %1 — 0/%2 windows")
-                                           .arg(data["model_id"].toString()).arg(total));
+                                           .arg(payload["model_id"].toString()).arg(total));
             } else if (event == "window") {
-                const int idx   = data["index"].toInt();
-                const int total = data["total"].toInt();
+                const int idx   = payload["index"].toInt();
+                const int total = payload["total"].toInt();
                 if (pb) { pb->setValue(idx); pb->setFormat(QString("%1 / %2 windows").arg(idx).arg(total)); }
                 if (log) log->append(QString("  Window %1/%2  train→%3  test %4→%5")
                                          .arg(idx).arg(total)
-                                         .arg(data["train_end"].toString().left(10))
-                                         .arg(data["test_start"].toString().left(10))
-                                         .arg(data["test_end"].toString().left(10)));
+                                         .arg(payload["train_end"].toString().left(10))
+                                         .arg(payload["test_start"].toString().left(10))
+                                         .arg(payload["test_end"].toString().left(10)));
                 status_label_->setText(QString("Window %1/%2").arg(idx).arg(total));
             } else if (event == "ensemble") {
-                if (log) log->append(QString("  %1").arg(data["message"].toString()));
+                if (log) log->append(QString("  %1").arg(payload["message"].toString()));
                 status_label_->setText("Combining rolling results...");
             } else if (event == "done") {
-                const int total = data["windows_trained"].toInt();
+                const int total = payload["windows_trained"].toInt();
                 if (pb) { pb->setValue(total); pb->setFormat("Complete"); }
                 if (log) log->append(QString("\nDone — %1 windows in %2s  |  Experiment: %3")
                                          .arg(total)
-                                         .arg(data["elapsed_sec"].toDouble(), 0, 'f', 1)
-                                         .arg(data["exp_name"].toString()));
+                                         .arg(payload["elapsed_sec"].toDouble(), 0, 'f', 1)
+                                         .arg(payload["exp_name"].toString()));
                 status_label_->setText(QString("Retrain complete — %1 windows in %2s")
                                            .arg(total)
-                                           .arg(data["elapsed_sec"].toDouble(), 0, 'f', 1));
+                                           .arg(payload["elapsed_sec"].toDouble(), 0, 'f', 1));
             } else if (event == "error") {
                 if (pb) { pb->setFormat("Failed"); }
-                if (log) log->append(QString("\nError: %1").arg(data["error"].toString()));
-                display_error(data["error"].toString());
+                if (log) log->append(QString("\nError: %1").arg(payload["error"].toString()));
+                display_error(payload["error"].toString());
             }
             return;
         }
 
         // ── Non-streaming responses ──────────────────────────────────────────
-        if (!data["success"].toBool()) {
-            display_error(data["error"].toString());
+        if (!payload["success"].toBool()) {
+            display_error(payload["error"].toString());
             return;
         }
         clear_results();
 
         if (command == "list") {
-            auto schedules = data["schedules"].toObject();
+            auto schedules = payload["schedules"].toObject();
             // Find the cards container and repopulate it
             auto* cards_w = this->findChild<QWidget*>("rr_cards_container");
             if (cards_w) {
@@ -2988,15 +2986,15 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         }
 
         if (command == "create") {
-            auto sched = data["schedule"].toObject();
-            const QString tmpl = data["template_generated"].toBool()
+            auto sched = payload["schedule"].toObject();
+            const QString tmpl = payload["template_generated"].toBool()
                                      ? QString("\nBuilt-in LightGBM+Alpha158 template generated at:\n%1")
-                                           .arg(data["conf_path"].toString())
+                                           .arg(payload["conf_path"].toString())
                                      : "";
             clear_results();
             auto* lbl = new QLabel(
                 QString("Schedule created: %1\nFreq: %2  |  Window: %3 days  |  Next: %4%5")
-                    .arg(data["model_id"].toString(),
+                    .arg(payload["model_id"].toString(),
                          sched["frequency"].toString(),
                          QString::number(sched["window"].toInt()),
                          sched["next_run"].toString().left(16).replace("T", "  "),
@@ -3011,12 +3009,12 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
         if (command == "preview") {
             clear_results();
-            const int total = data["total_windows"].toInt();
-            auto windows = data["windows"].toArray();
+            const int total = payload["total_windows"].toInt();
+            auto windows = payload["windows"].toArray();
 
             auto* hdr = new QLabel(
                 QString("Preview: %1 rolling windows  (step=%2, horizon=%3)")
-                    .arg(total).arg(data["step"].toInt()).arg(data["horizon"].toInt()),
+                    .arg(total).arg(payload["step"].toInt()).arg(payload["horizon"].toInt()),
                 this);
             hdr->setStyleSheet(QString("color:%1;font-weight:700;font-size:13px;")
                                    .arg(ui::colors::TEXT_PRIMARY()));
@@ -3054,17 +3052,17 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         }
 
         if (command == "delete") {
-            status_label_->setText(QString("Deleted: %1").arg(data["model_id"].toString()));
+            status_label_->setText(QString("Deleted: %1").arg(payload["model_id"].toString()));
             // Auto-refresh the schedule list
             AIQuantLabService::instance().rolling_list_schedules();
             return;
         }
 
-        display_result(data);
+        display_result(payload);
         return;
     }
 
-    display_result(data);
+    display_result(payload);
 }
 
 void QuantModulePanel::on_error(const QString& module_id, const QString& message) {

@@ -40,7 +40,7 @@ void ConflictMonitorPanel::build_ui() {
     // ── Events Table ────────────────────────────────────────────────────────
     events_table_ = new QTableWidget(left_splitter);
     events_table_->setColumnCount(7);
-    events_table_->setHorizontalHeaderLabels({"Category", "Country", "City", "Keywords", "Date", "Lat", "Lng"});
+    events_table_->setHorizontalHeaderLabels({"Category", "Country", "City", "Title", "Date", "Lat", "Lng"});
     events_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     events_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     events_table_->setAlternatingRowColors(true);
@@ -87,6 +87,8 @@ void ConflictMonitorPanel::build_ui() {
         detail_city_->setText(get_text(2));
         detail_keywords_->setText(get_text(3));
         detail_date_->setText(get_text(4));
+        if (auto* it = events_table_->item(row, 3); it && detail_source_)
+            detail_source_->setText(it->data(Qt::UserRole).toString());
 
         auto cat_color = category_color(get_text(0));
         detail_category_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
@@ -182,7 +184,7 @@ void ConflictMonitorPanel::build_ui() {
     };
     FieldDef fields[] = {
         {"CATEGORY", &detail_category_}, {"COUNTRY", &detail_country_}, {"CITY", &detail_city_},
-        {"KEYWORDS", &detail_keywords_}, {"DATE", &detail_date_},       {"SOURCE", &detail_source_},
+        {"TITLE", &detail_keywords_},    {"DATE", &detail_date_},       {"SOURCE", &detail_source_},
     };
 
     for (int r = 0; r < 6; ++r) {
@@ -217,14 +219,17 @@ void ConflictMonitorPanel::set_events(const QVector<NewsEvent>& events) {
 
         events_table_->setItem(i, 1, new QTableWidgetItem(ev.country));
         events_table_->setItem(i, 2, new QTableWidgetItem(ev.city));
-        events_table_->setItem(i, 3, new QTableWidgetItem(ev.matched_keywords));
+        auto* title_item = new QTableWidgetItem(ev.title);
+        title_item->setData(Qt::UserRole, ev.source);
+        title_item->setToolTip(ev.title);
+        events_table_->setItem(i, 3, title_item);
         events_table_->setItem(i, 4, new QTableWidgetItem(ev.extracted_date));
 
-        auto* lat_item = new QTableWidgetItem(QString::number(ev.latitude, 'f', 4));
+        auto* lat_item = new QTableWidgetItem(ev.has_coords ? QString::number(ev.latitude, 'f', 4) : QString());
         lat_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         events_table_->setItem(i, 5, lat_item);
 
-        auto* lng_item = new QTableWidgetItem(QString::number(ev.longitude, 'f', 4));
+        auto* lng_item = new QTableWidgetItem(ev.has_coords ? QString::number(ev.longitude, 'f', 4) : QString());
         lng_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         events_table_->setItem(i, 6, lng_item);
     }
@@ -239,11 +244,10 @@ void ConflictMonitorPanel::update_map(const QVector<NewsEvent>& events) {
     pins.reserve(events.size());
 
     QHash<QString, int> coord_counts;
-    auto* rng = QRandomGenerator::global();
 
     int skipped = 0;
     for (const auto& ev : events) {
-        if (ev.latitude == 0.0 && ev.longitude == 0.0) {
+        if (!ev.has_coords) {
             ++skipped;
             continue;
         }

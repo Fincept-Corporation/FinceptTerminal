@@ -12,7 +12,7 @@ namespace fincept {
 ///   // AppPaths::data() now returns .../profiles/work/data/
 ///
 /// Profiles are stored under:
-///   %LOCALAPPDATA%\com.fincept.terminal\profiles\<name>\
+///   %LOCALAPPDATA%/com.fincept.terminal/profiles/<name>/
 ///
 /// A manifest at root/profiles.json tracks the list of profiles.
 /// The default profile is named "default".

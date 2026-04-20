@@ -519,7 +519,7 @@ void CryptoTradingScreen::load_portfolio() {
     // because watch_symbol is called under the then-current selected_symbol_.
     QPointer<CryptoTradingScreen> self = this;
     const QString exch = exchange_id_;
-    QtConcurrent::run([self, exch]() {
+    (void)QtConcurrent::run([self, exch]() {
         if (!self)
             return;
         trading::PtPortfolio portfolio;
@@ -561,7 +561,7 @@ void CryptoTradingScreen::async_fetch_candles(const QString& symbol, const QStri
     if (candles_fetching_.exchange(true))
         return;
     QPointer<CryptoTradingScreen> self = this;
-    QtConcurrent::run([self, symbol, timeframe]() {
+    (void)QtConcurrent::run([self, symbol, timeframe]() {
         auto candles = ExchangeService::instance().fetch_ohlcv(symbol, timeframe, OHLCV_FETCH_COUNT);
         if (!self)
             return;
@@ -579,7 +579,7 @@ void CryptoTradingScreen::async_fetch_candles(const QString& symbol, const QStri
 
 void CryptoTradingScreen::async_fetch_live_positions() {
     QPointer<CryptoTradingScreen> self = this;
-    QtConcurrent::run([self]() {
+    (void)QtConcurrent::run([self]() {
         if (!self) {
             // Widget destroyed before dispatch — no counter to decrement.
             return;
@@ -600,7 +600,7 @@ void CryptoTradingScreen::async_fetch_live_positions() {
 
 void CryptoTradingScreen::async_fetch_live_orders() {
     QPointer<CryptoTradingScreen> self = this;
-    QtConcurrent::run([self]() {
+    (void)QtConcurrent::run([self]() {
         if (!self)
             return;
         auto result = ExchangeService::instance().fetch_open_orders_live(self->selected_symbol_);
@@ -619,7 +619,7 @@ void CryptoTradingScreen::async_fetch_live_orders() {
 
 void CryptoTradingScreen::async_fetch_live_balance() {
     QPointer<CryptoTradingScreen> self = this;
-    QtConcurrent::run([self]() {
+    (void)QtConcurrent::run([self]() {
         if (!self)
             return;
         auto result = ExchangeService::instance().fetch_balance();
@@ -802,7 +802,7 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
             refresh_portfolio();
         } else {
             QPointer<CryptoTradingScreen> self = this;
-            QtConcurrent::run([self, side, order_type, qty, price]() {
+            (void)QtConcurrent::run([self, side, order_type, qty, price]() {
                 if (!self)
                     return;
                 ExchangeService::instance().place_exchange_order(self->selected_symbol_, side, order_type, qty, price);
@@ -833,7 +833,7 @@ void CryptoTradingScreen::on_cancel_order(const QString& order_id) {
         }
     } else {
         QPointer<CryptoTradingScreen> self = this;
-        QtConcurrent::run([self, order_id]() {
+        (void)QtConcurrent::run([self, order_id]() {
             if (!self)
                 return;
             ExchangeService::instance().cancel_exchange_order(order_id, self->selected_symbol_);
@@ -856,7 +856,7 @@ void CryptoTradingScreen::on_ob_price_clicked(double price) {
 void CryptoTradingScreen::on_search_requested(const QString& filter) {
     QPointer<CryptoTradingScreen> self = this;
     QString filter_copy = filter;
-    QtConcurrent::run([self, filter_copy]() {
+    (void)QtConcurrent::run([self, filter_copy]() {
         if (!self)
             return;
         auto markets = ExchangeService::instance().fetch_markets("spot", filter_copy);
@@ -965,7 +965,7 @@ void CryptoTradingScreen::flush_ws_updates() {
             if (paper_bookkeeping_in_flight_.compare_exchange_strong(expected, true)) {
                 QPointer<CryptoTradingScreen> self = this;
                 const QString pid = portfolio_id_;
-                QtConcurrent::run([self, pid, batch]() {
+                (void)QtConcurrent::run([self, pid, batch]() {
                     struct Result {
                         QVector<PtPosition> positions;
                         bool fill_occurred = false;
@@ -1051,7 +1051,7 @@ void CryptoTradingScreen::refresh_ticker() {
         return;
     QPointer<CryptoTradingScreen> self = this;
     const QString symbol = selected_symbol_;
-    QtConcurrent::run([self, symbol]() {
+    (void)QtConcurrent::run([self, symbol]() {
         if (!self)
             return;
         auto ticker = ExchangeService::instance().fetch_ticker(symbol);
@@ -1077,7 +1077,7 @@ void CryptoTradingScreen::refresh_orderbook() {
     if (!initialized_)
         return;
     QPointer<CryptoTradingScreen> self = this;
-    QtConcurrent::run([self]() {
+    (void)QtConcurrent::run([self]() {
         if (!self)
             return;
         auto ob = ExchangeService::instance().fetch_orderbook(self->selected_symbol_, OB_MAX_DISPLAY_LEVELS);
@@ -1103,7 +1103,7 @@ void CryptoTradingScreen::refresh_portfolio() {
     // placement/cancel flushes, this was one of the loudest UI-thread stalls.
     QPointer<CryptoTradingScreen> self = this;
     const QString pid = portfolio_id_;
-    QtConcurrent::run([self, pid]() {
+    (void)QtConcurrent::run([self, pid]() {
         struct Snapshot {
             PtPortfolio portfolio;
             QVector<PtPosition> positions;
@@ -1143,7 +1143,7 @@ void CryptoTradingScreen::refresh_watchlist() {
     if (!initialized_)
         return;
     QPointer<CryptoTradingScreen> self = this;
-    QtConcurrent::run([self]() {
+    (void)QtConcurrent::run([self]() {
         if (!self)
             return;
         auto tickers = ExchangeService::instance().fetch_tickers(self->watchlist_symbols_);
@@ -1170,7 +1170,7 @@ void CryptoTradingScreen::refresh_market_info() {
     QPointer<CryptoTradingScreen> self = this;
     const QString symbol = selected_symbol_;
 
-    QtConcurrent::run([self, symbol]() {
+    (void)QtConcurrent::run([self, symbol]() {
         if (!self)
             return;
         auto fr = ExchangeService::instance().fetch_funding_rate(symbol);
@@ -1192,7 +1192,7 @@ void CryptoTradingScreen::refresh_market_info() {
             Qt::QueuedConnection);
     });
 
-    QtConcurrent::run([self, symbol]() {
+    (void)QtConcurrent::run([self, symbol]() {
         if (!self)
             return;
         auto oi = ExchangeService::instance().fetch_open_interest(symbol);
@@ -1234,7 +1234,7 @@ void CryptoTradingScreen::refresh_live_data() {
 
 void CryptoTradingScreen::async_fetch_my_trades() {
     QPointer<CryptoTradingScreen> self = this;
-    QtConcurrent::run([self]() {
+    (void)QtConcurrent::run([self]() {
         if (!self)
             return;
         auto result = ExchangeService::instance().fetch_my_trades(self->selected_symbol_);
@@ -1252,7 +1252,7 @@ void CryptoTradingScreen::async_fetch_my_trades() {
 
 void CryptoTradingScreen::async_fetch_trading_fees() {
     QPointer<CryptoTradingScreen> self = this;
-    QtConcurrent::run([self]() {
+    (void)QtConcurrent::run([self]() {
         if (!self)
             return;
         auto result = ExchangeService::instance().fetch_trading_fees(self->selected_symbol_);
@@ -1269,7 +1269,7 @@ void CryptoTradingScreen::async_fetch_trading_fees() {
 
 void CryptoTradingScreen::async_fetch_mark_price() {
     QPointer<CryptoTradingScreen> self = this;
-    QtConcurrent::run([self]() {
+    (void)QtConcurrent::run([self]() {
         if (!self)
             return;
         auto mp = ExchangeService::instance().fetch_mark_price(self->selected_symbol_);
@@ -1286,13 +1286,13 @@ void CryptoTradingScreen::async_fetch_mark_price() {
 
 void CryptoTradingScreen::async_set_leverage(int leverage) {
     const QString symbol = selected_symbol_;
-    QtConcurrent::run([symbol, leverage]() { ExchangeService::instance().set_leverage(symbol, leverage); });
+    (void)QtConcurrent::run([symbol, leverage]() { ExchangeService::instance().set_leverage(symbol, leverage); });
 }
 
 void CryptoTradingScreen::async_set_margin_mode(const QString& mode) {
     const QString symbol = selected_symbol_;
     const QString m = mode;
-    QtConcurrent::run([symbol, m]() { ExchangeService::instance().set_margin_mode(symbol, m); });
+    (void)QtConcurrent::run([symbol, m]() { ExchangeService::instance().set_margin_mode(symbol, m); });
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────

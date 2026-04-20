@@ -155,22 +155,22 @@ TokenExchangeResponse IBKRBroker::exchange_token(const QString& api_key, const Q
                          {{"Content-Type", "application/json"}, {"Accept", "application/json"}});
 
     if (!resp.success)
-        return {false, "", "", "", "Gateway not reachable at " + gw + ": " + resp.error};
+        return {false, "", "", "", "Gateway not reachable at " + gw + ": " + resp.error, ""};
 
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
     if (!doc.isObject())
-        return {false, "", "", "", "Gateway: invalid auth status response"};
+        return {false, "", "", "", "Gateway: invalid auth status response", ""};
 
     QJsonObject obj = doc.object();
     bool authenticated = obj.value("authenticated").toBool();
     if (!authenticated) {
         return {false, "", "", "",
                 "Gateway is running but not authenticated. "
-                "Please log in via the gateway browser interface first."};
+                "Please log in via the gateway browser interface first.", ""};
     }
 
     // Store gateway URL as "access_token" — it's the only credential we need at runtime
-    return {true, gw, "", api_key, ""};
+    return {true, gw, "", api_key, "", ""};
 }
 
 // ---------- place_order ----------

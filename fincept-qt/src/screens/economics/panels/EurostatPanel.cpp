@@ -119,7 +119,7 @@ void EurostatPanel::activate() {
 }
 
 void EurostatPanel::build_controls(QHBoxLayout* thl) {
-    auto lbl = [this](const QString& t) {
+    auto lbl = [](const QString& t) {
         auto* l = new QLabel(t);
         l->setStyleSheet(ctrl_label_style());
         return l;

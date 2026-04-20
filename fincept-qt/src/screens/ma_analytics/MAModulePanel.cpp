@@ -2045,7 +2045,7 @@ static QTableWidget* build_kv_table(const QJsonObject& obj, const QString& accen
     return table;
 }
 
-void MAModulePanel::display_result(const QJsonObject& data) {
+void MAModulePanel::display_result(const QJsonObject& payload) {
     clear_results();
 
     QString accent = QString("%1,%2,%3").arg(module_.color.red()).arg(module_.color.green()).arg(module_.color.blue());
@@ -2066,7 +2066,7 @@ void MAModulePanel::display_result(const QJsonObject& data) {
 
     int col = 0, row = 0;
     bool has_scalars = false;
-    for (auto it = data.begin(); it != data.end(); ++it) {
+    for (auto it = payload.begin(); it != payload.end(); ++it) {
         if (it.value().isObject() || it.value().isArray())
             continue;
         has_scalars = true;
@@ -2086,7 +2086,7 @@ void MAModulePanel::display_result(const QJsonObject& data) {
         grid->deleteLater();
 
     // 2. Tables for nested objects and arrays
-    for (auto it = data.begin(); it != data.end(); ++it) {
+    for (auto it = payload.begin(); it != payload.end(); ++it) {
         if (it.value().isArray()) {
             auto arr = it.value().toArray();
             if (arr.isEmpty())
@@ -2157,7 +2157,7 @@ void MAModulePanel::display_result(const QJsonObject& data) {
     raw_text->setReadOnly(true);
     raw_text->setVisible(false);
     raw_text->setMaximumHeight(300);
-    raw_text->setPlainText(QJsonDocument(data).toJson(QJsonDocument::Indented));
+    raw_text->setPlainText(QJsonDocument(payload).toJson(QJsonDocument::Indented));
     raw_text->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
                                     "font-family:%4; font-size:%5px; padding:8px; }")
                                 .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
@@ -2199,10 +2199,10 @@ static const QHash<ModuleId, QStringList>& get_context_map() {
     return map;
 }
 
-void MAModulePanel::on_result_ready(const QString& context, const QJsonObject& data) {
+void MAModulePanel::on_result_ready(const QString& context, const QJsonObject& payload) {
     auto it = get_context_map().find(module_.id);
     if (it != get_context_map().end() && it->contains(context)) {
-        display_result(data);
+        display_result(payload);
     }
 }
 

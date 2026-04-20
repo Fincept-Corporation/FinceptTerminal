@@ -51,7 +51,18 @@ void NewsFeedDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
 
 void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, const QModelIndex& index, bool selected,
                                       bool hovered) const {
+    // GCC 12 false-positive: -Warray-bounds on QVariant::value<NewsArticle>()
+    // inlined move/copy — the analyzer wrongly treats the temporary as
+    // QVariant[1]. Suppress locally; struct layout is fixed and QVariant
+    // conversion is validated by QMetaType.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
     auto article = index.data(ArticleRole).value<services::NewsArticle>();
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
     auto monitor_color = index.data(MonitorColorRole).toString();
     bool is_new = index.data(IsNewRole).toBool();
     int tier = index.data(SourceTierRole).toInt();

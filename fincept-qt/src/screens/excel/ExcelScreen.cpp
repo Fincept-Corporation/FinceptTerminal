@@ -218,15 +218,15 @@ void ExcelScreen::on_import() {
         auto* sheet = new SpreadsheetWidget(name, max_row, max_col, sheet_tabs_);
 
         // Load data
-        QVector<QVector<QString>> data(max_row);
+        QVector<QVector<QString>> cells(max_row);
         for (int r = 0; r < max_row; ++r) {
-            data[r].resize(max_col);
+            cells[r].resize(max_col);
             for (int c = 0; c < max_col; ++c) {
                 auto cell = xlsx.read(r + 1, c + 1); // QXlsx is 1-based
-                data[r][c] = cell.isValid() ? cell.toString() : "";
+                cells[r][c] = cell.isValid() ? cell.toString() : "";
             }
         }
-        sheet->set_data(data);
+        sheet->set_data(cells);
         sheet_tabs_->addTab(sheet, name);
     }
 
@@ -276,10 +276,10 @@ void ExcelScreen::on_export() {
         // Rename sheet
         xlsx.renameSheet(xlsx.sheetNames().last(), sheet->sheet_name());
 
-        auto data = sheet->get_data();
-        for (int r = 0; r < data.size(); ++r) {
-            for (int c = 0; c < data[r].size(); ++c) {
-                const QString& val = data[r][c];
+        auto cells = sheet->get_data();
+        for (int r = 0; r < cells.size(); ++r) {
+            for (int c = 0; c < cells[r].size(); ++c) {
+                const QString& val = cells[r][c];
                 if (val.isEmpty())
                     continue;
 
@@ -336,14 +336,14 @@ void ExcelScreen::on_export_csv() {
         return;
 
     QTextStream out(&file);
-    auto data = sheet->get_data();
+    auto cells = sheet->get_data();
 
     // Find the last row/col with data to avoid huge trailing empty rows
     int last_row = 0;
     int last_col = 0;
-    for (int r = 0; r < data.size(); ++r) {
-        for (int c = 0; c < data[r].size(); ++c) {
-            if (!data[r][c].isEmpty()) {
+    for (int r = 0; r < cells.size(); ++r) {
+        for (int c = 0; c < cells[r].size(); ++c) {
+            if (!cells[r][c].isEmpty()) {
                 last_row = std::max(last_row, r);
                 last_col = std::max(last_col, c);
             }
@@ -353,7 +353,7 @@ void ExcelScreen::on_export_csv() {
     for (int r = 0; r <= last_row; ++r) {
         QStringList row;
         for (int c = 0; c <= last_col; ++c) {
-            QString val = (c < data[r].size()) ? data[r][c] : "";
+            QString val = (c < cells[r].size()) ? cells[r][c] : "";
             if (val.contains(',') || val.contains('"') || val.contains('\n'))
                 val = "\"" + val.replace("\"", "\"\"") + "\"";
             row << val;

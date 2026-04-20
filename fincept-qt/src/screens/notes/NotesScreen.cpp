@@ -113,14 +113,6 @@ static QString priority_color(const QString& p) {
     return POSITIVE();
 }
 
-static QString sentiment_color(const QString& s) {
-    if (s == "BULLISH")
-        return POSITIVE();
-    if (s == "BEARISH")
-        return NEGATIVE();
-    return WARNING();
-}
-
 // ── Constructor ──────────────────────────────────────────────────────────────
 
 NotesScreen::NotesScreen(QWidget* parent) : QWidget(parent) {

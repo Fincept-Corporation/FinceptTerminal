@@ -275,8 +275,8 @@ void GovDataCongressPanel::on_result(const QString& request_id, const services::
 
 // ── Populate ─────────────────────────────────────────────────────────────────
 
-void GovDataCongressPanel::populate_bills(const QJsonObject& data) {
-    const QJsonArray bills = data["bills"].toArray();
+void GovDataCongressPanel::populate_bills(const QJsonObject& json) {
+    const QJsonArray bills = json["bills"].toArray();
     bills_table_->setRowCount(0);
     bills_table_->setRowCount(bills.size());
 
@@ -310,10 +310,10 @@ void GovDataCongressPanel::populate_bills(const QJsonObject& data) {
     LOG_INFO("GovCongress", QString("Loaded %1 bills").arg(bills.size()));
 }
 
-void GovDataCongressPanel::populate_bill_detail(const QJsonObject& data) {
-    QString md = data["markdown_content"].toString();
+void GovDataCongressPanel::populate_bill_detail(const QJsonObject& json) {
+    QString md = json["markdown_content"].toString();
     if (md.isEmpty()) {
-        auto bill = data["bill_data"].toObject();
+        auto bill = json["bill_data"].toObject();
         md = "# " + bill["title"].toString() + "\n\n";
         md += "**Type:** " + bill["type"].toString() + "\n\n";
         md += "**Congress:** " + QString::number(bill["congress"].toInt()) + "\n\n";
@@ -337,8 +337,8 @@ void GovDataCongressPanel::populate_bill_detail(const QJsonObject& data) {
     current_view_ = BillDetail;
 }
 
-void GovDataCongressPanel::populate_summary(const QJsonObject& data) {
-    auto bill_types = data["bill_types"].toObject();
+void GovDataCongressPanel::populate_summary(const QJsonObject& json) {
+    auto bill_types = json["bill_types"].toObject();
     summary_table_->setRowCount(0);
     summary_table_->setRowCount(bill_types.size());
 

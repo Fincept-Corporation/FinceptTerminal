@@ -170,21 +170,21 @@ TokenExchangeResponse MotilalBroker::exchange_token(const QString& api_key, cons
     auto resp = http.post_json(QString("%1/rest/login/v3/authdirectapi").arg(BASE), body, login_headers);
 
     if (!resp.success)
-        return {false, "", "", "", "Login failed: " + resp.error};
+        return {false, "", "", "", "Login failed: " + resp.error, ""};
 
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
     if (!doc.isObject())
-        return {false, "", "", "", "Login: invalid response"};
+        return {false, "", "", "", "Login: invalid response", ""};
 
     QJsonObject obj = doc.object();
     if (obj.value("status").toString() != "SUCCESS")
-        return {false, "", "", "", obj.value("message").toString("Login failed")};
+        return {false, "", "", "", obj.value("message").toString("Login failed"), ""};
 
     QString token = obj.value("AuthToken").toString();
     if (token.isEmpty())
-        return {false, "", "", "", "Login: no AuthToken in response"};
+        return {false, "", "", "", "Login: no AuthToken in response", ""};
 
-    return {true, token, "", api_key, ""};
+    return {true, token, "", api_key, "", ""};
 }
 
 // ---------- place_order ----------
@@ -383,7 +383,6 @@ ApiResponse<QVector<BrokerPosition>> MotilalBroker::get_positions(const BrokerCr
             continue;
 
         double buy_amt = o.value("buyamount").toDouble();
-        double sell_amt = o.value("sellamount").toDouble();
         double avg_px = (buy_qty > 0) ? (buy_amt / buy_qty) : 0.0;
 
         BrokerPosition pos;

@@ -175,7 +175,7 @@ void AccountDataStream::async_fetch_quote() {
     const QString symbol = selected_symbol_;
     QPointer<AccountDataStream> self = this;
 
-    QtConcurrent::run([self, acct_id, bid, symbol]() {
+    (void)QtConcurrent::run([self, acct_id, bid, symbol]() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) {
             if (self) self->quote_fetching_ = false;
@@ -209,7 +209,7 @@ void AccountDataStream::async_fetch_positions() {
     const QString bid = broker_id_;
     QPointer<AccountDataStream> self = this;
 
-    QtConcurrent::run([self, acct_id, bid]() {
+    (void)QtConcurrent::run([self, acct_id, bid]() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
         auto creds = AccountManager::instance().load_credentials(acct_id);
@@ -235,7 +235,7 @@ void AccountDataStream::async_fetch_holdings() {
     const QString bid = broker_id_;
     QPointer<AccountDataStream> self = this;
 
-    QtConcurrent::run([self, acct_id, bid]() {
+    (void)QtConcurrent::run([self, acct_id, bid]() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
         auto creds = AccountManager::instance().load_credentials(acct_id);
@@ -261,7 +261,7 @@ void AccountDataStream::async_fetch_orders() {
     const QString bid = broker_id_;
     QPointer<AccountDataStream> self = this;
 
-    QtConcurrent::run([self, acct_id, bid]() {
+    (void)QtConcurrent::run([self, acct_id, bid]() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
         auto creds = AccountManager::instance().load_credentials(acct_id);
@@ -287,7 +287,7 @@ void AccountDataStream::async_fetch_funds() {
     const QString bid = broker_id_;
     QPointer<AccountDataStream> self = this;
 
-    QtConcurrent::run([self, acct_id, bid]() {
+    (void)QtConcurrent::run([self, acct_id, bid]() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
         auto creds = AccountManager::instance().load_credentials(acct_id);
@@ -316,7 +316,7 @@ void AccountDataStream::async_fetch_watchlist_quotes() {
     const QStringList symbols = watchlist_symbols_;
     QPointer<AccountDataStream> self = this;
 
-    QtConcurrent::run([self, acct_id, bid, symbols]() {
+    (void)QtConcurrent::run([self, acct_id, bid, symbols]() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
         auto creds = AccountManager::instance().load_credentials(acct_id);
@@ -341,7 +341,7 @@ void AccountDataStream::fetch_candles(const QString& symbol, const QString& time
     const QString bid = broker_id_;
     QPointer<AccountDataStream> self = this;
 
-    QtConcurrent::run([self, acct_id, bid, symbol, timeframe]() {
+    (void)QtConcurrent::run([self, acct_id, bid, symbol, timeframe]() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) {
             if (self) self->candles_fetching_ = false;
@@ -389,7 +389,7 @@ void AccountDataStream::fetch_orderbook(const QString& symbol) {
     const QString bid = broker_id_;
     QPointer<AccountDataStream> self = this;
 
-    QtConcurrent::run([self, acct_id, bid, symbol]() {
+    (void)QtConcurrent::run([self, acct_id, bid, symbol]() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
         auto creds = AccountManager::instance().load_credentials(acct_id);
@@ -451,7 +451,7 @@ void AccountDataStream::fetch_time_sales(const QString& symbol) {
     const QString bid = broker_id_;
     QPointer<AccountDataStream> self = this;
 
-    QtConcurrent::run([self, acct_id, bid, symbol]() {
+    (void)QtConcurrent::run([self, acct_id, bid, symbol]() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
         auto creds = AccountManager::instance().load_credentials(acct_id);
@@ -471,7 +471,7 @@ void AccountDataStream::fetch_latest_trade(const QString& symbol) {
     const QString bid = broker_id_;
     QPointer<AccountDataStream> self = this;
 
-    QtConcurrent::run([self, acct_id, bid, symbol]() {
+    (void)QtConcurrent::run([self, acct_id, bid, symbol]() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
         auto creds = AccountManager::instance().load_credentials(acct_id);
@@ -490,7 +490,7 @@ void AccountDataStream::fetch_calendar() {
     const QString bid = broker_id_;
     QPointer<AccountDataStream> self = this;
 
-    QtConcurrent::run([self, acct_id, bid]() {
+    (void)QtConcurrent::run([self, acct_id, bid]() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
         auto creds = AccountManager::instance().load_credentials(acct_id);
@@ -510,7 +510,7 @@ void AccountDataStream::fetch_clock() {
     const QString bid = broker_id_;
     QPointer<AccountDataStream> self = this;
 
-    QtConcurrent::run([self, acct_id, bid]() {
+    (void)QtConcurrent::run([self, acct_id, bid]() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
         auto creds = AccountManager::instance().load_credentials(acct_id);

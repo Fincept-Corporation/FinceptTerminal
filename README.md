@@ -239,6 +239,17 @@ We're building the future of financial analysis — together.
 
 ---
 
+## Support the Project
+
+We've launched a community token on pump.fun. Holding or trading this token is purely a way to show support for Fincept Terminal's development — it has no utility inside the product, no governance rights, no revenue share, and no promised returns.
+
+- pump.fun: https://pump.fun/coin/J7Xrcq6cX4GZ3mnQXvrsCYGQyijc9gSNZT4DSUijpump
+- Solana mint address: 84zrRRB7eqF3G2zhsGsD7zk922kZw3LacxhjkSHZJXwK
+
+This token exists solely to support the project. Fincept Corporation is not responsible for any profit or loss any participant incurs from buying, selling, or holding it. Trade at your own risk and only with funds you can afford to lose.
+
+---
+
 ## For Universities & Educators
 
 **Bring professional-grade financial analytics to your classroom.**

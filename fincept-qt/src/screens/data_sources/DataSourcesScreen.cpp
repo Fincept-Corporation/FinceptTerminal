@@ -143,13 +143,6 @@ QString field_type_label(FieldType type) {
     return "Text";
 }
 
-QString compact_value(const QString& value, int max_len = 22) {
-    const QString trimmed = value.trimmed();
-    if (trimmed.size() <= max_len)
-        return trimmed;
-    return trimmed.left(max_len - 3) + "...";
-}
-
 int total_connections_for_provider(const QVector<DataSource>& rows, const QString& connector_id) {
     int count = 0;
     for (const auto& ds : rows)
@@ -1417,14 +1410,14 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config, const 
             QWidget* widget = field_widgets.value(field.name, nullptr);
             QString text_value;
 
-            if (auto* edit = qobject_cast<QLineEdit*>(widget)) {
-                text_value = edit->text().trimmed();
+            if (auto* line_edit = qobject_cast<QLineEdit*>(widget)) {
+                text_value = line_edit->text().trimmed();
                 if (field.type == FieldType::Number)
                     cfg_json[field.name] = text_value.toInt();
                 else
                     cfg_json[field.name] = text_value;
-            } else if (auto* edit = qobject_cast<QTextEdit*>(widget)) {
-                text_value = edit->toPlainText().trimmed();
+            } else if (auto* text_edit = qobject_cast<QTextEdit*>(widget)) {
+                text_value = text_edit->toPlainText().trimmed();
                 cfg_json[field.name] = text_value;
             } else if (auto* combo = qobject_cast<QComboBox*>(widget)) {
                 text_value = combo->currentData().toString();
@@ -2867,9 +2860,9 @@ void DataSourcesScreen::on_import_connections() {
         LOG_ERROR(TAG, QString("Import failed: cannot open %1").arg(path));
         return;
     }
-    const QByteArray data = file.readAll();
+    const QByteArray payload = file.readAll();
     QJsonParseError parse_err;
-    const auto doc = QJsonDocument::fromJson(data, &parse_err);
+    const auto doc = QJsonDocument::fromJson(payload, &parse_err);
     if (parse_err.error != QJsonParseError::NoError || !doc.isArray()) {
         LOG_ERROR(TAG, QString("Import failed: invalid JSON — %1").arg(parse_err.errorString()));
         return;
@@ -3003,7 +2996,7 @@ void DataSourcesScreen::on_poll_timer() {
         const int cap_port = port;
         const QString cap_probe = probe_url;
 
-        QtConcurrent::run([self, conn_id, cap_host, cap_port, cap_probe]() {
+        (void)QtConcurrent::run([self, conn_id, cap_host, cap_port, cap_probe]() {
             QTcpSocket socket;
             socket.connectToHost(cap_host, static_cast<quint16>(cap_port));
             const bool ok = socket.waitForConnected(3000);

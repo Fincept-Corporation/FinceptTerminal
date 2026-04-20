@@ -34,8 +34,8 @@ QVector<MarketPanelConfig> MarketPanelStore::load() {
             cfg.symbols << s.toString();
         if (obj.contains("column_order")) {
             QStringList cols;
-            for (const auto& v : obj["column_order"].toArray())
-                cols << v.toString();
+            for (const auto& col : obj["column_order"].toArray())
+                cols << col.toString();
             if (!cols.isEmpty())
                 cfg.column_order = cols;
         }

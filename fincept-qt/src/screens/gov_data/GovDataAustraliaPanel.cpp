@@ -281,32 +281,32 @@ void GovDataAustraliaPanel::on_result(const QString& request_id, const services:
 
     if (request_id == "ausgov_agencies") {
         // Agencies: {data:[{id, name, title, description, created, dataset_count, ...}]}
-        QJsonArray data;
+        QJsonArray payload;
         const QJsonValue raw = result.data["data"];
         if (raw.isArray())
-            data = raw.toArray();
+            payload = raw.toArray();
 
-        current_agencies_ = data;
-        populate_agencies(data);
+        current_agencies_ = payload;
+        populate_agencies(payload);
         current_view_ = Agencies;
         content_stack_->setCurrentIndex(Agencies);
-        LOG_INFO("GovDataAustraliaPanel", "Loaded " + QString::number(data.size()) + " agencies");
+        LOG_INFO("GovDataAustraliaPanel", "Loaded " + QString::number(payload.size()) + " agencies");
 
     } else if (request_id.startsWith("ausgov_datasets_") || request_id.startsWith("ausgov_search_") ||
                request_id == "ausgov_recent") {
 
         int total = 0;
-        const QJsonArray data = unwrap_datasets(result, total);
+        const QJsonArray payload = unwrap_datasets(result, total);
 
-        current_datasets_ = data;
+        current_datasets_ = payload;
         showing_recent_ = (request_id == "ausgov_recent");
 
-        populate_datasets(data, total);
+        populate_datasets(payload, total);
         current_view_ = Datasets;
         content_stack_->setCurrentIndex(Datasets);
 
         LOG_INFO("GovDataAustraliaPanel",
-                 "Loaded " + QString::number(data.size()) + " datasets" + (showing_recent_ ? " (recent)" : ""));
+                 "Loaded " + QString::number(payload.size()) + " datasets" + (showing_recent_ ? " (recent)" : ""));
     }
 
     update_toolbar_state();
@@ -315,12 +315,12 @@ void GovDataAustraliaPanel::on_result(const QString& request_id, const services:
 
 // ── Populate tables ───────────────────────────────────────────────────────────
 
-void GovDataAustraliaPanel::populate_agencies(const QJsonArray& data) {
+void GovDataAustraliaPanel::populate_agencies(const QJsonArray& json) {
     agencies_table_->setRowCount(0);
-    agencies_table_->setRowCount(data.size());
+    agencies_table_->setRowCount(json.size());
 
-    for (int i = 0; i < data.size(); ++i) {
-        const auto obj = data[i].toObject();
+    for (int i = 0; i < json.size(); ++i) {
+        const auto obj = json[i].toObject();
 
         // Prefer display_name → title → name
         QString name = obj["display_name"].toString();
@@ -354,15 +354,15 @@ void GovDataAustraliaPanel::populate_agencies(const QJsonArray& data) {
         agencies_table_->setItem(i, 2, created_item);
     }
 
-    row_count_label_->setText(QString::number(data.size()) + " agencies");
+    row_count_label_->setText(QString::number(json.size()) + " agencies");
 }
 
-void GovDataAustraliaPanel::populate_datasets(const QJsonArray& data, int total_count) {
+void GovDataAustraliaPanel::populate_datasets(const QJsonArray& json, int total_count) {
     datasets_table_->setRowCount(0);
-    datasets_table_->setRowCount(data.size());
+    datasets_table_->setRowCount(json.size());
 
-    for (int i = 0; i < data.size(); ++i) {
-        const auto obj = data[i].toObject();
+    for (int i = 0; i < json.size(); ++i) {
+        const auto obj = json[i].toObject();
 
         QString title = obj["title"].toString();
         if (title.isEmpty())
@@ -416,7 +416,7 @@ void GovDataAustraliaPanel::populate_datasets(const QJsonArray& data, int total_
         datasets_table_->setItem(i, 4, mod_item);
     }
 
-    row_count_label_->setText(QString("Showing %1 of %2").arg(data.size()).arg(total_count));
+    row_count_label_->setText(QString("Showing %1 of %2").arg(json.size()).arg(total_count));
 }
 
 void GovDataAustraliaPanel::populate_resources(const QJsonArray& resources) {

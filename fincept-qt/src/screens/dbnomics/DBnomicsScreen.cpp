@@ -420,8 +420,8 @@ void DBnomicsScreen::on_series_loaded(const QVector<services::DbnSeriesInfo>& se
     set_status(QString("Loaded %1 series").arg(series.size()));
 }
 
-void DBnomicsScreen::on_observations_loaded(const services::DbnDataPoint& data) {
-    last_loaded_data_ = data;
+void DBnomicsScreen::on_observations_loaded(const services::DbnDataPoint& point) {
+    last_loaded_data_ = point;
     has_pending_data_ = true;
 
     // Always stop loading spinners — data has arrived
@@ -430,17 +430,17 @@ void DBnomicsScreen::on_observations_loaded(const services::DbnDataPoint& data) 
 
     // Check if this series is already in single_series_
     for (auto& s : single_series_) {
-        if (s.series_id == data.series_id) {
-            s.observations = data.observations;
-            s.series_name = data.series_name;
+        if (s.series_id == point.series_id) {
+            s.observations = point.observations;
+            s.series_name = point.series_name;
             render_single_view();
             return;
         }
     }
 
     // Not yet in view — prompt user
-    set_status(QString("Loaded: %1  •  Click ADD TO SINGLE VIEW").arg(data.series_name));
-    LOG_INFO("DBnomicsScreen", QString("Observations loaded for: %1").arg(data.series_id));
+    set_status(QString("Loaded: %1  •  Click ADD TO SINGLE VIEW").arg(point.series_name));
+    LOG_INFO("DBnomicsScreen", QString("Observations loaded for: %1").arg(point.series_id));
 }
 
 void DBnomicsScreen::on_search_results_loaded(const QVector<services::DbnSearchResult>& results,

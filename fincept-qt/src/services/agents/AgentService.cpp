@@ -1266,7 +1266,7 @@ void AgentService::run_portfolio_analysis(const QString& analysis_type, const QJ
 
 // ── Plan variants ────────────────────────────────────────────────────────────
 
-QString AgentService::create_stock_analysis_plan(const QString& symbol, const QJsonObject& config) {
+QString AgentService::create_stock_analysis_plan(const QString& symbol, const QJsonObject& /*config*/) {
     LOG_INFO("AgentService", QString("Stock analysis plan: %1").arg(symbol));
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QJsonObject params;
@@ -1301,7 +1301,7 @@ QString AgentService::create_stock_analysis_plan(const QString& symbol, const QJ
     return req_id;
 }
 
-QString AgentService::create_portfolio_plan(const QJsonObject& goals, const QJsonObject& config) {
+QString AgentService::create_portfolio_plan(const QJsonObject& goals, const QJsonObject& /*config*/) {
     LOG_INFO("AgentService", "Portfolio plan");
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QJsonObject params;

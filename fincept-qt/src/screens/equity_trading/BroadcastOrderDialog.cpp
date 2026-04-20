@@ -178,7 +178,7 @@ void BroadcastOrderDialog::on_place_order() {
     // Run broadcast on background thread (P1: never block UI)
     QPointer<BroadcastOrderDialog> self = this;
     auto order_copy = order_;
-    QtConcurrent::run([self, selected, order_copy]() {
+    (void)QtConcurrent::run([self, selected, order_copy]() {
         auto results = UnifiedTrading::instance().broadcast_order(selected, order_copy);
         QMetaObject::invokeMethod(
             self,

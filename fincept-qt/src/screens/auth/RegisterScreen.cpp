@@ -6,6 +6,7 @@
 
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QHideEvent>
 #include <QPainter>
 #include <QVBoxLayout>
 
@@ -131,6 +132,21 @@ RegisterScreen::RegisterScreen(QWidget* parent) : QWidget(parent) {
 }
 
 // ── Background ───────────────────────────────────────────────────────────────
+
+void RegisterScreen::hideEvent(QHideEvent* event) {
+    // Wipe registration + OTP inputs and reset to the form page whenever the
+    // screen leaves the stack — entered credentials must not linger.
+    for (QLineEdit* w : {first_name_, last_name_, email_, phone_, country_code_,
+                         password_, confirm_pw_, otp_input_}) {
+        if (w) w->clear();
+    }
+    if (password_) password_->setEchoMode(QLineEdit::Password);
+    if (confirm_pw_) confirm_pw_->setEchoMode(QLineEdit::Password);
+    if (error_label_) error_label_->hide();
+    if (otp_error_) otp_error_->hide();
+    if (pages_) pages_->setCurrentIndex(0);
+    QWidget::hideEvent(event);
+}
 
 void RegisterScreen::paintEvent(QPaintEvent* /*event*/) {
     QPainter p(this);

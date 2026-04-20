@@ -7,6 +7,7 @@
 
 #include <QComboBox>
 #include <QDateTime>
+#include <QTimeZone>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLineEdit>
@@ -787,7 +788,7 @@ void PolymarketDetailPanel::set_comments(const QVector<pmx::Comment>& comments) 
             body->setWordWrap(true);
 
             auto* meta = new QLabel(
-                QDateTime::fromSecsSinceEpoch(c.created_at, Qt::UTC).toString("yyyy-MM-dd HH:mm") +
+                QDateTime::fromSecsSinceEpoch(c.created_at, QTimeZone::UTC).toString("yyyy-MM-dd HH:mm") +
                 (c.likes > 0 ? QString("  · %1 likes").arg(c.likes) : ""));
             meta->setStyleSheet(
                 QString("color: %1; font-size: 8px; background: transparent;").arg(colors::TEXT_DIM()));

@@ -136,12 +136,12 @@ void DBnomicsService::fetch_datasets(const QString& provider_code, int offset) {
                 o["name"] = d.name;
                 arr.append(o);
             }
-            QJsonObject root;
-            root["docs"] = arr;
-            root["total"] = total;
+            QJsonObject cache_root;
+            cache_root["docs"] = arr;
+            cache_root["total"] = total;
             fincept::CacheManager::instance().put(
                 "dbnomics:datasets:" + provider_code,
-                QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))), kDatasetCacheSec,
+                QVariant(QString::fromUtf8(QJsonDocument(cache_root).toJson(QJsonDocument::Compact))), kDatasetCacheSec,
                 "dbnomics");
         }
         LOG_INFO("DBnomicsService", QString("Loaded %1 datasets (total=%2)").arg(out.size()).arg(total));
@@ -205,18 +205,18 @@ void DBnomicsService::fetch_series(const QString& provider_code, const QString& 
 
             if (first_page && no_query) {
                 QJsonArray arr;
-                for (const auto& s : out) {
+                for (const auto& si : out) {
                     QJsonObject o;
-                    o["code"] = s.code;
-                    o["name"] = s.name;
+                    o["code"] = si.code;
+                    o["name"] = si.name;
                     arr.append(o);
                 }
-                QJsonObject root;
-                root["docs"] = arr;
-                root["total"] = total;
+                QJsonObject cache_root;
+                cache_root["docs"] = arr;
+                cache_root["total"] = total;
                 fincept::CacheManager::instance().put(
                     "dbnomics:series:" + cache_key,
-                    QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))), kSeriesCacheSec,
+                    QVariant(QString::fromUtf8(QJsonDocument(cache_root).toJson(QJsonDocument::Compact))), kSeriesCacheSec,
                     "dbnomics");
             }
             LOG_INFO("DBnomicsService", QString("Loaded %1 series (total=%2)").arg(out.size()).arg(total));

@@ -137,7 +137,7 @@ void TerminalToolBridge::execute_call(const QString& call_id, const QString& too
 
     // Execute on background thread to avoid blocking UI
     QPointer<TerminalToolBridge> self = this;
-    QtConcurrent::run([self, call_id, local_name, arguments]() {
+    (void)QtConcurrent::run([self, call_id, local_name, arguments]() {
         // Call the tool via McpProvider
         auto result = mcp::McpProvider::instance().call_tool(local_name, arguments);
 

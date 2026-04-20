@@ -641,8 +641,9 @@ void RelationshipGraphView::wheelEvent(QWheelEvent* event) {
 void RelationshipGraphView::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::MiddleButton) {
         setDragMode(QGraphicsView::ScrollHandDrag);
-        QMouseEvent fake(event->type(), event->pos(), Qt::LeftButton,
-                         Qt::LeftButton, event->modifiers());
+        QMouseEvent fake(event->type(), event->position(), event->scenePosition(),
+                         event->globalPosition(), Qt::LeftButton, Qt::LeftButton,
+                         event->modifiers());
         QGraphicsView::mousePressEvent(&fake);
     } else {
         QGraphicsView::mousePressEvent(event);
@@ -651,8 +652,9 @@ void RelationshipGraphView::mousePressEvent(QMouseEvent* event) {
 
 void RelationshipGraphView::mouseReleaseEvent(QMouseEvent* event) {
     if (event->button() == Qt::MiddleButton) {
-        QMouseEvent fake(event->type(), event->pos(), Qt::LeftButton,
-                         Qt::LeftButton, event->modifiers());
+        QMouseEvent fake(event->type(), event->position(), event->scenePosition(),
+                         event->globalPosition(), Qt::LeftButton, Qt::LeftButton,
+                         event->modifiers());
         QGraphicsView::mouseReleaseEvent(&fake);
         setDragMode(QGraphicsView::ScrollHandDrag);
     } else {

@@ -254,7 +254,7 @@ void CryptoWatchlist::rebuild_table() {
         for (int i = 0; i < n; ++i) {
             const QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
             auto ensure = [&](int col, const QString& text, const QColor& fg,
-                              int align = Qt::AlignLeft | Qt::AlignVCenter) {
+                              Qt::Alignment align = Qt::AlignLeft | Qt::AlignVCenter) {
                 auto* it = table_->item(i, col);
                 if (!it) {
                     it = new QTableWidgetItem;
@@ -295,7 +295,7 @@ void CryptoWatchlist::rebuild_table() {
             bg = kRowNegHint;
 
         auto ensure = [&](int col, const QString& text, const QColor& fg,
-                          int align = Qt::AlignLeft | Qt::AlignVCenter) {
+                          Qt::Alignment align = Qt::AlignLeft | Qt::AlignVCenter) {
             auto* it = table_->item(i, col);
             if (!it) {
                 it = new QTableWidgetItem;

@@ -856,16 +856,16 @@ void AltInvestmentsScreen::on_analyze() {
 // ── Form data collection ─────────────────────────────────────────────────────
 
 QJsonObject AltInvestmentsScreen::collect_form_data() const {
-    QJsonObject data;
+    QJsonObject form;
     for (int i = 0; i < current_fields_.size() && i < field_widgets_.size(); ++i) {
         const auto& f = current_fields_[i];
         auto* w = field_widgets_[i];
         if (f.type == AltField::Text) {
             if (auto* le = qobject_cast<QLineEdit*>(w))
-                data[f.key] = le->text();
+                form[f.key] = le->text();
         } else if (f.type == AltField::Combo) {
             if (auto* cb = qobject_cast<QComboBox*>(w))
-                data[f.key] = cb->currentText();
+                form[f.key] = cb->currentText();
         } else {
             if (auto* sp = qobject_cast<QDoubleSpinBox*>(w)) {
                 double val = sp->value();
@@ -875,17 +875,17 @@ QJsonObject AltInvestmentsScreen::collect_form_data() const {
                     val *= 1e6;
                 else if (f.divide_100)
                     val /= 100.0;
-                data[f.key] = val;
+                form[f.key] = val;
             }
         }
     }
-    return data;
+    return form;
 }
 
 // ── Python execution ──────────────────────────────────────────────────────────
 
-void AltInvestmentsScreen::run_analysis(const QString& command, const QJsonObject& data) {
-    const QString data_json = QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact));
+void AltInvestmentsScreen::run_analysis(const QString& command, const QJsonObject& form) {
+    const QString data_json = QString::fromUtf8(QJsonDocument(form).toJson(QJsonDocument::Compact));
     const QString cache_key = "alt_screen:" + command + ":" + data_json;
 
     const QVariant cached = fincept::CacheManager::instance().get(cache_key);

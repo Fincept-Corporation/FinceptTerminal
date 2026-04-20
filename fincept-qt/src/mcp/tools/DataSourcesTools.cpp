@@ -497,7 +497,7 @@ std::vector<ToolDef> get_data_sources_tools() {
             int port = 80;
 
             // Try explicit URL fields first
-            for (const QString& key : {"url", "baseUrl", "endpoint", "wsdlUrl", "serviceRoot", "jobManagerUrl"}) {
+            for (const char* key : {"url", "baseUrl", "endpoint", "wsdlUrl", "serviceRoot", "jobManagerUrl"}) {
                 QString val = config_obj[key].toString().trimmed();
                 if (!val.isEmpty()) {
                     QUrl u(val);
@@ -531,7 +531,7 @@ std::vector<ToolDef> get_data_sources_tools() {
             // Fallback: comma-separated host lists (kafka brokers, nats servers,
             //           cassandra contactPoints, etcd hosts, memcached servers)
             if (host.isEmpty()) {
-                for (const QString& key : {"brokers", "servers", "contactPoints", "hosts", "zkQuorum"}) {
+                for (const char* key : {"brokers", "servers", "contactPoints", "hosts", "zkQuorum"}) {
                     QString val = config_obj[key].toString().trimmed();
                     if (!val.isEmpty()) {
                         // Take the first entry — "host:port" or just "host"

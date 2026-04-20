@@ -136,7 +136,7 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
         auto* dlg = new TemplatePicker(this);
         connect(dlg, &TemplatePicker::template_selected, this, [this](const QString& tid) {
             // Clear saved state so fresh template is used
-            QtConcurrent::run([]() { fincept::SettingsRepository::instance().remove("dashboard_canvas_layout"); });
+            (void)QtConcurrent::run([]() { fincept::SettingsRepository::instance().remove("dashboard_canvas_layout"); });
             canvas_->apply_template(tid);
         });
         dlg->exec();
@@ -317,8 +317,8 @@ void DashboardScreen::save_layout() {
     GridLayout layout = canvas_->current_layout();
 
     // Serialize: cols, row_h, margin, item count, then each item
-    QByteArray data;
-    QDataStream stream(&data, QIODevice::WriteOnly);
+    QByteArray buf;
+    QDataStream stream(&buf, QIODevice::WriteOnly);
     stream << layout.cols << layout.row_h << layout.margin;
     stream << static_cast<int>(layout.items.size());
     for (const auto& item : layout.items) {
@@ -327,15 +327,15 @@ void DashboardScreen::save_layout() {
         stream << item.cell.min_w << item.cell.min_h;
     }
 
-    QString encoded = data.toBase64();
+    QString encoded = buf.toBase64();
     QPointer<DashboardScreen> self = this;
-    QtConcurrent::run(
+    (void)QtConcurrent::run(
         [encoded]() { fincept::SettingsRepository::instance().set("dashboard_canvas_layout", encoded, "dashboard"); });
 }
 
 void DashboardScreen::restore_layout() {
     QPointer<DashboardScreen> self = this;
-    QtConcurrent::run([self]() {
+    (void)QtConcurrent::run([self]() {
         auto result = fincept::SettingsRepository::instance().get("dashboard_canvas_layout");
 
         QMetaObject::invokeMethod(

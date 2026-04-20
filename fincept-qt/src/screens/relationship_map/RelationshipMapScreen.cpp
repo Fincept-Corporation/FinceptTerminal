@@ -647,10 +647,10 @@ void RelationshipMapScreen::on_progress(int percent, const QString& message) {
     }
 }
 
-void RelationshipMapScreen::on_data_ready(const RelationshipData& data) {
-    current_data_ = data;
+void RelationshipMapScreen::on_data_ready(const RelationshipData& payload) {
+    current_data_ = payload;
     has_data_ = true;
-    loaded_ticker_ = data.company.ticker;
+    loaded_ticker_ = payload.company.ticker;
     progress_bar_->hide();
     progress_label_->setText("Complete");
     legend_widget_->show();

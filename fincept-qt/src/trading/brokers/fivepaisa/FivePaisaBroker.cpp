@@ -133,11 +133,11 @@ TokenExchangeResponse FivePaisaBroker::exchange_token(const QString& api_key, co
                                                       const QString& auth_code) {
     auto kp = unpack_key(api_key);
     if (kp.app_key.isEmpty())
-        return {false, "", "", "", "ApiKey must be 'app_key:::user_id:::client_id'"};
+        return {false, "", "", "", "ApiKey must be 'app_key:::user_id:::client_id'", ""};
 
     QStringList auth_parts = auth_code.split(":::");
     if (auth_parts.size() < 3)
-        return {false, "", "", "", "AuthCode must be 'email:::pin:::totp'"};
+        return {false, "", "", "", "AuthCode must be 'email:::pin:::totp'", ""};
     QString email = auth_parts[0].trimmed();
     QString pin = auth_parts[1].trimmed();
     QString totp = auth_parts[2].trimmed();
@@ -163,12 +163,12 @@ TokenExchangeResponse FivePaisaBroker::exchange_token(const QString& api_key, co
             BrokerHttp::instance().post_json(QString(BASE_URL) + "/VendorsAPI/Service1.svc/TOTPLogin", req, headers);
 
         if (!resp.success)
-            return {false, "", "", "", checked_error(resp, "TOTP login network error")};
+            return {false, "", "", "", checked_error(resp, "TOTP login network error"), ""};
 
         QString req_token = resp.json["body"].toObject()["RequestToken"].toString();
         if (req_token.isEmpty()) {
             QString msg = resp.json["body"].toObject()["Message"].toString();
-            return {false, "", "", "", msg.isEmpty() ? "No RequestToken in TOTP response" : msg};
+            return {false, "", "", "", msg.isEmpty() ? "No RequestToken in TOTP response" : msg, ""};
         }
 
         // Step 2: Get access token
@@ -186,15 +186,15 @@ TokenExchangeResponse FivePaisaBroker::exchange_token(const QString& api_key, co
                                                       req2, headers);
 
         if (!resp2.success)
-            return {false, "", "", "", checked_error(resp2, "GetAccessToken network error")};
+            return {false, "", "", "", checked_error(resp2, "GetAccessToken network error"), ""};
 
         QString access_token = resp2.json["body"].toObject()["AccessToken"].toString();
         if (access_token.isEmpty()) {
             QString msg = resp2.json["body"].toObject()["Message"].toString();
-            return {false, "", "", "", msg.isEmpty() ? "No AccessToken in response" : msg};
+            return {false, "", "", "", msg.isEmpty() ? "No AccessToken in response" : msg, ""};
         }
 
-        return {true, access_token, kp.client_id, "", ""};
+        return {true, access_token, kp.client_id, "", "", ""};
     }
 }
 

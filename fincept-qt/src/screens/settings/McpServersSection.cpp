@@ -592,7 +592,7 @@ void McpServersSection::on_start_server() {
 
     QPointer<McpServersSection> self = this;
     QString id = selected_server_id_;
-    QtConcurrent::run([self, id]() {
+    (void)QtConcurrent::run([self, id]() {
         auto r = McpManager::instance().start_server(id);
         QMetaObject::invokeMethod(
             qApp,

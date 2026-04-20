@@ -293,7 +293,7 @@ endif()
 # Silence upstream warnings so CI's -Werror doesn't fail on third-party code.
 # /WX- / -Wno-error needed in addition to /W0 / -w because CI adds -Werror (/WX)
 # at the directory level, which suppression flags alone don't override.
-foreach(_md4c_tgt md4c md4c-html)
+foreach(_md4c_tgt md4c md4c-html md2html)
     if(TARGET ${_md4c_tgt})
         if(MSVC)
             target_compile_options(${_md4c_tgt} PRIVATE /W0 /WX-)
@@ -431,6 +431,7 @@ set(CORE_SOURCES
     src/core/session/SessionManager.cpp
     src/core/session/ScreenStateManager.cpp
     src/core/keys/KeyConfigManager.cpp
+    src/core/net/NetSpeedMeter.cpp
 )
 
 # Network
@@ -590,6 +591,9 @@ set(TRADING_SOURCES
     src/trading/AccountDataStream.cpp
     src/trading/DataStreamManager.cpp
     src/trading/ExchangeService.cpp
+    src/trading/ExchangeSession.cpp
+    src/trading/ExchangeSessionManager.cpp
+    src/trading/ExchangeDaemonPool.cpp
     src/trading/brokers/BrokerHttp.cpp
     # Trading WebSocket
     src/trading/websocket/ZerodhaWebSocket.cpp
@@ -733,6 +737,7 @@ set(UI_SOURCES
     src/ui/widgets/WorldMapWidget.cpp
     src/ui/widgets/LoadingOverlay.cpp
     src/ui/widgets/ConfettiOverlay.cpp
+    src/ui/widgets/SpeedSparkline.cpp
     src/ui/tables/DataTable.cpp
     src/ui/charts/ChartFactory.cpp
     src/ui/navigation/NavigationBar.cpp
@@ -767,6 +772,7 @@ set(SCREEN_SOURCES
     src/screens/settings/McpServersSection.cpp
     src/screens/settings/KeybindingsSection.cpp
     src/screens/settings/PythonEnvSection.cpp
+    src/screens/settings/VoiceConfigSection.cpp
     src/screens/about/AboutScreen.cpp
     src/screens/support/SupportScreen.cpp
     src/screens/trade_viz/TradeVizScreen.cpp
@@ -997,6 +1003,7 @@ set(SCREEN_SOURCES
     src/screens/polymarket/PolymarketStatusBar.cpp
     src/screens/polymarket/PredictionAccountDialog.cpp
     src/screens/polymarket/ExchangePresentation.cpp
+    src/screens/polymarket/PolymarketOrderBlotter.cpp
 
     # Alpha Arena
     src/screens/alpha_arena/AlphaArenaScreen.cpp

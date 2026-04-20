@@ -48,10 +48,6 @@ static QString PANEL() {
         .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM());
 }
 
-static QString PANEL_HEADER() {
-    return QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM());
-}
-
 static QString LINK_BTN() {
     return QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
                    "border-radius: 2px; padding: 8px 12px; font-size: 12px; text-align: left; "
@@ -84,13 +80,6 @@ static QLabel* makeBullet(const QString& text) {
                            .arg(ui::colors::TEXT_SECONDARY()));
     lbl->setWordWrap(true);
     return lbl;
-}
-
-static QWidget* makeSeparator() {
-    auto* line = new QFrame;
-    line->setFrameShape(QFrame::HLine);
-    line->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM()));
-    return line;
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────

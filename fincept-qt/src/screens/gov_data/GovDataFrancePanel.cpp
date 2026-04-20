@@ -327,21 +327,21 @@ void GovDataFrancePanel::on_result(const QString& request_id, const services::Go
         return;
     }
 
-    QJsonArray data = result.data["data"].toArray();
+    QJsonArray payload = result.data["data"].toArray();
 
     if (request_id == "fr_services") {
-        current_services_ = data;
-        populate_services(data);
+        current_services_ = payload;
+        populate_services(payload);
         current_view_ = Services;
         services_btn_->setChecked(true);
         datasets_btn_->setChecked(false);
         geo_btn_->setChecked(false);
         content_stack_->setCurrentIndex(Services);
         update_breadcrumb("Data Services");
-        row_count_label_->setText(QString::number(data.size()) + " services");
+        row_count_label_->setText(QString::number(payload.size()) + " services");
     } else if (request_id == "fr_datasets") {
-        current_datasets_ = data;
-        populate_datasets(data);
+        current_datasets_ = payload;
+        populate_datasets(payload);
         current_view_ = Datasets;
         datasets_btn_->setChecked(true);
         services_btn_->setChecked(false);
@@ -350,10 +350,10 @@ void GovDataFrancePanel::on_result(const QString& request_id, const services::Go
         update_breadcrumb("Datasets  ›  "
                           " + search_query_ + "
                           "");
-        row_count_label_->setText(QString::number(data.size()) + " datasets");
+        row_count_label_->setText(QString::number(payload.size()) + " datasets");
     } else if (request_id == "fr_geo") {
-        current_geo_ = data;
-        populate_geo(data);
+        current_geo_ = payload;
+        populate_geo(payload);
         current_view_ = Geo;
         geo_btn_->setChecked(true);
         services_btn_->setChecked(false);
@@ -362,14 +362,14 @@ void GovDataFrancePanel::on_result(const QString& request_id, const services::Go
         update_breadcrumb("Municipalities  ›  "
                           " + search_query_ + "
                           "");
-        row_count_label_->setText(QString::number(data.size()) + " results");
+        row_count_label_->setText(QString::number(payload.size()) + " results");
     } else if (request_id == "fr_resources") {
-        current_resources_ = data;
-        populate_resources(data);
+        current_resources_ = payload;
+        populate_resources(payload);
         current_view_ = Resources;
         content_stack_->setCurrentIndex(Resources);
         update_breadcrumb("Datasets  ›  Column Schema");
-        row_count_label_->setText(QString::number(data.size()) + " columns");
+        row_count_label_->setText(QString::number(payload.size()) + " columns");
     }
 
     update_toolbar_state();
@@ -377,12 +377,12 @@ void GovDataFrancePanel::on_result(const QString& request_id, const services::Go
 
 // ── Populate tables ───────────────────────────────────────────────────────────
 
-void GovDataFrancePanel::populate_services(const QJsonArray& data) {
+void GovDataFrancePanel::populate_services(const QJsonArray& json) {
     services_table_->setRowCount(0);
-    services_table_->setRowCount(data.size());
+    services_table_->setRowCount(json.size());
 
-    for (int i = 0; i < data.size(); ++i) {
-        const auto obj = data[i].toObject();
+    for (int i = 0; i < json.size(); ++i) {
+        const auto obj = json[i].toObject();
 
         QString name = obj["display_name"].toString();
         if (name.isEmpty())
@@ -416,15 +416,15 @@ void GovDataFrancePanel::populate_services(const QJsonArray& data) {
         services_table_->setItem(i, 3, dt);
     }
 
-    LOG_INFO("GovFrance", QString("Populated %1 data services").arg(data.size()));
+    LOG_INFO("GovFrance", QString("Populated %1 json services").arg(json.size()));
 }
 
-void GovDataFrancePanel::populate_datasets(const QJsonArray& data) {
+void GovDataFrancePanel::populate_datasets(const QJsonArray& json) {
     datasets_table_->setRowCount(0);
-    datasets_table_->setRowCount(data.size());
+    datasets_table_->setRowCount(json.size());
 
-    for (int i = 0; i < data.size(); ++i) {
-        const auto obj = data[i].toObject();
+    for (int i = 0; i < json.size(); ++i) {
+        const auto obj = json[i].toObject();
 
         QString title = obj["title"].toString();
         if (title.isEmpty())
@@ -464,15 +464,15 @@ void GovDataFrancePanel::populate_datasets(const QJsonArray& data) {
         datasets_table_->setItem(i, 4, new QTableWidgetItem(modified));
     }
 
-    LOG_INFO("GovFrance", QString("Populated %1 datasets").arg(data.size()));
+    LOG_INFO("GovFrance", QString("Populated %1 datasets").arg(json.size()));
 }
 
-void GovDataFrancePanel::populate_geo(const QJsonArray& data) {
+void GovDataFrancePanel::populate_geo(const QJsonArray& json) {
     geo_table_->setRowCount(0);
-    geo_table_->setRowCount(data.size());
+    geo_table_->setRowCount(json.size());
 
-    for (int i = 0; i < data.size(); ++i) {
-        const auto obj = data[i].toObject();
+    for (int i = 0; i < json.size(); ++i) {
+        const auto obj = json[i].toObject();
 
         auto* name_item = new QTableWidgetItem(obj["name"].toString());
         name_item->setForeground(QColor(kGovDataFranceColor));
@@ -498,15 +498,15 @@ void GovDataFrancePanel::populate_geo(const QJsonArray& data) {
         geo_table_->setItem(i, 5, pop_item);
     }
 
-    LOG_INFO("GovFrance", QString("Populated %1 municipalities").arg(data.size()));
+    LOG_INFO("GovFrance", QString("Populated %1 municipalities").arg(json.size()));
 }
 
-void GovDataFrancePanel::populate_resources(const QJsonArray& data) {
+void GovDataFrancePanel::populate_resources(const QJsonArray& json) {
     resources_table_->setRowCount(0);
-    resources_table_->setRowCount(data.size());
+    resources_table_->setRowCount(json.size());
 
-    for (int i = 0; i < data.size(); ++i) {
-        const auto obj = data[i].toObject();
+    for (int i = 0; i < json.size(); ++i) {
+        const auto obj = json[i].toObject();
 
         // Schema rows: name = column name, format = type
         auto* col_item = new QTableWidgetItem(obj["name"].toString());
@@ -520,7 +520,7 @@ void GovDataFrancePanel::populate_resources(const QJsonArray& data) {
         resources_table_->setItem(i, 1, type_item);
     }
 
-    LOG_INFO("GovFrance", QString("Populated %1 schema columns").arg(data.size()));
+    LOG_INFO("GovFrance", QString("Populated %1 schema columns").arg(json.size()));
 }
 
 // ── Status helpers ────────────────────────────────────────────────────────────

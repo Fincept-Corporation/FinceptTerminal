@@ -18,6 +18,9 @@ class RegisterScreen : public QWidget {
 
   protected:
     void paintEvent(QPaintEvent* event) override;
+    /// Wipe registration + OTP fields whenever the screen leaves the stack so
+    /// entered credentials do not linger.
+    void hideEvent(QHideEvent* event) override;
 
   private:
     QStackedWidget* pages_ = nullptr;

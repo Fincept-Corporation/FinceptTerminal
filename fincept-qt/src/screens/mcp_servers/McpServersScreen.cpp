@@ -571,7 +571,7 @@ void McpServersScreen::on_start_server() {
         return;
     const QString id = selected_server_id_;
     QPointer<McpServersScreen> self = this;
-    QtConcurrent::run([id, self]() {
+    (void)QtConcurrent::run([id, self]() {
         const auto result = McpManager::instance().start_server(id);
         QMetaObject::invokeMethod(
             self,
@@ -592,7 +592,7 @@ void McpServersScreen::on_stop_server() {
         return;
     const QString id = selected_server_id_;
     QPointer<McpServersScreen> self = this;
-    QtConcurrent::run([id, self]() {
+    (void)QtConcurrent::run([id, self]() {
         McpManager::instance().stop_server(id);
         QMetaObject::invokeMethod(
             self,
@@ -956,7 +956,7 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
             // start_server() blocks for process launch + handshake (can take 60s+).
             toggle_btn->setText("⟳ STARTING...");
             toggle_btn->setEnabled(false);
-            QtConcurrent::run([sid, self]() {
+            (void)QtConcurrent::run([sid, self]() {
                 const auto r = McpManager::instance().start_server(sid);
                 if (!self)
                     return;
@@ -1022,7 +1022,7 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
             return;
         // Fetch logs off-thread so mutex never stalls UI
         QPointer<QTextEdit> lv = log_view;
-        QtConcurrent::run([sid, lv]() {
+        (void)QtConcurrent::run([sid, lv]() {
             const QStringList lines = McpManager::instance().get_logs(sid);
             QMetaObject::invokeMethod(
                 lv,

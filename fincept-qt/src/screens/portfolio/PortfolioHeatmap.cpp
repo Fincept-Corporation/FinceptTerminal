@@ -342,7 +342,6 @@ void PortfolioHeatmap::update_risk_gauge() {
 
     // Use a colored inner bar proportional to score
     double pct = std::min(rs / 100.0, 1.0);
-    int bar_width = static_cast<int>(pct * risk_bar_->width());
     risk_bar_->setStyleSheet(
         QString("background: qlineargradient(x1:0, x2:1, stop:0 %1, stop:%2 %1, stop:%3 transparent);")
             .arg(rs_color)

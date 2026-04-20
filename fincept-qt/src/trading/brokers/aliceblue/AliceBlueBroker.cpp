@@ -128,19 +128,19 @@ TokenExchangeResponse AliceBlueBroker::exchange_token(const QString& api_key, co
     auto resp = BrokerHttp::instance().post_json(AUTH_URL, body, headers);
 
     if (!resp.success)
-        return {false, "", "", "", checked_error(resp, "Network error")};
+        return {false, "", "", "", checked_error(resp, "Network error"), ""};
 
     QString stat = resp.json["stat"].toString();
     if (stat != "Ok")
-        return {false, "", "", "", checked_error(resp, "Authentication failed")};
+        return {false, "", "", "", checked_error(resp, "Authentication failed"), ""};
 
     QString session = resp.json["userSession"].toString();
     QString client_id = resp.json["clientId"].toString();
 
     if (session.isEmpty())
-        return {false, "", "", "", "No userSession in response"};
+        return {false, "", "", "", "No userSession in response", ""};
 
-    return {true, session, client_id, "", ""};
+    return {true, session, client_id, "", "", ""};
 }
 
 // ============================================================================

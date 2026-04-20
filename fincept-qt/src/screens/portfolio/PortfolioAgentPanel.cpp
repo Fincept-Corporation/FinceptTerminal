@@ -217,7 +217,7 @@ void PortfolioAgentPanel::run_agent(bool force) {
     QString prompt = lines.join("\n");
     QPointer<PortfolioAgentPanel> self = this;
 
-    QtConcurrent::run([self, prompt, agent_id]() {
+    (void)QtConcurrent::run([self, prompt, agent_id]() {
         auto response = ai_chat::LlmService::instance().chat(prompt, {});
 
         if (!self)

@@ -143,7 +143,7 @@ void ExchangeService::poll_prices() {
 
     QPointer<ExchangeService> self = this;
     QPointer<ExchangeSession> session_ptr = sess;
-    QtConcurrent::run([self, session_ptr, symbols, watched]() {
+    (void)QtConcurrent::run([self, session_ptr, symbols, watched]() {
         if (!self || !session_ptr)
             return;
         auto tickers = session_ptr->fetch_tickers(symbols);

@@ -388,8 +388,8 @@ void GovDataTreasuryPanel::on_result(const QString& request_id, const services::
 
 // ── Populate ─────────────────────────────────────────────────────────────────
 
-void GovDataTreasuryPanel::populate_prices(const QJsonObject& data) {
-    const QJsonArray records = data["data"].toArray();
+void GovDataTreasuryPanel::populate_prices(const QJsonObject& json) {
+    const QJsonArray records = json["json"].toArray();
     prices_table_->setRowCount(0);
     prices_table_->setRowCount(records.size());
 
@@ -420,8 +420,8 @@ void GovDataTreasuryPanel::populate_prices(const QJsonObject& data) {
     LOG_INFO("GovTreasury", QString("Loaded %1 price records").arg(records.size()));
 }
 
-void GovDataTreasuryPanel::populate_auctions(const QJsonObject& data) {
-    const QJsonArray records = data["data"].toArray();
+void GovDataTreasuryPanel::populate_auctions(const QJsonObject& json) {
+    const QJsonArray records = json["json"].toArray();
     auctions_table_->setRowCount(0);
     auctions_table_->setRowCount(records.size());
 
@@ -457,20 +457,20 @@ void GovDataTreasuryPanel::populate_auctions(const QJsonObject& data) {
     LOG_INFO("GovTreasury", QString("Loaded %1 auction records").arg(records.size()));
 }
 
-void GovDataTreasuryPanel::populate_summary(const QJsonObject& data) {
-    total_securities_label_->setText(QString::number(data["total_securities"].toInt()));
+void GovDataTreasuryPanel::populate_summary(const QJsonObject& json) {
+    total_securities_label_->setText(QString::number(json["total_securities"].toInt()));
 
-    auto yield = data["yield_summary"].toObject();
+    auto yield = json["yield_summary"].toObject();
     min_rate_label_->setText(QString::number(yield["min_rate"].toDouble(), 'f', 3) + "%");
     max_rate_label_->setText(QString::number(yield["max_rate"].toDouble(), 'f', 3) + "%");
     avg_rate_label_->setText(QString::number(yield["avg_rate"].toDouble(), 'f', 3) + "%");
 
-    auto price = data["price_summary"].toObject();
+    auto price = json["price_summary"].toObject();
     min_price_label_->setText(QString::number(price["min_price"].toDouble(), 'f', 2));
     max_price_label_->setText(QString::number(price["max_price"].toDouble(), 'f', 2));
     avg_price_label_->setText(QString::number(price["avg_price"].toDouble(), 'f', 2));
 
-    auto types = data["security_types"].toObject();
+    auto types = json["security_types"].toObject();
     type_breakdown_table_->setRowCount(0);
     type_breakdown_table_->setRowCount(types.size());
     int row = 0;

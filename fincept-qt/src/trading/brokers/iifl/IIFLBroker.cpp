@@ -170,19 +170,19 @@ TokenExchangeResponse IIFLBroker::exchange_token(const QString& api_key, const Q
     auto trade_resp = http.post_json(QString("%1/user/session").arg(INTERACTIVE_URL), trade_body,
                                      {{"Content-Type", "application/json"}, {"Accept", "application/json"}});
     if (!trade_resp.success)
-        return {false, "", "", "", "Interactive login failed: " + trade_resp.error};
+        return {false, "", "", "", "Interactive login failed: " + trade_resp.error, ""};
 
     QJsonDocument trade_doc = QJsonDocument::fromJson(trade_resp.raw_body.toUtf8());
     if (!trade_doc.isObject())
-        return {false, "", "", "", "Interactive login: invalid response"};
+        return {false, "", "", "", "Interactive login: invalid response", ""};
 
     QJsonObject trade_obj = trade_doc.object();
     if (trade_obj.value("type").toString() != "success")
-        return {false, "", "", "", trade_obj.value("description").toString("Interactive login failed")};
+        return {false, "", "", "", trade_obj.value("description").toString("Interactive login failed"), ""};
 
     QString trade_token = trade_obj.value("result").toObject().value("token").toString();
     if (trade_token.isEmpty())
-        return {false, "", "", "", "Interactive login: no token in response"};
+        return {false, "", "", "", "Interactive login: no token in response", ""};
 
     // Step 2: Market data login (feed token)
     QJsonObject market_body;
@@ -193,26 +193,26 @@ TokenExchangeResponse IIFLBroker::exchange_token(const QString& api_key, const Q
     auto market_resp = http.post_json(QString("%1/auth/login").arg(MARKET_DATA_URL), market_body,
                                       {{"Content-Type", "application/json"}, {"Accept", "application/json"}});
     if (!market_resp.success)
-        return {false, "", "", "", "Market data login failed: " + market_resp.error};
+        return {false, "", "", "", "Market data login failed: " + market_resp.error, ""};
 
     QJsonDocument market_doc = QJsonDocument::fromJson(market_resp.raw_body.toUtf8());
     if (!market_doc.isObject())
-        return {false, "", "", "", "Market data login: invalid response"};
+        return {false, "", "", "", "Market data login: invalid response", ""};
 
     QJsonObject market_obj = market_doc.object();
     if (market_obj.value("type").toString() != "success")
-        return {false, "", "", "", market_obj.value("description").toString("Market data login failed")};
+        return {false, "", "", "", market_obj.value("description").toString("Market data login failed"), ""};
 
     QJsonObject market_result = market_obj.value("result").toObject();
     QString feed_token = market_result.value("token").toString();
     QString user_id = market_result.value("userID").toString();
 
     if (feed_token.isEmpty())
-        return {false, "", "", "", "Market data login: no token in response"};
+        return {false, "", "", "", "Market data login: no token in response", ""};
 
     // Pack both tokens
     QString packed_token = trade_token + ":::" + feed_token;
-    return {true, packed_token, user_id, "", ""};
+    return {true, packed_token, user_id, "", "", ""};
 }
 
 // ---------- place_order ----------

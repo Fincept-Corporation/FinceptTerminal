@@ -46,7 +46,7 @@ void IlostatPanel::activate() {
 }
 
 void IlostatPanel::build_controls(QHBoxLayout* thl) {
-    auto mk_lbl = [this](const QString& t) {
+    auto mk_lbl = [](const QString& t) {
         auto* l = new QLabel(t);
         l->setStyleSheet(ctrl_label_style());
         return l;

@@ -667,19 +667,19 @@ void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList
 
 // ── Display ─────────────────────────────────────────────────────────────────
 
-void AsiaMarketsScreen::display_table(const QJsonArray& data) {
-    if (data.isEmpty()) {
+void AsiaMarketsScreen::display_table(const QJsonArray& rows_json) {
+    if (rows_json.isEmpty()) {
         data_status_->setText("No data returned");
         return;
     }
 
     // Columns from first row
     QStringList columns;
-    auto first = data[0].toObject();
+    auto first = rows_json[0].toObject();
     for (auto it = first.begin(); it != first.end(); ++it)
         columns << it.key();
 
-    int max_rows = qMin(data.size(), 2000);
+    int max_rows = qMin(rows_json.size(), 2000);
 
     // Block all signals + updates during population
     data_table_->setSortingEnabled(false);
@@ -694,7 +694,7 @@ void AsiaMarketsScreen::display_table(const QJsonArray& data) {
     const QColor col_neg(colors::NEGATIVE());
 
     for (int row = 0; row < max_rows; ++row) {
-        auto obj = data[row].toObject();
+        auto obj = rows_json[row].toObject();
         for (int col = 0; col < columns.size(); ++col) {
             auto val = obj.value(columns[col]);
             QString text;
@@ -723,12 +723,12 @@ void AsiaMarketsScreen::display_table(const QJsonArray& data) {
     data_table_->setUpdatesEnabled(true);
     data_table_->setSortingEnabled(true);
 
-    if (data.size() > max_rows)
-        data_status_->setText(QString("Showing %1 of %2").arg(max_rows).arg(data.size()));
+    if (rows_json.size() > max_rows)
+        data_status_->setText(QString("Showing %1 of %2").arg(max_rows).arg(rows_json.size()));
 }
 
-void AsiaMarketsScreen::display_json(const QJsonArray& data) {
-    QJsonDocument doc(data);
+void AsiaMarketsScreen::display_json(const QJsonArray& rows_json) {
+    QJsonDocument doc(rows_json);
     json_view_->setPlainText(doc.toJson(QJsonDocument::Indented));
 }
 

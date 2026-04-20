@@ -359,20 +359,20 @@ void GovDataHKPanel::on_result(const QString& request_id, const services::GovDat
         return;
     }
 
-    QJsonArray data = result.data["data"].toArray();
+    QJsonArray payload = result.data["data"].toArray();
 
     if (request_id == "hk_categories") {
-        current_categories_ = data;
-        populate_categories(data);
+        current_categories_ = payload;
+        populate_categories(payload);
         current_view_ = Categories;
         categories_btn_->setChecked(true);
         datasets_btn_->setChecked(false);
         content_stack_->setCurrentIndex(Categories);
         update_breadcrumb("Categories");
-        row_count_label_->setText(QString::number(data.size()) + " categories");
+        row_count_label_->setText(QString::number(payload.size()) + " categories");
 
     } else if (request_id == "hk_datasets") {
-        if (data.isEmpty()) {
+        if (payload.isEmpty()) {
             // HK category_datasets frequently returns empty — show note
             show_status("HK DATA — Categories may have limited datasets\n\n"
                         "No datasets found for "
@@ -384,8 +384,8 @@ void GovDataHKPanel::on_result(const QString& request_id, const services::GovDat
                               " returned 0 datasets");
             return;
         }
-        current_datasets_ = data;
-        populate_datasets(data);
+        current_datasets_ = payload;
+        populate_datasets(payload);
         current_view_ = Datasets;
         categories_btn_->setChecked(false);
         datasets_btn_->setChecked(true);
@@ -393,13 +393,13 @@ void GovDataHKPanel::on_result(const QString& request_id, const services::GovDat
 
         int total = result.data["metadata"].toObject()["total_count"].toInt(0);
         if (total == 0)
-            total = data.size();
+            total = payload.size();
         update_breadcrumb("Datasets  ›  " + selected_category_name_);
-        row_count_label_->setText(QString("Showing %1 of %2").arg(data.size()).arg(total));
+        row_count_label_->setText(QString("Showing %1 of %2").arg(payload.size()).arg(total));
 
     } else if (request_id == "hk_datasets_list") {
         // Full dataset name list for client-side search
-        all_dataset_names_ = data;
+        all_dataset_names_ = payload;
         QString query = search_input_->text().trimmed();
         if (!query.isEmpty())
             filter_datasets_list(query);
@@ -407,12 +407,12 @@ void GovDataHKPanel::on_result(const QString& request_id, const services::GovDat
             show_status("Dataset list loaded. Type a search term and click FETCH.");
 
     } else if (request_id == "hk_resources") {
-        current_resources_ = data;
-        populate_resources(data);
+        current_resources_ = payload;
+        populate_resources(payload);
         current_view_ = Resources;
         content_stack_->setCurrentIndex(Resources);
         update_breadcrumb("Datasets  ›  Resources");
-        row_count_label_->setText(QString::number(data.size()) + " files");
+        row_count_label_->setText(QString::number(payload.size()) + " files");
     }
 
     update_toolbar_state();
@@ -420,12 +420,12 @@ void GovDataHKPanel::on_result(const QString& request_id, const services::GovDat
 
 // ── Populate tables ───────────────────────────────────────────────────────────
 
-void GovDataHKPanel::populate_categories(const QJsonArray& data) {
+void GovDataHKPanel::populate_categories(const QJsonArray& json) {
     categories_table_->setRowCount(0);
-    categories_table_->setRowCount(data.size());
+    categories_table_->setRowCount(json.size());
 
-    for (int i = 0; i < data.size(); ++i) {
-        const auto obj = data[i].toObject();
+    for (int i = 0; i < json.size(); ++i) {
+        const auto obj = json[i].toObject();
 
         QString name = obj["display_name"].toString();
         if (name.isEmpty())
@@ -440,15 +440,15 @@ void GovDataHKPanel::populate_categories(const QJsonArray& data) {
         categories_table_->setItem(i, 0, name_item);
     }
 
-    LOG_INFO("GovHK", QString("Populated %1 categories").arg(data.size()));
+    LOG_INFO("GovHK", QString("Populated %1 categories").arg(json.size()));
 }
 
-void GovDataHKPanel::populate_datasets(const QJsonArray& data) {
+void GovDataHKPanel::populate_datasets(const QJsonArray& json) {
     datasets_table_->setRowCount(0);
-    datasets_table_->setRowCount(data.size());
+    datasets_table_->setRowCount(json.size());
 
-    for (int i = 0; i < data.size(); ++i) {
-        const auto obj = data[i].toObject();
+    for (int i = 0; i < json.size(); ++i) {
+        const auto obj = json[i].toObject();
 
         QString title = obj["title"].toString();
         if (title.isEmpty())
@@ -474,15 +474,15 @@ void GovDataHKPanel::populate_datasets(const QJsonArray& data) {
         datasets_table_->setItem(i, 2, new QTableWidgetItem(modified));
     }
 
-    LOG_INFO("GovHK", QString("Populated %1 datasets").arg(data.size()));
+    LOG_INFO("GovHK", QString("Populated %1 datasets").arg(json.size()));
 }
 
-void GovDataHKPanel::populate_resources(const QJsonArray& data) {
+void GovDataHKPanel::populate_resources(const QJsonArray& json) {
     resources_table_->setRowCount(0);
-    resources_table_->setRowCount(data.size());
+    resources_table_->setRowCount(json.size());
 
-    for (int i = 0; i < data.size(); ++i) {
-        const auto obj = data[i].toObject();
+    for (int i = 0; i < json.size(); ++i) {
+        const auto obj = json[i].toObject();
 
         QString name = obj["name"].toString();
         if (name.isEmpty())
@@ -509,7 +509,7 @@ void GovDataHKPanel::populate_resources(const QJsonArray& data) {
         resources_table_->setItem(i, 2, mod_item);
     }
 
-    LOG_INFO("GovHK", QString("Populated %1 resources").arg(data.size()));
+    LOG_INFO("GovHK", QString("Populated %1 resources").arg(json.size()));
 }
 
 // ── Status helpers ────────────────────────────────────────────────────────────

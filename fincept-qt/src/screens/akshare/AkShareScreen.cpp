@@ -713,20 +713,20 @@ void AkShareScreen::execute_query(const QString& script, const QString& endpoint
 
 // ── Display ─────────────────────────────────────────────────────────────────
 
-void AkShareScreen::display_table_data(const QJsonArray& data) {
+void AkShareScreen::display_table_data(const QJsonArray& rows_json) {
     data_table_->setSortingEnabled(false);
     data_table_->clear();
     data_table_->setRowCount(0);
     data_table_->setColumnCount(0);
 
-    if (data.isEmpty()) {
+    if (rows_json.isEmpty()) {
         data_status_->setText("No data returned");
         return;
     }
 
     // Extract columns from first row
     QStringList columns;
-    auto first = data[0].toObject();
+    auto first = rows_json[0].toObject();
     for (auto it = first.begin(); it != first.end(); ++it) {
         columns << it.key();
     }
@@ -735,11 +735,11 @@ void AkShareScreen::display_table_data(const QJsonArray& data) {
     data_table_->setHorizontalHeaderLabels(columns);
 
     // Populate rows (cap at 5000 to avoid UI freeze)
-    int max_rows = qMin(data.size(), 5000);
+    int max_rows = qMin(rows_json.size(), 5000);
     data_table_->setRowCount(max_rows);
 
     for (int row = 0; row < max_rows; ++row) {
-        auto obj = data[row].toObject();
+        auto obj = rows_json[row].toObject();
         for (int col = 0; col < columns.size(); ++col) {
             auto val = obj.value(columns[col]);
             QString text;
@@ -774,13 +774,13 @@ void AkShareScreen::display_table_data(const QJsonArray& data) {
     }
     data_table_->setSortingEnabled(true);
 
-    if (data.size() > max_rows) {
-        data_status_->setText(QString("Showing %1 of %2 records").arg(max_rows).arg(data.size()));
+    if (rows_json.size() > max_rows) {
+        data_status_->setText(QString("Showing %1 of %2 records").arg(max_rows).arg(rows_json.size()));
     }
 }
 
-void AkShareScreen::display_json_data(const QJsonArray& data) {
-    QJsonDocument doc(data);
+void AkShareScreen::display_json_data(const QJsonArray& rows_json) {
+    QJsonDocument doc(rows_json);
     json_view_->setPlainText(doc.toJson(QJsonDocument::Indented));
 }
 

@@ -1750,7 +1750,7 @@ void LlmService::fetch_models(const QString& provider, const QString& api_key, c
     auto headers = get_models_headers(provider, api_key);
 
     QPointer<LlmService> self = this;
-    QtConcurrent::run([self, provider, url, headers]() {
+    (void)QtConcurrent::run([self, provider, url, headers]() {
         // Blocking GET (reuse blocking_post pattern but with GET)
         QNetworkAccessManager nam;
         QNetworkRequest req{QUrl(url)};
@@ -1811,7 +1811,7 @@ LlmResponse LlmService::chat(const QString& user_message, const std::vector<Conv
     ensure_config();
 
     if (provider_.isEmpty())
-        return LlmResponse{.error = "No LLM provider configured"};
+        return LlmResponse{.content = {}, .error = "No LLM provider configured"};
 
     // Take config snapshot — release lock before blocking network call
     QString p = provider_, k = api_key_, b = base_url_, m = model_, sp = system_prompt_;
@@ -1865,7 +1865,7 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
 
     if (p.isEmpty()) {
         on_chunk("", true);
-        emit finished_streaming(LlmResponse{.error = "No LLM provider configured"});
+        emit finished_streaming(LlmResponse{.content = {}, .error = "No LLM provider configured"});
         return;
     }
 
@@ -1914,7 +1914,7 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
             hub.retire_topic(stream_topic);
         }
     };
-    QtConcurrent::run(
+    (void)QtConcurrent::run(
         [self, p, k, b, m, sp, t, mx, user_message, history_copy, guarded_chunk, use_tools, saved_tools]() {
             if (!self)
                 return;

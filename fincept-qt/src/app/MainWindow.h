@@ -94,6 +94,9 @@ class MainWindow : public QMainWindow {
     void update_window_title();
     /// Show or hide the toolbar/status bar shell (hidden during auth screens).
     void set_shell_visible(bool visible);
+    /// Show the auth stack at the given index and hide the privileged shell.
+    /// All login/register/forgot/pricing/info transitions go through here.
+    void enter_auth_stack(int auth_index);
 
     // Info screens stack (Contact, Terms, Privacy, Trademarks, Help)
     QStackedWidget* info_stack_ = nullptr;

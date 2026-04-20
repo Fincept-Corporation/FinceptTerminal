@@ -200,7 +200,7 @@ void Surface3DWidget::paintEvent(QPaintEvent*) {
 
             // Brighter lighting — ambient 0.65 + directional, never below 55%
             float dx1 = x1 - x0, dy1 = y01 - y00;
-            float dy2 = y10 - y00, dz2 = zz1 - zz0;
+            float dz2 = zz1 - zz0;
             float nx = dy1 * dz2;
             float ny = -dx1 * dz2;
             float nz = 0.0f;

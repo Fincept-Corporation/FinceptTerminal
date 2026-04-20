@@ -6,7 +6,7 @@ namespace fincept {
 /// Central registry for all application file-system paths.
 ///
 /// All paths live under a single root directory:
-///   Windows : %LOCALAPPDATA%\com.fincept.terminal\
+///   Windows : %LOCALAPPDATA%/com.fincept.terminal/
 ///   macOS   : ~/Library/Application Support/com.fincept.terminal/
 ///   Linux   : ~/.local/share/com.fincept.terminal/
 ///

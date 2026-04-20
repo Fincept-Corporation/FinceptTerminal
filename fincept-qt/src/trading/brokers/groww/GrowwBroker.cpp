@@ -191,13 +191,13 @@ TokenExchangeResponse GrowwBroker::exchange_token(const QString& api_key, const 
     auto resp = BrokerHttp::instance().post_json("https://api.groww.in/v1/token/api/access", body, headers);
 
     if (!resp.success)
-        return {false, "", "", "", checked_error(resp, "Network error")};
+        return {false, "", "", "", checked_error(resp, "Network error"), ""};
 
     QString token = resp.json["token"].toString();
     if (token.isEmpty())
-        return {false, "", "", "", checked_error(resp, "No token in response")};
+        return {false, "", "", "", checked_error(resp, "No token in response"), ""};
 
-    return {true, token, "", "", ""};
+    return {true, token, "", "", "", ""};
 }
 
 // ============================================================================

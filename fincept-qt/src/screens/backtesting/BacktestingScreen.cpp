@@ -1324,7 +1324,7 @@ void BacktestingScreen::clear_results() {
     raw_json_edit_->clear();
 }
 
-void BacktestingScreen::display_result(const QJsonObject& data) {
+void BacktestingScreen::display_result(const QJsonObject& payload) {
     clear_results();
 
     auto accent = providers_[active_provider_].color.name();
@@ -1339,9 +1339,9 @@ void BacktestingScreen::display_result(const QJsonObject& data) {
     summary_layout_->addWidget(header);
 
     // Extract performance metrics (handle nested structures)
-    auto perf = data.contains("performance") ? data["performance"].toObject()
-                : data.contains("data")      ? data["data"].toObject().value("performance").toObject()
-                                             : data;
+    auto perf = payload.contains("performance") ? payload["performance"].toObject()
+                : payload.contains("payload")      ? payload["payload"].toObject().value("performance").toObject()
+                                             : payload;
 
     // Key metric cards in grid
     auto* cards = new QWidget(summary_container_);
@@ -1406,8 +1406,8 @@ void BacktestingScreen::display_result(const QJsonObject& data) {
         cards->deleteLater();
 
     // If result has a status/message, show it
-    if (data.contains("status")) {
-        auto status = data["status"].toString();
+    if (payload.contains("status")) {
+        auto status = payload["status"].toString();
         auto* status_lbl = new QLabel(QString("Status: %1").arg(status), summary_container_);
         status_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:8px;")
                                       .arg(status == "success" ? ui::colors::POSITIVE() : ui::colors::WARNING())
@@ -1441,8 +1441,8 @@ void BacktestingScreen::display_result(const QJsonObject& data) {
     }
 
     // ── TRADES tab ──
-    auto trades = data.contains("trades") ? data["trades"].toArray()
-                  : data.contains("data") ? data["data"].toObject().value("trades").toArray()
+    auto trades = payload.contains("trades") ? payload["trades"].toArray()
+                  : payload.contains("payload") ? payload["payload"].toObject().value("trades").toArray()
                                           : QJsonArray();
 
     if (!trades.isEmpty() && trades[0].isObject()) {
@@ -1469,7 +1469,7 @@ void BacktestingScreen::display_result(const QJsonObject& data) {
     }
 
     // ── RAW JSON tab ──
-    raw_json_edit_->setPlainText(QJsonDocument(data).toJson(QJsonDocument::Indented));
+    raw_json_edit_->setPlainText(QJsonDocument(payload).toJson(QJsonDocument::Indented));
 
     // Switch to summary tab
     result_tabs_->setCurrentIndex(0);
@@ -1496,13 +1496,13 @@ void BacktestingScreen::display_error(const QString& msg) {
 
 // ── Signal handlers ──────────────────────────────────────────────────────────
 
-void BacktestingScreen::on_result(const QString& provider, const QString& command, const QJsonObject& data) {
+void BacktestingScreen::on_result(const QString& provider, const QString& command, const QJsonObject& payload) {
     // Route background metadata commands — don't touch run state or results UI
     if (command == "get_strategies") {
         // Only apply if result is for the currently-active provider
         if (provider != providers_[active_provider_].slug)
             return;
-        strategies_ = services::backtest::strategies_from_json(data);
+        strategies_ = services::backtest::strategies_from_json(payload);
         auto cats = services::backtest::categories_from_strategies(strategies_);
         strategy_category_combo_->blockSignals(true);
         strategy_category_combo_->clear();
@@ -1517,7 +1517,7 @@ void BacktestingScreen::on_result(const QString& provider, const QString& comman
         if (provider != providers_[active_provider_].slug)
             return;
         // Populate both indicator combos from {indicators:{Cat:[{id,name}]}}
-        auto ind_obj = data.value("indicators").toObject();
+        auto ind_obj = payload.value("indicators").toObject();
         indicator_combo_->clear();
         ind_signal_indicator_combo_->clear();
         for (const auto& cat : ind_obj.keys()) {
@@ -1536,7 +1536,7 @@ void BacktestingScreen::on_result(const QString& provider, const QString& comman
     is_running_ = false;
     run_button_->setEnabled(true);
     set_status_state("READY", ui::colors::POSITIVE, "rgba(22,163,74,0.08)");
-    display_result(data);
+    display_result(payload);
     LOG_INFO("Backtesting", QString("[%1/%2] Complete").arg(provider, command));
 }
 

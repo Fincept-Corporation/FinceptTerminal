@@ -571,7 +571,7 @@ FactorExposureData generate_factor_exposure(const std::vector<std::string>& asse
     FactorExposureData data;
     data.factors = {"Market", "Size", "Value", "Momentum", "Low Vol", "Quality", "Yield"};
     data.assets = assets;
-    for (const auto& asset : assets) {
+    for ([[maybe_unused]] const auto& asset : assets) {
         std::vector<float> row;
         // Market factor: most equities high
         row.push_back(0.8f + (randf() - 0.5f) * 0.3f);
@@ -690,7 +690,7 @@ MonetaryPolicyData generate_monetary_policy() {
     for (int i = 0; i < (int)data.central_banks.size(); i++) {
         std::vector<float> row;
         float rate = current_rates[i];
-        for (int m : data.meetings_ahead) {
+        for ([[maybe_unused]] int m : data.meetings_ahead) {
             rate += expected_cuts[i] * (randf() > 0.5f ? 1.0f : 0.0f);
             row.push_back(rate + (randf() - 0.5f) * 0.05f);
         }

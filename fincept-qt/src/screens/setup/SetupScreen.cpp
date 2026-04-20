@@ -476,7 +476,7 @@ void SetupScreen::prefill_completed_steps() {
     // check_status() slow path can spawn Python processes (up to ~15s on first run).
     // Run it on a background thread and post results back to the UI thread — P1/P8.
     QPointer<SetupScreen> self = this;
-    QtConcurrent::run([self]() {
+    (void)QtConcurrent::run([self]() {
         const auto status = python::PythonSetupManager::instance().check_status();
         QMetaObject::invokeMethod(self, [self, status]() {
             if (!self)

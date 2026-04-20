@@ -468,7 +468,7 @@ void PythonSetupManager::run_setup() {
     LOG_INFO("PythonSetup", "=== run_setup START ===");
     QPointer<PythonSetupManager> self = this;
 
-    QtConcurrent::run([self]() {
+    (void)QtConcurrent::run([self]() {
         if (!self)
             return;
 

@@ -28,7 +28,6 @@ using namespace fincept::ui;
 GovDataUKPanel::GovDataUKPanel(QWidget* parent) : QWidget(parent) {
     // UK has a unique #govPopularBtn — pass its style as extra_qss
     auto uk_extra = [&]() -> QString {
-        const auto& t = ThemeManager::instance().tokens();
         const auto cc = QColor(kGovDataUKColor);
         const QString c = kGovDataUKColor;
         const QString cr = QString::number(cc.red());
@@ -256,52 +255,52 @@ void GovDataUKPanel::on_result(const QString& request_id, const services::GovDat
     }
 
     // Unwrap top-level "data" field — always an array for UK panel
-    QJsonArray data;
+    QJsonArray payload;
     const QJsonValue raw = result.data["data"];
     if (raw.isArray()) {
-        data = raw.toArray();
+        payload = raw.toArray();
     } else if (raw.isObject()) {
         // Defensive: in case a future command wraps in {datasets:[]}
         const QJsonObject obj = raw.toObject();
         if (obj.contains("datasets"))
-            data = obj["datasets"].toArray();
+            payload = obj["datasets"].toArray();
         else if (obj.contains("result"))
-            data = obj["result"].toArray();
+            payload = obj["result"].toArray();
     }
 
     if (request_id == "ukgov_publishers" || request_id == "ukgov_popular") {
-        current_publishers_ = data;
-        populate_publishers(data);
+        current_publishers_ = payload;
+        populate_publishers(payload);
         current_view_ = Publishers;
         content_stack_->setCurrentIndex(Publishers);
-        LOG_INFO("GovDataUKPanel", "Loaded " + QString::number(data.size()) + " publishers");
+        LOG_INFO("GovDataUKPanel", "Loaded " + QString::number(payload.size()) + " publishers");
 
     } else if (request_id.startsWith("ukgov_datasets_")) {
         int total = result.data["metadata"].toObject()["total_count"].toInt(0);
         if (total == 0)
-            total = data.size();
-        current_datasets_ = data;
-        populate_datasets(data, total);
+            total = payload.size();
+        current_datasets_ = payload;
+        populate_datasets(payload, total);
         current_view_ = Datasets;
         content_stack_->setCurrentIndex(Datasets);
-        LOG_INFO("GovDataUKPanel", "Loaded " + QString::number(data.size()) + " datasets");
+        LOG_INFO("GovDataUKPanel", "Loaded " + QString::number(payload.size()) + " datasets");
 
     } else if (request_id.startsWith("ukgov_search_")) {
         int total = result.data["metadata"].toObject()["total_count"].toInt(0);
         if (total == 0)
-            total = data.size();
-        current_datasets_ = data;
-        populate_datasets(data, total);
+            total = payload.size();
+        current_datasets_ = payload;
+        populate_datasets(payload, total);
         current_view_ = Datasets;
         content_stack_->setCurrentIndex(Datasets);
-        LOG_INFO("GovDataUKPanel", "Search returned " + QString::number(data.size()) + " datasets");
+        LOG_INFO("GovDataUKPanel", "Search returned " + QString::number(payload.size()) + " datasets");
 
     } else if (request_id.startsWith("ukgov_resources_")) {
-        current_resources_ = data;
-        populate_resources(data);
+        current_resources_ = payload;
+        populate_resources(payload);
         current_view_ = Resources;
         content_stack_->setCurrentIndex(Resources);
-        LOG_INFO("GovDataUKPanel", "Loaded " + QString::number(data.size()) + " resources");
+        LOG_INFO("GovDataUKPanel", "Loaded " + QString::number(payload.size()) + " resources");
     }
 
     update_toolbar_state();
@@ -310,12 +309,12 @@ void GovDataUKPanel::on_result(const QString& request_id, const services::GovDat
 
 // ── Populate tables ───────────────────────────────────────────────────────────
 
-void GovDataUKPanel::populate_publishers(const QJsonArray& data) {
+void GovDataUKPanel::populate_publishers(const QJsonArray& json) {
     publishers_table_->setRowCount(0);
-    publishers_table_->setRowCount(data.size());
+    publishers_table_->setRowCount(json.size());
 
-    for (int i = 0; i < data.size(); ++i) {
-        const auto obj = data[i].toObject();
+    for (int i = 0; i < json.size(); ++i) {
+        const auto obj = json[i].toObject();
 
         // Prefer display_name → title → name → id
         QString name = obj["display_name"].toString();
@@ -336,15 +335,15 @@ void GovDataUKPanel::populate_publishers(const QJsonArray& data) {
         publishers_table_->setItem(i, 0, name_item);
     }
 
-    row_count_label_->setText(QString::number(data.size()) + " publishers");
+    row_count_label_->setText(QString::number(json.size()) + " publishers");
 }
 
-void GovDataUKPanel::populate_datasets(const QJsonArray& data, int total_count) {
+void GovDataUKPanel::populate_datasets(const QJsonArray& json, int total_count) {
     datasets_table_->setRowCount(0);
-    datasets_table_->setRowCount(data.size());
+    datasets_table_->setRowCount(json.size());
 
-    for (int i = 0; i < data.size(); ++i) {
-        const auto obj = data[i].toObject();
+    for (int i = 0; i < json.size(); ++i) {
+        const auto obj = json[i].toObject();
 
         QString title = obj["title"].toString();
         if (title.isEmpty())
@@ -382,15 +381,15 @@ void GovDataUKPanel::populate_datasets(const QJsonArray& data, int total_count) 
         datasets_table_->setItem(i, 3, tag_item);
     }
 
-    row_count_label_->setText(QString("Showing %1 of %2").arg(data.size()).arg(total_count));
+    row_count_label_->setText(QString("Showing %1 of %2").arg(json.size()).arg(total_count));
 }
 
-void GovDataUKPanel::populate_resources(const QJsonArray& data) {
+void GovDataUKPanel::populate_resources(const QJsonArray& json) {
     resources_table_->setRowCount(0);
-    resources_table_->setRowCount(data.size());
+    resources_table_->setRowCount(json.size());
 
-    for (int i = 0; i < data.size(); ++i) {
-        const auto obj = data[i].toObject();
+    for (int i = 0; i < json.size(); ++i) {
+        const auto obj = json[i].toObject();
 
         QString name = obj["name"].toString();
         if (name.isEmpty())
@@ -433,7 +432,7 @@ void GovDataUKPanel::populate_resources(const QJsonArray& data) {
         resources_table_->setItem(i, 4, url_item);
     }
 
-    row_count_label_->setText(QString::number(data.size()) + " files");
+    row_count_label_->setText(QString::number(json.size()) + " files");
 }
 
 // ── Navigation slots ──────────────────────────────────────────────────────────

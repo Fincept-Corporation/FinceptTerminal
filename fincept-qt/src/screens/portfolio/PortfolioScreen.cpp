@@ -589,7 +589,7 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
     services::PortfolioService::instance().fetch_risk_free_rate();
 }
 
-void PortfolioScreen::on_summary_error(QString portfolio_id, QString error) {
+void PortfolioScreen::on_summary_error(QString portfolio_id, QString /*error*/) {
     if (portfolio_id != selected_id_)
         return;
     // Show empty state with error — for now just revert to empty

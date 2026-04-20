@@ -4,6 +4,7 @@
 
 #include <QBrush>
 #include <QDateTime>
+#include <QTimeZone>
 #include <QHeaderView>
 #include <QPointer>
 #include <QTimer>
@@ -20,7 +21,7 @@ constexpr int kMaxRows = 200;
 constexpr int kFlashMs = 600;
 
 void apply_row(QTableWidget* table, int row, const PredictionTrade& t, int price_decimals) {
-    const QString time = QDateTime::fromMSecsSinceEpoch(t.ts_ms, Qt::UTC).toString("HH:mm:ss");
+    const QString time = QDateTime::fromMSecsSinceEpoch(t.ts_ms, QTimeZone::UTC).toString("HH:mm:ss");
     table->setItem(row, 0, new QTableWidgetItem(time));
     table->setItem(row, 1, new QTableWidgetItem("TRADE"));
 

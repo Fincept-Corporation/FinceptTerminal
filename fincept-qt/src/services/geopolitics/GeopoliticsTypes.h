@@ -11,13 +11,14 @@ namespace fincept::services::geo {
 
 struct NewsEvent {
     QString url;
-    QString domain;
+    QString source;
     QString event_category;
-    QString matched_keywords;
+    QString title;
     QString city;
     QString country;
     double latitude = 0;
     double longitude = 0;
+    bool has_coords = false;
     QString extracted_date;
     QString created_at;
 };

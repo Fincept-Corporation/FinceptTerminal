@@ -6,6 +6,7 @@
 
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QHideEvent>
 #include <QPainter>
 #include <QStackedWidget>
 #include <QVBoxLayout>
@@ -131,6 +132,21 @@ LoginScreen::LoginScreen(QWidget* parent) : QWidget(parent) {
 }
 
 // ── Background Paint ─────────────────────────────────────────────────────────
+
+void LoginScreen::hideEvent(QHideEvent* event) {
+    // Wipe credential + MFA inputs whenever this screen leaves the stack so
+    // they can't be recovered or pre-filled after a logout/navigation.
+    if (email_input_) email_input_->clear();
+    if (password_input_) {
+        password_input_->clear();
+        password_input_->setEchoMode(QLineEdit::Password);
+    }
+    if (mfa_input_) mfa_input_->clear();
+    clear_error();
+    if (mfa_error_) mfa_error_->hide();
+    if (pages_) pages_->setCurrentIndex(0);
+    QWidget::hideEvent(event);
+}
 
 void LoginScreen::paintEvent(QPaintEvent* /*event*/) {
     QPainter p(this);

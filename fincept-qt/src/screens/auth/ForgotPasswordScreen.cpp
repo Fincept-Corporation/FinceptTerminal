@@ -6,6 +6,7 @@
 
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QHideEvent>
 #include <QPainter>
 #include <QVBoxLayout>
 
@@ -42,18 +43,6 @@ static QString btn_primary() {
                    "QPushButton:disabled { color: %4; background: %5; border-color: %6; }")
         .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE(), ui::colors::TEXT_DIM(), ui::colors::BG_RAISED(),
              ui::colors::BORDER_DIM());
-}
-
-static QString btn_standard() {
-    return QString("QPushButton {"
-                   "  background: %1; color: %2;"
-                   "  border: 1px solid %3;"
-                   "  padding: 0 12px; font-size: 14px; font-weight: 700;"
-                   "  font-family: 'Consolas','Courier New',monospace;"
-                   "}"
-                   "QPushButton:hover { color: %4; background: %5; }")
-        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(),
-             ui::colors::BG_HOVER());
 }
 
 static QString link_style() {
@@ -122,6 +111,19 @@ ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
 }
 
 // ── Background ───────────────────────────────────────────────────────────────
+
+void ForgotPasswordScreen::hideEvent(QHideEvent* event) {
+    // Wipe email/OTP/new-password inputs and return to step 1 whenever the
+    // screen leaves the stack — reset state must not linger.
+    for (QLineEdit* w : {email_input_, otp_input_, new_password_, confirm_password_}) {
+        if (w) w->clear();
+    }
+    if (new_password_) new_password_->setEchoMode(QLineEdit::Password);
+    if (confirm_password_) confirm_password_->setEchoMode(QLineEdit::Password);
+    if (error_label_) error_label_->hide();
+    if (pages_) pages_->setCurrentIndex(0);
+    QWidget::hideEvent(event);
+}
 
 void ForgotPasswordScreen::paintEvent(QPaintEvent* /*event*/) {
     QPainter p(this);

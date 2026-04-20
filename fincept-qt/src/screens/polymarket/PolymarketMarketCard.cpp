@@ -11,10 +11,6 @@ using namespace fincept::services::prediction;
 
 static const char* OUTCOME_BAR_COLORS[] = {"#00D66F", "#FF3B3B", "#FF8800", "#4F8EF7", "#A855F7"};
 
-static QChar outcome_initial(const QString& name) {
-    return name.isEmpty() ? QChar('?') : name.at(0).toUpper();
-}
-
 // ── Model ───────────────────────────────────────────────────────────────────
 
 PolymarketMarketCardModel::PolymarketMarketCardModel(QObject* parent) : QAbstractListModel(parent) {}
@@ -112,7 +108,7 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
     if (selected) {
         // Selected: deep tinted background, left accent rail
         QColor sel_bg = accent;
-        sel_bg.setAlphaF(0.10);
+        sel_bg.setAlphaF(0.10f);
         painter->fillRect(r, sel_bg);
         // Left accent rail (3px)
         painter->fillRect(r.left(), r.top(), 3, r.height(), accent);

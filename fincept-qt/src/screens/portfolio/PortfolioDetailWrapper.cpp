@@ -111,26 +111,26 @@ void PortfolioDetailWrapper::update_data(const portfolio::PortfolioSummary& summ
         return;
 
     // Update the active view with new data
-    if (auto* v = qobject_cast<AnalyticsSectorsView*>(current)) {
-        v->set_data(summary, currency);
-    } else if (auto* v = qobject_cast<PerformanceRiskView*>(current)) {
-        v->set_data(summary, currency);
-        v->set_snapshots(current_snapshots_);
-    } else if (auto* v = qobject_cast<RiskManagementView*>(current)) {
-        v->set_data(summary, currency);
-        v->set_metrics(current_metrics_);
-    } else if (auto* v = qobject_cast<PortfolioOptimizationView*>(current)) {
-        v->set_data(summary, currency);
-    } else if (auto* v = qobject_cast<QuantStatsView*>(current)) {
-        v->set_data(summary, currency);
-    } else if (auto* v = qobject_cast<ReportsView*>(current)) {
-        v->set_data(summary, currency);
-    } else if (auto* v = qobject_cast<CustomIndexView*>(current)) {
-        v->set_data(summary, currency);
-    } else if (auto* v = qobject_cast<PlanningView*>(current)) {
-        v->set_data(summary, currency);
-    } else if (auto* v = qobject_cast<EconomicsView*>(current)) {
-        v->set_data(summary, currency);
+    if (auto* sectors_v = qobject_cast<AnalyticsSectorsView*>(current)) {
+        sectors_v->set_data(summary, currency);
+    } else if (auto* perf_v = qobject_cast<PerformanceRiskView*>(current)) {
+        perf_v->set_data(summary, currency);
+        perf_v->set_snapshots(current_snapshots_);
+    } else if (auto* risk_v = qobject_cast<RiskManagementView*>(current)) {
+        risk_v->set_data(summary, currency);
+        risk_v->set_metrics(current_metrics_);
+    } else if (auto* opt_v = qobject_cast<PortfolioOptimizationView*>(current)) {
+        opt_v->set_data(summary, currency);
+    } else if (auto* quant_v = qobject_cast<QuantStatsView*>(current)) {
+        quant_v->set_data(summary, currency);
+    } else if (auto* reports_v = qobject_cast<ReportsView*>(current)) {
+        reports_v->set_data(summary, currency);
+    } else if (auto* idx_v = qobject_cast<CustomIndexView*>(current)) {
+        idx_v->set_data(summary, currency);
+    } else if (auto* plan_v = qobject_cast<PlanningView*>(current)) {
+        plan_v->set_data(summary, currency);
+    } else if (auto* econ_v = qobject_cast<EconomicsView*>(current)) {
+        econ_v->set_data(summary, currency);
     }
 }
 

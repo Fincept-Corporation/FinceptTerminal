@@ -134,7 +134,7 @@ void wire_trading_bridges(NodeRegistry& registry) {
 
 // ── Agent Bridge ───────────────────────────────────────────────────────
 
-void wire_agent_bridges(NodeRegistry& registry) {
+void wire_agent_bridges(NodeRegistry& /*registry*/) {
     // agent.run and agent.tool_picker have real executors from AgentNodes.cpp.
     // agent.single/agent.multi/agent.mediator are legacy stubs — leave their
     // executors to the fallback pass-through in wire_all_bridges if still null.

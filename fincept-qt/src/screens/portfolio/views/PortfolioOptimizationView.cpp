@@ -466,13 +466,13 @@ void PortfolioOptimizationView::run_optimization() {
                     // ── OPTIMIZE results table ────────────────────────────────
                     self->result_table_->setRowCount(
                         static_cast<int>(self->summary_.holdings.size()));
-                    for (int r = 0; r < static_cast<int>(self->summary_.holdings.size()); ++r) {
-                        const auto& h = self->summary_.holdings[r];
+                    for (int row = 0; row < static_cast<int>(self->summary_.holdings.size()); ++row) {
+                        const auto& h = self->summary_.holdings[row];
                         const double cw = h.weight;
                         const double ow = opt_weights.value(h.symbol).toDouble(cw / 100.0) * 100.0;
                         const double ch = ow - cw;
 
-                        self->result_table_->setRowHeight(r, 28);
+                        self->result_table_->setRowHeight(row, 28);
 
                         auto set = [&](int col, const QString& text,
                                        const char* color = nullptr) {
@@ -481,7 +481,7 @@ void PortfolioOptimizationView::run_optimization() {
                                                             : (Qt::AlignRight | Qt::AlignVCenter));
                             if (color)
                                 item->setForeground(QColor(color));
-                            self->result_table_->setItem(r, col, item);
+                            self->result_table_->setItem(row, col, item);
                         };
 
                         set(0, h.symbol, ui::colors::CYAN);

@@ -13,13 +13,6 @@
 namespace fincept {
 namespace {
 
-Result<void> sql(QSqlDatabase& db, const char* stmt) {
-    QSqlQuery q(db);
-    if (!q.exec(stmt))
-        return Result<void>::err(q.lastError().text().toStdString());
-    return Result<void>::ok();
-}
-
 Result<void> apply_v015(QSqlDatabase& /*db*/) {
     // This migration runs its DDL on cache.db, not fincept.db.
     // The version record is still tracked in fincept.db schema_version

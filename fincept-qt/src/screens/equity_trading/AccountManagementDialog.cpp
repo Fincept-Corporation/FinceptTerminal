@@ -457,7 +457,7 @@ void AccountManagementDialog::on_connect_account() {
     const QString auth_code_val = auth_code;
     const QString existing_additional = creds.additional_data;
 
-    QtConcurrent::run([self, broker, account_id, api_key_val, api_secret_val, auth_code_val, existing_additional]() {
+    (void)QtConcurrent::run([self, broker, account_id, api_key_val, api_secret_val, auth_code_val, existing_additional]() {
         auto result = broker->exchange_token(api_key_val, api_secret_val, auth_code_val);
 
         QMetaObject::invokeMethod(
@@ -750,7 +750,7 @@ void AccountManagementDialog::on_connect_zerodha_totp() {
     const QString acct = selected_account_id_;
     QPointer<AccountManagementDialog> self = this;
 
-    QtConcurrent::run([self, acct, user_id, password, api_key, api_secret, totp_secret]() {
+    (void)QtConcurrent::run([self, acct, user_id, password, api_key, api_secret, totp_secret]() {
         trading::ZerodhaBroker broker;
         auto stage_cb = [self](const QString& stage) {
             QMetaObject::invokeMethod(qApp, [self, stage]() {
@@ -895,7 +895,7 @@ void AccountManagementDialog::exchange_and_store_token_async(const QString& api_
     const QString acct = selected_account_id_;
     QPointer<AccountManagementDialog> self = this;
 
-    QtConcurrent::run([self, acct, api_key, api_secret, request_token]() {
+    (void)QtConcurrent::run([self, acct, api_key, api_secret, request_token]() {
         trading::ZerodhaBroker broker;
         auto result = broker.exchange_token(api_key, api_secret, request_token);
 

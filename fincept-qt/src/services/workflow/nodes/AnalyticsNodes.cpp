@@ -44,14 +44,6 @@ void analytics_run_python_json(const QString& script, const QStringList& args,
     });
 }
 
-// Helper: produce a clear "not yet implemented" result object.
-QJsonValue analytics_not_implemented(const QString& type_id) {
-    QJsonObject obj;
-    obj["error"] = "not_yet_implemented";
-    obj["node"] = type_id;
-    return obj;
-}
-
 } // anonymous namespace
 
 void register_analytics_nodes(NodeRegistry& registry) {
@@ -585,14 +577,13 @@ void register_analytics_nodes(NodeRegistry& registry) {
                 }
 
                 double peak = prices[0], max_dd = 0;
-                int dd_start = 0, dd_end = 0, dd_peak_idx = 0;
+                int dd_start = 0, dd_end = 0;
                 int current_dd_start = 0;
                 int max_dd_duration = 0, current_duration = 0;
 
                 for (int i = 0; i < prices.size(); ++i) {
                     if (prices[i] > peak) {
                         peak = prices[i];
-                        dd_peak_idx = i;
                         current_dd_start = i;
                         current_duration = 0;
                     }

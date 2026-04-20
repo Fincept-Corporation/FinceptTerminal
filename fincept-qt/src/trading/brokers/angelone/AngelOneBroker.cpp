@@ -719,15 +719,6 @@ QString AngelOneBroker::checked_error(const BrokerHttpResponse& resp, const QStr
     return msg;
 }
 
-static QString margin_error(const BrokerHttpResponse& resp, const QString& fallback) {
-    QString msg = resp.json.value("message").toString();
-    if (msg.isEmpty())
-        msg = resp.error;
-    if (msg.isEmpty())
-        msg = fallback;
-    return msg;
-}
-
 static double read_num_any(const QJsonObject& o, const QStringList& keys) {
     for (const auto& k : keys) {
         if (!o.contains(k))

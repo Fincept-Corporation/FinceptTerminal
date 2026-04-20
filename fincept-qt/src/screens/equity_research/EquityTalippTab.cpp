@@ -423,7 +423,7 @@ void EquityTalippTab::on_compute_clicked() {
 }
 
 // ── rebuild_last_values ───────────────────────────────────────────────────────
-void EquityTalippTab::rebuild_last_values(const QString& indicator_id, const QVector<double>& values) {
+void EquityTalippTab::rebuild_last_values(const QString& /*indicator_id*/, const QVector<double>& values) {
     auto* hl = qobject_cast<QHBoxLayout*>(last_values_area_->layout());
     if (!hl)
         return;

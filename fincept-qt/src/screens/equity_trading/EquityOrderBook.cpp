@@ -138,7 +138,6 @@ void EquityOrderBook::rebuild_cache() {
     const int half = h / 2;
     const int col_price = 4;
     const int col_qty = w / 2;
-    const int col_total = w * 3 / 4;
 
     // Find max quantity for bar scaling
     double max_qty = 1.0;

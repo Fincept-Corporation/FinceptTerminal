@@ -372,21 +372,21 @@ void GovDataProviderPanel::on_result(const QString& request_id, const services::
 
     // Some scripts (Australia search/org-datasets) return data as {"datasets":[...], "count":...}
     // instead of a flat array. Unwrap if needed.
-    QJsonArray data;
+    QJsonArray payload;
     QJsonValue raw = result.data["data"];
     if (raw.isArray()) {
-        data = raw.toArray();
+        payload = raw.toArray();
     } else if (raw.isObject()) {
         QJsonObject obj = raw.toObject();
         if (obj.contains("datasets"))
-            data = obj["datasets"].toArray();
+            payload = obj["datasets"].toArray();
         else if (obj.contains("result"))
-            data = obj["result"].toArray();
+            payload = obj["result"].toArray();
     }
 
     if (request_id.startsWith("gov_orgs_")) {
-        current_orgs_ = data;
-        populate_orgs(data);
+        current_orgs_ = payload;
+        populate_orgs(payload);
         content_stack_->setCurrentIndex(Orgs);
         current_view_ = Orgs;
         update_breadcrumb();
@@ -396,15 +396,15 @@ void GovDataProviderPanel::on_result(const QString& request_id, const services::
         if (total == 0 && result.data["data"].isObject())
             total = result.data["data"].toObject()["count"].toInt(0);
         if (total == 0)
-            total = data.size();
-        current_datasets_ = data;
-        populate_datasets(data, total);
+            total = payload.size();
+        current_datasets_ = payload;
+        populate_datasets(payload, total);
         content_stack_->setCurrentIndex(Datasets);
         current_view_ = Datasets;
         update_breadcrumb();
     } else if (request_id.startsWith("gov_resources_")) {
-        current_resources_ = data;
-        populate_resources(data);
+        current_resources_ = payload;
+        populate_resources(payload);
         content_stack_->setCurrentIndex(Resources);
         current_view_ = Resources;
         update_breadcrumb();
@@ -415,12 +415,12 @@ void GovDataProviderPanel::on_result(const QString& request_id, const services::
 
 // ── Populate tables ──────────────────────────────────────────────────────────
 
-void GovDataProviderPanel::populate_orgs(const QJsonArray& data) {
+void GovDataProviderPanel::populate_orgs(const QJsonArray& json) {
     orgs_table_->setRowCount(0);
-    orgs_table_->setRowCount(data.size());
+    orgs_table_->setRowCount(json.size());
 
-    for (int i = 0; i < data.size(); ++i) {
-        const auto obj = data[i].toObject();
+    for (int i = 0; i < json.size(); ++i) {
+        const auto obj = json[i].toObject();
         QString name = obj["display_name"].toString();
         if (name.isEmpty())
             name = obj["title"].toString();
@@ -441,15 +441,15 @@ void GovDataProviderPanel::populate_orgs(const QJsonArray& data) {
         orgs_table_->setItem(i, 1, cnt);
     }
 
-    row_count_label_->setText(QString::number(data.size()) + " " + org_label_.toLower() + "s");
+    row_count_label_->setText(QString::number(json.size()) + " " + org_label_.toLower() + "s");
 }
 
-void GovDataProviderPanel::populate_datasets(const QJsonArray& data, int total_count) {
+void GovDataProviderPanel::populate_datasets(const QJsonArray& json, int total_count) {
     datasets_table_->setRowCount(0);
-    datasets_table_->setRowCount(data.size());
+    datasets_table_->setRowCount(json.size());
 
-    for (int i = 0; i < data.size(); ++i) {
-        const auto obj = data[i].toObject();
+    for (int i = 0; i < json.size(); ++i) {
+        const auto obj = json[i].toObject();
         QString title = obj["title"].toString();
         if (title.isEmpty())
             title = obj["name"].toString();
@@ -486,15 +486,15 @@ void GovDataProviderPanel::populate_datasets(const QJsonArray& data, int total_c
         datasets_table_->setItem(i, 3, tag_item);
     }
 
-    row_count_label_->setText(QString("Showing %1 of %2").arg(data.size()).arg(total_count));
+    row_count_label_->setText(QString("Showing %1 of %2").arg(json.size()).arg(total_count));
 }
 
-void GovDataProviderPanel::populate_resources(const QJsonArray& data) {
+void GovDataProviderPanel::populate_resources(const QJsonArray& json) {
     resources_table_->setRowCount(0);
-    resources_table_->setRowCount(data.size());
+    resources_table_->setRowCount(json.size());
 
-    for (int i = 0; i < data.size(); ++i) {
-        const auto obj = data[i].toObject();
+    for (int i = 0; i < json.size(); ++i) {
+        const auto obj = json[i].toObject();
         QString name = obj["name"].toString();
         if (name.isEmpty())
             name = obj["id"].toString();
@@ -546,7 +546,7 @@ void GovDataProviderPanel::populate_resources(const QJsonArray& data) {
         }
     }
 
-    row_count_label_->setText(QString::number(data.size()) + " files");
+    row_count_label_->setText(QString::number(json.size()) + " files");
 }
 
 // ── View navigation ──────────────────────────────────────────────────────────

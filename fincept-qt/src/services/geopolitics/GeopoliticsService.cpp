@@ -71,7 +71,7 @@ void GeopoliticsService::fetch_events(const QString& country, const QString& cit
             return;
         }
         auto root = result.value().object();
-        // API returns {success, data: {events: [...]}} — unwrap the data envelope
+        // API returns {success, message, data: {events: [...], pagination: {...}}}
         auto obj = root.contains("data") ? root["data"].toObject() : root;
         auto arr = obj["events"].toArray();
         QVector<NewsEvent> events;
@@ -80,33 +80,40 @@ void GeopoliticsService::fetch_events(const QString& country, const QString& cit
             auto e = v.toObject();
             NewsEvent ev;
             ev.url = e["url"].toString();
-            ev.domain = e["domain"].toString();
+            ev.source = e["source"].toString();
             ev.event_category = e["event_category"].toString();
-            ev.matched_keywords = e["matched_keywords"].toString();
+            ev.title = e["title"].toString();
             ev.city = e["city"].toString();
             ev.country = e["country"].toString();
-            ev.latitude = e["latitude"].toDouble();
-            ev.longitude = e["longitude"].toDouble();
+            const auto lat_v = e["latitude"];
+            const auto lng_v = e["longitude"];
+            ev.has_coords = lat_v.isDouble() && lng_v.isDouble();
+            ev.latitude = ev.has_coords ? lat_v.toDouble() : 0.0;
+            ev.longitude = ev.has_coords ? lng_v.toDouble() : 0.0;
             ev.extracted_date = e["extracted_date"].toString();
             ev.created_at = e["created_at"].toString();
-            // Filter out invalid coordinates
-            if (std::isnan(ev.latitude) || std::isnan(ev.longitude))
-                continue;
             events.append(ev);
         }
-        int total = obj.contains("total") ? obj["total"].toInt() : events.size();
+        // Pagination envelope replaces the old flat "total" field
+        int total = events.size();
+        if (obj.contains("pagination"))
+            total = obj["pagination"].toObject()["total_events"].toInt(total);
+        else if (obj.contains("total"))
+            total = obj["total"].toInt(total);
         // Serialize events to JSON for CacheManager persistence
         QJsonArray cached_arr;
         for (const auto& ev : events) {
             QJsonObject o;
             o["url"] = ev.url;
-            o["domain"] = ev.domain;
+            o["source"] = ev.source;
             o["event_category"] = ev.event_category;
-            o["matched_keywords"] = ev.matched_keywords;
+            o["title"] = ev.title;
             o["city"] = ev.city;
             o["country"] = ev.country;
-            o["latitude"] = ev.latitude;
-            o["longitude"] = ev.longitude;
+            if (ev.has_coords) {
+                o["latitude"] = ev.latitude;
+                o["longitude"] = ev.longitude;
+            }
             o["extracted_date"] = ev.extracted_date;
             o["created_at"] = ev.created_at;
             cached_arr.append(o);
@@ -225,19 +232,21 @@ void GeopoliticsService::fetch_unique_categories() {
 
 void GeopoliticsService::fetch_unique_cities() {
     QPointer<GeopoliticsService> self = this;
-    HttpClient::instance().get(QString(kApiBase) + "/unique-cities", [self](Result<QJsonDocument> result) {
+    HttpClient::instance().get(QString(kApiBase) + "?get_unique_cities=true", [self](Result<QJsonDocument> result) {
         if (!self)
             return;
         if (!result.is_ok()) {
             emit self->error_occurred("cities", QString::fromStdString(result.error()));
             return;
         }
-        auto arr = result.value().array();
+        // Response: {success, message, data: {unique_cities: [{city, country}, ...]}}
+        auto root = result.value().object();
+        auto data = root.contains("data") ? root["data"].toObject() : root;
+        auto arr = data["unique_cities"].toArray();
         QStringList cities;
         cities.reserve(arr.size());
         for (const auto& v : arr) {
-            auto o = v.toObject();
-            auto city = o["city"].toString();
+            const auto city = v.toObject()["city"].toString();
             if (!city.isEmpty())
                 cities.append(city);
         }
@@ -291,8 +300,6 @@ static QVector<HDXDataset> parse_hdx_results(const QString& output) {
     }
     return datasets;
 }
-
-static inline void publish_hdx(GeopoliticsService* self, const QString& context, const QVector<HDXDataset>& datasets);
 
 void GeopoliticsService::search_hdx_conflicts() {
     run_python("hdx_data.py", {"search_conflict", "", "20"}, "hdx_conflicts", [this](bool ok, const QString& out) {

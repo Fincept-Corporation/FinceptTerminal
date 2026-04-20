@@ -106,7 +106,7 @@ void CftcPanel::activate() {
 // ── Controls ──────────────────────────────────────────────────────────────────
 
 void CftcPanel::build_controls(QHBoxLayout* thl) {
-    auto make_lbl = [this](const QString& text) {
+    auto make_lbl = [](const QString& text) {
         auto* l = new QLabel(text);
         l->setStyleSheet(ctrl_label_style());
         return l;

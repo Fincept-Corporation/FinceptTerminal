@@ -232,7 +232,7 @@ void InstrumentService::force_refresh(const QString& broker_id, const BrokerCred
     }
     emit refresh_started(broker_id);
     QPointer<InstrumentService> self = this;
-    QtConcurrent::run([self, broker_id, creds]() {
+    (void)QtConcurrent::run([self, broker_id, creds]() {
         if (!self)
             return;
         self->do_refresh(broker_id, creds);
@@ -273,7 +273,7 @@ void InstrumentService::load_from_db_async(const QString& broker_id,
     QPointer<InstrumentService> self = this;
     QString db_path = fincept::Database::instance().path(); // read path on UI thread before going async
 
-    QtConcurrent::run([self, broker_id, db_path, callback]() {
+    (void)QtConcurrent::run([self, broker_id, db_path, callback]() {
         // Each worker thread needs its own named QSqlDatabase connection.
         const QString conn_name =
             "inst_async_" + broker_id + "_" + QUuid::createUuid().toString(QUuid::WithoutBraces);

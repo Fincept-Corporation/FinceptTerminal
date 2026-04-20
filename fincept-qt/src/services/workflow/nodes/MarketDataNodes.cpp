@@ -43,14 +43,6 @@ void run_python_json(const QString& script, const QStringList& args,
     });
 }
 
-// Helper: produce a clear "not yet implemented" result object.
-QJsonValue not_implemented(const QString& type_id) {
-    QJsonObject obj;
-    obj["error"] = "not_yet_implemented";
-    obj["node"] = type_id;
-    return obj;
-}
-
 } // anonymous namespace
 
 void register_market_data_nodes(NodeRegistry& registry) {

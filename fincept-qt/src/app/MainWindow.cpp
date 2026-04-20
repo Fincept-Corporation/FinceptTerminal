@@ -305,6 +305,9 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
     addAction(act_focus);
     connect(act_focus, &QAction::triggered, this, [this]() {
         if (locked_) return;
+        // Don't let the focus-mode shortcut toggle shell visibility while
+        // the user is on an auth screen — the toolbar must stay hidden.
+        if (stack_ && stack_->currentIndex() == 0) return;
         focus_mode_ = !focus_mode_;
         if (dock_toolbar_)
             dock_toolbar_->setVisible(!focus_mode_);
@@ -442,6 +445,8 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
             else
                 showFullScreen();
         } else if (action == "focus_mode") {
+            // Auth screens must never reveal the shell via focus-mode toggle.
+            if (stack_ && stack_->currentIndex() == 0) return;
             focus_mode_ = !focus_mode_;
             if (dock_toolbar_)
                 dock_toolbar_->setVisible(!focus_mode_);
@@ -964,37 +969,48 @@ void MainWindow::on_auth_state_changed() {
     }
 }
 
+// Centralised transition into the auth stack. Any path that shows a login /
+// register / forgot / pricing / info screen must go through here so the
+// privileged shell (menus, command bar, CHAT, LOGOUT, status ticker) cannot
+// be seen by an unauthenticated user. Title is also reset by set_shell_visible
+// so the last-visited screen name does not leak.
+void MainWindow::enter_auth_stack(int auth_index) {
+    set_shell_visible(false);
+    stack_->setCurrentIndex(0);
+    auth_stack_->setCurrentIndex(auth_index);
+}
+
 void MainWindow::show_login() {
-    auth_stack_->setCurrentIndex(0);
+    enter_auth_stack(0);
 }
 void MainWindow::show_register() {
-    auth_stack_->setCurrentIndex(1);
+    enter_auth_stack(1);
 }
 void MainWindow::show_forgot_password() {
-    auth_stack_->setCurrentIndex(2);
+    enter_auth_stack(2);
 }
 void MainWindow::show_pricing() {
-    auth_stack_->setCurrentIndex(3);
+    enter_auth_stack(3);
 }
 void MainWindow::show_info_contact() {
     info_stack_->setCurrentIndex(0);
-    auth_stack_->setCurrentIndex(4);
+    enter_auth_stack(4);
 }
 void MainWindow::show_info_terms() {
     info_stack_->setCurrentIndex(1);
-    auth_stack_->setCurrentIndex(4);
+    enter_auth_stack(4);
 }
 void MainWindow::show_info_privacy() {
     info_stack_->setCurrentIndex(2);
-    auth_stack_->setCurrentIndex(4);
+    enter_auth_stack(4);
 }
 void MainWindow::show_info_trademarks() {
     info_stack_->setCurrentIndex(3);
-    auth_stack_->setCurrentIndex(4);
+    enter_auth_stack(4);
 }
 void MainWindow::show_info_help() {
     info_stack_->setCurrentIndex(4);
-    auth_stack_->setCurrentIndex(4);
+    enter_auth_stack(4);
 }
 
 void MainWindow::show_lock_screen() {
@@ -1083,16 +1099,22 @@ void MainWindow::update_window_title() {
     if (profile != "default")
         title += QString(" [%1]").arg(profile);
 
-    if (WorkspaceManager::instance().has_current_workspace()) {
-        const QString ws = WorkspaceManager::instance().current_workspace_name();
-        if (!ws.isEmpty())
-            title += QString(" — %1").arg(ws);
-    }
+    // Workspace / screen name must never appear in the title while the user
+    // is on the auth or lock stack — that would leak the last-visited screen
+    // to an unauthenticated viewer.
+    const bool shell_visible = stack_ && stack_->currentIndex() == 1;
+    if (shell_visible) {
+        if (WorkspaceManager::instance().has_current_workspace()) {
+            const QString ws = WorkspaceManager::instance().current_workspace_name();
+            if (!ws.isEmpty())
+                title += QString(" — %1").arg(ws);
+        }
 
-    if (dock_router_) {
-        const QString id = dock_router_->current_screen_id();
-        if (!id.isEmpty())
-            title += QString(" — %1").arg(DockScreenRouter::title_for_id(id));
+        if (dock_router_) {
+            const QString id = dock_router_->current_screen_id();
+            if (!id.isEmpty())
+                title += QString(" — %1").arg(DockScreenRouter::title_for_id(id));
+        }
     }
 
     setWindowTitle(title);

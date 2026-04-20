@@ -77,8 +77,8 @@ double SpreadsheetItem::resolve_cell_value(int row, int col) const {
 
     QVariant val = item->data(Qt::DisplayRole);
     bool ok = false;
-    double d = val.toDouble(&ok);
-    return ok ? d : 0.0;
+    double dv = val.toDouble(&ok);
+    return ok ? dv : 0.0;
 }
 
 QVector<double> SpreadsheetItem::resolve_range(const QString& from, const QString& to) const {
@@ -94,14 +94,14 @@ QVector<double> SpreadsheetItem::resolve_range(const QString& from, const QStrin
     if (c1 > c2)
         std::swap(c1, c2);
 
-    QVector<double> values;
+    QVector<double> out;
     for (int r = r1; r <= r2; ++r) {
         for (int c = c1; c <= c2; ++c) {
             double v = resolve_cell_value(r, c);
-            values.append(v);
+            out.append(v);
         }
     }
-    return values;
+    return out;
 }
 
 QVariant SpreadsheetItem::evaluate_formula() const {
@@ -115,20 +115,20 @@ QVariant SpreadsheetItem::evaluate_formula() const {
     auto fm = func_re.match(expr);
     if (fm.hasMatch()) {
         QString func = fm.captured(1);
-        auto values = resolve_range(fm.captured(2), fm.captured(3));
-        if (values.isEmpty())
+        auto vals = resolve_range(fm.captured(2), fm.captured(3));
+        if (vals.isEmpty())
             return 0.0;
 
         if (func == "SUM")
-            return std::accumulate(values.begin(), values.end(), 0.0);
+            return std::accumulate(vals.begin(), vals.end(), 0.0);
         if (func == "AVG" || func == "AVERAGE")
-            return std::accumulate(values.begin(), values.end(), 0.0) / values.size();
+            return std::accumulate(vals.begin(), vals.end(), 0.0) / vals.size();
         if (func == "MIN")
-            return *std::min_element(values.begin(), values.end());
+            return *std::min_element(vals.begin(), vals.end());
         if (func == "MAX")
-            return *std::max_element(values.begin(), values.end());
+            return *std::max_element(vals.begin(), vals.end());
         if (func == "COUNT")
-            return static_cast<double>(values.size());
+            return static_cast<double>(vals.size());
     }
 
     // ── Simple cell reference: =A1 ───────────────────────────────────────
@@ -380,22 +380,22 @@ QString SpreadsheetWidget::column_label(int col) {
 QVector<QVector<QString>> SpreadsheetWidget::get_data() const {
     int rows = table_->rowCount();
     int cols = table_->columnCount();
-    QVector<QVector<QString>> data(rows);
+    QVector<QVector<QString>> cells(rows);
     for (int r = 0; r < rows; ++r) {
-        data[r].resize(cols);
+        cells[r].resize(cols);
         for (int c = 0; c < cols; ++c) {
             auto* item = dynamic_cast<SpreadsheetItem*>(table_->item(r, c));
-            data[r][c] = item ? item->raw_text() : "";
+            cells[r][c] = item ? item->raw_text() : "";
         }
     }
-    return data;
+    return cells;
 }
 
-void SpreadsheetWidget::set_data(const QVector<QVector<QString>>& data) {
+void SpreadsheetWidget::set_data(const QVector<QVector<QString>>& cells) {
     table_->blockSignals(true);
 
-    int rows = data.size();
-    int cols = rows > 0 ? data[0].size() : 26;
+    int rows = cells.size();
+    int cols = rows > 0 ? cells[0].size() : 26;
 
     // Ensure minimum size
     rows = std::max(rows, 100);
@@ -408,8 +408,8 @@ void SpreadsheetWidget::set_data(const QVector<QVector<QString>>& data) {
     for (int r = 0; r < rows; ++r) {
         for (int c = 0; c < cols; ++c) {
             QString text;
-            if (r < data.size() && c < data[r].size()) {
-                text = data[r][c];
+            if (r < cells.size() && c < cells[r].size()) {
+                text = cells[r][c];
             }
             auto* item = new SpreadsheetItem(text);
             table_->setItem(r, c, item);

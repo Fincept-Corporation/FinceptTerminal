@@ -483,7 +483,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
                 bf.setBackground(QColor("#fffbe6"));
             cursor.setBlockFormat(bf);
             QTextCharFormat fmt;
-            fmt.setFontFamily("Consolas");
+            fmt.setFontFamilies({"Consolas"});
             fmt.setFontPointSize(11);
             fmt.setForeground(QColor(theme.text_color));
             cursor.insertText(comp.content.isEmpty() ? "// code block" : comp.content, fmt);
@@ -684,9 +684,9 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
                 if (!high.isEmpty() || !low.isEmpty() || !volume.isEmpty()) {
                     cursor.insertBlock();
                     cursor.setBlockFormat(bf);
-                    QTextCharFormat meta_fmt;
-                    meta_fmt.setFontPointSize(10);
-                    meta_fmt.setForeground(QColor(theme.meta_color));
+                    QTextCharFormat detail_fmt;
+                    detail_fmt.setFontPointSize(10);
+                    detail_fmt.setForeground(QColor(theme.meta_color));
 
                     QString detail;
                     if (!high.isEmpty() && !low.isEmpty())
@@ -704,7 +704,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
                             vol_str = volume;
                         detail += "Vol: " + vol_str;
                     }
-                    cursor.insertText("    " + detail, meta_fmt);
+                    cursor.insertText("    " + detail, detail_fmt);
                 }
             }
             cursor.insertText("\n");

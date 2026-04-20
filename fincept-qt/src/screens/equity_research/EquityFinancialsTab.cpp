@@ -618,24 +618,24 @@ QWidget* EquityFinancialsTab::build_cashflow_view() {
 
 // ── Data slot ─────────────────────────────────────────────────────────────────
 
-void EquityFinancialsTab::on_financials_loaded(services::equity::FinancialsData data) {
-    if (data.symbol != current_symbol_)
+void EquityFinancialsTab::on_financials_loaded(services::equity::FinancialsData payload) {
+    if (payload.symbol != current_symbol_)
         return;
-    cached_data_ = data;
+    cached_data_ = payload;
     loaded_ = true;
     loading_overlay_->hide_loading();
 
-    populate_income_view(data);
-    populate_balance_view(data);
-    populate_cashflow_view(data);
-    populate_table(inc_table_, data.income_statement);
-    populate_table(bal_table_, data.balance_sheet);
-    populate_table(cf_table_, data.cash_flow);
-    rebuild_revenue_chart(data);
-    rebuild_margin_chart(data);
-    rebuild_balance_chart(data);
-    rebuild_cashflow_chart(data);
-    rebuild_return_chart(data);
+    populate_income_view(payload);
+    populate_balance_view(payload);
+    populate_cashflow_view(payload);
+    populate_table(inc_table_, payload.income_statement);
+    populate_table(bal_table_, payload.balance_sheet);
+    populate_table(cf_table_, payload.cash_flow);
+    rebuild_revenue_chart(payload);
+    rebuild_margin_chart(payload);
+    rebuild_balance_chart(payload);
+    rebuild_cashflow_chart(payload);
+    rebuild_return_chart(payload);
 }
 
 // ── Populate helpers ──────────────────────────────────────────────────────────

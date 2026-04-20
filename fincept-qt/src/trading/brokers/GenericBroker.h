@@ -11,7 +11,7 @@ namespace fincept::trading {
 class GenericBroker : public IBroker {
   public:
     TokenExchangeResponse exchange_token(const QString&, const QString&, const QString&) override {
-        return {false, "", "", "", QString("Not implemented for %1").arg(name())};
+        return {false, "", "", "", QString("Not implemented for %1").arg(name()), ""};
     }
     OrderPlaceResponse place_order(const BrokerCredentials&, const UnifiedOrder&) override {
         return {false, "", QString("Not implemented for %1").arg(name())};

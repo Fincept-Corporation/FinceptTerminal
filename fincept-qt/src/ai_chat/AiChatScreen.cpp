@@ -910,7 +910,7 @@ void AiChatScreen::on_send() {
             });
     } else {
         QPointer<AiChatScreen> self = this;
-        QtConcurrent::run([self, text, hist_copy]() {
+        (void)QtConcurrent::run([self, text, hist_copy]() {
             auto resp = ai_chat::LlmService::instance().chat(text, hist_copy);
             QMetaObject::invokeMethod(
                 qApp,

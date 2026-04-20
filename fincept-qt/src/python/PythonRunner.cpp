@@ -256,7 +256,7 @@ void PythonRunner::run_code(const QString& code, Callback cb) {
     file.close();
 
     // Queue as a special request — use the temp file path directly
-    queue_.enqueue({"__code__:" + temp_path, {}, std::move(cb)});
+    queue_.enqueue({"__code__:" + temp_path, {}, std::move(cb), {}});
     start_next();
 }
 
