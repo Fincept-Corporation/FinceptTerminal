@@ -1,10 +1,8 @@
 name: Build Qt Terminal - All Platforms
 
 on:
+  # Manual-only — release.yml handles tag builds / installer generation.
   workflow_dispatch:
-  push:
-    tags:
-      - 'v*'
 
 env:
   BUILD_TYPE: Release
@@ -84,13 +82,16 @@ jobs:
           update-package-index: true
 
       # ---- System dependencies (Linux) ----
+      # Ubuntu 22.04's default g++ is 11.4, but CMakeLists.txt requires GCC 12.3+.
+      # Install gcc-12/g++-12 from the Ubuntu Toolchain PPA (pre-enabled on
+      # ubuntu-22.04 runners) and pin it via CC/CXX for the rest of the job.
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo add-apt-repository universe -y
           sudo apt-get update -qq
           sudo apt-get install -y \
-            cmake ninja-build g++ \
+            cmake ninja-build gcc-12 g++-12 \
             libssl-dev \
             qt6-base-dev qt6-base-private-dev \
             qt6-tools-dev qt6-tools-dev-tools \
@@ -103,6 +104,8 @@ jobs:
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
             libxcb-xinerama0 libxcb-xkb1 \
             pkg-config zip
+          echo "CC=gcc-12"  >> "$GITHUB_ENV"
+          echo "CXX=g++-12" >> "$GITHUB_ENV"
 
       # ---- OpenSSL dev libs (Windows) ----
       # windows-2022 runners ship only the "Light" OpenSSL (no .lib files).

@@ -299,20 +299,6 @@ QWidget* QuantLibScreen::create_center_panel() {
     endpoint_combo_ = new QComboBox;
     ebl->addWidget(endpoint_combo_);
 
-    // Parameters
-    auto make_param = [&](const QString& label, QLineEdit*& input) {
-        auto* row = new QWidget(this);
-        auto* rl = new QVBoxLayout(row);
-        rl->setContentsMargins(0, 0, 0, 0);
-        rl->setSpacing(3);
-        auto* lbl = new QLabel(label);
-        lbl->setObjectName("qlLabel");
-        input = new QLineEdit;
-        rl->addWidget(lbl);
-        rl->addWidget(input);
-        ebl->addWidget(row);
-    };
-
     // JSON body input — users enter the exact fields the API expects
     auto* json_label = new QLabel("REQUEST BODY (JSON)");
     json_label->setObjectName("qlLabel");

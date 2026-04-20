@@ -246,15 +246,21 @@ if(FINCEPT_HAS_PRIVATE_HEADERS)
 
     # QXlsx uses implicit const char* -> QString conversions which are banned
     # by Qt6's strict cast macros. Undefine them for this target only.
+    # Also silence upstream warnings so CI's -Werror doesn't fail on third-party
+    # code. /WX- is critical on MSVC: /W0 suppresses warnings but does NOT
+    # disable the directory-inherited /WX (warnings-as-errors) that promotes
+    # any surviving warning to a build-breaking error.
     if(MSVC)
         target_compile_options(QXlsx PRIVATE
             /UQT_NO_CAST_FROM_ASCII /UQT_NO_CAST_FROM_BYTEARRAY
             /UQT_NO_CAST_TO_ASCII   /UQT_NO_URL_CAST_FROM_STRING
+            /W0 /WX-
         )
     else()
         target_compile_options(QXlsx PRIVATE
             -UQT_NO_CAST_FROM_ASCII -UQT_NO_CAST_FROM_BYTEARRAY
             -UQT_NO_CAST_TO_ASCII   -UQT_NO_URL_CAST_FROM_STRING
+            -w -Wno-error
         )
     endif()
 else()
@@ -284,6 +290,18 @@ set_target_properties(md4c PROPERTIES UNITY_BUILD OFF)
 if(TARGET md4c-html)
     set_target_properties(md4c-html PROPERTIES UNITY_BUILD OFF)
 endif()
+# Silence upstream warnings so CI's -Werror doesn't fail on third-party code.
+# /WX- / -Wno-error needed in addition to /W0 / -w because CI adds -Werror (/WX)
+# at the directory level, which suppression flags alone don't override.
+foreach(_md4c_tgt md4c md4c-html)
+    if(TARGET ${_md4c_tgt})
+        if(MSVC)
+            target_compile_options(${_md4c_tgt} PRIVATE /W0 /WX-)
+        else()
+            target_compile_options(${_md4c_tgt} PRIVATE -w -Wno-error)
+        endif()
+    endif()
+endforeach()
 # md4c's src/CMakeLists.txt installs from ${CMAKE_BINARY_DIR}/src/md4c.pc but
 # configure_file() writes to ${CMAKE_CURRENT_BINARY_DIR}/md4c.pc (the subbuild
 # dir). On CI these are different paths, causing CPack's "file INSTALL cannot
@@ -319,6 +337,12 @@ set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(QGeoView)
 # QGeoView has anonymous-namespace symbol clashes under unity build
 set_target_properties(qgeoview PROPERTIES UNITY_BUILD OFF)
+# Silence upstream warnings so CI's -Werror doesn't fail on third-party code.
+if(MSVC)
+    target_compile_options(qgeoview PRIVATE /W0 /WX-)
+else()
+    target_compile_options(qgeoview PRIVATE -w -Wno-error)
+endif()
 
 # Qt 6.8.3's FindWrapOpenGL.cmake adds "-framework AGL" which was removed in
 # macOS 14 (Sonoma). The patch in setup.sh fixes this at the Qt install level.
@@ -362,7 +386,9 @@ if(UNIX)
     file(WRITE ${SingleApplication_SOURCE_DIR}/singleapplication.cpp "${_sa_src}")
 endif()
 if(MSVC)
-    target_compile_options(SingleApplication PRIVATE /W0)
+    target_compile_options(SingleApplication PRIVATE /W0 /WX-)
+else()
+    target_compile_options(SingleApplication PRIVATE -w -Wno-error)
 endif()
 
 # ── Qt Advanced Docking System (detachable panels) ───────────────────────────
@@ -385,8 +411,12 @@ set_target_properties(qtadvanceddocking-qt6 PROPERTIES UNITY_BUILD OFF)
 
 # Restore install rules for the main application targets
 set(CMAKE_SKIP_INSTALL_RULES FALSE CACHE BOOL "" FORCE)
+# Third-party code: silence warnings so CI's -Werror doesn't turn a benign
+# upstream warning (e.g. -Wunused-but-set-variable on Clang) into a build failure.
 if(MSVC)
-    target_compile_options(qtadvanceddocking-qt6 PRIVATE /W0)
+    target_compile_options(qtadvanceddocking-qt6 PRIVATE /W0 /WX-)
+else()
+    target_compile_options(qtadvanceddocking-qt6 PRIVATE -w -Wno-error)
 endif()
 
 # ── Source files by module ────────────────────────────────────────────────────
@@ -2018,29 +2048,29 @@ if(FINCEPT_BUILD_INSTALLER)
         # Python-backed screens crash on an installed build.
         install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scripts/"
                 DESTINATION "scripts" COMPONENT scripts)
-        # Requirements files — read by PythonSetupManager::install_packages()
-        # during first-run setup. Missing files → setup fails on installed build.
-        install(FILES
-                "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy1.txt"
-                "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy2.txt"
-                DESTINATION "resources" COMPONENT core)
-        # Qt plugin directories
-        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/platforms"
+        # Full resources/ tree — icons, images, stylesheets, data files, etc.
+        # Also catches requirements-*.txt. Without this, asset paths resolved
+        # via AppPaths::resources_dir() return an empty dir and screens that
+        # load PNGs / JSON config crash on missing-file errors.
+        install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/"
+                DESTINATION "resources" COMPONENT core
+                PATTERN ".git*" EXCLUDE
+                PATTERN "*.pyc" EXCLUDE)
+        # qt.conf — pins plugin/library paths relative to the exe. Without
+        # this Qt uses hardcoded build-machine paths that don't exist on the
+        # user's machine, producing "could not load the Qt platform plugin".
+        install(FILES "$<TARGET_FILE_DIR:FinceptTerminal>/qt.conf"
                 DESTINATION "." COMPONENT core OPTIONAL)
-        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/sqldrivers"
-                DESTINATION "." COMPONENT core OPTIONAL)
-        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/imageformats"
-                DESTINATION "." COMPONENT core OPTIONAL)
-        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/styles"
-                DESTINATION "." COMPONENT core OPTIONAL)
-        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/tls"
-                DESTINATION "." COMPONENT core OPTIONAL)
-        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/multimedia"
-                DESTINATION "." COMPONENT core OPTIONAL)
-        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/networkinformation"
-                DESTINATION "." COMPONENT core OPTIONAL)
-        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/generic"
-                DESTINATION "." COMPONENT core OPTIONAL)
+        # Qt plugin directories. OPTIONAL keeps the install non-fatal when
+        # a plugin dir isn't produced by windeployqt on a given host (e.g.
+        # texttospeech only appears when Qt TTS is present).
+        foreach(_plugin_dir
+                platforms sqldrivers imageformats iconengines styles tls
+                multimedia texttospeech networkinformation platforminputcontexts
+                printsupport generic)
+            install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/${_plugin_dir}"
+                    DESTINATION "." COMPONENT core OPTIONAL)
+        endforeach()
     endif()
 
     # ── CPack general metadata ───────────────────────────────────────────────
