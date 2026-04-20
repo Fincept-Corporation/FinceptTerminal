@@ -260,7 +260,7 @@ int main(int argc, char* argv[]) {
                 log.set_tag_level(tag, lvl_map.value(level));
         }
     }
-    LOG_INFO("App", "Fincept Terminal v4.0.1 starting...");
+    LOG_INFO("App", "Fincept Terminal v4.0.2 starting...");
 
     // Theme is applied after DB is open so saved font/theme are respected from the start.
 
