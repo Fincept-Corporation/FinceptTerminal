@@ -16,24 +16,27 @@ Output JSON:
 }
 """
 
-import sys
-from exchange_client import (
-    make_exchange, output_success, output_error,
-    parse_credentials_from_stdin, run_with_error_handling,
-)
+output_error("Missing API key in credentials", "AUTH_ERROR")
 
+    if not credentials.get("secret"):
+        output_error("Missing API secret in credentials", "AUTH_ERROR")
 
-@run_with_error_handling
-def main():
-    if len(sys.argv) < 4:
-        output_error("Usage: cancel_order.py <exchange_id> <order_id> <symbol>", "INVALID_ARGS")
+    exchange = make_exchange(exchange_id, credentials)
 
-    exchange_id = sys.argv[1]
-    order_id = sys.argv[2]
-    symbol = sys.argv[3]
+    try:
+        result = exchange.cancel_order(order_id, symbol)
+    except Exception as e:
+        output_error(f"Failed to cancel order: {str(e)}", "EXCHANGE_ERROR")
 
-    credentials = parse_credentials_from_stdin()
-    if not credentials.get("api_key"):
+    if not result or result.get("status") not in ("canceled", "cancelled"):
+        output_error("Order cancellation not confirmed", "CANCEL_FAILED")
+
+    output_success({
+        "id": result.get("id", order_id),
+        "symbol": result.get("symbol", symbol),
+        "status": result.get("status", "canceled"),
+        "exchange": exchange_id
+    })
         output_error("API key required. Pass credentials via stdin JSON.", "AUTH_ERROR")
 
     exchange = make_exchange(exchange_id, credentials)
