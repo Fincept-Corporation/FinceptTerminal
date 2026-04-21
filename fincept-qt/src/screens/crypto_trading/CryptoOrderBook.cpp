@@ -22,17 +22,8 @@ namespace {
 inline QColor kBgBase() {
     return QColor(ui::ThemeManager::instance().tokens().bg_base);
 }
-inline QColor kBgSurface() {
-    return QColor(ui::ThemeManager::instance().tokens().bg_surface);
-}
-inline QColor kBgRaised() {
-    return QColor(ui::ThemeManager::instance().tokens().bg_raised);
-}
 inline QColor kBorderDim() {
     return QColor(ui::ThemeManager::instance().tokens().border_dim);
-}
-inline QColor kTextPrimary() {
-    return QColor(ui::ThemeManager::instance().tokens().text_primary);
 }
 inline QColor kTextSecondary() {
     return QColor(ui::ThemeManager::instance().tokens().text_secondary);
@@ -48,9 +39,6 @@ inline QColor kColorBid() {
 }
 inline QColor kColorAsk() {
     return QColor(ui::ThemeManager::instance().tokens().negative);
-}
-inline QColor kColorAmber() {
-    return QColor(ui::ThemeManager::instance().tokens().accent);
 }
 inline QColor kBidBar() {
     auto c = kColorBid();

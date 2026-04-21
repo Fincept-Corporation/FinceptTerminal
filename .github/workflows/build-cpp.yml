@@ -653,18 +653,30 @@ jobs:
           Categories=Finance;
           EOF
 
-          # App icon (use existing .ico or create placeholder)
+          # App icon — use real icon if present, otherwise generate a valid
+          # 256×256 PNG via Python/Pillow (always present on ubuntu-latest runners).
+          # We avoid ImageMagick here because its default security policy and
+          # missing-font fallbacks produced zero-byte PNGs that fail libpng's
+          # CRC check in linuxdeploy.
+          ICON_DEST="AppDir/usr/share/icons/hicolor/256x256/apps/fincept-terminal.png"
           if [ -f "resources/icons/app_icon_256.png" ]; then
-            cp resources/icons/app_icon_256.png AppDir/usr/share/icons/hicolor/256x256/apps/fincept-terminal.png
+            cp resources/icons/app_icon_256.png "${ICON_DEST}"
           else
-            # Generate a minimal placeholder icon with ImageMagick
-            convert -size 256x256 xc:#1a1a2e -fill white \
-              -font DejaVu-Sans -pointsize 48 -gravity center \
-              -annotate 0 "FT" AppDir/usr/share/icons/hicolor/256x256/apps/fincept-terminal.png 2>/dev/null || \
-            cp /usr/share/icons/hicolor/256x256/apps/firefox.png \
-               AppDir/usr/share/icons/hicolor/256x256/apps/fincept-terminal.png 2>/dev/null || \
-            touch AppDir/usr/share/icons/hicolor/256x256/apps/fincept-terminal.png
+            python3 - <<'PY'
+          from PIL import Image, ImageDraw, ImageFont
+          img = Image.new("RGBA", (256, 256), (26, 26, 46, 255))
+          d = ImageDraw.Draw(img)
+          try:
+              f = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 96)
+          except OSError:
+              f = ImageFont.load_default()
+          d.text((128, 128), "FT", fill=(255, 255, 255, 255), font=f, anchor="mm")
+          img.save("AppDir/usr/share/icons/hicolor/256x256/apps/fincept-terminal.png", "PNG")
+          PY
           fi
+          # Verify the file is a valid PNG before handing it to linuxdeploy.
+          file "${ICON_DEST}"
+          [ -s "${ICON_DEST}" ] || { echo "::error::Icon is empty"; exit 1; }
 
           # ── Strip unused Qt SQL driver plugins ───────────────────────────
           # We only use SQLite. linuxdeploy-plugin-qt walks every plugin in

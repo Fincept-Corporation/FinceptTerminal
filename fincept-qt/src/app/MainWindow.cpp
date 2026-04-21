@@ -172,7 +172,7 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
 
     // Lock screen signals
     connect(lock_screen_, &screens::LockScreen::unlocked, this, &MainWindow::on_terminal_unlocked);
-    connect(lock_screen_, &screens::LockScreen::reauth_requested, this, [this]() {
+    connect(lock_screen_, &screens::LockScreen::reauth_requested, this, []() {
         // Max PIN attempts exceeded — force full re-login
         auth::AuthManager::instance().logout();
     });

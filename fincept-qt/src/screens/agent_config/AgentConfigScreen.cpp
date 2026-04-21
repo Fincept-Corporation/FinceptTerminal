@@ -322,11 +322,11 @@ void AgentConfigScreen::setup_service_connections() {
 
     // Task 4 & 9: when an agent is saved/deleted in CREATE, refresh the agent
     // list so AGENTS tab and TEAMS available list stay in sync.
-    connect(&svc, &services::AgentService::config_saved, this, [this]() {
+    connect(&svc, &services::AgentService::config_saved, this, []() {
         services::AgentService::instance().clear_cache();
         services::AgentService::instance().discover_agents();
     });
-    connect(&svc, &services::AgentService::config_deleted, this, [this]() {
+    connect(&svc, &services::AgentService::config_deleted, this, []() {
         services::AgentService::instance().clear_cache();
         services::AgentService::instance().discover_agents();
     });

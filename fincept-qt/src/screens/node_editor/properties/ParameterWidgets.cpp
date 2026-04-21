@@ -222,7 +222,7 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
                          [key, on_change, combo](int) { on_change(key, QJsonValue(combo->currentData().toString())); });
 
         QObject::connect(import_btn, &QPushButton::clicked, container,
-                         [populate, dialog_filter, key, on_change, combo, import_btn]() {
+                         [populate, dialog_filter, key, on_change, import_btn]() {
                              QString path = QFileDialog::getOpenFileName(import_btn->window(), "Import File", QString(),
                                                                          dialog_filter);
                              if (path.isEmpty())

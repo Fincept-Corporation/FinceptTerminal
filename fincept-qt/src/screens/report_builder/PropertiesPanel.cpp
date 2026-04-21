@@ -181,7 +181,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         editor_layout_->addWidget(cell_table);
 
         // Save cell data when any cell changes
-        auto save_cells = [this, cell_table, rows_spin, cols_spin]() {
+        auto save_cells = [this, cell_table]() {
             QJsonObject obj;
             for (int r = 0; r < cell_table->rowCount(); ++r) {
                 for (int c = 0; c < cell_table->columnCount(); ++c) {

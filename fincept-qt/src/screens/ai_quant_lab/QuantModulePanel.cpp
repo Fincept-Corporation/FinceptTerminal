@@ -1066,7 +1066,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
                                  .arg(ui::fonts::DATA_FAMILY)
                                  .arg(ui::fonts::TINY)
                                  .arg(ui::colors::BG_BASE()));
-    connect(check_btn, &QPushButton::clicked, this, [this, status_txt]() {
+    connect(check_btn, &QPushButton::clicked, this, [status_txt]() {
         status_txt->setText("Checking...");
         AIQuantLabService::instance().rd_agent_check_status();
     });
@@ -1081,7 +1081,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
                               .arg(ui::fonts::DATA_FAMILY)
                               .arg(ui::fonts::TINY)
                               .arg(ui::colors::BG_BASE()));
-    connect(ui_btn, &QPushButton::clicked, this, [this, status_txt]() {
+    connect(ui_btn, &QPushButton::clicked, this, [status_txt]() {
         status_txt->setText("Starting log viewer...");
         AIQuantLabService::instance().rd_agent_start_ui();
     });
@@ -1102,7 +1102,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
                                .arg(ui::fonts::TINY)
                                .arg(module_.color.name())
                                .arg(ui::colors::BG_BASE()));
-    connect(mcp_btn, &QPushButton::toggled, this, [this, mcp_btn, status_txt](bool checked) {
+    connect(mcp_btn, &QPushButton::toggled, this, [mcp_btn, status_txt](bool checked) {
         if (checked) {
             status_txt->setText("Starting MCP tool server...");
             AIQuantLabService::instance().rd_agent_start_mcp_server();
@@ -1384,7 +1384,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     tm_vl->addWidget(rd_agent_output_);
 
     // Wire toolbar buttons
-    connect(refresh_btn, &QPushButton::clicked, this, [this, filter_combo]() {
+    connect(refresh_btn, &QPushButton::clicked, this, [filter_combo]() {
         auto filter = filter_combo->currentText();
         AIQuantLabService::instance().rd_agent_list_tasks(filter == "All" ? QString{} : filter);
     });

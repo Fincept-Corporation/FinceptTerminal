@@ -37,16 +37,6 @@ inline QString kSectionLabel() {
         .arg(kMonoFont());
 }
 
-inline QString kInputStyle() {
-    return QString("QLineEdit { background: %1; border: 1px solid %2; color: %3; padding: 4px 8px;"
-                   " font-size: %4px; %5 }"
-                   "QLineEdit:focus { border-color: %6; }")
-        .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::BORDER_DIM(), fincept::ui::colors::TEXT_PRIMARY())
-        .arg(fincept::ui::fonts::SMALL)
-        .arg(kMonoFont())
-        .arg(fincept::ui::colors::BORDER_BRIGHT());
-}
-
 inline QString kComboStyle() {
     return QString("QComboBox { background: %1; color: %2; border: 1px solid %3; padding: 4px 8px;"
                    " font-size: %4px; %5 }"

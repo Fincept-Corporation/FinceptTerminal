@@ -304,7 +304,7 @@ void RelationshipMapScreen::build_ui() {
 
     // Center card click → navigate to equity research
     connect(scene_, &relmap::RelationshipGraphScene::center_card_clicked,
-            this, [this](const QString& ticker) {
+            this, [](const QString& ticker) {
                 fincept::EventBus::instance().publish("equity_research.load_symbol",
                     {{"symbol", ticker}, {"type", "equity"}});
             });

@@ -81,11 +81,17 @@ Result<void> SecureStorage::store(const QString& key, const QString& value) {
     return Result<void>::ok();
 
 #elif defined(Q_OS_MAC)
-    // macOS Keychain — encrypted, user-unlocked
+    // macOS Keychain — encrypted, user-unlocked.
+    // NOTE: Using legacy SecKeychain* API (deprecated in 10.10). The modern
+    // SecItem* API is a larger port; suppressing the warning locally keeps
+    // CI green. TODO: migrate to SecItemAdd / SecItemCopyMatching.
     const QByteArray svc = QByteArray(kService);
     const QByteArray acct = key.toUtf8();
     const QByteArray data = value.toUtf8();
 
+    OSStatus status;
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wdeprecated-declarations"
     // Delete any existing item first (SecItemUpdate is more complex)
     SecKeychainItemRef existing = nullptr;
     OSStatus del_status =
@@ -96,9 +102,10 @@ Result<void> SecureStorage::store(const QString& key, const QString& value) {
         CFRelease(existing);
     }
 
-    OSStatus status = SecKeychainAddGenericPassword(nullptr, static_cast<UInt32>(svc.size()), svc.constData(),
-                                                    static_cast<UInt32>(acct.size()), acct.constData(),
-                                                    static_cast<UInt32>(data.size()), data.constData(), nullptr);
+    status = SecKeychainAddGenericPassword(nullptr, static_cast<UInt32>(svc.size()), svc.constData(),
+                                           static_cast<UInt32>(acct.size()), acct.constData(),
+                                           static_cast<UInt32>(data.size()), data.constData(), nullptr);
+#    pragma clang diagnostic pop
 
     if (status != errSecSuccess) {
         LOG_ERROR(TAG, QString("Keychain store failed (OSStatus %1) for key: %2").arg(status).arg(key));
@@ -139,16 +146,23 @@ Result<QString> SecureStorage::retrieve(const QString& key) {
 
     UInt32 data_len = 0;
     void* data_ptr = nullptr;
-    OSStatus status = SecKeychainFindGenericPassword(nullptr, static_cast<UInt32>(svc.size()), svc.constData(),
-                                                     static_cast<UInt32>(acct.size()), acct.constData(), &data_len,
-                                                     &data_ptr, nullptr);
+    OSStatus status;
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    status = SecKeychainFindGenericPassword(nullptr, static_cast<UInt32>(svc.size()), svc.constData(),
+                                            static_cast<UInt32>(acct.size()), acct.constData(), &data_len,
+                                            &data_ptr, nullptr);
+#    pragma clang diagnostic pop
 
     if (status != errSecSuccess) {
         return Result<QString>::err("Credential not found in Keychain");
     }
 
     QString value = QString::fromUtf8(static_cast<const char*>(data_ptr), static_cast<int>(data_len));
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wdeprecated-declarations"
     SecKeychainItemFreeContent(nullptr, data_ptr);
+#    pragma clang diagnostic pop
     return Result<QString>::ok(value);
 
 #else
@@ -179,6 +193,8 @@ Result<void> SecureStorage::remove(const QString& key) {
     const QByteArray svc = QByteArray(kService);
     const QByteArray acct = key.toUtf8();
 
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wdeprecated-declarations"
     SecKeychainItemRef item = nullptr;
     OSStatus status =
         SecKeychainFindGenericPassword(nullptr, static_cast<UInt32>(svc.size()), svc.constData(),
@@ -188,6 +204,7 @@ Result<void> SecureStorage::remove(const QString& key) {
         SecKeychainItemDelete(item);
         CFRelease(item);
     }
+#    pragma clang diagnostic pop
     return Result<void>::ok();
 
 #else

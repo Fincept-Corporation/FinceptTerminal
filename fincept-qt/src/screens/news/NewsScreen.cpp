@@ -533,7 +533,6 @@ void NewsScreen::apply_filters_async() {
     const QString search_lower = search_query_.toLower();
     const QString sort = sort_mode_;
     const QString variant = active_variant_;
-    int visible_count = visible_article_count_;
 
     // For 7D / 30D ranges, merge DB history
     if (time_range == "7D" || time_range == "30D") {
@@ -563,7 +562,7 @@ void NewsScreen::apply_filters_async() {
     }
 
     (void)QtConcurrent::run([self, gen, articles_copy = std::move(articles_copy), category, time_range, search_lower, sort,
-                       variant, visible_count]() {
+                       variant]() {
         int64_t window_sec = 0;
         if (time_range == "1H")
             window_sec = 3600;

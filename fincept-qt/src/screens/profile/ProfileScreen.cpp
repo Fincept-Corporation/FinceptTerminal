@@ -135,7 +135,7 @@ void ProfileScreen::build_header(QVBoxLayout* root) {
         QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 10px;"
                 "font-size:11px;font-weight:700;font-family:'Consolas',monospace;}QPushButton:hover{color:%4;}")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY()));
-    connect(rb, &QPushButton::clicked, this, [this]() { auth::AuthManager::instance().refresh_user_data(); });
+    connect(rb, &QPushButton::clicked, this, []() { auth::AuthManager::instance().refresh_user_data(); });
     hl->addWidget(rb);
     root->addWidget(bar);
 }

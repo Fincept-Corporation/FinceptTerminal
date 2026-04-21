@@ -346,7 +346,7 @@ void CryptoTradingScreen::setup_timers() {
         } else {
             // Connect once; disconnect after first fire.
             auto conn = std::make_shared<QMetaObject::Connection>();
-            *conn = connect(es, &trading::ExchangeService::daemon_ready, this, [this, conn, run_initial_fetches]() {
+            *conn = connect(es, &trading::ExchangeService::daemon_ready, this, [conn, run_initial_fetches]() {
                 QObject::disconnect(*conn);
                 run_initial_fetches();
             });

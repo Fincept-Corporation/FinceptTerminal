@@ -37,11 +37,6 @@ static constexpr qreal kHubX_R       =  310.0; // hub center X, right side
 static constexpr qreal kLeafX_R      =  500.0; // leaf center X, right side
 static constexpr qreal kHubX_L       = -310.0; // hub center X, left side
 static constexpr qreal kLeafX_L      = -500.0; // leaf center X, left side
-// Kept for ABI compat with header declarations
-static constexpr qreal kHubRadius      = 310.0;
-static constexpr qreal kLeafRadius     = 500.0;
-static constexpr qreal kClusterArcGap  = 0.0;
-static constexpr qreal kLeafColumnOffset = 20.0;
 
 // ── Forward declarations ──────────────────────────────────────────────────────
 class RelNode;
@@ -74,9 +69,9 @@ class RelNode : public QGraphicsItem {
   public:
     enum class Role { Center, Hub, Leaf };
 
-    RelNode(RelationshipGraphScene* graph, const QString& label, const QString& sub,
+    RelNode(const QString& label, const QString& sub,
             const QColor& accent, qreal w, qreal h, Role role)
-        : graph_(graph), label_(label), sub_(sub), accent_(accent)
+        : label_(label), sub_(sub), accent_(accent)
         , w_(w), h_(h), role_(role) {
         setFlag(QGraphicsItem::ItemIsMovable, role != Role::Center);
         setFlag(QGraphicsItem::ItemSendsGeometryChanges);
@@ -259,7 +254,6 @@ class RelNode : public QGraphicsItem {
         QGraphicsItem::mouseReleaseEvent(event);
     }
   private:
-    RelationshipGraphScene* graph_;
     QVector<RelEdge*> edges_;
     QString label_, sub_;
     QColor  accent_;
@@ -360,7 +354,7 @@ void RelationshipGraphScene::build_graph(
         .arg(data.company.day_change_pct, 0, 'f', 2)
         .arg(data.company.market_cap / 1e9, 0, 'f', 0);
 
-    auto* center_node = new RelNode(this, data.company.ticker, center_sub,
+    auto* center_node = new RelNode(data.company.ticker, center_sub,
                                     cAmber, kCenterW, kCenterH, RelNode::Role::Center);
     center_node->setPos(0, 0);
     addItem(center_node);
@@ -538,7 +532,7 @@ void RelationshipGraphScene::build_graph(
             qreal bcy = y + (bh - kClusterGap) / 2.0; // band vertical center
 
             // Hub
-            auto* hub = new RelNode(this, c.label, QString(), c.color,
+            auto* hub = new RelNode(c.label, QString(), c.color,
                                     kHubW, kHubH, RelNode::Role::Hub);
             hub->setPos(hub_cx, bcy);
             addItem(hub);
@@ -557,7 +551,7 @@ void RelationshipGraphScene::build_graph(
 
             for (int i = 0; i < n; ++i) {
                 qreal lcy = ly0 + i * (kLeafH + kLeafGap) + kLeafH / 2.0;
-                auto* leaf = new RelNode(this, c.leaves[i].label, c.leaves[i].sub,
+                auto* leaf = new RelNode(c.leaves[i].label, c.leaves[i].sub,
                                          c.leaves[i].accent, kLeafW, kLeafH,
                                          RelNode::Role::Leaf);
                 leaf->setPos(leaf_cx, lcy);

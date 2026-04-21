@@ -1,25 +1,9 @@
 name: Lint
 
 on:
+  # Manual-only — lint never runs automatically on push/tag/PR.
+  # Trigger from the Actions tab via "Run workflow".
   workflow_dispatch:
-  pull_request:
-    paths:
-      - 'fincept-qt/src/**'
-      - 'fincept-qt/.clang-tidy'
-      - 'fincept-qt/.clang-format'
-      - 'fincept-qt/.cppcheck-suppressions'
-      - 'fincept-qt/CMakeLists.txt'
-      - '.github/workflows/lint.yml'
-  push:
-    branches:
-      - main
-    paths:
-      - 'fincept-qt/src/**'
-      - 'fincept-qt/.clang-tidy'
-      - 'fincept-qt/.clang-format'
-      - 'fincept-qt/.cppcheck-suppressions'
-      - 'fincept-qt/CMakeLists.txt'
-      - '.github/workflows/lint.yml'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true

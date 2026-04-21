@@ -298,7 +298,7 @@ void PolymarketScreen::connect_active_adapter() {
     adapter_connections_ << connect(a, &pred::PredictionExchangeAdapter::open_orders_ready,
                                      this, &PolymarketScreen::on_open_orders_ready);
     adapter_connections_ << connect(a, &pred::PredictionExchangeAdapter::order_cancelled, this,
-                                     [this, a](const QString& oid, bool ok, const QString& err) {
+                                     [a](const QString& oid, bool ok, const QString& err) {
                                          if (!ok) {
                                              LOG_WARN("PredictionMarkets", "Cancel failed: " + err);
                                              return;
@@ -357,7 +357,7 @@ void PolymarketScreen::connect_active_adapter() {
         adapter_connections_ << connect(ks, &pred::kalshi_ns::KalshiAdapter::single_order_ready,
                                          this, &PolymarketScreen::on_kalshi_single_order);
         adapter_connections_ << connect(ks, &pred::kalshi_ns::KalshiAdapter::order_amended, this,
-                                         [this, ks](const QString& oid, bool ok, const QString& err) {
+                                         [ks](const QString& oid, bool ok, const QString& err) {
                                              if (!ok) {
                                                  LOG_WARN("PredictionMarkets",
                                                           "Amend failed: " + err);
@@ -366,8 +366,8 @@ void PolymarketScreen::connect_active_adapter() {
                                              ks->fetch_order(oid);
                                          });
         adapter_connections_ << connect(ks, &pred::kalshi_ns::KalshiAdapter::orders_batch_cancelled,
-                                         this, [this, ks](const QStringList&, bool ok,
-                                                          const QString& err) {
+                                         this, [ks](const QStringList&, bool ok,
+                                                    const QString& err) {
                                              if (!ok) LOG_WARN("PredictionMarkets",
                                                                "Batch cancel failed: " + err);
                                              ks->fetch_open_orders();

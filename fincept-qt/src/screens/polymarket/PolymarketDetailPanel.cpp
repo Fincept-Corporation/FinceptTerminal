@@ -858,7 +858,7 @@ void PolymarketDetailPanel::set_polymarket_extras_enabled(bool enabled) {
     if (!enabled) {
         if (holders_table_) holders_table_->setRowCount(0);
 
-        auto clear_container = [this](QWidget* container, const QString& msg) {
+        auto clear_container = [](QWidget* container, const QString& msg) {
             if (!container) return;
             auto* vl = qobject_cast<QVBoxLayout*>(container->layout());
             if (!vl) return;

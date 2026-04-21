@@ -152,7 +152,7 @@ void PortfolioFFNView::build_ui() {
     };
 
     // helper to create a placeholder label
-    auto make_placeholder_label = [this](const QString& text) -> QLabel* {
+    auto make_placeholder_label = [](const QString& text) -> QLabel* {
         auto* lbl = new QLabel(text);
         lbl->setAlignment(Qt::AlignCenter);
         lbl->setWordWrap(true);

@@ -969,7 +969,7 @@ void ReportBuilderScreen::show_template_dialog() {
             });
 
     // Double-click accepts
-    connect(list, &QListWidget::itemDoubleClicked, dlg, [this, list, dlg, bb](QListWidgetItem* item) {
+    connect(list, &QListWidget::itemDoubleClicked, dlg, [this, dlg](QListWidgetItem* item) {
         if (!item || !(item->flags() & Qt::ItemIsSelectable))
             return;
         QString tname = item->data(Qt::UserRole).toString();

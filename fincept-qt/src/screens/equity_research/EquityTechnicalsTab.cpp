@@ -19,7 +19,6 @@ static constexpr const char* LTRED = "#f87171";
 static constexpr const char* CYAN = "#22d3ee";
 static constexpr const char* YELLOW = "#eab308";
 static constexpr const char* BLUE = "#60a5fa";
-static constexpr const char* PURPLE = "#a855f7";
 static constexpr const char* GRAY = "#6b7280";
 
 // ── Signal helpers ───────────────────────────────────────────────────────────
