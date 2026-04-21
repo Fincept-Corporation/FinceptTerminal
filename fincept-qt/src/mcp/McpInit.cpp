@@ -2,6 +2,7 @@
 
 #include "mcp/McpInit.h"
 
+#include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "mcp/McpProvider.h"
 #include "mcp/McpService.h"
@@ -54,8 +55,12 @@ void initialize_all_tools() {
     // ai chat tab
     provider.register_tools(tools::get_ai_chat_tools());
 
-    // crypto trading tab
-    provider.register_tools(tools::get_crypto_trading_tools());
+    // crypto trading tab (feature-flagged; disabled by default until WS stability fix lands)
+    if (fincept::AppConfig::instance().crypto_markets_enabled()) {
+        provider.register_tools(tools::get_crypto_trading_tools());
+    } else {
+        LOG_WARN(TAG, "Skipping crypto MCP tools: features/crypto_markets_enabled=false");
+    }
 
     // paper trading tab
     provider.register_tools(tools::get_paper_trading_tools());

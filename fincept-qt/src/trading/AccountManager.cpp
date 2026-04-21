@@ -214,8 +214,19 @@ void AccountManager::remove_account(const QString& account_id) {
     clear_credentials(account_id);
 
     // Remove paper portfolio if it exists
-    if (!account.paper_portfolio_id.isEmpty())
-        pt_delete_portfolio(account.paper_portfolio_id);
+    if (!account.paper_portfolio_id.isEmpty()) {
+        try {
+            pt_delete_portfolio(account.paper_portfolio_id);
+        } catch (const std::exception& e) {
+            LOG_WARN("AccountManager",
+                     QString("Failed to delete paper portfolio %1 for removed account %2: %3")
+                         .arg(account.paper_portfolio_id, account_id, e.what()));
+        } catch (...) {
+            LOG_WARN("AccountManager",
+                     QString("Failed to delete paper portfolio %1 for removed account %2 (unknown exception)")
+                         .arg(account.paper_portfolio_id, account_id));
+        }
+    }
 
     // Remove from DB
     AccountRepository::instance().remove(account_id);
@@ -325,11 +336,18 @@ bool AccountManager::has_account(const QString& account_id) const {
 // AccountManager does not interpret it.
 void AccountManager::save_credentials(const QString& account_id, const BrokerCredentials& creds) {
     auto& secure = SecureStorage::instance();
-    secure.store(acct_key(account_id, "api_key"), creds.api_key);
-    secure.store(acct_key(account_id, "api_secret"), creds.api_secret);
-    secure.store(acct_key(account_id, "access_token"), creds.access_token);
-    secure.store(acct_key(account_id, "user_id"), creds.user_id);
-    secure.store(acct_key(account_id, "additional_data"), creds.additional_data);
+    const auto write_or_warn = [&](const QString& key, const QString& value) {
+        auto r = secure.store(key, value);
+        if (r.is_err()) {
+            LOG_WARN("AccountManager", QString("SecureStorage store failed for '%1' (account=%2)")
+                                           .arg(key, account_id));
+        }
+    };
+    write_or_warn(acct_key(account_id, "api_key"), creds.api_key);
+    write_or_warn(acct_key(account_id, "api_secret"), creds.api_secret);
+    write_or_warn(acct_key(account_id, "access_token"), creds.access_token);
+    write_or_warn(acct_key(account_id, "user_id"), creds.user_id);
+    write_or_warn(acct_key(account_id, "additional_data"), creds.additional_data);
 }
 
 BrokerCredentials AccountManager::load_credentials(const QString& account_id) const {
@@ -360,11 +378,18 @@ BrokerCredentials AccountManager::load_credentials(const QString& account_id) co
 
 void AccountManager::clear_credentials(const QString& account_id) {
     auto& secure = SecureStorage::instance();
-    secure.remove(acct_key(account_id, "api_key"));
-    secure.remove(acct_key(account_id, "api_secret"));
-    secure.remove(acct_key(account_id, "access_token"));
-    secure.remove(acct_key(account_id, "user_id"));
-    secure.remove(acct_key(account_id, "additional_data"));
+    const auto remove_or_warn = [&](const QString& key) {
+        auto r = secure.remove(key);
+        if (r.is_err()) {
+            LOG_WARN("AccountManager", QString("SecureStorage remove failed for '%1' (account=%2)")
+                                           .arg(key, account_id));
+        }
+    };
+    remove_or_warn(acct_key(account_id, "api_key"));
+    remove_or_warn(acct_key(account_id, "api_secret"));
+    remove_or_warn(acct_key(account_id, "access_token"));
+    remove_or_warn(acct_key(account_id, "user_id"));
+    remove_or_warn(acct_key(account_id, "additional_data"));
 }
 
 // ── Connection state ────────────────────────────────────────────────────────

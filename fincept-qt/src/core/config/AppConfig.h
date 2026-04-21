@@ -18,6 +18,9 @@ class AppConfig {
     QString api_base_url() const;
     bool dark_mode() const;
     int refresh_interval_ms() const;
+    /// Temporary kill-switch for Kraken/HyperLiquid UI + WS startup.
+    /// Default: false (disabled) until Qt/C++ WS stability issues are resolved.
+    bool crypto_markets_enabled() const;
 
   private:
     AppConfig();

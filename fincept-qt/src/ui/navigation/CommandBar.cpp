@@ -1,5 +1,6 @@
 #include "ui/navigation/CommandBar.h"
 
+#include "core/config/AppConfig.h"
 #include "core/events/EventBus.h"
 #include "core/keys/KeyConfigManager.h"
 #include "core/session/ScreenStateManager.h"
@@ -7,6 +8,7 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <algorithm>
 #include <QApplication>
 #include <QEvent>
 #include <QJsonArray>
@@ -402,6 +404,13 @@ void CommandBar::build_commands() {
          "",
          {"support", "ticket", "assistance"}},
     };
+
+    if (!fincept::AppConfig::instance().crypto_markets_enabled()) {
+        commands_.erase(std::remove_if(commands_.begin(),
+                                       commands_.end(),
+                                       [](const ScreenCommand& cmd) { return cmd.id == "crypto_trading"; }),
+                        commands_.end());
+    }
 }
 
 // ── asset type registry ──────────────────────────────────────────────────────

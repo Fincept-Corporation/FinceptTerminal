@@ -1,7 +1,10 @@
 #include "ui/navigation/FKeyBar.h"
 
+#include "core/config/AppConfig.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+
+#include <algorithm>
 
 namespace fincept::ui {
 
@@ -23,6 +26,12 @@ TabBar::TabBar(QWidget* parent) : QWidget(parent) {
         {"node_editor", "NODES"},   {"code_editor", "CODE"},  {"ai_quant_lab", "QUANT LAB"}, {"quantlib", "QUANTLIB"},
         {"forum", "FORUM"},         {"settings", "SETTINGS"}, {"profile", "PROFILE"},
     };
+    if (!fincept::AppConfig::instance().crypto_markets_enabled()) {
+        tabs.erase(std::remove_if(tabs.begin(),
+                                  tabs.end(),
+                                  [](const TabDef& tab) { return tab.id == "crypto_trading"; }),
+                   tabs.end());
+    }
     for (const auto& def : tabs)
         add_tab(def);
     scroll_area->setWidget(container);

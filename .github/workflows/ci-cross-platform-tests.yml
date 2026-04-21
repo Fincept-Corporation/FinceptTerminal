@@ -1,0 +1,122 @@
+name: CI - Cross-Platform Tests
+
+on:
+  pull_request:
+    paths:
+      - "fincept-qt/**"
+      - "setup.sh"
+      - ".github/workflows/ci-cross-platform-tests.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "fincept-qt/**"
+      - "setup.sh"
+      - ".github/workflows/ci-cross-platform-tests.yml"
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+  QT_VERSION: "6.8.3"
+  QT_MODULES: "qtcharts qtwebsockets qtmultimedia"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  datahub-tests:
+    name: DataHub Tests (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            platform: Windows
+            qt_arch: win64_msvc2022_64
+          - os: ubuntu-22.04
+            platform: Linux
+            qt_arch: linux_gcc_64
+          - os: macos-15
+            platform: macOS
+            qt_arch: clang_64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo add-apt-repository universe -y
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            cmake ninja-build gcc-12 g++-12 \
+            libssl-dev \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libxkbcommon-dev libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-cursor-dev \
+            libxcb-icccm4 libxcb-icccm4-dev \
+            libxcb-image0 libxcb-image0-dev \
+            libxcb-keysyms1 libxcb-keysyms1-dev \
+            libxcb-randr0 \
+            libxcb-render-util0 libxcb-render-util0-dev \
+            libxcb-shape0-dev \
+            libxcb-sync-dev \
+            libxcb-xfixes0-dev \
+            libxcb-xinerama0 libxcb-xinerama0-dev \
+            libxcb-xkb1 libxkbcommon-x11-dev \
+            libdbus-1-dev libfontconfig1-dev libfreetype6-dev \
+            pkg-config
+          echo "CC=gcc-12"  >> "$GITHUB_ENV"
+          echo "CXX=g++-12" >> "$GITHUB_ENV"
+
+      - name: Install OpenSSL (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VCPKG_ROOT="${VCPKG_INSTALLATION_ROOT:-C:/vcpkg}"
+          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows --no-print-usage
+          OPENSSL_DIR="$VCPKG_ROOT/installed/x64-windows"
+          echo "OPENSSL_ROOT_DIR=$OPENSSL_DIR" >> "$GITHUB_ENV"
+          ls "$OPENSSL_DIR/lib/libcrypto.lib" >/dev/null
+
+      - name: Install OpenSSL (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install openssl@3 || brew upgrade openssl@3 || true
+          echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: ${{ matrix.qt_arch }}
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          cache-key-prefix: ci-tests-${{ runner.os }}-${{ matrix.qt_arch }}-${{ env.QT_VERSION }}
+
+      - name: Configure CMake
+        shell: bash
+        run: |
+          set -euo pipefail
+          OPENSSL_ARG=""
+          if [ -n "${OPENSSL_ROOT_DIR:-}" ]; then
+            OPENSSL_ARG="-DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}"
+          fi
+          cmake -B fincept-qt/build-ci -S fincept-qt \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DFINCEPT_BUILD_TESTS=ON \
+            -DFINCEPT_BUILD_INSTALLER=OFF \
+            -DDEPLOY_QT=OFF \
+            ${OPENSSL_ARG}
+
+      - name: Build test target
+        shell: bash
+        run: cmake --build fincept-qt/build-ci --config ${{ env.BUILD_TYPE }} --target test_datahub --parallel 4
+
+      - name: Run DataHub tests
+        shell: bash
+        run: ctest --test-dir fincept-qt/build-ci -C ${{ env.BUILD_TYPE }} --output-on-failure -R datahub

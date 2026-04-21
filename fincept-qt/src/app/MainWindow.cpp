@@ -6,6 +6,7 @@
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
 #include "auth/PinManager.h"
+#include "core/config/AppConfig.h"
 #include "core/config/ProfileManager.h"
 #include "core/events/EventBus.h"
 #include "core/keys/KeyConfigManager.h"
@@ -792,9 +793,17 @@ void MainWindow::setup_docking_mode() {
 }
 
 void MainWindow::setup_dock_screens() {
+    const bool crypto_markets_enabled = AppConfig::instance().crypto_markets_enabled();
+
     dock_router_->register_factory("dashboard", []() { return new screens::DashboardScreen; });
     dock_router_->register_factory("markets", []() { return new screens::MarketsScreen; });
-    dock_router_->register_factory("crypto_trading", []() { return new screens::CryptoTradingScreen; });
+    if (crypto_markets_enabled) {
+        dock_router_->register_factory("crypto_trading", []() { return new screens::CryptoTradingScreen; });
+    } else {
+        dock_router_->register_factory(
+            "crypto_trading",
+            []() { return new screens::ComingSoonScreen("Crypto Trading Temporarily Disabled"); });
+    }
     dock_router_->register_factory("news", []() { return new screens::NewsScreen; });
     dock_router_->register_factory("forum", []() { return new screens::ForumScreen; });
     dock_router_->register_factory("watchlist", []() { return new screens::WatchlistScreen; });

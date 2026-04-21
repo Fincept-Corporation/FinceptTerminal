@@ -924,6 +924,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           echo "Fetching asset URLs for release ${TAG}..."
@@ -937,33 +938,27 @@ jobs:
             sleep 5
           done
 
-          # Extract URLs for each platform (first match per pattern)
-          WIN_URL=$(gh release view "${TAG}" --json assets \
-            --jq '.assets[] | select(.name | test("(?i)windows.*\\.exe$|setup.*\\.exe$")) | .url' \
+          # Extract installer asset names (first match per platform).
+          # IMPORTANT: build direct public download URLs from asset names.
+          # Using API-style asset URLs can return 404 for unauthenticated users.
+          WIN_ASSET=$(gh release view "${TAG}" --json assets \
+            --jq '.assets[] | select(.name | test("(?i)(windows[-_].*x64|win64).*setup.*\\.exe$")) | .name' \
             | head -1)
-          LIN_URL=$(gh release view "${TAG}" --json assets \
-            --jq '.assets[] | select(.name | test("\\.run$|linux.*setup")) | .url' \
+          LIN_ASSET=$(gh release view "${TAG}" --json assets \
+            --jq '.assets[] | select(.name | test("(?i)linux[-_].*x64.*setup.*\\.run$")) | .name' \
             | head -1)
-          MAC_URL=$(gh release view "${TAG}" --json assets \
-            --jq '.assets[] | select(.name | test("\\.dmg$|macos.*setup")) | .url' \
+          MAC_ASSET=$(gh release view "${TAG}" --json assets \
+            --jq '.assets[] | select(.name | test("(?i)macos.*(arm64|setup).*(\\.dmg|\\.exe)$")) | .name' \
             | head -1)
-
-          # Fallback: if browser_download_url not available via .url, try .browserDownloadUrl
-          [ -z "$WIN_URL" ] && WIN_URL=$(gh release view "${TAG}" --json assets \
-            --jq '.assets[] | select(.name | test("(?i)windows.*\\.exe$|setup.*\\.exe$")) | .browserDownloadUrl' \
-            | head -1) || true
-          [ -z "$LIN_URL" ] && LIN_URL=$(gh release view "${TAG}" --json assets \
-            --jq '.assets[] | select(.name | test("\\.run$|linux.*setup")) | .browserDownloadUrl' \
-            | head -1) || true
-          [ -z "$MAC_URL" ] && MAC_URL=$(gh release view "${TAG}" --json assets \
-            --jq '.assets[] | select(.name | test("\\.dmg$|macos.*setup")) | .browserDownloadUrl' \
-            | head -1) || true
 
           # Release page URL as final fallback
-          RELEASE_URL="https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/${TAG}"
-          WIN_URL="${WIN_URL:-${RELEASE_URL}}"
-          LIN_URL="${LIN_URL:-${RELEASE_URL}}"
-          MAC_URL="${MAC_URL:-${RELEASE_URL}}"
+          RELEASE_URL="https://github.com/${REPO}/releases/tag/${TAG}"
+          WIN_URL="${RELEASE_URL}"
+          LIN_URL="${RELEASE_URL}"
+          MAC_URL="${RELEASE_URL}"
+          [ -n "${WIN_ASSET}" ] && WIN_URL="https://github.com/${REPO}/releases/download/${TAG}/${WIN_ASSET}"
+          [ -n "${LIN_ASSET}" ] && LIN_URL="https://github.com/${REPO}/releases/download/${TAG}/${LIN_ASSET}"
+          [ -n "${MAC_ASSET}" ] && MAC_URL="https://github.com/${REPO}/releases/download/${TAG}/${MAC_ASSET}"
 
           echo "WIN_URL=${WIN_URL}" >> "$GITHUB_ENV"
           echo "LIN_URL=${LIN_URL}" >> "$GITHUB_ENV"

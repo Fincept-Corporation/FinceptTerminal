@@ -6,6 +6,7 @@
 
 #include "trading/ExchangeService.h"
 
+#include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "trading/ExchangeDaemonPool.h"
 #include "trading/ExchangeSession.h"
@@ -187,6 +188,12 @@ void ExchangeService::poll_prices() {
 // ============================================================================
 
 bool ExchangeService::start_ws_stream(const QString& primary_symbol, const QStringList& all_symbols) {
+    if (!fincept::AppConfig::instance().crypto_markets_enabled()) {
+        LOG_WARN(kServiceTag,
+                 "Crypto WS stream start blocked by feature flag "
+                 "(features/crypto_markets_enabled=false)");
+        return false;
+    }
     return active_session()->start_ws(primary_symbol, all_symbols);
 }
 

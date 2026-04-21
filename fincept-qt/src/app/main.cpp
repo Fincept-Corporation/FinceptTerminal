@@ -123,7 +123,14 @@ int main(int argc, char* argv[]) {
     // (created lazily by the manager) publish through its SessionPublisher
     // seam. ExchangeService keeps a back-compat shim but no longer registers
     // itself with the hub.
-    fincept::trading::ExchangeSessionManager::instance().ensure_registered_with_hub();
+    const bool crypto_markets_enabled = fincept::AppConfig::instance().crypto_markets_enabled();
+    if (crypto_markets_enabled) {
+        fincept::trading::ExchangeSessionManager::instance().ensure_registered_with_hub();
+    } else {
+        LOG_WARN("App",
+                 "Crypto markets module disabled (features/crypto_markets_enabled=false). "
+                 "Set FINCEPT_ENABLE_CRYPTO_MARKETS=1 to override.");
+    }
     // Prediction Markets — multi-exchange tab (Polymarket, Kalshi, …).
     // PolymarketWebSocket is the hub producer for `prediction:polymarket:*`;
     // the adapter layer translates exchange-local types into the unified

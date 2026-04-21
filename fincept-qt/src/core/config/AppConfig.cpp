@@ -33,4 +33,16 @@ int AppConfig::refresh_interval_ms() const {
     return settings_.value("data/refresh_interval_ms", 30000).toInt();
 }
 
+bool AppConfig::crypto_markets_enabled() const {
+    // Environment override for emergency production toggles.
+    const QString env = QString::fromUtf8(qgetenv("FINCEPT_ENABLE_CRYPTO_MARKETS")).trimmed().toLower();
+    if (!env.isEmpty()) {
+        if (env == "1" || env == "true" || env == "yes" || env == "on")
+            return true;
+        if (env == "0" || env == "false" || env == "no" || env == "off")
+            return false;
+    }
+    return settings_.value("features/crypto_markets_enabled", false).toBool();
+}
+
 } // namespace fincept

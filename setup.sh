@@ -28,7 +28,7 @@ info() { echo -e "  ${YELLOW}$1${NC}"; }
 
 echo ""
 echo "================================================"
-echo "  Fincept Terminal v4.0.1 — Setup"
+echo "  Fincept Terminal v4.0.2 — Setup"
 echo "  Pinned: Qt ${QT_VERSION} | CMake ${CMAKE_MIN}+ | Python ${PYTHON_MIN}+"
 [ "$CI_MODE" = true ] && echo "  (CI mode — skipping interactive steps)"
 echo "================================================"
@@ -67,8 +67,14 @@ elif [ "$PLATFORM" = "macos" ]; then
         [ "$CI_MODE" = true ] && fail "Homebrew not found in CI environment."
         info "Homebrew not found. Installing..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        # Ensure brew is available in this shell on both Apple Silicon and Intel.
+        if [ -x "/opt/homebrew/bin/brew" ]; then
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+        elif [ -x "/usr/local/bin/brew" ]; then
+            eval "$(/usr/local/bin/brew shellenv)"
+        fi
     fi
-    brew install cmake ninja python@3.11 openssl@3 yt-dlp
+    brew install cmake ninja python@3.11 openssl@3 || brew upgrade cmake ninja python@3.11 openssl@3 || true
 fi
 ok
 
@@ -119,7 +125,8 @@ else
     info "Installing Qt ${QT_VERSION} via aqtinstall to $QT_INSTALL_ROOT ..."
     # aqtinstall is a stable community tool that downloads exact Qt versions
     # from the official Qt mirror. Much smaller than Qt Online Installer and scriptable.
-    "$PYTHON" -m pip install --user --quiet --upgrade aqtinstall
+    "$PYTHON" -m pip install --user --quiet --upgrade aqtinstall \
+      || "$PYTHON" -m pip install --user --quiet --upgrade --break-system-packages aqtinstall
     AQT="$("$PYTHON" -m pip show aqtinstall >/dev/null 2>&1 && "$PYTHON" -m aqt help >/dev/null 2>&1 && echo "$PYTHON -m aqt" || echo "")"
     [ -n "$AQT" ] || fail "aqtinstall did not install correctly."
     # Qt host/target/arch
@@ -148,12 +155,29 @@ cd "$APP_DIR"
 echo "[6/7] Configuring (preset: $PRESET)..."
 # Override the preset's default CMAKE_PREFIX_PATH with the one we just set,
 # so the build picks up the aqtinstall location rather than ~/Qt/6.8.3/...
-EXTRA_ARGS=""
-if [ "$PLATFORM" = "macos" ] && [ -d "/opt/homebrew/opt/openssl@3" ]; then
-    EXTRA_ARGS="-DOPENSSL_ROOT_DIR=/opt/homebrew/opt/openssl@3"
+EXTRA_ARGS=()
+if [ "$PLATFORM" = "macos" ]; then
+    OPENSSL_ROOT="${OPENSSL_ROOT_DIR:-}"
+    if [ -z "$OPENSSL_ROOT" ]; then
+        for candidate in \
+            "/opt/homebrew/opt/openssl@3" \
+            "/usr/local/opt/openssl@3" \
+            "/opt/local/libexec/openssl3"; do
+            if [ -d "$candidate" ]; then
+                OPENSSL_ROOT="$candidate"
+                break
+            fi
+        done
+    fi
+    if [ -n "$OPENSSL_ROOT" ] && [ -d "$OPENSSL_ROOT" ]; then
+        EXTRA_ARGS+=("-DOPENSSL_ROOT_DIR=$OPENSSL_ROOT")
+        info "Using OpenSSL from: $OPENSSL_ROOT"
+    else
+        info "OpenSSL root not auto-detected; relying on CMake default discovery."
+    fi
 fi
 
-cmake --preset "$PRESET" -DCMAKE_PREFIX_PATH="$QT_PREFIX" $EXTRA_ARGS \
+cmake --preset "$PRESET" -DCMAKE_PREFIX_PATH="$QT_PREFIX" "${EXTRA_ARGS[@]}" \
     || fail "CMake configure failed. See error above."
 ok
 
@@ -173,7 +197,8 @@ echo "  Run: $BIN"
 echo "================================================"
 echo ""
 
-if [ "$CI_MODE" = true ]; then
+if [ "$CI_MODE" = true ] || [ ! -t 0 ]; then
+    [ "$CI_MODE" = false ] && info "Non-interactive shell detected — skipping launch prompt."
     exit 0
 fi
 

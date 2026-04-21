@@ -25,6 +25,9 @@
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrentRun>
 
+#include <algorithm>
+#include <exception>
+
 namespace fincept::screens::equity {
 
 using namespace fincept::ui;
@@ -219,6 +222,12 @@ void AccountManagementDialog::on_account_selected(int row) {
     }
 
     auto* item = account_list_->item(row);
+    if (!item) {
+        right_stack_->setCurrentWidget(empty_page_);
+        remove_btn_->setEnabled(false);
+        selected_account_id_.clear();
+        return;
+    }
     selected_account_id_ = item->data(Qt::UserRole).toString();
     remove_btn_->setEnabled(true);
 
@@ -345,6 +354,11 @@ void AccountManagementDialog::load_saved_credentials(const QString& account_id) 
 
 void AccountManagementDialog::on_add_account() {
     const QString broker_id = broker_picker_->currentData().toString();
+    if (broker_id.trimmed().isEmpty()) {
+        QMessageBox::warning(this, "Add Account",
+                             "No broker is selected. Restart the app or check broker registry initialization.");
+        return;
+    }
     QString name = display_name_input_->text().trimmed();
     if (name.isEmpty()) {
         auto* broker = BrokerRegistry::instance().get(broker_id);
@@ -355,7 +369,25 @@ void AccountManagementDialog::on_add_account() {
             name += QString(" #%1").arg(existing.size() + 1);
     }
 
-    auto account = AccountManager::instance().add_account(broker_id, name);
+    BrokerAccount account;
+    try {
+        account = AccountManager::instance().add_account(broker_id, name);
+    } catch (const std::exception& e) {
+        LOG_ERROR("AccountManagementDialog",
+                  QString("add_account threw for broker '%1': %2").arg(broker_id, e.what()));
+        QMessageBox::critical(this, "Add Account",
+                              "The broker account could not be created due to an internal error. "
+                              "Check the application log for details.");
+        return;
+    } catch (...) {
+        LOG_ERROR("AccountManagementDialog", QString("add_account threw unknown exception for broker '%1'")
+                                                 .arg(broker_id));
+        QMessageBox::critical(this, "Add Account",
+                              "The broker account could not be created due to an internal error. "
+                              "Check the application log for details.");
+        return;
+    }
+
     if (account.account_id.isEmpty()) {
         // AccountManager returns an empty account on persistence failure (e.g. FK
         // violation, paper-portfolio creation failed). Surface this instead of
@@ -407,9 +439,17 @@ void AccountManagementDialog::on_connect_account() {
         return;
 
     auto account = AccountManager::instance().get_account(selected_account_id_);
-    auto* broker = BrokerRegistry::instance().get(account.broker_id);
-    if (!broker)
+    if (account.account_id.isEmpty() || account.broker_id.isEmpty()) {
+        form_status_->setText("Selected account is invalid.");
+        form_status_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
         return;
+    }
+    auto* broker = BrokerRegistry::instance().get(account.broker_id);
+    if (!broker) {
+        form_status_->setText("Broker implementation is not available.");
+        form_status_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
+        return;
+    }
 
     // Collect credentials from form fields
     BrokerCredentials creds;
@@ -442,6 +482,21 @@ void AccountManagementDialog::on_connect_account() {
         ++idx;
     }
 
+    if (creds.api_key.trimmed().isEmpty() || creds.api_secret.trimmed().isEmpty()) {
+        form_status_->setText("API Key and API Secret are required.");
+        form_status_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
+        return;
+    }
+    const bool needs_auth_code =
+        std::any_of(cred_field_defs_.begin(),
+                    cred_field_defs_.end(),
+                    [](const trading::CredentialFieldDef& def) { return def.field == CredentialField::AuthCode; });
+    if (needs_auth_code && auth_code.trimmed().isEmpty()) {
+        form_status_->setText("Auth Code is required.");
+        form_status_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
+        return;
+    }
+
     // Attempt token exchange asynchronously — exchange_token() makes a blocking
     // HTTP call (BrokerHttp::execute uses QEventLoop), so running it on the UI
     // thread freezes the entire terminal until the request completes. Offload
@@ -457,60 +512,81 @@ void AccountManagementDialog::on_connect_account() {
     const QString auth_code_val = auth_code;
     const QString existing_additional = creds.additional_data;
 
-    (void)QtConcurrent::run([self, broker, account_id, api_key_val, api_secret_val, auth_code_val, existing_additional]() {
-        auto result = broker->exchange_token(api_key_val, api_secret_val, auth_code_val);
+    const QString broker_id = account.broker_id;
+    (void)QtConcurrent::run(
+        [self, broker_id, account_id, api_key_val, api_secret_val, auth_code_val, existing_additional]() {
+            TokenExchangeResponse result;
+            auto* worker_broker = BrokerRegistry::instance().get(broker_id);
+            if (!worker_broker) {
+                result.success = false;
+                result.error = QString("Broker '%1' is not registered").arg(broker_id);
+            } else {
+                try {
+                    result = worker_broker->exchange_token(api_key_val, api_secret_val, auth_code_val);
+                } catch (const std::exception& e) {
+                    result.success = false;
+                    result.error = QString("Broker auth failed: %1").arg(e.what());
+                    LOG_ERROR("AccountManagementDialog",
+                              QString("exchange_token threw for broker '%1': %2").arg(broker_id, e.what()));
+                } catch (...) {
+                    result.success = false;
+                    result.error = QString("Broker auth failed with unknown exception for '%1'").arg(broker_id);
+                    LOG_ERROR("AccountManagementDialog",
+                              QString("exchange_token threw unknown exception for broker '%1'").arg(broker_id));
+                }
+            }
 
-        QMetaObject::invokeMethod(
-            qApp,
-            [self, account_id, api_key_val, api_secret_val, auth_code_val, existing_additional, result]() {
-                // Always update AccountManager — it's thread-safe and survives dialog close
-                if (!result.success) {
-                    AccountManager::instance().set_connection_state(account_id, ConnectionState::Error, result.error);
+            QMetaObject::invokeMethod(
+                qApp,
+                [self, account_id, api_key_val, api_secret_val, existing_additional, result]() {
+                    // Always update AccountManager — it's thread-safe and survives dialog close
+                    if (!result.success) {
+                        AccountManager::instance().set_connection_state(account_id, ConnectionState::Error, result.error);
+                        if (self) {
+                            self->form_status_->setText(QString("Error: %1").arg(result.error));
+                            self->form_status_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
+                            self->connect_btn_->setEnabled(true);
+                            if (self->selected_account_id_ == account_id)
+                                self->refresh_account_list();
+                        }
+                        return;
+                    }
+
+                    // Build merged credentials
+                    BrokerCredentials creds;
+                    creds.broker_id = AccountManager::instance().get_account(account_id).broker_id;
+                    creds.api_key = api_key_val;
+                    creds.api_secret = api_secret_val;
+                    creds.access_token = result.access_token;
+                    if (!result.user_id.isEmpty())
+                        creds.user_id = result.user_id;
+
+                    // Merge additional_data (keep existing like client_code, add new from token response)
+                    auto existing = QJsonDocument::fromJson(existing_additional.toUtf8()).object();
+                    auto extra = QJsonDocument::fromJson(result.additional_data.toUtf8()).object();
+                    for (auto it = extra.begin(); it != extra.end(); ++it)
+                        existing[it.key()] = it.value();
+                    if (!existing.isEmpty())
+                        creds.additional_data = QJsonDocument(existing).toJson(QJsonDocument::Compact);
+
+                    AccountManager::instance().save_credentials(account_id, creds);
+                    AccountManager::instance().set_connection_state(account_id, ConnectionState::Connected);
+
+                    // Emit signal so EquityTradingScreen starts the data stream, even if the
+                    // dialog has been closed in the meantime.
                     if (self) {
-                        self->form_status_->setText(QString("Error: %1").arg(result.error));
-                        self->form_status_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
+                        emit self->credentials_saved(account_id);
+                        self->form_status_->setText(QString("Connected as %1")
+                                                         .arg(creds.user_id.isEmpty() ? creds.api_key.left(8) + "..."
+                                                                                      : creds.user_id));
+                        self->form_status_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
                         self->connect_btn_->setEnabled(true);
                         if (self->selected_account_id_ == account_id)
                             self->refresh_account_list();
                     }
-                    return;
-                }
-
-                // Build merged credentials
-                BrokerCredentials creds;
-                creds.broker_id = AccountManager::instance().get_account(account_id).broker_id;
-                creds.api_key = api_key_val;
-                creds.api_secret = api_secret_val;
-                creds.access_token = result.access_token;
-                if (!result.user_id.isEmpty())
-                    creds.user_id = result.user_id;
-
-                // Merge additional_data (keep existing like client_code, add new from token response)
-                auto existing = QJsonDocument::fromJson(existing_additional.toUtf8()).object();
-                auto extra = QJsonDocument::fromJson(result.additional_data.toUtf8()).object();
-                for (auto it = extra.begin(); it != extra.end(); ++it)
-                    existing[it.key()] = it.value();
-                if (!existing.isEmpty())
-                    creds.additional_data = QJsonDocument(existing).toJson(QJsonDocument::Compact);
-
-                AccountManager::instance().save_credentials(account_id, creds);
-                AccountManager::instance().set_connection_state(account_id, ConnectionState::Connected);
-
-                // Emit signal so EquityTradingScreen starts the data stream, even if the
-                // dialog has been closed in the meantime.
-                if (self) {
-                    emit self->credentials_saved(account_id);
-                    self->form_status_->setText(QString("Connected as %1")
-                                                     .arg(creds.user_id.isEmpty() ? creds.api_key.left(8) + "..."
-                                                                                  : creds.user_id));
-                    self->form_status_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
-                    self->connect_btn_->setEnabled(true);
-                    if (self->selected_account_id_ == account_id)
-                        self->refresh_account_list();
-                }
-            },
-            Qt::QueuedConnection);
-    });
+                },
+                Qt::QueuedConnection);
+        });
 }
 
 void AccountManagementDialog::on_rename_account() {
@@ -758,8 +834,18 @@ void AccountManagementDialog::on_connect_zerodha_totp() {
                 self->z_status_->setText(stage);
             }, Qt::QueuedConnection);
         };
-        auto result = broker.login_with_totp(user_id, password, api_key, api_secret,
-                                             totp_secret, stage_cb);
+        TokenExchangeResponse result;
+        try {
+            result = broker.login_with_totp(user_id, password, api_key, api_secret, totp_secret, stage_cb);
+        } catch (const std::exception& e) {
+            result.success = false;
+            result.error = QString("Zerodha TOTP login failed: %1").arg(e.what());
+            LOG_ERROR("Zerodha", QString("login_with_totp threw: %1").arg(e.what()));
+        } catch (...) {
+            result.success = false;
+            result.error = "Zerodha TOTP login failed with unknown exception";
+            LOG_ERROR("Zerodha", "login_with_totp threw unknown exception");
+        }
 
         QMetaObject::invokeMethod(qApp, [self, acct, result]() {
             if (!self) return;
@@ -888,16 +974,30 @@ void AccountManagementDialog::on_connect_zerodha_manual_paste() {
 void AccountManagementDialog::exchange_and_store_token_async(const QString& api_key,
                                                              const QString& api_secret,
                                                              const QString& request_token) {
-    z_connect_btn_->setEnabled(false);
-    z_browser_btn_->setEnabled(false);
-    z_manual_connect_btn_->setEnabled(false);
+    if (z_connect_btn_)
+        z_connect_btn_->setEnabled(false);
+    if (z_browser_btn_)
+        z_browser_btn_->setEnabled(false);
+    if (z_manual_connect_btn_)
+        z_manual_connect_btn_->setEnabled(false);
 
     const QString acct = selected_account_id_;
     QPointer<AccountManagementDialog> self = this;
 
     (void)QtConcurrent::run([self, acct, api_key, api_secret, request_token]() {
         trading::ZerodhaBroker broker;
-        auto result = broker.exchange_token(api_key, api_secret, request_token);
+        TokenExchangeResponse result;
+        try {
+            result = broker.exchange_token(api_key, api_secret, request_token);
+        } catch (const std::exception& e) {
+            result.success = false;
+            result.error = QString("Token exchange failed: %1").arg(e.what());
+            LOG_ERROR("Zerodha", QString("exchange_token threw: %1").arg(e.what()));
+        } catch (...) {
+            result.success = false;
+            result.error = "Token exchange failed with unknown exception";
+            LOG_ERROR("Zerodha", "exchange_token threw unknown exception");
+        }
 
         QMetaObject::invokeMethod(qApp, [self, acct, result]() {
             if (!self) return;
@@ -918,9 +1018,12 @@ void AccountManagementDialog::exchange_and_store_token_async(const QString& api_
                 self->z_status_->setText(result.error);
                 self->z_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
             }
-            self->z_connect_btn_->setEnabled(true);
-            self->z_browser_btn_->setEnabled(true);
-            self->z_manual_connect_btn_->setEnabled(true);
+            if (self->z_connect_btn_)
+                self->z_connect_btn_->setEnabled(true);
+            if (self->z_browser_btn_)
+                self->z_browser_btn_->setEnabled(true);
+            if (self->z_manual_connect_btn_)
+                self->z_manual_connect_btn_->setEnabled(true);
             self->refresh_account_list();
         }, Qt::QueuedConnection);
     });

@@ -2,6 +2,7 @@
 
 #include "mcp/tools/NavigationTools.h"
 
+#include "core/config/AppConfig.h"
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 
@@ -52,17 +53,27 @@ static const TabEntry TAB_MAP[] = {
 
 static constexpr int TAB_COUNT = static_cast<int>(sizeof(TAB_MAP) / sizeof(TAB_MAP[0]));
 
+static bool tab_enabled(const TabEntry& entry) {
+    if (QString::fromLatin1(entry.name) == QLatin1String("crypto_trading"))
+        return fincept::AppConfig::instance().crypto_markets_enabled();
+    return true;
+}
+
 static int find_tab_index(const QString& name) {
     QString lower = name.toLower();
 
     // Exact match on id
     for (int i = 0; i < TAB_COUNT; ++i) {
+        if (!tab_enabled(TAB_MAP[i]))
+            continue;
         if (lower == TAB_MAP[i].name)
             return TAB_MAP[i].index;
     }
 
     // Partial match on display name
     for (int i = 0; i < TAB_COUNT; ++i) {
+        if (!tab_enabled(TAB_MAP[i]))
+            continue;
         if (QString(TAB_MAP[i].display_name).toLower().contains(lower))
             return TAB_MAP[i].index;
     }
@@ -72,6 +83,8 @@ static int find_tab_index(const QString& name) {
 
 static QString find_tab_name(int idx) {
     for (int i = 0; i < TAB_COUNT; ++i) {
+        if (!tab_enabled(TAB_MAP[i]))
+            continue;
         if (TAB_MAP[i].index == idx)
             return TAB_MAP[i].name;
     }
@@ -86,11 +99,7 @@ std::vector<ToolDef> get_navigation_tools() {
         ToolDef t;
         t.name = "navigate_to_tab";
         t.description = "Navigate to a specific terminal screen by name. "
-                        "Available screens: dashboard, markets, news, watchlist, crypto_trading, "
-                        "dbnomics, surface_analytics, notes, report_builder, profile, settings, "
-                        "about, support, ai_chat, agent_config, economics, geopolitics, quantlib, "
-                        "algo_trading, backtesting, node_editor, code_editor, ma_analytics, data_sources, "
-                        "gov_data, forum, docs.";
+                        "Use list_tabs to discover currently enabled screens.";
         t.category = "navigation";
         t.input_schema.properties =
             QJsonObject{{"tab", QJsonObject{{"type", "string"}, {"description", "Screen name to navigate to"}}}};
@@ -104,6 +113,8 @@ std::vector<ToolDef> get_navigation_tools() {
             if (idx < 0) {
                 QString valid;
                 for (int i = 0; i < TAB_COUNT; ++i) {
+                    if (!tab_enabled(TAB_MAP[i]))
+                        continue;
                     if (!valid.isEmpty())
                         valid += ", ";
                     valid += TAB_MAP[i].name;
@@ -130,6 +141,8 @@ std::vector<ToolDef> get_navigation_tools() {
         t.handler = [](const QJsonObject&) -> ToolResult {
             QJsonArray tabs;
             for (int i = 0; i < TAB_COUNT; ++i) {
+                if (!tab_enabled(TAB_MAP[i]))
+                    continue;
                 tabs.append(QJsonObject{
                     {"name", TAB_MAP[i].name}, {"display_name", TAB_MAP[i].display_name}, {"index", TAB_MAP[i].index}});
             }
