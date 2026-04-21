@@ -1900,11 +1900,17 @@ if(WIN32)
 endif()
 
 # ── Copy Python scripts to build output ──────────────────────────────────────
+# POST_BUILD drags the whole scripts/ tree over. Afterwards we prune junk
+# that must never ship — backup folders (agents.deleted.*), test caches,
+# local SQLite databases — because on macOS anything unexpected in the
+# .app bundle makes codesign reject it ("bundle format unrecognized").
 add_custom_command(TARGET FinceptTerminal POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/scripts"
         "$<TARGET_FILE_DIR:FinceptTerminal>/scripts"
-    COMMENT "Copying Python scripts to build output..."
+    COMMAND ${CMAKE_COMMAND} -DSCRIPTS_DIR=$<TARGET_FILE_DIR:FinceptTerminal>/scripts
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/prune_scripts_junk.cmake"
+    COMMENT "Copying Python scripts to build output + pruning junk..."
 )
 
 # ── Copy requirements files to build output ──────────────────────────────────
@@ -1980,7 +1986,8 @@ if(WIN32)
     # Windows: install exe + all DLLs beside it (windeployqt already copies them)
     install(TARGETS FinceptTerminal RUNTIME DESTINATION "." COMPONENT core)
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scripts/"
-            DESTINATION "scripts" COMPONENT scripts)
+            DESTINATION "scripts" COMPONENT scripts
+            REGEX "(\\.deleted\\.|\\.pytest_cache|\\.benchmarks|__pycache__|\\.pyc$|\\.db$|\\.sqlite$|\\.sqlite3$|\\.bak$|\\.orig$)" EXCLUDE)
     # Requirements files — needed by PythonSetupManager at first run to install
     # Python packages. Must be deployed beside the exe so find_requirements_file()
     # can locate them at C:/Program Files/FinceptTerminal/resources/*.txt.
@@ -2006,7 +2013,8 @@ else()
     # Python analytics scripts
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scripts/"
             DESTINATION "share/fincept-terminal/scripts"
-            USE_SOURCE_PERMISSIONS COMPONENT scripts)
+            USE_SOURCE_PERMISSIONS COMPONENT scripts
+            REGEX "(\\.deleted\\.|\\.pytest_cache|\\.benchmarks|__pycache__|\\.pyc$|\\.db$|\\.sqlite$|\\.sqlite3$|\\.bak$|\\.orig$)" EXCLUDE)
 
     # App icon (PNG required for hicolor theme; convert .ico → .png in CI)
     set(_ICON_PNG "${CMAKE_CURRENT_SOURCE_DIR}/resources/fincept.png")

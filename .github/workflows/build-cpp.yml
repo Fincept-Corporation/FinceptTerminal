@@ -496,7 +496,7 @@ jobs:
           # Copy app resources and Python analytics scripts
           # ----------------------------------------------------------------
           cp -r resources dist/resources 2>/dev/null || true
-          cp -r scripts   dist/scripts   2>/dev/null || true
+          bash .github/scripts/sync_scripts.sh scripts dist/scripts
 
           # ----------------------------------------------------------------
           # Final diagnostic — list everything that will be zipped
@@ -554,7 +554,7 @@ jobs:
           # ── Stage resources INSIDE the bundle (not as siblings) ───────────
           mkdir -p "${APP_BUNDLE}/Contents/Resources"
           cp -r resources "${APP_BUNDLE}/Contents/Resources/" 2>/dev/null || true
-          cp -r scripts   "${APP_BUNDLE}/Contents/Resources/scripts" 2>/dev/null || true
+          bash .github/scripts/sync_scripts.sh scripts "${APP_BUNDLE}/Contents/Resources/scripts"
 
           # ── Embed Python.framework (tag builds only — skip on push) ───────
           if [ "$IS_TAG" = "true" ]; then
@@ -641,7 +641,7 @@ jobs:
 
           # Copy resources and scripts inside AppDir
           cp -r resources AppDir/usr/bin/resources 2>/dev/null || true
-          cp -r scripts   AppDir/usr/bin/scripts   2>/dev/null || true
+          bash .github/scripts/sync_scripts.sh scripts AppDir/usr/bin/scripts
 
           # Desktop entry (required by linuxdeploy)
           cat > AppDir/usr/share/applications/fincept-terminal.desktop <<'EOF'
@@ -655,28 +655,19 @@ jobs:
 
           # App icon — use real icon if present, otherwise generate a valid
           # 256×256 PNG via Python/Pillow (always present on ubuntu-latest runners).
-          # We avoid ImageMagick here because its default security policy and
-          # missing-font fallbacks produced zero-byte PNGs that fail libpng's
-          # CRC check in linuxdeploy.
+          # We avoid ImageMagick because its default security policy and
+          # missing-font fallbacks produced zero-byte PNGs that failed libpng's
+          # CRC check in linuxdeploy. `python3 -c` sidesteps the YAML-indented
+          # heredoc trap (Python rejects the leading spaces as IndentationError).
           ICON_DEST="AppDir/usr/share/icons/hicolor/256x256/apps/fincept-terminal.png"
           if [ -f "resources/icons/app_icon_256.png" ]; then
             cp resources/icons/app_icon_256.png "${ICON_DEST}"
           else
-            python3 - <<'PY'
-          from PIL import Image, ImageDraw, ImageFont
-          img = Image.new("RGBA", (256, 256), (26, 26, 46, 255))
-          d = ImageDraw.Draw(img)
-          try:
-              f = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 96)
-          except OSError:
-              f = ImageFont.load_default()
-          d.text((128, 128), "FT", fill=(255, 255, 255, 255), font=f, anchor="mm")
-          img.save("AppDir/usr/share/icons/hicolor/256x256/apps/fincept-terminal.png", "PNG")
-          PY
+            python3 -c 'import sys; from PIL import Image, ImageDraw, ImageFont; img=Image.new("RGBA",(256,256),(26,26,46,255)); d=ImageDraw.Draw(img); f=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",96) if __import__("os").path.exists("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf") else ImageFont.load_default(); d.text((128,128),"FT",fill=(255,255,255,255),font=f,anchor="mm"); img.save(sys.argv[1],"PNG")' "${ICON_DEST}"
           fi
           # Verify the file is a valid PNG before handing it to linuxdeploy.
           file "${ICON_DEST}"
-          [ -s "${ICON_DEST}" ] || { echo "::error::Icon is empty"; exit 1; }
+          [ -s "${ICON_DEST}" ] || { echo "::error::Icon is empty or missing"; exit 1; }
 
           # ── Strip unused Qt SQL driver plugins ───────────────────────────
           # We only use SQLite. linuxdeploy-plugin-qt walks every plugin in
@@ -806,7 +797,7 @@ jobs:
           lipo -create "$ARM64_BIN" "$X64_BIN" -output dist/FinceptTerminal
           chmod +x dist/FinceptTerminal
           cp -r arm64/resources dist/resources 2>/dev/null || true
-          cp -r arm64/scripts dist/scripts 2>/dev/null || true
+          bash .github/scripts/sync_scripts.sh arm64/scripts dist/scripts
           file dist/FinceptTerminal
           lipo -info dist/FinceptTerminal
           ls -lh dist/FinceptTerminal

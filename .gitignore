@@ -130,6 +130,21 @@ fincept-qt/.cache/
 # ── Exchange runtime cache ────────────────────────────────────
 fincept-qt/scripts/exchange/.cache/
 
+# ── Python test + bench caches ────────────────────────────────
+.pytest_cache/
+.benchmarks/
+
+# ── Editor/refactor backups ───────────────────────────────────
+*.bak
+*.orig
+*.deleted
+*.deleted.*
+
+# ── Local SQLite databases ────────────────────────────────────
+# (*.db is already covered above; adding sqlite variants)
+*.sqlite
+*.sqlite3
+
 # ── Internal planning docs ────────────────────────────────────
 fincept-qt/docs/superpowers/
 docs/superpowers/

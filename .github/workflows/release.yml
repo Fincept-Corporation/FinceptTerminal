@@ -182,7 +182,7 @@ jobs:
           done
 
           cp -r resources "${BUILD_DIR}/resources" 2>/dev/null || true
-          cp -r scripts   "${BUILD_DIR}/scripts"   2>/dev/null || true
+          bash .github/scripts/sync_scripts.sh scripts "${BUILD_DIR}/scripts"
           # qt.conf — pins plugin and data paths relative to the executable.
           # Without this, Qt falls back to hardcoded build-time paths which
           # don't exist on a clean machine and cause plugin load failures.
@@ -367,7 +367,7 @@ jobs:
           # App resources + Python analytics scripts live next to the binary
           # (matches AppPaths resolution on Linux).
           cp -r resources "${APPDIR}/usr/bin/resources" 2>/dev/null || true
-          cp -r scripts   "${APPDIR}/usr/bin/scripts"   2>/dev/null || true
+          bash .github/scripts/sync_scripts.sh scripts "${APPDIR}/usr/bin/scripts"
 
           # Requirements files — PythonSetupManager reads these at first run.
           mkdir -p "${APPDIR}/usr/bin/resources"
@@ -638,7 +638,7 @@ jobs:
           # Copy app resources + Python analytics scripts into bundle
           mkdir -p "${APP_BUNDLE}/Contents/Resources"
           cp -r resources "${APP_BUNDLE}/Contents/Resources/" 2>/dev/null || true
-          cp -r scripts   "${APP_BUNDLE}/Contents/Resources/scripts" 2>/dev/null || true
+          bash .github/scripts/sync_scripts.sh scripts "${APP_BUNDLE}/Contents/Resources/scripts"
 
           echo "Bundle staged at: ${APP_BUNDLE}"
           echo "Pre-sign size: $(du -sh "${APP_BUNDLE}" | cut -f1)"
@@ -1004,53 +1004,12 @@ jobs:
 
           README="README.md"
 
-          # If markers are already present, replace the block between them.
-          # If not, replace the old static "Option 1" section header line.
-          if grep -q "${START_MARKER}" "${README}"; then
-            # Use python for reliable multi-line replacement
-            python3 - <<PYEOF
-          import re, pathlib
-
-          readme = pathlib.Path("${README}")
-          content = readme.read_text(encoding="utf-8")
-
-          new_block = """${NEW_BLOCK}"""
-
-          pattern = re.compile(
-              r'<!-- DOWNLOAD-TABLE-START -->.*?<!-- DOWNLOAD-TABLE-END -->',
-              re.DOTALL
-          )
-          updated = pattern.sub(new_block, content)
-          readme.write_text(updated, encoding="utf-8")
-          print("README updated (existing markers replaced)")
-          PYEOF
-          else
-            # First run — insert markers by replacing the old "Option 1" heading
-            python3 - <<PYEOF
-          import re, pathlib
-
-          readme = pathlib.Path("${README}")
-          content = readme.read_text(encoding="utf-8")
-
-          new_block = """${NEW_BLOCK}"""
-
-          # Replace the "### Option 1 — Download Pre-built Binary" section
-          # up to (but not including) the next "### Option 2" or "---" line
-          pattern = re.compile(
-              r'### Option 1 — Download Pre-built Binary.*?(?=\n---|\n### Option 2)',
-              re.DOTALL
-          )
-          updated = pattern.sub(new_block, content)
-          if updated == content:
-              # Pattern didn't match — prepend before "## Installation"
-              updated = content.replace(
-                  "## Installation\n",
-                  "## Installation\n\n" + new_block + "\n"
-              )
-          readme.write_text(updated, encoding="utf-8")
-          print("README updated (sentinels inserted for first time)")
-          PYEOF
-          fi
+          # Delegate the regex replacement to a standalone Python script so
+          # YAML indentation can't poison the Python source (an in-line
+          # heredoc body would be parsed by Python with leading spaces and
+          # fail with IndentationError).
+          export README NEW_BLOCK
+          python3 .github/scripts/update_readme_table.py
 
           echo "=== README diff preview (first 60 lines) ==="
           git diff README.md | head -60 || true
@@ -1138,62 +1097,11 @@ jobs:
           # Export shell-side vars so the embedded python can read them via os.environ
           export WORK VERSION TAG REPO
 
-          # Map platform key → (filename-glob, asset download url template)
-          python3 <<'PYEOF' > updates.json
-          import hashlib
-          import json
-          import os
-          import pathlib
-          import re
-
-          work = pathlib.Path(os.environ["WORK"]) if os.environ.get("WORK") else pathlib.Path.cwd()
-          version = os.environ["VERSION"]
-          tag = os.environ["TAG"]
-          repo = os.environ["REPO"]
-          release_url = f"https://github.com/{repo}/releases/tag/{tag}"
-
-          # Supported platform keys and the regex that matches their installer filename.
-          # Order matters: more specific keys first.
-          platforms = [
-              ("windows-x64",   re.compile(rf"FinceptTerminal-{re.escape(version)}-windows-x64-setup\.exe$")),
-              ("windows-arm64", re.compile(rf"FinceptTerminal-{re.escape(version)}-windows-arm64-setup\.exe$")),
-              ("linux-x64",     re.compile(rf"FinceptTerminal-{re.escape(version)}-linux-x64-setup\.run$")),
-              ("linux-arm64",   re.compile(rf"FinceptTerminal-{re.escape(version)}-linux-arm64-setup\.run$")),
-              ("macos-arm64",   re.compile(rf"FinceptTerminal-{re.escape(version)}-macos-arm64-setup\.(dmg|exe)$")),
-              ("macos-x64",     re.compile(rf"FinceptTerminal-{re.escape(version)}-macos-x64-setup\.(dmg|exe)$")),
-              ("macos-universal", re.compile(rf"FinceptTerminal-{re.escape(version)}-macos-universal-setup\.(dmg|exe)$")),
-          ]
-
-          # Scan downloaded files
-          files = {p.name: p for p in work.iterdir() if p.is_file()}
-          print(f"# Found {len(files)} asset file(s): {sorted(files)}", flush=True)
-
-          updates = {}
-          for key, pattern in platforms:
-              match = next((f for f in files if pattern.match(f)), None)
-              if not match:
-                  print(f"# No asset matches {key} — skipping", flush=True)
-                  continue
-
-              path = files[match]
-              sha = hashlib.sha256(path.read_bytes()).hexdigest()
-              url = f"https://github.com/{repo}/releases/download/{tag}/{match}"
-              updates[key] = {
-                  "latest-version": version,
-                  "download-url": url,
-                  "sha256": sha,
-                  "open-url": release_url,
-                  "changelog": f"Fincept Terminal v{version} — see release notes at {release_url}",
-              }
-              print(f"# {key}: {match} sha256={sha[:16]}...", flush=True)
-
-          manifest = {
-              "_comment": "Auto-generated by .github/workflows/release.yml on every tag push. Do not edit by hand.",
-              "schema-version": 2,
-              "updates": updates,
-          }
-          print(json.dumps(manifest, indent=2))
-          PYEOF
+          # Delegate manifest generation to a standalone Python script to
+          # keep this step free of YAML/Python indentation conflicts. The
+          # script writes JSON to stdout and diagnostics to stderr; we redirect
+          # stdout into updates.json and let stderr surface in the job log.
+          python3 .github/scripts/generate_updates_manifest.py > updates.json
 
           echo "=== updates.json diff ==="
           git diff updates.json | head -80 || true
