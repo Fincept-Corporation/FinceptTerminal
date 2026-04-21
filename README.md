@@ -93,22 +93,19 @@ The script handles: compiler check, CMake, Qt6, Python, build, and launch.
 
 ---
 
-### Option 3 — Docker
+### Option 3 — Docker (CI / Developer Environments)
+
+> **Note:** Docker is intended for CI/CD testing and development environments only.
+> For the best experience, use the pre-built installers in **Option 1** above.
+> Docker requires Linux with X11. Windows and macOS are not supported.
 
 ```bash
-# Pull and run
-docker pull ghcr.io/fincept-corporation/fincept-terminal:latest
-docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix \
-    ghcr.io/fincept-corporation/fincept-terminal:latest
-
-# Or build from source
+# Build from source (Linux + X11 required)
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal
 docker build -t fincept-terminal .
 docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fincept-terminal
 ```
-
-> **Note:** Docker is primarily intended for Linux. macOS and Windows require additional XServer configuration.
 
 ---
 
