@@ -158,6 +158,14 @@ class StockAnalysisWrapper:
             "timestamp": int(datetime.now().timestamp())
         }
 
+    def _convert_dataframe_to_json_safe(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """Convert DataFrame to JSON-safe format by converting datetime columns to strings"""
+        df_copy = df.copy()
+        for col in df_copy.columns:
+            if pd.api.types.is_datetime64_any_dtype(df_copy[col]):
+                df_copy[col] = df_copy[col].astype(str)
+        return df_copy.to_dict('records')
+
     def _validate_and_format_dataframe(self, df: pd.DataFrame, min_rows: int = 1) -> Dict[str, Any]:
         """Validate and format DataFrame for consistent output"""
         if df is None or df.empty:
@@ -183,7 +191,7 @@ class StockAnalysisWrapper:
 
         return {
             "success": True,
-            "data": df_clean.to_dict('records'),
+            "data": self._convert_dataframe_to_json_safe(df_clean),
             "count": len(df_clean),
             "timestamp": int(datetime.now().timestamp()),
             "data_quality": "high",
@@ -915,9 +923,9 @@ def main():
     endpoint = sys.argv[1]
     args = sys.argv[2:] if len(sys.argv) > 2 else []
 
-    # Map endpoint names to method calls
+    # Map endpoint names to method calls (aliases)
     endpoint_map = {
-                "get_all_endpoints": wrapper.get_all_stock_analysis_endpoints,
+        "get_all_endpoints": wrapper.get_all_stock_analysis_endpoints,
         "get_analysis_summary": wrapper.get_analysis_summary,
 
         # Technical Indicators
@@ -956,70 +964,43 @@ def main():
         "baidu_polls": wrapper.get_baidu_poll_data
     }
 
+    # Custom JSON encoder for date objects
+    class DateTimeEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, (datetime, datetime.date)):
+                return obj.isoformat()
+            return super().default(obj)
+
+    # Resolution logic: map -> explicit get_ -> direct hasattr
     method = endpoint_map.get(endpoint)
+    if not method:
+        method_name = f"get_{endpoint}" if not endpoint.startswith("get_") else endpoint
+        if hasattr(wrapper, method_name):
+            method = getattr(wrapper, method_name)
+
     if method:
-        if args:
-            # For endpoints that require parameters
-            try:
-                if endpoint in ["individual_fund_flow", "cost_layer", "order_book"]:
-                    result = method(symbol=args[0] if args else "sh600000")
-                elif endpoint in ["valuation_analysis"]:
-                    result = method(market=args[0] if args else "sh")
-                elif endpoint == "stock_comments":
-                    result = method(symbol=args[0] if args else None)
-                else:
-                    result = method(*args)
-            except Exception as e:
-                result = {"error": str(e), "endpoint": endpoint}
-        else:
-            result = method()
-        print(json.dumps(result, indent=2, ensure_ascii=True))
+        try:
+            # Smart argument handling
+            if endpoint in ["individual_fund_flow", "cost_layer", "order_book"] or \
+               method.__name__ in ["get_individual_stock_fund_flow", "get_cost_layer_analysis", "get_order_book_analysis"]:
+                result = method(symbol=args[0] if args else "sh600000")
+            elif endpoint in ["valuation_analysis"] or method.__name__ == "get_valuation_analysis":
+                result = method(market=args[0] if args else "sh")
+            elif endpoint == "stock_comments" or method.__name__ == "get_stock_comments":
+                result = method(symbol=args[0] if args else None)
+            else:
+                result = method(*args) if args else method()
+        except Exception as e:
+            result = {"success": False, "error": str(e), "endpoint": endpoint, "traceback": traceback.format_exc()}
     else:
-        print(json.dumps({
+        result = {
+            "success": False,
             "error": f"Unknown endpoint: {endpoint}",
             "available_endpoints": list(endpoint_map.keys())
-        }, indent=2))
+        }
 
+    print(json.dumps(result, ensure_ascii=True, cls=DateTimeEncoder))
 
-
-# ==================== CLI ====================
-
-# ==================== CLI ====================
 if __name__ == "__main__":
-    import sys
-    import json
-
-    # Get wrapper instance
-    wrapper = StockAnalysisWrapper()
-
-    if len(sys.argv) < 2:
-        print(json.dumps({"error": "Usage: python akshare_analysis.py <endpoint> [args...]"}))
-        sys.exit(1)
-
-    endpoint = sys.argv[1]
-    args = sys.argv[2:] if len(sys.argv) > 2 else []
-
-    # Handle get_all_endpoints
-    if endpoint == "get_all_endpoints":
-        if hasattr(wrapper, 'get_all_available_endpoints'):
-            result = wrapper.get_all_available_endpoints()
-        elif hasattr(wrapper, 'get_all_endpoints'):
-            result = wrapper.get_all_endpoints()
-        else:
-            result = {"success": False, "error": "Endpoint list not available"}
-        print(json.dumps(result, ensure_ascii=True))
-        sys.exit(0)
-
-    # Dynamic method resolution
-    method_name = f"get_{endpoint}" if not endpoint.startswith("get_") else endpoint
-
-    if hasattr(wrapper, method_name):
-        method = getattr(wrapper, method_name)
-        try:
-            result = method(*args) if args else method()
-            print(json.dumps(result, ensure_ascii=True))
-        except Exception as e:
-            print(json.dumps({"success": False, "error": str(e), "endpoint": endpoint}))
-    else:
-        print(json.dumps({"success": False, "error": f"Unknown endpoint: {endpoint}. Method '{method_name}' not found."}))
+    main()
 

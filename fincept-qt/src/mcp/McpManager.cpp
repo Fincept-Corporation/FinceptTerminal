@@ -5,6 +5,9 @@
 #include "core/logging/Logger.h"
 #include "storage/repositories/McpServerRepository.h"
 
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QUuid>
 
 namespace fincept::mcp {
@@ -42,14 +45,43 @@ void McpManager::initialize() {
         cfg.name = srv.name;
         cfg.description = srv.description;
         cfg.command = srv.command;
-        cfg.args = srv.args.split(' ', Qt::SkipEmptyParts);
         cfg.category = srv.category;
         cfg.enabled = srv.enabled;
         cfg.auto_start = srv.auto_start;
         cfg.status = ServerStatus::Stopped;
 
-        // Parse env JSON (stored as "KEY=VALUE KEY2=VALUE2")
-        if (!srv.env.isEmpty()) {
+        // Parse args: Try JSON array first (supports spaces), fallback to legacy space-split
+        bool args_parsed = false;
+        if (srv.args.trimmed().startsWith('[')) {
+            QJsonDocument doc = QJsonDocument::fromJson(srv.args.toUtf8());
+            if (doc.isArray()) {
+                QJsonArray arr = doc.array();
+                for (const auto& val : arr) {
+                    if (val.isString())
+                        cfg.args.append(val.toString());
+                }
+                args_parsed = true;
+            }
+        }
+
+        if (!args_parsed) {
+            cfg.args = srv.args.split(' ', Qt::SkipEmptyParts);
+        }
+
+        // Parse env: Try JSON object first, fallback to legacy "KEY=VAL KEY2=VAL2" format
+        bool env_parsed = false;
+        if (srv.env.trimmed().startsWith('{')) {
+            QJsonDocument doc = QJsonDocument::fromJson(srv.env.toUtf8());
+            if (doc.isObject()) {
+                QJsonObject obj = doc.object();
+                for (auto it = obj.begin(); it != obj.end(); ++it) {
+                    cfg.env[it.key()] = it.value().toString();
+                }
+                env_parsed = true;
+            }
+        }
+
+        if (!env_parsed && !srv.env.isEmpty()) {
             for (const auto& pair : srv.env.split(' ', Qt::SkipEmptyParts)) {
                 int eq = pair.indexOf('=');
                 if (eq > 0)
@@ -79,16 +111,21 @@ Result<void> McpManager::save_server(const McpServerConfig& config) {
     srv.name = config.name;
     srv.description = config.description;
     srv.command = config.command;
-    srv.args = config.args.join(' ');
     srv.category = config.category;
     srv.enabled = config.enabled;
     srv.auto_start = config.auto_start;
     srv.status = "stopped";
 
-    QStringList env_pairs;
+    // Store args and env as JSON strings to correctly handle spaces and special chars
+    QJsonArray argsArr;
+    for (const auto& arg : config.args)
+        argsArr.append(arg);
+    srv.args = QJsonDocument(argsArr).toJson(QJsonDocument::Compact);
+
+    QJsonObject envObj;
     for (auto it = config.env.constBegin(); it != config.env.constEnd(); ++it)
-        env_pairs.append(it.key() + "=" + it.value());
-    srv.env = env_pairs.join(' ');
+        envObj[it.key()] = it.value();
+    srv.env = QJsonDocument(envObj).toJson(QJsonDocument::Compact);
 
     auto r = McpServerRepository::instance().save(srv);
     if (r.is_err())
