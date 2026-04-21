@@ -37,6 +37,7 @@ Respond ONLY with a valid JSON object in this exact format (no markdown, no expl
 
 class QueryIntent(Enum):
     """Classified query intents"""
+
     TRADING = "trading"
     PORTFOLIO = "portfolio"
     ANALYSIS = "analysis"
@@ -51,6 +52,7 @@ class QueryIntent(Enum):
 @dataclass
 class RouteConfig:
     """Configuration for a route"""
+
     intent: QueryIntent
     agent_id: str
     keywords: List[str] = field(default_factory=list)
@@ -62,6 +64,7 @@ class RouteConfig:
 @dataclass
 class RoutingResult:
     """Result of routing decision"""
+
     intent: QueryIntent
     agent_id: str
     confidence: float
@@ -79,66 +82,141 @@ class IntentClassifier:
     # Default keyword mappings
     DEFAULT_KEYWORDS = {
         QueryIntent.TRADING: [
-            "buy", "sell", "trade", "order", "position", "long", "short",
-            "stop loss", "take profit", "limit order", "market order",
-            "entry", "exit", "fill", "execute"
+            "buy",
+            "sell",
+            "trade",
+            "order",
+            "position",
+            "long",
+            "short",
+            "stop loss",
+            "take profit",
+            "limit order",
+            "market order",
+            "entry",
+            "exit",
+            "fill",
+            "execute",
         ],
         QueryIntent.PORTFOLIO: [
-            "portfolio", "holdings", "allocation", "rebalance", "diversify",
-            "weight", "exposure", "balance", "assets", "positions"
+            "portfolio",
+            "holdings",
+            "allocation",
+            "rebalance",
+            "diversify",
+            "weight",
+            "exposure",
+            "balance",
+            "assets",
+            "positions",
         ],
         QueryIntent.ANALYSIS: [
-            "analyze", "analysis", "valuation", "dcf", "fair value",
-            "fundamental", "technical", "chart", "indicator", "pattern",
-            "support", "resistance", "trend", "investment thesis",
-            "stock analysis", "equity research", "price target", "outlook",
-            "forecast", "recommendation", "rating", "overvalued", "undervalued"
+            "analyze",
+            "analysis",
+            "valuation",
+            "dcf",
+            "fair value",
+            "fundamental",
+            "technical",
+            "chart",
+            "indicator",
+            "pattern",
+            "support",
+            "resistance",
+            "trend",
+            "investment thesis",
+            "stock analysis",
+            "equity research",
+            "price target",
+            "outlook",
+            "forecast",
+            "recommendation",
+            "rating",
+            "overvalued",
+            "undervalued",
         ],
         QueryIntent.RISK: [
-            "risk", "var", "volatility", "drawdown", "sharpe", "beta",
-            "correlation", "hedge", "exposure", "stress test", "scenario"
+            "risk",
+            "var",
+            "volatility",
+            "drawdown",
+            "sharpe",
+            "beta",
+            "correlation",
+            "hedge",
+            "exposure",
+            "stress test",
+            "scenario",
         ],
         QueryIntent.NEWS: [
-            "news", "headline", "announcement", "earnings", "report",
-            "press release", "update", "breaking"
+            "news",
+            "headline",
+            "announcement",
+            "earnings",
+            "report",
+            "press release",
+            "update",
+            "breaking",
         ],
         QueryIntent.GEOPOLITICS: [
-            "geopolitical", "war", "conflict", "sanction", "trade war",
-            "election", "policy", "government", "diplomatic", "military"
+            "geopolitical",
+            "war",
+            "conflict",
+            "sanction",
+            "trade war",
+            "election",
+            "policy",
+            "government",
+            "diplomatic",
+            "military",
         ],
         QueryIntent.ECONOMICS: [
-            "gdp", "inflation", "interest rate", "fed", "central bank",
-            "employment", "jobs", "cpi", "ppi", "economic"
+            "gdp",
+            "inflation",
+            "interest rate",
+            "fed",
+            "central bank",
+            "employment",
+            "jobs",
+            "cpi",
+            "ppi",
+            "economic",
         ],
         QueryIntent.RESEARCH: [
-            "research", "deep dive", "investigate", "study", "comprehensive",
-            "detailed", "in-depth", "explore"
-        ]
+            "research",
+            "deep dive",
+            "investigate",
+            "study",
+            "comprehensive",
+            "detailed",
+            "in-depth",
+            "explore",
+        ],
     }
 
     # Default patterns
     DEFAULT_PATTERNS = {
         QueryIntent.TRADING: [
-            r'\b(buy|sell)\s+\d+',
-            r'\b(long|short)\s+[A-Z]{1,5}\b',
-            r'place\s+(market|limit)\s+order'
+            r"\b(buy|sell)\s+\d+",
+            r"\b(long|short)\s+[A-Z]{1,5}\b",
+            r"place\s+(market|limit)\s+order",
         ],
         QueryIntent.ANALYSIS: [
-            r'analyze\s+[A-Z]{1,5}',
-            r'what.*think.*about\s+[A-Z]{1,5}',
-            r'[A-Z]{1,5}\s+(outlook|forecast|prediction)'
+            r"analyze\s+[A-Z]{1,5}",
+            r"what.*think.*about\s+[A-Z]{1,5}",
+            r"[A-Z]{1,5}\s+(outlook|forecast|prediction)",
         ],
         QueryIntent.PORTFOLIO: [
-            r'my\s+portfolio',
-            r'rebalance.*portfolio',
-            r'portfolio.*allocation'
-        ]
+            r"my\s+portfolio",
+            r"rebalance.*portfolio",
+            r"portfolio.*allocation",
+        ],
     }
 
     def __init__(
         self,
         custom_keywords: Dict[QueryIntent, List[str]] = None,
-        custom_patterns: Dict[QueryIntent, List[str]] = None
+        custom_patterns: Dict[QueryIntent, List[str]] = None,
     ):
         self.keywords = {**self.DEFAULT_KEYWORDS}
         self.patterns = {**self.DEFAULT_PATTERNS}
@@ -157,7 +235,9 @@ class IntentClassifier:
             for intent, patterns in self.patterns.items()
         }
 
-    def classify(self, query: str) -> List[tuple[QueryIntent, float, List[str], List[str]]]:
+    def classify(
+        self, query: str
+    ) -> List[tuple[QueryIntent, float, List[str], List[str]]]:
         """
         Classify query intent.
 
@@ -248,7 +328,9 @@ class LLMRouter:
         """Ask the LLM to classify the query. Returns (QueryIntent, confidence, reasoning)."""
         from finagent_core.registries import ModelsRegistry
 
-        base_url = self.api_keys.get(f"{provider}_base_url") or self.api_keys.get(f"{provider.upper()}_BASE_URL")
+        base_url = self.api_keys.get(f"{provider}_base_url") or self.api_keys.get(
+            f"{provider.upper()}_BASE_URL"
+        )
         model = ModelsRegistry.create_model(
             provider=provider,
             model_id=model_id,
@@ -258,6 +340,7 @@ class LLMRouter:
         )
 
         from agno.agent import Agent
+
         router_agent = Agent(
             model=model,
             instructions=LLM_ROUTER_SYSTEM_PROMPT,
@@ -290,7 +373,9 @@ class LLMRouter:
             intent_str = "general"
 
         intent = QueryIntent(intent_str)
-        logger.info(f"LLM routed '{query[:60]}' → {intent_str} (conf={confidence:.2f}): {reasoning}")
+        logger.info(
+            f"LLM routed '{query[:60]}' → {intent_str} (conf={confidence:.2f}): {reasoning}"
+        )
         return intent, confidence, reasoning
 
 
@@ -334,64 +419,70 @@ class SuperAgent:
                 agent_id="trading_agent",
                 keywords=["buy", "sell", "trade"],
                 priority=10,
-                config_override={"tools": ["yfinance", "calculator"]}
+                config_override={"tools": ["yfinance", "calculator"]},
             ),
             RouteConfig(
                 intent=QueryIntent.PORTFOLIO,
                 agent_id="portfolio_agent",
                 keywords=["portfolio", "allocation"],
                 priority=9,
-                config_override={"tools": ["yfinance", "calculator"]}
+                config_override={"tools": ["yfinance", "calculator"]},
             ),
             RouteConfig(
                 intent=QueryIntent.ANALYSIS,
                 agent_id="analysis_agent",
                 keywords=["analyze", "valuation"],
                 priority=8,
-                config_override={"reasoning": True, "tools": ["yfinance", "duckduckgo"]}
+                config_override={
+                    "reasoning": True,
+                    "tools": ["yfinance", "duckduckgo"],
+                },
             ),
             RouteConfig(
                 intent=QueryIntent.RISK,
                 agent_id="risk_agent",
                 keywords=["risk", "volatility"],
                 priority=8,
-                config_override={"tools": ["yfinance", "calculator"]}
+                config_override={"tools": ["yfinance", "calculator"]},
             ),
             RouteConfig(
                 intent=QueryIntent.NEWS,
                 agent_id="news_agent",
                 keywords=["news", "headlines"],
                 priority=5,
-                config_override={"tools": ["duckduckgo"]}
+                config_override={"tools": ["duckduckgo"]},
             ),
             RouteConfig(
                 intent=QueryIntent.GEOPOLITICS,
                 agent_id="geopolitics_agent",
                 keywords=["geopolitical", "conflict"],
                 priority=5,
-                config_override={"tools": ["duckduckgo"]}
+                config_override={"tools": ["duckduckgo"]},
             ),
             RouteConfig(
                 intent=QueryIntent.ECONOMICS,
                 agent_id="economics_agent",
                 keywords=["gdp", "inflation"],
                 priority=6,
-                config_override={"tools": ["duckduckgo", "calculator"]}
+                config_override={"tools": ["duckduckgo", "calculator"]},
             ),
             RouteConfig(
                 intent=QueryIntent.RESEARCH,
                 agent_id="research_agent",
                 keywords=["research", "investigate"],
                 priority=7,
-                config_override={"reasoning": True, "tools": ["duckduckgo", "yfinance"]}
+                config_override={
+                    "reasoning": True,
+                    "tools": ["duckduckgo", "yfinance"],
+                },
             ),
             RouteConfig(
                 intent=QueryIntent.GENERAL,
                 agent_id="core_agent",
                 keywords=[],
                 priority=0,
-                config_override={}
-            )
+                config_override={},
+            ),
         ]
 
         for route in default_routes:
@@ -404,16 +495,28 @@ class SuperAgent:
         if route.keywords:
             self.classifier.keywords.setdefault(route.intent, []).extend(route.keywords)
 
-    def _resolve_model_config_from_keys(self, api_keys: Dict[str, Any]) -> Dict[str, Any]:
+    def _resolve_model_config_from_keys(
+        self, api_keys: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Derive provider + base_url from available api_keys instead of hardcoding openai."""
         keys = api_keys or {}
-        preferred = ["fincept", "ollama", "anthropic", "google", "groq",
-                     "deepseek", "openai", "openrouter"]
+        preferred = [
+            "fincept",
+            "ollama",
+            "anthropic",
+            "google",
+            "groq",
+            "deepseek",
+            "openai",
+            "openrouter",
+        ]
         for provider in preferred:
             if keys.get(provider) or keys.get(f"{provider.upper()}_API_KEY"):
                 config = {"provider": provider}
                 # Pick up custom base_url if shipped (e.g. MiniMax behind anthropic provider)
-                base_url = keys.get(f"{provider}_base_url") or keys.get(f"{provider.upper()}_BASE_URL")
+                base_url = keys.get(f"{provider}_base_url") or keys.get(
+                    f"{provider.upper()}_BASE_URL"
+                )
                 if base_url:
                     config["base_url"] = base_url
                 return config
@@ -421,7 +524,9 @@ class SuperAgent:
             if k.endswith("_API_KEY") and v:
                 provider = k[:-8].lower()
                 config = {"provider": provider}
-                base_url = keys.get(f"{provider}_base_url") or keys.get(f"{provider.upper()}_BASE_URL")
+                base_url = keys.get(f"{provider}_base_url") or keys.get(
+                    f"{provider.upper()}_BASE_URL"
+                )
                 if base_url:
                     config["base_url"] = base_url
                 return config
@@ -446,7 +551,8 @@ class SuperAgent:
             agent_id=route.agent_id if route else self.fallback_agent_id,
             confidence=confidence,
             config=route.config_override if route else {},
-            matched_keywords=[reasoning],  # repurpose field to carry LLM reasoning
+            # repurpose field to carry LLM reasoning
+            matched_keywords=[reasoning],
             matched_patterns=[],
         )
 
@@ -470,14 +576,16 @@ class SuperAgent:
 
             route = self.routes.get(intent)
             if route:
-                results.append(RoutingResult(
-                    intent=intent,
-                    agent_id=route.agent_id,
-                    confidence=confidence,
-                    config=route.config_override,
-                    matched_keywords=matched_kw,
-                    matched_patterns=matched_pt
-                ))
+                results.append(
+                    RoutingResult(
+                        intent=intent,
+                        agent_id=route.agent_id,
+                        confidence=confidence,
+                        config=route.config_override,
+                        matched_keywords=matched_kw,
+                        matched_patterns=matched_pt,
+                    )
+                )
 
         return results
 
@@ -486,7 +594,7 @@ class SuperAgent:
         query: str,
         session_id: Optional[str] = None,
         context: Optional[Dict[str, Any]] = None,
-        user_config: Optional[Dict[str, Any]] = None
+        user_config: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Route and execute query.
@@ -509,18 +617,22 @@ class SuperAgent:
 
         # Route query (LLM-based)
         routing = self.route(query)
-        logger.info(f"Routed to {routing.agent_id} with confidence {routing.confidence:.2f}")
+        logger.info(
+            f"Routed to {routing.agent_id} with confidence {routing.confidence:.2f}"
+        )
 
         # Build config - use user's model config if provided, otherwise resolve from api_keys
         if user_config and user_config.get("model"):
             model_config = user_config["model"]
         else:
-            model_config = self._resolve_model_config_from_keys(getattr(self, "api_keys", {}))
+            model_config = self._resolve_model_config_from_keys(
+                getattr(self, "api_keys", {})
+            )
 
         config = {
             "model": model_config,
             "instructions": self._get_instructions_for_intent(routing.intent),
-            **routing.config
+            **routing.config,
         }
 
         # Merge user config overrides (tools, reasoning, etc.)
@@ -543,8 +655,8 @@ class SuperAgent:
                     "intent": routing.intent.value,
                     "agent_id": routing.agent_id,
                     "confidence": routing.confidence,
-                    "matched_keywords": routing.matched_keywords
-                }
+                    "matched_keywords": routing.matched_keywords,
+                },
             }
 
         # Try to load specific agent
@@ -558,7 +670,11 @@ class SuperAgent:
         # Execute
         try:
             response = agent.run(query, config, session_id)
-            content = agent.get_response_content(response) if hasattr(agent, 'get_response_content') else str(response)
+            content = (
+                agent.get_response_content(response)
+                if hasattr(agent, "get_response_content")
+                else str(response)
+            )
 
             # Detect when Agno swallowed an API error and returned it as response text
             _ERROR_PREFIXES = (
@@ -567,7 +683,9 @@ class SuperAgent:
                 "Fincept API failed",
                 "Cannot connect to Fincept API",
             )
-            if isinstance(content, str) and any(content.startswith(p) for p in _ERROR_PREFIXES):
+            if isinstance(content, str) and any(
+                content.startswith(p) for p in _ERROR_PREFIXES
+            ):
                 return {
                     "success": False,
                     "error": content,
@@ -575,9 +693,9 @@ class SuperAgent:
                         "intent": routing.intent.value,
                         "agent_id": routing.agent_id,
                         "confidence": routing.confidence,
-                        "matched_keywords": routing.matched_keywords
+                        "matched_keywords": routing.matched_keywords,
                     },
-                    "model_attempted": f"{model_provider}/{model_id}"
+                    "model_attempted": f"{model_provider}/{model_id}",
                 }
 
             return {
@@ -587,14 +705,18 @@ class SuperAgent:
                     "intent": routing.intent.value,
                     "agent_id": routing.agent_id,
                     "confidence": routing.confidence,
-                    "matched_keywords": routing.matched_keywords
+                    "matched_keywords": routing.matched_keywords,
                 },
-                "model_used": f"{model_provider}/{model_id}"
+                "model_used": f"{model_provider}/{model_id}",
             }
         except Exception as e:
             error_msg = str(e)
             # Provide helpful error for common issues
-            if "api_key" in error_msg.lower() or "authentication" in error_msg.lower() or "unauthorized" in error_msg.lower():
+            if (
+                "api_key" in error_msg.lower()
+                or "authentication" in error_msg.lower()
+                or "unauthorized" in error_msg.lower()
+            ):
                 error_msg = f"API key error for provider '{model_provider}': {error_msg}. Check your API key in Settings > LLM Configuration."
             elif "connection" in error_msg.lower() or "connect" in error_msg.lower():
                 error_msg = f"Connection error for '{model_provider}': {error_msg}. Check your base URL and network."
@@ -605,16 +727,17 @@ class SuperAgent:
                 "routing": {
                     "intent": routing.intent.value,
                     "agent_id": routing.agent_id,
-                    "confidence": routing.confidence
+                    "confidence": routing.confidence,
                 },
-                "model_attempted": f"{model_provider}/{model_id}"
+                "model_attempted": f"{model_provider}/{model_id}",
             }
 
     def execute_multi(
         self,
         query: str,
         session_id: Optional[str] = None,
-        aggregate: bool = True
+        aggregate: bool = True,
+        user_config: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Execute query on multiple routed agents and aggregate results.
@@ -623,6 +746,7 @@ class SuperAgent:
             query: User query
             session_id: Optional session ID
             aggregate: Whether to aggregate responses
+            user_config: Optional user-provided model config
 
         Returns:
             Aggregated or individual responses
@@ -630,33 +754,62 @@ class SuperAgent:
         routings = self.route_multi(query)
 
         if not routings:
-            return self.execute(query, session_id)
+            return self.execute(query, session_id, user_config=user_config)
 
         responses = []
-        for routing in routings:
-            result = self.execute(query, session_id)
+
+        print("\n" + "=" * 60)
+        print("  🚀  MULTI-AGENT WORKFLOW STARTED")
+        print("=" * 60)
+        print(f"  📋 Query      : {query[:200]}")
+        print(f"  🤖 Agents     : {len(routings)}")
+        print("=" * 60)
+
+        for i, routing in enumerate(routings, 1):
+            print(f"\n  ┌─ Agent {i} of {len(routings)} {'─' * 35}")
+            print(f"  │  🎯 Intent    : {getattr(routing, 'intent', 'N/A')}")
+            print(f"  │  📊 Confidence: {getattr(routing, 'confidence', 'N/A')}")
+            print(f"  │  ⏳ Status    : Running...")
+
+            result = self.execute(query, session_id, user_config=user_config)
             result["routing"]["priority"] = routing.confidence
             responses.append(result)
 
+            if result.get("success"):
+                print(f"  │  ✅ Status    : Success")
+                print(f"  │  💬 Response  : {str(result.get('response', ''))[:200]}")
+            else:
+                print(f"  │  ❌ Status    : Failed")
+                print(f"  │  ⚠️  Error     : {result.get('error', 'Unknown error')}")
+            print(f"  └{'─' * 45}")
+
+        success_count = sum(1 for r in responses if r.get("success"))
+        fail_count = len(responses) - success_count
+
+        print("\n" + "=" * 60)
+        print("  📊  WORKFLOW SUMMARY")
+        print("=" * 60)
+        print(f"  ✅ Successful : {success_count}")
+        print(f"  ❌ Failed     : {fail_count}")
+        print(f"  📦 Total      : {len(responses)}")
+        print("=" * 60 + "\n")
+
         if aggregate and len(responses) > 1:
-            # Simple aggregation - combine successful responses
             combined = []
             for resp in responses:
                 if resp.get("success"):
-                    combined.append(f"[{resp['routing']['intent']}]\n{resp['response']}")
+                    combined.append(
+                        f"[{resp['routing']['intent']}]\n{resp['response']}"
+                    )
 
             return {
                 "success": True,
                 "response": "\n\n---\n\n".join(combined),
                 "responses": responses,
-                "aggregated": True
+                "aggregated": True,
             }
 
-        return {
-            "success": True,
-            "responses": responses,
-            "aggregated": False
-        }
+        return {"success": True, "responses": responses, "aggregated": False}
 
     def _get_instructions_for_intent(self, intent: QueryIntent) -> str:
         """Get specialized instructions for intent"""
@@ -666,57 +819,51 @@ class SuperAgent:
 - Position management
 - Entry/exit strategies
 - Market timing""",
-
             QueryIntent.PORTFOLIO: """You are a portfolio manager. Help users with:
 - Portfolio allocation and rebalancing
 - Diversification strategies
 - Asset selection
 - Position sizing""",
-
             QueryIntent.ANALYSIS: """You are a financial analyst. Help users with:
 - Stock valuation (DCF, comparables)
 - Fundamental analysis
 - Technical analysis
 - Market research""",
-
             QueryIntent.RISK: """You are a risk analyst. Help users with:
 - Risk metrics (VaR, Sharpe, etc.)
 - Volatility analysis
 - Stress testing
 - Hedging strategies""",
-
             QueryIntent.NEWS: """You are a financial news analyst. Help users with:
 - Market news and headlines
 - Earnings announcements
 - Company updates
 - Sector news""",
-
             QueryIntent.GEOPOLITICS: """You are a geopolitical analyst. Help users with:
 - Geopolitical risk assessment
 - International relations
 - Policy analysis
 - Global macro trends""",
-
             QueryIntent.ECONOMICS: """You are an economist. Help users with:
 - Economic indicators
 - Central bank policy
 - Macro trends
 - Economic forecasting""",
-
             QueryIntent.RESEARCH: """You are a research analyst. Help users with:
 - Deep-dive research
 - Comprehensive analysis
 - Industry studies
 - Investment theses""",
-
-            QueryIntent.GENERAL: """You are a helpful financial AI assistant."""
+            QueryIntent.GENERAL: """You are a helpful financial AI assistant.""",
         }
 
         return instructions.get(intent, instructions[QueryIntent.GENERAL])
 
 
 # Entry point for C++ commands
-def route_query(query: str, api_keys: Dict[str, str] = None, config: Dict[str, Any] = None) -> Dict[str, Any]:
+def route_query(
+    query: str, api_keys: Dict[str, str] = None, config: Dict[str, Any] = None
+) -> Dict[str, Any]:
     """Route a query and return routing info"""
     model_config = (config or {}).get("model")
     agent = SuperAgent(api_keys=api_keys, model_config=model_config)
@@ -728,7 +875,7 @@ def route_query(query: str, api_keys: Dict[str, str] = None, config: Dict[str, A
         "confidence": routing.confidence,
         "matched_keywords": routing.matched_keywords,
         "matched_patterns": routing.matched_patterns,
-        "config": routing.config
+        "config": routing.config,
     }
 
 
@@ -736,7 +883,7 @@ def execute_query(
     query: str,
     api_keys: Dict[str, str] = None,
     session_id: str = None,
-    config: Dict[str, Any] = None
+    config: Dict[str, Any] = None,
 ) -> Dict[str, Any]:
     """Route and execute a query"""
     model_config = config.get("model") if config else None
