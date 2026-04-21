@@ -117,15 +117,15 @@ Result<void> McpManager::save_server(const McpServerConfig& config) {
     srv.status = "stopped";
 
     // Store args and env as JSON strings to correctly handle spaces and special chars
-    QJsonArray argsArr;
+    QJsonArray args_arr;
     for (const auto& arg : config.args)
-        argsArr.append(arg);
-    srv.args = QJsonDocument(argsArr).toJson(QJsonDocument::Compact);
+        args_arr.append(arg);
+    srv.args = QJsonDocument(args_arr).toJson(QJsonDocument::Compact);
 
-    QJsonObject envObj;
+    QJsonObject env_obj;
     for (auto it = config.env.constBegin(); it != config.env.constEnd(); ++it)
-        envObj[it.key()] = it.value();
-    srv.env = QJsonDocument(envObj).toJson(QJsonDocument::Compact);
+        env_obj[it.key()] = it.value();
+    srv.env = QJsonDocument(env_obj).toJson(QJsonDocument::Compact);
 
     auto r = McpServerRepository::instance().save(srv);
     if (r.is_err())

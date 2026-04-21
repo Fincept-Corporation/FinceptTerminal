@@ -11,7 +11,7 @@ import json
 import pandas as pd
 import akshare as ak
 from typing import Dict, Any, List, Optional, Union
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 import traceback
 import time
 
@@ -967,7 +967,7 @@ def main():
     # Custom JSON encoder for date objects
     class DateTimeEncoder(json.JSONEncoder):
         def default(self, obj):
-            if isinstance(obj, (datetime, datetime.date)):
+            if isinstance(obj, (datetime, date)):
                 return obj.isoformat()
             return super().default(obj)
 
