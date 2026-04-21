@@ -445,6 +445,23 @@ int main(int argc, char* argv[]) {
             window->setAttribute(Qt::WA_DeleteOnClose);
             window->show();
 
+            // Restore any secondary windows that were open at last shutdown so
+            // multi-monitor layouts survive across relaunches. Each window
+            // restores its own geometry + dock layout from SessionManager.
+            {
+                const QList<int> saved_ids =
+                    fincept::SessionManager::instance().load_window_ids();
+                for (int id : saved_ids) {
+                    if (id <= 0) continue; // 0 = primary, already created
+                    auto* w = new fincept::MainWindow(id);
+                    w->setAttribute(Qt::WA_DeleteOnClose);
+                    w->show();
+                }
+                if (!saved_ids.isEmpty())
+                    LOG_INFO("App", QString("Restored %1 secondary window(s) from last session")
+                                        .arg(saved_ids.size() > 0 ? saved_ids.size() - 1 : 0));
+            }
+
             // Wire new-window handler now that the primary window exists
             QObject::connect(&app, &SingleApplication::receivedMessage,
                              [](quint32 /*instanceId*/, QByteArray /*message*/) {
@@ -472,6 +489,23 @@ int main(int argc, char* argv[]) {
     // Python already set up — launch main window directly
     fincept::MainWindow window;
     window.show();
+
+    // Restore any secondary windows that were open at last shutdown. The
+    // primary window on the stack owns its own lifetime; restored secondaries
+    // use WA_DeleteOnClose and self-remove from QApplication::topLevelWidgets.
+    {
+        const QList<int> saved_ids =
+            fincept::SessionManager::instance().load_window_ids();
+        for (int id : saved_ids) {
+            if (id <= 0) continue; // 0 = primary, already created
+            auto* w = new fincept::MainWindow(id);
+            w->setAttribute(Qt::WA_DeleteOnClose);
+            w->show();
+        }
+        if (saved_ids.size() > 1)
+            LOG_INFO("App", QString("Restored %1 secondary window(s) from last session")
+                                .arg(saved_ids.size() - 1));
+    }
 
     // ── New-window handler: fires when the user re-launches the exe ──────────
     // The secondary instance sends "--new-window" and exits. We construct a new

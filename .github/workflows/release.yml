@@ -182,7 +182,7 @@ jobs:
           done
 
           cp -r resources "${BUILD_DIR}/resources" 2>/dev/null || true
-          bash .github/scripts/sync_scripts.sh scripts "${BUILD_DIR}/scripts"
+          bash "${GITHUB_WORKSPACE}/.github/scripts/sync_scripts.sh" scripts "${BUILD_DIR}/scripts"
           # qt.conf — pins plugin and data paths relative to the executable.
           # Without this, Qt falls back to hardcoded build-time paths which
           # don't exist on a clean machine and cause plugin load failures.
@@ -367,7 +367,7 @@ jobs:
           # App resources + Python analytics scripts live next to the binary
           # (matches AppPaths resolution on Linux).
           cp -r resources "${APPDIR}/usr/bin/resources" 2>/dev/null || true
-          bash .github/scripts/sync_scripts.sh scripts "${APPDIR}/usr/bin/scripts"
+          bash "${GITHUB_WORKSPACE}/.github/scripts/sync_scripts.sh" scripts "${APPDIR}/usr/bin/scripts"
 
           # Requirements files — PythonSetupManager reads these at first run.
           mkdir -p "${APPDIR}/usr/bin/resources"
@@ -638,7 +638,7 @@ jobs:
           # Copy app resources + Python analytics scripts into bundle
           mkdir -p "${APP_BUNDLE}/Contents/Resources"
           cp -r resources "${APP_BUNDLE}/Contents/Resources/" 2>/dev/null || true
-          bash .github/scripts/sync_scripts.sh scripts "${APP_BUNDLE}/Contents/Resources/scripts"
+          bash "${GITHUB_WORKSPACE}/.github/scripts/sync_scripts.sh" scripts "${APP_BUNDLE}/Contents/Resources/scripts"
 
           echo "Bundle staged at: ${APP_BUNDLE}"
           echo "Pre-sign size: $(du -sh "${APP_BUNDLE}" | cut -f1)"

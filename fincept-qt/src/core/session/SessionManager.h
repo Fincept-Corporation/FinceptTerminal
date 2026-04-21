@@ -1,7 +1,9 @@
 #pragma once
 #include <QElapsedTimer>
+#include <QList>
 #include <QObject>
 #include <QSettings>
+#include <QString>
 #include <QVariantMap>
 
 namespace fincept {
@@ -28,6 +30,18 @@ class SessionManager : public QObject {
     // Track how many windows were open at last shutdown
     void save_window_count(int count);
     int load_window_count() const;
+
+    // Track the exact set of window IDs that were open at last shutdown.
+    // Used on startup to restore every window (not just window 0) so that
+    // multi-monitor layouts survive across app relaunches.
+    void save_window_ids(const QList<int>& ids);
+    QList<int> load_window_ids() const;
+
+    // Per-window QScreen name — used to restore a window onto the correct
+    // monitor when multiple are connected. Empty on first run / fallback
+    // to primary screen when the saved screen is no longer available.
+    void save_screen_name(int window_id, const QString& screen_name);
+    QString load_screen_name(int window_id) const;
 
     // ADS dock layout — scoped per window_id
     void save_dock_layout(int window_id, const QByteArray& layout);

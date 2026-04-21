@@ -73,6 +73,37 @@ int SessionManager::load_window_count() const {
     return settings_.value("window_count", 1).toInt();
 }
 
+void SessionManager::save_window_ids(const QList<int>& ids) {
+    QVariantList v;
+    v.reserve(ids.size());
+    for (int id : ids)
+        v.append(id);
+    settings_.setValue("window_ids", v);
+}
+
+QList<int> SessionManager::load_window_ids() const {
+    QList<int> out;
+    const QVariantList v = settings_.value("window_ids").toList();
+    out.reserve(v.size());
+    for (const QVariant& x : v) {
+        bool ok = false;
+        const int id = x.toInt(&ok);
+        if (ok)
+            out.append(id);
+    }
+    return out;
+}
+
+void SessionManager::save_screen_name(int window_id, const QString& screen_name) {
+    const QString prefix = QString("window_%1/").arg(window_id);
+    settings_.setValue(prefix + "screen_name", screen_name);
+}
+
+QString SessionManager::load_screen_name(int window_id) const {
+    const QString prefix = QString("window_%1/").arg(window_id);
+    return settings_.value(prefix + "screen_name").toString();
+}
+
 void SessionManager::save_dock_layout(int window_id, const QByteArray& layout) {
     const QString prefix = QString("window_%1/").arg(window_id);
     settings_.setValue(prefix + "dock_layout", layout);

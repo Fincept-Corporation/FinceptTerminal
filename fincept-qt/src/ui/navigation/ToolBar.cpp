@@ -7,9 +7,11 @@
 #include <QAction>
 #include <QDateTime>
 #include <QFontMetrics>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QResizeEvent>
+#include <QScreen>
 
 namespace fincept::ui {
 
@@ -265,6 +267,32 @@ QMenu* ToolBar::build_file_menu() {
     auto* m = new QMenu("File", this);
     m->setStyleSheet(popup_ss());
     m->addAction("New Window", this, [this]() { emit action_triggered("new_window"); });
+
+    // "Move to Monitor" — rebuilt on every popup so plug/unplug events are
+    // reflected without restarting the app. Emits "move_to_monitor:<name>"
+    // so MainWindow can look the screen up by name (indices are unstable).
+    auto* monitors = m->addMenu("Move to Monitor");
+    monitors->setStyleSheet(popup_ss());
+    connect(monitors, &QMenu::aboutToShow, this, [this, monitors]() {
+        monitors->clear();
+        const auto screens = QGuiApplication::screens();
+        if (screens.size() <= 1) {
+            auto* only = monitors->addAction("(single monitor)");
+            only->setEnabled(false);
+            return;
+        }
+        int idx = 1;
+        for (QScreen* s : screens) {
+            const QString name = s->name();
+            const QSize size = s->size();
+            const QString label =
+                QString("%1. %2  (%3×%4)").arg(idx++).arg(name).arg(size.width()).arg(size.height());
+            monitors->addAction(label, this, [this, name]() {
+                emit action_triggered(QString("move_to_monitor:%1").arg(name));
+            });
+        }
+    });
+
     m->addSeparator();
     m->addAction("New Workspace", this, [this]() { emit action_triggered("new_workspace"); });
     m->addAction("Open Workspace", this, [this]() { emit action_triggered("open_workspace"); });

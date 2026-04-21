@@ -8,9 +8,16 @@
 # Exclusions (kept in sync with fincept-qt/cmake/prune_scripts_junk.cmake
 # and the install(DIRECTORY ... REGEX EXCLUDE) rule in CMakeLists.txt):
 #   __pycache__, *.pyc, .pytest_cache, .benchmarks,
+#   .venv, venv, env,
 #   *.deleted.*, *.bak, *.orig,
 #   *.db, *.sqlite, *.sqlite3,
-#   .DS_Store, Thumbs.db
+#   .DS_Store, Thumbs.db,
+#   .git, .firecrawl
+#
+# Implementation note: we use `tar --exclude ... | tar -x` instead of rsync
+# because rsync is NOT pre-installed on GitHub's windows-2022 runner
+# (git-bash omits it, MSYS2 is not on PATH). tar is available on all three
+# runner OSes (Windows git-bash, Ubuntu, macOS) out of the box.
 
 set -euo pipefail
 
@@ -29,13 +36,17 @@ fi
 
 mkdir -p "$DEST"
 
-# rsync is present on ubuntu-latest and macos-latest by default. On Windows
-# runners it's in git-bash (which is what `shell: bash` uses).
-rsync -a \
+# Stream tar from SRC → DEST with exclusions applied. The trailing `.` in
+# `tar -C "$SRC" -c .` packs SRC's contents (not SRC itself) so files land
+# directly under DEST, matching rsync's `SRC/ DEST/` semantics.
+tar \
     --exclude='__pycache__' \
     --exclude='*.pyc' \
     --exclude='.pytest_cache' \
     --exclude='.benchmarks' \
+    --exclude='.venv' \
+    --exclude='venv' \
+    --exclude='env' \
     --exclude='*.deleted.*' \
     --exclude='*.deleted' \
     --exclude='*.bak' \
@@ -45,4 +56,6 @@ rsync -a \
     --exclude='*.sqlite3' \
     --exclude='.DS_Store' \
     --exclude='Thumbs.db' \
-    "${SRC%/}/" "${DEST%/}/"
+    --exclude='.git' \
+    --exclude='.firecrawl' \
+    -C "$SRC" -cf - . | tar -C "$DEST" -xf -
