@@ -50,7 +50,7 @@ jobs:
             artifact: FinceptTerminal-macOS-arm64
             exe: FinceptTerminal
             qt_arch: clang_64
-            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=arm64"
+            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0"
 
           # ---- macOS x64 (Intel) ----
           # Cross-compiled on ARM64 runner. CMakeLists.txt auto-disables GGML_NATIVE
@@ -61,7 +61,7 @@ jobs:
             artifact: FinceptTerminal-macOS-x64
             exe: FinceptTerminal
             qt_arch: clang_64
-            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=x86_64"
+            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0"
 
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.platform }} ${{ matrix.arch }}
