@@ -1,11 +1,11 @@
 # ── Stage 1: Build ────────────────────────────────────────────────────────────
 # Debian 12 base: ships a recent glibc (2.36) and g++-12 meeting our GCC 12.3+ pin.
-# Qt is NOT installed from apt (Debian ships 6.4.x); we fetch Qt 6.7.2 via
+# Qt is NOT installed from apt (Debian ships 6.4.x); we fetch Qt 6.8.3 via
 # aqtinstall to match the version pin in fincept-qt/CMakeLists.txt.
 FROM debian:12-slim AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
-ARG QT_VERSION=6.7.2
+ARG QT_VERSION=6.8.3
 ARG QT_ARCH=gcc_64
 
 # Build toolchain + Qt runtime system deps (for Qt to link against)
@@ -32,7 +32,7 @@ ENV QT_ROOT=/opt/Qt
 RUN pip3 install --break-system-packages --no-cache-dir aqtinstall \
     && python3 -m aqt install-qt linux desktop ${QT_VERSION} ${QT_ARCH} \
         --outputdir ${QT_ROOT} \
-        --modules qtcharts qtwebsockets qtmultimedia qtspeech
+        --modules qtcharts qtwebsockets qtmultimedia qtmultimediawidgets qtspeech
 
 ENV CMAKE_PREFIX_PATH="${QT_ROOT}/${QT_VERSION}/${QT_ARCH}"
 ENV PATH="${CMAKE_PREFIX_PATH}/bin:${PATH}"
@@ -48,12 +48,12 @@ RUN rm -rf build \
 
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
-# Minimal runtime: bundles Qt 6.7.2 libs copied from the builder stage so the
+# Minimal runtime: bundles Qt 6.8.3 libs copied from the builder stage so the
 # runtime image doesn't depend on Debian's (older) Qt packages.
 FROM debian:12-slim AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
-ARG QT_VERSION=6.7.2
+ARG QT_VERSION=6.8.3
 ARG QT_ARCH=gcc_64
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -69,7 +69,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV QT_ROOT=/opt/Qt
 ENV QT_PREFIX="${QT_ROOT}/${QT_VERSION}/${QT_ARCH}"
 
-# Bundle Qt 6.7.2 libs + plugins from builder stage
+# Bundle Qt 6.8.3 libs + plugins from builder stage
 COPY --from=builder ${QT_PREFIX}/lib       ${QT_PREFIX}/lib
 COPY --from=builder ${QT_PREFIX}/plugins   ${QT_PREFIX}/plugins
 

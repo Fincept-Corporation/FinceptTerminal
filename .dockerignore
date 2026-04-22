@@ -2,3 +2,13 @@ fincept-qt/build/
 fincept-qt/uitest/
 tmpqt/
 .git/
+images/
+docs/
+.github/
+*.md
+package.json
+package-lock.json
+funding.json
+updates.json
+fincept_icon.ico
+setup.sh

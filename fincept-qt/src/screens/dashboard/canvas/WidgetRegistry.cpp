@@ -30,6 +30,7 @@
 #include "screens/dashboard/widgets/TradeTapeWidget.h"
 #include "screens/dashboard/widgets/VideoPlayerWidget.h"
 #include "screens/dashboard/widgets/WatchlistWidget.h"
+#include "screens/dashboard/widgets/WebScraperWidget.h"
 
 namespace fincept::screens {
 
@@ -155,6 +156,10 @@ WidgetRegistry::WidgetRegistry() {
     register_widget({"news_category", "News — Category", "Research",
                      "Category-filtered news headlines — news:category:<category>", 5, 5, 3, 3,
                      [](const QJsonObject& cfg) { return new widgets::NewsCategoryWidget(cfg); }});
+
+    register_widget({"web_scraper", "Web Scraper", "Tools",
+                     "Scrape tables from any URL — auto-detects HTML, JSON, CSV, XML/RSS", 6, 5, 3,
+                     3, [](const QJsonObject& cfg) { return new widgets::WebScraperWidget(cfg); }});
 }
 
 void WidgetRegistry::register_widget(WidgetMeta meta) {

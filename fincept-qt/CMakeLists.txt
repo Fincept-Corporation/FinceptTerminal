@@ -896,6 +896,7 @@ set(SCREEN_SOURCES
     src/screens/dashboard/widgets/NewsCategoryWidget.cpp
     src/screens/dashboard/widgets/RecentFilesWidget.cpp
     src/screens/dashboard/widgets/VideoPlayerWidget.cpp
+    src/screens/dashboard/widgets/WebScraperWidget.cpp
     src/screens/report_builder/ReportBuilderScreen.cpp
     src/screens/report_builder/ComponentToolbar.cpp
     src/screens/report_builder/DocumentCanvas.cpp
@@ -1255,6 +1256,7 @@ set_source_files_properties(
     src/screens/dashboard/widgets/RecentFilesWidget.cpp
     src/screens/dashboard/widgets/VideoPlayerWidget.cpp
     src/screens/dashboard/widgets/WatchlistWidget.cpp
+    src/screens/dashboard/widgets/WebScraperWidget.cpp
     src/screens/data_mapping/DataMappingScreen.cpp
     src/screens/dbnomics/DBnomicsChartWidget.cpp
     src/screens/dbnomics/DBnomicsDataTable.cpp

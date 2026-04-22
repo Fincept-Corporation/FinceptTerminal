@@ -725,7 +725,7 @@ void AnalyticsSectorsView::update_correlation() {
               [](const auto& a, const auto& b) { return a.weight > b.weight; });
     int n = static_cast<int>(std::min(qsizetype{10}, sorted.size()));
 
-    auto make_header = [this](const QString& s, bool rotate) {
+    auto make_header = [](const QString& s, bool rotate) {
         auto* lbl = new QLabel(s);
         lbl->setAlignment(Qt::AlignCenter);
         lbl->setFixedHeight(rotate ? 46 : 24);
