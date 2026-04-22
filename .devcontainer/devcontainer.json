@@ -1,0 +1,8 @@
+{
+  "name": "FinceptTerminal",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "pip install -e .",
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {}
+  }
+}

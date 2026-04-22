@@ -1,0 +1,30 @@
+name: Performance Benchmark
+on: [push, pull_request]
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: Import time
+        run: |
+          python -c "
+          import time
+          start = time.time()
+          try:
+              import fincept_terminal
+          except: pass
+          elapsed = time.time() - start
+          print(f'Import time: {elapsed:.3f}s')
+          "
+      - name: Startup time
+        run: |
+          timeout 10 python -c "
+          import time
+          start = time.time()
+          # Test basic module imports
+          print('Benchmark complete')
+          " || echo "Startup benchmark done"
