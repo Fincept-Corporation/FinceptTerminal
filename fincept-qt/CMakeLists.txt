@@ -1826,9 +1826,29 @@ target_link_libraries(FinceptTerminal PRIVATE
     OpenSSL::Crypto
 )
 
-# macOS: also link Security.framework for Keychain in SecureStorage
+# macOS: link Security.framework + CoreFoundation for SecItem API in SecureStorage
 if(APPLE)
-    target_link_libraries(FinceptTerminal PRIVATE "-framework Security")
+    target_link_libraries(FinceptTerminal PRIVATE "-framework Security" "-framework CoreFoundation")
+endif()
+
+# Linux: optionally link libsecret for cryptographically secure credential storage.
+# Without libsecret, SecureStorage falls back to XOR-obfuscated QSettings (insecure).
+# Install libsecret-1-dev (Debian/Ubuntu) or libsecret-devel (Fedora) before building.
+if(UNIX AND NOT APPLE)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LIBSECRET IMPORTED_TARGET libsecret-1)
+        if(LIBSECRET_FOUND)
+            target_link_libraries(FinceptTerminal PRIVATE PkgConfig::LIBSECRET)
+            target_compile_definitions(FinceptTerminal PRIVATE FINCEPT_HAVE_LIBSECRET)
+            message(STATUS "libsecret found — Linux SecureStorage will use Secret Service backend")
+        else()
+            message(WARNING
+                "libsecret-1 not found — Linux credential storage falls back to "
+                "XOR-obfuscated QSettings (NOT cryptographically secure). "
+                "Install libsecret-1-dev and rebuild for production deployments.")
+        endif()
+    endif()
 endif()
 
 # Copy OpenSSL DLLs to build output — Windows only

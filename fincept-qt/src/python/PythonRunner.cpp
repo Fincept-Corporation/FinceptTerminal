@@ -52,6 +52,33 @@ QString PythonRunner::scripts_dir() const {
     return scripts_dir_;
 }
 
+// ── Sensitive environment variable stripping ─────────────────────────────────
+// Removes credential-like variables inherited from the parent process before
+// passing the environment to a Python subprocess. This prevents API keys,
+// tokens, and passwords set in the user's shell from leaking into child
+// processes (readable via /proc/<pid>/environ on Linux or process inspection
+// tools on other platforms).
+//
+// Scripts that need a specific API key receive it via an explicit env.insert()
+// call at the call-site — never via implicit inheritance from the shell.
+static void strip_sensitive_env_vars(QProcessEnvironment& env) {
+    const QStringList all_keys = env.keys();
+    for (const QString& k : all_keys) {
+        const QString upper = k.toUpper();
+        if (upper.endsWith(QLatin1String("_API_KEY"))    ||
+            upper.endsWith(QLatin1String("_SECRET"))     ||
+            upper.endsWith(QLatin1String("_SECRET_KEY")) ||
+            upper.endsWith(QLatin1String("_ACCESS_TOKEN"))||
+            upper.endsWith(QLatin1String("_AUTH_TOKEN")) ||
+            upper.endsWith(QLatin1String("_TOKEN"))      ||
+            upper.endsWith(QLatin1String("_PASSWORD"))   ||
+            upper.endsWith(QLatin1String("_PRIVATE_KEY")))
+        {
+            env.remove(k);
+        }
+    }
+}
+
 // ── Standard Python environment ──────────────────────────────────────────────
 // Shared by PythonRunner::run() and external direct-QProcess callers
 // (e.g., AgentService's stdin/stream paths). Anything every Python spawn needs
@@ -59,6 +86,7 @@ QString PythonRunner::scripts_dir() const {
 // here. Script-specific path additions (parent-of-pkg) stay in run().
 QProcessEnvironment PythonRunner::build_python_env() const {
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    strip_sensitive_env_vars(env); // Never let shell-inherited credentials reach subprocesses
     env.insert("PYTHONIOENCODING", "utf-8");
     env.insert("PYTHONDONTWRITEBYTECODE", "1");
     env.insert("PYTHONUNBUFFERED", "1");
