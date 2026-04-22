@@ -1,4 +1,4 @@
 fincept-qt/build/
 fincept-qt/uitest/
-tmpqt/
+tmpqt/ hello
 .git/
