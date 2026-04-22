@@ -538,7 +538,12 @@ class SuperAgent:
         if not model_provider or not model_id:
             return {
                 "success": False,
-                "error": "No LLM model configured. Please configure a model provider and model ID in Settings > LLM Configuration.",
+                "error": (
+                    "No LLM model configured. Configure a model provider and "
+                    "model ID in Settings > LLM Configuration, or pass "
+                    'user_config={"model": {"provider": "...", "model_id": "..."}} '
+                    "when calling the API programmatically."
+                ),
                 "routing": {
                     "intent": routing.intent.value,
                     "agent_id": routing.agent_id,
