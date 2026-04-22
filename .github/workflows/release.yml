@@ -352,17 +352,48 @@ jobs:
           Categories=Finance;
           EOF
 
-          # Icon — use real one if available, else placeholder so linuxdeploy
-          # doesn't abort on a missing .png (it's mandatory for valid AppImage).
+          # Icon — linuxdeploy requires a valid PNG (it runs libpng/CImg over
+          # the file to generate scaled variants). Convert the repo's .ico to
+          # a 256x256 PNG via ImageMagick (pre-installed on ubuntu-22.04). Fall
+          # back to a generated solid-color PNG only if no source icon exists —
+          # never hand-write PNG bytes inline, ImageMagick's CRC check rejects
+          # anything with a malformed IDAT chunk.
           ICON_DEST="${APPDIR}/usr/share/icons/hicolor/256x256/apps/fincept-terminal.png"
           if [ -f "resources/icons/app_icon_256.png" ]; then
             cp "resources/icons/app_icon_256.png" "${ICON_DEST}"
           elif [ -f "resources/fincept.png" ]; then
             cp "resources/fincept.png" "${ICON_DEST}"
+          elif [ -f "resources/fincept.ico" ]; then
+            # .ico may hold multiple frames — "ico:file[0]" selects the first,
+            # which is conventionally the largest/primary. Explicit "ico:" prefix
+            # forces the ICO decoder in case policy.xml has format detection quirks.
+            convert "ico:resources/fincept.ico[0]" -resize 256x256 -background none -flatten "png:${ICON_DEST}"
           else
-            # 1x1 transparent PNG — keeps linuxdeploy happy.
-            printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82' > "${ICON_DEST}"
+            # Solid-color 256x256 PNG as last resort. ImageMagick writes it
+            # with a valid IDAT + CRC, unlike an inline printf of raw bytes.
+            convert -size 256x256 xc:'#1a1a1a' "png:${ICON_DEST}"
           fi
+
+          # Sanity check — a broken PNG here will fail the AppImage build
+          # 30 seconds later inside linuxdeploy, so fail fast with a clear error.
+          # Check: file exists, is non-empty, `file` reports PNG, and libpng's
+          # own `pngcheck`-equivalent (imagemagick `identify`) can parse it.
+          if [ ! -s "${ICON_DEST}" ]; then
+            echo "::error::Icon at ${ICON_DEST} is missing or empty"
+            ls -la "${ICON_DEST}" 2>&1 || true
+            exit 1
+          fi
+          if ! file "${ICON_DEST}" | grep -q 'PNG image data'; then
+            echo "::error::Icon at ${ICON_DEST} is not a valid PNG"
+            file "${ICON_DEST}"
+            exit 1
+          fi
+          if ! identify "${ICON_DEST}" >/dev/null 2>&1; then
+            echo "::error::Icon at ${ICON_DEST} failed ImageMagick identify — libpng will reject it"
+            identify "${ICON_DEST}" 2>&1 || true
+            exit 1
+          fi
+          echo "Icon OK: $(identify -format '%wx%h %m' "${ICON_DEST}")"
 
           # App resources + Python analytics scripts live next to the binary
           # (matches AppPaths resolution on Linux).
@@ -607,6 +638,14 @@ jobs:
           PLIST
           fi
 
+          # Note: CMake's POST_BUILD rule (CMakeLists.txt line 1907) copies
+          # scripts/ to Contents/MacOS/scripts/. This is REQUIRED — at runtime
+          # PythonRunner::find_scripts_dir() searches paths relative to
+          # applicationDirPath() (which is Contents/MacOS on macOS). Moving
+          # scripts to Contents/Resources/ would break script discovery.
+          # codesign can handle files in MacOS/; what it CANNOT handle is a
+          # malformed framework (see the Python.framework block below).
+
           # Embed Python framework (before codesign so it gets signed with the bundle)
           PY_FRAMEWORK=""
           for candidate in \
@@ -620,28 +659,66 @@ jobs:
           mkdir -p "${BUNDLE_FRAMEWORKS}"
           if [ -n "${PY_FRAMEWORK}" ]; then
             echo "Embedding Python.framework from: ${PY_FRAMEWORK}"
-            # Use rsync to skip missing symlink targets (PrivateHeaders in Tk/Tcl
-            # sub-frameworks don't exist on CI runners — cp -R would abort on them).
-            rsync -a --copy-unsafe-links "${PY_FRAMEWORK}/" "${BUNDLE_FRAMEWORKS}/Python.framework/" 2>/dev/null || \
-              cp -R "${PY_FRAMEWORK}" "${BUNDLE_FRAMEWORKS}/" 2>/dev/null || true
-            # Remove any dangling PrivateHeaders symlinks that don't resolve
-            find "${BUNDLE_FRAMEWORKS}/Python.framework" -name "PrivateHeaders" -type l \
+            # CRITICAL: preserve symlinks. `Python.framework` is a versioned
+            # framework — Versions/Current → 3.12, top-level Python/Resources/
+            # Headers → Versions/Current/Python etc. If we dereference symlinks
+            # (rsync --copy-unsafe-links, or `cp -RL`) the directory structure
+            # is no longer a valid framework bundle and codesign rejects it with
+            # "embedded framework contains modified or invalid version".
+            # `cp -R` on macOS preserves symlinks by default; `ditto` is the
+            # Apple-blessed way to copy bundles losslessly (preserves xattr,
+            # symlinks, resource forks).
+            if [ -d "${BUNDLE_FRAMEWORKS}/Python.framework" ]; then
+              rm -rf "${BUNDLE_FRAMEWORKS}/Python.framework"
+            fi
+            ditto "${PY_FRAMEWORK}" "${BUNDLE_FRAMEWORKS}/Python.framework"
+
+            # Strip dev-only files that shouldn't ship AND that confuse codesign:
+            #   - .pyc caches (regenerated at runtime, and old hashes fail seal)
+            #   - __pycache__ directories
+            #   - .a / .la static libs (not needed at runtime)
+            #   - test/ directories inside stdlib (huge, not needed)
+            find "${BUNDLE_FRAMEWORKS}/Python.framework" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+            find "${BUNDLE_FRAMEWORKS}/Python.framework" -name "*.pyc" -delete 2>/dev/null || true
+            find "${BUNDLE_FRAMEWORKS}/Python.framework" -name "*.pyo" -delete 2>/dev/null || true
+
+            # Remove dangling symlinks (PrivateHeaders often points to missing targets)
+            find "${BUNDLE_FRAMEWORKS}/Python.framework" -type l \
               ! -exec test -e {} \; -delete 2>/dev/null || true
+
             PY_VER="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
             ln -sf "../Frameworks/Python.framework/Versions/${PY_VER}/bin/python${PY_VER}" \
                    "${APP_BUNDLE}/Contents/MacOS/python3" 2>/dev/null || true
             echo "Python ${PY_VER} embedded"
+
+            # Sanity check: verify the framework structure is intact before we
+            # hand it to codesign. A valid framework has Versions/Current as a
+            # symlink and the top-level Python binary as a symlink to Versions/
+            # Current/Python. If either is a real file or directory, codesign
+            # will reject it.
+            if [ ! -L "${BUNDLE_FRAMEWORKS}/Python.framework/Versions/Current" ]; then
+              echo "::error::Python.framework/Versions/Current is not a symlink — codesign will reject"
+              ls -la "${BUNDLE_FRAMEWORKS}/Python.framework/Versions/"
+              exit 1
+            fi
           else
             echo "WARNING: Python.framework not found"
           fi
 
-          # Copy app resources + Python analytics scripts into bundle
+          # Resources (icons, requirements-*.txt) go in Contents/Resources/ —
+          # macOS convention for non-code assets, read via QStandardPaths.
+          # Scripts are ALREADY in Contents/MacOS/scripts/ via CMake POST_BUILD;
+          # do not duplicate them into Resources/ (doubles bundle size and
+          # creates two trees for codesign to hash).
           mkdir -p "${APP_BUNDLE}/Contents/Resources"
           cp -r resources "${APP_BUNDLE}/Contents/Resources/" 2>/dev/null || true
-          bash "${GITHUB_WORKSPACE}/.github/scripts/sync_scripts.sh" scripts "${APP_BUNDLE}/Contents/Resources/scripts"
 
           echo "Bundle staged at: ${APP_BUNDLE}"
           echo "Pre-sign size: $(du -sh "${APP_BUNDLE}" | cut -f1)"
+          echo "=== Contents/MacOS/ top level ==="
+          ls -la "${APP_BUNDLE}/Contents/MacOS/" | head -10
+          echo "=== Scripts count under MacOS/scripts ==="
+          find "${APP_BUNDLE}/Contents/MacOS/scripts" -type f 2>/dev/null | wc -l || true
 
       # ── Run macdeployqt on the fully staged bundle ────────────────────────
       # macdeployqt copies Qt frameworks, fixes rpaths, and signs everything

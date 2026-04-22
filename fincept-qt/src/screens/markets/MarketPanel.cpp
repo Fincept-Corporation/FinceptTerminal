@@ -273,7 +273,11 @@ void MarketPanel::hub_resubscribe() {
             }
         });
     }
-    hub.request(topics);
+    // force=true: on cold start, DataHub::subscribe auto-triggers a fetch,
+    // but on user-initiated refresh_all() (F5 / auto-refresh tick / panel
+    // reconfig) we want to bypass min_interval. Producer rate limit still
+    // paces upstream calls.
+    hub.request(topics, /*force=*/true);
     hub_active_ = true;
 }
 

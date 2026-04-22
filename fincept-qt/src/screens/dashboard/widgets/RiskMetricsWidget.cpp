@@ -201,7 +201,7 @@ void RiskMetricsWidget::refresh_data() {
     topics.reserve(kRiskSymbols.size());
     for (const auto& sym : kRiskSymbols)
         topics.append(QStringLiteral("market:quote:") + sym);
-    hub.request(topics);
+    hub.request(topics, /*force=*/true);  // user-triggered: bypass min_interval
 }
 
 

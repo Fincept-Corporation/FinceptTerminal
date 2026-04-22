@@ -386,10 +386,20 @@ QMenu* ToolBar::build_navigate_menu() {
 QMenu* ToolBar::build_view_menu() {
     auto* m = new QMenu("View", this);
     m->setStyleSheet(popup_ss());
+    // Component Browser at the top — Bloomberg's discoverability hook.
+    m->addAction("Component Browser\tCtrl+K", this,
+                 [this]() { emit action_triggered("browse_components"); });
+    m->addSeparator();
     m->addAction("Fullscreen\tF11", this, [this]() { emit action_triggered("fullscreen"); });
     m->addSeparator();
     m->addAction("Focus Mode\tF10", this, [this]() { emit action_triggered("focus_mode"); });
-    m->addAction("Always on Top", this, [this]() { emit action_triggered("always_on_top"); });
+    // Phase 11: the shortcut is Ctrl+Shift+T; we don't mark the QAction as
+    // checkable because its state is owned by MainWindow::always_on_top_ —
+    // a checkable toolbar action would drift out of sync on window focus
+    // changes. If the user cares about the visual, the window's title bar
+    // retains the OS-level "always on top" decoration on most platforms.
+    m->addAction("Always on Top\tCtrl+Shift+T", this,
+                 [this]() { emit action_triggered("always_on_top"); });
     m->addSeparator();
 
     // Float any screen as a separate window on another monitor

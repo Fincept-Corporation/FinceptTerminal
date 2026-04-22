@@ -151,9 +151,13 @@ QWidget* PortfolioDetailWrapper::get_or_create_view(portfolio::DetailView view) 
 
     QWidget* widget = nullptr;
     switch (view) {
-        case portfolio::DetailView::AnalyticsSectors:
-            widget = new AnalyticsSectorsView;
+        case portfolio::DetailView::AnalyticsSectors: {
+            auto* asv = new AnalyticsSectorsView;
+            connect(asv, &AnalyticsSectorsView::sector_selected,
+                    this, &PortfolioDetailWrapper::sector_selected);
+            widget = asv;
             break;
+        }
         case portfolio::DetailView::PerfRisk: {
             auto* prv = new PerformanceRiskView;
             if (!current_snapshots_.isEmpty())

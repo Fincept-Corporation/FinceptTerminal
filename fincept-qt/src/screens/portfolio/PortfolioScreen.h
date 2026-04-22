@@ -26,8 +26,7 @@ class PortfolioTxnPanel;
 class PortfolioOrderPanel;
 class PortfolioDetailWrapper;
 class PortfolioFFNView;
-class PortfolioAiPanel;
-class PortfolioAgentPanel;
+class PortfolioInsightsPanel;
 
 class PortfolioScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
@@ -96,8 +95,8 @@ class PortfolioScreen : public QWidget, public IStatefulScreen {
     PortfolioOrderPanel* order_panel_ = nullptr;
     PortfolioDetailWrapper* detail_wrapper_ = nullptr;
     PortfolioFFNView* ffn_view_ = nullptr;
-    PortfolioAiPanel* ai_panel_ = nullptr;
-    PortfolioAgentPanel* agent_panel_ = nullptr;
+    PortfolioInsightsPanel* insights_panel_ = nullptr;
+    QWidget* insights_scrim_ = nullptr;
 
     // State
     QVector<portfolio::Portfolio> portfolios_;

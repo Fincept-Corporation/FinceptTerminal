@@ -33,7 +33,28 @@ DataHub::DataHub() {
                                    // measured in seconds.
     connect(&scheduler_, &QTimer::timeout, this, &DataHub::scheduler_body);
     scheduler_.start();
-    LOG_INFO("DataHub", "Initialised (scheduler tick = 1s)");
+
+    // Coalesce timer — single-shot, armed by request(), fires once per window.
+    // Default 100ms so widget burst subscriptions (dashboard + markets both
+    // opening) collapse into one producer->refresh() per producer. Tunable
+    // via set_coalesce_window_ms() — tests commonly use 0 for synchronous
+    // dispatch.
+    coalesce_timer_.setSingleShot(true);
+    coalesce_timer_.setInterval(coalesce_window_ms_);
+    connect(&coalesce_timer_, &QTimer::timeout, this, &DataHub::flush_coalesced_requests);
+
+    LOG_INFO("DataHub", QString("Initialised (scheduler tick = 1s, coalesce window = %1ms)")
+                            .arg(coalesce_window_ms_));
+}
+
+void DataHub::set_coalesce_window_ms(int ms) {
+    if (ms < 0) ms = 0;
+    coalesce_window_ms_ = ms;
+    // Apply on the hub thread so the timer's internal state isn't touched
+    // from a foreign thread.
+    QMetaObject::invokeMethod(this, [this, ms]() {
+        coalesce_timer_.setInterval(ms);
+    }, Qt::QueuedConnection);
 }
 
 // ── Pattern match ──────────────────────────────────────────────────────────
@@ -73,11 +94,44 @@ DataHub::TopicState& DataHub::state_for(const QString& topic) {
 
 Producer* DataHub::find_producer(const QString& topic) const {
     // Caller holds mutex_.
-    for (Producer* p : producers_)
-        for (const auto& pat : p->topic_patterns())
-            if (pattern_matches(pat, topic))
-                return p;
+    // Pattern index is sorted by prefix length DESC so the first entry
+    // whose prefix matches is also the most specific (longest-prefix win).
+    for (const auto& e : pattern_index_) {
+        if (e.is_wildcard) {
+            if (topic.size() >= e.prefix.size() &&
+                QStringView{topic}.startsWith(e.prefix))
+                return e.owner;
+        } else {
+            if (topic == e.prefix)
+                return e.owner;
+        }
+    }
     return nullptr;
+}
+
+void DataHub::rebuild_pattern_index() {
+    // Caller holds mutex_. Called from register_producer / unregister_producer.
+    pattern_index_.clear();
+    for (Producer* p : producers_) {
+        for (const auto& pat : p->topic_patterns()) {
+            PatternEntry e;
+            e.owner = p;
+            if (pat.endsWith(QLatin1Char('*'))) {
+                e.prefix = pat.left(pat.size() - 1);
+                e.is_wildcard = true;
+            } else {
+                e.prefix = pat;
+                e.is_wildcard = false;
+            }
+            pattern_index_.append(std::move(e));
+        }
+    }
+    // Sort longest prefix first so iteration in find_producer() returns
+    // the most specific match.
+    std::sort(pattern_index_.begin(), pattern_index_.end(),
+              [](const PatternEntry& a, const PatternEntry& b) {
+                  return a.prefix.size() > b.prefix.size();
+              });
 }
 
 // ── Subscription ───────────────────────────────────────────────────────────
@@ -98,9 +152,13 @@ void DataHub::on_owner_destroyed(QObject* owner) {
                       vec.end());
             if (vec.isEmpty()) {
                 subscriptions_.erase(sub_it);
+                // Topic just went idle — drop cached state if policy opted in.
+                // Done under the same lock to keep state coherent.
+                if (auto ts_it = topics_.find(topic);
+                    ts_it != topics_.end() && ts_it->policy.drop_on_idle) {
+                    topics_.erase(ts_it);
+                }
                 emit topic_idle(topic);
-                if (Producer* p = find_producer(topic))
-                    p->on_topic_idle(topic);
             }
         }
         owner_topics_.erase(topics_it);
@@ -156,6 +214,7 @@ QMetaObject::Connection DataHub::subscribe(
     Q_ASSERT(owner && "subscribe requires a non-null owner for lifetime tracking");
 
     bool became_active = false;
+    bool needs_cold_start_fetch = false;
     {
         QMutexLocker lock(&mutex_);
         Subscription sub;
@@ -169,7 +228,18 @@ QMetaObject::Connection DataHub::subscribe(
         owner_topics_[owner].insert(topic);
 
         // Make sure the topic state exists with correct policy.
-        state_for(topic);
+        auto& st = state_for(topic);
+
+        // Cold-start fetch: if we have no cached value AND nothing is in flight,
+        // request a forced refresh so the widget gets data on the first scheduler
+        // tick rather than waiting for TTL/min_interval to line up. `push_only`
+        // topics have no producer-side pull, so skip — they only get data via
+        // explicit publish() calls.
+        const bool have_fresh_value = st.value.isValid() && st.last_publish_ms > 0 &&
+                                       (now_ms() - st.last_publish_ms) < st.policy.ttl_ms;
+        if (!have_fresh_value && !st.in_flight && !st.policy.push_only) {
+            needs_cold_start_fetch = true;
+        }
     }
 
     // Auto-cleanup on owner destruction. The QObject::destroyed signal
@@ -183,6 +253,12 @@ QMetaObject::Connection DataHub::subscribe(
         emit topic_active(topic);
     }
     deliver_initial_value(owner, topic, slot);
+
+    // Dispatch the cold-start fetch outside the mutex. force=true bypasses
+    // min_interval_ms but per-producer rate limit still applies.
+    if (needs_cold_start_fetch) {
+        request(topic, /*force=*/true);
+    }
     return conn;
 }
 
@@ -190,6 +266,7 @@ QMetaObject::Connection DataHub::subscribe_pattern(
     QObject* owner, const QString& pattern,
     std::function<void(const QString&, const QVariant&)> slot) {
     Q_ASSERT(owner && "subscribe_pattern requires a non-null owner");
+    QStringList cold_start_topics;
     {
         QMutexLocker lock(&mutex_);
         Subscription sub;
@@ -198,10 +275,29 @@ QMetaObject::Connection DataHub::subscribe_pattern(
         sub.is_pattern = true;
         pattern_subscriptions_[pattern].append(std::move(sub));
         owner_patterns_[owner].insert(pattern);
+
+        // Cold-start parity with subscribe(): for every already-known topic
+        // that matches this pattern and has no fresh cached value, queue a
+        // forced refresh. Pattern-only subscribers (e.g. AgentErrorsWidget
+        // listening to `agent:error:*`) otherwise have to wait for TTL
+        // expiry + a scheduler tick before seeing anything.
+        const qint64 t = now_ms();
+        for (auto it = topics_.begin(); it != topics_.end(); ++it) {
+            if (!pattern_matches(pattern, it.key())) continue;
+            if (it->policy.push_only) continue;
+            if (it->in_flight) continue;
+            const bool have_fresh =
+                it->value.isValid() && it->last_publish_ms > 0 &&
+                (t - it->last_publish_ms) < it->policy.ttl_ms;
+            if (!have_fresh) cold_start_topics.append(it.key());
+        }
     }
-    return connect(owner, &QObject::destroyed, this,
+    auto conn = connect(owner, &QObject::destroyed, this,
         [this, owner](QObject*) { on_owner_destroyed(owner); },
         Qt::QueuedConnection);
+    if (!cold_start_topics.isEmpty())
+        request(cold_start_topics, /*force=*/true);
+    return conn;
 }
 
 void DataHub::unsubscribe(QObject* owner) {
@@ -218,9 +314,11 @@ void DataHub::unsubscribe(QObject* owner, const QString& topic) {
               vec.end());
     if (vec.isEmpty()) {
         subscriptions_.erase(sub_it);
+        if (auto ts_it = topics_.find(topic);
+            ts_it != topics_.end() && ts_it->policy.drop_on_idle) {
+            topics_.erase(ts_it);
+        }
         emit topic_idle(topic);
-        if (Producer* p = find_producer(topic))
-            p->on_topic_idle(topic);
     }
     if (auto it = owner_topics_.find(owner); it != owner_topics_.end()) {
         it.value().remove(topic);
@@ -263,6 +361,7 @@ void DataHub::do_publish(const QString& topic, const QVariant& value,
         st.last_publish_ms = now_ms();
         st.total_publishes += 1;
         st.in_flight = false;
+        st.last_error.clear();  // successful publish clears any stored error
         if (ttl_override.count() > 0) {
             st.policy.ttl_ms = static_cast<int>(ttl_override.count());
         }
@@ -325,19 +424,53 @@ void DataHub::publish(const QString& topic, const QVariant& value,
     do_publish(topic, value, ttl);
 }
 
+void DataHub::publish_error(const QString& topic, const QString& error) {
+    if (QThread::currentThread() != this->thread()) {
+        QMetaObject::invokeMethod(this, [this, topic, error]() {
+            publish_error(topic, error);
+        }, Qt::QueuedConnection);
+        return;
+    }
+    {
+        QMutexLocker lock(&mutex_);
+        auto& st = state_for(topic);
+        st.in_flight = false;
+        st.last_error = error;
+        st.last_error_ms = now_ms();
+        st.total_errors += 1;
+    }
+    LOG_WARN("DataHub", QString("publish_error topic='%1' error='%2'").arg(topic).arg(error.left(200)));
+    emit topic_error(topic, error);
+}
+
 // ── Producer registration ──────────────────────────────────────────────────
 
 void DataHub::register_producer(Producer* producer) {
     Q_ASSERT(producer);
     QMutexLocker lock(&mutex_);
-    if (!producers_.contains(producer))
+    if (!producers_.contains(producer)) {
         producers_.append(producer);
+        rebuild_pattern_index();
+    }
 }
 
 void DataHub::unregister_producer(Producer* producer) {
     QMutexLocker lock(&mutex_);
     producers_.removeAll(producer);
     producer_last_refresh_ms_.remove(producer);
+    rebuild_pattern_index();
+    // Drop any pending coalesced refresh requests targeting this producer —
+    // dispatching them after unregister would call refresh() on a dangling
+    // pointer. The topics involved have their `in_flight` flag cleared so
+    // the next find_producer() on the scheduler pass routes them to a new
+    // owner (if one registers) or leaves them alone.
+    if (auto it = coalesce_pending_.find(producer); it != coalesce_pending_.end()) {
+        for (const QString& topic : it.value()) {
+            if (auto ts_it = topics_.find(topic); ts_it != topics_.end())
+                ts_it->in_flight = false;
+        }
+        coalesce_pending_.erase(it);
+    }
 }
 
 void DataHub::set_policy(const QString& topic, const TopicPolicy& policy) {
@@ -358,9 +491,38 @@ void DataHub::set_policy_pattern(const QString& pattern, const TopicPolicy& poli
     }
 }
 
+int DataHub::clear_policy_pattern(const QString& pattern) {
+    QMutexLocker lock(&mutex_);
+    int removed = 0;
+    for (auto it = pattern_policies_.begin(); it != pattern_policies_.end(); ) {
+        if (it->first == pattern) {
+            it = pattern_policies_.erase(it);
+            ++removed;
+        } else {
+            ++it;
+        }
+    }
+    return removed;
+}
+
 // ── Pull-through ───────────────────────────────────────────────────────────
 
 QVariant DataHub::peek(const QString& topic) const {
+    QMutexLocker lock(&mutex_);
+    auto it = topics_.find(topic);
+    if (it == topics_.end() || !it->value.isValid())
+        return {};
+    // Push-only topics don't age — always return last published value.
+    if (it->policy.push_only)
+        return it->value;
+    if (it->last_publish_ms <= 0)
+        return {};
+    if ((now_ms() - it->last_publish_ms) >= it->policy.ttl_ms)
+        return {};  // stale
+    return it->value;
+}
+
+QVariant DataHub::peek_raw(const QString& topic) const {
     QMutexLocker lock(&mutex_);
     auto it = topics_.find(topic);
     return it == topics_.end() ? QVariant{} : it->value;
@@ -371,14 +533,20 @@ void DataHub::request(const QString& topic, bool force) {
 }
 
 void DataHub::request(const QStringList& topics, bool force) {
-    // Group topics by owning producer under the lock, then call outside.
+    // Apply gates under the lock, then buffer into coalesce_pending_. The
+    // coalesce timer (kCoalesceWindowMs) merges bursts of request() calls —
+    // e.g., dashboard + markets subscribing simultaneously — into one
+    // producer->refresh() per producer.
     //
-    // Gates applied here:
+    // Gates applied here (same as before — gating is at buffer time, not
+    // flush time, because in_flight/min_interval reflect intent to fetch):
     //   - in_flight: always skip; the producer is already working.
     //   - min_interval_ms: skipped when `force=true` (user-driven refresh).
     //   - max_requests_per_sec: always honoured — force doesn't open the
     //     rate-limit floodgate.
-    QHash<Producer*, QStringList> by_producer;
+    int accepted = 0;
+    bool need_arm = false;
+    QStringList orphan_topics;
     {
         QMutexLocker lock(&mutex_);
         const qint64 t = now_ms();
@@ -391,7 +559,10 @@ void DataHub::request(const QStringList& topics, bool force) {
                 continue;
             }
             Producer* p = find_producer(topic);
-            if (!p) continue;
+            if (!p) {
+                orphan_topics.append(topic);
+                continue;
+            }
             const int rps = p->max_requests_per_sec();
             if (rps > 0) {
                 const qint64 last = producer_last_refresh_ms_.value(p, 0);
@@ -401,11 +572,59 @@ void DataHub::request(const QStringList& topics, bool force) {
             st.in_flight = true;
             st.last_refresh_request_ms = t;
             producer_last_refresh_ms_[p] = t;
-            by_producer[p].append(topic);
+            // Buffer instead of dispatching — duplicate topics within the
+            // window are naturally prevented by the in_flight gate above.
+            coalesce_pending_[p].append(topic);
+            ++accepted;
         }
+        need_arm = accepted > 0;
     }
-    for (auto it = by_producer.begin(); it != by_producer.end(); ++it)
+
+    if (!orphan_topics.isEmpty()) {
+        // Topic requested by a consumer but no producer claims a matching
+        // pattern. This is almost always a typo in the topic string or a
+        // missing ensure_registered_with_hub() call — log once per request
+        // so the miss surfaces during development.
+        LOG_WARN("DataHub",
+                 QString("request(): %1 topic(s) have no producer — likely unregistered "
+                         "service or typo. First few: %2")
+                     .arg(orphan_topics.size())
+                     .arg(orphan_topics.mid(0, 3).join(QStringLiteral(", "))));
+    }
+    if (need_arm) {
+        // The coalesce timer lives on the hub thread; arming from another
+        // thread requires a queued call. isSingleShot + not-active means
+        // restart resets the window, which is the behaviour we want: a
+        // second request() inside the window extends coalescing, it
+        // doesn't flush early.
+        QMetaObject::invokeMethod(this, [this]() {
+            if (!coalesce_timer_.isActive())
+                coalesce_timer_.start();
+        }, Qt::QueuedConnection);
+    }
+}
+
+void DataHub::flush_coalesced_requests() {
+    QHash<Producer*, QStringList> work;
+    {
+        QMutexLocker lock(&mutex_);
+        work.swap(coalesce_pending_);
+    }
+    if (work.isEmpty())
+        return;
+
+    int total = 0;
+    for (auto it = work.begin(); it != work.end(); ++it) {
+        total += it.value().size();
+        LOG_DEBUG("DataHub", QString("coalesce flush: producer=%1 topics=%2")
+                                 .arg(reinterpret_cast<quintptr>(it.key()), 0, 16)
+                                 .arg(it.value().size()));
         it.key()->refresh(it.value());
+    }
+    if (total > 0) {
+        LOG_DEBUG("DataHub", QString("coalesce flushed %1 topics across %2 producers")
+                                 .arg(total).arg(work.size()));
+    }
 }
 
 // ── Scheduler ──────────────────────────────────────────────────────────────
@@ -414,9 +633,33 @@ void DataHub::scheduler_body() {
     // One pass: collect refresh work per producer, respecting TTL, min
     // interval, in-flight, and per-producer rate limits.
     QHash<Producer*, QStringList> work;
+    QStringList timed_out_topics;
     {
         QMutexLocker lock(&mutex_);
         const qint64 t = now_ms();
+
+        // Pre-pass: clear `in_flight` on topics whose producer missed the
+        // refresh_timeout_ms window. Without this a crashed / hung producer
+        // pins the topic forever and subscribers never see fresh data.
+        for (auto it = topics_.begin(); it != topics_.end(); ++it) {
+            if (!it->in_flight) continue;
+            if (it->policy.refresh_timeout_ms <= 0) continue;
+            if (it->last_refresh_request_ms <= 0) continue;
+            if ((t - it->last_refresh_request_ms) >= it->policy.refresh_timeout_ms) {
+                it->in_flight = false;
+                timed_out_topics.append(it.key());
+            }
+        }
+
+        // Drop empty subscription buckets left behind by unsubscribe churn.
+        // The scheduler would otherwise skip them forever while still paying
+        // the hash iteration cost on every tick.
+        for (auto it = subscriptions_.begin(); it != subscriptions_.end(); ) {
+            if (it.value().isEmpty())
+                it = subscriptions_.erase(it);
+            else
+                ++it;
+        }
 
         for (auto it = subscriptions_.begin(); it != subscriptions_.end(); ++it) {
             const QString& topic = it.key();
@@ -452,6 +695,13 @@ void DataHub::scheduler_body() {
         }
     }
 
+    for (const QString& topic : timed_out_topics) {
+        LOG_WARN("DataHub", QString("Producer refresh timed out for topic '%1' — clearing in_flight. "
+                                     "The producer failed to publish() or publish_error() within "
+                                     "refresh_timeout_ms; hub will retry on the next scheduler pass.").arg(topic));
+        emit topic_error(topic, QStringLiteral("refresh_timeout"));
+    }
+
     for (auto it = work.begin(); it != work.end(); ++it) {
         LOG_DEBUG("DataHub", QString("refresh(): producer=%1 topics=%2")
                                  .arg(reinterpret_cast<quintptr>(it.key()), 0, 16)
@@ -480,15 +730,30 @@ QVector<TopicStats> DataHub::stats() const {
         s.topic = it.key();
         s.last_publish_ms = it->last_publish_ms;
         s.last_refresh_request_ms = it->last_refresh_request_ms;
+        s.last_error_ms = it->last_error_ms;
         s.total_publishes = it->total_publishes;
+        s.total_errors = it->total_errors;
         s.in_flight = it->in_flight;
         s.push_only = it->policy.push_only;
+        s.last_error = it->last_error;
         if (auto sub_it = subscriptions_.find(it.key()); sub_it != subscriptions_.end())
             s.subscriber_count = sub_it.value().size();
         out.append(std::move(s));
     }
     std::sort(out.begin(), out.end(),
               [](const TopicStats& a, const TopicStats& b) { return a.topic < b.topic; });
+    return out;
+}
+
+QList<QObject*> DataHub::subscribers(const QString& topic) const {
+    QMutexLocker lock(&mutex_);
+    QList<QObject*> out;
+    auto it = subscriptions_.find(topic);
+    if (it == subscriptions_.end()) return out;
+    out.reserve(it.value().size());
+    for (const auto& s : it.value()) {
+        if (s.owner) out.append(s.owner.data());
+    }
     return out;
 }
 

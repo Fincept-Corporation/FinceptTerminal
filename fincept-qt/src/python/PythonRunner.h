@@ -93,6 +93,7 @@ class PythonRunner : public QObject {
         int stdout_streamed = 0;  // offset into stdout_buf already streamed
         int stderr_streamed = 0;
         StreamCallback on_line;
+        qint64 start_ms = 0;  // spawn timestamp for duration diagnostics
     };
     QHash<QProcess*, ProcessBuffers> proc_buffers_;
 };

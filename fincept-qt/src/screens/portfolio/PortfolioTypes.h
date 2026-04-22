@@ -28,6 +28,7 @@ struct PortfolioAsset {
     double avg_buy_price = 0;
     QString first_purchase_date;
     QString last_updated;
+    QString sector; // empty = not yet resolved; filled from import JSON or SectorResolver
 };
 
 struct Transaction {
@@ -50,6 +51,7 @@ struct HoldingWithQuote {
     QString symbol;
     double quantity = 0;
     double avg_buy_price = 0;
+    QString sector;
 
     // Live market data
     double current_price = 0;

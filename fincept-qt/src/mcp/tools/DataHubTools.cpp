@@ -87,7 +87,9 @@ std::vector<ToolDef> get_datahub_tools() {
             const QString topic = args["topic"].toString().trimmed();
             if (topic.isEmpty()) return ToolResult::fail("Missing 'topic'");
             auto& hub = fincept::datahub::DataHub::instance();
-            const QVariant v = hub.peek(topic);
+            // peek_raw: MCP diagnostic tool shows stale data rather than
+            // nothing — callers use stats() / last_publish_ms to judge freshness.
+            const QVariant v = hub.peek_raw(topic);
             QJsonObject out;
             out["topic"] = topic;
             if (!v.isValid()) {

@@ -36,6 +36,7 @@ portfolio::PortfolioAsset PortfolioRepository::map_asset(QSqlQuery& q) {
         q.value(4).toDouble(), // avg_buy_price
         q.value(5).toString(), // first_purchase_date
         q.value(6).toString(), // last_updated
+        q.value(7).toString(), // sector
     };
 }
 
@@ -107,18 +108,21 @@ Result<void> PortfolioRepository::delete_portfolio(const QString& id) {
 
 Result<QVector<portfolio::PortfolioAsset>> PortfolioRepository::get_assets(const QString& portfolio_id) {
     return query_list_as<portfolio::PortfolioAsset>(
-        "SELECT id, portfolio_id, symbol, quantity, avg_buy_price, first_purchase_date, last_updated "
+        "SELECT id, portfolio_id, symbol, quantity, avg_buy_price, first_purchase_date, last_updated, "
+        "COALESCE(sector, '') "
         "FROM portfolio_assets WHERE portfolio_id = ? ORDER BY symbol",
         {portfolio_id}, map_asset);
 }
 
 Result<qint64> PortfolioRepository::add_asset(const QString& portfolio_id, const QString& symbol, double qty,
-                                              double price, const QString& date) {
+                                              double price, const QString& date, const QString& sector) {
     QString purchase_date = date.isEmpty() ? QDateTime::currentDateTimeUtc().toString(Qt::ISODate) : date;
 
-    // Upsert: if symbol already exists in portfolio, update quantity and avg price
+    // Upsert: if symbol already exists in portfolio, update quantity and avg price.
+    // Preserve existing sector unless the caller provides a non-empty one.
     auto existing = query_list_as<portfolio::PortfolioAsset>(
-        "SELECT id, portfolio_id, symbol, quantity, avg_buy_price, first_purchase_date, last_updated "
+        "SELECT id, portfolio_id, symbol, quantity, avg_buy_price, first_purchase_date, last_updated, "
+        "COALESCE(sector, '') "
         "FROM portfolio_assets WHERE portfolio_id = ? AND symbol = ?",
         {portfolio_id, symbol.toUpper()}, map_asset);
 
@@ -126,18 +130,26 @@ Result<qint64> PortfolioRepository::add_asset(const QString& portfolio_id, const
         auto& asset = existing.value().first();
         double new_qty = asset.quantity + qty;
         double new_avg = ((asset.avg_buy_price * asset.quantity) + (price * qty)) / new_qty;
-        auto r = exec_write("UPDATE portfolio_assets SET quantity = ?, avg_buy_price = ?, "
+        QString merged_sector = sector.isEmpty() ? asset.sector : sector;
+        auto r = exec_write("UPDATE portfolio_assets SET quantity = ?, avg_buy_price = ?, sector = ?, "
                             "last_updated = datetime('now') WHERE id = ?",
-                            {new_qty, new_avg, asset.id});
+                            {new_qty, new_avg, merged_sector, asset.id});
         if (r.is_err())
             return Result<qint64>::err(r.error());
         return Result<qint64>::ok(static_cast<qint64>(asset.id));
     }
 
     return exec_insert(
-        "INSERT INTO portfolio_assets (portfolio_id, symbol, quantity, avg_buy_price, first_purchase_date) "
-        "VALUES (?, ?, ?, ?, ?)",
-        {portfolio_id, symbol.toUpper(), qty, price, purchase_date});
+        "INSERT INTO portfolio_assets (portfolio_id, symbol, quantity, avg_buy_price, first_purchase_date, sector) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        {portfolio_id, symbol.toUpper(), qty, price, purchase_date, sector});
+}
+
+Result<void> PortfolioRepository::set_asset_sector(const QString& portfolio_id, const QString& symbol,
+                                                   const QString& sector) {
+    return exec_write("UPDATE portfolio_assets SET sector = ? "
+                      "WHERE portfolio_id = ? AND symbol = ?",
+                      {sector, portfolio_id, symbol.toUpper()});
 }
 
 Result<void> PortfolioRepository::update_asset(const QString& portfolio_id, const QString& symbol, double qty,

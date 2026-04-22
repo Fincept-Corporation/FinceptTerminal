@@ -1,12 +1,22 @@
 #pragma once
+#include "core/symbol/SymbolGroup.h"
+
 #include <QHash>
 #include <QObject>
+#include <QPointer>
 
 #include <DockManager.h>
 #include <DockWidget.h>
 #include <functional>
 
+namespace fincept::ui {
+class GroupBadge;
+}
+
 namespace fincept {
+
+class IGroupLinked;
+struct SymbolRef;
 
 /// ADS-aware screen router. Each screen is wrapped in a CDockWidget that can be
 /// docked, tabbed, floated, or auto-hidden. Mirrors ScreenRouter's API so the
@@ -61,6 +71,22 @@ class DockScreenRouter : public QObject {
     /// Returns all registered screen IDs (both eager and factory).
     QStringList all_screen_ids() const;
 
+    /// Cycle focus between all currently-open dock widgets in this manager.
+    /// Wraps at either end. No-op if fewer than 2 panels are open.
+    /// `forward = true` moves to the next panel in open order; false moves back.
+    void cycle_focused_panel(bool forward);
+
+    /// Duplicate an open dock widget into a new tab. Only works for screens
+    /// that were registered via register_factory() — eagerly-registered
+    /// screens use a single widget instance and cannot be duplicated. The
+    /// new tab gets a synthetic id `<base>#dup<N>` so it doesn't collide in
+    /// QSettings. If the source screen implements IStatefulScreen, its
+    /// save_state() is applied to the duplicate via restore_state() so the
+    /// duplicate starts in the same view (e.g. same ticker loaded in
+    /// EquityResearch, same watchlist selected in WatchlistScreen).
+    /// Returns the new dock widget or nullptr on failure.
+    ads::CDockWidget* duplicate_panel(const QString& id);
+
   signals:
     void screen_changed(const QString& id);
 
@@ -85,6 +111,22 @@ class DockScreenRouter : public QObject {
 
     ads::CDockWidget* create_dock_widget(const QString& id);
     void materialize_screen(const QString& id);
+
+    // ── Symbol group linking ──────────────────────────────────────────────────
+    // If `screen` (or one of its descendants) implements IGroupLinked, wraps
+    // it in a thin container with a top-bar GroupBadge and wires the badge to
+    // SymbolContext. Returns the container (or `screen` itself if no linking
+    // is supported). Safe to call once per materialised screen.
+    QWidget* wrap_with_group_badge(const QString& id, QWidget* screen);
+
+    // The IGroupLinked* for each screen id, so SymbolContext signals can be
+    // routed back. Held as raw pointer since lifetime matches the wrapped
+    // QWidget in screens_, which we already manage.
+    QHash<QString, IGroupLinked*> group_linked_;
+    QHash<QString, QPointer<ui::GroupBadge>> group_badges_;
+
+    void on_group_symbol_changed_external(fincept::SymbolGroup g, const fincept::SymbolRef& ref,
+                                          QObject* source);
     /// Apply theme colors directly to all CDockAreaTitleBar and CDockWidgetTab
     /// widgets. Called after any addDockWidget() call since those create new
     /// QFrame-derived widgets that the app-level QFrame rule overrides.
@@ -102,6 +144,13 @@ class DockScreenRouter : public QObject {
     /// Save/restore IStatefulScreen state for a materialized screen widget.
     void save_screen_state(const QString& id);
     void restore_screen_state(const QString& id);
+
+    /// Phase 12 — build + show the right-click tab context menu at the given
+    /// global position for the given dock widget id. Public so callers outside
+    /// the router can trigger it (e.g. a "menu" key or toolbar action), but
+    /// primarily invoked from the event filter on the tab widget.
+  public:
+    void show_tab_context_menu(const QString& id, const QPoint& global_pos);
 };
 
 } // namespace fincept

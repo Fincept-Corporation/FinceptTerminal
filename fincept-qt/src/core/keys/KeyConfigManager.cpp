@@ -27,6 +27,34 @@ static QString storage_key(KeyAction a) {
         case KeyAction::RunCell:    return "key.run_cell";
         case KeyAction::RunAndNext: return "key.run_and_next";
         case KeyAction::RenameCell: return "key.rename_cell";
+
+        case KeyAction::FocusWindow1: return "key.focus_window_1";
+        case KeyAction::FocusWindow2: return "key.focus_window_2";
+        case KeyAction::FocusWindow3: return "key.focus_window_3";
+        case KeyAction::FocusWindow4: return "key.focus_window_4";
+        case KeyAction::FocusWindow5: return "key.focus_window_5";
+        case KeyAction::FocusWindow6: return "key.focus_window_6";
+        case KeyAction::FocusWindow7: return "key.focus_window_7";
+        case KeyAction::FocusWindow8: return "key.focus_window_8";
+        case KeyAction::FocusWindow9: return "key.focus_window_9";
+        case KeyAction::CyclePanelsForward:  return "key.cycle_panels_forward";
+        case KeyAction::CyclePanelsBack:     return "key.cycle_panels_back";
+        case KeyAction::CycleWindowsForward: return "key.cycle_windows_forward";
+        case KeyAction::CycleWindowsBack:    return "key.cycle_windows_back";
+        case KeyAction::NewWindowNextMonitor: return "key.new_window_next_monitor";
+        case KeyAction::MoveWindowToMonitor1: return "key.move_window_to_monitor_1";
+        case KeyAction::MoveWindowToMonitor2: return "key.move_window_to_monitor_2";
+        case KeyAction::MoveWindowToMonitor3: return "key.move_window_to_monitor_3";
+        case KeyAction::MoveWindowToMonitor4: return "key.move_window_to_monitor_4";
+        case KeyAction::MoveWindowToMonitor5: return "key.move_window_to_monitor_5";
+        case KeyAction::MoveWindowToMonitor6: return "key.move_window_to_monitor_6";
+        case KeyAction::MoveWindowToMonitor7: return "key.move_window_to_monitor_7";
+        case KeyAction::MoveWindowToMonitor8: return "key.move_window_to_monitor_8";
+        case KeyAction::MoveWindowToMonitor9: return "key.move_window_to_monitor_9";
+
+        case KeyAction::BrowseComponents: return "key.browse_components";
+        case KeyAction::ToggleAlwaysOnTop: return "key.toggle_always_on_top";
+        case KeyAction::LockNow: return "key.lock_now";
     }
     return {};
 }
@@ -49,6 +77,45 @@ KeyConfigManager::KeyConfigManager() {
     defaults_[KeyAction::RunCell]    = QKeySequence(Qt::CTRL | Qt::Key_Return);
     defaults_[KeyAction::RunAndNext] = QKeySequence(Qt::SHIFT | Qt::Key_Return);
     defaults_[KeyAction::RenameCell] = QKeySequence(Qt::Key_F2);
+
+    // Phase 3 — window/panel navigation
+    defaults_[KeyAction::FocusWindow1] = QKeySequence(Qt::CTRL | Qt::Key_1);
+    defaults_[KeyAction::FocusWindow2] = QKeySequence(Qt::CTRL | Qt::Key_2);
+    defaults_[KeyAction::FocusWindow3] = QKeySequence(Qt::CTRL | Qt::Key_3);
+    defaults_[KeyAction::FocusWindow4] = QKeySequence(Qt::CTRL | Qt::Key_4);
+    defaults_[KeyAction::FocusWindow5] = QKeySequence(Qt::CTRL | Qt::Key_5);
+    defaults_[KeyAction::FocusWindow6] = QKeySequence(Qt::CTRL | Qt::Key_6);
+    defaults_[KeyAction::FocusWindow7] = QKeySequence(Qt::CTRL | Qt::Key_7);
+    defaults_[KeyAction::FocusWindow8] = QKeySequence(Qt::CTRL | Qt::Key_8);
+    defaults_[KeyAction::FocusWindow9] = QKeySequence(Qt::CTRL | Qt::Key_9);
+    defaults_[KeyAction::CyclePanelsForward]  = QKeySequence(Qt::CTRL | Qt::Key_Tab);
+    defaults_[KeyAction::CyclePanelsBack]     = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Tab);
+    // Ctrl+Alt+Tab is a window-manager shortcut on several platforms; wrap it
+    // with the same gesture plus a non-default modifier so it still feels
+    // related but doesn't clash. Users can rebind in Settings.
+    defaults_[KeyAction::CycleWindowsForward] = QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_Tab);
+    defaults_[KeyAction::CycleWindowsBack]    = QKeySequence(Qt::CTRL | Qt::ALT | Qt::SHIFT | Qt::Key_Tab);
+    defaults_[KeyAction::NewWindowNextMonitor] = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N);
+    defaults_[KeyAction::MoveWindowToMonitor1] = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_1);
+    defaults_[KeyAction::MoveWindowToMonitor2] = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_2);
+    defaults_[KeyAction::MoveWindowToMonitor3] = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_3);
+    defaults_[KeyAction::MoveWindowToMonitor4] = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_4);
+    defaults_[KeyAction::MoveWindowToMonitor5] = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_5);
+    defaults_[KeyAction::MoveWindowToMonitor6] = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_6);
+    defaults_[KeyAction::MoveWindowToMonitor7] = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_7);
+    defaults_[KeyAction::MoveWindowToMonitor8] = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_8);
+    defaults_[KeyAction::MoveWindowToMonitor9] = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_9);
+
+    // Phase 6 — Component Browser
+    defaults_[KeyAction::BrowseComponents] = QKeySequence(Qt::CTRL | Qt::Key_K);
+
+    // Phase 11 — Always-on-top window toggle. Ctrl+Shift+T is un-used by any
+    // existing binding in this project and is a common convention for "top".
+    defaults_[KeyAction::ToggleAlwaysOnTop] = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T);
+
+    // Phase 12 — Manual lock. Ctrl+L is the most common "lock" binding across
+    // terminal / Bloomberg workflows. Users can rebind in Settings.
+    defaults_[KeyAction::LockNow] = QKeySequence(Qt::CTRL | Qt::Key_L);
 
     // Create QActions with default sequences
     for (auto it = defaults_.begin(); it != defaults_.end(); ++it) {
@@ -120,6 +187,34 @@ QString KeyConfigManager::display_name(KeyAction a) const {
         case KeyAction::RunCell:    return "Run Cell";
         case KeyAction::RunAndNext: return "Run & Move Next";
         case KeyAction::RenameCell: return "Rename Cell";
+
+        case KeyAction::FocusWindow1: return "Focus Window 1";
+        case KeyAction::FocusWindow2: return "Focus Window 2";
+        case KeyAction::FocusWindow3: return "Focus Window 3";
+        case KeyAction::FocusWindow4: return "Focus Window 4";
+        case KeyAction::FocusWindow5: return "Focus Window 5";
+        case KeyAction::FocusWindow6: return "Focus Window 6";
+        case KeyAction::FocusWindow7: return "Focus Window 7";
+        case KeyAction::FocusWindow8: return "Focus Window 8";
+        case KeyAction::FocusWindow9: return "Focus Window 9";
+        case KeyAction::CyclePanelsForward:  return "Next Panel";
+        case KeyAction::CyclePanelsBack:     return "Previous Panel";
+        case KeyAction::CycleWindowsForward: return "Next Window";
+        case KeyAction::CycleWindowsBack:    return "Previous Window";
+        case KeyAction::NewWindowNextMonitor: return "New Window (Next Monitor)";
+        case KeyAction::MoveWindowToMonitor1: return "Move Window to Monitor 1";
+        case KeyAction::MoveWindowToMonitor2: return "Move Window to Monitor 2";
+        case KeyAction::MoveWindowToMonitor3: return "Move Window to Monitor 3";
+        case KeyAction::MoveWindowToMonitor4: return "Move Window to Monitor 4";
+        case KeyAction::MoveWindowToMonitor5: return "Move Window to Monitor 5";
+        case KeyAction::MoveWindowToMonitor6: return "Move Window to Monitor 6";
+        case KeyAction::MoveWindowToMonitor7: return "Move Window to Monitor 7";
+        case KeyAction::MoveWindowToMonitor8: return "Move Window to Monitor 8";
+        case KeyAction::MoveWindowToMonitor9: return "Move Window to Monitor 9";
+
+        case KeyAction::BrowseComponents:  return "Browse Components";
+        case KeyAction::ToggleAlwaysOnTop: return "Toggle Always-on-Top";
+        case KeyAction::LockNow:           return "Lock Terminal Now";
     }
     return {};
 }
@@ -146,6 +241,36 @@ QString KeyConfigManager::group_name(KeyAction a) const {
         case KeyAction::RunAndNext:
         case KeyAction::RenameCell:
             return "Code Editor";
+
+        case KeyAction::FocusWindow1:
+        case KeyAction::FocusWindow2:
+        case KeyAction::FocusWindow3:
+        case KeyAction::FocusWindow4:
+        case KeyAction::FocusWindow5:
+        case KeyAction::FocusWindow6:
+        case KeyAction::FocusWindow7:
+        case KeyAction::FocusWindow8:
+        case KeyAction::FocusWindow9:
+        case KeyAction::CyclePanelsForward:
+        case KeyAction::CyclePanelsBack:
+        case KeyAction::CycleWindowsForward:
+        case KeyAction::CycleWindowsBack:
+        case KeyAction::NewWindowNextMonitor:
+        case KeyAction::MoveWindowToMonitor1:
+        case KeyAction::MoveWindowToMonitor2:
+        case KeyAction::MoveWindowToMonitor3:
+        case KeyAction::MoveWindowToMonitor4:
+        case KeyAction::MoveWindowToMonitor5:
+        case KeyAction::MoveWindowToMonitor6:
+        case KeyAction::MoveWindowToMonitor7:
+        case KeyAction::MoveWindowToMonitor8:
+        case KeyAction::MoveWindowToMonitor9:
+            return "Windows";
+
+        case KeyAction::BrowseComponents:
+        case KeyAction::ToggleAlwaysOnTop:
+        case KeyAction::LockNow:
+            return "Global";
     }
     return {};
 }
@@ -157,6 +282,20 @@ QList<KeyAction> KeyConfigManager::all_actions() const {
         KeyAction::NavNext, KeyAction::NavPrev, KeyAction::NavAccept, KeyAction::NavEscape,
         KeyAction::NewsNext, KeyAction::NewsPrev, KeyAction::NewsOpen, KeyAction::NewsClose,
         KeyAction::RunCell, KeyAction::RunAndNext, KeyAction::RenameCell,
+        KeyAction::FocusWindow1, KeyAction::FocusWindow2, KeyAction::FocusWindow3,
+        KeyAction::FocusWindow4, KeyAction::FocusWindow5, KeyAction::FocusWindow6,
+        KeyAction::FocusWindow7, KeyAction::FocusWindow8, KeyAction::FocusWindow9,
+        KeyAction::CyclePanelsForward, KeyAction::CyclePanelsBack,
+        KeyAction::CycleWindowsForward, KeyAction::CycleWindowsBack,
+        KeyAction::NewWindowNextMonitor,
+        KeyAction::MoveWindowToMonitor1, KeyAction::MoveWindowToMonitor2,
+        KeyAction::MoveWindowToMonitor3, KeyAction::MoveWindowToMonitor4,
+        KeyAction::MoveWindowToMonitor5, KeyAction::MoveWindowToMonitor6,
+        KeyAction::MoveWindowToMonitor7, KeyAction::MoveWindowToMonitor8,
+        KeyAction::MoveWindowToMonitor9,
+        KeyAction::BrowseComponents,
+        KeyAction::ToggleAlwaysOnTop,
+        KeyAction::LockNow,
     };
 }
 

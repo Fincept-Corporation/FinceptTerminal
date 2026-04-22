@@ -544,6 +544,15 @@ QString ThemeManager::build_ads_qss() const {
         ads--CTitleBarButton:hover { background: %8; }
         ads--CAutoHideSideBar { background: %1; border: none; }
         QScrollArea#dockWidgetScrollArea { padding: 0px; border: none; }
+
+        /* Phase 14 — auto-dock polish. Echoes Bloomberg Launchpad's amber
+           yellow snap-line when two components touch. ADS paints the drop
+           preview (COverlayDropArea / COverlayCrossWidget) and the splitter
+           handle hover — both styled with the accent colour so the visual
+           intent across drag + resize is consistent. */
+        ads--CDockOverlay { background: transparent; }
+        ads--CDockOverlayCross { background: transparent; }
+        ads--CDockSplitter::handle:hover { background-color: %4; }
     )")
         .arg(t.bg_base)        // %1
         .arg(t.bg_raised)      // %2

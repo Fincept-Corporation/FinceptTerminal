@@ -7,10 +7,13 @@
 #include "core/config/AppConfig.h"
 #include "core/config/AppPaths.h"
 #include "core/config/ProfileManager.h"
+#include "core/components/ComponentCatalog.h"
 #include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/session/SessionManager.h"
+#include "core/symbol/SymbolGroup.h"
+#include "core/symbol/SymbolRef.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "mcp/McpInit.h"
 #include "network/http/HttpClient.h"
@@ -42,6 +45,7 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QLockFile>
@@ -117,6 +121,18 @@ int main(int argc, char* argv[]) {
     // fincept-qt/DATAHUB_ARCHITECTURE.md.
     // Phase 2: register MarketDataService as the `market:quote:*` producer.
     fincept::datahub::register_metatypes();
+    // SymbolContext payload types — signals cross threads when a producer
+    // service (not just UI) publishes a group change.
+    qRegisterMetaType<fincept::SymbolRef>("fincept::SymbolRef");
+    qRegisterMetaType<fincept::SymbolGroup>("fincept::SymbolGroup");
+    // Phase 6: load the Component Browser catalogue. Try the build-side copy
+    // first (present after cmake configure copies resources) and fall back to
+    // the source-tree path for local dev runs without install step.
+    fincept::ComponentCatalog::instance().load_with_fallbacks({
+        QCoreApplication::applicationDirPath() + "/resources/component_catalog.json",
+        QCoreApplication::applicationDirPath() + "/component_catalog.json",
+        "resources/component_catalog.json",
+    });
     fincept::services::MarketDataService::instance().ensure_registered_with_hub();
     // Phase 2 (multi-broker refactor): ExchangeSessionManager is the hub
     // producer for `ws:kraken:*` / `ws:hyperliquid:*`. Individual sessions
@@ -289,6 +305,8 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v016();
     fincept::register_migration_v017();
     fincept::register_migration_v018();
+    fincept::register_migration_v019();
+    fincept::register_migration_v020();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -477,6 +495,12 @@ int main(int argc, char* argv[]) {
             if (!fincept::ai_chat::LlmService::instance().is_configured())
                 LOG_WARN("App",
                          "LLM provider not configured — AI chat will prompt user to configure Settings → LLM Config");
+
+            // Warm agent discovery cache (same reason as the main path).
+            QTimer::singleShot(0, &app, []() {
+                fincept::services::AgentService::instance().discover_agents();
+            });
+
             LOG_INFO("App", "Application ready (after setup)");
         });
 
@@ -541,6 +565,16 @@ int main(int argc, char* argv[]) {
 
     if (!fincept::ai_chat::LlmService::instance().is_configured())
         LOG_WARN("App", "LLM provider not configured — AI chat will prompt user to configure Settings → LLM Config");
+
+    // Warm the agent discovery cache on startup. This populates
+    // AgentService::cached_agents() so any screen that lists agents
+    // (Agent Config, Portfolio → Agent Runner, Node Editor) shows the
+    // full finagent_core set immediately instead of falling back to the
+    // much smaller DB-only list. Run deferred so Python is fully ready.
+    QTimer::singleShot(0, &app, []() {
+        fincept::services::AgentService::instance().discover_agents();
+    });
+
     LOG_INFO("App", "Application ready");
     return app.exec();
 }

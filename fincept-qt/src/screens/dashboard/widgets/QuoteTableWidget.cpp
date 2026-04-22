@@ -49,16 +49,15 @@ void QuoteTableWidget::hideEvent(QHideEvent* e) {
 }
 
 void QuoteTableWidget::refresh_data() {
-    // User-triggered refresh (e.g. BaseWidget refresh button): ask the hub
-    // to kick a fresh fetch for every symbol. This bypasses the scheduler's
-    // TTL gate but is still paced by `min_interval_ms` and the producer's
-    // `max_requests_per_sec()`.
+    // User-triggered refresh: force-bypass min_interval so a user tap on the
+    // refresh button always kicks a fetch. Producer-side rate limit still
+    // applies, so rage-clicking can't hammer upstream.
     auto& hub = datahub::DataHub::instance();
     QStringList topics;
     topics.reserve(symbols_.size());
     for (const auto& sym : symbols_)
         topics.append(QStringLiteral("market:quote:") + sym);
-    hub.request(topics);
+    hub.request(topics, /*force=*/true);
 }
 
 

@@ -67,7 +67,7 @@ void TopMoversWidget::refresh_data() {
     topics.reserve(symbols_.size());
     for (const auto& sym : symbols_)
         topics.append(QStringLiteral("market:quote:") + sym);
-    hub.request(topics);
+    hub.request(topics, /*force=*/true);  // user-triggered: bypass min_interval
 }
 
 

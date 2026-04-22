@@ -1,5 +1,6 @@
 // src/screens/equity_research/EquityResearchScreen.h
 #pragma once
+#include "core/symbol/IGroupLinked.h"
 #include "screens/IStatefulScreen.h"
 #include "services/equity/EquityResearchModels.h"
 
@@ -21,14 +22,23 @@ class EquityPeersTab;
 class EquityNewsTab;
 class EquitySentimentTab;
 
-class EquityResearchScreen : public QWidget, public IStatefulScreen {
+class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
     Q_OBJECT
+    Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit EquityResearchScreen(QWidget* parent = nullptr);
 
     void restore_state(const QVariantMap& state) override;
     QVariantMap save_state() const override;
     QString state_key() const override { return "equity_research"; }
+
+    // IGroupLinked — receives group broadcasts and calls load_symbol();
+    // also publishes when load_symbol() is triggered internally via the
+    // existing EventBus wiring (see .cpp).
+    void set_group(SymbolGroup g) override { link_group_ = g; }
+    SymbolGroup group() const override { return link_group_; }
+    void on_group_symbol_changed(const SymbolRef& ref) override;
+    SymbolRef current_symbol() const override;
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -72,6 +82,9 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen {
     QTimer* refresh_timer_ = nullptr;
     QString current_symbol_;
     QString current_currency_;
+
+    // Symbol group link — SymbolGroup::None when unlinked.
+    SymbolGroup link_group_ = SymbolGroup::None;
 };
 
 } // namespace fincept::screens

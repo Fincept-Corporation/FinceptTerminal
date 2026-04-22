@@ -248,9 +248,10 @@ void RiskManagementView::update_overview() {
 void RiskManagementView::update_stress_test() {
     double total_mv = summary_.total_market_value;
 
-    // ── Compute actual sector weights from holdings ───────────────────────────
-    // Classify each holding into equity / bond / commodity / crypto / other
-    // based on symbol patterns — mirrors PortfolioSectorPanel::infer_sector
+    // ── Compute actual asset-class weights from holdings ──────────────────────
+    // Classify each holding into equity / bond / commodity / crypto for the
+    // stress scenarios below. This is an asset-class heuristic distinct from
+    // the GICS-style sector used by SectorResolver / AnalyticsSectorsView.
     double equity_wt = 0, bond_wt = 0, commodity_wt = 0, crypto_wt = 0;
     for (const auto& h : summary_.holdings) {
         const QString s = h.symbol.toUpper();

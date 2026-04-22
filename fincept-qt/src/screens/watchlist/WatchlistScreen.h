@@ -1,4 +1,5 @@
 #pragma once
+#include "core/symbol/IGroupLinked.h"
 #include "screens/IStatefulScreen.h"
 #include "services/markets/MarketDataService.h"
 #include "storage/repositories/WatchlistRepository.h"
@@ -19,8 +20,9 @@ namespace fincept::screens {
 
 /// Full-screen Watchlist — manage multiple watchlists with live quotes.
 /// Layout: Watchlist Sidebar | Stock Table + Controls
-class WatchlistScreen : public QWidget, public IStatefulScreen {
+class WatchlistScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
     Q_OBJECT
+    Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit WatchlistScreen(QWidget* parent = nullptr);
 
@@ -28,6 +30,12 @@ class WatchlistScreen : public QWidget, public IStatefulScreen {
     QVariantMap save_state() const override;
     QString state_key() const override { return "watchlist"; }
     int state_version() const override { return 1; }
+
+    // IGroupLinked
+    void set_group(SymbolGroup g) override { link_group_ = g; }
+    SymbolGroup group() const override { return link_group_; }
+    void on_group_symbol_changed(const SymbolRef& ref) override;
+    SymbolRef current_symbol() const override;
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -85,6 +93,13 @@ class WatchlistScreen : public QWidget, public IStatefulScreen {
 
     QHash<QString, services::QuoteData> row_cache_;
     bool hub_active_ = false;
+
+    // Symbol group link — SymbolGroup::None when unlinked.
+    SymbolGroup link_group_ = SymbolGroup::None;
+
+    // Emit the currently-selected symbol into the linked group, if any.
+    // Safe to call with no selection — no-op.
+    void publish_selection_to_group();
 };
 
 } // namespace fincept::screens

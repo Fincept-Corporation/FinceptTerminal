@@ -23,8 +23,16 @@ class PinManager : public QObject {
     /// True if user has configured a PIN (hash exists in SecureStorage).
     bool has_pin() const;
 
-    /// Set or update the PIN. Returns error if hash/storage fails.
+    /// Set or update the PIN. Returns error if hash/storage fails or the PIN
+    /// is trivially weak (all-same digits, ascending/descending sequence).
+    /// Note: this does NOT require the old PIN — use change_pin() for that.
     Result<void> set_pin(const QString& pin);
+
+    /// Change the PIN, requiring the current PIN for authorization. A wrong
+    /// old_pin increments the failed-attempt counter exactly like a failed
+    /// unlock, so an attacker who unlocks an unattended terminal cannot
+    /// silently swap the PIN without facing the same lockout.
+    Result<void> change_pin(const QString& old_pin, const QString& new_pin);
 
     /// Verify a PIN attempt. On failure increments attempt counter and
     /// may trigger lockout. Returns true on match.
@@ -45,6 +53,12 @@ class PinManager : public QObject {
     /// Max attempts before permanent lockout (requires server re-auth).
     static constexpr int kMaxAttempts = 5;
 
+    /// Number of "free" wrong attempts before the timed-lockout ladder kicks
+    /// in. Set to 2 so the user gets 3 tries (attempts 1, 2, 3) with only a
+    /// generic "incorrect" error; the 3rd mistake starts the 30s lockout.
+    /// kMaxAttempts still caps the total at 5 before forced re-login.
+    static constexpr int kFreeAttempts = 2;
+
     /// Reset lockout state (called after successful server re-auth).
     void reset_lockout();
 
@@ -58,8 +72,10 @@ class PinManager : public QObject {
   private:
     PinManager();
 
-    // PBKDF2-SHA256 parameters
-    static constexpr int kIterations = 100000;
+    // PBKDF2-SHA256 parameters.
+    // 600_000 iterations per OWASP Password Storage Cheat Sheet (2023) for
+    // PBKDF2-SHA256. Verify cost stays well under 500ms on target hardware.
+    static constexpr int kIterations = 600000;
     static constexpr int kSaltLength = 32;
     static constexpr int kHashLength = 32;
 

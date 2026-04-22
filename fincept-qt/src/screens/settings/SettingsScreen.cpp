@@ -6,6 +6,7 @@
 #include "ai_chat/LlmService.h"
 #include "auth/InactivityGuard.h"
 #include "auth/PinManager.h"
+#include "auth/SecurityAuditLog.h"
 #include "core/config/AppConfig.h"
 #include "core/config/AppPaths.h"
 #include "core/config/ProfileManager.h"
@@ -2643,7 +2644,13 @@ QWidget* SettingsScreen::build_security() {
         }
     });
 
-    // Save PIN handler
+    // Save PIN handler.
+    //
+    // All validation (length, digits, weak pattern, old-PIN verification, same-
+    // as-old rejection) lives in PinManager::change_pin so there is exactly
+    // one enforcement path and a wrong current PIN correctly feeds the
+    // shared lockout counter. The UI only checks "new" == "confirm" since the
+    // manager has no notion of a confirm field.
     connect(save_pin_btn, &QPushButton::clicked, this, [this]() {
         sec_pin_error_->hide();
         sec_pin_success_->hide();
@@ -2653,28 +2660,6 @@ QWidget* SettingsScreen::build_security() {
         const QString new_pin = sec_new_pin_->text();
         const QString confirm = sec_confirm_pin_->text();
 
-        // Verify current PIN
-        if (!pm.verify_pin(current)) {
-            sec_pin_error_->setText("Current PIN is incorrect");
-            sec_pin_error_->show();
-            sec_current_pin_->clear();
-            sec_current_pin_->setFocus();
-            return;
-        }
-
-        // Validate new PIN
-        if (new_pin.length() != 6) {
-            sec_pin_error_->setText("New PIN must be exactly 6 digits");
-            sec_pin_error_->show();
-            return;
-        }
-        for (const QChar& c : new_pin) {
-            if (!c.isDigit()) {
-                sec_pin_error_->setText("PIN must contain only digits");
-                sec_pin_error_->show();
-                return;
-            }
-        }
         if (new_pin != confirm) {
             sec_pin_error_->setText("New PINs do not match");
             sec_pin_error_->show();
@@ -2682,16 +2667,16 @@ QWidget* SettingsScreen::build_security() {
             sec_confirm_pin_->setFocus();
             return;
         }
-        if (new_pin == current) {
-            sec_pin_error_->setText("New PIN must be different from current PIN");
-            sec_pin_error_->show();
-            return;
-        }
 
-        auto result = pm.set_pin(new_pin);
+        auto result = pm.change_pin(current, new_pin);
         if (result.is_err()) {
             sec_pin_error_->setText(QString::fromStdString(result.error()));
             sec_pin_error_->show();
+            // On a wrong current PIN the manager incremented the attempt
+            // counter; clear the field and let the user try again (up to
+            // kMaxAttempts, at which point the lock screen takes over).
+            sec_current_pin_->clear();
+            sec_current_pin_->setFocus();
             return;
         }
 
@@ -2736,6 +2721,11 @@ QWidget* SettingsScreen::build_security() {
     connect(sec_autolock_toggle_, &QCheckBox::toggled, this,
             [this](bool checked) { sec_lock_timeout_->setEnabled(checked); });
 
+    sec_lock_on_minimize_ = new QCheckBox("Lock when the window is minimized");
+    sec_lock_on_minimize_->setStyleSheet(check_ss());
+    vl->addWidget(make_row("Lock on Minimize", sec_lock_on_minimize_,
+                            "When on, minimizing the terminal immediately shows the PIN screen."));
+
     vl->addSpacing(16);
 
     // ── SAVE ──────────────────────────────────────────────────────────────────
@@ -2751,6 +2741,10 @@ QWidget* SettingsScreen::build_security() {
 
         repo.set("security.autolock_enabled", autolock ? "true" : "false", "security");
         repo.set("security.lock_timeout_minutes", QString::number(minutes), "security");
+        if (sec_lock_on_minimize_) {
+            repo.set("security.lock_on_minimize",
+                     sec_lock_on_minimize_->isChecked() ? "true" : "false", "security");
+        }
 
         guard.set_timeout_minutes(minutes);
         guard.set_enabled(autolock);
@@ -2759,9 +2753,53 @@ QWidget* SettingsScreen::build_security() {
     });
     vl->addWidget(save_btn);
 
+    // ── AUDIT LOG ─────────────────────────────────────────────────────────────
+    vl->addSpacing(16);
+    auto* t_audit = new QLabel("AUDIT LOG");
+    t_audit->setStyleSheet(sub_title_ss());
+    vl->addWidget(t_audit);
+    vl->addSpacing(4);
+
+    auto* audit_note = new QLabel("Recent security events (PIN setup, failed unlocks, inactivity locks).");
+    audit_note->setWordWrap(true);
+    audit_note->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;")
+                                  .arg(ui::colors::TEXT_DIM()));
+    vl->addWidget(audit_note);
+
+    sec_audit_list_ = new QListWidget;
+    sec_audit_list_->setFixedHeight(180);
+    sec_audit_list_->setStyleSheet(
+        QString("QListWidget { background:%1; color:%2; border:1px solid %3;"
+                "font-family:'Consolas','Courier New',monospace; font-size:12px; }"
+                "QListWidget::item { padding:2px 6px; }")
+            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM()));
+    vl->addWidget(sec_audit_list_);
+
+    auto* refresh_audit = new QPushButton("Refresh");
+    refresh_audit->setFixedWidth(140);
+    refresh_audit->setStyleSheet(btn_secondary_ss());
+    connect(refresh_audit, &QPushButton::clicked, this, [this]() { refresh_audit_log(); });
+    vl->addWidget(refresh_audit);
+
     vl->addStretch();
     scroll->setWidget(page);
     return scroll;
+}
+
+void SettingsScreen::refresh_audit_log() {
+    if (!sec_audit_list_)
+        return;
+    sec_audit_list_->clear();
+    const auto events = auth::SecurityAuditLog::instance().recent(100);
+    for (const auto& e : events) {
+        const QString ts = e.timestamp.toString("yyyy-MM-dd hh:mm:ss");
+        const QString line = e.detail.isEmpty()
+                                 ? QString("%1  %2").arg(ts, e.event)
+                                 : QString("%1  %2  (%3)").arg(ts, e.event, e.detail);
+        sec_audit_list_->addItem(line);
+    }
+    if (events.isEmpty())
+        sec_audit_list_->addItem("(no events recorded yet)");
 }
 
 void SettingsScreen::load_security() {
@@ -2815,6 +2853,17 @@ void SettingsScreen::load_security() {
             }
         }
     }
+
+    if (sec_lock_on_minimize_) {
+        const QSignalBlocker b(sec_lock_on_minimize_);
+        auto r = repo.get("security.lock_on_minimize");
+        // Default off — most users minimize frequently and don't expect a lock.
+        sec_lock_on_minimize_->setChecked(r.is_ok() && r.value() == "true");
+    }
+
+    // Populate audit log when the Security tab is shown. Cheap — the query
+    // is LIMIT 100 against an indexed column.
+    refresh_audit_log();
 }
 
 // ── Profiles ──────────────────────────────────────────────────────────────────

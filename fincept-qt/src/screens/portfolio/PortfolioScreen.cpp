@@ -2,8 +2,7 @@
 #include "screens/portfolio/PortfolioScreen.h"
 
 #include "core/session/ScreenStateManager.h"
-#include "screens/portfolio/PortfolioAgentPanel.h"
-#include "screens/portfolio/PortfolioAiPanel.h"
+#include "screens/portfolio/PortfolioInsightsPanel.h"
 #include "screens/portfolio/PortfolioBlotter.h"
 #include "screens/portfolio/PortfolioCommandBar.h"
 #include "screens/portfolio/PortfolioDetailWrapper.h"
@@ -28,6 +27,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QPropertyAnimation>
 #include <QPushButton>
 #include <QSplitter>
@@ -61,18 +61,40 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
             sector_panel_->set_correlation(matrix);
     });
     connect(&svc, &services::PortfolioService::spy_history_loaded, this,
-            [this](QStringList dates, QVector<double> closes) {
-                if (perf_chart_)
-                    perf_chart_->set_spy_history(dates, closes);
-                // Recompute metrics now that SPY data is available for OLS beta
+            [this](QStringList /*dates*/, QVector<double> /*closes*/) {
+                // Recompute metrics now that SPY data is available for OLS beta.
+                // The chart consumes the per-symbol benchmark_history_loaded
+                // signal below — SPY here is purely a Beta signal.
                 if (summary_loaded_)
                     services::PortfolioService::instance().compute_metrics(current_summary_);
+            });
+    connect(&svc, &services::PortfolioService::benchmark_history_loaded, this,
+            [this](QString symbol, QStringList dates, QVector<double> closes) {
+                // Hand the chart whichever benchmark was actually requested
+                // (SPY for USD, ^GSPTSE for CAD, etc.) so the overlay label and
+                // currency-normalisation are correct.
+                if (!perf_chart_ || !summary_loaded_)
+                    return;
+                const QString want = services::PortfolioService::default_benchmark_for_currency(
+                    current_summary_.portfolio.currency);
+                if (symbol != want)
+                    return; // ignore the secondary SPY-for-Beta fetch
+                perf_chart_->set_benchmark_history(symbol, dates, closes);
             });
     connect(&svc, &services::PortfolioService::risk_free_rate_loaded, this, [this](double /*rate*/) {
         // Recompute metrics with updated risk-free rate for Sharpe
         if (summary_loaded_)
             services::PortfolioService::instance().compute_metrics(current_summary_);
     });
+    // After yfinance backfill lands, refresh snapshots and metrics so Beta/MDD
+    // populate without requiring a manual refresh.
+    connect(&svc, &services::PortfolioService::history_backfilled, this,
+            [this](QString portfolio_id, int point_count) {
+                if (point_count <= 0 || !summary_loaded_ || portfolio_id != selected_id_)
+                    return;
+                services::PortfolioService::instance().load_snapshots(portfolio_id);
+                services::PortfolioService::instance().compute_metrics(current_summary_);
+            });
 
     // Restore persisted refresh interval (P17)
     {
@@ -170,6 +192,24 @@ void PortfolioScreen::build_ui() {
         command_bar_->set_detail_view(std::nullopt);
         update_content_state();
     });
+    // AnalyticsSectorsView → filter the main blotter by the clicked sector.
+    // Mirrors the PortfolioSectorPanel::sector_selected wiring below so both
+    // entry points behave identically.
+    connect(detail_wrapper_, &PortfolioDetailWrapper::sector_selected, this, [this](const QString& sector) {
+        if (!blotter_)
+            return;
+        if (sector.isEmpty()) {
+            blotter_->set_sector_filter({});
+            return;
+        }
+        QStringList matching;
+        for (const auto& h : current_summary_.holdings) {
+            QString h_sector = h.sector.isEmpty() ? QStringLiteral("Unclassified") : h.sector;
+            if (h_sector == sector)
+                matching.append(h.symbol);
+        }
+        blotter_->set_sector_filter(matching);
+    });
 
     // FFN view
     ffn_view_ = new PortfolioFFNView(this);
@@ -190,9 +230,19 @@ void PortfolioScreen::build_ui() {
     status_bar_ = new PortfolioStatusBar(this);
     layout->addWidget(status_bar_);
 
-    // ── Floating panels (overlay, not in layout) ─────────────────────────────
-    ai_panel_ = new PortfolioAiPanel(this);
-    agent_panel_ = new PortfolioAgentPanel(this);
+    // ── Insights dock (unified AI + Agent right-hand panel) ─────────────────
+    // Sits above all other widgets as a child overlay, positioned in
+    // resizeEvent so it tracks window size. A scrim behind it dims the rest
+    // of the screen so the user knows focus has moved.
+    insights_scrim_ = new QWidget(this);
+    insights_scrim_->setObjectName("PortfolioInsightsScrim");
+    insights_scrim_->setStyleSheet("#PortfolioInsightsScrim { background:rgba(0,0,0,0.45); }");
+    insights_scrim_->hide();
+
+    insights_panel_ = new PortfolioInsightsPanel(this);
+    connect(insights_panel_, &PortfolioInsightsPanel::close_requested, this, [this]() {
+        insights_scrim_->hide();
+    });
 
     // Wire export/import/AI/Agent signals from CommandBar
     connect(command_bar_, &PortfolioCommandBar::export_csv_requested, this, [this]() {
@@ -219,30 +269,48 @@ void PortfolioScreen::build_ui() {
             services::PortfolioService::instance().import_json(dlg.file_path(), dlg.mode(), dlg.merge_target_id());
         }
     });
-    connect(command_bar_, &PortfolioCommandBar::ai_analyze_requested, this, [this]() {
+    auto open_insights = [this](PortfolioInsightsPanel::Tab tab) {
         if (!summary_loaded_)
             return;
-        ai_panel_->set_summary(current_summary_);
-        const int top = command_bar_->height() + 6;
-        ai_panel_->move(width() - 492, top);
-        ai_panel_->setFixedHeight(height() - top - 60);
-        ai_panel_->show_panel();
-    });
-    connect(command_bar_, &PortfolioCommandBar::agent_run_requested, this, [this]() {
-        if (!summary_loaded_)
-            return;
-        agent_panel_->set_summary(current_summary_);
-        const int top = command_bar_->height() + 6;
-        agent_panel_->move(width() - 984, top);
-        agent_panel_->setFixedHeight(height() - top - 60);
-        agent_panel_->show_panel();
-    });
+        insights_panel_->set_summary(current_summary_);
+        const int top = command_bar_->height();
+        const int bottom_reserve = status_bar_ ? status_bar_->height() : 0;
+        const int h = qMax(200, height() - top - bottom_reserve);
+        insights_scrim_->setGeometry(0, top, width(), h);
+        insights_scrim_->show();
+        insights_scrim_->raise();
+        insights_panel_->setFixedHeight(h);
+        insights_panel_->move(width() - insights_panel_->width(), top);
+        insights_panel_->raise();
+        insights_panel_->open_tab(tab);
+    };
+    connect(command_bar_, &PortfolioCommandBar::ai_analyze_requested, this,
+            [open_insights]() { open_insights(PortfolioInsightsPanel::Tab::AI); });
+    connect(command_bar_, &PortfolioCommandBar::agent_run_requested, this,
+            [open_insights]() { open_insights(PortfolioInsightsPanel::Tab::Agent); });
 
     // Wire import completion
     connect(&services::PortfolioService::instance(), &services::PortfolioService::import_complete, this,
             [this](portfolio::ImportResult result) {
-                if (!result.portfolio_id.isEmpty())
-                    on_portfolio_selected(result.portfolio_id);
+                if (result.portfolio_id.isEmpty()) {
+                    QString detail = result.errors.isEmpty()
+                                         ? QString("Import failed with no details.")
+                                         : result.errors.join("\n");
+                    QMessageBox::warning(this, "Portfolio Import Failed",
+                                         "Could not import the portfolio.\n\n" + detail +
+                                             "\n\nExpected format:\n"
+                                             "{\n"
+                                             "  \"portfolio_name\": \"My Portfolio\",\n"
+                                             "  \"currency\": \"USD\",\n"
+                                             "  \"owner\": \"...\",\n"
+                                             "  \"transactions\": [\n"
+                                             "    {\"date\": \"YYYY-MM-DD\", \"symbol\": \"AAPL\", \"type\": \"BUY\",\n"
+                                             "     \"quantity\": 10, \"price\": 150.0}\n"
+                                             "  ]\n"
+                                             "}");
+                    return;
+                }
+                on_portfolio_selected(result.portfolio_id);
             });
 }
 
@@ -582,8 +650,18 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
         services::PortfolioService::instance().fetch_correlation(syms);
     }
 
-    // Fetch SPY benchmark history for perf chart overlay
-    services::PortfolioService::instance().fetch_spy_history("1y");
+    // Fetch benchmark history for perf chart overlay. Use the portfolio's
+    // currency to pick a sensible default index (TSX for CAD, SPY for USD,
+    // FTSE for GBP, …). We also always fetch SPY itself because Beta in
+    // compute_metrics() regresses against SPY regardless of currency.
+    {
+        auto& svc = services::PortfolioService::instance();
+        const QString bench = services::PortfolioService::default_benchmark_for_currency(
+            summary.portfolio.currency);
+        svc.fetch_benchmark_history(bench, "1y");
+        if (bench != QStringLiteral("SPY"))
+            svc.fetch_benchmark_history("SPY", "1y");
+    }
 
     // Fetch live risk-free rate (DGS10) for Sharpe computation — cached 24h
     services::PortfolioService::instance().fetch_risk_free_rate();
@@ -722,6 +800,15 @@ QWidget* PortfolioScreen::build_main_view() {
     top_split->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM()));
 
     perf_chart_ = new PortfolioPerfChart;
+    // Trigger backfill when the user clicks a period that needs more history
+    // than we have cached. PortfolioService re-emits history_backfilled when
+    // done, which routes back through the chart via load_snapshots.
+    connect(perf_chart_, &PortfolioPerfChart::backfill_period_requested, this,
+            [this](const QString& period) {
+                if (selected_id_.isEmpty())
+                    return;
+                services::PortfolioService::instance().backfill_history(selected_id_, period);
+            });
     sector_panel_ = new PortfolioSectorPanel;
     connect(sector_panel_, &PortfolioSectorPanel::sector_selected, this, [this](const QString& sector) {
         if (sector.isEmpty()) {
@@ -730,7 +817,8 @@ QWidget* PortfolioScreen::build_main_view() {
         }
         QStringList matching;
         for (const auto& h : current_summary_.holdings) {
-            if (PortfolioSectorPanel::infer_sector(h.symbol) == sector)
+            QString h_sector = h.sector.isEmpty() ? QStringLiteral("Unclassified") : h.sector;
+            if (h_sector == sector)
                 matching.append(h.symbol);
         }
         blotter_->set_sector_filter(matching);
@@ -1016,6 +1104,20 @@ void PortfolioScreen::animate_order_panel_in() {
 void PortfolioScreen::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
     reposition_order_panel();
+
+    // Keep the insights dock (and its scrim) glued to the right edge when
+    // the window is resized.
+    if (insights_panel_ && command_bar_) {
+        const int top = command_bar_->height();
+        const int bottom_reserve = status_bar_ ? status_bar_->height() : 0;
+        const int h = qMax(200, height() - top - bottom_reserve);
+        if (insights_scrim_ && insights_scrim_->isVisible())
+            insights_scrim_->setGeometry(0, top, width(), h);
+        if (insights_panel_->isVisible()) {
+            insights_panel_->setFixedHeight(h);
+            insights_panel_->move(width() - insights_panel_->width(), top);
+        }
+    }
 }
 
 const portfolio::HoldingWithQuote* PortfolioScreen::find_holding(const QString& symbol) const {

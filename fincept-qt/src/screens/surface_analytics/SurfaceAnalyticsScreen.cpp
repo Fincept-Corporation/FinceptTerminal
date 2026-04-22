@@ -1106,4 +1106,27 @@ void SurfaceAnalyticsScreen::restore_state(const QVariantMap& state) {
         on_category_clicked(cat);
 }
 
+// ── IGroupLinked ─────────────────────────────────────────────────────────────
+
+void SurfaceAnalyticsScreen::on_group_symbol_changed(const fincept::SymbolRef& ref) {
+    if (!ref.is_valid() || !symbol_combo_)
+        return;
+    // Only act when the incoming symbol matches one of our supported tickers
+    // (VOL_SYMBOLS). For anything else the screen has no data surface, so
+    // silently ignore rather than clearing the current view.
+    for (int i = 0; i < N_SYMBOLS; ++i) {
+        if (ref.symbol.compare(QString::fromLatin1(VOL_SYMBOLS[i]), Qt::CaseInsensitive) == 0) {
+            if (symbol_combo_->currentIndex() != i)
+                symbol_combo_->setCurrentIndex(i); // triggers on_symbol_changed
+            return;
+        }
+    }
+}
+
+fincept::SymbolRef SurfaceAnalyticsScreen::current_symbol() const {
+    if (selected_symbol_ < 0 || selected_symbol_ >= N_SYMBOLS)
+        return {};
+    return fincept::SymbolRef::equity(QString::fromLatin1(VOL_SYMBOLS[selected_symbol_]));
+}
+
 } // namespace fincept::surface

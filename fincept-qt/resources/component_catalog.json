@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "components": [
+    { "id": "dashboard",         "title": "Dashboard",          "category": "Core",        "description": "Customizable widget grid — quotes, charts, news, notes", "tags": ["grid","widgets","home"] },
+    { "id": "markets",           "title": "Markets",            "category": "Core",        "description": "Cross-asset market overview and movers",                   "tags": ["markets","overview","movers"] },
+    { "id": "watchlist",         "title": "Watchlist",          "category": "Core",        "description": "Symbol lists with live quotes",                             "tags": ["watchlist","quotes","symbols"] },
+    { "id": "news",              "title": "News",               "category": "Core",        "description": "Global news wire with category filters and sentiment",     "tags": ["news","wire","headlines"] },
+
+    { "id": "crypto_trading",    "title": "Crypto Trading",     "category": "Trading",     "description": "Order entry + real-time book for Kraken / HyperLiquid",    "tags": ["crypto","trading","order"] },
+    { "id": "equity_trading",    "title": "Equity Trading",     "category": "Trading",     "description": "Multi-account equity trading across 16+ brokers",          "tags": ["equity","trading","brokers"] },
+    { "id": "algo_trading",      "title": "Algo Trading",       "category": "Trading",     "description": "Strategy runner, order router, and execution analytics",   "tags": ["algo","strategy","execution"] },
+    { "id": "backtesting",       "title": "Backtesting",        "category": "Trading",     "description": "Historical strategy simulation and reporting",             "tags": ["backtest","simulation"] },
+    { "id": "trade_viz",         "title": "Trade Viz",          "category": "Trading",     "description": "Order and position visualisation on price charts",         "tags": ["trade","visualise","orders"] },
+
+    { "id": "portfolio",         "title": "Portfolio",          "category": "Research",    "description": "Holdings, P&L, allocation and performance attribution",    "tags": ["portfolio","pnl","holdings"] },
+    { "id": "equity_research",   "title": "Equity Research",    "category": "Research",    "description": "Fundamentals, technicals, peers, sentiment in one view",   "tags": ["research","fundamentals","peers"] },
+    { "id": "derivatives",       "title": "Derivatives",        "category": "Research",    "description": "Bond, option, swap and CDS pricing",                       "tags": ["derivatives","pricing","options"] },
+    { "id": "surface_analytics", "title": "Surface Analytics",  "category": "Research",    "description": "Volatility surfaces, Greeks, yield curves, correlation",   "tags": ["surface","vol","greeks"] },
+    { "id": "ma_analytics",      "title": "M&A Analytics",      "category": "Research",    "description": "Deal comparables, accretion/dilution, event studies",      "tags": ["m&a","deals","comparables"] },
+    { "id": "alt_investments",   "title": "Alt. Investments",   "category": "Research",    "description": "Private markets, real assets, infrastructure screens",     "tags": ["alts","private","infra"] },
+
+    { "id": "quantlib",          "title": "QuantLib Suite",     "category": "QuantLib",    "description": "18 quantitative analysis tools — curves, models, risk",    "tags": ["quantlib","curves","models"] },
+    { "id": "ai_quant_lab",      "title": "AI Quant Lab",       "category": "AI",          "description": "ML factor discovery, HFT, RL trading, vision quant",       "tags": ["ai","quant","ml"] },
+    { "id": "alpha_arena",       "title": "Alpha Arena",        "category": "AI",          "description": "Competitive strategy arena with leaderboards",             "tags": ["alpha","arena","contest"] },
+    { "id": "agent_config",      "title": "Agent Config",       "category": "AI",          "description": "LLM agent framework configuration (hedge fund, macro)",    "tags": ["agents","llm","config"] },
+    { "id": "mcp_servers",       "title": "MCP Servers",        "category": "AI",          "description": "Model Context Protocol server management",                 "tags": ["mcp","tools","servers"] },
+    { "id": "ai_chat",           "title": "AI Chat",            "category": "AI",          "description": "In-terminal chat with market-aware tool-use",              "tags": ["chat","llm","assistant"] },
+
+    { "id": "economics",         "title": "Economics",          "category": "Economics",   "description": "Macro dashboards — FRED, IMF, World Bank, OECD",          "tags": ["economics","macro","fred"] },
+    { "id": "dbnomics",          "title": "DBnomics",           "category": "Economics",   "description": "80+ provider unified economic data browser",              "tags": ["dbnomics","providers","series"] },
+    { "id": "akshare",           "title": "AkShare Data",       "category": "Economics",   "description": "China markets and alternative data",                      "tags": ["akshare","china","data"] },
+    { "id": "asia_markets",      "title": "Asia Markets",       "category": "Economics",   "description": "APAC market overview — JP, KR, IN, CN, SG, HK",           "tags": ["asia","apac","markets"] },
+
+    { "id": "geopolitics",       "title": "Geopolitics",        "category": "Geopolitics", "description": "Relationship maps, conflicts, sanctions monitors",        "tags": ["geopolitics","conflict","sanctions"] },
+    { "id": "gov_data",          "title": "Government Data",    "category": "Geopolitics", "description": "US/EU/UK government open-data feeds",                      "tags": ["government","opendata"] },
+    { "id": "maritime",          "title": "Maritime",           "category": "Geopolitics", "description": "Vessel tracking, port activity, shipping flows",          "tags": ["maritime","ships","ports"] },
+    { "id": "polymarket",        "title": "Prediction Markets", "category": "Geopolitics", "description": "Polymarket and Kalshi event odds + order book",           "tags": ["polymarket","kalshi","prediction"] },
+    { "id": "relationship_map",  "title": "Relationship Map",   "category": "Geopolitics", "description": "Entity relationship graph explorer",                      "tags": ["relationship","graph","entities"] },
+
+    { "id": "node_editor",       "title": "Node Editor",        "category": "Tools",       "description": "Visual workflow node editor with 12 node categories",     "tags": ["workflow","nodes","visual"] },
+    { "id": "code_editor",       "title": "Code Editor",        "category": "Tools",       "description": "In-app code cells — Python, SQL, shell",                  "tags": ["code","python","cells"] },
+    { "id": "excel",             "title": "Excel",              "category": "Tools",       "description": "Spreadsheet grid with formulas, XLSX import/export",       "tags": ["excel","xlsx","spreadsheet"] },
+    { "id": "report_builder",    "title": "Report Builder",     "category": "Tools",       "description": "PDF/HTML reports from terminal data",                     "tags": ["report","pdf","builder"] },
+    { "id": "data_sources",      "title": "Data Sources",       "category": "Tools",       "description": "100+ connectors — APIs, DBs, websockets",                  "tags": ["data","sources","connectors"] },
+    { "id": "data_mapping",      "title": "Data Mapping",       "category": "Tools",       "description": "Transform and route between data sources",                "tags": ["mapping","etl","transform"] },
+    { "id": "file_manager",      "title": "File Manager",       "category": "Tools",       "description": "Project-local file browser",                              "tags": ["files","browser"] },
+    { "id": "notes",             "title": "Notes",              "category": "Tools",       "description": "Markdown scratchpad with live preview",                   "tags": ["notes","markdown"] },
+
+    { "id": "forum",             "title": "Forum",              "category": "Community",   "description": "Community discussion threads",                            "tags": ["forum","community"] },
+    { "id": "profile",           "title": "Profile",            "category": "Community",   "description": "User profile and account",                                "tags": ["profile","account"] },
+    { "id": "settings",          "title": "Settings",           "category": "Community",   "description": "Preferences, keybindings, themes, voice, LLM",            "tags": ["settings","preferences"] },
+    { "id": "support",           "title": "Support",            "category": "Community",   "description": "Ticket + support",                                        "tags": ["support","help"] },
+    { "id": "docs",              "title": "Docs",               "category": "Community",   "description": "In-app documentation",                                    "tags": ["docs","documentation"] },
+    { "id": "about",             "title": "About",              "category": "Community",   "description": "Version, license, credits",                               "tags": ["about","version"] }
+  ]
+}

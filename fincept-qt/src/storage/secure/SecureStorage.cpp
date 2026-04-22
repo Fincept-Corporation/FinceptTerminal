@@ -34,6 +34,21 @@ namespace fincept {
 
 SecureStorage& SecureStorage::instance() {
     static SecureStorage s;
+
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MAC)
+    // One-time honest warning on Linux: the backend here is XOR-obfuscated
+    // QSettings, not real encryption. Emit at first access so it always
+    // shows up in the startup log for operators, and only once per process.
+    static bool warned_once = false;
+    if (!warned_once) {
+        warned_once = true;
+        LOG_WARN("SecureStorage",
+                 "Linux backend is XOR-obfuscated QSettings — NOT cryptographically "
+                 "secure. Anyone with read access to the user profile can recover "
+                 "stored secrets. libsecret/KWallet backend is planned.");
+    }
+#endif
+
     return s;
 }
 

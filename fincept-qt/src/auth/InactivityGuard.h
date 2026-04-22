@@ -1,4 +1,5 @@
 #pragma once
+#include <QDateTime>
 #include <QObject>
 #include <QTimer>
 
@@ -29,6 +30,24 @@ class InactivityGuard : public QObject {
     /// Reset the inactivity timer (called internally on user activity).
     void reset_timer();
 
+    /// Check whether enough wall-clock time has elapsed since the last
+    /// recorded user activity that a lock should be forced now. Used after
+    /// resume from sleep/suspend — QTimer pauses while the OS is asleep, so
+    /// it cannot be relied on to fire immediately on wake. If the wall-clock
+    /// delta exceeds the configured timeout, emit lock_requested() directly.
+    /// Returns true if a lock was forced.
+    bool check_for_resume_lock();
+
+    /// Force an immediate lock (emits lock_requested). Called by the
+    /// manual "Lock Now" action and by minimize-to-lock.
+    void trigger_manual_lock();
+
+    /// Terminal-locked flag. MainWindow sets this to true while the lock
+    /// screen is active so other subsystems (e.g. DockScreenRouter) can
+    /// early-return and refuse to mutate state behind the lock screen.
+    void set_terminal_locked(bool locked) { terminal_locked_ = locked; }
+    bool is_terminal_locked() const { return terminal_locked_; }
+
   signals:
     /// Emitted when the idle timeout expires — MainWindow should show lock screen.
     void lock_requested();
@@ -41,6 +60,11 @@ class InactivityGuard : public QObject {
 
     QTimer* timer_ = nullptr;
     bool enabled_ = false;
+    bool terminal_locked_ = false;
+    // Wall-clock timestamp of the last recorded user activity. Used by
+    // check_for_resume_lock() to decide whether the machine slept through
+    // the inactivity window (QTimer pauses during OS suspend).
+    QDateTime last_activity_;
 };
 
 } // namespace fincept::auth

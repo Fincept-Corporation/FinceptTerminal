@@ -2,6 +2,8 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "core/symbol/SymbolContext.h"
+#include "core/symbol/SymbolDragSource.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -242,7 +244,32 @@ QWidget* WatchlistScreen::build_main_panel() {
     table_->set_column_widths({100, 160, 100, 90, 80, 90, 90, 110});
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
+
+    // When the user selects a row, publish its symbol into the linked group.
+    // Use itemSelectionChanged rather than cellClicked so keyboard navigation
+    // also propagates.
+    connect(table_, &QTableWidget::itemSelectionChanged, this,
+            &WatchlistScreen::publish_selection_to_group);
+
+    // Drag-out: hold-and-drag a symbol row to broadcast the ticker to any
+    // panel. The provider callback reads the current row at drag-start so
+    // keyboard row-changes are reflected without reinstalling the filter.
+    symbol_dnd::installDragSource(
+        table_->viewport(),
+        [this]() { return current_symbol(); },
+        link_group_);
+
     lay->addWidget(table_, 1);
+
+    // Drop: dropping a symbol onto the watchlist body adds it to the current
+    // watchlist. Happens on the main_panel_ so the drop target is generous
+    // (header, table, sidebar edge all count).
+    symbol_dnd::installDropFilter(main_panel_, [this](const SymbolRef& ref, SymbolGroup) {
+        if (current_wl_id_.isEmpty() || !ref.is_valid())
+            return;
+        fincept::WatchlistRepository::instance().add_stock(current_wl_id_, ref.symbol);
+        load_stocks();
+    });
 
     return main_panel_;
 }
@@ -450,7 +477,10 @@ void WatchlistScreen::hub_resubscribe_stocks() {
             rebuild_from_cache();
         });
     }
-    hub.request(topics);
+    // force=true: watchlist symbols change on user edit; bypass min_interval
+    // so newly-added tickers resolve immediately instead of waiting for the
+    // scheduler tick.
+    hub.request(topics, /*force=*/true);
     hub_active_ = true;
 }
 
@@ -597,6 +627,42 @@ void WatchlistScreen::restore_state(const QVariantMap& state) {
         }
     }
     // Watchlist not found (may have been deleted) — leave default selection
+}
+
+// ── IGroupLinked ─────────────────────────────────────────────────────────────
+
+void WatchlistScreen::on_group_symbol_changed(const SymbolRef& ref) {
+    if (!table_ || !ref.is_valid())
+        return;
+    // Select the row whose symbol matches; scroll into view. No-op if the
+    // ticker isn't in this watchlist.
+    for (int r = 0; r < stocks_.size(); ++r) {
+        if (stocks_[r].symbol.compare(ref.symbol, Qt::CaseInsensitive) == 0) {
+            QSignalBlocker block(table_); // avoid re-emitting publish
+            table_->selectRow(r);
+            table_->scrollToItem(table_->item(r, 0), QAbstractItemView::PositionAtCenter);
+            return;
+        }
+    }
+}
+
+SymbolRef WatchlistScreen::current_symbol() const {
+    if (!table_)
+        return {};
+    const int r = table_->currentRow();
+    if (r < 0 || r >= stocks_.size())
+        return {};
+    return SymbolRef::equity(stocks_[r].symbol);
+}
+
+void WatchlistScreen::publish_selection_to_group() {
+    if (link_group_ == SymbolGroup::None || !table_)
+        return;
+    const int r = table_->currentRow();
+    if (r < 0 || r >= stocks_.size())
+        return;
+    const SymbolRef ref = SymbolRef::equity(stocks_[r].symbol);
+    SymbolContext::instance().set_group_symbol(link_group_, ref, this);
 }
 
 } // namespace fincept::screens

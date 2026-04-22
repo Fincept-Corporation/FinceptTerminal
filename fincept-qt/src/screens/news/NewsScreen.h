@@ -1,4 +1,5 @@
 #pragma once
+#include "core/symbol/IGroupLinked.h"
 #include "screens/IStatefulScreen.h"
 #include "services/news/NewsClusterService.h"
 #include "services/news/NewsMonitorService.h"
@@ -28,8 +29,9 @@ class NewsTickerStrip;
 ///   3. Content area — full-width feed | optional right detail overlay (420px)
 ///                      optional left intel drawer (280px, toggled)
 ///   4. Ticker strip (22px) — scrolling breaking headlines
-class NewsScreen : public QWidget, public IStatefulScreen {
+class NewsScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
     Q_OBJECT
+    Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit NewsScreen(QWidget* parent = nullptr);
 
@@ -37,6 +39,14 @@ class NewsScreen : public QWidget, public IStatefulScreen {
     QVariantMap save_state() const override;
     QString state_key() const override { return "news"; }
     int state_version() const override { return 1; }
+
+    // IGroupLinked — subscribe-only. When the group's active symbol
+    // changes, the news feed's search query becomes that symbol so the
+    // article list filters to mentions.
+    void set_group(SymbolGroup g) override { link_group_ = g; }
+    SymbolGroup group() const override { return link_group_; }
+    void on_group_symbol_changed(const SymbolRef& ref) override;
+    SymbolRef current_symbol() const override { return {}; }
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -134,6 +144,9 @@ class NewsScreen : public QWidget, public IStatefulScreen {
 
     // Active variant for feed filtering
     QString active_variant_ = "FULL";
+
+    // Symbol group link — SymbolGroup::None when unlinked.
+    SymbolGroup link_group_ = SymbolGroup::None;
 };
 
 } // namespace fincept::screens

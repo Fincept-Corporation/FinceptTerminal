@@ -278,7 +278,11 @@ void DashboardScreen::hub_resubscribe_ticker() {
             rebuild_ticker_from_cache();
         });
     }
-    hub.request(topics);
+    // force=true: ticker bar re-subscribe happens on user edits and tab shows —
+    // bypass min_interval so the ticker doesn't sit blank. Subscribe's built-in
+    // cold-start fetch (task 4) already handles the cold case; force is for
+    // the "symbols changed, existing cache is for old symbols" case.
+    hub.request(topics, /*force=*/true);
     hub_active_ = true;
 }
 

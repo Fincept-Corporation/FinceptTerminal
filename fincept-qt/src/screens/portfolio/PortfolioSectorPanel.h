@@ -20,9 +20,8 @@ class PortfolioSectorPanel : public QWidget {
     /// Feed real pairwise Pearson correlation matrix (key = "SYM1|SYM2").
     void set_correlation(const QHash<QString, double>& matrix);
 
-    // Sector utilities — public so callers can map symbols to sectors
+    // Sector utilities — public so callers can map indices to colors
     static QColor sector_color(int index);
-    static QString infer_sector(const QString& symbol);
 
   signals:
     /// Emitted when the user clicks a pie slice. Empty string = clear filter.

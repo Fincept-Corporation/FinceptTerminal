@@ -69,7 +69,7 @@ void SectorHeatmapWidget::refresh_data() {
     QStringList topics;
     for (const auto& sym : sector_symbols())
         topics.append(QStringLiteral("market:quote:") + sym);
-    hub.request(topics);
+    hub.request(topics, /*force=*/true);  // user-triggered: bypass min_interval
 }
 
 

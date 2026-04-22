@@ -6,6 +6,8 @@
 
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QIntValidator>
+#include <QKeyEvent>
 #include <QPainter>
 #include <QStackedWidget>
 #include <QVBoxLayout>
@@ -77,6 +79,44 @@ static QString error_style() {
                    "border: 1px solid #7f1d1d; padding: 6px 8px;"
                    "font-family: 'Consolas','Courier New',monospace;")
         .arg(ui::colors::NEGATIVE());
+}
+
+// Hardens a PIN QLineEdit against input-method leakage, predictive text, and
+// paste-based brute-force scripts. Called on every PIN entry field in this
+// screen.
+static void harden_pin_input(QLineEdit* edit) {
+    if (!edit) return;
+
+    // Tell IMEs / on-screen keyboards this is a 6-digit secret — no prediction,
+    // no suggestions, no clipboard history surfacing.
+    edit->setInputMethodHints(Qt::ImhDigitsOnly | Qt::ImhSensitiveData |
+                              Qt::ImhNoPredictiveText | Qt::ImhNoAutoUppercase |
+                              Qt::ImhHiddenText);
+
+    // Validator rejects non-digits at the keypress level so only 0-9 can be
+    // typed even if the paste block below is ever circumvented.
+    auto* validator = new QIntValidator(0, 999999, edit);
+    edit->setValidator(validator);
+
+    // Disable drag/drop into the field (dropped text would bypass validators).
+    edit->setDragEnabled(false);
+    edit->setAcceptDrops(false);
+
+    // No right-click → Paste, and no clipboard pull via the built-in menu.
+    edit->setContextMenuPolicy(Qt::NoContextMenu);
+
+    // Disable Qt's built-in paste shortcut so Ctrl+V / Shift+Insert cannot
+    // inject a scripted PIN attempt. We still allow manual digit entry only.
+    QObject::connect(edit, &QLineEdit::textChanged, edit, [edit](const QString& txt) {
+        // Belt-and-braces: if anything non-digit somehow lands here, strip it.
+        QString cleaned;
+        cleaned.reserve(txt.size());
+        for (const QChar& c : txt) if (c.isDigit()) cleaned.append(c);
+        if (cleaned != txt) {
+            QSignalBlocker b(edit);
+            edit->setText(cleaned);
+        }
+    });
 }
 
 static QFrame* make_separator() {
@@ -218,6 +258,7 @@ void LockScreen::build_setup_page() {
     setup_pin_input_->setEchoMode(QLineEdit::Password);
     setup_pin_input_->setFixedHeight(44);
     setup_pin_input_->setStyleSheet(pin_input_style());
+    harden_pin_input(setup_pin_input_);
     vl->addWidget(setup_pin_input_);
 
     // Confirm PIN input
@@ -232,6 +273,7 @@ void LockScreen::build_setup_page() {
     setup_confirm_input_->setEchoMode(QLineEdit::Password);
     setup_confirm_input_->setFixedHeight(44);
     setup_confirm_input_->setStyleSheet(pin_input_style());
+    harden_pin_input(setup_confirm_input_);
     vl->addWidget(setup_confirm_input_);
 
     // Error label
@@ -319,6 +361,7 @@ void LockScreen::build_unlock_page() {
     unlock_pin_input_->setEchoMode(QLineEdit::Password);
     unlock_pin_input_->setFixedHeight(48);
     unlock_pin_input_->setStyleSheet(pin_input_style());
+    harden_pin_input(unlock_pin_input_);
     vl->addWidget(unlock_pin_input_);
 
     // Lockout / attempt display
@@ -467,24 +510,10 @@ void LockScreen::show_lockout() {
 // ── Actions ─────────────────────────────────────────────────────────────────
 
 void LockScreen::on_setup_submit() {
-    QString pin = setup_pin_input_->text();
-    QString confirm = setup_confirm_input_->text();
+    const QString pin = setup_pin_input_->text();
+    const QString confirm = setup_confirm_input_->text();
 
-    if (pin.length() != 6) {
-        setup_error_->setText("PIN must be exactly 6 digits");
-        setup_error_->show();
-        return;
-    }
-
-    // Check all digits
-    for (const QChar& c : pin) {
-        if (!c.isDigit()) {
-            setup_error_->setText("PIN must contain only digits");
-            setup_error_->show();
-            return;
-        }
-    }
-
+    // Match check is UI-only — PinManager has no concept of a confirm field.
     if (pin != confirm) {
         setup_error_->setText("PINs do not match");
         setup_error_->show();
@@ -493,35 +522,9 @@ void LockScreen::on_setup_submit() {
         return;
     }
 
-    // Check for trivially weak PINs
-    bool all_same = true;
-    for (int i = 1; i < pin.length(); ++i) {
-        if (pin[i] != pin[0]) {
-            all_same = false;
-            break;
-        }
-    }
-    if (all_same) {
-        setup_error_->setText("PIN is too simple — use unique digits");
-        setup_error_->show();
-        return;
-    }
-
-    // Sequential check (123456, 654321)
-    bool sequential_up = true;
-    bool sequential_down = true;
-    for (int i = 1; i < pin.length(); ++i) {
-        if (pin[i].unicode() != pin[i - 1].unicode() + 1)
-            sequential_up = false;
-        if (pin[i].unicode() != pin[i - 1].unicode() - 1)
-            sequential_down = false;
-    }
-    if (sequential_up || sequential_down) {
-        setup_error_->setText("PIN is too simple — avoid sequential digits");
-        setup_error_->show();
-        return;
-    }
-
+    // All length / digit-only / weak-pattern rejection now lives in
+    // PinManager::set_pin() so future setup flows (QR companion, tests) hit
+    // the same guardrails. Render whatever message PinManager returns.
     auto result = auth::PinManager::instance().set_pin(pin);
     if (result.is_err()) {
         setup_error_->setText(QString::fromStdString(result.error()));

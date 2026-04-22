@@ -992,7 +992,7 @@ void MarketPulsePanel::refresh_data() {
     push(kBreadthSymbols);
     push(kMoverSymbols);
     push(kSnapshotSymbols);
-    hub.request(topics);
+    hub.request(topics, /*force=*/true);  // user-triggered refresh
 }
 
 } // namespace fincept::screens

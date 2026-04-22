@@ -378,6 +378,7 @@ void PythonRunner::start_next() {
         // Initialize incremental output buffers (carry stream callback from the request)
         proc_buffers_[proc] = {};
         proc_buffers_[proc].on_line = req.on_line;
+        proc_buffers_[proc].start_ms = QDateTime::currentMSecsSinceEpoch();
 
         // Helper: drain complete \n-terminated lines from a buffer starting at `offset`,
         // invoke `on_line(line, is_stderr)` per line, advance `offset`. Trailing
@@ -422,6 +423,9 @@ void PythonRunner::start_next() {
                     bufs.stdout_buf.append(proc->readAllStandardOutput());
                     bufs.stderr_buf.append(proc->readAllStandardError());
 
+                    const qint64 duration_ms = bufs.start_ms > 0
+                        ? QDateTime::currentMSecsSinceEpoch() - bufs.start_ms : 0;
+
                     QString stdout_str = QString::fromUtf8(bufs.stdout_buf);
                     QString stderr_str = QString::fromUtf8(bufs.stderr_buf);
 
@@ -450,10 +454,15 @@ void PythonRunner::start_next() {
                     }
 
                     if (!result.success && !is_code) {
-                        LOG_ERROR("Python", QString("Script %1 failed (exit=%2): %3")
+                        LOG_ERROR("Python", QString("Script %1 failed in %2ms (exit=%3): %4")
                                                 .arg(script_name)
+                                                .arg(duration_ms)
                                                 .arg(exit_code)
                                                 .arg(result.error.left(200)));
+                    } else if (!is_code) {
+                        LOG_DEBUG("Python", QString("Script %1 finished in %2ms")
+                                                .arg(script_name)
+                                                .arg(duration_ms));
                     }
 
                     cb(std::move(result));

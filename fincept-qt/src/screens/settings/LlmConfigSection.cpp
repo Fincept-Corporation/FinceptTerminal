@@ -27,8 +27,8 @@ namespace fincept::screens {
 
 static constexpr const char* TAG = "LlmConfigSection";
 
-const QStringList LlmConfigSection::KNOWN_PROVIDERS = {"openai",     "anthropic", "gemini", "groq",   "deepseek",
-                                                       "openrouter", "minimax",   "ollama", "fincept"};
+const QStringList LlmConfigSection::KNOWN_PROVIDERS = {"openai",  "anthropic", "gemini",   "groq",  "deepseek",
+                                                       "openrouter", "minimax", "kimi", "ollama", "xai",   "fincept"};
 
 QString LlmConfigSection::default_base_url(const QString& provider) {
     const QString p = provider.toLower();
@@ -46,8 +46,12 @@ QString LlmConfigSection::default_base_url(const QString& provider) {
         return {};
     if (p == "minimax")
         return "https://api.minimax.io/v1";
+    if (p == "kimi")
+        return {}; // defaults to https://api.moonshot.ai
     if (p == "ollama")
         return "http://localhost:11434";
+    if (p == "xai")
+        return {};
     if (p == "fincept")
         return {}; // endpoints are hardcoded in LlmService, no base_url needed
     return {};
@@ -70,8 +74,25 @@ QStringList LlmConfigSection::fallback_models(const QString& provider) {
         return {"openai/gpt-4o", "anthropic/claude-sonnet-4-5", "google/gemini-2.5-flash"};
     if (p == "minimax")
         return {"MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed"};
+    if (p == "kimi")
+        return {"moonshot-v1-auto",
+                "moonshot-v1-8k",
+                "moonshot-v1-32k",
+                "moonshot-v1-128k",
+                "kimi-k2.5",
+                "kimi-k2.6",
+                "kimi-k2-thinking",
+                "kimi-k2-thinking-turbo",
+                "kimi-k2-0905-preview",
+                "kimi-k2-turbo-preview",
+                "kimi-k2-0711-preview",
+                "moonshot-v1-8k-vision-preview",
+                "moonshot-v1-32k-vision-preview",
+                "moonshot-v1-128k-vision-preview"};
     if (p == "ollama")
-        return {"llama3:8b", "mistral:7b", "codellama:7b"};
+        return {"llama3.1:8b", "qwen2.5:7b", "mistral:7b"};
+    if (p == "xai")
+        return {"grok-4-latest", "grok-4", "grok-3", "grok-3-mini"};
     if (p == "fincept")
         return {"MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed"};
     return {};
@@ -523,16 +544,26 @@ QWidget* LlmConfigSection::build_global_panel() {
 // ============================================================================
 
 void LlmConfigSection::load_providers() {
+    // Remember the currently-selected provider so a reload (e.g. after Save)
+    // doesn't snap the user back to the first row. Fall back to the active
+    // provider on first load, then row 0 if nothing else applies.
+    QString prior_selection;
+    if (provider_list_->currentItem())
+        prior_selection = provider_list_->currentItem()->data(Qt::UserRole).toString();
+
     provider_list_->blockSignals(true);
     provider_list_->clear();
 
+    QString active_provider;
     auto result = LlmConfigRepository::instance().list_providers();
     if (result.is_ok()) {
         for (const auto& p : result.value()) {
             bool is_fincept = (p.provider.toLower() == "fincept");
             QString display = is_fincept ? "Fincept LLM" : p.provider;
-            if (p.is_active)
+            if (p.is_active) {
                 display += "  ✓";
+                active_provider = p.provider;
+            }
             // Show model tag only for non-fincept providers
             if (!is_fincept && !p.model.isEmpty())
                 display += "  [" + p.model + "]";
@@ -558,8 +589,24 @@ void LlmConfigSection::load_providers() {
     }
 
     delete_btn_->setEnabled(false);
-    if (provider_list_->count() > 0)
-        provider_list_->setCurrentRow(0);
+
+    // Selection precedence: prior selection (preserves UX across Save reloads)
+    // > active provider (so first load lands on what the user is actually using)
+    // > row 0 (fallback).
+    int target_row = -1;
+    const QString wanted = !prior_selection.isEmpty() ? prior_selection : active_provider;
+    if (!wanted.isEmpty()) {
+        for (int i = 0; i < provider_list_->count(); ++i) {
+            if (provider_list_->item(i)->data(Qt::UserRole).toString() == wanted) {
+                target_row = i;
+                break;
+            }
+        }
+    }
+    if (target_row < 0 && provider_list_->count() > 0)
+        target_row = 0;
+    if (target_row >= 0)
+        provider_list_->setCurrentRow(target_row);
 }
 
 void LlmConfigSection::populate_form(const QString& provider) {
@@ -701,16 +748,36 @@ void LlmConfigSection::on_save_provider() {
     auto r2 = LlmConfigRepository::instance().save_provider(cfg);
     if (r2.is_err()) {
         show_status("Failed to save: " + QString::fromStdString(r2.error()), true);
+        LOG_ERROR(TAG, "save_provider failed for " + provider + ": " + QString::fromStdString(r2.error()));
         return;
     }
-    LlmConfigRepository::instance().set_active(provider);
+    auto r3 = LlmConfigRepository::instance().set_active(provider);
+    if (r3.is_err()) {
+        show_status("Failed to activate: " + QString::fromStdString(r3.error()), true);
+        LOG_ERROR(TAG, "set_active failed for " + provider + ": " + QString::fromStdString(r3.error()));
+        return;
+    }
+
+    // Read-after-write verification — catches silent failures where the INSERT
+    // reports success but the row never lands (e.g. autocommit off, FK rollback,
+    // wrong DB path). Without this the old code would say "Saved" and the user
+    // only finds out on restart.
+    auto verify = LlmConfigRepository::instance().get_active_provider();
+    if (!verify.is_ok() || verify.value().provider.toLower() != provider) {
+        QString detail = verify.is_ok()
+                             ? QString("active is '%1' not '%2'").arg(verify.value().provider, provider)
+                             : QString::fromStdString(verify.error());
+        show_status("Save verification failed: " + detail, true);
+        LOG_ERROR(TAG, "Save verification failed — " + detail);
+        return;
+    }
 
     show_status("Saved and set as active provider", false);
     load_providers();
     ai_chat::LlmService::instance().reload_config();
     emit config_changed();
 
-    LOG_INFO(TAG, "LLM provider saved: " + provider + " / " + cfg.model);
+    LOG_INFO(TAG, "LLM provider saved and verified: " + provider + " / " + cfg.model);
 }
 
 void LlmConfigSection::on_delete_provider() {

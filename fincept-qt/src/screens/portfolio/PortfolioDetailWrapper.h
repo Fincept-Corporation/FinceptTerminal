@@ -25,6 +25,7 @@ class PortfolioDetailWrapper : public QWidget {
 
   signals:
     void back_requested();
+    void sector_selected(QString sector); // forwarded from AnalyticsSectorsView
 
   private:
     void build_ui();

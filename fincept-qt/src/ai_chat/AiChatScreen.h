@@ -11,7 +11,6 @@
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
-#include <QTextEdit>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -92,7 +91,7 @@ class AiChatScreen : public QWidget, public IStatefulScreen {
     mutable QMutex history_mutex_;
     std::vector<ai_chat::ConversationMessage> history_;
     bool streaming_ = false;
-    QPointer<QTextEdit> streaming_bubble_;
+    QPointer<QLabel> streaming_bubble_;
     int total_tokens_ = 0;
     int total_messages_ = 0;
 
@@ -111,7 +110,7 @@ class AiChatScreen : public QWidget, public IStatefulScreen {
     void load_messages(const QString& session_id);
     void create_new_session();
     void add_message_bubble(const QString& role, const QString& content, const QString& timestamp = {});
-    QTextEdit* add_streaming_bubble();
+    QLabel* add_streaming_bubble();
     void clear_messages();
     void scroll_to_bottom();
     void set_input_enabled(bool enabled);

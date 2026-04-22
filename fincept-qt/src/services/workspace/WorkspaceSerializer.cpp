@@ -82,6 +82,7 @@ QJsonDocument WorkspaceSerializer::to_json(const WorkspaceDef& ws) {
     }
     root["screen_states"] = QJsonValue(states);
     root["window_geometry"] = ws.window_geometry_base64;
+    root["symbol_context"] = QJsonValue(ws.symbol_context);
 
     return QJsonDocument(root);
 }
@@ -160,6 +161,7 @@ Result<WorkspaceDef> WorkspaceSerializer::from_json(const QJsonDocument& doc) {
     }
 
     ws.window_geometry_base64 = root["window_geometry"].toString();
+    ws.symbol_context = root["symbol_context"].toObject();
 
     return Result<WorkspaceDef>::ok(std::move(ws));
 }

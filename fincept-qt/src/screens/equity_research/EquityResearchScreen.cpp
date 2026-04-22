@@ -3,6 +3,8 @@
 
 #include "core/events/EventBus.h"
 #include "core/session/ScreenStateManager.h"
+#include "core/symbol/SymbolContext.h"
+#include "core/symbol/SymbolDragSource.h"
 #include "screens/equity_research/EquityAnalysisTab.h"
 #include "screens/equity_research/EquityFinancialsTab.h"
 #include "screens/equity_research/EquityNewsTab.h"
@@ -46,6 +48,14 @@ EquityResearchScreen::EquityResearchScreen(QWidget* parent) : QWidget(parent) {
 
     // Default symbol
     load_symbol("AAPL");
+
+    // Drop any dragged symbol onto the screen to jump the research view
+    // to that ticker. Uses the existing load_symbol path so caching,
+    // signals, and the EventBus publish stay consistent.
+    symbol_dnd::installDropFilter(this, [this](const SymbolRef& ref, SymbolGroup) {
+        if (ref.is_valid())
+            load_symbol(ref.symbol);
+    });
 }
 
 void EquityResearchScreen::showEvent(QShowEvent* e) {
@@ -125,6 +135,14 @@ QWidget* EquityResearchScreen::build_title_bar() {
 
     symbol_label_ = new QLabel;
     symbol_label_->setStyleSheet(QString("color:%1; font-size:14px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY()));
+    symbol_label_->setCursor(Qt::OpenHandCursor);
+    symbol_label_->setToolTip("Drag to broadcast this symbol to any panel");
+    // Drag-out: pull the current symbol from the live member so the filter
+    // always ships the most recent ticker, not whatever was loaded at build.
+    symbol_dnd::installDragSource(
+        symbol_label_,
+        [this]() { return current_symbol(); },
+        link_group_);
     hl->addWidget(symbol_label_);
 
     hl->addStretch();
@@ -239,6 +257,25 @@ void EquityResearchScreen::load_symbol(const QString& symbol) {
 
     // Trigger quote + info + historical
     services::equity::EquityResearchService::instance().load_symbol(symbol);
+
+    // Publish to linked group so Watchlist/EquityTrading/News/etc. follow.
+    if (link_group_ != SymbolGroup::None) {
+        SymbolContext::instance().set_group_symbol(
+            link_group_, SymbolRef::equity(symbol), this);
+    }
+}
+
+// ── IGroupLinked ─────────────────────────────────────────────────────────────
+
+void EquityResearchScreen::on_group_symbol_changed(const SymbolRef& ref) {
+    if (ref.is_valid())
+        load_symbol(ref.symbol);
+}
+
+SymbolRef EquityResearchScreen::current_symbol() const {
+    if (current_symbol_.isEmpty())
+        return {};
+    return SymbolRef::equity(current_symbol_);
 }
 
 void EquityResearchScreen::update_quote_bar(const services::equity::QuoteData& q) {

@@ -57,15 +57,23 @@ void PortfolioBlotter::build_ui() {
                                   "QTableWidget::item { padding:5px 8px; border-bottom:1px solid %4; }"
                                   "QTableWidget::item:selected { background:rgba(217,119,6,0.10); color:%6; }"
                                   "QTableWidget::item:hover { background:%7; }"
-                                  "QHeaderView::section { background:%8; color:%9; border:none;"
-                                  "  border-bottom:2px solid %10; border-right:1px solid %4; padding:5px 8px;"
-                                  "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
                                   "QScrollBar:vertical { width:5px; background:%1; }"
                                   "QScrollBar::handle:vertical { background:%4; min-height:20px; }")
                               .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::fonts::DATA_FAMILY,
                                    ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(), ui::colors::AMBER(),
-                                   ui::colors::BG_HOVER(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY())
-                              .arg(ui::colors::AMBER()));
+                                   ui::colors::BG_HOVER()));
+
+    // Apply the header rule directly on the header widget — the global qApp
+    // stylesheet (ThemeManager.cpp) defines QHeaderView::section with
+    // text_dim color, and Qt resolves header sub-controls from the header's
+    // OWN stylesheet, not the parent QTableWidget's. Setting it on the table
+    // is silently overridden, which is why headers stayed dim grey.
+    hdr->setStyleSheet(QString("QHeaderView::section { background:%1; color:%2; border:none;"
+                               "  border-bottom:2px solid %3; border-right:1px solid %4;"
+                               "  padding:5px 8px; font-size:10px; font-weight:700;"
+                               "  letter-spacing:0.5px; }")
+                           .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(),
+                                ui::colors::AMBER(), ui::colors::BORDER_DIM()));
 
     connect(hdr, &QHeaderView::sectionClicked, this, &PortfolioBlotter::on_header_clicked);
     connect(table_, &QTableWidget::cellClicked, this, &PortfolioBlotter::on_row_clicked);
@@ -142,7 +150,9 @@ void PortfolioBlotter::hub_resubscribe_sparklines() {
             repaint_sparkline_cells();
         });
     }
-    hub.request(topics);
+    // force=true: holdings set changes on portfolio edits; bypass the sparkline
+    // min_interval so the row reflects the new symbol without waiting 30s.
+    hub.request(topics, /*force=*/true);
     hub_active_ = true;
 }
 
@@ -271,8 +281,10 @@ void PortfolioBlotter::populate_table() {
                             Qt::Alignment align = Qt::AlignRight | Qt::AlignVCenter) {
             auto* item = new QTableWidgetItem(text);
             item->setTextAlignment(align);
-            if (color)
-                item->setForeground(QColor(color));
+            // QTableWidgetItem ignores QTableWidget's stylesheet `color` and
+            // falls back to QPalette::Text (which renders as black on Windows).
+            // Always set an explicit foreground.
+            item->setForeground(QColor(color ? color : ui::colors::TEXT_PRIMARY()));
             table_->setItem(r, col, item);
         };
 
@@ -431,17 +443,20 @@ void PortfolioBlotter::refresh_theme() {
                                   "QTableWidget::item { padding:5px 8px; border-bottom:1px solid %4; }"
                                   "QTableWidget::item:selected { background:rgba(217,119,6,0.10); color:%6; }"
                                   "QTableWidget::item:hover { background:%7; }"
-                                  "QHeaderView::section { background:%8; color:%9; border:none;"
-                                  "  border-bottom:2px solid %10; border-right:1px solid %4; padding:5px 8px;"
-                                  "  font-size:" +
-                                  hsz +
-                                  "px; font-weight:700; letter-spacing:0.5px; }"
                                   "QScrollBar:vertical { width:5px; background:%1; }"
                                   "QScrollBar::handle:vertical { background:%4; min-height:20px; }")
                               .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::fonts::DATA_FAMILY,
                                    ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(), ui::colors::AMBER(),
-                                   ui::colors::BG_HOVER(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY())
-                              .arg(ui::colors::AMBER()));
+                                   ui::colors::BG_HOVER()));
+    // See note in build constructor — header rule must live on the header
+    // widget itself or the global qApp stylesheet wins.
+    table_->horizontalHeader()->setStyleSheet(
+        QString("QHeaderView::section { background:%1; color:%2; border:none;"
+                "  border-bottom:2px solid %3; border-right:1px solid %4;"
+                "  padding:5px 8px; font-size:" + hsz +
+                "px; font-weight:700; letter-spacing:0.5px; }")
+            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(),
+                 ui::colors::AMBER(), ui::colors::BORDER_DIM()));
     populate_table();
 }
 

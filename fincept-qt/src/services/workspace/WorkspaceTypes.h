@@ -50,6 +50,11 @@ struct WorkspaceDef {
 
     // Window geometry (base64 of QWidget::saveGeometry())
     QString window_geometry_base64;
+
+    // SymbolContext snapshot — per-group active security assignments.
+    // Opaque blob authored by SymbolContext::to_json(), consumed by
+    // SymbolContext::from_json() on workspace load. Empty on first run.
+    QJsonObject symbol_context;
 };
 
 // ── Lightweight summary for listing dialogs ───────────────────────────────────

@@ -170,12 +170,13 @@ void MarketSentimentWidget::hideEvent(QHideEvent* e) {
 }
 
 void MarketSentimentWidget::refresh_data() {
+    // User-triggered refresh — force past min_interval; producer rate limit still paces upstream.
     auto& hub = datahub::DataHub::instance();
     QStringList topics;
     topics.reserve(kSentimentSymbols.size());
     for (const auto& sym : kSentimentSymbols)
         topics.append(QStringLiteral("market:quote:") + sym);
-    hub.request(topics);
+    hub.request(topics, /*force=*/true);
 }
 
 

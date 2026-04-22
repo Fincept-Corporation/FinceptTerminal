@@ -1,14 +1,26 @@
 #include "app/DockScreenRouter.h"
 
+#include "auth/InactivityGuard.h"
+#include "core/components/PopularityTracker.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/session/SessionManager.h"
+#include "core/symbol/IGroupLinked.h"
+#include "core/symbol/SymbolContext.h"
+#include "core/symbol/SymbolRef.h"
 #include "screens/IStatefulScreen.h"
+#include "ui/widgets/GroupBadge.h"
 
+#include <QApplication>
+#include <QClipboard>
+#include <QContextMenuEvent>
 #include <QEvent>
+#include <QHBoxLayout>
+#include <QInputDialog>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QVBoxLayout>
 
 #include <DockAreaWidget.h>
@@ -74,6 +86,101 @@ QString DockScreenRouter::title_for_id(const QString& id) {
 }
 
 DockScreenRouter::DockScreenRouter(ads::CDockManager* manager, QObject* parent) : QObject(parent), manager_(manager) {
+    // Route SymbolContext broadcasts to the matching IGroupLinked screens.
+    // One central listener per router — cheaper and easier to reason about
+    // than per-screen connections, and it gives us a single filter point
+    // for source-suppression (skip re-delivery to the publisher).
+    connect(&SymbolContext::instance(), &SymbolContext::group_symbol_changed, this,
+            &DockScreenRouter::on_group_symbol_changed_external);
+}
+
+void DockScreenRouter::on_group_symbol_changed_external(SymbolGroup g, const SymbolRef& ref, QObject* source) {
+    for (auto it = group_linked_.begin(); it != group_linked_.end(); ++it) {
+        IGroupLinked* linked = it.value();
+        if (!linked || linked->group() != g)
+            continue;
+        auto* as_obj = dynamic_cast<QObject*>(linked);
+        if (as_obj && as_obj == source)
+            continue; // skip feedback to the publisher
+        linked->on_group_symbol_changed(ref);
+    }
+}
+
+QWidget* DockScreenRouter::wrap_with_group_badge(const QString& id, QWidget* screen) {
+    if (!screen)
+        return screen;
+    auto* linked = dynamic_cast<IGroupLinked*>(screen);
+    if (!linked)
+        return screen; // screen doesn't opt in — no wrapping, no overhead
+
+    // Container with a narrow strip on top holding the badge. The badge is
+    // parented to the strip so deleting the screen cascades-deletes it.
+    auto* container = new QWidget;
+    container->setObjectName("group_linked_container__" + id);
+    auto* v = new QVBoxLayout(container);
+    v->setContentsMargins(0, 0, 0, 0);
+    v->setSpacing(0);
+
+    auto* strip = new QWidget(container);
+    strip->setObjectName("group_badge_strip");
+    strip->setFixedHeight(22);
+    auto* h = new QHBoxLayout(strip);
+    h->setContentsMargins(6, 2, 6, 2);
+    h->setSpacing(6);
+
+    auto* badge = new ui::GroupBadge(strip);
+    badge->set_group_silent(linked->group());
+    h->addWidget(badge);
+
+    auto* label = new QLabel(strip);
+    label->setObjectName("group_badge_symbol");
+    label->setStyleSheet("color:#9ca3af;font-size:11px;");
+    const SymbolRef cur = SymbolContext::instance().group_symbol(linked->group());
+    if (cur.is_valid())
+        label->setText(cur.display());
+    h->addWidget(label);
+    h->addStretch(1);
+
+    v->addWidget(strip);
+    v->addWidget(screen, 1);
+
+    // Keep the strip label in sync with the group's active symbol.
+    auto sync_label = [label, linked]() {
+        const SymbolRef cur = SymbolContext::instance().group_symbol(linked->group());
+        label->setText(cur.is_valid() ? cur.display() : QString());
+    };
+
+    connect(badge, &ui::GroupBadge::group_change_requested, this,
+            [this, id, linked, badge, sync_label](SymbolGroup g) {
+                linked->set_group(g);
+                badge->set_group_silent(g);
+                sync_label();
+                // If the new group already has an active symbol, push it into
+                // the newly-linked screen immediately. If the screen itself
+                // has a current symbol and the group has none, seed the group
+                // from the screen.
+                const SymbolRef group_sym = SymbolContext::instance().group_symbol(g);
+                if (group_sym.is_valid()) {
+                    linked->on_group_symbol_changed(group_sym);
+                } else if (g != SymbolGroup::None) {
+                    const SymbolRef own = linked->current_symbol();
+                    if (own.is_valid())
+                        SymbolContext::instance().set_group_symbol(g, own,
+                                                                  dynamic_cast<QObject*>(linked));
+                }
+            });
+
+    // Re-sync the label when someone *else* publishes to the group this panel
+    // is linked to.
+    connect(&SymbolContext::instance(), &SymbolContext::group_symbol_changed, label,
+            [linked, sync_label](SymbolGroup g, const SymbolRef&, QObject*) {
+                if (linked->group() == g)
+                    sync_label();
+            });
+
+    group_linked_[id] = linked;
+    group_badges_[id] = badge;
+    return container;
 }
 
 void DockScreenRouter::register_screen(const QString& id, QWidget* screen) {
@@ -88,8 +195,22 @@ void DockScreenRouter::register_factory(const QString& id, ScreenFactory factory
 }
 
 void DockScreenRouter::navigate(const QString& id, bool exclusive) {
+    // Hard refuse while the lock screen is showing — signals/timers/keyboard
+    // shortcuts that would otherwise mutate panel state behind the PIN gate
+    // must be no-ops. MainWindow also disables the dock_manager_ widget tree
+    // for keyboard/focus safety; this check catches programmatic callers.
+    if (auth::InactivityGuard::instance().is_terminal_locked()) {
+        LOG_DEBUG("DockRouter", QString("navigate('%1') suppressed — terminal locked").arg(id));
+        return;
+    }
+
     LOG_INFO("DockRouter",
              QString(">>> navigate('%1', exclusive=%2) panel_count=%3").arg(id).arg(exclusive).arg(panel_count_));
+    // Bump popularity so the Component Browser surfaces frequently-used
+    // panels at the top. Safe for unknown ids — PopularityTracker no-ops
+    // on failure and we still fall into the unknown-screen branch below.
+    PopularityTracker::instance().increment(id);
+
     auto* dw = find_dock_widget(id);
 
     bool needs_add = false;
@@ -423,6 +544,268 @@ ads::CDockWidget* DockScreenRouter::find_dock_widget(const QString& id) const {
     return dock_widgets_.value(id, nullptr);
 }
 
+void DockScreenRouter::cycle_focused_panel(bool forward) {
+    if (!manager_)
+        return;
+    // Build an ordered list of currently-visible dock widgets — we cycle
+    // through those, not the entire registration catalogue.
+    QList<ads::CDockWidget*> visible;
+    visible.reserve(dock_widgets_.size());
+    for (auto it = dock_widgets_.cbegin(); it != dock_widgets_.cend(); ++it) {
+        ads::CDockWidget* dw = it.value();
+        if (dw && !dw->isClosed())
+            visible.append(dw);
+    }
+    if (visible.size() < 2)
+        return;
+
+    // Find the currently-focused dock widget. ADS exposes focusedDockWidget()
+    // but it may be null if the focused QWidget isn't inside any dock —
+    // fall back to the dock containing current_id_.
+    ads::CDockWidget* current = manager_->focusedDockWidget();
+    if (!current)
+        current = dock_widgets_.value(current_id_, nullptr);
+
+    int idx = visible.indexOf(current);
+    if (idx < 0)
+        idx = 0;
+    else
+        idx = (idx + (forward ? 1 : -1) + visible.size()) % visible.size();
+
+    ads::CDockWidget* next = visible.at(idx);
+    next->raise();
+    next->setAsCurrentTab();
+    if (auto* w = next->widget())
+        w->setFocus(Qt::ShortcutFocusReason);
+    current_id_ = next->objectName();
+    emit screen_changed(current_id_);
+}
+
+ads::CDockWidget* DockScreenRouter::duplicate_panel(const QString& id) {
+    if (!manager_)
+        return nullptr;
+
+    // Strip any existing #dup<N> suffix so duplicates-of-duplicates all derive
+    // from the same original factory — prevents unbounded id drift.
+    QString base = id;
+    const int hash = id.indexOf('#');
+    if (hash > 0)
+        base = id.left(hash);
+
+    // We need a factory to produce a fresh widget — the eagerly-registered
+    // path gives one instance that we can't clone safely.
+    auto fit = factories_.find(base);
+    // Special case: the original factory was consumed on first materialise,
+    // so factories_ may no longer contain `base`. In that case reconstruct
+    // from a registered rebuild helper (we don't have one yet) — fail with a
+    // warning so the user sees a concrete reason rather than a silent no-op.
+    if (fit == factories_.end()) {
+        // Only eager (one-instance) screens reach here. Duplication is not
+        // supported for them in this phase.
+        LOG_WARN("DockRouter",
+                 QString("duplicate_panel('%1'): factory not available — duplication requires "
+                         "register_factory() and the original factory is consumed on first materialise. "
+                         "Re-register a factory before duplication to support this path.").arg(base));
+        return nullptr;
+    }
+
+    // Allocate a unique suffixed id. Scan existing ids to avoid collisions.
+    int n = 2;
+    QString dup_id;
+    do {
+        dup_id = QString("%1#dup%2").arg(base).arg(n++);
+    } while (dock_widgets_.contains(dup_id) || factories_.contains(dup_id));
+
+    // Build the duplicate via a fresh factory copy so navigate() can
+    // materialize it on-demand through the existing path. Re-install the
+    // base factory too so further duplicates remain possible.
+    ScreenFactory factory_copy = fit.value();
+    factories_[dup_id] = factory_copy;
+    factories_[base]   = factory_copy;
+
+    // Title: "<Original Title> 2", "<Original Title> 3", ...
+    const int dup_index = n - 1;
+    // Populate title for the synthetic id so the tab label reads cleanly.
+    // title_for_id() is static — we can't extend it at runtime, so we store
+    // the custom title via the existing user-rename path.
+    save_tab_title(dup_id, QString("%1 %2").arg(title_for_id(base)).arg(dup_index));
+
+    // Create the dock widget. This path also wraps the widget in a
+    // GroupBadge container if the source screen implements IGroupLinked,
+    // materialises via the factory, and adds the dock widget to the manager.
+    auto* dw = create_dock_widget(dup_id);
+    if (!dw) {
+        LOG_WARN("DockRouter", QString("duplicate_panel: create_dock_widget failed for %1").arg(dup_id));
+        return nullptr;
+    }
+    materialize_screen(dup_id);
+
+    // Copy IStatefulScreen state from source → duplicate so the user doesn't
+    // re-type the ticker etc. Source is the inner screen widget, not the
+    // group-badge container — screens_ always stores the inner widget.
+    auto* src_screen = screens_.value(base, nullptr);
+    auto* dup_screen = screens_.value(dup_id, nullptr);
+    if (src_screen && dup_screen) {
+        auto* src_stateful = dynamic_cast<screens::IStatefulScreen*>(src_screen);
+        auto* dup_stateful = dynamic_cast<screens::IStatefulScreen*>(dup_screen);
+        if (src_stateful && dup_stateful)
+            dup_stateful->restore_state(src_stateful->save_state());
+    }
+
+    // Place the duplicate next to the original as a tabbed sibling so the
+    // user sees it immediately without manually docking.
+    auto* src_dw = dock_widgets_.value(base, nullptr);
+    if (src_dw && src_dw->dockAreaWidget()) {
+        manager_->addDockWidgetTabToArea(dw, src_dw->dockAreaWidget());
+    } else {
+        manager_->addDockWidget(ads::CenterDockWidgetArea, dw);
+    }
+    dw->setAsCurrentTab();
+    dw->raise();
+
+    LOG_INFO("DockRouter", QString("Duplicated '%1' → '%2'").arg(base, dup_id));
+    return dw;
+}
+
+// ── Phase 12 — tab right-click context menu ──────────────────────────────────
+
+void DockScreenRouter::show_tab_context_menu(const QString& id, const QPoint& global_pos) {
+    auto* dw = dock_widgets_.value(id, nullptr);
+    if (!dw)
+        return;
+
+    QMenu menu;
+    menu.setStyleSheet(
+        "QMenu{background:#111827;color:#e5e7eb;border:1px solid #374151;padding:4px 0;}"
+        "QMenu::item{padding:5px 24px 5px 12px;}"
+        "QMenu::item:selected{background:#1f2937;color:#d97706;}"
+        "QMenu::item:disabled{color:#6b7280;}"
+        "QMenu::separator{background:#374151;height:1px;margin:4px 8px;}");
+
+    // Rename — reuses the inline editor code path. Simpler to pop a modal
+    // prompt here; the inline editor requires the label's geometry which is
+    // awkward to invoke from a menu click.
+    auto* act_rename = menu.addAction("Rename Tab…");
+    connect(act_rename, &QAction::triggered, this, [this, id, dw]() {
+        bool ok = false;
+        const QString name = QInputDialog::getText(nullptr, "Rename Tab", "New name:",
+                                                   QLineEdit::Normal, dw->windowTitle(), &ok);
+        if (ok && !name.trimmed().isEmpty()) {
+            dw->setWindowTitle(name.trimmed());
+            save_tab_title(id, name.trimmed());
+        }
+    });
+
+    // Duplicate — only enabled for factory-registered screens. We can't tell
+    // from here reliably without re-running the factory lookup, so we flag the
+    // item as enabled and let duplicate_panel no-op with a log warning on
+    // unsupported screens.
+    auto* act_dup = menu.addAction("Duplicate Panel");
+    connect(act_dup, &QAction::triggered, this, [this, id]() { duplicate_panel(id); });
+
+    menu.addSeparator();
+
+    // Float or re-dock. ADS's setFloating() has no matching setDocked(); to
+    // re-dock a floating widget we close its view and re-open it, which
+    // causes ADS to re-attach it to the main container.
+    const bool floating = dw->isFloating();
+    auto* act_float = menu.addAction(floating ? "Re-dock Panel" : "Float Panel");
+    connect(act_float, &QAction::triggered, this, [this, dw, floating]() {
+        if (floating) {
+            dw->toggleView(false);
+            dw->toggleView(true);
+            if (manager_ && manager_->dockAreaCount() == 0)
+                manager_->addDockWidget(ads::CenterDockWidgetArea, dw);
+        } else {
+            dw->setFloating();
+        }
+    });
+
+    // Always-on-top — only meaningful when the dock is a top-level floating
+    // window. For docked tabs, the flag lives on the MainWindow; we don't
+    // expose it here to avoid confusion.
+    if (floating) {
+        if (auto* fc = dw->floatingDockContainer()) {
+            const bool on = fc->windowFlags().testFlag(Qt::WindowStaysOnTopHint);
+            auto* act_top = menu.addAction("Always on Top");
+            act_top->setCheckable(true);
+            act_top->setChecked(on);
+            connect(act_top, &QAction::triggered, this, [fc, on]() {
+                Qt::WindowFlags f = fc->windowFlags();
+                if (on)
+                    f &= ~Qt::WindowStaysOnTopHint;
+                else
+                    f |= Qt::WindowStaysOnTopHint;
+                fc->setWindowFlags(f);
+                fc->show();
+            });
+        }
+    }
+
+    menu.addSeparator();
+
+    // Link to Group (Phase 1) — only for screens implementing IGroupLinked.
+    // The inner screen is in screens_[id]; the container wrapping happens at
+    // dw->widget(), so cast from the stored screen to test the interface.
+    if (auto* screen = screens_.value(id, nullptr)) {
+        if (auto* linked = dynamic_cast<IGroupLinked*>(screen)) {
+            auto* group_menu = menu.addMenu("Link to Group");
+            group_menu->setStyleSheet(menu.styleSheet());
+            const SymbolGroup current = linked->group();
+
+            auto* unlink = group_menu->addAction("(None)");
+            unlink->setCheckable(true);
+            unlink->setChecked(current == SymbolGroup::None);
+            connect(unlink, &QAction::triggered, this, [this, id]() {
+                if (auto* s = screens_.value(id, nullptr)) {
+                    if (auto* l = dynamic_cast<IGroupLinked*>(s))
+                        l->set_group(SymbolGroup::None);
+                }
+                QPointer<ui::GroupBadge> badge = group_badges_.value(id);
+                if (badge)
+                    badge->set_group_silent(SymbolGroup::None);
+            });
+            group_menu->addSeparator();
+
+            for (SymbolGroup g : all_symbol_groups()) {
+                auto* a = group_menu->addAction(QString("Group %1").arg(symbol_group_letter(g)));
+                a->setCheckable(true);
+                a->setChecked(g == current);
+                connect(a, &QAction::triggered, this, [this, id, g]() {
+                    auto* s = screens_.value(id, nullptr);
+                    auto* l = s ? dynamic_cast<IGroupLinked*>(s) : nullptr;
+                    if (!l) return;
+                    l->set_group(g);
+                    QPointer<ui::GroupBadge> badge = group_badges_.value(id);
+                    if (badge)
+                        badge->set_group_silent(g);
+                    // Seed the newly-linked group with the screen's current
+                    // symbol (if any) so the other group panels follow it.
+                    const SymbolRef own = l->current_symbol();
+                    if (own.is_valid())
+                        SymbolContext::instance().set_group_symbol(
+                            g, own, dynamic_cast<QObject*>(l));
+                });
+            }
+        }
+    }
+
+    menu.addSeparator();
+
+    // Copy tab title to clipboard — small but handy for sharing a panel id
+    // over chat / for scripting.
+    auto* act_copy = menu.addAction("Copy Tab Title");
+    connect(act_copy, &QAction::triggered, this, [dw]() {
+        QApplication::clipboard()->setText(dw->windowTitle());
+    });
+
+    // Close tab.
+    auto* act_close = menu.addAction("Close Tab");
+    connect(act_close, &QAction::triggered, this, [dw]() { dw->toggleView(false); });
+
+    menu.exec(global_pos);
+}
+
 QStringList DockScreenRouter::all_screen_ids() const {
     QStringList ids;
     ids.reserve(dock_widgets_.size() + factories_.size());
@@ -436,6 +819,18 @@ QStringList DockScreenRouter::all_screen_ids() const {
 }
 
 bool DockScreenRouter::eventFilter(QObject* obj, QEvent* event) {
+    // Phase 12 — right-click context menu on any installed tab/label. Handled
+    // first so we don't gate on QLabel-only below (the tab widget itself is
+    // also a watched object now).
+    if (event->type() == QEvent::ContextMenu) {
+        const QString id = obj->property("dock_id").toString();
+        if (!id.isEmpty() && dock_widgets_.contains(id)) {
+            auto* cm = static_cast<QContextMenuEvent*>(event);
+            show_tab_context_menu(id, cm->globalPos());
+            return true;
+        }
+    }
+
     if (event->type() != QEvent::MouseButtonDblClick)
         return QObject::eventFilter(obj, event);
 
@@ -523,7 +918,7 @@ ads::CDockWidget* DockScreenRouter::create_dock_widget(const QString& id) {
     // in on first navigation via materialize_screen().
     if (screens_.contains(id)) {
         screens_[id]->setMinimumWidth(0);
-        dw->setWidget(screens_[id]);
+        dw->setWidget(wrap_with_group_badge(id, screens_[id]));
     } else {
         auto* placeholder = new QWidget;
         auto* lbl = new QLabel(title_for_id(id));
@@ -537,7 +932,14 @@ ads::CDockWidget* DockScreenRouter::create_dock_widget(const QString& id) {
     // Intercept double-click on the title label inside CDockWidgetTab to allow
     // inline rename. We use the label (objectName "dockWidgetTabLabel"), NOT the
     // tab frame — ADS already uses tab frame double-click to undock/float.
+    //
+    // Phase 12 — also install the filter on the tab widget itself so right-click
+    // anywhere on the tab (including the icon / padding) opens the context
+    // menu. The event filter distinguishes by event type, not watched object.
     if (auto* tab = dw->tabWidget()) {
+        tab->installEventFilter(this);
+        tab->setProperty("dock_id", id);
+        tab->setContextMenuPolicy(Qt::DefaultContextMenu);
         if (auto* lbl = tab->findChild<QLabel*>("dockWidgetTabLabel")) {
             lbl->installEventFilter(this);
             lbl->setProperty("dock_id", id);
@@ -600,7 +1002,7 @@ void DockScreenRouter::materialize_screen(const QString& id) {
         return;
 
     QWidget* old = dw->widget();
-    dw->setWidget(screen);
+    dw->setWidget(wrap_with_group_badge(id, screen));
     if (old) {
         old->setParent(nullptr);
         old->deleteLater();

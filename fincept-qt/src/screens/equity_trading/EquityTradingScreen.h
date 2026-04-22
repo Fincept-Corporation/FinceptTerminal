@@ -3,6 +3,7 @@
 // Supports multiple broker accounts simultaneously via DataStreamManager.
 // Each account has its own data stream (WS/polling), portfolio, and credentials.
 
+#include "core/symbol/IGroupLinked.h"
 #include "screens/IStatefulScreen.h"
 #include "screens/equity_trading/EquityTypes.h"
 #include "services/workspace/IWorkspaceParticipant.h"
@@ -31,14 +32,21 @@ class EquityBottomPanel;
 
 namespace fincept::screens {
 
-class EquityTradingScreen : public QWidget, public IWorkspaceParticipant {
+class EquityTradingScreen : public QWidget, public IWorkspaceParticipant, public IGroupLinked {
     Q_OBJECT
+    Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit EquityTradingScreen(QWidget* parent = nullptr);
     ~EquityTradingScreen();
 
     QJsonObject save_state() const override;
     void restore_state(const QJsonObject& state) override;
+
+    // IGroupLinked — see WatchlistScreen for the propagation contract.
+    void set_group(SymbolGroup g) override { link_group_ = g; }
+    SymbolGroup group() const override { return link_group_; }
+    void on_group_symbol_changed(const SymbolRef& ref) override;
+    SymbolRef current_symbol() const override;
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -123,6 +131,9 @@ class EquityTradingScreen : public QWidget, public IWorkspaceParticipant {
     double current_price_ = 0.0; // last known LTP for selected symbol
 
     bool initialized_ = false;
+
+    // Symbol group link — SymbolGroup::None when unlinked.
+    SymbolGroup link_group_ = SymbolGroup::None;
 };
 
 } // namespace fincept::screens

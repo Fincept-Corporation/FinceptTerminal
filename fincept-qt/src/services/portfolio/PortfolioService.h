@@ -7,6 +7,7 @@
 #include <QDateTime>
 #include <QHash>
 #include <QMutex>
+#include <QSet>
 #include <QObject>
 #include <QPointer>
 #include <QTimer>
@@ -51,9 +52,16 @@ class PortfolioService : public QObject {
     /// correlation matrix. Result emitted via correlation_computed().
     void fetch_correlation(const QStringList& symbols);
 
-    // ── SPY benchmark data ────────────────────────────────────────────────────
-    /// Fetch SPY daily closes for the given period string (e.g. "1y", "6mo").
-    /// Emits spy_history_loaded(dates, closes).
+    // ── Benchmark data ───────────────────────────────────────────────────────
+    /// Fetch daily closes for an arbitrary benchmark ticker (defaults to SPY
+    /// for backward compatibility). Emits benchmark_history_loaded(symbol, ...)
+    /// AND the legacy spy_history_loaded(...) so older consumers keep working.
+    void fetch_benchmark_history(const QString& symbol = "SPY", const QString& period = "1y");
+    /// Convenience wrapper: pick a default benchmark from a portfolio currency
+    /// (CAD → ^GSPTSE, USD → SPY, GBP → ^FTSE, EUR → ^STOXX50E, AUD → ^AXJO,
+    /// INR → ^NSEI). Falls back to SPY for unknown currencies.
+    static QString default_benchmark_for_currency(const QString& currency);
+    /// Legacy shim — calls fetch_benchmark_history("SPY", period).
     void fetch_spy_history(const QString& period = "1y");
 
     // ── Risk-free rate ────────────────────────────────────────────────────────
@@ -71,6 +79,15 @@ class PortfolioService : public QObject {
 
     // ── Snapshots (performance history) ─────────────────────────────────────
     void load_snapshots(const QString& portfolio_id, int days = 365);
+
+    /// Reconstruct daily NAV from yfinance OHLC for the current holdings and
+    /// upsert one row per trading day into portfolio_snapshots. This is what
+    /// gives Beta and MDD a real time series on a freshly imported portfolio
+    /// — without it both metrics show "—" until the user keeps the app open
+    /// across enough days for daily snapshots to accumulate.
+    /// Period: e.g. "1mo" / "6mo" / "1y" / "5y" (yfinance period strings).
+    /// Emits history_backfilled(portfolio_id, point_count) on success.
+    void backfill_history(const QString& portfolio_id, const QString& period = "1y");
 
     // ── Cache control ────────────────────────────────────────────────────────
     void invalidate_cache(const QString& portfolio_id);
@@ -99,10 +116,20 @@ class PortfolioService : public QObject {
     void correlation_computed(QHash<QString, double> matrix);
 
     /// SPY daily close history: parallel vectors of ISO date strings and prices.
+    /// Kept for back-compat — also fired whenever benchmark_history_loaded fires
+    /// with symbol == "SPY" so existing consumers don't break.
     void spy_history_loaded(QStringList dates, QVector<double> closes);
+
+    /// Generalised benchmark history: includes the symbol so chart consumers
+    /// can label the overlay correctly when a non-SPY benchmark is requested.
+    void benchmark_history_loaded(QString symbol, QStringList dates, QVector<double> closes);
 
     /// Current 10-year risk-free rate as annual decimal (e.g. 0.043 = 4.3%).
     void risk_free_rate_loaded(double rate);
+
+    /// Fired when backfill_history finishes. point_count is the number of
+    /// trading days written (0 on failure).
+    void history_backfilled(QString portfolio_id, int point_count);
 
   private:
     PortfolioService();
@@ -124,11 +151,18 @@ class PortfolioService : public QObject {
     static constexpr int kCacheTtlSec = 300; // 5 minutes
 
     // ── SPY cache (for OLS beta in compute_metrics) ──────────────────────────
+    // Beta is always computed against SPY regardless of which benchmark is
+    // shown on the chart, so the cache keys to "SPY" specifically.
     QStringList spy_dates_cache_;
     QVector<double> spy_closes_cache_;
 
     // ── Risk-free rate cache (annual decimal, e.g. 0.043) ────────────────────
     double rf_rate_ = 0.04; // default 4% until FRED responds
+
+    // ── Backfill state ───────────────────────────────────────────────────────
+    // Per-portfolio guard so compute_metrics doesn't kick off backfill on
+    // every refresh tick. Cleared on app restart — that's the explicit retry.
+    QSet<QString> backfill_attempted_;
 };
 
 } // namespace fincept::services

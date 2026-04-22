@@ -43,6 +43,11 @@ class SessionManager : public QObject {
     void save_screen_name(int window_id, const QString& screen_name);
     QString load_screen_name(int window_id) const;
 
+    // Per-window boolean flags — used by always-on-top and similar window
+    // state toggles. Namespaced under window_<id>/flags/<name>.
+    void save_window_flag(int window_id, const QString& name, bool value);
+    bool load_window_flag(int window_id, const QString& name, bool default_value = false) const;
+
     // ADS dock layout — scoped per window_id
     void save_dock_layout(int window_id, const QByteArray& layout);
     QByteArray load_dock_layout(int window_id) const;

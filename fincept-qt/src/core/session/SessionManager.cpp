@@ -104,6 +104,16 @@ QString SessionManager::load_screen_name(int window_id) const {
     return settings_.value(prefix + "screen_name").toString();
 }
 
+void SessionManager::save_window_flag(int window_id, const QString& name, bool value) {
+    const QString key = QString("window_%1/flags/%2").arg(window_id).arg(name);
+    settings_.setValue(key, value);
+}
+
+bool SessionManager::load_window_flag(int window_id, const QString& name, bool default_value) const {
+    const QString key = QString("window_%1/flags/%2").arg(window_id).arg(name);
+    return settings_.value(key, default_value).toBool();
+}
+
 void SessionManager::save_dock_layout(int window_id, const QByteArray& layout) {
     const QString prefix = QString("window_%1/").arg(window_id);
     settings_.setValue(prefix + "dock_layout", layout);

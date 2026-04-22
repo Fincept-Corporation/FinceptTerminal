@@ -2,12 +2,14 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "python/PythonWorker.h"
 #include "storage/cache/CacheManager.h"
 
 #    include "datahub/DataHub.h"
 #    include "datahub/DataHubMetaTypes.h"
 #    include "datahub/TopicPolicy.h"
 
+#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -34,72 +36,185 @@ QStringList MarketDataService::topic_patterns() const {
 }
 
 int MarketDataService::max_requests_per_sec() const {
-    // PythonRunner caps at 3 concurrent processes; a batched-quote fetch
-    // is 2–3 s typical. Capping hub-driven refreshes at 2/s keeps at
-    // least one PythonRunner slot for non-quote work.
-    return 2;
+    // Raised from 2 to 10: with the merged batch-all refresh path and the
+    // persistent yfinance worker, refreshes complete in <200ms, so gating at
+    // 2 req/s starved cold-start (quote + spark + history arrived 500ms apart).
+    // 10 req/s still backs off enough for upstream yfinance rate limits while
+    // letting dashboard + markets refresh converge in one scheduler tick.
+    return 10;
 }
 
 void MarketDataService::refresh(const QStringList& topics) {
-    // Hub guarantees `topics` all match one of our patterns. Route each
-    // topic family to the matching fetcher.
+    // Hub guarantees `topics` all match one of our patterns. We bundle ALL
+    // three families into a single `yfinance_data.py batch_all` invocation so
+    // one refresh tick spawns one Python process instead of three. Individual
+    // fetch_quotes/fetch_sparklines/fetch_history callback APIs remain untouched
+    // — they're still used by report builder and other one-shot paths.
     static const QString kQuote = QStringLiteral("market:quote:");
     static const QString kSpark = QStringLiteral("market:sparkline:");
     static const QString kHist  = QStringLiteral("market:history:");
 
+    const qint64 refresh_t0 = QDateTime::currentMSecsSinceEpoch();
+
     QStringList quote_syms;
     QStringList spark_syms;
-    QStringList hist_topics;  // keep raw — history is parameterised by period/interval
+    struct HistReq { QString topic; QString symbol; QString period; QString interval; };
+    QVector<HistReq> hist_reqs;
     for (const auto& t : topics) {
-        if (t.startsWith(kQuote))
+        if (t.startsWith(kQuote)) {
             quote_syms.append(t.mid(kQuote.size()));
-        else if (t.startsWith(kSpark))
+        } else if (t.startsWith(kSpark)) {
             spark_syms.append(t.mid(kSpark.size()));
-        else if (t.startsWith(kHist))
-            hist_topics.append(t);
-    }
-
-    if (!quote_syms.isEmpty()) {
-        LOG_INFO("DataHub", QString("refresh market:quote batch=%1").arg(quote_syms.size()));
-        // Routed through batched fetch path. Per-symbol publish happens in
-        // flush_batch() so consumers see each result as soon as it resolves.
-        fetch_quotes(quote_syms, [](bool, QVector<QuoteData>) {});
-    }
-
-    if (!spark_syms.isEmpty()) {
-        LOG_INFO("DataHub", QString("refresh market:sparkline batch=%1").arg(spark_syms.size()));
-        // Sparkline fetcher returns QHash<symbol, prices>; fan out to hub.
-        QPointer<MarketDataService> self = this;
-        fetch_sparklines(spark_syms, [self](bool ok, QHash<QString, QVector<double>> data) {
-            if (!self || !ok)
-                return;
-            for (auto it = data.cbegin(); it != data.cend(); ++it)
-                self->publish_sparkline_to_hub(it.key(), it.value());
-        });
-    }
-
-    if (!hist_topics.isEmpty()) {
-        // History topics are parameterised: `market:history:<sym>:<period>:<interval>`.
-        // Dispatch one fetch per unique topic.
-        LOG_INFO("DataHub", QString("refresh market:history batch=%1").arg(hist_topics.size()));
-        QPointer<MarketDataService> self = this;
-        for (const QString& topic : hist_topics) {
-            // Strip the prefix and split "<sym>:<period>:<interval>".
-            const QString tail = topic.mid(kHist.size());
+        } else if (t.startsWith(kHist)) {
+            const QString tail = t.mid(kHist.size());
             const QStringList parts = tail.split(QLatin1Char(':'));
-            if (parts.size() != 3)
-                continue;
-            const QString sym = parts.at(0);
-            const QString period = parts.at(1);
-            const QString interval = parts.at(2);
-            fetch_history(sym, period, interval,
-                          [self, sym, period, interval](bool ok, QVector<HistoryPoint> points) {
-                              if (!self || !ok)
-                                  return;
-                              self->publish_history_to_hub(sym, period, interval, points);
-                          });
+            if (parts.size() == 3)
+                hist_reqs.append({t, parts.at(0), parts.at(1), parts.at(2)});
         }
     }
+
+    LOG_INFO("DataHub", QString("refresh() quotes=%1 sparks=%2 histories=%3 (1 python spawn)")
+                            .arg(quote_syms.size())
+                            .arg(spark_syms.size())
+                            .arg(hist_reqs.size()));
+
+    // Build the unified batch_all payload.
+    QJsonObject payload;
+    if (!quote_syms.isEmpty()) {
+        QJsonArray arr;
+        for (const auto& s : quote_syms) arr.append(s);
+        payload["quotes"] = arr;
+    }
+    if (!spark_syms.isEmpty()) {
+        QJsonArray arr;
+        for (const auto& s : spark_syms) arr.append(s);
+        payload["sparklines"] = arr;
+    }
+    if (!hist_reqs.isEmpty()) {
+        QJsonArray arr;
+        for (const auto& h : hist_reqs) {
+            QJsonObject o;
+            o["symbol"] = h.symbol;
+            o["period"] = h.period;
+            o["interval"] = h.interval;
+            arr.append(o);
+        }
+        payload["histories"] = arr;
+    }
+
+    if (payload.isEmpty()) {
+        return;  // Nothing to fetch — hub guarantees this won't happen in practice.
+    }
+
+    QPointer<MarketDataService> self = this;
+
+    // Route via PythonWorker (persistent daemon) instead of PythonRunner so
+    // we don't pay the 2–3s yfinance/pandas import cost per refresh tick. See
+    // PythonWorker docs — scope is yfinance_data.py only.
+    python::PythonWorker::instance().submit(
+        "batch_all", payload,
+        [self, quote_syms, spark_syms, hist_reqs, refresh_t0](bool ok, QJsonObject root, QString err) {
+            if (!self)
+                return;
+
+            const qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - refresh_t0;
+
+            if (!ok) {
+                LOG_WARN("MarketData",
+                         QString("batch_all failed in %1ms: %2").arg(elapsed).arg(err.left(200)));
+                return;
+            }
+
+            // PythonWorker passes through the `result` JSON as-is (or wraps
+            // a scalar under "_value"). For batch_all the daemon returns an
+            // object so root is already the {quotes,sparklines,histories} map.
+            // publish to hub, store in cache. We don't need the flush_batch code
+            // path here because no callback chain is waiting on this refresh tick.
+            const QJsonArray quotes_arr = root.value("quotes").toArray();
+            int quotes_ok = 0;
+            for (const auto& v : quotes_arr) {
+                const QJsonObject q = v.toObject();
+                if (q.isEmpty() || q.contains("error"))
+                    continue;
+                QuoteData qd{
+                    q["symbol"].toString(),
+                    q["name"].toString(q["symbol"].toString()),
+                    q["price"].toDouble(),
+                    q["change"].toDouble(),
+                    q["change_percent"].toDouble(),
+                    q["high"].toDouble(),
+                    q["low"].toDouble(),
+                    q["volume"].toDouble()};
+
+                // Cache write — mirrors store_quote() in flush_batch.
+                QJsonObject co;
+                co["symbol"] = qd.symbol;
+                co["name"] = qd.name;
+                co["price"] = qd.price;
+                co["change"] = qd.change;
+                co["change_pct"] = qd.change_pct;
+                co["high"] = qd.high;
+                co["low"] = qd.low;
+                co["volume"] = qd.volume;
+                fincept::CacheManager::instance().put(
+                    "market:" + qd.symbol,
+                    QVariant(QString::fromUtf8(QJsonDocument(co).toJson(QJsonDocument::Compact))),
+                    kQuoteCacheTtlSec, "market_data");
+
+                self->publish_quote_to_hub(qd);
+                ++quotes_ok;
+            }
+
+            // Sparklines — {sym: [closes]}
+            const QJsonObject sparks = root.value("sparklines").toObject();
+            int sparks_ok = 0;
+            for (auto it = sparks.begin(); it != sparks.end(); ++it) {
+                const QJsonArray closes = it.value().toArray();
+                if (closes.isEmpty())
+                    continue;
+                QVector<double> prices;
+                prices.reserve(closes.size());
+                for (const auto& c : closes)
+                    prices.append(c.toDouble());
+                self->publish_sparkline_to_hub(it.key(), prices);
+                ++sparks_ok;
+            }
+
+            // Histories — array of {symbol, period, interval, points[]}
+            const QJsonArray hists = root.value("histories").toArray();
+            int hists_ok = 0;
+            for (const auto& hv : hists) {
+                const QJsonObject h = hv.toObject();
+                if (h.contains("error"))
+                    continue;
+                const QString sym = h.value("symbol").toString();
+                const QString per = h.value("period").toString();
+                const QString ivl = h.value("interval").toString();
+                const QJsonArray pts = h.value("points").toArray();
+                QVector<HistoryPoint> points;
+                points.reserve(pts.size());
+                for (const auto& pv : pts) {
+                    const QJsonObject p = pv.toObject();
+                    HistoryPoint pt;
+                    pt.timestamp = static_cast<qint64>(p["timestamp"].toDouble());
+                    pt.open = p["open"].toDouble();
+                    pt.high = p["high"].toDouble();
+                    pt.low = p["low"].toDouble();
+                    pt.close = p["close"].toDouble();
+                    pt.volume = static_cast<qint64>(p["volume"].toDouble());
+                    points.append(pt);
+                }
+                self->publish_history_to_hub(sym, per, ivl, points);
+                ++hists_ok;
+            }
+
+            LOG_INFO("MarketData",
+                     QString("batch_all OK in %1ms: quotes=%2/%3 sparks=%4/%5 hists=%6/%7")
+                         .arg(elapsed)
+                         .arg(quotes_ok).arg(quote_syms.size())
+                         .arg(sparks_ok).arg(spark_syms.size())
+                         .arg(hists_ok).arg(hist_reqs.size()));
+        });
 }
 
 void MarketDataService::publish_quote_to_hub(const QuoteData& q) {
@@ -127,25 +242,30 @@ void MarketDataService::ensure_registered_with_hub() {
     auto& hub = datahub::DataHub::instance();
     hub.register_producer(this);
 
-    // Quotes: 30s TTL, 5s min interval (matches Phase 2 pilot).
+    // Quotes: 30s TTL, 2s min interval. Dropped min_interval from 5s → 2s so
+    // user-triggered refreshes and initial cold-start paint don't queue behind
+    // the gate. 2s still prevents hammering yfinance on scheduler ticks.
     datahub::TopicPolicy quote_p;
     quote_p.ttl_ms = 30'000;
-    quote_p.min_interval_ms = 5'000;
+    quote_p.min_interval_ms = 2'000;
     hub.set_policy_pattern(QStringLiteral("market:quote:*"), quote_p);
 
-    // Sparklines: 5-day hourly data, changes slowly — cache 10 minutes, refresh at most
-    // every 60s so a dashboard with 20 holdings doesn't hammer the sparkline script.
+    // Sparklines: 5-day hourly data, changes slowly — cache 10 minutes,
+    // refresh at most every 30s. Reduced from 60s so a user flipping between
+    // screens doesn't wait a full minute for sparkline refresh after swapping
+    // the symbol set.
     datahub::TopicPolicy spark_p;
     spark_p.ttl_ms = 10 * 60'000;
-    spark_p.min_interval_ms = 60'000;
+    spark_p.min_interval_ms = 30'000;
     hub.set_policy_pattern(QStringLiteral("market:sparkline:*"), spark_p);
 
     // History: OHLCV series. One-shot per chart; policies are conservative to
-    // avoid re-fetching for every open of the same chart. 30 min TTL, 5 min
-    // min-interval so a user flipping periods still triggers a fresh fetch.
+    // avoid re-fetching for every open of the same chart. 30 min TTL, 60s
+    // min-interval (was 5 min) so a user flipping periods/intervals on a
+    // chart doesn't stare at a stale view for 5 minutes.
     datahub::TopicPolicy hist_p;
     hist_p.ttl_ms = 30 * 60'000;
-    hist_p.min_interval_ms = 5 * 60'000;
+    hist_p.min_interval_ms = 60'000;
     hub.set_policy_pattern(QStringLiteral("market:history:*"), hist_p);
 
     hub_registered_ = true;

@@ -38,14 +38,9 @@ class RecordingProducer : public Producer {
             all_requested_topics.append(t);
     }
 
-    void on_topic_idle(const QString& topic) override {
-        idle_topics.append(topic);
-    }
-
     int refresh_count = 0;
     QStringList last_refresh_topics;
     QStringList all_requested_topics;
-    QStringList idle_topics;
 
   private:
     QStringList patterns_;
@@ -58,6 +53,15 @@ class TestDataHub : public QObject {
     Q_OBJECT
 
   private slots:
+
+    // Drain any queued invocations between tests so timer fires from one
+    // test don't leak into the next. DataHub is a singleton so state is
+    // shared across the whole run; we reset per-test side-effects here.
+    void cleanup() {
+        QCoreApplication::processEvents();
+        QCoreApplication::sendPostedEvents();
+        QCoreApplication::processEvents();
+    }
 
     // Core flow — subscribe, publish, slot invoked.
     void subscribe_publish_delivers() {
@@ -101,6 +105,10 @@ class TestDataHub : public QObject {
         } // owner destroyed here
 
         // Give the queued destroyed() → on_owner_destroyed a chance to run.
+        // processEvents once may only deliver the first queued item; run a
+        // couple to drain all cascaded queued invocations.
+        QCoreApplication::sendPostedEvents();
+        QCoreApplication::processEvents();
         QCoreApplication::processEvents();
 
         hub.publish("test:destroy:1", QVariant(2));
@@ -110,6 +118,8 @@ class TestDataHub : public QObject {
         QCOMPARE(call_count, 1);
 
         // Subscriber count for this topic should have dropped to 0.
+        // After unsubscribe the subscriptions_ bucket is erased, so stats()
+        // reports the default zero (via missing bucket).
         const auto stats = hub.stats();
         for (const auto& s : stats)
             if (s.topic == "test:destroy:1")
@@ -164,6 +174,12 @@ class TestDataHub : public QObject {
         RecordingProducer prod({"test:flight:*"});
         hub.register_producer(&prod);
 
+        // Disable coalesce window for deterministic synchronous testing —
+        // request() then dispatches on the next event-loop iteration instead
+        // of waiting ~100ms. Restored at end of test.
+        const int saved_coalesce = hub.coalesce_window_ms();
+        hub.set_coalesce_window_ms(0);
+
         QObject owner;
         hub.subscribe(&owner, "test:flight:1",
                       [](const QVariant&) {});
@@ -171,7 +187,8 @@ class TestDataHub : public QObject {
         hub.request("test:flight:1");
         hub.request("test:flight:1");  // should be deduped — already in-flight
 
-        QCOMPARE(prod.refresh_count, 1);
+        // Let the zero-ms coalesce timer fire once.
+        QTRY_COMPARE(prod.refresh_count, 1);
 
         // Once the producer publishes, the in-flight flag clears and the
         // next request() should go through again.
@@ -179,9 +196,10 @@ class TestDataHub : public QObject {
         QCoreApplication::processEvents();
 
         hub.request("test:flight:1");
-        QCOMPARE(prod.refresh_count, 2);
+        QTRY_COMPARE(prod.refresh_count, 2);
 
         hub.unregister_producer(&prod);
+        hub.set_coalesce_window_ms(saved_coalesce);
     }
 
     // Cross-thread publish() must marshal to the hub thread safely.
@@ -218,6 +236,11 @@ class TestDataHub : public QObject {
         RecordingProducer prod({"test:ttl:*"});
         hub.register_producer(&prod);
 
+        // Clear any stale pattern policy from prior tests + use sync coalesce.
+        hub.clear_policy_pattern("test:ttl:*");
+        const int saved_coalesce = hub.coalesce_window_ms();
+        hub.set_coalesce_window_ms(0);
+
         TopicPolicy p;
         p.ttl_ms = 60'000;
         p.min_interval_ms = 0;
@@ -226,9 +249,9 @@ class TestDataHub : public QObject {
         QObject owner;
         hub.subscribe(&owner, "test:ttl:1", [](const QVariant&) {});
 
-        // First tick: no cached value → refresh fires.
-        hub.tick_scheduler();
-        QCOMPARE(prod.refresh_count, 1);
+        // subscribe() auto cold-starts a forced request — give the coalesce
+        // flush a chance to run and drive refresh_count to 1.
+        QTRY_COMPARE(prod.refresh_count, 1);
 
         // Producer publishes; TTL is 60 s so next tick should skip.
         hub.publish("test:ttl:1", QVariant(1));
@@ -238,6 +261,26 @@ class TestDataHub : public QObject {
         QCOMPARE(prod.refresh_count, 1);  // unchanged
 
         hub.unregister_producer(&prod);
+        hub.set_coalesce_window_ms(saved_coalesce);
+    }
+
+    // peek() returns invalid when value is past TTL; peek_raw() returns anyway.
+    void peek_respects_ttl() {
+        auto& hub = DataHub::instance();
+
+        TopicPolicy p;
+        p.ttl_ms = 1;  // effectively immediate expiry
+        p.min_interval_ms = 0;
+        hub.clear_policy_pattern(QStringLiteral("test:peek:*"));  // idempotent if absent
+        hub.set_policy_pattern(QStringLiteral("test:peek:*"), p);
+
+        hub.publish(QStringLiteral("test:peek:ttl:1"), QVariant(QString("stale")));
+        QCoreApplication::processEvents();
+
+        QVERIFY(hub.peek_raw(QStringLiteral("test:peek:ttl:1")).isValid());
+        QTest::qWait(5);  // exceed ttl
+        QVERIFY(!hub.peek(QStringLiteral("test:peek:ttl:1")).isValid());   // stale → invalid
+        QVERIFY(hub.peek_raw(QStringLiteral("test:peek:ttl:1")).isValid()); // raw still there
     }
 };
 

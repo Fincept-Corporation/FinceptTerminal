@@ -7,6 +7,7 @@
 #include <QHash>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTimer>
@@ -115,6 +116,8 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
     QLabel* sec_pin_status_ = nullptr;
     QComboBox* sec_lock_timeout_ = nullptr;
     QCheckBox* sec_autolock_toggle_ = nullptr;
+    QCheckBox* sec_lock_on_minimize_ = nullptr;
+    QListWidget* sec_audit_list_ = nullptr;
     QLabel* sec_lockout_status_ = nullptr;
     QPushButton* sec_change_pin_btn_ = nullptr;
     // Change PIN sub-widgets (shown/hidden dynamically)
@@ -131,6 +134,7 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
     void load_appearance();
     void load_notifications();
     void load_security();
+    void refresh_audit_log();
     void refresh_storage_stats();
 
     // ── Notification helpers ──────────────────────────────────────────────────

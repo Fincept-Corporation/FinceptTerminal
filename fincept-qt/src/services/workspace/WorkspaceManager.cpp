@@ -3,6 +3,7 @@
 #include "app/ScreenRouter.h"
 #include "core/config/AppPaths.h"
 #include "core/logging/Logger.h"
+#include "core/symbol/SymbolContext.h"
 #include "screens/dashboard/canvas/GridLayout.h"
 #include "services/workspace/WorkspaceSerializer.h"
 #include "services/workspace/WorkspaceTemplates.h"
@@ -306,6 +307,10 @@ void WorkspaceManager::capture_from_ui() {
         ss.state = it.value()->save_state();
         current_workspace_->screen_states.append(ss);
     }
+
+    // Symbol context (group→symbol assignments) is a singleton, captured once
+    // per workspace save. Empty object if the user hasn't touched any groups.
+    current_workspace_->symbol_context = SymbolContext::instance().to_json();
 }
 
 void WorkspaceManager::apply_to_ui() {
@@ -361,6 +366,10 @@ void WorkspaceManager::apply_to_ui() {
     // Navigate to active screen — apply to primary router
     if (!routers_.isEmpty() && !ws.active_screen.isEmpty())
         routers_.first()->navigate(ws.active_screen);
+
+    // Restore symbol group context last so every subscriber has been
+    // constructed (or at least queued) before signals fan out.
+    SymbolContext::instance().from_json(ws.symbol_context);
 }
 
 void WorkspaceManager::ensure_workspaces_dir() const {

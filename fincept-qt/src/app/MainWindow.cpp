@@ -9,6 +9,7 @@
 #include "core/config/ProfileManager.h"
 #include "core/events/EventBus.h"
 #include "core/keys/KeyConfigManager.h"
+#include "core/keys/WindowCycler.h"
 #include "core/logging/Logger.h"
 #include "core/session/SessionManager.h"
 #include "screens/ComingSoonScreen.h"
@@ -73,9 +74,11 @@
 #include "ui/navigation/DockStatusBar.h"
 #include "ui/navigation/DockToolBar.h"
 #include "ui/navigation/FKeyBar.h"
+#include "ui/components/ComponentBrowserDialog.h"
 #include "ui/navigation/NavigationBar.h"
 #include "ui/navigation/StatusBar.h"
 #include "ui/navigation/ToolBar.h"
+#include "ui/pushpins/PushpinBar.h"
 #include "ui/theme/Theme.h"
 #include "ui/workspace/WorkspaceNewDialog.h"
 #include "ui/workspace/WorkspaceOpenDialog.h"
@@ -93,6 +96,7 @@
 #include <QScreen>
 #include <QShortcut>
 #include <QStatusBar>
+#include <QToolBar>
 #include <QVBoxLayout>
 #include <QWindow>
 
@@ -202,6 +206,13 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
         }
     }
 
+    // Restore always-on-top before the first show() so the OS hint is
+    // applied cleanly. Cannot use set_always_on_top() here — it would call
+    // show() which only works after the widget has a fully built-out layout.
+    always_on_top_ = SessionManager::instance().load_window_flag(window_id_, "always_on_top", false);
+    if (always_on_top_)
+        setWindowFlags(windowFlags() | Qt::WindowStaysOnTopHint);
+
     auto* master_stack = new QStackedWidget;
 
     // ── Auth stack ───────────────────────────────────────────────────────────
@@ -238,6 +249,21 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
     dock_toolbar_ = new ui::DockToolBar(this);
     addToolBar(Qt::TopToolBarArea, dock_toolbar_);
 
+    // Pushpin bar lives on its own toolbar row below the main toolbar so the
+    // chips are always visible and drop targets across all panels. Start a
+    // new toolbar line via addToolBarBreak().
+    addToolBarBreak(Qt::TopToolBarArea);
+    pushpin_bar_ = new ui::PushpinBar;
+    pushpin_toolbar_ = new QToolBar(this);
+    pushpin_toolbar_->setObjectName("pushpinToolbar");
+    pushpin_toolbar_->setMovable(false);
+    pushpin_toolbar_->setFloatable(false);
+    pushpin_toolbar_->setAllowedAreas(Qt::TopToolBarArea);
+    pushpin_toolbar_->addWidget(pushpin_bar_);
+    addToolBar(Qt::TopToolBarArea, pushpin_toolbar_);
+    // Hidden until auth completes; set_shell_visible() shows it.
+    pushpin_toolbar_->setVisible(false);
+
     dock_status_bar_ = new ui::DockStatusBar(this);
     setStatusBar(dock_status_bar_);
 
@@ -246,6 +272,9 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
 
     // ── Workspace + signal wiring ───────────────────────────────────────────
     WorkspaceManager::instance().set_main_window(this);
+    WindowCycler::instance().register_window(this);
+    connect(this, &QObject::destroyed, this,
+            [this]() { WindowCycler::instance().unregister_window(this); });
     connect(&WorkspaceManager::instance(), &WorkspaceManager::workspace_loaded, this,
             [this](const WorkspaceDef&) { update_window_title(); });
     connect(&WorkspaceManager::instance(), &WorkspaceManager::workspace_error, this,
@@ -365,6 +394,8 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
             dock_toolbar_->setVisible(!focus_mode_);
         if (dock_status_bar_)
             dock_status_bar_->setVisible(!focus_mode_);
+        if (pushpin_toolbar_)
+            pushpin_toolbar_->setVisible(!focus_mode_);
     });
 
     auto* act_refresh = km.action(KeyAction::Refresh);
@@ -397,9 +428,102 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
         }
     });
 
+    // Manual lock (default Ctrl+L). Bypasses the inactivity timer — useful
+    // when stepping away from an unlocked terminal. This action is deliberately
+    // NOT guarded by `locked_` (it's a lock command; already-locked is a no-op
+    // via show_lock_screen's early-return). Requires authentication + a
+    // configured PIN, which show_lock_screen also enforces.
+    if (auto* act_lock = km.action(KeyAction::LockNow)) {
+        act_lock->setShortcutContext(Qt::ApplicationShortcut);
+        addAction(act_lock);
+        connect(act_lock, &QAction::triggered, this, [this]() {
+            auth::InactivityGuard::instance().trigger_manual_lock();
+        });
+    }
+
+    // Minimize-to-lock is handled in changeEvent() — see its override. We
+    // only install the key shortcut here. The setting `security.lock_on_minimize`
+    // (default off) governs the behaviour and is read each time the event fires.
+
+    // ── Phase 3: window/panel keyboard navigation ────────────────────────────
+    // All actions are WindowShortcut-scoped so they only fire against the
+    // active MainWindow. WindowCycler::current_focused() then routes the
+    // action across windows when needed.
+    auto bind_km = [this](KeyAction a, std::function<void()> fn) {
+        auto* act = KeyConfigManager::instance().action(a);
+        if (!act)
+            return;
+        act->setShortcutContext(Qt::WindowShortcut);
+        addAction(act);
+        connect(act, &QAction::triggered, this, [this, fn]() {
+            if (locked_) return;
+            fn();
+        });
+    };
+
+    // Focus window by 1-based ordinal.
+    const KeyAction focus_keys[] = {
+        KeyAction::FocusWindow1, KeyAction::FocusWindow2, KeyAction::FocusWindow3,
+        KeyAction::FocusWindow4, KeyAction::FocusWindow5, KeyAction::FocusWindow6,
+        KeyAction::FocusWindow7, KeyAction::FocusWindow8, KeyAction::FocusWindow9,
+    };
+    for (int i = 0; i < 9; ++i) {
+        bind_km(focus_keys[i], [i]() { WindowCycler::instance().focus_window_by_index(i); });
+    }
+
+    // Cycle panels inside the focused window.
+    bind_km(KeyAction::CyclePanelsForward,
+            []() { WindowCycler::instance().cycle_panels_in_current_window(true); });
+    bind_km(KeyAction::CyclePanelsBack,
+            []() { WindowCycler::instance().cycle_panels_in_current_window(false); });
+
+    // Cycle between MainWindow instances.
+    bind_km(KeyAction::CycleWindowsForward,
+            []() { WindowCycler::instance().cycle_windows(true); });
+    bind_km(KeyAction::CycleWindowsBack,
+            []() { WindowCycler::instance().cycle_windows(false); });
+
+    // New window on next monitor.
+    bind_km(KeyAction::NewWindowNextMonitor,
+            []() { WindowCycler::instance().new_window_on_next_monitor(); });
+
+    // Move current window to monitor N (1-based in the shortcut, 0-based to the API).
+    const KeyAction move_keys[] = {
+        KeyAction::MoveWindowToMonitor1, KeyAction::MoveWindowToMonitor2,
+        KeyAction::MoveWindowToMonitor3, KeyAction::MoveWindowToMonitor4,
+        KeyAction::MoveWindowToMonitor5, KeyAction::MoveWindowToMonitor6,
+        KeyAction::MoveWindowToMonitor7, KeyAction::MoveWindowToMonitor8,
+        KeyAction::MoveWindowToMonitor9,
+    };
+    for (int i = 0; i < 9; ++i) {
+        bind_km(move_keys[i], [i]() { WindowCycler::instance().move_current_window_to_monitor(i); });
+    }
+
+    // Component Browser (Phase 6)
+    bind_km(KeyAction::BrowseComponents, [this]() {
+        auto* dlg = new ui::ComponentBrowserDialog(this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        connect(dlg, &ui::ComponentBrowserDialog::component_chosen, this, [this](const QString& id) {
+            if (dock_router_ && !id.isEmpty())
+                dock_router_->navigate(id);
+        });
+        dlg->show();
+    });
+
+    // Always-on-top toggle (Phase 11) — shortcut targets the focused window
+    // because bind_km installs QAction with WindowShortcut context.
+    bind_km(KeyAction::ToggleAlwaysOnTop, [this]() { set_always_on_top(!always_on_top_); });
+
     // Toolbar actions
     connect(toolbar, &ui::ToolBar::action_triggered, this, [this](const QString& action) {
         if (locked_) return;
+        if (action == "browse_components") {
+            // Same path as the keyboard shortcut so the behavior stays in one
+            // place — the KeyConfigManager action will be triggered directly.
+            if (auto* act = KeyConfigManager::instance().action(KeyAction::BrowseComponents))
+                act->trigger();
+            return;
+        }
         if (action == "new_window") {
             auto* w = new MainWindow(MainWindow::next_window_id());
             w->setAttribute(Qt::WA_DeleteOnClose);
@@ -435,32 +559,7 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
                 LOG_WARN("MainWindow", QString("Move to monitor: screen '%1' not found").arg(target_name));
                 return;
             }
-            if (screen() == target)
-                return; // already there
-
-            // Preserve maximised/fullscreen state across the move: Qt can't
-            // directly relocate a maximised window to a different screen, so
-            // we restore → move → re-apply the state.
-            const bool was_maximised = isMaximized();
-            const bool was_fullscreen = isFullScreen();
-            if (was_maximised || was_fullscreen)
-                showNormal();
-
-            const QRect sg = target->availableGeometry();
-            // Keep size if it fits, otherwise clamp to 90% of target screen.
-            QSize new_size = size();
-            if (new_size.width() > sg.width() || new_size.height() > sg.height())
-                new_size = QSize(sg.width() * 9 / 10, sg.height() * 9 / 10);
-            resize(new_size);
-            move(sg.center() - QPoint(new_size.width() / 2, new_size.height() / 2));
-
-            if (was_fullscreen)
-                showFullScreen();
-            else if (was_maximised)
-                showMaximized();
-
-            LOG_INFO("MainWindow", QString("Moved window %1 to monitor '%2'")
-                                       .arg(window_id_).arg(target_name));
+            move_to_screen(target);
         } else if (action.startsWith("panel_")) {
             // Float a screen — in ADS mode, navigate dock_router; in legacy, spawn window
             static const QMap<QString, QPair<QString, QString>> panel_map = {
@@ -546,14 +645,7 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
             if (dock_status_bar_)
                 dock_status_bar_->setVisible(!focus_mode_);
         } else if (action == "always_on_top") {
-            always_on_top_ = !always_on_top_;
-            Qt::WindowFlags flags = windowFlags();
-            if (always_on_top_)
-                flags |= Qt::WindowStaysOnTopHint;
-            else
-                flags &= ~Qt::WindowStaysOnTopHint;
-            setWindowFlags(flags);
-            show(); // required after setWindowFlags to re-show the window
+            set_always_on_top(!always_on_top_);
         } else if (action == "refresh") {
             if (dock_manager_) {
                 auto* focused = dock_manager_->focusedDockWidget();
@@ -736,6 +828,12 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
             auto& auth = auth::AuthManager::instance();
             if (auth.is_authenticated())
                 auth.refresh_user_data();
+            // Resume-from-sleep lock: QTimer pauses during OS suspend, so a
+            // 5-minute timer can carry 4:59 of remaining time across a
+            // 30-minute nap. Ask the guard to check wall-clock delta and
+            // force a lock if the user was effectively idle for the full
+            // timeout. No-op when the guard is disabled or already locked.
+            auth::InactivityGuard::instance().check_for_resume_lock();
         }
     });
 }
@@ -749,6 +847,8 @@ void MainWindow::toggle_chat_mode() {
             dock_toolbar_->setVisible(false);
         if (dock_status_bar_)
             dock_status_bar_->setVisible(false);
+        if (pushpin_toolbar_)
+            pushpin_toolbar_->setVisible(false);
         if (chat_bubble_)
             chat_bubble_->setVisible(false);
         stack_->setCurrentIndex(2);
@@ -759,6 +859,8 @@ void MainWindow::toggle_chat_mode() {
             dock_toolbar_->setVisible(true);
         if (dock_status_bar_)
             dock_status_bar_->setVisible(true);
+        if (pushpin_toolbar_)
+            pushpin_toolbar_->setVisible(true);
         // Restore chat bubble based on setting
         if (chat_bubble_) {
             auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
@@ -1030,6 +1132,26 @@ void MainWindow::on_auth_state_changed() {
         }
 
         if (auth.session().has_paid_plan()) {
+            // Defensive: at this point the PIN gate above must have either
+            // routed us to the lock screen (and returned) or confirmed
+            // pin_gate_cleared_. If we are about to show the shell while
+            // still locked or ungated, log a warning so the regression is
+            // visible rather than leaking the dashboard for one frame.
+            if (locked_ || !pin_gate_cleared_) {
+                LOG_WARN("MainWindow",
+                         QString("on_auth_state_changed: shell would become visible while "
+                                 "locked=%1 gate_cleared=%2 — forcing lock screen")
+                             .arg(locked_).arg(pin_gate_cleared_));
+                if (auth::PinManager::instance().has_pin())
+                    lock_screen_->show_unlock();
+                else
+                    lock_screen_->show_setup();
+                locked_ = true;
+                set_shell_visible(false);
+                stack_->setCurrentIndex(3);
+                return;
+            }
+
             // Paid user → straight to dashboard
             set_shell_visible(true);
             stack_->setCurrentIndex(1);
@@ -1053,8 +1175,10 @@ void MainWindow::on_auth_state_changed() {
             auth_stack_->setCurrentIndex(3);
         }
     } else {
-        // Disable inactivity guard when logged out
+        // Disable inactivity guard when logged out and drop the locked flag
+        // so a subsequent login is not immediately router-blocked.
         auth::InactivityGuard::instance().set_enabled(false);
+        auth::InactivityGuard::instance().set_terminal_locked(false);
         pin_gate_cleared_ = false;
         set_shell_visible(false);
         stack_->setCurrentIndex(0);
@@ -1108,12 +1232,21 @@ void MainWindow::show_info_help() {
 
 void MainWindow::show_lock_screen() {
     auto& auth = auth::AuthManager::instance();
-    if (!auth.is_authenticated())
+    if (!auth.is_authenticated()) {
+        LOG_DEBUG("MainWindow", "show_lock_screen: ignored — not authenticated");
         return;
+    }
 
-    // Don't lock if already on lock screen or login screen
-    if (stack_->currentIndex() == 3 || stack_->currentIndex() == 0)
+    // Don't lock if already on lock screen or login screen — traced so
+    // spurious inactivity ticks during auth transitions are visible in logs.
+    if (stack_->currentIndex() == 3) {
+        LOG_DEBUG("MainWindow", "show_lock_screen: ignored — already on lock screen");
         return;
+    }
+    if (stack_->currentIndex() == 0) {
+        LOG_DEBUG("MainWindow", "show_lock_screen: ignored — currently on auth stack");
+        return;
+    }
 
     LOG_INFO("MainWindow", "Inactivity timeout — showing lock screen");
     lock_screen_->activate();
@@ -1123,6 +1256,23 @@ void MainWindow::show_lock_screen() {
     stack_->setCurrentIndex(3);
     if (chat_bubble_)
         chat_bubble_->setVisible(false);
+
+    // Disable widgets behind the lock screen so keyboard shortcuts, focus
+    // traversal, and dock-manager hit-testing cannot mutate state while the
+    // lock screen is shown. Re-enabled in on_terminal_unlocked().
+    if (dock_manager_ && dock_manager_->parentWidget())
+        dock_manager_->parentWidget()->setEnabled(false);
+    if (dock_toolbar_)    dock_toolbar_->setEnabled(false);
+    if (pushpin_toolbar_) pushpin_toolbar_->setEnabled(false);
+    if (dock_status_bar_) dock_status_bar_->setEnabled(false);
+
+    // Stop the inactivity guard while locked — the user-activity stream on
+    // the lock screen itself would otherwise keep firing no-op ticks, and
+    // there is nothing useful to do with them until the PIN is accepted.
+    // Also raise the process-wide locked flag so DockScreenRouter (and any
+    // other background navigator) refuses to mutate panel state.
+    auth::InactivityGuard::instance().set_terminal_locked(true);
+    auth::InactivityGuard::instance().set_enabled(false);
 }
 
 void MainWindow::on_terminal_unlocked() {
@@ -1131,7 +1281,19 @@ void MainWindow::on_terminal_unlocked() {
     locked_ = false;
     pin_gate_cleared_ = true;
 
-    // Enable/restart inactivity guard
+    // Re-enable widgets disabled in show_lock_screen() and drop the
+    // process-wide locked flag that DockScreenRouter consults.
+    auth::InactivityGuard::instance().set_terminal_locked(false);
+
+    if (dock_manager_ && dock_manager_->parentWidget())
+        dock_manager_->parentWidget()->setEnabled(true);
+    if (dock_toolbar_)    dock_toolbar_->setEnabled(true);
+    if (pushpin_toolbar_) pushpin_toolbar_->setEnabled(true);
+    if (dock_status_bar_) dock_status_bar_->setEnabled(true);
+
+    // Enable/restart inactivity guard. It is disabled in show_lock_screen()
+    // and on logout, so it may currently be off even though the filter is
+    // already installed on qApp from a previous unlock.
     auto& guard = auth::InactivityGuard::instance();
     if (!guard.is_enabled()) {
         qApp->installEventFilter(&guard);
@@ -1177,6 +1339,8 @@ void MainWindow::set_shell_visible(bool visible) {
         dock_toolbar_->setVisible(visible && !focus_mode_ && !chat_mode_);
     if (dock_status_bar_)
         dock_status_bar_->setVisible(visible && !focus_mode_ && !chat_mode_);
+    if (pushpin_toolbar_)
+        pushpin_toolbar_->setVisible(visible && !focus_mode_ && !chat_mode_);
     if (!visible) {
         // Reset title to plain app name — no screen suffix while on auth screens
         const QString profile = ProfileManager::instance().active();
@@ -1211,6 +1375,53 @@ void MainWindow::update_window_title() {
     }
 
     setWindowTitle(title);
+}
+
+void MainWindow::set_always_on_top(bool on) {
+    if (always_on_top_ == on)
+        return;
+    always_on_top_ = on;
+    Qt::WindowFlags flags = windowFlags();
+    if (on)
+        flags |= Qt::WindowStaysOnTopHint;
+    else
+        flags &= ~Qt::WindowStaysOnTopHint;
+    setWindowFlags(flags);
+    // setWindowFlags hides the window on most platforms; re-show it so the
+    // change is visible. Preserve maximised/fullscreen state across the toggle.
+    if (isVisible() || true) // always re-show; isVisible is false after the flag change
+        show();
+    SessionManager::instance().save_window_flag(window_id_, "always_on_top", on);
+    LOG_INFO("MainWindow",
+             QString("Window %1 always-on-top = %2").arg(window_id_).arg(on ? "on" : "off"));
+}
+
+void MainWindow::move_to_screen(QScreen* target) {
+    if (!target || screen() == target)
+        return;
+
+    // Preserve maximised/fullscreen state across the move: Qt can't directly
+    // relocate a maximised window to a different screen, so we restore →
+    // move → re-apply the state.
+    const bool was_maximised = isMaximized();
+    const bool was_fullscreen = isFullScreen();
+    if (was_maximised || was_fullscreen)
+        showNormal();
+
+    const QRect sg = target->availableGeometry();
+    QSize new_size = size();
+    if (new_size.width() > sg.width() || new_size.height() > sg.height())
+        new_size = QSize(sg.width() * 9 / 10, sg.height() * 9 / 10);
+    resize(new_size);
+    move(sg.center() - QPoint(new_size.width() / 2, new_size.height() / 2));
+
+    if (was_fullscreen)
+        showFullScreen();
+    else if (was_maximised)
+        showMaximized();
+
+    LOG_INFO("MainWindow", QString("Moved window %1 to monitor '%2'")
+                               .arg(window_id_).arg(target->name()));
 }
 
 void MainWindow::schedule_dock_layout_save() {
@@ -1250,7 +1461,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
         open_ids.append(window_id_);
     std::sort(open_ids.begin(), open_ids.end());
     SessionManager::instance().save_window_ids(open_ids);
-    SessionManager::instance().save_window_count(open_ids.size());
+    SessionManager::instance().save_window_count(static_cast<int>(open_ids.size()));
 
     event->accept();
 }
@@ -1259,6 +1470,23 @@ void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
     if (chat_bubble_)
         chat_bubble_->reposition();
+}
+
+void MainWindow::changeEvent(QEvent* event) {
+    QMainWindow::changeEvent(event);
+    if (event->type() != QEvent::WindowStateChange)
+        return;
+    if (!(windowState() & Qt::WindowMinimized))
+        return;
+    // Only lock if the user opted in and we are actually in an authenticated
+    // session with a configured PIN — otherwise there is nothing to lock.
+    auto& auth = auth::AuthManager::instance();
+    if (!auth.is_authenticated() || !auth::PinManager::instance().has_pin())
+        return;
+    auto r = SettingsRepository::instance().get("security.lock_on_minimize");
+    const bool lock_on_min = r.is_ok() && r.value() == "true";
+    if (lock_on_min)
+        auth::InactivityGuard::instance().trigger_manual_lock();
 }
 
 } // namespace fincept

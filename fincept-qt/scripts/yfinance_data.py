@@ -356,6 +356,68 @@ def get_batch_sparklines(symbols, period="5d", interval="1h"):
         return {"error": str(e)}
 
 
+def get_batch_all(payload):
+    """Unified batch fetcher — returns quotes + sparklines + histories in a single call.
+
+    Called by MarketDataService::refresh() so one DataHub refresh tick spawns a single
+    Python process rather than three (quote + sparkline + history). Shares the same
+    underlying yf.download paths as the individual endpoints — no behaviour change
+    per family, just fewer process spawns.
+
+    payload = {
+      "quotes":     [sym, ...],                         # optional
+      "sparklines": [sym, ...],                         # optional, 5d/1h
+      "histories":  [{"symbol","period","interval"}, ...],  # optional
+    }
+
+    Returns:
+      {
+        "quotes":     [<quote dicts from get_batch_quotes>, ...],
+        "sparklines": {sym: [close, ...], ...},
+        "histories":  [{"symbol","period","interval","points":[...]}],
+      }
+    Any family absent from `payload` is omitted from the result.
+    """
+    out = {}
+
+    quote_syms = payload.get("quotes") or []
+    if quote_syms:
+        out["quotes"] = get_batch_quotes(quote_syms)
+
+    spark_syms = payload.get("sparklines") or []
+    if spark_syms:
+        out["sparklines"] = get_batch_sparklines(spark_syms)
+
+    hist_reqs = payload.get("histories") or []
+    if hist_reqs:
+        histories = []
+        for req in hist_reqs:
+            try:
+                sym = req.get("symbol")
+                period = req.get("period", "6mo")
+                interval = req.get("interval", "1d")
+                if not sym:
+                    continue
+                points = get_historical_period(sym, period, interval)
+                histories.append({
+                    "symbol": sym,
+                    "period": period,
+                    "interval": interval,
+                    "points": points if isinstance(points, list) else [],
+                })
+            except Exception as e:
+                histories.append({
+                    "symbol": req.get("symbol", ""),
+                    "period": req.get("period", ""),
+                    "interval": req.get("interval", ""),
+                    "points": [],
+                    "error": str(e),
+                })
+        out["histories"] = histories
+
+    return out
+
+
 def get_company_profile(symbol):
     """Get company profile data formatted for peer comparison"""
     try:
@@ -556,6 +618,145 @@ def get_news(symbol, count=20):
     except Exception as e:
         return {"error": str(e), "symbol": symbol, "articles": []}
 
+def _candidate_yf_symbols(symbol):
+    """Generate yfinance ticker candidates for a portfolio symbol.
+
+    Heuristic — try the symbol as-given first, then common non-US exchange
+    suffixes. We can't ask the portfolio for currency here, so we just iterate
+    until something returns data. Order matters: most likely first.
+    """
+    s = symbol.strip().upper()
+    if not s:
+        return []
+    # Already has an exchange suffix or is an index/crypto/forex pair → trust it.
+    if '.' in s or s.startswith('^') or '-' in s or '=' in s:
+        return [s]
+    # Bare ticker — try US first, then Toronto, NSE, BSE, LSE, ASX, Hong Kong.
+    return [s, f"{s}.TO", f"{s}.NS", f"{s}.BO", f"{s}.L", f"{s}.AX", f"{s}.HK"]
+
+
+def _resolve_for_history(symbols, period):
+    """Resolve every input symbol to a yfinance ticker that returns data
+    in the given period, AND return the close-price DataFrame for each.
+
+    Returns: dict[input_symbol] -> (resolved_symbol, closes_series).
+    Symbols that fail every candidate are omitted.
+
+    We do this in two passes:
+      1. Bulk download all bare symbols + obvious-suffix variants we need to
+         cover. yf.download is one HTTP fan-out so this is cheap.
+      2. For each input, pick the first candidate that yielded a non-empty
+         close series.
+    """
+    import io, contextlib, logging
+    candidates_per_symbol = {s: _candidate_yf_symbols(s) for s in symbols}
+    all_candidates = sorted({c for variants in candidates_per_symbol.values() for c in variants})
+
+    if not all_candidates:
+        return {}
+
+    # yfinance prints "Failed download" / HTTP error lines straight to stdout
+    # AND uses the logging module. Silence both — we report misses via the
+    # `missing` key in the returned JSON, and noise on stdout corrupts the
+    # JSON the C++ caller is trying to parse.
+    yf_logger = logging.getLogger("yfinance")
+    prev_level = yf_logger.level
+    yf_logger.setLevel(logging.CRITICAL)
+    _buf_out = io.StringIO()
+    _buf_err = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(_buf_out), contextlib.redirect_stderr(_buf_err):
+            data = yf.download(
+                tickers=all_candidates,
+                period=period,
+                interval="1d",
+                group_by="ticker",
+                auto_adjust=True,
+                progress=False,
+                threads=True,
+            )
+    finally:
+        yf_logger.setLevel(prev_level)
+
+    if data is None or data.empty:
+        return {}
+
+    single = len(all_candidates) == 1
+
+    def closes_for(ticker):
+        try:
+            if single:
+                return data["Close"].dropna()
+            return data[ticker]["Close"].dropna()
+        except Exception:
+            return None
+
+    resolved = {}
+    for s, variants in candidates_per_symbol.items():
+        for v in variants:
+            ser = closes_for(v)
+            if ser is not None and not ser.empty:
+                resolved[s] = (v, ser)
+                break
+    return resolved
+
+
+def get_portfolio_nav_history(positions, period='6mo'):
+    """Reconstruct a daily NAV time series from current positions.
+
+    positions: list of {"symbol": str, "quantity": float} dicts.
+    Returns: {"dates": [...], "navs": [...], "resolved": {sym: yf_sym},
+              "missing": [sym, ...]}.
+
+    Each input symbol is resolved to a yfinance ticker via _resolve_for_history,
+    which tries common exchange suffixes (.TO, .NS, .BO, .L, .AX, .HK) when the
+    bare symbol returns no data. Missing closes are forward-filled per symbol so
+    a symbol that listed mid-period doesn't drop the whole row.
+
+    NAV on each date = sum(close_i * quantity_i) over all resolved symbols.
+
+    NOTE: this back-projects NAV using CURRENT quantity at every date — it
+    does not account for buys/sells inside the window. That's acceptable for
+    risk metrics (Beta, MDD) which measure basket variability, not realised P&L.
+    """
+    try:
+        if not positions:
+            return {"dates": [], "navs": []}
+        symbols = [p["symbol"] for p in positions if p.get("symbol")]
+        qty_map = {p["symbol"]: float(p.get("quantity", 0)) for p in positions if p.get("symbol")}
+        if not symbols:
+            return {"dates": [], "navs": []}
+
+        resolved = _resolve_for_history(symbols, period)
+        if not resolved:
+            return {"dates": [], "navs": [], "error": "no historical data for any symbol",
+                    "missing": symbols}
+
+        nav_series = None
+        for sym, (yf_sym, closes) in resolved.items():
+            contrib = closes.ffill() * qty_map[sym]
+            if nav_series is None:
+                nav_series = contrib
+            else:
+                nav_series = nav_series.add(contrib, fill_value=0)
+
+        if nav_series is None or nav_series.empty:
+            return {"dates": [], "navs": [], "error": "no usable closes",
+                    "missing": [s for s in symbols if s not in resolved]}
+
+        nav_series = nav_series.dropna()
+        dates = [idx.strftime("%Y-%m-%d") for idx in nav_series.index]
+        navs = [float(v) for v in nav_series.values]
+        return {
+            "dates": dates,
+            "navs": navs,
+            "resolved": {s: yf for s, (yf, _) in resolved.items()},
+            "missing": [s for s in symbols if s not in resolved],
+        }
+    except Exception as e:
+        return {"dates": [], "navs": [], "error": str(e)}
+
+
 def get_historical_period(symbol, period='6mo', interval='1d'):
     """Fetch historical data using a period string (e.g., '1mo', '6mo', '1y', '5y')"""
     try:
@@ -730,6 +931,28 @@ def main(args=None):
             count = int(args[2]) if len(args) > 2 else 20
             result = get_news(symbol, count)
 
+    elif command == "portfolio_nav_history":
+        # Args layout: <period> <sym1> <qty1> <sym2> <qty2> ...
+        # Period defaults to 1y if first arg looks like a symbol.
+        if len(args) < 3:
+            result = {"error": "Usage: yfinance_data.py portfolio_nav_history <period> <sym1> <qty1> ..."}
+        else:
+            period = args[1]
+            tail = args[2:]
+            if len(tail) % 2 != 0:
+                result = {"error": "symbol/quantity arguments must be paired"}
+            else:
+                positions = []
+                for i in range(0, len(tail), 2):
+                    try:
+                        positions.append({"symbol": tail[i], "quantity": float(tail[i + 1])})
+                    except ValueError:
+                        result = {"error": f"invalid quantity for {tail[i]}"}
+                        positions = None
+                        break
+                if positions is not None:
+                    result = get_portfolio_nav_history(positions, period)
+
     elif command == "historical_period":
         if len(args) < 2:
             result = {"error": "Usage: python yfinance_data.py historical_period <symbol> [period] [interval]"}
@@ -745,6 +968,38 @@ def main(args=None):
         else:
             symbols = args[1:]
             result = get_batch_sparklines(symbols)
+
+    elif command == "batch_all":
+        # Unified hub-refresh endpoint: payload is a single JSON blob on argv[1]
+        # (or @tempfile via PythonRunner's arg-spill) describing quotes + sparklines
+        # + histories to fetch. One process, one yfinance warm-up, three family
+        # results. See MarketDataService::refresh().
+        if len(args) < 2:
+            result = {"error": "Usage: python yfinance_data.py batch_all <json_payload>"}
+        else:
+            raw = args[1]
+            # Handle PythonRunner arg-spill: args > ~8KB land as "@/tmp/…" and
+            # must be read back. Payloads for large symbol lists easily exceed
+            # that threshold on Windows (32KB cmdline limit).
+            if raw.startswith("@"):
+                path = raw[1:]
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        raw = f.read()
+                    try:
+                        import os as _os
+                        _os.remove(path)
+                    except Exception:
+                        pass
+                except Exception as e:
+                    result = {"error": f"batch_all: failed to read spill file: {e}"}
+                    raw = None
+            if raw is not None:
+                try:
+                    payload = json.loads(raw)
+                    result = get_batch_all(payload)
+                except json.JSONDecodeError as e:
+                    result = {"error": f"batch_all: invalid JSON payload: {e}"}
 
     elif command == "resolve_symbol":
         if len(args) < 2:
@@ -773,5 +1028,119 @@ def main(args=None):
     print(output)
     return output
 
+# ── Daemon mode ──────────────────────────────────────────────────────────────
+#
+# Long-lived worker invoked by PythonWorker on the C++ side. Reads length-prefixed
+# JSON request frames from stdin, writes length-prefixed JSON response frames to
+# stdout. Keeps yfinance + pandas loaded so MarketDataService refreshes don't pay
+# the 2–3s import cost on every spawn.
+#
+# Frame format (stdin + stdout, network byte order):
+#   [4 bytes big-endian uint32 length N] [N bytes UTF-8 JSON]
+#
+# Request JSON:  {"id": <int>, "action": "batch_all"|"batch_quotes"|..., "payload": {...}}
+# Response JSON: {"id": <int>, "ok": true, "result": <any>}  or
+#                {"id": <int>, "ok": false, "error": "<msg>"}
+#
+# Special action "shutdown" causes a clean exit. EOF on stdin also exits.
+
+def _daemon_read_frame(stream):
+    """Read one length-prefixed frame. Returns bytes payload, or None on EOF."""
+    header = b""
+    while len(header) < 4:
+        chunk = stream.read(4 - len(header))
+        if not chunk:
+            return None
+        header += chunk
+    n = int.from_bytes(header, byteorder="big", signed=False)
+    if n == 0 or n > 64 * 1024 * 1024:  # sanity: cap frames at 64 MB
+        return None
+    buf = b""
+    while len(buf) < n:
+        chunk = stream.read(n - len(buf))
+        if not chunk:
+            return None
+        buf += chunk
+    return buf
+
+
+def _daemon_write_frame(stream, data_bytes):
+    """Write one length-prefixed frame. `data_bytes` must be bytes."""
+    n = len(data_bytes)
+    stream.write(n.to_bytes(4, byteorder="big", signed=False))
+    stream.write(data_bytes)
+    stream.flush()
+
+
+def _daemon_dispatch(action, payload):
+    """Run one action and return the raw result object (not wrapped)."""
+    if action == "batch_all":
+        return get_batch_all(payload or {})
+    if action == "batch_quotes":
+        syms = (payload or {}).get("symbols") or []
+        return get_batch_quotes(syms)
+    if action == "batch_sparklines":
+        syms = (payload or {}).get("symbols") or []
+        return get_batch_sparklines(syms)
+    if action == "historical_period":
+        p = payload or {}
+        return get_historical_period(
+            p.get("symbol"), p.get("period", "6mo"), p.get("interval", "1d"))
+    if action == "quote":
+        return get_quote((payload or {}).get("symbol"))
+    if action == "info":
+        return get_info((payload or {}).get("symbol"))
+    if action == "news":
+        p = payload or {}
+        return get_news(p.get("symbol"), p.get("count", 20))
+    return {"error": f"Unknown action: {action}"}
+
+
+def run_daemon():
+    """Main daemon loop — read frame, dispatch, write frame, repeat."""
+    import io
+    # Use the raw binary stdio streams; we do our own framing.
+    stdin = sys.stdin.buffer
+    stdout = sys.stdout.buffer
+    # Ready marker so the C++ host knows imports are done and the worker is
+    # ready to accept requests. Uses the same framing.
+    try:
+        ready = json.dumps({"ready": True, "pid": __import__("os").getpid()}).encode("utf-8")
+        _daemon_write_frame(stdout, ready)
+    except Exception:
+        pass
+
+    while True:
+        frame = _daemon_read_frame(stdin)
+        if frame is None:
+            break  # EOF or bad frame — exit
+        try:
+            req = json.loads(frame.decode("utf-8"))
+        except Exception as e:
+            err = {"id": 0, "ok": False, "error": f"bad request JSON: {e}"}
+            _daemon_write_frame(stdout, json.dumps(err).encode("utf-8"))
+            continue
+
+        req_id = req.get("id", 0)
+        action = req.get("action", "")
+        if action == "shutdown":
+            resp = {"id": req_id, "ok": True, "result": {"shutdown": True}}
+            _daemon_write_frame(stdout, json.dumps(resp).encode("utf-8"))
+            break
+
+        try:
+            result = _daemon_dispatch(action, req.get("payload"))
+            resp = {"id": req_id, "ok": True, "result": result}
+        except Exception as e:
+            resp = {"id": req_id, "ok": False, "error": str(e)}
+        try:
+            _daemon_write_frame(stdout, json.dumps(resp).encode("utf-8"))
+        except Exception:
+            break
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--daemon":
+        run_daemon()
+    else:
+        main()

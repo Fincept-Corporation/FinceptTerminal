@@ -161,12 +161,13 @@ void PortfolioPerfChart::build_ui() {
         period_btns_.append(btn);
     }
 
-    // Benchmark toggle
-    benchmark_btn_ = new QPushButton("SPY");
-    benchmark_btn_->setFixedSize(34, 22);
+    // Benchmark toggle (label updates when set_benchmark_history fires with a
+    // non-SPY symbol — e.g. ^GSPTSE for CAD portfolios).
+    benchmark_btn_ = new QPushButton(benchmark_symbol_);
+    benchmark_btn_->setFixedSize(60, 22);
     benchmark_btn_->setCheckable(true);
     benchmark_btn_->setCursor(Qt::PointingHandCursor);
-    benchmark_btn_->setToolTip("Overlay SPY benchmark (normalised to portfolio start value)");
+    benchmark_btn_->setToolTip("Overlay benchmark index (auto-selected by portfolio currency)");
     benchmark_btn_->setStyleSheet(
         QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                 "  font-size:9px; font-weight:700; border-radius:2px; }"
@@ -179,6 +180,30 @@ void PortfolioPerfChart::build_ui() {
     });
     header->addSpacing(6);
     header->addWidget(benchmark_btn_);
+
+    // Indexed-mode toggle: switches the y-axis from currency value to
+    // percent-indexed (base 100). Required for fair benchmark comparison
+    // when the portfolio and benchmark are in different currencies — without
+    // this, comparing CAD NAV against USD SPY closes is meaningless.
+    indexed_btn_ = new QPushButton("%");
+    indexed_btn_->setFixedSize(28, 22);
+    indexed_btn_->setCheckable(true);
+    indexed_btn_->setCursor(Qt::PointingHandCursor);
+    indexed_btn_->setToolTip("Indexed view: rebase portfolio and benchmark to 100 at the start of\n"
+                             "the selected period. Use when comparing different currencies.");
+    indexed_btn_->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
+                "  font-size:9px; font-weight:700; border-radius:2px; }"
+                "QPushButton:checked { color:%4; background:%2; border:1px solid %2; }"
+                "QPushButton:hover:!checked { color:%3; border-color:%3; }")
+            .arg(ui::colors::TEXT_TERTIARY(), ui::colors::AMBER(), ui::colors::TEXT_PRIMARY(),
+                 ui::colors::BG_BASE()));
+    connect(indexed_btn_, &QPushButton::clicked, this, [this]() {
+        indexed_mode_ = indexed_btn_->isChecked();
+        update_chart();
+    });
+    header->addSpacing(4);
+    header->addWidget(indexed_btn_);
 
     layout->addLayout(header);
 
@@ -209,6 +234,16 @@ void PortfolioPerfChart::build_ui() {
     nav_label_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(ui::colors::WARNING()));
     info_bar->addWidget(nav_label_);
 
+    auto* sep3 = new QLabel("|");
+    sep3->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::BORDER_MED()));
+    info_bar->addWidget(sep3);
+
+    cost_basis_label_ = new QLabel;
+    cost_basis_label_->setStyleSheet(
+        QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
+    cost_basis_label_->setToolTip("Total cost basis — the dashed horizontal line on the chart.");
+    info_bar->addWidget(cost_basis_label_);
+
     info_bar->addStretch();
     layout->addLayout(info_bar);
 
@@ -232,6 +267,10 @@ void PortfolioPerfChart::set_summary(const portfolio::PortfolioSummary& summary)
 
 void PortfolioPerfChart::set_snapshots(const QVector<portfolio::PortfolioSnapshot>& snapshots) {
     snapshots_ = snapshots;
+    // Sort once so iso_date_to_ms_utc downstream produces a monotonic series.
+    std::sort(snapshots_.begin(), snapshots_.end(),
+              [](const auto& a, const auto& b) { return a.snapshot_date < b.snapshot_date; });
+    update_period_buttons_enabled();
     update_chart();
 }
 
@@ -240,17 +279,71 @@ void PortfolioPerfChart::set_currency(const QString& currency) {
 }
 
 void PortfolioPerfChart::set_spy_history(const QStringList& dates, const QVector<double>& closes) {
-    spy_dates_ = dates;
+    set_benchmark_history(QStringLiteral("SPY"), dates, closes);
+}
+
+void PortfolioPerfChart::set_benchmark_history(const QString& symbol, const QStringList& dates,
+                                               const QVector<double>& closes) {
+    benchmark_symbol_ = symbol.isEmpty() ? QStringLiteral("SPY") : symbol;
+    spy_dates_ = dates;   // field name kept for back-compat; holds chosen benchmark
     spy_closes_ = closes;
+    if (benchmark_btn_)
+        benchmark_btn_->setText(benchmark_symbol_);
     if (show_benchmark_)
-        update_chart(); // refresh only if overlay is visible
+        update_chart();
 }
 
 void PortfolioPerfChart::set_period(const QString& period) {
+    const QString prev = current_period_;
     current_period_ = period;
     for (auto* btn : period_btns_)
         btn->setChecked(btn->text() == period);
+
+    // If the user is asking for a longer window than we have snapshots for,
+    // request a backfill. The owner re-feeds set_snapshots when it lands.
+    if (prev != period && !snapshots_.isEmpty()) {
+        const QDate earliest = QDate::fromString(snapshots_.first().snapshot_date.left(10), Qt::ISODate);
+        const QDate today = QDate::currentDate();
+        const int needed_days = (period == "5Y" || period == "ALL") ? 1825
+                              : (period == "1Y" || period == "YTD") ? 365
+                              : (period == "3M") ? 95
+                              : (period == "1M") ? 32
+                              : 10;
+        if (earliest.isValid() && earliest.daysTo(today) < needed_days - 5) {
+            const QString backfill_period =
+                (period == "5Y" || period == "ALL") ? "5y" : "1y";
+            emit backfill_period_requested(backfill_period);
+        }
+    }
     update_chart();
+}
+
+qint64 PortfolioPerfChart::iso_date_to_ms_utc(const QString& iso_date) {
+    const QDate d = QDate::fromString(iso_date.left(10), Qt::ISODate);
+    if (!d.isValid())
+        return QDateTime::currentMSecsSinceEpoch();
+    return QDateTime(d, QTime(0, 0), QTimeZone::UTC).toMSecsSinceEpoch();
+}
+
+void PortfolioPerfChart::update_period_buttons_enabled() {
+    if (snapshots_.isEmpty())
+        return;
+    const QDate earliest = QDate::fromString(snapshots_.first().snapshot_date.left(10), Qt::ISODate);
+    const QDate today = QDate::currentDate();
+    const int span_days = earliest.isValid() ? earliest.daysTo(today) : 0;
+    for (auto* btn : period_btns_) {
+        const QString p = btn->text();
+        // Daily snapshots only — 1D needs intraday data we don't capture.
+        bool feasible = true;
+        if (p == "1D")
+            feasible = false; // explicitly unsupported with daily snapshots
+        else if (p == "1W")
+            feasible = span_days >= 5;
+        // Other periods are always allowed: backfill kicks in when clicked.
+        btn->setEnabled(feasible);
+        btn->setToolTip(feasible ? QString()
+                                 : QStringLiteral("Needs intraday data — daily snapshots only."));
+    }
 }
 
 QColor PortfolioPerfChart::chart_color() const {
@@ -271,9 +364,14 @@ void PortfolioPerfChart::update_chart() {
         period_change_label_->setText("No data");
         total_return_label_->clear();
         nav_label_->clear();
+        if (cost_basis_label_)
+            cost_basis_label_->clear();
         chart_view_->set_series_data({}, currency_);
         return;
     }
+
+    const double live_nav = summary_.total_market_value;
+    const double cost_basis = summary_.total_cost_basis;
 
     // ── Determine cutoff date from selected period ────────────────────────────
     QDate cutoff = QDate::currentDate();
@@ -289,81 +387,84 @@ void PortfolioPerfChart::update_chart() {
         cutoff = QDate(QDate::currentDate().year(), 1, 1);
     else if (current_period_ == "1Y")
         cutoff = cutoff.addYears(-1);
+    else if (current_period_ == "5Y")
+        cutoff = cutoff.addYears(-5);
     else
         cutoff = cutoff.addYears(-10); // ALL
 
-    // ── Filter snapshots by period ────────────────────────────────────────────
+    // ── Filter snapshots (already sorted ascending by set_snapshots) ─────────
     QVector<portfolio::PortfolioSnapshot> filtered;
+    filtered.reserve(snapshots_.size());
     for (const auto& s : snapshots_) {
-        QDate d = QDate::fromString(s.snapshot_date.left(10), Qt::ISODate);
+        const QDate d = QDate::fromString(s.snapshot_date.left(10), Qt::ISODate);
         if (d.isValid() && d >= cutoff)
             filtered.append(s);
     }
 
-    // Sort ascending by date
-    std::sort(filtered.begin(), filtered.end(),
-              [](const auto& a, const auto& b) { return a.snapshot_date < b.snapshot_date; });
+    // ── Build raw NAV series in absolute currency value ──────────────────────
+    QVector<QPointF> nav_pts;       // (ms_utc, NAV)
+    nav_pts.reserve(filtered.size() + 1);
+    double period_baseline = 0; // first snapshot value within window
 
-    // ── Build chart series ────────────────────────────────────────────────────
-    auto* line = new QLineSeries;
+    if (filtered.size() >= 2) {
+        period_baseline = filtered.first().total_value;
+        for (const auto& s : filtered)
+            nav_pts.append(QPointF(static_cast<double>(iso_date_to_ms_utc(s.snapshot_date)),
+                                   s.total_value));
+        // Pin a final point at "now" so the line meets the live NAV.
+        const qint64 now_ms = QDateTime::currentDateTimeUtc().toMSecsSinceEpoch();
+        if (nav_pts.last().x() < now_ms)
+            nav_pts.append(QPointF(static_cast<double>(now_ms), live_nav));
+    } else {
+        // No real history yet — render a clean cost→NAV reference segment.
+        // (Backfill is auto-triggered on import / first metrics call.)
+        period_baseline = cost_basis > 0 ? cost_basis : live_nav;
+        const qint64 yest = QDateTime::currentDateTimeUtc().addDays(-1).toMSecsSinceEpoch();
+        const qint64 now_ms = QDateTime::currentDateTimeUtc().toMSecsSinceEpoch();
+        nav_pts.append(QPointF(static_cast<double>(yest), period_baseline));
+        nav_pts.append(QPointF(static_cast<double>(now_ms), live_nav));
+    }
+
+    // ── Period P&L is *always* relative to the period baseline ───────────────
+    const double period_pnl = live_nav - period_baseline;
+    const double period_pnl_pct = period_baseline > 0 ? (period_pnl / period_baseline) * 100.0 : 0.0;
+
+    // ── Convert series to display space (currency value vs. base-100 indexed) ─
+    auto to_display = [&](double v) -> double {
+        if (!indexed_mode_)
+            return v;
+        return period_baseline > 0 ? (v / period_baseline) * 100.0 : 0.0;
+    };
+
+    auto* nav_line = new QLineSeries;
     auto* area_upper = new QLineSeries;
     auto* area_lower = new QLineSeries;
 
-    double first_val = 0;
-    double last_val = summary_.total_market_value;
-    double min_val = last_val;
-    double max_val = last_val;
+    double y_min = std::numeric_limits<double>::max();
+    double y_max = std::numeric_limits<double>::lowest();
+    const double area_baseline_disp = to_display(period_baseline);
 
-    if (filtered.size() >= 2) {
-        // Real snapshot data
-        first_val = filtered.first().total_value;
-        for (const auto& s : filtered) {
-            QDateTime dt = QDateTime::fromString(s.snapshot_date.left(10), Qt::ISODate);
-            if (!dt.isValid())
-                dt = QDateTime::currentDateTime();
-            const qint64 ms = dt.toMSecsSinceEpoch();
-            line->append(ms, s.total_value);
-            area_upper->append(ms, s.total_value);
-            area_lower->append(ms, first_val);
-            min_val = std::min(min_val, s.total_value);
-            max_val = std::max(max_val, s.total_value);
-        }
-        // Append current live value at now
-        const qint64 now_ms = QDateTime::currentDateTime().toMSecsSinceEpoch();
-        line->append(now_ms, last_val);
-        area_upper->append(now_ms, last_val);
-        area_lower->append(now_ms, first_val);
-        min_val = std::min(min_val, last_val);
-        max_val = std::max(max_val, last_val);
-    } else {
-        // Insufficient real data — show a single cost→NAV segment and a note.
-        // Do NOT synthesise fake data points.
-        const double cost = summary_.total_cost_basis > 0 ? summary_.total_cost_basis : last_val;
-        first_val = cost;
-        const qint64 start_ms = QDateTime::currentDateTime().addDays(-1).toMSecsSinceEpoch();
-        const qint64 now_ms = QDateTime::currentDateTime().toMSecsSinceEpoch();
-        line->append(start_ms, cost);
-        line->append(now_ms, last_val);
-        area_upper->append(start_ms, cost);
-        area_upper->append(now_ms, last_val);
-        area_lower->append(start_ms, cost);
-        area_lower->append(now_ms, cost);
-        min_val = std::min(cost, last_val);
-        max_val = std::max(cost, last_val);
-
-        // Overlay a note inside the chart area
-        period_change_label_->setText(QString("%1  — (no history yet, showing NAV only)").arg(current_period_));
-        period_change_label_->setStyleSheet(
-            QString("color:%1; font-size:11px; font-weight:500;").arg(ui::colors::TEXT_TERTIARY()));
+    for (const auto& p : nav_pts) {
+        const double y = to_display(p.y());
+        nav_line->append(p.x(), y);
+        area_upper->append(p.x(), y);
+        area_lower->append(p.x(), area_baseline_disp);
+        y_min = std::min(y_min, y);
+        y_max = std::max(y_max, y);
     }
 
-    // ── Period P&L from the series endpoints ─────────────────────────────────
-    double period_pnl = last_val - first_val;
-    double period_pnl_pct = (first_val > 0) ? (period_pnl / first_val) * 100.0 : 0;
+    // Y-axis must always include the cost-basis reference so the user can see
+    // the gap between NAV and cost. Skip in indexed mode where 100 is the line.
+    const double cost_disp = to_display(cost_basis);
+    if (cost_basis > 0) {
+        y_min = std::min(y_min, cost_disp);
+        y_max = std::max(y_max, cost_disp);
+    }
+    y_min = std::min(y_min, area_baseline_disp);
+    y_max = std::max(y_max, area_baseline_disp);
 
     QColor lc = period_pnl >= 0 ? QColor(ui::colors::POSITIVE()) : QColor(ui::colors::NEGATIVE());
-    QPen pen(lc, 2);
-    line->setPen(pen);
+    nav_line->setPen(QPen(lc, 2));
 
     auto* area = new QAreaSeries(area_upper, area_lower);
     QColor fill = lc;
@@ -372,13 +473,26 @@ void PortfolioPerfChart::update_chart() {
     area->setPen(Qt::NoPen);
 
     chart->addSeries(area);
-    chart->addSeries(line);
+    chart->addSeries(nav_line);
+
+    // ── Cost basis reference line ────────────────────────────────────────────
+    // Skipped in indexed mode (where the period baseline IS the reference at 100).
+    QLineSeries* cost_line = nullptr;
+    if (cost_basis > 0 && !indexed_mode_) {
+        cost_line = new QLineSeries;
+        cost_line->setName("Cost basis");
+        cost_line->append(nav_pts.first().x(), cost_disp);
+        cost_line->append(nav_pts.last().x(), cost_disp);
+        QPen cp(QColor(ui::colors::TEXT_TERTIARY()), 1, Qt::DashLine);
+        cost_line->setPen(cp);
+        chart->addSeries(cost_line);
+    }
 
     // ── Axes ──────────────────────────────────────────────────────────────────
     auto* x_axis = new QDateTimeAxis;
     if (current_period_ == "1D" || current_period_ == "1W")
         x_axis->setFormat("MMM dd");
-    else if (current_period_ == "ALL" || current_period_ == "1Y")
+    else if (current_period_ == "ALL" || current_period_ == "5Y" || current_period_ == "1Y")
         x_axis->setFormat("MMM yy");
     else
         x_axis->setFormat("dd MMM");
@@ -389,84 +503,87 @@ void PortfolioPerfChart::update_chart() {
     x_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM()), 1));
     x_axis->setLabelsFont(QFont(ui::fonts::DATA_FAMILY(), 8));
 
-    double padding = std::max((max_val - min_val) * 0.08, max_val * 0.01);
     auto* y_axis = new QValueAxis;
-    y_axis->setRange(min_val - padding, max_val + padding);
-    y_axis->setLabelFormat("%.0f");
+    const double padding = std::max((y_max - y_min) * 0.08, std::abs(y_max) * 0.01);
+    y_axis->setRange(y_min - padding, y_max + padding);
+    y_axis->setLabelFormat(indexed_mode_ ? "%.1f" : "%.0f");
     y_axis->setTickCount(5);
     y_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
-    {
-        QPen grid_pen(QColor(ui::colors::BORDER_DIM()), 1, Qt::DotLine);
-        y_axis->setGridLinePen(grid_pen);
-    }
+    y_axis->setGridLinePen(QPen(QColor(ui::colors::BORDER_DIM()), 1, Qt::DotLine));
     y_axis->setMinorGridLineVisible(false);
     y_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM()), 1));
     y_axis->setLabelsFont(QFont(ui::fonts::DATA_FAMILY(), 8));
 
     chart->addAxis(x_axis, Qt::AlignBottom);
     chart->addAxis(y_axis, Qt::AlignLeft);
-    line->attachAxis(x_axis);
-    line->attachAxis(y_axis);
+    nav_line->attachAxis(x_axis);
+    nav_line->attachAxis(y_axis);
     area->attachAxis(x_axis);
     area->attachAxis(y_axis);
+    if (cost_line) {
+        cost_line->attachAxis(x_axis);
+        cost_line->attachAxis(y_axis);
+    }
 
-    // ── Feed crosshair with series points ────────────────────────────────────
-    chart_view_->set_series_data(line->points(), currency_);
+    chart_view_->set_series_data(nav_line->points(), indexed_mode_ ? QStringLiteral("idx") : currency_);
 
-    // ── Benchmark overlay (real SPY prices normalised to first_val) ──────────
-    if (show_benchmark_ && line->count() >= 2) {
+    // ── Benchmark overlay ─────────────────────────────────────────────────────
+    if (show_benchmark_ && nav_line->count() >= 2) {
         if (spy_dates_.isEmpty() || spy_closes_.isEmpty()) {
-            // Real data not yet available — show a note; do NOT draw fake curve
-            nav_label_->setText(nav_label_->text() + QString("  |  SPY: loading…"));
+            nav_label_->setText(nav_label_->text() +
+                                QString("  |  %1: loading…").arg(benchmark_symbol_));
         } else {
-            // Filter SPY history to the same date window as the portfolio line
-            const QPointF& p0 = line->at(0);
-            const QPointF& pN = line->at(line->count() - 1);
-            const QDate start_date = QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(p0.x())).date();
-            const QDate end_date = QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(pN.x())).date();
+            const QDate start_date = QDateTime::fromMSecsSinceEpoch(
+                static_cast<qint64>(nav_line->at(0).x()), QTimeZone::UTC).date();
+            const QDate end_date = QDateTime::fromMSecsSinceEpoch(
+                static_cast<qint64>(nav_line->at(nav_line->count() - 1).x()), QTimeZone::UTC).date();
 
-            // Find first SPY close on or after start_date to use as base
-            double spy_base = 0.0;
+            // First benchmark close on/after period start = base for normalisation.
+            double bench_base = 0.0;
             int base_idx = -1;
             for (int i = 0; i < spy_dates_.size(); ++i) {
                 const QDate d = QDate::fromString(spy_dates_[i], Qt::ISODate);
                 if (d >= start_date) {
-                    spy_base = spy_closes_[i];
+                    bench_base = spy_closes_[i];
                     base_idx = i;
                     break;
                 }
             }
 
-            if (base_idx >= 0 && spy_base > 1e-6) {
-                auto* spy_line = new QLineSeries;
-                double spy_min = first_val, spy_max = first_val;
-
+            if (base_idx >= 0 && bench_base > 1e-6) {
+                auto* bench_line = new QLineSeries;
+                double b_min = std::numeric_limits<double>::max();
+                double b_max = std::numeric_limits<double>::lowest();
                 for (int i = base_idx; i < spy_dates_.size(); ++i) {
                     const QDate d = QDate::fromString(spy_dates_[i], Qt::ISODate);
                     if (d > end_date)
                         break;
-                    const qint64 ms = QDateTime(d, QTime(), QTimeZone::UTC).toMSecsSinceEpoch();
-                    const double val = first_val * (spy_closes_[i] / spy_base);
-                    spy_line->append(ms, val);
-                    spy_min = std::min(spy_min, val);
-                    spy_max = std::max(spy_max, val);
+                    const qint64 ms = iso_date_to_ms_utc(spy_dates_[i]);
+                    // In currency mode, scale benchmark to start at the
+                    // portfolio's period baseline so they share the y-axis
+                    // visually. In indexed mode, base-100 normalisation puts
+                    // them on the same dimensionless scale.
+                    const double bench_disp = indexed_mode_
+                        ? (spy_closes_[i] / bench_base) * 100.0
+                        : period_baseline * (spy_closes_[i] / bench_base);
+                    bench_line->append(ms, bench_disp);
+                    b_min = std::min(b_min, bench_disp);
+                    b_max = std::max(b_max, bench_disp);
                 }
 
-                if (spy_line->count() >= 2) {
-                    QPen spy_pen(QColor(ui::colors::CYAN()), 1, Qt::DashLine);
-                    spy_line->setPen(spy_pen);
-                    spy_line->setName("SPY");
-                    chart->addSeries(spy_line);
-                    spy_line->attachAxis(x_axis);
-                    spy_line->attachAxis(y_axis);
-
-                    // Extend y-axis if SPY goes outside portfolio range
-                    const double new_min = std::min(min_val, spy_min);
-                    const double new_max = std::max(max_val, spy_max);
-                    const double new_pad = std::max((new_max - new_min) * 0.08, new_max * 0.01);
+                if (bench_line->count() >= 2) {
+                    QPen bp(QColor(ui::colors::CYAN()), 1, Qt::DashLine);
+                    bench_line->setPen(bp);
+                    bench_line->setName(benchmark_symbol_);
+                    chart->addSeries(bench_line);
+                    bench_line->attachAxis(x_axis);
+                    bench_line->attachAxis(y_axis);
+                    const double new_min = std::min(y_min, b_min);
+                    const double new_max = std::max(y_max, b_max);
+                    const double new_pad = std::max((new_max - new_min) * 0.08, std::abs(new_max) * 0.01);
                     y_axis->setRange(new_min - new_pad, new_max + new_pad);
                 } else {
-                    delete spy_line;
+                    delete bench_line;
                 }
             }
         }
@@ -474,20 +591,28 @@ void PortfolioPerfChart::update_chart() {
 
     // ── Info labels ───────────────────────────────────────────────────────────
     const char* pnl_color = period_pnl_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-
     period_change_label_->setText(QString("%1  %2%3%")
                                       .arg(current_period_)
                                       .arg(period_pnl_pct >= 0 ? "+" : "")
                                       .arg(QString::number(period_pnl_pct, 'f', 2)));
-    period_change_label_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(pnl_color));
+    period_change_label_->setStyleSheet(
+        QString("color:%1; font-size:11px; font-weight:600;").arg(pnl_color));
 
-    double total_pnl_pct = summary_.total_unrealized_pnl_percent;
+    const double total_pnl_pct = summary_.total_unrealized_pnl_percent;
     const char* total_color = total_pnl_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
     total_return_label_->setText(
         QString("TOTAL  %1%2%").arg(total_pnl_pct >= 0 ? "+" : "").arg(QString::number(total_pnl_pct, 'f', 2)));
-    total_return_label_->setStyleSheet(QString("color:%1; font-size:14px; font-weight:700;").arg(total_color));
+    total_return_label_->setStyleSheet(
+        QString("color:%1; font-size:14px; font-weight:700;").arg(total_color));
 
-    nav_label_->setText(QString("NAV %1 %2").arg(currency_).arg(QString::number(last_val, 'f', 2)));
+    nav_label_->setText(QString("NAV %1 %2").arg(currency_).arg(QString::number(live_nav, 'f', 2)));
+    if (cost_basis_label_) {
+        if (cost_basis > 0)
+            cost_basis_label_->setText(
+                QString("COST %1 %2").arg(currency_).arg(QString::number(cost_basis, 'f', 2)));
+        else
+            cost_basis_label_->clear();
+    }
 }
 
 void PortfolioPerfChart::refresh_theme() {

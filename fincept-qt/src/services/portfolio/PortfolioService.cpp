@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "services/sectors/SectorResolver.h"
 #include "storage/repositories/PortfolioRepository.h"
 #include "storage/repositories/SettingsRepository.h"
 
@@ -25,7 +26,38 @@ PortfolioService& PortfolioService::instance() {
     return s;
 }
 
-PortfolioService::PortfolioService() : QObject(nullptr) {}
+PortfolioService::PortfolioService() : QObject(nullptr) {
+    // When the SectorResolver lands a fresh sector for a symbol, persist it
+    // onto whichever portfolios hold it and invalidate their summary caches
+    // so the Sectors tab refreshes on next refresh.
+    connect(&SectorResolver::instance(), &SectorResolver::sector_resolved, this,
+            [this](QString symbol, QString sector) {
+                if (symbol.isEmpty() || sector.isEmpty())
+                    return;
+                auto& repo = PortfolioRepository::instance();
+                auto ports = repo.list_portfolios();
+                if (ports.is_err())
+                    return;
+                for (const auto& p : ports.value()) {
+                    auto assets = repo.get_assets(p.id);
+                    if (assets.is_err())
+                        continue;
+                    bool touched = false;
+                    for (const auto& a : assets.value()) {
+                        if (a.symbol == symbol && a.sector != sector) {
+                            repo.set_asset_sector(p.id, symbol, sector);
+                            touched = true;
+                        }
+                    }
+                    if (touched) {
+                        invalidate_cache(p.id);
+                        // Refresh the active portfolio view so sectors appear
+                        // without the user having to hit refresh manually.
+                        load_summary(p.id);
+                    }
+                }
+            });
+}
 
 // ── Portfolio CRUD ───────────────────────────────────────────────────────────
 
@@ -145,6 +177,11 @@ void PortfolioService::build_summary(const QString& portfolio_id, const QVector<
             h.quantity = asset.quantity;
             h.avg_buy_price = asset.avg_buy_price;
             h.cost_basis = asset.quantity * asset.avg_buy_price;
+            // Prefer stored sector; fall back to resolver cache (which may
+            // populate async — see sector_resolved handler in constructor).
+            h.sector = asset.sector.isEmpty()
+                           ? SectorResolver::instance().sector_for(asset.symbol)
+                           : asset.sector;
 
             auto it = quote_map.find(asset.symbol);
             if (it != quote_map.end()) {
@@ -393,14 +430,34 @@ print(json.dumps(matrix))
 
 // ── SPY benchmark data ────────────────────────────────────────────────────────
 
+QString PortfolioService::default_benchmark_for_currency(const QString& currency) {
+    const QString c = currency.trimmed().toUpper();
+    if (c == "CAD") return QStringLiteral("^GSPTSE");
+    if (c == "GBP") return QStringLiteral("^FTSE");
+    if (c == "EUR") return QStringLiteral("^STOXX50E");
+    if (c == "AUD") return QStringLiteral("^AXJO");
+    if (c == "INR") return QStringLiteral("^NSEI");
+    if (c == "JPY") return QStringLiteral("^N225");
+    if (c == "HKD") return QStringLiteral("^HSI");
+    return QStringLiteral("SPY"); // USD and unknown
+}
+
 void PortfolioService::fetch_spy_history(const QString& period) {
+    fetch_benchmark_history(QStringLiteral("SPY"), period);
+}
+
+void PortfolioService::fetch_benchmark_history(const QString& symbol, const QString& period) {
+    // Allow callers to omit the symbol → defaults to SPY (legacy behaviour).
+    const QString sym = symbol.isEmpty() ? QStringLiteral("SPY") : symbol;
+
     const QString code = QString(R"python(
 import json, sys
 import yfinance as yf
 
-period = "%1"
+symbol = "%1"
+period = "%2"
 try:
-    hist = yf.download("SPY", period=period, interval="1d", progress=False)
+    hist = yf.download(symbol, period=period, interval="1d", progress=False, auto_adjust=True)
     dates  = []
     closes = []
     if hist is not None and not hist.empty:
@@ -409,42 +466,46 @@ try:
             if hasattr(v, "item"): v = v.item()
             dates.append(dt.strftime("%Y-%m-%d"))
             closes.append(float(v))
-    print(json.dumps({"dates": dates, "closes": closes}))
+    print(json.dumps({"symbol": symbol, "dates": dates, "closes": closes}))
 except Exception as e:
-    print(json.dumps({"dates": [], "closes": [], "error": str(e)}))
+    print(json.dumps({"symbol": symbol, "dates": [], "closes": [], "error": str(e)}))
 )python")
-                             .arg(period);
+                             .arg(sym, period);
 
     QPointer<PortfolioService> self = this;
-    python::PythonRunner::instance().run_code(code, [self](python::PythonResult result) {
+    python::PythonRunner::instance().run_code(code, [self, sym](python::PythonResult result) {
         if (!self)
             return;
-        if (!result.success || result.output.trimmed().isEmpty()) {
-            LOG_WARN("PortfolioSvc", "SPY fetch failed: " + result.error.left(200));
-            emit self->spy_history_loaded({}, {});
-            return;
-        }
-        QJsonParseError err;
-        const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8(), &err);
-        if (err.error != QJsonParseError::NoError) {
-            emit self->spy_history_loaded({}, {});
-            return;
-        }
-        const auto obj = doc.object();
-        const auto dates_arr = obj["dates"].toArray();
-        const auto closes_arr = obj["closes"].toArray();
         QStringList dates;
         QVector<double> closes;
-        dates.reserve(dates_arr.size());
-        closes.reserve(closes_arr.size());
-        for (const auto& v : dates_arr)
-            dates.append(v.toString());
-        for (const auto& v : closes_arr)
-            closes.append(v.toDouble());
-        // Cache for OLS beta in compute_metrics
-        self->spy_dates_cache_ = dates;
-        self->spy_closes_cache_ = closes;
-        emit self->spy_history_loaded(dates, closes);
+        if (!result.success || result.output.trimmed().isEmpty()) {
+            LOG_WARN("PortfolioSvc",
+                     QString("Benchmark %1 fetch failed: %2").arg(sym, result.error.left(200)));
+        } else {
+            QJsonParseError err;
+            const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8(), &err);
+            if (err.error == QJsonParseError::NoError && doc.isObject()) {
+                const auto obj = doc.object();
+                const auto dates_arr = obj["dates"].toArray();
+                const auto closes_arr = obj["closes"].toArray();
+                dates.reserve(dates_arr.size());
+                closes.reserve(closes_arr.size());
+                for (const auto& v : dates_arr)
+                    dates.append(v.toString());
+                for (const auto& v : closes_arr)
+                    closes.append(v.toDouble());
+            }
+        }
+
+        // Beta computation in compute_metrics() always regresses against SPY,
+        // so only update that cache when SPY is what the caller asked for —
+        // otherwise we would corrupt Beta with e.g. TSX returns.
+        if (sym == QStringLiteral("SPY")) {
+            self->spy_dates_cache_ = dates;
+            self->spy_closes_cache_ = closes;
+            emit self->spy_history_loaded(dates, closes);
+        }
+        emit self->benchmark_history_loaded(sym, dates, closes);
     });
 }
 
@@ -540,6 +601,17 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
     //  loading snapshots from SQLite which is sub-millisecond for <365 rows)
     auto snap_r = PortfolioRepository::instance().get_snapshots(summary.portfolio.id, 365);
     if (snap_r.is_err() || snap_r.value().size() < 3) {
+        // Trigger an async backfill so the next compute_metrics call has data.
+        // This is one-shot per process to avoid hammering yfinance — once we've
+        // attempted, the user can manually re-trigger via re-import.
+        if (!backfill_attempted_.contains(summary.portfolio.id)) {
+            backfill_attempted_.insert(summary.portfolio.id);
+            QPointer<PortfolioService> self = this;
+            const QString pid = summary.portfolio.id;
+            QMetaObject::invokeMethod(this, [self, pid]() {
+                if (self) self->backfill_history(pid, "1y");
+            }, Qt::QueuedConnection);
+        }
         // Fallback: derive volatility from cross-sectional day changes only
         double sum = 0, sum_sq = 0;
         int n = 0;
@@ -815,10 +887,60 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
     }
 
     auto root = doc.object();
-    QString name = root["portfolio_name"].toString("Imported Portfolio");
+
+    // Schema validation — the importer only accepts the terminal's own export format:
+    //   { "portfolio_name": "...", "currency": "...", "transactions": [ {date,symbol,type,quantity,price}, ... ] }
+    // Reject anything else up front so we don't create empty/mis-named portfolios.
+    const QString schema_msg =
+        "Unsupported JSON format. Expected the terminal's export format with fields "
+        "'portfolio_name' (string) and 'transactions' (array of {date, symbol, type, quantity, price}). "
+        "Holdings-only snapshots are not supported — convert each holding to a BUY transaction first.";
+
+    if (!root.contains("portfolio_name") || !root.value("portfolio_name").isString() ||
+        root.value("portfolio_name").toString().trimmed().isEmpty()) {
+        emit import_complete({"", "", 0, {schema_msg}});
+        LOG_ERROR("PortfolioSvc", "Import rejected: missing/invalid 'portfolio_name'");
+        return;
+    }
+    if (!root.contains("transactions") || !root.value("transactions").isArray()) {
+        emit import_complete({"", "", 0, {schema_msg}});
+        LOG_ERROR("PortfolioSvc", "Import rejected: missing/invalid 'transactions' array");
+        return;
+    }
+
+    QString name = root["portfolio_name"].toString();
     QString owner = root["owner"].toString("");
     QString currency = root["currency"].toString("USD");
     auto txn_arr = root["transactions"].toArray();
+
+    if (txn_arr.isEmpty()) {
+        emit import_complete({"", name, 0, {"No transactions found in file. " + schema_msg}});
+        LOG_ERROR("PortfolioSvc", "Import rejected: 'transactions' array is empty");
+        return;
+    }
+
+    // Collect symbol → sector mapping from any hints the file provides:
+    //   1. top-level "holdings[]" (legacy broker-export format) — symbol + sector
+    //   2. per-transaction "sector" field
+    // Either/both populate an authoritative override we hand to SectorResolver
+    // so the Sectors tab is correct without waiting on a yfinance round-trip.
+    QHash<QString, QString> sector_hints;
+    if (root.contains("holdings") && root.value("holdings").isArray()) {
+        for (const auto& v : root.value("holdings").toArray()) {
+            auto obj = v.toObject();
+            QString sym = obj.value("symbol").toString().trimmed().toUpper();
+            QString sec = obj.value("sector").toString().trimmed();
+            if (!sym.isEmpty() && !sec.isEmpty())
+                sector_hints.insert(sym, sec);
+        }
+    }
+    for (const auto& v : txn_arr) {
+        auto obj = v.toObject();
+        QString sym = obj.value("symbol").toString().trimmed().toUpper();
+        QString sec = obj.value("sector").toString().trimmed();
+        if (!sym.isEmpty() && !sec.isEmpty() && !sector_hints.contains(sym))
+            sector_hints.insert(sym, sec);
+    }
 
     auto& repo = PortfolioRepository::instance();
     QString target_id;
@@ -854,7 +976,8 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
         QString date = obj["date"].toString();
 
         if (type == "BUY") {
-            auto r = repo.add_asset(target_id, sym, qty, price, date);
+            QString hint_sector = sector_hints.value(sym.toUpper());
+            auto r = repo.add_asset(target_id, sym, qty, price, date, hint_sector);
             if (r.is_err()) {
                 errors.append(QString("BUY %1: %2").arg(sym, QString::fromStdString(r.error())));
                 continue;
@@ -890,12 +1013,32 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
         ++replayed;
     }
 
+    // Seed SectorResolver with authoritative mapping from the import file,
+    // and kick off async resolution for any symbols that had no hint.
+    for (auto it = sector_hints.constBegin(); it != sector_hints.constEnd(); ++it)
+        SectorResolver::instance().remember(it.key(), it.value());
+
+    QStringList unresolved;
+    if (auto assets = repo.get_assets(target_id); assets.is_ok()) {
+        for (const auto& a : assets.value())
+            if (a.sector.isEmpty())
+                unresolved << a.symbol;
+    }
+    if (!unresolved.isEmpty())
+        SectorResolver::instance().prefetch(unresolved);
+
     invalidate_cache(target_id);
     load_portfolios();
 
     emit import_complete({target_id, name, replayed, errors});
     LOG_INFO("PortfolioSvc",
              QString("Imported %1 transactions into %2, %3 errors").arg(replayed).arg(target_id).arg(errors.size()));
+
+    // Backfill 1y of historical NAV from yfinance so Beta and MDD have data
+    // immediately. Async — fires history_backfilled when done; the screen's
+    // metrics_computed handler will already have reloaded snapshots once the
+    // user refreshes (or on next compute_metrics call).
+    backfill_history(target_id, "1y");
 }
 
 // ── Snapshots ────────────────────────────────────────────────────────────────
@@ -907,6 +1050,82 @@ void PortfolioService::load_snapshots(const QString& portfolio_id, int days) {
     } else {
         LOG_WARN("PortfolioSvc", "Failed to load snapshots: " + QString::fromStdString(r.error()));
     }
+}
+
+void PortfolioService::backfill_history(const QString& portfolio_id, const QString& period) {
+    if (portfolio_id.isEmpty())
+        return;
+
+    auto& repo = PortfolioRepository::instance();
+    auto assets_r = repo.get_assets(portfolio_id);
+    if (assets_r.is_err() || assets_r.value().isEmpty()) {
+        emit history_backfilled(portfolio_id, 0);
+        return;
+    }
+    const auto assets = assets_r.value();
+
+    // Build the args list: [portfolio_nav_history, period, sym1, qty1, sym2, qty2, ...]
+    // Cost basis is the same for every backfilled day (we don't have transaction-time
+    // cost basis), so save_snapshot's pnl_pct uses today's cost — see comment below.
+    QStringList args;
+    args << "portfolio_nav_history" << period;
+    double total_cost_basis = 0.0;
+    for (const auto& a : assets) {
+        args << a.symbol << QString::number(a.quantity, 'f', 8);
+        total_cost_basis += a.quantity * a.avg_buy_price;
+    }
+
+    QPointer<PortfolioService> self = this;
+    python::PythonRunner::instance().run("yfinance_data.py", args,
+                                         [self, portfolio_id, total_cost_basis](python::PythonResult result) {
+        if (!self)
+            return;
+        if (!result.success || result.output.trimmed().isEmpty()) {
+            LOG_WARN("PortfolioSvc",
+                     QString("backfill_history failed for %1: %2").arg(portfolio_id, result.error.left(200)));
+            emit self->history_backfilled(portfolio_id, 0);
+            return;
+        }
+        QJsonParseError err;
+        const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8(), &err);
+        if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+            LOG_WARN("PortfolioSvc", "backfill_history: bad JSON: " + err.errorString());
+            emit self->history_backfilled(portfolio_id, 0);
+            return;
+        }
+        const auto obj = doc.object();
+        if (obj.contains("error")) {
+            LOG_WARN("PortfolioSvc", "backfill_history: " + obj["error"].toString());
+            emit self->history_backfilled(portfolio_id, 0);
+            return;
+        }
+        const auto dates = obj["dates"].toArray();
+        const auto navs = obj["navs"].toArray();
+        if (dates.isEmpty() || dates.size() != navs.size()) {
+            emit self->history_backfilled(portfolio_id, 0);
+            return;
+        }
+
+        // Upsert each row. INSERT OR REPLACE keyed by (portfolio_id, snapshot_date)
+        // so re-running backfill (with a different period or after the user adds
+        // holdings) corrects existing rows in place.
+        auto& repo = PortfolioRepository::instance();
+        int written = 0;
+        for (int i = 0; i < dates.size(); ++i) {
+            const QString d = dates[i].toString();
+            const double nav = navs[i].toDouble();
+            const double pnl = nav - total_cost_basis;
+            const double pnl_pct = total_cost_basis > 0 ? (pnl / total_cost_basis) * 100.0 : 0.0;
+            auto wr = repo.save_snapshot(portfolio_id, nav, total_cost_basis, pnl, pnl_pct, d);
+            if (wr.is_ok())
+                ++written;
+        }
+
+        LOG_INFO("PortfolioSvc",
+                 QString("Backfilled %1 historical snapshots for %2").arg(written).arg(portfolio_id));
+        self->invalidate_cache(portfolio_id);
+        emit self->history_backfilled(portfolio_id, written);
+    });
 }
 
 // ── Cache control ────────────────────────────────────────────────────────────

@@ -87,6 +87,8 @@ QJsonObject AgentService::build_api_keys() const {
         {"mistral", "MISTRAL_API_KEY"},
         {"cohere", "COHERE_API_KEY"},
         {"xai", "XAI_API_KEY"},
+        {"kimi", "MOONSHOT_API_KEY"},
+        {"moonshot", "MOONSHOT_API_KEY"},
     };
 
     QJsonObject keys;
@@ -1249,6 +1251,28 @@ void AgentService::run_portfolio_analysis(const QString& analysis_type, const QJ
     if (!portfolio_summary.isEmpty())
         params["portfolio_summary"] = portfolio_summary;
 
+    // finagent_core's "run" action requires a non-empty `query`. Synthesize
+    // one from the analysis type and include the portfolio context so the
+    // agent has something to answer even if it ignores `portfolio_summary`.
+    QString query;
+    if (analysis_type == "risk")
+        query = "Analyze the risk of this portfolio — concentration, correlation, and downside scenarios. "
+                "Quantify exposures where possible.";
+    else if (analysis_type == "rebalance")
+        query = "Suggest rebalancing actions for this portfolio with specific weight targets and rationale. "
+                "Call out sectors that are over- or under-weight.";
+    else if (analysis_type == "opportunities")
+        query = "Identify opportunities in this portfolio — undervalued positions, missing sectors, and potential "
+                "additions. Prefer concrete candidate tickers.";
+    else
+        query = "Provide a comprehensive analysis of this portfolio with actionable recommendations. "
+                "Organize the output with clear headings.";
+
+    const QString ctx = portfolio_summary.value("context_text").toString();
+    if (!ctx.isEmpty())
+        query = ctx + "\n\nTask: " + query;
+    params["query"] = query;
+
     QPointer<AgentService> self = this;
     run_python_stdin("run", params, {}, [self](bool ok, QJsonObject result) {
         if (!self)
@@ -1256,8 +1280,17 @@ void AgentService::run_portfolio_analysis(const QString& analysis_type, const QJ
         AgentExecutionResult r;
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
-        r.response = result.contains("response") ? result["response"].toString()
-                                                 : QJsonDocument(result).toJson(QJsonDocument::Indented);
+        // finagent_core emits the response under one of several keys depending
+        // on the underlying agent (same spread handled by run_agent). Mirror
+        // that extraction order so callers always get usable text.
+        if (result.contains("response") && !result["response"].toString().isEmpty())
+            r.response = result["response"].toString();
+        else if (result.contains("result") && !result["result"].toString().isEmpty())
+            r.response = result["result"].toString();
+        else if (result.contains("data"))
+            r.response = QJsonDocument(result["data"].toObject()).toJson(QJsonDocument::Indented);
+        else
+            r.response = QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
         self->publish_agent_result(r, /*final=*/true);

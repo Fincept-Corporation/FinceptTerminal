@@ -137,7 +137,7 @@ void ScreenerWidget::refresh_data() {
     topics.reserve(kScreenerSymbols.size());
     for (const auto& sym : kScreenerSymbols)
         topics.append(QStringLiteral("market:quote:") + sym);
-    hub.request(topics);
+    hub.request(topics, /*force=*/true);  // user-triggered: bypass min_interval
 }
 
 

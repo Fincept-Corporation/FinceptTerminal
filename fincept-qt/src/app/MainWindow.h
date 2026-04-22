@@ -6,6 +6,9 @@
 #include <QStackedWidget>
 #include <QTimer>
 
+class QScreen;
+class QToolBar;
+
 namespace ads {
 class CDockManager;
 }
@@ -15,6 +18,7 @@ class DockScreenRouter;
 namespace fincept::ui {
 class DockToolBar;
 class DockStatusBar;
+class PushpinBar;
 class TabBar;
 } // namespace fincept::ui
 namespace fincept::chat_mode {
@@ -40,9 +44,26 @@ class MainWindow : public QMainWindow {
     /// never collide with orphaned saved layouts from a previous session.
     static int next_window_id();
 
+    /// Screen router used by this window. Exposed so WindowCycler can ask
+    /// the currently-focused window to cycle its own panels.
+    DockScreenRouter* dock_router() const { return dock_router_; }
+
+    /// Relocate this window to the given QScreen, preserving maximised /
+    /// fullscreen state and clamping size to the target's available area.
+    /// Called by WindowCycler for the Ctrl+Shift+N series of shortcuts.
+    void move_to_screen(QScreen* target);
+
+    /// Apply / clear Qt::WindowStaysOnTopHint. Handles the Qt requirement
+    /// that the window be re-shown after toggling the flag. Persists the
+    /// state per-window in SessionManager. Safe to call with the current
+    /// state (no-op). Also called from Phase 12's right-click context menu.
+    void set_always_on_top(bool on);
+    bool is_always_on_top() const { return always_on_top_; }
+
   protected:
     void closeEvent(QCloseEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     QStackedWidget* stack_ = nullptr;
@@ -55,6 +76,8 @@ class MainWindow : public QMainWindow {
     DockScreenRouter* dock_router_ = nullptr;
     ui::DockToolBar* dock_toolbar_ = nullptr;
     ui::DockStatusBar* dock_status_bar_ = nullptr;
+    ui::PushpinBar* pushpin_bar_ = nullptr;
+    QToolBar* pushpin_toolbar_ = nullptr; // outer QToolBar that hosts pushpin_bar_
     ui::TabBar* tab_bar_ = nullptr;
 
     // View state

@@ -21,8 +21,9 @@ class PortfolioRepository : public BaseRepository<portfolio::Portfolio> {
     // ── Assets CRUD ──────────────────────────────────────────────────────────
     Result<QVector<portfolio::PortfolioAsset>> get_assets(const QString& portfolio_id);
     Result<qint64> add_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
-                             const QString& date = {});
+                             const QString& date = {}, const QString& sector = {});
     Result<void> update_asset(const QString& portfolio_id, const QString& symbol, double qty, double avg_price);
+    Result<void> set_asset_sector(const QString& portfolio_id, const QString& symbol, const QString& sector);
     Result<void> remove_asset(const QString& portfolio_id, const QString& symbol);
 
     // ── Transactions ─────────────────────────────────────────────────────────

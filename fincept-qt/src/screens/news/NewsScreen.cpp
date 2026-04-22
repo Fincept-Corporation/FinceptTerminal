@@ -3,6 +3,7 @@
 #include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "core/symbol/SymbolDragSource.h"
 #include "screens/news/NewsCommandBar.h"
 #include "screens/news/NewsDetailPanel.h"
 #include "screens/news/NewsFeedPanel.h"
@@ -48,6 +49,15 @@ NewsScreen::NewsScreen(QWidget* parent) : QWidget(parent) {
 
     build_ui();
     connect_signals();
+
+    // Drop a symbol anywhere on the News screen to filter the feed by that
+    // ticker. Reuses the search-query pipeline so caching/highlighting stay
+    // coherent with keyword search.
+    symbol_dnd::installDropFilter(this, [this](const SymbolRef& ref, SymbolGroup) {
+        if (ref.is_valid())
+            on_search_changed(ref.symbol);
+    });
+
     LOG_INFO("NewsScreen", "News screen constructed (no data fetch in constructor)");
 }
 
@@ -346,6 +356,20 @@ void NewsScreen::on_search_changed(const QString& query) {
     ScreenStateManager::instance().notify_changed(this);
     apply_filters_async();
 }
+
+void NewsScreen::on_group_symbol_changed(const SymbolRef& ref) {
+    if (!ref.is_valid())
+        return;
+    // Route through the same pipeline the search box uses so caching,
+    // highlighting, and notifications stay consistent. We don't touch
+    // the command bar's text box — the search query is the data-layer
+    // filter, which is what drives feed filtering.
+    on_search_changed(ref.symbol);
+}
+
+// Drop hook installed in the constructor below is wired via symbol_dnd —
+// see constructor edits for the installDropFilter call that forwards to
+// on_search_changed().
 
 void NewsScreen::on_refresh() {
     refresh_data(true);

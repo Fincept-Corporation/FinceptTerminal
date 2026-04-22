@@ -4,6 +4,7 @@
 
 #include "SurfaceDemoData.h"
 #include "SurfaceTypes.h"
+#include "core/symbol/IGroupLinked.h"
 #include "screens/IStatefulScreen.h"
 #include "services/databento/DatabentoService.h"
 
@@ -23,8 +24,11 @@ class SurfaceTableWidget;
 class SurfaceMetricsPanel;
 class SurfaceDatabentoPanel;
 
-class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefulScreen {
+class SurfaceAnalyticsScreen : public QWidget,
+                               public fincept::screens::IStatefulScreen,
+                               public fincept::IGroupLinked {
     Q_OBJECT
+    Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit SurfaceAnalyticsScreen(QWidget* parent = nullptr);
 
@@ -32,6 +36,13 @@ class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefu
     QVariantMap save_state() const override;
     QString state_key() const override { return "surface_analytics"; }
     int state_version() const override { return 1; }
+
+    // IGroupLinked — subscribe-only. Only equity group changes are honoured,
+    // and only if the symbol is in VOL_SYMBOLS (the screen's supported list).
+    void set_group(fincept::SymbolGroup g) override { link_group_ = g; }
+    fincept::SymbolGroup group() const override { return link_group_; }
+    void on_group_symbol_changed(const fincept::SymbolRef& ref) override;
+    fincept::SymbolRef current_symbol() const override;
 
   private slots:
     void on_category_clicked(int index);
@@ -123,6 +134,9 @@ class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefu
     ImpliedDividendData impl_div_data_;
     InflationExpData inflation_data_;
     MonetaryPolicyData monetary_data_;
+
+    // Symbol group link — SymbolGroup::None when unlinked.
+    fincept::SymbolGroup link_group_ = fincept::SymbolGroup::None;
 
     // Category accent colors (R,G,B)
     static constexpr int CAT_COLORS[][3] = {

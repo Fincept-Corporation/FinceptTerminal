@@ -1,5 +1,38 @@
 cmake_minimum_required(VERSION 3.27)
+
+# ── RC compiler override (clang-cl + Windows only) ───────────────────────────
+# When building with clang-cl, CMake's Windows-Clang module auto-enables the
+# two-step `cmake -E cmake_llvm_rc` wrapper: preprocess the .rc with clang-cl
+# then pipe to rc.exe. That wrapper inherits incompatible C flags (-MD, -FS,
+# /showIncludes) and fails silently with exit 1 on Windows SDK rc.exe. Our
+# app.rc is a trivial ICON declaration with no macros or #includes, so we
+# bypass the wrapper and use rc.exe directly. Tracked as CMake issue #20198.
+# Must run before project() so CMAKE_RC_COMPILER is set before RC language init.
+if(WIN32 AND CMAKE_HOST_WIN32)
+    # Heuristic: if CC/CXX env vars point to clang-cl, or the generator is likely
+    # to pick up clang-cl from PATH, force MSVC rc.exe. Harmless on pure MSVC too.
+    find_program(_fincept_rc_exe NAMES rc rc.exe
+        HINTS
+            "$ENV{WindowsSdkVerBinPath}x64"
+            "$ENV{WindowsSdkDir}bin/$ENV{WindowsSDKVersion}x64"
+            "C:/Program Files (x86)/Windows Kits/10/bin/10.0.22621.0/x64"
+            "C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64")
+    if(_fincept_rc_exe)
+        set(CMAKE_RC_COMPILER "${_fincept_rc_exe}" CACHE FILEPATH "Windows resource compiler" FORCE)
+        set(CMAKE_RC_COMPILER_INIT "${_fincept_rc_exe}")
+    endif()
+endif()
+
 project(FinceptTerminal VERSION 4.0.2 LANGUAGES CXX)
+
+# Strip C/C++ flags out of RC invocations — rc.exe only understands /D, /I, /fo.
+if(WIN32)
+    set(CMAKE_RC_FLAGS "/nologo" CACHE STRING "" FORCE)
+    set(CMAKE_RC_FLAGS_RELEASE "" CACHE STRING "" FORCE)
+    set(CMAKE_RC_FLAGS_DEBUG "" CACHE STRING "" FORCE)
+    set(CMAKE_RC_FLAGS_RELWITHDEBINFO "" CACHE STRING "" FORCE)
+    set(CMAKE_RC_FLAGS_MINSIZEREL "" CACHE STRING "" FORCE)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -439,7 +472,13 @@ set(CORE_SOURCES
     src/core/session/SessionManager.cpp
     src/core/session/ScreenStateManager.cpp
     src/core/keys/KeyConfigManager.cpp
+    src/core/keys/WindowCycler.cpp
     src/core/net/NetSpeedMeter.cpp
+    src/core/symbol/SymbolContext.cpp
+    src/core/symbol/SymbolMime.cpp
+    src/core/symbol/SymbolDragSource.cpp
+    src/core/components/ComponentCatalog.cpp
+    src/core/components/PopularityTracker.cpp
 )
 
 # Network
@@ -465,6 +504,7 @@ set(AUTH_SOURCES
     src/auth/SessionGuard.cpp
     src/auth/PinManager.cpp
     src/auth/InactivityGuard.cpp
+    src/auth/SecurityAuditLog.cpp
 )
 
 # Storage
@@ -542,12 +582,15 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v016_broker_accounts.cpp
     src/storage/sqlite/migrations/v017_perf_indexes.cpp
     src/storage/sqlite/migrations/v018_widget_config.cpp
+    src/storage/sqlite/migrations/v019_sector_cache.cpp
+    src/storage/sqlite/migrations/v020_security_audit_log.cpp
 )
 
 # Python runner
 set(PYTHON_SOURCES
     src/python/PythonRunner.cpp
     src/python/PythonSetupManager.cpp
+    src/python/PythonWorker.cpp
 )
 
 # AI Chat
@@ -667,6 +710,7 @@ set(SERVICE_SOURCES
     src/services/economics/EconomicsService.cpp
     src/services/agents/AgentService.cpp
     src/services/file_manager/FileManagerService.cpp
+    src/services/sectors/SectorResolver.cpp
     src/services/workflow/NodeRegistry.cpp
     src/services/workflow/WorkflowService.cpp
     src/services/workflow/WorkflowExecutor.cpp
@@ -675,6 +719,7 @@ set(SERVICE_SOURCES
     src/services/workspace/WorkspaceSerializer.cpp
     src/services/workspace/WorkspaceManager.cpp
     src/services/workspace/WorkspaceTemplates.cpp
+    src/services/pushpins/PushpinService.cpp
     src/services/workflow/nodes/TriggerNodes.cpp
     src/services/workflow/nodes/ControlFlowNodes.cpp
     src/services/workflow/nodes/UtilityNodes.cpp
@@ -739,7 +784,12 @@ set(UI_SOURCES
     src/ui/theme/ThemeManager.cpp
     src/ui/theme/StyleSheets.cpp
     src/ui/widgets/Card.cpp
+    src/ui/widgets/GroupBadge.cpp
     src/ui/widgets/StatusBadge.cpp
+    src/ui/pushpins/SymbolChip.cpp
+    src/ui/pushpins/PushpinBar.cpp
+    src/ui/components/ComponentCard.cpp
+    src/ui/components/ComponentBrowserDialog.cpp
     src/ui/widgets/SearchBar.cpp
     src/ui/widgets/GeometricBackground.cpp
     src/ui/widgets/WorldMapWidget.cpp
@@ -1064,8 +1114,7 @@ set(SCREEN_SOURCES
     src/screens/portfolio/views/PlanningView.cpp
     src/screens/portfolio/views/EconomicsView.cpp
     src/screens/portfolio/PortfolioFFNView.cpp
-    src/screens/portfolio/PortfolioAiPanel.cpp
-    src/screens/portfolio/PortfolioAgentPanel.cpp
+    src/screens/portfolio/PortfolioInsightsPanel.cpp
     src/screens/agent_config/AgentConfigScreen.cpp
     src/screens/agent_config/AgentsViewPanel.cpp
     src/screens/agent_config/SystemViewPanel.cpp
@@ -1281,8 +1330,7 @@ set_source_files_properties(
     src/screens/node_editor/toolbar/DeployDialog.cpp
     src/screens/node_editor/toolbar/NodeEditorToolbar.cpp
     src/screens/notes/NotesScreen.cpp
-    src/screens/portfolio/PortfolioAgentPanel.cpp
-    src/screens/portfolio/PortfolioAiPanel.cpp
+    src/screens/portfolio/PortfolioInsightsPanel.cpp
     src/screens/portfolio/PortfolioBlotter.cpp
     src/screens/portfolio/PortfolioCommandBar.cpp
     src/screens/portfolio/PortfolioDetailWrapper.cpp
@@ -1369,6 +1417,8 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v016_broker_accounts.cpp
     src/storage/sqlite/migrations/v017_perf_indexes.cpp
     src/storage/sqlite/migrations/v018_widget_config.cpp
+    src/storage/sqlite/migrations/v019_sector_cache.cpp
+    src/storage/sqlite/migrations/v020_security_audit_log.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
@@ -1926,6 +1976,9 @@ add_custom_command(TARGET FinceptTerminal POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy2.txt"
         "$<TARGET_FILE_DIR:FinceptTerminal>/resources/requirements-numpy2.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/component_catalog.json"
+        "$<TARGET_FILE_DIR:FinceptTerminal>/resources/component_catalog.json"
     COMMENT "Copying requirements files to build output..."
 )
 

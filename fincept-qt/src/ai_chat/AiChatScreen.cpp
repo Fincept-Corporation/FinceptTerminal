@@ -37,6 +37,7 @@
 #include <QToolButton>
 #include <QtConcurrent/QtConcurrent>
 
+#include <cmath>
 #include <memory>
 
 namespace fincept::screens {
@@ -45,6 +46,30 @@ static constexpr const char* TAG = "AiChatScreen";
 
 namespace fnt = fincept::ui::fonts;
 namespace col = fincept::ui::colors;
+
+// ── Bubble sizing ─────────────────────────────────────────────────────────────
+//
+// Approach: QLabel with setWordWrap(true) + setMaximumWidth(N). QLabel's
+// built-in heightForWidth() handles height computation natively — no manual
+// measurement, no clone tricks, no crop risk. The label grows vertically as
+// text is set, and the surrounding QVBoxLayout picks that up automatically.
+//
+// These are the only sizing numbers we need: the column max widths and the
+// horizontal padding that bubble_style() bakes into the QFrame CSS. Inner
+// label width = col - 2 * padding_x.
+
+// Column widths (max). User bubbles are narrower so their right-aligned layout
+// floats toward the right edge; AI bubbles get more room.
+static constexpr int kUserColMaxWidth = 560;
+static constexpr int kAiColMaxWidth = 680;
+
+// Horizontal CSS padding in bubble_style(): "padding:10px 14px".
+static constexpr int kBubblePadX = 14;
+
+// The width QLabel should wrap at — the bubble's inner text area.
+static int bubble_inner_width(bool is_user) {
+    return (is_user ? kUserColMaxWidth : kAiColMaxWidth) - 2 * kBubblePadX;
+}
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
 
@@ -67,7 +92,7 @@ static QString body_color(const QString& role) {
     return col::TEXT_PRIMARY();
 }
 
-// Default stylesheet for rendered markdown inside QTextEdit / QLabel bubbles.
+// Default stylesheet for rendered markdown inside QLabel bubbles.
 // Comprehensive styling for LLM responses: paragraphs, lists, headings,
 // code blocks, blockquotes, tables, and links.
 static QString markdown_css(const QString& text_color) {
@@ -96,18 +121,6 @@ static QString markdown_css(const QString& text_color) {
                    "strong { color: %1; font-weight: 700; }"
                    "em { font-style: italic; }")
         .arg(text_color, col::AMBER(), col::BORDER_MED(), col::BG_RAISED(), col::TEXT_SECONDARY());
-}
-
-// Override Qt's default blue palette on QTextEdit to match Obsidian theme.
-static void apply_obsidian_palette(QTextEdit* edit) {
-    QPalette p = edit->palette();
-    p.setColor(QPalette::Link, QColor(col::AMBER()));
-    p.setColor(QPalette::LinkVisited, QColor(col::AMBER()));
-    p.setColor(QPalette::Highlight, QColor(col::AMBER_DIM()));
-    p.setColor(QPalette::HighlightedText, QColor(col::TEXT_PRIMARY()));
-    p.setColor(QPalette::Base, Qt::transparent);
-    p.setColor(QPalette::Text, QColor(col::TEXT_PRIMARY()));
-    edit->setPalette(p);
 }
 
 static QString generate_session_title() {
@@ -925,26 +938,27 @@ void AiChatScreen::on_send() {
 
 void AiChatScreen::on_stream_chunk(const QString& chunk, bool done) {
     // Snapshot QPointer to local — prevents TOCTOU between null-check and use.
-    QTextEdit* bubble = streaming_bubble_;
+    QLabel* bubble = streaming_bubble_;
     if (!bubble)
         return;
 
     // Tool-call clear sentinel: reset bubble content (removes partial XML)
     if (chunk.startsWith("\x01__TOOL_CALL_CLEAR__")) {
-        bubble->clear();
-        bubble->setPlainText("Calling tool...");
+        bubble->setProperty("acc", QString("Calling tool..."));
+        bubble->setText("Calling tool...");
         scroll_to_bottom();
         return;
     }
 
     if (!chunk.isEmpty()) {
+        QString acc = bubble->property("acc").toString();
         // If bubble shows the "Calling tool..." placeholder, replace it
-        if (bubble->toPlainText() == "Calling tool...") {
-            bubble->setPlainText(chunk);
-        } else {
-            bubble->moveCursor(QTextCursor::End);
-            bubble->insertPlainText(chunk);
-        }
+        if (acc == "Calling tool...")
+            acc = chunk;
+        else
+            acc += chunk;
+        bubble->setProperty("acc", acc);
+        bubble->setText(acc);
         scroll_to_bottom();
     }
     Q_UNUSED(done)
@@ -962,8 +976,11 @@ void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
     set_input_enabled(true);
 
     if (!response.success) {
-        if (streaming_bubble_)
-            streaming_bubble_->setPlainText("Error: " + response.error);
+        if (streaming_bubble_) {
+            const QString err = "Error: " + response.error;
+            streaming_bubble_->setProperty("acc", err);
+            streaming_bubble_->setText(err);
+        }
         streaming_bubble_ = nullptr;
         return;
     }
@@ -971,15 +988,16 @@ void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
     const QString content = response.content;
     if (streaming_bubble_) {
         // Get final text (either from response or what was streamed)
-        QString final_text = streaming_bubble_->toPlainText();
+        QString final_text = streaming_bubble_->property("acc").toString();
         if (!content.isEmpty() && final_text.isEmpty())
             final_text = content;
-        // Re-render as markdown so **bold**, - lists, code blocks, etc. display properly
+        // Re-render as markdown so **bold**, - lists, code blocks, etc. display properly.
+        // Switching format on QLabel re-parses; no manual measurement needed.
         if (!final_text.isEmpty()) {
-            streaming_bubble_->document()->setDefaultStyleSheet(markdown_css(col::TEXT_PRIMARY()));
-            streaming_bubble_->setMarkdown(final_text);
+            streaming_bubble_->setTextFormat(Qt::MarkdownText);
+            streaming_bubble_->setText(final_text);
+            streaming_bubble_->setProperty("acc", final_text);
         }
-        streaming_bubble_->setReadOnly(true);
 
         // Show the copy button now that streaming is done
         auto* copy_obj = streaming_bubble_->property("copy_btn").value<QObject*>();
@@ -1031,7 +1049,7 @@ void AiChatScreen::add_message_bubble(const QString& role, const QString& conten
 
     auto* col_widget = new QWidget;
     col_widget->setStyleSheet("background:transparent;");
-    col_widget->setMaximumWidth(is_user ? 560 : 680);
+    col_widget->setMaximumWidth(is_user ? kUserColMaxWidth : kAiColMaxWidth);
     auto* cvl = new QVBoxLayout(col_widget);
     cvl->setContentsMargins(0, 0, 0, 0);
     cvl->setSpacing(4);
@@ -1044,29 +1062,25 @@ void AiChatScreen::add_message_bubble(const QString& role, const QString& conten
                                 .arg(fnt::TINY));
     cvl->addWidget(role_lbl);
 
-    // Bubble
+    // Bubble — QLabel auto-sizes to its content via heightForWidth(), so we
+    // just pin a max width and let Qt do the math. No scrollbars (QLabel has
+    // none), no clone tricks, no manual height callbacks.
     auto* bubble = new QFrame;
     bubble->setStyleSheet(bubble_style(role));
     auto* bvl = new QVBoxLayout(bubble);
     bvl->setContentsMargins(0, 0, 0, 0);
 
-    auto* body = new QTextEdit;
-    body->setReadOnly(true);
-    body->setFrameShape(QFrame::NoFrame);
-    body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-    body->document()->setDocumentMargin(4);
-    body->document()->setDefaultStyleSheet(markdown_css(body_color(role)));
-    apply_obsidian_palette(body);
-    body->setMarkdown(content);
-    body->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    body->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    body->setStyleSheet(QString("QTextEdit{background:transparent;color:%1;border:none;font-size:%2px;}")
+    auto* body = new QLabel;
+    body->setTextFormat(Qt::MarkdownText);
+    body->setText(content);
+    body->setWordWrap(true);
+    body->setMaximumWidth(bubble_inner_width(is_user));
+    body->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    body->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    body->setStyleSheet(QString("QLabel{background:transparent;color:%1;font-size:%2px;}")
                             .arg(body_color(role))
                             .arg(fnt::BODY));
-    // Size to content
-    body->document()->setTextWidth(is_user ? 520 : 640);
-    const int doc_h = static_cast<int>(body->document()->size().height());
-    body->setFixedHeight(qMax(doc_h + 16, 32));
     bvl->addWidget(body);
     cvl->addWidget(bubble);
 
@@ -1113,7 +1127,7 @@ void AiChatScreen::add_message_bubble(const QString& role, const QString& conten
     messages_layout_->insertWidget(messages_layout_->count() - 1, row);
 }
 
-QTextEdit* AiChatScreen::add_streaming_bubble() {
+QLabel* AiChatScreen::add_streaming_bubble() {
     auto* row = new QWidget;
     row->setStyleSheet("background:transparent;");
     auto* rl = new QHBoxLayout(row);
@@ -1121,7 +1135,7 @@ QTextEdit* AiChatScreen::add_streaming_bubble() {
 
     auto* col_widget = new QWidget;
     col_widget->setStyleSheet("background:transparent;");
-    col_widget->setMaximumWidth(680);
+    col_widget->setMaximumWidth(kAiColMaxWidth);
     auto* cvl = new QVBoxLayout(col_widget);
     cvl->setContentsMargins(0, 0, 0, 0);
     cvl->setSpacing(4);
@@ -1137,29 +1151,23 @@ QTextEdit* AiChatScreen::add_streaming_bubble() {
     auto* bvl = new QVBoxLayout(bubble);
     bvl->setContentsMargins(0, 0, 0, 0);
 
-    auto* body = new QTextEdit;
-    body->setReadOnly(false);
-    body->setFrameShape(QFrame::NoFrame);
-    body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-    body->document()->setDocumentMargin(4);
-    body->document()->setDefaultStyleSheet(markdown_css(col::TEXT_PRIMARY()));
-    apply_obsidian_palette(body);
-    body->setMinimumHeight(32);
-    body->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    body->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    body->setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
-    body->setStyleSheet(QString("QTextEdit{background:transparent;color:%1;border:none;font-size:%2px;}")
+    // Streaming body — QLabel with plain-text format during streaming (appending
+    // chunks as markdown would re-parse on every token; waste). on_streaming_done
+    // switches to Qt::MarkdownText and re-renders the final accumulated text.
+    // Accumulated text is stored on the widget as a dynamic property "acc" so
+    // chunk handlers don't need external state.
+    auto* body = new QLabel;
+    body->setTextFormat(Qt::PlainText);
+    body->setText({});
+    body->setProperty("acc", QString{});
+    body->setWordWrap(true);
+    body->setMaximumWidth(bubble_inner_width(/*is_user=*/false));
+    body->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    body->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    body->setStyleSheet(QString("QLabel{background:transparent;color:%1;font-size:%2px;}")
                             .arg(col::TEXT_PRIMARY())
                             .arg(fnt::BODY));
-    // Grow height to fit content as chunks stream in
-    connect(body->document(), &QTextDocument::contentsChanged, body, [body, bubble, row]() {
-        body->document()->setTextWidth(body->viewport()->width() > 0 ? body->viewport()->width() : 640);
-        const int doc_h = static_cast<int>(body->document()->size().height());
-        const int new_h = qMax(doc_h + 16, 32);
-        body->setFixedHeight(new_h);
-        bubble->adjustSize();
-        row->adjustSize();
-    });
     bvl->addWidget(body);
     cvl->addWidget(bubble);
 
@@ -1175,7 +1183,7 @@ QTextEdit* AiChatScreen::add_streaming_bubble() {
                                 .arg(col::TEXT_PRIMARY()));
     copy_btn->hide();
     connect(copy_btn, &QPushButton::clicked, this, [body, copy_btn]() {
-        QApplication::clipboard()->setText(body->toPlainText());
+        QApplication::clipboard()->setText(body->property("acc").toString());
         copy_btn->setText("Copied!");
         QTimer::singleShot(1500, copy_btn, [copy_btn]() { copy_btn->setText("Copy"); });
     });
