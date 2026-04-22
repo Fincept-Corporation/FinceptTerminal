@@ -246,7 +246,9 @@ jobs:
         with:
           key: linux-x64-release-${{ env.QT_VERSION }}
           max-size: 500M
-          update-package-index: true
+          # update-package-index is unset: the "Install system dependencies"
+          # step below already runs apt-get update, so this action's own
+          # update is redundant and was observed to hang the runner.
 
       # ── System deps ───────────────────────────────────────────────────────
       # ubuntu-22.04 ships g++ 11.4 by default, but CMakeLists.txt enforces

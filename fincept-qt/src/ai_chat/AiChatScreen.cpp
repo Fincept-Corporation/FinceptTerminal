@@ -92,37 +92,6 @@ static QString body_color(const QString& role) {
     return col::TEXT_PRIMARY();
 }
 
-// Default stylesheet for rendered markdown inside QLabel bubbles.
-// Comprehensive styling for LLM responses: paragraphs, lists, headings,
-// code blocks, blockquotes, tables, and links.
-static QString markdown_css(const QString& text_color) {
-    return QString("body { color: %1; line-height: 1.5; }"
-                   "p { margin-top: 6px; margin-bottom: 6px; }"
-                   "ul, ol { margin-top: 4px; margin-bottom: 4px; padding-left: 20px; }"
-                   "li { margin-top: 3px; margin-bottom: 3px; }"
-                   "h1 { margin-top: 14px; margin-bottom: 6px; color: %2; font-size: 18px; font-weight: 700; }"
-                   "h2 { margin-top: 12px; margin-bottom: 5px; color: %2; font-size: 16px; font-weight: 700; }"
-                   "h3 { margin-top: 10px; margin-bottom: 4px; color: %2; font-size: 15px; font-weight: 600; }"
-                   "h4 { margin-top: 8px; margin-bottom: 4px; color: %2; font-size: 14px; font-weight: 600; }"
-                   "hr { margin-top: 10px; margin-bottom: 10px; border: none; "
-                   "     border-top: 1px solid %3; }"
-                   "a { color: %2; text-decoration: underline; }"
-                   "code { background: %4; color: %2; padding: 1px 4px; "
-                   "       font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; }"
-                   "pre { background: %4; border: 1px solid %3; padding: 10px 12px; "
-                   "      margin-top: 6px; margin-bottom: 6px; "
-                   "      font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; }"
-                   "blockquote { border-left: 3px solid %2; padding-left: 12px; "
-                   "             margin-top: 6px; margin-bottom: 6px; color: %5; }"
-                   "table { border-collapse: collapse; margin-top: 6px; margin-bottom: 6px; }"
-                   "th { background: %4; border: 1px solid %3; padding: 4px 8px; "
-                   "     font-weight: 600; color: %2; }"
-                   "td { border: 1px solid %3; padding: 4px 8px; }"
-                   "strong { color: %1; font-weight: 700; }"
-                   "em { font-style: italic; }")
-        .arg(text_color, col::AMBER(), col::BORDER_MED(), col::BG_RAISED(), col::TEXT_SECONDARY());
-}
-
 static QString generate_session_title() {
     static const QStringList prefixes = {"Amber", "Apex", "Atlas", "Echo", "Flux", "Nova", "Slate", "Vector"};
     static const QStringList nouns = {"Brief", "Drift", "Focus", "Ledger", "Macro", "Pulse", "Signal", "Tape"};

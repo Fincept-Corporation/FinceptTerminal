@@ -43,7 +43,7 @@ QList<AuditEvent> SecurityAuditLog::recent(int limit) {
     if (r.is_err())
         return out;
 
-    auto q = r.value();
+    auto& q = r.value();
     while (q.next()) {
         AuditEvent e;
         e.id = q.value(0).toLongLong();

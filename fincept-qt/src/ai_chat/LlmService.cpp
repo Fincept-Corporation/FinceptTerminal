@@ -1773,6 +1773,7 @@ void LlmService::parse_usage(LlmResponse& resp, const QJsonObject& rj, const QSt
 // ============================================================================
 
 QString LlmService::get_models_url(const QString& provider, const QString& api_key, const QString& base_url) {
+    Q_UNUSED(api_key) // Auth goes via headers (see get_models_headers()), URL is provider-based.
     const QString p = provider.toLower();
 
     // Custom base_url (except fincept)
