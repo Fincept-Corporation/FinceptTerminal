@@ -4,7 +4,7 @@
 //
 // Flow:
 //   1. Download UV standalone binary (~13MB) — single download, no pip/get-pip.py
-//   2. uv python install 3.12                — UV handles Python download internally
+//   2. uv python install 3.11.9              — UV handles Python download internally
 //   3. uv venv venv-numpy1 + venv-numpy2     — PARALLEL venv creation
 //   4. uv pip install requirements            — PARALLEL package install (UV is 10-100x faster than pip)
 //
@@ -111,7 +111,7 @@ class PythonSetupManager : public QObject {
     bool verify_packages_installed(const QString& venv_name,
                                    const QString& requirements_file) const;
 
-    static constexpr const char* kPythonVersion = "3.12";
+    static constexpr const char* kPythonVersion = "3.11.9";
     static constexpr const char* kUvVersion = "0.7.12";
 
     // Session-lifetime caches — requirements files never change at runtime.

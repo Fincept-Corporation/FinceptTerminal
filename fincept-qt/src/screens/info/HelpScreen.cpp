@@ -279,7 +279,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
 
             {"💻", "What are the system requirements?",
              "Windows 10+ (x64), macOS 12+, or Linux (glibc 2.31+). 8 GB RAM recommended. "
-             "Active internet required for data feeds. Python 3.12 is installed automatically "
+             "Active internet required for data feeds. Python 3.11.9 is installed automatically "
              "during first-time setup."},
 
             {"🔒", "Is my data secure?",

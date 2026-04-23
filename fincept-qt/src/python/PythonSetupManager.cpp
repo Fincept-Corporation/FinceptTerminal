@@ -78,17 +78,24 @@ QString PythonSetupManager::base_python_path() const {
         return cached_python_path_;
     }
 
-    // Fallback: scan known install directory for the cpython-3.12 subdirectory.
+    // Fallback: scan known install directory for cpython folders.
+    // Prefer exact patch pin (e.g. cpython-3.11.9*) and then major.minor.
+    const QString python_version = QString::fromLatin1(kPythonVersion);
+    const QString python_series = python_version.section('.', 0, 1);
+    QStringList patterns{QString("cpython-%1*").arg(python_version)};
+    if (!python_series.isEmpty() && python_series != python_version) {
+        patterns << QString("cpython-%1*").arg(python_series);
+    }
 #ifdef _WIN32
     QDir py_dir(install_dir() + "/python");
-    auto entries = py_dir.entryList({"cpython-3.12*"}, QDir::Dirs);
+    auto entries = py_dir.entryList(patterns, QDir::Dirs);
     if (!entries.isEmpty()) {
         cached_python_path_ = py_dir.filePath(entries.first() + "/python.exe");
         return cached_python_path_;
     }
 #else
     QDir py_dir(install_dir() + "/python");
-    auto entries = py_dir.entryList({"cpython-3.12*"}, QDir::Dirs);
+    auto entries = py_dir.entryList(patterns, QDir::Dirs);
     if (!entries.isEmpty()) {
         cached_python_path_ = py_dir.filePath(entries.first() + "/bin/python3");
         return cached_python_path_;
@@ -507,13 +514,15 @@ void PythonSetupManager::run_setup() {
 
         // ── Step 2: Install Python via UV ────────────────────────────────────
         if (!status.python_installed) {
-            self->emit_progress("python", 0, "Installing Python 3.12 via UV...");
+            self->emit_progress("python", 0,
+                                QString("Installing Python %1 via UV...").arg(QString::fromLatin1(kPythonVersion)));
             if (!self->install_python_via_uv()) {
                 self->emit_progress("python", 0, "Failed to install Python", true);
                 fail("Python installation failed");
                 return;
             }
-            self->emit_progress("python", 100, "Python 3.12 installed");
+            self->emit_progress("python", 100,
+                                QString("Python %1 installed").arg(QString::fromLatin1(kPythonVersion)));
         } else {
             self->emit_progress("python", 100, "Python already installed: " + status.python_version);
         }
@@ -732,7 +741,8 @@ bool PythonSetupManager::download_uv() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 bool PythonSetupManager::install_python_via_uv() {
-    emit_progress("python", 20, "UV is downloading Python 3.12...");
+    emit_progress("python", 20,
+                  QString("UV is downloading Python %1...").arg(QString::fromLatin1(kPythonVersion)));
 
     // Shared UV env (cache dir, hardlinks, bytecode compile, concurrency, timeout).
     QStringList env = uv_env_extra();
