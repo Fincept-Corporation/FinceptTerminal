@@ -238,12 +238,25 @@ We're building the future of financial analysis — together.
 
 ## Support the Project
 
-We've launched a community token on pump.fun. Holding or trading this token is purely a way to show support for Fincept Terminal's development — it has no utility inside the product, no governance rights, no revenue share, and no promised returns.
+We've built a community token on pump.fun as a way for early believers to stand alongside Fincept Terminal's journey — from where it is today to where we're taking it.
 
-- pump.fun: https://pump.fun/coin/J7Xrcq6cX4GZ3mnQXvrsCYGQyijc9gSNZT4DSUijpump
-- Solana mint address: 84zrRRB7eqF3G2zhsGsD7zk922kZw3LacxhjkSHZJXwK
+**Fincept Terminal is being built for the long haul.** We're committed to making it the go-to financial intelligence platform, and this token is a way for the community to be part of that story from the ground up.
 
-This token exists solely to support the project. Fincept Corporation is not responsible for any profit or loss any participant incurs from buying, selling, or holding it. Trade at your own risk and only with funds you can afford to lose.
+- **pump.fun:** [View Token](https://pump.fun/coin/9LUqJ5aQTjQiUCL93gi33LZcscUoSBJNhVCYpPzEpump)
+- **Solana Mint Address:** `84zrRRB7eqF3G2zhsGsD7zk922kZw3LacxhjkSHZJXwK`
+
+**What this token is:**
+- A signal of belief in Fincept Terminal's long-term vision
+- A way to be part of the community at the earliest stage
+- Planned for integration into the Fincept Terminal ecosystem as the product grows
+
+**What this token is not (today):**
+- It currently carries no in-product utility, governance rights, or revenue share
+- It is not an investment contract, and no returns are promised or implied
+
+We're thinking long-term — and we hope you are too. That said, please only participate with funds you can genuinely afford to lose. Crypto markets are volatile, and Fincept Corporation assumes no responsibility for any gains or losses from buying, selling, or holding this token.
+
+**If you believe in what we're building, holding is how you show it.**
 
 ---
 
