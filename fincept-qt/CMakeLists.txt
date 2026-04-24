@@ -479,6 +479,7 @@ set(CORE_SOURCES
     src/core/symbol/SymbolDragSource.cpp
     src/core/components/ComponentCatalog.cpp
     src/core/components/PopularityTracker.cpp
+    src/core/crash/CrashHandler.cpp
 )
 
 # Network
@@ -1552,7 +1553,23 @@ set_source_files_properties(
 # MACOSX_BUNDLE — create a proper .app bundle on macOS
 if(WIN32)
     set(_FINCEPT_EXE_FLAGS WIN32)
-    set(_FINCEPT_PLATFORM_SOURCES resources/app.rc)
+    # Generate app.rc from app.rc.in so FILEVERSION / PRODUCTVERSION / string
+    # table reflect the project() VERSION. Without this the exe's PE version
+    # resource is 0.0.0.0 and Windows Error Reporting cannot triage crashes
+    # by app version (see issue #215). The .ico reference is relative to the
+    # generated file's directory, so copy fincept.ico next to it.
+    set(FINCEPT_VER_MAJOR ${PROJECT_VERSION_MAJOR})
+    set(FINCEPT_VER_MINOR ${PROJECT_VERSION_MINOR})
+    set(FINCEPT_VER_PATCH ${PROJECT_VERSION_PATCH})
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.rc.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/app.rc"
+        @ONLY)
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/fincept.ico"
+        "${CMAKE_CURRENT_BINARY_DIR}/fincept.ico"
+        COPYONLY)
+    set(_FINCEPT_PLATFORM_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/app.rc")
 elseif(APPLE)
     set(_FINCEPT_EXE_FLAGS MACOSX_BUNDLE)
     set(_FINCEPT_PLATFORM_SOURCES "")
@@ -1829,6 +1846,15 @@ target_link_libraries(FinceptTerminal PRIVATE
 # macOS: also link Security.framework for Keychain in SecureStorage
 if(APPLE)
     target_link_libraries(FinceptTerminal PRIVATE "-framework Security")
+endif()
+
+# Windows: link dbghelp for the crash-handler minidump writer (see
+# src/core/crash/CrashHandler.cpp). Also link Advapi32/Crypt32 explicitly for
+# SecureStorage — they're normally pulled in transitively, but when MSVC runs
+# /OPT:REF aggressively on release builds the indirect reference via wincred.h
+# can get stripped, producing late-link errors.
+if(WIN32)
+    target_link_libraries(FinceptTerminal PRIVATE dbghelp Advapi32 Crypt32)
 endif()
 
 # Copy OpenSSL DLLs to build output — Windows only

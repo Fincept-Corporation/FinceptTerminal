@@ -6,6 +6,12 @@ labels: "type:performance, status:triage"
 assignees: ""
 ---
 
+<!--
+Planning to fix this yourself? Please read .github/CONTRIBUTING.md first.
+A maintainer must add `good-first-issue`, `help-wanted`, or `scope:approved`
+to this issue before PRs against it will be accepted.
+-->
+
 ## What's slow or freezing?
 <!-- Describe the issue and when it happens (e.g., on startup, when switching screens) -->
 

@@ -151,7 +151,7 @@ QWidget* DockScreenRouter::wrap_with_group_badge(const QString& id, QWidget* scr
     };
 
     connect(badge, &ui::GroupBadge::group_change_requested, this,
-            [this, id, linked, badge, sync_label](SymbolGroup g) {
+            [linked, badge, sync_label](SymbolGroup g) {
                 linked->set_group(g);
                 badge->set_group_silent(g);
                 sync_label();

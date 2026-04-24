@@ -538,7 +538,12 @@ class SuperAgent:
         if not model_provider or not model_id:
             return {
                 "success": False,
-                "error": "No LLM model configured. Please configure a model provider and model ID in Settings > LLM Configuration.",
+                "error": (
+                    "No LLM model configured. "
+                    "GUI: Settings > LLM Configuration. "
+                    "Programmatic: pass user_config={'model': {'provider': '...', 'model_id': '...'}} "
+                    "to execute() / execute_multi()."
+                ),
                 "routing": {
                     "intent": routing.intent.value,
                     "agent_id": routing.agent_id,
@@ -614,7 +619,8 @@ class SuperAgent:
         self,
         query: str,
         session_id: Optional[str] = None,
-        aggregate: bool = True
+        aggregate: bool = True,
+        user_config: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Execute query on multiple routed agents and aggregate results.
@@ -623,20 +629,83 @@ class SuperAgent:
             query: User query
             session_id: Optional session ID
             aggregate: Whether to aggregate responses
+            user_config: Optional user-provided model/tools/instructions overrides.
+                Must be forwarded to every per-agent execute() call — otherwise
+                multi-agent runs bypass the user's configured provider and fail
+                with "No LLM model configured" (issue #150).
 
         Returns:
-            Aggregated or individual responses
+            Aggregated or individual responses, plus a ``workflow`` dict
+            describing each step (intent, agent_id, confidence, success,
+            latency_ms, error) so the UI can render the multi-agent trace.
         """
+        import time
+
         routings = self.route_multi(query)
 
         if not routings:
-            return self.execute(query, session_id)
+            return self.execute(query, session_id, user_config=user_config)
 
-        responses = []
-        for routing in routings:
-            result = self.execute(query, session_id)
-            result["routing"]["priority"] = routing.confidence
+        logger.info(
+            f"Multi-agent workflow start: query={query[:80]!r} agents={len(routings)}"
+        )
+
+        responses: List[Dict[str, Any]] = []
+        steps: List[Dict[str, Any]] = []
+        workflow_started_at = time.time()
+
+        for index, routing in enumerate(routings, start=1):
+            step_started_at = time.time()
+            logger.info(
+                f"Multi-agent step {index}/{len(routings)}: "
+                f"agent={routing.agent_id} intent={routing.intent.value} "
+                f"confidence={routing.confidence:.2f}"
+            )
+
+            result = self.execute(query, session_id, user_config=user_config)
+            latency_ms = int((time.time() - step_started_at) * 1000)
+
+            # Preserve original confidence as priority (route_multi's confidence
+            # may differ from the per-step LLM-routed confidence in execute()).
+            result.setdefault("routing", {})["priority"] = routing.confidence
             responses.append(result)
+
+            step = {
+                "index": index,
+                "intent": routing.intent.value,
+                "agent_id": routing.agent_id,
+                "confidence": routing.confidence,
+                "success": bool(result.get("success")),
+                "latency_ms": latency_ms,
+                "error": result.get("error"),
+            }
+            steps.append(step)
+
+            if step["success"]:
+                logger.info(
+                    f"Multi-agent step {index}/{len(routings)} ok "
+                    f"agent={routing.agent_id} latency_ms={latency_ms}"
+                )
+            else:
+                logger.warning(
+                    f"Multi-agent step {index}/{len(routings)} failed "
+                    f"agent={routing.agent_id} latency_ms={latency_ms} "
+                    f"error={step['error']!r}"
+                )
+
+        success_count = sum(1 for s in steps if s["success"])
+        total_latency_ms = int((time.time() - workflow_started_at) * 1000)
+        workflow = {
+            "total": len(steps),
+            "succeeded": success_count,
+            "failed": len(steps) - success_count,
+            "latency_ms": total_latency_ms,
+            "steps": steps,
+        }
+        logger.info(
+            f"Multi-agent workflow done: succeeded={success_count}/{len(steps)} "
+            f"latency_ms={total_latency_ms}"
+        )
 
         if aggregate and len(responses) > 1:
             # Simple aggregation - combine successful responses
@@ -646,16 +715,18 @@ class SuperAgent:
                     combined.append(f"[{resp['routing']['intent']}]\n{resp['response']}")
 
             return {
-                "success": True,
+                "success": success_count > 0,
                 "response": "\n\n---\n\n".join(combined),
                 "responses": responses,
-                "aggregated": True
+                "aggregated": True,
+                "workflow": workflow,
             }
 
         return {
-            "success": True,
+            "success": success_count > 0,
             "responses": responses,
-            "aggregated": False
+            "aggregated": False,
+            "workflow": workflow,
         }
 
     def _get_instructions_for_intent(self, intent: QueryIntent) -> str:

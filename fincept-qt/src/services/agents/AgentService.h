@@ -43,7 +43,7 @@ class AgentService : public QObject
     void execute_routed_query(const QString& query, const QJsonObject& config = {}, const QString& session_id = {});
 
     // ── Multi-query & parallel ───────────────────────────────────────────────
-    void execute_multi_query(const QString& query, bool aggregate = true);
+    void execute_multi_query(const QString& query, bool aggregate = true, const QJsonObject& config = {});
 
     // ── Financial workflows ──────────────────────────────────────────────────
     void run_stock_analysis(const QString& symbol, const QJsonObject& config = {});

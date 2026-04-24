@@ -1,17 +1,21 @@
 # Contributing to Fincept Terminal
 
-Welcome! Fincept Terminal is an open-source native C++20 financial intelligence platform with 40+ screens, embedded Python analytics, and 100+ data connectors.
+Fincept Terminal is an open-source native C++20/Qt6 financial intelligence platform with 50+ screens, embedded Python analytics, and 100+ data connectors. This guide is the canonical **how-to** for contributors — build, architecture, conventions.
+
+> **Before you open a PR**, also read the contribution **policy**: [`.github/CONTRIBUTING.md`](../.github/CONTRIBUTING.md). Policy defines which PRs are accepted (linked approved issue, minimum scope, no auto-formatter churn, etc.); this file covers how to build and where code lives.
 
 ---
 
-## Table of Contents
+## Contents
 
 - [Ways to Contribute](#ways-to-contribute)
 - [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
+- [Prerequisites](#prerequisites)
+- [Build](#build)
+- [Run](#run)
 - [Project Architecture](#project-architecture)
+- [Code Conventions](#code-conventions)
 - [Development Workflow](#development-workflow)
-- [Pull Request Process](#pull-request-process)
 - [Language-Specific Guides](#language-specific-guides)
 - [Getting Help](#getting-help)
 
@@ -19,230 +23,246 @@ Welcome! Fincept Terminal is an open-source native C++20 financial intelligence 
 
 ## Ways to Contribute
 
-| Area | Examples |
-|------|----------|
-| **Code** | Bug fixes, new features, new screens, new analytics |
-| **Documentation** | Improve guides, add examples |
-| **Testing** | Report bugs, write tests, review PRs |
-| **Design** | UI/UX improvements, themes |
-| **Data** | New data sources, API integrations, Python scripts |
+| Area          | Examples                                                          |
+|---------------|-------------------------------------------------------------------|
+| C++ / Qt      | New screens, services, core infrastructure, performance fixes     |
+| Python        | Analytics scripts, AI agents, data fetchers                       |
+| Data sources  | Broker integrations, government / market data connectors          |
+| Documentation | Fix broken/outdated docs (see policy for scope)                   |
+| Testing       | Reproduce bugs, review PRs, write tests                           |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technologies |
-|-------|--------------|
-| **Language** | C++20 — MSVC 19.38 (VS 2022 17.8) / GCC 12.3 / Apple Clang 15.0 |
-| **UI** | Qt 6.7.2 Widgets (pinned EXACT) |
-| **Charts** | Qt6 Charts |
-| **Networking** | Qt6 Network + Qt6 WebSockets |
-| **Database** | Qt6 Sql (SQLite) |
-| **Serialization** | QJsonDocument |
-| **Analytics** | Embedded Python 3.11.9 (1300+ scripts) |
-| **Build** | CMake 3.27.7 + Ninja 1.11.1 (pinned) |
-
-**Language-Specific Guides:**
-- [C++ Guide](./CPP_CONTRIBUTOR_GUIDE.md) — screens, services, core infrastructure
-- [Python Guide](./PYTHON_CONTRIBUTOR_GUIDE.md) — analytics modules, data fetchers
+| Layer         | Technology                                                                           |
+|---------------|--------------------------------------------------------------------------------------|
+| Language      | **C++20** — MSVC 19.38 (VS 2022 17.8) / GCC 12.3 / Apple Clang 15.0                  |
+| UI            | **Qt 6.8.3 EXACT** Widgets (pinned)                                                  |
+| Charts        | Qt6 Charts                                                                           |
+| Networking    | Qt6 Network + Qt6 WebSockets                                                         |
+| Database      | Qt6 Sql (SQLite)                                                                     |
+| Analytics     | Embedded **Python 3.11.9** (4000+ scripts)                                           |
+| Excel I/O     | QXlsx v1.4.9 (FetchContent, pinned commit)                                           |
+| Mapping       | QGeoView (pinned commit)                                                             |
+| Build         | **CMake 3.27.7 + Ninja 1.11.1** (pinned, unity build)                                |
 
 ---
 
-## Getting Started
+## Prerequisites
 
-### Prerequisites (pinned versions — enforced by CMake)
+Pinned toolchain versions — enforced by CMake. Mismatch produces a clear fail-fast error.
 
-| Tool | Version |
-|------|---------|
-| **C++ compiler** | MSVC 19.38 (VS 2022 17.8) / GCC 12.3 / Apple Clang 15.0 (Xcode 15.2) |
-| **CMake** | 3.27.7 — [cmake.org](https://cmake.org/download/) |
-| **Ninja** | 1.11.1 — [releases](https://github.com/ninja-build/ninja/releases) |
-| **Qt** | 6.7.2 (LTS) — [Qt Online Installer](https://www.qt.io/download-qt-installer) |
-| **Python** | 3.11.9 — [python.org](https://www.python.org/downloads/release/python-3119/) |
-| **Git** | latest — [git-scm.com](https://git-scm.com) |
+| Tool          | Version                                                                                 |
+|---------------|-----------------------------------------------------------------------------------------|
+| C++ compiler  | MSVC 19.38 (VS 2022 17.8) / GCC 12.3 / Apple Clang 15.0 (Xcode 15.2)                    |
+| CMake         | **3.27.7** — [cmake.org](https://cmake.org/download/)                                   |
+| Ninja         | **1.11.1** — [releases](https://github.com/ninja-build/ninja/releases)                  |
+| Qt            | **6.8.3** — [Qt Online Installer](https://www.qt.io/download-qt-installer)              |
+| Python        | **3.11.9** — [python.org](https://www.python.org/downloads/release/python-3119/)        |
+| Git           | latest — [git-scm.com](https://git-scm.com)                                             |
 
-> The CMake build fails fast with a clear error message when toolchain versions don't match.
+Optional (speeds up rebuilds): **ccache 4.13.4** on Windows is auto-detected.
 
-### Setup (fastest — automated)
+---
+
+## Build
+
+### Fastest — automated setup script
 
 ```bash
-# Clone + auto-install toolchain + Qt 6.7.2 + build
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal
-./setup.sh       # Linux / macOS
-setup.bat        # Windows (run from VS 2022 Developer Cmd)
+./setup.sh      # Linux / macOS — installs toolchain + Qt via aqtinstall, then builds
+setup.bat       # Windows — run from a VS 2022 Developer Command Prompt
 ```
 
-The setup script uses `aqtinstall` to fetch Qt 6.7.2 exactly.
+### Manual — CMake presets
 
-### Setup (manual — using CMake presets)
+All day-to-day development uses presets from `fincept-qt/CMakePresets.json`.
 
 ```bash
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal/fincept-qt
+cd fincept-qt
 
-# Install Qt 6.7.2 first (Qt Online Installer or: pip install aqtinstall && aqt install-qt ...)
+# Configure (one-time, or after CMakeLists.txt changes)
+cmake --preset win-release        # Windows
+cmake --preset linux-release      # Linux
+cmake --preset macos-release      # macOS
 
-# Configure + Build (pick your platform preset)
-cmake --preset win-release     && cmake --build --preset win-release     # Windows
-cmake --preset linux-release   && cmake --build --preset linux-release   # Linux
-cmake --preset macos-release   && cmake --build --preset macos-release   # macOS
-
-# Run
-./build/linux-release/FinceptTerminal                                           # Linux
-./build/macos-release/FinceptTerminal.app/Contents/MacOS/FinceptTerminal        # macOS
-.\build\win-release\FinceptTerminal.exe                                         # Windows
+# Build (run after every code change — incremental)
+cmake --build --preset win-release        # Windows
+cmake --build --preset linux-release      # Linux
+cmake --build --preset macos-release      # macOS
 ```
 
-### Verify Installation
+Debug builds: replace `release` with `debug` in both commands.
+
+Manual configure if presets can't resolve Qt:
+
+```powershell
+cmake -B build/win-release -G Ninja -DCMAKE_BUILD_TYPE=Release `
+  -DCMAKE_PREFIX_PATH="C:/Qt/6.8.3/msvc2022_64"
+cmake --build build/win-release
+```
+
+---
+
+## Run
 
 ```bash
-cmake --version     # 3.27.7
-python --version    # 3.11.9
-# Compiler:
-cl            /   # MSVC 19.38+ (Windows)
-g++ --version /   # 12.3+       (Linux)
-clang --version   # 15.0+       (macOS, Xcode 15.2)
+.\build\win-release\FinceptTerminal.exe                                           # Windows
+./build/linux-release/FinceptTerminal                                             # Linux
+./build/macos-release/FinceptTerminal.app/Contents/MacOS/FinceptTerminal          # macOS
 ```
 
 ---
 
 ## Project Architecture
 
-### Source Layout (`fincept-cpp/src/`)
+### Repository layout
+
+```
+finceptTerminal/
+├── fincept-qt/                 # Main C++ application (all development happens here)
+│   ├── src/                    # C++ source
+│   ├── scripts/                # Embedded Python analytics (4000+ files)
+│   ├── resources/              # Icons, assets, Qt resources
+│   ├── CMakeLists.txt
+│   ├── CMakePresets.json
+│   ├── CLAUDE.md               # Performance/architecture rules (P1–P15, D1–D5)
+│   └── DESIGN_SYSTEM.md        # Obsidian UI/UX spec
+├── docs/                       # Repo-wide documentation (this file lives here)
+├── .github/                    # Issue/PR templates, workflows, contribution policy
+└── README.md
+```
+
+### C++ source layout (`fincept-qt/src/`)
 
 ```
 src/
-├── main.cpp                # Entry point, GLFW/OpenGL setup
-├── app.cpp/h               # App state machine, routing
-│
-├── core/                   # Shared infrastructure
-│   ├── config.h            # Constants (URLs, timeouts, versions)
-│   ├── event_bus.h         # Pub/sub messaging
-│   ├── logger.h            # Structured logging
-│   └── result.h            # Result<T> error handling
-│
-├── ui/                     # Reusable ImGui widgets
-├── http/                   # HTTP client (libcurl)
-├── storage/                # SQLite database
-├── auth/                   # Authentication
-├── python/                 # Python runtime bridge
-├── mcp/                    # MCP integration
-├── trading/                # Trading engine + brokers
-├── portfolio/              # Portfolio management
-│
-└── screens/                # 40+ terminal screens
-    ├── dashboard/
-    ├── markets/
-    ├── crypto_trading/
-    ├── research/
-    ├── quantlib/
-    ├── ai_chat/
-    ├── economics/
-    ├── geopolitics/
-    └── ...
+├── app/              # Entry point, MainWindow, routing, splash
+├── core/             # Config, events, logging, Result<T>, session
+├── ui/               # Theme, reusable widgets, tables, charts, navigation
+├── network/          # http/ and websocket/ clients
+├── storage/          # SQLite, cache, secure storage, 16 repositories
+├── auth/             # Guest + registered auth, JWT
+├── python/           # Embedded Python bridge, PythonRunner
+├── datahub/          # DataHub producers/consumers (see DATAHUB_ARCHITECTURE.md)
+├── services/         # 18 service domains — market data, news, agents, workflow, etc.
+├── trading/          # Trading core + 18 broker integrations
+├── mcp/              # Model Context Protocol infrastructure (24 tool modules)
+├── ai_chat/          # AI chat UI + LlmService
+└── screens/          # 50+ terminal screens, one subdirectory each
 ```
 
-### Python Scripts (`fincept-cpp/scripts/`)
+### Python scripts (`fincept-qt/scripts/`)
 
 ```
 scripts/
-├── Analytics/              # 34 analytics modules
-│   ├── equityInvestment/   # Stock valuation, DCF
-│   ├── portfolioManagement/# Portfolio optimization
-│   ├── derivatives/        # Options pricing, Greeks
-│   ├── fixedIncome/        # Bond analytics
-│   └── ...
-│
-├── agents/                 # AI agents
-├── strategies/             # Trading strategies
-├── technicals/             # Technical analysis
-└── *.py                    # 80+ data fetchers
+├── Analytics/        # CFA-level quant modules — equity, portfolio, derivatives,
+│                     #   fixed income, economics, corporate finance
+├── agents/           # AI agent frameworks (finagent_core, Geopolitics, HedgeFund, …)
+├── ai_quant_lab/     # ML, factor discovery, HFT, RL trading, vision quant
+├── agno_trading/     # Agno-based trading agents
+└── *.py              # 100+ top-level data fetchers (market, gov, economic, alt)
 ```
+
+See `fincept-qt/CLAUDE.md` for the detailed service catalog and architecture rules.
+
+---
+
+## Code Conventions
+
+### C++
+
+- **Standard:** C++20
+- **Naming:** `snake_case` functions/variables, `PascalCase` types/classes
+- **Namespaces:** `namespace fincept {}`, `namespace fincept::ui {}`; never `using namespace std;`
+- **Qt:** `Q_OBJECT` in all QObject subclasses; pointer-to-member signal/slot syntax only (never `SIGNAL()`/`SLOT()` string macros)
+- **Error handling:** `Result<T>` — no raw exception-based APIs across module boundaries
+- **Logging:** `LOG_INFO` / `LOG_WARN` / `LOG_ERROR` / `LOG_DEBUG` with a context tag, e.g. `LOG_INFO("MarketData", "Fetched 12 quotes")`. Never log API keys or credentials.
+
+### Python
+
+- **Style:** match surrounding code. Do **not** run Black / autopep8 / isort on existing files.
+- **Logging:** use the `logging` module (`logger = logging.getLogger(__name__)`, `logger.info(...)`), never `print()`. Scripts run inside an embedded Qt runtime; `print()` output never reaches the user.
+- **Entry points:** C++ invokes scripts through `PythonRunner::instance().run(...)` — your script receives a JSON payload on stdin and must return JSON on stdout. See existing scripts in `scripts/` for the pattern.
+
+### UI / design
+
+Follow `fincept-qt/DESIGN_SYSTEM.md` (Obsidian design system). Do not introduce ad-hoc color values, typography, or spacing — use the tokens.
+
+### Mandatory architecture rules (summary)
+
+Full detail in `fincept-qt/CLAUDE.md`. These are **non-negotiable** — PRs that violate them will be sent back:
+
+- **P1.** Never block the UI thread — no `waitForFinished()` on main thread.
+- **P2.** Lazy screen construction — use `register_factory()` for any screen that fetches data.
+- **P3.** Timers must start/stop in `showEvent()` / `hideEvent()`, never in constructors.
+- **P4.** Python subprocesses go through `PythonRunner` (max 3 concurrent).
+- **P6.** Screens render UI only; services do all fetching, caching, processing.
+- **P14.** Logs use the `LOG_*` macros (C++) or `logger` (Python). Never `printf` / `print` / `std::cout`.
+- **D1–D5.** Streaming data flows through the DataHub — never spawn Python directly from a screen. See `fincept-qt/DATAHUB_ARCHITECTURE.md`.
 
 ---
 
 ## Development Workflow
 
-### Branch Naming
+### Branch naming
 
 ```
-feature/add-options-screen
-fix/chart-rendering-crash
-docs/update-architecture
+feat/add-options-screen
+fix/chart-render-crash
+docs/update-python-guide
+perf/market-data-coalesce
+refactor/broker-http
 ```
 
-### Making Changes
+Never PR from your fork's `main` — always a topic branch.
 
-1. Create branch from `main`
-2. Follow the appropriate language guide
-3. Build and test locally
-4. Commit with clear messages
-
-### Commit Format
+### Commit style
 
 ```
-type: short description
+type: short imperative subject line
+
+Optional body explaining why, not what. Wrap at ~72 cols.
 
 Types: feat, fix, docs, refactor, test, chore, perf
 ```
 
----
+### Before you open a PR
 
-## Pull Request Process
+1. Confirm the issue you're fixing carries one of: `good-first-issue`, `help-wanted`, `scope:approved` (see [`.github/CONTRIBUTING.md`](../.github/CONTRIBUTING.md)).
+2. Build locally and run the app — verify the fix / feature works end-to-end.
+3. Keep the diff minimal. No auto-formatter churn.
+4. Fill out the PR template honestly; don't tick boxes you didn't verify.
 
-### Before Submitting
-
-- [ ] Code compiles without warnings (`-Wall -Wextra`)
-- [ ] No duplicated code — use `core/` and `ui/widgets/`
-- [ ] Screens don't call HTTP directly (use data services)
-- [ ] New `.cpp` files added to `CMakeLists.txt`
-- [ ] `.clang-format` applied
-- [ ] Tested in development mode
-
-### PR Template
-
-```markdown
-## Description
-Brief description
-
-## Type
-- [ ] Bug fix
-- [ ] New feature / screen
-- [ ] Documentation
-
-## Testing
-How was this tested?
-
-## Screenshots (if UI)
-```
+Review process, scope gate, and close-on-sight list are in [`.github/CONTRIBUTING.md`](../.github/CONTRIBUTING.md).
 
 ---
 
 ## Language-Specific Guides
 
-| Guide | Coverage |
-|-------|----------|
-| [C++ Guide](../fincept-cpp/CONTRIBUTING.md) | Screens, services, core infrastructure, widgets |
-| [Python Guide](./PYTHON_CONTRIBUTOR_GUIDE.md) | Analytics modules, data fetchers, AI agents |
+| Guide                                                   | Coverage                                                  |
+|---------------------------------------------------------|-----------------------------------------------------------|
+| [C++ Guide](./CPP_CONTRIBUTOR_GUIDE.md)                 | Screens, services, core infrastructure, widgets, Qt patterns |
+| [Python Guide](./PYTHON_CONTRIBUTOR_GUIDE.md)           | Analytics modules, data fetchers, AI agents, PythonRunner contract |
+| [Architecture](./ARCHITECTURE.md)                       | System design, module boundaries, data flow               |
 
 ---
 
 ## Getting Help
 
-| Channel | Link |
-|---------|------|
-| Issues | [GitHub Issues](https://github.com/Fincept-Corporation/FinceptTerminal/issues) |
-| Discussions | [GitHub Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions) |
-| Discord | [Join Discord](https://discord.gg/ae87a8ygbN) |
-| Email | support@fincept.in |
+| Channel      | Link                                                                          |
+|--------------|-------------------------------------------------------------------------------|
+| Issues       | [GitHub Issues](https://github.com/Fincept-Corporation/FinceptTerminal/issues) |
+| Discussions  | [GitHub Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions) |
+| Discord      | [discord.gg/ae87a8ygbN](https://discord.gg/ae87a8ygbN)                         |
+| Email        | support@fincept.in                                                             |
 
-### Good First Issues
-
-Look for labels: `good first issue`, `help wanted`, `documentation`
+Good first issues carry the `good-first-issue` label — those are the right starting point for new contributors.
 
 ---
 
-**Repository**: https://github.com/Fincept-Corporation/FinceptTerminal
-**Version**: 4.0.1
-**License**: AGPL-3.0
+**Repository:** https://github.com/Fincept-Corporation/FinceptTerminal
+**License:** AGPL-3.0-or-later

@@ -53,6 +53,10 @@ QString AppPaths::workspaces() {
     return ProfileManager::instance().profile_root() + "/workspaces";
 }
 
+QString AppPaths::crashdumps() {
+    return ProfileManager::instance().profile_root() + "/crashdumps";
+}
+
 void AppPaths::ensure_all() {
     // Use fprintf to stderr (not qWarning) — main.cpp installs a Qt message
     // handler that routes qWarning into Logger, but Logger's file isn't open
@@ -77,6 +81,7 @@ void AppPaths::ensure_all() {
     try_mkpath(models());
     try_mkpath(runtime());
     try_mkpath(workspaces());
+    try_mkpath(crashdumps());
 }
 
 } // namespace fincept

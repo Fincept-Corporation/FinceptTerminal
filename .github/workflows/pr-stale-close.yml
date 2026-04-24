@@ -1,0 +1,28 @@
+name: Close stale gated PRs
+
+on:
+  schedule:
+    - cron: '30 4 * * *'   # daily at 04:30 UTC
+  workflow_dispatch: {}
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  close-stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-pr-stale: 7
+          days-before-pr-close: 0
+          only-pr-labels: needs-scope-approval
+          stale-pr-message: ''
+          close-pr-message: |
+            Closing this PR because it has had the `needs-scope-approval` label for 7+ days without a maintainer-approved issue being linked.
+
+            This is not personal — see [CONTRIBUTING.md](https://github.com/${{ github.repository }}/blob/main/.github/CONTRIBUTING.md) for the scope-approval flow. You are welcome to open a new PR once an issue carrying `good-first-issue`, `help-wanted`, or `scope:approved` exists and the change is agreed with a maintainer.
+          close-pr-label: 'invalid'
+          operations-per-run: 100
+          exempt-pr-labels: 'scope:approved,pinned,do-not-close'

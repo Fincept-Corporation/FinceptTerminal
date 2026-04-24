@@ -1,0 +1,59 @@
+name: Sync repository labels
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/labels.json'
+      - '.github/workflows/sync-labels.yml'
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create or update labels from labels.json
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = '.github/labels.json';
+            const desired = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const { owner, repo } = context.repo;
+
+            // Fetch existing labels (paginate)
+            const existing = await github.paginate(github.rest.issues.listLabelsForRepo, {
+              owner, repo, per_page: 100,
+            });
+            const existingByName = new Map(existing.map(l => [l.name, l]));
+
+            for (const want of desired) {
+              const have = existingByName.get(want.name);
+              if (!have) {
+                core.info(`Creating label: ${want.name}`);
+                await github.rest.issues.createLabel({
+                  owner, repo,
+                  name: want.name,
+                  color: want.color,
+                  description: want.description || '',
+                });
+              } else if (have.color !== want.color || (have.description || '') !== (want.description || '')) {
+                core.info(`Updating label: ${want.name}`);
+                await github.rest.issues.updateLabel({
+                  owner, repo,
+                  name: want.name,
+                  color: want.color,
+                  description: want.description || '',
+                });
+              } else {
+                core.info(`Label already up to date: ${want.name}`);
+              }
+            }
+
+            core.info('Label sync complete. (Extra labels on the repo are left untouched.)');

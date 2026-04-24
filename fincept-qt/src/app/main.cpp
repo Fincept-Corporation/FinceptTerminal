@@ -8,6 +8,7 @@
 #include "core/config/AppPaths.h"
 #include "core/config/ProfileManager.h"
 #include "core/components/ComponentCatalog.h"
+#include "core/crash/CrashHandler.h"
 #include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
@@ -81,6 +82,13 @@ int main(int argc, char* argv[]) {
         // write the manifest. Create root now (single mkdir, idempotent).
         QDir().mkpath(fincept::AppPaths::root());
     }
+
+    // Install the unhandled-exception filter BEFORE any Qt object is
+    // constructed. On Windows this writes a minidump to AppPaths::crashdumps()
+    // when the process dies from an access violation, stack overflow, or GS
+    // cookie check failure (STATUS_STACK_BUFFER_OVERRUN — see issue #215).
+    // Do it early so a crash in Qt's own startup still produces a dump.
+    fincept::crash::install();
 
     // Required before QApplication when any dock panel contains an OpenGL widget
     // (Qt Charts, QOpenGLWidget) — prevents black rendering in floating windows.

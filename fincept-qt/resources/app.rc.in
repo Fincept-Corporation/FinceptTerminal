@@ -1,0 +1,39 @@
+// No #include <windows.h> — the project's CMAKE_RC_FLAGS strips default /I
+// paths so rc.exe can't resolve SDK headers. Use the numeric equivalents:
+//   VS_VERSION_INFO      = 1
+//   VS_FFI_FILEFLAGSMASK = 0x3FL
+//   VOS_NT_WINDOWS32     = 0x00040004L
+//   VFT_APP              = 0x00000001L
+//   VFT2_UNKNOWN         = 0x00000000L
+// Values lifted from verrsrc.h; they are ABI-stable since Windows 2000.
+
+IDI_ICON1 ICON "fincept.ico"
+
+1 VERSIONINFO
+FILEVERSION     @FINCEPT_VER_MAJOR@,@FINCEPT_VER_MINOR@,@FINCEPT_VER_PATCH@,0
+PRODUCTVERSION  @FINCEPT_VER_MAJOR@,@FINCEPT_VER_MINOR@,@FINCEPT_VER_PATCH@,0
+FILEFLAGSMASK   0x3FL
+FILEFLAGS       0x0L
+FILEOS          0x00040004L
+FILETYPE        0x00000001L
+FILESUBTYPE     0x00000000L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName",      "Fincept Corporation"
+            VALUE "FileDescription",  "Fincept Terminal - Financial Intelligence Platform"
+            VALUE "FileVersion",      "@CMAKE_PROJECT_VERSION@"
+            VALUE "InternalName",     "FinceptTerminal"
+            VALUE "LegalCopyright",   "Copyright (C) 2025 Fincept Corporation. AGPL-3.0-or-later."
+            VALUE "OriginalFilename", "FinceptTerminal.exe"
+            VALUE "ProductName",      "Fincept Terminal"
+            VALUE "ProductVersion",   "@CMAKE_PROJECT_VERSION@"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 0x04B0
+    END
+END

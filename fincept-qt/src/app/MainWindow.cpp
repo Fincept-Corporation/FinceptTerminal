@@ -436,7 +436,7 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
     if (auto* act_lock = km.action(KeyAction::LockNow)) {
         act_lock->setShortcutContext(Qt::ApplicationShortcut);
         addAction(act_lock);
-        connect(act_lock, &QAction::triggered, this, [this]() {
+        connect(act_lock, &QAction::triggered, this, []() {
             auth::InactivityGuard::instance().trigger_manual_lock();
         });
     }

@@ -427,8 +427,16 @@ def dispatch_action(
         query = params.get("query")
         if not query:
             return {"success": False, "error": "Missing 'query'"}
-        agent = SuperAgent(api_keys=api_keys)
-        return agent.execute_multi(query, params.get("session_id"), params.get("aggregate", True))
+        # Forward user's model config so execute_multi's per-agent execute()
+        # calls don't fall through to the "No LLM model configured" path.
+        model_config = (config or {}).get("model")
+        agent = SuperAgent(api_keys=api_keys, model_config=model_config)
+        return agent.execute_multi(
+            query,
+            params.get("session_id"),
+            params.get("aggregate", True),
+            user_config=config,
+        )
 
     # =========================================================================
     # Execution Planner

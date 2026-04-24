@@ -45,6 +45,9 @@ class AppPaths {
     /// root/workspaces — saved workspace files (.fwsp)
     static QString workspaces();
 
+    /// root/crashdumps — minidumps written by the unhandled-exception filter
+    static QString crashdumps();
+
     /// Create all sub-directories if they don't exist.
     /// Call once before any path is used.
     static void ensure_all();

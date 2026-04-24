@@ -1163,14 +1163,14 @@ void AgentService::execute_routed_query(const QString& query, const QJsonObject&
 
 // ── Multi-query ──────────────────────────────────────────────────────────────
 
-void AgentService::execute_multi_query(const QString& query, bool aggregate) {
+void AgentService::execute_multi_query(const QString& query, bool aggregate, const QJsonObject& config) {
     LOG_INFO("AgentService", QString("Multi-query: %1").arg(query.left(60)));
     QJsonObject params;
     params["query"] = query;
     params["aggregate"] = aggregate;
 
     QPointer<AgentService> self = this;
-    run_python_stdin("execute_multi_query", params, {}, [self](bool ok, QJsonObject result) {
+    run_python_stdin("execute_multi_query", params, config, [self](bool ok, QJsonObject result) {
         if (!self)
             return;
         if (ok)

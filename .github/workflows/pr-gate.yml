@@ -1,0 +1,113 @@
+name: PR Scope Gate
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  pull-requests: write
+  issues: write
+  contents: read
+
+jobs:
+  scope-check:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate PR scope
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const { owner, repo } = context.repo;
+            const number = pr.number;
+
+            // ── Config ────────────────────────────────────────────────
+            const SMALL_PR_MAX_LINES = 10;         // PRs ≤ this many changed lines are "small"
+            const APPROVED_LABELS = ['good-first-issue', 'help-wanted', 'scope:approved'];
+            const BYPASS_LABEL = 'scope:approved';  // any label on the PR itself that bypasses the gate
+            const FORK_MAIN_WARN = pr.head.ref === 'main' && pr.head.repo.full_name !== pr.base.repo.full_name;
+
+            // ── Collect signals ───────────────────────────────────────
+            const body = pr.body || '';
+            const closesRegex = /\b(?:clos(?:e|es|ed)|fix(?:es|ed)?|resolv(?:e|es|ed))\s+#(\d+)/gi;
+            const linkedIssues = [...body.matchAll(closesRegex)].map(m => parseInt(m[1], 10));
+
+            const changedLines = (pr.additions || 0) + (pr.deletions || 0);
+            const isSmall = changedLines <= SMALL_PR_MAX_LINES;
+
+            // PR-level bypass (a maintainer labeled this specific PR as scope:approved)
+            const prLabels = (pr.labels || []).map(l => l.name);
+            const prBypass = prLabels.includes(BYPASS_LABEL);
+
+            // ── Check linked issues for approval labels ───────────────
+            let approvedIssue = null;
+            for (const n of linkedIssues) {
+              try {
+                const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: n });
+                const names = (issue.labels || []).map(l => (typeof l === 'string' ? l : l.name));
+                if (names.some(x => APPROVED_LABELS.includes(x))) { approvedIssue = n; break; }
+              } catch (e) { /* issue may not exist — fall through */ }
+            }
+
+            // ── Decide ────────────────────────────────────────────────
+            const problems = [];
+            if (!prBypass && !approvedIssue) {
+              problems.push(
+                `❌ **No scope-approved linked issue.** This PR must close an issue that carries one of: ` +
+                APPROVED_LABELS.map(l => '`' + l + '`').join(', ') +
+                `. Link it in the PR body with \`Closes #NNN\`.`
+              );
+            }
+            if (!prBypass && isSmall && !approvedIssue) {
+              problems.push(
+                `❌ **Small PR (${changedLines} changed lines) without a scope-approved issue.** ` +
+                `Small PRs are a common vector for contributor-list farming; we require a maintainer-approved issue before reviewing them.`
+              );
+            }
+            if (FORK_MAIN_WARN) {
+              problems.push(
+                `⚠️ **PR opened from your fork's \`main\` branch.** Please use a topic branch (e.g. \`fix/short-slug\`) — see CONTRIBUTING.md.`
+              );
+            }
+
+            // ── Comment + label ───────────────────────────────────────
+            const marker = '<!-- pr-scope-gate -->';
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number: number });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+
+            if (problems.length === 0) {
+              // Clear previous block comment & invalid label if any
+              if (existing) {
+                await github.rest.issues.deleteComment({ owner, repo, comment_id: existing.id });
+              }
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number: number, name: 'needs-scope-approval' });
+              } catch (e) {}
+              core.setOutput('blocked', 'false');
+              return;
+            }
+
+            const body_md = [
+              marker,
+              `Hi @${pr.user.login} — thanks for the PR! Our automated scope gate flagged the following:`,
+              '',
+              ...problems,
+              '',
+              `Please read [CONTRIBUTING.md](https://github.com/${owner}/${repo}/blob/main/.github/CONTRIBUTING.md). ` +
+              `Once an issue with the appropriate label exists and is linked here, re-run this check by pushing an empty commit or editing the PR description. ` +
+              `A maintainer can also bypass this gate by adding the \`${BYPASS_LABEL}\` label to **this PR**.`,
+              '',
+              `PRs that remain unresolved for 7 days will be closed automatically.`
+            ].join('\n');
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: body_md });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number: number, body: body_md });
+            }
+            try {
+              await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels: ['needs-scope-approval'] });
+            } catch (e) {}
+            core.setOutput('blocked', 'true');

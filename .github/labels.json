@@ -1,0 +1,16 @@
+[
+  { "name": "good-first-issue",     "color": "7057ff", "description": "Newcomer-friendly, pre-approved scope. Anyone may PR against it." },
+  { "name": "help-wanted",          "color": "008672", "description": "Open for external contribution, pre-approved scope." },
+  { "name": "scope:approved",       "color": "0e8a16", "description": "Maintainer-approved scope. Applied to an issue or directly to a PR to bypass the scope gate." },
+  { "name": "needs-scope-approval", "color": "fbca04", "description": "Auto-applied by pr-gate.yml to PRs that fail the scope gate." },
+  { "name": "invalid",              "color": "e6e6e6", "description": "Closed as not meeting contribution policy. Applied automatically by stale-close workflow." },
+  { "name": "spam",                 "color": "b60205", "description": "Obvious farming / LLM-slop PRs. Closed manually." },
+  { "name": "pinned",               "color": "5319e7", "description": "Exempt from stale-bot closure." },
+  { "name": "do-not-close",         "color": "5319e7", "description": "Explicit intent: do not auto-close." },
+  { "name": "type:bug",             "color": "d73a4a", "description": "Something isn't working." },
+  { "name": "type:enhancement",     "color": "a2eeef", "description": "Improvement to an existing feature." },
+  { "name": "type:feature",         "color": "a2eeef", "description": "New feature or screen." },
+  { "name": "type:documentation",   "color": "0075ca", "description": "Documentation-related." },
+  { "name": "type:performance",     "color": "d93f0b", "description": "Performance / responsiveness issue." },
+  { "name": "status:triage",        "color": "ededed", "description": "Needs triage by a maintainer." }
+]

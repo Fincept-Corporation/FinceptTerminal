@@ -1,7 +1,18 @@
 fincept-qt/build/
+fincept-qt/build-*/
 fincept-qt/uitest/
+fincept-qt/.vs/
+fincept-qt/cmake-build-*/
+build/
+build-*/
+out/
+.vs/
+.vscode/
+.idea/
+*.user
 tmpqt/
 .git/
+.gitignore
 images/
 docs/
 .github/
@@ -12,3 +23,5 @@ funding.json
 updates.json
 fincept_icon.ico
 setup.sh
+Dockerfile
+.dockerignore

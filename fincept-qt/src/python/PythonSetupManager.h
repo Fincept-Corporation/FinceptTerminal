@@ -111,7 +111,11 @@ class PythonSetupManager : public QObject {
     bool verify_packages_installed(const QString& venv_name,
                                    const QString& requirements_file) const;
 
-    static constexpr const char* kPythonVersion = "3.12";
+    // Pinned to an exact patch so `uv python install <ver>` resolves to the
+    // same build on every machine. Previously set to "3.12" which let uv pick
+    // the latest patch, producing non-reproducible installs and contributing
+    // to confusion during crash triage (see issue #215).
+    static constexpr const char* kPythonVersion = "3.12.7";
     static constexpr const char* kUvVersion = "0.7.12";
 
     // Session-lifetime caches — requirements files never change at runtime.

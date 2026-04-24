@@ -6,6 +6,12 @@ labels: "type:feature, status:triage"
 assignees: ""
 ---
 
+<!--
+Planning to send a PR for this? Please read .github/CONTRIBUTING.md first.
+A maintainer must add `good-first-issue`, `help-wanted`, or `scope:approved`
+to this issue before PRs against it will be accepted.
+-->
+
 ## What feature would you like?
 <!-- Describe the feature clearly -->
 

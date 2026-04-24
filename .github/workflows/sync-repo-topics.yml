@@ -1,0 +1,47 @@
+name: Sync repository topics
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-repo-topics.yml'
+  schedule:
+    - cron: '0 5 * * 1'   # weekly — idempotent safety net
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # required to call /repos/{owner}/{repo}/topics
+
+jobs:
+  ensure-topics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure required topics are set
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Topics we always want applied. Extra topics already on the repo are preserved.
+            const REQUIRED = ['hacktoberfest-excluded'];
+
+            const { owner, repo } = context.repo;
+
+            const { data: current } = await github.request('GET /repos/{owner}/{repo}/topics', {
+              owner, repo,
+              headers: { 'Accept': 'application/vnd.github.mercy-preview+json' },
+            });
+            const have = new Set(current.names || []);
+            const missing = REQUIRED.filter(t => !have.has(t));
+
+            if (missing.length === 0) {
+              core.info(`All required topics already present: ${REQUIRED.join(', ')}`);
+              return;
+            }
+
+            const merged = Array.from(new Set([...(current.names || []), ...REQUIRED]));
+            core.info(`Adding missing topics: ${missing.join(', ')}`);
+            await github.request('PUT /repos/{owner}/{repo}/topics', {
+              owner, repo,
+              names: merged,
+              headers: { 'Accept': 'application/vnd.github.mercy-preview+json' },
+            });
+            core.info(`Topics now: ${merged.join(', ')}`);
