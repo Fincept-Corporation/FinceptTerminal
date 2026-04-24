@@ -1085,11 +1085,28 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
 
 # ═════════════════════════════════════════════════════════════════════════════
-# JOB 5 — Update README with direct download links
-#          Runs after release, uses gh CLI to get actual asset URLs
+# JOB 5 — Update repo metadata on main (README download links + updates.json)
+#
+# Previously split into two jobs that both ran `needs: release` and both
+# pushed to main — they raced and the loser died with
+# `! [rejected] main -> main (fetch first)`. Worse, when the loser was the
+# updates.json push, the in-app auto-updater (UpdateService.cpp fetches
+# raw.githubusercontent.com/.../main/updates.json) would never see the new
+# version, silently breaking updates for every existing install.
+#
+# Merged into ONE job with ONE checkout, ONE commit (containing both file
+# changes), and ONE push. No race possible. No retries needed.
+#
+# Outputs:
+#  - README.md: download table rewritten with current release asset URLs
+#  - updates.json: manifest consumed by UpdateService.cpp; platform keys must
+#    match UpdateService::current_platform_key()
+#    (windows-x64 / windows-arm64 / linux-x64 / macos-arm64 / macos-x64).
+#    Asset filenames must match CPACK_PACKAGE_FILE_NAME in CMakeLists.txt:
+#    FinceptTerminal-<version>-<platform>-<arch>-setup.<ext>
 # ═════════════════════════════════════════════════════════════════════════════
-  update-readme:
-    name: Update README download links
+  update-repo-metadata:
+    name: Update README + updates.json on main
     needs: release
     runs-on: ubuntu-latest
     if: >-
@@ -1100,19 +1117,42 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (main branch, full history)
         uses: actions/checkout@v4
         with:
-          # Use a token with write access so we can push the commit back
+          # Write-scoped token so we can push the merged commit back.
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 1
-          # Checkout main branch (not the tag) so we can push a commit
+          # Checkout main (not the tag) because we commit on top of main.
           ref: main
+          # fetch-depth: 0 gives us full history. Needed so a future
+          # `git pull --rebase` (only used if a human race-pushes to main
+          # during the workflow — vanishingly rare but cheap insurance)
+          # has the base commits available.
+          fetch-depth: 0
+
+      # ── Wait for the release to be fully published ────────────────────────
+      # GitHub's release-creation step in the previous job returns as soon as
+      # the release row exists, but the asset rows can take a few seconds to
+      # propagate to the API. Poll for visibility once here; both downstream
+      # steps (URL fetch + asset download) share this readiness gate instead
+      # of each polling separately.
+      - name: Wait for release to be visible
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 12); do
+            ASSET_COUNT=$(gh release view "${TAG}" --json assets --jq '.assets | length' 2>/dev/null || echo "0")
+            echo "  attempt ${i}: ${ASSET_COUNT} asset(s) visible"
+            [ "${ASSET_COUNT}" -ge 1 ] && exit 0
+            sleep 5
+          done
+          echo "::error::Release ${TAG} still has no visible assets after 60s"
+          exit 1
 
       # ── Fetch release asset URLs via gh CLI ───────────────────────────────
       # gh is pre-installed on all GitHub-hosted runners.
-      # We query the release created in the previous job and extract
-      # each installer's browser_download_url.
       - name: Fetch release asset URLs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1120,15 +1160,6 @@ jobs:
         run: |
           set -euo pipefail
           echo "Fetching asset URLs for release ${TAG}..."
-
-          # Poll up to 60s for the release to be fully published
-          for i in $(seq 1 12); do
-            ASSETS=$(gh release view "${TAG}" --json assets --jq '.assets' 2>/dev/null || echo "[]")
-            COUNT=$(echo "$ASSETS" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
-            echo "  attempt ${i}: ${COUNT} asset(s) found"
-            [ "$COUNT" -ge 1 ] && break
-            sleep 5
-          done
 
           # Extract URLs for each platform (first match per pattern)
           WIN_URL=$(gh release view "${TAG}" --json assets \
@@ -1168,18 +1199,15 @@ jobs:
           echo "Linux    : ${LIN_URL}"
           echo "macOS    : ${MAC_URL}"
 
-      # ── Rewrite the download table in README.md ───────────────────────────
-      # Strategy: sed-replace a clearly-delimited block between two sentinel
-      # comments. This is the most robust approach — no regex on links needed.
-      # The sentinels already exist in the README (added below by this step on
-      # first run; subsequent runs just overwrite between them).
+      # ── Rewrite README download table ─────────────────────────────────────
+      # Strategy: replace a clearly-delimited block between two sentinel
+      # comments. Robust — no regex on links needed.
       - name: Update README download table
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
-          # Sentinel markers in README — we replace everything between them.
           START_MARKER="<!-- DOWNLOAD-TABLE-START -->"
           END_MARKER="<!-- DOWNLOAD-TABLE-END -->"
 
@@ -1197,71 +1225,15 @@ jobs:
 
           README="README.md"
 
-          # Delegate the regex replacement to a standalone Python script so
-          # YAML indentation can't poison the Python source (an in-line
-          # heredoc body would be parsed by Python with leading spaces and
-          # fail with IndentationError).
+          # Delegate regex replacement to a standalone Python script so
+          # YAML indentation can't poison the Python source.
           export README NEW_BLOCK
           python3 .github/scripts/update_readme_table.py
 
           echo "=== README diff preview (first 60 lines) ==="
           git diff README.md | head -60 || true
 
-      # ── Commit and push ───────────────────────────────────────────────────
-      - name: Commit and push README update
-        run: |
-          set -euo pipefail
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          if git diff --quiet README.md; then
-            echo "README unchanged — nothing to commit"
-            exit 0
-          fi
-
-          git add README.md
-          git commit -m "docs: update download links for ${TAG}
-
-          Auto-updated by release workflow after successful build.
-          Windows, Linux, macOS installer URLs reflect the ${TAG} release.
-
-          Co-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
-
-          git push origin main
-          echo "README pushed to main"
-
-# ═════════════════════════════════════════════════════════════════════════════
-# JOB 6 — Regenerate updates.json (auto-updater manifest)
-#
-# Reads the published GitHub Release, computes sha256 for each installer
-# asset, writes a per-platform/per-arch manifest that the in-app updater
-# consumes (see fincept-qt/src/services/updater/UpdateService.cpp).
-#
-# Platform key scheme — must match UpdateService::current_platform_key():
-#   windows-x64 / windows-arm64 / linux-x64 / macos-arm64 / macos-x64
-#
-# Asset filename scheme — must match CPACK_PACKAGE_FILE_NAME in CMakeLists.txt:
-#   FinceptTerminal-<version>-<platform>-<arch>-setup.<ext>
-# ═════════════════════════════════════════════════════════════════════════════
-  update-manifest:
-    name: Regenerate updates.json
-    needs: release
-    runs-on: ubuntu-latest
-    if: >-
-      !cancelled() &&
-      needs.release.result == 'success' &&
-      startsWith(github.ref, 'refs/tags/')
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 1
-          ref: main
-
+      # ── Regenerate updates.json (auto-updater manifest) ───────────────────
       - name: Regenerate updates.json from release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1270,18 +1242,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Strip leading 'v' from tag so "v4.0.2" → "4.0.2" for latest-version
+          # Strip leading 'v' so "v4.0.2" → "4.0.2" for latest-version
           VERSION="${TAG#v}"
-          RELEASE_URL="https://github.com/${REPO}/releases/tag/${TAG}"
-
-          # Poll up to 60s for the release to be fully published
-          for i in $(seq 1 12); do
-            if gh release view "${TAG}" --json assets >/dev/null 2>&1; then
-              break
-            fi
-            echo "  attempt ${i}: release not yet visible, sleeping..."
-            sleep 5
-          done
 
           WORK="$(mktemp -d)"
           echo "Downloading release assets to ${WORK}..."
@@ -1291,15 +1253,17 @@ jobs:
           export WORK VERSION TAG REPO
 
           # Delegate manifest generation to a standalone Python script to
-          # keep this step free of YAML/Python indentation conflicts. The
-          # script writes JSON to stdout and diagnostics to stderr; we redirect
-          # stdout into updates.json and let stderr surface in the job log.
+          # keep this step free of YAML/Python indentation conflicts.
           python3 .github/scripts/generate_updates_manifest.py > updates.json
 
           echo "=== updates.json diff ==="
           git diff updates.json | head -80 || true
 
-      - name: Commit and push updates.json
+      # ── Single atomic commit + push ───────────────────────────────────────
+      # Both files in one commit → one push → no race with anything. If
+      # neither file changed (rare but possible, e.g. re-running the same
+      # tag), exit cleanly without an empty commit.
+      - name: Commit and push repo metadata
         env:
           TAG: ${{ github.ref_name }}
         run: |
@@ -1307,17 +1271,36 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          if git diff --quiet updates.json; then
-            echo "updates.json unchanged — nothing to commit"
+          README_CHANGED=0
+          MANIFEST_CHANGED=0
+          git diff --quiet README.md    || README_CHANGED=1
+          git diff --quiet updates.json || MANIFEST_CHANGED=1
+
+          if [ "${README_CHANGED}" -eq 0 ] && [ "${MANIFEST_CHANGED}" -eq 0 ]; then
+            echo "Neither README.md nor updates.json changed — nothing to commit"
             exit 0
           fi
 
-          git add updates.json
-          git commit -m "chore(release): regenerate updates.json for ${TAG}
+          # Stage only what we own. Never `git add -A` in automation: a
+          # stray artefact from an earlier step would sneak into main.
+          [ "${README_CHANGED}"   -eq 1 ] && git add README.md
+          [ "${MANIFEST_CHANGED}" -eq 1 ] && git add updates.json
 
-          Auto-generated by release workflow. sha256 computed from release assets.
+          git commit -m "chore(release): update README download links and updates.json for ${TAG}
+
+          Auto-generated by release workflow after successful build:
+            * README.md: download table rewritten with ${TAG} asset URLs
+            * updates.json: manifest consumed by the in-app auto-updater
+              (UpdateService.cpp) — sha256 computed from release assets.
 
           Co-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
 
-          git push origin main
-          echo "updates.json pushed to main"
+          # Defensive: if a human raced us and pushed to main during this
+          # workflow, rebase once and retry. We do NOT race any sibling job
+          # here (there are none), so this should almost never fire.
+          if ! git push origin main; then
+            echo "::warning::push rejected (likely external push to main); rebasing once..."
+            git pull --rebase origin main
+            git push origin main
+          fi
+          echo "Repo metadata pushed to main"
