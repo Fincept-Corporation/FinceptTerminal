@@ -656,10 +656,23 @@ jobs:
           # preserves symlinks as symlinks, unlike ditto under non-root) and
           # then explicitly rebuild Versions/Current + the top-level convenience
           # symlinks for Python.framework AND every nested framework inside it.
+          # Version pinned to match the Python runtime the C++ app is built
+          # and tested against. setup-python@v6 already provisions 3.12 into
+          # ${pythonLocation} and `brew install python@3.12` pours a clean
+          # single-version framework under $(brew --prefix python@3.12).
+          # Must be kept in sync with the PythonRunner/PythonSetupManager
+          # expectations in src/python/.
+          PY_VER_KEEP="3.12"
+
+          # Prefer the Homebrew-installed framework: on a fresh pour it holds
+          # exactly Versions/${PY_VER_KEEP} + Current, avoiding the multi-
+          # version mess that /Library/Frameworks/Python.framework carries on
+          # the macos-15-arm64 runner image (3.11/3.12/3.13/3.14 side-by-side).
+          # The extra-version pruning below is still done as a safety net.
           PY_FRAMEWORK=""
           for candidate in \
-            "/Library/Frameworks/Python.framework" \
             "$(brew --prefix python@3.12 2>/dev/null)/Frameworks/Python.framework" \
+            "/Library/Frameworks/Python.framework" \
             "$(brew --prefix python3 2>/dev/null)/Frameworks/Python.framework"; do
             [ -d "${candidate}/Versions" ] && { PY_FRAMEWORK="${candidate}"; break; }
           done
@@ -681,24 +694,31 @@ jobs:
             # cleaned separately below).
             rsync -a "${PY_FRAMEWORK}/" "${PYFW}/"
 
-            # Resolve the concrete version dir (e.g. "3.12") — pick the first
-            # real directory under Versions/ that isn't the Current symlink.
-            PY_VER=""
-            if [ -d "${PYFW}/Versions" ]; then
-              for v in "${PYFW}/Versions/"*; do
-                name="$(basename "$v")"
-                [ "$name" = "Current" ] && continue
-                [ -d "$v" ] || continue
-                PY_VER="$name"
-                break
-              done
-            fi
-            if [ -z "${PY_VER}" ]; then
-              echo "::error::Could not determine Python version inside framework"
+            # Strip every Python version except the one we ship. The
+            # macos-15-arm64 runner image preinstalls
+            # /Library/Frameworks/Python.framework with 3.11, 3.12, 3.13 and
+            # 3.14 side-by-side. Leaving more than one version inside the
+            # bundled framework trips `codesign --verify --strict` with
+            # "embedded framework contains modified or invalid version" —
+            # Apple's framework format expects exactly one active version
+            # plus Versions/Current. This must run BEFORE
+            # fix_framework_symlinks, otherwise Current could point at a
+            # version we are about to delete.
+            if [ ! -d "${PYFW}/Versions/${PY_VER_KEEP}" ]; then
+              echo "::error::Expected Python ${PY_VER_KEEP} under ${PYFW}/Versions/, found:"
               ls -la "${PYFW}/Versions/" || true
               exit 1
             fi
-            echo "Python framework version: ${PY_VER}"
+            for v in "${PYFW}/Versions/"*; do
+              name="$(basename "$v")"
+              [ "$name" = "Current" ] && continue
+              [ "$name" = "${PY_VER_KEEP}" ] && continue
+              [ -d "$v" ] || continue
+              echo "Pruning extra Python version from bundle: ${name}"
+              rm -rf "$v"
+            done
+            PY_VER="${PY_VER_KEEP}"
+            echo "Python framework version (kept): ${PY_VER}"
 
             # Helper: rebuild the framework symlink layer for a framework dir.
             # $1 = path to .framework; $2 = concrete version string inside
