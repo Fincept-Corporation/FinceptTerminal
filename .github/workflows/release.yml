@@ -614,7 +614,7 @@ jobs:
       - name: Stage .app bundle contents
         working-directory: fincept-qt
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           BUILD_DIR="build"
 
           if [ -d "${BUILD_DIR}/${{ env.APP_NAME }}.app" ]; then
@@ -648,7 +648,14 @@ jobs:
           # codesign can handle files in MacOS/; what it CANNOT handle is a
           # malformed framework (see the Python.framework block below).
 
-          # Embed Python framework (before codesign so it gets signed with the bundle)
+          # Embed Python framework (before codesign so it gets signed with the bundle).
+          # Root cause fixed here (issue #191): codesign --verify rejected the
+          # bundle with "embedded framework contains modified or invalid version"
+          # because `ditto` left the Versions/Current symlinks inside nested
+          # Tcl.framework / Tk.framework broken. We switch to rsync -a (which
+          # preserves symlinks as symlinks, unlike ditto under non-root) and
+          # then explicitly rebuild Versions/Current + the top-level convenience
+          # symlinks for Python.framework AND every nested framework inside it.
           PY_FRAMEWORK=""
           for candidate in \
             "/Library/Frameworks/Python.framework" \
@@ -659,52 +666,124 @@ jobs:
 
           BUNDLE_FRAMEWORKS="${APP_BUNDLE}/Contents/Frameworks"
           mkdir -p "${BUNDLE_FRAMEWORKS}"
-          if [ -n "${PY_FRAMEWORK}" ]; then
+
+          if [ -z "${PY_FRAMEWORK}" ]; then
+            echo "::warning::Python.framework not found — skipping embed step"
+          else
             echo "Embedding Python.framework from: ${PY_FRAMEWORK}"
-            # CRITICAL: preserve symlinks. `Python.framework` is a versioned
-            # framework — Versions/Current → 3.12, top-level Python/Resources/
-            # Headers → Versions/Current/Python etc. If we dereference symlinks
-            # (rsync --copy-unsafe-links, or `cp -RL`) the directory structure
-            # is no longer a valid framework bundle and codesign rejects it with
-            # "embedded framework contains modified or invalid version".
-            # `cp -R` on macOS preserves symlinks by default; `ditto` is the
-            # Apple-blessed way to copy bundles losslessly (preserves xattr,
-            # symlinks, resource forks).
-            if [ -d "${BUNDLE_FRAMEWORKS}/Python.framework" ]; then
-              rm -rf "${BUNDLE_FRAMEWORKS}/Python.framework"
+            PYFW="${BUNDLE_FRAMEWORKS}/Python.framework"
+            rm -rf "${PYFW}"
+
+            # rsync -a == -rlptgoD; -l preserves symlinks as symlinks. The
+            # trailing slash on the source copies contents into the target
+            # directory. --safe-links would skip symlinks that point outside
+            # the source tree, which we want (dangling nested symlinks are
+            # cleaned separately below).
+            rsync -a "${PY_FRAMEWORK}/" "${PYFW}/"
+
+            # Resolve the concrete version dir (e.g. "3.12") — pick the first
+            # real directory under Versions/ that isn't the Current symlink.
+            PY_VER=""
+            if [ -d "${PYFW}/Versions" ]; then
+              for v in "${PYFW}/Versions/"*; do
+                name="$(basename "$v")"
+                [ "$name" = "Current" ] && continue
+                [ -d "$v" ] || continue
+                PY_VER="$name"
+                break
+              done
             fi
-            ditto "${PY_FRAMEWORK}" "${BUNDLE_FRAMEWORKS}/Python.framework"
+            if [ -z "${PY_VER}" ]; then
+              echo "::error::Could not determine Python version inside framework"
+              ls -la "${PYFW}/Versions/" || true
+              exit 1
+            fi
+            echo "Python framework version: ${PY_VER}"
 
-            # Strip dev-only files that shouldn't ship AND that confuse codesign:
-            #   - .pyc caches (regenerated at runtime, and old hashes fail seal)
+            # Helper: rebuild the framework symlink layer for a framework dir.
+            # $1 = path to .framework; $2 = concrete version string inside
+            # Versions/. Rebuilds Versions/Current and the top-level name /
+            # Resources / Headers symlinks. Uses relative targets so the
+            # framework is relocatable.
+            fix_framework_symlinks() {
+              local fw="$1" ver="$2"
+              local fw_name
+              fw_name="$(basename "$fw" .framework)"
+              [ -d "${fw}/Versions/${ver}" ] || { echo "skip ${fw}: Versions/${ver} missing"; return 0; }
+              ( cd "${fw}/Versions" && rm -f Current && ln -s "${ver}" Current )
+              for link in "${fw_name}" Resources Headers; do
+                local target="Versions/Current/${link}"
+                if [ -e "${fw}/${target}" ] || [ -L "${fw}/${target}" ]; then
+                  ( cd "${fw}" && rm -f "${link}" && ln -s "${target}" "${link}" )
+                fi
+              done
+            }
+
+            # Fix Python.framework itself
+            fix_framework_symlinks "${PYFW}" "${PY_VER}"
+
+            # Fix any nested frameworks inside Python (Tcl, Tk, and anything
+            # else Homebrew ships). Codesign walks into these, and a broken
+            # symlink layer here is what produced the "modified or invalid
+            # version" error on the runner.
+            NESTED_ROOT="${PYFW}/Versions/${PY_VER}/Frameworks"
+            if [ -d "${NESTED_ROOT}" ]; then
+              for nested_fw in "${NESTED_ROOT}"/*.framework; do
+                [ -d "${nested_fw}" ] || continue
+                nested_ver=""
+                if [ -d "${nested_fw}/Versions" ]; then
+                  for v in "${nested_fw}/Versions/"*; do
+                    name="$(basename "$v")"
+                    [ "$name" = "Current" ] && continue
+                    [ -d "$v" ] || continue
+                    nested_ver="$name"
+                    break
+                  done
+                fi
+                [ -n "${nested_ver}" ] || { echo "skip ${nested_fw}: no version dir"; continue; }
+                fix_framework_symlinks "${nested_fw}" "${nested_ver}"
+              done
+            fi
+
+            # Strip dev-only files that shouldn't ship AND confuse codesign:
+            #   - .pyc / .pyo caches (regenerated at runtime, stale hashes fail seal)
             #   - __pycache__ directories
-            #   - .a / .la static libs (not needed at runtime)
-            #   - test/ directories inside stdlib (huge, not needed)
-            find "${BUNDLE_FRAMEWORKS}/Python.framework" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-            find "${BUNDLE_FRAMEWORKS}/Python.framework" -name "*.pyc" -delete 2>/dev/null || true
-            find "${BUNDLE_FRAMEWORKS}/Python.framework" -name "*.pyo" -delete 2>/dev/null || true
+            # Run AFTER the symlink fix — otherwise find could race the rebuild.
+            find "${PYFW}" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+            find "${PYFW}" -name "*.pyc" -delete 2>/dev/null || true
+            find "${PYFW}" -name "*.pyo" -delete 2>/dev/null || true
 
-            # Remove dangling symlinks (PrivateHeaders often points to missing targets)
-            find "${BUNDLE_FRAMEWORKS}/Python.framework" -type l \
-              ! -exec test -e {} \; -delete 2>/dev/null || true
+            # Remove dangling symlinks (e.g. Homebrew's PrivateHeaders often
+            # points to missing targets). `-exec test -e` resolves through
+            # symlinks, so a broken link matches `! -exec test -e`.
+            find "${PYFW}" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
 
-            PY_VER="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+            # Strip quarantine and extended attributes from the framework.
+            # Leftover com.apple.quarantine or com.apple.provenance xattrs on
+            # individual pages invalidate the ad-hoc signature when the DMG
+            # is copied to /Applications on macOS 14+ Apple Silicon — this is
+            # the root cause behind the SIGKILL "Code Signature Invalid"
+            # reports in issues #139, #173, #191.
+            xattr -cr "${PYFW}" 2>/dev/null || true
+
+            # Convenience symlink the C++ runtime uses to invoke the embedded
+            # python binary. Kept from the original block.
             ln -sf "../Frameworks/Python.framework/Versions/${PY_VER}/bin/python${PY_VER}" \
                    "${APP_BUNDLE}/Contents/MacOS/python3" 2>/dev/null || true
             echo "Python ${PY_VER} embedded"
 
-            # Sanity check: verify the framework structure is intact before we
-            # hand it to codesign. A valid framework has Versions/Current as a
-            # symlink and the top-level Python binary as a symlink to Versions/
-            # Current/Python. If either is a real file or directory, codesign
-            # will reject it.
-            if [ ! -L "${BUNDLE_FRAMEWORKS}/Python.framework/Versions/Current" ]; then
-              echo "::error::Python.framework/Versions/Current is not a symlink — codesign will reject"
-              ls -la "${BUNDLE_FRAMEWORKS}/Python.framework/Versions/"
-              exit 1
-            fi
-          else
-            echo "WARNING: Python.framework not found"
+            # Sanity-check every framework that codesign will walk into.
+            # Fail fast with a clear error here rather than blowing up 30
+            # seconds later inside `codesign --verify`.
+            for check_fw in "${PYFW}" "${NESTED_ROOT}"/*.framework; do
+              [ -d "${check_fw}" ] || continue
+              if [ ! -L "${check_fw}/Versions/Current" ]; then
+                echo "::error::${check_fw}/Versions/Current is not a symlink — codesign will reject"
+                ls -la "${check_fw}/Versions/" || true
+                exit 1
+              fi
+            done
+            echo "Python.framework structure OK"
           fi
 
           # Resources (icons, requirements-*.txt) go in Contents/Resources/ —
@@ -811,13 +890,28 @@ jobs:
       - name: Deep ad-hoc codesign bundle
         working-directory: fincept-qt
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           APP_BUNDLE="build/${{ env.APP_NAME }}.app"
+
+          # Strip extended attributes (quarantine / provenance / Finder info)
+          # from the whole bundle. macdeployqt copies Qt frameworks out of the
+          # aqtinstall kit, which may carry com.apple.quarantine from the
+          # install-qt-action download. Leftover xattrs on individual pages
+          # invalidate the signature the moment the DMG is copied to
+          # /Applications on macOS 14+ Apple Silicon (root cause of the
+          # SIGKILL "Code Signature Invalid" reports in #139, #173, #191).
+          echo "Stripping extended attributes from bundle..."
+          xattr -cr "${APP_BUNDLE}" 2>/dev/null || true
 
           echo "Removing existing signatures (leaves first)..."
           # Strip signatures from every Mach-O in the bundle. Must be done
           # leaf-to-root so nested frameworks are unsigned before we re-sign
-          # their parents.
+          # their parents. NOTE: site-packages .so files inside Python.framework
+          # ship as 0644 (not exec), so -perm +111 misses them — explicitly
+          # catch *.so via the filename predicate. Same for *.dylib nested in
+          # frameworks. The `file ... Mach-O` check still gates actual action
+          # so text files accidentally named .so (none today, but belt and
+          # suspenders) won't trigger spurious codesign calls.
           find "${APP_BUNDLE}" -type f \( -name "*.dylib" -o -name "*.so" -o -perm +111 \) 2>/dev/null | \
             while read -r f; do
               if file "$f" 2>/dev/null | grep -q "Mach-O"; then
