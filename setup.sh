@@ -58,6 +58,8 @@ if [ "$PLATFORM" = "linux" ]; then
     sudo apt-get install -y --no-install-recommends \
         git cmake ninja-build g++ \
         python3 python3-pip python3-venv \
+	libssl-dev \
+	libxcb-cursor0 \
         libgl1-mesa-dev libglu1-mesa-dev \
         libxkbcommon-dev libxkbcommon-x11-dev \
         libfontconfig1 libdbus-1-3 \
@@ -119,12 +121,12 @@ else
     info "Installing Qt ${QT_VERSION} via aqtinstall to $QT_INSTALL_ROOT ..."
     # aqtinstall is a stable community tool that downloads exact Qt versions
     # from the official Qt mirror. Much smaller than Qt Online Installer and scriptable.
-    "$PYTHON" -m pip install --user --quiet --upgrade aqtinstall
+    "$PYTHON" -m pip install --user --quiet --upgrade --break-system-packages aqtinstall
     AQT="$("$PYTHON" -m pip show aqtinstall >/dev/null 2>&1 && "$PYTHON" -m aqt help >/dev/null 2>&1 && echo "$PYTHON -m aqt" || echo "")"
     [ -n "$AQT" ] || fail "aqtinstall did not install correctly."
     # Qt host/target/arch
     if [ "$PLATFORM" = "linux" ]; then
-        AQT_HOST="linux"   ; AQT_TARGET="desktop" ; AQT_ARCH="gcc_64"
+        AQT_HOST="linux"   ; AQT_TARGET="desktop" ; AQT_ARCH="linux_gcc_64"
     else
         AQT_HOST="mac"     ; AQT_TARGET="desktop" ; AQT_ARCH="macos"
     fi
