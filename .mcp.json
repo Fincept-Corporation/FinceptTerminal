@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "fincept-terminal": {
+      "command": "/Users/shin/.pyenv/versions/3.12.11/bin/python3",
+      "args": ["/Users/shin/01_Myworkspace/FinceptTerminal/mcp-server/server.py"]
+    }
+  }
+}
