@@ -16,16 +16,30 @@ HttpClient::HttpClient() {
 }
 
 QNetworkRequest HttpClient::build_request(const QString& url) const {
-    QString full_url = url.startsWith("http") ? url : (base_url_ + url);
+    const bool is_relative = !url.startsWith("http");
+    const QString full_url = is_relative ? (base_url_ + url) : url;
     QUrl qurl(full_url);
     QNetworkRequest req{qurl};
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     req.setHeader(QNetworkRequest::UserAgentHeader, "FinceptTerminal/4.0");
-    if (!api_key_.isEmpty()) {
-        req.setRawHeader("X-API-Key", api_key_.toUtf8());
-    }
-    if (!session_token_.isEmpty()) {
-        req.setRawHeader("X-Session-Token", session_token_.toUtf8());
+
+    // Only attach Fincept auth headers when the request targets the configured
+    // Fincept API host. Notification providers (Slack, Discord, Telegram,
+    // PagerDuty, user webhooks, …) and other services pass absolute third-party
+    // URLs through this same singleton — without this guard their servers would
+    // receive the user's X-API-Key and X-Session-Token in every call.
+    const bool same_host = is_relative || [&]() {
+        const QUrl base(base_url_);
+        return !base.host().isEmpty() && qurl.host().compare(base.host(), Qt::CaseInsensitive) == 0;
+    }();
+
+    if (same_host) {
+        if (!api_key_.isEmpty()) {
+            req.setRawHeader("X-API-Key", api_key_.toUtf8());
+        }
+        if (!session_token_.isEmpty()) {
+            req.setRawHeader("X-Session-Token", session_token_.toUtf8());
+        }
     }
     return req;
 }
