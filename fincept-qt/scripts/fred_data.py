@@ -27,7 +27,10 @@ session.mount('https://', adapter)
 def make_fred_request(endpoint: str, params: Dict[str, Any]) -> Dict:
     """Make request to FRED API using connection pool"""
     if not FRED_API_KEY:
-        return {"error": "FRED API key not configured"}
+        return {
+            "error": "FRED API key not configured. Set FRED_API_KEY environment variable.",
+            "error_code": "MISSING_API_KEY",
+        }
 
     params['api_key'] = FRED_API_KEY
     params['file_type'] = 'json'
@@ -35,10 +38,30 @@ def make_fred_request(endpoint: str, params: Dict[str, Any]) -> Dict:
     url = f"{FRED_API_BASE}/{endpoint}"
     try:
         response = session.get(url, params=params, timeout=15)
+        if response.status_code in (401, 403):
+            return {
+                "error": "FRED rejected the API key (HTTP {}).".format(response.status_code),
+                "error_code": "INVALID_API_KEY",
+            }
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After", "")
+            try:
+                retry_seconds = int(retry_after)
+            except (TypeError, ValueError):
+                retry_seconds = 60
+            return {
+                "error": "FRED rate limit hit. Retry in ~{}s.".format(retry_seconds),
+                "error_code": "RATE_LIMITED",
+                "retry_after": retry_seconds,
+            }
         response.raise_for_status()
         return response.json()
+    except requests.exceptions.HTTPError as e:
+        return {"error": str(e), "error_code": "HTTP_ERROR"}
+    except requests.exceptions.Timeout:
+        return {"error": "FRED request timed out.", "error_code": "TIMEOUT"}
     except requests.exceptions.RequestException as e:
-        return {"error": str(e)}
+        return {"error": str(e), "error_code": "REQUEST_FAILED"}
 
 
 def get_series(series_id: str, start_date: Optional[str] = None, end_date: Optional[str] = None,

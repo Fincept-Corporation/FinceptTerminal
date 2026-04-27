@@ -1,6 +1,7 @@
 #include "services/workflow/nodes/MarketDataNodes.h"
 
 #include "python/PythonRunner.h"
+#include "screens/economics/panels/EconomicsPresets.h"
 #include "services/workflow/NodeRegistry.h"
 
 #include <QJsonDocument>
@@ -198,9 +199,66 @@ void register_market_data_nodes(NodeRegistry& registry) {
 
     registry.register_type({
         .type_id = "market.get_economics",
-        .display_name = "Economic Data",
+        .display_name = "FRED Economic Data",
         .category = "Market Data",
-        .description = "Fetch economic indicators (GDP, CPI, unemployment, etc.)",
+        .description = "Fetch a FRED macroeconomic series (GDP, CPI, Treasury yields, Fed Funds, etc.)",
+        .icon_text = "$",
+        .accent_color = "#2563eb",
+        .version = 2,
+        .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
+        .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::EconomicData}},
+        .parameters =
+            {
+                {"preset",
+                 "Preset",
+                 "select",
+                 "GDPC1",
+                 fincept::screens::fred_preset_series_ids(),
+                 "Pick a common series, or use Series ID below for any FRED code"},
+                {"series_id", "Series ID (override)", "string", "", {},
+                 "Optional FRED series id (e.g. GS10). Overrides Preset when set."},
+                {"start_date", "Start Date", "string", "", {}, "YYYY-MM-DD (optional)"},
+                {"end_date", "End Date", "string", "", {}, "YYYY-MM-DD (optional)"},
+                {"frequency", "Frequency", "select", "",
+                 {"", "d", "w", "m", "q", "a"},
+                 "Output frequency: d=daily, w=weekly, m=monthly, q=quarterly, a=annual"},
+                {"transform", "Transform", "select", "",
+                 {"", "chg", "pch", "log"},
+                 "chg=change, pch=percent change, log=natural log"},
+            },
+        .execute =
+            [](const QJsonObject& params, const QVector<QJsonValue>&,
+               std::function<void(bool, QJsonValue, QString)> cb) {
+                QString series_id = params.value("series_id").toString().trimmed();
+                if (series_id.isEmpty())
+                    series_id = params.value("preset").toString("GDPC1");
+
+                QStringList args = {"series", series_id};
+                const QString start = params.value("start_date").toString().trimmed();
+                const QString end = params.value("end_date").toString().trimmed();
+                const QString freq = params.value("frequency").toString().trimmed();
+                const QString transform = params.value("transform").toString().trimmed();
+
+                // fred_data.py series <id> [start] [end] [frequency] [transform] — positional.
+                // Only emit trailing args if needed; pad earlier ones with empty strings.
+                if (!start.isEmpty() || !end.isEmpty() || !freq.isEmpty() || !transform.isEmpty())
+                    args.append(start);
+                if (!end.isEmpty() || !freq.isEmpty() || !transform.isEmpty())
+                    args.append(end);
+                if (!freq.isEmpty() || !transform.isEmpty())
+                    args.append(freq);
+                if (!transform.isEmpty())
+                    args.append(transform);
+
+                run_python_json("fred_data.py", args, cb);
+            },
+    });
+
+    registry.register_type({
+        .type_id = "market.get_yield_curve",
+        .display_name = "US Treasury Yield Curve",
+        .category = "Market Data",
+        .description = "Fetch the full US Treasury yield curve (1m–30y) plus 10y-2y / 10y-3m spreads from FRED",
         .icon_text = "$",
         .accent_color = "#2563eb",
         .version = 1,
@@ -208,36 +266,20 @@ void register_market_data_nodes(NodeRegistry& registry) {
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::EconomicData}},
         .parameters =
             {
-                {"indicator",
-                 "Indicator",
-                 "select",
-                 "GDP",
-                 {"GDP", "CPI", "UNEMPLOYMENT", "INTEREST_RATE", "INFLATION", "RETAIL_SALES"},
-                 ""},
-                {"country", "Country", "string", "US", {}, "Country code"},
+                {"start_date", "Start Date", "string", "", {}, "YYYY-MM-DD (optional)"},
+                {"end_date", "End Date", "string", "", {}, "YYYY-MM-DD (optional)"},
             },
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>&,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                // Map indicator names to FRED series IDs
-                QString indicator = params.value("indicator").toString("GDP");
-                QString series_id;
-                if (indicator == "GDP")
-                    series_id = "GDP";
-                else if (indicator == "CPI")
-                    series_id = "CPIAUCSL";
-                else if (indicator == "UNEMPLOYMENT")
-                    series_id = "UNRATE";
-                else if (indicator == "INTEREST_RATE")
-                    series_id = "FEDFUNDS";
-                else if (indicator == "INFLATION")
-                    series_id = "T10YIE";
-                else if (indicator == "RETAIL_SALES")
-                    series_id = "RSAFS";
-                else
-                    series_id = indicator;
-
-                run_python_json("fred_data.py", {"series", series_id}, cb);
+                QStringList args = {"yield_curve"};
+                const QString start = params.value("start_date").toString().trimmed();
+                const QString end = params.value("end_date").toString().trimmed();
+                if (!start.isEmpty() || !end.isEmpty())
+                    args.append(start);
+                if (!end.isEmpty())
+                    args.append(end);
+                run_python_json("fred_economic_data.py", args, cb);
             },
     });
 

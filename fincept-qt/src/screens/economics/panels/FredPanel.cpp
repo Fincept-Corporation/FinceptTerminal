@@ -2,6 +2,7 @@
 #include "screens/economics/panels/FredPanel.h"
 
 #include "core/logging/Logger.h"
+#include "screens/economics/panels/EconomicsPresets.h"
 #include "services/economics/EconomicsService.h"
 
 #include <QHBoxLayout>
@@ -17,27 +18,6 @@ static constexpr const char* kFredScript = "fred_data.py";
 static constexpr const char* kFredSourceId = "fred";
 static constexpr const char* kFredColor = "#EF4444"; // red
 } // namespace
-
-static const QList<QPair<QString, QString>> kFredPresets = {
-    {"-- Custom series ID --", ""},
-    {"Real GDP (GDPC1)", "GDPC1"},
-    {"Nominal GDP (GDP)", "GDP"},
-    {"CPI All Items (CPIAUCSL)", "CPIAUCSL"},
-    {"Core CPI (CPILFESL)", "CPILFESL"},
-    {"Unemployment Rate (UNRATE)", "UNRATE"},
-    {"Federal Funds Rate (FEDFUNDS)", "FEDFUNDS"},
-    {"10-Year Treasury Yield (DGS10)", "DGS10"},
-    {"2-Year Treasury Yield (DGS2)", "DGS2"},
-    {"30-Year Mortgage Rate (MORTGAGE30US)", "MORTGAGE30US"},
-    {"M2 Money Supply (M2SL)", "M2SL"},
-    {"Personal Savings Rate (PSAVERT)", "PSAVERT"},
-    {"Industrial Production (INDPRO)", "INDPRO"},
-    {"Retail Sales (RSXFS)", "RSXFS"},
-    {"Housing Starts (HOUST)", "HOUST"},
-    {"Trade Balance (BOPGSTB)", "BOPGSTB"},
-    {"VIX Volatility Index (VIXCLS)", "VIXCLS"},
-    {"S&P 500 (SP500)", "SP500"},
-};
 
 FredPanel::FredPanel(QWidget* parent) : EconPanelBase(kFredSourceId, kFredColor, parent) {
     build_base_ui(this);
@@ -55,8 +35,8 @@ void FredPanel::build_controls(QHBoxLayout* thl) {
     lbl1->setStyleSheet(ctrl_label_style());
 
     preset_combo_ = new QComboBox;
-    for (const auto& p : kFredPresets)
-        preset_combo_->addItem(p.first, p.second);
+    for (const auto& p : fred_presets())
+        preset_combo_->addItem(p.label, p.series_id);
     preset_combo_->setFixedHeight(26);
     preset_combo_->setMinimumWidth(200);
     connect(preset_combo_, &QComboBox::currentIndexChanged, this, [this](int idx) {
@@ -97,8 +77,23 @@ void FredPanel::on_result(const QString& request_id, const services::EconomicsRe
     if (result.source_id != kFredSourceId)
         return;
     if (!result.success) {
-        // Check for API key error specifically
-        if (result.error.contains("API key") || result.error.contains("api_key")) {
+        // EconomicsService prefixes errors with "[CODE] " when the script
+        // returns a structured error_code. Branch on those for friendly UX.
+        if (result.error.startsWith("[MISSING_API_KEY]")) {
+            show_error("FRED API key not configured.\n"
+                       "Set FRED_API_KEY environment variable.\n"
+                       "Free key at: fred.stlouisfed.org/docs/api/api_key.html");
+        } else if (result.error.startsWith("[INVALID_API_KEY]")) {
+            show_error("FRED rejected your API key.\n"
+                       "Check FRED_API_KEY — re-issue one at:\n"
+                       "fred.stlouisfed.org/docs/api/api_key.html");
+        } else if (result.error.startsWith("[RATE_LIMITED]")) {
+            show_error("FRED rate-limit hit. Try again in a moment.\n"
+                       + result.error.mid(QStringLiteral("[RATE_LIMITED] ").size()));
+        } else if (result.error.startsWith("[TIMEOUT]")) {
+            show_error("FRED request timed out — check your network and retry.");
+        } else if (result.error.contains("API key") || result.error.contains("api_key")) {
+            // Legacy un-coded message fallback
             show_error("FRED API key not configured.\n"
                        "Set FRED_API_KEY environment variable.\n"
                        "Free key at: fred.stlouisfed.org/docs/api/api_key.html");

@@ -106,7 +106,10 @@ void EconomicsService::execute(const QString& source_id, const QString& script, 
             if (res.data.contains("error") && !res.data["error"].isNull() && !res.data["error"].toString().isEmpty() &&
                 !res.data.contains("data")) {
                 res.success = false;
-                res.error = res.data["error"].toString();
+                const QString error_code = res.data.value("error_code").toString();
+                const QString message = res.data["error"].toString();
+                // Prefix with [CODE] so panels can branch on it without a schema change.
+                res.error = error_code.isEmpty() ? message : (QStringLiteral("[") + error_code + QStringLiteral("] ") + message);
                 emit self->result_ready(request_id, res);
                 return;
             }

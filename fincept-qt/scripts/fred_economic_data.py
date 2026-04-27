@@ -85,6 +85,11 @@ PCE_SERIES = {
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
+    if not API_KEY:
+        return {
+            "error": "FRED API key not configured. Set FRED_API_KEY environment variable.",
+            "error_code": "MISSING_API_KEY",
+        }
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     if params is None:
         params = {}
@@ -92,14 +97,32 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
     params["file_type"] = "json"
     try:
         response = session.get(url, params=params, timeout=30)
+        if response.status_code in (401, 403):
+            return {
+                "error": f"FRED rejected the API key (HTTP {response.status_code}).",
+                "error_code": "INVALID_API_KEY",
+            }
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After", "")
+            try:
+                retry_seconds = int(retry_after)
+            except (TypeError, ValueError):
+                retry_seconds = 60
+            return {
+                "error": f"FRED rate limit hit. Retry in ~{retry_seconds}s.",
+                "error_code": "RATE_LIMITED",
+                "retry_after": retry_seconds,
+            }
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        return {"error": f"HTTP {e.response.status_code}: {str(e)}", "error_code": "HTTP_ERROR"}
+    except requests.exceptions.Timeout:
+        return {"error": "FRED request timed out.", "error_code": "TIMEOUT"}
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
+        return {"error": f"Request failed: {str(e)}", "error_code": "REQUEST_FAILED"}
     except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        return {"error": f"JSON decode error: {str(e)}", "error_code": "PARSE_ERROR"}
 
 
 def _get_series_observations(series_id: str, start_date: str = "", end_date: str = "") -> Dict:
@@ -124,7 +147,7 @@ def _get_series_observations(series_id: str, start_date: str = "", end_date: str
 
 def get_yield_curve(start_date: str = "", end_date: str = "") -> Dict:
     if not API_KEY:
-        return {"error": "FRED_API_KEY environment variable not set"}
+        return {"error": "FRED_API_KEY environment variable not set", "error_code": "MISSING_API_KEY"}
     result = {"yield_curve": {}, "spreads": {}, "start_date": start_date, "end_date": end_date}
     tenor_series = {k: v for k, v in YIELD_CURVE_SERIES.items() if "spread" not in k}
     spread_series = {k: v for k, v in YIELD_CURVE_SERIES.items() if "spread" in k}
@@ -140,7 +163,7 @@ def get_yield_curve(start_date: str = "", end_date: str = "") -> Dict:
 
 def get_money_supply(measure: str = "m2", start_date: str = "", end_date: str = "") -> Dict:
     if not API_KEY:
-        return {"error": "FRED_API_KEY environment variable not set"}
+        return {"error": "FRED_API_KEY environment variable not set", "error_code": "MISSING_API_KEY"}
     if measure == "all":
         result = {"money_supply": {}}
         for name, series_id in MONEY_SUPPLY_SERIES.items():
@@ -156,7 +179,7 @@ def get_money_supply(measure: str = "m2", start_date: str = "", end_date: str = 
 
 def get_credit_conditions(series_id: str = "fed_funds_rate", start_date: str = "", end_date: str = "") -> Dict:
     if not API_KEY:
-        return {"error": "FRED_API_KEY environment variable not set"}
+        return {"error": "FRED_API_KEY environment variable not set", "error_code": "MISSING_API_KEY"}
     resolved_id = CREDIT_CONDITION_SERIES.get(series_id, series_id)
     data = _get_series_observations(resolved_id, start_date, end_date)
     data["requested_series"] = series_id
@@ -166,7 +189,7 @@ def get_credit_conditions(series_id: str = "fed_funds_rate", start_date: str = "
 
 def get_financial_stress_index(start_date: str = "", end_date: str = "") -> Dict:
     if not API_KEY:
-        return {"error": "FRED_API_KEY environment variable not set"}
+        return {"error": "FRED_API_KEY environment variable not set", "error_code": "MISSING_API_KEY"}
     result = {"stress_indices": {}, "start_date": start_date, "end_date": end_date}
     for name, series_id in FINANCIAL_STRESS_SERIES.items():
         result["stress_indices"][name] = _get_series_observations(series_id, start_date, end_date)
@@ -176,7 +199,7 @@ def get_financial_stress_index(start_date: str = "", end_date: str = "") -> Dict
 
 def get_consumer_sentiment(start_date: str = "", end_date: str = "") -> Dict:
     if not API_KEY:
-        return {"error": "FRED_API_KEY environment variable not set"}
+        return {"error": "FRED_API_KEY environment variable not set", "error_code": "MISSING_API_KEY"}
     result = {"sentiment": {}, "start_date": start_date, "end_date": end_date}
     for name, series_id in CONSUMER_SENTIMENT_SERIES.items():
         result["sentiment"][name] = _get_series_observations(series_id, start_date, end_date)
@@ -186,7 +209,7 @@ def get_consumer_sentiment(start_date: str = "", end_date: str = "") -> Dict:
 
 def get_pce_inflation(start_date: str = "", end_date: str = "") -> Dict:
     if not API_KEY:
-        return {"error": "FRED_API_KEY environment variable not set"}
+        return {"error": "FRED_API_KEY environment variable not set", "error_code": "MISSING_API_KEY"}
     result = {"pce": {}, "start_date": start_date, "end_date": end_date}
     for name, series_id in PCE_SERIES.items():
         result["pce"][name] = _get_series_observations(series_id, start_date, end_date)

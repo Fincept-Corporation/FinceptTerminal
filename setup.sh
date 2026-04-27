@@ -53,15 +53,33 @@ version_ge() {
 # ── Step 1: System dependencies (build tools only) ──────────
 echo "[1/7] Installing system build tools..."
 if [ "$PLATFORM" = "linux" ]; then
-    command -v apt-get &>/dev/null || fail "apt-get not found. Install cmake / ninja-build / g++ / python3.11 / python3-pip manually."
-    sudo apt-get update -qq
-    sudo apt-get install -y --no-install-recommends \
-        git cmake ninja-build g++ \
-        python3 python3-pip python3-venv \
-        libgl1-mesa-dev libglu1-mesa-dev \
-        libxkbcommon-dev libxkbcommon-x11-dev \
-        libfontconfig1 libdbus-1-3 \
-        pkg-config curl
+    if command -v apt-get &>/dev/null; then
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends \
+            git cmake ninja-build g++ \
+            python3 python3-pip python3-venv \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libfontconfig1 libdbus-1-3 \
+            pkg-config curl
+    elif command -v pacman &>/dev/null; then
+        sudo pacman -Sy --noconfirm --needed \
+            base-devel git cmake ninja \
+            python python-pip \
+            mesa glu libxkbcommon \
+            fontconfig dbus \
+            pkgconf curl
+    elif command -v dnf &>/dev/null; then
+        sudo dnf install -y \
+            git cmake ninja-build gcc-c++ \
+            python3 python3-pip python3-virtualenv \
+            mesa-libGL-devel mesa-libGLU-devel \
+            libxkbcommon-devel \
+            fontconfig dbus-libs \
+            pkgconfig curl
+    else
+        info "No recognised package manager found. Ensure cmake, ninja, g++, python3, and Qt build dependencies are installed manually."
+    fi
 elif [ "$PLATFORM" = "macos" ]; then
     if ! command -v brew &>/dev/null; then
         [ "$CI_MODE" = true ] && fail "Homebrew not found in CI environment."
@@ -119,18 +137,24 @@ else
     info "Installing Qt ${QT_VERSION} via aqtinstall to $QT_INSTALL_ROOT ..."
     # aqtinstall is a stable community tool that downloads exact Qt versions
     # from the official Qt mirror. Much smaller than Qt Online Installer and scriptable.
-    "$PYTHON" -m pip install --user --quiet --upgrade aqtinstall
-    AQT="$("$PYTHON" -m pip show aqtinstall >/dev/null 2>&1 && "$PYTHON" -m aqt help >/dev/null 2>&1 && echo "$PYTHON -m aqt" || echo "")"
-    [ -n "$AQT" ] || fail "aqtinstall did not install correctly."
+    # Use an isolated venv to avoid PEP 668 "externally-managed-environment" errors
+    # on Arch Linux, Ubuntu 23.04+, and other distros that block global pip installs.
+    AQT_VENV="$SCRIPT_DIR/.aqt-venv"
+    "$PYTHON" -m venv "$AQT_VENV"
+    "$AQT_VENV/bin/pip" install --quiet --upgrade aqtinstall
+    AQT="$AQT_VENV/bin/aqt"
+    [ -x "$AQT" ] || fail "aqtinstall did not install correctly."
     # Qt host/target/arch
+    # AQT_ARCH is the argument passed to aqt (aqtinstall 3.x uses linux_gcc_64 on Linux).
+    # QT_KIT is the subdirectory aqtinstall actually creates on disk (always gcc_64).
     if [ "$PLATFORM" = "linux" ]; then
-        AQT_HOST="linux"   ; AQT_TARGET="desktop" ; AQT_ARCH="gcc_64"
+        AQT_HOST="linux"   ; AQT_TARGET="desktop" ; AQT_ARCH="linux_gcc_64"
     else
         AQT_HOST="mac"     ; AQT_TARGET="desktop" ; AQT_ARCH="macos"
     fi
     # Modules required to compile Fincept (match find_package COMPONENTS)
     AQT_MODULES="qtcharts qtwebsockets qtmultimedia qtspeech"
-    $AQT install-qt "$AQT_HOST" "$AQT_TARGET" "$QT_VERSION" "$AQT_ARCH" \
+    "$AQT" install-qt "$AQT_HOST" "$AQT_TARGET" "$QT_VERSION" "$AQT_ARCH" \
         --outputdir "$QT_INSTALL_ROOT" \
         --modules $AQT_MODULES \
         || fail "aqtinstall failed. Check internet connection or install Qt ${QT_VERSION} manually from https://www.qt.io/download-qt-installer"
