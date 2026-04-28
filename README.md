@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/fincept-corporation-finceptterminal-badge.png)](https://mseep.ai/app/fincept-corporation-finceptterminal)
+
 # Fincept Terminal
 
 <div align="center">
