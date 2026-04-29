@@ -4,16 +4,68 @@
 
 #include "screens/surface_analytics/SurfaceTypes.h"
 
+#include <QDate>
 #include <QDateTime>
 #include <QHash>
 #include <QJsonObject>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 
+#include <functional>
 #include <string>
 #include <vector>
 
 namespace fincept {
+
+// Metadata types for the Surface Analytics control panel
+struct DbPublisher {
+    int publisher_id = 0;
+    QString dataset;
+    QString venue;
+    QString description;
+};
+
+struct DbDatasetRange {
+    QString dataset;
+    QDate start;
+    QDate end;
+};
+
+struct DbCostQuery {
+    QString dataset;
+    QStringList symbols;
+    QString schema;
+    QDate start;
+    QDate end;
+    QString stype_in = "raw_symbol";
+};
+
+struct DbCostResult {
+    bool success = false;
+    QString error;
+    qint64 record_count = 0;
+    double cost_usd = 0.0;
+};
+
+// Unified parameters for surface fetches. Replaces the per-method
+// (symbol, spot, days, root_symbol, ...) overloads. The screen builds one
+// of these from the SurfaceControlPanel state and passes it to fetch_with_params().
+struct DatabentoFetchParams {
+    QString chart_type;     // String form of ChartType, e.g. "Volatility"
+    QString symbol;         // Underlying for option/futures surfaces
+    QStringList basket;     // Multi-symbol basket for risk surfaces
+    QString dataset;        // Optional override; capability default if empty
+    QString schema;         // Optional override; capability default if empty
+    QDate start_date;
+    QDate end_date;
+    int strike_window_pct = 20;
+    int dte_min = 7;
+    int dte_max = 365;
+    QStringList venues;     // Optional OPRA-venue filter
+    QString iv_method = "Brent";
+    float spot_override = 0.0f;  // 0 = lookup via DataHub::peek
+};
 
 // Result of a Databento fetch — emitted via signals
 struct DatabentoOhlcvResult {
@@ -64,6 +116,25 @@ class DatabentoService : public QObject {
     // Test connection
     void test_connection(); // emits connection_tested(bool ok, QString msg)
 
+    // ── Metadata (callback-based; results cached in-memory) ─────────────────
+    // The control panel uses these to populate dataset/schema/publisher pickers
+    // and to suggest sane default date ranges before a fetch is dispatched.
+    void list_datasets(std::function<void(QStringList)> cb);
+    void list_schemas(const QString& dataset, std::function<void(QStringList)> cb);
+    void list_publishers(const QString& dataset, std::function<void(QList<DbPublisher>)> cb);
+    void get_dataset_range(const QString& dataset, std::function<void(DbDatasetRange)> cb);
+    void get_cost(const DbCostQuery& q, std::function<void(DbCostResult)> cb);
+    void search_symbols(const QString& query, const QString& dataset,
+                        std::function<void(QStringList)> cb);
+
+    // ── Unified surface fetch ───────────────────────────────────────────────
+    // Routes to the right Python command based on params.chart_type.
+    // Spot for option surfaces is read from DataHub::peek("market:quote:<sym>")
+    // unless params.spot_override > 0. Result arrives through the existing
+    // vol_surface_ready / ohlcv_ready / futures_ready / surface_ready signals
+    // matching the request's chart family.
+    void fetch_with_params(const DatabentoFetchParams& params);
+
     // Fetch historical OHLCV for a list of symbols (used for correlation, PCA, drawdown, beta)
     void fetch_ohlcv(const QStringList& symbols, int days = 60);
 
@@ -99,6 +170,9 @@ class DatabentoService : public QObject {
     void surface_ready(const DatabentoSurfaceResult& result);
     void fetch_started(const QString& description);
     void fetch_failed(const QString& error);
+    // Emits the raw Python stdout for the most recent fetch so the data
+    // inspector can show it in the "View raw response" modal.
+    void raw_response(const QString& script_command, const QString& raw_stdout);
 
   private:
     DatabentoService();
@@ -116,6 +190,12 @@ class DatabentoService : public QObject {
     DatabentoVolSurfaceResult cached_vol_;
     DatabentoFuturesResult cached_futures_;
     QDateTime last_fetch_time_;
+
+    // Metadata caches — populated lazily on first request, valid for app session
+    QStringList cached_datasets_;
+    QHash<QString, QStringList> cached_schemas_;     // dataset → schemas
+    QHash<QString, QList<DbPublisher>> cached_publishers_;
+    QHash<QString, DbDatasetRange> cached_ranges_;
 
     static constexpr const char* SECURE_KEY = "databento.api_key";
     static constexpr const char* SCRIPT = "databento_provider.py";

@@ -49,6 +49,13 @@ void Surface3DWidget::clear() {
     update();
 }
 
+void Surface3DWidget::set_supported(bool supported) {
+    if (supported_ == supported)
+        return;
+    supported_ = supported;
+    update();
+}
+
 // ---- Color mapping ----
 QColor Surface3DWidget::lerp_color(const QColor& a, const QColor& b, float t) {
     return QColor((int)(a.red() + (b.red() - a.red()) * t), (int)(a.green() + (b.green() - a.green()) * t),
@@ -110,6 +117,20 @@ void Surface3DWidget::paintEvent(QPaintEvent*) {
 
     // Obsidian background — pure dark base
     painter.fillRect(rect(), QColor(8, 8, 8));
+
+    if (!supported_) {
+        painter.setPen(QColor(217, 119, 6));
+        painter.setFont(QFont("Consolas", 13, QFont::Bold));
+        painter.drawText(QRect(0, H / 2 - 28, W, 24), Qt::AlignCenter,
+                         "3D NOT APPLICABLE");
+        painter.setPen(QColor(140, 140, 140));
+        painter.setFont(QFont("Consolas", 10));
+        painter.drawText(QRect(0, H / 2, W, 22), Qt::AlignCenter,
+                         "This surface is 1-D or categorical.");
+        painter.drawText(QRect(0, H / 2 + 18, W, 22), Qt::AlignCenter,
+                         "Switch to TABLE or LINE view.");
+        return;
+    }
 
     if (grid_.empty() || grid_[0].empty()) {
         painter.setPen(QColor(80, 80, 80));

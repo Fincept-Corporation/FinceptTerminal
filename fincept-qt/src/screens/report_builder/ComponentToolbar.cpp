@@ -10,7 +10,10 @@
 namespace fincept::screens {
 
 ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
-    setFixedWidth(240);
+    // Use min/max width pair (not setFixedWidth) so the parent splitter can
+    // drive resize and the collapse animation can drive maximumWidth → 0.
+    setMinimumWidth(0);
+    setMaximumWidth(240);
     setStyleSheet(QString("background: %1; border-right: 1px solid %2;").arg(ui::colors::PANEL(), ui::colors::BORDER()));
 
     // Wrap content in a scroll area so it doesn't clip on small displays

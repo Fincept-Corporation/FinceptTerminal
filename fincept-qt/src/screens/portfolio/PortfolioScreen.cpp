@@ -2,6 +2,8 @@
 #include "screens/portfolio/PortfolioScreen.h"
 
 #include "core/session/ScreenStateManager.h"
+#include "core/symbol/SymbolContext.h"
+#include "core/symbol/SymbolRef.h"
 #include "screens/portfolio/PortfolioInsightsPanel.h"
 #include "screens/portfolio/PortfolioBlotter.h"
 #include "screens/portfolio/PortfolioCommandBar.h"
@@ -1045,6 +1047,13 @@ void PortfolioScreen::on_symbol_selected(const QString& symbol) {
         blotter_->set_selected_symbol(symbol);
     if (order_panel_)
         order_panel_->set_holding(find_holding(symbol));
+
+    // Publish to the linked group so other panels (Equity Research, Watchlist
+    // …) follow the selection. Only when actually linked.
+    if (link_group_ != SymbolGroup::None && !symbol.isEmpty()) {
+        SymbolContext::instance().set_group_symbol(
+            link_group_, SymbolRef::equity(symbol), this);
+    }
 }
 
 void PortfolioScreen::on_buy_requested() {
@@ -1182,6 +1191,33 @@ void PortfolioScreen::restore_state(const QVariantMap& state) {
         on_portfolio_selected(id);
     if (!sym.isEmpty())
         selected_symbol_ = sym;
+}
+
+// ── IGroupLinked ─────────────────────────────────────────────────────────────
+
+SymbolRef PortfolioScreen::current_symbol() const {
+    if (selected_symbol_.isEmpty())
+        return {};
+    return SymbolRef::equity(selected_symbol_);
+}
+
+void PortfolioScreen::on_group_symbol_changed(const SymbolRef& ref) {
+    if (!ref.is_valid())
+        return;
+    // Only react if the symbol is actually held — otherwise the group is
+    // pointing at a ticker the user can't act on here, and silently
+    // selecting a phantom would be misleading.
+    if (!find_holding(ref.symbol))
+        return;
+    if (selected_symbol_ == ref.symbol)
+        return;
+    selected_symbol_ = ref.symbol;
+    if (heatmap_)
+        heatmap_->set_selected_symbol(ref.symbol);
+    if (blotter_)
+        blotter_->set_selected_symbol(ref.symbol);
+    if (order_panel_)
+        order_panel_->set_holding(find_holding(ref.symbol));
 }
 
 } // namespace fincept::screens

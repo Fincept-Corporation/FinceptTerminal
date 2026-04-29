@@ -128,6 +128,39 @@ The MCP module `DataHubTools` exposes four generic introspection tools to any LL
 - `datahub_request` — ask the hub to refresh a topic (subject to policy + `force` flag)
 - `datahub_subscribe_briefly` — collect all values published on a topic for a bounded duration (100-30000 ms)
 
+## Crypto / on-chain (Phase 10)
+
+The Crypto Center owns a small set of topics for the user's connected Solana wallet. Read-only data flows through the hub. Transaction-signing paths (Phase 2 swap) **do not** go through the hub — they're one-shot user actions handled by `WalletService` + `WalletTxBridge` directly.
+
+### Wallet balances
+
+| Pattern | Producer | TTL | Min interval | Notes |
+|---|---|---|---|---|
+| `wallet:balance:<pubkey>` | `WalletBalanceProducer` | 30 s (poll) / push-only (stream) | 10 s (poll) / — (stream) | Two refresh modes, switched at runtime via SecureStorage `wallet.balance_mode` (`poll` / `stream`). **Phase 2 §2A.5 carries every SPL token the wallet holds**, not just $FNCPT. Polling uses Solana RPC `getBalance` + `getTokenAccountsByOwner` (programId-filtered, no mint filter) + `TokenMetadataService::lookup` for symbol/name/icon. Streaming opens a per-pubkey WebSocket to the RPC `wss://` endpoint and `accountSubscribe`s on the wallet pubkey for SOL changes; non-SOL tokens are bootstrapped via REST and re-seeded on a 30 s heartbeat. Stream policy: `push_only=true`, `coalesce_within_ms=250`. Shape: `WalletBalance{pubkey_b58, sol_lamports, tokens: QVector<TokenHolding{mint, symbol, name, amount_raw, decimals, verified, icon_url}>, ts_ms}`. Legacy back-compat accessors `fncpt_holding()` / `fncpt_ui()` / `fncpt_decimals()` are exposed on `WalletBalance` for callers that still want FNCPT specifically. Endpoint priority: `solana.rpc_url` SecureStorage override → Helius (`solana.helius_api_key`) → public mainnet RPC (`https`/`wss` derived). |
+
+### Token price
+
+| Pattern | Producer | TTL | Min interval | Notes |
+|---|---|---|---|---|
+| `market:price:token:<mint>` | `TokenPriceProducer` | 60 s | 30 s | Jupiter Lite Price API (`lite-api.jup.ag/price/v3`). One batched call per refresh covers every mint that has at least one subscriber: `?ids=<m1>,<m2>,…`. Coalesce 250 ms across rapid subscribe events (panel re-subscribes on every balance update). `<mint>` accepts wrapped-SOL (`So111…1112`) for native SOL pricing. Shape: `TokenPrice{mint, usd, sol, ts_ms, valid}`. The `sol` field is FNCPT-priced-in-SOL when the SOL mint is part of the same batch; 0 otherwise. |
+| `market:price:fncpt` | `TokenPriceProducer` | 60 s | 30 s | **Deprecated alias** for `market:price:token:9LUqJ5aQTjQiUCL93gi33LZcscUoSBJNhVCYpPzEpump`. Kept for one phase so existing subscribers (Phase 1's HoldingsBar, BalancePanel, SwapPanel) keep working without churn. Removed in Phase 3 cleanup; new subscribers should use `market:price:token:<mint>` directly. Shape: `TokenPrice` (legacy `FncptPrice` is a typedef alias). |
+
+### Wallet activity (Phase 2)
+
+| Pattern | Producer | TTL | Min interval | Notes |
+|---|---|---|---|---|
+| `wallet:activity:<pubkey>` | `WalletActivityProducer` | 30 s | 10 s | Last 50 parsed wallet operations. Helius parsed-transactions endpoint (`api.helius.xyz/v0/addresses/<pk>/transactions?limit=50`) when the user has a Helius key in `solana.helius_api_key`; falls back to raw `getSignaturesForAddress` (signatures only) when no key is configured. Shape: `vector<ParsedActivity{ts, kind, asset, amount, signature, status}>` where `kind` ∈ `{SWAP, RECEIVE, SEND, OTHER}`. |
+
+### Fee discount eligibility (Phase 2)
+
+| Pattern | Producer | TTL | Min interval | Notes |
+|---|---|---|---|---|
+| `billing:fncpt_discount:<pubkey>` | `FeeDiscountService` | derived from `wallet:balance:<pubkey>` (no separate fetch) | — | The service subscribes to the user's balance topic internally and republishes eligibility. Shape: `FncptDiscount{eligible, threshold_raw, threshold_decimals, applied_skus}`. Threshold + applied SKUs come from `services/billing/FeeDiscountConfig.h`; defaults to **1,000 $FNCPT → 30 % off** for AI reports, deep backtests, premium screens. |
+
+> **Phase 2 swap path is not a hub topic.** `PumpFunSwapService::build_swap()` is a one-shot, user-initiated HTTP POST to `pumpportal.fun/api/trade-local` that returns an unsigned versioned-tx body. There's no debounce-coalesce or cache-coherence value to pushing it through DataHub; the result is fed directly into `WalletService::sign_and_send()`. See `plans/crypto-center-phase-2.md` D1.
+
+> **Burn deferred to Phase 5.** Phase 2 ships BUY and SELL only. Real burns (with on-chain receipt) move into Phase 5 alongside the buyback-worker design. No `wallet:burn_receipt:*` topic in Phase 2.
+
 ## Force refresh
 
 `DataHub::request(topic, force=true)` bypasses `min_interval_ms` (so user-driven refresh buttons work inside the interval gate). Per-producer `max_requests_per_sec()` is still honoured — rage-clicking cannot hammer upstream.

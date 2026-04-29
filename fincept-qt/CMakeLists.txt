@@ -23,7 +23,7 @@ if(WIN32 AND CMAKE_HOST_WIN32)
     endif()
 endif()
 
-project(FinceptTerminal VERSION 4.0.2 LANGUAGES CXX)
+project(FinceptTerminal VERSION 4.0.2 LANGUAGES C CXX)
 
 # Strip C/C++ flags out of RC invocations — rc.exe only understands /D, /I, /fo.
 if(WIN32)
@@ -65,11 +65,66 @@ endif()
 # ── Compiler cache (ccache / sccache) ────────────────────────────────────────
 # Detected at configure time. If present, routes every C/C++ compilation
 # through the cache. Cuts clean rebuilds by 5-20x when source hasn't changed.
+#
+# PCH SUPPORT — without this, ccache rejects 99% of calls with
+# "Could not use precompiled header" because MSVC-style PCH files include
+# a serialised path that defeats the cache key. The sloppiness flags +
+# CCACHE_PCH_EXTSUM tell ccache to hash the PCH's contents instead of its
+# path. This must be set both at configure time (when CMake records the
+# launcher script) and at build time (when the launcher actually runs),
+# so we wrap ccache in a CMake-generated script that exports the env vars
+# unconditionally.
 find_program(FINCEPT_CCACHE_PROGRAM NAMES ccache sccache)
 if(FINCEPT_CCACHE_PROGRAM)
-    set(CMAKE_CXX_COMPILER_LAUNCHER "${FINCEPT_CCACHE_PROGRAM}")
-    set(CMAKE_C_COMPILER_LAUNCHER   "${FINCEPT_CCACHE_PROGRAM}")
-    message(STATUS "Compiler cache enabled: ${FINCEPT_CCACHE_PROGRAM}")
+    # Expose the same env vars to interactive `ccache -s` runs by writing a
+    # ccache.conf in the cache dir. This is idempotent — ccache reads it on
+    # every invocation, so changes here propagate without a clean rebuild.
+    if(WIN32)
+        set(_fincept_ccache_dir "$ENV{LOCALAPPDATA}/ccache")
+    elseif(APPLE)
+        set(_fincept_ccache_dir "$ENV{HOME}/Library/Caches/ccache")
+    else()
+        set(_fincept_ccache_dir "$ENV{HOME}/.ccache")
+    endif()
+    if(_fincept_ccache_dir AND IS_DIRECTORY "${_fincept_ccache_dir}")
+        # ccache.conf format: KEY = VALUE per line. We write only the keys we
+        # need; ccache merges with defaults for everything else.
+        file(WRITE "${_fincept_ccache_dir}/ccache.conf"
+            "sloppiness = pch_defines,time_macros,include_file_mtime,include_file_ctime,locale\n"
+            "pch_external_checksum = true\n"
+            "depend_mode = true\n"
+            "compiler_check = content\n"
+            "max_size = 5G\n")
+        message(STATUS "Wrote ccache config to ${_fincept_ccache_dir}/ccache.conf")
+    endif()
+
+    # Wrap ccache in a launcher script that exports the env vars unconditionally
+    # — belt-and-braces in case ccache.conf isn't picked up (e.g. when the user
+    # has CCACHE_DIR set to a non-default location).
+    if(WIN32)
+        set(_fincept_ccache_launcher "${CMAKE_BINARY_DIR}/ccache_launcher.cmd")
+        file(WRITE "${_fincept_ccache_launcher}"
+            "@echo off\r\n"
+            "set CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime,locale\r\n"
+            "set CCACHE_PCH_EXTSUM=true\r\n"
+            "set CCACHE_DEPEND=1\r\n"
+            "set CCACHE_COMPILERCHECK=content\r\n"
+            "\"${FINCEPT_CCACHE_PROGRAM}\" %*\r\n")
+    else()
+        set(_fincept_ccache_launcher "${CMAKE_BINARY_DIR}/ccache_launcher.sh")
+        file(WRITE "${_fincept_ccache_launcher}"
+            "#!/bin/sh\n"
+            "export CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime,locale\n"
+            "export CCACHE_PCH_EXTSUM=true\n"
+            "export CCACHE_DEPEND=1\n"
+            "export CCACHE_COMPILERCHECK=content\n"
+            "exec \"${FINCEPT_CCACHE_PROGRAM}\" \"$@\"\n")
+        execute_process(COMMAND chmod +x "${_fincept_ccache_launcher}")
+    endif()
+
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${_fincept_ccache_launcher}")
+    set(CMAKE_C_COMPILER_LAUNCHER   "${_fincept_ccache_launcher}")
+    message(STATUS "Compiler cache enabled: ${FINCEPT_CCACHE_PROGRAM} (PCH-aware launcher)")
 endif()
 
 # ── macOS rpath configuration ────────────────────────────────────────────────
@@ -110,19 +165,34 @@ set(CMAKE_UNITY_BUILD_BATCH_SIZE 14)
 # https://cmake.org/cmake/help/latest/module/FetchContent.html#variable:FETCHCONTENT_UPDATES_DISCONNECTED
 set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "Skip FetchContent update step after initial download")
 
+# ── LTO (whole-program optimisation) ─────────────────────────────────────────
+# /GL + /LTCG produce the smallest, fastest binary but make every incremental
+# link a full whole-program rebuild over 400+ object files — easily 30-90s per
+# link on a developer machine. Default OFF so daily iteration is fast; CI and
+# explicit release builds opt in.
+option(FINCEPT_ENABLE_LTO
+    "Enable MSVC /GL + /LTCG and equivalent on GCC/Clang (slow link, smaller/faster binary)"
+    OFF)
+if(DEFINED ENV{CI})
+    set(FINCEPT_ENABLE_LTO ON CACHE BOOL "" FORCE)
+endif()
+
 # MSVC compiler flags for maximum build throughput:
-#   /MP        — multi-processor compilation (uses all logical cores within one project)
-#   /Z7        — embed debug info in .obj instead of shared PDB → no PDB write contention
-#                that serialises /MP builds (major speedup on 16+ core machines)
+#   /Z7        — embed debug info in .obj instead of shared PDB → no PDB write
+#                contention (major speedup with parallel compilation)
 #   /Oi        — enable intrinsics (faster codegen, no extra passes)
 #   /bigobj    — allow >65535 sections (needed by large unity TUs and MOC output)
-#   /d2FuncCache7 — MSVC internal: increase function-level cache for template-heavy code
+#
+# /MP is intentionally NOT set: Ninja already parallelises at the cl.exe level
+# (one cl.exe per TU, capped at host CPU count). Adding /MP makes each cl.exe
+# fork N more workers, oversubscribing the box and *slowing* builds. /MP is
+# only useful under MSBuild, which parallelises by project not by TU.
 if(MSVC)
     # /permissive- : enforces ISO C++ conformance — catches MS-specific non-portable
     #                code that would break on GCC/Clang (two-phase lookup, etc.)
     # /W4          : level-4 warnings (highest practical without /Wall noise)
     # /WX only in CI so local iteration isn't blocked by new warnings
-    add_compile_options(/MP /Z7 /Oi /bigobj /permissive- /W4)
+    add_compile_options(/Z7 /Oi /bigobj /permissive- /W4)
     if(DEFINED ENV{CI})
         add_compile_options(/WX)
     endif()
@@ -133,13 +203,31 @@ if(MSVC)
         string(REPLACE "/Zi" "/Z7" ${flag_var} "${${flag_var}}")
         string(REPLACE "/ZI" "/Z7" ${flag_var} "${${flag_var}}")
     endforeach()
-    # Release: enable whole-program optimisation + link-time code generation.
-    # /GL compiles to IL; /LTCG merges at link time for cross-TU inlining & DCE.
-    # Only for Release — Debug/RelWithDebInfo stay fast for iteration.
-    if(CMAKE_BUILD_TYPE STREQUAL "Release" OR
-       (DEFINED CMAKE_CONFIGURATION_TYPES AND "Release" IN_LIST CMAKE_CONFIGURATION_TYPES))
+
+    # Whole-program optimisation. /GL marks each .obj as IL; /LTCG merges at
+    # link time. Both required together — using one without the other warns
+    # and silently disables. Gated behind FINCEPT_ENABLE_LTO so incremental
+    # dev links stay fast (incremental linking is incompatible with /LTCG).
+    if(FINCEPT_ENABLE_LTO)
         add_compile_options($<$<CONFIG:Release>:/GL>)
         add_link_options($<$<CONFIG:Release>:/LTCG:incremental>)
+    else()
+        # /INCREMENTAL with debug info needs /DEBUG to emit a usable PDB even
+        # though we use /Z7 (objects carry debug). Keep linker incremental for
+        # fast Release-mode iteration. CMake's default Release link flags set
+        # /INCREMENTAL:NO; override here.
+        add_link_options($<$<CONFIG:Release>:/INCREMENTAL>)
+        add_link_options($<$<CONFIG:RelWithDebInfo>:/INCREMENTAL>)
+        # Replace any /INCREMENTAL:NO that CMake's defaults inserted.
+        foreach(flag_var
+                CMAKE_EXE_LINKER_FLAGS_RELEASE
+                CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO
+                CMAKE_SHARED_LINKER_FLAGS_RELEASE
+                CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO
+                CMAKE_MODULE_LINKER_FLAGS_RELEASE
+                CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO)
+            string(REPLACE "/INCREMENTAL:NO" "/INCREMENTAL" ${flag_var} "${${flag_var}}")
+        endforeach()
     endif()
 endif()
 
@@ -460,6 +548,34 @@ else()
     target_compile_options(qtadvanceddocking-qt6 PRIVATE -w -Wno-error)
 endif()
 
+# ── ed25519 (orlp/ed25519) ───────────────────────────────────────────────────
+# Public-domain Ed25519 reference implementation. We only use ed25519_verify
+# in WalletService (signed-message challenge for Solana wallet connect).
+# Upstream has no CMakeLists, so we build the .c files into a small static lib.
+set(CMAKE_SKIP_INSTALL_RULES TRUE CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    ed25519
+    GIT_REPOSITORY https://github.com/orlp/ed25519.git
+    GIT_TAG        b1f19fab4aebe607805620d25a5e42566ce46a0e  # master @ 2026-04-27
+    GIT_SHALLOW    TRUE
+    UPDATE_DISCONNECTED TRUE
+)
+FetchContent_MakeAvailable(ed25519)
+file(GLOB FINCEPT_ED25519_SRC "${ed25519_SOURCE_DIR}/src/*.c")
+add_library(fincept_ed25519 STATIC ${FINCEPT_ED25519_SRC})
+target_include_directories(fincept_ed25519 PUBLIC "${ed25519_SOURCE_DIR}/src")
+set_target_properties(fincept_ed25519 PROPERTIES
+    UNITY_BUILD OFF
+    POSITION_INDEPENDENT_CODE ON
+    C_STANDARD 99
+)
+if(MSVC)
+    target_compile_options(fincept_ed25519 PRIVATE /W0 /WX-)
+else()
+    target_compile_options(fincept_ed25519 PRIVATE -w -Wno-error)
+endif()
+set(CMAKE_SKIP_INSTALL_RULES FALSE CACHE BOOL "" FORCE)
+
 # ── Source files by module ────────────────────────────────────────────────────
 
 # Core
@@ -475,6 +591,7 @@ set(CORE_SOURCES
     src/core/keys/WindowCycler.cpp
     src/core/net/NetSpeedMeter.cpp
     src/core/symbol/SymbolContext.cpp
+    src/core/symbol/SymbolGroupRegistry.cpp
     src/core/symbol/SymbolMime.cpp
     src/core/symbol/SymbolDragSource.cpp
     src/core/components/ComponentCatalog.cpp
@@ -585,6 +702,7 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v018_widget_config.cpp
     src/storage/sqlite/migrations/v019_sector_cache.cpp
     src/storage/sqlite/migrations/v020_security_audit_log.cpp
+    src/storage/sqlite/migrations/v021_max_tokens_default.cpp
 )
 
 # Python runner
@@ -597,6 +715,7 @@ set(PYTHON_SOURCES
 # AI Chat
 set(AI_CHAT_SOURCES
     src/ai_chat/LlmService.cpp
+    src/ai_chat/ModelCatalog.cpp
     src/ai_chat/AiChatScreen.cpp
     src/ai_chat/AiChatBubble.cpp
 )
@@ -631,6 +750,7 @@ set(MCP_SOURCES
     src/mcp/tools/PythonTools.cpp
     src/mcp/tools/SystemTools.cpp
     src/mcp/tools/DataHubTools.cpp
+    src/mcp/tools/ReportBuilderTools.cpp
 )
 
 # Trading
@@ -711,6 +831,26 @@ set(SERVICE_SOURCES
     src/services/economics/EconomicsService.cpp
     src/services/agents/AgentService.cpp
     src/services/file_manager/FileManagerService.cpp
+
+    # Wallet (Phase 1 — Solana wallet identity + balance display)
+    src/services/wallet/Ed25519Verifier.cpp
+    src/services/wallet/SolanaRpcClient.cpp
+    src/services/wallet/LocalWalletBridge.cpp
+    src/services/wallet/ConnectWalletDialog.cpp
+    src/services/wallet/WalletService.cpp
+    src/services/wallet/WalletTypes.cpp
+    src/services/wallet/WalletBalanceProducer.cpp
+    src/services/wallet/TokenPriceProducer.cpp
+    # Wallet (Phase 2 — transaction-signing bridge + PumpPortal swap)
+    src/services/wallet/WalletTxBridge.cpp
+    src/services/wallet/SignTransactionDialog.cpp
+    src/services/wallet/PumpFunSwapService.cpp
+    # Wallet (Phase 2 Stage 2A.5 — multi-token holdings)
+    src/services/wallet/TokenMetadataService.cpp
+    # Wallet (Phase 2 Stage 2B — activity feed)
+    src/services/wallet/WalletActivityProducer.cpp
+    # Billing (Phase 2 Stage 2C — fee discount eligibility)
+    src/services/billing/FeeDiscountService.cpp
     src/services/sectors/SectorResolver.cpp
     src/services/workflow/NodeRegistry.cpp
     src/services/workflow/WorkflowService.cpp
@@ -853,6 +993,8 @@ set(SCREEN_SOURCES
     src/screens/relationship_map/RelationshipMapScreen.cpp
     src/screens/relationship_map/RelationshipGraphScene.cpp
     src/services/relationship_map/RelationshipMapService.cpp
+    src/services/report_builder/ReportBuilderService.cpp
+    src/services/report_builder/ReportBuilderTemplates.cpp
     src/screens/markets/MarketsScreen.cpp
     src/screens/markets/MarketPanel.cpp
     src/screens/markets/MarketPanelStore.cpp
@@ -954,8 +1096,9 @@ set(SCREEN_SOURCES
     src/screens/surface_analytics/SurfaceCsvImporter.cpp
     src/screens/surface_analytics/Surface3DWidget.cpp
     src/screens/surface_analytics/SurfaceTableWidget.cpp
-    src/screens/surface_analytics/SurfaceMetricsPanel.cpp
-    src/screens/surface_analytics/SurfaceDatabentoPanel.cpp
+    src/screens/surface_analytics/SurfaceLineWidget.cpp
+    src/screens/surface_analytics/SurfaceControlPanel.cpp
+    src/screens/surface_analytics/SurfaceDataInspector.cpp
     src/screens/surface_analytics/SurfaceAnalyticsScreen.cpp
     src/screens/dbnomics/DBnomicsDataTable.cpp
     src/screens/dbnomics/DBnomicsChartWidget.cpp
@@ -1142,6 +1285,19 @@ set(SCREEN_SOURCES
     src/screens/node_editor/properties/ExecutionResultsPanel.cpp
     src/screens/node_editor/toolbar/NodeEditorToolbar.cpp
     src/screens/node_editor/toolbar/DeployDialog.cpp
+
+    # Crypto Center
+    src/screens/crypto_center/CryptoCenterScreen.cpp
+    src/screens/crypto_center/HoldingsBar.cpp
+    src/screens/crypto_center/WalletActionConfirmDialog.cpp
+    src/screens/crypto_center/tabs/ComingSoonTab.cpp
+    src/screens/crypto_center/tabs/HomeTab.cpp
+    src/screens/crypto_center/tabs/SettingsTab.cpp
+    src/screens/crypto_center/tabs/TradeTab.cpp
+    src/screens/crypto_center/tabs/ActivityTab.cpp
+    src/screens/crypto_center/panels/SwapPanel.cpp
+    src/screens/crypto_center/panels/HoldingsTable.cpp
+    src/screens/crypto_center/panels/FeeDiscountPanel.cpp
 )
 
 # App
@@ -1259,6 +1415,17 @@ set_source_files_properties(
     src/screens/dashboard/widgets/WatchlistWidget.cpp
     src/screens/dashboard/widgets/WebScraperWidget.cpp
     src/screens/data_mapping/DataMappingScreen.cpp
+    src/screens/crypto_center/CryptoCenterScreen.cpp
+    src/screens/crypto_center/HoldingsBar.cpp
+    src/screens/crypto_center/WalletActionConfirmDialog.cpp
+    src/screens/crypto_center/tabs/ComingSoonTab.cpp
+    src/screens/crypto_center/tabs/HomeTab.cpp
+    src/screens/crypto_center/tabs/SettingsTab.cpp
+    src/screens/crypto_center/tabs/TradeTab.cpp
+    src/screens/crypto_center/tabs/ActivityTab.cpp
+    src/screens/crypto_center/panels/SwapPanel.cpp
+    src/screens/crypto_center/panels/HoldingsTable.cpp
+    src/screens/crypto_center/panels/FeeDiscountPanel.cpp
     src/screens/dbnomics/DBnomicsChartWidget.cpp
     src/screens/dbnomics/DBnomicsDataTable.cpp
     src/screens/dbnomics/DBnomicsScreen.cpp
@@ -1373,10 +1540,11 @@ set_source_files_properties(
     src/screens/support/SupportScreen.cpp
     src/screens/surface_analytics/Surface3DWidget.cpp
     src/screens/surface_analytics/SurfaceAnalyticsScreen.cpp
+    src/screens/surface_analytics/SurfaceControlPanel.cpp
     src/screens/surface_analytics/SurfaceCsvImporter.cpp
-    src/screens/surface_analytics/SurfaceDatabentoPanel.cpp
+    src/screens/surface_analytics/SurfaceDataInspector.cpp
     src/screens/surface_analytics/SurfaceDemoData.cpp
-    src/screens/surface_analytics/SurfaceMetricsPanel.cpp
+    src/screens/surface_analytics/SurfaceLineWidget.cpp
     src/screens/surface_analytics/SurfaceTableWidget.cpp
     src/screens/trade_viz/TradeVizScreen.cpp
     src/screens/watchlist/WatchlistScreen.cpp
@@ -1841,11 +2009,35 @@ target_link_libraries(FinceptTerminal PRIVATE
     qtadvanceddocking-qt6
     OpenSSL::SSL
     OpenSSL::Crypto
+    fincept_ed25519
 )
 
-# macOS: also link Security.framework for Keychain in SecureStorage
+# macOS: link Security.framework + CoreFoundation for SecItem API in SecureStorage
 if(APPLE)
-    target_link_libraries(FinceptTerminal PRIVATE "-framework Security")
+    target_link_libraries(FinceptTerminal PRIVATE "-framework Security" "-framework CoreFoundation")
+endif()
+
+# Linux: optionally link libsecret for cryptographically-secure credential
+# storage (Secret Service / GNOME Keyring / KWallet via the freedesktop
+# compatibility layer). Without libsecret, SecureStorage falls back to
+# XOR-obfuscated QSettings which is NOT secure. Install libsecret-1-dev
+# (Debian/Ubuntu), libsecret-devel (Fedora), or libsecret (Arch) and
+# reconfigure to enable.
+if(UNIX AND NOT APPLE)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LIBSECRET IMPORTED_TARGET libsecret-1)
+        if(LIBSECRET_FOUND)
+            target_link_libraries(FinceptTerminal PRIVATE PkgConfig::LIBSECRET)
+            target_compile_definitions(FinceptTerminal PRIVATE FINCEPT_HAVE_LIBSECRET)
+            message(STATUS "libsecret found — Linux SecureStorage will use Secret Service backend")
+        else()
+            message(WARNING
+                "libsecret-1 not found — Linux credential storage falls back to "
+                "XOR-obfuscated QSettings (NOT cryptographically secure). "
+                "Install libsecret-1-dev and rebuild for production deployments.")
+        endif()
+    endif()
 endif()
 
 # Windows: link dbghelp for the crash-handler minidump writer (see
@@ -2007,6 +2199,19 @@ add_custom_command(TARGET FinceptTerminal POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/resources/component_catalog.json"
         "$<TARGET_FILE_DIR:FinceptTerminal>/resources/component_catalog.json"
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:FinceptTerminal>/resources/wallet"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/wallet/connect.html"
+        "$<TARGET_FILE_DIR:FinceptTerminal>/resources/wallet/connect.html"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/wallet/swap.html"
+        "$<TARGET_FILE_DIR:FinceptTerminal>/resources/wallet/swap.html"
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:FinceptTerminal>/resources/wallet/vendor"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/wallet/vendor"
+        "$<TARGET_FILE_DIR:FinceptTerminal>/resources/wallet/vendor"
     COMMENT "Copying requirements files to build output..."
 )
 

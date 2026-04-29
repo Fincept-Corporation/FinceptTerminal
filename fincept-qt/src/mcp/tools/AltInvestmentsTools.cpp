@@ -3,13 +3,12 @@
 #include "mcp/tools/AltInvestmentsTools.h"
 
 #include "core/logging/Logger.h"
+#include "mcp/tools/ThreadHelper.h"
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 
-#include <QEventLoop>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QTimer>
 
 namespace fincept::mcp::tools {
 
@@ -33,57 +32,51 @@ static ToolResult run_alt_sync(const QString& command, const QJsonObject& params
             return ToolResult::ok_data(doc.object());
     }
 
-    ToolResult tool_result = ToolResult::fail("timeout");
-    bool done = false;
+    ToolResult tool_result = ToolResult::fail("Python runner failed to respond");
 
-    QEventLoop loop;
-    QTimer::singleShot(kTimeoutMs, &loop, &QEventLoop::quit);
-
-    python::PythonRunner::instance().run(
-        "Analytics/alternateInvestment/cli.py", {command, "--data", data_json},
-        [&](const python::PythonResult& result) {
-            done = true;
-            if (!result.success) {
-                tool_result = ToolResult::fail(result.error.isEmpty() ? "Analysis failed" : result.error);
-                loop.quit();
-                return;
-            }
-
-            // Extract JSON from stdout
-            QString out = result.output;
-            int start = out.indexOf('{');
-            int end = out.lastIndexOf('}');
-            if (start < 0 || end < 0 || end <= start) {
-                tool_result = ToolResult::fail("No JSON in output");
-                loop.quit();
-                return;
-            }
-
-            QJsonParseError err;
-            auto doc = QJsonDocument::fromJson(out.mid(start, end - start + 1).toUtf8(), &err);
-            if (doc.isNull() || !doc.isObject()) {
-                tool_result = ToolResult::fail("Invalid JSON: " + err.errorString());
-                loop.quit();
-                return;
-            }
-
-            auto obj = doc.object();
-            if (obj.contains("error")) {
-                tool_result = ToolResult::fail(obj["error"].toString());
-                loop.quit();
-                return;
-            }
-
-            auto metrics = obj.contains("metrics") ? obj["metrics"].toObject() : obj;
-            fincept::CacheManager::instance().put(
-                cache_key, QVariant(QString::fromUtf8(QJsonDocument(metrics).toJson(QJsonDocument::Compact))),
-                kAltTtlSec, "alt_investments");
-            tool_result = ToolResult::ok_data(metrics);
-            loop.quit();
-        });
-
-    if (!done)
-        loop.exec();
+    // Marshal onto PythonRunner's thread (main). Worker-thread QEventLoop
+    // would never be woken by main-thread QProcess::finished signals.
+    auto* runner = &python::PythonRunner::instance();
+    detail::run_async_wait(runner, [&](auto signal_done) {
+        runner->run("Analytics/alternateInvestment/cli.py", {command, "--data", data_json},
+                    [&, signal_done](const python::PythonResult& result) {
+                        if (!result.success) {
+                            tool_result = ToolResult::fail(
+                                result.error.isEmpty() ? "Analysis failed" : result.error);
+                            signal_done();
+                            return;
+                        }
+                        // Extract JSON from stdout
+                        QString out = result.output;
+                        int start = out.indexOf('{');
+                        int end = out.lastIndexOf('}');
+                        if (start < 0 || end < 0 || end <= start) {
+                            tool_result = ToolResult::fail("No JSON in output");
+                            signal_done();
+                            return;
+                        }
+                        QJsonParseError err;
+                        auto doc = QJsonDocument::fromJson(out.mid(start, end - start + 1).toUtf8(), &err);
+                        if (doc.isNull() || !doc.isObject()) {
+                            tool_result = ToolResult::fail("Invalid JSON: " + err.errorString());
+                            signal_done();
+                            return;
+                        }
+                        auto obj = doc.object();
+                        if (obj.contains("error")) {
+                            tool_result = ToolResult::fail(obj["error"].toString());
+                            signal_done();
+                            return;
+                        }
+                        auto metrics = obj.contains("metrics") ? obj["metrics"].toObject() : obj;
+                        fincept::CacheManager::instance().put(
+                            cache_key,
+                            QVariant(QString::fromUtf8(QJsonDocument(metrics).toJson(QJsonDocument::Compact))),
+                            kAltTtlSec, "alt_investments");
+                        tool_result = ToolResult::ok_data(metrics);
+                        signal_done();
+                    });
+    });
 
     return tool_result;
 }

@@ -16,7 +16,7 @@
     {
       "name": "win-release",
       "displayName": "Windows Release (MSVC 2022, Qt 6.8.3)",
-      "description": "Pinned Release build for Windows x64",
+      "description": "Pinned Release build for Windows x64. Defaults to fast incremental link; opt into LTO with -DFINCEPT_ENABLE_LTO=ON for ship builds.",
       "inherits": "base",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
       "architecture": { "value": "x64", "strategy": "external" },
@@ -30,6 +30,25 @@
       "displayName": "Windows Debug (MSVC 2022, Qt 6.8.3)",
       "inherits": "win-release",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "win-fast",
+      "displayName": "Windows Fast Iteration (MSVC 2022, RelWithDebInfo, Qt 6.8.3)",
+      "description": "Optimised build tuned for fast incremental link — no LTO, incremental linker, /O2 with /Ob1. Use for daily development; switch to win-release for shipping.",
+      "inherits": "win-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "FINCEPT_ENABLE_LTO": "OFF"
+      }
+    },
+    {
+      "name": "win-release-lto",
+      "displayName": "Windows Release + LTO (MSVC 2022, Qt 6.8.3)",
+      "description": "Ship build: full /GL + /LTCG whole-program optimisation. Slow to link (30-90s); use win-release or win-fast for iteration.",
+      "inherits": "win-release",
+      "cacheVariables": {
+        "FINCEPT_ENABLE_LTO": "ON"
+      }
     },
 
     {
@@ -71,8 +90,10 @@
   ],
 
   "buildPresets": [
-    { "name": "win-release",   "configurePreset": "win-release"   },
-    { "name": "win-debug",     "configurePreset": "win-debug"     },
+    { "name": "win-release",     "configurePreset": "win-release"     },
+    { "name": "win-debug",       "configurePreset": "win-debug"       },
+    { "name": "win-fast",        "configurePreset": "win-fast"        },
+    { "name": "win-release-lto", "configurePreset": "win-release-lto" },
     { "name": "linux-release", "configurePreset": "linux-release" },
     { "name": "linux-debug",   "configurePreset": "linux-debug"   },
     { "name": "macos-release", "configurePreset": "macos-release" },

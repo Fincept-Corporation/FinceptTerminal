@@ -20,57 +20,6 @@ Modules:
 - sovereign_credit: Sovereign and municipal credit analysis
 """
 
-from .bond_pricing import (
-    BondPricer,
-    BondType,
-    CouponFrequency,
-    DayCountConvention,
-)
-
-from .duration_convexity import (
-    DurationCalculator,
-    ConvexityCalculator,
-)
-
-from .yield_curve import (
-    YieldCurveBuilder,
-    SpreadAnalyzer,
-)
-
-from .credit_analysis import (
-    CreditAnalyzer,
-    DefaultProbabilityModel,
-)
-
-from .structured_products import (
-    MBSAnalyzer,
-    ABSAnalyzer,
-    PrepaymentModel,
-)
-
-from .bond_portfolio import (
-    BondPortfolioAnalyzer,
-    ImmunizationStrategy,
-)
-
-from .bond_features import (
-    BondFeaturesAnalyzer,
-)
-
-from .market_structure import (
-    MarketStructureAnalyzer,
-)
-
-from .floating_rate import (
-    FloatingRateAnalyzer,
-    MoneyMarketAnalyzer,
-)
-
-from .sovereign_credit import (
-    SovereignCreditAnalyzer,
-    MunicipalCreditAnalyzer,
-    GovernmentVsCorporateComparison,
-)
 
 __all__ = [
     # Bond Pricing
@@ -108,3 +57,51 @@ __all__ = [
 ]
 
 __version__ = '1.1.0'
+
+
+# ── Lazy attribute resolution (PEP 562) ─────────────────────────────────────
+# Submodules below have an `if __name__ == "__main__":` block and may be
+# invoked via `python -m`. Eagerly importing them here would put each in
+# sys.modules before Python re-executes them as __main__, triggering a
+# RuntimeWarning ("found in sys.modules ... prior to execution"). The lazy
+# loader keeps the public API intact while deferring import to first access.
+_LAZY_ATTRS: dict[str, tuple[str, str]] = {
+    "BondPricer": ("bond_pricing", "BondPricer"),
+    "BondType": ("bond_pricing", "BondType"),
+    "CouponFrequency": ("bond_pricing", "CouponFrequency"),
+    "DayCountConvention": ("bond_pricing", "DayCountConvention"),
+    "DurationCalculator": ("duration_convexity", "DurationCalculator"),
+    "ConvexityCalculator": ("duration_convexity", "ConvexityCalculator"),
+    "YieldCurveBuilder": ("yield_curve", "YieldCurveBuilder"),
+    "SpreadAnalyzer": ("yield_curve", "SpreadAnalyzer"),
+    "CreditAnalyzer": ("credit_analysis", "CreditAnalyzer"),
+    "DefaultProbabilityModel": ("credit_analysis", "DefaultProbabilityModel"),
+    "MBSAnalyzer": ("structured_products", "MBSAnalyzer"),
+    "ABSAnalyzer": ("structured_products", "ABSAnalyzer"),
+    "PrepaymentModel": ("structured_products", "PrepaymentModel"),
+    "BondPortfolioAnalyzer": ("bond_portfolio", "BondPortfolioAnalyzer"),
+    "ImmunizationStrategy": ("bond_portfolio", "ImmunizationStrategy"),
+    "BondFeaturesAnalyzer": ("bond_features", "BondFeaturesAnalyzer"),
+    "MarketStructureAnalyzer": ("market_structure", "MarketStructureAnalyzer"),
+    "FloatingRateAnalyzer": ("floating_rate", "FloatingRateAnalyzer"),
+    "MoneyMarketAnalyzer": ("floating_rate", "MoneyMarketAnalyzer"),
+    "SovereignCreditAnalyzer": ("sovereign_credit", "SovereignCreditAnalyzer"),
+    "MunicipalCreditAnalyzer": ("sovereign_credit", "MunicipalCreditAnalyzer"),
+    "GovernmentVsCorporateComparison": ("sovereign_credit", "GovernmentVsCorporateComparison"),
+}
+
+
+def __getattr__(name: str):  # PEP 562
+    target = _LAZY_ATTRS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    submodule, original_name = target
+    import importlib
+    mod = importlib.import_module(f".{submodule}", __name__)
+    value = getattr(mod, original_name)
+    globals()[name] = value  # cache for subsequent access
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_LAZY_ATTRS))

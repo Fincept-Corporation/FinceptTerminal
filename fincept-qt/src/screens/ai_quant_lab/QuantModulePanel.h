@@ -66,6 +66,7 @@ class QuantModulePanel : public QWidget {
     QJsonObject llm_config_from_combo(QComboBox* combo) const;
     void display_result(const QJsonObject& data);
     void display_backtest_result(const QJsonObject& data);
+    void display_cfa_result(const QString& command, const QJsonObject& data);
     void display_error(const QString& msg);
     void clear_results();
 

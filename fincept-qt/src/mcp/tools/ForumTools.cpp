@@ -4,13 +4,12 @@
 #include "mcp/tools/ForumTools.h"
 
 #include "core/logging/Logger.h"
+#include "mcp/tools/ThreadHelper.h"
 #include "services/forum/ForumModels.h"
 #include "services/forum/ForumService.h"
 
-#include <QEventLoop>
 #include <QJsonArray>
 #include <QJsonObject>
-#include <QTimer>
 
 namespace fincept::mcp::tools {
 
@@ -90,34 +89,30 @@ static QJsonObject profile_to_json(const ForumProfile& p) {
 // ── Async helpers ─────────────────────────────────────────────────────────────
 
 // Wraps a ForumService callback-based call into a synchronous ToolResult.
-// `trigger` must call the ForumService method and invoke `done_cb` when complete.
+// `trigger` runs on the ForumService's thread (main); the network reply
+// signals fire on the same thread. The worker sleeps on a wait condition
+// until the callback fires. See mcp/tools/ThreadHelper.h for rationale.
 template <typename T>
 static ToolResult run_forum_sync(std::function<void(std::function<void(bool, T)>)> trigger,
                                  std::function<QJsonValue(const T&)> serialise) {
     bool ok = false;
-    QString err_msg = "timeout";
+    QString err_msg = "Forum service did not respond";
     QJsonValue result_data;
-    bool fired = false;
 
-    QEventLoop loop;
-    QTimer::singleShot(kTimeoutMs, &loop, &QEventLoop::quit);
-
-    trigger([&](bool success, T data) {
-        fired = true;
-        ok = success;
-        if (success)
-            result_data = serialise(data);
-        else
-            err_msg = "Forum service returned an error";
-        loop.quit();
+    auto* svc = &ForumService::instance();
+    detail::run_async_wait(svc, [&](auto signal_done) {
+        trigger([&, signal_done](bool success, T data) {
+            ok = success;
+            if (success)
+                result_data = serialise(data);
+            else
+                err_msg = "Forum service returned an error";
+            signal_done();
+        });
     });
-
-    if (!fired)
-        loop.exec();
 
     if (!ok)
         return ToolResult::fail(err_msg);
-
     if (result_data.isArray())
         return ToolResult::ok_data(result_data.toArray());
     if (result_data.isObject())
@@ -128,21 +123,16 @@ static ToolResult run_forum_sync(std::function<void(std::function<void(bool, T)>
 // BoolCallback variant (write operations)
 static ToolResult run_forum_bool(std::function<void(ForumService::BoolCallback)> trigger) {
     bool ok = false;
-    QString msg = "timeout";
-    bool fired = false;
+    QString msg = "Forum service did not respond";
 
-    QEventLoop loop;
-    QTimer::singleShot(kTimeoutMs, &loop, &QEventLoop::quit);
-
-    trigger([&](bool success, QString message) {
-        fired = true;
-        ok = success;
-        msg = message;
-        loop.quit();
+    auto* svc = &ForumService::instance();
+    detail::run_async_wait(svc, [&](auto signal_done) {
+        trigger([&, signal_done](bool success, QString message) {
+            ok = success;
+            msg = message;
+            signal_done();
+        });
     });
-
-    if (!fired)
-        loop.exec();
 
     if (!ok)
         return ToolResult::fail(msg.isEmpty() ? "Forum operation failed" : msg);

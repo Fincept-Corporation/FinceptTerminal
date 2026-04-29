@@ -6,6 +6,7 @@
     { "id": "watchlist",         "title": "Watchlist",          "category": "Core",        "description": "Symbol lists with live quotes",                             "tags": ["watchlist","quotes","symbols"] },
     { "id": "news",              "title": "News",               "category": "Core",        "description": "Global news wire with category filters and sentiment",     "tags": ["news","wire","headlines"] },
 
+    { "id": "crypto_center",     "title": "Crypto Center",      "category": "Crypto",      "description": "Connect your Solana wallet, view $FNCPT + SOL balances",   "tags": ["wallet","solana","fncpt","crypto","balance","phantom"] },
     { "id": "crypto_trading",    "title": "Crypto Trading",     "category": "Trading",     "description": "Order entry + real-time book for Kraken / HyperLiquid",    "tags": ["crypto","trading","order"] },
     { "id": "equity_trading",    "title": "Equity Trading",     "category": "Trading",     "description": "Multi-account equity trading across 16+ brokers",          "tags": ["equity","trading","brokers"] },
     { "id": "algo_trading",      "title": "Algo Trading",       "category": "Trading",     "description": "Strategy runner, order router, and execution analytics",   "tags": ["algo","strategy","execution"] },

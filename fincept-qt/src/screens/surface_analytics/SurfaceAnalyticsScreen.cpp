@@ -1,14 +1,20 @@
 #include "SurfaceAnalyticsScreen.h"
 
 #include "Surface3DWidget.h"
+#include "SurfaceCapabilities.h"
+#include "SurfaceControlPanel.h"
 #include "SurfaceCsvImporter.h"
-#include "SurfaceDatabentoPanel.h"
-#include "SurfaceMetricsPanel.h"
+#include "SurfaceDataInspector.h"
+#include "SurfaceDefaults.h"
+#include "SurfaceLineWidget.h"
 #include "SurfaceTableWidget.h"
+#include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
+#include "services/markets/MarketDataService.h"
 #include "ui/theme/Theme.h"
 
-#include <QComboBox>
 #include <QFileDialog>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -17,6 +23,8 @@
 #include <QScrollArea>
 #include <QSplitter>
 #include <QStackedWidget>
+#include <QStringList>
+#include <QVariant>
 #include <QVBoxLayout>
 
 #include <cstdlib>
@@ -68,24 +76,47 @@ static QString btn_inactive() {
         .arg(colors::BORDER_BRIGHT());
 }
 
-static QString btn_active_amber() {
-    return QString("QPushButton { background:rgba(217,119,6,0.12); border:1px solid %1; color:%2;"
-                   " font-size:11px; font-weight:bold; font-family:%3;"
-                   " padding:0 10px; }"
-                   "QPushButton:hover { background:%2; color:%4; }")
-        .arg(colors::AMBER_DIM())
-        .arg(colors::AMBER())
-        .arg(MONO)
-        .arg(colors::BG_BASE());
-}
-
 // ── Constructor ──────────────────────────────────────────────────────────────
 SurfaceAnalyticsScreen::SurfaceAnalyticsScreen(QWidget* parent) : QWidget(parent) {
     srand((unsigned)time(nullptr));
     setup_ui();
+    // Default to the seeded equity underlyings on first open so demo data fills.
+    if (!control_panel_->state().basket.isEmpty())
+        control_panel_->set_capability(active_chart_);
     load_demo_data();
     update_chart();
     update_metrics();
+    update_inspector_lineage();
+}
+
+QString SurfaceAnalyticsScreen::current_symbol_or_default() const {
+    QString s = control_panel_ ? control_panel_->state().symbol : QString();
+    if (s.isEmpty())
+        s = QString::fromUtf8(defaults::EQUITY_UNDERLYINGS[0]);
+    return s;
+}
+
+float SurfaceAnalyticsScreen::spot_for(const QString& sym) const {
+    if (sym.isEmpty())
+        return 100.0f;
+    auto it = spot_cache_.constFind(sym);
+    if (it != spot_cache_.constEnd())
+        return it.value();
+    // Best-effort hub lookup; if no quote published yet, returns invalid QVariant.
+    auto& hub = fincept::datahub::DataHub::instance();
+    QVariant v = hub.peek(QString("market:quote:%1").arg(sym));
+    if (v.isValid()) {
+        if (v.canConvert<fincept::services::QuoteData>()) {
+            auto q = v.value<fincept::services::QuoteData>();
+            if (q.price > 0.0)
+                return (float)q.price;
+        }
+        bool ok = false;
+        double d = v.toDouble(&ok);
+        if (ok && d > 0.0)
+            return (float)d;
+    }
+    return 100.0f;
 }
 
 // ── Layout ───────────────────────────────────────────────────────────────────
@@ -107,16 +138,19 @@ void SurfaceAnalyticsScreen::setup_ui() {
     surface_bar_ = build_surface_bar();
     root->addWidget(surface_bar_);
 
-    // Content — metrics panel | chart area
-    auto* splitter = new QSplitter(Qt::Horizontal, this);
-    splitter->setHandleWidth(1);
-    splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(colors::BORDER_DIM()));
+    // Vertical split: top = horizontal split (control panel | view stack), bottom = data inspector
+    auto* outer = new QSplitter(Qt::Vertical, this);
+    outer->setHandleWidth(1);
+    outer->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(colors::BORDER_DIM()));
 
-    metrics_panel_ = new SurfaceMetricsPanel(splitter);
-    splitter->addWidget(metrics_panel_);
+    auto* hsplit = new QSplitter(Qt::Horizontal, outer);
+    hsplit->setHandleWidth(1);
+    hsplit->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(colors::BORDER_DIM()));
 
-    // Right: view stack + databento panel
-    auto* right = new QWidget(splitter);
+    control_panel_ = new SurfaceControlPanel(hsplit);
+    hsplit->addWidget(control_panel_);
+
+    auto* right = new QWidget(hsplit);
     right->setStyleSheet(QString("background:%1;").arg(colors::BG_BASE()));
     auto* rvl = new QVBoxLayout(right);
     rvl->setContentsMargins(0, 0, 0, 0);
@@ -125,19 +159,35 @@ void SurfaceAnalyticsScreen::setup_ui() {
     view_stack_ = new QStackedWidget(right);
     surface_3d_ = new Surface3DWidget(view_stack_);
     surface_table_ = new SurfaceTableWidget(view_stack_);
+    surface_line_ = new SurfaceLineWidget(view_stack_);
     view_stack_->addWidget(surface_3d_);    // 0
     view_stack_->addWidget(surface_table_); // 1
+    view_stack_->addWidget(surface_line_);  // 2
     rvl->addWidget(view_stack_, 1);
 
-    databento_panel_ = new SurfaceDatabentoPanel(right);
-    databento_panel_->setFixedHeight(200);
-    rvl->addWidget(databento_panel_);
+    hsplit->addWidget(right);
+    hsplit->setStretchFactor(0, 0);
+    hsplit->setStretchFactor(1, 1);
+    outer->addWidget(hsplit);
 
-    splitter->addWidget(right);
-    splitter->setStretchFactor(0, 0);
-    splitter->setStretchFactor(1, 1);
+    data_inspector_ = new SurfaceDataInspector(outer);
+    outer->addWidget(data_inspector_);
+    outer->setStretchFactor(0, 1);
+    outer->setStretchFactor(1, 0);
+    outer->setSizes({600, 220});
 
-    root->addWidget(splitter, 1);
+    root->addWidget(outer, 1);
+
+    // Wire control panel signals
+    connect(control_panel_, &SurfaceControlPanel::controls_changed, this,
+            &SurfaceAnalyticsScreen::on_controls_changed);
+    connect(control_panel_, &SurfaceControlPanel::symbol_changed, this,
+            &SurfaceAnalyticsScreen::on_control_symbol_changed);
+    connect(control_panel_, &SurfaceControlPanel::fetch_requested, this,
+            &SurfaceAnalyticsScreen::on_fetch_requested);
+
+    // Default visibility / capability for active surface
+    control_panel_->set_capability(active_chart_);
 }
 
 // ── Category bar (32px, Obsidian tab style) ──────────────────────────────────
@@ -198,20 +248,25 @@ QWidget* SurfaceAnalyticsScreen::build_category_bar() {
 
     btn_3d_ = new QPushButton("3D", bar);
     btn_table_ = new QPushButton("TABLE", bar);
+    btn_line_ = new QPushButton("LINE", bar);
     btn_3d_->setFixedHeight(20);
     btn_table_->setFixedHeight(20);
+    btn_line_->setFixedHeight(20);
     btn_3d_->setCheckable(true);
     btn_table_->setCheckable(true);
-    btn_3d_->setChecked(true);
+    btn_line_->setCheckable(true);
+    btn_3d_->setChecked(view_mode_ == ViewMode::Surface3D);
+    btn_table_->setChecked(view_mode_ == ViewMode::Table);
+    btn_line_->setChecked(view_mode_ == ViewMode::Line);
 
-    auto tab_style = [&](bool checked) { return checked ? btn_active_amber() : btn_inactive(); };
-    btn_3d_->setStyleSheet(tab_style(true));
-    btn_table_->setStyleSheet(tab_style(false));
+    apply_view_mode_buttons();
 
     connect(btn_3d_, &QPushButton::clicked, this, &SurfaceAnalyticsScreen::on_view_3d);
     connect(btn_table_, &QPushButton::clicked, this, &SurfaceAnalyticsScreen::on_view_table);
+    connect(btn_line_, &QPushButton::clicked, this, &SurfaceAnalyticsScreen::on_view_line);
     hl->addWidget(btn_3d_);
     hl->addWidget(btn_table_);
+    hl->addWidget(btn_line_);
 
     hl->addSpacing(4);
     hl->addWidget(make_sep(bar));
@@ -284,35 +339,6 @@ QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
     }
 
     hl->addStretch();
-
-    // Symbol selector — equity derivatives only
-    if (active_category_ == 0) {
-        auto* sym_lbl = new QLabel("SYM:", bar);
-        sym_lbl->setStyleSheet(QString("color:%1; font-size:11px; background:transparent; font-family:%2;")
-                                   .arg(colors::TEXT_SECONDARY())
-                                   .arg(MONO));
-        hl->addWidget(sym_lbl);
-
-        symbol_combo_ = new QComboBox(bar);
-        for (int s = 0; s < N_SYMBOLS; s++)
-            symbol_combo_->addItem(VOL_SYMBOLS[s]);
-        symbol_combo_->setCurrentIndex(selected_symbol_);
-        symbol_combo_->setFixedHeight(18);
-        symbol_combo_->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                             " padding:0 6px; font-size:11px; font-family:%4; }"
-                                             "QComboBox::drop-down { border:none; }"
-                                             "QComboBox QAbstractItemView { background:%1; color:%2;"
-                                             " border:1px solid %3; selection-background-color:%5; }")
-                                         .arg(colors::BG_RAISED())
-                                         .arg(colors::TEXT_PRIMARY())
-                                         .arg(colors::BORDER_DIM())
-                                         .arg(MONO)
-                                         .arg(colors::BG_HOVER()));
-        connect(symbol_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                &SurfaceAnalyticsScreen::on_symbol_changed);
-        hl->addWidget(symbol_combo_);
-    }
-
     return bar;
 }
 
@@ -331,16 +357,28 @@ void SurfaceAnalyticsScreen::refresh_surface_bar() {
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 void SurfaceAnalyticsScreen::load_demo_data() {
-    const char* sym = VOL_SYMBOLS[selected_symbol_];
-    float spot = VOL_SPOTS[selected_symbol_];
+    QString qsym = current_symbol_or_default();
+    std::string sym = qsym.toStdString();
+    float spot = spot_for(qsym);
 
-    vol_data_ = generate_vol_surface(sym, spot);
-    delta_data_ = generate_delta_surface(sym, spot);
-    gamma_data_ = generate_gamma_surface(sym, spot);
-    vega_data_ = generate_vega_surface(sym, spot);
-    theta_data_ = generate_theta_surface(sym, spot);
-    skew_data_ = generate_skew_surface(sym);
-    local_vol_data_ = generate_local_vol(sym, spot);
+    // Build a basket vector<string> from the control-panel state for risk surfaces.
+    std::vector<std::string> basket;
+    if (control_panel_) {
+        for (const QString& s : control_panel_->state().basket)
+            basket.push_back(s.toStdString());
+    }
+    if (basket.empty()) {
+        for (auto* s : defaults::RISK_BASKET)
+            basket.emplace_back(s);
+    }
+
+    vol_data_ = generate_vol_surface(sym.c_str(), spot);
+    delta_data_ = generate_delta_surface(sym.c_str(), spot);
+    gamma_data_ = generate_gamma_surface(sym.c_str(), spot);
+    vega_data_ = generate_vega_surface(sym.c_str(), spot);
+    theta_data_ = generate_theta_surface(sym.c_str(), spot);
+    skew_data_ = generate_skew_surface(sym.c_str());
+    local_vol_data_ = generate_local_vol(sym.c_str(), spot);
 
     yield_data_ = generate_yield_curve();
     swaption_data_ = generate_swaption_vol();
@@ -363,15 +401,15 @@ void SurfaceAnalyticsScreen::load_demo_data() {
     crack_data_ = generate_crack_spread();
     contango_data_ = generate_contango();
 
-    corr_data_ = generate_correlation(corr_assets_);
-    pca_data_ = generate_pca(corr_assets_);
+    corr_data_ = generate_correlation(basket);
+    pca_data_ = generate_pca(basket);
     var_data_ = generate_var();
     stress_data_ = generate_stress_test();
-    factor_data_ = generate_factor_exposure(corr_assets_);
-    liquidity_data_ = generate_liquidity(sym, spot);
-    drawdown_data_ = generate_drawdown(corr_assets_);
-    beta_data_ = generate_beta(corr_assets_);
-    impl_div_data_ = generate_implied_dividend(sym, spot);
+    factor_data_ = generate_factor_exposure(basket);
+    liquidity_data_ = generate_liquidity(sym.c_str(), spot);
+    drawdown_data_ = generate_drawdown(basket);
+    beta_data_ = generate_beta(basket);
+    impl_div_data_ = generate_implied_dividend(sym.c_str(), spot);
 
     inflation_data_ = generate_inflation_expectations();
     monetary_data_ = generate_monetary_policy();
@@ -419,7 +457,27 @@ void SurfaceAnalyticsScreen::update_chart() {
 
     float mn, mx;
 
-    if (show_table_) {
+    // ── Capability-driven view-mode coercion ───────────────────────────────
+    // A surface declares which views it supports. If the active view_mode_ is
+    // not supported, fall back to the first one that is.
+    const auto& cap = capability_for(active_chart_);
+    ViewMode mode = view_mode_;
+    if (mode == ViewMode::Surface3D && !cap.supports_3d)
+        mode = cap.supports_table ? ViewMode::Table : ViewMode::Line;
+    if (mode == ViewMode::Line && !cap.supports_line)
+        mode = cap.supports_table ? ViewMode::Table : ViewMode::Surface3D;
+    if (mode == ViewMode::Table && !cap.supports_table)
+        mode = cap.supports_3d ? ViewMode::Surface3D : ViewMode::Line;
+
+    surface_3d_->set_supported(cap.supports_3d);
+
+    if (mode == ViewMode::Line) {
+        view_stack_->setCurrentIndex(2);
+        update_line_view();
+        return;
+    }
+
+    if (mode == ViewMode::Table) {
         view_stack_->setCurrentIndex(1);
 
         switch (active_chart_) {
@@ -829,14 +887,276 @@ void SurfaceAnalyticsScreen::update_chart() {
     }
 }
 
-// ── Metrics routing ───────────────────────────────────────────────────────────
+// ── Metrics routing — now hands the active surface's z grid to the control panel
+// which computes summary stats locally (count/min/max/mean/median/std/skew/kurt).
 void SurfaceAnalyticsScreen::update_metrics() {
-    metrics_panel_->update_metrics(
-        active_chart_, vol_data_, delta_data_, gamma_data_, vega_data_, theta_data_, skew_data_, local_vol_data_,
-        yield_data_, swaption_data_, capfloor_data_, bond_spread_data_, ois_data_, real_yield_data_, fwd_rate_data_,
-        fx_vol_data_, fx_fwd_data_, xccy_data_, cds_data_, credit_trans_data_, recovery_data_, cmdty_fwd_data_,
-        cmdty_vol_data_, crack_data_, contango_data_, corr_data_, pca_data_, var_data_, stress_data_, factor_data_,
-        liquidity_data_, drawdown_data_, beta_data_, impl_div_data_, inflation_data_, monetary_data_);
+    if (!control_panel_)
+        return;
+    if (const auto* z = active_z_grid())
+        control_panel_->update_metrics(*z);
+    else
+        control_panel_->update_metrics({});
+}
+
+const std::vector<std::vector<float>>* SurfaceAnalyticsScreen::active_z_grid() const {
+    switch (active_chart_) {
+        case ChartType::Volatility: return &vol_data_.z;
+        case ChartType::DeltaSurface: return &delta_data_.z;
+        case ChartType::GammaSurface: return &gamma_data_.z;
+        case ChartType::VegaSurface: return &vega_data_.z;
+        case ChartType::ThetaSurface: return &theta_data_.z;
+        case ChartType::SkewSurface: return &skew_data_.z;
+        case ChartType::LocalVolSurface: return &local_vol_data_.z;
+        case ChartType::YieldCurve: return &yield_data_.z;
+        case ChartType::SwaptionVol: return &swaption_data_.z;
+        case ChartType::CapFloorVol: return &capfloor_data_.z;
+        case ChartType::BondSpread: return &bond_spread_data_.z;
+        case ChartType::OISBasis: return &ois_data_.z;
+        case ChartType::RealYield: return &real_yield_data_.z;
+        case ChartType::ForwardRate: return &fwd_rate_data_.z;
+        case ChartType::FXVol: return &fx_vol_data_.z;
+        case ChartType::FXForwardPoints: return &fx_fwd_data_.z;
+        case ChartType::CrossCurrencyBasis: return &xccy_data_.z;
+        case ChartType::CDSSpread: return &cds_data_.z;
+        case ChartType::CreditTransition: return &credit_trans_data_.z;
+        case ChartType::RecoveryRate: return &recovery_data_.z;
+        case ChartType::CommodityForward: return &cmdty_fwd_data_.z;
+        case ChartType::CommodityVol: return &cmdty_vol_data_.z;
+        case ChartType::CrackSpread: return &crack_data_.z;
+        case ChartType::ContangoBackwardation: return &contango_data_.z;
+        case ChartType::Correlation: return &corr_data_.z;
+        case ChartType::PCA: return &pca_data_.z;
+        case ChartType::VaR: return &var_data_.z;
+        case ChartType::StressTestPnL: return &stress_data_.z;
+        case ChartType::FactorExposure: return &factor_data_.z;
+        case ChartType::LiquidityHeatmap: return &liquidity_data_.z;
+        case ChartType::Drawdown: return &drawdown_data_.z;
+        case ChartType::BetaSurface: return &beta_data_.z;
+        case ChartType::ImpliedDividend: return &impl_div_data_.z;
+        case ChartType::InflationExpectations: return &inflation_data_.z;
+        case ChartType::MonetaryPolicyPath: return &monetary_data_.z;
+    }
+    return nullptr;
+}
+
+void SurfaceAnalyticsScreen::update_inspector_lineage() {
+    if (!data_inspector_)
+        return;
+    const auto& cap = capability_for(active_chart_);
+    QString date_range;
+    if (control_panel_) {
+        const auto& s = control_panel_->state();
+        if (s.start_date.isValid() && s.end_date.isValid())
+            date_range = QString("%1 → %2")
+                             .arg(s.start_date.toString("yyyy-MM-dd"))
+                             .arg(s.end_date.toString("yyyy-MM-dd"));
+    }
+    QString sym = current_symbol_or_default();
+    if (cap.tier == SurfaceTier::EQUITIES && control_panel_)
+        sym = control_panel_->state().basket.join(",");
+    qint64 count = 0;
+    if (const auto* z = active_z_grid())
+        for (const auto& row : *z)
+            count += (qint64)row.size();
+    data_inspector_->set_lineage(QString::fromUtf8(cap.dataset),
+                                 QString::fromUtf8(cap.schema),
+                                 QString::fromUtf8(cap.symbology),
+                                 sym, date_range, count, 0.0);
+
+    // Fire-and-forget cost lookup. Skip for DEMO (no dataset) and for
+    // capabilities whose schema is a composite ("definition+cbbo-1s") since
+    // metadata.get_cost takes a single schema. Use the first listed.
+    if (cap.tier == SurfaceTier::DEMO || !control_panel_)
+        return;
+    auto& svc = DatabentoService::instance();
+    if (!svc.has_api_key())
+        return;
+    const auto& s = control_panel_->state();
+    if (!s.start_date.isValid() || !s.end_date.isValid())
+        return;
+    QString schema = QString::fromUtf8(cap.schema);
+    int plus = schema.indexOf('+');
+    if (plus >= 0)
+        schema = schema.left(plus);
+    DbCostQuery q;
+    q.dataset = QString::fromUtf8(cap.dataset);
+    q.schema = schema;
+    q.start = s.start_date;
+    q.end = s.end_date;
+    q.stype_in = QString::fromUtf8(cap.symbology);
+    if (cap.tier == SurfaceTier::EQUITIES)
+        q.symbols = s.basket.isEmpty() ? QStringList{s.symbol} : s.basket;
+    else if (QString::fromUtf8(cap.symbology) == "parent")
+        q.symbols = QStringList{s.symbol + ".OPT"};
+    else
+        q.symbols = QStringList{s.symbol};
+
+    QPointer<SurfaceAnalyticsScreen> self = this;
+    QString ds = q.dataset;
+    QString sch = QString::fromUtf8(cap.schema);
+    QString symb = QString::fromUtf8(cap.symbology);
+    QString sym_text = sym;
+    QString dr = date_range;
+    qint64 row_ct = count;
+    svc.get_cost(q, [self, ds, sch, symb, sym_text, dr, row_ct](DbCostResult r) {
+        if (!self || !self->data_inspector_)
+            return;
+        if (!r.success)
+            return;
+        self->data_inspector_->set_lineage(ds, sch, symb, sym_text, dr,
+                                           row_ct > 0 ? row_ct : r.record_count,
+                                           r.cost_usd);
+    });
+}
+
+void SurfaceAnalyticsScreen::update_line_view() {
+    if (!surface_line_)
+        return;
+    auto fmt_months_str = [](const std::vector<int>& v) {
+        QStringList out;
+        for (int i : v) out << QString("%1M").arg(i);
+        return out;
+    };
+
+    switch (active_chart_) {
+        case ChartType::YieldCurve: {
+            // Show the latest column of the yield matrix as a single curve
+            if (yield_data_.z.empty() || yield_data_.maturities.empty())
+                break;
+            std::vector<float> xs, ys;
+            for (size_t i = 0; i < yield_data_.maturities.size(); ++i) {
+                xs.push_back((float)yield_data_.maturities[i]);
+                ys.push_back(yield_data_.z[0].size() > i ? yield_data_.z[0][i] : 0.0f);
+            }
+            surface_line_->set_curve("YIELD CURVE", xs, ys, fmt_months_str(yield_data_.maturities),
+                                     "Maturity (months)", "Yield %", QColor(63, 185, 80));
+            return;
+        }
+        case ChartType::ContangoBackwardation: {
+            std::vector<SurfaceLineWidget::Series> series;
+            for (size_t i = 0; i < contango_data_.commodities.size() && i < contango_data_.z.size(); ++i) {
+                SurfaceLineWidget::Series s;
+                s.name = QString::fromStdString(contango_data_.commodities[i]);
+                for (size_t k = 0; k < contango_data_.contract_months.size(); ++k)
+                    s.x_values.push_back((float)contango_data_.contract_months[k]);
+                s.y_values.assign(contango_data_.z[i].begin(), contango_data_.z[i].end());
+                static const QColor palette[] = {
+                    QColor(217, 119, 6), QColor(88, 166, 255), QColor(63, 185, 80),
+                    QColor(220, 80, 80), QColor(155, 114, 255), QColor(89, 196, 217)};
+                s.color = palette[i % 6];
+                series.push_back(s);
+            }
+            surface_line_->set_series("CONTANGO / BACKWARDATION", series, "Contract month", "Roll %");
+            return;
+        }
+        case ChartType::CommodityForward: {
+            std::vector<SurfaceLineWidget::Series> series;
+            for (size_t i = 0; i < cmdty_fwd_data_.commodities.size() && i < cmdty_fwd_data_.z.size(); ++i) {
+                SurfaceLineWidget::Series s;
+                s.name = QString::fromStdString(cmdty_fwd_data_.commodities[i]);
+                for (size_t k = 0; k < cmdty_fwd_data_.contract_months.size(); ++k)
+                    s.x_values.push_back((float)cmdty_fwd_data_.contract_months[k]);
+                s.y_values.assign(cmdty_fwd_data_.z[i].begin(), cmdty_fwd_data_.z[i].end());
+                static const QColor palette[] = {
+                    QColor(217, 119, 6), QColor(88, 166, 255), QColor(63, 185, 80),
+                    QColor(220, 80, 80), QColor(155, 114, 255), QColor(89, 196, 217)};
+                s.color = palette[i % 6];
+                series.push_back(s);
+            }
+            surface_line_->set_series("FUTURES TERM STRUCTURE", series, "Contract month", "Price");
+            return;
+        }
+        case ChartType::CrackSpread: {
+            std::vector<SurfaceLineWidget::Series> series;
+            for (size_t i = 0; i < crack_data_.spread_types.size() && i < crack_data_.z.size(); ++i) {
+                SurfaceLineWidget::Series s;
+                s.name = QString::fromStdString(crack_data_.spread_types[i]);
+                for (size_t k = 0; k < crack_data_.contract_months.size(); ++k)
+                    s.x_values.push_back((float)crack_data_.contract_months[k]);
+                s.y_values.assign(crack_data_.z[i].begin(), crack_data_.z[i].end());
+                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255),
+                                                 QColor(63, 185, 80), QColor(220, 80, 80)};
+                s.color = palette[i % 4];
+                series.push_back(s);
+            }
+            surface_line_->set_series("CRACK / CRUSH SPREAD", series, "Contract month", "Spread $/bbl");
+            return;
+        }
+        case ChartType::FXForwardPoints: {
+            std::vector<SurfaceLineWidget::Series> series;
+            for (size_t i = 0; i < fx_fwd_data_.pairs.size() && i < fx_fwd_data_.z.size(); ++i) {
+                SurfaceLineWidget::Series s;
+                s.name = QString::fromStdString(fx_fwd_data_.pairs[i]);
+                for (size_t k = 0; k < fx_fwd_data_.tenors.size(); ++k)
+                    s.x_values.push_back((float)fx_fwd_data_.tenors[k]);
+                s.y_values.assign(fx_fwd_data_.z[i].begin(), fx_fwd_data_.z[i].end());
+                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255),
+                                                 QColor(63, 185, 80), QColor(220, 80, 80)};
+                s.color = palette[i % 4];
+                series.push_back(s);
+            }
+            surface_line_->set_series("FX FORWARD POINTS", series, "Tenor (months)", "Fwd points");
+            return;
+        }
+        case ChartType::InflationExpectations: {
+            if (inflation_data_.z.empty() || inflation_data_.horizons.empty())
+                break;
+            std::vector<float> xs, ys;
+            for (size_t i = 0; i < inflation_data_.horizons.size(); ++i) {
+                xs.push_back((float)inflation_data_.horizons[i]);
+                ys.push_back(inflation_data_.z[0].size() > i ? inflation_data_.z[0][i] : 0.0f);
+            }
+            QStringList xl;
+            for (int h : inflation_data_.horizons) xl << QString("%1Y").arg(h);
+            surface_line_->set_curve("INFLATION EXPECTATIONS", xs, ys, xl,
+                                     "Horizon (years)", "Breakeven %",
+                                     QColor(89, 196, 217));
+            return;
+        }
+        case ChartType::MonetaryPolicyPath: {
+            std::vector<SurfaceLineWidget::Series> series;
+            for (size_t i = 0; i < monetary_data_.central_banks.size() && i < monetary_data_.z.size(); ++i) {
+                SurfaceLineWidget::Series s;
+                s.name = QString::fromStdString(monetary_data_.central_banks[i]);
+                for (size_t k = 0; k < monetary_data_.meetings_ahead.size(); ++k)
+                    s.x_values.push_back((float)monetary_data_.meetings_ahead[k]);
+                s.y_values.assign(monetary_data_.z[i].begin(), monetary_data_.z[i].end());
+                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255),
+                                                 QColor(63, 185, 80), QColor(220, 80, 80)};
+                s.color = palette[i % 4];
+                series.push_back(s);
+            }
+            surface_line_->set_series("RATE PATH", series, "Meetings ahead", "Rate %");
+            return;
+        }
+        default:
+            break;
+    }
+    // Fallback — clear if the current chart has no line representation.
+    surface_line_->clear();
+}
+
+void SurfaceAnalyticsScreen::apply_view_mode_buttons() {
+    auto active = [&]() {
+        return QString("QPushButton { background:rgba(217,119,6,0.18); color:%1; "
+                       "border:1px solid %2; padding:0 10px; font-size:11px; "
+                       "font-weight:bold; font-family:%3; }")
+            .arg(colors::AMBER())
+            .arg(colors::AMBER_DIM())
+            .arg(MONO);
+    };
+    if (btn_3d_) {
+        btn_3d_->setChecked(view_mode_ == ViewMode::Surface3D);
+        btn_3d_->setStyleSheet(view_mode_ == ViewMode::Surface3D ? active() : btn_inactive());
+    }
+    if (btn_table_) {
+        btn_table_->setChecked(view_mode_ == ViewMode::Table);
+        btn_table_->setStyleSheet(view_mode_ == ViewMode::Table ? active() : btn_inactive());
+    }
+    if (btn_line_) {
+        btn_line_->setChecked(view_mode_ == ViewMode::Line);
+        btn_line_->setStyleSheet(view_mode_ == ViewMode::Line ? active() : btn_inactive());
+    }
 }
 
 // ── Slots ─────────────────────────────────────────────────────────────────────
@@ -865,9 +1185,12 @@ void SurfaceAnalyticsScreen::on_category_clicked(int index) {
         }
     }
 
-    databento_panel_->set_active_chart(active_chart_, VOL_SYMBOLS[selected_symbol_], VOL_SPOTS[selected_symbol_]);
+    if (control_panel_)
+        control_panel_->set_capability(active_chart_);
+    load_dataset_range_for_active_capability();
     update_chart();
     update_metrics();
+    update_inspector_lineage();
     fincept::ScreenStateManager::instance().notify_changed(this);
 }
 
@@ -876,22 +1199,29 @@ void SurfaceAnalyticsScreen::on_surface_clicked(int cat, int surf_index) {
     if (cat < (int)cats.size() && surf_index < (int)cats[cat].types.size())
         active_chart_ = cats[cat].types[surf_index];
     refresh_surface_bar();
-    databento_panel_->set_active_chart(active_chart_, VOL_SYMBOLS[selected_symbol_], VOL_SPOTS[selected_symbol_]);
+    if (control_panel_)
+        control_panel_->set_capability(active_chart_);
+    load_dataset_range_for_active_capability();
     update_chart();
     update_metrics();
+    update_inspector_lineage();
 }
 
 void SurfaceAnalyticsScreen::on_view_3d() {
-    show_table_ = false;
-    btn_3d_->setStyleSheet(btn_active_amber());
-    btn_table_->setStyleSheet(btn_inactive());
+    view_mode_ = ViewMode::Surface3D;
+    apply_view_mode_buttons();
     update_chart();
 }
 
 void SurfaceAnalyticsScreen::on_view_table() {
-    show_table_ = true;
-    btn_3d_->setStyleSheet(btn_inactive());
-    btn_table_->setStyleSheet(btn_active_amber());
+    view_mode_ = ViewMode::Table;
+    apply_view_mode_buttons();
+    update_chart();
+}
+
+void SurfaceAnalyticsScreen::on_view_line() {
+    view_mode_ = ViewMode::Line;
+    apply_view_mode_buttons();
     update_chart();
 }
 
@@ -905,14 +1235,68 @@ void SurfaceAnalyticsScreen::on_refresh() {
     load_demo_data();
     update_chart();
     update_metrics();
+    update_inspector_lineage();
 }
 
-void SurfaceAnalyticsScreen::on_symbol_changed(int index) {
-    selected_symbol_ = index;
+void SurfaceAnalyticsScreen::on_controls_changed() {
+    update_inspector_lineage();
+}
+
+void SurfaceAnalyticsScreen::on_control_symbol_changed(const QString& /*sym*/) {
+    // Rebuild demo surfaces with the new underlying so the chart isn't stale.
     load_demo_data();
     update_chart();
     update_metrics();
-    databento_panel_->set_active_chart(active_chart_, VOL_SYMBOLS[selected_symbol_], VOL_SPOTS[selected_symbol_]);
+    update_inspector_lineage();
+}
+
+void SurfaceAnalyticsScreen::on_fetch_requested() {
+    if (!control_panel_)
+        return;
+    const auto& cap = capability_for(active_chart_);
+    if (cap.tier == SurfaceTier::DEMO)
+        return; // Button should be disabled, but guard anyway
+
+    auto& svc = DatabentoService::instance();
+    if (!svc.has_api_key()) {
+        if (data_inspector_) {
+            data_inspector_->set_status("No Databento API key configured", false);
+            data_inspector_->set_error("Add a key in Settings → Credentials → Databento.");
+        }
+        return;
+    }
+
+    DatabentoFetchParams p;
+    static const char* CT_NAMES[] = {
+        "Volatility", "DeltaSurface", "GammaSurface", "VegaSurface", "ThetaSurface",
+        "SkewSurface", "LocalVolSurface", "YieldCurve", "SwaptionVol", "CapFloorVol",
+        "BondSpread", "OISBasis", "RealYield", "ForwardRate", "FXVol",
+        "FXForwardPoints", "CrossCurrencyBasis", "CDSSpread", "CreditTransition",
+        "RecoveryRate", "CommodityForward", "CommodityVol", "CrackSpread",
+        "ContangoBackwardation", "Correlation", "PCA", "VaR", "StressTestPnL",
+        "FactorExposure", "LiquidityHeatmap", "Drawdown", "BetaSurface",
+        "ImpliedDividend", "InflationExpectations", "MonetaryPolicyPath",
+    };
+    int idx = (int)active_chart_;
+    if (idx >= 0 && idx < (int)(sizeof(CT_NAMES) / sizeof(CT_NAMES[0])))
+        p.chart_type = QString::fromUtf8(CT_NAMES[idx]);
+
+    const auto& s = control_panel_->state();
+    p.symbol = s.symbol;
+    p.basket = s.basket;
+    p.dataset = s.dataset.isEmpty() ? QString::fromUtf8(cap.dataset) : s.dataset;
+    p.start_date = s.start_date;
+    p.end_date = s.end_date;
+    p.strike_window_pct = s.strike_window_pct;
+    p.dte_min = s.dte_min;
+    p.dte_max = s.dte_max;
+    p.iv_method = s.iv_method;
+    p.spot_override = spot_for(p.symbol);
+
+    if (data_inspector_)
+        data_inspector_->set_status(
+            QString("Fetching %1 …").arg(QString::fromUtf8(chart_type_name(active_chart_))), true);
+    svc.fetch_with_params(p);
 }
 
 void SurfaceAnalyticsScreen::dispatch_csv(const QString& path) {
@@ -958,49 +1342,102 @@ void SurfaceAnalyticsScreen::dispatch_csv(const QString& path) {
 
 // ── Databento slots ───────────────────────────────────────────────────────────
 void SurfaceAnalyticsScreen::on_vol_surface_received(const fincept::DatabentoVolSurfaceResult& r) {
-    if (r.success) {
-        const char* sym = VOL_SYMBOLS[selected_symbol_];
-        float spot = VOL_SPOTS[selected_symbol_];
-        if (!r.vol.z.empty()) {
-            vol_data_ = r.vol;
-            vol_data_.underlying = sym;
-            vol_data_.spot_price = spot;
+    if (data_inspector_)
+        data_inspector_->set_status(r.success ? "Vol surface loaded" : "Vol fetch failed", r.success);
+    if (!r.success) {
+        if (data_inspector_)
+            data_inspector_->set_error(r.error);
+        update_chart();
+        return;
+    }
+
+    QString sym = current_symbol_or_default();
+    std::string sym_std = sym.toStdString();
+    float spot = spot_for(sym);
+
+    if (!r.vol.z.empty()) {
+        vol_data_ = r.vol;
+        vol_data_.underlying = sym_std;
+        vol_data_.spot_price = spot;
+    }
+    if (!r.delta.z.empty()) {
+        delta_data_ = r.delta;
+        delta_data_.underlying = sym_std;
+        delta_data_.spot_price = spot;
+    }
+    if (!r.gamma.z.empty()) {
+        gamma_data_ = r.gamma;
+        gamma_data_.underlying = sym_std;
+        gamma_data_.spot_price = spot;
+    }
+    if (!r.vega.z.empty()) {
+        vega_data_ = r.vega;
+        vega_data_.underlying = sym_std;
+        vega_data_.spot_price = spot;
+    }
+    if (!r.theta.z.empty()) {
+        theta_data_ = r.theta;
+        theta_data_.underlying = sym_std;
+        theta_data_.spot_price = spot;
+    }
+    if (!r.skew.z.empty()) {
+        skew_data_ = r.skew;
+        skew_data_.underlying = sym_std;
+    }
+
+    if (data_inspector_) {
+        QStringList headers = {"strike", "expiration", "iv"};
+        QVector<QStringList> rows;
+        for (size_t i = 0; i < vol_data_.strikes.size(); ++i) {
+            for (size_t j = 0; j < vol_data_.expirations.size(); ++j) {
+                if (i < vol_data_.z.size() && j < vol_data_.z[i].size()) {
+                    rows.push_back({QString::number(vol_data_.strikes[i], 'f', 2),
+                                    QString::number(vol_data_.expirations[j]),
+                                    QString::number(vol_data_.z[i][j], 'f', 4)});
+                }
+            }
         }
-        if (!r.delta.z.empty()) {
-            delta_data_ = r.delta;
-            delta_data_.underlying = sym;
-            delta_data_.spot_price = spot;
-        }
-        if (!r.gamma.z.empty()) {
-            gamma_data_ = r.gamma;
-            gamma_data_.underlying = sym;
-            gamma_data_.spot_price = spot;
-        }
-        if (!r.vega.z.empty()) {
-            vega_data_ = r.vega;
-            vega_data_.underlying = sym;
-            vega_data_.spot_price = spot;
-        }
-        if (!r.theta.z.empty()) {
-            theta_data_ = r.theta;
-            theta_data_.underlying = sym;
-            theta_data_.spot_price = spot;
-        }
-        if (!r.skew.z.empty()) {
-            skew_data_ = r.skew;
-            skew_data_.underlying = sym;
+        data_inspector_->show_table("vol_surface", headers, rows);
+    }
+
+    update_chart();
+    update_metrics();
+    update_inspector_lineage();
+}
+
+void SurfaceAnalyticsScreen::on_ohlcv_received(const fincept::DatabentoOhlcvResult& r) {
+    if (data_inspector_) {
+        data_inspector_->set_status(r.success ? "OHLCV loaded" : "OHLCV fetch failed", r.success);
+        if (!r.success)
+            data_inspector_->set_error(r.error);
+        else {
+            QStringList headers = {"symbol", "date", "open", "high", "low", "close", "volume"};
+            QVector<QStringList> rows;
+            for (auto it = r.data.constBegin(); it != r.data.constEnd(); ++it) {
+                for (const QJsonObject& bar : it.value()) {
+                    rows.push_back({it.key(),
+                                    bar.value("date").toString(),
+                                    QString::number(bar.value("open").toDouble(), 'f', 2),
+                                    QString::number(bar.value("high").toDouble(), 'f', 2),
+                                    QString::number(bar.value("low").toDouble(), 'f', 2),
+                                    QString::number(bar.value("close").toDouble(), 'f', 2),
+                                    QString::number(bar.value("volume").toDouble(), 'f', 0)});
+                }
+            }
+            data_inspector_->show_table("ohlcv-1d", headers, rows);
         }
     }
     update_chart();
     update_metrics();
-}
-
-void SurfaceAnalyticsScreen::on_ohlcv_received(const fincept::DatabentoOhlcvResult&) {
-    update_chart();
-    update_metrics();
+    update_inspector_lineage();
 }
 
 void SurfaceAnalyticsScreen::on_futures_received(const fincept::DatabentoFuturesResult& r) {
+    if (data_inspector_) {
+        data_inspector_->set_status(r.success ? "Futures curve loaded" : "Futures fetch failed", r.success);
+        if (!r.success)
+            data_inspector_->set_error(r.error);
+    }
     if (r.success) {
         if (!r.forward.z.empty())
             cmdty_fwd_data_ = r.forward;
@@ -1009,36 +1446,45 @@ void SurfaceAnalyticsScreen::on_futures_received(const fincept::DatabentoFutures
     }
     update_chart();
     update_metrics();
+    update_inspector_lineage();
 }
 
 void SurfaceAnalyticsScreen::on_surface_received(const fincept::DatabentoSurfaceResult& r) {
+    if (data_inspector_) {
+        data_inspector_->set_status(r.success ? "Surface loaded" : "Surface fetch failed", r.success);
+        if (!r.success)
+            data_inspector_->set_error(r.error);
+    }
     if (!r.success) {
         update_chart();
         return;
     }
     const auto& type = r.type;
+    QString sym = current_symbol_or_default();
+    std::string sym_std = sym.toStdString();
+    float spot = spot_for(sym);
 
     if (type == "local_vol" && !r.z.empty()) {
         local_vol_data_.strikes.assign(r.x_axis.begin(), r.x_axis.end());
         local_vol_data_.expirations.assign(r.y_axis.begin(), r.y_axis.end());
         local_vol_data_.z = r.z;
-        local_vol_data_.underlying = VOL_SYMBOLS[selected_symbol_];
-        local_vol_data_.spot_price = VOL_SPOTS[selected_symbol_];
+        local_vol_data_.underlying = sym_std;
+        local_vol_data_.spot_price = spot;
     } else if (type == "implied_dividend" && !r.z.empty()) {
         impl_div_data_.strikes.assign(r.x_axis.begin(), r.x_axis.end());
         impl_div_data_.expirations.assign(r.y_axis.begin(), r.y_axis.end());
         impl_div_data_.z = r.z;
-        impl_div_data_.underlying = VOL_SYMBOLS[selected_symbol_];
+        impl_div_data_.underlying = sym_std;
     } else if (type == "liquidity" && !r.z.empty()) {
         liquidity_data_.strikes.assign(r.x_axis.begin(), r.x_axis.end());
         liquidity_data_.expirations.assign(r.y_axis.begin(), r.y_axis.end());
         liquidity_data_.z = r.z;
-        liquidity_data_.underlying = VOL_SYMBOLS[selected_symbol_];
+        liquidity_data_.underlying = sym_std;
     } else if (type == "commodity_vol" && !r.z.empty()) {
         cmdty_vol_data_.strikes.assign(r.x_axis.begin(), r.x_axis.end());
         cmdty_vol_data_.expirations.assign(r.y_axis.begin(), r.y_axis.end());
         cmdty_vol_data_.z = r.z;
-        cmdty_vol_data_.commodity = "CL";
+        cmdty_vol_data_.commodity = sym_std;
     } else if (type == "crack_spread" && !r.z.empty()) {
         crack_data_.spread_types = r.x_labels;
         crack_data_.contract_months.assign(r.y_axis.begin(), r.y_axis.end());
@@ -1047,86 +1493,171 @@ void SurfaceAnalyticsScreen::on_surface_received(const fincept::DatabentoSurface
         stress_data_.scenarios = r.x_labels;
         stress_data_.portfolios = r.y_labels;
         stress_data_.z = r.z;
-    } else if (type == "yield_curve" && !r.z.empty()) {
-        yield_data_.maturities.clear();
-        for (float f : r.x_axis)
-            yield_data_.maturities.push_back((int)f);
-        yield_data_.time_points.assign(r.y_axis.begin(), r.y_axis.end());
-        yield_data_.z = r.z;
-    } else if (type == "forward_rate" && !r.z.empty()) {
-        fwd_rate_data_.start_tenors.clear();
-        for (float f : r.x_axis)
-            fwd_rate_data_.start_tenors.push_back((int)f);
-        fwd_rate_data_.forward_periods.assign(r.y_axis.begin(), r.y_axis.end());
-        fwd_rate_data_.z = r.z;
-    } else if (type == "rate_path" && !r.z.empty()) {
-        monetary_data_.central_banks = r.x_labels;
-        monetary_data_.meetings_ahead.assign(r.y_axis.begin(), r.y_axis.end());
-        monetary_data_.z = r.z;
-    } else if (type == "fx_forward_points" && !r.z.empty()) {
-        fx_fwd_data_.pairs = r.x_labels;
-        fx_fwd_data_.tenors.assign(r.y_axis.begin(), r.y_axis.end());
-        fx_fwd_data_.z = r.z;
     }
 
     update_chart();
     update_metrics();
+    update_inspector_lineage();
+}
+
+void SurfaceAnalyticsScreen::on_db_fetch_started(const QString& desc) {
+    if (data_inspector_)
+        data_inspector_->set_status(desc, true);
+}
+
+void SurfaceAnalyticsScreen::on_db_fetch_failed(const QString& err) {
+    if (data_inspector_) {
+        data_inspector_->set_status("Fetch failed", false);
+        data_inspector_->set_error(err);
+    }
+}
+
+void SurfaceAnalyticsScreen::on_db_connection_tested(bool ok, const QString& msg) {
+    if (!control_panel_)
+        return;
+    control_panel_->set_provider_status("databento",
+                                        ok ? "connected" : "error",
+                                        ok ? QString() : msg);
+}
+
+void SurfaceAnalyticsScreen::on_db_raw_response(const QString& cmd, const QString& raw_stdout) {
+    if (!data_inspector_)
+        return;
+    QString header = QString("=== %1 ===\n").arg(cmd);
+    data_inspector_->set_raw_output(header + raw_stdout);
+}
+
+void SurfaceAnalyticsScreen::refresh_provider_status() {
+    if (!control_panel_)
+        return;
+    auto& svc = DatabentoService::instance();
+    control_panel_->set_provider_status(
+        "databento",
+        svc.has_api_key() ? "configured" : "not configured",
+        svc.has_api_key() ? "key set" : "Settings → Credentials");
+}
+
+void SurfaceAnalyticsScreen::load_dataset_range_for_active_capability() {
+    if (!control_panel_)
+        return;
+    const auto& cap = capability_for(active_chart_);
+    QString ds = QString::fromUtf8(cap.dataset);
+    if (ds.isEmpty())
+        return; // DEMO surface — no Databento dataset to query
+    auto& svc = DatabentoService::instance();
+    if (!svc.has_api_key())
+        return;
+    QPointer<SurfaceAnalyticsScreen> self = this;
+    svc.get_dataset_range(ds, [self](DbDatasetRange r) {
+        if (!self || !self->control_panel_)
+            return;
+        self->control_panel_->apply_dataset_range(r.start, r.end);
+    });
 }
 
 // ── Show/hide event — P3 compliance ──────────────────────────────────────────
 void SurfaceAnalyticsScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
-    connect(databento_panel_, &SurfaceDatabentoPanel::vol_surface_received, this,
+    auto& svc = DatabentoService::instance();
+    connect(&svc, &DatabentoService::vol_surface_ready, this,
             &SurfaceAnalyticsScreen::on_vol_surface_received, Qt::UniqueConnection);
-    connect(databento_panel_, &SurfaceDatabentoPanel::ohlcv_received, this, &SurfaceAnalyticsScreen::on_ohlcv_received,
-            Qt::UniqueConnection);
-    connect(databento_panel_, &SurfaceDatabentoPanel::futures_received, this,
+    connect(&svc, &DatabentoService::ohlcv_ready, this,
+            &SurfaceAnalyticsScreen::on_ohlcv_received, Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::futures_ready, this,
             &SurfaceAnalyticsScreen::on_futures_received, Qt::UniqueConnection);
-    connect(databento_panel_, &SurfaceDatabentoPanel::surface_received, this,
+    connect(&svc, &DatabentoService::surface_ready, this,
             &SurfaceAnalyticsScreen::on_surface_received, Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::fetch_started, this,
+            &SurfaceAnalyticsScreen::on_db_fetch_started, Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::fetch_failed, this,
+            &SurfaceAnalyticsScreen::on_db_fetch_failed, Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::connection_tested, this,
+            &SurfaceAnalyticsScreen::on_db_connection_tested, Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::raw_response, this,
+            &SurfaceAnalyticsScreen::on_db_raw_response, Qt::UniqueConnection);
+    refresh_provider_status();
+    load_dataset_range_for_active_capability();
 }
 
 void SurfaceAnalyticsScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
-    disconnect(databento_panel_, nullptr, this, nullptr);
+    auto& svc = DatabentoService::instance();
+    disconnect(&svc, nullptr, this, nullptr);
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap SurfaceAnalyticsScreen::save_state() const {
-    return {
+    QVariantMap s{
         {"category", active_category_},
         {"chart", static_cast<int>(active_chart_)},
+        {"view_mode", static_cast<int>(view_mode_)},
     };
+    if (control_panel_) {
+        const auto& cs = control_panel_->state();
+        s["symbol"] = cs.symbol;
+        s["dataset"] = cs.dataset;
+        s["start_date"] = cs.start_date.toString(Qt::ISODate);
+        s["end_date"] = cs.end_date.toString(Qt::ISODate);
+        s["strike_window_pct"] = cs.strike_window_pct;
+        s["dte_min"] = cs.dte_min;
+        s["dte_max"] = cs.dte_max;
+        s["iv_method"] = cs.iv_method;
+        s["basket"] = cs.basket;
+    }
+    return s;
 }
 
 void SurfaceAnalyticsScreen::restore_state(const QVariantMap& state) {
     const int cat = state.value("category", 0).toInt();
     if (cat != active_category_)
         on_category_clicked(cat);
+    if (state.contains("view_mode")) {
+        view_mode_ = static_cast<ViewMode>(state.value("view_mode", 0).toInt());
+        apply_view_mode_buttons();
+    }
+    if (control_panel_) {
+        SurfaceControlsState cs = control_panel_->state();
+        cs.symbol = state.value("symbol", cs.symbol).toString();
+        cs.dataset = state.value("dataset", cs.dataset).toString();
+        QString sd = state.value("start_date").toString();
+        QString ed = state.value("end_date").toString();
+        if (!sd.isEmpty()) cs.start_date = QDate::fromString(sd, Qt::ISODate);
+        if (!ed.isEmpty()) cs.end_date = QDate::fromString(ed, Qt::ISODate);
+        cs.strike_window_pct = state.value("strike_window_pct", cs.strike_window_pct).toInt();
+        cs.dte_min = state.value("dte_min", cs.dte_min).toInt();
+        cs.dte_max = state.value("dte_max", cs.dte_max).toInt();
+        cs.iv_method = state.value("iv_method", cs.iv_method).toString();
+        cs.basket = state.value("basket", cs.basket).toStringList();
+        control_panel_->apply_state(cs);
+        load_demo_data();
+        update_chart();
+        update_metrics();
+    }
 }
 
 // ── IGroupLinked ─────────────────────────────────────────────────────────────
 
 void SurfaceAnalyticsScreen::on_group_symbol_changed(const fincept::SymbolRef& ref) {
-    if (!ref.is_valid() || !symbol_combo_)
+    if (!ref.is_valid() || !control_panel_)
         return;
-    // Only act when the incoming symbol matches one of our supported tickers
-    // (VOL_SYMBOLS). For anything else the screen has no data surface, so
-    // silently ignore rather than clearing the current view.
-    for (int i = 0; i < N_SYMBOLS; ++i) {
-        if (ref.symbol.compare(QString::fromLatin1(VOL_SYMBOLS[i]), Qt::CaseInsensitive) == 0) {
-            if (symbol_combo_->currentIndex() != i)
-                symbol_combo_->setCurrentIndex(i); // triggers on_symbol_changed
-            return;
-        }
-    }
+    // Push the linked symbol into the control panel; demo data + chart rebuild
+    // happen via on_control_symbol_changed.
+    SurfaceControlsState cs = control_panel_->state();
+    if (cs.symbol.compare(ref.symbol, Qt::CaseInsensitive) == 0)
+        return;
+    cs.symbol = ref.symbol.toUpper();
+    control_panel_->apply_state(cs);
+    on_control_symbol_changed(cs.symbol);
 }
 
 fincept::SymbolRef SurfaceAnalyticsScreen::current_symbol() const {
-    if (selected_symbol_ < 0 || selected_symbol_ >= N_SYMBOLS)
+    if (!control_panel_)
         return {};
-    return fincept::SymbolRef::equity(QString::fromLatin1(VOL_SYMBOLS[selected_symbol_]));
+    QString s = control_panel_->state().symbol;
+    if (s.isEmpty())
+        return {};
+    return fincept::SymbolRef::equity(s);
 }
 
 } // namespace fincept::surface

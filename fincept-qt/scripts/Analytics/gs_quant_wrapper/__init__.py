@@ -25,16 +25,8 @@ Note: All functions work offline with your own data. No GS API required.
 """
 
 # DateTime utilities
-from .datetime_utils import (
-    DateTimeUtils,
-    DateTimeConfig
-)
 
 # Timeseries - unified class
-from .timeseries_analytics import (
-    TimeseriesAnalytics,
-    TimeseriesConfig
-)
 
 # Timeseries - sub-modules
 from . import ts_math_statistics
@@ -45,29 +37,10 @@ from . import ts_data_transforms
 from . import ts_portfolio_analytics
 
 # Instrument wrapper
-from .instrument_wrapper import (
-    InstrumentFactory,
-    InstrumentConfig,
-    EquitySpecs,
-    BondSpecs,
-    OptionSpecs,
-    SwapSpecs
-)
 
 # Risk analytics
-from .risk_analytics import (
-    RiskAnalytics,
-    RiskConfig,
-    MarketShock
-)
 
 # Backtest analytics
-from .backtest_analytics import (
-    BacktestEngine,
-    BacktestConfig,
-    Trade,
-    Position
-)
 
 __version__ = '1.3.0'
 __author__ = 'Fincept Corporation'
@@ -108,3 +81,46 @@ __all__ = [
     'Trade',
     'Position',
 ]
+
+
+# ── Lazy attribute resolution (PEP 562) ─────────────────────────────────────
+# Submodules below have an `if __name__ == "__main__":` block and may be
+# invoked via `python -m`. Eagerly importing them here would put each in
+# sys.modules before Python re-executes them as __main__, triggering a
+# RuntimeWarning ("found in sys.modules ... prior to execution"). The lazy
+# loader keeps the public API intact while deferring import to first access.
+_LAZY_ATTRS: dict[str, tuple[str, str]] = {
+    "DateTimeUtils": ("datetime_utils", "DateTimeUtils"),
+    "DateTimeConfig": ("datetime_utils", "DateTimeConfig"),
+    "TimeseriesAnalytics": ("timeseries_analytics", "TimeseriesAnalytics"),
+    "TimeseriesConfig": ("timeseries_analytics", "TimeseriesConfig"),
+    "InstrumentFactory": ("instrument_wrapper", "InstrumentFactory"),
+    "InstrumentConfig": ("instrument_wrapper", "InstrumentConfig"),
+    "EquitySpecs": ("instrument_wrapper", "EquitySpecs"),
+    "BondSpecs": ("instrument_wrapper", "BondSpecs"),
+    "OptionSpecs": ("instrument_wrapper", "OptionSpecs"),
+    "SwapSpecs": ("instrument_wrapper", "SwapSpecs"),
+    "RiskAnalytics": ("risk_analytics", "RiskAnalytics"),
+    "RiskConfig": ("risk_analytics", "RiskConfig"),
+    "MarketShock": ("risk_analytics", "MarketShock"),
+    "BacktestEngine": ("backtest_analytics", "BacktestEngine"),
+    "BacktestConfig": ("backtest_analytics", "BacktestConfig"),
+    "Trade": ("backtest_analytics", "Trade"),
+    "Position": ("backtest_analytics", "Position"),
+}
+
+
+def __getattr__(name: str):  # PEP 562
+    target = _LAZY_ATTRS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    submodule, original_name = target
+    import importlib
+    mod = importlib.import_module(f".{submodule}", __name__)
+    value = getattr(mod, original_name)
+    globals()[name] = value  # cache for subsequent access
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_LAZY_ATTRS))

@@ -28,7 +28,10 @@
 namespace fincept::screens {
 
 PropertiesPanel::PropertiesPanel(QWidget* parent) : QWidget(parent) {
-    setFixedWidth(280);
+    // Use min/max width pair (not setFixedWidth) so the parent splitter can
+    // drive resize and the collapse animation can drive maximumWidth → 0.
+    setMinimumWidth(0);
+    setMaximumWidth(280);
     setStyleSheet(QString("background: %1; border-left: 1px solid %2;").arg(ui::colors::PANEL(), ui::colors::BORDER()));
 
     auto* vl = new QVBoxLayout(this);

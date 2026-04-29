@@ -356,29 +356,40 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
     QTextCursor cursor = current_page->textCursor();
 
     // ── Metadata header ───────────────────────────────────────────────────────
+    // Title: large, accent-coloured, with a thicker rule under the meta line
+    // so the cover area reads as a proper report header.
+    QTextBlockFormat title_bf;
+    title_bf.setBottomMargin(2);
+    cursor.setBlockFormat(title_bf);
     QTextCharFormat title_fmt;
-    title_fmt.setFontPointSize(20);
+    title_fmt.setFontPointSize(24);
     title_fmt.setFontWeight(QFont::Bold);
     title_fmt.setForeground(QColor(theme.heading_color));
-    cursor.insertText(metadata.title + "\n", title_fmt);
+    cursor.insertText(metadata.title, title_fmt);
 
+    cursor.insertBlock();
+    QTextBlockFormat meta_bf;
+    meta_bf.setTopMargin(2);
+    meta_bf.setBottomMargin(8);
+    cursor.setBlockFormat(meta_bf);
     QTextCharFormat meta_fmt;
     meta_fmt.setFontPointSize(10);
     meta_fmt.setForeground(QColor(theme.meta_color));
-    QString meta_line = metadata.author;
-    if (!metadata.company.isEmpty())
-        meta_line += " | " + metadata.company;
-    if (!metadata.date.isEmpty())
-        meta_line += " | " + metadata.date;
-    cursor.insertText(meta_line + "\n\n", meta_fmt);
+    QStringList meta_parts;
+    if (!metadata.author.trimmed().isEmpty()) meta_parts << metadata.author;
+    if (!metadata.company.trimmed().isEmpty()) meta_parts << metadata.company;
+    if (!metadata.date.trimmed().isEmpty()) meta_parts << metadata.date;
+    cursor.insertText(meta_parts.join("  ·  "), meta_fmt);
 
-    // Divider
+    // Accent-coloured rule under the cover meta — visually separates the
+    // report header from the body.
+    cursor.insertBlock();
     QTextBlockFormat line_block;
-    line_block.setTopMargin(4);
-    line_block.setBottomMargin(12);
-    cursor.insertBlock(line_block);
+    line_block.setTopMargin(6);
+    line_block.setBottomMargin(16);
+    cursor.setBlockFormat(line_block);
     QTextCharFormat line_fmt;
-    line_fmt.setForeground(QColor(theme.divider_color));
+    line_fmt.setForeground(QColor(theme.accent_color));
     line_fmt.setFontPointSize(8);
     cursor.insertText(QString(80, QChar(0x2500)), line_fmt);
 
@@ -404,71 +415,166 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
         }
 
         if (comp.type == "heading") {
+            // Visual hierarchy: large size, accent-colour rule before, generous
+            // top margin so sections don't run together.
+            QTextBlockFormat hbf;
+            hbf.setTopMargin(20);
+            hbf.setBottomMargin(8);
+            if (i == selected_index)
+                hbf.setBackground(QColor("#fffbe6"));
+            cursor.setBlockFormat(hbf);
+
             QTextCharFormat fmt;
-            fmt.setFontPointSize(16);
+            fmt.setFontPointSize(18);
             fmt.setFontWeight(QFont::Bold);
             fmt.setForeground(QColor(theme.heading_color));
             cursor.insertText(comp.content.isEmpty() ? "Heading" : comp.content, fmt);
-            cursor.insertText("\n");
+
+            // Thin accent rule under the heading for institutional polish.
+            cursor.insertBlock();
+            QTextBlockFormat rule_bf;
+            rule_bf.setTopMargin(2);
+            rule_bf.setBottomMargin(10);
+            cursor.setBlockFormat(rule_bf);
+            QTextCharFormat rule_fmt;
+            rule_fmt.setForeground(QColor(theme.accent_color));
+            rule_fmt.setFontPointSize(8);
+            cursor.insertText(QString(80, QChar(0x2500)), rule_fmt);
 
         } else if (comp.type == "text") {
+            // Use markdown rendering so **bold**, *italic*, links, etc.
+            // come through. Also gives the LLM a familiar formatting target.
             QTextBlockFormat bf;
             bf.setLineHeight(140, QTextBlockFormat::ProportionalHeight);
+            bf.setTopMargin(4);
+            bf.setBottomMargin(8);
             if (i == selected_index)
                 bf.setBackground(QColor("#fffbe6"));
             cursor.setBlockFormat(bf);
+
+            // Set default char format so insertMarkdown picks up the right
+            // body colour. Markdown headers/emphasis override per-run as needed.
             QTextCharFormat fmt;
             fmt.setFontPointSize(12);
             fmt.setForeground(QColor(theme.text_color));
-            cursor.insertText(comp.content.isEmpty() ? "Enter text here..." : comp.content, fmt);
+            cursor.setCharFormat(fmt);
+
+            const QString body = comp.content.isEmpty() ? "Enter text here..." : comp.content;
+            // Heuristic: if content contains common markdown markers, render
+            // as markdown; else fall back to plain text. Avoids spurious
+            // re-interpretation of ad-hoc punctuation in plain copy.
+            const bool looks_markdown = body.contains("**") || body.contains("__") ||
+                                        body.contains("\n- ") || body.contains("\n* ") ||
+                                        body.contains("\n#");
+            if (looks_markdown)
+                cursor.insertMarkdown(body);
+            else
+                cursor.insertText(body, fmt);
             cursor.insertText("\n");
 
         } else if (comp.type == "table") {
-            int rows = comp.config.value("rows", "3").toInt();
-            int cols = comp.config.value("cols", "3").toInt();
+            // Cell data sources, in priority order:
+            //   1. config["csv"] — pipe-separated rows, comma-separated cells:
+            //      "Metric,FY22,FY23|Revenue,81462,96773|Net Income,12556,14997"
+            //      This is the LLM-friendly format the MCP tool description
+            //      recommends.
+            //   2. config["data"] — JSON map {"r_c":"value"} (legacy).
+            //   3. fallback to "Header N" placeholders so the table at least
+            //      shows where data should go rather than empty cells.
+            QVector<QStringList> rows_data;
+            QString csv = comp.config.value("csv");
+            if (!csv.isEmpty()) {
+                for (const QString& row_str : csv.split('|', Qt::SkipEmptyParts)) {
+                    QStringList row;
+                    for (const QString& cell : row_str.split(',')) // keep empty cells
+                        row << cell.trimmed();
+                    rows_data.append(row);
+                }
+            }
 
-            QTextTableFormat tf;
-            tf.setBorderBrush(QColor(theme.divider_color));
-            tf.setBorder(1);
-            tf.setCellPadding(6);
-            tf.setCellSpacing(0);
-            QVector<QTextLength> widths(cols, QTextLength(QTextLength::PercentageLength, 100.0 / cols));
-            tf.setColumnWidthConstraints(widths);
-
-            // Parse cell data from JSON stored in config["data"]
             QJsonObject cell_data;
-            if (comp.config.contains("data")) {
+            if (rows_data.isEmpty() && comp.config.contains("data")) {
                 QJsonDocument doc = QJsonDocument::fromJson(comp.config.value("data").toUtf8());
                 if (doc.isObject())
                     cell_data = doc.object();
             }
 
+            // Determine grid dimensions: prefer csv shape, then config rows/cols,
+            // then a 3x3 default. Cap to keep one massive table from blowing the page.
+            int rows;
+            int cols;
+            if (!rows_data.isEmpty()) {
+                rows = rows_data.size();
+                cols = 0;
+                for (const auto& r : rows_data)
+                    cols = qMax(cols, r.size());
+            } else {
+                rows = comp.config.value("rows", "3").toInt();
+                cols = comp.config.value("cols", "3").toInt();
+            }
+            rows = qBound(1, rows, 100);
+            cols = qBound(1, cols, 12);
+
+            QTextTableFormat tf;
+            tf.setBorderBrush(QColor(theme.divider_color));
+            tf.setBorder(1);
+            tf.setBorderStyle(QTextFrameFormat::BorderStyle_Solid);
+            tf.setCellPadding(6);
+            tf.setCellSpacing(0);
+            QVector<QTextLength> widths(cols, QTextLength(QTextLength::PercentageLength, 100.0 / cols));
+            tf.setColumnWidthConstraints(widths);
+
+            // Push a top margin block so tables don't touch the prior heading rule.
+            QTextBlockFormat tbf;
+            tbf.setTopMargin(6);
+            tbf.setBottomMargin(6);
+            cursor.setBlockFormat(tbf);
+
             auto* table = cursor.insertTable(rows, cols, tf);
 
             for (int r = 0; r < rows; ++r) {
                 for (int c = 0; c < cols; ++c) {
-                    QString cell_key = QString("%1_%2").arg(r).arg(c);
                     QString cell_text;
-
-                    if (cell_data.contains(cell_key)) {
-                        cell_text = cell_data.value(cell_key).toString();
-                    } else if (r == 0) {
-                        cell_text = QString("Header %1").arg(c + 1);
+                    if (!rows_data.isEmpty()) {
+                        if (r < rows_data.size() && c < rows_data[r].size())
+                            cell_text = rows_data[r][c];
+                    } else {
+                        QString cell_key = QString("%1_%2").arg(r).arg(c);
+                        if (cell_data.contains(cell_key))
+                            cell_text = cell_data.value(cell_key).toString();
+                        else if (r == 0)
+                            cell_text = QString("Header %1").arg(c + 1);
                     }
 
                     QTextCharFormat cell_fmt;
+                    QTextBlockFormat cell_block;
                     if (r == 0) {
                         cell_fmt.setFontWeight(QFont::Bold);
+                        cell_fmt.setFontPointSize(11);
                         cell_fmt.setForeground(QColor(theme.table_header_fg));
-                        QTextBlockFormat hdr_block;
-                        hdr_block.setBackground(QColor(theme.table_header_bg));
-                        auto cell_cursor = table->cellAt(r, c).firstCursorPosition();
-                        cell_cursor.setBlockFormat(hdr_block);
-                        cell_cursor.insertText(cell_text, cell_fmt);
+                        cell_block.setBackground(QColor(theme.table_header_bg));
+                        cell_block.setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
                     } else {
+                        cell_fmt.setFontPointSize(11);
                         cell_fmt.setForeground(QColor(theme.text_color));
-                        table->cellAt(r, c).firstCursorPosition().insertText(cell_text, cell_fmt);
+                        // Right-align numeric-looking cells (helps financials read).
+                        bool is_numeric = !cell_text.isEmpty();
+                        for (QChar ch : cell_text) {
+                            if (!ch.isDigit() && ch != QChar('.') && ch != QChar(',') &&
+                                ch != QChar('-') && ch != QChar('+') && ch != QChar('%') &&
+                                ch != QChar('$') && ch != QChar(' ') && ch != QChar('(') &&
+                                ch != QChar(')') && ch != QChar('B') && ch != QChar('M') &&
+                                ch != QChar('K') && ch != QChar('T') && ch != QChar('x')) {
+                                is_numeric = false;
+                                break;
+                            }
+                        }
+                        if (c > 0 && is_numeric)
+                            cell_block.setAlignment(Qt::AlignRight | Qt::AlignVCenter);
                     }
+                    auto cc = table->cellAt(r, c).firstCursorPosition();
+                    cc.setBlockFormat(cell_block);
+                    cc.insertText(cell_text, cell_fmt);
                 }
             }
             cursor.movePosition(QTextCursor::End);
@@ -499,6 +605,9 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
         } else if (comp.type == "quote") {
             QTextBlockFormat bf;
             bf.setLeftMargin(24);
+            bf.setRightMargin(8);
+            bf.setTopMargin(8);
+            bf.setBottomMargin(8);
             bf.setBackground(QColor(theme.quote_bg));
             if (i == selected_index)
                 bf.setBackground(QColor("#fffbe6"));
@@ -507,29 +616,56 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             fmt.setFontItalic(true);
             fmt.setForeground(QColor(theme.meta_color));
             fmt.setFontPointSize(12);
-            cursor.insertText(comp.content.isEmpty() ? "Block quote..." : comp.content, fmt);
+            cursor.setCharFormat(fmt);
+            const QString body = comp.content.isEmpty() ? "Block quote..." : comp.content;
+            if (body.contains("**") || body.contains("__"))
+                cursor.insertMarkdown(body);
+            else
+                cursor.insertText(body, fmt);
             cursor.insertText("\n");
 
         } else if (comp.type == "list") {
-            QTextListFormat lf;
-            lf.setStyle(QTextListFormat::ListDisc);
-            lf.setIndent(1);
             QStringList items = comp.content.split("\n", Qt::SkipEmptyParts);
             if (items.isEmpty())
                 items << "Item 1" << "Item 2";
-            QTextList* list = nullptr;
+
+            QTextBlockFormat outer_bf;
+            outer_bf.setTopMargin(4);
+            outer_bf.setBottomMargin(8);
+            if (i == selected_index)
+                outer_bf.setBackground(QColor("#fffbe6"));
+            cursor.setBlockFormat(outer_bf);
+
+            QTextListFormat lf;
+            lf.setStyle(QTextListFormat::ListDisc);
+            lf.setIndent(1);
+
             QTextCharFormat item_fmt;
+            item_fmt.setFontPointSize(12);
             item_fmt.setForeground(QColor(theme.text_color));
+            cursor.setCharFormat(item_fmt);
+
+            QTextList* list = nullptr;
             for (const auto& item : items) {
                 if (!list) {
                     list = cursor.insertList(lf);
                 } else {
                     cursor.insertBlock();
+                    list->add(cursor.block());
                 }
-                cursor.insertText(item, item_fmt);
+                // Render each item's content as markdown so **bold** and
+                // emphasis inside list items work.
+                if (item.contains("**") || item.contains("__") || item.contains("*"))
+                    cursor.insertMarkdown(item);
+                else
+                    cursor.insertText(item, item_fmt);
             }
+
+            // Terminate the list cleanly: open a fresh non-list block so the
+            // next component doesn't accidentally become a list item.
             cursor.insertBlock();
-            cursor.setBlockFormat(QTextBlockFormat{});
+            QTextBlockFormat reset_bf;
+            cursor.setBlockFormat(reset_bf);
 
         } else if (comp.type == "chart") {
             QString chart_type = comp.config.value("chart_type", "line");
@@ -715,27 +851,47 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             cursor = current_page->textCursor();
 
         } else if (comp.type == "toc") {
+            QTextBlockFormat toc_hdr_bf;
+            toc_hdr_bf.setTopMargin(8);
+            toc_hdr_bf.setBottomMargin(6);
+            cursor.setBlockFormat(toc_hdr_bf);
             QTextCharFormat hdr_fmt;
             hdr_fmt.setFontPointSize(14);
             hdr_fmt.setFontWeight(QFont::Bold);
             hdr_fmt.setForeground(QColor(theme.heading_color));
-            cursor.insertText("Table of Contents\n", hdr_fmt);
+            cursor.insertText("Table of Contents", hdr_fmt);
 
             if (toc_headings.isEmpty()) {
+                cursor.insertBlock();
                 QTextCharFormat empty_fmt;
                 empty_fmt.setForeground(QColor(theme.meta_color));
                 empty_fmt.setFontPointSize(11);
-                cursor.insertText("  (No headings found in document)\n", empty_fmt);
+                cursor.insertText("  (No headings found in document)", empty_fmt);
+                cursor.insertText("\n");
             } else {
                 int num = 1;
                 for (const auto& heading : toc_headings) {
                     cursor.insertBlock();
+                    QTextBlockFormat entry_bf;
+                    entry_bf.setLeftMargin(12);
+                    entry_bf.setTopMargin(2);
+                    entry_bf.setBottomMargin(2);
+                    cursor.setBlockFormat(entry_bf);
+
+                    QTextCharFormat num_fmt;
+                    num_fmt.setFontPointSize(11);
+                    num_fmt.setFontWeight(QFont::Bold);
+                    num_fmt.setForeground(QColor(theme.accent_color));
+                    cursor.insertText(QString("%1.  ").arg(num++), num_fmt);
+
                     QTextCharFormat entry_fmt;
                     entry_fmt.setFontPointSize(11);
                     entry_fmt.setForeground(QColor(theme.text_color));
-                    cursor.insertText(QString("  %1.  %2").arg(num++).arg(heading), entry_fmt);
+                    cursor.insertText(heading, entry_fmt);
                 }
-                cursor.insertText("\n");
+                // Reset block formatting so the next component starts fresh.
+                cursor.insertBlock();
+                cursor.setBlockFormat(QTextBlockFormat{});
             }
 
         } else if (comp.type == "stats_block") {
@@ -872,7 +1028,12 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             QTextCharFormat body_fmt;
             body_fmt.setFontPointSize(11);
             body_fmt.setForeground(QColor(theme.text_color));
-            cursor.insertText(comp.content.isEmpty() ? "Enter callout text..." : comp.content, body_fmt);
+            cursor.setCharFormat(body_fmt);
+            const QString cbody = comp.content.isEmpty() ? "Enter callout text..." : comp.content;
+            if (cbody.contains("**") || cbody.contains("__") || cbody.contains("\n- "))
+                cursor.insertMarkdown(cbody);
+            else
+                cursor.insertText(cbody, body_fmt);
             cursor.insertText("\n");
 
         } else if (comp.type == "sparkline") {

@@ -161,16 +161,61 @@ class CFAQuantEngine:
             return None
         return obj
 
-    def _parse_data(self, data: Union[str, List, Dict]) -> np.ndarray:
-        if isinstance(data, str):
+    def _looks_like_ticker(self, s: str) -> bool:
+        s = s.strip()
+        if not s or ',' in s or s.startswith('[') or s.startswith('{'):
+            return False
+        # Letters / dot / dash only (e.g. AAPL, BRK.B, TCS.NS, ^GSPC)
+        return all(c.isalpha() or c in '.-^' for c in s)
+
+    def _fetch_ticker_history(self, ticker: str, period: str = '1y',
+                              interval: str = '1d', column: str = 'Close') -> np.ndarray:
+        try:
+            import yfinance as yf
+        except ImportError as exc:
+            raise ImportError(f"yfinance is required to fetch ticker '{ticker}': {exc}")
+
+        df = yf.download(ticker, period=period, interval=interval,
+                         progress=False, auto_adjust=False)
+        if df is None or df.empty:
+            raise ValueError(f"No data returned for ticker '{ticker}' (period={period})")
+
+        # yfinance returns a MultiIndex when multiple tickers / multi-level cols
+        if isinstance(df.columns, pd.MultiIndex):
+            # pick the requested column at level 0
             try:
-                parsed = json.loads(data)
+                series = df[column].iloc[:, 0]
+            except (KeyError, IndexError):
+                series = df.iloc[:, 0]
+        else:
+            series = df[column] if column in df.columns else df.iloc[:, 0]
+
+        values = pd.Series(series).dropna().to_numpy(dtype=float)
+        if values.size == 0:
+            raise ValueError(f"Ticker '{ticker}' produced an empty series after cleaning")
+        return values
+
+    def _parse_data(self, data: Union[str, List, Dict],
+                    period: str = '1y', interval: str = '1d',
+                    column: str = 'Close') -> np.ndarray:
+        if isinstance(data, str):
+            stripped = data.strip()
+            # 1. JSON list / array
+            if stripped.startswith('[') or stripped.startswith('{'):
+                parsed = json.loads(stripped)
                 if isinstance(parsed, list):
                     return np.array(parsed, dtype=float)
-                return np.array(parsed, dtype=float)
-            except json.JSONDecodeError:
-                values = [float(x.strip()) for x in data.split(',') if x.strip()]
-                return np.array(values)
+                if isinstance(parsed, dict):
+                    return pd.DataFrame(parsed).values
+            # 2. Ticker symbol → fetch close prices
+            if self._looks_like_ticker(stripped):
+                return self._fetch_ticker_history(stripped, period=period,
+                                                  interval=interval, column=column)
+            # 3. CSV numeric values
+            values = [float(x.strip()) for x in stripped.split(',') if x.strip()]
+            if not values:
+                raise ValueError("Empty data input")
+            return np.array(values)
         elif isinstance(data, list):
             return np.array(data, dtype=float)
         elif isinstance(data, dict):
@@ -209,11 +254,18 @@ class CFAQuantEngine:
             'timestamp': datetime.now().isoformat()
         }
 
+    def _data_kwargs(self, params: Dict[str, Any]) -> Dict[str, str]:
+        return {
+            'period': params.get('period', '1y'),
+            'interval': params.get('interval', '1d'),
+            'column': params.get('column', 'Close'),
+        }
+
     def trend_analysis(self, params: Dict[str, Any]) -> Dict[str, Any]:
         if self.analyzer is None:
             return {'success': False, 'error': f'Module not loaded: {getattr(self, "import_error", "unknown")}'}
 
-        data = self._parse_data(params.get('data', []))
+        data = self._parse_data(params.get('data', []), **self._data_kwargs(params))
         trend_type = params.get('trend_type', 'linear')
 
         result = self.analyzer.analyze_trend(data, trend_type=trend_type)
@@ -223,7 +275,7 @@ class CFAQuantEngine:
         if self.analyzer is None:
             return {'success': False, 'error': f'Module not loaded: {getattr(self, "import_error", "unknown")}'}
 
-        data = self._parse_data(params.get('data', []))
+        data = self._parse_data(params.get('data', []), **self._data_kwargs(params))
         test_type = params.get('test_type', 'adf')
 
         result = self.analyzer.test_stationarity(data, test_type=test_type)
@@ -233,7 +285,7 @@ class CFAQuantEngine:
         if self.analyzer is None:
             return {'success': False, 'error': f'Module not loaded: {getattr(self, "import_error", "unknown")}'}
 
-        data = self._parse_data(params.get('data', []))
+        data = self._parse_data(params.get('data', []), **self._data_kwargs(params))
 
         # Handle order parameter - ensure it's a tuple
         order_param = params.get('order', [1, 0, 1])
@@ -258,7 +310,7 @@ class CFAQuantEngine:
         if self.analyzer is None:
             return {'success': False, 'error': f'Module not loaded: {getattr(self, "import_error", "unknown")}'}
 
-        data = self._parse_data(params.get('data', []))
+        data = self._parse_data(params.get('data', []), **self._data_kwargs(params))
         horizon = params.get('horizon', 5)
         method = params.get('method', 'simple_exponential')
         train_size = params.get('train_size', 0.8)
@@ -288,7 +340,7 @@ class CFAQuantEngine:
         if X is None or y is None:
             data = params.get('data')
             if data is not None:
-                data_arr = self._parse_data(data)
+                data_arr = self._parse_data(data, **self._data_kwargs(params))
                 n_lags = params.get('n_lags')
                 if n_lags is None or n_lags < 1:
                     n_lags = 5
@@ -317,7 +369,7 @@ class CFAQuantEngine:
         if X is None:
             data = params.get('data')
             if data is not None:
-                data_arr = self._parse_data(data)
+                data_arr = self._parse_data(data, **self._data_kwargs(params))
                 n_lags = params.get('n_lags')
                 if n_lags is None or n_lags < 1:
                     n_lags = 5
@@ -345,7 +397,7 @@ class CFAQuantEngine:
         if X is None or y is None:
             data = params.get('data')
             if data is not None:
-                data_arr = self._parse_data(data)
+                data_arr = self._parse_data(data, **self._data_kwargs(params))
                 n_lags = params.get('n_lags')
                 if n_lags is None or n_lags < 1:
                     n_lags = 5
@@ -380,7 +432,7 @@ class CFAQuantEngine:
         if self.analyzer is None:
             return {'success': False, 'error': f'Module not loaded: {getattr(self, "import_error", "unknown")}'}
 
-        population = self._parse_data(params.get('population', []))
+        population = self._parse_data(params.get('population', []), **self._data_kwargs(params))
         sample_size = params.get('sample_size', 100)
         sampling_methods = params.get('sampling_methods', ['simple', 'stratified', 'systematic'])
 
@@ -408,7 +460,7 @@ class CFAQuantEngine:
         if self.analyzer is None:
             return {'success': False, 'error': f'Module not loaded: {getattr(self, "import_error", "unknown")}'}
 
-        data = self._parse_data(params.get('data', []))
+        data = self._parse_data(params.get('data', []), **self._data_kwargs(params))
         methods = params.get('methods', ['bootstrap', 'jackknife', 'permutation'])
         n_resamples = params.get('n_resamples', 1000)
 
@@ -438,11 +490,19 @@ class CFAQuantEngine:
         if self.validator is None:
             return {'success': False, 'error': f'Module not loaded: {getattr(self, "import_error", "unknown")}'}
 
-        data = params.get('data', [])
-        if isinstance(data, list):
-            data = pd.Series(data)
-        elif isinstance(data, dict):
-            data = pd.DataFrame(data)
+        raw = params.get('data', [])
+        if isinstance(raw, str):
+            try:
+                arr = self._parse_data(raw, **self._data_kwargs(params))
+                data = pd.Series(arr)
+            except Exception as e:
+                return {'success': False, 'error': f'Could not parse data: {e}'}
+        elif isinstance(raw, list):
+            data = pd.Series(raw)
+        elif isinstance(raw, dict):
+            data = pd.DataFrame(raw)
+        else:
+            data = pd.Series(raw)
 
         data_type = params.get('data_type', 'general')
         data_name = params.get('data_name', 'data')

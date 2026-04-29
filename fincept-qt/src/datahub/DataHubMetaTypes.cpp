@@ -60,7 +60,22 @@ void register_metatypes() {
     qRegisterMetaType<QVector<fincept::services::maritime::VesselData>>("QVector<fincept::services::maritime::VesselData>");
     qRegisterMetaType<fincept::relmap::RelationshipData>("fincept::relmap::RelationshipData");
 
-    LOG_INFO("DataHub", "Registered 35 payload meta-types");
+    // Crypto / Wallet (Phase 1 + Phase 2 Stage 2A.5 multi-token holdings)
+    qRegisterMetaType<fincept::wallet::WalletBalance>("fincept::wallet::WalletBalance");
+    qRegisterMetaType<fincept::wallet::TokenHolding>("fincept::wallet::TokenHolding");
+    qRegisterMetaType<fincept::wallet::TokenPrice>("fincept::wallet::TokenPrice");
+    qRegisterMetaType<fincept::wallet::TokenMetadata>("fincept::wallet::TokenMetadata");
+    // FncptPrice is a typedef of TokenPrice — register its name as an alias so
+    // Qt's metatype lookup serves either spelling.
+    qRegisterMetaType<fincept::wallet::FncptPrice>("fincept::wallet::FncptPrice");
+    // Phase 2 §2B activity feed — vector form is what publishes on the topic.
+    qRegisterMetaType<fincept::wallet::ParsedActivity>("fincept::wallet::ParsedActivity");
+    qRegisterMetaType<QVector<fincept::wallet::ParsedActivity>>(
+        "QVector<fincept::wallet::ParsedActivity>");
+    // Phase 2 §2C fee-discount eligibility.
+    qRegisterMetaType<fincept::wallet::FncptDiscount>("fincept::wallet::FncptDiscount");
+
+    LOG_INFO("DataHub", "Registered 42 payload meta-types");
 }
 
 } // namespace fincept::datahub

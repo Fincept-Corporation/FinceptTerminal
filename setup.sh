@@ -61,6 +61,9 @@ if [ "$PLATFORM" = "linux" ]; then
             libgl1-mesa-dev libglu1-mesa-dev \
             libxkbcommon-dev libxkbcommon-x11-dev \
             libfontconfig1 libdbus-1-3 \
+            libssl-dev \
+            libxcb-cursor0 \
+            libsecret-1-dev \
             pkg-config curl
     elif command -v pacman &>/dev/null; then
         sudo pacman -Sy --noconfirm --needed \
@@ -68,6 +71,7 @@ if [ "$PLATFORM" = "linux" ]; then
             python python-pip \
             mesa glu libxkbcommon \
             fontconfig dbus \
+            libsecret \
             pkgconf curl
     elif command -v dnf &>/dev/null; then
         sudo dnf install -y \
@@ -76,6 +80,7 @@ if [ "$PLATFORM" = "linux" ]; then
             mesa-libGL-devel mesa-libGLU-devel \
             libxkbcommon-devel \
             fontconfig dbus-libs \
+            libsecret-devel \
             pkgconfig curl
     else
         info "No recognised package manager found. Ensure cmake, ninja, g++, python3, and Qt build dependencies are installed manually."
@@ -145,12 +150,15 @@ else
     AQT="$AQT_VENV/bin/aqt"
     [ -x "$AQT" ] || fail "aqtinstall did not install correctly."
     # Qt host/target/arch
-    # AQT_ARCH is the argument passed to aqt (aqtinstall 3.x uses linux_gcc_64 on Linux).
-    # QT_KIT is the subdirectory aqtinstall actually creates on disk (always gcc_64).
+    # AQT_ARCH is the argument passed to aqt; QT_KIT is the subdirectory aqtinstall
+    # actually creates on disk. They differ on every platform — aqtinstall maps the
+    # arch argument to the on-disk dir internally:
+    #   Linux : aqt arg "linux_gcc_64" → on-disk "gcc_64"
+    #   macOS : aqt arg "clang_64"     → on-disk "macos"   (Qt >= 6.1.2 only)
     if [ "$PLATFORM" = "linux" ]; then
         AQT_HOST="linux"   ; AQT_TARGET="desktop" ; AQT_ARCH="linux_gcc_64"
     else
-        AQT_HOST="mac"     ; AQT_TARGET="desktop" ; AQT_ARCH="macos"
+        AQT_HOST="mac"     ; AQT_TARGET="desktop" ; AQT_ARCH="clang_64"
     fi
     # Modules required to compile Fincept (match find_package COMPONENTS)
     AQT_MODULES="qtcharts qtwebsockets qtmultimedia qtspeech"

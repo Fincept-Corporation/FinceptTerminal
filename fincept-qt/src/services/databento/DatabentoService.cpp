@@ -53,23 +53,38 @@ DatabentoService& DatabentoService::instance() {
 DatabentoService::DatabentoService() {}
 
 // ── API key ────────────────────────────────────────────────────────────────
+// We accept both the legacy SECURE_KEY ("databento.api_key") and the canonical
+// env-style key ("DATABENTO_API_KEY") used by Settings + PythonRunner env
+// injection. Reads check both; writes mirror to both so the two paths stay
+// in sync regardless of which screen entered the key.
+static constexpr const char* DATABENTO_ENV_KEY = "DATABENTO_API_KEY";
+
 bool DatabentoService::has_api_key() const {
     auto r = SecureStorage::instance().retrieve(SECURE_KEY);
-    return r.is_ok() && !r.value().isEmpty();
+    if (r.is_ok() && !r.value().isEmpty())
+        return true;
+    auto r2 = SecureStorage::instance().retrieve(DATABENTO_ENV_KEY);
+    return r2.is_ok() && !r2.value().isEmpty();
 }
 
 void DatabentoService::set_api_key(const QString& key) {
-    SecureStorage::instance().store(SECURE_KEY, key.trimmed());
+    QString trimmed = key.trimmed();
+    SecureStorage::instance().store(SECURE_KEY, trimmed);
+    SecureStorage::instance().store(DATABENTO_ENV_KEY, trimmed);
     LOG_INFO("Databento", "API key stored");
 }
 
 QString DatabentoService::api_key() const {
     auto r = SecureStorage::instance().retrieve(SECURE_KEY);
-    return r.is_ok() ? r.value() : QString{};
+    if (r.is_ok() && !r.value().isEmpty())
+        return r.value();
+    auto r2 = SecureStorage::instance().retrieve(DATABENTO_ENV_KEY);
+    return r2.is_ok() ? r2.value() : QString{};
 }
 
 void DatabentoService::clear_api_key() {
     SecureStorage::instance().remove(SECURE_KEY);
+    SecureStorage::instance().remove(DATABENTO_ENV_KEY);
 }
 
 // ── Core runner — wraps PythonRunner per P4 ────────────────────────────────
@@ -105,9 +120,13 @@ void DatabentoService::run_script(const QStringList& args, std::function<void(bo
 
     QPointer<DatabentoService> self = this;
 
-    PythonRunner::instance().run(SCRIPT, script_args, [self, cb](PythonResult result) {
+    QString cmd_label = command;
+    PythonRunner::instance().run(SCRIPT, script_args, [self, cb, cmd_label](PythonResult result) {
         if (!self)
             return;
+        // Surface the full stdout (includes warnings + JSON) so the inspector's
+        // "View raw response" modal has something useful to show.
+        emit self->raw_response(cmd_label, result.output);
         if (!result.success) {
             LOG_ERROR("Databento", "Script error: " + result.error);
             cb(false, {{"error", result.error}});
@@ -704,6 +723,195 @@ surface::CommodityForwardData DatabentoService::parse_commodity_forward(const QJ
         data.z.push_back(row);
     }
     return data;
+}
+
+// ── Metadata: list datasets ────────────────────────────────────────────────
+void DatabentoService::list_datasets(std::function<void(QStringList)> cb) {
+    if (!cached_datasets_.isEmpty()) {
+        cb(cached_datasets_);
+        return;
+    }
+    QPointer<DatabentoService> self = this;
+    run_script({"list_datasets"}, [self, cb](bool ok, const QJsonObject& j) {
+        QStringList out;
+        if (self && ok && !j["error"].toBool(false)) {
+            for (const auto& v : j["datasets"].toArray()) {
+                QString id = v.toObject()["id"].toString();
+                if (!id.isEmpty())
+                    out << id;
+            }
+            self->cached_datasets_ = out;
+        }
+        cb(out);
+    });
+}
+
+// ── Metadata: list schemas for a dataset ───────────────────────────────────
+void DatabentoService::list_schemas(const QString& dataset, std::function<void(QStringList)> cb) {
+    if (cached_schemas_.contains(dataset)) {
+        cb(cached_schemas_.value(dataset));
+        return;
+    }
+    QPointer<DatabentoService> self = this;
+    QString ds = dataset;
+    run_script({"list_schemas", "dataset", dataset}, [self, ds, cb](bool ok, const QJsonObject& j) {
+        QStringList out;
+        if (self && ok && !j["error"].toBool(false)) {
+            for (const auto& v : j["schemas"].toArray()) {
+                QString id = v.toObject()["id"].toString();
+                if (!id.isEmpty())
+                    out << id;
+            }
+            self->cached_schemas_[ds] = out;
+        }
+        cb(out);
+    });
+}
+
+// ── Metadata: list publishers (optionally filtered to one dataset) ─────────
+void DatabentoService::list_publishers(const QString& dataset, std::function<void(QList<DbPublisher>)> cb) {
+    QString cache_key = dataset.isEmpty() ? "*" : dataset;
+    if (cached_publishers_.contains(cache_key)) {
+        cb(cached_publishers_.value(cache_key));
+        return;
+    }
+    QPointer<DatabentoService> self = this;
+    QStringList args = {"list_publishers"};
+    if (!dataset.isEmpty()) {
+        args << "dataset" << dataset;
+    }
+    run_script(args, [self, cache_key, cb](bool ok, const QJsonObject& j) {
+        QList<DbPublisher> out;
+        if (self && ok && !j["error"].toBool(false)) {
+            for (const auto& v : j["publishers"].toArray()) {
+                QJsonObject o = v.toObject();
+                DbPublisher p;
+                p.publisher_id = o["publisher_id"].toInt();
+                p.dataset = o["dataset"].toString();
+                p.venue = o["venue"].toString();
+                p.description = o["description"].toString();
+                out.push_back(p);
+            }
+            self->cached_publishers_[cache_key] = out;
+        }
+        cb(out);
+    });
+}
+
+// ── Metadata: dataset date range ───────────────────────────────────────────
+void DatabentoService::get_dataset_range(const QString& dataset, std::function<void(DbDatasetRange)> cb) {
+    if (cached_ranges_.contains(dataset)) {
+        cb(cached_ranges_.value(dataset));
+        return;
+    }
+    QPointer<DatabentoService> self = this;
+    run_script({"dataset_range", "dataset", dataset}, [self, dataset, cb](bool ok, const QJsonObject& j) {
+        DbDatasetRange out;
+        out.dataset = dataset;
+        if (self && ok && !j["error"].toBool(false)) {
+            QString s = j["start"].toString();
+            QString e = j["end"].toString();
+            // Accept "YYYY-MM-DD..." or full ISO with 'T'
+            if (!s.isEmpty())
+                out.start = QDate::fromString(s.left(10), "yyyy-MM-dd");
+            if (!e.isEmpty())
+                out.end = QDate::fromString(e.left(10), "yyyy-MM-dd");
+            self->cached_ranges_[dataset] = out;
+        }
+        cb(out);
+    });
+}
+
+// ── Metadata: cost estimate ────────────────────────────────────────────────
+void DatabentoService::get_cost(const DbCostQuery& q, std::function<void(DbCostResult)> cb) {
+    QStringList args = {"get_cost_estimate",
+                        "dataset", q.dataset,
+                        "symbols", q.symbols.join(","),
+                        "schema", q.schema,
+                        "start_date", q.start.toString("yyyy-MM-dd"),
+                        "end_date", q.end.toString("yyyy-MM-dd")};
+    run_script(args, [cb](bool ok, const QJsonObject& j) {
+        DbCostResult res;
+        if (!ok || j["error"].toBool(false)) {
+            res.success = false;
+            res.error = ok ? j["message"].toString("Unknown error") : j["error"].toString();
+        } else {
+            res.success = true;
+            res.record_count = (qint64)j["record_count"].toDouble(0);
+            res.cost_usd = j["cost_usd"].toDouble(0);
+        }
+        cb(res);
+    });
+}
+
+// ── Metadata: symbol search ────────────────────────────────────────────────
+void DatabentoService::search_symbols(const QString& query, const QString& dataset,
+                                      std::function<void(QStringList)> cb) {
+    QStringList args = {"symbol_search", "query", query};
+    if (!dataset.isEmpty()) {
+        args << "dataset" << dataset;
+    }
+    run_script(args, [cb](bool ok, const QJsonObject& j) {
+        QStringList out;
+        if (ok && !j["error"].toBool(false)) {
+            for (const auto& v : j["matches"].toArray()) {
+                QString rs = v.toObject()["raw_symbol"].toString();
+                if (!rs.isEmpty())
+                    out << rs;
+            }
+        }
+        cb(out);
+    });
+}
+
+// ── Unified surface fetch dispatcher ───────────────────────────────────────
+// Takes a DatabentoFetchParams produced by the SurfaceControlPanel and routes
+// to the correct underlying fetch, which still emits the appropriate
+// vol_surface_ready / ohlcv_ready / futures_ready / surface_ready signal.
+void DatabentoService::fetch_with_params(const DatabentoFetchParams& params) {
+    const QString& chart = params.chart_type;
+
+    // Resolve spot for option-surface fetches. If the caller provided one,
+    // honour it; otherwise default to a placeholder; the screen can later
+    // consult DataHub for a live quote.
+    float spot = params.spot_override > 0.0f ? params.spot_override : 100.0f;
+
+    if (chart == "Volatility" || chart == "DeltaSurface" || chart == "GammaSurface" ||
+        chart == "VegaSurface" || chart == "ThetaSurface" || chart == "SkewSurface") {
+        fetch_options_surface(params.symbol, spot);
+    } else if (chart == "LocalVolSurface") {
+        fetch_local_vol(params.symbol, spot);
+    } else if (chart == "ImpliedDividend") {
+        fetch_implied_dividend(params.symbol, spot);
+    } else if (chart == "LiquidityHeatmap") {
+        fetch_liquidity(params.symbol, spot);
+    } else if (chart == "CommodityForward" || chart == "ContangoBackwardation") {
+        QStringList roots = params.basket;
+        if (roots.isEmpty() && !params.symbol.isEmpty())
+            roots << params.symbol;
+        fetch_futures_term_structure(roots);
+    } else if (chart == "CommodityVol") {
+        fetch_commodity_vol(params.symbol);
+    } else if (chart == "CrackSpread") {
+        fetch_crack_spread();
+    } else if (chart == "Correlation" || chart == "PCA" || chart == "Drawdown" ||
+               chart == "BetaSurface" || chart == "VaR" || chart == "FactorExposure") {
+        QDate start = params.start_date.isValid() ? params.start_date
+                                                  : QDate::currentDate().addDays(-60);
+        QDate end = params.end_date.isValid() ? params.end_date : QDate::currentDate();
+        int days = std::max(1, (int)start.daysTo(end));
+        QStringList syms = params.basket.isEmpty() ? QStringList{params.symbol} : params.basket;
+        fetch_ohlcv(syms, days);
+    } else if (chart == "StressTestPnL") {
+        fetch_stress_test(params.basket.isEmpty() ? QStringList{params.symbol} : params.basket);
+    } else {
+        // Surfaces with no Databento source — emit failure so UI shows DEMO state
+        DatabentoSurfaceResult res;
+        res.success = false;
+        res.type = chart;
+        res.error = "No Databento source for this surface";
+        emit surface_ready(res);
+    }
 }
 
 surface::ContangoData DatabentoService::parse_contango(const QJsonObject& j) {

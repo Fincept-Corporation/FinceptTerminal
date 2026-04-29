@@ -19,6 +19,10 @@ class Surface3DWidget : public QWidget {
                      bool diverging = false, const std::vector<std::string>* col_labels = nullptr,
                      const std::vector<std::string>* row_labels = nullptr);
 
+    // When false the widget paints an overlay telling the user the active
+    // chart type cannot be shown in 3D and to switch to TABLE / LINE view.
+    void set_supported(bool supported);
+
     void clear();
 
   protected:
@@ -58,6 +62,8 @@ class Surface3DWidget : public QWidget {
     bool dragging_ = false;
     QPoint drag_start_;
     float drag_start_yaw_ = 0, drag_start_pitch_ = 0;
+
+    bool supported_ = true;
 };
 
 } // namespace fincept::surface

@@ -22,6 +22,7 @@
 #include "mcp/tools/PortfolioTools.h"
 #include "mcp/tools/ProfileTools.h"
 #include "mcp/tools/PythonTools.h"
+#include "mcp/tools/ReportBuilderTools.h"
 #include "mcp/tools/SettingsTools.h"
 #include "mcp/tools/SystemTools.h"
 #include "mcp/tools/WatchlistTools.h"
@@ -80,6 +81,9 @@ void initialize_all_tools() {
 
     // file manager tab
     provider.register_tools(tools::get_file_manager_tools());
+
+    // report builder tab — live LLM-driven report authoring
+    provider.register_tools(tools::get_report_builder_tools());
 
     // settings, python, system
     provider.register_tools(tools::get_settings_tools());

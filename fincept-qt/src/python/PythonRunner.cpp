@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonSetupManager.h"
+#include "storage/secure/SecureStorage.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -9,11 +10,64 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
+#include <QLatin1String>
 #include <QProcessEnvironment>
 #include <QStandardPaths>
+#include <QStringList>
 #include <QUuid>
 
 namespace fincept::python {
+
+// ── Credential catalogue ─────────────────────────────────────────────────────
+// Env-var names that SettingsScreen lets the user configure and store in
+// SecureStorage (see SettingsScreen.cpp CRED_KEYS). build_python_env() pulls
+// each from SecureStorage and injects it into the subprocess env so Python
+// scripts that read os.environ.get("FRED_API_KEY") work whether or not the
+// user has the variable in their shell. SecureStorage is the source of truth:
+// the injected value overrides any inherited shell value.
+//
+// Keep this list in sync with SettingsScreen.cpp CRED_KEYS. C++-only services
+// (Binance/Kraken/Polymarket) are listed too — injection is harmless when no
+// Python script reads them, and it future-proofs new scripts.
+static const QStringList kManagedCredentialKeys = {
+    "ALPHA_VANTAGE_API_KEY", "POLYGON_API_KEY",      "DATABENTO_API_KEY",
+    "FRED_API_KEY",          "NEWSAPI_KEY",          "BINANCE_API_KEY",
+    "BINANCE_SECRET_KEY",    "KRAKEN_API_KEY",       "KRAKEN_SECRET_KEY",
+    "IEX_CLOUD_TOKEN",       "FINNHUB_API_KEY",      "TIINGO_API_KEY",
+    "QUANDL_API_KEY",        "POLYMARKET_API_KEY",   "POLYMARKET_SECRET",
+    "POLYMARKET_PASSPHRASE", "POLYMARKET_WALLET",
+};
+
+// ── Sensitive shell-env stripping ────────────────────────────────────────────
+// After SecureStorage injection, drop any *other* credential-shaped variable
+// the user may have inherited from their shell. This prevents unrelated keys
+// (e.g. a developer's GITHUB_TOKEN, AWS_SECRET_ACCESS_KEY) from leaking into
+// Python subprocesses where they'd be visible via /proc/<pid>/environ on
+// Linux or process inspection tools elsewhere.
+//
+// Suffix list narrowed vs. PR #214: we omit bare _TOKEN because legitimate
+// non-credential vars use it (CSRF_TOKEN, GITHUB_TOKEN for tooling). The
+// kManagedCredentialKeys allow-list is checked first so any key the user
+// configured in Settings is preserved, regardless of suffix.
+static void strip_unmanaged_credentials(QProcessEnvironment& env,
+                                        const QStringList& managed) {
+    static const QStringList kSuffixes = {
+        "_API_KEY", "_SECRET", "_SECRET_KEY", "_ACCESS_TOKEN",
+        "_AUTH_TOKEN", "_PASSWORD", "_PRIVATE_KEY",
+    };
+    const QStringList all_keys = env.keys();
+    for (const QString& k : all_keys) {
+        if (managed.contains(k))
+            continue; // we just injected this one — keep it
+        const QString upper = k.toUpper();
+        for (const QString& sfx : kSuffixes) {
+            if (upper.endsWith(sfx)) {
+                env.remove(k);
+                break;
+            }
+        }
+    }
+}
 
 // Scripts that require NumPy 1.x environment
 static const QStringList kNumpy1Scripts = {
@@ -85,6 +139,29 @@ QProcessEnvironment PythonRunner::build_python_env() const {
     QString new_pypath =
         existing_pypath.isEmpty() ? scripts_dir_ : (scripts_dir_ + kPathSep + existing_pypath);
     env.insert("PYTHONPATH", new_pypath);
+
+    // Inject credentials stored via SettingsScreen → SecureStorage. SecureStorage
+    // is the source of truth: any value found there overrides whatever the user's
+    // shell happened to have. Without this, Python scripts like fred_data.py that
+    // read os.environ.get("FRED_API_KEY") only worked when the user happened to
+    // export the variable in their shell before launching the app.
+    int injected = 0;
+    for (const QString& key : kManagedCredentialKeys) {
+        auto r = SecureStorage::instance().retrieve(key);
+        if (r.is_ok() && !r.value().isEmpty()) {
+            env.insert(key, r.value());
+            ++injected;
+        }
+    }
+
+    // Strip any other credential-shaped variable the user inherited from their
+    // shell. The allow-list above is preserved; everything else matching the
+    // sensitive suffixes is removed before the subprocess sees it.
+    strip_unmanaged_credentials(env, kManagedCredentialKeys);
+
+    if (injected > 0) {
+        LOG_DEBUG("Python", QString("Injected %1 credentials from SecureStorage").arg(injected));
+    }
 
     return env;
 }
@@ -349,22 +426,19 @@ void PythonRunner::start_next() {
         // FINAGENT_DATA_DIR, base PYTHONPATH = scripts_dir_).
         QProcessEnvironment env = build_python_env();
 
-        // Script-specific: if the script is inside a sub-package (contains '/'),
-        // prepend the parent-of-pkg dir so relative imports resolve.
-        if (!is_code && req.script.contains('/')) {
-#ifdef _WIN32
-            const QChar kPathSep = ';';
-#else
-            const QChar kPathSep = ':';
-#endif
-            QString script_dir = QFileInfo(scripts_dir_ + "/" + req.script).dir().absolutePath();
-            QString parent_of_pkg = QFileInfo(script_dir).dir().absolutePath();
-            QString pypath = env.value("PYTHONPATH");
-            if (parent_of_pkg != scripts_dir_ && !pypath.contains(parent_of_pkg)) {
-                pypath = parent_of_pkg + kPathSep + pypath;
-                env.insert("PYTHONPATH", pypath);
-            }
-        }
+        // NOTE: do NOT prepend parent-of-pkg (e.g. <scripts>/mcp) to PYTHONPATH
+        // for sub-package scripts. scripts_dir_ is already on PYTHONPATH (see
+        // build_python_env line 141), so `python -m mcp.edgar.main` resolves
+        // both the package itself AND its relative imports correctly.
+        //
+        // Adding parent-of-pkg used to *shadow* third-party libraries: if a
+        // local sub-package shares a name with a venv package (e.g. our
+        // `<scripts>/mcp/edgar/` vs the `edgartools` PyPI library which
+        // exports module `edgar`), Python's `from edgar import Company` would
+        // resolve to the local empty package and fail with `ImportError:
+        // cannot import name 'Company' from 'edgar'`. Removing this block
+        // fixes the SEC EDGAR tools — and any other tool whose Python deps
+        // share a top-level name with a local package.
 
         proc->setProcessEnvironment(env);
         proc->setWorkingDirectory(scripts_dir_);

@@ -119,6 +119,13 @@ class DockScreenRouter : public QObject {
     // is supported). Safe to call once per materialised screen.
     QWidget* wrap_with_group_badge(const QString& id, QWidget* screen);
 
+    // Inserts a GroupBadge at index 0 of the CDockWidgetTab's layout (next to
+    // the title label / close button). Idempotent — safe to call multiple
+    // times for the same id. Called from create_dock_widget once the tab is
+    // built, and from materialize_screen if the linked-pointer was discovered
+    // after the tab existed.
+    void attach_group_badge_to_tab(const QString& id, QWidget* screen);
+
     // The IGroupLinked* for each screen id, so SymbolContext signals can be
     // routed back. Held as raw pointer since lifetime matches the wrapped
     // QWidget in screens_, which we already manage.

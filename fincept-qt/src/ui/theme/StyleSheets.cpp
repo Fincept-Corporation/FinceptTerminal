@@ -209,7 +209,13 @@ QString news_screen_styles() {
                "#newsTickerStrip { background: %1; border-top: 1px solid %3; }"
 
                /* ── Skeleton ── */
-               "#newsSkeletonOverlay { background: %1; }")
+               "#newsSkeletonOverlay { background: %1; }"
+
+               /* ── Empty state ── */
+               "#newsEmptyState { background: %1; }"
+               "#newsEmptyStateTitle { color: %12; font-size: 13px; font-weight: 700; "
+               "  letter-spacing: 0.5px; background: transparent; }"
+               "#newsEmptyStateHint { color: %6; font-size: 11px; background: transparent; }")
         .arg(colors::BG_BASE())        // %1
         .arg(colors::BG_SURFACE())     // %2
         .arg(colors::BORDER_DIM())     // %3

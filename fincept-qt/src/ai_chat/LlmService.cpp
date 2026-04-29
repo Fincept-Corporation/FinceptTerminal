@@ -6,6 +6,8 @@
 
 #include "ai_chat/LlmService.h"
 
+#include "ai_chat/ModelCatalog.h"
+
 #include "core/logging/Logger.h"
 #include "mcp/McpService.h"
 #include "storage/repositories/LlmConfigRepository.h"
@@ -156,7 +158,12 @@ void LlmService::ensure_config() const {
 
     provider_ = model_ = api_key_ = base_url_ = system_prompt_ = {};
     temperature_ = 0.7;
-    max_tokens_ = 4096;
+    // 0 = "no user override; use ModelCatalog::output_cap(provider, model)".
+    // The DB still holds whatever the user picked (including the legacy
+    // 2000-token default). A v15 migration resets historical 2000 values
+    // to 0; users who deliberately picked 2000 will get the model default
+    // — that's the right call given 2000 was never a meaningful user choice.
+    max_tokens_ = 0;
     tools_enabled_ = true;
 
     auto providers = LlmConfigRepository::instance().list_providers();
@@ -209,19 +216,54 @@ void LlmService::ensure_config() const {
     // should use the provided tools (navigation, market data, portfolio, etc.)
     // rather than declining requests it can actually fulfil via a tool call.
     if (system_prompt_.trimmed().isEmpty()) {
-        system_prompt_ = "You are Fincept AI, the intelligent assistant embedded inside the "
-                         "Fincept Terminal — a professional desktop financial intelligence application. "
-                         "You have access to a set of tools that let you interact with the terminal "
-                         "directly: navigate to any screen, fetch live market data, manage watchlists, "
-                         "query portfolios, execute trades on paper, run Python analytics, and more. "
-                         "ALWAYS use the available tools when the user asks you to perform an action "
-                         "that a tool can fulfil (e.g. 'go to news', 'show me BTC price', "
-                         "'open settings'). Never tell the user you cannot navigate or open screens — "
-                         "use the navigate_to_tab tool instead. "
-                         "Be concise, accurate, and finance-focused in your responses.";
+        system_prompt_ =
+            "You are Fincept AI, the intelligent assistant embedded inside the Fincept Terminal — "
+            "a professional desktop financial intelligence application. You have access to tools that "
+            "let you interact with the terminal directly: navigate screens, fetch live market data, "
+            "manage watchlists, query portfolios, paper-trade, run Python analytics, search SEC Edgar "
+            "filings, fetch news, and BUILD REPORTS LIVE in the Report Builder.\n"
+            "\n"
+            "Behaviour rules:\n"
+            "• ALWAYS use a tool when one can fulfil the request — never decline an action that a tool "
+            "  exists for. Never tell the user you cannot navigate or open screens.\n"
+            "• Building a report (e.g. 'create an equity research report on TSLA'): your job is to "
+            "  WRITE THE REPORT INTO THE REPORT BUILDER USING TOOLS. Do not narrate the report into "
+            "  the chat. The flow is: (1) optionally call report_apply_template with the closest match "
+            "  for context, (2) call report_get_state to learn the current component ids, (3) gather "
+            "  data with tools like get_quote, edgar_get_financials, edgar_10k_sections, "
+            "  edgar_calc_multiples, get_news, search_news, (4) populate the report by calling "
+            "  report_update_component or report_add_component for each section. Use stable component "
+            "  ids returned by report_get_state / report_add_component — never indices.\n"
+            "• Report formatting (CRITICAL for a polished result):\n"
+            "  - text/list/quote/callout content SUPPORTS MARKDOWN. Use **bold** to highlight key "
+            "    figures (e.g. 'Revenue grew **22% YoY** to **$96.8B**'). Use *italic* sparingly. "
+            "    Do not paste raw asterisks expecting them to render — they do, but only inside the "
+            "    content of those component types.\n"
+            "  - For tables, ALWAYS pass real data via config={'csv':'Header1,Header2|Cell1,Cell2|...'}. "
+            "    Pipe `|` separates rows, comma `,` separates cells. First row is auto-bolded. Never "
+            "    leave a table empty — it renders as 'Header 1, Header 2, ...' placeholder text.\n"
+            "  - For charts, pass config={'chart_type':'bar'|'line'|'pie','title':...,'data':'1,2,3',"
+            "    'labels':'Q1,Q2,Q3'}.\n"
+            "  - Set proper metadata FIRST via report_set_metadata: title (e.g. 'Tesla Equity Research "
+            "    Report'), author (e.g. 'Fincept Research'), company, and date. Don't leave 'Analyst' "
+            "    or 'Untitled Report' defaults.\n"
+            "  - Avoid one-line ramblings. Each text component should be a tight paragraph.\n"
+            "• Python scripts: ONLY pass script names returned by list_python_scripts. Never invent or "
+            "  guess script names. If list_python_scripts returns nothing useful, fall back to other "
+            "  tools (get_quote, edgar_*, get_candles, etc.) — those are the canonical data sources.\n"
+            "• When you have completed the user's request, reply with a concise summary in chat. "
+            "  Do not paste the full report content into chat — the report lives in the Report "
+            "  Builder canvas and the user is watching it fill in.\n"
+            "Be concise, accurate, and finance-focused.";
     }
 
     config_loaded_ = true;
+    const int resolved = resolved_max_tokens();
+    const int catalog_cap = ModelCatalog::output_cap(provider_, model_);
+    LOG_INFO(TAG, QString("LLM config loaded: provider=%1 model=%2 tools_enabled=%3 "
+                          "max_tokens(user=%4 catalog=%5 resolved=%6)")
+                      .arg(provider_, model_, tools_enabled_ ? "TRUE" : "FALSE")
+                      .arg(max_tokens_).arg(catalog_cap).arg(resolved));
 }
 
 // ============================================================================
@@ -304,6 +346,26 @@ QJsonObject LlmService::profile_to_json(const ResolvedLlmProfile& p) {
 // ============================================================================
 // Endpoint + headers
 // ============================================================================
+
+int LlmService::resolved_max_tokens() const {
+    // Called with mutex_ held by the caller (build_*_request paths).
+    constexpr int kFallback = 8192;
+    const int catalog_cap = ModelCatalog::output_cap(provider_, model_);
+
+    // User-set value (loaded from llm_global_settings or per-profile).
+    // Treat <=0 as "unset — use model default".
+    if (max_tokens_ > 0) {
+        // User asked for a specific number — honour it but clamp to the
+        // model's published cap so we don't get a 400 from the API.
+        if (catalog_cap > 0 && max_tokens_ > catalog_cap)
+            return catalog_cap;
+        return max_tokens_;
+    }
+
+    if (catalog_cap > 0)
+        return catalog_cap;
+    return kFallback;
+}
 
 QString LlmService::get_endpoint_url() const {
     // Called with mutex_ held
@@ -413,10 +475,11 @@ QJsonObject LlmService::build_openai_request(const QString& user_message,
     // OpenAI deprecated max_tokens; gpt-5 / o-series require max_completion_tokens.
     // xAI also prefers max_completion_tokens. Other OpenAI-compatible providers
     // still expect max_tokens.
+    const int mx = resolved_max_tokens();
     if (provider_ == "openai" || provider_ == "xai")
-        req["max_completion_tokens"] = max_tokens_;
+        req["max_completion_tokens"] = mx;
     else
-        req["max_tokens"] = max_tokens_;
+        req["max_tokens"] = mx;
     if (stream) {
         req["stream"] = true;
         // Streamed OpenAI / xAI responses omit usage unless we opt in
@@ -424,11 +487,29 @@ QJsonObject LlmService::build_openai_request(const QString& user_message,
             req["stream_options"] = QJsonObject{{"include_usage", true}};
     }
 
-    // deepseek-reasoner rejects tools entirely.
-    if (!stream && with_tools && tools_enabled_ && !is_ds_reasoner && !groq_no_tools) {
+    // Send tools on BOTH streaming and non-streaming requests. The streaming
+    // path detects a tool-call response (finish_reason="tool_calls" or
+    // delta.tool_calls) and falls back to non-streaming do_request, which
+    // executes the tools and follows up. Without sending tools on stream,
+    // the model has no idea they exist and answers from training data —
+    // which silently breaks live tool calling for OpenAI/Kimi/Groq/etc.
+    // deepseek-reasoner rejects tools entirely; some Groq models also.
+    if (with_tools && tools_enabled_ && !is_ds_reasoner && !groq_no_tools) {
         QJsonArray tools = mcp::McpService::instance().format_tools_for_openai();
         if (!tools.isEmpty())
             req["tools"] = tools;
+        LOG_INFO(TAG, QString("OpenAI request: stream=%1 provider=%2 tools=%3 (count=%4)")
+                          .arg(stream ? "true" : "false", provider_,
+                               tools.isEmpty() ? "none" : "attached")
+                          .arg(tools.size()));
+    } else {
+        LOG_WARN(TAG, QString("OpenAI request: stream=%1 provider=%2 NO TOOLS — "
+                              "with_tools=%3 tools_enabled_=%4 ds_reasoner=%5 groq_no_tools=%6")
+                          .arg(stream ? "true" : "false", provider_)
+                          .arg(with_tools ? "true" : "false")
+                          .arg(tools_enabled_ ? "true" : "false")
+                          .arg(is_ds_reasoner ? "true" : "false")
+                          .arg(groq_no_tools ? "true" : "false"));
     }
     return req;
 }
@@ -445,7 +526,7 @@ QJsonObject LlmService::build_anthropic_request(const QString& user_message,
     QJsonObject req;
     req["model"] = model_;
     req["messages"] = messages;
-    req["max_tokens"] = max_tokens_;
+    req["max_tokens"] = resolved_max_tokens();
     // Temperature intentionally omitted — Anthropic defaults to 1.0.
     if (!system_prompt_.isEmpty())
         req["system"] = system_prompt_;
@@ -453,8 +534,11 @@ QJsonObject LlmService::build_anthropic_request(const QString& user_message,
         req["stream"] = true;
 
     // Anthropic tool format: array of {name, description, input_schema}
-    // (no "type":"function" wrapper like OpenAI)
-    if (!stream && tools_enabled_) {
+    // (no "type":"function" wrapper like OpenAI). Tools are sent for both
+    // streaming and non-streaming requests so the model can request a
+    // tool_use even mid-stream — the streaming code path detects this and
+    // falls back to do_request to execute and follow up.
+    if (tools_enabled_) {
         QJsonArray ant_tools;
         auto all_tools = mcp::McpService::instance().get_all_tools();
         for (const auto& tool : all_tools) {
@@ -486,7 +570,7 @@ QJsonObject LlmService::build_gemini_request(const QString& user_message,
 
     QJsonObject gen_cfg;
     // Temperature intentionally omitted — Gemini defaults to 1.0.
-    gen_cfg["maxOutputTokens"] = max_tokens_;
+    gen_cfg["maxOutputTokens"] = resolved_max_tokens();
 
     QJsonObject req;
     req["contents"] = contents;
@@ -694,7 +778,7 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
 
     QJsonObject submit_body;
     submit_body["prompt"] = prompt;
-    submit_body["max_tokens"] = max_tokens_;
+    submit_body["max_tokens"] = resolved_max_tokens();
     // Temperature intentionally omitted — Fincept backend uses its own default.
 
     auto hdr = get_headers();
@@ -899,7 +983,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
             QJsonObject fu;
             fu["model"] = model_;
             fu["messages"] = loop_msgs;
-            fu["max_tokens"] = max_tokens_;
+            fu["max_tokens"] = resolved_max_tokens();
             // Temperature intentionally omitted — Anthropic default.
             if (!system_prompt_.isEmpty())
                 fu["system"] = system_prompt_;
@@ -991,7 +1075,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     fu_body["contents"] = fu_contents;
                     QJsonObject gen_cfg;
                     // Temperature intentionally omitted — Gemini default.
-                    gen_cfg["maxOutputTokens"] = max_tokens_;
+                    gen_cfg["maxOutputTokens"] = resolved_max_tokens();
                     fu_body["generationConfig"] = gen_cfg;
                     if (!system_prompt_.isEmpty())
                         fu_body["systemInstruction"] =
@@ -1073,8 +1157,12 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                         QJsonDocument::fromJson(tc["function"].toObject()["arguments"].toString("{}").toUtf8())
                             .object();
 
-                    LOG_INFO(TAG, "Executing tool: " + fn_name);
+                    LOG_INFO(TAG, QString("Executing tool: %1 args=%2").arg(fn_name,
+                                  QString::fromUtf8(QJsonDocument(fn_args).toJson(QJsonDocument::Compact)).left(200)));
                     auto tr = mcp::McpService::instance().execute_openai_function(fn_name, fn_args);
+                    LOG_INFO(TAG, QString("Tool %1 -> %2 (msg=%3 err=%4)")
+                                      .arg(fn_name, tr.success ? "OK" : "FAIL",
+                                           tr.message.left(120), tr.error.left(120)));
                     loop_msgs.append(QJsonObject{
                         {"role", "tool"},
                         {"tool_call_id", call_id},
@@ -1121,14 +1209,18 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
 LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& url,
                                      const QMap<QString, QString>& headers) {
     LlmResponse resp;
-    static constexpr int MAX_ROUNDS = 5;
+    // 15 rounds covers complex agentic workflows (multi-step research →
+    // template → fill → polish). Each round can contain many parallel
+    // tool calls so this isn't 15 tool calls — it's 15 reasoning steps.
+    static constexpr int MAX_ROUNDS = 15;
+    LOG_INFO(TAG, QString("TOOL LOOP: starting (max %1 rounds, model=%2)").arg(MAX_ROUNDS).arg(model_));
 
     for (int round = 0; round < MAX_ROUNDS; ++round) {
         QJsonObject fu;
         fu["model"] = model_;
         fu["messages"] = loop_messages;
         // Temperature intentionally omitted — provider default.
-        fu["max_tokens"] = max_tokens_;
+        fu["max_tokens"] = resolved_max_tokens();
 
         QJsonArray tools = mcp::McpService::instance().format_tools_for_openai();
         if (!tools.isEmpty())
@@ -1166,7 +1258,12 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                 QJsonObject fa =
                     QJsonDocument::fromJson(tc["function"].toObject()["arguments"].toString("{}").toUtf8()).object();
 
+                LOG_INFO(TAG, QString("TOOL LOOP r%1: executing %2 args=%3").arg(round).arg(fname,
+                              QString::fromUtf8(QJsonDocument(fa).toJson(QJsonDocument::Compact)).left(200)));
                 auto tr = mcp::McpService::instance().execute_openai_function(fname, fa);
+                LOG_INFO(TAG, QString("TOOL LOOP r%1: %2 -> %3 (msg=%4 err=%5)")
+                                  .arg(round).arg(fname,
+                                       tr.success ? "OK" : "FAIL", tr.message.left(120), tr.error.left(120)));
                 loop_messages.append(QJsonObject{
                     {"role", "tool"},
                     {"tool_call_id", cid},
@@ -1179,9 +1276,48 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         resp.content = extract_openai_message_text(msg);
         parse_usage(resp, rj, provider_);
         resp.success = !resp.content.isEmpty();
+        LOG_INFO(TAG, QString("TOOL LOOP: finished after %1 round(s) — %2 chars of text")
+                          .arg(round + 1).arg(resp.content.length()));
         return resp;
     }
 
+    // Max rounds exhausted. The user would see an empty bubble. Force one
+    // final non-tool turn so the model summarizes whatever it accomplished
+    // so the chat doesn't go silent.
+    LOG_WARN(TAG, "TOOL LOOP: exceeded max rounds — forcing summary turn (no tools)");
+    {
+        // Append a synthetic system nudge instructing the model to wrap up.
+        loop_messages.append(QJsonObject{
+            {"role", "system"},
+            {"content", "You have used your tool-call budget. Reply now with a final answer to the user "
+                        "summarizing what you accomplished and what (if anything) is incomplete. Do not "
+                        "request any more tools."}});
+
+        QJsonObject fu;
+        fu["model"] = model_;
+        fu["messages"] = loop_messages;
+        fu["max_tokens"] = resolved_max_tokens();
+        // Deliberately omit the tools field so the model is forced to produce text.
+
+        auto http = blocking_post(url, fu, headers);
+        if (http.success) {
+            auto doc = QJsonDocument::fromJson(http.body);
+            if (!doc.isNull()) {
+                QJsonObject rj = doc.object();
+                QJsonArray choices = rj["choices"].toArray();
+                if (!choices.isEmpty()) {
+                    QJsonObject msg = choices[0].toObject()["message"].toObject();
+                    resp.content = extract_openai_message_text(msg);
+                    parse_usage(resp, rj, provider_);
+                    resp.success = !resp.content.isEmpty();
+                    LOG_INFO(TAG, QString("TOOL LOOP: summary fallback produced %1 chars")
+                                      .arg(resp.content.length()));
+                    if (resp.success)
+                        return resp;
+                }
+            }
+        }
+    }
     resp.error = "Tool call loop exceeded maximum rounds";
     return resp;
 }
@@ -1413,7 +1549,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         msgs.append(QJsonObject{{"role", "user"}, {"content", follow_prompt}});
         follow_body["model"] = model_;
         follow_body["messages"] = msgs;
-        follow_body["max_tokens"] = max_tokens_;
+        follow_body["max_tokens"] = resolved_max_tokens();
         // Temperature intentionally omitted — Anthropic default.
         if (!system_prompt_.isEmpty())
             follow_body["system"] = system_prompt_;
@@ -1435,7 +1571,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         follow_body["model"] = model_;
         follow_body["messages"] = msgs;
         // Temperature intentionally omitted — provider default.
-        follow_body["max_tokens"] = max_tokens_;
+        follow_body["max_tokens"] = resolved_max_tokens();
     }
 
     // No tools in follow-up to prevent infinite loop
@@ -1587,12 +1723,14 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                         const QString type = obj["type"].toString();
                         if (type == "content_block_start" &&
                             obj["content_block"].toObject()["type"].toString() == "tool_use") {
+                            LOG_INFO(TAG, "STREAM: Anthropic tool_use content_block_start detected");
                             tool_call_detected = true;
                             loop.quit();
                             return;
                         }
                         if (type == "message_delta" &&
                             obj["delta"].toObject()["stop_reason"].toString() == "tool_use") {
+                            LOG_INFO(TAG, "STREAM: Anthropic stop_reason=tool_use detected");
                             tool_call_detected = true;
                             loop.quit();
                             return;
@@ -1607,12 +1745,17 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                             // "stop" with accumulated tool XML → also check
                         }
                         if (finish == "tool_calls") {
+                            LOG_INFO(TAG,
+                                     QString("STREAM: OpenAI-compat finish_reason=tool_calls detected (%1)")
+                                         .arg(provider_));
                             tool_call_detected = true;
                             loop.quit();
                             return;
                         }
                         QJsonObject delta = choices[0].toObject()["delta"].toObject();
                         if (!delta["tool_calls"].isUndefined() && !delta["tool_calls"].isNull()) {
+                            LOG_INFO(TAG, QString("STREAM: OpenAI-compat delta.tool_calls detected (%1)")
+                                              .arg(provider_));
                             tool_call_detected = true;
                             loop.quit();
                             return;
@@ -1622,6 +1765,7 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                     // Fincept may also return tool_calls at top level
                     if (!obj["tool_calls"].isUndefined() && !obj["tool_calls"].isNull() &&
                         obj["tool_calls"].toArray().size() > 0) {
+                        LOG_INFO(TAG, "STREAM: top-level tool_calls detected (fincept)");
                         tool_call_detected = true;
                         loop.quit();
                         return;

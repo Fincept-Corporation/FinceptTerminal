@@ -5,12 +5,11 @@
 #include "mcp/tools/EdgarTools.h"
 
 #include "core/logging/Logger.h"
+#include "mcp/tools/ThreadHelper.h"
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 
-#include <QEventLoop>
 #include <QJsonDocument>
-#include <QTimer>
 
 namespace fincept::mcp::tools {
 
@@ -33,44 +32,33 @@ static ToolResult run_edgar(const QStringList& args) {
 
     QJsonObject result;
     QString error;
-    bool done = false;
 
-    QEventLoop loop;
-    QTimer timeout;
-    timeout.setSingleShot(true);
-    timeout.setInterval(kTimeoutMs);
-    QObject::connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
-
-    fincept::python::PythonRunner::instance().run(SCRIPT, args, [&](const fincept::python::PythonResult& r) {
-        if (!r.success) {
-            error = r.error.isEmpty() ? r.output : r.error;
-        } else {
-            QString text = fincept::python::extract_json(r.output);
-            QJsonParseError pe;
-            auto doc = QJsonDocument::fromJson(text.toUtf8(), &pe);
-            if (pe.error != QJsonParseError::NoError) {
-                error = QString("JSON parse error: %1").arg(pe.errorString());
+    // Marshal the PythonRunner::run() call onto the runner's thread (main).
+    // The previous worker-thread QEventLoop pattern caused QObject parentage
+    // violations since QProcess signals fire on the main thread and never
+    // wake the worker's loop. See mcp/tools/ThreadHelper.h.
+    auto* runner = &fincept::python::PythonRunner::instance();
+    detail::run_async_wait(runner, [&](auto signal_done) {
+        runner->run(SCRIPT, args, [&, signal_done](const fincept::python::PythonResult& r) {
+            if (!r.success) {
+                error = r.error.isEmpty() ? r.output : r.error;
             } else {
-                QJsonObject obj = doc.object();
-                if (obj.value("success").toBool(true) == false)
-                    error = obj.value("error").toString("unknown error");
-                else
-                    result = obj;
+                QString text = fincept::python::extract_json(r.output);
+                QJsonParseError pe;
+                auto doc = QJsonDocument::fromJson(text.toUtf8(), &pe);
+                if (pe.error != QJsonParseError::NoError) {
+                    error = QString("JSON parse error: %1").arg(pe.errorString());
+                } else {
+                    QJsonObject obj = doc.object();
+                    if (obj.value("success").toBool(true) == false)
+                        error = obj.value("error").toString("unknown error");
+                    else
+                        result = obj;
+                }
             }
-        }
-        done = true;
-        loop.quit();
+            signal_done();
+        });
     });
-
-    if (!done) {
-        timeout.start();
-        loop.exec();
-    }
-
-    if (!done) {
-        LOG_WARN(TAG, QString("edgar timeout [%1]").arg(args.value(0)));
-        return ToolResult::fail("Edgar request timed out");
-    }
 
     if (!error.isEmpty()) {
         LOG_WARN(TAG, QString("edgar error [%1]: %2").arg(args.value(0), error));

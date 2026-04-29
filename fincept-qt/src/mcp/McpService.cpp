@@ -159,10 +159,15 @@ ToolResult McpService::execute_tool(const QString& server_id, const QString& too
 ToolResult McpService::execute_openai_function(const QString& function_name, const QJsonObject& args) {
     auto [server_id, tool_name] = McpProvider::parse_openai_function_name(function_name);
 
-    if (server_id.isEmpty() || tool_name.isEmpty())
+    if (server_id.isEmpty() || tool_name.isEmpty()) {
+        LOG_WARN(TAG, "Invalid function name format: " + function_name);
         return ToolResult::fail("Invalid function name format: " + function_name);
+    }
 
-    return execute_tool(server_id, tool_name, args);
+    LOG_INFO(TAG, QString("Dispatch: %1 -> server=%2 tool=%3").arg(function_name, server_id, tool_name));
+    auto result = execute_tool(server_id, tool_name, args);
+    LOG_INFO(TAG, QString("Dispatch result: %1 success=%2").arg(tool_name, result.success ? "true" : "false"));
+    return result;
 }
 
 // ============================================================================

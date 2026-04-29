@@ -44,8 +44,31 @@ NewsFeedPanel::NewsFeedPanel(QWidget* parent) : QWidget(parent) {
     // Skeleton loading widget
     build_skeleton();
 
+    // Empty-state widget — shown when fetch yields zero articles
+    empty_state_ = new QWidget(stack);
+    empty_state_->setObjectName("newsEmptyState");
+    {
+        auto* layout = new QVBoxLayout(empty_state_);
+        layout->setContentsMargins(24, 24, 24, 24);
+        layout->setSpacing(8);
+        layout->addStretch();
+        auto* title = new QLabel(QStringLiteral("No articles available"), empty_state_);
+        title->setObjectName("newsEmptyStateTitle");
+        title->setAlignment(Qt::AlignCenter);
+        auto* hint = new QLabel(
+            QStringLiteral("Check your network connection and click Refresh to retry."),
+            empty_state_);
+        hint->setObjectName("newsEmptyStateHint");
+        hint->setAlignment(Qt::AlignCenter);
+        hint->setWordWrap(true);
+        layout->addWidget(title);
+        layout->addWidget(hint);
+        layout->addStretch();
+    }
+
     stack->addWidget(list_view_);        // index 0 = feed
     stack->addWidget(skeleton_overlay_); // index 1 = skeleton
+    stack->addWidget(empty_state_);      // index 2 = empty state
     stack->setCurrentIndex(0);
     stack_ = stack;
 
@@ -206,6 +229,16 @@ void NewsFeedPanel::set_loading(bool loading) {
         skeleton_anim_timer_->start();
     } else {
         remove_skeleton();
+    }
+}
+
+void NewsFeedPanel::set_empty_state(bool empty) {
+    if (is_loading_)
+        return; // skeleton wins until loading completes
+    if (empty) {
+        stack_->setCurrentWidget(empty_state_);
+    } else if (stack_->currentWidget() == empty_state_) {
+        stack_->setCurrentWidget(list_view_);
     }
 }
 

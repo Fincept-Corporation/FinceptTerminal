@@ -136,6 +136,14 @@ class LlmService : public QObject {
     QString get_endpoint_url() const;
     QMap<QString, QString> get_headers() const;
 
+    /// Resolve the max output tokens for a request. Order:
+    ///   1. user-set max_tokens (max_tokens_ > 0) → use it, but clamp to
+    ///      the model's published cap so we don't get a 400 from the API.
+    ///   2. model's published cap from ModelCatalog.
+    ///   3. conservative fallback (8192).
+    /// Called with mutex_ held.
+    int resolved_max_tokens() const;
+
     // Synchronous HTTP helpers (use QNetworkAccessManager + QEventLoop)
     // Must be called from a background thread.
     LlmResponse do_request(const QString& user_message, const std::vector<ConversationMessage>& history);

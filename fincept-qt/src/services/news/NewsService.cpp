@@ -26,9 +26,16 @@
 
 namespace fincept::services {
 
-static constexpr int kFeedTransferTimeoutMs = 5000;   // 5s per RSS feed request
+static constexpr int kFeedTransferTimeoutMs = 8000;   // 8s per RSS feed request
 static constexpr int kWsReconnectDelayMs    = 10000;  // 10s before WebSocket reconnect
 static constexpr int kSummaryMaxChars       = 300;    // max chars for article summary
+
+// Use a real browser User-Agent — Bloomberg, WSJ, FT and other major
+// publishers reject "FinceptTerminal/4.0" as scraper traffic. Browser UA
+// gets us 200s on the same endpoints.
+static constexpr const char* kBrowserUserAgent =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 // ── Singleton ───────────────────────────────────────────────────────────────
 
@@ -100,8 +107,10 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
 
     for (const auto& feed : feeds) {
         QNetworkRequest req(QUrl(feed.url));
-        req.setHeader(QNetworkRequest::UserAgentHeader, "FinceptTerminal/4.0");
+        req.setHeader(QNetworkRequest::UserAgentHeader, kBrowserUserAgent);
         req.setRawHeader("Accept", "application/rss+xml, application/xml, text/xml, */*");
+        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                         QNetworkRequest::NoLessSafeRedirectPolicy);
         req.setTransferTimeout(kFeedTransferTimeoutMs);
 
         auto* reply = nam_->get(req);
@@ -109,11 +118,31 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
             reply->deleteLater();
 
             QVector<NewsArticle> articles;
+            const int http_code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             if (reply->error() == QNetworkReply::NoError) {
                 QByteArray data = reply->readAll();
-                if (data.trimmed().startsWith('<')) {
+                const QByteArray trimmed = data.trimmed();
+                // Cheap shape check: real RSS/Atom starts with <?xml or <rss or
+                // <feed. HTML error pages (Akamai access-denied, Cloudflare
+                // captcha) start with <html / <!doctype and would pass through
+                // the parser silently producing 0 articles — flag them clearly.
+                const bool looks_like_html =
+                    trimmed.left(20).toLower().contains("<html") ||
+                    trimmed.left(20).toLower().contains("<!doctype html");
+                if (looks_like_html) {
+                    LOG_WARN("NewsService",
+                             QString("Feed %1 (%2) returned HTML (likely access-denied), %3 bytes")
+                                 .arg(feed.id, feed.source).arg(data.size()));
+                } else if (trimmed.startsWith('<')) {
                     articles = parse_rss_xml(data, feed);
                 }
+                if (articles.isEmpty() && !looks_like_html) {
+                    LOG_WARN("NewsService", QString("Feed %1 (%2) returned %3 bytes but no parsed articles")
+                                                .arg(feed.id, feed.source).arg(data.size()));
+                }
+            } else {
+                LOG_WARN("NewsService", QString("Feed %1 (%2) failed: HTTP %3, err=%4")
+                                            .arg(feed.id, feed.source).arg(http_code).arg(reply->errorString()));
             }
 
             {
@@ -230,8 +259,10 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
 
     for (const auto& feed : feeds) {
         QNetworkRequest req(QUrl(feed.url));
-        req.setHeader(QNetworkRequest::UserAgentHeader, "FinceptTerminal/4.0");
+        req.setHeader(QNetworkRequest::UserAgentHeader, kBrowserUserAgent);
         req.setRawHeader("Accept", "application/rss+xml, application/xml, text/xml, */*");
+        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                         QNetworkRequest::NoLessSafeRedirectPolicy);
         req.setTransferTimeout(kFeedTransferTimeoutMs);
 
         auto* reply = nam_->get(req);
@@ -239,10 +270,27 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
             reply->deleteLater();
 
             QVector<NewsArticle> batch;
+            const int http_code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             if (reply->error() == QNetworkReply::NoError) {
                 QByteArray data = reply->readAll();
-                if (data.trimmed().startsWith('<'))
+                const QByteArray trimmed = data.trimmed();
+                const bool looks_like_html =
+                    trimmed.left(20).toLower().contains("<html") ||
+                    trimmed.left(20).toLower().contains("<!doctype html");
+                if (looks_like_html) {
+                    LOG_WARN("NewsService",
+                             QString("Feed %1 (%2) returned HTML (likely access-denied), %3 bytes")
+                                 .arg(feed.id, feed.source).arg(data.size()));
+                } else if (trimmed.startsWith('<')) {
                     batch = parse_rss_xml(data, feed);
+                }
+                if (batch.isEmpty() && !looks_like_html) {
+                    LOG_WARN("NewsService", QString("Feed %1 (%2) returned %3 bytes but no parsed articles")
+                                                .arg(feed.id, feed.source).arg(data.size()));
+                }
+            } else {
+                LOG_WARN("NewsService", QString("Feed %1 (%2) failed: HTTP %3, err=%4")
+                                            .arg(feed.id, feed.source).arg(http_code).arg(reply->errorString()));
             }
 
             QVector<NewsArticle> snapshot;
@@ -942,19 +990,17 @@ QString NewsService::source_flag_label(SourceFlag flag) {
 QVector<RSSFeed> NewsService::default_feeds() {
     return {
         // Tier 1 — Wire Services & Regulators
-        {"reuters-world", "Reuters World", "https://feeds.reuters.com/Reuters/worldNews", "GEOPOLITICS", "GLOBAL",
-         "REUTERS", 1},
-        {"reuters-biz", "Reuters Business", "https://feeds.reuters.com/reuters/businessNews", "MARKETS", "GLOBAL",
-         "REUTERS", 1},
-        {"reuters-mkts", "Reuters Markets", "https://feeds.reuters.com/reuters/financialsNews", "MARKETS", "GLOBAL",
-         "REUTERS", 1},
+        // Reuters discontinued public RSS in 2020 (feeds.reuters.com is dead).
+        // We keep tier-1 coverage via AP, BBC, FT, Bloomberg, WSJ instead.
         {"ap-top", "AP Top News", "https://rsshub.app/apnews/topics/ap-top-news", "GEOPOLITICS", "GLOBAL", "AP", 1},
         {"sec-press", "SEC Press Releases", "https://www.sec.gov/news/pressreleases.rss", "REGULATORY", "US", "SEC", 1},
         {"fed-press", "Federal Reserve", "https://www.federalreserve.gov/feeds/press_all.xml", "REGULATORY", "US",
          "FEDERAL RESERVE", 1},
         {"un-news", "UN News", "https://news.un.org/feed/subscribe/en/news/all/rss.xml", "GEOPOLITICS", "GLOBAL", "UN",
          1},
-        {"imf-news", "IMF News", "https://www.imf.org/en/News/rss?language=eng", "ECONOMIC", "GLOBAL", "IMF", 1},
+        // (IMF News removed — endpoint serves an Akamai access-denied HTML page,
+        //  not RSS. Fincept's macro coverage is already provided by Bloomberg /
+        //  WSJ / Economist / IMF press is reachable via UN feeds.)
 
         // Tier 2 — Major Financial Media
         {"bloomberg-mkts", "Bloomberg Markets", "https://feeds.bloomberg.com/markets/news.rss", "MARKETS", "GLOBAL",
@@ -984,11 +1030,11 @@ QVector<RSSFeed> NewsService::default_feeds() {
         // Tier 2 — Geopolitics & Defense
         {"foreignpolicy", "Foreign Policy", "https://foreignpolicy.com/feed/", "GEOPOLITICS", "GLOBAL",
          "FOREIGN POLICY", 2},
-        {"defensenews", "Defense News", "https://www.defensenews.com/rss/", "GEOPOLITICS", "GLOBAL", "DEFENSE NEWS", 2},
+        // (defensenews.com/rss/ returns 404 — endpoint discontinued.)
 
         // Tier 2 — Energy & Commodities
         {"oilprice", "OilPrice.com", "https://oilprice.com/rss/main", "ENERGY", "GLOBAL", "OILPRICE", 2},
-        {"kitco", "Kitco Gold", "https://www.kitco.com/rss/news/", "MARKETS", "GLOBAL", "KITCO", 2},
+        // (Kitco RSS endpoint removed — kitco.com no longer publishes RSS.)
 
         // Tier 2 — Tech
         {"techcrunch", "TechCrunch", "https://techcrunch.com/feed/", "TECH", "GLOBAL", "TECHCRUNCH", 2},
@@ -1010,8 +1056,7 @@ QVector<RSSFeed> NewsService::default_feeds() {
         // ── Additional feeds (29→80+) ──────────────────────────────────────
 
         // Tier 1 — Wire (additional)
-        {"reuters-tech", "Reuters Technology", "https://feeds.reuters.com/reuters/technologyNews", "TECH", "GLOBAL",
-         "REUTERS", 1},
+        // (Reuters tech RSS removed — feed discontinued.)
 
         // Tier 2 — Major Financial (additional)
         {"cnbc-world", "CNBC World",
@@ -1063,7 +1108,7 @@ QVector<RSSFeed> NewsService::default_feeds() {
         {"wolfstreet", "Wolf Street", "https://wolfstreet.com/feed/", "ECONOMIC", "US", "WOLF STREET", 3},
 
         // Tier 3 — Defense & Security
-        {"defense-one", "Defense One", "https://www.defenseone.com/rss/", "DEFENSE", "US", "DEFENSE ONE", 3},
+        // (defenseone.com/rss/ returns 404 — endpoint discontinued.)
         {"bellingcat", "Bellingcat", "https://www.bellingcat.com/feed/", "GEOPOLITICS", "GLOBAL", "BELLINGCAT", 3},
 
         // Tier 3 — Tech (additional)

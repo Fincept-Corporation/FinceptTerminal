@@ -527,6 +527,12 @@ void NewsScreen::refresh_data(bool force) {
                             return;
                         self->all_articles_ = std::move(articles);
                         self->command_bar_->set_loading_progress(done, total);
+                        // Hide skeleton as soon as we have any articles to render —
+                        // otherwise the overlay traps progressive partials and the
+                        // user sees a blank list until the slowest feed times out.
+                        if (!self->all_articles_.isEmpty()) {
+                            self->feed_panel_->set_loading(false);
+                        }
                         self->apply_filters_async();
                         if (done == total)
                             QObject::disconnect(*conn);
@@ -540,9 +546,13 @@ void NewsScreen::refresh_data(bool force) {
         self->feed_panel_->set_loading(false);
         if (!ok) {
             LOG_ERROR("NewsScreen", "Failed to fetch news");
+            self->feed_panel_->set_empty_state(true);
             return;
         }
         self->all_articles_ = std::move(articles);
+        // Show empty state only when literally no articles came back across
+        // every feed — otherwise apply_filters_async will populate the list.
+        self->feed_panel_->set_empty_state(self->all_articles_.isEmpty());
         self->apply_filters_async();
     });
 }
@@ -611,19 +621,32 @@ void NewsScreen::apply_filters_async() {
         QMap<QString, int> category_counts;
         int bullish = 0, bearish = 0, neutral = 0;
 
+        // Per-stage rejection counters — surface the cause when we silently
+        // filter the entire input down to zero (the single highest-impact
+        // failure mode in this pipeline).
+        int rejected_time = 0, rejected_variant = 0, rejected_category = 0, rejected_search = 0;
+
         for (const auto& a : articles_copy) {
-            if (cutoff > 0 && a.sort_ts < cutoff)
+            if (cutoff > 0 && a.sort_ts < cutoff) {
+                ++rejected_time;
                 continue;
+            }
 
             // Variant filter
             if (variant == "FINANCE" && a.category != "MARKETS" && a.category != "EARNINGS" &&
-                a.category != "ECONOMIC" && a.category != "REGULATORY")
+                a.category != "ECONOMIC" && a.category != "REGULATORY") {
+                ++rejected_variant;
                 continue;
-            if (variant == "CRYPTO" && a.category != "CRYPTO" && a.category != "TECH")
+            }
+            if (variant == "CRYPTO" && a.category != "CRYPTO" && a.category != "TECH") {
+                ++rejected_variant;
                 continue;
+            }
             if (variant == "MACRO" && a.category != "ECONOMIC" && a.category != "REGULATORY" &&
-                a.category != "GEOPOLITICS" && a.category != "ENERGY")
+                a.category != "GEOPOLITICS" && a.category != "ENERGY") {
+                ++rejected_variant;
                 continue;
+            }
 
             // Category filter
             if (category != "ALL") {
@@ -632,8 +655,10 @@ void NewsScreen::apply_filters_async() {
                     {"NRG", "ENERGY"},  {"CRPT", "CRYPTO"},   {"GEO", "GEOPOLITICS"}, {"DEF", "DEFENSE"},
                 };
                 auto it = cat_map.find(category);
-                if (it != cat_map.end() && a.category != it.value())
+                if (it != cat_map.end() && a.category != it.value()) {
+                    ++rejected_category;
                     continue;
+                }
             }
 
             // Search filter
@@ -650,8 +675,10 @@ void NewsScreen::apply_filters_async() {
                         }
                     }
                 }
-                if (!match)
+                if (!match) {
+                    ++rejected_search;
                     continue;
+                }
             }
 
             filtered.append(a);
@@ -678,6 +705,16 @@ void NewsScreen::apply_filters_async() {
         }
 
         auto clusters = services::cluster_articles(filtered);
+
+        // When the entire input is filtered to zero, surface why so the cause
+        // is visible in logs without users digging into the source.
+        if (!articles_copy.isEmpty() && filtered.isEmpty()) {
+            LOG_WARN("NewsScreen",
+                     QString("Filter rejected ALL %1 articles "
+                             "(time=%2 variant=%3 category=%4 search=%5 range=%6)")
+                         .arg(articles_copy.size()).arg(rejected_time).arg(rejected_variant)
+                         .arg(rejected_category).arg(rejected_search).arg(time_range));
+        }
 
         QMetaObject::invokeMethod(
             self,
@@ -709,6 +746,14 @@ void NewsScreen::update_ui_from_filtered(int /*generation*/, const QVector<servi
     feed_panel_->model()->set_wire_articles(visible);
     feed_panel_->model()->set_clusters(clusters);
     feed_panel_->model()->set_view_mode(view_mode_);
+
+    // Empty-state toggle: only show "no articles" when we're not still loading
+    // and the filter genuinely produced nothing. Hide it as soon as the user
+    // has any rows to look at.
+    if (!loading_)
+        feed_panel_->set_empty_state(filtered.isEmpty());
+    else if (!filtered.isEmpty())
+        feed_panel_->set_empty_state(false);
 
     // Command bar counts
     command_bar_->set_article_count(filtered.size());
@@ -945,9 +990,13 @@ int64_t NewsScreen::time_window_seconds() const {
 // ── IStatefulScreen ─────────────────────────────────────────────────────────
 
 QVariantMap NewsScreen::save_state() const {
+    // search_query_ is intentionally NOT persisted — it's a transient
+    // typed-in filter, and restoring it would silently filter the feed
+    // on next launch (the search input widget doesn't display restored
+    // queries, so users can't see what's hiding articles).
     return {
-        {"category", active_category_}, {"time_range", time_range_},     {"sort_mode", sort_mode_},
-        {"view_mode", view_mode_},      {"search_query", search_query_}, {"variant", active_variant_},
+        {"category", active_category_}, {"time_range", time_range_}, {"sort_mode", sort_mode_},
+        {"view_mode", view_mode_},      {"variant", active_variant_},
     };
 }
 
@@ -956,7 +1005,8 @@ void NewsScreen::restore_state(const QVariantMap& state) {
     time_range_ = state.value("time_range", "24H").toString();
     sort_mode_ = state.value("sort_mode", "RELEVANCE").toString();
     view_mode_ = state.value("view_mode", "WIRE").toString();
-    search_query_ = state.value("search_query").toString();
+    // Drop any legacy "search_query" stored by an older build — see save_state().
+    search_query_.clear();
     active_variant_ = state.value("variant", "FULL").toString();
 
     if (command_bar_)

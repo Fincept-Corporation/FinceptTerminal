@@ -35,6 +35,12 @@
 #include "services/prediction/kalshi/KalshiAdapter.h"
 #include "services/prediction/polymarket/PolymarketAdapter.h"
 #include "services/relationship_map/RelationshipMapService.h"
+#include "services/report_builder/ReportBuilderService.h"
+#include "datahub/DataHub.h"
+#include "datahub/TopicPolicy.h"
+#include "services/billing/FeeDiscountService.h"
+#include "services/wallet/TokenMetadataService.h"
+#include "services/wallet/WalletService.h"
 #include "trading/DataStreamManager.h"
 #include "trading/ExchangeService.h"
 #include "trading/ExchangeSessionManager.h"
@@ -191,6 +197,32 @@ int main(int argc, char* argv[]) {
     fincept::services::ma::MAAnalyticsService::instance().ensure_registered_with_hub();
     // Phase 9: AgentService as agent:* push-only producer (output/stream/status/routing/error).
     fincept::services::AgentService::instance().ensure_registered_with_hub();
+    // Crypto: WalletService owns wallet:balance:* and market:price:token:*.
+    // TokenMetadataService loads its symbol/name cache from SecureStorage
+    // first so the very first balance publish has labels for known tokens;
+    // a daily background refresh fires in the background after.
+    fincept::wallet::TokenMetadataService::instance().load_from_storage();
+    fincept::wallet::TokenMetadataService::instance().refresh_from_jupiter_async();
+    // Restore_from_storage runs after the hub is up so a soft-connected
+    // wallet's balance topic resolves to a registered producer immediately.
+    fincept::wallet::WalletService::instance().ensure_registered_with_hub();
+    fincept::wallet::WalletService::instance().restore_from_storage();
+
+    // Phase 2 §2C: fee-discount eligibility producer. Lives in billing/
+    // because it's consumed by other paid screens later; for Phase 2 it
+    // only feeds HoldingsBar's chip and TradeTab's FeeDiscountPanel.
+    {
+        static fincept::billing::FeeDiscountService discount_service;
+        auto& hub = fincept::datahub::DataHub::instance();
+        hub.register_producer(&discount_service);
+        fincept::datahub::TopicPolicy p;
+        // Eligibility is derived from wallet:balance — refresh cadence here
+        // is just a fallback; the service also republishes whenever the
+        // balance topic emits.
+        p.ttl_ms = 60 * 1000;
+        p.min_interval_ms = 15 * 1000;
+        hub.set_policy_pattern(QStringLiteral("billing:fncpt_discount:*"), p);
+    }
 
     // Create all application directories under %LOCALAPPDATA%/com.fincept.terminal
     fincept::AppPaths::ensure_all();
@@ -315,6 +347,7 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v018();
     fincept::register_migration_v019();
     fincept::register_migration_v020();
+    fincept::register_migration_v021();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -433,6 +466,12 @@ int main(int argc, char* argv[]) {
         // Guard is installed on qApp and enabled by MainWindow::on_terminal_unlocked()
         // after the user successfully enters their PIN.
     }
+
+    // Force the ReportBuilderService singleton onto the main thread before
+    // MCP tools register — tools route into it via QMetaObject::invokeMethod
+    // with BlockingQueuedConnection from worker threads, so the service must
+    // already exist with main-thread affinity.
+    (void)fincept::services::ReportBuilderService::instance();
 
     // Initialize MCP tool system — registers all internal tools and starts
     // external MCP servers in the background (non-blocking).

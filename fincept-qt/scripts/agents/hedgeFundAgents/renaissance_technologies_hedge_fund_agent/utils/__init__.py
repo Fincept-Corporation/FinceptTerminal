@@ -24,19 +24,6 @@ from .embedder_factory import (
     create_embedder_from_config,
 )
 
-from .paths import (
-    get_app_data_dir,
-    get_rentech_data_dir,
-    get_knowledge_base_path,
-    get_memory_db_path,
-    get_logs_dir,
-    get_cache_dir,
-    get_frontend_db_path,
-    get_knowledge_path,
-    get_memory_path,
-    get_log_file_path,
-    get_cache_file_path,
-)
 
 __all__ = [
     "StockData",
@@ -66,3 +53,40 @@ __all__ = [
     "get_log_file_path",
     "get_cache_file_path",
 ]
+
+
+# ── Lazy attribute resolution (PEP 562) ─────────────────────────────────────
+# Submodules below have an `if __name__ == "__main__":` block and may be
+# invoked via `python -m`. Eagerly importing them here would put each in
+# sys.modules before Python re-executes them as __main__, triggering a
+# RuntimeWarning ("found in sys.modules ... prior to execution"). The lazy
+# loader keeps the public API intact while deferring import to first access.
+_LAZY_ATTRS: dict[str, tuple[str, str]] = {
+    "get_app_data_dir": ("paths", "get_app_data_dir"),
+    "get_rentech_data_dir": ("paths", "get_rentech_data_dir"),
+    "get_knowledge_base_path": ("paths", "get_knowledge_base_path"),
+    "get_memory_db_path": ("paths", "get_memory_db_path"),
+    "get_logs_dir": ("paths", "get_logs_dir"),
+    "get_cache_dir": ("paths", "get_cache_dir"),
+    "get_frontend_db_path": ("paths", "get_frontend_db_path"),
+    "get_knowledge_path": ("paths", "get_knowledge_path"),
+    "get_memory_path": ("paths", "get_memory_path"),
+    "get_log_file_path": ("paths", "get_log_file_path"),
+    "get_cache_file_path": ("paths", "get_cache_file_path"),
+}
+
+
+def __getattr__(name: str):  # PEP 562
+    target = _LAZY_ATTRS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    submodule, original_name = target
+    import importlib
+    mod = importlib.import_module(f".{submodule}", __name__)
+    value = getattr(mod, original_name)
+    globals()[name] = value  # cache for subsequent access
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_LAZY_ATTRS))

@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:* http://localhost:*; img-src 'self' data:;">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fincept — Sign Transaction</title>
+  <link rel="icon" href="data:,">
+  <!-- Vendored @solana/web3.js UMD bundle. If missing, the page degrades to
+       a base64 passthrough that some wallets accept directly. See
+       resources/wallet/vendor/README.md. -->
+  <script src="vendor/web3.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg-base: #080808;
+      --bg-surface: #0a0a0a;
+      --bg-raised: #111111;
+      --bg-hover: #161616;
+      --border-dim: #1a1a1a;
+      --border-med: #222222;
+      --border-bright: #303030;
+      --text-primary: #e0e0e0;
+      --text-secondary: #999999;
+      --text-tertiary: #707070;
+      --accent: #d97706;
+      --accent-bg: rgba(217, 119, 6, 0.08);
+      --positive: #10b981;
+      --negative: #ef4444;
+      --mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; min-height: 100vh;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font: 13px/1.5 var(--sans);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-dim);
+      max-width: 480px;
+      width: calc(100% - 32px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      overflow: hidden;
+    }
+    .header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border-dim);
+      background: var(--bg-raised);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .header .brand {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      color: var(--accent);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .header .sep { color: var(--border-bright); font-family: var(--mono); }
+    .header .route {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-tertiary);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .body { padding: 22px 20px 20px 20px; }
+    h1 { font-size: 15px; margin: 0 0 8px 0; font-weight: 600; }
+    p { color: var(--text-secondary); margin: 8px 0; }
+    .wallet-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px;
+      border: 1px solid var(--border-dim);
+      background: var(--bg-raised);
+      margin-bottom: 6px;
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      transition: background 0.1s, border-color 0.1s;
+    }
+    .wallet-row:hover { background: var(--bg-hover); border-color: var(--border-bright); }
+    .wallet-row.disabled { opacity: 0.4; cursor: not-allowed; }
+    .wallet-row .name { color: var(--text-primary); text-transform: uppercase; }
+    .wallet-row .status { color: var(--text-tertiary); font-size: 10px; }
+    .status-line {
+      margin-top: 14px;
+      padding: 10px 12px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border-dim);
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+      min-height: 32px;
+    }
+    .status-line.error { color: var(--negative); border-color: var(--negative); background: rgba(239, 68, 68, 0.08); }
+    .status-line.ok { color: var(--positive); border-color: var(--positive); background: rgba(16, 185, 129, 0.08); }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <div class="header">
+      <span class="brand">FINCEPT</span>
+      <span class="sep">/</span>
+      <span class="route">SIGN TRANSACTION</span>
+    </div>
+    <div class="body">
+      <h1>Sign and forward to the network</h1>
+      <p>The terminal has built a transaction and is waiting for your wallet to
+         approve it. Click the wallet you want to use; the wallet will pop up
+         with the decoded transaction. <b>You sign in the wallet, not in the
+         terminal — your private key never leaves the wallet.</b></p>
+
+      <div id="walletList">
+        <div class="wallet-row" data-provider="phantom">
+          <span class="name">Phantom</span>
+          <span class="status">checking…</span>
+        </div>
+        <div class="wallet-row" data-provider="solflare">
+          <span class="name">Solflare</span>
+          <span class="status">checking…</span>
+        </div>
+        <div class="wallet-row" data-provider="backpack">
+          <span class="name">Backpack</span>
+          <span class="status">checking…</span>
+        </div>
+        <div class="wallet-row" data-provider="glow">
+          <span class="name">Glow</span>
+          <span class="status">checking…</span>
+        </div>
+      </div>
+
+      <div id="status" class="status-line">Loading transaction body from local bridge…</div>
+    </div>
+  </div>
+
+<script>
+(function() {
+  "use strict";
+
+  // ── URL params ──────────────────────────────────────────────────────────
+  const params = new URLSearchParams(window.location.search);
+  const req = params.get("req");
+  const token = params.get("token");
+  const baseUrl = window.location.origin;
+
+  // ── Diagnostic logging ─────────────────────────────────────────────────
+  function logToTerminal(level, msg) {
+    try {
+      fetch(baseUrl + "/log?token=" + encodeURIComponent(token), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ level: level, msg: msg })
+      }).catch(function() {});
+    } catch (e) {}
+  }
+
+  // ── DOM helpers ────────────────────────────────────────────────────────
+  function setStatus(text, kind) {
+    const el = document.getElementById("status");
+    el.textContent = text;
+    el.className = "status-line" + (kind ? (" " + kind) : "");
+  }
+
+  // ── Provider resolution (mirrors connect.html) ─────────────────────────
+  function resolveProvider(name) {
+    switch (name) {
+      case "phantom":
+        return (window.phantom && window.phantom.solana && window.phantom.solana.isPhantom)
+          ? window.phantom.solana : null;
+      case "solflare":
+        return (window.solflare && window.solflare.isSolflare) ? window.solflare : null;
+      case "backpack":
+        return (window.backpack && window.backpack.isBackpack) ? window.backpack : null;
+      case "glow":
+        return (window.glow && window.glow.isGlow) ? window.glow : null;
+      default:
+        return null;
+    }
+  }
+
+  function refreshAvailability() {
+    const rows = document.querySelectorAll(".wallet-row");
+    rows.forEach(function(row) {
+      const name = row.getAttribute("data-provider");
+      const provider = resolveProvider(name);
+      const status = row.querySelector(".status");
+      if (provider) {
+        status.textContent = "available";
+        row.classList.remove("disabled");
+      } else {
+        status.textContent = "not detected";
+        row.classList.add("disabled");
+      }
+    });
+  }
+
+  // ── Base64 helpers (no dependency on web3.js) ──────────────────────────
+  function base64ToBytes(b64) {
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; ++i) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function bytesToBase64(bytes) {
+    let s = "";
+    for (let i = 0; i < bytes.length; ++i) s += String.fromCharCode(bytes[i]);
+    return btoa(s);
+  }
+
+  // ── Transaction body fetch ─────────────────────────────────────────────
+  let txBase64 = null;
+  async function fetchTxBody() {
+    try {
+      const r = await fetch(baseUrl + "/tx?req=" + encodeURIComponent(req)
+                                  + "&token=" + encodeURIComponent(token));
+      if (!r.ok) throw new Error("/tx returned " + r.status);
+      const j = await r.json();
+      txBase64 = j.tx_base64;
+      if (!txBase64) throw new Error("missing tx_base64");
+      logToTerminal("info", "tx body received (" + txBase64.length + " b64 chars)");
+      setStatus("Transaction loaded. Pick a wallet to sign.");
+    } catch (e) {
+      const msg = (e && e.message) ? e.message : String(e);
+      logToTerminal("error", "tx fetch failed: " + msg);
+      setStatus("Could not load transaction: " + msg, "error");
+    }
+  }
+
+  // ── Result delivery ────────────────────────────────────────────────────
+  async function postResult(payload) {
+    try {
+      await fetch(baseUrl + "/result?req=" + encodeURIComponent(req)
+                          + "&token=" + encodeURIComponent(token), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      logToTerminal("error", "result delivery failed: " + e);
+    }
+  }
+
+  // ── Sign + send via the chosen wallet ──────────────────────────────────
+  let signing = false;
+  async function signWith(name, provider) {
+    if (signing) return;
+    if (!txBase64) {
+      setStatus("Transaction not loaded yet.", "error");
+      return;
+    }
+    signing = true;
+    setStatus("Connecting to " + name + " — approve in the wallet popup…");
+    try {
+      // Connect first; many wallets require this even when already authorised.
+      try { await provider.connect({ onlyIfTrusted: false }); } catch (e) {
+        logToTerminal("warn", "connect threw (continuing): " + e);
+      }
+      const txBytes = base64ToBytes(txBase64);
+
+      let signature = null;
+      // Preferred path: deserialize via vendored web3.js, then signAndSendTransaction.
+      if (window.solanaWeb3 && window.solanaWeb3.VersionedTransaction) {
+        const tx = window.solanaWeb3.VersionedTransaction.deserialize(txBytes);
+        if (typeof provider.signAndSendTransaction === "function") {
+          const r = await provider.signAndSendTransaction(tx);
+          signature = (r && r.signature) ? r.signature : r;
+          logToTerminal("info", "signAndSendTransaction returned");
+        } else if (typeof provider.signTransaction === "function") {
+          // Some wallets only signTransaction — caller forwards via RPC.
+          const signed = await provider.signTransaction(tx);
+          const serialised = signed.serialize();
+          signature = "BYTES:" + bytesToBase64(serialised);
+          logToTerminal("info", "signTransaction returned signed bytes");
+        } else {
+          throw new Error("wallet exposes neither signAndSendTransaction nor signTransaction");
+        }
+      } else {
+        // Degraded path: web3.js missing. Try the raw base64 passthrough.
+        if (typeof provider.signAndSendTransactionRaw === "function") {
+          const r = await provider.signAndSendTransactionRaw(txBytes);
+          signature = (r && r.signature) ? r.signature : r;
+          logToTerminal("warn", "fallback signAndSendTransactionRaw used (web3.js missing)");
+        } else {
+          throw new Error("vendored @solana/web3.js missing — see resources/wallet/vendor/README.md");
+        }
+      }
+
+      if (!signature) throw new Error("wallet returned empty signature");
+      setStatus("Submitted. Closing window…", "ok");
+      await postResult({ signature: signature });
+      setTimeout(function() { try { window.close(); } catch (e) {} }, 800);
+    } catch (e) {
+      const msg = (e && e.message) ? e.message : String(e);
+      logToTerminal("error", "sign failed: " + msg);
+      setStatus("Sign failed: " + msg, "error");
+      await postResult({ error: msg });
+      signing = false;
+    }
+  }
+
+  // ── Wire up rows ───────────────────────────────────────────────────────
+  function wireRows() {
+    document.querySelectorAll(".wallet-row").forEach(function(row) {
+      const name = row.getAttribute("data-provider");
+      row.addEventListener("click", function() {
+        if (row.classList.contains("disabled")) return;
+        const provider = resolveProvider(name);
+        if (!provider) return;
+        signWith(name, provider);
+      });
+    });
+  }
+
+  // ── Bootstrap ──────────────────────────────────────────────────────────
+  if (!req || !token) {
+    setStatus("Missing req/token in URL — open this page through the terminal.",
+              "error");
+    return;
+  }
+  refreshAvailability();
+  wireRows();
+  fetchTxBody();
+  // Re-check provider availability after extensions inject — they sometimes
+  // arrive after the initial load.
+  setTimeout(refreshAvailability, 500);
+  setTimeout(refreshAvailability, 1500);
+})();
+</script>
+</body>
+</html>

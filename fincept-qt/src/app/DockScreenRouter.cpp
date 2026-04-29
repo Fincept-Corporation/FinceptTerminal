@@ -7,6 +7,7 @@
 #include "core/session/SessionManager.h"
 #include "core/symbol/IGroupLinked.h"
 #include "core/symbol/SymbolContext.h"
+#include "core/symbol/SymbolGroupRegistry.h"
 #include "core/symbol/SymbolRef.h"
 #include "screens/IStatefulScreen.h"
 #include "ui/widgets/GroupBadge.h"
@@ -107,80 +108,78 @@ void DockScreenRouter::on_group_symbol_changed_external(SymbolGroup g, const Sym
 }
 
 QWidget* DockScreenRouter::wrap_with_group_badge(const QString& id, QWidget* screen) {
+    // The badge now lives inside the ADS tab title (next to close/float),
+    // not inside the screen content area. Wrapping happens in
+    // attach_group_badge_to_tab() after the CDockWidget is constructed —
+    // this function is now a pass-through that just records the linked
+    // pointer if the screen opts in. Existing call sites are unchanged.
     if (!screen)
         return screen;
+    if (auto* linked = dynamic_cast<IGroupLinked*>(screen))
+        group_linked_[id] = linked;
+    attach_group_badge_to_tab(id, screen);
+    return screen;
+}
+
+void DockScreenRouter::attach_group_badge_to_tab(const QString& id, QWidget* screen) {
+    auto* dw = dock_widgets_.value(id, nullptr);
+    if (!dw)
+        return;
+    auto* tab = dw->tabWidget();
+    if (!tab)
+        return;
+    auto* layout = qobject_cast<QBoxLayout*>(tab->layout());
+    if (!layout)
+        return; // ADS layout not built yet — caller will retry on materialise
+
+    // If a badge already exists (placeholder phase, or duplicate call), tear
+    // it down so we can re-wire with the real screen's linked pointer. The
+    // re-create is cheaper than juggling state in the existing widget.
+    if (auto* existing = tab->findChild<ui::GroupBadge*>("dockTabBadge")) {
+        layout->removeWidget(existing);
+        existing->deleteLater();
+    }
+
     auto* linked = dynamic_cast<IGroupLinked*>(screen);
-    if (!linked)
-        return screen; // screen doesn't opt in — no wrapping, no overhead
 
-    // Container with a narrow strip on top holding the badge. The badge is
-    // parented to the strip so deleting the screen cascades-deletes it.
-    auto* container = new QWidget;
-    container->setObjectName("group_linked_container__" + id);
-    auto* v = new QVBoxLayout(container);
-    v->setContentsMargins(0, 0, 0, 0);
-    v->setSpacing(0);
+    auto* badge = new ui::GroupBadge(tab);
+    badge->setObjectName("dockTabBadge");
+    badge->set_group_silent(linked ? linked->group() : SymbolGroup::None);
+    if (!linked) {
+        // Non-linked panel: still show the badge so the control is uniform,
+        // but disable interaction — there is no IGroupLinked target.
+        badge->setEnabled(false);
+        badge->setToolTip(QStringLiteral("This panel doesn't support symbol groups"));
+    }
+    // Insert at index 0 — before the icon/title label.
+    layout->insertWidget(0, badge);
+    layout->insertSpacing(1, 6);
 
-    auto* strip = new QWidget(container);
-    strip->setObjectName("group_badge_strip");
-    strip->setFixedHeight(22);
-    auto* h = new QHBoxLayout(strip);
-    h->setContentsMargins(6, 2, 6, 2);
-    h->setSpacing(6);
-
-    auto* badge = new ui::GroupBadge(strip);
-    badge->set_group_silent(linked->group());
-    h->addWidget(badge);
-
-    auto* label = new QLabel(strip);
-    label->setObjectName("group_badge_symbol");
-    label->setStyleSheet("color:#9ca3af;font-size:11px;");
-    const SymbolRef cur = SymbolContext::instance().group_symbol(linked->group());
-    if (cur.is_valid())
-        label->setText(cur.display());
-    h->addWidget(label);
-    h->addStretch(1);
-
-    v->addWidget(strip);
-    v->addWidget(screen, 1);
-
-    // Keep the strip label in sync with the group's active symbol.
-    auto sync_label = [label, linked]() {
-        const SymbolRef cur = SymbolContext::instance().group_symbol(linked->group());
-        label->setText(cur.is_valid() ? cur.display() : QString());
-    };
+    if (!linked) {
+        // No further wiring; the tab badge is decorative for this panel.
+        group_badges_[id] = badge;
+        return;
+    }
 
     connect(badge, &ui::GroupBadge::group_change_requested, this,
-            [linked, badge, sync_label](SymbolGroup g) {
+            [linked, badge](SymbolGroup g) {
                 linked->set_group(g);
                 badge->set_group_silent(g);
-                sync_label();
-                // If the new group already has an active symbol, push it into
-                // the newly-linked screen immediately. If the screen itself
-                // has a current symbol and the group has none, seed the group
-                // from the screen.
+                // If the new group already has an active symbol, push it
+                // into the newly-linked screen immediately. Otherwise seed
+                // the group from the screen's current symbol.
                 const SymbolRef group_sym = SymbolContext::instance().group_symbol(g);
                 if (group_sym.is_valid()) {
                     linked->on_group_symbol_changed(group_sym);
                 } else if (g != SymbolGroup::None) {
                     const SymbolRef own = linked->current_symbol();
                     if (own.is_valid())
-                        SymbolContext::instance().set_group_symbol(g, own,
-                                                                  dynamic_cast<QObject*>(linked));
+                        SymbolContext::instance().set_group_symbol(
+                            g, own, dynamic_cast<QObject*>(linked));
                 }
             });
 
-    // Re-sync the label when someone *else* publishes to the group this panel
-    // is linked to.
-    connect(&SymbolContext::instance(), &SymbolContext::group_symbol_changed, label,
-            [linked, sync_label](SymbolGroup g, const SymbolRef&, QObject*) {
-                if (linked->group() == g)
-                    sync_label();
-            });
-
-    group_linked_[id] = linked;
     group_badges_[id] = badge;
-    return container;
 }
 
 void DockScreenRouter::register_screen(const QString& id, QWidget* screen) {
@@ -752,6 +751,7 @@ void DockScreenRouter::show_tab_context_menu(const QString& id, const QPoint& gl
             auto* group_menu = menu.addMenu("Link to Group");
             group_menu->setStyleSheet(menu.styleSheet());
             const SymbolGroup current = linked->group();
+            auto& registry = SymbolGroupRegistry::instance();
 
             auto* unlink = group_menu->addAction("(None)");
             unlink->setCheckable(true);
@@ -767,10 +767,19 @@ void DockScreenRouter::show_tab_context_menu(const QString& id, const QPoint& gl
             });
             group_menu->addSeparator();
 
+            // Only enabled slots are selectable; disabled ones are surfaced
+            // as greyed-out entries so the full inventory stays visible.
             for (SymbolGroup g : all_symbol_groups()) {
-                auto* a = group_menu->addAction(QString("Group %1").arg(symbol_group_letter(g)));
+                const bool en = registry.enabled(g);
+                QString label = QStringLiteral("%1  (%2)")
+                                    .arg(registry.name(g))
+                                    .arg(symbol_group_letter(g));
+                if (!en)
+                    label += QStringLiteral("  — disabled");
+                auto* a = group_menu->addAction(label);
                 a->setCheckable(true);
                 a->setChecked(g == current);
+                a->setEnabled(en);
                 connect(a, &QAction::triggered, this, [this, id, g]() {
                     auto* s = screens_.value(id, nullptr);
                     auto* l = s ? dynamic_cast<IGroupLinked*>(s) : nullptr;
@@ -913,6 +922,10 @@ ads::CDockWidget* DockScreenRouter::create_dock_widget(const QString& id) {
     dw->setMinimumSizeHintMode(ads::CDockWidget::MinimumSizeHintFromDockWidget);
     dw->setMinimumWidth(200);
 
+    // Register the dock widget early so attach_group_badge_to_tab() (called
+    // from wrap_with_group_badge below) can resolve the tab via dock_widgets_.
+    dock_widgets_[id] = dw;
+
     // Screen widgets must allow shrinking so ADS can create side-by-side splits.
     // Factory screens get a lightweight placeholder here; the real widget is swapped
     // in on first navigation via materialize_screen().
@@ -927,6 +940,10 @@ ads::CDockWidget* DockScreenRouter::create_dock_widget(const QString& id) {
         auto* vl = new QVBoxLayout(placeholder);
         vl->addWidget(lbl);
         dw->setWidget(placeholder);
+        // Attach a decorative `[·]` badge for factory screens too — once the
+        // real screen materialises, attach_group_badge_to_tab is idempotent
+        // and won't add a second badge, so the existing one stays in place.
+        attach_group_badge_to_tab(id, placeholder);
     }
 
     // Intercept double-click on the title label inside CDockWidgetTab to allow
@@ -969,7 +986,8 @@ ads::CDockWidget* DockScreenRouter::create_dock_widget(const QString& id) {
         }
     });
 
-    dock_widgets_[id] = dw;
+    // dock_widgets_[id] was registered earlier (before wrap_with_group_badge)
+    // so attach_group_badge_to_tab could resolve the tab during construction.
     return dw;
 }
 

@@ -185,16 +185,23 @@ def find_company_by_name(query: str, top_n: int = 10) -> Dict[str, Any]:
                 "query": query
             }
 
-        # Convert results to list
+        # Convert results to list. edgartools.find_company can yield Company
+        # objects, plain dicts, or (occasionally) None placeholders depending
+        # on version — guard each access so a malformed entry doesn't blow up
+        # the whole call.
         companies = []
         for i, company in enumerate(results):
             if i >= top_n:
                 break
+            if company is None:
+                continue
+            tickers = getattr(company, 'tickers', None) or []
+            ticker = tickers[0] if tickers else None
             companies.append({
-                "ticker": company.tickers[0] if company.tickers else None,
-                "cik": company.cik,
-                "name": company.name,
-                "industry": company.industry if hasattr(company, 'industry') else None,
+                "ticker": ticker,
+                "cik": getattr(company, 'cik', None),
+                "name": getattr(company, 'name', None),
+                "industry": getattr(company, 'industry', None),
             })
 
         return {

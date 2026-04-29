@@ -228,7 +228,10 @@ void AiChatScreen::build_ui() {
 
 void AiChatScreen::build_sidebar() {
     sidebar_ = new QWidget;
-    sidebar_->setFixedWidth(280);
+    // Use min/max width pair instead of setFixedWidth so the collapse
+    // animation can drive maximumWidth between 0 and kSidebarExpandedWidth.
+    sidebar_->setMinimumWidth(0);
+    sidebar_->setMaximumWidth(kSidebarExpandedWidth);
     sidebar_->setStyleSheet(
         QString("background:%1;border-right:1px solid %2;").arg(col::BG_SURFACE(), col::BORDER_DIM()));
 
@@ -408,8 +411,23 @@ QWidget* AiChatScreen::build_header_bar() {
     bar->setFixedHeight(52);
     bar->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(col::BG_RAISED(), col::BORDER_DIM()));
     auto* hl = new QHBoxLayout(bar);
-    hl->setContentsMargins(20, 0, 16, 0);
+    hl->setContentsMargins(8, 0, 16, 0);
     hl->setSpacing(10);
+
+    // Sidebar collapse toggle. Lives at the left edge of the chat header so
+    // it remains visible (and can re-expand the sidebar) even when the
+    // sidebar is collapsed to width 0.
+    sidebar_toggle_btn_ = new QPushButton("‹");
+    sidebar_toggle_btn_->setFixedSize(28, 28);
+    sidebar_toggle_btn_->setCursor(Qt::PointingHandCursor);
+    sidebar_toggle_btn_->setToolTip("Collapse sidebar  (Ctrl+B)");
+    sidebar_toggle_btn_->setShortcut(QKeySequence("Ctrl+B"));
+    sidebar_toggle_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
+                                               "border-radius:0px;font-size:18px;font-weight:700;padding:0;}"
+                                               "QPushButton:hover{background:%3;color:%4;border-color:%4;}")
+                                           .arg(col::TEXT_SECONDARY(), col::BORDER_DIM(), col::BG_HOVER(), col::AMBER()));
+    connect(sidebar_toggle_btn_, &QPushButton::clicked, this, &AiChatScreen::on_toggle_sidebar);
+    hl->addWidget(sidebar_toggle_btn_);
 
     // Status dot
     hdr_status_dot_ = new QLabel;
@@ -638,6 +656,41 @@ bool AiChatScreen::eventFilter(QObject* obj, QEvent* event) {
         }
     }
     return QWidget::eventFilter(obj, event);
+}
+
+void AiChatScreen::on_toggle_sidebar() {
+    apply_sidebar_collapsed(!sidebar_collapsed_, /*animate=*/true);
+    ScreenStateManager::instance().notify_changed(this);
+}
+
+void AiChatScreen::apply_sidebar_collapsed(bool collapsed, bool animate) {
+    sidebar_collapsed_ = collapsed;
+    if (!sidebar_)
+        return;
+
+    const int target = collapsed ? 0 : kSidebarExpandedWidth;
+
+    // Lazily create the animation so the helper works even before the first
+    // user toggle (e.g. when restore_state runs before the screen is shown).
+    if (!sidebar_anim_) {
+        sidebar_anim_ = new QPropertyAnimation(sidebar_, "maximumWidth", this);
+        sidebar_anim_->setDuration(180);
+        sidebar_anim_->setEasingCurve(QEasingCurve::OutCubic);
+    }
+
+    sidebar_anim_->stop();
+    if (animate) {
+        sidebar_anim_->setStartValue(sidebar_->maximumWidth());
+        sidebar_anim_->setEndValue(target);
+        sidebar_anim_->start();
+    } else {
+        sidebar_->setMaximumWidth(target);
+    }
+
+    if (sidebar_toggle_btn_) {
+        sidebar_toggle_btn_->setText(collapsed ? "›" : "‹");
+        sidebar_toggle_btn_->setToolTip(collapsed ? "Expand sidebar  (Ctrl+B)" : "Collapse sidebar  (Ctrl+B)");
+    }
 }
 
 void AiChatScreen::on_search_changed(const QString& text) {
@@ -1287,6 +1340,7 @@ QVariantMap AiChatScreen::save_state() const {
         s.insert("scroll", scroll_area_->verticalScrollBar()->value());
     if (!attached_file_path_.isEmpty())
         s.insert("attached_file", attached_file_path_);
+    s.insert("sidebar_collapsed", sidebar_collapsed_);
 
     return s;
 }
@@ -1326,6 +1380,11 @@ void AiChatScreen::restore_state(const QVariantMap& state) {
             attach_badge_->setVisible(true);
         }
     }
+
+    // Sidebar collapsed state — apply without animation on restore so the
+    // user lands on the previously chosen layout immediately.
+    if (state.contains("sidebar_collapsed"))
+        apply_sidebar_collapsed(state.value("sidebar_collapsed").toBool(), /*animate=*/false);
 
     // Scroll position — defer until after message_layout has laid out,
     // otherwise the scrollbar max is still 0.

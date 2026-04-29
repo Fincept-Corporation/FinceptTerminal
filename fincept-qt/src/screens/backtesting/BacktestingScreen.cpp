@@ -3,6 +3,8 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "core/symbol/SymbolContext.h"
+#include "core/symbol/SymbolRef.h"
 #include "services/backtesting/BacktestingService.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
@@ -543,6 +545,9 @@ QWidget* BacktestingScreen::build_right_panel() {
     symbols_edit_->setPlaceholderText("SPY,AAPL,MSFT");
     symbols_edit_->setStyleSheet(input_style);
     vl->addWidget(symbols_edit_);
+    // Publish the first symbol to the linked group when the user finishes editing.
+    connect(symbols_edit_, &QLineEdit::editingFinished, this,
+            [this]() { publish_first_symbol_to_group(); });
 
     auto* cap_lbl = new QLabel("INITIAL CAPITAL ($)", content);
     cap_lbl->setStyleSheet(label_style);
@@ -1588,6 +1593,41 @@ void BacktestingScreen::restore_state(const QVariantMap& state) {
         on_provider_changed(prov);
     if (cmd != active_command_)
         on_command_changed(cmd);
+}
+
+// ── IGroupLinked ─────────────────────────────────────────────────────────────
+
+SymbolRef BacktestingScreen::current_symbol() const {
+    if (!symbols_edit_)
+        return {};
+    const QString text = symbols_edit_->text().trimmed();
+    if (text.isEmpty())
+        return {};
+    // First comma-separated token is the "active" symbol for group linking.
+    const QString first = text.section(',', 0, 0).trimmed();
+    if (first.isEmpty())
+        return {};
+    return SymbolRef::equity(first);
+}
+
+void BacktestingScreen::on_group_symbol_changed(const SymbolRef& ref) {
+    if (!ref.is_valid() || !symbols_edit_)
+        return;
+    // Replace the entire field — adding to a comma list silently would
+    // surprise users who have a multi-symbol backtest configured.
+    if (symbols_edit_->text().trimmed() == ref.symbol)
+        return;
+    QSignalBlocker block(symbols_edit_); // avoid bouncing the publish back
+    symbols_edit_->setText(ref.symbol);
+}
+
+void BacktestingScreen::publish_first_symbol_to_group() {
+    if (link_group_ == SymbolGroup::None)
+        return;
+    const SymbolRef ref = current_symbol();
+    if (!ref.is_valid())
+        return;
+    SymbolContext::instance().set_group_symbol(link_group_, ref, this);
 }
 
 } // namespace fincept::screens

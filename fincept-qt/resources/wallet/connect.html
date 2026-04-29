@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:* http://localhost:*; img-src 'self' data:;">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fincept — Connect Wallet</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg-base: #080808;
+      --bg-surface: #0a0a0a;
+      --bg-raised: #111111;
+      --bg-hover: #161616;
+      --border-dim: #1a1a1a;
+      --border-med: #222222;
+      --border-bright: #303030;
+      --text-primary: #e0e0e0;
+      --text-secondary: #999999;
+      --text-tertiary: #707070;
+      --text-dim: #555555;
+      --accent: #d97706;
+      --accent-dim: #78350f;
+      --accent-bg: rgba(217, 119, 6, 0.08);
+      --positive: #10b981;
+      --negative: #ef4444;
+      --info: #3b82f6;
+      --mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; min-height: 100vh;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font: 13px/1.5 var(--sans);
+      display: flex; align-items: center; justify-content: center;
+      letter-spacing: 0.01em;
+    }
+    .panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-dim);
+      border-radius: 4px;
+      padding: 0;
+      max-width: 480px;
+      width: calc(100% - 32px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      overflow: hidden;
+    }
+    .header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border-dim);
+      background: var(--bg-raised);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .header .brand {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      color: var(--accent);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .header .sep {
+      color: var(--border-bright);
+      font-family: var(--mono);
+    }
+    .header .route {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-tertiary);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .body { padding: 20px; }
+    h1 {
+      font-size: 16px;
+      margin: 0 0 6px 0;
+      font-weight: 600;
+      letter-spacing: 0.005em;
+    }
+    .lede {
+      color: var(--text-secondary);
+      font-size: 12px;
+      margin: 0 0 18px 0;
+      line-height: 1.55;
+    }
+    .section-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      margin: 4px 0 8px 0;
+    }
+    .wallet-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 12px;
+      border: 1px solid var(--border-dim);
+      background: var(--bg-base);
+      border-radius: 3px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: border-color 80ms linear, background 80ms linear;
+    }
+    .wallet-row:hover {
+      border-color: var(--accent);
+      background: var(--bg-hover);
+    }
+    .wallet-row.active {
+      border-color: var(--accent);
+      background: var(--accent-bg);
+    }
+    .wallet-row[data-disabled="true"] {
+      opacity: 0.35; cursor: not-allowed;
+      background: transparent;
+    }
+    .wallet-row[data-disabled="true"]:hover {
+      border-color: var(--border-dim);
+      background: transparent;
+    }
+    .wallet-name {
+      font-weight: 500;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+    .wallet-status {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-tertiary);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .wallet-status.detected {
+      color: var(--positive);
+    }
+    .wallet-status.detected::before {
+      content: "● ";
+    }
+    .status {
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 3px;
+      background: var(--bg-base);
+      border: 1px solid var(--border-dim);
+      display: none;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.5;
+      word-break: break-all;
+      color: var(--text-secondary);
+    }
+    .status.show { display: block; }
+    .status.error {
+      border-color: var(--negative);
+      color: var(--negative);
+      background: rgba(239, 68, 68, 0.04);
+    }
+    .status.success {
+      border-color: var(--positive);
+      color: var(--positive);
+      background: rgba(16, 185, 129, 0.04);
+    }
+    .status.working {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-bg);
+    }
+    .footer {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border-dim);
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      line-height: 1.6;
+    }
+    .footer .key {
+      color: var(--text-tertiary);
+    }
+    .pulse {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin-right: 6px;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <div class="header">
+      <span class="brand">Fincept Terminal</span>
+      <span class="sep">/</span>
+      <span class="route">Crypto Center</span>
+    </div>
+    <div class="body">
+      <h1>Connect your Solana wallet</h1>
+      <p class="lede">
+        Fincept Terminal will read your wallet's public address and balances only.
+        Your private keys never leave your wallet.
+      </p>
+
+      <div class="section-label">Available wallets</div>
+      <div id="wallet-list">
+        <div class="wallet-row" data-provider="phantom">
+          <span class="wallet-name">Phantom</span>
+          <span class="wallet-status">checking…</span>
+        </div>
+        <div class="wallet-row" data-provider="solflare">
+          <span class="wallet-name">Solflare</span>
+          <span class="wallet-status">checking…</span>
+        </div>
+        <div class="wallet-row" data-provider="backpack">
+          <span class="wallet-name">Backpack</span>
+          <span class="wallet-status">checking…</span>
+        </div>
+        <div class="wallet-row" data-provider="glow">
+          <span class="wallet-name">Glow</span>
+          <span class="wallet-status">checking…</span>
+        </div>
+        <div class="wallet-row" data-provider="generic">
+          <span class="wallet-name">Other (window.solana)</span>
+          <span class="wallet-status">checking…</span>
+        </div>
+      </div>
+
+      <div id="status" class="status"></div>
+
+      <div class="footer">
+        <span class="key">SECURITY</span> · keys never leave your wallet ·
+        <span class="key">SCOPE</span> · public address + balance only ·
+        <span class="key">SESSION</span> · close this tab when done
+      </div>
+    </div>
+  </main>
+
+  <script>
+  (function() {
+    "use strict";
+
+    var NONCE_HEX = "__NONCE_HEX__";
+    var TOKEN     = "__CALLBACK_TOKEN__";
+
+    function logToTerminal(level, msg) {
+      try {
+        fetch("/log?token=" + encodeURIComponent(TOKEN), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ level: level, msg: String(msg) })
+        }).catch(function() {});
+      } catch (_) {}
+      if (level === "error") console.error("[FinceptWallet]", msg);
+      else if (level === "warn") console.warn("[FinceptWallet]", msg);
+      else console.log("[FinceptWallet]", msg);
+    }
+    window.addEventListener("error", function(e) {
+      logToTerminal("error", "uncaught: " + (e && e.message));
+    });
+    window.addEventListener("unhandledrejection", function(e) {
+      logToTerminal("error", "unhandled rejection: " +
+        (e && e.reason && e.reason.message ? e.reason.message : String(e && e.reason)));
+    });
+    logToTerminal("info", "connect.html loaded; nonce_len=" + NONCE_HEX.length + " token_len=" + TOKEN.length);
+
+    function statusBox(text, kind) {
+      var el = document.getElementById("status");
+      el.textContent = text;
+      el.className = "status show" + (kind ? " " + kind : "");
+    }
+    function statusWorking(text) {
+      var el = document.getElementById("status");
+      el.innerHTML = "<span class=\"pulse\"></span>" + text;
+      el.className = "status show working";
+    }
+
+    // ── Base58 (Bitcoin alphabet) ─────────────────────────────────────────
+    // Reference algorithm from the bitcoin core / bs58 package, transcribed
+    // for the browser. Avoids the "Invalid array length" overflow that
+    // happens with the naive worst-case allocation when the input contains
+    // the unusual leading-bytes that pump.fun signatures occasionally have.
+    var B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+    function b58encode(bytes) {
+      if (!(bytes instanceof Uint8Array)) bytes = new Uint8Array(bytes);
+      if (bytes.length === 0) return "";
+      // Count leading zeros.
+      var zeros = 0;
+      while (zeros < bytes.length && bytes[zeros] === 0) zeros++;
+
+      // Convert base-256 digits to base-58 digits using big-int free arithmetic.
+      // Worst case: ceil(N * log(256)/log(58)) ~ N * 1.366 bytes.
+      var size = ((bytes.length - zeros) * 138 / 100 | 0) + 1;
+      var b58 = new Uint8Array(size);
+      var length = 0;
+
+      for (var i = zeros; i < bytes.length; i++) {
+        var carry = bytes[i];
+        var j = 0;
+        // Apply "carry" to the entire b58 array, working from right to left.
+        for (var k = size - 1; (carry !== 0 || j < length) && k >= 0; k--, j++) {
+          carry += 256 * b58[k];
+          b58[k] = carry % 58;
+          carry = (carry / 58) | 0;
+        }
+        if (carry !== 0) {
+          throw new Error("base58 encode: non-zero carry");
+        }
+        length = j;
+      }
+
+      // Skip leading zeros in b58 result.
+      var it = size - length;
+      while (it < size && b58[it] === 0) it++;
+
+      var str = "";
+      for (var z = 0; z < zeros; z++) str += "1";
+      for (; it < size; it++) str += B58_ALPHABET.charAt(b58[it]);
+      return str;
+    }
+
+    function resolveProvider(name) {
+      switch (name) {
+        case "phantom":
+          return (window.phantom && window.phantom.solana && window.phantom.solana.isPhantom)
+            ? window.phantom.solana : null;
+        case "solflare":
+          return (window.solflare && window.solflare.isSolflare) ? window.solflare : null;
+        case "backpack":
+          return (window.backpack && window.backpack.isBackpack) ? window.backpack : null;
+        case "glow":
+          return (window.glowSolana || (window.glow && window.glow.solana)) || null;
+        case "generic":
+          return (window.solana && typeof window.solana.connect === "function")
+            ? window.solana : null;
+      }
+      return null;
+    }
+
+    var connecting = false;
+    function refreshDetections() {
+      var rows = document.querySelectorAll(".wallet-row");
+      rows.forEach(function(row) {
+        var name = row.getAttribute("data-provider");
+        var provider = resolveProvider(name);
+        var statusEl = row.querySelector(".wallet-status");
+        if (provider) {
+          statusEl.textContent = "detected";
+          statusEl.classList.add("detected");
+          row.setAttribute("data-disabled", "false");
+          row.onclick = function() { if (!connecting) connect(name, provider, row); };
+        } else {
+          statusEl.textContent = "not installed";
+          statusEl.classList.remove("detected");
+          row.setAttribute("data-disabled", "true");
+          row.onclick = null;
+        }
+      });
+    }
+
+    async function connect(name, provider, rowEl) {
+      try {
+        connecting = true;
+        document.querySelectorAll(".wallet-row").forEach(function(r) { r.classList.remove("active"); });
+        if (rowEl) rowEl.classList.add("active");
+
+        logToTerminal("info", "connect() start for " + name);
+        statusWorking("Requesting wallet authorisation…");
+
+        var conn = await provider.connect();
+        logToTerminal("info", "provider.connect() returned");
+        var pubkey = (conn && conn.publicKey) ? conn.publicKey : provider.publicKey;
+        if (!pubkey) throw new Error("wallet did not return a public key");
+        var pubkeyB58 = (typeof pubkey.toBase58 === "function")
+          ? pubkey.toBase58()
+          : (typeof pubkey === "string" ? pubkey : "");
+        if (!pubkeyB58) throw new Error("could not stringify public key");
+        logToTerminal("info", "got pubkey " + pubkeyB58);
+
+        statusWorking("Please sign the verification message in your wallet…");
+        var message = new TextEncoder().encode(
+          "Fincept Terminal wallet-connect challenge. Nonce: " + NONCE_HEX);
+        logToTerminal("info", "calling signMessage (" + message.length + " bytes)");
+        var signed = await provider.signMessage(message, "utf8");
+        logToTerminal("info", "signMessage resolved; type=" +
+          (signed && signed.constructor && signed.constructor.name));
+
+        var sigBytes = (signed && signed.signature) ? signed.signature : signed;
+        if (!sigBytes) throw new Error("wallet returned no signature field");
+        if (!(sigBytes instanceof Uint8Array)) {
+          if (Array.isArray(sigBytes)) {
+            sigBytes = new Uint8Array(sigBytes);
+          } else if (typeof sigBytes === "object" && typeof sigBytes.length === "number") {
+            sigBytes = new Uint8Array(Array.from(sigBytes));
+          } else if (sigBytes && typeof sigBytes === "object") {
+            // ArrayBuffer-like
+            try { sigBytes = new Uint8Array(sigBytes); }
+            catch (e) { throw new Error("could not coerce signature to bytes: " + e.message); }
+          } else {
+            throw new Error("unexpected signature type");
+          }
+        }
+        logToTerminal("info", "signature bytes len=" + sigBytes.length);
+        if (sigBytes.length !== 64) {
+          logToTerminal("warn", "unexpected signature length " + sigBytes.length + " (expected 64)");
+        }
+        var sigB58;
+        try {
+          sigB58 = b58encode(sigBytes);
+        } catch (e) {
+          throw new Error("base58 encode failed: " + e.message);
+        }
+        logToTerminal("info", "POST /callback (sig_b58_len=" + sigB58.length + ")");
+
+        var resp = await fetch("/callback?token=" + encodeURIComponent(TOKEN), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pubkey: pubkeyB58,
+            signature: sigB58,
+            label: name
+          })
+        });
+        logToTerminal("info", "callback POST done; status=" + resp.status);
+        if (!resp.ok) {
+          throw new Error("server returned " + resp.status);
+        }
+        statusBox("Connected. You may close this tab.", "success");
+      } catch (err) {
+        var msg = (err && err.message) ? err.message : String(err);
+        logToTerminal("error", "connect() failed: " + msg);
+        statusBox("Connect failed: " + msg, "error");
+        connecting = false;
+        if (rowEl) rowEl.classList.remove("active");
+      }
+    }
+
+    refreshDetections();
+    setTimeout(refreshDetections, 500);
+    setTimeout(refreshDetections, 1500);
+  })();
+  </script>
+</body>
+</html>

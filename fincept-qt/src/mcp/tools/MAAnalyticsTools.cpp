@@ -5,51 +5,54 @@
 #include "mcp/tools/MAAnalyticsTools.h"
 
 #include "core/logging/Logger.h"
+#include "mcp/tools/ThreadHelper.h"
 #include "services/ma_analytics/MAAnalyticsService.h"
 
-#include <QEventLoop>
 #include <QJsonDocument>
-#include <QTimer>
 
 namespace fincept::mcp::tools {
 
 static constexpr const char* TAG = "MAAnalyticsTools";
-static constexpr int kTimeoutMs = 30000;
 
-// Helper: call an async MA service method, wait for result or error
+// Wait for an async MA service operation to complete. The trigger lambda
+// runs on the service thread (so it's safe to start a request that emits
+// signals back on that same thread). Worker thread sleeps on a wait
+// condition until the service emits result_ready or error_occurred.
 static ToolResult run_ma_sync(const QString& context, std::function<void()> trigger) {
     QJsonObject result_data;
     QString error_msg;
     bool got_result = false;
 
-    QEventLoop loop;
     auto& svc = fincept::services::ma::MAAnalyticsService::instance();
 
-    QObject::connect(&svc, &fincept::services::ma::MAAnalyticsService::result_ready, &loop,
-                     [&](const QString& ctx, const QJsonObject& data) {
-                         if (ctx != context)
-                             return;
-                         result_data = data;
-                         got_result = true;
-                         loop.quit();
-                     });
-
-    QObject::connect(&svc, &fincept::services::ma::MAAnalyticsService::error_occurred, &loop,
-                     [&](const QString& ctx, const QString& msg) {
-                         if (ctx != context)
-                             return;
-                         error_msg = msg;
-                         got_result = true;
-                         loop.quit();
-                     });
-
-    QTimer::singleShot(kTimeoutMs, &loop, &QEventLoop::quit);
-
-    trigger();
-    loop.exec();
+    detail::run_async_wait(&svc, [&](auto signal_done) {
+        // Hook the signals on the service's thread before triggering, so we
+        // never miss an immediate callback. The connections are scoped via
+        // a heap QObject so we can disconnect deterministically.
+        auto* gate = new QObject;
+        QObject::connect(&svc, &fincept::services::ma::MAAnalyticsService::result_ready, gate,
+                         [&, gate, signal_done](const QString& ctx, const QJsonObject& data) {
+                             if (ctx != context)
+                                 return;
+                             result_data = data;
+                             got_result = true;
+                             gate->deleteLater();
+                             signal_done();
+                         });
+        QObject::connect(&svc, &fincept::services::ma::MAAnalyticsService::error_occurred, gate,
+                         [&, gate, signal_done](const QString& ctx, const QString& msg) {
+                             if (ctx != context)
+                                 return;
+                             error_msg = msg;
+                             got_result = true;
+                             gate->deleteLater();
+                             signal_done();
+                         });
+        trigger();
+    });
 
     if (!got_result)
-        return ToolResult::fail("Timeout waiting for M&A result: " + context);
+        return ToolResult::fail("M&A result missing: " + context);
     if (!error_msg.isEmpty())
         return ToolResult::fail(error_msg);
 

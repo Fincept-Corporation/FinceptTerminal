@@ -351,6 +351,10 @@ QMenu* ToolBar::build_navigate_menu() {
     nav(trd, "Derivatives", "derivatives");
     nav(trd, "Watchlist", "watchlist");
 
+    // Crypto / on-chain identity
+    auto* crypto = add_sub("Crypto");
+    nav(crypto, "Crypto Center", "crypto_center");
+
     // Research & Intelligence
     auto* res = add_sub("Research & Intelligence");
     nav(res, "Equity Research", "equity_research");
