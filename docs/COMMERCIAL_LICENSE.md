@@ -1,6 +1,7 @@
 # Fincept Terminal — Commercial License
 
-**Effective Date:** April 30, 2026
+**Version:** 2.0
+**In effect from:** April 30, 2026 (and continuing in force until superseded by a subsequent version published by Fincept Corporation)
 **Licensor:** Fincept Corporation (a company organized under the laws of India)
 **Contact:** support@fincept.in · +91-9773034108 · https://fincept.in
 
@@ -245,6 +246,10 @@ This License shall be governed by and construed in accordance with the laws of t
 
 © 2025–2026 Fincept Corporation. All rights reserved.
 
-**Last Updated:** April 30, 2026
+---
+
+**Document Version:** 2.0
+**In Force From:** April 30, 2026
+**Status:** Current and binding. These terms remain in full force and effect indefinitely until expressly superseded by a subsequent version published by Fincept Corporation at this location. The date above marks the most recent revision; it is **not** an expiry date.
 
 For the open-source license terms, see [`/LICENSE`](../LICENSE).

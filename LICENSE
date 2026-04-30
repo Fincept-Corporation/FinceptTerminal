@@ -1,7 +1,7 @@
 GNU AFFERO GENERAL PUBLIC LICENSE
 Version 3, 19 November 2007
 
-Copyright (C) 2025 Fincept Corporation
+Copyright (C) 2025-2026 Fincept Corporation
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published
@@ -17,118 +17,245 @@ You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 ================================================================================
-DUAL LICENSING NOTICE
+                          DUAL LICENSING NOTICE
 ================================================================================
 
-Fincept Terminal is available under two licensing options:
+Fincept Terminal is dual-licensed. Every user must comply with ONE of the
+following licenses:
 
-1. AGPL-3.0 License (Open Source)
-   - Free for personal and educational use
-   - Free to use with your own data sources
-   - Requires sharing modifications if you distribute or provide as a network service
-   - Full source code must remain available under AGPL-3.0
-   - See full license text at: https://www.gnu.org/licenses/agpl-3.0.html
+1. AGPL-3.0 (Open Source)
+   - Free for personal use, individual learning, academic research by
+     individual students, and open-source contribution to this repository.
+   - Requires sharing modifications if distributed or made available as a
+     network service.
+   - Full text: https://www.gnu.org/licenses/agpl-3.0.html
 
-2. Commercial License
-   - Required for any business/commercial use
-   - Required to access Fincept Data Sources and APIs for commercial purposes
-   - No obligation to share source code
-   - Priority support available
-   - See docs/COMMERCIAL_LICENSE.md for pricing and terms
+2. Fincept Commercial License
+   - REQUIRED for any business or internal company use, regardless of
+     revenue, size, or duration.
+   - Required for SaaS, cloud, hosted, white-label, or resale offerings.
+   - Required for forks that remove or replace Fincept's APIs, data
+     sources, or service endpoints, where used commercially or internally.
+   - See: docs/COMMERCIAL_LICENSE.md
 
-================================================================================
-FINCEPT DATA & API
-================================================================================
-
-The Fincept Terminal software is free under AGPL-3.0.
-
-Fincept Data Sources and APIs are separate services that require:
-- Commercial License for business use ($10,200/year)
-- University License for academic institutions ($799/month)
-- Free for personal/educational individual use
+The AGPL-3.0 option is NOT available for Commercial Use as defined in
+docs/COMMERCIAL_LICENSE.md, Section 3. Commercial Use without an executed
+Commercial License is a breach of copyright and is subject to the full
+range of remedies set forth in docs/COMMERCIAL_LICENSE.md.
 
 ================================================================================
-TRADEMARK NOTICE
+              CLONING / FORKING / MODIFICATION DOES NOT GRANT
+                     COMMERCIAL OR INTERNAL-USE RIGHTS
 ================================================================================
 
-"Fincept Terminal", "Fincept", and the Fincept logo are trademarks of
-Fincept Corporation. All rights reserved.
+Cloning, forking, downloading, building, or modifying this repository does
+NOT grant any right to use Fincept Terminal — or any Modified Version or
+Derivative Work — for Commercial Use. Internal use within any for-profit
+organization, government body, fund, or revenue-generating non-profit is
+Commercial Use and requires a paid Commercial License.
 
-You may not use these trademarks without explicit written permission,
-except as necessary to comply with the AGPL-3.0 attribution requirements.
-
-Use of the trademarks to promote derivative works or competing products
-is strictly prohibited without a trademark license agreement.
+The license attaches to the codebase and any Derivative Work of it, not to
+specific API integrations. Removing, replacing, disabling, or rewiring
+Fincept's APIs, data sources, or service endpoints does NOT sever or
+extinguish the licensing obligation.
 
 ================================================================================
-ADDITIONAL RESTRICTIONS
+                       FINCEPT DATA & API SERVICES
 ================================================================================
 
-While the AGPL-3.0 grants broad freedoms, the following restrictions apply:
+The Fincept Terminal software is offered under AGPL-3.0 for non-commercial
+use as described above.
 
-1. NETWORK USE REQUIREMENT
-   If you run a modified version of Fincept Terminal as a network service
-   (SaaS, cloud platform, web application), you MUST:
+Fincept Data Sources and APIs are separate services subject to:
+- Commercial License: USD 10,200 / year
+- University & Academic License: USD 799 / month (20 accounts)
+- Free for individual personal and educational use only
+
+================================================================================
+                            TRADEMARK NOTICE
+================================================================================
+
+"Fincept", "Fincept Terminal", "Fincept Corporation", and the Fincept logo
+are trademarks of Fincept Corporation. All rights reserved.
+
+You may not use these marks — or any colorable imitation, transliteration,
+abbreviation, translation, or variation or derivative thereof — without
+prior written permission from Fincept Corporation, except as strictly
+necessary to comply with AGPL-3.0 attribution requirements.
+
+Removal, replacement, or rebranding of these marks in any fork or
+Derivative Work does NOT extinguish Fincept Corporation's rights in the
+underlying Software, nor does it sever the licensing obligations attaching
+to the codebase.
+
+The Fincept Trade Dress — including screen layouts, color palette,
+terminal command syntax, ticker conventions, function-code conventions,
+keyboard shortcut conventions, dashboard widget vocabulary, and overall
+visual identity of Fincept Terminal — is also protected. Substantially
+similar replication, even with branding removed, is prohibited.
+
+Use of the trademarks or trade dress to promote derivative works or
+competing products is strictly prohibited.
+
+================================================================================
+                         ADDITIONAL RESTRICTIONS
+================================================================================
+
+While AGPL-3.0 grants broad freedoms for non-commercial use, the following
+additional restrictions apply to all users of this Software:
+
+1. NETWORK USE REQUIREMENT (AGPL § 13)
+   If you run a modified version as a network service (SaaS, cloud
+   platform, web application), you MUST:
    - Provide users with access to the complete source code
    - Clearly indicate the source is available
    - Make the source available via download or repository access
 
 2. ATTRIBUTION REQUIREMENT
    You must retain all copyright notices, attribution statements, and
-   this license file in any distribution or derivative work.
+   this license file in any distribution or Derivative Work.
 
 3. TRADEMARK RESTRICTIONS
-   - Cannot use "Fincept" branding without permission
-   - Must clearly differentiate derivative works from the official version
+   - Cannot use "Fincept" or related marks without permission
    - Cannot imply endorsement by Fincept Corporation
+   - Must clearly differentiate Derivative Works from the official version
+   - Cannot replicate Fincept Trade Dress
+
+4. COMMERCIAL & INTERNAL-USE RESTRICTION
+   - Commercial Use of any kind requires a Commercial License
+   - Internal corporate use is Commercial Use, regardless of whether the
+     Software is exposed to third parties
+   - Forks that strip or replace Fincept APIs are still subject to the
+     Commercial License requirement
 
 ================================================================================
-CONTRIBUTOR LICENSE AGREEMENT
+                     CONTRIBUTOR LICENSE AGREEMENT (CLA)
 ================================================================================
 
-By contributing to Fincept Terminal, you agree that:
+By contributing to Fincept Terminal (via pull request, patch, or any other
+means), you agree that:
 
 1. You grant Fincept Corporation a perpetual, worldwide, non-exclusive,
-   royalty-free license to use, reproduce, modify, and distribute your
-   contributions under both AGPL-3.0 and commercial licenses.
+   royalty-free, irrevocable license — with the right to sublicense — to
+   use, reproduce, modify, distribute, sublicense, and relicense your
+   contributions under AGPL-3.0, the Fincept Commercial License, and any
+   future license selected by Fincept Corporation.
 
-2. You certify that you have the right to make the contribution and grant
-   these licenses.
+2. You certify that you have the legal right to make the contribution and
+   to grant these licenses, and that the contribution is your original work
+   or properly attributed.
 
-3. Your contributions are provided "as-is" without warranties.
+3. Your contributions are provided "AS IS" without warranties of any kind.
 
-4. Contributing does not grant you commercial rights to use Fincept
-   Data Sources and APIs.
-
-================================================================================
-COMMERCIAL USE
-================================================================================
-
-You NEED a commercial license if you:
-- Use Fincept Terminal for any business purpose
-- Use Fincept Data Sources or APIs commercially
-- Are a startup (even with $0 revenue)
-- Use internally at a company
-- Offer as SaaS or cloud platform
-- White-label or resell
-
-You DON'T need a commercial license if you:
-- Use for personal learning
-- Are an individual student
-- Use with your own data sources (non-commercial)
-- Contribute to the open-source project
+4. Contributing does NOT grant you Commercial Use rights, nor access to
+   Fincept Data Sources or APIs for commercial purposes.
 
 ================================================================================
-CONTACT INFORMATION
+                       WHEN A COMMERCIAL LICENSE IS REQUIRED
 ================================================================================
 
-Email: support@fincept.in
-Phone: +91-9773034108
-Website: https://fincept.in
-Repository: https://github.com/Fincept-Corporation/FinceptTerminal
+You NEED a Commercial License if you:
+- Use Fincept Terminal for any business purpose, paid or free
+- Use Fincept Terminal internally at a company, fund, or for-profit entity
+  (regardless of whether it is exposed to third parties)
+- Are a startup at any stage, including pre-revenue and pre-product
+- Are a hedge fund, prop firm, bank, brokerage, asset manager, family
+  office, fintech, or exchange
+- Offer Fincept Terminal as SaaS, PaaS, or any hosted service
+- White-label, rebrand, distribute, or resell Fincept Terminal
+- Maintain or operate a fork that strips or replaces Fincept APIs and use
+  it commercially or internally
+- Engage a third-party developer, integrator, or consultancy to build,
+  modify, deploy, host, or customize Fincept Terminal for any of the above
+
+You do NOT need a Commercial License if you:
+- Use Fincept Terminal for personal learning on your own machine
+- Are an individual student conducting non-commercial research
+- Are contributing to the open-source project
+
+When in doubt, assume a Commercial License is required and email
+support@fincept.in.
+
+================================================================================
+                      ENFORCEMENT, PENALTIES & LIABILITY
+================================================================================
+
+Fincept Corporation actively monitors public code repositories, container
+registries, application stores, cloud marketplaces, SaaS platforms, and
+trademark registers for unlicensed Commercial Use of Fincept Terminal,
+Modified Versions, and Derivative Works.
+
+Unauthorized Commercial Use is subject to liquidated damages, including
+(without limitation):
+
+  * USD 50,000 per organization per year for unauthorized internal
+    corporate use (or 5x the then-current Commercial License fee,
+    whichever is greater)
+  * USD 250,000 per offering for unauthorized SaaS, hosting, or resale,
+    plus full disgorgement of revenue
+  * USD 100,000 per organization for unauthorized fork-and-replace-API
+    deployments, plus 5x the Commercial License fee for each year of use
+  * USD 150,000 per element for unauthorized use of Fincept Marks or
+    Fincept Trade Dress
+  * USD 10,000 per day for continued use after notice of breach
+
+In addition, Fincept Corporation will pursue:
+- Backdated license fees from the date of first unauthorized use, with
+  18% annual interest
+- Disgorgement of all profits, revenue, and cost savings derived from
+  unauthorized use
+- DMCA takedowns (17 U.S.C. § 512), notices under the Information
+  Technology Act, 2000 (India), and equivalent foreign statutes
+- Cease-and-desist letters and civil action for copyright and trademark
+  infringement
+- Criminal complaints under the Copyright Act, 1957 (India) §§ 63-63B
+  and equivalent foreign laws
+- All attorneys' fees, court costs, expert fees, and investigation costs
+
+JOINT AND SEVERAL LIABILITY. Any organization that engages, hires, or
+contracts with a third-party developer, integrator, IT consultancy,
+outsourcing vendor, freelancer, or offshore development center to build,
+modify, deploy, fork, host, or customize Fincept Terminal or any
+Derivative Work shall be JOINTLY AND SEVERALLY LIABLE with that third
+party for any unauthorized Commercial Use, breach of license, or
+infringement. The contracting company cannot escape liability by claiming
+that the developer was solely responsible. Liability extends to parents,
+subsidiaries, affiliates, successors, joint-venture partners, and
+acquirers. The duty to verify license compliance is non-delegable.
+
+Full enforcement, penalty, and joint-and-several liability terms are set
+forth in docs/COMMERCIAL_LICENSE.md, Sections 12, 13, and 14.
+
+================================================================================
+                       GOVERNING LAW & JURISDICTION
+================================================================================
+
+This License and any dispute arising out of or relating to it shall be
+governed by the laws of the Republic of India, without regard to its
+conflict-of-laws principles. The courts of Delhi, India shall have
+exclusive jurisdiction. Fincept Corporation reserves the right to seek
+injunctive or equitable relief in any court of competent jurisdiction
+worldwide to protect its intellectual property.
+
+================================================================================
+                          CONTACT INFORMATION
+================================================================================
+
+Email:         support@fincept.in
+Phone:         +91-9773034108
+Website:       https://fincept.in
+Repository:    https://github.com/Fincept-Corporation/FinceptTerminal
 Documentation: https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs
+Commercial:    docs/COMMERCIAL_LICENSE.md
 
 ================================================================================
 
-Last Updated: February 2026
-Version: 3.3.1
+Document Version: 2.0
+In Force From:    April 30, 2026
+Status:           Current and binding. These terms remain in full force and
+                  effect indefinitely until expressly superseded by a
+                  subsequent version published by Fincept Corporation. The
+                  date above marks the most recent revision and is NOT an
+                  expiry date.
+Software Version: 4.0.2 (current release; license applies to all releases,
+                  branches, tags, and commits of the Software)
