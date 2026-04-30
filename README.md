@@ -287,7 +287,7 @@ We're thinking long-term — and we hope you are too. That said, please only par
 | ✅ **Free under AGPL-3.0** | Personal use · Individual learning · Academic research · Open-source contributions to this repository |
 | ❌ **Commercial License required** | Any business use (paid or free) · Internal company use · Startups at any stage · Hedge funds, brokerages, banks, fintechs · SaaS / hosted offerings · White-label or reselling · Forks that strip or replace Fincept APIs · Consulting deliverables · Employee training or evaluation by for-profit entities |
 
-The license attaches to the **codebase and any Derivative Work of it**, not to specific API integrations. Substituting Fincept APIs with your own — or with any third party's — does not sever or extinguish the licensing obligation.
+The license attaches to the **codebase and any Derivative Work of it**, not to specific API integrations. Substituting Fincept APIs with your own — or with any third party's — does not sever or extinguish the licensing obligation. **These terms apply to every version, branch, tag, and commit of Fincept Terminal — past, present, and future** — and remain in force indefinitely until superseded by a subsequent published version.
 
 **Trademarks.** "Fincept", "Fincept Terminal", and the Fincept logo are trademarks of Fincept Corporation. Use in any forked, derivative, rebranded, or commercial product requires prior written permission. Removal or rebranding of these marks in a fork does not extinguish the underlying licensing obligation.
 

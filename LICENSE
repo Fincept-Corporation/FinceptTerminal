@@ -132,23 +132,45 @@ additional restrictions apply to all users of this Software:
                      CONTRIBUTOR LICENSE AGREEMENT (CLA)
 ================================================================================
 
-By contributing to Fincept Terminal (via pull request, patch, or any other
-means), you agree that:
+By contributing to Fincept Terminal (via pull request, patch, comment,
+issue, or any other means), each contributor agrees to the following terms:
 
-1. You grant Fincept Corporation a perpetual, worldwide, non-exclusive,
-   royalty-free, irrevocable license — with the right to sublicense — to
-   use, reproduce, modify, distribute, sublicense, and relicense your
-   contributions under AGPL-3.0, the Fincept Commercial License, and any
-   future license selected by Fincept Corporation.
+1. ASSIGNMENT AND LICENSE-IN. To the maximum extent permitted by law, each
+   contribution is a work made for hire owned by Fincept Corporation. To
+   the extent any contribution is not a work made for hire, the contributor
+   hereby presently and unconditionally ASSIGNS to Fincept Corporation all
+   right, title, and interest in and to the contribution, including all
+   copyright, moral rights (waived to the maximum extent permitted), and
+   related rights. Without limiting the foregoing, the contributor grants
+   Fincept Corporation a perpetual, worldwide, non-exclusive, royalty-free,
+   irrevocable, sublicensable license — with the right to sublicense
+   through multiple tiers — to use, reproduce, modify, distribute,
+   sublicense, and relicense the contribution under AGPL-3.0, the Fincept
+   Commercial License, and any future license selected by Fincept
+   Corporation.
 
-2. You certify that you have the legal right to make the contribution and
-   to grant these licenses, and that the contribution is your original work
-   or properly attributed.
+2. NO JOINT AUTHORSHIP. Each contributor expressly disclaims any claim of
+   joint authorship in the Software as a whole or in any other
+   contributor's contributions. Contributing does NOT grant the contributor
+   any license to the Software as a whole, to any other contributor's
+   contributions, or to Commercial Use of the Software.
 
-3. Your contributions are provided "AS IS" without warranties of any kind.
+3. WARRANTY AND INDEMNITY. Each contributor warrants that (a) the
+   contribution is the contributor's original work or is properly attributed
+   and licensed for the contribution; (b) the contributor has the legal
+   right to make the contribution and grant the rights herein; (c) the
+   contribution is free of any obligations to any current or former
+   employer, client, university, or third party that would conflict with
+   this assignment; and (d) the contribution does not infringe any
+   third-party rights. The contributor shall indemnify, defend, and hold
+   harmless Fincept Corporation from any breach of these warranties.
 
-4. Contributing does NOT grant you Commercial Use rights, nor access to
-   Fincept Data Sources or APIs for commercial purposes.
+4. AS-IS. Contributions are provided "AS IS" without warranties of any
+   kind beyond the warranties in Section 3 above.
+
+5. NO COMMERCIAL RIGHTS BACK. Contributing does NOT grant the contributor
+   Commercial Use rights, license-back rights, or access to Fincept Data
+   Sources or APIs for commercial purposes.
 
 ================================================================================
                        WHEN A COMMERCIAL LICENSE IS REQUIRED
@@ -259,3 +281,10 @@ Status:           Current and binding. These terms remain in full force and
                   expiry date.
 Software Version: 4.0.2 (current release; license applies to all releases,
                   branches, tags, and commits of the Software)
+
+This License governs all current and future use of the Software, including
+use of historical versions, regardless of when those versions were
+originally published. Any commercial or internal-corporate use of any
+version of Fincept Terminal — past, present, or future — is subject to
+the terms of this License and the accompanying Commercial License at
+docs/COMMERCIAL_LICENSE.md.
