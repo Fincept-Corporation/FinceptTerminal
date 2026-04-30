@@ -5,7 +5,8 @@
 
 namespace fincept::chat_mode {
 
-/// Bridges the desktop app's 218 internal MCP tools to the Finagent backend.
+/// Bridges the desktop app's internal MCP tools (count provided by
+/// McpProvider::tool_count()) to the Finagent backend.
 ///
 /// Lifecycle: start() on chat mode entry, stop() on exit.
 ///  1. Registers all enabled internal tools via POST /terminal-tools/register

@@ -41,9 +41,9 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
   private slots:
     void on_load_vessels();
     void on_search_vessel();
-    void on_vessels_loaded(QVector<services::maritime::VesselData> vessels, int total);
+    void on_vessels_loaded(services::maritime::VesselsPage page);
     void on_vessel_found(services::maritime::VesselData vessel);
-    void on_vessel_history(QVector<services::maritime::VesselData> history);
+    void on_vessel_history(services::maritime::VesselHistoryPage page);
     void on_error(const QString& context, const QString& message);
     void on_route_selected(int row);
 
@@ -55,8 +55,10 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     QWidget* build_right_panel();
     QWidget* build_status_bar();
     void connect_service();
+    void rebuild_routes_from_vessels(const QVector<services::maritime::VesselData>& vessels);
     void populate_routes_table();
     void update_intelligence(int vessel_count);
+    void update_credits(int remaining);
     void update_map(const QVector<services::maritime::VesselData>& vessels);
     void apply_theme();
     void set_status(const QString& text, const ui::ColorToken& color);
@@ -65,6 +67,8 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     QWidget* top_bar_ = nullptr;
     QLabel* brand_label_ = nullptr;
     QLabel* classified_label_ = nullptr;
+    QLabel* credits_label_ = nullptr;
+    QLabel* not_found_label_ = nullptr;  // shown when multi-vessel returns missing IMOs
 
     // Left / right panel roots
     QWidget* left_panel_ = nullptr;
@@ -75,9 +79,7 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     QLabel* stat_vessels_ = nullptr;
     QLabel* stat_displayed_ = nullptr;
     QLabel* stat_routes_ = nullptr;
-    QLabel* stat_volume_ = nullptr;
     QLabel* stat_ports_ = nullptr;
-    QLabel* threat_badge_ = nullptr;
 
     // Center
     fincept::ui::WorldMapWidget* map_widget_ = nullptr;

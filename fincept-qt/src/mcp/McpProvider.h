@@ -5,6 +5,7 @@
 
 #include "mcp/McpTypes.h"
 
+#include <QFuture>
 #include <QHash>
 #include <QMutex>
 #include <QSet>
@@ -41,7 +42,37 @@ class McpProvider {
 
     // ── Tool Execution ─────────────────────────────────────────────────────
 
+    /// Synchronous execution. For tools registered with `handler` (legacy),
+    /// invokes directly and returns. For tools registered with `async_handler`,
+    /// dispatches asynchronously and waits for the future to complete (with
+    /// the tool's default_timeout_ms applied). Validation runs first via
+    /// mcp::validate_args; failures short-circuit before the handler.
     ToolResult call_tool(const QString& name, const QJsonObject& args);
+
+    /// Phase 4: asynchronous execution. Returns a QFuture that resolves with
+    /// the ToolResult. For sync handlers, returns an already-resolved future
+    /// (the handler runs on the calling thread). For async handlers, builds
+    /// a ToolContext (cancellation hook + timeout from the per-call ctx or
+    /// the tool's default), invokes the handler, and arms a timeout timer.
+    ///
+    /// Pass an empty ToolContext to get the tool's defaults. Pass a populated
+    /// one to override timeout / inject a cancellation hook (Phase 5 will
+    /// thread cancellation tokens through here).
+    QFuture<ToolResult> call_tool_async(const QString& name, const QJsonObject& args,
+                                         ToolContext ctx = {});
+
+    // ── Phase 6.3: Authorization hook ──────────────────────────────────────
+    /// Caller-supplied predicate that returns true iff the call should
+    /// proceed. The hook receives the tool's required AuthLevel and
+    /// is_destructive flag; it is responsible for checking the active
+    /// session (AuthManager), prompting the user (modal dialog), and
+    /// returning the verdict synchronously. Hook lives in the app layer to
+    /// avoid pulling auth/UI headers into McpTypes.h.
+    ///
+    /// When unset, tools with auth_required > Authenticated or
+    /// is_destructive=true fail closed; lesser tools pass through.
+    using AuthChecker = std::function<bool(AuthLevel required, bool is_destructive)>;
+    void set_auth_checker(AuthChecker checker);
 
     // ── LLM Integration ────────────────────────────────────────────────────
 
@@ -71,6 +102,10 @@ class McpProvider {
     QHash<QString, ToolDef> tools_;
     QSet<QString> disabled_tools_;
     quint64 generation_ = 0;
+
+    // Phase 6.3 — guarded by mutex_ so set_auth_checker / call_tool_async
+    // see consistent state across threads.
+    AuthChecker auth_checker_;
 };
 
 } // namespace fincept::mcp

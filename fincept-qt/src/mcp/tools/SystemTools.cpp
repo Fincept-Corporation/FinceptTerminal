@@ -8,6 +8,13 @@
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 
+// FINCEPT_VERSION_STRING is injected by CMake from CMAKE_PROJECT_VERSION.
+// Fallback mirrors main.cpp so dev builds without the compile-definition
+// still produce something parseable instead of failing to compile.
+#ifndef FINCEPT_VERSION_STRING
+#    define FINCEPT_VERSION_STRING "0.0.0-dev"
+#endif
+
 namespace fincept::mcp::tools {
 
 std::vector<ToolDef> get_system_tools() {
@@ -69,7 +76,7 @@ std::vector<ToolDef> get_system_tools() {
         t.category = "system";
         t.handler = [](const QJsonObject&) -> ToolResult {
             return ToolResult::ok_data(
-                QJsonObject{{"version", "4.0.0"},
+                QJsonObject{{"version", QString::fromUtf8(FINCEPT_VERSION_STRING)},
                             {"platform",
 #ifdef _WIN32
                              "windows"

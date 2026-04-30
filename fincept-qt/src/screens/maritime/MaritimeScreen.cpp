@@ -10,8 +10,10 @@
 
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QHeaderView>
 #include <QScrollArea>
+#include <QSet>
 #include <QSplitter>
 #include <QTabWidget>
 
@@ -88,7 +90,7 @@ static QString detail_text_ss() {
 
 // ── Constructor ──────────────────────────────────────────────────────────────
 MaritimeScreen::MaritimeScreen(QWidget* parent) : QWidget(parent) {
-    routes_ = default_trade_routes();
+    // routes_ starts empty — populated dynamically from loaded vessels.
     build_ui();
     connect_service();
 
@@ -107,8 +109,14 @@ void MaritimeScreen::showEvent(QShowEvent* e) {
     refresh_timer_->start();
     if (first_show_) {
         first_show_ = false;
-        populate_routes_table();
-        on_load_vessels();
+        // Pull whatever bounding box the user last typed (restored from
+        // ScreenStateManager) — no hardcoded "Mumbai area" load.
+        if (area_min_lat_ && area_max_lat_ && area_min_lng_ && area_max_lng_) {
+            const bool valid = area_max_lat_->value() > area_min_lat_->value()
+                            && area_max_lng_->value() > area_min_lng_->value();
+            if (valid)
+                on_load_vessels();
+        }
     }
     LOG_INFO("Maritime", "Screen shown");
 }
@@ -146,13 +154,14 @@ void MaritimeScreen::apply_theme() {
                                              .arg(ui::colors::TEXT_TERTIARY())
                                              .arg(ui::fonts::DATA_FAMILY));
 
-    if (threat_badge_)
-        threat_badge_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
-                                             "padding:3px 10px; background:%3; border:1px solid %4; border-radius:2px;")
-                                         .arg(ui::colors::POSITIVE())
-                                         .arg(ui::fonts::DATA_FAMILY)
-                                         .arg(ui::colors::BG_SURFACE())
-                                         .arg(ui::colors::BORDER_MED()));
+    if (credits_label_)
+        credits_label_->setStyleSheet(
+            QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
+                    "padding:3px 10px; background:%3; border:1px solid %4; border-radius:2px;")
+                .arg(ui::colors::TEXT_TERTIARY())
+                .arg(ui::fonts::DATA_FAMILY)
+                .arg(ui::colors::BG_SURFACE())
+                .arg(ui::colors::BORDER_MED()));
 
     if (vessel_count_label_)
         vessel_count_label_->setStyleSheet(
@@ -245,15 +254,15 @@ QWidget* MaritimeScreen::build_top_bar() {
     brand_label_ = new QLabel("FINCEPT MARITIME INTELLIGENCE", bar);
     hl->addWidget(brand_label_);
 
-    classified_label_ = new QLabel("CLASSIFIED // TRADE ROUTE ANALYSIS", bar);
+    classified_label_ = new QLabel("VESSEL TRACKING // FINCEPT MARINE API", bar);
     hl->addWidget(classified_label_);
 
     hl->addStretch(1);
 
-    threat_badge_ = new QLabel("THREAT: LOW", bar);
-    hl->addWidget(threat_badge_);
+    credits_label_ = new QLabel("CREDITS: —", bar);
+    hl->addWidget(credits_label_);
 
-    vessel_count_label_ = new QLabel("0 VESSELS", bar);
+    vessel_count_label_ = new QLabel("— VESSELS", bar);
     hl->addWidget(vessel_count_label_);
 
     return bar;
@@ -268,7 +277,7 @@ QWidget* MaritimeScreen::build_left_panel() {
     vl->setContentsMargins(12, 12, 12, 12);
     vl->setSpacing(8);
 
-    auto* load_btn = new QPushButton("LOAD VESSELS (MUMBAI AREA)", panel);
+    auto* load_btn = new QPushButton("LOAD VESSELS IN AREA", panel);
     load_btn->setCursor(Qt::PointingHandCursor);
     load_btn->setStyleSheet(btn_primary_ss());
     connect(load_btn, &QPushButton::clicked, this, &MaritimeScreen::on_load_vessels);
@@ -304,27 +313,25 @@ QWidget* MaritimeScreen::build_left_panel() {
         return box;
     };
 
-    auto* sv = make_stat("TOTAL VESSELS", "0", ui::colors::INFO);
-    stat_vessels_ = sv->findChild<QLabel*>("TOTAL VESSELS");
+    // All stats start at "—" and are populated from the loaded vessel set.
+    // No hardcoded trade-volume, route count, or satellite numbers — the API
+    // does not expose those, so we don't fabricate them.
+    auto* sv = make_stat("TOTAL IN AREA", "—", ui::colors::INFO);
+    stat_vessels_ = sv->findChild<QLabel*>("TOTAL IN AREA");
     grid->addWidget(sv, 0, 0);
 
-    auto* sd = make_stat("DISPLAYED", "0", ui::colors::POSITIVE);
+    auto* sd = make_stat("DISPLAYED", "—", ui::colors::POSITIVE);
     stat_displayed_ = sd->findChild<QLabel*>("DISPLAYED");
     grid->addWidget(sd, 0, 1);
 
-    auto* sr = make_stat("ROUTES", "10", ui::colors::INFO);
+    auto* sr = make_stat("ROUTES", "—", ui::colors::INFO);
     stat_routes_ = sr->findChild<QLabel*>("ROUTES");
     grid->addWidget(sr, 1, 0);
 
-    auto* stv = make_stat("TRADE VOL", "$847.3B", ui::colors::POSITIVE);
-    stat_volume_ = stv->findChild<QLabel*>("TRADE VOL");
-    grid->addWidget(stv, 1, 1);
-
-    auto* sp = make_stat("PORTS", "6", ui::colors::WARNING);
+    auto* sp = make_stat("PORTS", "—", ui::colors::WARNING);
     stat_ports_ = sp->findChild<QLabel*>("PORTS");
-    grid->addWidget(sp, 2, 0);
+    grid->addWidget(sp, 1, 1);
 
-    grid->addWidget(make_stat("SATELLITES", "13", ui::colors::AMBER), 2, 1);
     vl->addLayout(grid);
 
     vl->addSpacing(8);
@@ -336,7 +343,7 @@ QWidget* MaritimeScreen::build_left_panel() {
 
     routes_table_ = new QTableWidget(panel);
     routes_table_->setColumnCount(3);
-    routes_table_->setHorizontalHeaderLabels({"Route", "Value", "Status"});
+    routes_table_->setHorizontalHeaderLabels({"Route", "Vessels", "Status"});
     routes_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     routes_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     routes_table_->horizontalHeader()->setStretchLastSection(true);
@@ -362,18 +369,13 @@ QWidget* MaritimeScreen::build_center_panel() {
         QString("background:%1; border-bottom:1px solid %2;").arg(C(ui::colors::BG_RAISED), C(ui::colors::BORDER_DIM)));
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(16, 0, 16, 0);
-    auto* title = new QLabel("VESSEL TRACKING — AIS FEED", header);
+    auto* title = new QLabel("VESSEL TRACKING", header);
     title->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
                              .arg(ui::colors::AMBER())
                              .arg(ui::fonts::TINY)
                              .arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(title);
     hhl->addStretch();
-    auto* ais_badge = new QLabel("AIS: STREAMING", header);
-    ais_badge->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2; font-weight:700;")
-                                 .arg(ui::colors::POSITIVE())
-                                 .arg(ui::fonts::DATA_FAMILY));
-    hhl->addWidget(ais_badge);
     vl->addWidget(header);
 
     auto* splitter = new QSplitter(Qt::Vertical, panel);
@@ -381,13 +383,7 @@ QWidget* MaritimeScreen::build_center_panel() {
     splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM()));
 
     map_widget_ = new fincept::ui::WorldMapWidget(splitter);
-    map_widget_->setMinimumHeight(160);
-
-    QVector<fincept::ui::MapPin> port_pins;
-    for (const auto& port : preset_ports())
-        port_pins.append({port.lat, port.lng, port.name, ui::colors::CYAN, 6.0});
-    map_widget_->set_pins(port_pins);
-
+    map_widget_->setMinimumHeight(280);
     splitter->addWidget(map_widget_);
 
     vessels_table_ = new QTableWidget(splitter);
@@ -403,8 +399,10 @@ QWidget* MaritimeScreen::build_center_panel() {
     vessels_table_->setStyleSheet(table_ss());
     splitter->addWidget(vessels_table_);
 
-    splitter->setStretchFactor(0, 4);
-    splitter->setStretchFactor(1, 6);
+    vessels_table_->setMinimumHeight(180);
+    splitter->setStretchFactor(0, 5);
+    splitter->setStretchFactor(1, 5);
+    splitter->setSizes({380, 360});
     vl->addWidget(splitter, 1);
 
     return panel;
@@ -513,10 +511,12 @@ QWidget* MaritimeScreen::build_right_panel() {
         return spin;
     };
 
-    area_min_lat_ = make_coord("MIN LATITUDE", 18.5);
-    area_max_lat_ = make_coord("MAX LATITUDE", 19.5);
-    area_min_lng_ = make_coord("MIN LONGITUDE", 72.0);
-    area_max_lng_ = make_coord("MAX LONGITUDE", 73.5);
+    // Spinners start at zero — the user supplies a real bbox before the
+    // first call (or restore_state injects the last-used coords).
+    area_min_lat_ = make_coord("MIN LATITUDE", 0.0);
+    area_max_lat_ = make_coord("MAX LATITUDE", 0.0);
+    area_min_lng_ = make_coord("MIN LONGITUDE", 0.0);
+    area_max_lng_ = make_coord("MAX LONGITUDE", 0.0);
 
     auto* area_btn = new QPushButton("SEARCH AREA", content);
     area_btn->setCursor(Qt::PointingHandCursor);
@@ -564,22 +564,21 @@ QWidget* MaritimeScreen::build_right_panel() {
 
     // ── System Status ──────────────────────────────────────────────────────
     vl->addSpacing(8);
-    auto* sys_title = new QLabel("SYSTEM STATUS", content);
-    sys_title->setStyleSheet(tiny_label_ss());
-    vl->addWidget(sys_title);
+    not_found_label_ = new QLabel(content);
+    not_found_label_->setVisible(false);
+    not_found_label_->setWordWrap(true);
+    not_found_label_->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;"
+                                            "padding:6px; border:1px solid %3; background:%4; border-radius:2px;")
+                                        .arg(ui::colors::WARNING())
+                                        .arg(ui::fonts::DATA_FAMILY)
+                                        .arg(ui::colors::BORDER_MED())
+                                        .arg(ui::colors::BG_SURFACE()));
+    vl->addWidget(not_found_label_);
 
-    // Status items use semantic tokens
-    struct StatusItem {
-        QString text;
-        const ui::ColorToken& color;
-    };
-    QVector<QPair<QString, QString>> statuses = {
-        {"AIS Transponders", ui::colors::INFO()},
-        {"Satellite Imagery", ui::colors::POSITIVE()},
-        {"Trade Routes: 10 corridors", ui::colors::INFO()},
-        {"Orbital Tracking: 13 SATs", ui::colors::AMBER()},
-        {"Major Ports: 6 monitored", ui::colors::WARNING()},
-    };
+    // Suppressed: hardcoded "system status" placeholders (AIS Transponders /
+    // Satellite Imagery / 10 corridors / 13 SATs / 6 ports) — none of these
+    // figures come from the API. Restore once a real backend exposes them.
+    QVector<QPair<QString, QString>> statuses;
     for (const auto& [text, color] : statuses) {
         auto* lbl = new QLabel(QString::fromUtf8("\u25CF ") + text, content);
         lbl->setStyleSheet(QString("color:%1; font-size:8px; font-family:%2;").arg(color).arg(ui::fonts::DATA_FAMILY));
@@ -651,8 +650,12 @@ void MaritimeScreen::populate_routes_table() {
         auto* name_item = new QTableWidgetItem(r.name);
         name_item->setForeground(QBrush(QColor(ui::colors::INFO.get())));
         routes_table_->setItem(i, 0, name_item);
-        routes_table_->setItem(i, 1, new QTableWidgetItem(r.value));
-        auto* status_item = new QTableWidgetItem(r.status.toUpper());
+        // The API doesn't expose trade-volume in $ — repurpose the middle
+        // column for the live vessel count derived from the loaded set.
+        auto* count_item = new QTableWidgetItem(QString::number(r.vessels));
+        count_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        routes_table_->setItem(i, 1, count_item);
+        auto* status_item = new QTableWidgetItem(r.status.isEmpty() ? QStringLiteral("-") : r.status.toUpper());
         status_item->setForeground(route_status_color(r.status));
         routes_table_->setItem(i, 2, status_item);
     }
@@ -661,8 +664,16 @@ void MaritimeScreen::populate_routes_table() {
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 void MaritimeScreen::on_load_vessels() {
-    set_status("LOADING...", ui::colors::WARNING);
     AreaSearchParams params;
+    if (area_min_lat_) params.min_lat = area_min_lat_->value();
+    if (area_max_lat_) params.max_lat = area_max_lat_->value();
+    if (area_min_lng_) params.min_lng = area_min_lng_->value();
+    if (area_max_lng_) params.max_lng = area_max_lng_->value();
+    if (params.max_lat <= params.min_lat || params.max_lng <= params.min_lng) {
+        set_status("INVALID BBOX", ui::colors::WARNING);
+        return;
+    }
+    set_status("LOADING...", ui::colors::WARNING);
     MaritimeService::instance().search_vessels_by_area(params);
 }
 
@@ -676,12 +687,18 @@ void MaritimeScreen::on_search_vessel() {
     MaritimeService::instance().get_vessel_position(imo);
 }
 
-void MaritimeScreen::on_vessels_loaded(QVector<VesselData> vessels, int total) {
-    vessels_table_->setSortingEnabled(false);
-    vessels_table_->setRowCount(vessels.size());
+void MaritimeScreen::on_vessels_loaded(VesselsPage page) {
+    // Render limit — area-search can return 14k+ rows. Pin/render the top
+    // (newest-first) batch to keep the UI responsive; full count still
+    // shown in the status badge.
+    static constexpr int kRenderLimit = 500;
+    const int render_n = qMin(page.vessels.size(), kRenderLimit);
 
-    for (int i = 0; i < vessels.size(); ++i) {
-        const auto& v = vessels[i];
+    vessels_table_->setSortingEnabled(false);
+    vessels_table_->setRowCount(render_n);
+
+    for (int i = 0; i < render_n; ++i) {
+        const auto& v = page.vessels[i];
 
         auto* name_item = new QTableWidgetItem(v.name);
         name_item->setForeground(QBrush(QColor(ui::colors::INFO.get())));
@@ -707,16 +724,34 @@ void MaritimeScreen::on_vessels_loaded(QVector<VesselData> vessels, int total) {
         vessels_table_->setItem(i, 6, new QTableWidgetItem(v.from_port));
         vessels_table_->setItem(i, 7, new QTableWidgetItem(v.to_port));
 
-        auto* prog = new QTableWidgetItem(v.route_progress > 0 ? QString("%1%").arg(v.route_progress, 0, 'f', 0) : "—");
+        auto* prog = new QTableWidgetItem(v.route_progress > 0 ? QString("%1%").arg(v.route_progress, 0, 'f', 0) : "-");
         prog->setTextAlignment(Qt::AlignCenter);
         vessels_table_->setItem(i, 8, prog);
     }
 
     vessels_table_->setSortingEnabled(true);
     vessels_table_->resizeColumnsToContents();
-    update_intelligence(total);
-    update_map(vessels);
-    set_status("READY", ui::colors::POSITIVE);
+
+    // Surface multi-vessel "not_found" warnings if any IMOs were missing.
+    if (not_found_label_) {
+        if (!page.not_found.isEmpty()) {
+            not_found_label_->setText(QString("Not found in DB: %1").arg(page.not_found.join(", ")));
+            not_found_label_->setVisible(true);
+        } else {
+            not_found_label_->setVisible(false);
+        }
+    }
+
+    update_intelligence(page.total_count);
+    update_credits(page.remaining_credits);
+    update_map(page.vessels.mid(0, kRenderLimit));
+    rebuild_routes_from_vessels(page.vessels);
+    populate_routes_table();
+
+    if (page.vessels.size() > kRenderLimit)
+        set_status(QString("READY (showing %1 of %2)").arg(render_n).arg(page.vessels.size()), ui::colors::WARNING);
+    else
+        set_status("READY", ui::colors::POSITIVE);
 }
 
 void MaritimeScreen::on_vessel_found(VesselData vessel) {
@@ -749,8 +784,8 @@ void MaritimeScreen::on_route_selected(int row) {
     const auto& r = routes_[row];
     route_detail_->setVisible(true);
     rd_name_->setText(r.name);
-    rd_value_->setText("Trade Value: " + r.value);
-    rd_status_->setText("Status: " + r.status.toUpper());
+    rd_value_->setText(r.value.isEmpty() ? QStringLiteral("Trade Value: n/a") : "Trade Value: " + r.value);
+    rd_status_->setText("Status: " + (r.status.isEmpty() ? QStringLiteral("-") : r.status.toUpper()));
     rd_status_->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;")
                                   .arg(route_status_color(r.status).name())
                                   .arg(ui::fonts::DATA_FAMILY));
@@ -758,27 +793,84 @@ void MaritimeScreen::on_route_selected(int row) {
 }
 
 void MaritimeScreen::update_intelligence(int vessel_count) {
-    vessel_count_label_->setText(QString("%1 VESSELS").arg(vessel_count));
+    auto fmt = [](int n) -> QString {
+        if (n >= 1'000'000) return QString::number(n / 1'000'000.0, 'f', 1) + "M";
+        if (n >= 1'000)     return QString::number(n / 1'000.0,     'f', 1) + "K";
+        return QString::number(n);
+    };
+    const QString count_str = fmt(vessel_count);
+    vessel_count_label_->setText(QString("%1 VESSELS").arg(count_str));
     if (stat_vessels_)
-        stat_vessels_->setText(QString::number(vessel_count));
+        stat_vessels_->setText(count_str);
     if (stat_displayed_)
         stat_displayed_->setText(QString::number(qMin(vessel_count, 500)));
+    if (stat_routes_)
+        stat_routes_->setText(QString::number(routes_.size()));
+}
+
+void MaritimeScreen::update_credits(int remaining) {
+    if (!credits_label_ || remaining < 0)
+        return;
+    const QString c = remaining < 20  ? ui::colors::NEGATIVE()
+                    : remaining < 100 ? ui::colors::WARNING()
+                                      : ui::colors::POSITIVE();
+    QColor cc(c);
+    auto rgb = QString("%1,%2,%3").arg(cc.red()).arg(cc.green()).arg(cc.blue());
+    credits_label_->setText(QString("CREDITS: %1").arg(remaining));
+    credits_label_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
+                                          "padding:3px 10px; background:rgba(%3,0.08); border:1px solid rgba(%3,0.3);"
+                                          "border-radius:2px;")
+                                      .arg(c)
+                                      .arg(ui::fonts::DATA_FAMILY)
+                                      .arg(rgb));
 }
 
 void MaritimeScreen::update_map(const QVector<VesselData>& vessels) {
     QVector<fincept::ui::MapPin> pins;
-    for (const auto& port : preset_ports())
-        pins.append({port.lat, port.lng, port.name, ui::colors::CYAN, 6.0});
+    pins.reserve(vessels.size());
+    QSet<QString> port_seen;
     for (const auto& v : vessels) {
         if (v.latitude == 0.0 && v.longitude == 0.0)
             continue;
-        pins.append({v.latitude, v.longitude, QString("%1 (%2)").arg(v.name, v.imo), ui::colors::POSITIVE, 4.0});
+        pins.append({v.latitude, v.longitude, QString("%1 (%2)").arg(v.name, v.imo),
+                     ui::colors::POSITIVE, 4.0});
+        // Track unique destination ports for the PORTS stat.
+        if (!v.to_port.isEmpty())
+            port_seen.insert(v.to_port);
     }
+    if (stat_ports_)
+        stat_ports_->setText(QString::number(port_seen.size()));
     map_widget_->set_pins(pins);
     map_widget_->fit_to_pins();
 }
 
-void MaritimeScreen::on_vessel_history(QVector<VesselData> history) {
+void MaritimeScreen::rebuild_routes_from_vessels(const QVector<VesselData>& vessels) {
+    // Aggregate vessels by from_port -> to_port. Skip rows with missing
+    // endpoints. Sort by vessel count desc so the busiest corridors top
+    // the list.
+    QHash<QString, TradeRoute> agg;
+    for (const auto& v : vessels) {
+        if (v.from_port.isEmpty() || v.to_port.isEmpty())
+            continue;
+        const QString key = v.from_port + " -> " + v.to_port;
+        auto& r = agg[key];
+        if (r.name.isEmpty()) {
+            r.name = key;
+            r.status = QStringLiteral("active");
+        }
+        r.vessels++;
+    }
+    routes_.clear();
+    routes_.reserve(agg.size());
+    for (auto it = agg.cbegin(); it != agg.cend(); ++it)
+        routes_.append(it.value());
+    std::sort(routes_.begin(), routes_.end(),
+              [](const TradeRoute& a, const TradeRoute& b) { return a.vessels > b.vessels; });
+}
+
+void MaritimeScreen::on_vessel_history(VesselHistoryPage page) {
+    update_credits(page.remaining_credits);
+    const auto& history = page.history;
     if (history.isEmpty()) {
         set_status("NO HISTORY", ui::colors::WARNING);
         return;
@@ -843,8 +935,9 @@ void MaritimeScreen::on_vessel_history(QVector<VesselData> history) {
     vessels_table_->setSortingEnabled(true);
     vessels_table_->resizeColumnsToContents();
 
-    set_status(QString("HISTORY: %1 — %2 positions").arg(vessel_name).arg(total), ui::colors::WARNING);
-    LOG_INFO("Maritime", QString("Vessel history: %1 — %2 positions").arg(vessel_name).arg(total));
+    const int reported = page.total_records > 0 ? page.total_records : total;
+    set_status(QString("HISTORY: %1 (%2 positions)").arg(vessel_name).arg(reported), ui::colors::WARNING);
+    LOG_INFO("Maritime", QString("Vessel history [%1]: %2 / %3 positions").arg(vessel_name).arg(total).arg(reported));
 }
 
 // ── IStatefulScreen ──────────────────────────────────────────────────────────

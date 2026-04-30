@@ -75,7 +75,7 @@ plan's risk-mitigation cadence).
 
 | Pattern | Producer | TTL | Min interval | Notes |
 |---|---|---|---|---|
-| `geopolitics:events` | `GeopoliticsService` | 2 min | 30 s | Conflict monitor news events (default params) |
+| `geopolitics:events` | `GeopoliticsService` | 2 min | 30 s | Conflict monitor news events (default params). Payload: `EventsPage` (events sorted newest-first + pagination + credits metering). |
 | `geopolitics:countries` | `GeopoliticsService` | 10 min | 60 s | Unique country list w/ event counts |
 | `geopolitics:categories` | `GeopoliticsService` | 10 min | 60 s | Unique event category list |
 | `geopolitics:cities` | `GeopoliticsService` | 10 min | 60 s | Cities with extracted coordinates |
@@ -88,10 +88,11 @@ plan's risk-mitigation cadence).
 
 | Pattern | Producer | TTL | Min interval | Notes |
 |---|---|---|---|---|
-| `maritime:vessel:<imo>` | `MaritimeService` | 1 min | 30 s | Single vessel position |
-| `maritime:vessels:multi` | `MaritimeService` | 1 min | 30 s | Batch vessel snapshot (default preset IMO list) |
-| `maritime:history:<imo>` | `MaritimeService` | 5 min | 60 s | Vessel route history |
-| `maritime:health` | `MaritimeService` | 5 min | 60 s | Marine API health check |
+| `maritime:vessel:<imo>` | `MaritimeService` | 1 min | 30 s | Single vessel position. Payload: `VesselData`. |
+| `maritime:vessels:multi` | `MaritimeService` | 1 min | 30 s | Multi-vessel batch (caller supplies IMOs). Payload: `VesselsPage` (vessels + found_count + not_found list + credits metering). User-invoked — hub does not auto-refresh. |
+| `maritime:vessels:area` | `MaritimeService` | 1 min | 30 s | Area-search bounding box. Payload: `VesselsPage` (vessels sorted newest-first, total_count, credits metering). User-invoked. |
+| `maritime:history:<imo>` | `MaritimeService` | 5 min | 60 s | Vessel route history. Payload: `VesselHistoryPage` (history sorted newest-first + total_records + credits metering). |
+| `maritime:health` | `MaritimeService` | 5 min | 60 s | Marine API health check. |
 
 ### M&A Analytics
 

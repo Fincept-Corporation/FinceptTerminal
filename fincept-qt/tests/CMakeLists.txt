@@ -34,3 +34,69 @@ set_target_properties(test_datahub PROPERTIES
 )
 
 add_test(NAME datahub COMMAND test_datahub)
+
+# ── MCP schema validator tests (Phase 3) ────────────────────────────────────
+# Header-only ToolSchema/ToolSchemaBuilder + the SchemaValidator translation unit.
+# No dependency on the rest of the MCP system — McpProvider/McpService are not linked.
+
+add_executable(test_validator
+    mcp/test_validator.cpp
+    ../src/mcp/SchemaValidator.cpp
+)
+
+target_include_directories(test_validator PRIVATE
+    ../src
+)
+
+target_link_libraries(test_validator PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+set_target_properties(test_validator PROPERTIES
+    UNITY_BUILD OFF
+    AUTOMOC ON
+)
+
+add_test(NAME mcp_validator COMMAND test_validator)
+
+# ── MCP async dispatch tests (Phase 4) ──────────────────────────────────────
+# Links McpProvider + SchemaValidator + Logger. Doesn't link McpService /
+# McpManager / external client stack — async tests don't need them.
+
+add_executable(test_async
+    mcp/test_async.cpp
+    ../src/mcp/McpProvider.cpp
+    ../src/mcp/SchemaValidator.cpp
+    ../src/core/logging/Logger.cpp
+)
+
+target_include_directories(test_async PRIVATE
+    ../src
+)
+
+target_link_libraries(test_async PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+set_target_properties(test_async PROPERTIES
+    UNITY_BUILD OFF
+    AUTOMOC ON
+)
+
+add_test(NAME mcp_async COMMAND test_async)
+
+# ── MCP dispatcher tests (Phase 5) ──────────────────────────────────────────
+# Test source kept (mcp/test_dispatcher.cpp) but executable target is disabled:
+# wiring it up requires linking the full McpManager + storage stack
+# (McpServerRepository → Database.h → QSqlDatabase + every other repository
+# transitively pulled). That blows up the test footprint without buying
+# coverage Phase 5 doesn't already get from integration. Re-enable when
+# McpService gains a dependency-injectable external-dispatch hook.
+#
+# add_executable(test_dispatcher
+#     mcp/test_dispatcher.cpp
+#     ...
+# )
+# add_test(NAME mcp_dispatcher COMMAND test_dispatcher)

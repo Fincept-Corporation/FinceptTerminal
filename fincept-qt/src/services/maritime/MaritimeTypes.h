@@ -27,84 +27,61 @@ struct VesselData {
     QString fetched_at;
 };
 
-// ── Trade route corridor ────────────────────────────────────────────────────
+// ── Trade route corridor (derived from current vessel set, not hardcoded) ──
+//
+// Built at runtime by aggregating loaded vessels on (from_port, to_port).
+// `value` is left empty since the API does not expose trade-volume figures —
+// the column is kept for future enrichment.
 
 struct TradeRoute {
     QString name;
-    QString value;  // e.g. "$45B"
-    QString status; // active, delayed, critical
+    QString value;
+    QString status;  // active, delayed, critical (left empty when not derivable)
     int vessels = 0;
     double start_lat = 0, start_lng = 0;
     double end_lat = 0, end_lng = 0;
 };
 
 inline QColor route_status_color(const QString& status) {
-    if (status == "critical")
+    if (status == QStringLiteral("critical"))
         return QColor("#FF0000");
-    if (status == "delayed")
+    if (status == QStringLiteral("delayed"))
         return QColor("#FFD700");
-    return QColor("#00FF00"); // active
+    if (status == QStringLiteral("active"))
+        return QColor("#00FF00");
+    return QColor("#888888");
 }
 
-// ── Intelligence stats ──────────────────────────────────────────────────────
+// ── Page envelope for area-search / multi-vessel responses ──────────────────
+//
+// Wraps the parsed vessel list with the new credit metering + result counts
+// the API returns. `not_found` is populated by multi-vessel when caller
+// requested IMOs that aren't in the database.
 
-struct IntelligenceData {
-    QString threat_level; // low, medium, high, critical
-    int active_vessels = 0;
-    int monitored_routes = 48;
-    QString trade_volume = "$847.3B";
+struct VesselsPage {
+    QVector<VesselData> vessels;
+    int total_count = 0;       // server-reported total ("vessel_count" / "found_count")
+    int found_count = 0;       // multi-vessel only
+    QStringList not_found;     // multi-vessel only — IMOs missing from DB
+    double credits_used = 0.0;
+    int remaining_credits = -1; // -1 = unknown / not reported
 };
 
-inline QColor threat_color(const QString& level) {
-    if (level == "critical")
-        return QColor("#FF0000");
-    if (level == "high")
-        return QColor("#FF6600");
-    if (level == "medium")
-        return QColor("#FFD700");
-    return QColor("#00FF00"); // low
-}
-
-// ── Preset port locations ───────────────────────────────────────────────────
-
-struct PresetPort {
-    QString name;
-    double lat;
-    double lng;
+struct VesselHistoryPage {
+    QString imo;
+    QVector<VesselData> history; // sorted newest-first
+    int total_records = 0;
+    double credits_used = 0.0;
+    int remaining_credits = -1;
 };
-
-inline QVector<PresetPort> preset_ports() {
-    return {
-        {"Mumbai Port", 18.9388, 72.8354},    {"Shanghai Port", 31.3548, 121.6431},
-        {"Singapore Port", 1.2644, 103.8224}, {"Hong Kong Port", 22.2855, 114.1577},
-        {"Rotterdam Port", 51.9553, 4.1392},  {"Dubai Port", 24.9857, 55.0272},
-    };
-}
-
-// ── Default trade routes ────────────────────────────────────────────────────
-
-inline QVector<TradeRoute> default_trade_routes() {
-    return {
-        {"Mumbai - Rotterdam", "$45B", "active", 23, 18.94, 72.84, 51.96, 4.14},
-        {"Mumbai - Shanghai", "$156B", "active", 89, 18.94, 72.84, 31.35, 121.64},
-        {"Mumbai - Singapore", "$89B", "active", 45, 18.94, 72.84, 1.26, 103.82},
-        {"Chennai - Tokyo", "$67B", "delayed", 34, 13.08, 80.27, 35.65, 139.84},
-        {"Kolkata - Hong Kong", "$45B", "active", 28, 22.57, 88.37, 22.29, 114.16},
-        {"Mumbai - Dubai", "$78B", "critical", 12, 18.94, 72.84, 24.99, 55.03},
-        {"Mumbai - New York", "$123B", "active", 56, 18.94, 72.84, 40.68, -74.04},
-        {"Chennai - Sydney", "$54B", "active", 31, 13.08, 80.27, -33.86, 151.21},
-        {"Cochin - Port Klang", "$34B", "active", 19, 9.97, 76.27, 3.00, 101.39},
-        {"Mumbai - Cape Town", "$28B", "delayed", 8, 18.94, 72.84, -33.92, 18.42},
-    };
-}
 
 // ── Area search params ──────────────────────────────────────────────────────
 
 struct AreaSearchParams {
-    double min_lat = 18.5;
-    double max_lat = 19.5;
-    double min_lng = 72.0;
-    double max_lng = 73.5;
+    double min_lat = 0;
+    double max_lat = 0;
+    double min_lng = 0;
+    double max_lng = 0;
     int days_ago = 0;
 };
 
@@ -112,4 +89,6 @@ struct AreaSearchParams {
 
 #include <QMetaType>
 Q_DECLARE_METATYPE(fincept::services::maritime::VesselData)
+Q_DECLARE_METATYPE(fincept::services::maritime::VesselsPage)
+Q_DECLARE_METATYPE(fincept::services::maritime::VesselHistoryPage)
 Q_DECLARE_METATYPE(QVector<fincept::services::maritime::VesselData>)

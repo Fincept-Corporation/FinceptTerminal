@@ -1,10 +1,12 @@
 #pragma once
 
 #include "ai_chat/LlmService.h"
+#include "core/events/EventBus.h"
 #include "screens/IStatefulScreen.h"
 
 #include <QLabel>
 #include <QLineEdit>
+#include <QList>
 #include <QListWidget>
 #include <QMutex>
 #include <QPlainTextEdit>
@@ -127,6 +129,15 @@ class AiChatScreen : public QWidget, public IStatefulScreen {
     void update_stats();
     void show_welcome(bool show);
     void show_typing(bool show);
+
+    // EventBus subscriptions — registered in showEvent, released in hideEvent.
+    // MCP set_active_llm publishes llm.provider_changed when the LLM (or
+    // Finagent) switches the active provider. We force-reload LlmService so
+    // the next message uses the new provider; LlmService::config_changed
+    // signal then triggers on_provider_changed for header refresh.
+    QList<EventBus::HandlerId> mcp_event_subs_;
+    void subscribe_mcp_events();
+    void unsubscribe_mcp_events();
 };
 
 } // namespace fincept::screens

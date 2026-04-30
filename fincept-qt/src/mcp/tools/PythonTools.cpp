@@ -3,12 +3,17 @@
 #include "mcp/tools/PythonTools.h"
 
 #include "core/logging/Logger.h"
+#include "mcp/AsyncDispatch.h"
+#include "mcp/ToolSchemaBuilder.h"
 #include "mcp/tools/ThreadHelper.h"
 #include "python/PythonRunner.h"
 
 #include <QDir>
 #include <QJsonDocument>
+#include <QPromise>
 #include <QRegularExpression>
+
+#include <memory>
 
 namespace fincept::mcp::tools {
 
@@ -55,6 +60,11 @@ std::vector<ToolDef> get_python_tools() {
     std::vector<ToolDef> tools;
 
     // ── run_python_script ──────────────────────────────────────────────
+    // Phase 4: async exemplar. Previously used run_script_sync (which
+    // blocked the worker thread for the entire script run via
+    // QMutex+QWaitCondition). Now the handler returns immediately; the
+    // promise resolves when PythonRunner's QProcess::finished signal
+    // fires. Provider's timeout watchdog covers runaway scripts.
     {
         ToolDef t;
         t.name = "run_python_script";
@@ -63,23 +73,25 @@ std::vector<ToolDef> get_python_tools() {
             "list_python_scripts — do not invent or guess script names. For market data prefer "
             "get_quote / get_candles / edgar_* tools rather than Python scripts.";
         t.category = "analytics";
-        t.input_schema.properties = QJsonObject{
-            {"script",
-             QJsonObject{{"type", "string"},
-                         {"description", "Script name (without .py) — must be a name returned by list_python_scripts"}}},
-            {"args",
-             QJsonObject{{"type", "array"}, {"description", "Array of string arguments to pass to the script"}}}};
-        t.input_schema.required = {"script"};
-        t.handler = [](const QJsonObject& args_obj) -> ToolResult {
-            QString script = args_obj["script"].toString().trimmed();
-            if (script.isEmpty())
-                return ToolResult::fail("Missing 'script'");
-
-            // Security: validate script name — alphanumeric, underscore, hyphen only
-            static const QRegularExpression valid_name("^[a-zA-Z0-9_-]+$");
-            if (!valid_name.match(script).hasMatch())
-                return ToolResult::fail("Invalid script name — only alphanumeric, underscore, hyphen allowed");
-
+        t.input_schema = ToolSchemaBuilder()
+            .string("script", "Script name (without .py) — must be returned by list_python_scripts")
+                .required()
+                .pattern("^[a-zA-Z0-9_-]+$")
+                .length(1, 128)
+            .array("args", "Array of string arguments to pass to the script",
+                   QJsonObject{{"type", "string"}})
+            .build();
+        // Python scripts can take a while; allow a generous default. Override
+        // per-call via _meta.timeout_ms when Phase 6 wires that through.
+        t.default_timeout_ms = 60000;
+        // Phase 6.3: arbitrary script execution must be gated. Even with the
+        // regex pattern check on script name, the script can read/write
+        // files, hit the network, etc. Always confirm.
+        t.auth_required = AuthLevel::Authenticated;
+        t.is_destructive = true;
+        t.async_handler = [](const QJsonObject& args_obj, ToolContext ctx,
+                             std::shared_ptr<QPromise<ToolResult>> promise) {
+            const QString script = args_obj["script"].toString().trimmed();
             QStringList script_args;
             if (args_obj.contains("args") && args_obj["args"].isArray()) {
                 for (const auto& a : args_obj["args"].toArray()) {
@@ -90,9 +102,40 @@ std::vector<ToolDef> get_python_tools() {
                 }
             }
 
+            if (!python::PythonRunner::instance().is_available()) {
+                promise->addResult(ToolResult::fail("Python is not available — run setup first"));
+                promise->finish();
+                return;
+            }
+
             LOG_INFO(TAG, QString("Running script: %1 with %2 args").arg(script).arg(script_args.size()));
 
-            return run_script_sync(script, script_args);
+            auto* runner = &python::PythonRunner::instance();
+            AsyncDispatch::callback_to_promise(
+                runner, ctx, promise,
+                [runner, script, script_args, ctx](auto resolve) {
+                    runner->run(script, script_args, [resolve, ctx](python::PythonResult result) {
+                        if (ctx.cancelled()) {
+                            resolve(ToolResult::fail("cancelled"));
+                            return;
+                        }
+                        if (!result.success) {
+                            resolve(ToolResult::fail("Script failed: " + result.error));
+                            return;
+                        }
+                        QString json_text = python::extract_json(result.output);
+                        if (json_text.isEmpty()) json_text = result.output;
+
+                        QJsonDocument doc = QJsonDocument::fromJson(json_text.toUtf8());
+                        if (!doc.isNull()) {
+                            if (doc.isObject())     resolve(ToolResult::ok_data(doc.object()));
+                            else if (doc.isArray()) resolve(ToolResult::ok_data(doc.array()));
+                            else                    resolve(ToolResult::ok(result.output));
+                        } else {
+                            resolve(ToolResult::ok(result.output));
+                        }
+                    });
+                });
         };
         tools.push_back(std::move(t));
     }

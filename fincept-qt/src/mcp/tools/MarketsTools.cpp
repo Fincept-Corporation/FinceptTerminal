@@ -2,10 +2,9 @@
 
 #include "mcp/tools/MarketsTools.h"
 
-#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
-
-#include <QVariantMap>
+#include "mcp/tools/ThreadHelper.h"
+#include "services/markets/MarketDataService.h"
 
 namespace fincept::mcp::tools {
 
@@ -15,11 +14,17 @@ std::vector<ToolDef> get_markets_tools() {
     std::vector<ToolDef> tools;
 
     // ── get_quote ───────────────────────────────────────────────────────
+    // Synchronous fetch via MarketDataService. The service batches/dedups
+    // (100 ms window) and publishes results to the DataHub `market:quote:<sym>`
+    // topic as a side effect, so the same call warms the hub for any
+    // streaming subscribers. Worker-thread blocking is bridged via
+    // detail::run_async_wait — the service lives on the main thread.
     {
         ToolDef t;
         t.name = "get_quote";
-        t.description = "Request a stock/crypto quote. Publishes a request event and returns confirmation. "
-                        "The actual data is delivered to the Markets screen.";
+        t.description = "Fetch the latest stock/ETF/crypto quote (price, change, "
+                        "high/low, volume). Backed by yfinance. Symbols accept "
+                        "AAPL, BTC-USD, ^GSPC, GBPUSD=X, GC=F, etc.";
         t.category = "markets";
         t.input_schema.properties = QJsonObject{
             {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol (e.g. AAPL, BTC-USD)"}}}};
@@ -29,33 +34,48 @@ std::vector<ToolDef> get_markets_tools() {
             if (symbol.isEmpty())
                 return ToolResult::fail("Missing 'symbol'");
 
-            EventBus::instance().publish("market.get_quote", QVariantMap{{"symbol", symbol}});
-            LOG_DEBUG(TAG, "Quote requested: " + symbol);
-            return ToolResult::ok("Quote request sent for " + symbol, QJsonObject{{"symbol", symbol}});
+            auto* svc = &services::MarketDataService::instance();
+            bool ok = false;
+            services::QuoteData q;
+            detail::run_async_wait(svc, [svc, symbol, &ok, &q](auto signal_done) {
+                svc->fetch_quotes({symbol}, [&ok, &q, symbol, signal_done](bool success, QVector<services::QuoteData> quotes) {
+                    if (success) {
+                        for (const auto& candidate : quotes) {
+                            if (candidate.symbol.compare(symbol, Qt::CaseInsensitive) == 0) {
+                                q = candidate;
+                                ok = true;
+                                break;
+                            }
+                        }
+                    }
+                    signal_done();
+                });
+            });
+
+            if (!ok) {
+                LOG_WARN(TAG, "fetch_quotes returned no data for " + symbol);
+                return ToolResult::fail("No quote data available for " + symbol);
+            }
+
+            return ToolResult::ok_data(QJsonObject{{"symbol", q.symbol},
+                                                   {"name", q.name},
+                                                   {"price", q.price},
+                                                   {"change", q.change},
+                                                   {"change_pct", q.change_pct},
+                                                   {"high", q.high},
+                                                   {"low", q.low},
+                                                   {"volume", q.volume}});
         };
         tools.push_back(std::move(t));
     }
 
     // ── search_symbol ───────────────────────────────────────────────────
-    {
-        ToolDef t;
-        t.name = "search_symbol";
-        t.description = "Search for a ticker symbol by company name or partial symbol.";
-        t.category = "markets";
-        t.input_schema.properties =
-            QJsonObject{{"query", QJsonObject{{"type", "string"},
-                                              {"description", "Search query (company name or partial symbol)"}}}};
-        t.input_schema.required = {"query"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
-            QString query = args["query"].toString().trimmed();
-            if (query.isEmpty())
-                return ToolResult::fail("Missing 'query'");
-
-            EventBus::instance().publish("market.search_symbol", QVariantMap{{"query", query}});
-            return ToolResult::ok("Symbol search sent for: " + query);
-        };
-        tools.push_back(std::move(t));
-    }
+    // Removed in Phase 2: no backend exists for symbol search. The previous
+    // implementation published a `market.search_symbol` event with no
+    // subscriber and returned a fake-OK ToolResult to the LLM. Per the
+    // Phase 2 plan we delete the tool rather than leave it broken.
+    // Future option: wire to an OpenFIGI / Yahoo /v1/finance/search
+    // endpoint via a Python script, then re-register here.
 
     return tools;
 }

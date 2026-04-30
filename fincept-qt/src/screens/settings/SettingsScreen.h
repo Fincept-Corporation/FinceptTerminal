@@ -1,12 +1,15 @@
 #pragma once
+#include "core/events/EventBus.h"
 #include "screens/IStatefulScreen.h"
 
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFrame>
 #include <QHash>
+#include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QList>
 #include <QListWidget>
 #include <QPushButton>
 #include <QStackedWidget>
@@ -30,6 +33,7 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
 
   protected:
     void showEvent(QShowEvent* e) override;
+    void hideEvent(QHideEvent* e) override;
 
   private:
     QStackedWidget* sections_ = nullptr;
@@ -139,6 +143,15 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
 
     // ── Notification helpers ──────────────────────────────────────────────────
     void save_provider_fields(const QString& provider_id, const ProviderWidgets& pw);
+
+    // ── MCP-driven UI sync ────────────────────────────────────────────────────
+    // MCP settings tools publish settings.changed / llm.provider_changed when
+    // the LLM mutates settings via Finagent or AI Chat. Subscribers are
+    // active only while the screen is visible (P3 lifecycle).
+    QList<EventBus::HandlerId> mcp_event_subs_;
+    void subscribe_mcp_events();
+    void unsubscribe_mcp_events();
+    void reload_all_sections(); // shared reload logic — also called from showEvent
 };
 
 } // namespace fincept::screens

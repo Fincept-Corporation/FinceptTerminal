@@ -3,6 +3,7 @@
 #include "ai_chat/AiChatScreen.h"
 
 #include "ai_chat/LlmService.h"
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "mcp/McpService.h"
@@ -201,10 +202,51 @@ void AiChatScreen::showEvent(QShowEvent* e) {
     connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::config_changed, this,
             &AiChatScreen::on_provider_changed, Qt::UniqueConnection);
     update_stats();
+    subscribe_mcp_events();
 }
 
 void AiChatScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+    unsubscribe_mcp_events();
+}
+
+// ── MCP-driven UI sync ──────────────────────────────────────────────────────
+// MCP set_active_llm publishes llm.provider_changed when the LLM or Finagent
+// switches the active provider. We force a LlmService::reload_config() so
+// the next outgoing message uses the new provider. reload_config emits
+// LlmService::config_changed which is already wired (above) to
+// on_provider_changed for the header label refresh.
+
+void AiChatScreen::subscribe_mcp_events() {
+    if (!mcp_event_subs_.isEmpty()) return; // idempotent
+
+    QPointer<AiChatScreen> self = this;
+    auto on_provider_event = [self](const QVariantMap&) {
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self]() {
+            if (!self) return;
+            ai_chat::LlmService::instance().reload_config();
+        }, Qt::QueuedConnection);
+    };
+
+    auto on_session_created = [self](const QVariantMap&) {
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self]() {
+            if (!self) return;
+            self->load_sessions();
+        }, Qt::QueuedConnection);
+    };
+
+    auto& bus = EventBus::instance();
+    mcp_event_subs_.append(bus.subscribe("llm.provider_changed",   on_provider_event));
+    mcp_event_subs_.append(bus.subscribe("ai_chat.session_created", on_session_created));
+}
+
+void AiChatScreen::unsubscribe_mcp_events() {
+    auto& bus = EventBus::instance();
+    for (auto id : mcp_event_subs_)
+        bus.unsubscribe(id);
+    mcp_event_subs_.clear();
 }
 
 void AiChatScreen::resizeEvent(QResizeEvent* e) {

@@ -3,6 +3,7 @@
 #include "mcp/tools/PaperTradingTools.h"
 
 #include "core/logging/Logger.h"
+#include "mcp/ToolSchemaBuilder.h"
 #include "trading/PaperTrading.h"
 
 namespace fincept::mcp::tools {
@@ -114,18 +115,25 @@ std::vector<ToolDef> get_paper_trading_tools() {
     {
         ToolDef t;
         t.name = "pt_place_order";
-        t.description = "Place a paper trading order. Supports market, limit, stop, stop_limit order types.";
+        t.description = "Place a paper trading order. Side must be buy/sell; "
+                        "order_type one of market/limit/stop/stop_limit. Quantity > 0.";
         t.category = "paper-trading";
-        t.input_schema.properties = QJsonObject{
-            {"portfolio_id", QJsonObject{{"type", "string"}, {"description", "Portfolio ID"}}},
-            {"symbol", QJsonObject{{"type", "string"}, {"description", "Trading symbol (e.g. BTC/USDT)"}}},
-            {"side", QJsonObject{{"type", "string"}, {"description", "buy or sell"}}},
-            {"order_type", QJsonObject{{"type", "string"}, {"description", "market, limit, stop, stop_limit"}}},
-            {"quantity", QJsonObject{{"type", "number"}, {"description", "Order quantity"}}},
-            {"price", QJsonObject{{"type", "number"}, {"description", "Limit price (required for limit/stop_limit)"}}},
-            {"stop_price", QJsonObject{{"type", "number"}, {"description", "Stop trigger price"}}},
-            {"reduce_only", QJsonObject{{"type", "boolean"}, {"description", "Only reduce existing position"}}}};
-        t.input_schema.required = {"portfolio_id", "symbol", "side", "quantity"};
+        // Phase 6.3: even paper trades should confirm — the LLM's intent may
+        // not match the user's. Real-broker tools (when added) will use
+        // ExplicitConfirm + is_destructive=true.
+        t.auth_required = AuthLevel::Authenticated;
+        t.is_destructive = true;
+        t.input_schema = ToolSchemaBuilder()
+            .string("portfolio_id", "Portfolio ID").required()
+            .string("symbol", "Trading symbol (e.g. BTC/USDT)").required().length(1, 32)
+            .string("side", "Order side").required().enums({"buy", "sell"})
+            .string("order_type", "Order type").default_str("market")
+                .enums({"market", "limit", "stop", "stop_limit"})
+            .number("quantity", "Order quantity (must be > 0)").required().min(0.0)
+            .number("price", "Limit price (required for limit/stop_limit orders)")
+            .number("stop_price", "Stop trigger price (required for stop/stop_limit)")
+            .boolean("reduce_only", "Only reduce existing position").default_bool(false)
+            .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString portfolio_id = args["portfolio_id"].toString();
             QString symbol = args["symbol"].toString();

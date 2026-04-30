@@ -4,6 +4,7 @@
 
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
+#include "mcp/ToolSchemaBuilder.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/SettingsRepository.h"
 
@@ -45,6 +46,9 @@ std::vector<ToolDef> get_settings_tools() {
         t.name = "set_setting";
         t.description = "Set an application setting.";
         t.category = "settings";
+        // Phase 6.3: mutates persisted state (could touch API keys / billing).
+        t.auth_required = AuthLevel::Authenticated;
+        t.is_destructive = true;
         t.input_schema.properties = QJsonObject{
             {"key", QJsonObject{{"type", "string"}, {"description", "Setting key"}}},
             {"value", QJsonObject{{"type", "string"}, {"description", "Setting value"}}},
@@ -124,13 +128,17 @@ std::vector<ToolDef> get_settings_tools() {
     {
         ToolDef t;
         t.name = "set_active_llm";
-        t.description = "Set the active LLM provider.";
+        t.description = "Set the active LLM provider. Must be one of the supported providers.";
         t.category = "settings";
-        t.input_schema.properties = QJsonObject{
-            {"provider",
-             QJsonObject{{"type", "string"},
-                         {"description", "Provider name (openai, anthropic, ollama, groq, google, fincept)"}}}};
-        t.input_schema.required = {"provider"};
+        // Phase 6.3: switching LLM provider mid-conversation is surprising;
+        // requires explicit confirmation.
+        t.auth_required = AuthLevel::Authenticated;
+        t.is_destructive = true;
+        t.input_schema = ToolSchemaBuilder()
+            .string("provider", "Provider id (openai, anthropic, ollama, groq, google, fincept)")
+                .required()
+                .enums({"openai", "anthropic", "ollama", "groq", "google", "fincept"})
+            .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString provider = args["provider"].toString();
             if (provider.isEmpty())

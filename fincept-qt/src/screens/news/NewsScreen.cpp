@@ -1,5 +1,6 @@
 #include "screens/news/NewsScreen.h"
 
+#include "core/events/EventBus.h"
 #include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
@@ -272,6 +273,7 @@ void NewsScreen::showEvent(QShowEvent* e) {
     pulse_timer_->start();
     services::NewsService::instance().start_auto_refresh();
     services::NewsService::instance().connect_live_feed();
+    subscribe_mcp_events();
 
     if (first_show_) {
         first_show_ = false;
@@ -304,6 +306,47 @@ void NewsScreen::hideEvent(QHideEvent* e) {
     services::NewsService::instance().stop_auto_refresh();
     services::NewsService::instance().disconnect_live_feed();
     filter_generation_.fetch_add(1, std::memory_order_relaxed);
+    unsubscribe_mcp_events();
+}
+
+// ── MCP-driven UI sync ──────────────────────────────────────────────────────
+// MCP tools (called from AI Chat / Finagent) publish events when the LLM
+// mutates news state. We subscribe while visible so the UI reflects the
+// change without the user having to manually refresh. EventBus handlers
+// can fire on a worker thread; we marshal to the screen's thread before
+// touching the model/panel.
+
+void NewsScreen::subscribe_mcp_events() {
+    if (!mcp_event_subs_.isEmpty()) return; // idempotent
+
+    QPointer<NewsScreen> self = this;
+    auto on_monitors_changed = [self](const QVariantMap&) {
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self]() {
+            if (!self || !self->visible_) return;
+            self->update_monitors();
+        }, Qt::QueuedConnection);
+    };
+    auto on_refresh_requested = [self](const QVariantMap&) {
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self]() {
+            if (!self || !self->visible_) return;
+            self->refresh_data(/*force=*/true);
+        }, Qt::QueuedConnection);
+    };
+
+    auto& bus = EventBus::instance();
+    mcp_event_subs_.append(bus.subscribe("news.monitor_added",   on_monitors_changed));
+    mcp_event_subs_.append(bus.subscribe("news.monitor_toggled", on_monitors_changed));
+    mcp_event_subs_.append(bus.subscribe("news.monitor_deleted", on_monitors_changed));
+    mcp_event_subs_.append(bus.subscribe("news.refresh_requested", on_refresh_requested));
+}
+
+void NewsScreen::unsubscribe_mcp_events() {
+    auto& bus = EventBus::instance();
+    for (auto id : mcp_event_subs_)
+        bus.unsubscribe(id);
+    mcp_event_subs_.clear();
 }
 
 // ── Slots ───────────────────────────────────────────────────────────────────

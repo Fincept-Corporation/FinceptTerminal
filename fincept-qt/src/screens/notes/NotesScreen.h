@@ -1,12 +1,16 @@
 #pragma once
+#include "core/events/EventBus.h"
 #include "screens/IStatefulScreen.h"
 #include "storage/repositories/NotesRepository.h"
 
 #include <QComboBox>
+#include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QList>
 #include <QListWidget>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QStackedWidget>
 #include <QTextEdit>
 #include <QWidget>
@@ -24,6 +28,10 @@ class NotesScreen : public QWidget, public IStatefulScreen {
     QVariantMap save_state() const override;
     QString state_key() const override { return "notes"; }
     int state_version() const override { return 1; }
+
+  protected:
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
   private slots:
     void on_category_selected(int row);
@@ -78,6 +86,14 @@ class NotesScreen : public QWidget, public IStatefulScreen {
     QComboBox* edit_sentiment_ = nullptr;
     QLineEdit* edit_tags_ = nullptr;
     QLineEdit* edit_tickers_ = nullptr;
+
+    // EventBus subscriptions — registered in showEvent, released in hideEvent.
+    // MCP notes tools publish notes.created / notes.deleted when the LLM
+    // mutates notes via Finagent or AI Chat. Each handler reloads the
+    // notes list so the screen reflects the change immediately.
+    QList<EventBus::HandlerId> mcp_event_subs_;
+    void subscribe_mcp_events();
+    void unsubscribe_mcp_events();
 };
 
 } // namespace fincept::screens

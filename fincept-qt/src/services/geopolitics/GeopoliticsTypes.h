@@ -23,26 +23,49 @@ struct NewsEvent {
     QString created_at;
 };
 
+/// Convert an API category id ("armed_conflict_unclassified") into a display
+/// label ("Armed Conflict (Unclassified)"). Used everywhere the category is
+/// shown to the user — table cells, detail panel, legend, dropdown.
+inline QString pretty_category(const QString& cat) {
+    QString base = cat;
+    bool unclassified = false;
+    if (base.endsWith(QStringLiteral("_unclassified"))) {
+        base.chop(13);
+        unclassified = true;
+    }
+    QStringList parts = base.split(QLatin1Char('_'), Qt::SkipEmptyParts);
+    for (auto& p : parts)
+        if (!p.isEmpty()) p[0] = p[0].toUpper();
+    QString out = parts.join(QLatin1Char(' '));
+    if (unclassified) out += QStringLiteral(" (Unclassified)");
+    return out;
+}
+
 inline QColor category_color(const QString& cat) {
-    if (cat == "armed_conflict")
-        return QColor(255, 0, 0);
-    if (cat == "terrorism")
-        return QColor(255, 69, 0);
-    if (cat == "protests")
-        return QColor(255, 215, 0);
-    if (cat == "civilian_violence")
-        return QColor(255, 100, 100);
-    if (cat == "riots")
-        return QColor(255, 165, 0);
-    if (cat == "political_violence")
-        return QColor(147, 51, 234);
-    if (cat == "crisis")
-        return QColor(0, 229, 255);
-    if (cat == "explosions")
-        return QColor(255, 20, 147);
-    if (cat == "strategic")
-        return QColor(100, 149, 237);
-    return QColor(136, 136, 136); // unclassified
+    // API returns *_unclassified variants — map them to the same colour as the
+    // base category so the legend / map / table stay coherent.
+    QString base = cat;
+    if (base.endsWith(QStringLiteral("_unclassified")))
+        base.chop(13);
+
+    if (base == QStringLiteral("armed_conflict"))     return QColor(255,   0,   0);
+    if (base == QStringLiteral("terrorism"))          return QColor(255,  69,   0);
+    if (base == QStringLiteral("protests"))           return QColor(255, 215,   0);
+    if (base == QStringLiteral("civilian_violence"))  return QColor(255, 100, 100);
+    if (base == QStringLiteral("riots"))              return QColor(255, 165,   0);
+    if (base == QStringLiteral("political_violence")) return QColor(147,  51, 234);
+    if (base == QStringLiteral("crisis"))             return QColor(  0, 229, 255);
+    if (base == QStringLiteral("explosions"))         return QColor(255,  20, 147);
+    if (base == QStringLiteral("strategic"))          return QColor(100, 149, 237);
+    if (base == QStringLiteral("diplomacy") ||
+        base == QStringLiteral("diplomatic"))         return QColor(167, 139, 250);
+    if (base == QStringLiteral("maritime"))           return QColor( 56, 189, 248);
+    if (base == QStringLiteral("elections"))          return QColor( 34, 197,  94);
+    if (base == QStringLiteral("sanctions"))          return QColor(251, 146,  60);
+    if (base == QStringLiteral("nuclear"))            return QColor(250, 204,  21);
+    if (base == QStringLiteral("cyber"))              return QColor( 20, 184, 166);
+    if (base == QStringLiteral("not_geopol"))         return QColor(100, 100, 100);
+    return QColor(136, 136, 136);
 }
 
 // ── HDX dataset ─────────────────────────────────────────────────────────────
@@ -70,6 +93,24 @@ struct UniqueCategory {
     int event_count = 0;
 };
 
+// ── Events page (response envelope from /research/news-events) ──────────────
+//
+// The Fincept API now wraps every events response with pagination and credit
+// metering. Consumers should treat this struct as the unit of delivery instead
+// of separate (events, total) tuples.
+
+struct EventsPage {
+    QVector<NewsEvent> events;
+    int total_events = 0;
+    int current_page = 1;
+    int total_pages = 0;
+    int events_per_page = 0;
+    bool has_next = false;
+    bool has_prev = false;
+    double credits_used = 0.0;
+    int remaining_credits = -1;  // -1 = unknown / not reported
+};
+
 // ── Relationship map node ───────────────────────────────────────────────────
 
 struct RelationshipNode {
@@ -88,13 +129,6 @@ inline QStringList critical_regions() {
             "Myanmar", "Ethiopia", "Haiti", "Somalia", "Venezuela"};
 }
 
-// ── Event categories ────────────────────────────────────────────────────────
-
-inline QStringList event_categories() {
-    return {"armed_conflict",     "terrorism", "protests",   "civilian_violence", "riots",
-            "political_violence", "crisis",    "explosions", "strategic"};
-}
-
 } // namespace fincept::services::geo
 
 #include <QMetaType>
@@ -102,6 +136,7 @@ Q_DECLARE_METATYPE(fincept::services::geo::NewsEvent)
 Q_DECLARE_METATYPE(fincept::services::geo::HDXDataset)
 Q_DECLARE_METATYPE(fincept::services::geo::UniqueCountry)
 Q_DECLARE_METATYPE(fincept::services::geo::UniqueCategory)
+Q_DECLARE_METATYPE(fincept::services::geo::EventsPage)
 Q_DECLARE_METATYPE(QVector<fincept::services::geo::NewsEvent>)
 Q_DECLARE_METATYPE(QVector<fincept::services::geo::HDXDataset>)
 Q_DECLARE_METATYPE(QVector<fincept::services::geo::UniqueCountry>)

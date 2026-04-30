@@ -48,88 +48,133 @@ void GeopoliticsService::run_python(const QString& script, const QStringList& ar
 // CONFLICT MONITOR — HTTP API
 // ═══════════════════════════════════════════════════════════════════════════════
 
-void GeopoliticsService::fetch_events(const QString& country, const QString& city, const QString& category, int limit) {
-    // Build URL with query params
+void GeopoliticsService::fetch_events(const QString& country, const QString& city, const QString& category,
+                                      int limit, int page, const QString& source,
+                                      const QString& date_from, const QString& date_to) {
     QUrl url(kApiBase);
     QUrlQuery q;
-    if (!country.isEmpty())
-        q.addQueryItem("country", country);
-    if (!city.isEmpty())
-        q.addQueryItem("city", city);
-    if (!category.isEmpty())
-        q.addQueryItem("event_category", category);
+    if (!country.isEmpty())   q.addQueryItem("country", country);
+    if (!city.isEmpty())      q.addQueryItem("city", city);
+    if (!category.isEmpty())  q.addQueryItem("event_category", category);
+    if (!source.isEmpty())    q.addQueryItem("source", source);
+    if (!date_from.isEmpty()) q.addQueryItem("date_from", date_from);
+    if (!date_to.isEmpty())   q.addQueryItem("date_to", date_to);
     q.addQueryItem("limit", QString::number(limit));
+    if (page > 1)
+        q.addQueryItem("page", QString::number(page));
     url.setQuery(q);
 
     QPointer<GeopoliticsService> self = this;
-    HttpClient::instance().get(url.toString(), [self, country, city, category, limit](Result<QJsonDocument> result) {
-        if (!self)
-            return;
-        if (!result.is_ok()) {
-            LOG_ERROR("Geopolitics", "Events fetch failed: " + QString::fromStdString(result.error()));
-            emit self->error_occurred("events", QString::fromStdString(result.error()));
-            return;
-        }
-        auto root = result.value().object();
-        // API returns {success, message, data: {events: [...], pagination: {...}}}
-        auto obj = root.contains("data") ? root["data"].toObject() : root;
-        auto arr = obj["events"].toArray();
-        QVector<NewsEvent> events;
-        events.reserve(arr.size());
-        for (const auto& v : arr) {
-            auto e = v.toObject();
-            NewsEvent ev;
-            ev.url = e["url"].toString();
-            ev.source = e["source"].toString();
-            ev.event_category = e["event_category"].toString();
-            ev.title = e["title"].toString();
-            ev.city = e["city"].toString();
-            ev.country = e["country"].toString();
-            const auto lat_v = e["latitude"];
-            const auto lng_v = e["longitude"];
-            ev.has_coords = lat_v.isDouble() && lng_v.isDouble();
-            ev.latitude = ev.has_coords ? lat_v.toDouble() : 0.0;
-            ev.longitude = ev.has_coords ? lng_v.toDouble() : 0.0;
-            ev.extracted_date = e["extracted_date"].toString();
-            ev.created_at = e["created_at"].toString();
-            events.append(ev);
-        }
-        // Pagination envelope replaces the old flat "total" field
-        int total = events.size();
-        if (obj.contains("pagination"))
-            total = obj["pagination"].toObject()["total_events"].toInt(total);
-        else if (obj.contains("total"))
-            total = obj["total"].toInt(total);
-        // Serialize events to JSON for CacheManager persistence
-        QJsonArray cached_arr;
-        for (const auto& ev : events) {
-            QJsonObject o;
-            o["url"] = ev.url;
-            o["source"] = ev.source;
-            o["event_category"] = ev.event_category;
-            o["title"] = ev.title;
-            o["city"] = ev.city;
-            o["country"] = ev.country;
-            if (ev.has_coords) {
-                o["latitude"] = ev.latitude;
-                o["longitude"] = ev.longitude;
+    HttpClient::instance().get(
+        url.toString(),
+        [self, country, city, category, limit, page](Result<QJsonDocument> result) {
+            if (!self)
+                return;
+            if (!result.is_ok()) {
+                LOG_ERROR("Geopolitics", "Events fetch failed: " + QString::fromStdString(result.error()));
+                emit self->error_occurred("events", QString::fromStdString(result.error()));
+                return;
             }
-            o["extracted_date"] = ev.extracted_date;
-            o["created_at"] = ev.created_at;
-            cached_arr.append(o);
-        }
-        QJsonObject cached_root;
-        cached_root["events"] = cached_arr;
-        cached_root["total"] = total;
-        const QString cache_key = QString("geo:events:%1:%2:%3:%4").arg(country, city, category).arg(limit);
-        fincept::CacheManager::instance().put(cache_key,
-                                              QVariant(QJsonDocument(cached_root).toJson(QJsonDocument::Compact)),
-                                              kEventsTtlSec, "geopolitics");
-        LOG_INFO("Geopolitics", QString("Loaded %1 events").arg(events.size()));
-        emit self->events_loaded(events, total);
-        if (self->hub_registered_)
-            publish_to_hub(QStringLiteral("geopolitics:events"), QVariant::fromValue(events));
-    });
+            // Response envelope:
+            //   {success, message, data: {events:[...], pagination:{...},
+            //                             filters_applied:{...},
+            //                             credits_used:N, remaining_credits:N}}
+            const auto root = result.value().object();
+            const auto obj  = root.contains("data") ? root["data"].toObject() : root;
+            const auto arr  = obj["events"].toArray();
+
+            EventsPage page_data;
+            page_data.events.reserve(arr.size());
+            for (const auto& v : arr) {
+                const auto e = v.toObject();
+                NewsEvent ev;
+                ev.url            = e["url"].toString();
+                ev.source         = e["source"].toString();
+                ev.event_category = e["event_category"].toString();
+                ev.title          = e["title"].toString();
+                ev.city           = e["city"].toString();
+                ev.country        = e["country"].toString();
+                const auto lat_v  = e["latitude"];
+                const auto lng_v  = e["longitude"];
+                ev.has_coords     = lat_v.isDouble() && lng_v.isDouble();
+                ev.latitude       = ev.has_coords ? lat_v.toDouble() : 0.0;
+                ev.longitude      = ev.has_coords ? lng_v.toDouble() : 0.0;
+                ev.extracted_date = e["extracted_date"].toString();
+                ev.created_at     = e["created_at"].toString();
+                page_data.events.append(ev);
+            }
+
+            // Newest first — extracted_date is "YYYY-MM-DD HH:MM:SS" so plain
+            // string comparison is lexicographically correct.
+            std::sort(page_data.events.begin(), page_data.events.end(),
+                      [](const NewsEvent& a, const NewsEvent& b) {
+                          return a.extracted_date > b.extracted_date;
+                      });
+
+            if (obj.contains("pagination")) {
+                const auto p = obj["pagination"].toObject();
+                page_data.total_events    = p["total_events"].toInt(page_data.events.size());
+                page_data.current_page    = p["current_page"].toInt(page);
+                page_data.total_pages     = p["total_pages"].toInt(0);
+                page_data.events_per_page = p["events_per_page"].toInt(limit);
+                page_data.has_next        = p["has_next"].toBool(false);
+                page_data.has_prev        = p["has_prev"].toBool(false);
+            } else {
+                page_data.total_events    = obj["total"].toInt(page_data.events.size());
+                page_data.current_page    = page;
+                page_data.events_per_page = limit;
+            }
+            page_data.credits_used      = obj["credits_used"].toDouble(0.0);
+            page_data.remaining_credits = obj["remaining_credits"].toInt(-1);
+
+            // Cache the (already-sorted) events for offline replay.
+            QJsonArray cached_arr;
+            for (const auto& ev : page_data.events) {
+                QJsonObject o;
+                o["url"]            = ev.url;
+                o["source"]         = ev.source;
+                o["event_category"] = ev.event_category;
+                o["title"]          = ev.title;
+                o["city"]           = ev.city;
+                o["country"]        = ev.country;
+                if (ev.has_coords) {
+                    o["latitude"]   = ev.latitude;
+                    o["longitude"]  = ev.longitude;
+                }
+                o["extracted_date"] = ev.extracted_date;
+                o["created_at"]     = ev.created_at;
+                cached_arr.append(o);
+            }
+            QJsonObject cached_root;
+            cached_root["events"]            = cached_arr;
+            cached_root["total_events"]      = page_data.total_events;
+            cached_root["current_page"]      = page_data.current_page;
+            cached_root["total_pages"]       = page_data.total_pages;
+            cached_root["events_per_page"]   = page_data.events_per_page;
+            cached_root["has_next"]          = page_data.has_next;
+            cached_root["has_prev"]          = page_data.has_prev;
+            cached_root["credits_used"]      = page_data.credits_used;
+            cached_root["remaining_credits"] = page_data.remaining_credits;
+            const QString cache_key = QString("geo:events:%1:%2:%3:%4:%5")
+                                          .arg(country, city, category)
+                                          .arg(limit)
+                                          .arg(page);
+            fincept::CacheManager::instance().put(
+                cache_key,
+                QVariant(QJsonDocument(cached_root).toJson(QJsonDocument::Compact)),
+                kEventsTtlSec, "geopolitics");
+
+            LOG_INFO("Geopolitics", QString("Loaded %1 events (page %2/%3, total %4, %5 credits left)")
+                                        .arg(page_data.events.size())
+                                        .arg(page_data.current_page)
+                                        .arg(page_data.total_pages)
+                                        .arg(page_data.total_events)
+                                        .arg(page_data.remaining_credits));
+
+            emit self->events_loaded(page_data);
+            if (self->hub_registered_)
+                publish_to_hub(QStringLiteral("geopolitics:events"), QVariant::fromValue(page_data));
+        });
 }
 
 void GeopoliticsService::fetch_unique_countries() {

@@ -19,6 +19,36 @@
 
 namespace fincept::ui {
 
+// ── Clickable pin marker ────────────────────────────────────────────────────
+//
+// QGVIcon itself is not interactive; we subclass it to receive map click
+// events via `projOnMouseClick` and bounce them back through a stored
+// callback. Pins that don't carry an id (the default -1) skip the wiring
+// entirely so non-interactive maps stay free of click overhead.
+namespace {
+class ClickableIcon : public QGVIcon {
+  public:
+    explicit ClickableIcon(int id, QString tooltip, std::function<void(int)> on_click)
+        : id_(id), tooltip_(std::move(tooltip)), on_click_(std::move(on_click)) {}
+
+  protected:
+    void projOnMouseClick(const QPointF& projPos) override {
+        Q_UNUSED(projPos);
+        if (on_click_)
+            on_click_(id_);
+    }
+    QString projTooltip(const QPointF& projPos) const override {
+        Q_UNUSED(projPos);
+        return tooltip_;
+    }
+
+  private:
+    int id_;
+    QString tooltip_;
+    std::function<void(int)> on_click_;
+};
+}  // namespace
+
 // ── One-time network manager setup for QGeoView tile loading ────────────────
 static void ensure_network_manager() {
     if (QGV::getNetworkManager())
@@ -114,10 +144,17 @@ void WorldMapWidget::rebuild_markers() {
 
     // Add new markers
     for (const auto& pin : pins_) {
-        auto* icon = new QGVIcon();
+        QGVIcon* icon = nullptr;
+        QGV::ItemFlags flags = QGV::ItemFlag::IgnoreScale | QGV::ItemFlag::IgnoreAzimuth;
+        if (pin.id >= 0) {
+            icon = new ClickableIcon(pin.id, pin.label, [this](int id) { emit pin_clicked(id); });
+            flags |= QGV::ItemFlag::Clickable;
+        } else {
+            icon = new QGVIcon();
+        }
         icon->setGeometry(QGV::GeoPos(pin.latitude, pin.longitude), QSizeF(20, 20));
         icon->loadImage(make_marker_image(pin.color, pin.radius));
-        icon->setFlags(QGV::ItemFlag::IgnoreScale | QGV::ItemFlag::IgnoreAzimuth);
+        icon->setFlags(flags);
         marker_layer_->addItem(icon);
     }
 }

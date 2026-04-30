@@ -22,7 +22,7 @@
 
 State-of-the-art financial intelligence platform with CFA-level analytics, AI automation, and unlimited data connectivity.
 
-[📥 Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases) · [📚 Docs](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs) · [💬 Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions) · [💬 Discord](https://discord.gg/ae87a8ygbN) · [🤝 Partner](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+[📥 Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases) · [⚖️ License](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md) · [💬 Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions) · [💬 Discord](https://discord.gg/ae87a8ygbN) · [🤝 Partner](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/FinceptBanner.png)
 
@@ -277,22 +277,25 @@ We're thinking long-term — and we hope you are too. That said, please only par
 
 ## License
 
-**Dual Licensed: AGPL-3.0 (Open Source) + Commercial**
+> ⚠️ **Cloning, forking, or modifying this repository does NOT grant commercial rights.**
+> A paid Commercial License is required for **any** business or internal company use — including forks that remove or replace Fincept's APIs with your own data sources. See **[Commercial License](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)** for binding terms.
 
-### Open Source (AGPL-3.0)
-- Free for personal, educational, and non-commercial use
-- Requires sharing modifications when distributed or used as network service
-- Full source code transparency
+**Dual Licensed: AGPL-3.0 (Open Source) + Fincept Commercial License**
 
-### Commercial License
-- Required for business use or to access Fincept Data/APIs commercially
-- Contact: **support@fincept.in**
-- Details: [Commercial License Guide](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+| | |
+|---|---|
+| ✅ **Free under AGPL-3.0** | Personal use · Individual learning · Academic research · Open-source contributions to this repository |
+| ❌ **Commercial License required** | Any business use (paid or free) · Internal company use · Startups at any stage · Hedge funds, brokerages, banks, fintechs · SaaS / hosted offerings · White-label or reselling · Forks that strip or replace Fincept APIs · Consulting deliverables · Employee training or evaluation by for-profit entities |
 
-### Trademarks
-"Fincept Terminal" and "Fincept" are trademarks of Fincept Corporation.
+The license attaches to the **codebase and any Derivative Work of it**, not to specific API integrations. Substituting Fincept APIs with your own — or with any third party's — does not sever or extinguish the licensing obligation.
 
-© 2025-2026 Fincept Corporation. All rights reserved.
+**Trademarks.** "Fincept", "Fincept Terminal", and the Fincept logo are trademarks of Fincept Corporation. Use in any forked, derivative, rebranded, or commercial product requires prior written permission. Removal or rebranding of these marks in a fork does not extinguish the underlying licensing obligation.
+
+**Enforcement & Penalties.** Fincept Corporation actively monitors public repositories, app stores, cloud marketplaces, and SaaS platforms for unlicensed Commercial Use, and pursues DMCA takedowns, cease-and-desist notices, and civil action under Indian and international law. Unauthorized commercial use is subject to **liquidated damages starting at USD 50,000 per organization per year**, with higher amounts for unauthorized SaaS distribution, fork-and-replace deployments, and trademark misuse — in addition to backdated license fees, disgorgement of profits, and recovery of legal costs. **Joint and several liability** applies: any company that engages a third-party developer, integrator, or consultancy to build, modify, or deploy the Software is fully liable alongside that developer for any unauthorized use. Governing law: India · Exclusive jurisdiction: Delhi, India.
+
+**Contact for licensing:** support@fincept.in · Full terms: [docs/COMMERCIAL_LICENSE.md](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+
+© 2025–2026 Fincept Corporation. All rights reserved.
 
 ---
 

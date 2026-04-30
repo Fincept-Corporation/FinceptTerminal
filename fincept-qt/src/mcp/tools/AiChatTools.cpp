@@ -2,8 +2,12 @@
 
 #include "mcp/tools/AiChatTools.h"
 
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
+#include "mcp/ToolSchemaBuilder.h"
 #include "storage/repositories/ChatRepository.h"
+
+#include <QVariantMap>
 
 namespace fincept::mcp::tools {
 
@@ -16,9 +20,14 @@ std::vector<ToolDef> get_ai_chat_tools() {
         t.name = "create_chat_session";
         t.description = "Create a new AI chat session.";
         t.category = "ai-chat";
-        t.input_schema.properties =
-            QJsonObject{{"title", QJsonObject{{"type", "string"}, {"description", "Chat session title"}}}};
-        t.input_schema.required = {"title"};
+        // Title was previously declared `required` but the handler defaulted
+        // to "New Chat" when missing — contradictory. Match the actual
+        // handler behaviour: optional, default "New Chat".
+        t.input_schema = ToolSchemaBuilder()
+            .string("title", "Chat session title")
+                .default_str("New Chat")
+                .length(1, 200)
+            .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString title = args["title"].toString("New Chat");
             auto r = ChatRepository::instance().create_session(title);
@@ -26,6 +35,11 @@ std::vector<ToolDef> get_ai_chat_tools() {
                 return ToolResult::fail("Failed to create session: " + QString::fromStdString(r.error()));
 
             const auto& session = r.value();
+            // Phase 2.10: publish so AiChatScreen reloads its session list
+            // immediately. ChatRepository has no Qt signals (it's a plain
+            // BaseRepository<T>), so EventBus is the only path.
+            EventBus::instance().publish("ai_chat.session_created",
+                                         QVariantMap{{"id", session.id}, {"title", session.title}});
             return ToolResult::ok("Chat session created", QJsonObject{{"id", session.id}, {"title", session.title}});
         };
         tools.push_back(std::move(t));

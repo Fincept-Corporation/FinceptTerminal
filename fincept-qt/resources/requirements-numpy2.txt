@@ -163,3 +163,13 @@ mplfinance>=0.12.0
 # Voice recognition (speech-to-text via Google API)
 SpeechRecognition>=3.10.0
 PyAudio>=0.2.14
+
+# Deepgram live STT (alternative provider) — pinned to v3 SDK; v4+ removed
+# DeepgramClientOptions and rearranged the live websocket API.
+deepgram-sdk>=3.0,<4.0
+
+# Text-to-speech (used by TtsService — replaces Qt6::TextToSpeech, which
+# is not part of the default Qt 6.8.3 install). pyttsx3 wraps SAPI on
+# Windows, NSSpeechSynthesizer on macOS, espeak on Linux — same engines
+# Qt's wrapper would have used.
+pyttsx3>=2.90

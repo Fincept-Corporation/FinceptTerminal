@@ -17,6 +17,10 @@ struct MapPin {
     QString label;
     QColor color{255, 100, 0};
     double radius = 5.0;
+    /// Caller-assigned identifier carried back through `pin_clicked`.
+    /// Useful for mapping a click to a row in a side table or to a domain
+    /// object — leave at -1 if the pin is not interactive.
+    int id = -1;
 };
 
 /// Interactive world map widget backed by QGeoView (real OSM/CartoDB tiles).
@@ -38,7 +42,9 @@ class WorldMapWidget : public QWidget {
     void fit_to_pins();
 
   signals:
-    void pin_clicked(const QString& label, double lat, double lng);
+    /// Emitted when a pin with `id != -1` is clicked. Carries the caller-
+    /// assigned id so the consumer can resolve back to its own data.
+    void pin_clicked(int id);
 
   private:
     void rebuild_markers();

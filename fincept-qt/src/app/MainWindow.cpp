@@ -2,7 +2,9 @@
 
 #include "ai_chat/AiChatBubble.h"
 #include "ai_chat/AiChatScreen.h"
+#include "ai_chat/LlmService.h"
 #include "app/DockScreenRouter.h"
+#include "mcp/ToolFilterPolicy.h"
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
 #include "auth/PinManager.h"
@@ -294,6 +296,19 @@ MainWindow::MainWindow(int window_id, QWidget* parent) : QMainWindow(parent), wi
 
     // Update the main window title bar to reflect the current screen name.
     connect(dock_router_, &DockScreenRouter::screen_changed, this, [this](const QString&) { update_window_title(); });
+
+    // Scope the LLM tool catalogue per active screen. ToolFilterPolicy returns
+    // std::nullopt for "kitchen-sink" surfaces (ai_chat, agent_config, …) —
+    // those clear the filter and get the full catalogue. Every other screen
+    // gets Tier-1 ∪ Tier-2 categories with a 50-tool cap.
+    connect(dock_router_, &DockScreenRouter::screen_changed, this, [](const QString& id) {
+        auto& llm = ai_chat::LlmService::instance();
+        auto filter = mcp::ToolFilterPolicy::filter_for_screen(id);
+        if (filter)
+            llm.set_tool_filter(*filter);
+        else
+            llm.clear_tool_filter();
+    });
 
     connect(this, &QObject::destroyed, this, [this]() { WorkspaceManager::instance().remove_window(this); });
 

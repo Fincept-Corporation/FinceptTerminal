@@ -4,6 +4,7 @@
 #include "mcp/McpProvider.h"
 #include "screens/chat_mode/ChatModeService.h"
 
+#include <QFutureWatcher>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPointer>
@@ -51,19 +52,16 @@ void TerminalToolBridge::register_tools() {
     QJsonArray tools_json;
 
     for (const auto& tool : all_tools) {
-        // Skip UI-only tools
-        bool skip = false;
-        // Check if tool name starts with excluded category prefixes
-        for (const auto& cat : EXCLUDED_CATEGORIES) {
-            if (tool.name.startsWith(cat + "_") || tool.name.startsWith(cat + "-")) {
-                skip = true;
-                break;
-            }
-        }
-        // Also skip AiChat tools (recursive)
-        if (tool.name.startsWith("ai_chat") || tool.name.startsWith("aichat"))
-            skip = true;
-        if (skip)
+        // Phase 6.5: filter by ToolDef.category, not by name-prefix.
+        // Pre-Phase-6 the check was tool.name.startsWith("navigation_") etc.
+        // — but tool names don't follow that prefix convention, so the
+        // filter never matched and every navigation/system/settings tool
+        // got uploaded to the cloud. UnifiedTool.category (populated by
+        // McpProvider::list_tools) is the source of truth.
+        if (EXCLUDED_CATEGORIES.contains(tool.category))
+            continue;
+        // Recursive AiChat tools — skip by category, not by name prefix.
+        if (tool.category == "ai-chat" || tool.category == "ai_chat")
             continue;
 
         QJsonObject schema = tool.input_schema;
@@ -130,39 +128,46 @@ void TerminalToolBridge::on_poll_tick() {
 void TerminalToolBridge::execute_call(const QString& call_id, const QString& tool_name, const QJsonObject& arguments) {
     LOG_INFO("TerminalToolBridge", QString("Executing tool: %1 (call %2)").arg(tool_name, call_id));
 
-    // Strip "fincept-terminal__" prefix if present
-    QString local_name = tool_name;
-    if (local_name.startsWith("fincept-terminal__"))
-        local_name = local_name.mid(18);
+    // Phase 5.10: centralised __ parsing. Was previously hardcoded as
+    // mid(18) which silently breaks if the server-id prefix ever changes.
+    auto [server_id, parsed_name] = mcp::McpProvider::parse_openai_function_name(tool_name);
+    const QString local_name = parsed_name.isEmpty() ? tool_name : parsed_name;
 
-    // Execute on background thread to avoid blocking UI
+    // Phase 4: dispatch via call_tool_async so sync handlers don't block
+    // a worker thread for the duration of long-running tools, and so
+    // multiple in-flight tool calls fan out concurrently. A QFutureWatcher
+    // delivers the result back to this bridge's thread when complete.
     QPointer<TerminalToolBridge> self = this;
-    (void)QtConcurrent::run([self, call_id, local_name, arguments]() {
-        // Call the tool via McpProvider
-        auto result = mcp::McpProvider::instance().call_tool(local_name, arguments);
+    auto future = mcp::McpProvider::instance().call_tool_async(local_name, arguments);
 
-        if (!self)
-            return;
-        QMetaObject::invokeMethod(
-            self,
-            [self, call_id, local_name, result]() {
-                if (!self || !self->active_)
-                    return;
+    auto* watcher = new QFutureWatcher<mcp::ToolResult>(this);
+    QObject::connect(watcher, &QFutureWatcher<mcp::ToolResult>::finished, this,
+                     [self, call_id, local_name, watcher]() {
+                         // resultCount() lives on QFuture, not QFutureWatcher —
+                         // use future() to reach it.
+                         const auto fut = watcher->future();
+                         mcp::ToolResult result = (fut.resultCount() > 0)
+                                                      ? fut.result()
+                                                      : mcp::ToolResult::fail("Tool produced no result");
+                         watcher->deleteLater();
 
-                // Submit result back to Finagent
-                ChatModeService::instance().submit_tool_result(
-                    call_id, result.to_json(), [self, local_name, success = result.success](bool ok, QString err) {
-                        if (!self)
-                            return;
-                        if (!ok) {
-                            LOG_WARN("TerminalToolBridge",
-                                     QString("Failed to submit result for %1: %2").arg(local_name, err));
-                        }
-                        emit self->tool_executed(local_name, success);
-                    });
-            },
-            Qt::QueuedConnection);
-    });
+                         if (!self || !self->active_) return;
+
+                         // Capture result by value into the submit callback —
+                         // avoids the init-capture pattern (which Clang on
+                         // Windows was rejecting for nested-lambda scoping).
+                         ChatModeService::instance().submit_tool_result(
+                             call_id, result.to_json(),
+                             [self, local_name, result](bool ok, QString err) {
+                                 if (!self) return;
+                                 if (!ok) {
+                                     LOG_WARN("TerminalToolBridge",
+                                              QString("Failed to submit result for %1: %2").arg(local_name, err));
+                                 }
+                                 emit self->tool_executed(local_name, result.success);
+                             });
+                     });
+    watcher->setFuture(future);
 }
 
 } // namespace fincept::chat_mode

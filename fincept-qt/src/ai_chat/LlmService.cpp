@@ -10,6 +10,7 @@
 
 #include "core/logging/Logger.h"
 #include "mcp/McpService.h"
+#include "mcp/ToolFilterPolicy.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/SettingsRepository.h"
 
@@ -257,6 +258,22 @@ void LlmService::ensure_config() const {
             "Be concise, accurate, and finance-focused.";
     }
 
+    // Tier-3 discovery hint. The tool catalogue you receive on each turn is
+    // intentionally scoped to the active screen / agent for token-cost and
+    // accuracy reasons. If the user asks for something whose tool isn't in
+    // your immediate catalogue, DO NOT decline — call tool.list to find it,
+    // then tool.describe to learn its schema, then invoke it. Always-on
+    // meta tools that enable this discovery: tool.list, tool.describe,
+    // mcp.health. Idempotent append (won't double-stack on reload).
+    static constexpr const char* kToolDiscoveryHint =
+        "\n\n[Tool discovery] The tools shown to you each turn are scoped "
+        "to the active context. If a needed tool is missing, call "
+        "tool.list(category=\"…\", search=\"…\") to discover it, then "
+        "tool.describe(name) to read its schema, then invoke it. Never "
+        "decline an action you can fulfil via a discoverable tool.";
+    if (tools_enabled_ && !system_prompt_.contains("[Tool discovery]"))
+        system_prompt_ += kToolDiscoveryHint;
+
     config_loaded_ = true;
     const int resolved = resolved_max_tokens();
     const int catalog_cap = ModelCatalog::output_cap(provider_, model_);
@@ -310,6 +327,27 @@ bool LlmService::tools_enabled() const {
     QMutexLocker lock(&mutex_);
     ensure_config();
     return tools_enabled_;
+}
+
+void LlmService::set_tool_filter(const mcp::ToolFilter& filter) {
+    QMutexLocker lock(&mutex_);
+    tool_filter_ = filter;
+    LOG_INFO(TAG, QString("Tool filter set: categories=[%1] excludes=[%2] name_patterns=%3 max_tools=%4")
+                      .arg(filter.categories.join(','))
+                      .arg(filter.exclude_categories.join(','))
+                      .arg(filter.name_patterns.size())
+                      .arg(filter.max_tools));
+}
+
+mcp::ToolFilter LlmService::tool_filter() const {
+    QMutexLocker lock(&mutex_);
+    return tool_filter_;
+}
+
+void LlmService::clear_tool_filter() {
+    QMutexLocker lock(&mutex_);
+    tool_filter_ = {};
+    LOG_INFO(TAG, "Tool filter cleared (full catalogue restored)");
 }
 
 bool LlmService::is_configured() const {
@@ -495,7 +533,7 @@ QJsonObject LlmService::build_openai_request(const QString& user_message,
     // which silently breaks live tool calling for OpenAI/Kimi/Groq/etc.
     // deepseek-reasoner rejects tools entirely; some Groq models also.
     if (with_tools && tools_enabled_ && !is_ds_reasoner && !groq_no_tools) {
-        QJsonArray tools = mcp::McpService::instance().format_tools_for_openai();
+        QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(tool_filter_);
         if (!tools.isEmpty())
             req["tools"] = tools;
         LOG_INFO(TAG, QString("OpenAI request: stream=%1 provider=%2 tools=%3 (count=%4)")
@@ -540,7 +578,7 @@ QJsonObject LlmService::build_anthropic_request(const QString& user_message,
     // falls back to do_request to execute and follow up.
     if (tools_enabled_) {
         QJsonArray ant_tools;
-        auto all_tools = mcp::McpService::instance().get_all_tools();
+        auto all_tools = mcp::McpService::instance().get_all_tools(tool_filter_);
         for (const auto& tool : all_tools) {
             QString fn_name = tool.server_id + "__" + tool.name;
             QJsonObject schema = tool.input_schema;
@@ -580,7 +618,8 @@ QJsonObject LlmService::build_gemini_request(const QString& user_message,
     }
 
     // Gemini tool format: tools[{functionDeclarations:[{name, description, parameters}]}]
-    auto all_tools = tools_enabled_ ? mcp::McpService::instance().get_all_tools() : std::vector<mcp::UnifiedTool>{};
+    auto all_tools =
+        tools_enabled_ ? mcp::McpService::instance().get_all_tools(tool_filter_) : std::vector<mcp::UnifiedTool>{};
     if (!all_tools.empty()) {
         QJsonArray fn_decls;
         for (const auto& tool : all_tools) {
@@ -715,8 +754,8 @@ LlmService::HttpResult LlmService::eventloop_request(const QString& method, cons
 // This allows models that don't support structured tool_calls to still
 // emit text-based tool invocations that try_extract_and_execute_text_tool_calls
 // can detect and execute.
-static QString build_tool_catalog_for_prompt() {
-    auto all_tools = mcp::McpService::instance().get_all_tools();
+static QString build_tool_catalog_for_prompt(const mcp::ToolFilter& filter) {
+    auto all_tools = mcp::McpService::instance().get_all_tools(filter);
     if (all_tools.empty())
         return {};
 
@@ -763,7 +802,7 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
 
     // Inject tool catalog so the model can emit text-based tool calls
     if (tools_enabled_) {
-        QString tool_catalog = build_tool_catalog_for_prompt();
+        QString tool_catalog = build_tool_catalog_for_prompt(tool_filter_);
         if (!tool_catalog.isEmpty())
             prompt += tool_catalog + "\n";
     }
@@ -1222,7 +1261,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         // Temperature intentionally omitted — provider default.
         fu["max_tokens"] = resolved_max_tokens();
 
-        QJsonArray tools = mcp::McpService::instance().format_tools_for_openai();
+        QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(tool_filter_);
         if (!tools.isEmpty())
             fu["tools"] = tools;
 
@@ -2166,10 +2205,46 @@ LlmResponse LlmService::chat(const QString& user_message, const std::vector<Conv
     if (!use_tools)
         tools_enabled_ = false;
 
+    // Lightweight intent classifier: scan the user message for keywords
+    // that suggest categories beyond what the screen filter exposes. Add
+    // them to a per-call temporary filter and restore the prior one after.
+    // Cheap: pure string scan, runs on the calling background thread.
+    mcp::ToolFilter saved_filter;
+    bool filter_overridden = false;
+    if (use_tools && tools_enabled_) {
+        const auto extras = mcp::ToolFilterPolicy::infer_extra_categories(user_message);
+        if (!extras.isEmpty()) {
+            saved_filter = tool_filter_;
+            mcp::ToolFilter expanded = saved_filter;
+            // If the screen wanted "full catalogue" (empty filter), seed it
+            // with Tier-1 first so we don't widen from nothing to a single
+            // category — that would silently shrink the catalogue.
+            if (expanded.categories.isEmpty()) {
+                // No filter active → leave it alone; full catalogue already
+                // covers the inferred extras.
+            } else {
+                bool changed = false;
+                for (const auto& c : extras) {
+                    if (!expanded.categories.contains(c)) {
+                        expanded.categories.append(c);
+                        changed = true;
+                    }
+                }
+                if (changed) {
+                    tool_filter_ = expanded;
+                    filter_overridden = true;
+                    LOG_INFO(TAG, QString("Intent classifier added categories: [%1]").arg(extras.join(',')));
+                }
+            }
+        }
+    }
+
     auto resp = do_request(user_message, history);
 
-    // Restore tools_enabled_ to saved value
+    // Restore tools_enabled_ + filter
     tools_enabled_ = saved_tools;
+    if (filter_overridden)
+        tool_filter_ = saved_filter;
 
     return resp;
 }

@@ -40,9 +40,12 @@ class MaritimeService : public QObject
     void check_health();
 
   signals:
-    void vessels_loaded(QVector<fincept::services::maritime::VesselData> vessels, int total);
+    /// Emitted by both area-search and multi-vessel calls. The page envelope
+    /// carries credit metering and (for multi-vessel) the list of IMOs the
+    /// API could not resolve.
+    void vessels_loaded(fincept::services::maritime::VesselsPage page);
     void vessel_found(fincept::services::maritime::VesselData vessel);
-    void vessel_history_loaded(QVector<fincept::services::maritime::VesselData> history);
+    void vessel_history_loaded(fincept::services::maritime::VesselHistoryPage page);
     void health_loaded(QJsonObject data);
     void error_occurred(QString context, QString message);
 

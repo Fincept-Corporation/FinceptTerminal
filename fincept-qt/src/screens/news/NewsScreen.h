@@ -1,4 +1,5 @@
 #pragma once
+#include "core/events/EventBus.h"
 #include "core/symbol/IGroupLinked.h"
 #include "screens/IStatefulScreen.h"
 #include "services/news/NewsClusterService.h"
@@ -7,6 +8,7 @@
 
 #include <QHBoxLayout>
 #include <QHideEvent>
+#include <QList>
 #include <QSet>
 #include <QShowEvent>
 #include <QWidget>
@@ -147,6 +149,16 @@ class NewsScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
 
     // Symbol group link — SymbolGroup::None when unlinked.
     SymbolGroup link_group_ = SymbolGroup::None;
+
+    // EventBus subscriptions — registered in showEvent, released in hideEvent.
+    // MCP news tools publish news.monitor_added / news.monitor_toggled /
+    // news.monitor_deleted / news.refresh_requested when the LLM mutates
+    // monitor state via Finagent or AI Chat. Handlers may fire on a worker
+    // thread; each callback marshals to this widget's thread before
+    // touching UI state.
+    QList<EventBus::HandlerId> mcp_event_subs_;
+    void subscribe_mcp_events();
+    void unsubscribe_mcp_events();
 };
 
 } // namespace fincept::screens

@@ -21,6 +21,8 @@
 #include "screens/settings/VoiceConfigSection.h"
 #include "services/notifications/NotificationService.h"
 #include "services/stt/SpeechService.h"
+#include "services/tts/TtsService.h"
+#include "services/voice_trigger/ClapDetectorService.h"
 #include "storage/StorageManager.h"
 #include "storage/cache/CacheManager.h"
 #include "storage/repositories/DataSourceRepository.h"
@@ -224,10 +226,22 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
                 []() { ai_chat::LlmService::instance().reload_config(); });
     }
 
-    // Wire Voice config changes → reload STT service (picks up provider / API key / model)
+    // Wire Voice config changes — reload BOTH STT and TTS services and
+    // restart the clap detector so the user's new provider / key / voice /
+    // wake-trigger picks take effect on the next session.
     if (auto* voice = qobject_cast<VoiceConfigSection*>(sections_->widget(13))) {
-        connect(voice, &VoiceConfigSection::config_changed, this,
-                []() { fincept::services::SpeechService::instance().reload_config(); });
+        connect(voice, &VoiceConfigSection::config_changed, this, []() {
+            fincept::services::SpeechService::instance().reload_config();
+            fincept::services::TtsService::instance().reload_config();
+
+            // Apply the clap-to-start toggle live: stop the detector
+            // unconditionally (in case mode/sensitivity changed) and
+            // restart only if the toggle is on.
+            auto& clap = fincept::services::ClapDetectorService::instance();
+            clap.stop();
+            if (fincept::services::ClapDetectorService::is_enabled_in_config())
+                clap.start();
+        });
     }
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
@@ -249,13 +263,66 @@ void SettingsScreen::refresh_theme() {
 
 void SettingsScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
+    reload_all_sections();
+    subscribe_mcp_events();
+}
+
+void SettingsScreen::hideEvent(QHideEvent* e) {
+    QWidget::hideEvent(e);
+    unsubscribe_mcp_events();
+}
+
+void SettingsScreen::reload_all_sections() {
     load_credentials();
     load_appearance();
     load_notifications();
     load_security();
     refresh_storage_stats();
-    if (auto* llm = qobject_cast<LlmConfigSection*>(sections_->widget(5)))
-        llm->reload();
+    if (sections_) {
+        if (auto* llm = qobject_cast<LlmConfigSection*>(sections_->widget(5)))
+            llm->reload();
+    }
+}
+
+// ── MCP-driven UI sync ──────────────────────────────────────────────────────
+// MCP settings tools publish settings.changed (with {key, value}) and
+// llm.provider_changed (with {provider}). Both warrant a full reload —
+// settings.changed could touch any section, and llm.provider_changed
+// requires LlmConfigSection to refresh + the active LlmService to pick
+// up the new provider.
+
+void SettingsScreen::subscribe_mcp_events() {
+    if (!mcp_event_subs_.isEmpty()) return; // idempotent
+
+    QPointer<SettingsScreen> self = this;
+    auto on_settings_changed = [self](const QVariantMap&) {
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self]() {
+            if (!self) return;
+            self->reload_all_sections();
+        }, Qt::QueuedConnection);
+    };
+    auto on_provider_changed = [self](const QVariantMap&) {
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self]() {
+            if (!self) return;
+            self->reload_all_sections();
+            // LlmService consumes the new active config; pick it up immediately
+            // so the AiChatScreen subscriber (Phase 2.9) doesn't race.
+            ai_chat::LlmService::instance().reload_config();
+        }, Qt::QueuedConnection);
+    };
+
+    auto& bus = EventBus::instance();
+    mcp_event_subs_.append(bus.subscribe("settings.changed",     on_settings_changed));
+    mcp_event_subs_.append(bus.subscribe("llm.provider_changed", on_provider_changed));
+}
+
+void SettingsScreen::unsubscribe_mcp_events() {
+    auto& bus = EventBus::instance();
+    for (auto id : mcp_event_subs_)
+        bus.unsubscribe(id);
+    mcp_event_subs_.clear();
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────

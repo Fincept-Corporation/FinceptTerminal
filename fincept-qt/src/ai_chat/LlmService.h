@@ -5,6 +5,7 @@
 // Streaming via QNetworkReply::readyRead + SSE parsing.
 
 #include "core/result/Result.h"
+#include "mcp/McpTypes.h"
 #include "storage/repositories/LlmProfileRepository.h"
 
 #include <QJsonArray>
@@ -74,6 +75,16 @@ class LlmService : public QObject {
     // Reload config from DB (call after user changes LLM settings)
     void reload_config();
 
+    // Per-request tool catalogue scoping. The full ~237-tool catalogue is
+    // expensive (≈100–150 KB JSON per turn) and harms tool-pick accuracy.
+    // Callers (AI chat, agents, terminal bridge) set a ToolFilter that
+    // narrows the catalogue to the categories/names relevant to the current
+    // screen or agent. Default-constructed = no filter = full catalogue
+    // (legacy behaviour). Thread-safe.
+    void set_tool_filter(const mcp::ToolFilter& filter);
+    mcp::ToolFilter tool_filter() const;
+    void clear_tool_filter();
+
     // ── Active config accessors (AI Chat context) ─────────────────────────────
     QString active_provider() const;
     QString active_model() const;
@@ -121,6 +132,10 @@ class LlmService : public QObject {
     mutable QString system_prompt_;
     mutable bool tools_enabled_ = true;
     mutable bool config_loaded_ = false;
+
+    // Phase 6 wiring: scopes the tool catalogue per-request. Empty = full
+    // catalogue. Read inside the build_*_request paths under mutex_.
+    mcp::ToolFilter tool_filter_;
 
     void ensure_config() const;
 

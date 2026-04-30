@@ -44,7 +44,8 @@ class GeopoliticsScreen : public QWidget, public IStatefulScreen {
     void on_apply_filters();
     void on_clear_filters();
     void on_tab_changed(int index);
-    void on_events_loaded(QVector<services::geo::NewsEvent> events, int total);
+    void on_events_loaded(services::geo::EventsPage page);
+    void on_categories_loaded(QVector<services::geo::UniqueCategory> cats);
     void on_error(const QString& context, const QString& message);
 
   private:
@@ -54,6 +55,7 @@ class GeopoliticsScreen : public QWidget, public IStatefulScreen {
     QWidget* build_status_bar();
     void connect_service();
     void refresh_theme();
+    void rebuild_legend(const QVector<services::geo::UniqueCategory>& cats);
 
     // Filter inputs
     QLineEdit* country_edit_ = nullptr;
@@ -74,6 +76,11 @@ class GeopoliticsScreen : public QWidget, public IStatefulScreen {
     // Status
     QLabel* event_count_label_ = nullptr;
     QLabel* status_label_ = nullptr;
+    QLabel* credits_label_ = nullptr;
+
+    // Legend (built dynamically from API categories)
+    QWidget* legend_container_ = nullptr;
+    QVBoxLayout* legend_layout_ = nullptr;
 
     // Auto-refresh
     QTimer* refresh_timer_ = nullptr;

@@ -1,5 +1,6 @@
 #include "screens/notes/NotesScreen.h"
 
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "services/file_manager/FileManagerService.h"
@@ -12,6 +13,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QMessageBox>
+#include <QPointer>
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QSplitter>
@@ -725,6 +727,46 @@ void NotesScreen::restore_state(const QVariantMap& state) {
             }
         }
     }
+}
+
+// ── Visibility lifecycle + MCP-driven UI sync ───────────────────────────────
+// MCP notes tools publish notes.created / notes.deleted when the LLM mutates
+// notes via AI Chat or Finagent. We subscribe while visible so the list
+// reflects the change without manual refresh. EventBus handlers may fire
+// on a worker thread; each callback marshals to the screen's thread.
+
+void NotesScreen::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    subscribe_mcp_events();
+}
+
+void NotesScreen::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    unsubscribe_mcp_events();
+}
+
+void NotesScreen::subscribe_mcp_events() {
+    if (!mcp_event_subs_.isEmpty()) return; // idempotent
+
+    QPointer<NotesScreen> self = this;
+    auto on_notes_changed = [self](const QVariantMap&) {
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self]() {
+            if (!self) return;
+            self->load_notes();
+        }, Qt::QueuedConnection);
+    };
+
+    auto& bus = EventBus::instance();
+    mcp_event_subs_.append(bus.subscribe("notes.created", on_notes_changed));
+    mcp_event_subs_.append(bus.subscribe("notes.deleted", on_notes_changed));
+}
+
+void NotesScreen::unsubscribe_mcp_events() {
+    auto& bus = EventBus::instance();
+    for (auto id : mcp_event_subs_)
+        bus.unsubscribe(id);
+    mcp_event_subs_.clear();
 }
 
 } // namespace fincept::screens

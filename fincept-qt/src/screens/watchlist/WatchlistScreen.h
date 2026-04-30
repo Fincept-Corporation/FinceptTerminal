@@ -1,4 +1,5 @@
 #pragma once
+#include "core/events/EventBus.h"
 #include "core/symbol/IGroupLinked.h"
 #include "screens/IStatefulScreen.h"
 #include "services/markets/MarketDataService.h"
@@ -9,6 +10,7 @@
 #include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QList>
 #include <QListWidget>
 #include <QPushButton>
 #include <QShowEvent>
@@ -100,6 +102,14 @@ class WatchlistScreen : public QWidget, public IStatefulScreen, public IGroupLin
     // Emit the currently-selected symbol into the linked group, if any.
     // Safe to call with no selection — no-op.
     void publish_selection_to_group();
+
+    // EventBus subscriptions — registered in showEvent, released in hideEvent.
+    // MCP watchlist tools publish watchlist.created / .deleted / .updated when
+    // the LLM mutates watchlists via Finagent or AI Chat. Each handler
+    // reloads watchlists + the current stock list.
+    QList<EventBus::HandlerId> mcp_event_subs_;
+    void subscribe_mcp_events();
+    void unsubscribe_mcp_events();
 };
 
 } // namespace fincept::screens

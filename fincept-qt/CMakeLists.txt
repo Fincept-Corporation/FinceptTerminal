@@ -728,6 +728,13 @@ set(MCP_SOURCES
     src/mcp/McpClient.cpp
     src/mcp/McpManager.cpp
     src/mcp/McpInit.cpp
+    src/mcp/SchemaValidator.cpp
+    src/mcp/ToolFilterPolicy.cpp
+
+    # Phase 5 — provider-neutral tool-call dispatcher + adapters.
+    src/mcp/dispatch/ToolDispatcher.cpp
+    src/mcp/dispatch/OpenAiAdapter.cpp
+    src/mcp/dispatch/AdapterFactory.cpp
 
     # Tool modules
     src/mcp/tools/NavigationTools.cpp
@@ -751,6 +758,7 @@ set(MCP_SOURCES
     src/mcp/tools/SystemTools.cpp
     src/mcp/tools/DataHubTools.cpp
     src/mcp/tools/ReportBuilderTools.cpp
+    src/mcp/tools/MetaTools.cpp
 )
 
 # Trading
@@ -898,6 +906,14 @@ set(SERVICE_SOURCES
 
     # Speech-to-text service (Python speech_recognition + Google API)
     src/services/stt/SpeechService.cpp
+
+    # Text-to-speech service (Python pyttsx3 — used as a portable substitute
+    # for Qt6::TextToSpeech when the Qt Speech module isn't installed).
+    src/services/tts/TtsService.cpp
+
+    # Clap-to-start trigger — lightweight pyaudio loop that fires a signal
+    # when it hears a (double-)clap. Wakes up the AiChatBubble mic.
+    src/services/voice_trigger/ClapDetectorService.cpp
 
     # Modular notification system — service + 15 providers
     src/services/notifications/NotificationService.cpp
@@ -1643,6 +1659,11 @@ set_source_files_properties(
     src/mcp/McpClient.cpp
     src/mcp/McpManager.cpp
     src/mcp/McpInit.cpp
+    src/mcp/SchemaValidator.cpp
+    src/mcp/ToolFilterPolicy.cpp
+    src/mcp/dispatch/ToolDispatcher.cpp
+    src/mcp/dispatch/OpenAiAdapter.cpp
+    src/mcp/dispatch/AdapterFactory.cpp
     src/mcp/tools/NavigationTools.cpp
     src/mcp/tools/MarketsTools.cpp
     src/mcp/tools/WatchlistTools.cpp
@@ -1662,6 +1683,7 @@ set_source_files_properties(
     src/mcp/tools/SettingsTools.cpp
     src/mcp/tools/PythonTools.cpp
     src/mcp/tools/SystemTools.cpp
+    src/mcp/tools/MetaTools.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
