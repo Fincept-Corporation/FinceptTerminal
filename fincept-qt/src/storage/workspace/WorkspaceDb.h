@@ -89,7 +89,11 @@ class WorkspaceDb {
 
     QSqlDatabase db_;
     QString connection_name_;
-    mutable QMutex mutex_;
+    // Recursive: open() holds the mutex while calling create_tables(),
+    // which routes through exec() that re-acquires the same mutex. With a
+    // non-recursive QMutex this deadlocks the main thread before any window
+    // is shown — see ee4e946e regression.
+    mutable QRecursiveMutex mutex_;
 };
 
 } // namespace fincept

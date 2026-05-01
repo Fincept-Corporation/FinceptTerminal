@@ -83,7 +83,16 @@
 #    include <Windows.h>
 #endif
 
+// FT_MARK: write a sequence number to a file so we can see how far startup progressed.
+// GUI-subsystem apps don't have a useful stderr, so we go straight to disk.
+#ifdef Q_OS_WIN
+#  define FT_MARK(n) do { char _msg[64]; _snprintf_s(_msg, 64, _TRUNCATE, "FT_MARK %d\n", (n)); OutputDebugStringA(_msg); HANDLE _h = CreateFileA("C:\\Users\\Tilak\\AppData\\Local\\Temp\\ft_marks.txt", FILE_APPEND_DATA, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL); if (_h != INVALID_HANDLE_VALUE) { DWORD _w; SetFilePointer(_h, 0, NULL, FILE_END); WriteFile(_h, _msg, (DWORD)strlen(_msg), &_w, NULL); CloseHandle(_h); } } while(0)
+#else
+#  define FT_MARK(n) do { fprintf(stderr, "FT_MARK %d\n", (n)); fflush(stderr); } while(0)
+#endif
+
 int main(int argc, char* argv[]) {
+    FT_MARK(1);
     // ── Parse --profile <name> from argv before Qt initialises ───────────────
     // This must happen first so that:
     //   1. AppPaths returns the correct per-profile directories
@@ -100,6 +109,7 @@ int main(int argc, char* argv[]) {
         // write the manifest. Create root now (single mkdir, idempotent).
         QDir().mkpath(fincept::AppPaths::root());
     }
+    FT_MARK(2);
 
     // Install the unhandled-exception filter BEFORE any Qt object is
     // constructed. On Windows this writes a minidump to AppPaths::crashdumps()
@@ -149,9 +159,12 @@ int main(int argc, char* argv[]) {
     //
     // Must run BEFORE any service init so future phases that lift services
     // into the shell can rely on it being present.
+    FT_MARK(10);
     fincept::TerminalShell::instance().initialise();
+    FT_MARK(11);
     QObject::connect(&app, &QCoreApplication::aboutToQuit,
                      []() { fincept::TerminalShell::instance().shutdown(); });
+    FT_MARK(12);
 
     // Register DataHub payload meta-types (QuoteData, HistoryPoint, InfoData,
     // NewsArticle, EconomicsResult) so they can flow through QVariant-keyed
@@ -171,7 +184,9 @@ int main(int argc, char* argv[]) {
         QCoreApplication::applicationDirPath() + "/component_catalog.json",
         "resources/component_catalog.json",
     });
+    FT_MARK(20);
     fincept::services::MarketDataService::instance().ensure_registered_with_hub();
+    FT_MARK(21);
     // Phase 2 (multi-broker refactor): ExchangeSessionManager is the hub
     // producer for `ws:kraken:*` / `ws:hyperliquid:*`. Individual sessions
     // (created lazily by the manager) publish through its SessionPublisher
@@ -235,12 +250,18 @@ int main(int argc, char* argv[]) {
     // TokenMetadataService loads its symbol/name cache from SecureStorage
     // first so the very first balance publish has labels for known tokens;
     // a daily background refresh fires in the background after.
+    FT_MARK(30);
     fincept::wallet::TokenMetadataService::instance().load_from_storage();
+    FT_MARK(31);
     fincept::wallet::TokenMetadataService::instance().refresh_from_jupiter_async();
+    FT_MARK(32);
     // Restore_from_storage runs after the hub is up so a soft-connected
     // wallet's balance topic resolves to a registered producer immediately.
+    FT_MARK(33);
     fincept::wallet::WalletService::instance().ensure_registered_with_hub();
+    FT_MARK(34);
     fincept::wallet::WalletService::instance().restore_from_storage();
+    FT_MARK(35);
 
     // Phase 2 §2C: fee-discount eligibility producer. Lives in billing/
     // because it's consumed by other paid screens later; for Phase 2 it
@@ -331,8 +352,10 @@ int main(int argc, char* argv[]) {
         hub.set_policy_pattern(QStringLiteral("billing:tier:*"), tier_p);
     }
 
+    FT_MARK(40);
     // Create all application directories under %LOCALAPPDATA%/com.fincept.terminal
     fincept::AppPaths::ensure_all();
+    FT_MARK(41);
 
     // ── One-time migration from legacy %APPDATA% location ─────────────────
     // Current locations (under %LOCALAPPDATA%\com.fincept.terminal\):
@@ -380,7 +403,9 @@ int main(int argc, char* argv[]) {
         QFile::remove(legacy2 + "-shm");
     }
 
+    FT_MARK(50);
     fincept::Logger::instance().set_file(fincept::AppPaths::logs() + "/fincept.log");
+    FT_MARK(51);
 
     // P3.18 — route Qt's own qDebug/qWarning/qCritical messages into our log
     // file so framework/3rd-party warnings are visible in Release builds.

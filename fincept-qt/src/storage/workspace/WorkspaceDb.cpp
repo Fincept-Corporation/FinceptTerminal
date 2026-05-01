@@ -27,7 +27,7 @@ WorkspaceDb& WorkspaceDb::instance() {
 }
 
 Result<void> WorkspaceDb::open(const QString& path) {
-    QMutexLocker lock(&mutex_);
+    QMutexLocker<QRecursiveMutex> lock(&mutex_);
 
     // Idempotent: if already open at the same path, nothing to do.
     if (db_.isOpen() && db_.databaseName() == path) {
@@ -63,7 +63,7 @@ Result<void> WorkspaceDb::open(const QString& path) {
 }
 
 void WorkspaceDb::close() {
-    QMutexLocker lock(&mutex_);
+    QMutexLocker<QRecursiveMutex> lock(&mutex_);
     if (db_.isOpen())
         db_.close();
     if (!connection_name_.isEmpty()) {
@@ -73,12 +73,12 @@ void WorkspaceDb::close() {
 }
 
 bool WorkspaceDb::is_open() const {
-    QMutexLocker lock(&mutex_);
+    QMutexLocker<QRecursiveMutex> lock(&mutex_);
     return db_.isOpen();
 }
 
 Result<QSqlQuery> WorkspaceDb::execute(const QString& sql, const QVariantList& params) {
-    QMutexLocker lock(&mutex_);
+    QMutexLocker<QRecursiveMutex> lock(&mutex_);
     QSqlQuery query(db_);
     query.prepare(sql);
     for (int i = 0; i < params.size(); ++i)
@@ -89,7 +89,7 @@ Result<QSqlQuery> WorkspaceDb::execute(const QString& sql, const QVariantList& p
 }
 
 Result<void> WorkspaceDb::exec(const QString& sql) {
-    QMutexLocker lock(&mutex_);
+    QMutexLocker<QRecursiveMutex> lock(&mutex_);
     QSqlQuery query(db_);
     if (!query.exec(sql))
         return Result<void>::err(query.lastError().text().toStdString());
@@ -112,7 +112,7 @@ QString WorkspaceDb::meta(const QString& key) const {
     // Re-acquire the lock here; execute() locks too, so we go through it.
     // This is one of the rare const methods that mutates internal state via
     // the mutex; mutable QMutex makes that explicit.
-    QMutexLocker lock(&mutex_);
+    QMutexLocker<QRecursiveMutex> lock(&mutex_);
     QSqlQuery query(db_);
     query.prepare("SELECT value FROM _meta WHERE key = ?");
     query.bindValue(0, key);
@@ -135,7 +135,7 @@ Result<void> WorkspaceDb::set_meta(const QString& key, const QString& value) {
 }
 
 QString WorkspaceDb::path() const {
-    QMutexLocker lock(&mutex_);
+    QMutexLocker<QRecursiveMutex> lock(&mutex_);
     return db_.databaseName();
 }
 

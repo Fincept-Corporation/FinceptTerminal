@@ -32,53 +32,70 @@ TerminalShell& TerminalShell::instance() {
     return s;
 }
 
+// FT_TS: trace markers identical to FT_MARK in main.cpp, scoped to TerminalShell::initialise.
+#ifdef Q_OS_WIN
+#  include <windows.h>
+#  include <stdio.h>
+#  include <string.h>
+#  define FT_TS(n) do { char _msg[64]; _snprintf_s(_msg, 64, _TRUNCATE, "FT_TS %d\n", (n)); OutputDebugStringA(_msg); HANDLE _h = CreateFileA("C:\\Users\\Tilak\\AppData\\Local\\Temp\\ft_marks.txt", FILE_APPEND_DATA, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL); if (_h != INVALID_HANDLE_VALUE) { DWORD _w; SetFilePointer(_h, 0, NULL, FILE_END); WriteFile(_h, _msg, (DWORD)strlen(_msg), &_w, NULL); CloseHandle(_h); } } while(0)
+#else
+#  define FT_TS(n) do { fprintf(stderr, "FT_TS %d\n", (n)); fflush(stderr); } while(0)
+#endif
+
 void TerminalShell::initialise() {
+    FT_TS(100);
     if (initialised_) {
         LOG_WARN(kShellTag, "initialise() called twice — ignoring");
         return;
     }
 
     LOG_INFO(kShellTag, "Shell initialising");
+    FT_TS(101);
 
     // Resolve and cache the active profile UUID so every later phase has
     // a stable handle without re-reading the manifest. ProfileManager
     // mints + persists a UUID on first read if the manifest is legacy.
     active_profile_id_ = ProfileManager::instance().active_profile_id();
+    FT_TS(102);
     LOG_INFO(kShellTag, QString("Active profile: %1 (id=%2)")
                           .arg(ProfileManager::instance().active())
                           .arg(active_profile_id_.to_string()));
-
+    FT_TS(103);
     // Create the new per-profile directory tree (workspace.db, layouts/,
     // crashes/). Distinct from AppPaths::ensure_all() which creates the
     // legacy tree (data/, logs/, cache/, etc.) — both run, both are
     // idempotent.
     ProfilePaths::ensure_all();
-
+    FT_TS(104);
     // Touch the registries so their static singletons construct *before*
     // any WindowFrame tries to register against them. Avoids a startup
     // race where the first window's constructor runs faster than the
     // registry's singleton init under aggressive optimisation.
     (void) WindowRegistry::instance();
+    FT_TS(105);
     (void) ActionRegistry::instance();
+    FT_TS(106);
     (void) PanelRegistry::instance();
+    FT_TS(107);
     (void) ProfileManager::instance();
+    FT_TS(108);
     // Phase 6 trim: MonitorWatcher boots here so its QGuiApplication signal
     // connections are in place before any frame restores. Phase 6's full
     // workspace-variant matcher will subscribe to topology_changed.
     (void) MonitorWatcher::instance();
-
+    FT_TS(109);
     // Phase 1b skeleton: LockOverlayController construction. Currently a
     // no-op — the full lift is deferred (see auth/lock/LockOverlayController.h
     // for rationale). Constructing it here keeps the dependency direction
     // shell → controller correct so the future lift doesn't have to invert.
     auth::LockOverlayController::instance().initialise();
-
+    FT_TS(110);
     // Phase 3 final: chat-bubble shell coordinator. Per-frame bubble
     // widgets stay where they are; this just centralises the shell-side
     // observation surface (frame add/remove tracking, future telemetry,
     // future cross-frame chat-session linking).
     ai_chat::ChatBubbleController::instance().initialise();
-
+    FT_TS(111);
     // Phase 6: open the per-profile LayoutCatalog so Launchpad's recent-
     // layouts list + the layout.* actions can read/write immediately.
     {
@@ -88,6 +105,7 @@ void TerminalShell::initialise() {
                                     .arg(QString::fromStdString(r.error())));
         }
     }
+    FT_TS(112);
 
     // Phase 10: install LocalTelemetrySink iff the user opted in. Settings
     // → Telemetry section (Phase 9 settings refactor) is the user-facing
@@ -109,11 +127,23 @@ void TerminalShell::initialise() {
     // replaced WindowFrame's hard-coded keyboard wiring. Must happen before
     // any WindowFrame is constructed so the per-frame hotkey-binding loop
     // sees the full action set.
+    FT_TS(113);
     actions::register_builtins();
-
+    FT_TS(114);
     // ── Phase 2: workspace persistence + crash recovery ────────────────
     workspace_db_ = &WorkspaceDb::instance();
-    auto db_open = workspace_db_->open(ProfilePaths::workspace_db());
+    FT_TS(115);
+    QString _ws_path = ProfilePaths::workspace_db();
+    FT_TS(1150);
+    char _path_msg[512];
+    _snprintf_s(_path_msg, 512, _TRUNCATE, "FT_TS workspace_db path: %s\n", _ws_path.toUtf8().constData());
+    OutputDebugStringA(_path_msg);
+    {
+        HANDLE _h = CreateFileA("C:\\Users\\Tilak\\AppData\\Local\\Temp\\ft_marks.txt", FILE_APPEND_DATA, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (_h != INVALID_HANDLE_VALUE) { DWORD _w; SetFilePointer(_h, 0, NULL, FILE_END); WriteFile(_h, _path_msg, (DWORD)strlen(_path_msg), &_w, NULL); CloseHandle(_h); }
+    }
+    auto db_open = workspace_db_->open(_ws_path);
+    FT_TS(116);
     if (db_open.is_err()) {
         LOG_ERROR(kShellTag, QString("Failed to open workspace.db: %1")
                                .arg(QString::fromStdString(db_open.error())));
@@ -148,9 +178,11 @@ void TerminalShell::initialise() {
         }
     }
 
+    FT_TS(120);
     initialised_ = true;
     LOG_INFO(kShellTag, "Shell initialised");
     emit started();
+    FT_TS(121);
 }
 
 void TerminalShell::shutdown() {

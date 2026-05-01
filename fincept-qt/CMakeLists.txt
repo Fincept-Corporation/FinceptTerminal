@@ -2269,15 +2269,16 @@ if(WIN32)
             "C:/Qt/6.8.2/msvc2022_64/bin"
     )
     if(WINDEPLOYQT_EXE)
-        # Only deploy Qt DLLs when explicitly requested via -DDEPLOY_QT=ON
-        # Avoids 10-30s overhead on every incremental build
-        if(DEPLOY_QT)
-            add_custom_command(TARGET FinceptTerminal POST_BUILD
-                COMMAND "${WINDEPLOYQT_EXE}"
-                ARGS "--no-translations" "$<TARGET_FILE:FinceptTerminal>"
-                COMMENT "Running windeployqt..."
-            )
-        endif()
+        # Always deploy Qt DLLs/plugins next to the exe. windeployqt is
+        # idempotent and copy_if_different — incremental cost is ~1-2 s
+        # when nothing changed. The previous DEPLOY_QT=ON gate caused the
+        # exe to run against a stale plugin set after a clean rebuild,
+        # producing 0xc0000005 crashes on startup.
+        add_custom_command(TARGET FinceptTerminal POST_BUILD
+            COMMAND "${WINDEPLOYQT_EXE}"
+            ARGS "--no-translations" "--no-compiler-runtime" "$<TARGET_FILE:FinceptTerminal>"
+            COMMENT "Running windeployqt..."
+        )
     endif()
 
     # ── Fix: Qt Maintenance Tool partial-update leaves plugins mismatched ──────
