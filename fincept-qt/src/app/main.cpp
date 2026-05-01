@@ -111,6 +111,17 @@ int main(int argc, char* argv[]) {
     }
     FT_MARK(2);
 
+    // ── chdir to a writable, app-stable directory ──────────────────────────
+    // SingleApplication (below) calls QSharedMemory::setNativeKey(<hash>,
+    // QNativeIpcKey::Type::SystemV). On Unix, Qt's SystemV path resolves a
+    // bare key as a CWD-relative filename for ftok(), then must create it.
+    // Launching from Finder (cwd=/) or any non-writable cwd → "unable to
+    // make key" → SingleApplication::abortSafely() → ::exit(EXIT_FAILURE)
+    // before main() can recover. AppPaths::root() was just mkpath'd above,
+    // so it always exists and is writable. The Qt token file
+    // (Base64-named) ends up here instead of polluting cwd/tmp.
+    QDir::setCurrent(fincept::AppPaths::root());
+
     // Install the unhandled-exception filter BEFORE any Qt object is
     // constructed. On Windows this writes a minidump to AppPaths::crashdumps()
     // when the process dies from an access violation, stack overflow, or GS
