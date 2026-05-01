@@ -159,7 +159,7 @@ src/
 
 ```
 scripts/
-├── Analytics/        # CFA-level quant modules — equity, portfolio, derivatives,
+├── Analytics/        # Analytics modules — equity, portfolio, derivatives,
 │                     #   fixed income, economics, corporate finance
 ├── agents/           # AI agent frameworks (finagent_core, Geopolitics, HedgeFund, …)
 ├── ai_quant_lab/     # ML, factor discovery, HFT, RL trading, vision quant

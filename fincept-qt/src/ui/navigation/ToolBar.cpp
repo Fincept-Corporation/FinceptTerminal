@@ -1,4 +1,4 @@
-#include "ui/navigation/ToolBar.h"
+﻿#include "ui/navigation/ToolBar.h"
 
 #include "auth/AuthManager.h"
 #include "ui/theme/Theme.h"
@@ -270,7 +270,7 @@ QMenu* ToolBar::build_file_menu() {
 
     // "Move to Monitor" — rebuilt on every popup so plug/unplug events are
     // reflected without restarting the app. Emits "move_to_monitor:<name>"
-    // so MainWindow can look the screen up by name (indices are unstable).
+    // so WindowFrame can look the screen up by name (indices are unstable).
     auto* monitors = m->addMenu("Move to Monitor");
     monitors->setStyleSheet(popup_ss());
     connect(monitors, &QMenu::aboutToShow, this, [this, monitors]() {
@@ -398,7 +398,7 @@ QMenu* ToolBar::build_view_menu() {
     m->addSeparator();
     m->addAction("Focus Mode\tF10", this, [this]() { emit action_triggered("focus_mode"); });
     // Phase 11: the shortcut is Ctrl+Shift+T; we don't mark the QAction as
-    // checkable because its state is owned by MainWindow::always_on_top_ —
+    // checkable because its state is owned by WindowFrame::always_on_top_ —
     // a checkable toolbar action would drift out of sync on window focus
     // changes. If the user cares about the visual, the window's title bar
     // retains the OS-level "always on top" decoration on most platforms.

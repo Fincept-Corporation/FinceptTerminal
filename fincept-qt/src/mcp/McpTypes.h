@@ -375,6 +375,7 @@ struct UnifiedTool {
     QJsonObject input_schema;
     bool is_internal = false;
     QString category; // Phase 6: enables ToolFilter category include/exclude
+    bool is_destructive = false; // Tool RAG / tool.list surfacing — flag mutating tools
 };
 
 // ============================================================================

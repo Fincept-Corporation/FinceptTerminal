@@ -580,11 +580,26 @@ set(CMAKE_SKIP_INSTALL_RULES FALSE CACHE BOOL "" FORCE)
 
 # Core
 set(CORE_SOURCES
+    src/core/actions/ActionRegistry.cpp
+    src/core/actions/builtin_actions.cpp
     src/core/config/AppConfig.cpp
     src/core/config/AppPaths.cpp
     src/core/config/ProfileManager.cpp
     src/core/logging/Logger.cpp
     src/core/events/EventBus.cpp
+    src/core/layout/LayoutTypes.cpp
+    src/core/layout/LayoutCatalog.cpp
+    src/core/layout/WorkspaceMatcher.cpp
+    src/core/layout/WorkspaceShell.cpp
+    src/core/panel/PanelHandle.cpp
+    src/core/panel/PanelMaterialiser.cpp
+    src/core/panel/PanelRegistry.cpp
+    src/core/profile/ProfilePaths.cpp
+    src/core/screen/MonitorTopology.cpp
+    src/core/screen/MonitorWatcher.cpp
+    src/core/telemetry/TelemetryProvider.cpp
+    src/core/telemetry/LocalTelemetrySink.cpp
+    src/core/debug/StressLoad.cpp
     src/core/session/SessionManager.cpp
     src/core/session/ScreenStateManager.cpp
     src/core/keys/KeyConfigManager.cpp
@@ -597,6 +612,7 @@ set(CORE_SOURCES
     src/core/components/ComponentCatalog.cpp
     src/core/components/PopularityTracker.cpp
     src/core/crash/CrashHandler.cpp
+    src/core/window/WindowRegistry.cpp
 )
 
 # Network
@@ -623,6 +639,7 @@ set(AUTH_SOURCES
     src/auth/PinManager.cpp
     src/auth/InactivityGuard.cpp
     src/auth/SecurityAuditLog.cpp
+    src/auth/lock/LockOverlayController.cpp
 )
 
 # Storage
@@ -630,6 +647,11 @@ set(STORAGE_SOURCES
     # Core databases
     src/storage/sqlite/Database.cpp
     src/storage/sqlite/CacheDatabase.cpp
+
+    # Workspace persistence (Phase 2 — multi-window refactor)
+    src/storage/workspace/WorkspaceDb.cpp
+    src/storage/workspace/WorkspaceSnapshotRing.cpp
+    src/storage/workspace/CrashRecovery.cpp
 
     # Migration system
     src/storage/sqlite/migrations/MigrationRunner.cpp
@@ -649,6 +671,11 @@ set(STORAGE_SOURCES
 
     # Secure storage (unchanged)
     src/storage/secure/SecureStorage.cpp
+
+    # Workspace persistence (multi-window refactor Phase 2/4/10)
+    src/storage/workspace/WorkspaceDb.cpp
+    src/storage/workspace/WorkspaceSnapshotRing.cpp
+    src/storage/workspace/CrashRecovery.cpp
 
     # Repositories
     src/storage/repositories/SettingsRepository.cpp
@@ -716,8 +743,10 @@ set(PYTHON_SOURCES
 set(AI_CHAT_SOURCES
     src/ai_chat/LlmService.cpp
     src/ai_chat/ModelCatalog.cpp
+    src/ai_chat/ChatBubbleFactory.cpp
     src/ai_chat/AiChatScreen.cpp
     src/ai_chat/AiChatBubble.cpp
+    src/ai_chat/ChatBubbleController.cpp
 )
 
 # MCP — Model Context Protocol system
@@ -729,7 +758,7 @@ set(MCP_SOURCES
     src/mcp/McpManager.cpp
     src/mcp/McpInit.cpp
     src/mcp/SchemaValidator.cpp
-    src/mcp/ToolFilterPolicy.cpp
+    src/mcp/ToolRetriever.cpp
 
     # Phase 5 — provider-neutral tool-call dispatcher + adapters.
     src/mcp/dispatch/ToolDispatcher.cpp
@@ -774,6 +803,10 @@ set(TRADING_SOURCES
     src/trading/ExchangeSession.cpp
     src/trading/ExchangeSessionManager.cpp
     src/trading/ExchangeDaemonPool.cpp
+    # Native Kraken WebSocket v2 client
+    src/trading/exchanges/kraken/KrakenSymbolMapper.cpp
+    src/trading/exchanges/kraken/KrakenBook.cpp
+    src/trading/exchanges/kraken/KrakenWsClient.cpp
     src/trading/brokers/BrokerHttp.cpp
     # Trading WebSocket
     src/trading/websocket/ZerodhaWebSocket.cpp
@@ -830,6 +863,7 @@ set(SERVICE_SOURCES
     src/services/ma_analytics/MAAnalyticsService.cpp
     src/services/geopolitics/GeopoliticsService.cpp
     src/services/maritime/MaritimeService.cpp
+    src/services/maritime/PortsCatalog.cpp
     src/services/ai_quant_lab/AIQuantLabService.cpp
     src/services/backtesting/BacktestingService.cpp
     src/services/algo_trading/AlgoTradingService.cpp
@@ -859,6 +893,14 @@ set(SERVICE_SOURCES
     src/services/wallet/WalletActivityProducer.cpp
     # Billing (Phase 2 Stage 2C — fee discount eligibility)
     src/services/billing/FeeDiscountService.cpp
+    # Wallet (Phase 5 — buyback & burn dashboard producers)
+    src/services/wallet/BuybackBurnService.cpp
+    src/services/wallet/TreasuryService.cpp
+    # Wallet (Phase 3 — STAKE / veFNCPT / real-yield)
+    src/services/wallet/StakingService.cpp
+    src/services/wallet/RealYieldService.cpp
+    # Billing (Phase 3 — tier service driving cross-screen gating)
+    src/services/billing/TierService.cpp
     src/services/sectors/SectorResolver.cpp
     src/services/workflow/NodeRegistry.cpp
     src/services/workflow/WorkflowService.cpp
@@ -903,6 +945,9 @@ set(SERVICE_SOURCES
     src/services/prediction/kalshi/KalshiRestClient.cpp
     src/services/prediction/kalshi/KalshiWsClient.cpp
     src/services/prediction/kalshi/KalshiAdapter.cpp
+    # Phase 4 — Fincept Internal prediction-market adapter (demo mode until
+    # `fincept.markets_endpoint` is configured and `fincept_market` lands).
+    src/services/prediction/fincept_internal/FinceptInternalAdapter.cpp
 
     # Speech-to-text service (Python speech_recognition + Google API)
     src/services/stt/SpeechService.cpp
@@ -962,6 +1007,13 @@ set(UI_SOURCES
     src/ui/navigation/CommandBar.cpp
     src/ui/navigation/DockToolBar.cpp
     src/ui/navigation/DockStatusBar.cpp
+    src/ui/debug/DebugOverlay.cpp
+    src/ui/command/CommandParser.cpp
+    src/ui/command/SuggestionIndex.cpp
+    src/ui/command/QuickCommandBar.cpp
+    src/ui/command/CommandPalette.cpp
+    src/ui/notifications/NotificationService.cpp
+    src/ui/error/ErrorPipeline.cpp
 
     src/ui/workspace/WorkspaceNewDialog.cpp
     src/ui/workspace/WorkspaceOpenDialog.cpp
@@ -1000,6 +1052,8 @@ set(SCREEN_SOURCES
     src/screens/chat_mode/ChatModeScreen.cpp
     src/screens/chat_mode/TerminalToolBridge.cpp
     src/screens/setup/SetupScreen.cpp
+    src/screens/launchpad/LaunchpadScreen.cpp
+    src/screens/recovery/CrashRecoveryDialog.cpp
     src/screens/info/ContactScreen.cpp
     src/screens/info/TermsScreen.cpp
     src/screens/info/PrivacyScreen.cpp
@@ -1056,6 +1110,9 @@ set(SCREEN_SOURCES
     src/screens/dashboard/widgets/RecentFilesWidget.cpp
     src/screens/dashboard/widgets/VideoPlayerWidget.cpp
     src/screens/dashboard/widgets/WebScraperWidget.cpp
+    src/screens/dashboard/widgets/GeopoliticsEventsWidget.cpp
+    src/screens/dashboard/widgets/MaritimeVesselsWidget.cpp
+    src/screens/dashboard/widgets/NotesWidget.cpp
     src/screens/report_builder/ReportBuilderScreen.cpp
     src/screens/report_builder/ComponentToolbar.cpp
     src/screens/report_builder/DocumentCanvas.cpp
@@ -1160,6 +1217,17 @@ set(SCREEN_SOURCES
     # AI Quant Lab
     src/screens/ai_quant_lab/AIQuantLabScreen.cpp
     src/screens/ai_quant_lab/QuantModulePanel.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_GS.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_Functime.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_Statsmodels.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_Fortitudo.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_Gluonts.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_CFA.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_Backtesting.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_RL.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_DeepAgent.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_QuantReporting.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_Misc.cpp
 
     # Backtesting
     src/screens/backtesting/BacktestingScreen.cpp
@@ -1314,14 +1382,27 @@ set(SCREEN_SOURCES
     src/screens/crypto_center/panels/SwapPanel.cpp
     src/screens/crypto_center/panels/HoldingsTable.cpp
     src/screens/crypto_center/panels/FeeDiscountPanel.cpp
+    # Crypto Center — Phase 5 (buyback & burn dashboard)
+    src/screens/crypto_center/tabs/RoadmapTab.cpp
+    src/screens/crypto_center/panels/BuybackBurnPanel.cpp
+    src/screens/crypto_center/panels/SupplyChartPanel.cpp
+    src/screens/crypto_center/panels/TreasuryPanel.cpp
+    src/screens/crypto_center/tabs/StakeTab.cpp
+    src/screens/crypto_center/panels/ActiveLocksPanel.cpp
+    src/screens/crypto_center/panels/LockPanel.cpp
+    src/screens/crypto_center/panels/TierPanel.cpp
+    # Crypto Center — Phase 4 (MARKETS tab — internal prediction markets)
+    src/screens/crypto_center/tabs/MarketsTab.cpp
+    src/screens/crypto_center/panels/MarketsListPanel.cpp
 )
 
 # App
 set(APP_SOURCES
     src/app/main.cpp
-    src/app/MainWindow.cpp
+    src/app/WindowFrame.cpp
     src/app/ScreenRouter.cpp
     src/app/DockScreenRouter.cpp
+    src/app/TerminalShell.cpp
 )
 
 # All screen files compiled individually — they have local statics/functions that
@@ -1341,6 +1422,17 @@ set_source_files_properties(
     src/screens/agent_config/WorkflowsViewPanel.cpp
     src/screens/ai_quant_lab/AIQuantLabScreen.cpp
     src/screens/ai_quant_lab/QuantModulePanel.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_GS.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_Functime.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_Statsmodels.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_Fortitudo.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_Gluonts.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_CFA.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_Backtesting.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_RL.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_DeepAgent.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_QuantReporting.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_Misc.cpp
     src/screens/akshare/AkShareScreen.cpp
     src/screens/algo_trading/AlgoTradingScreen.cpp
     src/screens/algo_trading/DeploymentDashboard.cpp
@@ -1430,6 +1522,9 @@ set_source_files_properties(
     src/screens/dashboard/widgets/VideoPlayerWidget.cpp
     src/screens/dashboard/widgets/WatchlistWidget.cpp
     src/screens/dashboard/widgets/WebScraperWidget.cpp
+    src/screens/dashboard/widgets/GeopoliticsEventsWidget.cpp
+    src/screens/dashboard/widgets/MaritimeVesselsWidget.cpp
+    src/screens/dashboard/widgets/NotesWidget.cpp
     src/screens/data_mapping/DataMappingScreen.cpp
     src/screens/crypto_center/CryptoCenterScreen.cpp
     src/screens/crypto_center/HoldingsBar.cpp
@@ -1442,6 +1537,16 @@ set_source_files_properties(
     src/screens/crypto_center/panels/SwapPanel.cpp
     src/screens/crypto_center/panels/HoldingsTable.cpp
     src/screens/crypto_center/panels/FeeDiscountPanel.cpp
+    src/screens/crypto_center/tabs/RoadmapTab.cpp
+    src/screens/crypto_center/panels/BuybackBurnPanel.cpp
+    src/screens/crypto_center/panels/SupplyChartPanel.cpp
+    src/screens/crypto_center/panels/TreasuryPanel.cpp
+    src/screens/crypto_center/tabs/StakeTab.cpp
+    src/screens/crypto_center/panels/ActiveLocksPanel.cpp
+    src/screens/crypto_center/panels/LockPanel.cpp
+    src/screens/crypto_center/panels/TierPanel.cpp
+    src/screens/crypto_center/tabs/MarketsTab.cpp
+    src/screens/crypto_center/panels/MarketsListPanel.cpp
     src/screens/dbnomics/DBnomicsChartWidget.cpp
     src/screens/dbnomics/DBnomicsDataTable.cpp
     src/screens/dbnomics/DBnomicsScreen.cpp
@@ -1553,6 +1658,8 @@ set_source_files_properties(
     src/screens/settings/McpServersSection.cpp
     src/screens/settings/SettingsScreen.cpp
     src/screens/setup/SetupScreen.cpp
+    src/screens/launchpad/LaunchpadScreen.cpp
+    src/screens/recovery/CrashRecoveryDialog.cpp
     src/screens/support/SupportScreen.cpp
     src/screens/surface_analytics/Surface3DWidget.cpp
     src/screens/surface_analytics/SurfaceAnalyticsScreen.cpp
@@ -1646,8 +1753,9 @@ set_source_files_properties(
 # ADS files use anonymous namespaces and heavy Qt meta-object includes —
 # exclude from unity to avoid ODR / symbol clashes in large batches
 set_source_files_properties(
-    src/app/MainWindow.cpp
+    src/app/WindowFrame.cpp
     src/app/DockScreenRouter.cpp
+    src/app/TerminalShell.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
@@ -1660,7 +1768,7 @@ set_source_files_properties(
     src/mcp/McpManager.cpp
     src/mcp/McpInit.cpp
     src/mcp/SchemaValidator.cpp
-    src/mcp/ToolFilterPolicy.cpp
+    src/mcp/ToolRetriever.cpp
     src/mcp/dispatch/ToolDispatcher.cpp
     src/mcp/dispatch/OpenAiAdapter.cpp
     src/mcp/dispatch/AdapterFactory.cpp
@@ -2513,7 +2621,7 @@ if(FINCEPT_BUILD_INSTALLER)
 
     cpack_add_component(scripts
         DISPLAY_NAME "Python Analytics Scripts"
-        DESCRIPTION  "1300+ CFA-level Python analytics scripts (equity, derivatives, portfolio, quant)"
+        DESCRIPTION  "1300+ Python analytics scripts (equity, derivatives, portfolio, quant)"
         DEPENDS core)
 
     # ── CPackIFW component configuration ─────────────────────────────────────

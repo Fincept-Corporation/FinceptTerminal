@@ -68,12 +68,16 @@ void PortfolioBlotter::build_ui() {
     // text_dim color, and Qt resolves header sub-controls from the header's
     // OWN stylesheet, not the parent QTableWidget's. Setting it on the table
     // is silently overridden, which is why headers stayed dim grey.
+    //
+    // 1px BORDER_MED bottom rule (was 2px AMBER) — only the CommandBar should
+    // hang off the brand rail; tables get a hairline so they don't compete.
+    // 11px font (was 10px) to match the unified type scale.
     hdr->setStyleSheet(QString("QHeaderView::section { background:%1; color:%2; border:none;"
-                               "  border-bottom:2px solid %3; border-right:1px solid %4;"
-                               "  padding:5px 8px; font-size:10px; font-weight:700;"
+                               "  border-bottom:1px solid %3; border-right:1px solid %4;"
+                               "  padding:5px 8px; font-size:11px; font-weight:700;"
                                "  letter-spacing:0.5px; }")
                            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(),
-                                ui::colors::AMBER(), ui::colors::BORDER_DIM()));
+                                ui::colors::BORDER_MED(), ui::colors::BORDER_DIM()));
 
     connect(hdr, &QHeaderView::sectionClicked, this, &PortfolioBlotter::on_header_clicked);
     connect(table_, &QTableWidget::cellClicked, this, &PortfolioBlotter::on_row_clicked);
@@ -452,11 +456,11 @@ void PortfolioBlotter::refresh_theme() {
     // widget itself or the global qApp stylesheet wins.
     table_->horizontalHeader()->setStyleSheet(
         QString("QHeaderView::section { background:%1; color:%2; border:none;"
-                "  border-bottom:2px solid %3; border-right:1px solid %4;"
+                "  border-bottom:1px solid %3; border-right:1px solid %4;"
                 "  padding:5px 8px; font-size:" + hsz +
                 "px; font-weight:700; letter-spacing:0.5px; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(),
-                 ui::colors::AMBER(), ui::colors::BORDER_DIM()));
+                 ui::colors::BORDER_MED(), ui::colors::BORDER_DIM()));
     populate_table();
 }
 

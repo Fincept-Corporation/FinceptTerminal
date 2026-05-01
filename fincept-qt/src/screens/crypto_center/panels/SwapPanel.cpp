@@ -6,6 +6,7 @@
 #include "screens/crypto_center/WalletActionSummary.h"
 #include "services/wallet/PumpFunSwapService.h"
 #include "services/wallet/SolanaRpcClient.h"
+#include "services/wallet/TokenMetadataService.h"
 #include "services/wallet/WalletService.h"
 #include "services/wallet/WalletTypes.h"
 #include "storage/secure/SecureStorage.h"
@@ -26,11 +27,12 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 namespace fincept::screens::panels {
 
 namespace {
 
-constexpr const char* kFncptMint = "9LUqJ5aQTjQiUCL93gi33LZcscUoSBJNhVCYpPzEpump";
 constexpr int kDebounceMs = 250;
 constexpr int kDefaultSlippageBps = 100;
 constexpr int kMaxSlippageBps = 500;
@@ -54,12 +56,46 @@ QString format_bps(int bps) {
         .arg(bps % 100, 2, 10, QChar('0'));
 }
 
+bool is_native_sol(const QString& mint) {
+    return mint == QString::fromLatin1(fincept::wallet::kWrappedSolMint);
+}
+
+bool is_fncpt(const QString& mint) {
+    return mint == QString::fromLatin1(fincept::wallet::kFncptMint);
+}
+
+QString price_topic_for(const QString& mint) {
+    return QStringLiteral("market:price:token:%1").arg(mint);
+}
+
+QString resolve_symbol(const QString& mint) {
+    if (is_native_sol(mint)) return QStringLiteral("SOL");
+    if (is_fncpt(mint)) return QStringLiteral("$FNCPT");
+    auto md = fincept::wallet::TokenMetadataService::instance().lookup(mint);
+    if (md && !md->symbol.isEmpty()) return md->symbol;
+    if (mint.size() <= 8) return mint;
+    return mint.left(4) + QStringLiteral("…") + mint.right(4);
+}
+
 } // namespace
 
 SwapPanel::SwapPanel(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("swapPanel"));
     build_ui();
     apply_theme();
+
+    // Pre-seed the synthetic SOL holding once. amount_raw is updated on each
+    // balance publish so MAX/can_submit reflect live SOL.
+    sol_holding_.mint = QString::fromLatin1(fincept::wallet::kWrappedSolMint);
+    sol_holding_.symbol = QStringLiteral("SOL");
+    sol_holding_.name = QStringLiteral("Solana");
+    sol_holding_.decimals = 9;
+    sol_holding_.verified = true;
+    sol_holding_.amount_raw = QStringLiteral("0");
+
+    // Default selection: BUY $FNCPT direction.
+    from_mint_ = QString::fromLatin1(fincept::wallet::kWrappedSolMint);
+    to_mint_ = QString::fromLatin1(fincept::wallet::kFncptMint);
 
     debounce_timer_ = new QTimer(this);
     debounce_timer_->setSingleShot(true);
@@ -75,6 +111,9 @@ SwapPanel::SwapPanel(QWidget* parent) : QWidget(parent) {
     auto& hub = fincept::datahub::DataHub::instance();
     connect(&hub, &fincept::datahub::DataHub::topic_error, this,
             &SwapPanel::on_topic_error);
+
+    rebuild_from_combo();
+    rebuild_to_combo();
 
     if (svc.is_connected()) {
         on_wallet_connected(svc.current_pubkey(), svc.state().label);
@@ -98,7 +137,8 @@ void SwapPanel::build_ui() {
     head_l->setSpacing(8);
     auto* title = new QLabel(QStringLiteral("SWAP"), head);
     title->setObjectName(QStringLiteral("swapPanelTitle"));
-    auto* head_status = new QLabel(QStringLiteral("via Jupiter"), head);
+    auto* head_status =
+        new QLabel(QStringLiteral("via PumpPortal · pool=auto"), head);
     head_status->setObjectName(QStringLiteral("swapPanelHeadStatus"));
     head_l->addWidget(title);
     head_l->addStretch();
@@ -111,26 +151,11 @@ void SwapPanel::build_ui() {
     bl->setContentsMargins(14, 14, 14, 14);
     bl->setSpacing(10);
 
-    // Mode (BUY $FNCPT / SELL $FNCPT)
-    {
-        auto* row = new QHBoxLayout;
-        row->setSpacing(8);
-        auto* lbl = new QLabel(QStringLiteral("DIRECTION"), body);
-        lbl->setObjectName(QStringLiteral("swapPanelCaption"));
-        mode_combo_ = new QComboBox(body);
-        mode_combo_->setObjectName(QStringLiteral("swapPanelCombo"));
-        mode_combo_->addItem(tr("BUY $FNCPT (SOL → $FNCPT)"));
-        mode_combo_->addItem(tr("SELL $FNCPT ($FNCPT → SOL)"));
-        mode_combo_->setFixedHeight(28);
-        row->addWidget(lbl);
-        row->addWidget(mode_combo_, 1);
-        bl->addLayout(row);
-    }
-
-    // FROM amount
+    // FROM (token + amount + MAX)
     {
         auto* row = new QHBoxLayout;
         row->setSpacing(6);
+
         auto* col_l = new QVBoxLayout;
         col_l->setSpacing(2);
         auto* cap = new QLabel(QStringLiteral("YOU PAY"), body);
@@ -148,15 +173,14 @@ void SwapPanel::build_ui() {
 
         auto* col_t = new QVBoxLayout;
         col_t->setSpacing(2);
-        auto* cap_t = new QLabel(QStringLiteral("TOKEN"), body);
+        auto* cap_t = new QLabel(QStringLiteral("FROM"), body);
         cap_t->setObjectName(QStringLiteral("swapPanelCaption"));
         col_t->addWidget(cap_t);
-        in_token_label_ = new QLabel(QStringLiteral("SOL"), body);
-        in_token_label_->setObjectName(QStringLiteral("swapPanelTokenChip"));
-        in_token_label_->setFixedHeight(34);
-        in_token_label_->setAlignment(Qt::AlignCenter);
-        in_token_label_->setMinimumWidth(80);
-        col_t->addWidget(in_token_label_);
+        from_combo_ = new QComboBox(body);
+        from_combo_->setObjectName(QStringLiteral("swapPanelCombo"));
+        from_combo_->setFixedHeight(34);
+        from_combo_->setMinimumWidth(140);
+        col_t->addWidget(from_combo_);
         row->addLayout(col_t);
 
         max_button_ = new QPushButton(tr("MAX"), body);
@@ -171,10 +195,11 @@ void SwapPanel::build_ui() {
         bl->addWidget(in_balance_label_);
     }
 
-    // TO (quoted)
+    // TO (estimate + token combo)
     {
         auto* row = new QHBoxLayout;
         row->setSpacing(6);
+
         auto* col_l = new QVBoxLayout;
         col_l->setSpacing(2);
         auto* cap = new QLabel(QStringLiteral("YOU RECEIVE (EST.)"), body);
@@ -188,20 +213,19 @@ void SwapPanel::build_ui() {
 
         auto* col_t = new QVBoxLayout;
         col_t->setSpacing(2);
-        auto* cap_t = new QLabel(QStringLiteral("TOKEN"), body);
+        auto* cap_t = new QLabel(QStringLiteral("TO"), body);
         cap_t->setObjectName(QStringLiteral("swapPanelCaption"));
         col_t->addWidget(cap_t);
-        out_token_label_ = new QLabel(QStringLiteral("$FNCPT"), body);
-        out_token_label_->setObjectName(QStringLiteral("swapPanelTokenChip"));
-        out_token_label_->setFixedHeight(34);
-        out_token_label_->setAlignment(Qt::AlignCenter);
-        out_token_label_->setMinimumWidth(80);
-        col_t->addWidget(out_token_label_);
+        to_combo_ = new QComboBox(body);
+        to_combo_->setObjectName(QStringLiteral("swapPanelCombo"));
+        to_combo_->setFixedHeight(34);
+        to_combo_->setMinimumWidth(140);
+        col_t->addWidget(to_combo_);
         row->addLayout(col_t);
         bl->addLayout(row);
     }
 
-    // Quote details (route, impact, slippage)
+    // Quote details
     {
         auto* details = new QFrame(body);
         details->setObjectName(QStringLiteral("swapPanelDetailsBlock"));
@@ -262,8 +286,10 @@ void SwapPanel::build_ui() {
     bl->addStretch(1);
     root->addWidget(body, 1);
 
-    connect(mode_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &SwapPanel::on_mode_changed);
+    connect(from_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &SwapPanel::on_from_changed);
+    connect(to_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &SwapPanel::on_to_changed);
     connect(amount_input_, &QLineEdit::textEdited, this, &SwapPanel::on_amount_changed);
     connect(max_button_, &QPushButton::clicked, this, &SwapPanel::on_max_clicked);
     connect(swap_button_, &QPushButton::clicked, this, &SwapPanel::on_swap_clicked);
@@ -293,10 +319,6 @@ void SwapPanel::apply_theme() {
         "QComboBox#swapPanelCombo { background:%2; color:%7; border:1px solid %3;"
         "  font-family:%5; font-size:11px; padding:0 8px; }"
         "QComboBox#swapPanelCombo::drop-down { border:none; width:18px; }"
-
-        // Token chip (read-only, looks like an inert pill)
-        "QLabel#swapPanelTokenChip { background:%8; color:%4; border:1px solid %3;"
-        "  font-family:%5; font-size:13px; font-weight:700; letter-spacing:1.2px; }"
 
         // Out amount
         "QLabel#swapPanelOutAmount { background:%8; color:%7; border:1px solid %3;"
@@ -343,6 +365,21 @@ void SwapPanel::apply_theme() {
     setStyleSheet(ss);
 }
 
+// ── Public API ─────────────────────────────────────────────────────────────
+
+void SwapPanel::set_from_mint(const QString& mint) {
+    if (mint.isEmpty()) return;
+    // Try to apply now; if the mint isn't in the combo yet, queue it for the
+    // next rebuild_from_combo() (which fires on every balance publish).
+    int idx = from_combo_ ? from_combo_->findData(mint) : -1;
+    if (idx >= 0 && from_combo_) {
+        from_combo_->setCurrentIndex(idx);
+        pending_from_mint_.clear();
+    } else {
+        pending_from_mint_ = mint;
+    }
+}
+
 // ── Lifecycle ──────────────────────────────────────────────────────────────
 
 void SwapPanel::on_wallet_connected(const QString& pubkey, const QString& /*label*/) {
@@ -355,13 +392,11 @@ void SwapPanel::on_wallet_connected(const QString& pubkey, const QString& /*labe
                           [this](const QVariant& v) { on_balance_update(v); });
             hub.request(current_balance_topic_, /*force=*/true);
         }
-        hub.subscribe(this, QStringLiteral("market:price:fncpt"),
-                      [this](const QVariant& v) { on_price_update(v); });
-        hub.request(QStringLiteral("market:price:fncpt"), /*force=*/true);
+        resubscribe_prices();
     }
     set_busy(false);
+    update_balance_label();
     swap_button_->setEnabled(can_submit());
-    update_inputs_from_balance();
 }
 
 void SwapPanel::on_wallet_disconnected() {
@@ -369,9 +404,13 @@ void SwapPanel::on_wallet_disconnected() {
     hub.unsubscribe(this);
     current_balance_topic_.clear();
     current_pubkey_.clear();
-    sol_balance_ = 0.0;
-    fncpt_balance_ = 0.0;
-    last_fncpt_usd_price_ = 0.0;
+    latest_balance_ = {};
+    sol_holding_.amount_raw = QStringLiteral("0");
+    price_usd_.clear();
+    price_sol_.clear();
+    price_topic_.clear();
+    rebuild_from_combo();
+    rebuild_to_combo();
     in_balance_label_->setText(tr("Balance: —"));
     out_amount_label_->setText(QStringLiteral("—"));
     route_label_->setText(QStringLiteral("—"));
@@ -389,9 +428,9 @@ void SwapPanel::showEvent(QShowEvent* e) {
         current_balance_topic_ = QStringLiteral("wallet:balance:%1").arg(current_pubkey_);
         hub.subscribe(this, current_balance_topic_,
                       [this](const QVariant& v) { on_balance_update(v); });
+        hub.request(current_balance_topic_, /*force=*/true);
     }
-    hub.subscribe(this, QStringLiteral("market:price:fncpt"),
-                  [this](const QVariant& v) { on_price_update(v); });
+    resubscribe_prices();
     slippage_label_->setText(format_bps(slippage_bps()));
     route_label_->setText(QStringLiteral("PumpSwap (auto)"));
 }
@@ -399,10 +438,10 @@ void SwapPanel::showEvent(QShowEvent* e) {
 void SwapPanel::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
     auto& hub = fincept::datahub::DataHub::instance();
-    // unsubscribe(this) detaches us from every topic in one call —
-    // covers both the balance topic and market:price:fncpt.
+    // unsubscribe(this) detaches us from every topic (balance + every price).
     hub.unsubscribe(this);
     current_balance_topic_.clear();
+    price_topic_.clear();
     debounce_timer_->stop();
 }
 
@@ -410,69 +449,215 @@ void SwapPanel::hideEvent(QHideEvent* e) {
 
 void SwapPanel::on_balance_update(const QVariant& v) {
     if (!v.canConvert<fincept::wallet::WalletBalance>()) return;
-    const auto bal = v.value<fincept::wallet::WalletBalance>();
-    sol_balance_ = bal.sol();
-    fncpt_balance_ = bal.fncpt_ui();
-    fncpt_decimals_ = bal.fncpt_decimals();
-    update_inputs_from_balance();
+    latest_balance_ = v.value<fincept::wallet::WalletBalance>();
+    // Mirror native SOL into the synthetic holding so MAX & balance label
+    // can read it the same way as any SPL token.
+    sol_holding_.amount_raw = QString::number(latest_balance_.sol_lamports);
+    rebuild_from_combo();
+    rebuild_to_combo();
+    if (isVisible()) resubscribe_prices();
+    update_balance_label();
+    recompute_estimate();
+    swap_button_->setEnabled(can_submit());
 }
 
-void SwapPanel::update_inputs_from_balance() {
-    if (mode_ == Mode::BuyFncpt) {
-        in_token_label_->setText(QStringLiteral("SOL"));
-        out_token_label_->setText(QStringLiteral("$FNCPT"));
-        in_balance_label_->setText(tr("Balance: %1 SOL").arg(format_token(sol_balance_, 4)));
-    } else {
-        in_token_label_->setText(QStringLiteral("$FNCPT"));
-        out_token_label_->setText(QStringLiteral("SOL"));
-        in_balance_label_->setText(
-            tr("Balance: %1 $FNCPT").arg(format_token(fncpt_balance_, 2)));
-    }
-}
-
-void SwapPanel::on_price_update(const QVariant& v) {
-    if (!v.canConvert<fincept::wallet::FncptPrice>()) return;
-    const auto p = v.value<fincept::wallet::FncptPrice>();
+void SwapPanel::on_price_update(const QString& mint, const QVariant& v) {
+    if (!v.canConvert<fincept::wallet::TokenPrice>()) return;
+    const auto p = v.value<fincept::wallet::TokenPrice>();
     if (!p.valid) return;
-    last_fncpt_usd_price_ = p.usd;
-    last_fncpt_sol_price_ = p.sol;  // FNCPT denominated in SOL
+    price_usd_.insert(mint, p.usd);
+    price_sol_.insert(mint, p.sol);
     recompute_estimate();
 }
 
 void SwapPanel::on_topic_error(const QString& topic, const QString& error) {
-    if (topic == QStringLiteral("market:price:fncpt")) {
-        // Without a price we can't estimate output — disable submit and warn.
-        show_error_strip(tr("Spot price unavailable: %1. Try again in a moment.")
+    // Surface only the active leg's price errors. Other topic errors are
+    // handled by HoldingsBar / HomeTab.
+    const auto from_topic = price_topic_for(from_mint_);
+    const auto to_topic = price_topic_for(to_mint_);
+    if (topic == from_topic || topic == to_topic) {
+        show_error_strip(tr("Price unavailable: %1. Try again in a moment.")
                              .arg(error));
         swap_button_->setEnabled(false);
     }
-    // Balance errors handled by HoldingsBar / HomeTab; ignore here.
 }
 
 void SwapPanel::on_amount_changed(const QString& /*s*/) {
-    // Debounce the local estimate recompute so we don't thrash on every
-    // keystroke (mostly cosmetic — the math is cheap, but it gives the
-    // user a chance to finish typing before we paint the output).
     debounce_timer_->start();
     out_amount_label_->setText(QStringLiteral("…"));
     swap_button_->setEnabled(false);
     clear_error_strip();
 }
 
-void SwapPanel::on_mode_changed(int idx) {
-    mode_ = (idx == 0) ? Mode::BuyFncpt : Mode::SellFncpt;
-    update_inputs_from_balance();
+void SwapPanel::on_from_changed(int idx) {
+    if (!from_combo_ || idx < 0) return;
+    const auto mint = from_combo_->itemData(idx).toString();
+    if (mint.isEmpty() || mint == from_mint_) return;
+    from_mint_ = mint;
+    // If FROM == TO, flip the TO to the canonical counterpart so the user
+    // never sees a same-token "swap".
+    if (to_mint_ == from_mint_) {
+        to_mint_ = is_fncpt(from_mint_)
+            ? QString::fromLatin1(fincept::wallet::kWrappedSolMint)
+            : QString::fromLatin1(fincept::wallet::kFncptMint);
+        rebuild_to_combo();
+    }
+    resubscribe_prices();
+    update_balance_label();
     debounce_timer_->start();
+    swap_button_->setEnabled(can_submit());
+}
+
+void SwapPanel::on_to_changed(int idx) {
+    if (!to_combo_ || idx < 0) return;
+    const auto mint = to_combo_->itemData(idx).toString();
+    if (mint.isEmpty() || mint == to_mint_) return;
+    to_mint_ = mint;
+    resubscribe_prices();
+    debounce_timer_->start();
+    swap_button_->setEnabled(can_submit());
 }
 
 void SwapPanel::on_max_clicked() {
-    const double bal = (mode_ == Mode::BuyFncpt) ? sol_balance_ : fncpt_balance_;
+    const auto* h = holding_for(from_mint_);
+    if (!h) return;
+    double bal = h->ui_amount();
     if (bal <= 0.0) return;
-    // Leave a small SOL reserve for fees. 0.005 SOL covers a swap + rent.
-    const double safe = (mode_ == Mode::BuyFncpt) ? std::max(0.0, bal - 0.005) : bal;
+    // Reserve a small SOL cushion for fees only when paying in SOL.
+    if (is_native_sol(from_mint_)) bal = std::max(0.0, bal - 0.005);
     QSignalBlocker b(amount_input_);
-    amount_input_->setText(format_token(safe, 6));
+    amount_input_->setText(format_token(bal, 6));
     on_amount_changed(amount_input_->text());
+}
+
+// ── Combo population ───────────────────────────────────────────────────────
+
+void SwapPanel::rebuild_from_combo() {
+    if (!from_combo_) return;
+    QSignalBlocker b(from_combo_);
+    from_combo_->clear();
+
+    // Always include native SOL at the top so an empty wallet still has a
+    // recognisable FROM (matches how PumpPortal frames trades — SOL is the
+    // canonical paying side).
+    from_combo_->addItem(resolve_symbol(QString::fromLatin1(fincept::wallet::kWrappedSolMint)),
+                         QString::fromLatin1(fincept::wallet::kWrappedSolMint));
+
+    // Holdings sorted by USD value (already done at publish time in
+    // WalletBalanceProducer); skip the wSOL entry from `tokens` to avoid a
+    // duplicate (native SOL is already at index 0). Same for unverified
+    // tokens unless the user opted in via SettingsTab.
+    bool show_unverified = false;
+    auto sr = SecureStorage::instance().retrieve(
+        QStringLiteral("wallet.show_unverified_tokens"));
+    if (sr.is_ok()) show_unverified = (sr.value() == QLatin1String("1"));
+
+    for (const auto& t : latest_balance_.tokens) {
+        if (is_native_sol(t.mint)) continue;
+        if (!t.verified && !show_unverified && !is_fncpt(t.mint)) continue;
+        if (t.ui_amount() <= 0.0) continue;
+        from_combo_->addItem(resolve_symbol(t.mint), t.mint);
+    }
+
+    // Also ensure FNCPT is always present (so the user can SELL even if they
+    // hold zero — e.g. just to see the UI), positioned after holdings.
+    if (from_combo_->findData(QString::fromLatin1(fincept::wallet::kFncptMint)) < 0) {
+        from_combo_->addItem(resolve_symbol(QString::fromLatin1(fincept::wallet::kFncptMint)),
+                             QString::fromLatin1(fincept::wallet::kFncptMint));
+    }
+
+    // Restore selection: pending override > current from_mint_ > index 0.
+    QString want = !pending_from_mint_.isEmpty() ? pending_from_mint_ : from_mint_;
+    int idx = from_combo_->findData(want);
+    if (idx < 0 && !pending_from_mint_.isEmpty()) {
+        // Pending mint isn't in the combo yet — keep the queue and pick
+        // current from_mint_ (or first row).
+        idx = from_combo_->findData(from_mint_);
+    }
+    if (idx < 0) idx = 0;
+    from_combo_->setCurrentIndex(idx);
+    if (idx >= 0) {
+        const auto picked = from_combo_->itemData(idx).toString();
+        if (!picked.isEmpty()) from_mint_ = picked;
+    }
+    if (!pending_from_mint_.isEmpty() && from_mint_ == pending_from_mint_) {
+        pending_from_mint_.clear();
+    }
+}
+
+void SwapPanel::rebuild_to_combo() {
+    if (!to_combo_) return;
+    QSignalBlocker b(to_combo_);
+    to_combo_->clear();
+
+    // Phase 2 valid TO targets are the counterpart of FROM. Even though
+    // PumpPortal only supports SOL↔FNCPT, we expose the combo so the user
+    // sees the surface area; can_submit() gates the actual SWAP.
+    auto add = [this](const QString& mint) {
+        if (mint == from_mint_) return; // never list FROM==TO
+        const int idx = to_combo_->findData(mint);
+        if (idx < 0) to_combo_->addItem(resolve_symbol(mint), mint);
+    };
+    add(QString::fromLatin1(fincept::wallet::kFncptMint));
+    add(QString::fromLatin1(fincept::wallet::kWrappedSolMint));
+
+    // Append other holdings as TO targets (display-only for Phase 2; SWAP
+    // gated for unsupported pairs).
+    for (const auto& t : latest_balance_.tokens) {
+        if (is_native_sol(t.mint)) continue;
+        if (is_fncpt(t.mint)) continue;
+        if (!t.verified) continue;
+        add(t.mint);
+    }
+
+    int idx = to_combo_->findData(to_mint_);
+    if (idx < 0) idx = 0;
+    to_combo_->setCurrentIndex(idx);
+    if (idx >= 0) {
+        const auto picked = to_combo_->itemData(idx).toString();
+        if (!picked.isEmpty()) to_mint_ = picked;
+    }
+}
+
+// ── Subscriptions ──────────────────────────────────────────────────────────
+
+void SwapPanel::resubscribe_prices() {
+    if (!isVisible()) return;
+    auto& hub = fincept::datahub::DataHub::instance();
+    // Drop any prior price subs we own before resubscribing the active legs.
+    // (We can't selectively unsubscribe by topic; unsubscribe(this) drops
+    // everything including the balance topic. Resubscribe both legs +
+    // balance every time — it's cheap and keeps lifetimes obvious.)
+    hub.unsubscribe(this);
+    price_topic_.clear();
+
+    if (!current_balance_topic_.isEmpty()) {
+        hub.subscribe(this, current_balance_topic_,
+                      [this](const QVariant& v) { on_balance_update(v); });
+    }
+
+    auto sub_price = [this, &hub](const QString& mint) {
+        if (mint.isEmpty()) return;
+        const auto topic = price_topic_for(mint);
+        price_topic_.insert(mint, topic);
+        hub.subscribe(this, topic,
+                      [this, mint](const QVariant& v) { on_price_update(mint, v); });
+        hub.request(topic, /*force=*/false);
+    };
+    sub_price(from_mint_);
+    sub_price(to_mint_);
+}
+
+void SwapPanel::update_balance_label() {
+    const auto* h = holding_for(from_mint_);
+    const QString sym = resolve_symbol(from_mint_);
+    if (!h) {
+        in_balance_label_->setText(tr("Balance: 0 %1").arg(sym));
+        return;
+    }
+    const int dp = is_native_sol(from_mint_) ? 4 : (is_fncpt(from_mint_) ? 2 : 4);
+    in_balance_label_->setText(
+        tr("Balance: %1 %2").arg(format_token(h->ui_amount(), dp)).arg(sym));
 }
 
 void SwapPanel::recompute_estimate() {
@@ -483,46 +668,42 @@ void SwapPanel::recompute_estimate() {
         swap_button_->setEnabled(false);
         return;
     }
-    if (last_fncpt_sol_price_ <= 0.0 || last_fncpt_usd_price_ <= 0.0) {
-        out_amount_label_->setText(QStringLiteral("…"));
-        status_label_->setText(tr("Waiting for spot price…"));
+
+    const double from_sol = price_sol_.value(from_mint_, 0.0);
+    const double from_usd = price_usd_.value(from_mint_, 0.0);
+    const double to_sol = price_sol_.value(to_mint_, 0.0);
+    const double to_usd = price_usd_.value(to_mint_, 0.0);
+
+    if (from_sol <= 0.0 || from_usd <= 0.0 || to_sol <= 0.0 || to_usd <= 0.0) {
+        out_amount_label_->setText(QStringLiteral("estimate unavailable"));
+        status_label_->setText(tr("Waiting for spot prices…"));
         swap_button_->setEnabled(false);
         return;
     }
 
-    // Local estimate from spot. PumpPortal returns the exact output at
-    // build_swap time; this is just the user-facing preview.
-    //
-    // Spot inputs:
-    //   last_fncpt_usd_price_ = USD per 1 FNCPT
-    //   last_fncpt_sol_price_ = SOL per 1 FNCPT
-    //
-    // BUY  (SOL → FNCPT): user types SOL_in
-    //                     est_fncpt_out = SOL_in / SOL_per_FNCPT
-    // SELL (FNCPT → SOL): user types FNCPT_in
-    //                     est_sol_out  = FNCPT_in * SOL_per_FNCPT
-    //
-    // Slippage is the user-set lower bound on what they'll accept; show the
-    // worst-case to set expectations correctly.
+    // SOL-denominated cross: out_units = in_units * (from_sol / to_sol).
     const double slippage_factor = 1.0 - (slippage_pct() / 100.0);
-    QString out_text;
-    if (mode_ == Mode::BuyFncpt) {
-        const double est_fncpt = (ui_amount / last_fncpt_sol_price_) * slippage_factor;
-        const double est_usd = ui_amount * last_fncpt_usd_price_ / last_fncpt_sol_price_;
-        out_text = QStringLiteral("≈ %1 $FNCPT  (~$%2)")
-                       .arg(format_token(est_fncpt, 2))
-                       .arg(format_token(est_usd, 2));
-    } else {
-        const double est_sol = ui_amount * last_fncpt_sol_price_ * slippage_factor;
-        const double est_usd = ui_amount * last_fncpt_usd_price_;
-        out_text = QStringLiteral("≈ %1 SOL  (~$%2)")
-                       .arg(format_token(est_sol, 6))
-                       .arg(format_token(est_usd, 2));
-    }
+    const double est_out = ui_amount * (from_sol / to_sol) * slippage_factor;
+    const double est_usd = ui_amount * from_usd;
+
+    const QString to_sym = resolve_symbol(to_mint_);
+    const int dp = is_native_sol(to_mint_) ? 6 : (is_fncpt(to_mint_) ? 2 : 4);
+    const QString out_text = QStringLiteral("≈ %1 %2  (~$%3)")
+                                 .arg(format_token(est_out, dp))
+                                 .arg(to_sym)
+                                 .arg(format_token(est_usd, 2));
     out_amount_label_->setText(out_text);
     route_label_->setText(QStringLiteral("PumpSwap (auto)"));
     impact_label_->setText(tr("set by PumpSwap; capped by slippage"));
     slippage_label_->setText(format_bps(slippage_bps()));
+
+    if (!is_supported_pair()) {
+        // Show the estimate so the user understands what they're trying to
+        // do, but block submit and explain.
+        status_label_->setText(unsupported_pair_message());
+        swap_button_->setEnabled(false);
+        return;
+    }
     status_label_->setText(tr("Ready. Click SWAP to build the transaction."));
     clear_error_strip();
     swap_button_->setEnabled(can_submit());
@@ -544,24 +725,46 @@ void SwapPanel::clear_error_strip() {
 void SwapPanel::set_busy(bool busy) {
     busy_ = busy;
     amount_input_->setEnabled(!busy);
-    mode_combo_->setEnabled(!busy);
+    if (from_combo_) from_combo_->setEnabled(!busy);
+    if (to_combo_) to_combo_->setEnabled(!busy);
     max_button_->setEnabled(!busy);
     swap_button_->setEnabled(!busy && can_submit());
+}
+
+bool SwapPanel::is_supported_pair() const {
+    // PumpPortal `trade-local` only routes SOL↔FNCPT for $FNCPT trades.
+    const bool sol_to_fncpt = is_native_sol(from_mint_) && is_fncpt(to_mint_);
+    const bool fncpt_to_sol = is_fncpt(from_mint_) && is_native_sol(to_mint_);
+    return sol_to_fncpt || fncpt_to_sol;
+}
+
+QString SwapPanel::unsupported_pair_message() const {
+    return tr("This pair isn't routable in Phase 2. PumpPortal supports "
+              "SOL ↔ $FNCPT only; a generalised router lands in Phase 3.");
 }
 
 bool SwapPanel::can_submit() const {
     if (busy_) return false;
     if (current_pubkey_.isEmpty()) return false;
-    if (last_fncpt_sol_price_ <= 0.0) return false;
-    if (last_fncpt_usd_price_ <= 0.0) return false;
+    if (!is_supported_pair()) return false;
+    if (price_sol_.value(from_mint_, 0.0) <= 0.0) return false;
+    if (price_sol_.value(to_mint_, 0.0) <= 0.0) return false;
     bool ok = false;
     const double ui_amount = QLocale::system().toDouble(amount_input_->text(), &ok);
     if (!ok || ui_amount <= 0.0) return false;
-    // Don't let the user buy/sell more than they have. PumpPortal would
-    // reject the tx anyway; this is the friendlier early-exit.
-    const double bal = (mode_ == Mode::BuyFncpt) ? sol_balance_ : fncpt_balance_;
-    if (ui_amount > bal) return false;
+    const auto* h = holding_for(from_mint_);
+    if (!h) return false;
+    if (ui_amount > h->ui_amount()) return false;
     return true;
+}
+
+const fincept::wallet::TokenHolding* SwapPanel::holding_for(const QString& mint) const {
+    if (mint.isEmpty()) return nullptr;
+    if (is_native_sol(mint)) return &sol_holding_;
+    for (const auto& t : latest_balance_.tokens) {
+        if (t.mint == mint) return &t;
+    }
+    return nullptr;
 }
 
 int SwapPanel::slippage_bps() const {
@@ -584,6 +787,75 @@ int SwapPanel::slippage_pct() const {
 }
 
 // ── Submit flow ────────────────────────────────────────────────────────────
+//
+// Sequence:
+//   1. build_swap → returns the unsigned tx body from PumpPortal.
+//   2. simulate_transaction → MITM gate (Phase 2 plan §2). If simulation
+//      reports an `err`, bail before the wallet ever pops.
+//   3. WalletActionConfirmDialog → user reviews decoded summary.
+//   4. sign_and_send → wallet signs and forwards to RPC.
+//   5. Poll getSignatureStatuses until confirmed.
+//
+// Each step checks the QPointer guard and surfaces failures to the error
+// strip / status label. set_busy(true) at step 1; set_busy(false) on any
+// terminal outcome.
+
+void SwapPanel::start_status_poll(const QString& sig) {
+    auto* rpc = new fincept::wallet::SolanaRpcClient(this);
+    rpc->reload_endpoint();
+    auto attempts = std::make_shared<int>(0);
+    auto* poll_timer = new QTimer(this);
+    poll_timer->setInterval(kStatusPollMs);
+    QPointer<SwapPanel> guard = this;
+    QObject::connect(poll_timer, &QTimer::timeout, this,
+                     [guard, rpc, sig, attempts, poll_timer]() {
+        if (!guard) {
+            poll_timer->stop();
+            poll_timer->deleteLater();
+            return;
+        }
+        if (++(*attempts) > kStatusPollMaxAttempts) {
+            poll_timer->stop();
+            poll_timer->deleteLater();
+            guard->set_busy(false);
+            guard->show_error_strip(
+                QObject::tr("No confirmation after 60 s. Check Solscan."));
+            guard->status_label_->setText(QObject::tr("Timed out."));
+            return;
+        }
+        rpc->get_signature_statuses(QStringList{sig},
+            [guard, sig, poll_timer](
+                Result<std::vector<fincept::wallet::SolanaRpcClient::SignatureStatus>> r) {
+            if (!guard) return;
+            if (r.is_err()) return; // transient — keep polling
+            const auto& vec = r.value();
+            if (vec.empty() || !vec[0].found) return;
+            const auto& s = vec[0];
+            if (!s.err.isEmpty()) {
+                poll_timer->stop();
+                poll_timer->deleteLater();
+                guard->set_busy(false);
+                guard->show_error_strip(
+                    QObject::tr("Tx failed on-chain: %1").arg(s.err));
+                guard->status_label_->setText(QObject::tr("Reverted."));
+                return;
+            }
+            if (s.confirmation_status == QStringLiteral("confirmed")
+                || s.confirmation_status == QStringLiteral("finalized")) {
+                poll_timer->stop();
+                poll_timer->deleteLater();
+                guard->set_busy(false);
+                guard->amount_input_->clear();
+                guard->out_amount_label_->setText(QStringLiteral("—"));
+                guard->status_label_->setText(
+                    QObject::tr("Confirmed: %1…").arg(sig.left(12)));
+                fincept::wallet::WalletService::instance()
+                    .force_balance_refresh();
+            }
+        });
+    });
+    poll_timer->start();
+}
 
 void SwapPanel::on_swap_clicked() {
     if (!can_submit()) return;
@@ -592,177 +864,204 @@ void SwapPanel::on_swap_clicked() {
         show_error_strip(tr("Swap service unavailable."));
         return;
     }
-    bool ok = false;
-    const double ui_amount = QLocale::system().toDouble(amount_input_->text(), &ok);
-    if (!ok || ui_amount <= 0.0) return;
+    bool ok_d = false;
+    const double ui_amount = QLocale::system().toDouble(amount_input_->text(), &ok_d);
+    if (!ok_d || ui_amount <= 0.0) return;
 
     const auto pubkey = current_pubkey_;
     const int slip_pct = slippage_pct();
     const int slip_bps_for_display = slippage_bps();
-    const auto action = (mode_ == Mode::BuyFncpt)
+    // The supported-pair gate above guarantees this is SOL→FNCPT or FNCPT→SOL.
+    const bool buying_fncpt = is_native_sol(from_mint_) && is_fncpt(to_mint_);
+    const auto action = buying_fncpt
                             ? fincept::wallet::PumpFunSwapService::Action::Buy
                             : fincept::wallet::PumpFunSwapService::Action::Sell;
     // BUY: amount is in SOL (denominatedInSol=true).
     // SELL: amount is in FNCPT (denominatedInSol=false).
-    const bool denom_in_sol = (mode_ == Mode::BuyFncpt);
+    const bool denom_in_sol = buying_fncpt;
 
-    // Build the user-facing summary from local estimate. PumpPortal will
-    // produce the canonical numbers when build_swap returns; the wallet
-    // shows the decoded transaction independently. Confirm dialog values
-    // here are the panel's expectation; mismatches with PumpPortal's
-    // result would be visible in the wallet popup.
-    WalletActionSummary summary;
-    summary.title = QStringLiteral("SWAP");
-    summary.lede = tr("Approve in your wallet to forward this transaction "
-                      "to the network. The terminal does not hold any funds.");
-    if (mode_ == Mode::BuyFncpt) {
-        const double est_fncpt = ui_amount / last_fncpt_sol_price_;
-        summary.rows.append({QStringLiteral("ROUTE"),
-                             QStringLiteral("PumpSwap (pool=auto)"), true});
-        summary.rows.append({QStringLiteral("YOU PAY"),
-                             QStringLiteral("%1 SOL").arg(format_token(ui_amount, 6)),
-                             true});
-        summary.rows.append({QStringLiteral("YOU RECEIVE"),
-                             tr("≈ %1 $FNCPT (PumpSwap fills at execution)")
-                                 .arg(format_token(est_fncpt, 2)),
-                             true});
-    } else {
-        const double est_sol = ui_amount * last_fncpt_sol_price_;
-        summary.rows.append({QStringLiteral("ROUTE"),
-                             QStringLiteral("PumpSwap (pool=auto)"), true});
-        summary.rows.append({QStringLiteral("YOU PAY"),
-                             QStringLiteral("%1 $FNCPT").arg(format_token(ui_amount, 2)),
-                             true});
-        summary.rows.append({QStringLiteral("YOU RECEIVE"),
-                             tr("≈ %1 SOL (PumpSwap fills at execution)")
-                                 .arg(format_token(est_sol, 6)),
-                             true});
-    }
-    summary.rows.append({QStringLiteral("MAX SLIPPAGE"),
-                         format_bps(slip_bps_for_display), true});
-    summary.rows.append({QStringLiteral("PRIORITY FEE"),
-                         QStringLiteral("%1 SOL")
-                             .arg(format_token(kDefaultPriorityFeeSol, 6)),
-                         true});
-    summary.warnings.append(
-        tr("PumpSwap will reject the trade if execution drifts more than "
-           "the slippage tolerance above. Your funds stay in your wallet."));
-    summary.primary_button_text = QStringLiteral("SWAP");
-    summary.primary_is_safe = true;
-    summary.arm_delay_ms = 1500;
+    const double from_sol_p = price_sol_.value(from_mint_, 0.0);
+    const double to_sol_p = price_sol_.value(to_mint_, 0.0);
+    const double est_out = (to_sol_p > 0.0) ? (ui_amount * from_sol_p / to_sol_p) : 0.0;
 
-    auto* dlg = new WalletActionConfirmDialog(summary, this);
+    set_busy(true);
+    clear_error_strip();
+    status_label_->setText(tr("Building swap transaction…"));
+
     QPointer<SwapPanel> self = this;
-    connect(dlg, &WalletActionConfirmDialog::confirmed, this,
-            [self, svc, pubkey, ui_amount, action, denom_in_sol, slip_pct]() {
+    svc->build_swap(action,
+                    QString::fromLatin1(fincept::wallet::kFncptMint),
+                    ui_amount,
+                    denom_in_sol,
+                    pubkey,
+                    slip_pct,
+                    kDefaultPriorityFeeSol,
+                    [self, ui_amount, buying_fncpt, est_out, slip_bps_for_display](
+                        Result<fincept::wallet::PumpFunSwapService::SwapTransaction> r) {
         if (!self) return;
-        self->set_busy(true);
-        self->status_label_->setText(self->tr("Building swap transaction…"));
+        if (r.is_err()) {
+            self->set_busy(false);
+            self->show_error_strip(
+                QObject::tr("build_swap failed: %1")
+                    .arg(QString::fromStdString(r.error())));
+            self->status_label_->setText(QObject::tr("Failed."));
+            return;
+        }
+        const auto tx = r.value();
 
-        QPointer<SwapPanel> guard = self;
-        svc->build_swap(action,
-                        QString::fromLatin1(kFncptMint),
-                        ui_amount,
-                        denom_in_sol,
-                        pubkey,
-                        slip_pct,
-                        kDefaultPriorityFeeSol,
-                        [guard](Result<fincept::wallet::PumpFunSwapService::SwapTransaction> r) {
-            if (!guard) return;
-            if (r.is_err()) {
-                guard->set_busy(false);
-                guard->show_error_strip(
-                    QObject::tr("build_swap failed: %1")
-                        .arg(QString::fromStdString(r.error())));
-                guard->status_label_->setText(QObject::tr("Failed."));
+        // ── MITM gate (Phase 2 §2) ──────────────────────────────────────
+        // Simulate the unsigned tx against the user's RPC. If it would
+        // revert, refuse to show the wallet — a malicious PumpPortal
+        // response that built a draining or malformed tx is caught here.
+        self->status_label_->setText(QObject::tr("Validating with RPC…"));
+        auto* rpc = new fincept::wallet::SolanaRpcClient(self);
+        rpc->reload_endpoint();
+        rpc->simulate_transaction(tx.tx_base64,
+            [self, tx, ui_amount, buying_fncpt, est_out, slip_bps_for_display, rpc](
+                Result<fincept::wallet::SolanaRpcClient::SimulationResult> sr) {
+            rpc->deleteLater();
+            if (!self) return;
+            if (sr.is_err()) {
+                self->set_busy(false);
+                self->show_error_strip(
+                    QObject::tr("Simulation failed: %1. Refusing to sign.")
+                        .arg(QString::fromStdString(sr.error())));
+                self->status_label_->setText(QObject::tr("Aborted."));
                 return;
             }
-            const auto tx = r.value();
-            guard->status_label_->setText(QObject::tr("Awaiting wallet signature…"));
-            fincept::wallet::WalletService::instance().sign_and_send(
-                tx.tx_base64,
-                QObject::tr("Sign swap"),
-                QObject::tr("Approve the swap in your wallet to complete the trade."),
-                guard,
-                [guard](Result<QString> sr) {
-                    if (!guard) return;
-                    if (sr.is_err()) {
-                        guard->set_busy(false);
-                        guard->show_error_strip(
-                            QObject::tr("Signing failed: %1")
-                                .arg(QString::fromStdString(sr.error())));
-                        guard->status_label_->setText(QObject::tr("Cancelled."));
+            const auto sim = sr.value();
+            if (!sim.ok) {
+                LOG_WARN("SwapPanel",
+                         "simulateTransaction reported err: " + sim.err);
+                self->set_busy(false);
+                self->show_error_strip(
+                    QObject::tr("This swap would fail on-chain: %1. "
+                                "Refusing to sign.").arg(sim.err));
+                self->status_label_->setText(QObject::tr("Aborted."));
+                return;
+            }
+
+            // ── Confirm dialog ──────────────────────────────────────────
+            WalletActionSummary summary;
+            summary.title = QStringLiteral("SWAP");
+            summary.lede = QObject::tr(
+                "Approve in your wallet to forward this transaction "
+                "to the network. The terminal does not hold any funds.");
+            summary.rows.append({QStringLiteral("ROUTE"),
+                                 QStringLiteral("PumpSwap (pool=auto)"), true});
+            if (buying_fncpt) {
+                summary.rows.append({QStringLiteral("YOU PAY"),
+                                     QStringLiteral("%1 SOL")
+                                         .arg(format_token(ui_amount, 6)),
+                                     true});
+                summary.rows.append({QStringLiteral("YOU RECEIVE"),
+                                     QObject::tr("≈ %1 $FNCPT (PumpSwap fills at execution)")
+                                         .arg(format_token(est_out, 2)),
+                                     true});
+            } else {
+                summary.rows.append({QStringLiteral("YOU PAY"),
+                                     QStringLiteral("%1 $FNCPT")
+                                         .arg(format_token(ui_amount, 2)),
+                                     true});
+                summary.rows.append({QStringLiteral("YOU RECEIVE"),
+                                     QObject::tr("≈ %1 SOL (PumpSwap fills at execution)")
+                                         .arg(format_token(est_out, 6)),
+                                     true});
+            }
+            summary.rows.append({QStringLiteral("MAX SLIPPAGE"),
+                                 format_bps(slip_bps_for_display), true});
+            summary.rows.append({QStringLiteral("PRIORITY FEE"),
+                                 QStringLiteral("%1 SOL")
+                                     .arg(format_token(kDefaultPriorityFeeSol, 6)),
+                                 true});
+            summary.rows.append({QStringLiteral("RPC SIMULATION"),
+                                 QStringLiteral("OK · %1 CU")
+                                     .arg(QString::number(sim.units_consumed)),
+                                 true});
+            summary.warnings.append(QObject::tr(
+                "PumpSwap will reject the trade if execution drifts more than "
+                "the slippage tolerance above. Your funds stay in your wallet."));
+            summary.primary_button_text = QStringLiteral("SWAP");
+            summary.primary_is_safe = true;
+            summary.arm_delay_ms = 1500;
+
+            auto* dlg = new WalletActionConfirmDialog(summary, self);
+            const QString tx_b64 = tx.tx_base64;
+            QObject::connect(dlg, &WalletActionConfirmDialog::confirmed, self,
+                             [self, tx_b64]() {
+                if (!self) return;
+
+                // ── Freshness gate (Phase 2 §2) ───────────────────────────
+                // The tx may have been sitting in the dialog for several
+                // seconds. Re-simulate with replace=false so an expired
+                // blockhash is caught before the wallet signs. If the
+                // simulation fails with BlockhashNotFound (or any other
+                // freshness-related error), abort and ask the user to retry.
+                self->status_label_->setText(QObject::tr("Re-checking freshness…"));
+                auto* fresh_rpc = new fincept::wallet::SolanaRpcClient(self);
+                fresh_rpc->reload_endpoint();
+                fresh_rpc->simulate_transaction(tx_b64,
+                    [self, tx_b64, fresh_rpc](
+                        Result<fincept::wallet::SolanaRpcClient::SimulationResult> fr) {
+                    fresh_rpc->deleteLater();
+                    if (!self) return;
+                    if (fr.is_err()) {
+                        self->set_busy(false);
+                        self->show_error_strip(
+                            QObject::tr("Could not verify freshness: %1. "
+                                        "Try the swap again.")
+                                .arg(QString::fromStdString(fr.error())));
+                        self->status_label_->setText(QObject::tr("Aborted."));
                         return;
                     }
-                    const auto sig = sr.value();
-                    guard->status_label_->setText(
-                        QObject::tr("Sent. Waiting for confirmation…"));
-                    LOG_INFO("SwapPanel", "submitted: " + sig);
+                    const auto fsim = fr.value();
+                    if (!fsim.ok) {
+                        // BlockhashNotFound is the canonical staleness error.
+                        // Anything else here also means "don't sign."
+                        self->set_busy(false);
+                        self->show_error_strip(
+                            QObject::tr("This swap is no longer fresh: %1. "
+                                        "Click SWAP again to rebuild.")
+                                .arg(fsim.err));
+                        self->status_label_->setText(QObject::tr("Stale."));
+                        return;
+                    }
 
-                    // Poll getSignatureStatuses until confirmed (or give up).
-                    auto* rpc = new fincept::wallet::SolanaRpcClient(guard);
-                    rpc->reload_endpoint();
-                    auto attempts = std::make_shared<int>(0);
-                    auto* poll_timer = new QTimer(guard);
-                    poll_timer->setInterval(kStatusPollMs);
-                    QPointer<SwapPanel> poll_guard = guard;
-                    QObject::connect(poll_timer, &QTimer::timeout, guard,
-                                     [poll_guard, rpc, sig, attempts, poll_timer]() {
-                        if (!poll_guard) {
-                            poll_timer->stop();
-                            poll_timer->deleteLater();
-                            return;
-                        }
-                        if (++(*attempts) > kStatusPollMaxAttempts) {
-                            poll_timer->stop();
-                            poll_timer->deleteLater();
-                            poll_guard->set_busy(false);
-                            poll_guard->show_error_strip(
-                                QObject::tr("No confirmation after 60 s. Check Solscan."));
-                            poll_guard->status_label_->setText(QObject::tr("Timed out."));
-                            return;
-                        }
-                        rpc->get_signature_statuses(QStringList{sig},
-                            [poll_guard, sig, poll_timer](
-                                Result<std::vector<fincept::wallet::SolanaRpcClient::SignatureStatus>> r) {
-                            if (!poll_guard) return;
-                            if (r.is_err()) return; // transient — keep polling
-                            const auto& vec = r.value();
-                            if (vec.empty() || !vec[0].found) return;
-                            const auto& s = vec[0];
-                            if (!s.err.isEmpty()) {
-                                poll_timer->stop();
-                                poll_timer->deleteLater();
-                                poll_guard->set_busy(false);
-                                poll_guard->show_error_strip(
-                                    QObject::tr("Tx failed on-chain: %1").arg(s.err));
-                                poll_guard->status_label_->setText(QObject::tr("Reverted."));
+                    // ── Sign and send ─────────────────────────────────────
+                    self->status_label_->setText(QObject::tr("Awaiting wallet signature…"));
+                    fincept::wallet::WalletService::instance().sign_and_send(
+                        tx_b64,
+                        QObject::tr("Sign swap"),
+                        QObject::tr("Approve the swap in your wallet to complete the trade."),
+                        self,
+                        [self](Result<QString> sr2) {
+                            if (!self) return;
+                            if (sr2.is_err()) {
+                                self->set_busy(false);
+                                self->show_error_strip(
+                                    QObject::tr("Signing failed: %1")
+                                        .arg(QString::fromStdString(sr2.error())));
+                                self->status_label_->setText(QObject::tr("Cancelled."));
                                 return;
                             }
-                            if (s.confirmation_status == QStringLiteral("confirmed")
-                                || s.confirmation_status == QStringLiteral("finalized")) {
-                                poll_timer->stop();
-                                poll_timer->deleteLater();
-                                poll_guard->set_busy(false);
-                                poll_guard->amount_input_->clear();
-                                poll_guard->out_amount_label_->setText(QStringLiteral("—"));
-                                poll_guard->status_label_->setText(
-                                    QObject::tr("Confirmed: %1…").arg(sig.left(12)));
-                                fincept::wallet::WalletService::instance()
-                                    .force_balance_refresh();
-                            }
+                            const auto sig = sr2.value();
+                            self->status_label_->setText(
+                                QObject::tr("Sent. Waiting for confirmation…"));
+                            LOG_INFO("SwapPanel", "submitted: " + sig);
+                            self->start_status_poll(sig);
                         });
-                    });
-                    poll_timer->start();
-                });
+                }, /*replace_recent_blockhash=*/false);
+            });
+            QObject::connect(dlg, &WalletActionConfirmDialog::cancelled, self,
+                             [self]() {
+                if (!self) return;
+                self->set_busy(false);
+                self->status_label_->setText(self->tr("Cancelled."));
+            });
+            dlg->setAttribute(Qt::WA_DeleteOnClose);
+            dlg->open();
         });
     });
-    connect(dlg, &WalletActionConfirmDialog::cancelled, this, [self]() {
-        if (!self) return;
-        self->status_label_->setText(self->tr("Cancelled."));
-    });
-    dlg->setAttribute(Qt::WA_DeleteOnClose);
-    dlg->open();
 }
 
 } // namespace fincept::screens::panels

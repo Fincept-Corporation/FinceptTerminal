@@ -15,6 +15,8 @@
 #include <QNetworkAccessManager>
 #include <QNetworkDiskCache>
 #include <QPainter>
+#include <QResizeEvent>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace fincept::ui {
@@ -174,6 +176,19 @@ void WorldMapWidget::clear_pins() {
     rebuild_markers();
 }
 
+void WorldMapWidget::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    // Re-fit on resize so the camera aspect tracks the widget. Debounce
+    // through a single-shot timer so live drag-resizing doesn't spam flyTo
+    // animations — one re-fit shortly after the user lets go is enough.
+    if (!map_ready_ || pins_.isEmpty())
+        return;
+    QTimer::singleShot(150, this, [this]() {
+        if (!pins_.isEmpty())
+            fit_to_pins();
+    });
+}
+
 void WorldMapWidget::fly_to(double lat, double lng, int zoom) {
     Q_UNUSED(zoom);
     if (!map_ready_)
@@ -189,24 +204,90 @@ void WorldMapWidget::fit_to_pins() {
 
     double min_lat = 90, max_lat = -90, min_lng = 180, max_lng = -180;
     for (const auto& pin : pins_) {
-        if (pin.latitude < min_lat)
-            min_lat = pin.latitude;
-        if (pin.latitude > max_lat)
-            max_lat = pin.latitude;
-        if (pin.longitude < min_lng)
-            min_lng = pin.longitude;
-        if (pin.longitude > max_lng)
-            max_lng = pin.longitude;
+        if (pin.latitude < min_lat)  min_lat = pin.latitude;
+        if (pin.latitude > max_lat)  max_lat = pin.latitude;
+        if (pin.longitude < min_lng) min_lng = pin.longitude;
+        if (pin.longitude > max_lng) max_lng = pin.longitude;
     }
 
-    // Add padding (at least 2 degrees, or 20% of the span)
-    double lat_span = std::max(max_lat - min_lat, 1.0);
-    double lng_span = std::max(max_lng - min_lng, 1.0);
-    double lat_pad = std::max(lat_span * 0.2, 2.0);
-    double lng_pad = std::max(lng_span * 0.2, 2.0);
+    // World-view fallback rectangle. Avoids the polar tile-coverage gap and
+    // matches the standard Web-Mercator content extent we want filling the
+    // viewport when pins are too sparse / globally scattered to fit usefully.
+    constexpr double kWorldMinLat = -60.0, kWorldMaxLat = 75.0;
+    constexpr double kWorldMinLng = -175.0, kWorldMaxLng = 175.0;
 
-    auto target = QGV::GeoRect(QGV::GeoPos(max_lat + lat_pad, min_lng - lng_pad),
-                               QGV::GeoPos(min_lat - lat_pad, max_lng + lng_pad));
+    double lat_span = std::max(max_lat - min_lat, 0.0);
+    double lng_span = std::max(max_lng - min_lng, 0.0);
+
+    // Globally-scattered pins → snap to world view; tighter zoom would just
+    // wrap pins around the dateline gutter and leave big dark gaps.
+    if (lng_span > 200.0 || lat_span > 110.0) {
+        auto world = QGV::GeoRect(QGV::GeoPos(kWorldMaxLat, kWorldMinLng),
+                                  QGV::GeoPos(kWorldMinLat, kWorldMaxLng));
+        map_->flyTo(QGVCameraActions(map_).scaleTo(world));
+        return;
+    }
+
+    // Pad proportionally to the span — 10% per side. Floor of 4° / 6° keeps a
+    // single pin or tightly-clustered pins from zooming in absurdly far while
+    // staying visually tight enough to avoid empty black space.
+    double lat_pad = std::max(lat_span * 0.1, 4.0);
+    double lng_pad = std::max(lng_span * 0.1, 6.0);
+
+    double box_min_lat = min_lat - lat_pad;
+    double box_max_lat = max_lat + lat_pad;
+    double box_min_lng = min_lng - lng_pad;
+    double box_max_lng = max_lng + lng_pad;
+
+    // Match the widget's aspect ratio so QGeoView doesn't letterbox the
+    // viewport with dark gutters on the long axis. Mercator distorts vertical
+    // distance by ~1/cos(lat); use the centre latitude as a first-order
+    // correction so the inflation feels right at high latitudes.
+    double w = std::max(1, width());
+    double h = std::max(1, height());
+    double widget_aspect = w / h;
+    double centre_lat = (box_min_lat + box_max_lat) * 0.5;
+    double mercator_k = std::cos(centre_lat * 3.14159265358979 / 180.0);
+    if (mercator_k < 0.2) mercator_k = 0.2;
+
+    double box_lat_h = box_max_lat - box_min_lat;
+    double box_lng_w = box_max_lng - box_min_lng;
+    // Effective screen-aspect of the box (lng_w * cos(lat)) / lat_h.
+    double box_aspect = (box_lng_w * mercator_k) / std::max(box_lat_h, 1e-6);
+
+    if (box_aspect < widget_aspect) {
+        // Box is too tall → widen it.
+        double need_lng_w = (widget_aspect * box_lat_h) / mercator_k;
+        double extra = (need_lng_w - box_lng_w) * 0.5;
+        box_min_lng -= extra;
+        box_max_lng += extra;
+    } else {
+        // Box is too wide → grow it vertically.
+        double need_lat_h = (box_lng_w * mercator_k) / widget_aspect;
+        double extra = (need_lat_h - box_lat_h) * 0.5;
+        box_min_lat -= extra;
+        box_max_lat += extra;
+    }
+
+    // Clamp to sensible viewable bounds. Beyond ±70° lat the OSM dark tiles
+    // are mostly empty ocean / ice and produce visible black gutters at the
+    // bottom of the map; above ±175° lng we cross the antimeridian gap.
+    box_min_lat = std::max(box_min_lat, kWorldMinLat);
+    box_max_lat = std::min(box_max_lat, kWorldMaxLat);
+    box_min_lng = std::max(box_min_lng, kWorldMinLng);
+    box_max_lng = std::min(box_max_lng, kWorldMaxLng);
+
+    // After clamping, if the box now covers most of the world horizontally,
+    // skip straight to the canonical world view to avoid an off-centre look.
+    if ((box_max_lng - box_min_lng) > (kWorldMaxLng - kWorldMinLng) * 0.85) {
+        auto world = QGV::GeoRect(QGV::GeoPos(kWorldMaxLat, kWorldMinLng),
+                                  QGV::GeoPos(kWorldMinLat, kWorldMaxLng));
+        map_->flyTo(QGVCameraActions(map_).scaleTo(world));
+        return;
+    }
+
+    auto target = QGV::GeoRect(QGV::GeoPos(box_max_lat, box_min_lng),
+                               QGV::GeoPos(box_min_lat, box_max_lng));
     map_->flyTo(QGVCameraActions(map_).scaleTo(target));
 }
 

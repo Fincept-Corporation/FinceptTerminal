@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <QDialog>
 #include <QString>
 
@@ -32,7 +32,7 @@ class ComponentBrowserDialog : public QDialog {
 
   signals:
     /// Emitted when the user double-clicks a card or presses Enter.
-    /// The caller (MainWindow) is expected to navigate to the screen.
+    /// The caller (WindowFrame) is expected to navigate to the screen.
     /// The dialog closes itself after emitting.
     void component_chosen(const QString& screen_id);
 

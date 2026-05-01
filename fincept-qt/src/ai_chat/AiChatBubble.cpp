@@ -14,6 +14,7 @@
 
 #include "ai_chat/AiChatBubble.h"
 
+#include "ai_chat/ChatBubbleFactory.h"
 #include "services/stt/SpeechService.h"
 #include "services/tts/TtsService.h"
 #include "services/voice_trigger/ClapDetectorService.h"
@@ -25,7 +26,6 @@
 #include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QPalette>
 #include <QPropertyAnimation>
 #include <QRegularExpression>
 #include <QResizeEvent>
@@ -48,42 +48,9 @@ static constexpr int HEADER_H  = 56;
 static constexpr int INPUT_H   = 60;
 static constexpr int STATUS_H  = 26;
 
-// Override Qt's default blue palette on QTextEdit to match the Obsidian theme.
-static void apply_obsidian_palette(QTextEdit* edit) {
-    QPalette p = edit->palette();
-    p.setColor(QPalette::Link,            QColor(col::AMBER()));
-    p.setColor(QPalette::LinkVisited,     QColor(col::AMBER()));
-    p.setColor(QPalette::Highlight,       QColor(col::AMBER_DIM()));
-    p.setColor(QPalette::HighlightedText, QColor(col::TEXT_PRIMARY()));
-    p.setColor(QPalette::Base,            Qt::transparent);
-    p.setColor(QPalette::Text,            QColor(col::TEXT_PRIMARY()));
-    edit->setPalette(p);
-}
-
-// Compact Markdown CSS used inside message bubbles.
-static QString bubble_md_css(const QString& text_color) {
-    return QString("body { color: %1; line-height: 1.45; }"
-                   "p { margin-top: 4px; margin-bottom: 4px; }"
-                   "ul, ol { margin-top: 3px; margin-bottom: 3px; padding-left: 16px; }"
-                   "li { margin-top: 2px; margin-bottom: 2px; }"
-                   "h1, h2, h3, h4 { margin-top: 8px; margin-bottom: 3px; color: %2; font-weight: 700; }"
-                   "hr { margin-top: 6px; margin-bottom: 6px; border: none; "
-                   "     border-top: 1px solid %3; }"
-                   "a { color: %2; text-decoration: underline; }"
-                   "code { background: %4; color: %2; padding: 1px 3px; "
-                   "       font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; }"
-                   "pre { background: %4; border: 1px solid %3; padding: 8px 10px; "
-                   "      margin-top: 4px; margin-bottom: 4px; "
-                   "      font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; }"
-                   "blockquote { border-left: 2px solid %2; padding-left: 8px; "
-                   "             margin-top: 4px; margin-bottom: 4px; color: %5; }"
-                   "table { border-collapse: collapse; margin-top: 4px; margin-bottom: 4px; }"
-                   "th { background: %4; border: 1px solid %3; padding: 3px 6px; "
-                   "     font-weight: 600; color: %2; }"
-                   "td { border: 1px solid %3; padding: 3px 6px; }"
-                   "strong { color: %1; font-weight: 700; }")
-        .arg(text_color, col::AMBER(), col::BORDER_MED(), col::BG_BASE(), col::TEXT_SECONDARY());
-}
+// Bubble visuals are owned by ChatBubbleFactory — shared with AiChatScreen.
+// The bubble passes a smaller column max width than the full-width tab.
+static constexpr int kBubbleColMaxWidth = static_cast<int>(PANEL_W * 0.84);
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 AiChatBubble::AiChatBubble(QWidget* parent) : QWidget(parent) {
@@ -559,8 +526,10 @@ void AiChatBubble::on_send() {
     // Defer streaming bubble creation to the first non-empty chunk.
     QPointer<AiChatBubble> self = this;
     auto first_chunk = std::make_shared<bool>(true);
-    // use_tools=false — the floating bubble must never trigger navigation
-    // or other tool side-effects that hijack the user's current screen.
+    // ToolPolicy::NoNavigation — the floating bubble lets the model use tools
+    // (so "add SPGI to my watchlist" works), but hides the `navigation`
+    // category so the model can't yank the user out of their current screen
+    // by calling navigate_to_tab / list_tabs / get_current_tab.
     ai_chat::LlmService::instance().chat_streaming(
         text, chat_history_,
         [self, first_chunk](const QString& chunk, bool done) {
@@ -577,16 +546,15 @@ void AiChatBubble::on_send() {
                 },
                 Qt::QueuedConnection);
         },
-        /*use_tools=*/false);
+        ai_chat::LlmService::ToolPolicy::NoNavigation);
 }
 
 void AiChatBubble::on_stream_chunk(const QString& chunk, bool done) {
-    QTextEdit* bubble = streaming_bubble_;
+    QLabel* bubble = streaming_bubble_;
     if (!bubble)
         return;
     if (!chunk.isEmpty()) {
-        bubble->moveCursor(QTextCursor::End);
-        bubble->insertPlainText(chunk);
+        fincept::ai_chat::ChatBubbleFactory::append_streaming_chunk(bubble, chunk);
         scroll_to_bottom();
     }
     Q_UNUSED(done)
@@ -599,18 +567,13 @@ void AiChatBubble::on_streaming_done(ai_chat::LlmResponse response) {
     const QString content = response.success ? response.content
                                              : QString("Error: %1").arg(response.error);
 
-    if (!streaming_bubble_ && !content.isEmpty()) {
+    if (!streaming_bubble_ && !content.isEmpty())
         streaming_bubble_ = add_streaming_bubble();
-        streaming_bubble_->setPlainText(content);
-    }
 
     if (streaming_bubble_) {
-        const QString final_text = streaming_bubble_->toPlainText();
-        if (!final_text.isEmpty()) {
-            streaming_bubble_->document()->setDefaultStyleSheet(bubble_md_css(col::TEXT_PRIMARY()));
-            streaming_bubble_->setMarkdown(final_text);
-        }
-        streaming_bubble_->setReadOnly(true);
+        const QString acc = streaming_bubble_->property("acc").toString();
+        const QString final_text = acc.isEmpty() ? content : acc;
+        fincept::ai_chat::ChatBubbleFactory::finalize_streaming(streaming_bubble_, final_text);
         streaming_bubble_ = nullptr;
     }
 
@@ -629,118 +592,27 @@ void AiChatBubble::on_streaming_done(ai_chat::LlmResponse response) {
 
 // ── Message bubbles ───────────────────────────────────────────────────────────
 void AiChatBubble::add_bubble(const QString& role, const QString& text) {
-    const bool is_user = (role == "user");
-
-    auto* row = new QWidget;
-    row->setStyleSheet("background:transparent;");
-    auto* rl = new QHBoxLayout(row);
-    rl->setContentsMargins(0, 0, 0, 0);
-    rl->setSpacing(0);
-
-    if (is_user)
-        rl->addStretch();
-
-    auto* col_w = new QWidget;
-    col_w->setStyleSheet("background:transparent;");
-    col_w->setMaximumWidth(static_cast<int>(PANEL_W * 0.84));
-    auto* cvl = new QVBoxLayout(col_w);
-    cvl->setContentsMargins(0, 0, 0, 0);
-    cvl->setSpacing(3);
-
-    auto* role_lbl = new QLabel(is_user ? "You" : "AI");
-    role_lbl->setAlignment(is_user ? Qt::AlignRight : Qt::AlignLeft);
-    role_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;background:transparent;")
-                                .arg(col::AMBER()));
-    cvl->addWidget(role_lbl);
-
-    auto* body = new QTextEdit;
-    body->setReadOnly(true);
-    body->setFrameShape(QFrame::NoFrame);
-    body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-    body->document()->setDocumentMargin(0);
-    body->document()->setDefaultStyleSheet(bubble_md_css(is_user ? "#fff7ed" : col::TEXT_PRIMARY()));
-    apply_obsidian_palette(body);
-    body->setMarkdown(text);
-    body->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    body->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    const int inner_w = static_cast<int>(PANEL_W * 0.84) - 18;
-    body->document()->setTextWidth(inner_w);
-    body->setStyleSheet(QString("QTextEdit{background:transparent;color:%1;border:none;"
-                                "font-size:13px;padding:0px;}")
-                            .arg(is_user ? "#fff7ed" : col::TEXT_PRIMARY()));
-    const int doc_h = static_cast<int>(body->document()->size().height());
-    body->setFixedHeight(qMax(doc_h, 18));
-
-    auto* bubble_frame = new QWidget;
-    bubble_frame->setStyleSheet(QString("background:%1;border:1px solid %2;border-radius:0px;")
-                                    .arg(is_user ? "rgba(120,53,15,0.45)" : col::BG_SURFACE(),
-                                         is_user ? "rgba(217,119,6,0.28)" : col::BORDER_DIM()));
-    auto* bvl = new QVBoxLayout(bubble_frame);
-    bvl->setContentsMargins(9, 6, 9, 6);
-    bvl->setSpacing(0);
-    bvl->addWidget(body);
-    cvl->addWidget(bubble_frame);
-
-    rl->addWidget(col_w);
-    if (!is_user)
-        rl->addStretch();
-
-    msg_layout_->insertWidget(msg_layout_->count() - 1, row);
+    fincept::ai_chat::ChatBubbleFactory::Options opts;
+    opts.role               = role;
+    opts.content            = text;
+    opts.show_footer        = true;
+    opts.user_col_max_width = kBubbleColMaxWidth;
+    opts.ai_col_max_width   = kBubbleColMaxWidth;
+    auto b = fincept::ai_chat::ChatBubbleFactory::build(opts);
+    msg_layout_->insertWidget(msg_layout_->count() - 1, b.row);
     scroll_to_bottom();
 }
 
-QTextEdit* AiChatBubble::add_streaming_bubble() {
-    auto* row = new QWidget;
-    row->setStyleSheet("background:transparent;");
-    auto* rl = new QHBoxLayout(row);
-    rl->setContentsMargins(0, 0, 0, 0);
-
-    auto* col_w = new QWidget;
-    col_w->setStyleSheet("background:transparent;");
-    col_w->setMaximumWidth(static_cast<int>(PANEL_W * 0.84));
-    auto* cvl = new QVBoxLayout(col_w);
-    cvl->setContentsMargins(0, 0, 0, 0);
-    cvl->setSpacing(3);
-
-    auto* role_lbl = new QLabel("AI");
-    role_lbl->setAlignment(Qt::AlignLeft);
-    role_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;background:transparent;")
-                                .arg(col::AMBER()));
-    cvl->addWidget(role_lbl);
-
-    auto* body = new QTextEdit;
-    body->setReadOnly(false);
-    body->setFrameShape(QFrame::NoFrame);
-    body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    body->document()->setDocumentMargin(0);
-    body->document()->setDefaultStyleSheet(bubble_md_css(col::TEXT_PRIMARY()));
-    apply_obsidian_palette(body);
-    body->setFixedHeight(20);
-    body->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    body->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    body->setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
-    body->setStyleSheet(QString("QTextEdit{background:%1;color:%2;border:1px solid %3;"
-                                "border-radius:0px;padding:6px 9px;font-size:13px;}")
-                            .arg(col::BG_SURFACE(), col::TEXT_PRIMARY(), col::BORDER_DIM()));
-
-    connect(body->document(), &QTextDocument::contentsChanged, body, [body, col_w, row]() {
-        const int vw = body->viewport()->width() > 0
-                           ? body->viewport()->width()
-                           : (static_cast<int>(PANEL_W * 0.84) - 18);
-        body->document()->setTextWidth(vw);
-        const int h = qMax(static_cast<int>(body->document()->size().height()), 20);
-        body->setFixedHeight(h);
-        col_w->adjustSize();
-        row->adjustSize();
-    });
-
-    cvl->addWidget(body);
-    rl->addWidget(col_w);
-    rl->addStretch();
-
-    msg_layout_->insertWidget(msg_layout_->count() - 1, row);
+QLabel* AiChatBubble::add_streaming_bubble() {
+    fincept::ai_chat::ChatBubbleFactory::Options opts;
+    opts.role               = "assistant";
+    opts.show_footer        = true;
+    opts.user_col_max_width = kBubbleColMaxWidth;
+    opts.ai_col_max_width   = kBubbleColMaxWidth;
+    auto b = fincept::ai_chat::ChatBubbleFactory::build_streaming(opts);
+    msg_layout_->insertWidget(msg_layout_->count() - 1, b.row);
     scroll_to_bottom();
-    return body;
+    return b.body;
 }
 
 void AiChatBubble::scroll_to_bottom() {

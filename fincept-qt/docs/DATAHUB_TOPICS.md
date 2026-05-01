@@ -162,6 +162,40 @@ The Crypto Center owns a small set of topics for the user's connected Solana wal
 
 > **Burn deferred to Phase 5.** Phase 2 ships BUY and SELL only. Real burns (with on-chain receipt) move into Phase 5 alongside the buyback-worker design. No `wallet:burn_receipt:*` topic in Phase 2.
 
+### Buyback & burn dashboard (Phase 5)
+
+Terminal-wide topics — same numbers shown to every user, no `<pubkey>` segment. Driven by the Fincept-operated buyback worker (`services/buyback-worker/`) which tallies revenue, executes Jupiter buys, and burns the bought $FNCPT via SPL Token `burn_checked` from the treasury account, then publishes per-epoch summaries to a Fincept HTTP endpoint configured via SecureStorage `fincept.treasury_endpoint`. Until the endpoint is configured, the producers ship a built-in mock payload (each POD carries `is_mock=true`); the dashboard reads "DEMO" in the head pill.
+
+| Pattern | Producer | TTL | Min interval | Notes |
+|---|---|---|---|---|
+| `treasury:buyback_epoch` | `BuybackBurnService` | 60 s | 30 s | Current epoch summary. Shape: `BuybackEpoch{epoch_no, start/end_ts_ms, revenue_total/subs/predmkt/misc_usd, buyback_usd, staker_yield_usd, treasury_topup_usd, fncpt_bought/burned_raw, fncpt_decimals, avg_buy_price_usd, burn_signature, is_mock}`. The three USD splits (`buyback`, `staker_yield`, `treasury_topup`) implement the plan §5.4 50/25/25 distribution; the worker chooses the actual percentages per epoch. `burn_signature` is base58 — `BuybackBurnPanel` opens it on Solscan. |
+| `treasury:burn_total` | `BuybackBurnService` | 5 min | 60 s | All-time totals. Shape: `BurnTotal{total_burned_raw, supply_remaining_raw, decimals, spent_on_buyback_usd, is_mock}`. |
+| `treasury:supply_history` | `BuybackBurnService` | 1 h | 5 min | 12-month time-series for the supply chart. Shape: `QVector<SupplyHistoryPoint{ts_ms, total_raw, circulating_raw, burned_raw, decimals}>`. Producer publishes the whole vector on every refresh; subscribers (`SupplyChartPanel`) replace the series wholesale. |
+| `treasury:reserves` | `TreasuryService` | 5 min | 60 s | Current SOL + USDC holdings of the treasury multisig. Source: `SolanaRpcClient::get_sol_balance` + `get_token_balance(USDC mint)` against the pubkey in SecureStorage `fincept.treasury_pubkey`. SOL→USD price is peeked from `market:price:token:<wSOL>` so we don't double-fetch. Shape: `TreasuryReserves{pubkey_b58, sol_lamports, usdc_amount, sol_usd_price, total_usd, multisig_label, multisig_url, is_mock}`. |
+| `treasury:runway` | `TreasuryService` | 5 min | 60 s | Months of runway at current burn. Computed as `total_usd / monthly_opex_usd`; opex from SecureStorage `fincept.treasury_monthly_opex_usd` (default $100k). Shape: `TreasuryRunway{total_usd, monthly_opex_usd, months, is_mock}`. Re-derived in lock-step with `treasury:reserves`. |
+
+### STAKE / veFNCPT / tier system (Phase 3)
+
+veFNCPT lock surface for the STAKE tab. All four producers ship in **mock mode** until `fincept.lock_program_id` (Anchor program) and `fincept.yield_endpoint` are configured in SecureStorage. Each payload carries `is_mock=true` so panels can surface the state explicitly.
+
+| Pattern | Producer | TTL | Min interval | Notes |
+|---|---|---|---|---|
+| `wallet:locks:<pubkey>` | `StakingService` | 60 s | 30 s | Vector of `LockPosition{position_id, amount_raw, decimals, lock_start_ts, unlock_ts, duration_secs, weight_raw, lifetime_yield_usdc, is_mock}`. Real path: `getProgramAccounts` against `fincept.lock_program_id`, filter by owner. Mock path: 3 demo positions (2,000 @ 4yr / 1,000 @ 1yr / 500 @ 6mo) per plan §3.2. |
+| `wallet:vefncpt:<pubkey>` | `StakingService` | 60 s | 30 s | Aggregate weight + projected next-period yield. Shape: `VeFncptAggregate{pubkey_b58, total_weight_raw, decimals, position_count, projected_next_period_yield_usdc, is_mock}`. Computed by summing `LockPosition.weight_raw` and applying §3.4 25 %-of-revenue staker-share. |
+| `wallet:yield:<pubkey>` | `RealYieldService` | 5 min | 60 s | Realised USDC yield. Shape: `YieldSnapshot{pubkey_b58, lifetime_usdc, last_period_usdc, last_period_end_ts, is_mock}`. Real path: `<endpoint>/yield/<pubkey>`. Mock path derives numbers from `treasury:revenue × 25 % / weight share` so demo numbers stay internally consistent with the buyback dashboard. |
+| `treasury:revenue` | `RealYieldService` | 1 h | 5 min | Terminal-wide weekly revenue bucket. Shape: `TreasuryRevenue{period_start_ts, period_end_ts, total_usd, is_mock}`. Used by `LockPanel` for "EST. YIELD" before lock-creation; also feeds the Phase 5 dashboard's revenue breakdown. Bucketed weekly to match the buyback worker's epoch cadence. |
+| `billing:tier:<pubkey>` | `TierService` | 60 s | 15 s | Derived from `wallet:vefncpt:<pubkey>`; service subscribes to vefncpt internally and republishes whenever weight changes. Shape: `TierStatus{pubkey_b58, tier (Free/Bronze/Silver/Gold), weight_raw, next_threshold_raw, decimals, is_mock}`. Thresholds in `services/billing/TierConfig.h` (100 / 1k / 10k veFNCPT). Drives cross-screen gating (AI Quant Lab, Alpha Arena) via the `tier_changed` Qt signal. |
+
+### Internal prediction markets (Phase 4)
+
+Reserved topic family for the `FinceptInternalAdapter` matching engine. Topics are policy-registered at adapter startup, but **no producer publishes to them yet**: the adapter ships in **demo mode** (curated 3-market dataset emitted via Qt signals only) until `fincept.markets_endpoint` is configured *and* the `fincept_market` Anchor program (`solana/programs/fincept_market/`, separate repo) is deployed.
+
+| Pattern | Producer | TTL | Min interval | Notes |
+|---|---|---|---|---|
+| `prediction:fincept:markets` | `FinceptInternalAdapter` (planned) | 30 s | 10 s | Curated/live market list. Shape: `QVector<PredictionMarket>` (same shape as `prediction:polymarket:markets`). Fields: `key`, `question`, `category`, `volume`, `outcomes` (binary YES/NO with prices in [0,1]), `end_date_iso`. Demo dataset emitted via `markets_ready` signal; topic publishing waits on the matching engine. |
+| `prediction:fincept:orderbook:<asset_id>` | `FinceptInternalAdapter` (planned) | 5 s | 1 s | Per-asset order book. Shape: `PredictionOrderBook{asset_id, bids[], asks[]}` matching the Polymarket/Kalshi shape. WebSocket-driven once live. |
+| `prediction:fincept:price:<asset_id>` | `FinceptInternalAdapter` (planned) | 5 s | 1 s | Last-trade price scalar. Same shape as `prediction:polymarket:price:*`. |
+
 ## Force refresh
 
 `DataHub::request(topic, force=true)` bypasses `min_interval_ms` (so user-driven refresh buttons work inside the interval gate). Per-producer `max_requests_per_sec()` is still honoured — rage-clicking cannot hammer upstream.

@@ -2,6 +2,7 @@
 
 #include "mcp/McpService.h"
 
+#include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "mcp/McpManager.h"
 #include "mcp/McpProvider.h"
@@ -9,6 +10,7 @@
 #include <QJsonDocument>
 #include <QPromise>
 #include <QRegularExpression>
+#include <QSet>
 #include <QThread>
 #include <QTimer>
 #include <QtConcurrent/QtConcurrent>
@@ -105,12 +107,12 @@ QByteArray McpService::filter_signature(const ToolFilter& f) {
     return key;
 }
 
-// Production safety cap: when a caller (or screen policy) leaves max_tools
-// at 0 (= unlimited), we still refuse to dump the full catalogue at the LLM.
-// Tool-pick accuracy degrades sharply past ~40 tools; ~150 KB of schema
-// also costs prompt tokens. Mirrors ToolFilterPolicy::kMaxToolsDefault so
-// any direct McpService caller (tests, ad-hoc scripts) inherits the same
-// guardrail without having to know about ToolFilterPolicy.
+// Production safety cap: when a caller leaves max_tools at 0 (= unlimited),
+// we still refuse to dump the full catalogue at the LLM. Tool-pick accuracy
+// degrades sharply past ~40 tools; ~150 KB of schema also costs prompt
+// tokens. Tool RAG / Tier-0 mode renders this mostly historical — kept as a
+// defence-in-depth backstop for callers that bypass Tier-0 by passing a
+// non-default ToolFilter.
 static constexpr int kHardMaxTools = 50;
 
 // Apply ToolFilter (categories include/exclude, name regex include/exclude,
@@ -160,10 +162,10 @@ static std::vector<UnifiedTool> apply_tool_filter(std::vector<UnifiedTool> tools
 
     // Stage 2 — deterministic sort. Anthropic's prompt cache only hits on
     // a byte-identical prefix, so the tool block order MUST be stable.
-    // Primary key: index in filter.categories (Tier-1 categories listed
-    // first by ToolFilterPolicy → they cluster at the top). Tools whose
-    // category isn't in the include list (external tools with empty
-    // category) sort to the end with a sentinel rank.
+    // Primary key: index in filter.categories (categories listed first by
+    // the caller cluster at the top). Tools whose category isn't in the
+    // include list (external tools with empty category) sort to the end
+    // with a sentinel rank.
     // Secondary key: tool name alphabetical.
     QHash<QString, int> cat_rank;
     for (int i = 0; i < filter.categories.size(); ++i)
@@ -211,23 +213,97 @@ QJsonArray McpService::format_tools_for_openai() {
     return format_tools_for_openai(ToolFilter{});
 }
 
+// Tool RAG Tier-0 — the always-loaded set when mcp_use_tool_rag is on.
+//
+// Rationale: when Tool RAG is active we send only this 6-tool prefix to the
+// LLM each turn (~3 KB of schema vs ~25 KB previously). Everything else is
+// discoverable via tool.list. Anthropic's recommended band is 3-5 always-on
+// tools — we go to 6 to keep navigation working without a search round-trip.
+//
+// Picked because they're (1) high-frequency, (2) safe (no destructive ops),
+// (3) needed before a search would even make sense:
+//   tool.list           — entry point to discover everything else
+//   tool.describe       — fetch full schema for a discovered tool
+//   navigate_to_tab     — UI navigation is the LLM's primary side-effect
+//   list_tabs           — what tabs exist?
+//   get_current_tab     — where is the user?
+//   get_auth_status     — guest vs signed-in changes valid actions
+static const QSet<QString>& tier_0_tool_names() {
+    static const QSet<QString> kTier0 = {
+        "tool.list",
+        "tool.describe",
+        "navigate_to_tab",
+        "list_tabs",
+        "get_current_tab",
+        "get_auth_status",
+    };
+    return kTier0;
+}
+
+// Whether the user has Tool RAG mode enabled. Flag persists in QSettings via
+// AppConfig.
+//
+// Default = TRUE.
+//
+// Rationale: Tool RAG (BM25 retrieval over the catalog via tool.list) lifts
+// tool-pick accuracy from ~49 → ~74% on Opus 4-class models per Anthropic's
+// published numbers, and from ~80 → ~88% on 4.5-class. Sending only ~6
+// Tier-0 tools per turn (vs. previously ~50) reduces prompt tokens by ~85%.
+// The kill switch is one settings flip away if a specific
+// provider/model combo regresses.
+static bool tool_rag_enabled() {
+    return fincept::AppConfig::instance()
+        .get("mcp/use_tool_rag", QVariant(true))
+        .toBool();
+}
+
 QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter) {
     QMutexLocker lock(&mutex_);
     cached_tools_locked();
 
-    const QByteArray key = filter_signature(filter);
+    // ── Tool RAG Tier-0 mode ──
+    // Engaged only when (a) the setting is on AND (b) the caller passed a
+    // default-constructed ToolFilter (i.e. didn't ask for a specific scope).
+    // Per-agent / per-screen explicit filters bypass Tier-0 — those callers
+    // know what they want and shouldn't be silently overridden.
+    const bool default_filter = filter.categories.isEmpty() &&
+                                filter.exclude_categories.isEmpty() &&
+                                filter.name_patterns.isEmpty() &&
+                                filter.exclude_name_patterns.isEmpty() &&
+                                filter.max_tools == 0;
+    const bool use_rag = default_filter && tool_rag_enabled();
+
+    const QByteArray key = use_rag
+        ? QByteArrayLiteral("__tier0__")
+        : filter_signature(filter);
+
     auto cached = openai_format_cache_.constFind(key);
     if (cached != openai_format_cache_.constEnd()) {
-        LOG_INFO(TAG, QString("format_tools_for_openai: %1 tools sent to LLM (cached)").arg(cached.value().size()));
+        LOG_INFO(TAG, QString("format_tools_for_openai: %1 tools sent to LLM (cached, %2)")
+                          .arg(cached.value().size())
+                          .arg(use_rag ? "tier-0" : "filtered"));
         return cached.value();
     }
 
     const int total_seen = static_cast<int>(cached_tools_.size());
-    auto tools = apply_tool_filter(cached_tools_, filter);
+    std::vector<UnifiedTool> tools;
+    if (use_rag) {
+        const auto& tier0 = tier_0_tool_names();
+        for (const auto& t : cached_tools_) {
+            if (tier0.contains(t.name))
+                tools.push_back(t);
+        }
+    } else {
+        tools = apply_tool_filter(cached_tools_, filter);
+    }
 
     QJsonArray result;
     for (const auto& tool : tools) {
-        QString fn_name = tool.server_id + "__" + tool.name;
+        // Encode tool name for the wire so dotted internal names like
+        // `tool.list` become `tool-dot-list` — Kimi / OpenAI / Groq reject
+        // dots in function names. parse_openai_function_name reverses this
+        // when the model invokes the tool.
+        QString fn_name = tool.server_id + "__" + McpProvider::encode_tool_name_for_wire(tool.name);
 
         QJsonObject schema = tool.input_schema;
         if (schema.isEmpty()) {
@@ -248,7 +324,11 @@ QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter) {
 
     openai_format_cache_.insert(key, result);
 
-    if (total_seen != result.size()) {
+    if (use_rag) {
+        LOG_INFO(TAG, QString("format_tools_for_openai: %1/%2 tools sent to LLM "
+                              "(tier-0 / Tool RAG mode, fresh)")
+                          .arg(result.size()).arg(total_seen));
+    } else if (total_seen != result.size()) {
         LOG_INFO(TAG, QString("format_tools_for_openai: %1/%2 tools sent to LLM (filtered, fresh)")
                           .arg(result.size()).arg(total_seen));
     } else {
@@ -381,7 +461,12 @@ void McpService::refresh_cache() {
     // External tools
     auto external = McpManager::instance().get_all_external_tools();
     for (auto& ext : external) {
-        cached_tools_.push_back({ext.server_id, ext.server_name, ext.name, ext.description, ext.input_schema, false});
+        // External tools default category="" (their server doesn't tag) and
+        // is_destructive=false (we have no signal for it from the wire — the
+        // MCP spec doesn't carry it). Treat external tools as non-destructive
+        // until they tell us otherwise.
+        cached_tools_.push_back({ext.server_id, ext.server_name, ext.name, ext.description,
+                                  ext.input_schema, false, QString{}, false});
     }
 
     // Invalidate filter-derived caches — they were computed against the

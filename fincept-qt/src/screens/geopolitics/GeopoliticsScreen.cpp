@@ -434,15 +434,22 @@ void GeopoliticsScreen::on_tab_changed(int index) {
 void GeopoliticsScreen::on_events_loaded(services::geo::EventsPage page) {
     const int shown = page.events.size();
     const int total = page.total_events;
+    int mapped = 0;
+    for (const auto& ev : page.events)
+        if (ev.has_coords) ++mapped;
 
-    // "12 / 1.2K EVENTS" — show what was rendered out of the total.
     auto fmt_count = [](int n) -> QString {
         if (n >= 1'000'000) return QString::number(n / 1'000'000.0, 'f', 1) + "M";
         if (n >= 1'000)     return QString::number(n / 1'000.0,     'f', 1) + "K";
         return QString::number(n);
     };
-    event_count_label_->setText(QString("%1 / %2 EVENTS").arg(fmt_count(shown), fmt_count(total)));
-    const QString color = shown > 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
+    // "30 MAPPED / 100 LOADED · 1.2K TOTAL" — surfaces the API gap (most events
+    // arrive without lat/lng, so the map only ever shows the geocoded subset).
+    event_count_label_->setText(QString("%1 MAPPED / %2 LOADED")
+                                    .arg(fmt_count(mapped), fmt_count(shown)));
+    event_count_label_->setToolTip(QString("Events on map: %1\nEvents loaded: %2\nTotal in API: %3")
+                                       .arg(mapped).arg(shown).arg(total));
+    const QString color = mapped > 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
     QColor clr(color);
     auto clr_rgb = QString("%1,%2,%3").arg(clr.red()).arg(clr.green()).arg(clr.blue());
     event_count_label_->setStyleSheet(

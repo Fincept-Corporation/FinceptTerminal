@@ -74,7 +74,6 @@ void PortfolioCommandBar::build_ui() {
     outer->addWidget(row2_);
 
     // Initially hide secondary clusters until portfolios load
-    stats_container_->hide();
     trade_cluster_->hide();
     tabs_container_->hide();
     tools_cluster_->hide();
@@ -83,18 +82,11 @@ void PortfolioCommandBar::build_ui() {
 // ── Row 1 ────────────────────────────────────────────────────────────────────
 
 void PortfolioCommandBar::build_row1(QHBoxLayout* layout) {
-    // Portfolio selector + inline stats (left-aligned)
+    // Portfolio selector (left-aligned). Inline NAV/P&L/DAY/POS labels were
+    // dropped — they duplicated the StatsRibbon below this bar. The bar is now
+    // strictly identity + actions, never KPI display.
     build_portfolio_selector();
     layout->addWidget(selector_btn_);
-
-    // Inline stats cluster
-    stats_container_ = new QWidget(this);
-    stats_container_->setStyleSheet("background:transparent;");
-    auto* stats_layout = new QHBoxLayout(stats_container_);
-    stats_layout->setContentsMargins(0, 0, 0, 0);
-    stats_layout->setSpacing(14);
-    build_stats_cluster(stats_layout);
-    layout->addWidget(stats_container_);
 
     layout->addStretch(1);
 
@@ -223,21 +215,6 @@ void PortfolioCommandBar::build_portfolio_selector() {
     dropdown_->hide();
 }
 
-void PortfolioCommandBar::build_stats_cluster(QHBoxLayout* layout) {
-    auto make_stat = [](QLabel*& lbl) {
-        lbl = new QLabel("--");
-        lbl->setStyleSheet("color:inherit; font-size:11px; font-weight:700; letter-spacing:0.3px;");
-    };
-    make_stat(nav_label_);
-    make_stat(pnl_label_);
-    make_stat(day_label_);
-    make_stat(pos_label_);
-    layout->addWidget(nav_label_);
-    layout->addWidget(pnl_label_);
-    layout->addWidget(day_label_);
-    layout->addWidget(pos_label_);
-}
-
 void PortfolioCommandBar::build_overflow_menu() {
     overflow_btn_ = new QToolButton(this);
     overflow_btn_->setText("\u22EF"); // horizontal ellipsis
@@ -353,35 +330,38 @@ void PortfolioCommandBar::build_tools_cluster(QHBoxLayout* layout) {
         layout->addWidget(out);
     };
 
-    make_tool_btn(ai_btn_, "AI", "#9D4EDD", &PortfolioCommandBar::ai_analyze_requested);
-    make_tool_btn(agent_btn_, "AGENT", "#00D4AA", &PortfolioCommandBar::agent_run_requested);
+    // AI = AMBER (brand action). AGENT = CYAN (info-tier).
+    // Custom hex colors (#9D4EDD purple, #00D4AA teal) violated DESIGN_SYSTEM
+    // colour discipline — only AMBER/CYAN/POSITIVE/NEGATIVE/WARNING are allowed.
+    make_tool_btn(ai_btn_, "AI", ui::colors::AMBER(), &PortfolioCommandBar::ai_analyze_requested);
+    make_tool_btn(agent_btn_, "AGENT", ui::colors::CYAN(), &PortfolioCommandBar::agent_run_requested);
 }
 
 // ── Styling ──────────────────────────────────────────────────────────────────
 
 void PortfolioCommandBar::apply_row1_styles() {
     selector_btn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:%2; border:1px solid %3; border-radius:2px;"
+        QString("QPushButton { background:%1; color:%2; border:1px solid %3;"
                 "  padding:0 12px; font-size:11px; font-weight:700; letter-spacing:0.5px; text-align:left; }"
                 "QPushButton:hover { border-color:%4; color:%4; }")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
 
     refresh_btn_->setStyleSheet(QString("QPushButton#pfIconBtn { background:transparent; color:%1;"
-                                        "  border:1px solid %2; border-radius:2px; font-size:13px; }"
+                                        "  border:1px solid %2; font-size:13px; }"
                                         "QPushButton#pfIconBtn:hover { border-color:%1; color:%1; }"
                                         "QPushButton#pfIconBtn:disabled { color:%3; }")
                                     .arg(ui::colors::AMBER(), ui::colors::BORDER_MED(), ui::colors::TEXT_TERTIARY()));
 
     interval_cb_->setStyleSheet(
-        QString("QComboBox { background:%1; color:%2; border:1px solid %3; border-radius:2px;"
-                "  padding:0 6px; font-size:10px; font-weight:600; min-width:42px; }"
+        QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                "  padding:0 6px; font-size:11px; font-weight:600; min-width:42px; }"
                 "QComboBox::drop-down { border:none; width:14px; }"
                 "QComboBox QAbstractItemView { background:%1; color:%2; selection-background-color:%4; }")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM()));
 
     overflow_btn_->setStyleSheet(
         QString("QToolButton#pfOverflowBtn { background:transparent; color:%1; border:1px solid %2;"
-                "  border-radius:2px; font-size:14px; font-weight:700; padding-bottom:4px; }"
+                "  font-size:14px; font-weight:700; padding-bottom:4px; }"
                 "QToolButton#pfOverflowBtn:hover { border-color:%3; color:%3; }"
                 "QToolButton#pfOverflowBtn::menu-indicator { image:none; width:0; }")
             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
@@ -389,8 +369,8 @@ void PortfolioCommandBar::apply_row1_styles() {
 
 void PortfolioCommandBar::apply_row2_styles() {
     auto trade_style = [](QPushButton* btn, const char* accent, const char* fg) {
-        btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none; border-radius:2px;"
-                                   "  padding:0 10px; font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+        btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
+                                   "  padding:0 10px; font-size:11px; font-weight:700; letter-spacing:0.5px; }"
                                    "QPushButton:hover { background:%1; opacity:0.85; }")
                                .arg(accent, fg));
     };
@@ -398,10 +378,11 @@ void PortfolioCommandBar::apply_row2_styles() {
     trade_style(sell_btn_, ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY());
     trade_style(div_btn_, ui::colors::CYAN(), ui::colors::BG_BASE());
 
-    // Neutral pill tabs — single style, color reserved for data, not navigation.
+    // Neutral square tabs — color reserved for data, not navigation.
+    // DESIGN_SYSTEM rule: no rounded corners on any element.
     const QString tab_qss =
         QString("QPushButton#pfTab { background:transparent; color:%1; border:1px solid transparent;"
-                "  border-radius:11px; padding:0 10px; font-size:10px; font-weight:600; letter-spacing:0.4px; }"
+                "  padding:0 10px; font-size:11px; font-weight:600; letter-spacing:0.4px; }"
                 "QPushButton#pfTab:hover { color:%2; background:%3; }"
                 "QPushButton#pfTab[active=\"true\"] { color:%4; background:%5; border-color:%4; }")
             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER(), ui::colors::AMBER(),
@@ -412,13 +393,13 @@ void PortfolioCommandBar::apply_row2_styles() {
 
     auto tool_style = [](QPushButton* btn, const char* accent) {
         btn->setStyleSheet(QString("QPushButton#pfToolBtn { background:transparent; color:%1; border:1px solid %1;"
-                                   "  border-radius:2px; padding:0 10px; font-size:10px; font-weight:700;"
+                                   "  padding:0 10px; font-size:11px; font-weight:700;"
                                    "  letter-spacing:0.5px; }"
                                    "QPushButton#pfToolBtn:hover { background:%1; color:#000; }")
                                .arg(accent));
     };
-    tool_style(ai_btn_, "#9D4EDD");
-    tool_style(agent_btn_, "#00D4AA");
+    tool_style(ai_btn_, ui::colors::AMBER());
+    tool_style(agent_btn_, ui::colors::CYAN());
 }
 
 // ── Dropdown ─────────────────────────────────────────────────────────────────
@@ -464,24 +445,12 @@ void PortfolioCommandBar::set_selected_portfolio(const portfolio::Portfolio& p) 
     update_selector_label();
 }
 
-void PortfolioCommandBar::set_summary(const portfolio::PortfolioSummary& s) {
-    auto fmt = [](double v) { return QString::number(v, 'f', 2); };
-    auto color = [](double v) { return v >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE(); };
-    const QString base_css = "font-size:11px; font-weight:700; letter-spacing:0.3px;";
-
-    nav_label_->setText(QString("NAV  %1").arg(fmt(s.total_market_value)));
-    nav_label_->setStyleSheet(QString("color:%1; %2").arg(ui::colors::WARNING(), base_css));
-
-    pnl_label_->setText(
-        QString("P&L  %1%2%").arg(s.total_unrealized_pnl >= 0 ? "+" : "").arg(fmt(s.total_unrealized_pnl_percent)));
-    pnl_label_->setStyleSheet(QString("color:%1; %2").arg(color(s.total_unrealized_pnl), base_css));
-
-    day_label_->setText(
-        QString("DAY  %1%2%").arg(s.total_day_change >= 0 ? "+" : "").arg(fmt(s.total_day_change_percent)));
-    day_label_->setStyleSheet(QString("color:%1; %2").arg(color(s.total_day_change), base_css));
-
-    pos_label_->setText(QString("POS %1  \u25B4%2  \u25BE%3").arg(s.total_positions).arg(s.gainers).arg(s.losers));
-    pos_label_->setStyleSheet(QString("color:%1; %2").arg(ui::colors::TEXT_SECONDARY(), base_css));
+void PortfolioCommandBar::set_summary(const portfolio::PortfolioSummary& /*s*/) {
+    // No-op. The bar no longer displays KPIs \u2014 those moved to the
+    // StatsRibbon below the bar (single source of truth for portfolio stats).
+    // Method retained as a public no-op so existing wiring in PortfolioScreen
+    // doesn't have to change; can be removed in a follow-up once callers drop
+    // the call.
 }
 
 void PortfolioCommandBar::set_refreshing(bool refreshing) {
@@ -500,14 +469,12 @@ void PortfolioCommandBar::set_detail_view(std::optional<portfolio::DetailView> v
 }
 
 void PortfolioCommandBar::set_has_selection(bool has) {
-    stats_container_->setVisible(has);
     trade_cluster_->setVisible(has);
     tabs_container_->setVisible(has);
     tools_cluster_->setVisible(has);
 }
 
 void PortfolioCommandBar::set_has_portfolios(bool has) {
-    stats_container_->setVisible(false);
     trade_cluster_->setVisible(false);
     tabs_container_->setVisible(false);
     tools_cluster_->setVisible(false);

@@ -413,23 +413,15 @@ void WatchlistScreen::load_watchlists() {
         watchlists_ = r.value();
     }
 
-    // Ensure at least one default watchlist exists
+    // Ensure at least one default watchlist exists. We deliberately leave it
+    // empty rather than seeding US large-caps — those weren't user-chosen and
+    // confused the AI Chat flow ("I added RITES" appeared to fail because the
+    // user saw the stale starter set after restart).
     if (watchlists_.isEmpty()) {
         QColor acc(colors::AMBER());
         auto cr = fincept::WatchlistRepository::instance().create("Default", acc.name());
-        if (cr.is_ok()) {
+        if (cr.is_ok())
             watchlists_.append(cr.value());
-            // Add some starter symbols
-            auto& repo = fincept::WatchlistRepository::instance();
-            repo.add_stock(watchlists_.first().id, "AAPL", "Apple Inc");
-            repo.add_stock(watchlists_.first().id, "MSFT", "Microsoft Corp");
-            repo.add_stock(watchlists_.first().id, "GOOGL", "Alphabet Inc");
-            repo.add_stock(watchlists_.first().id, "AMZN", "Amazon.com Inc");
-            repo.add_stock(watchlists_.first().id, "NVDA", "NVIDIA Corp");
-            repo.add_stock(watchlists_.first().id, "TSLA", "Tesla Inc");
-            repo.add_stock(watchlists_.first().id, "META", "Meta Platforms");
-            repo.add_stock(watchlists_.first().id, "JPM", "JPMorgan Chase");
-        }
     }
 
     wl_list_->blockSignals(true);

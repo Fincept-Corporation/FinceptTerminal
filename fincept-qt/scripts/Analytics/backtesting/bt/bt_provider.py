@@ -99,14 +99,19 @@ class BtProvider(BacktestingProviderBase):
         try:
             strategy_info = request.get('strategy', {})
             strategy_type = strategy_info.get('type', 'equal_weight')
-            strategy_params = strategy_info.get('parameters', {})
+            # Frontend sends `params`; legacy callers used `parameters`.
+            strategy_params = strategy_info.get('params') or strategy_info.get('parameters', {})
             start_date = request.get('startDate', '2020-01-01')
             end_date = request.get('endDate', '2024-01-01')
             initial_capital = float(request.get('initialCapital', 100000))
             commission = float(request.get('commission', 0.001))
 
-            assets = request.get('assets', [])
-            symbols = [a.get('symbol', 'SPY') for a in assets] if assets else ['SPY']
+            # Canonical input: `symbols: [str]` (sent by the C++ screen).
+            # `assets: [{symbol}]` accepted as a fallback for legacy callers.
+            symbols = request.get('symbols', [])
+            if not symbols:
+                assets = request.get('assets', [])
+                symbols = [a.get('symbol') for a in assets if isinstance(a, dict) and a.get('symbol')]
             if not symbols:
                 symbols = ['SPY']
 
@@ -216,7 +221,9 @@ class BtProvider(BacktestingProviderBase):
                 'annualizedReturn': annual_return,
                 'sharpeRatio': sharpe,
                 'sortinoRatio': sortino,
-                'maxDrawdown': max_dd,
+                # Frontend renders maxDrawdown as a positive percentage; align with
+                # vectorbt/backtestingpy by emitting its magnitude.
+                'maxDrawdown': abs(max_dd),
                 'winRate': win_rate,
                 'lossRate': 1 - win_rate,
                 'profitFactor': abs(float(daily_rets[daily_rets > 0].sum()) / float(daily_rets[daily_rets < 0].sum())) if losing_days > 0 else 0,
@@ -371,7 +378,8 @@ class BtProvider(BacktestingProviderBase):
             'annualizedReturn': float(annual_return),
             'sharpeRatio': float(sharpe),
             'sortinoRatio': float(sortino),
-            'maxDrawdown': float(max_dd),
+            # Magnitude (positive) — aligns with other providers' convention.
+            'maxDrawdown': abs(float(max_dd)),
             'winRate': float(win_rate),
             'lossRate': float(1 - win_rate),
             'profitFactor': float(profit_factor),
@@ -540,66 +548,81 @@ class BtProvider(BacktestingProviderBase):
     # ========================================================================
 
     def optimize(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Grid or random search optimization."""
+        """Grid or random search optimization.
+
+        Returns the same wire shape as run_backtest (`data.performance`,
+        `data.trades`, `data.equity`) populated from the *winning* iteration,
+        plus an `optimization` block with the chosen params and metric.
+        """
         import numpy as np
 
         try:
             strategy_info = request.get('strategy', {})
-            strategy_type = strategy_info.get('type', 'sma_crossover')
+            strategy_type = strategy_info.get('type', 'equal_weight')
             start_date = request.get('startDate', '2020-01-01')
             end_date = request.get('endDate', '2024-01-01')
             initial_capital = float(request.get('initialCapital', 100000))
-            objective = request.get('objective', 'sharpe')
-            method = request.get('method', 'grid')
-            max_iter = int(request.get('maxIterations', 100))
-            param_ranges = request.get('parameters', {})
+            commission = float(request.get('commission', 0.001))
+            # Frontend sends `optimizeObjective` / `optimizeMethod` / `paramRanges`;
+            # legacy callers used `objective` / `method` / `parameters`.
+            objective = request.get('optimizeObjective') or request.get('objective', 'sharpe')
+            method = request.get('optimizeMethod') or request.get('method', 'grid')
+            max_iter = int(request.get('maxIterations', 100) or 100)
+            param_ranges = request.get('paramRanges', {}) or request.get('parameters', {})
 
-            assets = request.get('assets', [])
-            symbols = [a.get('symbol', 'SPY') for a in assets] if assets else ['SPY']
+            symbols = request.get('symbols', [])
+            if not symbols:
+                assets = request.get('assets', [])
+                symbols = [a.get('symbol') for a in assets if isinstance(a, dict) and a.get('symbol')]
+            if not symbols:
+                symbols = ['SPY']
+
+            if not param_ranges:
+                return self._create_error_result('No parameter ranges supplied (expected paramRanges)')
 
             combos = self._generate_param_combos(param_ranges, method, max_iter)
+            if not combos:
+                return self._create_error_result('paramRanges produced zero combinations')
 
             best_score = -np.inf
-            best_params = {}
+            best_params: Dict[str, Any] = {}
             best_result = None
-            all_results = []
+            all_results: List[Dict[str, Any]] = []
 
             for i, combo in enumerate(combos):
+                # bt_strategies reads frontend param names directly, so no
+                # name translation needed. Pass through the trial combo.
                 bt_request = {
-                    'strategy': {'type': strategy_type, 'parameters': combo},
+                    'strategy': {'type': strategy_type, 'params': combo},
+                    'symbols': symbols,
                     'startDate': start_date,
                     'endDate': end_date,
                     'initialCapital': initial_capital,
-                    'commission': 0.001,
-                    'assets': [{'symbol': s} for s in symbols],
+                    'commission': commission,
                 }
-
                 result = self.run_backtest(bt_request)
-
                 score = self._get_objective_score(result, objective)
-                all_results.append({
-                    'parameters': combo,
-                    'score': score,
-                    'iteration': i,
-                })
+                all_results.append({'parameters': combo, 'score': score, 'iteration': i})
 
                 if score > best_score:
                     best_score = score
                     best_params = combo
                     best_result = result
 
-            return {
-                'success': True,
-                'data': {
-                    'id': self._generate_id(),
-                    'status': 'completed',
-                    'bestParameters': best_params,
-                    'bestScore': float(best_score),
-                    'bestResult': best_result.get('data', {}) if best_result else {},
-                    'allResults': all_results[:50],
-                    'iterations': len(combos),
-                },
+            # Use the best iteration's data as the surfaceable result so the
+            # screen's display_result() renders performance/trades.
+            data = (best_result or {}).get('data') or {}
+            data.setdefault('id', self._generate_id())
+            data.setdefault('status', 'completed')
+            data['optimization'] = {
+                'objective': objective,
+                'method': method,
+                'objective_value': float(best_score) if best_score != -np.inf else 0.0,
+                'best_params': best_params,
+                'iterations': len(combos),
+                'all_results': all_results[:100],  # cap to keep payload small
             }
+            return {'success': True, 'message': 'Optimization completed', 'data': data}
 
         except Exception as e:
             return {'success': False, 'error': str(e), 'traceback': traceback.format_exc()}
@@ -609,31 +632,48 @@ class BtProvider(BacktestingProviderBase):
     # ========================================================================
 
     def walk_forward(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Walk-forward analysis with train/test splits."""
+        """Walk-forward analysis with train/test splits.
+
+        Surfaces the *last fold's test result* in run_backtest shape so the
+        screen renders performance/trades, plus per-fold detail in
+        `data.walk_forward.folds`.
+        """
         import numpy as np
-        import pandas as pd
 
         try:
             strategy_info = request.get('strategy', {})
-            strategy_type = strategy_info.get('type', 'sma_crossover')
-            strategy_params = strategy_info.get('parameters', {})
+            strategy_type = strategy_info.get('type', 'equal_weight')
+            # Frontend sends params under `params`; legacy callers used `parameters`.
+            strategy_params = strategy_info.get('params') or strategy_info.get('parameters', {})
             start_date = request.get('startDate', '2020-01-01')
             end_date = request.get('endDate', '2024-01-01')
             initial_capital = float(request.get('initialCapital', 100000))
-            n_splits = int(request.get('nSplits', 5))
-            train_ratio = float(request.get('trainRatio', 0.7))
+            commission = float(request.get('commission', 0.001))
+            # Frontend sends `wfSplits` / `wfTrainRatio`; legacy fallbacks supported.
+            n_splits = int(request.get('wfSplits', request.get('nSplits', 5)) or 5)
+            train_ratio = float(request.get('wfTrainRatio', request.get('trainRatio', 0.7)) or 0.7)
 
-            assets = request.get('assets', [])
-            symbols = [a.get('symbol', 'SPY') for a in assets] if assets else ['SPY']
+            symbols = request.get('symbols', [])
+            if not symbols:
+                assets = request.get('assets', [])
+                symbols = [a.get('symbol') for a in assets if isinstance(a, dict) and a.get('symbol')]
+            if not symbols:
+                symbols = ['SPY']
+
+            if not (1 <= n_splits <= 20):
+                return self._create_error_result(f'wfSplits must be between 1 and 20 (got {n_splits})')
+            if not (0.1 <= train_ratio <= 0.95):
+                return self._create_error_result(f'wfTrainRatio must be between 0.1 and 0.95 (got {train_ratio})')
 
             from bt_data import fetch_data
             data = fetch_data(symbols, start_date, end_date)
             if data.empty:
-                return {'success': False, 'error': 'No data available'}
+                return self._create_error_result('No data available')
 
             n = len(data)
             split_size = n // n_splits
-            results = []
+            folds: List[Dict[str, Any]] = []
+            last_result = None
 
             for i in range(n_splits):
                 split_start = i * split_size
@@ -645,45 +685,46 @@ class BtProvider(BacktestingProviderBase):
                 test_start_date = data.index[min(train_end, n - 1)].strftime('%Y-%m-%d')
                 test_end_date = data.index[min(split_end - 1, n - 1)].strftime('%Y-%m-%d')
 
+                # Run a backtest on the test slice using the supplied params.
+                # (bt's portfolio strategies don't optimize per fold here — this
+                #  measures parameter robustness across periods.)
                 test_request = {
-                    'strategy': {'type': strategy_type, 'parameters': strategy_params},
+                    'strategy': {'type': strategy_type, 'params': strategy_params},
+                    'symbols': symbols,
                     'startDate': test_start_date,
                     'endDate': test_end_date,
                     'initialCapital': initial_capital,
-                    'commission': 0.001,
-                    'assets': [{'symbol': s} for s in symbols],
+                    'commission': commission,
                 }
-
                 result = self.run_backtest(test_request)
+                last_result = result
                 perf = result.get('data', {}).get('performance', {})
 
-                results.append({
-                    'split': i + 1,
+                folds.append({
+                    'fold': i,
                     'trainStart': train_start_date,
                     'trainEnd': train_end_date,
                     'testStart': test_start_date,
                     'testEnd': test_end_date,
-                    'totalReturn': perf.get('totalReturn', 0),
-                    'sharpeRatio': perf.get('sharpeRatio', 0),
-                    'maxDrawdown': perf.get('maxDrawdown', 0),
+                    'testReturn': float(perf.get('totalReturn', 0)),
+                    'testSharpe': float(perf.get('sharpeRatio', 0)),
+                    'testMaxDrawdown': float(perf.get('maxDrawdown', 0)),
                 })
 
-            avg_return = np.mean([r['totalReturn'] for r in results])
-            avg_sharpe = np.mean([r['sharpeRatio'] for r in results])
+            if not folds or last_result is None:
+                return self._create_error_result('No usable folds')
 
-            return {
-                'success': True,
-                'data': {
-                    'id': self._generate_id(),
-                    'status': 'completed',
-                    'splits': results,
-                    'summary': {
-                        'averageReturn': float(avg_return),
-                        'averageSharpe': float(avg_sharpe),
-                        'nSplits': n_splits,
-                    },
-                },
+            data_out = (last_result or {}).get('data') or {}
+            data_out.setdefault('id', self._generate_id())
+            data_out.setdefault('status', 'completed')
+            data_out['walk_forward'] = {
+                'n_splits': n_splits,
+                'train_ratio': train_ratio,
+                'folds': folds,
+                'mean_test_return': float(np.mean([f['testReturn'] for f in folds])),
+                'mean_test_sharpe': float(np.mean([f['testSharpe'] for f in folds])),
             }
+            return {'success': True, 'message': 'Walk-forward completed', 'data': data_out}
 
         except Exception as e:
             return {'success': False, 'error': str(e), 'traceback': traceback.format_exc()}

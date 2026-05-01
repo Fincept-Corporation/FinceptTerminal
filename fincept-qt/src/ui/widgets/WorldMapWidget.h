@@ -46,6 +46,9 @@ class WorldMapWidget : public QWidget {
     /// assigned id so the consumer can resolve back to its own data.
     void pin_clicked(int id);
 
+  protected:
+    void resizeEvent(QResizeEvent* event) override;
+
   private:
     void rebuild_markers();
     QImage make_marker_image(const QColor& color, double radius) const;

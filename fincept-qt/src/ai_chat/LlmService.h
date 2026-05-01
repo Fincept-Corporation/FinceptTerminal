@@ -66,24 +66,35 @@ class LlmService : public QObject {
     LlmResponse chat(const QString& user_message, const std::vector<ConversationMessage>& history,
                      bool use_tools = true);
 
+    // Per-request tool policy. Replaces the legacy `bool use_tools` so callers
+    // can opt into the common middle ground (tools enabled but navigation
+    // tools hidden — used by the floating bubble so the model can still hit
+    // benign tools like add_to_watchlist without yanking the user out of
+    // their current screen).
+    //
+    // Values:
+    //   All           — every tool advertised (AI Chat tab default).
+    //   NoNavigation  — drop the `navigation` category (floating bubble).
+    //   None          — no tools attached at all (legacy use_tools=false).
+    enum class ToolPolicy { All, NoNavigation, None };
+
     // Streaming — launches background thread; on_chunk called on that thread.
     // Emit finished_streaming(response) when done to get result on UI thread.
-    // use_tools: when false, disables MCP tool execution for this request
     void chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,
-                        StreamCallback on_chunk, bool use_tools = true);
+                        StreamCallback on_chunk, ToolPolicy policy = ToolPolicy::All);
+
+    // Back-compat overload — `use_tools=false` maps to ToolPolicy::None,
+    // `true` maps to ToolPolicy::All. Prefer the enum form for new callers.
+    void chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,
+                        StreamCallback on_chunk, bool use_tools);
 
     // Reload config from DB (call after user changes LLM settings)
     void reload_config();
 
-    // Per-request tool catalogue scoping. The full ~237-tool catalogue is
-    // expensive (≈100–150 KB JSON per turn) and harms tool-pick accuracy.
-    // Callers (AI chat, agents, terminal bridge) set a ToolFilter that
-    // narrows the catalogue to the categories/names relevant to the current
-    // screen or agent. Default-constructed = no filter = full catalogue
-    // (legacy behaviour). Thread-safe.
-    void set_tool_filter(const mcp::ToolFilter& filter);
-    mcp::ToolFilter tool_filter() const;
-    void clear_tool_filter();
+    // (Per-request ToolFilter setters removed — superseded by Tool RAG
+    // tool.list / Tier-0 advertisement model. The internal tool_filter_
+    // field stays default-constructed; an empty filter is the signal that
+    // tells McpService::format_tools_for_openai to engage Tier-0 mode.)
 
     // ── Active config accessors (AI Chat context) ─────────────────────────────
     QString active_provider() const;

@@ -117,4 +117,92 @@ Result<QJsonObject> TabSessionStore::load_screen_state(const QString& key, int e
     return Result<QJsonObject>::ok(obj);
 }
 
+// ── Phase 4b: instance-UUID-keyed screen state ───────────────────────────────
+
+Result<void> TabSessionStore::save_screen_state_by_uuid(const QString& instance_uuid,
+                                                        const QString& screen_key,
+                                                        const QJsonObject& state,
+                                                        int state_version,
+                                                        const QString& session_id) {
+    auto& cdb = CacheDatabase::instance();
+    if (!cdb.is_open())
+        return Result<void>::err("Cache database not open");
+    if (instance_uuid.isEmpty())
+        return Result<void>::err("instance_uuid is required for UUID-keyed save");
+
+    const QString json = QString::fromUtf8(QJsonDocument(state).toJson(QJsonDocument::Compact));
+
+    // The legacy table has screen_key as PRIMARY KEY, which we keep for
+    // backward compat. UUID-keyed rows use a synthesised screen_key of the
+    // form "uuid:<instance_uuid>" so they don't collide with type-id keys
+    // in the legacy code path. The real type id is preserved separately
+    // by writing it back via screen_key column for diagnostics — wait,
+    // primary key collision. Use upsert on the synthesised key but store
+    // the real screen type in the json blob instead. Simplest invariant.
+    const QString synthesised_key = "uuid:" + instance_uuid;
+
+    // Embed the screen_type into the saved object so consumers reading by
+    // UUID still know what type id this state belongs to. The screen
+    // restore_state() callback ignores unknown keys, so no incompatibility.
+    QJsonObject augmented = state;
+    if (!screen_key.isEmpty())
+        augmented.insert("__screen_type__", screen_key);
+    const QString augmented_json =
+        QString::fromUtf8(QJsonDocument(augmented).toJson(QJsonDocument::Compact));
+
+    auto r = cdb.execute(
+        "INSERT OR REPLACE INTO screen_state "
+        "(screen_key, state_version, state_json, updated_at, session_id, instance_uuid) "
+        "VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?, ?)",
+        {synthesised_key, state_version, augmented_json, session_id, instance_uuid});
+
+    if (r.is_err())
+        return Result<void>::err(r.error());
+    return Result<void>::ok();
+}
+
+Result<QJsonObject> TabSessionStore::load_screen_state_by_uuid(const QString& instance_uuid,
+                                                                int expected_version) {
+    auto& cdb = CacheDatabase::instance();
+    if (!cdb.is_open())
+        return Result<QJsonObject>::err("Cache database not open");
+    if (instance_uuid.isEmpty())
+        return Result<QJsonObject>::ok(QJsonObject{}); // not an error — just no state
+
+    auto r = cdb.execute(
+        "SELECT state_version, state_json FROM screen_state WHERE instance_uuid = ?",
+        {instance_uuid});
+
+    if (r.is_err())
+        return Result<QJsonObject>::err(r.error());
+
+    auto& q = r.value();
+    if (!q.next())
+        return Result<QJsonObject>::ok(QJsonObject{}); // no saved state yet
+
+    const int saved_version = q.value(0).toInt();
+    if (saved_version != expected_version)
+        return Result<QJsonObject>::ok(QJsonObject{}); // version mismatch — start fresh
+
+    QJsonObject obj = QJsonDocument::fromJson(q.value(1).toString().toUtf8()).object();
+    // Strip the diagnostic-only __screen_type__ marker before handing back
+    // to the screen — its restore_state() implementation expects only
+    // domain keys.
+    obj.remove("__screen_type__");
+    return Result<QJsonObject>::ok(obj);
+}
+
+Result<void> TabSessionStore::remove_screen_state_by_uuid(const QString& instance_uuid) {
+    auto& cdb = CacheDatabase::instance();
+    if (!cdb.is_open())
+        return Result<void>::err("Cache database not open");
+    if (instance_uuid.isEmpty())
+        return Result<void>::ok(); // nothing to remove
+
+    auto r = cdb.execute("DELETE FROM screen_state WHERE instance_uuid = ?", {instance_uuid});
+    if (r.is_err())
+        return Result<void>::err(r.error());
+    return Result<void>::ok();
+}
+
 } // namespace fincept

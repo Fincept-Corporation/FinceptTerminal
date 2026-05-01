@@ -236,11 +236,19 @@ class FastTradeProvider(BacktestingProviderBase):
             start_date = request.get('startDate')
             end_date = request.get('endDate')
             initial_capital = request.get('initialCapital', 10000)
-            assets = request.get('assets', [])
-            parameters = strategy_def.get('parameters', {})
+            # Frontend sends params under `params`; legacy callers used `parameters`.
+            parameters = strategy_def.get('params') or strategy_def.get('parameters', {})
+
+            # Canonical input: `symbols: [str]`. Fallback: `assets: [{symbol}]`.
+            symbols = request.get('symbols', [])
+            if not symbols:
+                assets = request.get('assets', [])
+                symbols = [a.get('symbol') for a in assets if isinstance(a, dict) and a.get('symbol')]
+            # _prepare_data still expects an assets-like list; build a minimal one.
+            assets_for_data = [{'symbol': s} for s in symbols] if symbols else []
 
             # Generate or load data
-            data = self._prepare_data(assets, start_date, end_date)
+            data = self._prepare_data(assets_for_data, start_date, end_date)
 
             # Build fast-trade configuration (without data in config)
             ft_config = self._build_fasttrade_config(
@@ -261,13 +269,33 @@ class FastTradeProvider(BacktestingProviderBase):
             else:
                 data_ft = data.copy()
 
-            # Run backtest using our wrapper (pass data separately)
+            # Run backtest using our wrapper (pass data separately).
+            #
+            # fast-trade 2.0.0 has a bug in build_summary -> calculate_trade_streaks
+            # that crashes with IndexError when zero trades are produced. Retry
+            # without summary in that case and synthesise the missing summary
+            # ourselves so the user still gets a usable empty result instead
+            # of an error banner.
             self._log('Executing fast-trade backtest...')
-            result = ft_run(backtest=ft_config, df=data_ft, summary=True)
+            try:
+                result = ft_run(backtest=ft_config, df=data_ft, summary=True)
+            except IndexError as ie:
+                self._log(f'fast-trade summary crashed (likely zero trades): {ie}; retrying without summary')
+                result = ft_run(backtest=ft_config, df=data_ft, summary=False)
+                # Provide a minimal empty summary so _convert_result has something to read.
+                if isinstance(result, dict) and 'summary' not in result:
+                    result['summary'] = {
+                        'num_trades': 0, 'win_perc': 0, 'loss_perc': 0,
+                        'total_return': 0, 'avg_win': 0, 'avg_loss': 0,
+                        'best_trade': 0, 'worst_trade': 0, 'sharpe': 0,
+                        'sortino': 0, 'max_drawdown': 0, 'calmar': 0,
+                    }
 
             # Convert result to standard format
+            symbol_for_trades = symbols[0] if symbols else 'ASSET'
             backtest_result = self._convert_result(
-                result, request.get('id', self._generate_id())
+                result, request.get('id', self._generate_id()),
+                symbol=symbol_for_trades,
             )
 
             result_dict = backtest_result.to_dict()
@@ -424,10 +452,12 @@ class FastTradeProvider(BacktestingProviderBase):
             config['base_balance'] = initial_capital
 
         else:
-            # Default to simple buy and hold
+            # Default to simple buy and hold. We feed daily yfinance data
+            # below ('1d' interval), so the freq must match — '1D' (capital)
+            # is fast-trade's accepted form for daily.
             config = {
                 'base_balance': initial_capital,
-                'freq': '1H',
+                'freq': '1D',
                 'comission': 0.001,
                 'datapoints': [],
                 'enter': [['close', '>', 0]],
@@ -437,9 +467,19 @@ class FastTradeProvider(BacktestingProviderBase):
         # Do NOT add data to config - it will be passed separately to ft_run(backtest, df=data)
         # This prevents fast-trade from trying to download data
 
-        # Add start_date for validation purposes only (won't trigger download without symbol)
+        # The ft_strategies builders default to `freq='1H'`, but our yfinance
+        # loader fetches daily bars. Override here so fast-trade's resample
+        # step doesn't choke (also note pandas 2.2 deprecated lowercase 'h';
+        # fast-trade accepts the capital '1D' form for daily).
+        config['freq'] = '1D'
+
+        # fast-trade ≥0.2 requires `start` and `stop` (not the deprecated
+        # `start_date`/`end_date`). The dataframe is the source of truth, so
+        # use the data's actual range when caller-supplied dates are missing.
         if start_date:
-            config['start_date'] = start_date
+            config['start'] = start_date
+        if end_date:
+            config['stop'] = end_date
 
         return config
 
@@ -447,69 +487,113 @@ class FastTradeProvider(BacktestingProviderBase):
     # Result Conversion
     # ========================================================================
 
-    def _convert_result(self, ft_result: Dict[str, Any], backtest_id: str) -> BacktestResult:
+    def _convert_result(self, ft_result: Dict[str, Any], backtest_id: str, symbol: str = 'ASSET') -> BacktestResult:
+        """Convert a fast-trade 2.0 result dict to our standard BacktestResult.
+
+        Fast-trade emits metrics in a few different places:
+          - top-level summary (`return_perc`, `sharpe_ratio`, `max_drawdown`
+            in DOLLARS, `win_perc`, `loss_perc`, `num_trades`, ...)
+          - `summary.risk_metrics` (`sortino_ratio`, `calmar_ratio`,
+            `annualized_volatility`)
+          - `summary.drawdown_metrics` (`max_drawdown_pct` in PERCENT,
+            `max_drawdown_duration` in bars)
+          - `summary.trade_quality` (`profit_factor`,
+            `largest_winning_trade`, `largest_losing_trade`)
+
+        We translate them all to the canonical PerformanceMetrics dataclass
+        whose values are fractions in [-1, 1] (or magnitudes for drawdown),
+        matching the convention used by every other provider.
         """
-        Convert fast-trade result to standard BacktestResult format
-        """
-        summary = ft_result.get('summary', {})
+        summary = ft_result.get('summary', {}) or {}
         df = ft_result.get('df', pd.DataFrame())
         trade_df = ft_result.get('trade_df', pd.DataFrame())
 
-        # Extract performance metrics
+        risk = summary.get('risk_metrics') or {}
+        dd = summary.get('drawdown_metrics') or {}
+        quality = summary.get('trade_quality') or {}
+
+        # Total return: fast-trade emits as a percent (e.g. 10.85 for 10.85%).
+        return_perc = float(summary.get('return_perc', 0) or 0)
+        total_return = return_perc / 100.0
+
+        # Days in the test: prefer counting bars in df since `total_days`
+        # doesn't exist in fast-trade 2.0's summary.
+        if not df.empty:
+            try:
+                first = pd.Timestamp(summary.get('first_tic') or df.index[0])
+                last = pd.Timestamp(summary.get('last_tic') or df.index[-1])
+                total_days = max(1, (last - first).days)
+            except Exception:
+                total_days = max(1, len(df))
+        else:
+            total_days = 365
+
+        win_perc = float(summary.get('win_perc', 0) or 0)
+        loss_perc = float(summary.get('loss_perc', 0) or 0)
+        num_trades = int(summary.get('num_trades', 0) or 0)
+
+        # max_drawdown: fast-trade reports the dollar magnitude at top level
+        # but a percent under drawdown_metrics — we want a positive fraction.
+        dd_pct = dd.get('max_drawdown_pct')
+        if dd_pct is not None:
+            max_drawdown = abs(float(dd_pct)) / 100.0
+        else:
+            max_drawdown = 0.0
+
         performance = PerformanceMetrics(
-            total_return=summary.get('return_perc', 0) / 100,
-            annualized_return=self._calculate_annualized_return(
-                summary.get('return_perc', 0) / 100,
-                summary.get('total_days', 365)
-            ),
-            sharpe_ratio=summary.get('sharpe_ratio', 0),
-            sortino_ratio=summary.get('sortino_ratio', 0),
-            max_drawdown=summary.get('max_drawdown', 0),
-            win_rate=summary.get('win_perc', 0) / 100,
-            loss_rate=summary.get('loss_perc', 0) / 100,
-            profit_factor=self._calculate_profit_factor(summary),
-            volatility=0.0,  # Not directly provided by fast-trade
-            calmar_ratio=summary.get('calmar_ratio', 0),
-            total_trades=summary.get('num_trades', 0),
-            winning_trades=int(summary.get('num_trades', 0) * summary.get('win_perc', 0) / 100),
-            losing_trades=int(summary.get('num_trades', 0) * summary.get('loss_perc', 0) / 100),
-            average_win=summary.get('avg_win', 0),
-            average_loss=summary.get('avg_loss', 0),
-            largest_win=summary.get('max_win', 0),
-            largest_loss=summary.get('max_loss', 0),
-            average_trade_return=summary.get('avg_trade', 0),
-            expectancy=summary.get('expectancy', 0),
+            total_return=total_return,
+            annualized_return=self._calculate_annualized_return(total_return, total_days),
+            sharpe_ratio=float(summary.get('sharpe_ratio', 0) or 0),
+            sortino_ratio=float(risk.get('sortino_ratio', 0) or 0),
+            max_drawdown=max_drawdown,
+            win_rate=win_perc / 100.0,
+            loss_rate=loss_perc / 100.0,
+            profit_factor=float(quality.get('profit_factor', 0) or 0),
+            volatility=float(risk.get('annualized_volatility', 0) or 0),
+            calmar_ratio=float(risk.get('calmar_ratio', 0) or 0),
+            total_trades=num_trades,
+            winning_trades=int(summary.get('total_num_winning_trades', 0) or 0),
+            losing_trades=int(summary.get('total_num_losing_trades', 0) or 0),
+            average_win=float(summary.get('avg_win_perc', 0) or 0) / 100.0,
+            average_loss=float(summary.get('avg_loss_perc', 0) or 0) / 100.0,
+            largest_win=float(quality.get('largest_winning_trade', summary.get('best_trade_perc', 0)) or 0),
+            largest_loss=float(quality.get('largest_losing_trade', summary.get('min_trade_perc', 0)) or 0),
+            average_trade_return=float(summary.get('mean_trade_perc', 0) or 0),
+            expectancy=0.0,  # not reported by fast-trade
             alpha=None,
             beta=None,
-            max_drawdown_duration=None,
+            max_drawdown_duration=int(dd.get('max_drawdown_duration', 0) or 0),
             information_ratio=None,
-            treynor_ratio=None
+            treynor_ratio=None,
         )
 
         # Extract trades
-        trades = self._extract_trades(trade_df)
+        trades = self._extract_trades(trade_df, symbol=symbol)
 
         # Extract equity curve
         equity = self._extract_equity_curve(df)
 
         # Build statistics
+        # Fast-trade 2.0 puts equity at top level: equity_peak/equity_final.
+        # Initial capital comes from the config we sent (base_balance).
+        initial_capital = float(ft_result.get('backtest', {}).get('base_balance', 10000) or 10000)
         statistics = BacktestStatistics(
-            start_date=str(df.index[0]) if len(df) > 0 else '',
-            end_date=str(df.index[-1]) if len(df) > 0 else '',
-            initial_capital=summary.get('starting_balance', 10000),
-            final_capital=summary.get('ending_balance', 10000),
-            total_fees=summary.get('total_comission', 0),
+            start_date=str(summary.get('first_tic', df.index[0] if len(df) else '')),
+            end_date=str(summary.get('last_tic', df.index[-1] if len(df) else '')),
+            initial_capital=initial_capital,
+            final_capital=float(summary.get('equity_final', initial_capital) or initial_capital),
+            total_fees=float(summary.get('total_fees', 0) or 0),
             total_slippage=0.0,  # Not tracked by fast-trade
-            total_trades=summary.get('num_trades', 0),
+            total_trades=int(summary.get('num_trades', 0) or 0),
             winning_days=0,  # Not directly provided
             losing_days=0,
             average_daily_return=0.0,
             best_day=0.0,
             worst_day=0.0,
-            consecutive_wins=summary.get('trade_streaks', {}).get('max_win_streak', 0),
-            consecutive_losses=summary.get('trade_streaks', {}).get('max_loss_streak', 0),
+            consecutive_wins=int(summary.get('trade_streaks', {}).get('max_win_streak', 0) or 0),
+            consecutive_losses=int(summary.get('trade_streaks', {}).get('max_loss_streak', 0) or 0),
             max_drawdown_date=None,
-            recovery_time=None
+            recovery_time=None,
         )
 
         # Build result
@@ -535,64 +619,85 @@ class FastTradeProvider(BacktestingProviderBase):
 
         return result
 
-    def _extract_trades(self, trade_df: pd.DataFrame) -> List[Trade]:
-        """Extract trade list from fast-trade trade dataframe"""
-        trades = []
+    def _extract_trades(self, trade_df: pd.DataFrame, symbol: str = 'ASSET') -> List[Trade]:
+        """Extract trade list from fast-trade 2.0's enriched dataframe.
 
-        if trade_df.empty:
+        fast-trade emits a single dataframe (returned as both `df` and
+        `trade_df`) where the `action` column carries one-letter codes:
+          'e' = enter, 'x' = exit, 'h' = hold (no signal).
+        Position size is in `aux`, equity in `account_value`/`adj_account_value`.
+        We pair each enter with the next subsequent exit to form Trade records.
+        """
+        trades: List[Trade] = []
+        if trade_df.empty or 'action' not in trade_df.columns:
             return trades
 
-        # Fast-trade outputs trades with 'action' column ('enter' or 'exit')
-        entries = trade_df[trade_df['action'] == 'enter']
-        exits = trade_df[trade_df['action'] == 'exit']
-
-        for i, (entry_idx, entry) in enumerate(entries.iterrows()):
-            # Find matching exit
-            exit_row = None
-            if i < len(exits):
-                exit_idx = exits.index[i]
-                exit_row = exits.loc[exit_idx]
-
-            trade = Trade(
-                id=f'trade-{i+1}',
-                symbol='ASSET',
-                entry_date=str(entry_idx),
-                side='long',
-                quantity=entry.get('amount', 0),
-                entry_price=entry.get('close', 0),
-                commission=entry.get('comission', 0),
-                slippage=0.0,
-                exit_date=str(exit_row.name) if exit_row is not None else None,
-                exit_price=exit_row.get('close', 0) if exit_row is not None else None,
-                pnl=exit_row.get('pnl', 0) if exit_row is not None else None,
-                pnl_percent=None,
-                holding_period=None,
-                exit_reason='signal' if exit_row is not None else None
-            )
-
-            trades.append(trade)
-
+        # Walk in time order, keeping at most one open position at a time.
+        open_entry = None
+        for ts, row in trade_df.iterrows():
+            action = row.get('action')
+            close = float(row.get('close', 0) or 0)
+            if action == 'e' and open_entry is None:
+                open_entry = (ts, close, float(row.get('aux', 0) or 0), float(row.get('fee', 0) or 0))
+            elif action == 'x' and open_entry is not None:
+                entry_ts, entry_price, qty, entry_fee = open_entry
+                exit_fee = float(row.get('fee', 0) or 0)
+                pnl = (close - entry_price) * qty - (entry_fee + exit_fee)
+                pnl_pct = ((close / entry_price) - 1.0) if entry_price else 0.0
+                try:
+                    holding = (pd.Timestamp(ts) - pd.Timestamp(entry_ts)).days
+                except Exception:
+                    holding = None
+                trades.append(Trade(
+                    id=f'trade-{len(trades) + 1}',
+                    symbol=symbol,
+                    entry_date=str(entry_ts),
+                    side='long',
+                    quantity=qty,
+                    entry_price=entry_price,
+                    commission=entry_fee + exit_fee,
+                    slippage=0.0,
+                    exit_date=str(ts),
+                    exit_price=close,
+                    pnl=pnl,
+                    pnl_percent=pnl_pct,
+                    holding_period=holding,
+                    exit_reason='signal',
+                ))
+                open_entry = None
         return trades
 
     def _extract_equity_curve(self, df: pd.DataFrame) -> List[EquityPoint]:
-        """Extract equity curve from fast-trade dataframe"""
-        equity_points = []
+        """Extract equity curve from fast-trade 2.0 dataframe.
 
+        Equity column is `adj_account_value` (commission-adjusted) preferred
+        over `account_value`. Drawdown is computed from the running maximum.
+        """
+        equity_points: List[EquityPoint] = []
         if df.empty:
             return equity_points
 
-        # Fast-trade includes 'total' column for equity
-        if 'total' in df.columns:
-            for date, row in df.iterrows():
-                point = EquityPoint(
-                    date=str(date),
-                    equity=row['total'],
-                    returns=0.0,  # Would need to calculate
-                    drawdown=0.0,  # Would need to calculate
-                    benchmark=None
-                )
-                equity_points.append(point)
+        equity_col = 'adj_account_value' if 'adj_account_value' in df.columns else (
+            'account_value' if 'account_value' in df.columns else None
+        )
+        if equity_col is None:
+            return equity_points
 
+        equity_series = df[equity_col].astype(float)
+        running_max = equity_series.cummax()
+        # Avoid divide-by-zero on the first bar / non-positive equity.
+        rm_safe = running_max.where(running_max > 0, 1.0)
+        drawdown = (equity_series - running_max) / rm_safe
+        returns = equity_series.pct_change().fillna(0.0)
+
+        for date, eq, ret, dd in zip(df.index, equity_series, returns, drawdown):
+            equity_points.append(EquityPoint(
+                date=str(date),
+                equity=float(eq),
+                returns=float(ret),
+                drawdown=float(dd),
+                benchmark=None,
+            ))
         return equity_points
 
     def _calculate_annualized_return(self, total_return: float, days: int) -> float:

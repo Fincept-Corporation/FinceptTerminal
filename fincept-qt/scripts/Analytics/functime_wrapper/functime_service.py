@@ -1,1354 +1,793 @@
 """
-Functime Service - Python backend for analytics
-=================================================================
+Functime Service (pandas/sklearn/statsmodels backend)
+======================================================
+Self-contained time-series analytics service for the Fincept Terminal
+"Functime" sub-tab. Does not require the polars-based functime library
+(the original wrapper is preserved as functime_service_polars_legacy.py).
 
-Provides JSON-RPC interface for C++ to call functime forecasting functions.
-
-Note: This service provides local-only forecasting when functime cloud is not configured.
-Uses sklearn-based implementations as fallback for cloud API.
+Response contract (all ops):
+    success: bool
+    operation: str
+    data: dict   (when success)
+    error: str   (when failure)
+    error_kind: str | None    (validation | runtime | unknown_op)
+    traceback: str | None     (only on uncaught exceptions)
 """
 
-import json
 import sys
 import os
-from typing import Dict, List, Any, Optional
+import json
+import math
+import traceback
 from datetime import datetime, timedelta
-
-# Add this script's directory to Python path for local imports
-_script_dir = os.path.dirname(os.path.abspath(__file__))
-if _script_dir not in sys.path:
-    sys.path.insert(0, _script_dir)
+from typing import Dict, List, Any, Optional
 
 import numpy as np
+import pandas as pd
 
+# Fail loudly only on truly missing essentials.
 try:
-    import polars as pl
-    POLARS_AVAILABLE = True
-except ImportError:
-    POLARS_AVAILABLE = False
-
-# Try sklearn for local fallback
-try:
-    from sklearn.linear_model import LinearRegression, Lasso, Ridge, ElasticNet, LassoCV, RidgeCV, ElasticNetCV
+    from sklearn.linear_model import LinearRegression, Lasso, Ridge, ElasticNet
     from sklearn.neighbors import KNeighborsRegressor
-    from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
-    SKLEARN_AVAILABLE = True
+    from sklearn.ensemble import IsolationForest
+    SKLEARN_OK = True
 except ImportError:
-    SKLEARN_AVAILABLE = False
+    SKLEARN_OK = False
 
 try:
-    from lightgbm import LGBMRegressor
-    LIGHTGBM_AVAILABLE = True
+    from statsmodels.tsa.seasonal import STL
+    from statsmodels.tsa.holtwinters import ExponentialSmoothing
+    from statsmodels.tsa.arima.model import ARIMA
+    from statsmodels.tsa.stattools import adfuller, kpss, acf
+    STATSMODELS_OK = True
 except ImportError:
-    LIGHTGBM_AVAILABLE = False
+    STATSMODELS_OK = False
 
-# Check if functime cloud is available and configured
-FUNCTIME_CLOUD_AVAILABLE = False
 try:
-    import functime
-    # Check if credentials exist
-    import toml
-    config_path = os.path.expanduser("~/.functime.toml")
-    if os.path.exists(config_path):
-        with open(config_path, 'r') as f:
-            config = toml.load(f)
-            if config.get('token_id') and config.get('token_secret'):
-                FUNCTIME_CLOUD_AVAILABLE = True
-except:
+    from scipy import stats as scstats
+    SCIPY_OK = True
+except ImportError:
+    SCIPY_OK = False
+
+
+# ============================================================================
+# INPUT COERCION + VALIDATION
+# ============================================================================
+
+class ValidationError(ValueError):
+    """Raised when an op's input doesn't pass coercion/length checks."""
     pass
 
-# Use local sklearn implementation as default
-FUNCTIME_AVAILABLE = SKLEARN_AVAILABLE and POLARS_AVAILABLE
 
-# Import local modules after path fix
-if FUNCTIME_AVAILABLE:
+def _coerce_floats(value, field_name):
+    """
+    Accept list[number], tuple[number], np.ndarray, or a CSV / whitespace-separated string.
+    Returns list[float]. Empty / None -> [].
+    """
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        out = []
+        for i, v in enumerate(value):
+            try:
+                out.append(float(v))
+            except (TypeError, ValueError):
+                raise ValidationError(f"{field_name}[{i}] is not numeric: {v!r}")
+        return out
+    if isinstance(value, np.ndarray):
+        return [float(v) for v in value.tolist()]
+    if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return []
+        for sep in [",", ";", "\t", "\n"]:
+            s = s.replace(sep, " ")
+        parts = [p for p in s.split(" ") if p.strip()]
+        out = []
+        for i, p in enumerate(parts):
+            try:
+                out.append(float(p))
+            except ValueError:
+                raise ValidationError(f"{field_name}[{i}] is not numeric: {p!r}")
+        return out
     try:
-        from preprocessing import (
-            apply_boxcox, scale_data, difference_data,
-            create_lags, create_rolling_features, impute_missing
-        )
-        from cross_validation import (
-            split_train_test, create_expanding_window_splits,
-            create_sliding_window_splits
-        )
-        from metrics import (
-            calculate_mae, calculate_rmse, calculate_smape,
-            calculate_mape, calculate_mse
-        )
-        from feature_extraction import (
-            create_calendar_effects, create_future_calendar_effects
-        )
-        from offsets import frequency_to_seasonal_period
-    except ImportError as e:
-        print(f"Warning: Could not import local modules: {e}", file=sys.stderr)
-
-# Import advanced modules
-try:
-    from advanced_models import (
-        naive_forecast, seasonal_naive_forecast, drift_forecast,
-        ses_forecast, holt_forecast, theta_forecast,
-        croston_forecast, xgboost_forecast, catboost_forecast
-    )
-    ADVANCED_MODELS_AVAILABLE = True
-except ImportError as e:
-    ADVANCED_MODELS_AVAILABLE = False
-    print(f"Warning: Could not import advanced_models: {e}", file=sys.stderr)
-
-try:
-    from ensemble import (
-        ensemble_mean, ensemble_median, ensemble_trimmed_mean,
-        ensemble_weighted, ensemble_stacking, auto_ensemble
-    )
-    ENSEMBLE_AVAILABLE = True
-except ImportError as e:
-    ENSEMBLE_AVAILABLE = False
-    print(f"Warning: Could not import ensemble: {e}", file=sys.stderr)
-
-try:
-    from anomaly_detection import (
-        detect_zscore, detect_iqr, detect_grubbs,
-        detect_isolation_forest, detect_lof,
-        detect_residual_anomalies, detect_change_points
-    )
-    ANOMALY_AVAILABLE = True
-except ImportError as e:
-    ANOMALY_AVAILABLE = False
-    print(f"Warning: Could not import anomaly_detection: {e}", file=sys.stderr)
-
-try:
-    from seasonality import (
-        detect_seasonal_period, decompose_stl, decompose_classical,
-        seasonally_adjust, calculate_seasonality_metrics
-    )
-    SEASONALITY_AVAILABLE = True
-except ImportError as e:
-    SEASONALITY_AVAILABLE = False
-    print(f"Warning: Could not import seasonality: {e}", file=sys.stderr)
-
-try:
-    from confidence_intervals import (
-        bootstrap_prediction_intervals, residual_prediction_intervals,
-        quantile_prediction_intervals, conformal_prediction_intervals,
-        monte_carlo_intervals
-    )
-    CONFIDENCE_AVAILABLE = True
-except ImportError as e:
-    CONFIDENCE_AVAILABLE = False
-    print(f"Warning: Could not import confidence_intervals: {e}", file=sys.stderr)
-
-try:
-    from feature_importance import (
-        calculate_permutation_importance, calculate_model_importance,
-        calculate_shap_importance, analyze_lag_importance, sensitivity_analysis
-    )
-    FEATURE_IMPORTANCE_AVAILABLE = True
-except ImportError as e:
-    FEATURE_IMPORTANCE_AVAILABLE = False
-    print(f"Warning: Could not import feature_importance: {e}", file=sys.stderr)
-
-try:
-    from advanced_cv import (
-        blocked_time_series_cv, purged_kfold_cv, combinatorial_purged_cv,
-        walk_forward_validation, nested_cv, get_cv_splits
-    )
-    ADVANCED_CV_AVAILABLE = True
-except ImportError as e:
-    ADVANCED_CV_AVAILABLE = False
-    print(f"Warning: Could not import advanced_cv: {e}", file=sys.stderr)
-
-try:
-    from backtesting import (
-        walk_forward_backtest, compare_models_backtest,
-        rolling_origin_evaluation, performance_attribution, backtest_summary
-    )
-    BACKTESTING_AVAILABLE = True
-except ImportError as e:
-    BACKTESTING_AVAILABLE = False
-    print(f"Warning: Could not import backtesting: {e}", file=sys.stderr)
+        return [float(value)]
+    except (TypeError, ValueError):
+        raise ValidationError(f"{field_name} is not numeric: {value!r}")
 
 
-def parse_panel_data_json(data_json: str) -> "pl.DataFrame":
-    """Parse JSON data into Polars DataFrame for functime panel data format"""
-    data = json.loads(data_json)
+def _require_min_length(values, n, field_name):
+    if len(values) < n:
+        raise ValidationError(
+            f"{field_name} needs at least {n} values, got {len(values)}")
 
-    if isinstance(data, dict):
-        # Check if it's multi-entity format {entity: {date: value}}
-        first_value = next(iter(data.values()), None)
-        if isinstance(first_value, dict):
-            # Multi-entity: {entity: {date: value}}
-            rows = []
-            for entity_id, time_values in data.items():
-                for time_str, value in time_values.items():
-                    rows.append({
-                        'entity_id': entity_id,
-                        'time': time_str,
-                        'value': float(value)
-                    })
-            df = pl.DataFrame(rows)
-            df = df.with_columns([
-                pl.col('time').str.to_datetime()
-            ])
-        else:
-            # Single entity: {date: value} - wrap as entity 'default'
-            rows = []
-            for time_str, value in data.items():
-                rows.append({
-                    'entity_id': 'default',
-                    'time': time_str,
-                    'value': float(value)
-                })
-            df = pl.DataFrame(rows)
-            df = df.with_columns([
-                pl.col('time').str.to_datetime()
-            ])
-    elif isinstance(data, list):
-        # Array format: [{entity_id, time, value}, ...]
-        df = pl.DataFrame(data)
-        if 'time' in df.columns and df['time'].dtype == pl.Utf8:
-            df = df.with_columns([
-                pl.col('time').str.to_datetime()
-            ])
-        if 'entity_id' not in df.columns:
-            df = df.with_columns([
-                pl.lit('default').alias('entity_id')
-            ])
+
+def _series_from_list(values, dates=None, name="series"):
+    """Build a pd.Series of floats with a date index (default daily)."""
+    if dates:
+        idx = pd.to_datetime(dates)
     else:
-        raise ValueError(f"Unsupported data format: {type(data)}")
-
-    # Sort by entity_id and time
-    df = df.sort(['entity_id', 'time'])
-    return df
+        idx = pd.date_range("2020-01-01", periods=len(values), freq="B")
+    return pd.Series(np.asarray(values, dtype=float), index=idx, name=name)
 
 
-def serialize_to_json(obj: Any) -> str:
-    """Convert object to JSON string with proper type handling"""
-    from datetime import date
-
-    def convert(item):
-        if item is None:
-            return None
-        if isinstance(item, datetime):
-            return item.isoformat()
-        if isinstance(item, date):
-            return item.isoformat()
-        if isinstance(item, (np.integer, np.floating)):
-            return float(item)
-        if isinstance(item, np.ndarray):
-            return [convert(v) for v in item.tolist()]
-        if isinstance(item, np.bool_):
-            return bool(item)
-        if POLARS_AVAILABLE and isinstance(item, pl.DataFrame):
-            return [convert(d) for d in item.to_dicts()]
-        if POLARS_AVAILABLE and isinstance(item, pl.Series):
-            return [convert(v) for v in item.to_list()]
-        if isinstance(item, dict):
-            return {str(k): convert(v) for k, v in item.items()}
-        if isinstance(item, (list, tuple)):
-            return [convert(v) for v in item]
-        if isinstance(item, float) and np.isnan(item):
-            return None
-        return item
-
-    return json.dumps(convert(obj))
+def _safe_float(v, default=0.0):
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return default
+    if math.isnan(f) or math.isinf(f):
+        return default
+    return f
 
 
-def serialize_result(data: Any) -> str:
-    """Serialize result to JSON, handling numpy/polars types"""
-    from datetime import date
+def _safe_int(v, default=0):
+    try:
+        f = float(v)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return int(f)
+    except (TypeError, ValueError):
+        return default
 
-    def convert(obj):
-        # Handle None first
-        if obj is None:
-            return None
 
-        # Handle numpy types
-        if isinstance(obj, (np.integer, np.floating)):
-            if np.isnan(obj):
-                return None
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return [convert(v) for v in obj.tolist()]
-        elif isinstance(obj, np.bool_):
-            return bool(obj)
-
-        # Handle polars types
-        elif POLARS_AVAILABLE and isinstance(obj, pl.DataFrame):
-            return [convert(d) for d in obj.to_dicts()]
-        elif POLARS_AVAILABLE and isinstance(obj, pl.Series):
-            return [convert(v) for v in obj.to_list()]
-
-        # Handle datetime and date
-        elif isinstance(obj, datetime):
-            return obj.isoformat()
-        elif isinstance(obj, date):
-            return obj.isoformat()
-
-        # Handle NaN for scalar floats
-        elif isinstance(obj, float) and np.isnan(obj):
-            return None
-
-        # Handle tuples (convert to list)
-        elif isinstance(obj, tuple):
-            return [convert(v) for v in obj]
-
-        # Handle dicts and lists - convert tuple keys to strings
-        elif isinstance(obj, dict):
-            return {str(k) if isinstance(k, tuple) else str(k): convert(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [convert(v) for v in obj]
-
-        # Return as-is for other types
-        return obj
-
-    return json.dumps(convert(data), indent=2)
+def _sample_curve(series, max_points=250):
+    """Return [{date, value}] sampled to ~max_points entries, always including the last."""
+    out = []
+    if series is None or len(series) == 0:
+        return out
+    step = max(1, len(series) // max_points)
+    for i, (d, v) in enumerate(series.items()):
+        if i % step == 0:
+            out.append({"date": str(d)[:10], "value": _safe_float(v)})
+    last_date = str(series.index[-1])[:10]
+    if not out or out[-1]["date"] != last_date:
+        out.append({"date": last_date, "value": _safe_float(series.iloc[-1])})
+    return out
 
 
 # ============================================================================
-# COMMAND HANDLERS
+# OPERATION HANDLERS
 # ============================================================================
 
-def check_status() -> Dict[str, Any]:
-    """Check functime library availability and version"""
+def op_check_status(_data):
+    """Report library availability — no inputs."""
     return {
-        "success": True,
-        "available": FUNCTIME_AVAILABLE,
-        "sklearn_available": SKLEARN_AVAILABLE,
-        "polars_available": POLARS_AVAILABLE,
-        "lightgbm_available": LIGHTGBM_AVAILABLE,
-        "functime_cloud_available": FUNCTIME_CLOUD_AVAILABLE,
-        "advanced_models_available": ADVANCED_MODELS_AVAILABLE,
-        "ensemble_available": ENSEMBLE_AVAILABLE,
-        "anomaly_available": ANOMALY_AVAILABLE,
-        "seasonality_available": SEASONALITY_AVAILABLE,
-        "confidence_available": CONFIDENCE_AVAILABLE,
-        "feature_importance_available": FEATURE_IMPORTANCE_AVAILABLE,
-        "advanced_cv_available": ADVANCED_CV_AVAILABLE,
-        "backtesting_available": BACKTESTING_AVAILABLE,
-        "message": "Time series forecasting ready (sklearn backend)" if FUNCTIME_AVAILABLE else "scikit-learn or polars not installed"
+        "sklearn": SKLEARN_OK,
+        "statsmodels": STATSMODELS_OK,
+        "scipy": SCIPY_OK,
+        "backend": "pandas + sklearn + statsmodels",
+        "ops_available": list(OPERATIONS.keys()),
     }
 
 
-def run_forecast(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Run forecasting with specified model using sklearn backend"""
-    if not FUNCTIME_AVAILABLE:
-        return {"success": False, "error": "Forecasting library not available (sklearn or polars missing)"}
+def op_forecast(data):
+    """
+    Multi-model forecasting.
+    Inputs:
+      values      : list[float] | CSV string  (required, >= 30 values)
+      model       : 'linear' | 'ridge' | 'lasso' | 'elasticnet' | 'knn' |
+                    'holt_winters' | 'arima' | 'naive' | 'drift'  (default: 'linear')
+      horizon     : int       (default: 14)
+      lags        : int       (default: 7)
+      alpha       : float     (regularization for ridge/lasso/elasticnet, default 1.0)
+      l1_ratio    : float     (elasticnet only, default 0.5)
+      n_neighbors : int       (knn only, default 5)
+      season      : int       (holt_winters/arima seasonal period, default 0=disabled)
+    """
+    if not SKLEARN_OK:
+        raise ValidationError("sklearn is not installed in the venv — cannot run forecast")
 
-    try:
-        data = parse_panel_data_json(params['data'])
-        model_type = params.get('model', 'linear')
-        fh = params.get('horizon', 7)
-        freq = params.get('frequency', '1d')
+    values = _coerce_floats(data.get("values"), "values")
+    _require_min_length(values, 30, "values")
 
-        # Model parameters
-        alpha = params.get('alpha', 1.0)
-        l1_ratio = params.get('l1_ratio', 0.5)
-        n_neighbors = params.get('n_neighbors', 5)
-        lags = params.get('lags', 3)  # Number of lags for autoregression
+    model_type = str(data.get("model", "linear")).lower()
+    horizon = max(1, _safe_int(data.get("horizon", 14)))
+    lags = max(1, _safe_int(data.get("lags", 7)))
+    alpha = _safe_float(data.get("alpha", 1.0))
+    l1_ratio = _safe_float(data.get("l1_ratio", 0.5))
+    n_neighbors = max(1, _safe_int(data.get("n_neighbors", 5)))
+    season = max(0, _safe_int(data.get("season", 0)))
 
-        # Get unique entities
-        entities = data['entity_id'].unique().to_list()
-        all_forecasts = []
-        final_best_params = None
+    series = _series_from_list(values, data.get("dates"))
+    arr = series.to_numpy()
+    n = len(arr)
 
-        for entity_id in entities:
-            entity_data = data.filter(pl.col('entity_id') == entity_id).sort('time')
-            times = entity_data['time'].to_list()
-            values = entity_data['value'].to_numpy()
+    # Compute in-sample fit and out-of-sample forecast
+    in_sample = np.full(n, np.nan)
+    forecast: List[float] = []
 
-            if len(values) < lags + 1:
-                continue
+    def _ml_forecast(model):
+        # Build lag matrix
+        if n <= lags + 1:
+            raise ValidationError(f"need at least lags+2={lags + 2} observations, got {n}")
+        X, y = [], []
+        for i in range(lags, n):
+            X.append(arr[i - lags:i])
+            y.append(arr[i])
+        X = np.asarray(X, dtype=float)
+        y = np.asarray(y, dtype=float)
+        model.fit(X, y)
+        # In-sample fitted (fit ignores first `lags` points)
+        in_sample[lags:] = model.predict(X)
+        # Recursive out-of-sample
+        last = list(arr[-lags:])
+        out = []
+        for _ in range(horizon):
+            x_pred = np.asarray([last[-lags:]], dtype=float)
+            yhat = float(model.predict(x_pred)[0])
+            out.append(yhat)
+            last.append(yhat)
+        return out
 
-            # Create lag features
-            X, y = [], []
-            for i in range(lags, len(values)):
-                X.append(values[i-lags:i])
-                y.append(values[i])
-            X = np.array(X)
-            y = np.array(y)
-
-            # Select and fit model
-            best_params = None
-
-            if model_type == 'linear':
-                model = LinearRegression()
-            elif model_type == 'lasso':
-                model = Lasso(alpha=alpha)
-            elif model_type == 'ridge':
-                model = Ridge(alpha=alpha)
-            elif model_type == 'elasticnet':
-                model = ElasticNet(alpha=alpha, l1_ratio=l1_ratio)
-            elif model_type == 'knn':
-                model = KNeighborsRegressor(n_neighbors=min(n_neighbors, len(X)))
-            elif model_type == 'lightgbm':
-                if not LIGHTGBM_AVAILABLE:
-                    return {"success": False, "error": "LightGBM not installed. Please install: pip install lightgbm"}
-                model = LGBMRegressor(n_estimators=100, verbosity=-1)
-
-            # Auto-tuned models with cross-validation
-            elif model_type == 'auto_lasso':
-                alphas = np.logspace(-4, 2, 50)
-                cv_splits = min(5, len(X) - 1)
-                if cv_splits < 2:
-                    cv_splits = 2
-                model = LassoCV(alphas=alphas, cv=cv_splits, max_iter=10000)
-                model.fit(X, y)
-                best_params = {'alpha': float(model.alpha_)}
-
-            elif model_type == 'auto_ridge':
-                alphas = np.logspace(-4, 4, 50)
-                cv_splits = min(5, len(X) - 1)
-                if cv_splits < 2:
-                    cv_splits = 2
-                model = RidgeCV(alphas=alphas, cv=cv_splits)
-                model.fit(X, y)
-                best_params = {'alpha': float(model.alpha_)}
-
-            elif model_type == 'auto_elasticnet':
-                alphas = np.logspace(-4, 2, 20)
-                l1_ratios = [0.1, 0.3, 0.5, 0.7, 0.9, 0.95, 0.99]
-                cv_splits = min(5, len(X) - 1)
-                if cv_splits < 2:
-                    cv_splits = 2
-                model = ElasticNetCV(alphas=alphas, l1_ratio=l1_ratios, cv=cv_splits, max_iter=10000)
-                model.fit(X, y)
-                best_params = {'alpha': float(model.alpha_), 'l1_ratio': float(model.l1_ratio_)}
-
-            elif model_type == 'auto_knn':
-                # Grid search for best n_neighbors
-                max_neighbors = min(20, len(X) - 1)
-                if max_neighbors < 1:
-                    max_neighbors = 1
-                param_grid = {'n_neighbors': list(range(1, max_neighbors + 1, 2))}
-                cv_splits = min(3, len(X) - 1)
-                if cv_splits < 2:
-                    cv_splits = 2
-                base_model = KNeighborsRegressor()
-                tscv = TimeSeriesSplit(n_splits=cv_splits)
-                grid_search = GridSearchCV(base_model, param_grid, cv=tscv, scoring='neg_mean_squared_error')
-                grid_search.fit(X, y)
-                model = grid_search.best_estimator_
-                best_params = grid_search.best_params_
-
-            elif model_type == 'auto_lightgbm':
-                if not LIGHTGBM_AVAILABLE:
-                    return {"success": False, "error": "LightGBM not installed. Please install: pip install lightgbm"}
-                param_grid = {
-                    'n_estimators': [50, 100, 200],
-                    'learning_rate': [0.01, 0.05, 0.1],
-                    'max_depth': [3, 5, 7]
-                }
-                cv_splits = min(3, len(X) - 1)
-                if cv_splits < 2:
-                    cv_splits = 2
-                base_model = LGBMRegressor(verbosity=-1)
-                tscv = TimeSeriesSplit(n_splits=cv_splits)
-                grid_search = GridSearchCV(base_model, param_grid, cv=tscv, scoring='neg_mean_squared_error')
-                grid_search.fit(X, y)
-                model = grid_search.best_estimator_
-                best_params = grid_search.best_params_
-
-            else:
-                return {"success": False, "error": f"Unknown model type: {model_type}. Supported: linear, lasso, ridge, elasticnet, knn, lightgbm, auto_lasso, auto_ridge, auto_elasticnet, auto_knn, auto_lightgbm"}
-
-            # Fit model if not already fitted by CV
-            if model_type not in ['auto_lasso', 'auto_ridge', 'auto_elasticnet', 'auto_knn', 'auto_lightgbm']:
-                model.fit(X, y)
-
-            # Store best params from first entity (they're the same for all)
-            if best_params and final_best_params is None:
-                final_best_params = best_params
-
-            # Generate future forecasts
-            last_values = values[-lags:].tolist()
-            last_time = times[-1]
-
-            # Parse frequency to timedelta
-            freq_map = {
-                '1d': timedelta(days=1),
-                '1h': timedelta(hours=1),
-                '1w': timedelta(weeks=1),
-                '1mo': timedelta(days=30),
-                '1m': timedelta(minutes=1),
-            }
-            delta = freq_map.get(freq, timedelta(days=1))
-
-            for h in range(fh):
-                X_pred = np.array([last_values[-lags:]])
-                y_pred = model.predict(X_pred)[0]
-                forecast_time = last_time + delta * (h + 1)
-
-                all_forecasts.append({
-                    'entity_id': entity_id,
-                    'time': forecast_time.isoformat() if hasattr(forecast_time, 'isoformat') else str(forecast_time),
-                    'value': float(y_pred)
-                })
-
-                last_values.append(y_pred)
-
-        return {
-            "success": True,
-            "model": model_type,
-            "horizon": fh,
-            "frequency": freq,
-            "lags": lags,
-            "forecast": all_forecasts,
-            "shape": [len(all_forecasts), 3],
-            "best_params": final_best_params,
-            "backend": "sklearn"
-        }
-    except Exception as e:
-        import traceback
-        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
-
-
-def preprocess_data(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Apply preprocessing transformations"""
-    if not FUNCTIME_AVAILABLE:
-        return {"success": False, "error": "Functime library not available"}
-
-    try:
-        data = parse_panel_data_json(params['data'])
-        method = params.get('method', 'scale')
-
-        if method == 'boxcox':
-            lmbda = params.get('lambda')
-            result = apply_boxcox(data, lmbda=lmbda)
-        elif method == 'scale':
-            scale_method = params.get('scale_method', 'standard')
-            result = scale_data(data, method=scale_method)
-        elif method == 'difference':
-            order = params.get('order', 1)
-            result = difference_data(data, order=order)
-        elif method == 'lags':
-            lags = params.get('lags', [1, 2, 3])
-            result = create_lags(data, lags=lags)
-        elif method == 'rolling':
-            window_sizes = params.get('window_sizes', [3, 7])
-            stats = params.get('stats', ['mean'])
-            result = create_rolling_features(data, window_sizes=window_sizes, stats=stats)
-        elif method == 'impute':
-            impute_method = params.get('impute_method', 'forward')
-            result = impute_missing(data, method=impute_method)
-        else:
-            return {"success": False, "error": f"Unknown preprocessing method: {method}"}
-
-        return {
-            "success": True,
-            "method": method,
-            "shape": result.get('shape', []),
-            "columns": result.get('columns', []),
-            "data": result.get(list(result.keys())[0], [])  # Get first data key
-        }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-def cross_validate(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Perform cross-validation splits"""
-    if not FUNCTIME_AVAILABLE:
-        return {"success": False, "error": "Functime library not available"}
-
-    try:
-        data = parse_panel_data_json(params['data'])
-        method = params.get('method', 'train_test')
-        test_size = params.get('test_size', 1)
-        n_splits = params.get('n_splits', 3)
-
-        if method == 'train_test':
-            result = split_train_test(data, test_size=test_size)
-            return {
-                "success": True,
-                "method": method,
-                "train_shape": result['train_shape'],
-                "test_shape": result['test_shape']
-            }
-        elif method == 'expanding':
-            step = params.get('step', 1)
-            result = create_expanding_window_splits(
-                data, test_size=test_size, n_splits=n_splits, step=step
-            )
-            return {
-                "success": True,
-                "method": method,
-                "n_splits": result['n_splits'],
-                "splits_summary": [
-                    {"train_shape": s['train_shape'], "test_shape": s['test_shape']}
-                    for s in result['splits']
-                ]
-            }
-        elif method == 'sliding':
-            train_size = params.get('train_size', 5)
-            step = params.get('step', 1)
-            result = create_sliding_window_splits(
-                data, train_size=train_size, test_size=test_size,
-                n_splits=n_splits, step=step
-            )
-            return {
-                "success": True,
-                "method": method,
-                "n_splits": result['n_splits'],
-                "splits_summary": [
-                    {"train_shape": s['train_shape'], "test_shape": s['test_shape']}
-                    for s in result['splits']
-                ]
-            }
-        else:
-            return {"success": False, "error": f"Unknown CV method: {method}"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-def calculate_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Calculate forecast accuracy metrics"""
-    if not FUNCTIME_AVAILABLE:
-        return {"success": False, "error": "Functime library not available"}
-
-    try:
-        y_true = parse_panel_data_json(params['y_true'])
-        y_pred = parse_panel_data_json(params['y_pred'])
-        metrics_list = params.get('metrics', ['mae', 'rmse', 'smape'])
-
-        results = {}
-
-        if 'mae' in metrics_list:
-            try:
-                mae_result = calculate_mae(y_true, y_pred)
-                results['mae'] = mae_result['mean_mae']
-            except Exception:
-                results['mae'] = None
-
-        if 'rmse' in metrics_list:
-            try:
-                rmse_result = calculate_rmse(y_true, y_pred)
-                results['rmse'] = rmse_result['mean_rmse']
-            except Exception:
-                results['rmse'] = None
-
-        if 'smape' in metrics_list:
-            try:
-                smape_result = calculate_smape(y_true, y_pred)
-                results['smape'] = smape_result['mean_smape']
-            except Exception:
-                results['smape'] = None
-
-        if 'mape' in metrics_list:
-            try:
-                mape_result = calculate_mape(y_true, y_pred)
-                results['mape'] = mape_result['mean_mape']
-            except Exception:
-                results['mape'] = None
-
-        if 'mse' in metrics_list:
-            try:
-                mse_result = calculate_mse(y_true, y_pred)
-                results['mse'] = mse_result['mean_mse']
-            except Exception:
-                results['mse'] = None
-
-        return {
-            "success": True,
-            "metrics": results
-        }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-def add_features(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Add calendar/holiday features"""
-    if not FUNCTIME_AVAILABLE:
-        return {"success": False, "error": "Functime library not available"}
-
-    try:
-        data = parse_panel_data_json(params['data'])
-        feature_type = params.get('feature_type', 'calendar')
-        freq = params.get('frequency', '1d')
-
-        if feature_type == 'calendar':
-            result = create_calendar_effects(data, freq=freq)
-        elif feature_type == 'future_calendar':
-            fh = params.get('horizon', 7)
-            result = create_future_calendar_effects(fh=fh, freq=freq)
-        else:
-            return {"success": False, "error": f"Unknown feature type: {feature_type}"}
-
-        return {
-            "success": True,
-            "feature_type": feature_type,
-            "shape": result.get('shape', []),
-            "columns": result.get('columns', []),
-            "data": result.get('data', [])
-        }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-def get_seasonal_period(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Get seasonal period for a frequency"""
-    if not FUNCTIME_AVAILABLE:
-        return {"success": False, "error": "Functime library not available"}
-
-    try:
-        freq = params.get('frequency', '1d')
-        result = frequency_to_seasonal_period(freq)
-
-        return {
-            "success": True,
-            "frequency": freq,
-            "seasonal_period": result['seasonal_period']
-        }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-def full_forecast_pipeline(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Run a complete forecasting pipeline with preprocessing and evaluation"""
-    if not FUNCTIME_AVAILABLE:
-        return {"success": False, "error": "Forecasting library not available (sklearn or polars missing)"}
-
-    try:
-        data = parse_panel_data_json(params['data'])
-        model_type = params.get('model', 'linear')
-        fh = params.get('horizon', 7)
-        freq = params.get('frequency', '1d')
-        test_size = params.get('test_size', fh)
-        preprocess_method = params.get('preprocess', None)
-
-        # Skip preprocessing for now - use data as-is
-        processed_data = data
-        preprocessing_info = None
-
-        if preprocess_method and preprocess_method != 'none':
-            preprocessing_info = {"method": preprocess_method, "note": "Preprocessing not applied - using raw data"}
-
-        # Train/test split: Hold out test_size rows per entity for evaluation
-        # We train on earlier data, make predictions for the test period, and compare
-        train_data = processed_data
-        test_data = None
-
+    if model_type == "linear":
+        forecast = _ml_forecast(LinearRegression())
+    elif model_type == "ridge":
+        forecast = _ml_forecast(Ridge(alpha=alpha))
+    elif model_type == "lasso":
+        forecast = _ml_forecast(Lasso(alpha=alpha, max_iter=10000))
+    elif model_type == "elasticnet":
+        forecast = _ml_forecast(ElasticNet(alpha=alpha, l1_ratio=l1_ratio, max_iter=10000))
+    elif model_type == "knn":
+        forecast = _ml_forecast(KNeighborsRegressor(n_neighbors=min(n_neighbors, max(1, n - lags - 1))))
+    elif model_type == "naive":
+        # Repeat the last value
+        in_sample[1:] = arr[:-1]
+        forecast = [float(arr[-1])] * horizon
+    elif model_type == "drift":
+        # Linear interpolation from first to last point
+        slope = (arr[-1] - arr[0]) / (n - 1) if n > 1 else 0.0
+        in_sample[1:] = arr[:-1] + slope
+        forecast = [float(arr[-1] + slope * (i + 1)) for i in range(horizon)]
+    elif model_type == "holt_winters":
+        if not STATSMODELS_OK:
+            raise ValidationError("statsmodels not installed — cannot run holt_winters")
+        kwargs = {"trend": "add"}
+        if season >= 2:
+            kwargs.update({"seasonal": "add", "seasonal_periods": season})
         try:
-            # Group by entity and split
-            entities = processed_data['entity_id'].unique().to_list()
-            train_rows = []
-            test_rows = []
-
-            for entity_id in entities:
-                entity_data = processed_data.filter(pl.col('entity_id') == entity_id).sort('time')
-                n = len(entity_data)
-                if n > test_size:
-                    train_rows.extend(entity_data.head(n - test_size).to_dicts())
-                    test_rows.extend(entity_data.tail(test_size).to_dicts())
-                else:
-                    train_rows.extend(entity_data.to_dicts())
-
-            train_data = pl.DataFrame(train_rows) if train_rows else processed_data
-            test_data = pl.DataFrame(test_rows) if test_rows else None
+            mdl = ExponentialSmoothing(arr, **kwargs).fit(optimized=True)
         except Exception as e:
-            # If split fails, use all data for training
-            train_data = processed_data
-            print(f"Warning: Could not split data: {e}", file=sys.stderr)
+            raise ValidationError(f"holt_winters fit failed: {e}")
+        in_sample[:] = mdl.fittedvalues
+        forecast = [float(v) for v in mdl.forecast(horizon)]
+    elif model_type == "arima":
+        if not STATSMODELS_OK:
+            raise ValidationError("statsmodels not installed — cannot run arima")
+        order = (1, 1, 1)
+        seasonal_order = (0, 0, 0, 0)
+        if season >= 2:
+            seasonal_order = (1, 0, 1, season)
+        try:
+            mdl = ARIMA(arr, order=order, seasonal_order=seasonal_order).fit()
+        except Exception as e:
+            raise ValidationError(f"arima fit failed: {e}")
+        in_sample[:] = mdl.fittedvalues
+        forecast = [float(v) for v in mdl.forecast(horizon)]
+    else:
+        raise ValidationError(
+            f"unknown model {model_type!r}; expected one of: "
+            "linear, ridge, lasso, elasticnet, knn, naive, drift, holt_winters, arima")
 
-        # Calculate evaluation metrics BEFORE generating the final forecast
-        # We need to predict on the test period using the training data
-        metrics = None
-        if test_data is not None and len(test_data) > 0:
-            try:
-                # Get actual test values
-                y_true_values = test_data['value'].to_numpy()
+    # Build forecast dates (extend the last frequency)
+    if isinstance(series.index, pd.DatetimeIndex) and len(series.index) >= 2:
+        delta = series.index[-1] - series.index[-2]
+    else:
+        delta = pd.Timedelta(days=1)
+    forecast_dates = [series.index[-1] + delta * (i + 1) for i in range(horizon)]
 
-                # For evaluation, we predict for test_size periods from training data
-                eval_forecast_result = run_forecast({
-                    'data': serialize_to_json(train_data.to_dicts()),
-                    'model': model_type,
-                    'horizon': min(test_size, len(y_true_values)),  # Match test size
-                    'frequency': freq
-                })
+    # In-sample residuals + summary
+    fitted = pd.Series(in_sample, index=series.index)
+    resid = (series - fitted).dropna()
+    resid_std = float(resid.std()) if len(resid) > 1 else 0.0
+    if len(resid) > 0:
+        rss = float((resid ** 2).sum())
+        tss = float(((series.loc[resid.index] - series.loc[resid.index].mean()) ** 2).sum())
+        r2 = 1.0 - rss / tss if tss > 0 else 0.0
+        mae = float(resid.abs().mean())
+        rmse = float(np.sqrt((resid ** 2).mean()))
+    else:
+        r2, mae, rmse = 0.0, 0.0, 0.0
 
-                if eval_forecast_result.get('success'):
-                    forecast_list = eval_forecast_result.get('forecast', [])
-                    if len(forecast_list) > 0:
-                        y_pred_values = np.array([f['value'] for f in forecast_list])
+    history = _sample_curve(series, 250)
+    in_sample_curve = []
+    for d, v in fitted.items():
+        if not math.isnan(v):
+            in_sample_curve.append({"date": str(d)[:10], "value": _safe_float(v)})
+    # Subsample fitted to ~250 too
+    if len(in_sample_curve) > 250:
+        step = max(1, len(in_sample_curve) // 250)
+        in_sample_curve = [r for i, r in enumerate(in_sample_curve) if i % step == 0]
 
-                        if len(y_pred_values) > 0 and len(y_true_values) > 0:
-                            min_len = min(len(y_true_values), len(y_pred_values))
-                            y_true = y_true_values[:min_len]
-                            y_pred = y_pred_values[:min_len]
+    return {
+        "model": model_type,
+        "n_observations": n,
+        "horizon": horizon,
+        "lags": lags,
+        "season": season,
+        "in_sample_r2": _safe_float(r2),
+        "in_sample_mae": _safe_float(mae),
+        "in_sample_rmse": _safe_float(rmse),
+        "residual_std": _safe_float(resid_std),
+        "history": history,
+        "fitted": in_sample_curve,
+        "forecast": [
+            {"date": str(d)[:10], "value": _safe_float(v)}
+            for d, v in zip(forecast_dates, forecast)
+        ],
+        "forecast_min": _safe_float(min(forecast) if forecast else 0.0),
+        "forecast_max": _safe_float(max(forecast) if forecast else 0.0),
+        "forecast_mean": _safe_float(float(np.mean(forecast)) if forecast else 0.0),
+        "last_actual": _safe_float(arr[-1]),
+        "first_forecast": _safe_float(forecast[0] if forecast else 0.0),
+        "last_forecast": _safe_float(forecast[-1] if forecast else 0.0),
+    }
 
-                            mae = float(np.mean(np.abs(y_true - y_pred)))
-                            rmse = float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
-                            # SMAPE
-                            smape = float(np.mean(2 * np.abs(y_true - y_pred) / (np.abs(y_true) + np.abs(y_pred) + 1e-8)) * 100)
 
-                            metrics = {
-                                'mae': mae,
-                                'rmse': rmse,
-                                'smape': smape
-                            }
-            except Exception as e:
-                print(f"Warning: Could not calculate metrics: {e}", file=sys.stderr)
+def op_anomaly_detection(data):
+    """
+    Detect anomalies in a time series.
+    Inputs:
+      values       : list[float] | CSV string  (required, >= 20)
+      method       : 'zscore' | 'iqr' | 'isolation_forest' | 'residual'  (default 'zscore')
+      threshold    : float — z-score / residual cutoff in std units (default 3.0)
+      iqr_k        : float — IQR multiplier (default 1.5)
+      contamination: float — IsolationForest expected anomaly fraction (default 0.05)
+    """
+    values = _coerce_floats(data.get("values"), "values")
+    _require_min_length(values, 20, "values")
+    method = str(data.get("method", "zscore")).lower()
 
-        # Now run forecast on FULL data for actual future predictions
-        forecast_result = run_forecast({
-            'data': serialize_to_json(processed_data.to_dicts()),
-            'model': model_type,
-            'horizon': fh,
-            'frequency': freq
+    series = _series_from_list(values, data.get("dates"))
+    arr = series.to_numpy()
+    n = len(arr)
+    flags = np.zeros(n, dtype=bool)
+    scores = np.zeros(n, dtype=float)
+
+    if method == "zscore":
+        thr = _safe_float(data.get("threshold", 3.0))
+        mu = float(arr.mean())
+        sd = float(arr.std()) or 1.0
+        scores = (arr - mu) / sd
+        flags = np.abs(scores) > thr
+    elif method == "iqr":
+        k = _safe_float(data.get("iqr_k", 1.5))
+        q1, q3 = np.percentile(arr, [25, 75])
+        iqr = q3 - q1
+        lo, hi = q1 - k * iqr, q3 + k * iqr
+        flags = (arr < lo) | (arr > hi)
+        scores = np.where(arr < lo, (lo - arr) / (iqr or 1.0),
+                          np.where(arr > hi, (arr - hi) / (iqr or 1.0), 0.0))
+    elif method == "isolation_forest":
+        if not SKLEARN_OK:
+            raise ValidationError("sklearn not installed — cannot run isolation_forest")
+        cont = max(0.001, min(0.5, _safe_float(data.get("contamination", 0.05))))
+        clf = IsolationForest(contamination=cont, random_state=42)
+        clf.fit(arr.reshape(-1, 1))
+        preds = clf.predict(arr.reshape(-1, 1))  # -1 anomaly, 1 normal
+        flags = preds == -1
+        # Anomaly score: lower = more anomalous; flip sign so higher = more anomalous
+        scores = -clf.score_samples(arr.reshape(-1, 1))
+    elif method == "residual":
+        # Fit a simple linear trend, flag residuals > threshold * std
+        thr = _safe_float(data.get("threshold", 3.0))
+        x = np.arange(n, dtype=float).reshape(-1, 1)
+        if SKLEARN_OK:
+            mdl = LinearRegression().fit(x, arr)
+            trend = mdl.predict(x)
+        else:
+            slope, intercept = np.polyfit(np.arange(n), arr, 1)
+            trend = slope * np.arange(n) + intercept
+        resid = arr - trend
+        sd = float(resid.std()) or 1.0
+        scores = resid / sd
+        flags = np.abs(scores) > thr
+    else:
+        raise ValidationError(
+            f"unknown method {method!r}; expected one of: zscore, iqr, isolation_forest, residual")
+
+    anomalies = []
+    for i in range(n):
+        if flags[i]:
+            anomalies.append({
+                "date": str(series.index[i])[:10],
+                "value": _safe_float(arr[i]),
+                "score": _safe_float(scores[i]),
+                "index": int(i),
+            })
+    # Sort by absolute score, biggest first
+    anomalies.sort(key=lambda a: abs(a["score"]), reverse=True)
+
+    return {
+        "method": method,
+        "n_observations": n,
+        "n_anomalies": int(flags.sum()),
+        "anomaly_rate_pct": _safe_float(float(flags.mean() * 100)),
+        "anomalies": anomalies[:200],  # Cap at 200 for the wire
+        "history": _sample_curve(series, 300),
+        "score_min": _safe_float(float(scores.min())),
+        "score_max": _safe_float(float(scores.max())),
+        "score_mean": _safe_float(float(scores.mean())),
+        "score_std": _safe_float(float(scores.std())),
+    }
+
+
+def op_seasonality(data):
+    """
+    Decompose a series into trend + seasonal + residual via STL, and detect
+    the dominant period via FFT/autocorrelation when none is provided.
+    Inputs:
+      values  : list[float]    (required, >= 24)
+      period  : int            (optional; auto-detected when omitted/0)
+      robust  : bool           (default True)
+    """
+    if not STATSMODELS_OK:
+        raise ValidationError("statsmodels not installed — cannot run seasonality")
+    values = _coerce_floats(data.get("values"), "values")
+    _require_min_length(values, 24, "values")
+
+    series = _series_from_list(values, data.get("dates"))
+    arr = series.to_numpy()
+    n = len(arr)
+
+    period = _safe_int(data.get("period", 0))
+    detected = False
+    if period < 2:
+        # Auto-detect via autocorrelation peak (skip lag 0)
+        max_lag = min(n // 2, 366)
+        ac = acf(arr, nlags=max_lag, fft=True)
+        # Find first significant peak after lag 1
+        if len(ac) > 4:
+            peaks = []
+            for i in range(2, len(ac) - 1):
+                if ac[i] > ac[i - 1] and ac[i] > ac[i + 1] and ac[i] > 0.2:
+                    peaks.append((i, float(ac[i])))
+            if peaks:
+                peaks.sort(key=lambda p: -p[1])
+                period = peaks[0][0]
+                detected = True
+        if period < 2:
+            period = max(2, n // 4)
+            detected = True
+
+    if period * 2 >= n:
+        period = max(2, n // 3)
+
+    robust = bool(data.get("robust", True))
+    try:
+        stl = STL(arr, period=period, robust=robust).fit()
+    except Exception as e:
+        raise ValidationError(f"STL decomposition failed: {e}")
+
+    trend = pd.Series(stl.trend, index=series.index)
+    seasonal = pd.Series(stl.seasonal, index=series.index)
+    resid = pd.Series(stl.resid, index=series.index)
+
+    # Strength of trend / seasonality (Hyndman 2018 formulation)
+    var_resid = float(resid.var())
+    var_detrended = float((seasonal + resid).var()) or 1.0
+    var_deseasonalized = float((trend + resid).var()) or 1.0
+    trend_strength = max(0.0, 1.0 - var_resid / var_deseasonalized)
+    seasonal_strength = max(0.0, 1.0 - var_resid / var_detrended)
+
+    return {
+        "n_observations": n,
+        "period": int(period),
+        "period_auto_detected": detected,
+        "trend_strength": _safe_float(trend_strength),
+        "seasonal_strength": _safe_float(seasonal_strength),
+        "residual_std": _safe_float(float(resid.std())),
+        "history": _sample_curve(series, 300),
+        "trend": _sample_curve(trend, 300),
+        "seasonal": _sample_curve(seasonal, 300),
+        "residual": _sample_curve(resid, 300),
+    }
+
+
+def op_metrics(data):
+    """
+    Forecast accuracy metrics between actual and predicted series (must align).
+    Inputs:
+      actual    : list[float] (required)
+      predicted : list[float] (required, same length as actual)
+    """
+    actual = _coerce_floats(data.get("actual"), "actual")
+    predicted = _coerce_floats(data.get("predicted"), "predicted")
+    _require_min_length(actual, 2, "actual")
+    if len(actual) != len(predicted):
+        raise ValidationError(
+            f"actual ({len(actual)}) and predicted ({len(predicted)}) must have the same length")
+
+    a = np.asarray(actual, dtype=float)
+    p = np.asarray(predicted, dtype=float)
+    err = a - p
+
+    mae = float(np.mean(np.abs(err)))
+    mse = float(np.mean(err ** 2))
+    rmse = float(np.sqrt(mse))
+    # MAPE / sMAPE — guard against zero
+    safe_a = np.where(np.abs(a) < 1e-12, np.nan, a)
+    mape = float(np.nanmean(np.abs(err / safe_a)) * 100.0)
+    denom = (np.abs(a) + np.abs(p))
+    safe_denom = np.where(denom < 1e-12, np.nan, denom)
+    smape = float(np.nanmean(2.0 * np.abs(err) / safe_denom) * 100.0)
+    # R²
+    ss_res = float(np.sum(err ** 2))
+    ss_tot = float(np.sum((a - a.mean()) ** 2)) or 1.0
+    r2 = 1.0 - ss_res / ss_tot
+    # Bias / direction accuracy
+    bias = float(np.mean(err))
+    if len(a) > 1:
+        actual_dir = np.sign(np.diff(a))
+        pred_dir = np.sign(np.diff(p))
+        direction_acc = float(np.mean(actual_dir == pred_dir) * 100.0)
+    else:
+        direction_acc = 0.0
+
+    return {
+        "n_observations": len(a),
+        "mae": _safe_float(mae),
+        "mse": _safe_float(mse),
+        "rmse": _safe_float(rmse),
+        "mape_pct": _safe_float(mape),
+        "smape_pct": _safe_float(smape),
+        "r_squared": _safe_float(r2),
+        "bias": _safe_float(bias),
+        "direction_accuracy_pct": _safe_float(direction_acc),
+    }
+
+
+def op_confidence_intervals(data):
+    """
+    Build prediction intervals around a point forecast.
+    Inputs:
+      values     : list[float]  (training history, >= 30)
+      horizon    : int          (default 14)
+      lags       : int          (default 7)
+      n_boot     : int          (bootstrap iterations, default 200)
+      confidence : float        (e.g. 0.95, default 0.95)
+      method     : 'bootstrap' | 'residual'  (default bootstrap)
+    """
+    if not SKLEARN_OK:
+        raise ValidationError("sklearn not installed — cannot build intervals")
+    values = _coerce_floats(data.get("values"), "values")
+    _require_min_length(values, 30, "values")
+    horizon = max(1, _safe_int(data.get("horizon", 14)))
+    lags = max(1, _safe_int(data.get("lags", 7)))
+    n_boot = max(50, min(1000, _safe_int(data.get("n_boot", 200))))
+    confidence = _safe_float(data.get("confidence", 0.95))
+    if not (0.5 < confidence < 1.0):
+        raise ValidationError(f"confidence must be in (0.5, 1.0), got {confidence}")
+    method = str(data.get("method", "bootstrap")).lower()
+
+    series = _series_from_list(values, data.get("dates"))
+    arr = series.to_numpy()
+    n = len(arr)
+    if n <= lags + 5:
+        raise ValidationError(f"need at least lags+6={lags + 6} observations, got {n}")
+
+    # Fit base linear regression on lag features
+    X, y = [], []
+    for i in range(lags, n):
+        X.append(arr[i - lags:i])
+        y.append(arr[i])
+    X = np.asarray(X, dtype=float)
+    y = np.asarray(y, dtype=float)
+    base = LinearRegression().fit(X, y)
+    point_resid = y - base.predict(X)
+    resid_std = float(point_resid.std()) or 1.0
+
+    # Recursive point forecast
+    last = list(arr[-lags:])
+    point = []
+    for _ in range(horizon):
+        x_pred = np.asarray([last[-lags:]], dtype=float)
+        yhat = float(base.predict(x_pred)[0])
+        point.append(yhat)
+        last.append(yhat)
+
+    alpha = 1.0 - confidence
+    lower_q = alpha / 2.0 * 100.0
+    upper_q = (1.0 - alpha / 2.0) * 100.0
+
+    if method == "residual":
+        # Parametric: assume Gaussian residuals; widen with sqrt(h) for accumulation
+        if not SCIPY_OK:
+            z = 1.96  # default 95% z-score if scipy missing
+        else:
+            z = float(scstats.norm.ppf(1.0 - alpha / 2.0))
+        lower = [point[h] - z * resid_std * math.sqrt(h + 1) for h in range(horizon)]
+        upper = [point[h] + z * resid_std * math.sqrt(h + 1) for h in range(horizon)]
+    elif method == "bootstrap":
+        rng = np.random.default_rng(42)
+        boot_paths = np.zeros((n_boot, horizon), dtype=float)
+        for b in range(n_boot):
+            last_b = list(arr[-lags:])
+            shocks = rng.choice(point_resid, size=horizon, replace=True)
+            for h in range(horizon):
+                x_pred = np.asarray([last_b[-lags:]], dtype=float)
+                yhat = float(base.predict(x_pred)[0]) + shocks[h]
+                boot_paths[b, h] = yhat
+                last_b.append(yhat)
+        lower = list(np.percentile(boot_paths, lower_q, axis=0))
+        upper = list(np.percentile(boot_paths, upper_q, axis=0))
+    else:
+        raise ValidationError(f"unknown method {method!r}; expected: bootstrap, residual")
+
+    if isinstance(series.index, pd.DatetimeIndex) and len(series.index) >= 2:
+        delta = series.index[-1] - series.index[-2]
+    else:
+        delta = pd.Timedelta(days=1)
+    forecast_dates = [series.index[-1] + delta * (i + 1) for i in range(horizon)]
+
+    intervals = [
+        {
+            "date": str(d)[:10],
+            "point": _safe_float(p),
+            "lower": _safe_float(l),
+            "upper": _safe_float(u),
+            "width": _safe_float(u - l),
+        }
+        for d, p, l, u in zip(forecast_dates, point, lower, upper)
+    ]
+
+    return {
+        "method": method,
+        "n_observations": n,
+        "horizon": horizon,
+        "confidence": _safe_float(confidence),
+        "lags": lags,
+        "n_boot": n_boot if method == "bootstrap" else None,
+        "residual_std": _safe_float(resid_std),
+        "history": _sample_curve(series, 250),
+        "intervals": intervals,
+        "mean_width": _safe_float(float(np.mean([i["width"] for i in intervals]))),
+        "first_lower": _safe_float(intervals[0]["lower"]),
+        "first_upper": _safe_float(intervals[0]["upper"]),
+        "last_lower": _safe_float(intervals[-1]["lower"]),
+        "last_upper": _safe_float(intervals[-1]["upper"]),
+    }
+
+
+def op_stationarity(data):
+    """
+    ADF + KPSS stationarity tests with a recommended differencing order.
+    Inputs:
+      values : list[float] (required, >= 30)
+      max_d  : int         (max differencing order to test, default 2)
+    """
+    if not STATSMODELS_OK:
+        raise ValidationError("statsmodels not installed — cannot run stationarity tests")
+    values = _coerce_floats(data.get("values"), "values")
+    _require_min_length(values, 30, "values")
+    max_d = max(0, min(3, _safe_int(data.get("max_d", 2))))
+
+    series = pd.Series(values, dtype=float)
+    results = []
+    recommended_d = None
+    for d in range(max_d + 1):
+        s = series.copy()
+        for _ in range(d):
+            s = s.diff().dropna()
+        if len(s) < 10:
+            continue
+        # ADF: H0 = unit root (non-stationary). Reject (p < .05) -> stationary.
+        try:
+            adf_stat, adf_p, _, _, adf_crit, _ = adfuller(s, autolag="AIC")
+            adf_stationary = adf_p < 0.05
+        except Exception as e:
+            adf_stat, adf_p, adf_crit, adf_stationary = float("nan"), 1.0, {}, False
+        # KPSS: H0 = stationary. Reject -> non-stationary.
+        try:
+            kpss_stat, kpss_p, _, kpss_crit = kpss(s, regression="c", nlags="auto")
+            kpss_stationary = kpss_p >= 0.05
+        except Exception:
+            kpss_stat, kpss_p, kpss_crit, kpss_stationary = float("nan"), 0.0, {}, False
+        verdict_both = adf_stationary and kpss_stationary
+        results.append({
+            "differencing_order": d,
+            "n_observations": int(len(s)),
+            "adf_statistic": _safe_float(adf_stat),
+            "adf_p_value": _safe_float(adf_p),
+            "adf_critical_5pct": _safe_float(adf_crit.get("5%")) if isinstance(adf_crit, dict) else 0.0,
+            "adf_stationary": bool(adf_stationary),
+            "kpss_statistic": _safe_float(kpss_stat),
+            "kpss_p_value": _safe_float(kpss_p),
+            "kpss_critical_5pct": _safe_float(kpss_crit.get("5%")) if isinstance(kpss_crit, dict) else 0.0,
+            "kpss_stationary": bool(kpss_stationary),
+            "both_stationary": bool(verdict_both),
         })
+        if recommended_d is None and verdict_both:
+            recommended_d = d
 
-        return {
-            "success": True,
-            "model": model_type,
-            "horizon": fh,
-            "frequency": freq,
-            "preprocessing": preprocessing_info,
-            "forecast": forecast_result.get('forecast', []),
-            "forecast_shape": forecast_result.get('shape'),
-            "best_params": forecast_result.get('best_params'),
-            "evaluation_metrics": metrics,
-            "data_summary": {
-                "total_rows": len(data),
-                "entities": data['entity_id'].n_unique() if 'entity_id' in data.columns else 1,
-                "train_size": len(train_data) if train_data is not None else 0,
-                "test_size": len(test_data) if test_data is not None else 0
-            }
-        }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    if recommended_d is None:
+        recommended_d = max_d
+
+    return {
+        "n_observations": len(series),
+        "max_d_tested": max_d,
+        "recommended_d": int(recommended_d),
+        "tests": results,
+    }
 
 
 # ============================================================================
-# ADVANCED MODELS COMMAND HANDLERS
+# DISPATCH TABLE
 # ============================================================================
 
-def run_advanced_forecast(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Run advanced forecasting models (naive, SES, Holt, Theta, Croston, XGBoost, CatBoost)"""
-    if not ADVANCED_MODELS_AVAILABLE:
-        return {"success": False, "error": "Advanced models not available"}
-
-    try:
-        data = parse_panel_data_json(params['data'])
-        model_type = params.get('model', 'naive')
-        fh = params.get('horizon', 7)
-        freq = params.get('frequency', '1d')
-
-        model_params = params.get('model_params', {})
-
-        if model_type == 'naive':
-            result = naive_forecast(data, fh=fh, freq=freq)
-        elif model_type == 'seasonal_naive':
-            seasonal_period = model_params.get('seasonal_period', 7)
-            result = seasonal_naive_forecast(data, fh=fh, seasonal_period=seasonal_period, freq=freq)
-        elif model_type == 'drift':
-            result = drift_forecast(data, fh=fh, freq=freq)
-        elif model_type == 'ses':
-            alpha = model_params.get('alpha')
-            result = ses_forecast(data, fh=fh, alpha=alpha, freq=freq)
-        elif model_type == 'holt':
-            alpha = model_params.get('alpha')
-            beta = model_params.get('beta')
-            result = holt_forecast(data, fh=fh, alpha=alpha, beta=beta, freq=freq)
-        elif model_type == 'theta':
-            result = theta_forecast(data, fh=fh, freq=freq)
-        elif model_type == 'croston':
-            alpha = model_params.get('alpha', 0.1)
-            result = croston_forecast(data, fh=fh, alpha=alpha, freq=freq)
-        elif model_type == 'xgboost':
-            n_lags = model_params.get('n_lags', 10)
-            xgb_params = model_params.get('xgb_params', {})
-            result = xgboost_forecast(data, fh=fh, n_lags=n_lags, xgb_params=xgb_params, freq=freq)
-        elif model_type == 'catboost':
-            n_lags = model_params.get('n_lags', 10)
-            cat_params = model_params.get('cat_params', {})
-            result = catboost_forecast(data, fh=fh, n_lags=n_lags, cat_params=cat_params, freq=freq)
-        else:
-            return {"success": False, "error": f"Unknown advanced model: {model_type}"}
-
-        return result
-    except Exception as e:
-        import traceback
-        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
-
-
-# ============================================================================
-# ENSEMBLE COMMAND HANDLERS
-# ============================================================================
-
-def run_ensemble(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Run ensemble forecasting"""
-    if not ENSEMBLE_AVAILABLE:
-        return {"success": False, "error": "Ensemble methods not available"}
-
-    try:
-        forecasts_json = params.get('forecasts', [])
-        method = params.get('method', 'mean')
-
-        # Parse forecasts - each should be a list of {entity_id, time, value}
-        if isinstance(forecasts_json, str):
-            forecasts_json = json.loads(forecasts_json)
-
-        forecasts = [pl.DataFrame(fc) for fc in forecasts_json]
-
-        if method == 'mean':
-            result = ensemble_mean(forecasts)
-        elif method == 'median':
-            result = ensemble_median(forecasts)
-        elif method == 'trimmed_mean':
-            trim_pct = params.get('trim_pct', 0.1)
-            result = ensemble_trimmed_mean(forecasts, trim_pct=trim_pct)
-        elif method == 'weighted':
-            weights = params.get('weights')
-            result = ensemble_weighted(forecasts, weights=weights)
-        elif method == 'stacking':
-            y_train = parse_panel_data_json(params['y_train'])
-            result = ensemble_stacking(forecasts, y_train)
-        else:
-            return {"success": False, "error": f"Unknown ensemble method: {method}"}
-
-        return result
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-def run_auto_ensemble(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Run automatic ensemble selection and combination"""
-    if not ENSEMBLE_AVAILABLE:
-        return {"success": False, "error": "Ensemble methods not available"}
-
-    try:
-        data = parse_panel_data_json(params['data'])
-        fh = params.get('horizon', 7)
-        freq = params.get('frequency', '1d')
-        n_best = params.get('n_best', 3)
-
-        result = auto_ensemble(data, fh=fh, freq=freq, n_best=n_best)
-        return result
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-# ============================================================================
-# ANOMALY DETECTION COMMAND HANDLERS
-# ============================================================================
-
-def run_anomaly_detection(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Run anomaly detection on time series"""
-    if not ANOMALY_AVAILABLE:
-        return {"success": False, "error": "Anomaly detection not available"}
-
-    try:
-        data = parse_panel_data_json(params['data'])
-        method = params.get('method', 'zscore')
-
-        if method == 'zscore':
-            threshold = params.get('threshold', 3.0)
-            result = detect_zscore(data, threshold=threshold)
-        elif method == 'iqr':
-            multiplier = params.get('multiplier', 1.5)
-            result = detect_iqr(data, k=multiplier)
-        elif method == 'grubbs':
-            alpha = params.get('alpha', 0.05)
-            result = detect_grubbs(data, alpha=alpha)
-        elif method == 'isolation_forest':
-            contamination = params.get('contamination', 0.05)
-            result = detect_isolation_forest(data, contamination=contamination)
-        elif method == 'lof':
-            n_neighbors = params.get('n_neighbors', 20)
-            contamination = params.get('contamination', 0.05)
-            result = detect_lof(data, n_neighbors=n_neighbors, contamination=contamination)
-        elif method == 'residual':
-            threshold = params.get('threshold', 3.0)
-            result = detect_residual_anomalies(data, threshold=threshold)
-        elif method == 'change_points':
-            n_bkps = params.get('n_bkps', 5)
-            result = detect_change_points(data, n_bkps=n_bkps)
-        else:
-            return {"success": False, "error": f"Unknown anomaly method: {method}"}
-
-        # Restructure result to match frontend expectations
-        # Frontend expects: { results: { entity_id: { anomalies: [...], n_anomalies, anomaly_rate } } }
-        if result.get('success') and 'data' in result:
-            # Group anomalies by entity_id
-            all_data = result.get('data', [])
-            anomalies_list = result.get('anomalies', [])
-
-            # Group by entity_id
-            entities_results = {}
-            for item in all_data:
-                entity_id = item.get('entity_id', 'default')
-                if entity_id not in entities_results:
-                    entities_results[entity_id] = {
-                        'anomalies': [],
-                        'n_anomalies': 0,
-                        'anomaly_rate': 0.0,
-                        'total_points': 0
-                    }
-                entities_results[entity_id]['total_points'] += 1
-                if item.get('is_anomaly'):
-                    entities_results[entity_id]['anomalies'].append(item)
-                    entities_results[entity_id]['n_anomalies'] += 1
-
-            # Calculate anomaly rate per entity
-            for entity_id, entity_data in entities_results.items():
-                if entity_data['total_points'] > 0:
-                    entity_data['anomaly_rate'] = entity_data['n_anomalies'] / entity_data['total_points']
-                del entity_data['total_points']  # Remove temp field
-
-            return {
-                'success': True,
-                'method': result.get('method', method),
-                'results': entities_results
-            }
-
-        return result
-    except Exception as e:
-        import traceback
-        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
-
-
-# ============================================================================
-# SEASONALITY COMMAND HANDLERS
-# ============================================================================
-
-def run_seasonality_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Run seasonality analysis on time series"""
-    if not SEASONALITY_AVAILABLE:
-        return {"success": False, "error": "Seasonality analysis not available"}
-
-    try:
-        data = parse_panel_data_json(params['data'])
-        # Support both 'operation' and 'analysis_type' parameter names
-        operation = params.get('operation') or params.get('analysis_type', 'decompose')
-
-        # Map analysis_type values to operation values
-        operation_map = {
-            'decompose': 'decompose_stl',
-            'detect': 'detect_period',
-            'strength': 'metrics',
-            'adjust': 'adjust',
-        }
-        operation = operation_map.get(operation, operation)
-
-        period = params.get('period')
-        model_type = params.get('model_type', 'additive')
-
-        if operation == 'detect_period':
-            method = params.get('method', 'fft')
-            max_period = params.get('max_period', 365)
-            result = detect_seasonal_period(data, method=method, max_period=max_period)
-        elif operation == 'decompose_stl':
-            robust = params.get('robust', True)
-            result = decompose_stl(data, period=period, robust=robust)
-        elif operation == 'decompose_classical':
-            result = decompose_classical(data, period=period, model=model_type)
-        elif operation == 'adjust':
-            method = params.get('method', 'stl')
-            result = seasonally_adjust(data, period=period, method=method)
-        elif operation == 'metrics':
-            result = calculate_seasonality_metrics(data, period=period)
-        else:
-            return {"success": False, "error": f"Unknown seasonality operation: {operation}"}
-
-        return result
-    except Exception as e:
-        import traceback
-        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
-
-
-# ============================================================================
-# CONFIDENCE INTERVALS COMMAND HANDLERS
-# ============================================================================
-
-def run_confidence_intervals(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Generate prediction/confidence intervals"""
-    if not CONFIDENCE_AVAILABLE:
-        return {"success": False, "error": "Confidence intervals not available"}
-
-    try:
-        method = params.get('method', 'monte_carlo')
-        confidence_levels = params.get('confidence_levels', [0.80, 0.95])
-
-        if method == 'bootstrap':
-            data = parse_panel_data_json(params['data'])
-            fh = params.get('horizon', 7)
-            freq = params.get('frequency', '1d')
-            n_bootstrap = params.get('n_bootstrap', 100)
-
-            # Need a forecaster - create a simple one
-            def simple_forecaster(y_train, fh, freq):
-                last_value = y_train['value'].to_list()[-1]
-                last_time = y_train['time'].to_list()[-1]
-                delta = timedelta(days=1)
-                forecast = []
-                for i in range(1, fh + 1):
-                    forecast.append({
-                        'entity_id': y_train['entity_id'].to_list()[0],
-                        'time': last_time + (delta * i),
-                        'value': last_value
-                    })
-                return {'forecast': forecast}
-
-            result = bootstrap_prediction_intervals(
-                data, simple_forecaster, fh=fh,
-                n_bootstrap=n_bootstrap, confidence_levels=confidence_levels, freq=freq
-            )
-        elif method == 'residual':
-            data = parse_panel_data_json(params['data'])
-            forecast = parse_panel_data_json(params['forecast'])
-            y_validation = parse_panel_data_json(params['y_validation']) if 'y_validation' in params else None
-            result = residual_prediction_intervals(data, forecast, y_validation, confidence_levels)
-        elif method == 'quantile':
-            data = parse_panel_data_json(params['data'])
-            fh = params.get('horizon', 7)
-            lags = params.get('lags', 10)
-            quantiles = params.get('quantiles', [0.025, 0.10, 0.50, 0.90, 0.975])
-            freq = params.get('frequency', '1d')
-            result = quantile_prediction_intervals(data, fh=fh, lags=lags, quantiles=quantiles, freq=freq)
-        elif method == 'conformal':
-            data = parse_panel_data_json(params['data'])
-            forecast = parse_panel_data_json(params['forecast'])
-            calibration_size = params.get('calibration_size', 50)
-            result = conformal_prediction_intervals(data, forecast, calibration_size, confidence_levels)
-        elif method == 'monte_carlo':
-            data = parse_panel_data_json(params['data'])
-            fh = params.get('horizon', 7)
-            n_simulations = params.get('n_simulations', 1000)
-            model = params.get('model', 'random_walk')
-            freq = params.get('frequency', '1d')
-            result = monte_carlo_intervals(data, fh=fh, n_simulations=n_simulations, model=model,
-                                          confidence_levels=confidence_levels, freq=freq)
-        else:
-            return {"success": False, "error": f"Unknown interval method: {method}"}
-
-        return result
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-# ============================================================================
-# FEATURE IMPORTANCE COMMAND HANDLERS
-# ============================================================================
-
-def run_feature_importance(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Calculate feature importance for time series"""
-    if not FEATURE_IMPORTANCE_AVAILABLE:
-        return {"success": False, "error": "Feature importance not available"}
-
-    try:
-        data = parse_panel_data_json(params['data'])
-        method = params.get('method', 'permutation')
-        n_lags = params.get('n_lags', 10)
-
-        if method == 'permutation':
-            n_repeats = params.get('n_repeats', 10)
-            model_type = params.get('model_type', 'ridge')
-            result = calculate_permutation_importance(data, n_lags=n_lags, n_repeats=n_repeats, model_type=model_type)
-        elif method == 'model':
-            model_type = params.get('model_type', 'ridge')
-            result = calculate_model_importance(data, n_lags=n_lags, model_type=model_type)
-        elif method == 'shap':
-            max_samples = params.get('max_samples', 100)
-            result = calculate_shap_importance(data, n_lags=n_lags, max_samples=max_samples)
-        elif method == 'lag_analysis':
-            max_lags = params.get('max_lags', 20)
-            result = analyze_lag_importance(data, max_lags=max_lags)
-        elif method == 'sensitivity':
-            fh = params.get('horizon', 10)
-            perturbation_pct = params.get('perturbation_pct', 0.05)
-            freq = params.get('frequency', '1d')
-
-            # Need a forecaster for sensitivity
-            def simple_forecaster(y_train, fh, freq):
-                last_value = y_train['value'].to_list()[-1]
-                last_time = y_train['time'].to_list()[-1]
-                delta = timedelta(days=1)
-                forecast = []
-                for i in range(1, fh + 1):
-                    forecast.append({
-                        'entity_id': y_train['entity_id'].to_list()[0],
-                        'time': last_time + (delta * i),
-                        'value': last_value
-                    })
-                return {'forecast': forecast}
-
-            result = sensitivity_analysis(data, simple_forecaster, fh=fh,
-                                         perturbation_pct=perturbation_pct, freq=freq)
-        else:
-            return {"success": False, "error": f"Unknown importance method: {method}"}
-
-        return result
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-# ============================================================================
-# ADVANCED CROSS-VALIDATION COMMAND HANDLERS
-# ============================================================================
-
-def run_advanced_cv(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Run advanced cross-validation methods"""
-    if not ADVANCED_CV_AVAILABLE:
-        return {"success": False, "error": "Advanced CV not available"}
-
-    try:
-        data = parse_panel_data_json(params['data'])
-        method = params.get('method', 'walk_forward')
-
-        if method == 'blocked':
-            n_splits = params.get('n_splits', 5)
-            test_size = params.get('test_size', 1)
-            gap = params.get('gap', 0)
-            result = blocked_time_series_cv(data, n_splits=n_splits, test_size=test_size, gap=gap)
-        elif method == 'purged':
-            n_splits = params.get('n_splits', 5)
-            embargo_pct = params.get('embargo_pct', 0.01)
-            purge_pct = params.get('purge_pct', 0.01)
-            result = purged_kfold_cv(data, n_splits=n_splits, embargo_pct=embargo_pct, purge_pct=purge_pct)
-        elif method == 'combinatorial':
-            n_test_splits = params.get('n_test_splits', 2)
-            n_groups = params.get('n_groups', 6)
-            embargo_pct = params.get('embargo_pct', 0.01)
-            result = combinatorial_purged_cv(data, n_test_splits=n_test_splits,
-                                            n_groups=n_groups, embargo_pct=embargo_pct)
-        elif method == 'walk_forward':
-            initial_train_size = params.get('initial_train_size', 100)
-            test_size = params.get('test_size', 1)
-            step_size = params.get('step_size', 1)
-            anchored = params.get('anchored', False)
-            result = walk_forward_validation(data, initial_train_size=initial_train_size,
-                                            test_size=test_size, step_size=step_size, anchored=anchored)
-        elif method == 'nested':
-            outer_splits = params.get('outer_splits', 5)
-            inner_splits = params.get('inner_splits', 3)
-            test_size = params.get('test_size', 1)
-            result = nested_cv(data, outer_splits=outer_splits, inner_splits=inner_splits, test_size=test_size)
-        else:
-            return {"success": False, "error": f"Unknown CV method: {method}"}
-
-        return result
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-# ============================================================================
-# BACKTESTING COMMAND HANDLERS
-# ============================================================================
-
-def run_backtest(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Run backtesting on time series"""
-    if not BACKTESTING_AVAILABLE:
-        return {"success": False, "error": "Backtesting not available"}
-
-    try:
-        data = parse_panel_data_json(params['data'])
-        operation = params.get('operation', 'walk_forward')
-        freq = params.get('frequency', '1d')
-
-        # Create a simple forecaster
-        def simple_forecaster(y_train, fh, freq):
-            last_value = y_train['value'].to_list()[-1]
-            last_time = y_train['time'].to_list()[-1]
-            delta = timedelta(days=1)
-            forecast = []
-            for i in range(1, fh + 1):
-                forecast.append({
-                    'entity_id': y_train['entity_id'].to_list()[0],
-                    'time': last_time + (delta * i),
-                    'value': last_value
-                })
-            return {'forecast': forecast}
-
-        if operation == 'walk_forward':
-            initial_train_size = params.get('initial_train_size', 100)
-            test_size = params.get('test_size', 1)
-            step_size = params.get('step_size', 1)
-            horizons = params.get('horizons')
-            retrain = params.get('retrain', True)
-            result = walk_forward_backtest(data, simple_forecaster, initial_train_size=initial_train_size,
-                                          test_size=test_size, step_size=step_size,
-                                          horizons=horizons, freq=freq, retrain=retrain)
-        elif operation == 'compare_models':
-            initial_train_size = params.get('initial_train_size', 100)
-            test_size = params.get('test_size', 1)
-            step_size = params.get('step_size', 5)
-            # Use simple forecasters for comparison
-            forecasters = {'naive': simple_forecaster}
-            result = compare_models_backtest(data, forecasters, initial_train_size=initial_train_size,
-                                            test_size=test_size, step_size=step_size, freq=freq)
-        elif operation == 'rolling_origin':
-            min_train_size = params.get('min_train_size', 50)
-            max_train_size = params.get('max_train_size')
-            test_size = params.get('test_size', 1)
-            result = rolling_origin_evaluation(data, simple_forecaster, min_train_size=min_train_size,
-                                              max_train_size=max_train_size, test_size=test_size, freq=freq)
-        elif operation == 'attribution':
-            backtest_results = params.get('backtest_results', {})
-            result = performance_attribution(backtest_results)
-        elif operation == 'summary':
-            backtest_results = params.get('backtest_results', {})
-            result = backtest_summary(backtest_results)
-        else:
-            return {"success": False, "error": f"Unknown backtest operation: {operation}"}
-
-        return result
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-# ============================================================================
-# MAIN ENTRY POINT
-# ============================================================================
-
-COMMANDS = {
-    "check_status": lambda _: check_status(),
-    "forecast": run_forecast,
-    "preprocess": preprocess_data,
-    "cross_validate": cross_validate,
-    "metrics": calculate_metrics,
-    "add_features": add_features,
-    "seasonal_period": get_seasonal_period,
-    "full_pipeline": full_forecast_pipeline,
-    # Advanced models
-    "advanced_forecast": run_advanced_forecast,
-    # Ensemble methods
-    "ensemble": run_ensemble,
-    "auto_ensemble": run_auto_ensemble,
-    # Anomaly detection
-    "anomaly_detection": run_anomaly_detection,
-    # Seasonality analysis
-    "seasonality": run_seasonality_analysis,
-    # Confidence intervals
-    "confidence_intervals": run_confidence_intervals,
-    # Feature importance
-    "feature_importance": run_feature_importance,
-    # Advanced cross-validation
-    "advanced_cv": run_advanced_cv,
-    # Backtesting
-    "backtest": run_backtest,
+OPERATIONS = {
+    "check_status": op_check_status,
+    "forecast": op_forecast,
+    "anomaly_detection": op_anomaly_detection,
+    "seasonality": op_seasonality,
+    "metrics": op_metrics,
+    "confidence_intervals": op_confidence_intervals,
+    "stationarity": op_stationarity,
 }
 
 
-def main(args: list) -> str:
-    """Main entry point called by the host via subprocess"""
+def dispatch(operation, data):
+    """Dispatch to operation handler. Always returns a dict with a `success` key."""
+    handler = OPERATIONS.get(operation)
+    if handler is None:
+        return {
+            "success": False,
+            "operation": operation,
+            "error": f"Unknown operation: {operation}",
+            "error_kind": "unknown_op",
+            "available": list(OPERATIONS.keys()),
+        }
     try:
-        if len(args) < 1:
-            return serialize_result({"success": False, "error": "No command specified"})
-
-        command = args[0]
-
-        if command not in COMMANDS:
-            return serialize_result({"success": False, "error": f"Unknown command: {command}"})
-
-        # Parse params if provided
-        params = {}
-        if len(args) > 1:
-            params = json.loads(args[1])
-
-        result = COMMANDS[command](params)
-        return serialize_result(result)
-
+        result = handler(data or {})
+        return {
+            "success": True,
+            "operation": operation,
+            "data": result,
+        }
+    except ValidationError as e:
+        return {
+            "success": False,
+            "operation": operation,
+            "error": str(e),
+            "error_kind": "validation",
+        }
     except Exception as e:
-        return serialize_result({"success": False, "error": str(e)})
+        return {
+            "success": False,
+            "operation": operation,
+            "error": str(e),
+            "error_kind": "runtime",
+            "traceback": traceback.format_exc(),
+        }
+
+
+def main(args):
+    """Entry point: args = [operation, json_data]"""
+    if len(args) < 1:
+        print(json.dumps({
+            "success": False,
+            "error": "Usage: functime_service.py <operation> [json_data]",
+            "error_kind": "usage",
+        }))
+        return
+
+    operation = args[0]
+    data = {}
+    if len(args) > 1:
+        try:
+            data = json.loads(args[1])
+        except json.JSONDecodeError as e:
+            print(json.dumps({
+                "success": False,
+                "operation": operation,
+                "error": f"Invalid JSON input: {e}",
+                "error_kind": "validation",
+            }))
+            return
+
+    result = dispatch(operation, data)
+    print(json.dumps(result, default=str))
 
 
 if __name__ == "__main__":
-    output = main(sys.argv[1:])
-    print(output)
+    main(sys.argv[1:])

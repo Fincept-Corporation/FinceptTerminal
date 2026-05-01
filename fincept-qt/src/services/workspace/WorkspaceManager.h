@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "core/result/Result.h"
 #include "services/workspace/IWorkspaceParticipant.h"
 #include "services/workspace/WorkspaceTypes.h"
@@ -17,7 +17,7 @@ class ScreenRouter;
 /// Central workspace service — singleton QObject on the UI thread.
 ///
 /// Lifecycle:
-///   MainWindow creates it after setup_app_screens().
+///   WindowFrame creates it after setup_app_screens().
 ///   load_last_workspace() is called after auth resolves.
 ///   save_workspace() is called in closeEvent().
 class WorkspaceManager : public QObject {

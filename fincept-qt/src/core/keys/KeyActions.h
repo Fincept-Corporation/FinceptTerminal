@@ -1,10 +1,10 @@
-// src/core/keys/KeyActions.h
+﻿// src/core/keys/KeyActions.h
 #pragma once
 
 namespace fincept {
 
 enum class KeyAction {
-    // Global (MainWindow)
+    // Global (WindowFrame)
     Refresh,
     ToggleChat,
     FocusMode,
@@ -29,7 +29,7 @@ enum class KeyAction {
     RenameCell,
 
     // Window / Panel Navigation (Phase 3)
-    // Focus a specific MainWindow by its 1-based ordinal across open windows
+    // Focus a specific WindowFrame by its 1-based ordinal across open windows
     // (Ctrl+1..9 by default). Ctrl+1 always targets window_id = 0.
     FocusWindow1,
     FocusWindow2,
@@ -41,18 +41,18 @@ enum class KeyAction {
     FocusWindow8,
     FocusWindow9,
 
-    // Cycle active dock widget inside the focused MainWindow.
+    // Cycle active dock widget inside the focused WindowFrame.
     CyclePanelsForward,
     CyclePanelsBack,
 
-    // Cycle focus between MainWindow instances (Bloomberg PANEL key).
+    // Cycle focus between WindowFrame instances (Bloomberg PANEL key).
     CycleWindowsForward,
     CycleWindowsBack,
 
-    // Spawn a new MainWindow, placed on the next available monitor.
+    // Spawn a new WindowFrame, placed on the next available monitor.
     NewWindowNextMonitor,
 
-    // Move the current MainWindow to monitor N (Ctrl+Shift+1..9).
+    // Move the current WindowFrame to monitor N (Ctrl+Shift+1..9).
     MoveWindowToMonitor1,
     MoveWindowToMonitor2,
     MoveWindowToMonitor3,

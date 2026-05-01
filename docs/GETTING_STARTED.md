@@ -156,7 +156,7 @@ FinceptTerminal/
 │   │       └── ...
 │   │
 │   ├── scripts/                    ← Python analytics scripts
-│   │   ├── Analytics/              ← CFA-level analytics modules
+│   │   ├── Analytics/              ← Analytics modules
 │   │   ├── agents/                 ← AI agent frameworks
 │   │   └── *.py                    ← 100+ data fetchers
 │   │

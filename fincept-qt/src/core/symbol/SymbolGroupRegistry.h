@@ -9,7 +9,7 @@
 
 namespace fincept {
 
-/// Per-user, per-slot metadata for symbol link groups (A..J).
+/// Per-profile, per-slot metadata for symbol link groups (A..J).
 ///
 /// Each slot owns three pieces of state:
 ///   - `name`: human-readable label ("Group A", "Tech Watch", …). Editable.
@@ -22,13 +22,23 @@ namespace fincept {
 /// Renaming "A" to "Tech Watch" does not migrate any saved state; existing
 /// links keep working under the new label.
 ///
-/// Storage: QSettings under `symbol_groups/<letter>/{name,color,enabled}`,
-/// global per user (not per workspace). Settings are written immediately on
-/// each mutation — no batched flush.
+/// Storage: QSettings under `<profile_prefix>symbol_groups/<letter>/{name,color,enabled}`,
+/// where `<profile_prefix>` comes from `ProfileManager::settings_group()` —
+/// empty for the default profile, `profiles/<name>/` otherwise. This lets two
+/// users on a shared box keep distinct group names/colours.
+///
+/// Settings are written immediately on each mutation — no batched flush.
 class SymbolGroupRegistry : public QObject {
     Q_OBJECT
   public:
     static SymbolGroupRegistry& instance();
+
+    /// Re-read all slots from QSettings under the current profile's settings
+    /// group. Call this after switching profiles so the badge palette /
+    /// names reflect the new active user. Emits `group_metadata_changed`
+    /// for every slot whose value actually differs from what was loaded.
+    /// Idempotent if the profile didn't change.
+    void reload();
 
     QString name(SymbolGroup g) const;
     QColor color(SymbolGroup g) const;

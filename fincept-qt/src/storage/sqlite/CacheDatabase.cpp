@@ -143,6 +143,45 @@ Result<void> CacheDatabase::create_tables() {
     if (r.is_err())
         return r;
 
+    // Phase 4b: add instance_uuid column to screen_state for the panel-UUID
+    // refactor. Pre-Phase-4 rows are keyed only by screen_key (the screen
+    // type id, e.g. "watchlist"). New rows get an instance_uuid (per-panel
+    // stable id) so two open watchlists never collide on save.
+    //
+    // Idempotent: PRAGMA table_info() lists existing columns; ALTER TABLE
+    // ADD COLUMN runs only if instance_uuid is missing. Safe to call on
+    // every CacheDatabase::open across upgrades.
+    {
+        QMutexLocker lock(&mutex_);
+        QSqlQuery info(db_);
+        if (info.exec("PRAGMA table_info(screen_state)")) {
+            bool has_instance_uuid = false;
+            while (info.next()) {
+                if (info.value(1).toString() == "instance_uuid") {
+                    has_instance_uuid = true;
+                    break;
+                }
+            }
+            if (!has_instance_uuid) {
+                QSqlQuery alter(db_);
+                if (alter.exec("ALTER TABLE screen_state ADD COLUMN instance_uuid TEXT")) {
+                    LOG_INFO("CacheDB", "screen_state migrated: added instance_uuid column");
+                } else {
+                    LOG_WARN("CacheDB",
+                             QString("Failed to add instance_uuid column: %1")
+                                 .arg(alter.lastError().text()));
+                }
+            }
+        }
+    }
+    // Index on instance_uuid for fast UUID-keyed lookups. NOT UNIQUE — old
+    // rows have NULL instance_uuid and SQLite treats multiple NULLs as
+    // distinct in a UNIQUE index, but we'd rather not rely on that subtlety.
+    r = exec("CREATE INDEX IF NOT EXISTS idx_screen_state_instance_uuid "
+             "ON screen_state(instance_uuid) WHERE instance_uuid IS NOT NULL");
+    if (r.is_err())
+        return r;
+
     LOG_INFO("CacheDB", "Cache tables initialized");
     return Result<void>::ok();
 }

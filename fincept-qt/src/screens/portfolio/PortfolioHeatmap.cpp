@@ -1,6 +1,7 @@
 // src/screens/portfolio/PortfolioHeatmap.cpp
 #include "screens/portfolio/PortfolioHeatmap.h"
 
+#include "screens/portfolio/PortfolioPanelHeader.h"
 #include "ui/theme/Theme.h"
 
 #include <QGridLayout>
@@ -13,8 +14,10 @@
 namespace fincept::screens {
 
 PortfolioHeatmap::PortfolioHeatmap(QWidget* parent) : QWidget(parent) {
-    setMinimumWidth(180);
-    setMaximumWidth(220);
+    // Heatmap now shares the top 40% with chart + sector panel (commit #4),
+    // not the full left column. Slightly wider band reads better at this size.
+    setMinimumWidth(200);
+    setMaximumWidth(240);
     build_ui();
 }
 
@@ -22,30 +25,28 @@ void PortfolioHeatmap::build_ui() {
     setStyleSheet(
         QString("background:%1; border-right:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
+    // Outer layout has zero margins so the unified header sits flush with the
+    // panel edges; an inner content layout holds the body with its own padding.
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(8, 8, 8, 6);
-    layout->setSpacing(5);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
 
-    // Header: title + mode buttons
-    auto* header = new QHBoxLayout;
-    auto* title = new QLabel("HOLDINGS");
-    title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1.5px;").arg(ui::colors::TEXT_SECONDARY()));
-    header->addWidget(title);
-    header->addStretch();
+    // Unified panel header — HOLDINGS title + 3 mode buttons in the controls slot.
+    auto header = make_panel_header("HOLDINGS", this);
 
-    auto make_mode_btn = [&](const QString& text) {
+    auto make_mode_btn = [this, &header](const QString& text) {
         auto* btn = new QPushButton(text);
         btn->setFixedSize(38, 20);
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
+        // 10px / 700, square corners. Active = AMBER fill on BG_BASE text.
         btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                                   "  font-size:9px; font-weight:700; border-radius:2px; }"
+                                   "  font-size:10px; font-weight:700; }"
                                    "QPushButton:checked { background:%3; color:%4; border-color:%3; }"
                                    "QPushButton:hover:!checked { color:%5; border-color:%5; }")
                                .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
                                     ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
-        header->addWidget(btn);
+        header.controls_slot->layout()->addWidget(btn);
         return btn;
     };
 
@@ -66,7 +67,19 @@ void PortfolioHeatmap::build_ui() {
     connect(weight_btn_, &QPushButton::clicked, this, [=]() { set_mode(portfolio::HeatmapMode::Weight); });
     connect(day_btn_, &QPushButton::clicked, this, [=]() { set_mode(portfolio::HeatmapMode::DayChange); });
 
-    layout->addLayout(header);
+    layout->addWidget(header.header);
+
+    // ── Content area below the header ────────────────────────────────────────
+    auto* body = new QWidget(this);
+    body->setStyleSheet("background:transparent;");
+    auto* body_layout_outer = new QVBoxLayout(body);
+    body_layout_outer->setContentsMargins(8, 8, 8, 6);
+    body_layout_outer->setSpacing(5);
+    layout->addWidget(body, 1);
+
+    // Re-aim downstream code: the rest of build_ui() adds widgets to `layout`,
+    // but we want them in `body`. Swap the variable name without a wide rewrite.
+    layout = body_layout_outer;
 
     // Scrollable blocks area
     auto* scroll = new QScrollArea;
@@ -82,114 +95,50 @@ void PortfolioHeatmap::build_ui() {
     scroll->setWidget(blocks_container_);
     layout->addWidget(scroll, 1);
 
-    // Selected holding detail
-    detail_panel_ = new QWidget(this);
-    detail_panel_->setStyleSheet(
-        QString("background:%1; border:1px solid %2; padding:4px;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
-    detail_panel_->setVisible(false);
+    // ── Top movers footer ────────────────────────────────────────────────────
+    // The previous panel duplicated the StatsRibbon and the POSITIONS table:
+    //   - 8-row selected-holding inspector → already in POSITIONS row data
+    //   - RISK SCORE gauge                  → already in StatsRibbon RISK chip
+    //   - HOLDINGS / CONC.TOP3 / VOL30      → already in StatsRibbon
+    // All three were deleted. Top movers stays — it's not in the ribbon and
+    // is contextual to the heatmap (the visible blocks).
+    auto* movers_sep = new QWidget(this);
+    movers_sep->setFixedHeight(1);
+    movers_sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
+    layout->addWidget(movers_sep);
 
-    auto* dp_layout = new QVBoxLayout(detail_panel_);
-    dp_layout->setContentsMargins(6, 4, 6, 4);
-    dp_layout->setSpacing(2);
-
-    detail_symbol_ = new QLabel;
-    detail_symbol_->setStyleSheet(QString("color:%1; font-size:14px; font-weight:700;").arg(ui::colors::CYAN()));
-    dp_layout->addWidget(detail_symbol_);
-
-    auto add_detail_row = [&](QLabel*& lbl, const QString& prefix) {
-        auto* row = new QHBoxLayout;
-        auto* lab = new QLabel(prefix);
-        lab->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_TERTIARY()));
-        row->addWidget(lab);
-        lbl = new QLabel("--");
-        lbl->setAlignment(Qt::AlignRight);
-        lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_PRIMARY()));
-        row->addWidget(lbl);
-        dp_layout->addLayout(row);
-    };
-
-    add_detail_row(detail_price_, "PRICE");
-    add_detail_row(detail_change_, "CHG%");
-    add_detail_row(detail_qty_, "QTY");
-    add_detail_row(detail_cost_, "COST");
-    add_detail_row(detail_mv_, "MKT VAL");
-    add_detail_row(detail_pnl_, "P&L");
-    add_detail_row(detail_pnl_pct_, "P&L%");
-    add_detail_row(detail_weight_, "WEIGHT");
-
-    layout->addWidget(detail_panel_);
-
-    // Risk gauge
-    auto* risk_header = new QLabel("RISK SCORE");
-    risk_header->setStyleSheet(
-        QString("color:%1; font-size:8px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
-    layout->addWidget(risk_header);
-
-    risk_bar_ = new QWidget(this);
-    risk_bar_->setFixedHeight(10);
-    risk_bar_->setStyleSheet(QString("background:%1; border-radius:2px;").arg(ui::colors::BG_BASE()));
-    layout->addWidget(risk_bar_);
-
-    risk_value_ = new QLabel("--");
-    risk_value_->setAlignment(Qt::AlignCenter);
-    risk_value_->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
-    layout->addWidget(risk_value_);
-
-    // Top movers
     auto* movers_header = new QLabel("TOP MOVERS");
     movers_header->setStyleSheet(
-        QString("color:%1; font-size:8px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
+        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;"
+                "  padding-top:4px;")
+            .arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(movers_header);
 
     top_gainer_ = new QLabel;
-    top_gainer_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::POSITIVE()));
+    top_gainer_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(ui::colors::POSITIVE()));
     layout->addWidget(top_gainer_);
 
     top_loser_ = new QLabel;
-    top_loser_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::NEGATIVE()));
+    top_loser_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(ui::colors::NEGATIVE()));
     layout->addWidget(top_loser_);
-
-    // Quick stats
-    auto add_stat = [&](QLabel*& lbl, const QString& prefix) {
-        auto* row = new QHBoxLayout;
-        auto* lab = new QLabel(prefix);
-        lab->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_TERTIARY()));
-        row->addWidget(lab);
-        lbl = new QLabel("--");
-        lbl->setAlignment(Qt::AlignRight);
-        lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
-        row->addWidget(lbl);
-        layout->addLayout(row);
-    };
-
-    add_stat(stat_holdings_, "HOLDINGS");
-    add_stat(stat_conc_, "CONC. TOP3");
-    add_stat(stat_vol_, "VOL 30D");
 }
 
 void PortfolioHeatmap::set_holdings(const QVector<portfolio::HoldingWithQuote>& holdings) {
     holdings_ = holdings;
     rebuild_blocks();
-    update_detail();
     update_top_movers();
-    stat_holdings_->setText(QString::number(holdings.size()));
 }
 
 void PortfolioHeatmap::set_metrics(const portfolio::ComputedMetrics& metrics) {
     metrics_ = metrics;
-    update_risk_gauge();
-
-    stat_conc_->setText(metrics.concentration_top3.has_value()
-                            ? QString("%1%").arg(QString::number(*metrics.concentration_top3, 'f', 1))
-                            : "--");
-    stat_vol_->setText(metrics.volatility.has_value() ? QString("%1%").arg(QString::number(*metrics.volatility, 'f', 1))
-                                                      : "--");
+    // Risk score / concentration / volatility are now in the StatsRibbon —
+    // the heatmap no longer duplicates them. Keep the metrics_ field around
+    // in case future heatmap modes want to colour blocks by risk score.
 }
 
 void PortfolioHeatmap::set_selected_symbol(const QString& symbol) {
     selected_symbol_ = symbol;
     rebuild_blocks();
-    update_detail();
 }
 
 void PortfolioHeatmap::set_currency(const QString& currency) {
@@ -262,9 +211,10 @@ void PortfolioHeatmap::rebuild_blocks() {
         QString border_style = selected ? QString("border:2px solid %1;").arg(ui::colors::AMBER())
                                         : QString("border:1px solid %1;").arg(ui::colors::BORDER_DIM());
 
+        // Square corners (was border-radius:2px). Block label 11px (was 10px).
         block->setStyleSheet(QString("QPushButton { background:rgb(%1,%2,%3); %4"
-                                     "  text-align:left; padding:4px 6px; border-radius:2px;"
-                                     "  color:%6; font-size:10px; font-weight:700; }"
+                                     "  text-align:left; padding:4px 6px;"
+                                     "  color:%6; font-size:11px; font-weight:700; }"
                                      "QPushButton:hover { border-color:%5; }")
                                  .arg(bg.red())
                                  .arg(bg.green())
@@ -284,7 +234,6 @@ void PortfolioHeatmap::rebuild_blocks() {
         connect(block, &QPushButton::clicked, this, [this, sym = h.symbol]() {
             selected_symbol_ = sym;
             rebuild_blocks();
-            update_detail();
             emit symbol_selected(sym);
         });
 
@@ -297,59 +246,6 @@ void PortfolioHeatmap::rebuild_blocks() {
     }
 
     grid->setRowStretch(row + 1, 1); // push blocks up
-}
-
-void PortfolioHeatmap::update_detail() {
-    const portfolio::HoldingWithQuote* found = nullptr;
-    for (const auto& h : holdings_) {
-        if (h.symbol == selected_symbol_) {
-            found = &h;
-            break;
-        }
-    }
-
-    if (!found) {
-        detail_panel_->setVisible(false);
-        return;
-    }
-
-    detail_panel_->setVisible(true);
-    const auto& h = *found;
-    auto fmt = [](double v, int dp = 2) { return QString::number(v, 'f', dp); };
-    auto color = [](double v) -> const char* { return v >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE; };
-
-    detail_symbol_->setText(h.symbol);
-    detail_price_->setText(fmt(h.current_price));
-    detail_change_->setText(QString("%1%2%").arg(h.day_change_percent >= 0 ? "+" : "").arg(fmt(h.day_change_percent)));
-    detail_change_->setStyleSheet(
-        QString("color:%1; font-size:9px; font-weight:600;").arg(color(h.day_change_percent)));
-    detail_qty_->setText(fmt(h.quantity, h.quantity == std::floor(h.quantity) ? 0 : 2));
-    detail_cost_->setText(fmt(h.avg_buy_price));
-    detail_mv_->setText(fmt(h.market_value));
-    detail_mv_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::WARNING()));
-    detail_pnl_->setText(QString("%1%2").arg(h.unrealized_pnl >= 0 ? "+" : "").arg(fmt(h.unrealized_pnl)));
-    detail_pnl_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(color(h.unrealized_pnl)));
-    detail_pnl_pct_->setText(
-        QString("%1%2%").arg(h.unrealized_pnl_percent >= 0 ? "+" : "").arg(fmt(h.unrealized_pnl_percent)));
-    detail_pnl_pct_->setStyleSheet(
-        QString("color:%1; font-size:9px; font-weight:600;").arg(color(h.unrealized_pnl_percent)));
-    detail_weight_->setText(QString("%1%").arg(fmt(h.weight, 1)));
-}
-
-void PortfolioHeatmap::update_risk_gauge() {
-    double rs = metrics_.risk_score.value_or(0);
-    const char* rs_color = rs < 30 ? ui::colors::POSITIVE : rs < 60 ? ui::colors::WARNING : ui::colors::NEGATIVE;
-
-    // Use a colored inner bar proportional to score
-    double pct = std::min(rs / 100.0, 1.0);
-    risk_bar_->setStyleSheet(
-        QString("background: qlineargradient(x1:0, x2:1, stop:0 %1, stop:%2 %1, stop:%3 transparent);")
-            .arg(rs_color)
-            .arg(pct)
-            .arg(std::min(pct + 0.01, 1.0)));
-
-    risk_value_->setText(QString::number(rs, 'f', 0));
-    risk_value_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(rs_color));
 }
 
 void PortfolioHeatmap::update_top_movers() {
@@ -380,9 +276,6 @@ void PortfolioHeatmap::update_top_movers() {
 void PortfolioHeatmap::refresh_theme() {
     setStyleSheet(
         QString("background:%1; border-right:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
-
-    detail_panel_->setStyleSheet(
-        QString("background:%1; border:1px solid %2; padding:4px;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
 
     // Rebuild blocks picks up new theme colors for borders/text
     rebuild_blocks();

@@ -8,6 +8,8 @@
 #include <QCoreApplication>
 #include <QFutureWatcher>
 #include <QPromise>
+#include <QRegularExpression>
+#include <QSet>
 #include <QThread>
 #include <QTimer>
 
@@ -81,7 +83,7 @@ std::vector<UnifiedTool> McpProvider::list_tools() const {
             continue;
         const auto& t = it.value();
         result.push_back({QString(INTERNAL_SERVER_ID), QString(INTERNAL_SERVER_NAME), t.name, t.description,
-                          t.input_schema.to_json(), true, t.category});
+                          t.input_schema.to_json(), true, t.category, t.is_destructive});
     }
     return result;
 }
@@ -94,7 +96,7 @@ std::vector<UnifiedTool> McpProvider::list_all_tools() const {
     for (auto it = tools_.cbegin(); it != tools_.cend(); ++it) {
         const auto& t = it.value();
         result.push_back({QString(INTERNAL_SERVER_ID), QString(INTERNAL_SERVER_NAME), t.name, t.description,
-                          t.input_schema.to_json(), true, t.category});
+                          t.input_schema.to_json(), true, t.category, t.is_destructive});
     }
     return result;
 }
@@ -334,7 +336,7 @@ QJsonArray McpProvider::format_tools_for_openai() const {
         }
 
         QJsonObject fn;
-        fn["name"] = QString(INTERNAL_SERVER_ID) + "__" + tool.name;
+        fn["name"] = QString(INTERNAL_SERVER_ID) + "__" + encode_tool_name_for_wire(tool.name);
         fn["description"] = tool.description;
         fn["parameters"] = schema;
 
@@ -351,7 +353,47 @@ QPair<QString, QString> McpProvider::parse_openai_function_name(const QString& f
     int pos = fn_name.indexOf("__");
     if (pos <= 0 || pos >= fn_name.length() - 2)
         return {"", ""};
-    return {fn_name.left(pos), fn_name.mid(pos + 2)};
+    return {fn_name.left(pos), decode_tool_name_from_wire(fn_name.mid(pos + 2))};
+}
+
+// Tightest common-subset regex for tool function names across every supported
+// provider (see header for provenance). Each candidate emitted by
+// encode_tool_name_for_wire MUST match this regex; non-matching names are
+// logged so they can be renamed in source.
+static const QRegularExpression& common_subset_regex() {
+    static const QRegularExpression re(QStringLiteral("^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"));
+    return re;
+}
+
+QString McpProvider::encode_tool_name_for_wire(const QString& tool_name) {
+    // Step 1: replace '.' with "-dot-". Internal tool names never contain
+    // hyphens (verified across all 239 tools), so the round-trip is unique.
+    QString out = tool_name;
+    out.replace(QLatin1Char('.'), QStringLiteral("-dot-"));
+
+    // Step 2: validate against the common subset. We intentionally do not
+    // attempt to repair non-conforming names — any tool whose name fails this
+    // check needs to be renamed in source, not silently mangled at the wire
+    // boundary (mangled names break the model's ability to call the tool by
+    // the catalog-advertised string). Log once per unique offender.
+    if (!common_subset_regex().match(out).hasMatch()) {
+        static QSet<QString> warned;
+        if (!warned.contains(out)) {
+            warned.insert(out);
+            LOG_WARN("McpProvider",
+                     QString("Tool name '%1' does not match the provider-safe regex "
+                             "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$ — Kimi/Anthropic/OpenAI will "
+                             "reject the request. Rename the tool at source.")
+                         .arg(out));
+        }
+    }
+    return out;
+}
+
+QString McpProvider::decode_tool_name_from_wire(const QString& wire_name) {
+    QString out = wire_name;
+    out.replace(QStringLiteral("-dot-"), QStringLiteral("."));
+    return out;
 }
 
 // ============================================================================

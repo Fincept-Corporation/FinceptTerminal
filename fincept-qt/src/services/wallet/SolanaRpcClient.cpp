@@ -408,4 +408,69 @@ void SolanaRpcClient::get_signatures_for_address(const QString& address_b58,
              });
 }
 
+void SolanaRpcClient::simulate_transaction(const QString& tx_base64,
+                                           SimulateTransactionCallback callback,
+                                           bool replace_recent_blockhash) {
+    // simulateTransaction takes the encoded tx as a positional arg, with an
+    // options object as the second positional arg. We pass:
+    //   - encoding: base64                         (matches PumpPortal's output)
+    //   - sigVerify: false                          (tx is unsigned)
+    //   - replaceRecentBlockhash: caller-controlled (see header docs)
+    //   - commitment: confirmed
+    //
+    // MITM gate path uses replace=true (logic-only check); freshness gate
+    // path uses replace=false (catches stale blockhash via BlockhashNotFound).
+    QJsonObject opts;
+    opts[QStringLiteral("encoding")] = QStringLiteral("base64");
+    opts[QStringLiteral("sigVerify")] = false;
+    opts[QStringLiteral("replaceRecentBlockhash")] = replace_recent_blockhash;
+    opts[QStringLiteral("commitment")] = QStringLiteral("confirmed");
+
+    QJsonObject params;
+    params[QStringLiteral("__array")] = QJsonArray{tx_base64, opts};
+
+    post_rpc(QStringLiteral("simulateTransaction"), params,
+             [cb = std::move(callback)](Result<QJsonObject> r) {
+                 if (r.is_err()) {
+                     cb(Result<SimulationResult>::err(r.error()));
+                     return;
+                 }
+                 const auto root = r.value();
+                 const auto result_v = root.value(QStringLiteral("result"));
+                 if (!result_v.isObject()) {
+                     cb(Result<SimulationResult>::err("malformed simulateTransaction response"));
+                     return;
+                 }
+                 const auto result = result_v.toObject();
+                 const auto value_v = result.value(QStringLiteral("value"));
+                 if (!value_v.isObject()) {
+                     cb(Result<SimulationResult>::err("missing simulation value"));
+                     return;
+                 }
+                 const auto value = value_v.toObject();
+
+                 SimulationResult sr;
+                 const auto err_v = value.value(QStringLiteral("err"));
+                 if (err_v.isNull() || err_v.isUndefined()) {
+                     sr.ok = true;
+                 } else {
+                     sr.ok = false;
+                     sr.err = QString::fromUtf8(
+                         QJsonDocument::fromVariant(err_v.toVariant())
+                             .toJson(QJsonDocument::Compact));
+                 }
+                 const auto logs_v = value.value(QStringLiteral("logs"));
+                 if (logs_v.isArray()) {
+                     for (const auto& l : logs_v.toArray()) {
+                         sr.logs.append(l.toString());
+                     }
+                 }
+                 const auto units_v = value.value(QStringLiteral("unitsConsumed"));
+                 if (units_v.isDouble()) {
+                     sr.units_consumed = static_cast<quint64>(units_v.toDouble());
+                 }
+                 cb(Result<SimulationResult>::ok(std::move(sr)));
+             });
+}
+
 } // namespace fincept::wallet

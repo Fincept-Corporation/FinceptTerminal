@@ -235,6 +235,52 @@ void CryptoBottomPanel::set_positions(const QVector<trading::PtPosition>& positi
     positions_table_->setUpdatesEnabled(true);
 }
 
+void CryptoBottomPanel::update_position_prices(const QHash<QString, double>& last_prices) {
+    // Live mark-to-market patch driven directly by WS ticks. Reads symbol +
+    // side + qty + entry from the existing rows (no DB round-trip), computes
+    // fresh P&L from the new mark, and patches columns 4 (Current) and 5 (P&L)
+    // in place. Long: pnl = (mark - entry) * qty. Short: pnl = (entry - mark) * qty.
+    if (last_prices.isEmpty() || !positions_table_)
+        return;
+    const int n = positions_table_->rowCount();
+    if (n == 0)
+        return;
+    positions_table_->setUpdatesEnabled(false);
+    for (int i = 0; i < n; ++i) {
+        auto* sym_item = positions_table_->item(i, 0);
+        if (!sym_item)
+            continue;
+        const QString sym = sym_item->text();
+        auto it = last_prices.constFind(sym);
+        if (it == last_prices.constEnd())
+            continue;
+        const double mark = it.value();
+        if (mark <= 0.0)
+            continue;
+
+        auto* side_item = positions_table_->item(i, 1);
+        auto* qty_item = positions_table_->item(i, 2);
+        auto* entry_item = positions_table_->item(i, 3);
+        auto* cur_item = positions_table_->item(i, 4);
+        auto* pnl_item = positions_table_->item(i, 5);
+        if (!side_item || !qty_item || !entry_item || !cur_item || !pnl_item)
+            continue;
+
+        const bool is_long = side_item->text().compare("LONG", Qt::CaseInsensitive) == 0;
+        const double qty = qty_item->text().toDouble();
+        const double entry = entry_item->text().toDouble();
+        if (qty <= 0.0 || entry <= 0.0)
+            continue;
+
+        const double pnl = is_long ? (mark - entry) * qty : (entry - mark) * qty;
+
+        cur_item->setText(QString::number(mark, 'f', 2));
+        pnl_item->setText(QString::number(pnl, 'f', 2));
+        pnl_item->setForeground(pnl >= 0 ? kColorPos() : kColorNeg());
+    }
+    positions_table_->setUpdatesEnabled(true);
+}
+
 void CryptoBottomPanel::set_orders(const QVector<trading::PtOrder>& orders) {
     QVector<trading::PtOrder> active;
     for (const auto& o : orders) {

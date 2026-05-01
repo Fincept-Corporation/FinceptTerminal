@@ -1,14 +1,23 @@
 """
 GS-Quant Wrapper Worker Handler
 ================================
-Dispatch router for C++ commands → Python gs_quant_wrapper operations.
+Dispatch router for C++ commands -> Python gs_quant_wrapper operations.
 Pattern: main(args) dispatches [operation, json_data].
+
+Response contract (all ops):
+    success: bool
+    operation: str
+    data: dict   (when success)
+    error: str   (when failure)
+    error_kind: str | None    (validation | runtime | unknown_op)
+    traceback: str | None     (only on uncaught exceptions)
 """
 
 import sys
 import os
 import json
 import traceback
+import math
 import numpy as np
 import pandas as pd
 from datetime import datetime
@@ -20,8 +29,64 @@ if _parent_dir not in sys.path:
     sys.path.insert(0, _parent_dir)
 
 
+# ============================================================================
+# INPUT COERCION + VALIDATION
+# ============================================================================
+
+class ValidationError(ValueError):
+    """Raised when an op's input doesn't pass coercion/length checks."""
+    pass
+
+
+def _coerce_floats(value, field_name):
+    """
+    Accept list[number], tuple[number], np.ndarray, or a CSV / whitespace-separated string.
+    Returns list[float]. Empty / None -> [].
+    """
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        out = []
+        for i, v in enumerate(value):
+            try:
+                out.append(float(v))
+            except (TypeError, ValueError):
+                raise ValidationError(
+                    f"{field_name}[{i}] is not numeric: {v!r}")
+        return out
+    if isinstance(value, np.ndarray):
+        return [float(v) for v in value.tolist()]
+    if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return []
+        # Accept comma-, semicolon-, whitespace-, or newline-separated
+        for sep in [",", ";", "\t", "\n"]:
+            s = s.replace(sep, " ")
+        parts = [p for p in s.split(" ") if p.strip()]
+        out = []
+        for i, p in enumerate(parts):
+            try:
+                out.append(float(p))
+            except ValueError:
+                raise ValidationError(
+                    f"{field_name}[{i}] is not numeric: {p!r}")
+        return out
+    # Single scalar
+    try:
+        return [float(value)]
+    except (TypeError, ValueError):
+        raise ValidationError(f"{field_name} is not numeric: {value!r}")
+
+
+def _require_min_length(values, n, field_name):
+    if len(values) < n:
+        raise ValidationError(
+            f"{field_name} needs at least {n} values, got {len(values)}")
+
+
 def _series_from_list(values, dates=None, name="series"):
-    """Helper: Convert list of values (+ optional dates) to pd.Series."""
+    """Helper: Convert list of values (+ optional dates) to pd.Series of floats."""
     if dates:
         idx = pd.to_datetime(dates)
     else:
@@ -30,69 +95,56 @@ def _series_from_list(values, dates=None, name="series"):
 
 
 def _df_from_dict(data_dict, dates=None):
-    """Helper: Convert dict-of-lists to pd.DataFrame."""
+    """Helper: Convert dict-of-lists to pd.DataFrame of floats, indexed by date."""
     if dates:
         idx = pd.to_datetime(dates)
     else:
         first_key = next(iter(data_dict))
         idx = pd.date_range("2020-01-01", periods=len(data_dict[first_key]), freq="B")
-    return pd.DataFrame(data_dict, index=idx)
+    # Build column-by-column with positional float arrays (avoid pandas
+    # auto-aligning to a default RangeIndex which would zero everything out).
+    df = pd.DataFrame(index=idx)
+    for k, v in data_dict.items():
+        arr = np.asarray(v, dtype=float)
+        if len(arr) != len(idx):
+            raise ValidationError(
+                f"prices[{k}] length {len(arr)} != index length {len(idx)}")
+        df[k] = arr
+    return df
+
+
+def _safe_float(v, default=0.0):
+    """Convert a value to float, replacing NaN/inf with default."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return default
+    if math.isnan(f) or math.isinf(f):
+        return default
+    return f
+
+
+def _safe_int(v, default=0):
+    try:
+        f = float(v)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return int(f)
+    except (TypeError, ValueError):
+        return default
 
 
 # ============================================================================
 # OPERATION HANDLERS
 # ============================================================================
 
-def op_performance_analysis(data):
-    """Full performance analysis: returns, risk, distribution metrics."""
-    from gs_quant_wrapper.timeseries_analytics import TimeseriesAnalytics, TimeseriesConfig
-
-    prices = data.get("prices", [])
-    benchmark_prices = data.get("benchmark_prices", [])
-    risk_free_rate = data.get("risk_free_rate", 0.02)
-    window = data.get("window", 20)
-
-    config = TimeseriesConfig(window=window)
-    ts = TimeseriesAnalytics(config)
-
-    price_series = _series_from_list(prices, data.get("dates"))
-    returns = ts.calculate_returns(price_series)
-
-    benchmark_ret = None
-    if benchmark_prices:
-        bench_series = _series_from_list(benchmark_prices, data.get("dates"))
-        benchmark_ret = ts.calculate_returns(bench_series)
-
-    result = ts.full_performance_analysis(returns, benchmark_ret, risk_free_rate)
-    return result
-
-
-def op_technical_analysis(data):
-    """Technical indicators summary: SMA, EMA, RSI, MACD, Bollinger Bands, ATR."""
-    from gs_quant_wrapper.timeseries_analytics import TimeseriesAnalytics, TimeseriesConfig
-
-    prices = data.get("prices", [])
-    high = data.get("high", [])
-    low = data.get("low", [])
-    dates = data.get("dates")
-
-    config = TimeseriesConfig(window=data.get("window", 20))
-    ts = TimeseriesAnalytics(config)
-
-    price_series = _series_from_list(prices, dates)
-    high_series = _series_from_list(high, dates) if high else None
-    low_series = _series_from_list(low, dates) if low else None
-
-    result = ts.technical_analysis_summary(price_series, high_series, low_series)
-    return result
-
-
 def op_risk_metrics(data):
     """Comprehensive risk metrics: volatility, VaR, CVaR, drawdown, ratios."""
     from gs_quant_wrapper import ts_risk_measures as risk
 
-    returns_list = data.get("returns", [])
-    risk_free_rate = data.get("risk_free_rate", 0.0)
+    returns_list = _coerce_floats(data.get("returns"), "returns")
+    _require_min_length(returns_list, 5, "returns")
+    risk_free_rate = _safe_float(data.get("risk_free_rate", 0.0))
     dates = data.get("dates")
     ret = _series_from_list(returns_list, dates, "returns")
 
@@ -110,464 +162,506 @@ def op_risk_metrics(data):
     dl = risk.drawdown_length(ret)
     mrp = risk.max_recovery_period(ret)
 
-    result = {
-        "volatility_annualized": float(vol),
-        "daily_risk": float(daily_r),
-        "annual_risk": float(annual_r),
-        "downside_risk": float(dside),
-        "max_drawdown": dd["max_drawdown"],
-        "max_drawdown_pct": dd["max_drawdown_pct"],
-        "peak_date": str(dd["peak_date"]),
-        "trough_date": str(dd["trough_date"]),
-        "recovery_date": str(dd.get("recovery_date")),
-        "max_drawdown_length": int(dl.max()),
-        "max_recovery_period": int(mrp),
-        "sharpe_ratio": float(sharpe),
-        "sortino_ratio": float(sortino_val),
-        "calmar_ratio": float(calmar_val),
-        "omega_ratio": float(omega_val),
-        "var_95": float(var_95),
-        "var_99": float(var_99),
+    return {
+        "n_observations": len(ret),
+        "volatility_annualized": _safe_float(vol),
+        "daily_risk": _safe_float(daily_r),
+        "annual_risk": _safe_float(annual_r),
+        "downside_risk": _safe_float(dside),
+        "max_drawdown": _safe_float(dd.get("max_drawdown")),
+        "max_drawdown_pct": _safe_float(dd.get("max_drawdown_pct")),
+        "peak_date": str(dd.get("peak_date")) if dd.get("peak_date") is not None else None,
+        "trough_date": str(dd.get("trough_date")) if dd.get("trough_date") is not None else None,
+        "recovery_date": str(dd.get("recovery_date")) if dd.get("recovery_date") is not None else None,
+        "max_drawdown_length": _safe_int(dl.max() if hasattr(dl, "max") else dl),
+        "max_recovery_period": _safe_int(mrp),
+        "sharpe_ratio": _safe_float(sharpe),
+        "sortino_ratio": _safe_float(sortino_val),
+        "calmar_ratio": _safe_float(calmar_val),
+        "omega_ratio": _safe_float(omega_val),
+        "var_95": _safe_float(var_95),
+        "var_99": _safe_float(var_99),
     }
-    return result
 
 
 def op_portfolio_analytics(data):
     """Portfolio analytics with benchmark comparison."""
     from gs_quant_wrapper import ts_portfolio_analytics as port
 
-    returns_list = data.get("returns", [])
-    benchmark_list = data.get("benchmark_returns", [])
-    risk_free_rate = data.get("risk_free_rate", 0.0)
+    returns_list = _coerce_floats(data.get("returns"), "returns")
+    benchmark_list = _coerce_floats(data.get("benchmark_returns"), "benchmark_returns")
+    _require_min_length(returns_list, 5, "returns")
+    _require_min_length(benchmark_list, 5, "benchmark_returns")
+    if len(returns_list) != len(benchmark_list):
+        raise ValidationError(
+            f"returns ({len(returns_list)}) and benchmark_returns ({len(benchmark_list)}) "
+            f"must have the same length")
+
+    risk_free_rate = _safe_float(data.get("risk_free_rate", 0.0))
     dates = data.get("dates")
 
     port_ret = _series_from_list(returns_list, dates, "portfolio")
     bench_ret = _series_from_list(benchmark_list, dates, "benchmark")
 
     result = {
-        "pnl_final": float(port.portfolio_pnl(port_ret, 1.0).iloc[-1]),
-        "alpha": float(port.portfolio_alpha(port_ret, bench_ret, risk_free_rate)),
-        "annual_risk": float(port.portfolio_annual_risk(port_ret)),
-        "sharpe_ratio": float(port.portfolio_sharpe_ratio(port_ret, risk_free_rate)),
-        "sortino_ratio": float(port.portfolio_sortino_ratio(port_ret, risk_free_rate)),
-        "calmar_ratio": float(port.portfolio_calmar_ratio(port_ret)),
-        "treynor_measure": float(port.portfolio_treynor_measure(port_ret, bench_ret, risk_free_rate)),
-        "modigliani_ratio": float(port.portfolio_modigliani_ratio(port_ret, bench_ret, risk_free_rate)),
-        "max_drawdown": float(port.portfolio_max_drawdown(port_ret)),
-        "drawdown_length": int(port.portfolio_drawdown_length(port_ret)),
-        "tracking_error": float(port.portfolio_tracking_error(port_ret, bench_ret)),
-        "information_ratio": float(port.portfolio_information_ratio(port_ret, bench_ret)),
-        "hit_rate": float(port.portfolio_hit_rate(port_ret)),
-        "r_squared": float(port.portfolio_r_squared(port_ret, bench_ret)),
-        "skewness": float(port.portfolio_skewness(port_ret)),
-        "kurtosis": float(port.portfolio_kurtosis(port_ret)),
-        "jensen_alpha": float(port.portfolio_jensen_alpha(port_ret, bench_ret, risk_free_rate)),
-        "jensen_alpha_bull": float(port.portfolio_jensen_alpha_bull(port_ret, bench_ret, risk_free_rate)),
-        "jensen_alpha_bear": float(port.portfolio_jensen_alpha_bear(port_ret, bench_ret, risk_free_rate)),
+        "n_observations": len(port_ret),
+        "pnl_final": _safe_float(port.portfolio_pnl(port_ret, 1.0).iloc[-1]),
+        "alpha": _safe_float(port.portfolio_alpha(port_ret, bench_ret, risk_free_rate)),
+        "annual_risk": _safe_float(port.portfolio_annual_risk(port_ret)),
+        "sharpe_ratio": _safe_float(port.portfolio_sharpe_ratio(port_ret, risk_free_rate)),
+        "sortino_ratio": _safe_float(port.portfolio_sortino_ratio(port_ret, risk_free_rate)),
+        "calmar_ratio": _safe_float(port.portfolio_calmar_ratio(port_ret)),
+        "treynor_measure": _safe_float(port.portfolio_treynor_measure(port_ret, bench_ret, risk_free_rate)),
+        "modigliani_ratio": _safe_float(port.portfolio_modigliani_ratio(port_ret, bench_ret, risk_free_rate)),
+        "max_drawdown": _safe_float(port.portfolio_max_drawdown(port_ret)),
+        "drawdown_length": _safe_int(port.portfolio_drawdown_length(port_ret)),
+        "tracking_error": _safe_float(port.portfolio_tracking_error(port_ret, bench_ret)),
+        "information_ratio": _safe_float(port.portfolio_information_ratio(port_ret, bench_ret)),
+        "hit_rate": _safe_float(port.portfolio_hit_rate(port_ret)),
+        "r_squared": _safe_float(port.portfolio_r_squared(port_ret, bench_ret)),
+        "skewness": _safe_float(port.portfolio_skewness(port_ret)),
+        "kurtosis": _safe_float(port.portfolio_kurtosis(port_ret)),
+        "jensen_alpha": _safe_float(port.portfolio_jensen_alpha(port_ret, bench_ret, risk_free_rate)),
+        "jensen_alpha_bull": _safe_float(port.portfolio_jensen_alpha_bull(port_ret, bench_ret, risk_free_rate)),
+        "jensen_alpha_bear": _safe_float(port.portfolio_jensen_alpha_bear(port_ret, bench_ret, risk_free_rate)),
     }
 
     capture = port.portfolio_capture_ratio(port_ret, bench_ret)
-    result["up_capture"] = capture["up_capture"]
-    result["down_capture"] = capture["down_capture"]
-    result["capture_ratio"] = capture["capture_ratio"]
-
-    return result
-
-
-def op_volatility_surface(data):
-    """Forward volatility and variance term structure."""
-    from gs_quant_wrapper import ts_risk_measures as risk
-
-    returns_list = data.get("returns", [])
-    tenors = data.get("tenors", [21, 63, 126, 252])
-    dates = data.get("dates")
-
-    ret = _series_from_list(returns_list, dates, "returns")
-
-    fvt = risk.forward_vol_term(ret, tenors)
-    fvar = risk.forward_var_term(ret, tenors)
-
-    vol_term = []
-    for _, row in fvt.iterrows():
-        vol_term.append({
-            "tenor_days": int(row["tenor_days"]),
-            "realized_vol": float(row["realized_vol"]) if not np.isnan(row["realized_vol"]) else None,
-            "forward_vol": float(row["forward_vol"]) if not np.isnan(row["forward_vol"]) else None,
-        })
-
-    var_term = []
-    for _, row in fvar.iterrows():
-        var_term.append({
-            "tenor_days": int(row["tenor_days"]),
-            "realized_var": float(row["realized_var"]) if not np.isnan(row["realized_var"]) else None,
-            "forward_var": float(row["forward_var"]) if not np.isnan(row["forward_var"]) else None,
-        })
-
-    return {"vol_term_structure": vol_term, "var_term_structure": var_term}
-
-
-def op_statistics(data):
-    """Descriptive statistics: mean, std, skew, kurtosis, percentiles, z-scores."""
-    from gs_quant_wrapper import ts_math_statistics as ms
-
-    values = data.get("values", [])
-    dates = data.get("dates")
-    series = _series_from_list(values, dates, "data")
-
-    pcts = ms.percentiles(series)
-
-    result = {
-        "mean": ms.mean(series),
-        "median": ms.median(series),
-        "std": ms.std(series),
-        "variance": ms.var(series),
-        "min": ms.min_(series),
-        "max": ms.max_(series),
-        "range": ms.range_(series),
-        "skewness": ms.skewness(series),
-        "kurtosis": ms.kurtosis(series),
-        "count": ms.count(series),
-        "sum": ms.sum_(series),
-        "semi_variance": ms.semi_variance(series),
-        "realized_variance": ms.realized_var(series),
-        "percentiles": {str(int(k)): float(v) for k, v in pcts.items()},
-    }
-    return result
-
-
-def op_correlation_analysis(data):
-    """Correlation, beta, R-squared between two series."""
-    from gs_quant_wrapper import ts_math_statistics as ms
-
-    x_values = data.get("x", [])
-    y_values = data.get("y", [])
-    dates = data.get("dates")
-
-    x = _series_from_list(x_values, dates, "x")
-    y = _series_from_list(y_values, dates, "y")
-
-    result = {
-        "correlation": ms.correlation(x, y),
-        "covariance": ms.cov(x, y),
-        "beta": ms.beta(x, y),
-        "r_squared": ms.r_squared(x, y),
-    }
-    return result
-
-
-def op_backtest(data):
-    """Run a backtest strategy: buy-and-hold, momentum, mean-reversion, rebalancing."""
-    from gs_quant_wrapper.backtest_analytics import BacktestEngine, BacktestConfig
-
-    prices_dict = data.get("prices", {})
-    strategy = data.get("strategy", "buy_and_hold")
-    initial_capital = data.get("initial_capital", 100000)
-    commission = data.get("commission", 0.001)
-    lookback = data.get("lookback", 20)
-    rebalance_freq = data.get("rebalance_freq", 20)
-    dates = data.get("dates")
-
-    config = BacktestConfig(
-        initial_capital=initial_capital,
-        commission=commission,
-    )
-    engine = BacktestEngine(config)
-
-    # prices can be a dict of ticker->list or a single list
-    if isinstance(prices_dict, dict):
-        df = _df_from_dict(prices_dict, dates)
-    else:
-        df = pd.DataFrame({"asset": prices_dict}, index=pd.date_range("2020-01-01", periods=len(prices_dict), freq="B"))
-
-    if strategy == "buy_and_hold":
-        ticker = data.get("ticker", df.columns[0])
-        prices_series = df[ticker] if ticker in df.columns else df.iloc[:, 0]
-        result = engine.backtest_buy_and_hold(prices_series)
-    elif strategy == "momentum":
-        ticker = data.get("ticker", df.columns[0])
-        prices_series = df[ticker] if ticker in df.columns else df.iloc[:, 0]
-        result = engine.backtest_momentum(prices_series, lookback=lookback)
-    elif strategy == "mean_reversion":
-        ticker = data.get("ticker", df.columns[0])
-        prices_series = df[ticker] if ticker in df.columns else df.iloc[:, 0]
-        result = engine.backtest_mean_reversion(prices_series, lookback=lookback)
-    elif strategy == "rebalancing":
-        weights = data.get("weights", {col: 1.0 / len(df.columns) for col in df.columns})
-        result = engine.backtest_rebalancing(df, weights, rebalance_freq=rebalance_freq)
-    else:
-        result = engine.backtest_buy_and_hold(df.iloc[:, 0])
-
-    # Serialize
-    serializable = {}
-    for k, v in result.items():
-        if isinstance(v, pd.Series):
-            serializable[k] = {str(d): float(val) for d, val in v.items()}
-        elif isinstance(v, pd.DataFrame):
-            serializable[k] = {col: {str(d): float(val) for d, val in v[col].items()} for col in v.columns}
-        elif isinstance(v, (np.floating, np.integer)):
-            serializable[k] = float(v)
-        elif isinstance(v, dict):
-            serializable[k] = {str(kk): float(vv) if isinstance(vv, (float, int, np.floating, np.integer)) else str(vv) for kk, vv in v.items()}
-        else:
-            serializable[k] = v
-
-    return serializable
-
-
-def op_basket_backtest(data):
-    """Basket/composite portfolio backtest."""
-    from gs_quant_wrapper import ts_portfolio_analytics as port
-
-    components_dict = data.get("components", {})
-    weights = data.get("weights")
-    initial_value = data.get("initial_value", 100.0)
-    rebalance = data.get("rebalance", "daily")
-    dates = data.get("dates")
-
-    components_df = _df_from_dict(components_dict, dates)
-
-    bt = port.backtest_basket(components_df, weights, initial_value, rebalance)
-
-    result = {
-        "final_value": float(bt["basket_value"].iloc[-1]),
-        "total_return": float((bt["basket_value"].iloc[-1] / initial_value) - 1),
-        "max_drawdown": float(bt["drawdown"].min()),
-        "basket_values": {str(d): float(v) for d, v in bt["basket_value"].items()},
-        "drawdown_series": {str(d): float(v) for d, v in bt["drawdown"].items()},
-    }
-    return result
-
-
-def op_datetime_utils(data):
-    """Date/time utilities: business days, day count fractions, date ranges."""
-    from gs_quant_wrapper.datetime_utils import DateTimeUtils
-
-    dt = DateTimeUtils()
-    operation = data.get("sub_operation", "business_days")
-
-    if operation == "business_days":
-        start = data.get("start_date", "2024-01-01")
-        end = data.get("end_date", "2024-12-31")
-        result = {"business_days": dt.count_business_days(start, end)}
-    elif operation == "day_count_fraction":
-        start = data.get("start_date", "2024-01-01")
-        end = data.get("end_date", "2024-12-31")
-        convention = data.get("convention", "ACT/365")
-        result = {"day_count_fraction": dt.calculate_day_count_fraction(start, end, convention)}
-    elif operation == "add_business_days":
-        date_str = data.get("date", "2024-01-01")
-        n = data.get("days", 10)
-        new_date = dt.add_business_days(date_str, n)
-        result = {"result_date": str(new_date)}
-    elif operation == "date_range":
-        start = data.get("start_date", "2024-01-01")
-        end = data.get("end_date", "2024-12-31")
-        rng = dt.generate_date_range(start, end)
-        result = {"dates": [str(d.date()) for d in rng], "count": len(rng)}
-    elif operation == "analyze":
-        start = data.get("start_date", "2024-01-01")
-        end = data.get("end_date", "2024-12-31")
-        result = dt.analyze_date_range(start, end)
-    else:
-        result = {"error": f"Unknown sub_operation: {operation}"}
+    result["up_capture"] = _safe_float(capture.get("up_capture"))
+    result["down_capture"] = _safe_float(capture.get("down_capture"))
+    result["capture_ratio"] = _safe_float(capture.get("capture_ratio"))
 
     return result
 
 
 def op_greeks(data):
-    """Calculate Greeks for a derivative instrument."""
+    """Calculate Greeks for an option (Black-Scholes)."""
     from gs_quant_wrapper.risk_analytics import RiskAnalytics, RiskConfig
 
+    spot = _safe_float(data.get("spot", 100.0))
+    strike = _safe_float(data.get("strike", 100.0))
+    expiry = _safe_float(data.get("expiry", 0.25))
+    rate = _safe_float(data.get("rate", 0.05))
+    vol = _safe_float(data.get("vol", 0.2))
+    option_type = str(data.get("option_type", "call")).lower()
+
+    if spot <= 0:
+        raise ValidationError(f"spot must be > 0, got {spot}")
+    if strike <= 0:
+        raise ValidationError(f"strike must be > 0, got {strike}")
+    if expiry <= 0:
+        raise ValidationError(f"expiry must be > 0 (in years), got {expiry}")
+    if vol <= 0:
+        raise ValidationError(f"vol must be > 0, got {vol}")
+    if option_type not in ("call", "put"):
+        raise ValidationError(f"option_type must be 'call' or 'put', got {option_type!r}")
+
     risk = RiskAnalytics(RiskConfig())
+    # SIGNATURE: calculate_all_greeks(option_type, spot, strike, time_to_expiry, volatility, risk_free_rate)
+    greeks = risk.calculate_all_greeks(option_type, spot, strike, expiry, vol, rate)
 
-    spot = data.get("spot", 100)
-    strike = data.get("strike", 100)
-    expiry = data.get("expiry", 0.25)
-    rate = data.get("rate", 0.05)
-    vol = data.get("vol", 0.2)
-    option_type = data.get("option_type", "call")
-
-    greeks = risk.calculate_all_greeks(spot, strike, expiry, rate, vol, option_type)
-    return greeks.__dict__ if hasattr(greeks, "__dict__") else greeks
+    raw = greeks.__dict__ if hasattr(greeks, "__dict__") else dict(greeks)
+    return {
+        "spot": spot,
+        "strike": strike,
+        "expiry_years": expiry,
+        "rate": rate,
+        "vol": vol,
+        "option_type": option_type,
+        "moneyness": _safe_float(spot / strike),
+        "greeks": {k: _safe_float(v) for k, v in raw.items()},
+    }
 
 
 def op_var_analysis(data):
-    """Value at Risk analysis: parametric, historical, Monte Carlo, CVaR."""
+    """Value at Risk: parametric, historical, Monte Carlo, CVaR."""
     from gs_quant_wrapper.risk_analytics import RiskAnalytics, RiskConfig
 
-    returns_list = data.get("returns", [])
-    confidence = data.get("confidence", 0.95)
-    position_value = data.get("position_value", 1000000)
+    returns_list = _coerce_floats(data.get("returns"), "returns")
+    _require_min_length(returns_list, 30, "returns")
+    confidence = _safe_float(data.get("confidence", 0.95))
+    if not (0.0 < confidence < 1.0):
+        raise ValidationError(f"confidence must be in (0, 1), got {confidence}")
+    position_value = _safe_float(data.get("position_value", 1_000_000.0))
+    if position_value <= 0:
+        raise ValidationError(f"position_value must be > 0, got {position_value}")
     dates = data.get("dates")
 
     ret = _series_from_list(returns_list, dates, "returns")
     risk = RiskAnalytics(RiskConfig())
 
-    parametric = risk.calculate_parametric_var(ret, confidence)
-    historical = risk.calculate_historical_var(ret, confidence)
-    mc = risk.calculate_monte_carlo_var(ret, confidence)
-    cvar = risk.calculate_cvar(ret, confidence)
+    # Real signatures (verified via inspect):
+    # calculate_parametric_var(portfolio_value, returns, confidence_level)
+    # calculate_historical_var(portfolio_value, returns, confidence_level)
+    # calculate_monte_carlo_var(portfolio_value, mean_return, std_return, confidence_level)
+    # calculate_cvar(portfolio_value, returns, confidence_level)
+    parametric = risk.calculate_parametric_var(position_value, ret, confidence)
+    historical = risk.calculate_historical_var(position_value, ret, confidence)
+    mc = risk.calculate_monte_carlo_var(position_value, float(ret.mean()),
+                                        float(ret.std()), confidence)
+    cvar = risk.calculate_cvar(position_value, ret, confidence)
 
     def _var_to_dict(v):
-        if isinstance(v, dict):
-            return {k: float(val) if isinstance(val, (float, int, np.floating, np.integer)) else str(val) for k, val in v.items()}
-        if hasattr(v, "__dict__"):
-            return {k: float(val) if isinstance(val, (float, int, np.floating, np.integer)) else str(val) for k, val in v.__dict__.items()}
-        return {"value": float(v)}
+        raw = v.__dict__ if hasattr(v, "__dict__") else (
+            v if isinstance(v, dict) else {"value": v})
+        out = {}
+        for k, val in raw.items():
+            if isinstance(val, (int, float, np.floating, np.integer)):
+                out[k] = _safe_float(val)
+            else:
+                out[k] = str(val)
+        return out
 
-    result = {
+    return {
+        "n_observations": len(ret),
+        "position_value": position_value,
+        "confidence": confidence,
         "parametric_var": _var_to_dict(parametric),
         "historical_var": _var_to_dict(historical),
         "monte_carlo_var": _var_to_dict(mc),
         "cvar": _var_to_dict(cvar),
-        "position_value": position_value,
-        "confidence": confidence,
     }
-    return result
 
 
 def op_stress_test(data):
-    """Stress testing with standard market scenarios."""
+    """Standard market stress scenarios applied to a single position."""
     from gs_quant_wrapper.risk_analytics import RiskAnalytics, RiskConfig
 
-    returns_list = data.get("returns", [])
-    position_value = data.get("position_value", 1000000)
-    dates = data.get("dates")
+    position_value = _safe_float(data.get("position_value", 1_000_000.0))
+    if position_value <= 0:
+        raise ValidationError(f"position_value must be > 0, got {position_value}")
 
-    ret = _series_from_list(returns_list, dates, "returns")
-    risk_analytics = RiskAnalytics(RiskConfig())
-
-    scenarios = risk_analytics.run_all_standard_scenarios(ret, position_value)
-
-    # Serialize scenario results
-    serializable = {}
-    for name, scenario in scenarios.items():
-        if isinstance(scenario, dict):
-            s = {}
-            for k, v in scenario.items():
-                if isinstance(v, (float, int, np.floating, np.integer)):
-                    s[k] = float(v)
-                elif isinstance(v, pd.Series):
-                    s[k] = float(v.iloc[-1]) if len(v) > 0 else 0
-                else:
-                    s[k] = str(v)
-            serializable[name] = s
-        else:
-            serializable[name] = str(scenario)
-
-    return serializable
-
-
-def op_instrument_create(data):
-    """Create and summarize a financial instrument."""
-    from gs_quant_wrapper.instrument_wrapper import InstrumentFactory
-
-    factory = InstrumentFactory()
-    instrument_type = data.get("instrument_type", "equity")
-
-    creators = {
-        "equity": lambda: factory.create_equity(data.get("ticker", "AAPL"), data.get("exchange", "NYSE")),
-        "etf": lambda: factory.create_etf(data.get("ticker", "SPY"), data.get("exchange", "NYSE")),
-        "bond": lambda: factory.create_bond(
-            data.get("issuer", "US TREASURY"),
-            data.get("coupon", 0.05),
-            data.get("maturity_years", 10),
-        ),
-        "option": lambda: factory.create_equity_option(
-            data.get("underlier", "AAPL"),
-            data.get("strike", 150),
-            data.get("expiry", "2025-06-20"),
-            data.get("option_type", "call"),
-        ),
-        "swap": lambda: factory.create_interest_rate_swap(
-            data.get("notional", 1000000),
-            data.get("fixed_rate", 0.03),
-            data.get("tenor", "5y"),
-        ),
-        "fx_spot": lambda: factory.create_fx_spot(
-            data.get("pair", "EUR/USD"),
-        ),
-        "cds": lambda: factory.create_cds(
-            data.get("reference_entity", "AAPL"),
-            data.get("notional", 10000000),
-        ),
-        "future": lambda: factory.create_equity_future(
-            data.get("underlier", "SPX"),
-            data.get("expiry", "2025-03-21"),
-        ),
-    }
-
-    creator = creators.get(instrument_type)
-    if creator:
-        instrument = creator()
-        summary = factory.get_instrument_summary(instrument)
-        if isinstance(summary, dict):
-            return summary
-        return {"instrument": str(summary)}
+    # run_all_standard_scenarios classifies positions by substring on the asset
+    # name ('equity', 'bond', 'fx', 'credit', 'commodity', 'vol'/'option') and
+    # applies canned shocks (2008, COVID, etc.) to notional. We accept either:
+    #   - explicit `positions` dict (asset_name -> notional), or
+    #   - a `mix` dict of weights to split position_value across asset classes
+    #     (default: balanced 60% equity / 30% bond / 10% commodity).
+    positions = data.get("positions")
+    if positions:
+        positions = {str(k): _safe_float(v) for k, v in positions.items()}
     else:
-        return {"error": f"Unknown instrument type: {instrument_type}"}
+        mix = data.get("mix") or {"equity": 0.60, "bond": 0.30, "commodity": 0.10}
+        # Normalize weights to sum to 1
+        total_w = sum(_safe_float(v) for v in mix.values()) or 1.0
+        positions = {str(k): position_value * (_safe_float(v) / total_w) for k, v in mix.items()}
 
-
-def op_comprehensive_risk_report(data):
-    """Full risk report combining Greeks, VaR, scenarios."""
-    from gs_quant_wrapper.risk_analytics import RiskAnalytics, RiskConfig
-
-    returns_list = data.get("returns", [])
-    position_value = data.get("position_value", 1000000)
-    confidence = data.get("confidence", 0.95)
-    dates = data.get("dates")
-
-    ret = _series_from_list(returns_list, dates, "returns")
     risk_analytics = RiskAnalytics(RiskConfig())
+    scenarios = risk_analytics.run_all_standard_scenarios(position_value, positions)
 
-    report = risk_analytics.comprehensive_risk_report(ret, position_value, confidence)
+    serialized = []
+    if isinstance(scenarios, list):
+        for sc in scenarios:
+            if not isinstance(sc, dict):
+                serialized.append({"scenario": str(sc)})
+                continue
+            row = {}
+            for k, v in sc.items():
+                if isinstance(v, (int, float, np.floating, np.integer)):
+                    row[k] = _safe_float(v)
+                elif isinstance(v, dict):
+                    row[k] = {kk: _safe_float(vv) if isinstance(vv, (int, float, np.floating, np.integer)) else str(vv)
+                              for kk, vv in v.items()}
+                else:
+                    row[k] = str(v)
+            serialized.append(row)
+    elif isinstance(scenarios, dict):
+        # Older shape: {scenario_name: {fields...}} -- normalize to list
+        for name, sc in scenarios.items():
+            row = {"scenario": name}
+            if isinstance(sc, dict):
+                for k, v in sc.items():
+                    if isinstance(v, (int, float, np.floating, np.integer)):
+                        row[k] = _safe_float(v)
+                    else:
+                        row[k] = str(v)
+            else:
+                row["value"] = str(sc)
+            serialized.append(row)
 
-    # Serialize
-    def _serialize(obj):
-        if isinstance(obj, dict):
-            return {k: _serialize(v) for k, v in obj.items()}
-        elif isinstance(obj, (list, tuple)):
-            return [_serialize(v) for v in obj]
-        elif isinstance(obj, pd.Series):
-            return {str(d): float(v) for d, v in obj.head(50).items()}
-        elif isinstance(obj, pd.DataFrame):
-            return {col: {str(d): float(v) for d, v in obj[col].head(50).items()} for col in obj.columns}
-        elif isinstance(obj, (np.floating, np.integer)):
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif hasattr(obj, "__dict__"):
-            return _serialize(obj.__dict__)
-        elif isinstance(obj, (datetime,)):
-            return str(obj)
-        else:
-            return obj
-
-    return _serialize(report)
+    return {
+        "position_value": position_value,
+        "n_scenarios": len(serialized),
+        "scenarios": serialized,
+        "positions": positions,
+    }
 
 
-def op_historical_simulation(data):
-    """Historical simulation for PnL estimation."""
-    from gs_quant_wrapper import ts_portfolio_analytics as port
+def _bt_buy_and_hold(prices, capital, commission):
+    """Buy on day 0, hold to end. Returns (portfolio_series, trades_count)."""
+    px = prices.iloc[:, 0]  # use first column
+    initial_price = float(px.iloc[0])
+    fee = capital * commission
+    invested = capital - fee
+    shares = invested / initial_price
+    series = (shares * px).rename("portfolio_value")
+    return series, 1
 
-    returns_list = data.get("returns", [])
-    position_value = data.get("position_value", 1000000)
-    scenarios = data.get("scenarios")
+
+def _bt_momentum(prices, capital, commission, lookback):
+    """Long top performer in trailing window, equal-weight if multiple. Daily rebalance."""
+    px = prices.copy()
+    n = len(px)
+    cash = capital
+    shares = {c: 0.0 for c in px.columns}
+    values = []
+    trades = 0
+    for i in range(n):
+        date = px.index[i]
+        # Mark-to-market current value
+        mv = sum(shares[c] * px.iloc[i][c] for c in px.columns)
+        values.append((date, cash + mv))
+        if i < lookback:
+            continue
+        # Compute trailing returns; pick top
+        window = px.iloc[i - lookback:i]
+        rets = (window.iloc[-1] / window.iloc[0] - 1.0).dropna()
+        if rets.empty:
+            continue
+        winner = rets.idxmax()
+        if rets[winner] <= 0:
+            continue
+        # Liquidate everything, buy winner
+        for c in px.columns:
+            if shares[c] > 0:
+                cash += shares[c] * px.iloc[i][c] * (1 - commission)
+                shares[c] = 0
+                trades += 1
+        target_cash = cash * (1 - commission)
+        shares[winner] = target_cash / px.iloc[i][winner]
+        cash = 0.0
+        trades += 1
+    return pd.Series(dict(values), name="portfolio_value"), trades
+
+
+def _bt_mean_reversion(prices, capital, commission, window):
+    """Buy first ticker when it dips below MA-1*std, sell when above MA+1*std."""
+    px = prices.iloc[:, 0]
+    ma = px.rolling(window).mean()
+    sd = px.rolling(window).std()
+    cash = capital
+    shares = 0.0
+    values = []
+    trades = 0
+    for i in range(len(px)):
+        date = px.index[i]
+        price = float(px.iloc[i])
+        if i >= window and not math.isnan(ma.iloc[i]):
+            lower = ma.iloc[i] - sd.iloc[i]
+            upper = ma.iloc[i] + sd.iloc[i]
+            if shares == 0 and price < lower and cash > 0:
+                spend = cash * (1 - commission)
+                shares = spend / price
+                cash = 0.0
+                trades += 1
+            elif shares > 0 and price > upper:
+                cash = shares * price * (1 - commission)
+                shares = 0.0
+                trades += 1
+        values.append((date, cash + shares * price))
+    return pd.Series(dict(values), name="portfolio_value"), trades
+
+
+def _bt_rebalancing(prices, capital, commission, weights, freq_days=21):
+    """Hold target weights, rebalance every freq_days."""
+    cols = list(prices.columns)
+    w = {c: float(weights.get(c, 0.0)) for c in cols}
+    total = sum(w.values()) or 1.0
+    w = {c: v / total for c, v in w.items()}
+    cash = capital
+    shares = {c: 0.0 for c in cols}
+    values = []
+    trades = 0
+    for i in range(len(prices)):
+        date = prices.index[i]
+        row = prices.iloc[i]
+        if i % freq_days == 0:
+            # Liquidate to cash
+            mv = sum(shares[c] * row[c] for c in cols)
+            cash += mv * (1 - commission)
+            shares = {c: 0.0 for c in cols}
+            # Buy targets
+            for c in cols:
+                if w[c] > 0 and not math.isnan(row[c]) and row[c] > 0:
+                    spend = cash * w[c] * (1 - commission)
+                    shares[c] = spend / float(row[c])
+                    trades += 1
+            cash -= sum(shares[c] * row[c] for c in cols)
+        mv = sum(shares[c] * row[c] for c in cols)
+        values.append((date, cash + mv))
+    return pd.Series(dict(values), name="portfolio_value"), trades
+
+
+def _curve_metrics(curve, initial_capital):
+    """Compute summary metrics from an equity curve series."""
+    if len(curve) < 2:
+        return {}
+    final_value = float(curve.iloc[-1])
+    total_return = final_value / initial_capital - 1.0
+    daily_rets = curve.pct_change(fill_method=None).dropna()
+    n_days = len(curve)
+    years = max(n_days / 252.0, 1e-6)
+    annualized_return = (1.0 + total_return) ** (1.0 / years) - 1.0 if final_value > 0 else -1.0
+    vol = float(daily_rets.std() * math.sqrt(252)) if len(daily_rets) > 1 else 0.0
+    sharpe = float(daily_rets.mean() / daily_rets.std() * math.sqrt(252)) if daily_rets.std() > 0 else 0.0
+    # Drawdown
+    peak = curve.cummax()
+    dd = (curve - peak) / peak
+    max_dd = float(dd.min())
+    # Best / worst day
+    best = float(daily_rets.max()) if len(daily_rets) else 0.0
+    worst = float(daily_rets.min()) if len(daily_rets) else 0.0
+    win_rate = float((daily_rets > 0).mean() * 100) if len(daily_rets) else 0.0
+    return {
+        "final_value": _safe_float(final_value),
+        "total_return": _safe_float(total_return),
+        "annualized_return": _safe_float(annualized_return),
+        "volatility": _safe_float(vol),
+        "sharpe_ratio": _safe_float(sharpe),
+        "max_drawdown": _safe_float(max_dd),
+        "best_day": _safe_float(best),
+        "worst_day": _safe_float(worst),
+        "win_rate_pct": _safe_float(win_rate),
+        "n_days": int(n_days),
+    }
+
+
+def op_backtest(data):
+    """Run a simple strategy backtest on price history."""
+    strategy = str(data.get("strategy", "buy_and_hold")).lower()
+    # Normalize C++ aliases to canonical names
+    aliases = {"buy_hold": "buy_and_hold", "buy-and-hold": "buy_and_hold",
+               "meanreversion": "mean_reversion", "mean-reversion": "mean_reversion"}
+    strategy = aliases.get(strategy, strategy)
+
+    initial_capital = _safe_float(data.get("initial_capital", 100_000.0))
+    if initial_capital <= 0:
+        raise ValidationError(f"initial_capital must be > 0, got {initial_capital}")
+    commission = _safe_float(data.get("commission", 0.001))
+    lookback = _safe_int(data.get("lookback", 20))
+    rebalance_freq = data.get("rebalance_freq", "monthly")
     dates = data.get("dates")
 
-    ret = _series_from_list(returns_list, dates, "returns")
-    sim = port.historical_simulation_estimated_pnl(ret, position_value, scenarios)
+    # ── Build the price DataFrame ────────────────────────────────────────────
+    prices_input = data.get("prices")
+    ticker = str(data.get("ticker", "")).strip().upper()
 
-    result = {
-        "scenarios_count": len(sim),
-        "var_5_pnl": float(sim[sim["percentile"] <= 5]["pnl"].iloc[-1]) if len(sim[sim["percentile"] <= 5]) > 0 else 0,
-        "var_1_pnl": float(sim[sim["percentile"] <= 1]["pnl"].iloc[-1]) if len(sim[sim["percentile"] <= 1]) > 0 else 0,
-        "median_pnl": float(sim[sim["percentile"].between(49, 51)]["pnl"].mean()) if len(sim[sim["percentile"].between(49, 51)]) > 0 else 0,
-        "best_pnl": float(sim["pnl"].max()),
-        "worst_pnl": float(sim["pnl"].min()),
-        "pnl_distribution": sim[["percentile", "pnl"]].to_dict(orient="records"),
+    if isinstance(prices_input, dict) and prices_input:
+        # Already a dict of ticker -> list[float]
+        cleaned = {k: _coerce_floats(v, f"prices[{k}]") for k, v in prices_input.items()}
+        df = _df_from_dict(cleaned, dates)
+    elif isinstance(prices_input, (list, tuple)) and prices_input:
+        prices_list = _coerce_floats(prices_input, "prices")
+        col = ticker or "ASSET"
+        df = pd.DataFrame({col: prices_list},
+                          index=pd.date_range("2020-01-01", periods=len(prices_list), freq="B"))
+    elif ticker:
+        # Fetch from yfinance as a convenience for the UI
+        try:
+            import yfinance as yf
+        except ImportError:
+            raise ValidationError(
+                "ticker provided but neither 'prices' supplied nor yfinance available")
+        period = str(data.get("period", "2y"))
+        hist = yf.Ticker(ticker).history(period=period, auto_adjust=True)
+        if hist.empty or "Close" not in hist.columns:
+            raise ValidationError(
+                f"yfinance returned no price history for ticker {ticker!r} (period={period})")
+        df = pd.DataFrame({ticker: hist["Close"].astype(float).values},
+                          index=hist.index.tz_localize(None) if hist.index.tz is not None else hist.index)
+    else:
+        raise ValidationError(
+            "backtest needs either 'prices' (list or dict) or a 'ticker' to fetch")
+
+    if len(df) < max(lookback + 5, 30):
+        raise ValidationError(
+            f"need at least {max(lookback + 5, 30)} price observations, got {len(df)}")
+
+    # Pick the active ticker for single-asset strategies
+    if ticker and ticker in df.columns:
+        single_df = df[[ticker]]
+    else:
+        single_df = df.iloc[:, [0]]
+        ticker = single_df.columns[0]
+
+    if strategy == "buy_and_hold":
+        curve, trades_count = _bt_buy_and_hold(single_df, initial_capital, commission)
+        active = [ticker]
+    elif strategy == "momentum":
+        curve, trades_count = _bt_momentum(df, initial_capital, commission, lookback)
+        active = list(df.columns)
+    elif strategy == "mean_reversion":
+        curve, trades_count = _bt_mean_reversion(single_df, initial_capital, commission, lookback)
+        active = [ticker]
+    elif strategy == "rebalancing":
+        weights = data.get("weights")
+        if not weights:
+            n = len(df.columns)
+            weights = {col: 1.0 / n for col in df.columns}
+        rebal_days = _safe_int(data.get("rebalance_days", 21))
+        curve, trades_count = _bt_rebalancing(df, initial_capital, commission, weights, rebal_days)
+        active = list(df.columns)
+    else:
+        raise ValidationError(
+            f"unknown strategy {strategy!r}; expected one of: "
+            "buy_and_hold, momentum, mean_reversion, rebalancing")
+
+    # Sample curve to ~250 points for the wire
+    step = max(1, len(curve) // 250)
+    equity_curve = [
+        {"date": str(d)[:10], "value": _safe_float(v)}
+        for i, (d, v) in enumerate(curve.items()) if i % step == 0
+    ]
+    # Always include the very last point
+    if equity_curve and equity_curve[-1]["date"] != str(curve.index[-1])[:10]:
+        equity_curve.append({"date": str(curve.index[-1])[:10],
+                             "value": _safe_float(curve.iloc[-1])})
+
+    metrics = _curve_metrics(curve, initial_capital)
+    metrics["initial_capital"] = _safe_float(initial_capital)
+    metrics["num_trades"] = int(trades_count)
+
+    return {
+        "strategy": strategy,
+        "ticker": ticker,
+        "tickers": active,
+        "initial_capital": initial_capital,
+        "n_observations": int(len(df)),
+        "start_date": str(df.index[0])[:10],
+        "end_date": str(df.index[-1])[:10],
+        "metrics": metrics,
+        "equity_curve": equity_curve,
     }
-    return result
+
+
+def op_statistics(data):
+    """Descriptive statistics of a single series."""
+    from gs_quant_wrapper import ts_math_statistics as ms
+
+    values = _coerce_floats(data.get("values"), "values")
+    _require_min_length(values, 2, "values")
+    dates = data.get("dates")
+    series = _series_from_list(values, dates, "data")
+
+    pcts = ms.percentiles(series)
+
+    return {
+        "n_observations": len(series),
+        "mean": _safe_float(ms.mean(series)),
+        "median": _safe_float(ms.median(series)),
+        "std": _safe_float(ms.std(series)),
+        "variance": _safe_float(ms.var(series)),
+        "min": _safe_float(ms.min_(series)),
+        "max": _safe_float(ms.max_(series)),
+        "range": _safe_float(ms.range_(series)),
+        "skewness": _safe_float(ms.skewness(series)),
+        "kurtosis": _safe_float(ms.kurtosis(series)),
+        "count": _safe_int(ms.count(series)),
+        "sum": _safe_float(ms.sum_(series)),
+        "semi_variance": _safe_float(ms.semi_variance(series)),
+        "realized_variance": _safe_float(ms.realized_var(series)),
+        "percentiles": {str(_safe_int(k)): _safe_float(v) for k, v in pcts.items()},
+    }
 
 
 # ============================================================================
@@ -575,54 +669,75 @@ def op_historical_simulation(data):
 # ============================================================================
 
 OPERATIONS = {
-    "performance_analysis": op_performance_analysis,
-    "technical_analysis": op_technical_analysis,
     "risk_metrics": op_risk_metrics,
     "portfolio_analytics": op_portfolio_analytics,
-    "volatility_surface": op_volatility_surface,
-    "statistics": op_statistics,
-    "correlation_analysis": op_correlation_analysis,
-    "backtest": op_backtest,
-    "basket_backtest": op_basket_backtest,
-    "datetime_utils": op_datetime_utils,
     "greeks": op_greeks,
     "var_analysis": op_var_analysis,
     "stress_test": op_stress_test,
-    "instrument_create": op_instrument_create,
-    "comprehensive_risk_report": op_comprehensive_risk_report,
-    "historical_simulation": op_historical_simulation,
+    "backtest": op_backtest,
+    "statistics": op_statistics,
 }
 
 
 def dispatch(operation, data):
-    """Dispatch to operation handler."""
+    """Dispatch to operation handler. Always returns a dict with a `success` key."""
     handler = OPERATIONS.get(operation)
     if handler is None:
-        return {"error": f"Unknown operation: {operation}", "available": list(OPERATIONS.keys())}
-    return handler(data)
+        return {
+            "success": False,
+            "operation": operation,
+            "error": f"Unknown operation: {operation}",
+            "error_kind": "unknown_op",
+            "available": list(OPERATIONS.keys()),
+        }
+    try:
+        result = handler(data or {})
+        return {
+            "success": True,
+            "operation": operation,
+            "data": result,
+        }
+    except ValidationError as e:
+        return {
+            "success": False,
+            "operation": operation,
+            "error": str(e),
+            "error_kind": "validation",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "operation": operation,
+            "error": str(e),
+            "error_kind": "runtime",
+            "traceback": traceback.format_exc(),
+        }
 
 
 def main(args):
     """Entry point: args = [operation, json_data]"""
     if len(args) < 2:
-        result = {"error": "Usage: worker_handler.py <operation> <json_data>"}
-        print(json.dumps(result))
+        print(json.dumps({
+            "success": False,
+            "error": "Usage: gs_quant_service.py <operation> <json_data>",
+            "error_kind": "usage",
+        }))
         return
 
     operation = args[0]
     try:
         data = json.loads(args[1])
     except json.JSONDecodeError as e:
-        result = {"error": f"Invalid JSON: {e}"}
-        print(json.dumps(result))
+        print(json.dumps({
+            "success": False,
+            "operation": operation,
+            "error": f"Invalid JSON input: {e}",
+            "error_kind": "validation",
+        }))
         return
 
-    try:
-        result = dispatch(operation, data)
-        print(json.dumps(result, default=str))
-    except Exception as e:
-        result = {"error": str(e), "traceback": traceback.format_exc()}
-        print(json.dumps(result, default=str))
+    result = dispatch(operation, data)
+    print(json.dumps(result, default=str))
 
 
 if __name__ == "__main__":

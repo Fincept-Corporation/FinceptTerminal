@@ -4,14 +4,18 @@
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "services/maritime/MaritimeService.h"
+#include "services/maritime/PortsCatalog.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/LoadingOverlay.h"
 #include "ui/widgets/WorldMapWidget.h"
 
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHash>
 #include <QHeaderView>
+#include <QJsonObject>
+#include <QLocale>
 #include <QScrollArea>
 #include <QSet>
 #include <QSplitter>
@@ -96,7 +100,17 @@ MaritimeScreen::MaritimeScreen(QWidget* parent) : QWidget(parent) {
 
     refresh_timer_ = new QTimer(this);
     refresh_timer_->setInterval(5 * 60 * 1000); // 5 min
-    connect(refresh_timer_, &QTimer::timeout, this, &MaritimeScreen::on_load_vessels);
+    // Auto-refresh re-issues whichever mode produced the most recent set: a
+    // bbox load if the user had typed one, otherwise the global sample. This
+    // avoids a no-op refresh after a first-show global view (the bbox
+    // spinners stay at zero in that case).
+    connect(refresh_timer_, &QTimer::timeout, this, [this]() {
+        const bool valid_bbox = area_min_lat_ && area_max_lat_ && area_min_lng_ && area_max_lng_
+                             && area_max_lat_->value() > area_min_lat_->value()
+                             && area_max_lng_->value() > area_min_lng_->value();
+        if (valid_bbox) on_load_vessels();
+        else            load_global_sample();
+    });
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this](const ui::ThemeTokens&) { apply_theme(); });
@@ -109,14 +123,23 @@ void MaritimeScreen::showEvent(QShowEvent* e) {
     refresh_timer_->start();
     if (first_show_) {
         first_show_ = false;
-        // Pull whatever bounding box the user last typed (restored from
-        // ScreenStateManager) — no hardcoded "Mumbai area" load.
+        // Default first-show action: globally-spread sample so the map looks
+        // populated instead of empty. If the user previously typed a valid
+        // bbox (restored from ScreenStateManager), honour that instead.
+        bool used_saved_bbox = false;
         if (area_min_lat_ && area_max_lat_ && area_min_lng_ && area_max_lng_) {
             const bool valid = area_max_lat_->value() > area_min_lat_->value()
                             && area_max_lng_->value() > area_min_lng_->value();
-            if (valid)
+            if (valid) {
                 on_load_vessels();
+                used_saved_bbox = true;
+            }
         }
+        if (!used_saved_bbox)
+            load_global_sample();
+        // Pull module status + DB record count for the status bar — replaces
+        // the previously-static "AIS FEED" label with the live API response.
+        MaritimeService::instance().check_health();
     }
     LOG_INFO("Maritime", "Screen shown");
 }
@@ -131,7 +154,12 @@ void MaritimeScreen::connect_service() {
     connect(&svc, &MaritimeService::vessels_loaded, this, &MaritimeScreen::on_vessels_loaded);
     connect(&svc, &MaritimeService::vessel_found, this, &MaritimeScreen::on_vessel_found);
     connect(&svc, &MaritimeService::vessel_history_loaded, this, &MaritimeScreen::on_vessel_history);
+    connect(&svc, &MaritimeService::health_loaded, this, &MaritimeScreen::on_health_loaded);
     connect(&svc, &MaritimeService::error_occurred, this, &MaritimeScreen::on_error);
+
+    auto& ports = PortsCatalog::instance();
+    connect(&ports, &PortsCatalog::ports_found, this, &MaritimeScreen::on_ports_found);
+    connect(&ports, &PortsCatalog::error_occurred, this, &MaritimeScreen::on_ports_error);
 }
 
 // ── Theme apply (called on construction + theme_changed) ─────────────────────
@@ -203,6 +231,19 @@ void MaritimeScreen::apply_theme() {
 
     if (imo_edit_)
         imo_edit_->setStyleSheet(input_ss());
+}
+
+void MaritimeScreen::show_map_loading(const QString& msg) {
+    if (!map_loader_) return;
+    // The overlay sizes from parent->rect() each time it's shown — that's
+    // already the behaviour of LoadingOverlay::show_loading(), but resize
+    // might have happened since construction so refresh the geometry first.
+    if (map_widget_) map_loader_->setGeometry(map_widget_->rect());
+    map_loader_->show_loading(msg);
+}
+
+void MaritimeScreen::hide_map_loading() {
+    if (map_loader_) map_loader_->hide_loading();
 }
 
 void MaritimeScreen::set_status(const QString& text, const ui::ColorToken& color) {
@@ -277,9 +318,15 @@ QWidget* MaritimeScreen::build_left_panel() {
     vl->setContentsMargins(12, 12, 12, 12);
     vl->setSpacing(8);
 
+    auto* global_btn = new QPushButton("GLOBAL VIEW (200 VESSELS)", panel);
+    global_btn->setCursor(Qt::PointingHandCursor);
+    global_btn->setStyleSheet(btn_primary_ss());
+    connect(global_btn, &QPushButton::clicked, this, &MaritimeScreen::load_global_sample);
+    vl->addWidget(global_btn);
+
     auto* load_btn = new QPushButton("LOAD VESSELS IN AREA", panel);
     load_btn->setCursor(Qt::PointingHandCursor);
-    load_btn->setStyleSheet(btn_primary_ss());
+    load_btn->setStyleSheet(btn_outline_ss());
     connect(load_btn, &QPushButton::clicked, this, &MaritimeScreen::on_load_vessels);
     vl->addWidget(load_btn);
 
@@ -385,6 +432,42 @@ QWidget* MaritimeScreen::build_center_panel() {
     map_widget_ = new fincept::ui::WorldMapWidget(splitter);
     map_widget_->setMinimumHeight(280);
     splitter->addWidget(map_widget_);
+    // Overlay sits on top of the map and follows its size; it consumes mouse
+    // events while visible so the user can't pan a half-loaded map.
+    map_loader_ = new fincept::ui::LoadingOverlay(map_widget_);
+
+    // Pin click → populate the right-panel SELECTED VESSEL card with the
+    // record we cached in update_map. Clicks during a stale map (cached set
+    // emptied) silently no-op.
+    connect(map_widget_, &fincept::ui::WorldMapWidget::pin_clicked, this, [this](int id) {
+        if (id < 0 || id >= rendered_vessels_.size()) return;
+        const auto& v = rendered_vessels_[id];
+        if (search_result_card_) search_result_card_->setVisible(true);
+        if (search_result_label_) search_result_label_->setVisible(false);
+        if (sr_name_)     sr_name_->setText(v.name);
+        if (sr_imo_)      sr_imo_->setText("IMO: " + v.imo);
+        if (sr_position_) sr_position_->setText(QString("Position: %1, %2")
+                                                    .arg(v.latitude, 0, 'f', 4)
+                                                    .arg(v.longitude, 0, 'f', 4));
+        if (sr_speed_)    sr_speed_->setText(QString("Speed: %1 kn").arg(v.speed, 0, 'f', 1));
+        if (sr_from_)     sr_from_->setText("From: " + (v.from_port.isEmpty() ? "—" : v.from_port));
+        if (sr_to_)       sr_to_->setText("To: "   + (v.to_port.isEmpty()   ? "—" : v.to_port));
+        // Sync the IMO field too so the user can hit "VOYAGE HISTORY" right
+        // after clicking a pin without retyping.
+        if (imo_edit_)    imo_edit_->setText(v.imo);
+        // Highlight the corresponding row in the vessels table if it's
+        // currently rendered (table may be in a different sort order).
+        if (vessels_table_) {
+            for (int r = 0; r < vessels_table_->rowCount(); ++r) {
+                auto* item = vessels_table_->item(r, 1);  // IMO column
+                if (item && item->text() == v.imo) {
+                    vessels_table_->setCurrentCell(r, 0);
+                    vessels_table_->scrollToItem(item, QAbstractItemView::PositionAtCenter);
+                    break;
+                }
+            }
+        }
+    });
 
     vessels_table_ = new QTableWidget(splitter);
     vessels_table_->setColumnCount(9);
@@ -453,6 +536,7 @@ QWidget* MaritimeScreen::build_right_panel() {
         if (imo.isEmpty())
             return;
         set_status("LOADING HISTORY...", ui::colors::WARNING);
+        show_map_loading(QStringLiteral("LOADING HISTORY"));
         MaritimeService::instance().get_vessel_history(imo);
     });
     vl->addWidget(history_btn);
@@ -528,9 +612,99 @@ QWidget* MaritimeScreen::build_right_panel() {
         params.min_lng = area_min_lng_->value();
         params.max_lng = area_max_lng_->value();
         set_status("SEARCHING...", ui::colors::WARNING);
+        pending_global_sample_ = false;
+        show_map_loading(QStringLiteral("SEARCHING AREA"));
         MaritimeService::instance().search_vessels_by_area(params);
     });
     vl->addWidget(area_btn);
+
+    // ── Ports Search ────────────────────────────────────────────────────────
+    //
+    // Free port directory (no API key, no static bundle): Wikidata SPARQL
+    // primary, with Marine Regions and OSM Overpass as automatic fallbacks
+    // inside PortsCatalog. Two entry points: free-text name search (works
+    // anywhere in the world) and "ports in current bbox" (uses whatever
+    // coords the user typed in the AREA SEARCH spinners above).
+    vl->addSpacing(8);
+    auto* ports_title = new QLabel("PORTS", content);
+    ports_title->setStyleSheet(section_label_ss());
+    vl->addWidget(ports_title);
+
+    auto* ports_lbl = new QLabel("PORT NAME", content);
+    ports_lbl->setStyleSheet(tiny_label_ss());
+    vl->addWidget(ports_lbl);
+
+    ports_query_edit_ = new QLineEdit(content);
+    ports_query_edit_->setPlaceholderText("e.g. Rotterdam");
+    ports_query_edit_->setStyleSheet(input_ss());
+    auto run_name_search = [this]() {
+        const QString q = ports_query_edit_->text().trimmed();
+        if (q.isEmpty()) return;
+        if (ports_status_) ports_status_->setText("Searching…");
+        PortsCatalog::instance().search_by_name(q);
+    };
+    connect(ports_query_edit_, &QLineEdit::returnPressed, this, run_name_search);
+    vl->addWidget(ports_query_edit_);
+
+    auto* ports_btn = new QPushButton("SEARCH PORTS", content);
+    ports_btn->setCursor(Qt::PointingHandCursor);
+    ports_btn->setStyleSheet(btn_primary_ss());
+    connect(ports_btn, &QPushButton::clicked, this, run_name_search);
+    vl->addWidget(ports_btn);
+
+    auto* ports_in_view_btn = new QPushButton("PORTS IN AREA", content);
+    ports_in_view_btn->setCursor(Qt::PointingHandCursor);
+    ports_in_view_btn->setStyleSheet(btn_outline_ss());
+    connect(ports_in_view_btn, &QPushButton::clicked, this, [this]() {
+        if (!area_min_lat_ || !area_max_lat_ || !area_min_lng_ || !area_max_lng_) return;
+        const double mn_lat = area_min_lat_->value();
+        const double mx_lat = area_max_lat_->value();
+        const double mn_lng = area_min_lng_->value();
+        const double mx_lng = area_max_lng_->value();
+        if (mx_lat <= mn_lat || mx_lng <= mn_lng) {
+            if (ports_status_) ports_status_->setText("Set a valid bbox in AREA SEARCH first.");
+            return;
+        }
+        if (ports_status_) ports_status_->setText("Searching…");
+        PortsCatalog::instance().search_by_bbox(mn_lat, mx_lat, mn_lng, mx_lng);
+    });
+    vl->addWidget(ports_in_view_btn);
+
+    ports_status_ = new QLabel(content);
+    ports_status_->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;")
+                                     .arg(ui::colors::TEXT_TERTIARY())
+                                     .arg(ui::fonts::DATA_FAMILY));
+    vl->addWidget(ports_status_);
+
+    ports_table_ = new QTableWidget(content);
+    ports_table_->setColumnCount(3);
+    ports_table_->setHorizontalHeaderLabels({"Name", "Country", "Source"});
+    ports_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    ports_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    ports_table_->setSelectionMode(QAbstractItemView::SingleSelection);
+    ports_table_->verticalHeader()->setVisible(false);
+    ports_table_->horizontalHeader()->setStretchLastSection(true);
+    ports_table_->setMinimumHeight(160);
+    ports_table_->setStyleSheet(table_ss());
+    // Click → drop a CYAN pin on the existing world map to distinguish from
+    // the green vessel pins, then re-fit the camera.
+    connect(ports_table_, &QTableWidget::currentCellChanged, this,
+            [this](int row, int, int, int) {
+        if (row < 0 || row >= port_results_.size() || !map_widget_) return;
+        const auto& p = port_results_[row];
+        // Add port pin on top of existing vessel pins; id=-1 keeps the port
+        // pin out of the pin_clicked dispatch (which expects vessel indices).
+        fincept::ui::MapPin pin;
+        pin.latitude  = p.latitude;
+        pin.longitude = p.longitude;
+        pin.label     = QString("%1 (%2)").arg(p.name, p.locode.isEmpty() ? p.country : p.locode);
+        pin.color     = QColor(ui::colors::CYAN.get());
+        pin.radius    = 6.0;
+        pin.id        = -1;
+        map_widget_->add_pin(pin);
+        map_widget_->fly_to(p.latitude, p.longitude);
+    });
+    vl->addWidget(ports_table_);
 
     // ── Route Detail ───────────────────────────────────────────────────────
     vl->addSpacing(8);
@@ -622,10 +796,17 @@ QWidget* MaritimeScreen::build_status_bar() {
 
     auto* lbl1 = new QLabel("SOURCE:", bar);
     lbl1->setStyleSheet(s);
-    auto* val1 = new QLabel("AIS FEED + FINCEPT API", bar);
-    val1->setStyleSheet(sv);
+    source_value_ = new QLabel("—", bar);
+    source_value_->setStyleSheet(sv);
     hl->addWidget(lbl1);
-    hl->addWidget(val1);
+    hl->addWidget(source_value_);
+
+    auto* lbl_rec = new QLabel("RECORDS:", bar);
+    lbl_rec->setStyleSheet(s);
+    records_value_ = new QLabel("—", bar);
+    records_value_->setStyleSheet(sv);
+    hl->addWidget(lbl_rec);
+    hl->addWidget(records_value_);
 
     auto* lbl2 = new QLabel("REFRESH:", bar);
     lbl2->setStyleSheet(s);
@@ -663,6 +844,23 @@ void MaritimeScreen::populate_routes_table() {
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────
+void MaritimeScreen::load_global_sample() {
+    // World bbox — the API caps at ±90 lat / ±180 lng, but stays well-behaved
+    // with these slightly inset values. Returns ~45k vessels worldwide today;
+    // the per-cell downsampler in on_vessels_loaded reduces that to ~200 pins
+    // distributed across a 10x10 lat/lng grid so the map fills out instead of
+    // clumping in the busiest shipping lanes.
+    AreaSearchParams params;
+    params.min_lat = -89.0;
+    params.max_lat =  89.0;
+    params.min_lng = -179.0;
+    params.max_lng =  179.0;
+    set_status("LOADING GLOBAL...", ui::colors::WARNING);
+    pending_global_sample_ = true;
+    show_map_loading(QStringLiteral("LOADING GLOBAL VESSELS"));
+    MaritimeService::instance().search_vessels_by_area(params);
+}
+
 void MaritimeScreen::on_load_vessels() {
     AreaSearchParams params;
     if (area_min_lat_) params.min_lat = area_min_lat_->value();
@@ -674,6 +872,8 @@ void MaritimeScreen::on_load_vessels() {
         return;
     }
     set_status("LOADING...", ui::colors::WARNING);
+    pending_global_sample_ = false;  // explicit bbox load — show as-is
+    show_map_loading(QStringLiteral("LOADING VESSELS"));
     MaritimeService::instance().search_vessels_by_area(params);
 }
 
@@ -684,10 +884,43 @@ void MaritimeScreen::on_search_vessel() {
     search_result_card_->setVisible(false);
     search_result_label_->setVisible(false);
     set_status("TRACKING...", ui::colors::WARNING);
+    show_map_loading(QStringLiteral("TRACKING VESSEL"));
     MaritimeService::instance().get_vessel_position(imo);
 }
 
 void MaritimeScreen::on_vessels_loaded(VesselsPage page) {
+    hide_map_loading();
+    // Spread mode — globally-sampled fetch was triggered. Bin the returned
+    // vessels into a 10x10 lat/lng grid and pick up to 2 per cell so the
+    // map gets coverage instead of a dense regional cluster (the API tends
+    // to return everything from busy shipping lanes first).
+    if (pending_global_sample_) {
+        pending_global_sample_ = false;
+        constexpr int kBins = 10;
+        constexpr int kPerCell = 2;
+        constexpr int kTargetCount = 200;
+        QHash<int, QVector<int>> by_cell;  // cell index → vessel indices
+        for (int i = 0; i < page.vessels.size(); ++i) {
+            const auto& v = page.vessels[i];
+            if (v.latitude == 0.0 && v.longitude == 0.0) continue;
+            const int la = qBound(0, int((v.latitude + 90.0) / 180.0 * kBins), kBins - 1);
+            const int ln = qBound(0, int((v.longitude + 180.0) / 360.0 * kBins), kBins - 1);
+            by_cell[la * kBins + ln].append(i);
+        }
+        QVector<VesselData> picked;
+        picked.reserve(kTargetCount);
+        for (auto it = by_cell.cbegin(); it != by_cell.cend() && picked.size() < kTargetCount; ++it) {
+            const auto& idxs = it.value();
+            const int take = std::min<int>(kPerCell, idxs.size());
+            for (int k = 0; k < take && picked.size() < kTargetCount; ++k)
+                picked.append(page.vessels[idxs[k]]);
+        }
+        // Replace the page contents with the spread sample so the table /
+        // map / stats all see the same downsampled set.
+        page.vessels = picked;
+        page.total_count = picked.size();
+    }
+
     // Render limit — area-search can return 14k+ rows. Pin/render the top
     // (newest-first) batch to keep the UI responsive; full count still
     // shown in the status badge.
@@ -755,6 +988,7 @@ void MaritimeScreen::on_vessels_loaded(VesselsPage page) {
 }
 
 void MaritimeScreen::on_vessel_found(VesselData vessel) {
+    hide_map_loading();
     search_result_card_->setVisible(true);
     search_result_label_->setVisible(false);
     sr_name_->setText(vessel.name);
@@ -767,6 +1001,8 @@ void MaritimeScreen::on_vessel_found(VesselData vessel) {
 }
 
 void MaritimeScreen::on_error(const QString& context, const QString& message) {
+    hide_map_loading();
+    pending_global_sample_ = false;
     if (context == "vessel_position") {
         search_result_card_->setVisible(false);
         search_result_label_->setText("Error: " + message);
@@ -774,6 +1010,69 @@ void MaritimeScreen::on_error(const QString& context, const QString& message) {
     }
     set_status("ERROR", ui::colors::NEGATIVE);
     LOG_ERROR("Maritime", QString("[%1] %2").arg(context, message));
+}
+
+void MaritimeScreen::on_ports_found(QVector<services::maritime::PortRecord> ports, QString context) {
+    Q_UNUSED(context);
+    port_results_ = ports;
+    if (!ports_table_) return;
+
+    ports_table_->setSortingEnabled(false);
+    ports_table_->setRowCount(ports.size());
+    for (int i = 0; i < ports.size(); ++i) {
+        const auto& p = ports[i];
+        // Name cell carries the LOCODE in its tooltip — that's a useful
+        // detail without burning a column for fields most rows won't have.
+        auto* name = new QTableWidgetItem(p.name);
+        if (!p.locode.isEmpty())
+            name->setToolTip(QString("%1\nUN/LOCODE: %2").arg(p.name, p.locode));
+        ports_table_->setItem(i, 0, name);
+        ports_table_->setItem(i, 1, new QTableWidgetItem(p.country));
+        ports_table_->setItem(i, 2, new QTableWidgetItem(services::maritime::port_source_name(p.source)));
+    }
+    ports_table_->setSortingEnabled(true);
+    ports_table_->resizeColumnsToContents();
+
+    if (ports_status_) {
+        if (ports.isEmpty())
+            ports_status_->setText("No ports found.");
+        else
+            ports_status_->setText(QString("%1 port%2 — click a row to plot.")
+                                       .arg(ports.size())
+                                       .arg(ports.size() == 1 ? "" : "s"));
+    }
+}
+
+void MaritimeScreen::on_ports_error(const QString& context, const QString& message) {
+    LOG_WARN("Maritime", QString("Ports [%1]: %2").arg(context, message));
+    if (ports_status_)
+        ports_status_->setText("Lookup failed: " + message);
+}
+
+void MaritimeScreen::on_health_loaded(QJsonObject data) {
+    // /marine/health envelope: {success, message, data:{module, status,
+    //   database:{status, total_records}, mode, endpoints:{...}}}
+    const QJsonObject d = data.value("data").toObject();
+    const QString module = d.value("module").toString();
+    const QString status = d.value("status").toString();
+    const qint64 total   = d.value("database").toObject().value("total_records").toVariant().toLongLong();
+
+    if (source_value_) {
+        const QString label = module.isEmpty() ? QStringLiteral("FINCEPT MARINE API") : module.toUpper();
+        const QString color = status == QStringLiteral("healthy")
+                                  ? ui::colors::POSITIVE()
+                                  : ui::colors::WARNING();
+        source_value_->setText(label);
+        source_value_->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
+                                         .arg(color)
+                                         .arg(ui::fonts::DATA_FAMILY));
+    }
+    if (records_value_) {
+        const QString formatted = total > 0
+            ? QLocale(QLocale::English).toString(total)
+            : QStringLiteral("—");
+        records_value_->setText(formatted);
+    }
 }
 
 void MaritimeScreen::on_route_selected(int row) {
@@ -826,14 +1125,21 @@ void MaritimeScreen::update_credits(int remaining) {
 }
 
 void MaritimeScreen::update_map(const QVector<VesselData>& vessels) {
+    rendered_vessels_.clear();
+    rendered_vessels_.reserve(vessels.size());
     QVector<fincept::ui::MapPin> pins;
     pins.reserve(vessels.size());
     QSet<QString> port_seen;
     for (const auto& v : vessels) {
         if (v.latitude == 0.0 && v.longitude == 0.0)
             continue;
+        // pin.id = index into rendered_vessels_ — pin_clicked uses it to
+        // resolve the click back to the full record for the right-panel
+        // detail card.
+        const int id = rendered_vessels_.size();
+        rendered_vessels_.append(v);
         pins.append({v.latitude, v.longitude, QString("%1 (%2)").arg(v.name, v.imo),
-                     ui::colors::POSITIVE, 4.0});
+                     ui::colors::POSITIVE, 4.0, id});
         // Track unique destination ports for the PORTS stat.
         if (!v.to_port.isEmpty())
             port_seen.insert(v.to_port);
@@ -869,6 +1175,7 @@ void MaritimeScreen::rebuild_routes_from_vessels(const QVector<VesselData>& vess
 }
 
 void MaritimeScreen::on_vessel_history(VesselHistoryPage page) {
+    hide_map_loading();
     update_credits(page.remaining_credits);
     const auto& history = page.history;
     if (history.isEmpty()) {

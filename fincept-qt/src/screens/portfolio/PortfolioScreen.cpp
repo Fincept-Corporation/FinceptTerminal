@@ -12,6 +12,7 @@
 #include "screens/portfolio/PortfolioFFNView.h"
 #include "screens/portfolio/PortfolioHeatmap.h"
 #include "screens/portfolio/PortfolioOrderPanel.h"
+#include "screens/portfolio/PortfolioPanelHeader.h"
 #include "screens/portfolio/PortfolioPerfChart.h"
 #include "screens/portfolio/PortfolioSectorPanel.h"
 #include "screens/portfolio/PortfolioStatsRibbon.h"
@@ -325,8 +326,9 @@ static QPushButton* make_cta_card(const QString& glyph, const QString& title, co
     btn->setFixedSize(220, 140);
     btn->setObjectName("pfCtaCard");
     btn->setProperty("accent", accent_hex);
+    // Square corners — DESIGN_SYSTEM rule 9.1 forbids border-radius.
     btn->setStyleSheet(
-        QString("QPushButton#pfCtaCard { background:%1; color:%2; border:1px solid %3; border-radius:4px;"
+        QString("QPushButton#pfCtaCard { background:%1; color:%2; border:1px solid %3;"
                 "  text-align:left; padding:16px; }"
                 "QPushButton#pfCtaCard:hover { border-color:%4; background:%5; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), accent_hex,
@@ -448,7 +450,8 @@ QWidget* PortfolioScreen::build_loading_state() {
     auto make_bar = [](int h, int w_px, const QString& color, QWidget* parent) {
         auto* bar = new QFrame(parent);
         bar->setFixedSize(w_px, h);
-        bar->setStyleSheet(QString("background:%1; border-radius:3px;").arg(color));
+        // Square — DESIGN_SYSTEM rule 9.1.
+        bar->setStyleSheet(QString("background:%1;").arg(color));
         return bar;
     };
 
@@ -781,25 +784,22 @@ QWidget* PortfolioScreen::build_main_view() {
     auto* w = new QWidget(this);
     w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 
-    auto* h_layout = new QHBoxLayout(w);
-    h_layout->setContentsMargins(0, 0, 0, 0);
-    h_layout->setSpacing(0);
+    // Root: vertical stack. Top row gets 40% (heatmap | chart | sector), the
+    // POSITIONS panel takes 60% full-width, and the TXN history sits at the
+    // bottom as a collapsible footer. This replaces the previous "heatmap
+    // full-height left rail + center column" layout — POSITIONS now spans
+    // the full width, which is where the user spends most of their time.
+    auto* root_layout = new QVBoxLayout(w);
+    root_layout->setContentsMargins(0, 0, 0, 0);
+    root_layout->setSpacing(0);
 
-    // Left: Heatmap (220px)
-    heatmap_ = new PortfolioHeatmap;
-    connect(heatmap_, &PortfolioHeatmap::symbol_selected, this, &PortfolioScreen::on_symbol_selected);
-    h_layout->addWidget(heatmap_);
-
-    // Center: chart + sector (top), blotter (bottom)
-    auto* center = new QWidget(this);
-    auto* center_layout = new QVBoxLayout(center);
-    center_layout->setContentsMargins(0, 0, 0, 0);
-    center_layout->setSpacing(0);
-
-    // Top: perf chart + sector panel side by side
+    // ── Top row: heatmap | chart | sector — 40% vertical ────────────────────
     auto* top_split = new QSplitter(Qt::Horizontal);
     top_split->setHandleWidth(1);
     top_split->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM()));
+
+    heatmap_ = new PortfolioHeatmap;
+    connect(heatmap_, &PortfolioHeatmap::symbol_selected, this, &PortfolioScreen::on_symbol_selected);
 
     perf_chart_ = new PortfolioPerfChart;
     // Trigger backfill when the user clicks a period that needs more history
@@ -811,6 +811,7 @@ QWidget* PortfolioScreen::build_main_view() {
                     return;
                 services::PortfolioService::instance().backfill_history(selected_id_, period);
             });
+
     sector_panel_ = new PortfolioSectorPanel;
     connect(sector_panel_, &PortfolioSectorPanel::sector_selected, this, [this](const QString& sector) {
         if (sector.isEmpty()) {
@@ -826,66 +827,55 @@ QWidget* PortfolioScreen::build_main_view() {
         blotter_->set_sector_filter(matching);
     });
 
+    top_split->addWidget(heatmap_);
     top_split->addWidget(perf_chart_);
     top_split->addWidget(sector_panel_);
-    top_split->setStretchFactor(0, 7); // ~70%
-    top_split->setStretchFactor(1, 3); // ~30%
-    sector_panel_->setMinimumWidth(180);
+    top_split->setStretchFactor(0, 0); // heatmap fixed-ish (200-240 via setMin/MaxWidth)
+    top_split->setStretchFactor(1, 7); // chart takes the lion's share
+    top_split->setStretchFactor(2, 3); // sector ~30% of remaining
+    sector_panel_->setMinimumWidth(280);
+    // Initial pixel sizes — splitter respects min/max so heatmap clamps to 220
+    // even if we ask for 500. Without setSizes the splitter sometimes gives
+    // the chart 100% on first paint until a layout tick fires.
+    top_split->setSizes({220, 1100, 320});
 
-    center_layout->addWidget(top_split, 40); // 40% of vertical space
+    root_layout->addWidget(top_split, 40); // 40% of vertical space
 
     // Separator
     auto* sep = new QWidget(this);
     sep->setFixedHeight(1);
     sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
-    center_layout->addWidget(sep);
+    root_layout->addWidget(sep);
 
-    // Positions section header: title + count badge + filter field
+    // Positions section: unified ▌POSITIONS panel header. The previous ad-hoc
+    // header_row pattern was the original template that drove make_panel_header;
+    // now it consumes the helper like every other panel.
     auto* blotter_section = new QWidget(this);
     auto* blotter_layout = new QVBoxLayout(blotter_section);
     blotter_layout->setContentsMargins(0, 0, 0, 0);
     blotter_layout->setSpacing(0);
 
-    auto* header_row = new QWidget(this);
-    header_row->setFixedHeight(32);
-    header_row->setObjectName("pfPositionsHeader");
-    header_row->setStyleSheet(QString("#pfPositionsHeader { background:%1; border-bottom:1px solid %2; }")
-                                  .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
-    auto* header_hl = new QHBoxLayout(header_row);
-    header_hl->setContentsMargins(12, 0, 10, 0);
-    header_hl->setSpacing(8);
+    auto pos_header = make_panel_header("POSITIONS", this);
+    auto* header_hl = pos_header.controls_slot->layout();
 
-    // Accent tick + section title
-    auto* title_tick = new QLabel;
-    title_tick->setFixedSize(3, 14);
-    title_tick->setStyleSheet(QString("background:%1; border-radius:1px;").arg(ui::colors::AMBER()));
-    header_hl->addWidget(title_tick);
-
-    auto* title = new QLabel("POSITIONS");
-    title->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1.2px; background:transparent;")
-                             .arg(ui::colors::TEXT_PRIMARY()));
-    header_hl->addWidget(title);
-
-    // Count badge
+    // Count badge — square hairline rectangle.
     positions_count_label_ = new QLabel("0");
     positions_count_label_->setAlignment(Qt::AlignCenter);
     positions_count_label_->setMinimumWidth(22);
     positions_count_label_->setFixedHeight(16);
     positions_count_label_->setStyleSheet(
-        QString("color:%1; background:%2; border:1px solid %3; border-radius:8px;"
+        QString("color:%1; background:%2; border:1px solid %3;"
                 "  font-size:10px; font-weight:700; padding:0 6px;")
             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     header_hl->addWidget(positions_count_label_);
 
-    header_hl->addStretch(1);
-
-    // Filter field — right-aligned, framed so it reads as an input, not a label
+    // Filter field — right-aligned, framed so it reads as an input. Square (rule 9.1).
     auto* filter_wrap = new QWidget(this);
     filter_wrap->setFixedHeight(22);
     filter_wrap->setMinimumWidth(200);
     filter_wrap->setObjectName("pfFilterWrap");
     filter_wrap->setStyleSheet(
-        QString("#pfFilterWrap { background:%1; border:1px solid %2; border-radius:2px; }"
+        QString("#pfFilterWrap { background:%1; border:1px solid %2; }"
                 "#pfFilterWrap:focus-within { border-color:%3; }")
             .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     auto* filter_hl = new QHBoxLayout(filter_wrap);
@@ -907,7 +897,7 @@ QWidget* PortfolioScreen::build_main_view() {
 
     header_hl->addWidget(filter_wrap);
 
-    blotter_layout->addWidget(header_row);
+    blotter_layout->addWidget(pos_header.header);
 
     // Bottom: positions blotter
     blotter_ = new PortfolioBlotter;
@@ -954,15 +944,19 @@ QWidget* PortfolioScreen::build_main_view() {
 
     blotter_layout->addWidget(blotter_, 1);
 
-    // Transaction history panel below blotter
+    root_layout->addWidget(blotter_section, 60); // 60% of vertical space
+
+    // ── Footer: transaction history (collapsible) ────────────────────────────
+    // Sits at the bottom of the main view, full-width. Defaults open at 140px;
+    // user can collapse via the chevron in its header.
     txn_panel_ = new PortfolioTxnPanel;
-    txn_panel_->setMinimumHeight(80);
-    txn_panel_->setMaximumHeight(160);
-    blotter_layout->addWidget(txn_panel_);
-
-    center_layout->addWidget(blotter_section, 60); // 60% of vertical space
-
-    h_layout->addWidget(center, 1); // center takes full remaining space
+    txn_panel_->setFixedHeight(140);
+    root_layout->addWidget(txn_panel_);
+    connect(txn_panel_, &PortfolioTxnPanel::collapse_toggled, this, [this](bool collapsed) {
+        // Header is 30px, table content is the rest. When collapsed, shrink
+        // to header height; when expanded, restore to 140px.
+        txn_panel_->setFixedHeight(collapsed ? 30 : 140);
+    });
 
     // Order panel is a floating overlay (parented to PortfolioScreen, not in layout)
     // so BUY/SELL slides in from the right edge without reflowing the main grid.

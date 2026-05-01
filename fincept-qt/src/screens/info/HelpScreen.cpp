@@ -273,7 +273,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
              "Upstox, Interactive Brokers, and more."},
 
             {"🐍", "Why does Python install at first launch?",
-             "Fincept embeds Python for 1300+ analytics scripts covering CFA-level equity, "
+             "Fincept embeds Python for 1300+ analytics scripts covering equity, "
              "portfolio, derivatives, and quant analysis. The one-time install is ~150 MB and "
              "happens automatically in the background."},
 

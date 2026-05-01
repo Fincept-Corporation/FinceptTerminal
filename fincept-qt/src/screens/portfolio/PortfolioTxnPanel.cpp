@@ -1,6 +1,7 @@
 // src/screens/portfolio/PortfolioTxnPanel.cpp
 #include "screens/portfolio/PortfolioTxnPanel.h"
 
+#include "screens/portfolio/PortfolioPanelHeader.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -21,27 +22,35 @@ void PortfolioTxnPanel::build_ui() {
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    // Header bar
-    auto* header = new QWidget(this);
-    header->setFixedHeight(28);
-    header->setStyleSheet(QString("background:%1; border-top:1px solid %2; border-bottom:1px solid %2;")
-                              .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
-    auto* hl = new QHBoxLayout(header);
-    hl->setContentsMargins(10, 0, 10, 0);
-    hl->setSpacing(8);
-
-    auto* title = new QLabel("TRANSACTION HISTORY");
-    title->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
-    hl->addWidget(title);
-
-    hl->addStretch();
+    // Unified panel header — TRANSACTION HISTORY title + count badge + collapse
+    // chevron in slot. The chevron toggles a collapse_toggled signal that the
+    // owner (PortfolioScreen) uses to shrink the panel to header height.
+    auto header = make_panel_header("TRANSACTION HISTORY", this);
 
     count_label_ = new QLabel;
-    count_label_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_TERTIARY()));
-    hl->addWidget(count_label_);
+    count_label_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;"
+                                        "  background:transparent;")
+                                    .arg(ui::colors::TEXT_TERTIARY()));
+    header.controls_slot->layout()->addWidget(count_label_);
 
-    layout->addWidget(header);
+    // Collapse chevron — ▼ when expanded (clicking will collapse), ▶ when
+    // collapsed (clicking will expand).
+    collapse_btn_ = new QPushButton("▾");
+    collapse_btn_->setFixedSize(22, 22);
+    collapse_btn_->setCursor(Qt::PointingHandCursor);
+    collapse_btn_->setToolTip("Collapse / expand transaction history");
+    collapse_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                                         "  font-size:11px; font-weight:700; }"
+                                         "QPushButton:hover { color:%3; border-color:%3; }")
+                                     .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+    connect(collapse_btn_, &QPushButton::clicked, this, [this]() {
+        collapsed_ = !collapsed_;
+        apply_collapsed_state();
+        emit collapse_toggled(collapsed_);
+    });
+    header.controls_slot->layout()->addWidget(collapse_btn_);
+
+    layout->addWidget(header.header);
 
     // Table
     static const QStringList kHeaders = {"Date", "Symbol", "Type", "Qty", "Price", "Total", "Notes"};
@@ -93,6 +102,14 @@ void PortfolioTxnPanel::clear() {
     count_label_->clear();
 }
 
+void PortfolioTxnPanel::apply_collapsed_state() {
+    // Hide the table when collapsed; chevron flips between ▾ (expanded) and ▸.
+    if (table_)
+        table_->setVisible(!collapsed_);
+    if (collapse_btn_)
+        collapse_btn_->setText(collapsed_ ? "▸" : "▾");
+}
+
 void PortfolioTxnPanel::populate() {
     table_->setSortingEnabled(false);
     table_->setRowCount(0);
@@ -124,7 +141,8 @@ void PortfolioTxnPanel::populate() {
         else
             type_color = QColor(ui::colors::TEXT_SECONDARY());
         type_item->setForeground(type_color);
-        type_item->setFont(QFont(ui::fonts::DATA_FAMILY, 9, QFont::Bold));
+        // 11px floor (was 9px) per unified scale.
+        type_item->setFont(QFont(ui::fonts::DATA_FAMILY, 11, QFont::Bold));
         table_->setItem(row, 2, type_item);
 
         // Qty

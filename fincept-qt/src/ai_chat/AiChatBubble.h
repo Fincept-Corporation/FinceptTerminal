@@ -24,7 +24,6 @@
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
-#include <QTextEdit>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -95,7 +94,7 @@ class AiChatBubble : public QWidget {
     /// the bubble is to stay separate from the AI Chat tab.
     std::vector<ai_chat::ConversationMessage> chat_history_;
 
-    QPointer<QTextEdit> streaming_bubble_;
+    QPointer<QLabel> streaming_bubble_;
 
     // ── Build helpers ────────────────────────────────────────────────────────
     void build_bubble_button();
@@ -112,7 +111,7 @@ class AiChatBubble : public QWidget {
     void show_welcome_if_empty();
     void hide_welcome();
     void add_bubble(const QString& role, const QString& text);
-    QTextEdit* add_streaming_bubble();
+    QLabel* add_streaming_bubble();
     void scroll_to_bottom();
     void set_input_enabled(bool enabled);
     void update_unread(int delta);

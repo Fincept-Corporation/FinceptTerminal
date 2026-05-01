@@ -8,7 +8,7 @@
 
 ### **Votre réflexion est la seule limite. Les données ne le sont pas.**
 
-Plateforme de renseignement financier de pointe avec analyses de niveau CFA, automatisation de l'IA et connectivité de données illimitée.
+Plateforme de renseignement financier de pointe avec analyses financières de niveau institutionnel, automatisation de l'IA et connectivité de données illimitée.
 
 [📥 Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases)·[📚 Documents](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)·[💬 Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)·[💬 Discorde](https://discord.gg/ae87a8ygbN)·[🤝 Partenaire](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
@@ -28,7 +28,7 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 | **Fonctionnalité**                       | **Description**                                                                                                                                                                                                                                    |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 📊**Analyses de niveau CFA**             | Modèles DCF, optimisation de portefeuille, mesures de risque (VaR, Sharpe), tarification des produits dérivés via Python intégré                                                                                                                   |
+| 📊**Analyses multi-actifs**              | Modèles DCF, optimisation de portefeuille, mesures de risque (VaR, Sharpe), tarification des produits dérivés sur actions, taux, dérivés, portefeuille et alternatifs via Python intégré                                                          |
 | 🤖**AI Agents**                          | Plus de 20 personnalités d'investisseurs (Buffett, Dalio, Graham), stratégies de hedge funds, support LLM local, multi-fournisseurs (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama)                                       |
 | 🌐**Plus de 100 connecteurs de données** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, FMI, Banque mondiale, AkShare, API gouvernementales, ainsi que des superpositions de données alternatives facultatives telles que le sentiment du marché Adanos pour la recherche sur les actions. |
 | 📈**Trading en temps réel**              | Crypto (Kraken/HyperLiquid WebSocket), actions, trading algo, moteur de trading papier                                                                                                                                                             |
@@ -190,7 +190,7 @@ Les versions récentes prennent également en charge les options facultatives**A
 
 -   **Performances natives**— C++20 avec Qt6, pas de surcharge Electron/Web
 -   **Binaire simple**- pas de Node.js, pas d'exécution de navigateur, pas de bundle JavaScript
--   **Analyses de niveau CFA**— couverture complète du programme via les modules Python
+-   **Boîte à outils complète d'analyste buy-side**— actions, portefeuille, dérivés, taux, finance d'entreprise, alternatifs
 -   **Plus de 100 connecteurs de données**— de Yahoo Finance aux bases de données gouvernementales
 -   **Gratuit et open source**(AGPL-3.0) avec licences commerciales disponibles
 
@@ -228,7 +228,7 @@ Nous construisons l’avenir de l’analyse financière – ensemble.
 -   **799 $/mois**pour 20 comptes
 -   Accès complet aux données et API Fincept
 -   Parfait pour les cours de finance, d'économie et de science des données
--   Analyse du programme CFA intégrée
+-   Analyses intégrées actions, portefeuille, dérivés, taux et économie
 
 **Intéressé?**E-mail**[support@fincept.in](mailto:support@fincept.in)**avec le nom de votre établissement.
 

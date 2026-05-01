@@ -1,11 +1,23 @@
 // WatchlistTools.cpp — Watchlist MCP tools
+//
+// Thread-safety note (2026-05-01):
+// These tools mutate fincept::Database via WatchlistRepository. The main DB
+// connection is a single QSqlDatabase opened on the main thread. Qt's docs
+// state that a QSqlDatabase connection "can only be used from within the
+// thread that created it." MCP tool handlers run on the LlmService worker
+// thread (QtConcurrent::run), so we MUST marshal every DB call to the main
+// thread via run_async_wait — otherwise SQL writes are silently dropped /
+// orphaned in the WAL of an off-thread connection and don't survive a
+// restart. (This was the actual bug behind "watchlist resets on restart".)
 
 #include "mcp/tools/WatchlistTools.h"
 
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
+#include "mcp/tools/ThreadHelper.h"
 #include "storage/repositories/WatchlistRepository.h"
 
+#include <QCoreApplication>
 #include <QVariantMap>
 
 namespace fincept::mcp::tools {
@@ -22,26 +34,35 @@ std::vector<ToolDef> get_watchlist_tools() {
         t.description = "Get all watchlists with their symbols.";
         t.category = "watchlist";
         t.handler = [](const QJsonObject&) -> ToolResult {
-            auto& repo = WatchlistRepository::instance();
-            auto lists = repo.list_all();
-            if (lists.is_err())
-                return ToolResult::fail("Failed to load watchlists: " + QString::fromStdString(lists.error()));
-
             QJsonArray result;
-            for (const auto& wl : lists.value()) {
-                auto stocks = repo.get_stocks(wl.id);
-                QJsonArray symbols;
-                if (stocks.is_ok()) {
-                    for (const auto& s : stocks.value()) {
-                        symbols.append(QJsonObject{{"symbol", s.symbol}, {"name", s.name}, {"added_at", s.added_at}});
-                    }
+            QString error;
+            detail::run_async_wait(QCoreApplication::instance(), [&](auto signal_done) {
+                auto& repo = WatchlistRepository::instance();
+                auto lists = repo.list_all();
+                if (lists.is_err()) {
+                    error = "Failed to load watchlists: " + QString::fromStdString(lists.error());
+                    signal_done();
+                    return;
                 }
-                result.append(QJsonObject{{"id", wl.id},
-                                          {"name", wl.name},
-                                          {"color", wl.color},
-                                          {"description", wl.description},
-                                          {"symbols", symbols}});
-            }
+                for (const auto& wl : lists.value()) {
+                    auto stocks = repo.get_stocks(wl.id);
+                    QJsonArray symbols;
+                    if (stocks.is_ok()) {
+                        for (const auto& s : stocks.value()) {
+                            symbols.append(QJsonObject{
+                                {"symbol", s.symbol}, {"name", s.name}, {"added_at", s.added_at}});
+                        }
+                    }
+                    result.append(QJsonObject{{"id", wl.id},
+                                              {"name", wl.name},
+                                              {"color", wl.color},
+                                              {"description", wl.description},
+                                              {"symbols", symbols}});
+                }
+                signal_done();
+            });
+            if (!error.isEmpty())
+                return ToolResult::fail(error);
             return ToolResult::ok_data(result);
         };
         tools.push_back(std::move(t));
@@ -63,13 +84,22 @@ std::vector<ToolDef> get_watchlist_tools() {
             if (name.isEmpty())
                 return ToolResult::fail("Missing 'name'");
 
-            auto r = WatchlistRepository::instance().create(name);
-            if (r.is_err())
-                return ToolResult::fail("Failed to create watchlist: " + QString::fromStdString(r.error()));
+            QString new_id;
+            QString error;
+            detail::run_async_wait(QCoreApplication::instance(), [&](auto signal_done) {
+                auto r = WatchlistRepository::instance().create(name);
+                if (r.is_err())
+                    error = "Failed to create watchlist: " + QString::fromStdString(r.error());
+                else
+                    new_id = r.value().id;
+                signal_done();
+            });
+            if (!error.isEmpty())
+                return ToolResult::fail(error);
 
-            EventBus::instance().publish("watchlist.created", QVariantMap{{"id", r.value().id}, {"name", name}});
+            EventBus::instance().publish("watchlist.created", QVariantMap{{"id", new_id}, {"name", name}});
             LOG_INFO(TAG, "Created watchlist: " + name);
-            return ToolResult::ok("Watchlist created", QJsonObject{{"id", r.value().id}, {"name", name}});
+            return ToolResult::ok("Watchlist created", QJsonObject{{"id", new_id}, {"name", name}});
         };
         tools.push_back(std::move(t));
     }
@@ -88,9 +118,15 @@ std::vector<ToolDef> get_watchlist_tools() {
             if (id.isEmpty())
                 return ToolResult::fail("Missing 'watchlist_id'");
 
-            auto r = WatchlistRepository::instance().remove(id);
-            if (r.is_err())
-                return ToolResult::fail("Failed to delete watchlist: " + QString::fromStdString(r.error()));
+            QString error;
+            detail::run_async_wait(QCoreApplication::instance(), [&](auto signal_done) {
+                auto r = WatchlistRepository::instance().remove(id);
+                if (r.is_err())
+                    error = "Failed to delete watchlist: " + QString::fromStdString(r.error());
+                signal_done();
+            });
+            if (!error.isEmpty())
+                return ToolResult::fail(error);
 
             EventBus::instance().publish("watchlist.deleted", QVariantMap{{"id", id}});
             return ToolResult::ok("Watchlist deleted", QJsonObject{{"id", id}});
@@ -102,7 +138,16 @@ std::vector<ToolDef> get_watchlist_tools() {
     {
         ToolDef t;
         t.name = "add_to_watchlist";
-        t.description = "Add a symbol to a watchlist. If watchlist_id is omitted, uses the first available watchlist.";
+        t.description =
+            "Add a ticker symbol to a watchlist. The 'symbol' field MUST be the exact "
+            "exchange-suffixed Yahoo ticker (e.g. 'RITES.NS' for RITES Limited on NSE, "
+            "'AAPL' for Apple on NASDAQ, '7203.T' for Toyota on Tokyo). "
+            "If the user gave a company NAME instead of a ticker — or you are uncertain "
+            "about the exchange suffix — call lookup_symbol(query=<company name>) FIRST "
+            "to resolve the correct ticker, then pass that ticker here. "
+            "Do NOT guess tickers from prior knowledge: cross-listed names and Indian/Asian "
+            "tickers are easy to get wrong, and the watchlist stores whatever you pass. "
+            "If watchlist_id is omitted, the first available watchlist is used.";
         t.category = "watchlist";
         t.input_schema.properties = QJsonObject{
             {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol to add"}}},
@@ -117,25 +162,36 @@ std::vector<ToolDef> get_watchlist_tools() {
 
             QString watchlist_id = args["watchlist_id"].toString();
             QString name = args["name"].toString();
-            auto& repo = WatchlistRepository::instance();
-
-            if (watchlist_id.isEmpty()) {
-                auto lists = repo.list_all();
-                if (lists.is_err())
-                    return ToolResult::fail("Failed to load watchlists: " + QString::fromStdString(lists.error()));
-                if (lists.value().isEmpty()) {
-                    auto created = repo.create("Default");
-                    if (created.is_err())
-                        return ToolResult::fail("Failed to create watchlist");
-                    watchlist_id = created.value().id;
-                } else {
-                    watchlist_id = lists.value().first().id;
+            QString error;
+            detail::run_async_wait(QCoreApplication::instance(), [&](auto signal_done) {
+                auto& repo = WatchlistRepository::instance();
+                if (watchlist_id.isEmpty()) {
+                    auto lists = repo.list_all();
+                    if (lists.is_err()) {
+                        error = "Failed to load watchlists: " + QString::fromStdString(lists.error());
+                        signal_done();
+                        return;
+                    }
+                    if (lists.value().isEmpty()) {
+                        auto created = repo.create("Default");
+                        if (created.is_err()) {
+                            error = "Failed to create watchlist";
+                            signal_done();
+                            return;
+                        }
+                        watchlist_id = created.value().id;
+                    } else {
+                        watchlist_id = lists.value().first().id;
+                    }
                 }
-            }
 
-            auto r = repo.add_stock(watchlist_id, symbol, name);
-            if (r.is_err())
-                return ToolResult::fail("Failed to add symbol: " + QString::fromStdString(r.error()));
+                auto r = repo.add_stock(watchlist_id, symbol, name);
+                if (r.is_err())
+                    error = "Failed to add symbol: " + QString::fromStdString(r.error());
+                signal_done();
+            });
+            if (!error.isEmpty())
+                return ToolResult::fail(error);
 
             LOG_INFO(TAG, "Added " + symbol + " to watchlist " + watchlist_id);
             EventBus::instance().publish(
@@ -165,17 +221,19 @@ std::vector<ToolDef> get_watchlist_tools() {
                 return ToolResult::fail("Missing 'symbol'");
 
             QString watchlist_id = args["watchlist_id"].toString();
-            auto& repo = WatchlistRepository::instance();
-
-            if (watchlist_id.isEmpty()) {
-                auto lists = repo.list_all();
-                if (lists.is_ok()) {
-                    for (const auto& wl : lists.value())
-                        repo.remove_stock(wl.id, symbol);
+            detail::run_async_wait(QCoreApplication::instance(), [&](auto signal_done) {
+                auto& repo = WatchlistRepository::instance();
+                if (watchlist_id.isEmpty()) {
+                    auto lists = repo.list_all();
+                    if (lists.is_ok()) {
+                        for (const auto& wl : lists.value())
+                            repo.remove_stock(wl.id, symbol);
+                    }
+                } else {
+                    repo.remove_stock(watchlist_id, symbol);
                 }
-            } else {
-                repo.remove_stock(watchlist_id, symbol);
-            }
+                signal_done();
+            });
 
             EventBus::instance().publish("watchlist.updated", QVariantMap{{"action", "remove"}, {"symbol", symbol}});
             return ToolResult::ok("Removed " + symbol + " from watchlist");

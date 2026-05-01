@@ -8,7 +8,7 @@
 
 ### **你的思维是唯一的限制。数据不是。**
 
-最先进的金融情报平台，具有 CFA 级分析、人工智能自动化和无限数据连接。
+最先进的金融情报平台，具有机构级金融分析、人工智能自动化和无限数据连接。
 
 [📥 下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases)·[📚 文档](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)·[💬 讨论](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)·[💬 不和谐](https://discord.gg/ae87a8ygbN)·[🤝 合作伙伴](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
@@ -28,7 +28,7 @@
 
 | **特征**            | **描述**                                                                                                         |
 | ----------------- | -------------------------------------------------------------------------------------------------------------- |
-| 📊**CFA 级别分析**    | DCF 模型、投资组合优化、风险指标（VaR、夏普）、通过嵌入式 Python 进行衍生品定价                                                                |
+| 📊**多资产分析**      | DCF 模型、投资组合优化、风险指标（VaR、夏普）、跨股票、固定收益、衍生品、投资组合及另类投资的衍生品定价，通过嵌入式 Python 实现                                       |
 | 🤖**人工智能代理**      | 20 多个投资者角色（巴菲特、戴利奥、格雷厄姆）、对冲基金策略、本地法学硕士支持、多提供商（OpenAI、Anthropic、Gemini、Groq、DeepSeek、MiniMax、OpenRouter、Ollama） |
 | 🌐**100 多个数据连接器** | DBnomics、Polygon、Kraken、雅虎财经、FRED、IMF、世界银行、AkShare、政府 API，以及可选的替代数据叠加，例如用于股票研究的 Adanos 市场情绪                    |
 | 📈**实时交易**        | 加密货币（Kraken/HyperLiquid WebSocket）、股权、算法交易、纸质交易引擎                                                              |
@@ -190,7 +190,7 @@ cmake --build build --config Release --parallel
 
 -   **原生性能**— 使用 Qt6 的 C++20，无 Electron/web 开销
 -   **单一二进制**— 没有 Node.js，没有浏览器运行时，没有 JavaScript 捆绑器
--   **CFA级别分析**— 通过 Python 模块完成完整的课程覆盖
+-   **完整的买方分析师工具包**— 股票、投资组合、衍生品、固定收益、企业金融、另类投资
 -   **100 多个数据连接器**— 从雅虎财经到政府数据库
 -   **免费和开源**(AGPL-3.0) 提供商业许可证
 
@@ -228,7 +228,7 @@ cmake --build build --config Release --parallel
 -   **$799/月**20 个帐户
 -   完全访问 Fincept 数据和 API
 -   非常适合金融、经济学和数据科学课程
--   内置 CFA 课程分析
+-   内置股票、投资组合、衍生品、固定收益和经济学分析
 
 **感兴趣的？**电子邮件**[support@fincept.in](mailto:support@fincept.in)**与您的机构名称。
 

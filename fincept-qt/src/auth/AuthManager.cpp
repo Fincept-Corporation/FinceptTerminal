@@ -112,8 +112,13 @@ void AuthManager::clear_session() {
     fincept::SettingsRepository::instance().remove("fincept_api_key");
     fincept::SecureStorage::instance().remove("api_key");
 
-    // Clear PIN and lockout state on logout — user must set up again after re-login
-    PinManager::instance().clear_pin();
+    // PIN intentionally NOT cleared here. The PIN is a local-device credential,
+    // independent of the backend session. Wiping it on every logout means a
+    // transient session expiry (SessionGuard 401 path, explicit Logout) trains
+    // the user to keep choosing fresh PINs and destroys the audit trail across
+    // sessions. The only path that should reset the PIN is the max-attempts
+    // re-auth flow (LockScreen → reauth_requested), and that path should call
+    // PinManager::clear_pin() explicitly before invoking logout().
 
     // Clear auto-configured fincept LLM provider and reset LlmService
     LlmConfigRepository::instance().delete_provider("fincept");

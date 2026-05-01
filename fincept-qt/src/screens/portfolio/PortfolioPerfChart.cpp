@@ -1,6 +1,7 @@
 // src/screens/portfolio/PortfolioPerfChart.cpp
 #include "screens/portfolio/PortfolioPerfChart.h"
 
+#include "screens/portfolio/PortfolioPanelHeader.h"
 #include "ui/theme/Theme.h"
 
 #include <QAreaSeries>
@@ -41,7 +42,7 @@ CrosshairChartView::CrosshairChartView(QChart* chart, QWidget* parent) : QChartV
     tooltip_ = new QLabel(this);
     tooltip_->setWindowFlags(Qt::ToolTip);
     tooltip_->setStyleSheet(QString("QLabel { background:%1; color:%2; border:1px solid %3;"
-                                    " font-size:10px; font-weight:600; padding:3px 6px; border-radius:3px; }")
+                                    " font-size:11px; font-weight:600; padding:3px 6px; }")
                                 .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED()));
     tooltip_->hide();
 }
@@ -129,15 +130,10 @@ void PortfolioPerfChart::build_ui() {
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    // Header: PERFORMANCE + period buttons
-    auto* header = new QHBoxLayout;
-    header->setContentsMargins(10, 6, 10, 4);
-
-    auto* title = new QLabel("PERFORMANCE");
-    title->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1.5px;").arg(ui::colors::TEXT_SECONDARY()));
-    header->addWidget(title);
-    header->addStretch();
+    // Unified panel header — PERFORMANCE title + period buttons + benchmark/% toggles
+    // packed into the right-side controls slot.
+    auto header = make_panel_header("PERFORMANCE", this);
+    auto* slot = header.controls_slot->layout();
 
     for (const auto& p : kPeriods) {
         auto* btn = new QPushButton(p);
@@ -145,7 +141,7 @@ void PortfolioPerfChart::build_ui() {
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid transparent;"
-                                   "  font-size:9px; font-weight:700; border-radius:2px; }"
+                                   "  font-size:11px; font-weight:700; }"
                                    "QPushButton:checked { color:%4; background:%2;"
                                    "  border:1px solid %2; }"
                                    "QPushButton:hover:!checked { color:%3; border-color:%5; }")
@@ -157,7 +153,7 @@ void PortfolioPerfChart::build_ui() {
 
         connect(btn, &QPushButton::clicked, this, [this, period = p]() { set_period(period); });
 
-        header->addWidget(btn);
+        slot->addWidget(btn);
         period_btns_.append(btn);
     }
 
@@ -170,7 +166,7 @@ void PortfolioPerfChart::build_ui() {
     benchmark_btn_->setToolTip("Overlay benchmark index (auto-selected by portfolio currency)");
     benchmark_btn_->setStyleSheet(
         QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
-                "  font-size:9px; font-weight:700; border-radius:2px; }"
+                "  font-size:11px; font-weight:700; }"
                 "QPushButton:checked { color:%4; background:%2; border:1px solid %2; }"
                 "QPushButton:hover:!checked { color:%3; border-color:%3; }")
             .arg(ui::colors::CYAN(), ui::colors::CYAN(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_BASE()));
@@ -178,8 +174,7 @@ void PortfolioPerfChart::build_ui() {
         show_benchmark_ = benchmark_btn_->isChecked();
         update_chart();
     });
-    header->addSpacing(6);
-    header->addWidget(benchmark_btn_);
+    slot->addWidget(benchmark_btn_);
 
     // Indexed-mode toggle: switches the y-axis from currency value to
     // percent-indexed (base 100). Required for fair benchmark comparison
@@ -193,7 +188,7 @@ void PortfolioPerfChart::build_ui() {
                              "the selected period. Use when comparing different currencies.");
     indexed_btn_->setStyleSheet(
         QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
-                "  font-size:9px; font-weight:700; border-radius:2px; }"
+                "  font-size:11px; font-weight:700; }"
                 "QPushButton:checked { color:%4; background:%2; border:1px solid %2; }"
                 "QPushButton:hover:!checked { color:%3; border-color:%3; }")
             .arg(ui::colors::TEXT_TERTIARY(), ui::colors::AMBER(), ui::colors::TEXT_PRIMARY(),
@@ -202,10 +197,9 @@ void PortfolioPerfChart::build_ui() {
         indexed_mode_ = indexed_btn_->isChecked();
         update_chart();
     });
-    header->addSpacing(4);
-    header->addWidget(indexed_btn_);
+    slot->addWidget(indexed_btn_);
 
-    layout->addLayout(header);
+    layout->addWidget(header.header);
 
     // Info bar: period change, total return, NAV
     auto* info_bar = new QHBoxLayout;
@@ -618,13 +612,15 @@ void PortfolioPerfChart::update_chart() {
 void PortfolioPerfChart::refresh_theme() {
     setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 
-    const QString bsz = QString::number(ui::fonts::font_px(-3));
+    // -2 gives ~11px on the default font scale (was -3 ≈ 10px).
+    // Square corners (was border-radius:2px) per DESIGN_SYSTEM rule 9.1.
+    const QString bsz = QString::number(ui::fonts::font_px(-2));
     // Re-style period buttons
     for (auto* btn : period_btns_) {
         btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid transparent;"
                                    "  font-size:" +
                                    bsz +
-                                   "px; font-weight:700; border-radius:2px; }"
+                                   "px; font-weight:700; }"
                                    "QPushButton:checked { color:%4; background:%2;"
                                    "  border:1px solid %2; }"
                                    "QPushButton:hover:!checked { color:%3; border-color:%5; }")
@@ -636,7 +632,7 @@ void PortfolioPerfChart::refresh_theme() {
             QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                     "  font-size:" +
                     bsz +
-                    "px; font-weight:700; border-radius:2px; }"
+                    "px; font-weight:700; }"
                     "QPushButton:checked { color:%4; background:%2; border:1px solid %2; }"
                     "QPushButton:hover:!checked { color:%3; border-color:%3; }")
                 .arg(ui::colors::CYAN(), ui::colors::CYAN(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_BASE()));

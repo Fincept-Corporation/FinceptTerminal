@@ -1,6 +1,7 @@
 // src/screens/portfolio/PortfolioSectorPanel.cpp
 #include "screens/portfolio/PortfolioSectorPanel.h"
 
+#include "screens/portfolio/PortfolioPanelHeader.h"
 #include "ui/theme/Theme.h"
 
 #include <QChart>
@@ -53,16 +54,19 @@ void PortfolioSectorPanel::build_ui() {
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
+    // ── Unified panel header: ▌SECTORS ───────────────────────────────────────
+    // The two inner sub-sections (allocation donut + correlation matrix) sit
+    // beneath this single header, separated by a hairline. The old design
+    // gave each a 9-11px inline title; consolidating them here keeps the
+    // panel header treatment consistent with HOLDINGS / PERFORMANCE / etc.
+    auto panel_hdr = make_panel_header("SECTORS", this);
+    layout->addWidget(panel_hdr.header);
+
     // ── Top: Sector Allocation (60%) ──────────────────────────────────────────
     auto* sector_widget = new QWidget(this);
     auto* sector_layout = new QVBoxLayout(sector_widget);
-    sector_layout->setContentsMargins(8, 4, 8, 4);
+    sector_layout->setContentsMargins(8, 6, 8, 4);
     sector_layout->setSpacing(4);
-
-    auto* sector_header = new QLabel("SECTOR ALLOCATION");
-    sector_header->setStyleSheet(
-        QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_SECONDARY()));
-    sector_layout->addWidget(sector_header);
 
     auto* donut_row = new QHBoxLayout;
 
@@ -97,14 +101,16 @@ void PortfolioSectorPanel::build_ui() {
     corr_layout->setContentsMargins(8, 4, 8, 4);
     corr_layout->setSpacing(4);
 
+    // Inline sub-section title (smaller weight than the unified panel header
+    // above — this is a sub-block within ▌SECTORS, not a peer panel).
     auto* corr_header = new QHBoxLayout;
-    auto* corr_title = new QLabel("CORRELATION MATRIX");
+    auto* corr_title = new QLabel("CORRELATION");
     corr_title->setStyleSheet(
-        QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_SECONDARY()));
+        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
     corr_header->addWidget(corr_title);
 
-    auto* corr_note = new QLabel("(P&L return proxy)");
-    corr_note->setStyleSheet(QString("color:%1; font-size:8px;").arg(ui::colors::TEXT_TERTIARY()));
+    auto* corr_note = new QLabel("(P&L return proxy, top 6 by weight)");
+    corr_note->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_DIM()));
     corr_header->addWidget(corr_note);
     corr_header->addStretch();
     corr_layout->addLayout(corr_header);
@@ -207,7 +213,8 @@ void PortfolioSectorPanel::update_donut() {
         // Wrap the row in a clickable QWidget for hit-testing
         auto* row_widget = new QWidget(this);
         row_widget->setCursor(Qt::PointingHandCursor);
-        row_widget->setStyleSheet(active ? QString("background:%1; border-radius:2px;").arg(ui::colors::BG_HOVER())
+        // Square corners — DESIGN_SYSTEM forbids border-radius on panel-level UI.
+        row_widget->setStyleSheet(active ? QString("background:%1;").arg(ui::colors::BG_HOVER())
                                          : "background:transparent;");
 
         auto* row = new QHBoxLayout(row_widget);
@@ -216,23 +223,24 @@ void PortfolioSectorPanel::update_donut() {
 
         auto* swatch = new QWidget(this);
         swatch->setFixedSize(8, 8);
-        swatch->setStyleSheet(QString("background:%1; border-radius:1px;").arg(sector_color(i).name()));
+        swatch->setStyleSheet(QString("background:%1;").arg(sector_color(i).name()));
         row->addWidget(swatch);
 
+        // 11px floor (was 9px). Active row uses AMBER text; otherwise TEXT_PRIMARY.
         auto* name = new QLabel(QString("%1 (%2)").arg(sec).arg(sector_counts[sec]));
-        name->setStyleSheet(active ? QString("color:%1; font-size:9px; font-weight:700;").arg(ui::colors::AMBER())
-                                   : QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_PRIMARY()));
+        name->setStyleSheet(active ? QString("color:%1; font-size:11px; font-weight:700;").arg(ui::colors::AMBER())
+                                   : QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_PRIMARY()));
         row->addWidget(name);
         row->addStretch();
 
         double pnl = sector_pnl[sec];
         auto* pnl_lbl = new QLabel(QString("%1%2").arg(pnl >= 0 ? "+" : "").arg(QString::number(pnl, 'f', 0)));
         const char* pc = pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-        pnl_lbl->setStyleSheet(QString("color:%1; font-size:8px;").arg(pc));
+        pnl_lbl->setStyleSheet(QString("color:%1; font-size:10px;").arg(pc));
         row->addWidget(pnl_lbl);
 
         auto* weight = new QLabel(QString(" %1%").arg(QString::number(sorted[i].second, 'f', 1)));
-        weight->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_SECONDARY()));
+        weight->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(ui::colors::TEXT_SECONDARY()));
         row->addWidget(weight);
 
         // Install click via event filter on row_widget
@@ -258,7 +266,7 @@ void PortfolioSectorPanel::update_correlation() {
     if (holdings_.size() < 2) {
         auto* layout = new QVBoxLayout(corr_widget_);
         auto* msg = new QLabel("Need 2+ holdings for correlation");
-        msg->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
+        msg->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
         msg->setAlignment(Qt::AlignCenter);
         layout->addWidget(msg);
         return;
@@ -297,14 +305,14 @@ void PortfolioSectorPanel::update_correlation() {
     for (int i = 0; i < n; ++i) {
         auto* lbl = new QLabel(sorted[i].symbol.left(4));
         lbl->setAlignment(Qt::AlignCenter);
-        lbl->setStyleSheet(QString("color:%1; font-size:7px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
+        lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
         grid->addWidget(lbl, 0, i + 1);
     }
 
     // Matrix
     for (int r = 0; r < n; ++r) {
         auto* row_label = new QLabel(sorted[r].symbol.left(4));
-        row_label->setStyleSheet(QString("color:%1; font-size:7px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
+        row_label->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
         grid->addWidget(row_label, r + 1, 0);
 
         for (int c = 0; c < n; ++c) {
@@ -315,7 +323,7 @@ void PortfolioSectorPanel::update_correlation() {
 
             auto* cell = new QLabel(label);
             cell->setAlignment(Qt::AlignCenter);
-            cell->setFixedSize(32, 18);
+            cell->setFixedSize(40, 22);
 
             QColor bg;
             if (is_diag) {
@@ -330,7 +338,7 @@ void PortfolioSectorPanel::update_correlation() {
 
             const char* text_color = is_diag ? ui::colors::BG_BASE : ui::colors::TEXT_PRIMARY;
             cell->setStyleSheet(QString("background:rgba(%1,%2,%3,%4); color:%5;"
-                                        "font-size:7px; font-weight:600;")
+                                        "font-size:10px; font-weight:600;")
                                     .arg(bg.red())
                                     .arg(bg.green())
                                     .arg(bg.blue())

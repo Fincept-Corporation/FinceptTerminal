@@ -39,6 +39,41 @@ class AIQuantLabService : public QObject {
     void gs_backtest(const QJsonObject& params);
     void gs_statistics(const QJsonObject& params);
 
+    // ── Functime ────────────────────────────────────────────────────────────
+    void functime_check_status();
+    void functime_forecast(const QJsonObject& params);
+    void functime_anomaly_detection(const QJsonObject& params);
+    void functime_seasonality(const QJsonObject& params);
+    void functime_metrics(const QJsonObject& params);
+    void functime_confidence_intervals(const QJsonObject& params);
+    void functime_stationarity(const QJsonObject& params);
+
+    // ── Statsmodels ─────────────────────────────────────────────────────────
+    void sm_check_status();
+    void sm_ols(const QJsonObject& params);
+    void sm_arima(const QJsonObject& params);
+    void sm_stationarity_tests(const QJsonObject& params);
+    void sm_acf_pacf(const QJsonObject& params);
+    void sm_granger_causality(const QJsonObject& params);
+    void sm_descriptive(const QJsonObject& params);
+
+    // ── Fortitudo ───────────────────────────────────────────────────────────
+    void fort_check_status();
+    void fort_portfolio_metrics(const QJsonObject& params);
+    void fort_covariance_matrix(const QJsonObject& params);
+    void fort_mean_variance_optimize(const QJsonObject& params);
+    void fort_mean_cvar_optimize(const QJsonObject& params);
+    void fort_efficient_frontier(const QJsonObject& params);
+    void fort_exp_decay_probabilities(const QJsonObject& params);
+
+    // ── GluonTS ─────────────────────────────────────────────────────────────
+    void gluon_check_status();
+    void gluon_probabilistic_forecast(const QJsonObject& params);
+    void gluon_quantile_forecast(const QJsonObject& params);
+    void gluon_distribution_fit(const QJsonObject& params);
+    void gluon_evaluate_forecast(const QJsonObject& params);
+    void gluon_seasonal_naive(const QJsonObject& params);
+
     // ── CFA Quant ───────────────────────────────────────────────────────────
     void cfa_trend_analysis(const QJsonObject& params);
     void cfa_stationarity_test(const QJsonObject& params);
@@ -140,9 +175,12 @@ class AIQuantLabService : public QObject {
     void dataproc_process_data(const QJsonObject& params);
 
     // ── Quant Reporting ─────────────────────────────────────────────────────
+    void reporting_check_status();
     void reporting_ic_analysis(const QJsonObject& params);
     void reporting_model_performance(const QJsonObject& params);
     void reporting_cumulative_returns(const QJsonObject& params);
+    void reporting_risk_report(const QJsonObject& params);
+    void reporting_factor_quantiles(const QJsonObject& params);
 
   signals:
     void result_ready(QString module_id, QString command, QJsonObject data);

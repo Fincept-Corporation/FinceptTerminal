@@ -771,6 +771,292 @@ def get_strategy_class(strategy_type: str, params: Dict[str, Any],
     return build_sma_crossover(params, opt_params)
 
 
+# Maps frontend parameter names (sent by the C++ screen as strategy.params)
+# to the class-level attribute names declared inside each builder. backtesting.py
+# only optimizes over class attributes, so `bt.optimize(**ranges)` must use the
+# class attribute names, not the frontend ids. Every entry corresponds to a
+# `_STRATEGY_META` entry above; if a strategy is missing here, optimize falls
+# back to passing frontend names through unchanged (works for builders whose
+# class attrs already equal the frontend names, e.g. RSI's `period`).
+STRATEGY_OPTIMIZE_PARAM_MAP: Dict[str, Dict[str, str]] = {
+    'sma_crossover':  {'fastPeriod': 'n1', 'slowPeriod': 'n2'},
+    'ema_crossover':  {'fastPeriod': 'n1', 'slowPeriod': 'n2'},
+    'macd':           {'fastPeriod': 'fast_p', 'slowPeriod': 'slow_p', 'signalPeriod': 'signal_p'},
+    'bollinger_bands':{'period': 'period', 'stdDev': 'std_dev'},
+    'mean_reversion': {'period': 'period', 'zThreshold': 'z_threshold'},
+    'momentum':       {'lookback': 'lookback', 'threshold': 'threshold'},
+    'breakout':       {'period': 'period'},
+    'stochastic':     {'kPeriod': 'k_period', 'dPeriod': 'd_period',
+                       'oversold': 'oversold', 'overbought': 'overbought'},
+    'rsi':            {'period': 'period', 'oversold': 'oversold', 'overbought': 'overbought'},
+    'adx_trend':      {'period': 'period', 'threshold': 'threshold'},
+    'williams_r':     {'period': 'period', 'oversold': 'oversold', 'overbought': 'overbought'},
+    'cci':            {'period': 'period', 'lower': 'threshold', 'upper': 'threshold'},
+    'obv_trend':      {'period': 'ma_period'},
+    'keltner_breakout': {'period': 'ema_period', 'atrPeriod': 'atr_period', 'multiplier': 'mult'},
+    'triple_ma':      {'fastPeriod': 'fast', 'mediumPeriod': 'med', 'slowPeriod': 'slow'},
+    'dual_momentum':  {'shortLookback': 'abs_period', 'longLookback': 'abs_period',
+                       'threshold': 'threshold'},
+    'volatility_breakout': {'period': 'atr_period', 'kMultiplier': 'atr_mult'},
+    'rsi_macd':       {'rsiPeriod': 'rsi_period', 'oversold': 'oversold', 'overbought': 'overbought',
+                       'fastPeriod': 'fast_p', 'slowPeriod': 'slow_p', 'signalPeriod': 'signal_p'},
+    'macd_adx':       {'fastPeriod': 'fast_p', 'slowPeriod': 'slow_p',
+                       'adxPeriod': 'adx_period', 'adxThreshold': 'adx_threshold'},
+    'bollinger_rsi':  {'bbPeriod': 'bb_period', 'stdDev': 'std_dev',
+                       'rsiPeriod': 'rsi_period', 'oversold': 'oversold', 'overbought': 'overbought'},
+    'ichimoku':       {'tenkanPeriod': 'tenkan_p', 'kijunPeriod': 'kijun_p'},
+    'psar':           {'afStep': 'af_step', 'afMax': 'af_max'},
+    'mfi':            {'period': 'period', 'oversold': 'oversold', 'overbought': 'overbought'},
+    'macd_zero_cross':{'fastPeriod': 'fast_p', 'slowPeriod': 'slow_p', 'signalPeriod': 'signal_p'},
+    'atr_trailing_stop': {'atrPeriod': 'atr_period', 'multiplier': 'atr_mult'},
+    'trend_momentum': {'maPeriod': 'ma_period', 'momentumPeriod': 'rsi_period'},
+}
+
+
+def map_optimize_params(strategy_type: str, frontend_ranges: Dict[str, Any]) -> Dict[str, Any]:
+    """Translate frontend param ranges (`fastPeriod`) to class attribute ranges (`n1`).
+
+    Frontend ranges look like {"fastPeriod": {"min": 5, "max": 20, "step": 1}, ...}.
+    Returns {"n1": {...}} for strategies whose class attrs differ from frontend names.
+    Pass-through for unmapped strategies/keys.
+    """
+    mapping = STRATEGY_OPTIMIZE_PARAM_MAP.get(strategy_type, {})
+    out: Dict[str, Any] = {}
+    for fname, cfg in (frontend_ranges or {}).items():
+        cattr = mapping.get(fname, fname)
+        # If two frontend params map to the same class attr (rare, e.g. dual_momentum),
+        # the second one wins — backtesting.py can only optimize one range per attr.
+        out[cattr] = cfg
+    return out
+
+
 def list_strategies() -> List[Dict[str, str]]:
     """Return list of available strategies for frontend catalog."""
     return [{'id': k, 'name': k.replace('_', ' ').title()} for k in STRATEGY_BUILDERS]
+
+
+# Per-strategy metadata used to build the categorised catalog the frontend
+# expects ({strategies: {category: [{id, name, params: [...]}]}}). Every entry
+# here corresponds to a key in STRATEGY_BUILDERS — keep them in sync.
+_STRATEGY_META: Dict[str, Dict[str, Any]] = {
+    'sma_crossover': {
+        'name': 'SMA Crossover', 'category': 'Trend',
+        'params': [
+            {'id': 'fastPeriod', 'name': 'Fast Period', 'default': 10, 'min': 2, 'max': 100, 'step': 1},
+            {'id': 'slowPeriod', 'name': 'Slow Period', 'default': 20, 'min': 5, 'max': 200, 'step': 1},
+        ],
+    },
+    'ema_crossover': {
+        'name': 'EMA Crossover', 'category': 'Trend',
+        'params': [
+            {'id': 'fastPeriod', 'name': 'Fast Period', 'default': 12, 'min': 2, 'max': 100, 'step': 1},
+            {'id': 'slowPeriod', 'name': 'Slow Period', 'default': 26, 'min': 5, 'max': 200, 'step': 1},
+        ],
+    },
+    'macd': {
+        'name': 'MACD Crossover', 'category': 'Trend',
+        'params': [
+            {'id': 'fastPeriod', 'name': 'Fast Period', 'default': 12, 'min': 2, 'max': 50, 'step': 1},
+            {'id': 'slowPeriod', 'name': 'Slow Period', 'default': 26, 'min': 10, 'max': 100, 'step': 1},
+            {'id': 'signalPeriod', 'name': 'Signal Period', 'default': 9, 'min': 2, 'max': 30, 'step': 1},
+        ],
+    },
+    'adx_trend': {
+        'name': 'ADX Trend', 'category': 'Trend',
+        'params': [
+            {'id': 'period', 'name': 'ADX Period', 'default': 14, 'min': 5, 'max': 50, 'step': 1},
+            {'id': 'threshold', 'name': 'ADX Threshold', 'default': 25, 'min': 10, 'max': 50, 'step': 1},
+        ],
+    },
+    'keltner_breakout': {
+        'name': 'Keltner Breakout', 'category': 'Trend',
+        'params': [
+            {'id': 'period', 'name': 'EMA Period', 'default': 20, 'min': 5, 'max': 100, 'step': 1},
+            {'id': 'atrPeriod', 'name': 'ATR Period', 'default': 10, 'min': 5, 'max': 50, 'step': 1},
+            {'id': 'multiplier', 'name': 'Multiplier', 'default': 2.0, 'min': 0.5, 'max': 5.0, 'step': 0.1},
+        ],
+    },
+    'triple_ma': {
+        'name': 'Triple MA', 'category': 'Trend',
+        'params': [
+            {'id': 'fastPeriod', 'name': 'Fast', 'default': 5, 'min': 2, 'max': 20, 'step': 1},
+            {'id': 'mediumPeriod', 'name': 'Medium', 'default': 20, 'min': 10, 'max': 50, 'step': 1},
+            {'id': 'slowPeriod', 'name': 'Slow', 'default': 50, 'min': 30, 'max': 200, 'step': 1},
+        ],
+    },
+    'ichimoku': {
+        'name': 'Ichimoku Cloud', 'category': 'Trend',
+        'params': [
+            {'id': 'tenkanPeriod', 'name': 'Tenkan', 'default': 9, 'min': 2, 'max': 30, 'step': 1},
+            {'id': 'kijunPeriod', 'name': 'Kijun', 'default': 26, 'min': 5, 'max': 100, 'step': 1},
+        ],
+    },
+    'psar': {
+        'name': 'Parabolic SAR', 'category': 'Trend',
+        'params': [
+            {'id': 'afStep', 'name': 'AF Step', 'default': 0.02, 'min': 0.005, 'max': 0.1, 'step': 0.005},
+            {'id': 'afMax', 'name': 'AF Max', 'default': 0.2, 'min': 0.05, 'max': 0.5, 'step': 0.01},
+        ],
+    },
+    'macd_zero_cross': {
+        'name': 'MACD Zero Cross', 'category': 'Trend',
+        'params': [
+            {'id': 'fastPeriod', 'name': 'Fast', 'default': 12, 'min': 2, 'max': 50, 'step': 1},
+            {'id': 'slowPeriod', 'name': 'Slow', 'default': 26, 'min': 10, 'max': 100, 'step': 1},
+            {'id': 'signalPeriod', 'name': 'Signal', 'default': 9, 'min': 2, 'max': 30, 'step': 1},
+        ],
+    },
+    'trend_momentum': {
+        'name': 'Trend + Momentum', 'category': 'Trend',
+        'params': [
+            {'id': 'maPeriod', 'name': 'MA Period', 'default': 50, 'min': 10, 'max': 200, 'step': 1},
+            {'id': 'momentumPeriod', 'name': 'Momentum Period', 'default': 14, 'min': 5, 'max': 50, 'step': 1},
+        ],
+    },
+    'mean_reversion': {
+        'name': 'Z-Score Mean Reversion', 'category': 'Mean Reversion',
+        'params': [
+            {'id': 'period', 'name': 'Lookback', 'default': 20, 'min': 5, 'max': 100, 'step': 1},
+            {'id': 'zThreshold', 'name': 'Z Threshold', 'default': 2.0, 'min': 0.5, 'max': 4.0, 'step': 0.1},
+        ],
+    },
+    'bollinger_bands': {
+        'name': 'Bollinger Bands', 'category': 'Mean Reversion',
+        'params': [
+            {'id': 'period', 'name': 'Period', 'default': 20, 'min': 5, 'max': 100, 'step': 1},
+            {'id': 'stdDev', 'name': 'Std Dev', 'default': 2.0, 'min': 0.5, 'max': 4.0, 'step': 0.1},
+        ],
+    },
+    'rsi': {
+        'name': 'RSI', 'category': 'Mean Reversion',
+        'params': [
+            {'id': 'period', 'name': 'Period', 'default': 14, 'min': 2, 'max': 50, 'step': 1},
+            {'id': 'oversold', 'name': 'Oversold', 'default': 30, 'min': 10, 'max': 40, 'step': 1},
+            {'id': 'overbought', 'name': 'Overbought', 'default': 70, 'min': 60, 'max': 95, 'step': 1},
+        ],
+    },
+    'stochastic': {
+        'name': 'Stochastic', 'category': 'Mean Reversion',
+        'params': [
+            {'id': 'kPeriod', 'name': '%K Period', 'default': 14, 'min': 5, 'max': 30, 'step': 1},
+            {'id': 'dPeriod', 'name': '%D Period', 'default': 3, 'min': 2, 'max': 10, 'step': 1},
+            {'id': 'oversold', 'name': 'Oversold', 'default': 20, 'min': 5, 'max': 30, 'step': 1},
+            {'id': 'overbought', 'name': 'Overbought', 'default': 80, 'min': 70, 'max': 95, 'step': 1},
+        ],
+    },
+    'williams_r': {
+        'name': 'Williams %R', 'category': 'Mean Reversion',
+        'params': [
+            {'id': 'period', 'name': 'Period', 'default': 14, 'min': 5, 'max': 50, 'step': 1},
+            {'id': 'oversold', 'name': 'Oversold', 'default': -80, 'min': -95, 'max': -60, 'step': 1},
+            {'id': 'overbought', 'name': 'Overbought', 'default': -20, 'min': -40, 'max': -5, 'step': 1},
+        ],
+    },
+    'momentum': {
+        'name': 'Momentum', 'category': 'Momentum',
+        'params': [
+            {'id': 'lookback', 'name': 'Lookback', 'default': 20, 'min': 5, 'max': 100, 'step': 1},
+            {'id': 'threshold', 'name': 'Threshold %', 'default': 0, 'min': 0, 'max': 20, 'step': 0.5},
+        ],
+    },
+    'dual_momentum': {
+        'name': 'Dual Momentum', 'category': 'Momentum',
+        'params': [
+            {'id': 'shortLookback', 'name': 'Short Lookback', 'default': 20, 'min': 5, 'max': 60, 'step': 1},
+            {'id': 'longLookback', 'name': 'Long Lookback', 'default': 60, 'min': 30, 'max': 200, 'step': 1},
+            {'id': 'threshold', 'name': 'Threshold %', 'default': 0, 'min': 0, 'max': 10, 'step': 0.5},
+        ],
+    },
+    'cci': {
+        'name': 'CCI', 'category': 'Momentum',
+        'params': [
+            {'id': 'period', 'name': 'Period', 'default': 20, 'min': 5, 'max': 50, 'step': 1},
+            {'id': 'lower', 'name': 'Lower', 'default': -100, 'min': -200, 'max': -50, 'step': 1},
+            {'id': 'upper', 'name': 'Upper', 'default': 100, 'min': 50, 'max': 200, 'step': 1},
+        ],
+    },
+    'breakout': {
+        'name': 'Donchian Breakout', 'category': 'Breakout',
+        'params': [
+            {'id': 'period', 'name': 'Channel Period', 'default': 20, 'min': 5, 'max': 100, 'step': 1},
+        ],
+    },
+    'volatility_breakout': {
+        'name': 'Volatility Breakout', 'category': 'Breakout',
+        'params': [
+            {'id': 'period', 'name': 'ATR Period', 'default': 20, 'min': 5, 'max': 50, 'step': 1},
+            {'id': 'kMultiplier', 'name': 'K Multiplier', 'default': 1.5, 'min': 0.5, 'max': 4.0, 'step': 0.1},
+        ],
+    },
+    'rsi_macd': {
+        'name': 'RSI + MACD', 'category': 'Multi-Indicator',
+        'params': [
+            {'id': 'rsiPeriod', 'name': 'RSI Period', 'default': 14, 'min': 5, 'max': 30, 'step': 1},
+            {'id': 'oversold', 'name': 'Oversold', 'default': 30, 'min': 15, 'max': 40, 'step': 1},
+            {'id': 'overbought', 'name': 'Overbought', 'default': 70, 'min': 60, 'max': 90, 'step': 1},
+            {'id': 'fastPeriod', 'name': 'MACD Fast', 'default': 12, 'min': 5, 'max': 30, 'step': 1},
+            {'id': 'slowPeriod', 'name': 'MACD Slow', 'default': 26, 'min': 15, 'max': 50, 'step': 1},
+            {'id': 'signalPeriod', 'name': 'MACD Signal', 'default': 9, 'min': 3, 'max': 20, 'step': 1},
+        ],
+    },
+    'macd_adx': {
+        'name': 'MACD + ADX', 'category': 'Multi-Indicator',
+        'params': [
+            {'id': 'fastPeriod', 'name': 'MACD Fast', 'default': 12, 'min': 5, 'max': 30, 'step': 1},
+            {'id': 'slowPeriod', 'name': 'MACD Slow', 'default': 26, 'min': 15, 'max': 50, 'step': 1},
+            {'id': 'signalPeriod', 'name': 'MACD Signal', 'default': 9, 'min': 3, 'max': 20, 'step': 1},
+            {'id': 'adxPeriod', 'name': 'ADX Period', 'default': 14, 'min': 5, 'max': 30, 'step': 1},
+            {'id': 'adxThreshold', 'name': 'ADX Threshold', 'default': 25, 'min': 15, 'max': 50, 'step': 1},
+        ],
+    },
+    'bollinger_rsi': {
+        'name': 'Bollinger + RSI', 'category': 'Multi-Indicator',
+        'params': [
+            {'id': 'bbPeriod', 'name': 'BB Period', 'default': 20, 'min': 5, 'max': 50, 'step': 1},
+            {'id': 'stdDev', 'name': 'Std Dev', 'default': 2.0, 'min': 1.0, 'max': 4.0, 'step': 0.1},
+            {'id': 'rsiPeriod', 'name': 'RSI Period', 'default': 14, 'min': 5, 'max': 30, 'step': 1},
+            {'id': 'oversold', 'name': 'Oversold', 'default': 30, 'min': 15, 'max': 40, 'step': 1},
+            {'id': 'overbought', 'name': 'Overbought', 'default': 70, 'min': 60, 'max': 90, 'step': 1},
+        ],
+    },
+    'obv_trend': {
+        'name': 'OBV Trend', 'category': 'Volume',
+        'params': [
+            {'id': 'period', 'name': 'OBV SMA Period', 'default': 20, 'min': 5, 'max': 100, 'step': 1},
+        ],
+    },
+    'mfi': {
+        'name': 'Money Flow Index', 'category': 'Volume',
+        'params': [
+            {'id': 'period', 'name': 'Period', 'default': 14, 'min': 5, 'max': 50, 'step': 1},
+            {'id': 'oversold', 'name': 'Oversold', 'default': 20, 'min': 5, 'max': 35, 'step': 1},
+            {'id': 'overbought', 'name': 'Overbought', 'default': 80, 'min': 65, 'max': 95, 'step': 1},
+        ],
+    },
+    'atr_trailing_stop': {
+        'name': 'ATR Trailing Stop', 'category': 'Risk',
+        'params': [
+            {'id': 'atrPeriod', 'name': 'ATR Period', 'default': 14, 'min': 5, 'max': 50, 'step': 1},
+            {'id': 'multiplier', 'name': 'Multiplier', 'default': 3.0, 'min': 0.5, 'max': 6.0, 'step': 0.1},
+        ],
+    },
+}
+
+
+def get_strategy_catalog() -> Dict[str, List[Dict[str, Any]]]:
+    """Return strategies grouped by category in BT shape: {category: [{id, name, params: [...]}]}.
+
+    Frontend (BacktestingTypes.h::strategies_from_json) expects this exact shape
+    when the provider response is `{success: true, data: {strategies: <catalog>}}`.
+    """
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    for sid in STRATEGY_BUILDERS:
+        meta = _STRATEGY_META.get(sid, {})
+        cat = meta.get('category', 'Other')
+        entry = {
+            'id': sid,
+            'name': meta.get('name', sid.replace('_', ' ').title()),
+            'params': meta.get('params', []),
+        }
+        grouped.setdefault(cat, []).append(entry)
+    return grouped

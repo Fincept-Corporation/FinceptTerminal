@@ -1,4 +1,7 @@
 #pragma once
+#include "core/identity/Uuid.h"
+
+#include <QHash>
 #include <QString>
 #include <QStringList>
 
@@ -14,8 +17,14 @@ namespace fincept {
 /// Profiles are stored under:
 ///   %LOCALAPPDATA%/com.fincept.terminal/profiles/<name>/
 ///
-/// A manifest at root/profiles.json tracks the list of profiles.
-/// The default profile is named "default".
+/// A manifest at root/profiles.json tracks the list of profiles. Each entry
+/// carries a stable `ProfileId` UUID alongside its human-readable name —
+/// names are what the UI shows, UUIDs are what code uses for identity. The
+/// distinction matters for cloud sync (a name can be reused on a different
+/// machine; a UUID cannot collide) and for the multi-window refactor where
+/// per-profile state is keyed by UUID downstream.
+///
+/// The default profile is named "default" and is auto-created on first run.
 ///
 /// Call set_active() BEFORE AppPaths::ensure_all() in main().
 class ProfileManager {
@@ -23,11 +32,17 @@ class ProfileManager {
     static ProfileManager& instance();
 
     /// Set the active profile. Must be called before AppPaths is used.
-    /// Creates the profile directory if it doesn't exist.
+    /// Creates the profile directory + manifest entry (with a freshly-minted
+    /// UUID) if the profile name is not yet known.
     void set_active(const QString& name);
 
     /// Returns the active profile name (default: "default").
     QString active() const;
+
+    /// Stable UUID of the active profile. Lazy-mints + persists if the
+    /// active profile is unknown to the manifest (e.g. first run, or a
+    /// profile created on disk by hand).
+    ProfileId active_profile_id() const;
 
     /// Returns true if a non-default profile is active.
     bool is_custom_profile() const;
@@ -35,8 +50,25 @@ class ProfileManager {
     /// Returns all known profile names from the manifest.
     QStringList list_profiles() const;
 
+    /// Returns the manifest entries: pairs of (name, ProfileId) in
+    /// definition order. The "default" profile is always present even if
+    /// missing from the manifest file.
+    struct Entry {
+        QString name;
+        ProfileId id;
+    };
+    QList<Entry> profile_entries() const;
+
+    /// Look up a profile's UUID by its name. Null on miss.
+    ProfileId profile_id_for(const QString& name) const;
+
+    /// Look up a profile's name by its UUID. Empty on miss.
+    QString profile_name_for(const ProfileId& id) const;
+
     /// Creates a new profile entry in the manifest (does not switch to it).
-    void create_profile(const QString& name);
+    /// Mints a fresh UUID. Idempotent: if the name already exists, returns
+    /// the existing UUID without touching the manifest.
+    ProfileId create_profile(const QString& name);
 
     /// Deletes a profile from the manifest. Does NOT delete its data directory
     /// (user must do that manually to avoid accidental data loss).
@@ -60,7 +92,22 @@ class ProfileManager {
 
     QString active_profile_{"default"};
 
+    /// Cache of (name → ProfileId) loaded from the manifest. Populated lazily
+    /// on first read; mutated by create_profile / delete_profile / set_active
+    /// (when minting a new UUID for a previously-unknown name).
+    mutable QHash<QString, ProfileId> id_cache_;
+    mutable bool id_cache_loaded_ = false;
+
     QString manifest_path() const;
+
+    /// Read the manifest into id_cache_. Idempotent. Tolerates legacy
+    /// manifests that store profiles as plain strings rather than {name,id}
+    /// objects: legacy entries get UUIDs minted + the manifest rewritten on
+    /// next save.
+    void load_id_cache_locked() const;
+
+    /// Persist the current name list + UUID map back to disk. Always writes
+    /// the new {name, id} object format.
     void save_manifest(const QStringList& profiles) const;
 };
 

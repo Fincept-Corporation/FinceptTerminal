@@ -11,10 +11,18 @@ namespace fincept::auth {
 
 /// Manages local PIN authentication — hashing, verification, and lockout.
 ///
-/// PIN is hashed with PBKDF2-SHA256 (100k iterations, 32-byte salt) and stored
-/// in OS-native SecureStorage (DPAPI / Keychain). A lockout mechanism enforces
-/// exponential backoff after failed attempts (30s, 60s, 5min, 15min, then
-/// requires full server re-authentication).
+/// PIN is hashed with PBKDF2-SHA256 (600k iterations, 32-byte salt) and stored
+/// in OS-native SecureStorage (DPAPI / Keychain). Failure ladder (kFreeAttempts
+/// = 2, kMaxAttempts = 5):
+///   attempts 1-2 → silent grace period, "incorrect" message only
+///   attempt 3   → 30s timed lockout
+///   attempt 4   → 60s timed lockout
+///   attempt 5   → permanent lockout, requires server re-authentication.
+/// Total online keyspace exposure for a 6-digit PIN: 4 cheap guesses then the
+/// re-auth gate. Two extra ladder tiers (5min / 15min) are deliberately *not*
+/// reachable under the current kMaxAttempts — keeping them in code but
+/// unreachable would be a foot-gun for future code that bumps the cap without
+/// reading the comment.
 class PinManager : public QObject {
     Q_OBJECT
   public:
@@ -79,13 +87,20 @@ class PinManager : public QObject {
     static constexpr int kSaltLength = 32;
     static constexpr int kHashLength = 32;
 
-    // Lockout durations (seconds) per attempt tier
-    static constexpr std::array<int, 4> kLockoutTiers = {30, 60, 300, 900};
+    // Lockout durations (seconds) per attempt tier. Sized to match the
+    // tiers that are actually reachable given kFreeAttempts + kMaxAttempts.
+    // If you bump kMaxAttempts, also extend this array — see class header.
+    static constexpr std::array<int, 2> kLockoutTiers = {30, 60};
 
     QByteArray derive_key(const QString& pin, const QByteArray& salt) const;
 
     int failed_attempts_ = 0;
     QDateTime lockout_until_;
+
+    // Set transiently by change_pin() so the verify_pin call inside it can
+    // tag audit-log entries with source=change_pin. False during normal
+    // lock-screen unlocks. Reset to false after verify_pin returns.
+    bool audit_source_change_pin_ = false;
 
     // Cached state loaded from SecureStorage
     bool has_pin_ = false;

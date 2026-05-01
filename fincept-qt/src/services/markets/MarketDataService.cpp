@@ -245,18 +245,30 @@ void MarketDataService::ensure_registered_with_hub() {
     // Quotes: 30s TTL, 2s min interval. Dropped min_interval from 5s → 2s so
     // user-triggered refreshes and initial cold-start paint don't queue behind
     // the gate. 2s still prevents hammering yfinance on scheduler ticks.
+    //
+    // Phase 8 / decision 9.2: pause_when_inactive=true. Quotes drive
+    // visible price tickers; when a frame is minimised the user can't see
+    // them and the fan-out cost (table re-paints, format computations) is
+    // pure waste. The cached value still updates so the next show reads
+    // a fresh price from peek().
     datahub::TopicPolicy quote_p;
     quote_p.ttl_ms = 30'000;
     quote_p.min_interval_ms = 2'000;
+    quote_p.pause_when_inactive = true;
     hub.set_policy_pattern(QStringLiteral("market:quote:*"), quote_p);
 
     // Sparklines: 5-day hourly data, changes slowly — cache 10 minutes,
     // refresh at most every 30s. Reduced from 60s so a user flipping between
     // screens doesn't wait a full minute for sparkline refresh after swapping
     // the symbol set.
+    //
+    // Phase 8 / decision 9.2: pause_when_inactive=true. Sparkline updates
+    // re-paint inline charts in tables — substantial work for inactive
+    // frames. Same reasoning as quotes.
     datahub::TopicPolicy spark_p;
     spark_p.ttl_ms = 10 * 60'000;
     spark_p.min_interval_ms = 30'000;
+    spark_p.pause_when_inactive = true;
     hub.set_policy_pattern(QStringLiteral("market:sparkline:*"), spark_p);
 
     // History: OHLCV series. One-shot per chart; policies are conservative to

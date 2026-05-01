@@ -8,7 +8,7 @@
 
 ### **Ihr Denken ist die einzige Grenze. Die Daten sind es nicht.**
 
-Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Automatisierung und unbegrenzter Datenkonnektivität.
+Hochmoderne Financial-Intelligence-Plattform mit Finanzanalysen auf institutionellem Niveau, KI-Automatisierung und unbegrenzter Datenkonnektivität.
 
 [📥 Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases)·[📚 Dokumente](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)·[💬 Diskussionen](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)·[💬 Zwietracht](https://discord.gg/ae87a8ygbN)·[🤝Partner](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
@@ -28,7 +28,7 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 
 | **Besonderheit**               | **Beschreibung**                                                                                                                                                                                      |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 📊**Analysen auf CFA-Ebene**   | DCF-Modelle, Portfoliooptimierung, Risikometriken (VaR, Sharpe), Derivatpreisgestaltung über eingebettetes Python                                                                                     |
+| 📊**Multi-Asset-Analyse**      | DCF-Modelle, Portfoliooptimierung, Risikometriken (VaR, Sharpe), Derivatpreisgestaltung über Aktien, Anleihen, Derivate, Portfolio und Alternativen via eingebettetes Python                          |
 | 🤖**KI-Agenten**               | Über 20 Investorenpersönlichkeiten (Buffett, Dalio, Graham), Hedgefonds-Strategien, lokale LLM-Unterstützung, Multi-Provider (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama) |
 | 🌐**Über 100 Datenanschlüsse** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, IWF, Weltbank, AkShare, Regierungs-APIs sowie optionale alternative Daten-Overlays wie Adanos-Marktstimmung für Aktienanalysen                        |
 | 📈**Echtzeithandel**           | Krypto (Kraken/HyperLiquid WebSocket), Aktien, Algo-Handel, Papierhandelsmaschine                                                                                                                     |
@@ -125,7 +125,7 @@ Aktuelle Builds unterstützen auch optional**Adanos-Marktstimmung**Konnektivitä
 
 -   **Native Leistung**– C++20 mit Qt6, kein Electron/Web-Overhead
 -   **Einzelne Binärdatei**– kein Node.js, keine Browser-Laufzeitumgebung, kein JavaScript-Bundler
--   **Analysen auf CFA-Ebene**— Vollständige Lehrplanabdeckung über Python-Module
+-   **Vollständiges Buy-Side-Analyst-Toolkit**— Aktien, Portfolio, Derivate, Anleihen, Corporate Finance, Alternativen
 -   **Über 100 Datenanschlüsse**– von Yahoo Finance bis hin zu Regierungsdatenbanken
 -   **Kostenlos und Open Source**(AGPL-3.0) mit kommerziellen Lizenzen verfügbar
 
@@ -163,7 +163,7 @@ Wir gestalten die Zukunft der Finanzanalyse – gemeinsam.
 -   **799 $/Monat**für 20 Konten
 -   Voller Zugriff auf Fincept-Daten und APIs
 -   Perfekt für Finanz-, Wirtschafts- und Datenwissenschaftskurse
--   Integrierte CFA-Lehrplananalyse
+-   Integrierte Analytik für Aktien, Portfolio, Derivate, Anleihen und Wirtschaft
 
 **Interessiert?**E-Mail**[support@fincept.in](mailto:support@fincept.in)**mit dem Namen Ihrer Institution.
 

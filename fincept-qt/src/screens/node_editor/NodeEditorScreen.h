@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "screens/IStatefulScreen.h"
 #include "screens/node_editor/NodeEditorTypes.h"
@@ -74,7 +74,7 @@ class NodeEditorScreen : public QWidget, public fincept::screens::IStatefulScree
 
 } // namespace fincept::workflow
 
-// Convenience alias used in MainWindow
+// Convenience alias used in WindowFrame
 namespace screens {
 using NodeEditorScreen = fincept::workflow::NodeEditorScreen;
 }

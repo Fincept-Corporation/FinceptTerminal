@@ -55,11 +55,13 @@ def extract_performance(
         downside_std = float(np.std(downside, ddof=1) * np.sqrt(252)) if len(downside) > 1 else 1e-8
         sortino = (mean_ret * 252) / downside_std if downside_std > 1e-8 else 0.0
 
-        # Max drawdown
+        # Max drawdown — emit as positive magnitude to match the convention
+        # used by every other backtesting provider (vectorbt/backtestingpy/bt/
+        # fasttrade). Frontend treats it as a percent in [0, 1].
         cumulative = np.cumprod(1 + daily_returns)
         running_max = np.maximum.accumulate(cumulative)
         drawdowns = (cumulative - running_max) / running_max
-        max_drawdown = float(np.min(drawdowns)) if len(drawdowns) > 0 else 0.0
+        max_drawdown = abs(float(np.min(drawdowns))) if len(drawdowns) > 0 else 0.0
 
         # Calmar ratio
         calmar = annualized_return / abs(max_drawdown) if abs(max_drawdown) > 1e-8 else 0.0

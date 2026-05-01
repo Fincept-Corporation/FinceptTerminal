@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <QWidget>
 
 class QHBoxLayout;
@@ -10,7 +10,7 @@ namespace fincept::ui {
 class SymbolChip;
 
 /// Thin horizontal strip of symbol chips shown at the top of every
-/// MainWindow. Rebuilt from PushpinService on every pins_changed signal.
+/// WindowFrame. Rebuilt from PushpinService on every pins_changed signal.
 /// Accepts drops of symbol MIME data (drag a symbol from any panel onto
 /// the bar to pin it).
 ///

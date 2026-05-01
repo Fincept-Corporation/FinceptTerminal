@@ -1,9 +1,9 @@
-// NavigationTools.cpp — Tab switching MCP tools (Qt port)
+﻿// NavigationTools.cpp — Tab switching MCP tools (Qt port)
 
 #include "mcp/tools/NavigationTools.h"
 
 #include "app/DockScreenRouter.h"
-#include "app/MainWindow.h"
+#include "app/WindowFrame.h"
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "mcp/ToolSchemaBuilder.h"
@@ -23,22 +23,22 @@ static constexpr const char* TAG = "NavTools";
 // ── Live router lookup ──────────────────────────────────────────────────────
 // MCP tool handlers run on a worker thread. QApplication's widget tree must
 // be queried from the main thread. We marshal via run_on_target_thread_sync
-// (qApp lives on the main thread) and pick the active or primary MainWindow.
+// (qApp lives on the main thread) and pick the active or primary WindowFrame.
 namespace {
 
 // Must be called on the main thread.
 fincept::DockScreenRouter* find_active_router_main_thread() {
     // Prefer the focused window — that's where the user just typed.
     if (auto* active = QApplication::activeWindow()) {
-        if (auto* mw = qobject_cast<fincept::MainWindow*>(active))
+        if (auto* mw = qobject_cast<fincept::WindowFrame*>(active))
             return mw->dock_router();
     }
     // Fall back to the primary window (window_id == 0). Multi-window mode is
-    // possible; we deliberately don't pick "any" MainWindow because that
+    // possible; we deliberately don't pick "any" WindowFrame because that
     // would surprise users running two terminals.
     const auto top_widgets = QApplication::topLevelWidgets();
     for (QWidget* w : top_widgets) {
-        if (auto* mw = qobject_cast<fincept::MainWindow*>(w)) {
+        if (auto* mw = qobject_cast<fincept::WindowFrame*>(w)) {
             if (mw->window_id() == 0)
                 return mw->dock_router();
         }
@@ -116,7 +116,7 @@ std::vector<ToolDef> get_navigation_tools() {
                 return ToolResult::fail("Unknown tab '" + tab + "'. Valid ids: " + snap.ids.join(", "));
             }
 
-            // Hand off to MainWindow's existing nav.switch_screen subscriber.
+            // Hand off to WindowFrame's existing nav.switch_screen subscriber.
             // The subscriber marshals onto dock_router_'s thread, so we don't
             // duplicate that logic here.
             EventBus::instance().publish("nav.switch_screen", QVariantMap{{"screen_id", resolved}});

@@ -245,6 +245,159 @@ void AIQuantLabService::gs_statistics(const QJsonObject& params) {
     run_python("Analytics/gs_quant_wrapper/gs_quant_service.py", {"statistics", json}, "gs_quant", "statistics");
 }
 
+// ── Functime ─────────────────────────────────────────────────────────────────
+namespace {
+constexpr const char* kFunctimeScript = "Analytics/functime_wrapper/functime_service.py";
+} // namespace
+
+void AIQuantLabService::functime_check_status() {
+    run_python(kFunctimeScript, {"check_status", "{}"}, "functime", "check_status");
+}
+
+void AIQuantLabService::functime_forecast(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kFunctimeScript, {"forecast", json}, "functime", "forecast");
+}
+
+void AIQuantLabService::functime_anomaly_detection(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kFunctimeScript, {"anomaly_detection", json}, "functime", "anomaly_detection");
+}
+
+void AIQuantLabService::functime_seasonality(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kFunctimeScript, {"seasonality", json}, "functime", "seasonality");
+}
+
+void AIQuantLabService::functime_metrics(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kFunctimeScript, {"metrics", json}, "functime", "metrics");
+}
+
+void AIQuantLabService::functime_confidence_intervals(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kFunctimeScript, {"confidence_intervals", json}, "functime", "confidence_intervals");
+}
+
+void AIQuantLabService::functime_stationarity(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kFunctimeScript, {"stationarity", json}, "functime", "stationarity");
+}
+
+// ── Statsmodels ──────────────────────────────────────────────────────────────
+namespace {
+constexpr const char* kStatsmodelsScript = "Analytics/statsmodels_wrapper/statsmodels_service.py";
+} // namespace
+
+void AIQuantLabService::sm_check_status() {
+    run_python(kStatsmodelsScript, {"check_status", "{}"}, "statsmodels", "check_status");
+}
+
+void AIQuantLabService::sm_ols(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kStatsmodelsScript, {"ols", json}, "statsmodels", "ols");
+}
+
+void AIQuantLabService::sm_arima(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kStatsmodelsScript, {"arima", json}, "statsmodels", "arima");
+}
+
+void AIQuantLabService::sm_stationarity_tests(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kStatsmodelsScript, {"stationarity_tests", json}, "statsmodels", "stationarity_tests");
+}
+
+void AIQuantLabService::sm_acf_pacf(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kStatsmodelsScript, {"acf_pacf", json}, "statsmodels", "acf_pacf");
+}
+
+void AIQuantLabService::sm_granger_causality(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kStatsmodelsScript, {"granger_causality", json}, "statsmodels", "granger_causality");
+}
+
+void AIQuantLabService::sm_descriptive(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kStatsmodelsScript, {"descriptive", json}, "statsmodels", "descriptive");
+}
+
+// ── Fortitudo ────────────────────────────────────────────────────────────────
+namespace {
+constexpr const char* kFortitudoScript = "Analytics/fortitudo_tech_wrapper/fortitudo_service.py";
+} // namespace
+
+void AIQuantLabService::fort_check_status() {
+    run_python(kFortitudoScript, {"check_status", "{}"}, "fortitudo", "check_status");
+}
+
+void AIQuantLabService::fort_portfolio_metrics(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kFortitudoScript, {"portfolio_metrics", json}, "fortitudo", "portfolio_metrics");
+}
+
+void AIQuantLabService::fort_covariance_matrix(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kFortitudoScript, {"covariance_matrix", json}, "fortitudo", "covariance_matrix");
+}
+
+void AIQuantLabService::fort_mean_variance_optimize(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kFortitudoScript, {"mean_variance_optimize", json}, "fortitudo",
+               "mean_variance_optimize");
+}
+
+void AIQuantLabService::fort_mean_cvar_optimize(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kFortitudoScript, {"mean_cvar_optimize", json}, "fortitudo", "mean_cvar_optimize");
+}
+
+void AIQuantLabService::fort_efficient_frontier(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kFortitudoScript, {"efficient_frontier", json}, "fortitudo", "efficient_frontier");
+}
+
+void AIQuantLabService::fort_exp_decay_probabilities(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kFortitudoScript, {"exp_decay_probabilities", json}, "fortitudo",
+               "exp_decay_probabilities");
+}
+
+// ── GluonTS ──────────────────────────────────────────────────────────────────
+namespace {
+constexpr const char* kGluonTsScript = "Analytics/gluonts_wrapper/gluonts_service.py";
+} // namespace
+
+void AIQuantLabService::gluon_check_status() {
+    run_python(kGluonTsScript, {"check_status", "{}"}, "gluonts", "check_status");
+}
+
+void AIQuantLabService::gluon_probabilistic_forecast(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kGluonTsScript, {"probabilistic_forecast", json}, "gluonts", "probabilistic_forecast");
+}
+
+void AIQuantLabService::gluon_quantile_forecast(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kGluonTsScript, {"quantile_forecast", json}, "gluonts", "quantile_forecast");
+}
+
+void AIQuantLabService::gluon_distribution_fit(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kGluonTsScript, {"distribution_fit", json}, "gluonts", "distribution_fit");
+}
+
+void AIQuantLabService::gluon_evaluate_forecast(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kGluonTsScript, {"evaluate_forecast", json}, "gluonts", "evaluate_forecast");
+}
+
+void AIQuantLabService::gluon_seasonal_naive(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python(kGluonTsScript, {"seasonal_naive", json}, "gluonts", "seasonal_naive");
+}
+
 // ── CFA Quant ────────────────────────────────────────────────────────────────
 void AIQuantLabService::cfa_trend_analysis(const QJsonObject& params) {
     run_module("cfa_quant", "trend_analysis", params);
@@ -570,6 +723,10 @@ void AIQuantLabService::dataproc_process_data(const QJsonObject& params) {
 }
 
 // ── Quant Reporting ───────────────────────────────────────────────────────────
+void AIQuantLabService::reporting_check_status() {
+    run_module("quant_reporting", "check_status", {});
+}
+
 void AIQuantLabService::reporting_ic_analysis(const QJsonObject& params) {
     run_module("quant_reporting", "ic_analysis", params);
 }
@@ -579,7 +736,15 @@ void AIQuantLabService::reporting_model_performance(const QJsonObject& params) {
 }
 
 void AIQuantLabService::reporting_cumulative_returns(const QJsonObject& params) {
-    run_module("quant_reporting", "cumulative_return_graph", params);
+    run_module("quant_reporting", "cumulative_returns", params);
+}
+
+void AIQuantLabService::reporting_risk_report(const QJsonObject& params) {
+    run_module("quant_reporting", "risk_report", params);
+}
+
+void AIQuantLabService::reporting_factor_quantiles(const QJsonObject& params) {
+    run_module("quant_reporting", "factor_quantiles", params);
 }
 
 } // namespace fincept::services::quant

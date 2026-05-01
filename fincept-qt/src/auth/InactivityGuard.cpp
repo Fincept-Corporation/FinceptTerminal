@@ -41,12 +41,28 @@ void InactivityGuard::set_enabled(bool enabled) {
 void InactivityGuard::set_timeout_minutes(int minutes) {
     minutes = qBound(1, minutes, 60);
     timer_->setInterval(minutes * 60 * 1000);
-    if (enabled_ && !timer_->isActive())
+    // QTimer::setInterval() does NOT re-arm a running single-shot timer — the
+    // already-pending fire still uses the old interval. Restart so the new
+    // value applies on the very next lock cycle, otherwise saving "60 min"
+    // in Settings while the guard is running on the 10-min default leaves
+    // the next lock to fire at the old 10-min mark.
+    if (enabled_) {
+        timer_->stop();
         timer_->start();
+        last_activity_ = QDateTime::currentDateTime();
+        LOG_INFO("Auth", QString("Inactivity timeout updated to %1 min").arg(minutes));
+    }
 }
 
 int InactivityGuard::timeout_minutes() const {
     return timer_->interval() / 60000;
+}
+
+void InactivityGuard::set_terminal_locked(bool locked) {
+    if (terminal_locked_ == locked)
+        return;
+    terminal_locked_ = locked;
+    emit terminal_locked_changed(locked);
 }
 
 void InactivityGuard::reset_timer() {

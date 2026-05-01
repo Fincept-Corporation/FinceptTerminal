@@ -2727,21 +2727,45 @@ QWidget* SettingsScreen::build_security() {
         const QString new_pin = sec_new_pin_->text();
         const QString confirm = sec_confirm_pin_->text();
 
+        // Surface lockout BEFORE attempting change_pin — otherwise change_pin
+        // returns "Current PIN is incorrect" because verify_pin's locked-out
+        // path also returns false. Misleading: the user thinks they typed
+        // the wrong PIN when actually they're rate-limited.
+        if (pm.is_locked_out()) {
+            int secs = pm.lockout_remaining_seconds();
+            sec_pin_error_->setText(
+                QString("Locked out — try again in %1s").arg(secs));
+            sec_pin_error_->show();
+            sec_current_pin_->clear();
+            sec_new_pin_->clear();
+            sec_confirm_pin_->clear();
+            return;
+        }
+
         if (new_pin != confirm) {
             sec_pin_error_->setText("New PINs do not match");
             sec_pin_error_->show();
+            // Clear both new-PIN fields, not just confirm — leaving the
+            // entered PIN visible-as-text in the masked field is mild
+            // process-memory exposure and forces a full retype anyway.
+            sec_new_pin_->clear();
             sec_confirm_pin_->clear();
-            sec_confirm_pin_->setFocus();
+            sec_new_pin_->setFocus();
             return;
         }
 
         auto result = pm.change_pin(current, new_pin);
         if (result.is_err()) {
-            sec_pin_error_->setText(QString::fromStdString(result.error()));
+            // If verify_pin tripped the lockout on this very attempt, show
+            // the countdown rather than the generic "incorrect" message.
+            if (pm.is_locked_out()) {
+                int secs = pm.lockout_remaining_seconds();
+                sec_pin_error_->setText(
+                    QString("Too many failed attempts — locked for %1s").arg(secs));
+            } else {
+                sec_pin_error_->setText(QString::fromStdString(result.error()));
+            }
             sec_pin_error_->show();
-            // On a wrong current PIN the manager incremented the attempt
-            // counter; clear the field and let the user try again (up to
-            // kMaxAttempts, at which point the lock screen takes over).
             sec_current_pin_->clear();
             sec_current_pin_->setFocus();
             return;
@@ -2802,6 +2826,7 @@ QWidget* SettingsScreen::build_security() {
     connect(save_btn, &QPushButton::clicked, this, [this]() {
         auto& repo = SettingsRepository::instance();
         auto& guard = auth::InactivityGuard::instance();
+        auto& pm = auth::PinManager::instance();
 
         bool autolock = sec_autolock_toggle_->isChecked();
         int minutes = sec_lock_timeout_->currentData().toInt();
@@ -2813,10 +2838,17 @@ QWidget* SettingsScreen::build_security() {
                      sec_lock_on_minimize_->isChecked() ? "true" : "false", "security");
         }
 
+        // Always update the interval so the change takes effect on the next
+        // run regardless of current PIN state. Only flip the enabled flag if
+        // a PIN is configured — otherwise the timer fires and lock_requested
+        // is suppressed by show_lock_screen()'s no-PIN guard, leaving the
+        // timer churning invisibly.
         guard.set_timeout_minutes(minutes);
-        guard.set_enabled(autolock);
+        guard.set_enabled(autolock && pm.has_pin());
 
-        LOG_INFO("Settings", QString("Security settings saved: autolock=%1, timeout=%2min").arg(autolock).arg(minutes));
+        LOG_INFO("Settings",
+                 QString("Security settings saved: autolock=%1, timeout=%2min, has_pin=%3")
+                     .arg(autolock).arg(minutes).arg(pm.has_pin()));
     });
     vl->addWidget(save_btn);
 

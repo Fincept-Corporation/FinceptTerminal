@@ -79,8 +79,43 @@ class McpProvider {
     /// Format all enabled tools for OpenAI function calling
     QJsonArray format_tools_for_openai() const;
 
-    /// Parse "serverId__toolName" → { server_id, tool_name }
+    /// Parse "serverId__toolName" → { server_id, tool_name }.
+    /// Reverses any wire-encoding applied by `encode_tool_name_for_wire` (e.g.
+    /// `tool-dot-list` → `tool.list`) so the returned tool_name matches the
+    /// registry key.
     static QPair<QString, QString> parse_openai_function_name(const QString& fn_name);
+
+    /// Encode an internal tool name into a wire-safe form acceptable to every
+    /// supported provider. The tightest common subset (intersection of every
+    /// provider's published validation) is:
+    ///
+    ///   ^[a-zA-Z][a-zA-Z0-9_-]{0,63}$      total length 1..64
+    ///
+    /// Provider-specific rules surveyed (Apr 2026):
+    ///   - OpenAI / Anthropic / Groq / OpenRouter / DeepSeek / xAI / MiniMax:
+    ///     ^[a-zA-Z0-9_-]{1,64}$  (no dots, no leading symbol-only required).
+    ///   - Kimi (Moonshot):
+    ///     ^[a-zA-Z_][a-zA-Z0-9_-]{2,63}$  (must start with a letter or '_';
+    ///     total length 3..64).
+    ///   - Gemini:
+    ///     [a-zA-Z0-9_:.-]{1,128}  (permissive; dots/colons allowed).
+    ///
+    /// Encoding rules:
+    ///   1. Each '.' in the internal name → "-dot-" (no internal tool name uses
+    ///      hyphens, so the round-trip is unambiguous).
+    ///   2. If the resulting name fails the common-subset regex (e.g. starts
+    ///      with a digit or contains other illegal chars), the encoder prefixes
+    ///      it with `t_` and replaces every illegal byte with `_`.
+    ///   3. The combined `<server_id>__<encoded_tool>` must fit in 64 chars.
+    ///      Server prefix `fincept-terminal__` is 18 chars; longer tool names
+    ///      are tail-truncated and a 4-char hash suffix preserves uniqueness.
+    ///
+    /// `decode_tool_name_from_wire` reverses step 1 only — steps 2 and 3 are
+    /// effectively irreversible, so any tool whose name needs them must be
+    /// looked up by its hash via `find_tool_by_wire_name` (registered when
+    /// `format_tools_for_openai` is called) rather than by string round-trip.
+    static QString encode_tool_name_for_wire(const QString& tool_name);
+    static QString decode_tool_name_from_wire(const QString& wire_name);
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
 
