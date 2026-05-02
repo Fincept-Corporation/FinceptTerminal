@@ -2,7 +2,9 @@
 
 #include "ai_chat/AiChatScreen.h"
 
+#include "ai_chat/ChatBubbleFactory.h"
 #include "ai_chat/LlmService.h"
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "mcp/McpService.h"
@@ -47,50 +49,11 @@ static constexpr const char* TAG = "AiChatScreen";
 namespace fnt = fincept::ui::fonts;
 namespace col = fincept::ui::colors;
 
-// ── Bubble sizing ─────────────────────────────────────────────────────────────
-//
-// Approach: QLabel with setWordWrap(true) + setMaximumWidth(N). QLabel's
-// built-in heightForWidth() handles height computation natively — no manual
-// measurement, no clone tricks, no crop risk. The label grows vertically as
-// text is set, and the surrounding QVBoxLayout picks that up automatically.
-//
-// These are the only sizing numbers we need: the column max widths and the
-// horizontal padding that bubble_style() bakes into the QFrame CSS. Inner
-// label width = col - 2 * padding_x.
-
-// Column widths (max). User bubbles are narrower so their right-aligned layout
-// floats toward the right edge; AI bubbles get more room.
+// Bubble visuals live in ChatBubbleFactory — shared with AiChatBubble.
+// Only the column max widths are local config: the tab gets more horizontal
+// room than the floating bubble.
 static constexpr int kUserColMaxWidth = 560;
 static constexpr int kAiColMaxWidth = 680;
-
-// Horizontal CSS padding in bubble_style(): "padding:10px 14px".
-static constexpr int kBubblePadX = 14;
-
-// The width QLabel should wrap at — the bubble's inner text area.
-static int bubble_inner_width(bool is_user) {
-    return (is_user ? kUserColMaxWidth : kAiColMaxWidth) - 2 * kBubblePadX;
-}
-
-// ── Style helpers ─────────────────────────────────────────────────────────────
-
-static QString bubble_style(const QString& role) {
-    if (role == "user")
-        return "background:rgba(120,53,15,0.45);border:1px solid rgba(217,119,6,0.28);"
-               "border-radius:0px;padding:10px 14px;";
-    if (role == "system")
-        return "background:rgba(50,12,12,0.85);border:1px solid rgba(220,38,38,0.22);"
-               "border-radius:0px;padding:10px 14px;";
-    return QString("background:%1;border:1px solid %2;border-radius:0px;padding:10px 14px;")
-        .arg(col::BG_SURFACE(), col::BORDER_DIM());
-}
-
-static QString body_color(const QString& role) {
-    if (role == "user")
-        return "#fff7ed";
-    if (role == "system")
-        return "#fee2e2";
-    return col::TEXT_PRIMARY();
-}
 
 static QString generate_session_title() {
     static const QStringList prefixes = {"Amber", "Apex", "Atlas", "Echo", "Flux", "Nova", "Slate", "Vector"};
@@ -201,10 +164,51 @@ void AiChatScreen::showEvent(QShowEvent* e) {
     connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::config_changed, this,
             &AiChatScreen::on_provider_changed, Qt::UniqueConnection);
     update_stats();
+    subscribe_mcp_events();
 }
 
 void AiChatScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+    unsubscribe_mcp_events();
+}
+
+// ── MCP-driven UI sync ──────────────────────────────────────────────────────
+// MCP set_active_llm publishes llm.provider_changed when the LLM or Finagent
+// switches the active provider. We force a LlmService::reload_config() so
+// the next outgoing message uses the new provider. reload_config emits
+// LlmService::config_changed which is already wired (above) to
+// on_provider_changed for the header label refresh.
+
+void AiChatScreen::subscribe_mcp_events() {
+    if (!mcp_event_subs_.isEmpty()) return; // idempotent
+
+    QPointer<AiChatScreen> self = this;
+    auto on_provider_event = [self](const QVariantMap&) {
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self]() {
+            if (!self) return;
+            ai_chat::LlmService::instance().reload_config();
+        }, Qt::QueuedConnection);
+    };
+
+    auto on_session_created = [self](const QVariantMap&) {
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self]() {
+            if (!self) return;
+            self->load_sessions();
+        }, Qt::QueuedConnection);
+    };
+
+    auto& bus = EventBus::instance();
+    mcp_event_subs_.append(bus.subscribe("llm.provider_changed",   on_provider_event));
+    mcp_event_subs_.append(bus.subscribe("ai_chat.session_created", on_session_created));
+}
+
+void AiChatScreen::unsubscribe_mcp_events() {
+    auto& bus = EventBus::instance();
+    for (auto id : mcp_event_subs_)
+        bus.unsubscribe(id);
+    mcp_event_subs_.clear();
 }
 
 void AiChatScreen::resizeEvent(QResizeEvent* e) {
@@ -966,21 +970,13 @@ void AiChatScreen::on_stream_chunk(const QString& chunk, bool done) {
 
     // Tool-call clear sentinel: reset bubble content (removes partial XML)
     if (chunk.startsWith("\x01__TOOL_CALL_CLEAR__")) {
-        bubble->setProperty("acc", QString("Calling tool..."));
-        bubble->setText("Calling tool...");
+        fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(bubble, "Calling tool...");
         scroll_to_bottom();
         return;
     }
 
     if (!chunk.isEmpty()) {
-        QString acc = bubble->property("acc").toString();
-        // If bubble shows the "Calling tool..." placeholder, replace it
-        if (acc == "Calling tool...")
-            acc = chunk;
-        else
-            acc += chunk;
-        bubble->setProperty("acc", acc);
-        bubble->setText(acc);
+        fincept::ai_chat::ChatBubbleFactory::append_streaming_chunk(bubble, chunk);
         scroll_to_bottom();
     }
     Q_UNUSED(done)
@@ -990,42 +986,51 @@ void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
     streaming_ = false;
     show_typing(false);
 
-    // If non-streaming path: create bubble now with full content
-    if (!streaming_bubble_ && response.success && !response.content.isEmpty()) {
+    // Ensure a bubble exists for any terminal state (success + content,
+    // failure with an error message, or success-but-empty). Without this,
+    // a kimi/openai response that arrives via the non-streaming fallback
+    // with no per-chunk emission, or fails before any chunk lands, would
+    // be silently dropped — the typing indicator hides and the input is
+    // re-enabled but nothing is shown.
+    const bool need_bubble = !streaming_bubble_ &&
+                             ((response.success && !response.content.isEmpty()) ||
+                              !response.success ||
+                              response.content.isEmpty());
+    if (need_bubble)
         streaming_bubble_ = add_streaming_bubble();
-    }
 
     set_input_enabled(true);
 
     if (!response.success) {
         if (streaming_bubble_) {
-            const QString err = "Error: " + response.error;
-            streaming_bubble_->setProperty("acc", err);
-            streaming_bubble_->setText(err);
+            const QString err = response.error.isEmpty() ? QStringLiteral("Error: request failed")
+                                                         : (QStringLiteral("Error: ") + response.error);
+            fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(streaming_bubble_, err);
         }
+        LOG_WARN("AiChat", QString("LLM request failed: %1").arg(response.error));
+        streaming_bubble_ = nullptr;
+        return;
+    }
+
+    // Success but empty body — surface a hint instead of silently doing nothing.
+    if (response.content.isEmpty()) {
+        if (streaming_bubble_) {
+            const QString hint = QStringLiteral("(empty response — model returned no content)");
+            fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(streaming_bubble_, hint);
+        }
+        LOG_WARN("AiChat", "LLM returned success with empty content");
         streaming_bubble_ = nullptr;
         return;
     }
 
     const QString content = response.content;
     if (streaming_bubble_) {
-        // Get final text (either from response or what was streamed)
-        QString final_text = streaming_bubble_->property("acc").toString();
-        if (!content.isEmpty() && final_text.isEmpty())
-            final_text = content;
-        // Re-render as markdown so **bold**, - lists, code blocks, etc. display properly.
-        // Switching format on QLabel re-parses; no manual measurement needed.
-        if (!final_text.isEmpty()) {
-            streaming_bubble_->setTextFormat(Qt::MarkdownText);
-            streaming_bubble_->setText(final_text);
-            streaming_bubble_->setProperty("acc", final_text);
-        }
-
-        // Show the copy button now that streaming is done
-        auto* copy_obj = streaming_bubble_->property("copy_btn").value<QObject*>();
-        if (auto* copy_btn = qobject_cast<QPushButton*>(copy_obj))
-            copy_btn->show();
-
+        // Use accumulated streamed text if present, else fall back to the
+        // response body (non-streaming path). finalize_streaming swaps the
+        // label to MarkdownText and reveals the copy button.
+        const QString acc = streaming_bubble_->property("acc").toString();
+        const QString final_text = acc.isEmpty() ? content : acc;
+        fincept::ai_chat::ChatBubbleFactory::finalize_streaming(streaming_bubble_, final_text);
         streaming_bubble_ = nullptr;
     }
     if (!content.isEmpty()) {
@@ -1048,183 +1053,26 @@ void AiChatScreen::on_provider_changed() {
 // ── Message bubbles ───────────────────────────────────────────────────────────
 
 void AiChatScreen::add_message_bubble(const QString& role, const QString& content, const QString& timestamp) {
-    const bool is_user = (role == "user");
-    const bool is_system = (role == "system");
-
-    const QString ts = [&]() -> QString {
-        QDateTime dt = QDateTime::fromString(timestamp, Qt::ISODate);
-        if (!dt.isValid())
-            dt = QDateTime::fromString(timestamp, "yyyy-MM-dd HH:mm:ss");
-        if (!dt.isValid() && !timestamp.isEmpty())
-            return timestamp;
-        return (dt.isValid() ? dt : QDateTime::currentDateTime()).toString("HH:mm");
-    }();
-
-    auto* row = new QWidget;
-    row->setStyleSheet("background:transparent;");
-    auto* rl = new QHBoxLayout(row);
-    rl->setContentsMargins(0, 0, 0, 0);
-    rl->setSpacing(0);
-
-    if (is_user)
-        rl->addStretch();
-
-    auto* col_widget = new QWidget;
-    col_widget->setStyleSheet("background:transparent;");
-    col_widget->setMaximumWidth(is_user ? kUserColMaxWidth : kAiColMaxWidth);
-    auto* cvl = new QVBoxLayout(col_widget);
-    cvl->setContentsMargins(0, 0, 0, 0);
-    cvl->setSpacing(4);
-
-    // Role label
-    auto* role_lbl = new QLabel(is_user ? "You" : (is_system ? "System" : "AI"));
-    role_lbl->setAlignment(is_user ? Qt::AlignRight : Qt::AlignLeft);
-    role_lbl->setStyleSheet(QString("color:%1;font-size:%2px;font-weight:600;background:transparent;")
-                                .arg(is_user ? col::AMBER() : (is_system ? col::NEGATIVE() : col::AMBER()))
-                                .arg(fnt::TINY));
-    cvl->addWidget(role_lbl);
-
-    // Bubble — QLabel auto-sizes to its content via heightForWidth(), so we
-    // just pin a max width and let Qt do the math. No scrollbars (QLabel has
-    // none), no clone tricks, no manual height callbacks.
-    auto* bubble = new QFrame;
-    bubble->setStyleSheet(bubble_style(role));
-    auto* bvl = new QVBoxLayout(bubble);
-    bvl->setContentsMargins(0, 0, 0, 0);
-
-    auto* body = new QLabel;
-    body->setTextFormat(Qt::MarkdownText);
-    body->setText(content);
-    body->setWordWrap(true);
-    body->setMaximumWidth(bubble_inner_width(is_user));
-    body->setTextInteractionFlags(Qt::TextBrowserInteraction);
-    body->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-    body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    body->setStyleSheet(QString("QLabel{background:transparent;color:%1;font-size:%2px;}")
-                            .arg(body_color(role))
-                            .arg(fnt::BODY));
-    bvl->addWidget(body);
-    cvl->addWidget(bubble);
-
-    // Footer row: timestamp + copy button
-    auto* footer = new QWidget;
-    footer->setStyleSheet("background:transparent;");
-    auto* fhl = new QHBoxLayout(footer);
-    fhl->setContentsMargins(0, 0, 0, 0);
-    fhl->setSpacing(6);
-
-    auto* time_lbl = new QLabel(ts);
-    time_lbl->setStyleSheet(
-        QString("color:%1;font-size:%2px;background:transparent;").arg(col::TEXT_DIM()).arg(fnt::TINY));
-    fhl->addWidget(time_lbl);
-
-    if (!is_user && !is_system) {
-        fhl->addStretch();
-        auto* copy_btn = new QPushButton("Copy");
-        copy_btn->setFixedHeight(20);
-        copy_btn->setCursor(Qt::PointingHandCursor);
-        copy_btn->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                                        "border-radius:0px;padding:0 8px;font-size:%3px;}"
-                                        "QPushButton:hover{background:%2;color:%4;}")
-                                    .arg(col::TEXT_DIM(), col::BORDER_MED())
-                                    .arg(fnt::TINY)
-                                    .arg(col::TEXT_PRIMARY()));
-        QString plain = content;
-        connect(copy_btn, &QPushButton::clicked, this, [plain, copy_btn]() {
-            QApplication::clipboard()->setText(plain);
-            copy_btn->setText("Copied!");
-            QTimer::singleShot(1500, copy_btn, [copy_btn]() { copy_btn->setText("Copy"); });
-        });
-        fhl->addWidget(copy_btn);
-    }
-
-    if (is_user)
-        fhl->insertStretch(0);
-    cvl->addWidget(footer);
-
-    rl->addWidget(col_widget);
-    if (!is_user)
-        rl->addStretch();
-
-    messages_layout_->insertWidget(messages_layout_->count() - 1, row);
+    fincept::ai_chat::ChatBubbleFactory::Options opts;
+    opts.role               = role;
+    opts.content            = content;
+    opts.timestamp_iso      = timestamp;
+    opts.show_footer        = true;
+    opts.user_col_max_width = kUserColMaxWidth;
+    opts.ai_col_max_width   = kAiColMaxWidth;
+    auto b = fincept::ai_chat::ChatBubbleFactory::build(opts);
+    messages_layout_->insertWidget(messages_layout_->count() - 1, b.row);
 }
 
 QLabel* AiChatScreen::add_streaming_bubble() {
-    auto* row = new QWidget;
-    row->setStyleSheet("background:transparent;");
-    auto* rl = new QHBoxLayout(row);
-    rl->setContentsMargins(0, 0, 0, 0);
-
-    auto* col_widget = new QWidget;
-    col_widget->setStyleSheet("background:transparent;");
-    col_widget->setMaximumWidth(kAiColMaxWidth);
-    auto* cvl = new QVBoxLayout(col_widget);
-    cvl->setContentsMargins(0, 0, 0, 0);
-    cvl->setSpacing(4);
-
-    auto* role_lbl = new QLabel("AI");
-    role_lbl->setAlignment(Qt::AlignLeft);
-    role_lbl->setStyleSheet(
-        QString("color:%1;font-size:%2px;font-weight:600;background:transparent;").arg(col::AMBER()).arg(fnt::TINY));
-    cvl->addWidget(role_lbl);
-
-    auto* bubble = new QFrame;
-    bubble->setStyleSheet(bubble_style("assistant"));
-    auto* bvl = new QVBoxLayout(bubble);
-    bvl->setContentsMargins(0, 0, 0, 0);
-
-    // Streaming body — QLabel with plain-text format during streaming (appending
-    // chunks as markdown would re-parse on every token; waste). on_streaming_done
-    // switches to Qt::MarkdownText and re-renders the final accumulated text.
-    // Accumulated text is stored on the widget as a dynamic property "acc" so
-    // chunk handlers don't need external state.
-    auto* body = new QLabel;
-    body->setTextFormat(Qt::PlainText);
-    body->setText({});
-    body->setProperty("acc", QString{});
-    body->setWordWrap(true);
-    body->setMaximumWidth(bubble_inner_width(/*is_user=*/false));
-    body->setTextInteractionFlags(Qt::TextBrowserInteraction);
-    body->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-    body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    body->setStyleSheet(QString("QLabel{background:transparent;color:%1;font-size:%2px;}")
-                            .arg(col::TEXT_PRIMARY())
-                            .arg(fnt::BODY));
-    bvl->addWidget(body);
-    cvl->addWidget(bubble);
-
-    // Copy button — hidden during streaming, shown when done
-    auto* copy_btn = new QPushButton("Copy");
-    copy_btn->setFixedHeight(20);
-    copy_btn->setCursor(Qt::PointingHandCursor);
-    copy_btn->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                                    "border-radius:0px;padding:0 8px;font-size:%3px;}"
-                                    "QPushButton:hover{background:%2;color:%4;}")
-                                .arg(col::TEXT_DIM(), col::BORDER_MED())
-                                .arg(fnt::TINY)
-                                .arg(col::TEXT_PRIMARY()));
-    copy_btn->hide();
-    connect(copy_btn, &QPushButton::clicked, this, [body, copy_btn]() {
-        QApplication::clipboard()->setText(body->property("acc").toString());
-        copy_btn->setText("Copied!");
-        QTimer::singleShot(1500, copy_btn, [copy_btn]() { copy_btn->setText("Copy"); });
-    });
-    auto* footer = new QWidget;
-    footer->setStyleSheet("background:transparent;");
-    auto* fhl = new QHBoxLayout(footer);
-    fhl->setContentsMargins(0, 0, 0, 0);
-    fhl->addStretch();
-    fhl->addWidget(copy_btn);
-    cvl->addWidget(footer);
-
-    // Store copy_btn so on_streaming_done can show it
-    body->setProperty("copy_btn", QVariant::fromValue(static_cast<QObject*>(copy_btn)));
-
-    rl->addWidget(col_widget);
-    rl->addStretch();
-
-    messages_layout_->insertWidget(messages_layout_->count() - 1, row);
-    return body;
+    fincept::ai_chat::ChatBubbleFactory::Options opts;
+    opts.role               = "assistant";
+    opts.show_footer        = true;
+    opts.user_col_max_width = kUserColMaxWidth;
+    opts.ai_col_max_width   = kAiColMaxWidth;
+    auto b = fincept::ai_chat::ChatBubbleFactory::build_streaming(opts);
+    messages_layout_->insertWidget(messages_layout_->count() - 1, b.row);
+    return b.body;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

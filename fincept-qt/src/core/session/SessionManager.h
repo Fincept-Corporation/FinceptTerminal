@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <QElapsedTimer>
 #include <QList>
 #include <QObject>
@@ -64,11 +64,34 @@ class SessionManager : public QObject {
     void set_last_screen(const QString& screen_id);
     QString last_screen() const;
 
+    /// Force an immediate snapshot of the current QSettings-backed state
+    /// into the WorkspaceDb ring buffer. Used by closeEvent paths that
+    /// want to bypass the auto-rate limit on a real shutdown. The Phase 2
+    /// auto path still rate-limits so this is the only "always now" hook.
+    /// No-op if WorkspaceDb isn't open (early init or shutdown teardown).
+    void flush_snapshot_now();
+
   signals:
     void session_started();
 
   private:
     SessionManager() = default;
+
+    /// Internal: triggered by every save_* call. Builds a JSON payload
+    /// from the union of `window_<id>/*` keys + `window_ids` + `last_screen`
+    /// and pushes through WorkspaceSnapshotRing::add_auto, which rate-limits
+    /// to 60s. This is the Phase 2 "double-write" — QSettings still gets
+    /// the per-key write (legacy reads keep working) and WorkspaceDb gets
+    /// the consolidated snapshot.
+    ///
+    /// Phase 6 replaces this with proper Workspace serialisation once
+    /// FrameLayout/PanelState are wired through WindowFrame.
+    void request_snapshot_(bool force);
+
+    /// Build a JSON payload representing the current QSettings state.
+    /// Used by request_snapshot_() and exposed for testing.
+    QByteArray build_snapshot_payload_() const;
+
     QElapsedTimer elapsed_;
     mutable QSettings settings_{"Fincept", "FinceptTerminal"};
 };

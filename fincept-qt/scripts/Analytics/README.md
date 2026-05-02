@@ -1,6 +1,6 @@
 # Analytics Modules
 
-> CFA-level financial analytics, portfolio optimization, and quantitative models
+> Financial analytics, portfolio optimization, and risk models — equity, fixed income, derivatives, alternatives
 
 ## Overview
 

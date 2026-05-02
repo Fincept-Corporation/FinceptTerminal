@@ -28,8 +28,14 @@ class GeopoliticsService : public QObject
     int max_requests_per_sec() const override;
 
     // ── Conflict Monitor (HTTP API) ─────────────────────────────────────────
+    //
+    // The Fincept news-events endpoint now supports pagination + extra
+    // filters echoed in `filters_applied`. `limit` maps to events_per_page,
+    // `page` is 1-indexed. `source`, `date_from`, `date_to` are forwarded
+    // verbatim — server validates and ignores empty values.
     void fetch_events(const QString& country = {}, const QString& city = {}, const QString& category = {},
-                      int limit = 100);
+                      int limit = 100, int page = 1, const QString& source = {},
+                      const QString& date_from = {}, const QString& date_to = {});
     void fetch_unique_countries();
     void fetch_unique_categories();
     void fetch_unique_cities();
@@ -49,7 +55,7 @@ class GeopoliticsService : public QObject
     void extract_geolocations(const QStringList& headlines);
 
   signals:
-    void events_loaded(QVector<fincept::services::geo::NewsEvent> events, int total);
+    void events_loaded(fincept::services::geo::EventsPage page);
     void countries_loaded(QVector<fincept::services::geo::UniqueCountry> countries);
     void categories_loaded(QVector<fincept::services::geo::UniqueCategory> categories);
     void cities_loaded(QStringList cities);

@@ -51,7 +51,6 @@ class PortfolioCommandBar : public QWidget {
     void build_row1(QHBoxLayout* layout);
     void build_row2(QHBoxLayout* layout);
     void build_portfolio_selector();
-    void build_stats_cluster(QHBoxLayout* layout);
     void build_trade_cluster(QHBoxLayout* layout);
     void build_detail_tabs(QHBoxLayout* layout);
     void build_tools_cluster(QHBoxLayout* layout);
@@ -66,12 +65,6 @@ class PortfolioCommandBar : public QWidget {
     QWidget* dropdown_ = nullptr;
     QLineEdit* search_edit_ = nullptr;
     QListWidget* portfolio_list_ = nullptr;
-
-    // Stats in the bar
-    QLabel* nav_label_ = nullptr;
-    QLabel* pnl_label_ = nullptr;
-    QLabel* day_label_ = nullptr;
-    QLabel* pos_label_ = nullptr;
 
     // Action buttons
     QPushButton* buy_btn_ = nullptr;
@@ -89,9 +82,8 @@ class PortfolioCommandBar : public QWidget {
     QVector<QPushButton*> detail_btns_;
 
     // Containers for show/hide
-    QWidget* row1_ = nullptr;            // selector + stats + refresh/interval/overflow
+    QWidget* row1_ = nullptr;            // selector + refresh/interval/overflow
     QWidget* row2_ = nullptr;            // BUY/SELL/DIV | detail tabs | AI/AGENT
-    QWidget* stats_container_ = nullptr; // inline NAV/PNL/DAY/POS
     QWidget* trade_cluster_ = nullptr;   // BUY/SELL/DIV
     QWidget* tabs_container_ = nullptr;  // 9 detail view pills
     QWidget* tools_cluster_ = nullptr;   // AI/AGENT

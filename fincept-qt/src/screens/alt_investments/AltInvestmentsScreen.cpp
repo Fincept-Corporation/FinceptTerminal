@@ -509,7 +509,7 @@ QWidget* AltInvestmentsScreen::create_header() {
     tc->setSpacing(1);
     auto* title = new QLabel("ALTERNATIVE INVESTMENTS");
     title->setObjectName("altHeaderTitle");
-    auto* sub = new QLabel("27 ANALYZERS  \xB7  10 ASSET CLASSES  \xB7  CFA-LEVEL ANALYTICS");
+    auto* sub = new QLabel("27 ANALYZERS  \xB7  10 ASSET CLASSES  \xB7  MULTI-ASSET ANALYTICS");
     sub->setObjectName("altHeaderSub");
     tc->addWidget(title);
     tc->addWidget(sub);

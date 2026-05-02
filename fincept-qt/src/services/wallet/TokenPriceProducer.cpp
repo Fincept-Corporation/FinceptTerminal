@@ -19,7 +19,7 @@ namespace fincept::wallet {
 
 namespace {
 
-constexpr const char* kFamilyPrefix = "market:price:token:";
+constexpr const char* kTokenPriceFamilyPrefix = "market:price:token:";
 constexpr const char* kFncptAlias   = "market:price:fncpt";
 // Jupiter Lite Price API v3. Same host we already use; the response shape
 // keys results by mint, so a single call serves any number of mints.
@@ -44,14 +44,14 @@ QString TokenPriceProducer::mint_for_topic(const QString& topic) {
     if (topic == QString::fromLatin1(kFncptAlias)) {
         return QString::fromLatin1(kFncptMint);
     }
-    if (topic.startsWith(QString::fromLatin1(kFamilyPrefix))) {
-        return topic.mid(static_cast<int>(qstrlen(kFamilyPrefix)));
+    if (topic.startsWith(QString::fromLatin1(kTokenPriceFamilyPrefix))) {
+        return topic.mid(static_cast<int>(qstrlen(kTokenPriceFamilyPrefix)));
     }
     return {};
 }
 
 QString TokenPriceProducer::topic_for_mint(const QString& mint) {
-    return QString::fromLatin1(kFamilyPrefix) + mint;
+    return QString::fromLatin1(kTokenPriceFamilyPrefix) + mint;
 }
 
 void TokenPriceProducer::refresh(const QStringList& topics) {

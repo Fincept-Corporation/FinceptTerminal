@@ -3,82 +3,88 @@
 #include "mcp/tools/AltInvestmentsTools.h"
 
 #include "core/logging/Logger.h"
-#include "mcp/tools/ThreadHelper.h"
+#include "mcp/AsyncDispatch.h"
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QPromise>
+
+#include <memory>
 
 namespace fincept::mcp::tools {
 
-static constexpr int kTimeoutMs = 30000;
+static constexpr int kAltTimeoutMs = 30000;
 static constexpr int kAltTtlSec = 10 * 60; // 10 min — deterministic given same inputs
 
 // ── Shared async helper ──────────────────────────────────────────────────────
-// Calls cli.py synchronously (blocks calling thread via QEventLoop).
+// Phase 4: Resolves `promise` with the metrics JSON when cli.py finishes.
+// Returns immediately; the worker thread never blocks. Cache hits resolve
+// synchronously inside this function.
+//
 // command  = analyzer id (e.g. "high_yield_bond")
 // params   = JSON object with name/type/value/rate/term/fee/current_value/additional
 
-static ToolResult run_alt_sync(const QString& command, const QJsonObject& params) {
-    QString data_json = QString::fromUtf8(QJsonDocument(params).toJson(QJsonDocument::Compact));
-
-    // Cache: key = command + serialized params
+static void run_alt_async(const QString& command, const QJsonObject& params, ToolContext ctx,
+                           std::shared_ptr<QPromise<ToolResult>> promise) {
+    const QString data_json = QString::fromUtf8(QJsonDocument(params).toJson(QJsonDocument::Compact));
     const QString cache_key = "alt:" + command + ":" + data_json;
+
+    // Cache hit — resolve immediately, no Python spawn.
     const QVariant cached = fincept::CacheManager::instance().get(cache_key);
     if (!cached.isNull()) {
         auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
-        if (!doc.isNull() && doc.isObject())
-            return ToolResult::ok_data(doc.object());
+        if (!doc.isNull() && doc.isObject()) {
+            promise->addResult(ToolResult::ok_data(doc.object()));
+            promise->finish();
+            return;
+        }
     }
 
-    ToolResult tool_result = ToolResult::fail("Python runner failed to respond");
-
-    // Marshal onto PythonRunner's thread (main). Worker-thread QEventLoop
-    // would never be woken by main-thread QProcess::finished signals.
     auto* runner = &python::PythonRunner::instance();
-    detail::run_async_wait(runner, [&](auto signal_done) {
-        runner->run("Analytics/alternateInvestment/cli.py", {command, "--data", data_json},
-                    [&, signal_done](const python::PythonResult& result) {
-                        if (!result.success) {
-                            tool_result = ToolResult::fail(
-                                result.error.isEmpty() ? "Analysis failed" : result.error);
-                            signal_done();
-                            return;
-                        }
-                        // Extract JSON from stdout
-                        QString out = result.output;
-                        int start = out.indexOf('{');
-                        int end = out.lastIndexOf('}');
-                        if (start < 0 || end < 0 || end <= start) {
-                            tool_result = ToolResult::fail("No JSON in output");
-                            signal_done();
-                            return;
-                        }
-                        QJsonParseError err;
-                        auto doc = QJsonDocument::fromJson(out.mid(start, end - start + 1).toUtf8(), &err);
-                        if (doc.isNull() || !doc.isObject()) {
-                            tool_result = ToolResult::fail("Invalid JSON: " + err.errorString());
-                            signal_done();
-                            return;
-                        }
-                        auto obj = doc.object();
-                        if (obj.contains("error")) {
-                            tool_result = ToolResult::fail(obj["error"].toString());
-                            signal_done();
-                            return;
-                        }
-                        auto metrics = obj.contains("metrics") ? obj["metrics"].toObject() : obj;
-                        fincept::CacheManager::instance().put(
-                            cache_key,
-                            QVariant(QString::fromUtf8(QJsonDocument(metrics).toJson(QJsonDocument::Compact))),
-                            kAltTtlSec, "alt_investments");
-                        tool_result = ToolResult::ok_data(metrics);
-                        signal_done();
-                    });
-    });
-
-    return tool_result;
+    AsyncDispatch::callback_to_promise(
+        runner, ctx, promise,
+        [runner, command, data_json, cache_key, ctx](auto resolve) {
+            runner->run("Analytics/alternateInvestment/cli.py", {command, "--data", data_json},
+                        [resolve, cache_key, ctx](const python::PythonResult& result) {
+                            if (ctx.cancelled()) {
+                                resolve(ToolResult::fail("cancelled"));
+                                return;
+                            }
+                            if (!result.success) {
+                                resolve(ToolResult::fail(
+                                    result.error.isEmpty() ? "Analysis failed" : result.error));
+                                return;
+                            }
+                            // Extract JSON from stdout
+                            QString out = result.output;
+                            int start = out.indexOf('{');
+                            int end = out.lastIndexOf('}');
+                            if (start < 0 || end < 0 || end <= start) {
+                                resolve(ToolResult::fail("No JSON in output"));
+                                return;
+                            }
+                            QJsonParseError err;
+                            auto doc = QJsonDocument::fromJson(
+                                out.mid(start, end - start + 1).toUtf8(), &err);
+                            if (doc.isNull() || !doc.isObject()) {
+                                resolve(ToolResult::fail("Invalid JSON: " + err.errorString()));
+                                return;
+                            }
+                            auto obj = doc.object();
+                            if (obj.contains("error")) {
+                                resolve(ToolResult::fail(obj["error"].toString()));
+                                return;
+                            }
+                            auto metrics = obj.contains("metrics") ? obj["metrics"].toObject() : obj;
+                            fincept::CacheManager::instance().put(
+                                cache_key,
+                                QVariant(QString::fromUtf8(QJsonDocument(metrics).toJson(QJsonDocument::Compact))),
+                                kAltTtlSec, "alt_investments");
+                            resolve(ToolResult::ok_data(metrics));
+                        });
+        });
 }
 
 // ── Common input schema ──────────────────────────────────────────────────────
@@ -100,6 +106,9 @@ static ToolSchema make_schema(const QString& type_description) {
 }
 
 // ── Tool factory macro ───────────────────────────────────────────────────────
+// Phase 4: every alt analyzer runs cli.py asynchronously. The macro emits an
+// AsyncToolHandler that builds the params dict and delegates to run_alt_async,
+// which resolves the promise when Python finishes (or the watchdog fires).
 
 #define ALT_TOOL(CMD, NAME, DESC, TYPE_DESC)                                                                           \
     {                                                                                                                  \
@@ -108,7 +117,9 @@ static ToolSchema make_schema(const QString& type_description) {
         t.description = (DESC);                                                                                        \
         t.category = "alt-investments";                                                                                \
         t.input_schema = make_schema(TYPE_DESC);                                                                       \
-        t.handler = [](const QJsonObject& args) -> ToolResult {                                                        \
+        t.default_timeout_ms = kAltTimeoutMs;                                                                          \
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx,                                                 \
+                              std::shared_ptr<QPromise<ToolResult>> promise) {                                          \
             QJsonObject p;                                                                                             \
             p["name"] = args["name"].toString("Investment");                                                           \
             p["type"] = args["type"].toString("default");                                                              \
@@ -118,7 +129,7 @@ static ToolSchema make_schema(const QString& type_description) {
             p["fee"] = args["fee"].toDouble(0) / 100.0;                                                                \
             p["current_value"] = args["current_value"].toDouble(0);                                                    \
             p["additional"] = args["additional"].toDouble(0);                                                          \
-            return run_alt_sync(CMD, p);                                                                               \
+            run_alt_async(CMD, p, ctx, promise);                                                                       \
         };                                                                                                             \
         tools.push_back(std::move(t));                                                                                 \
     }

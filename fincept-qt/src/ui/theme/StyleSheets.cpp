@@ -276,8 +276,19 @@ QString crypto_trading_styles() {
                "  padding: 2px 10px; font-size: 11px; font-weight: 700; }"
                "#cryptoApiBtn:hover { color: %4; background: %13; }"
 
+               /* ── WS status pill ── */
                "#cryptoWsStatus { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; "
-               "  background: transparent; border: none; }"
+               "  background: transparent; border: 1px solid %3; border-radius: 9px; "
+               "  padding: 2px 8px; }"
+               "#cryptoWsStatus[ws=\"live\"] { color: %15; border-color: %19; "
+               "  background: %17; }"
+               "#cryptoWsStatus[ws=\"connecting\"] { color: %12; border-color: %10; "
+               "  background: %8; }"
+               "#cryptoWsStatus[ws=\"offline\"] { color: %11; border-color: %20; "
+               "  background: %18; }"
+               "#cryptoWsTransport { color: %9; font-size: 9px; font-weight: 600; "
+               "  letter-spacing: 0.5px; background: transparent; border: none; "
+               "  margin-left: 4px; }"
                "#cryptoClock { color: %6; font-size: 11px; font-weight: 600; "
                "  background: transparent; border: none; }"
 

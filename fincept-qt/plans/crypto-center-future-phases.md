@@ -1,8 +1,8 @@
 # Crypto Center — Future Phases (2–5)
 
-**Status**: design draft
+**Status**: terminal-side shipped — Phases 2, 3, 4, 5 all have UI + service surfaces in `main`. Phases 3, 4 and the buyback worker (5) ship in demo / mock mode pending external infrastructure. See "Shipped state" table at the bottom of this document.
 **Owner**: tilakpatel22
-**Last updated**: 2026-04-27
+**Last updated**: 2026-05-01
 **Predecessor**: `plans/crypto-center-wallet-connect.md` (Phase 1, shipped); Phase 1.5 hardening shipped 2026-04-27 — see §1.5 below.
 **Scope**: everything that lands inside `screens/crypto_center/CryptoCenterScreen` after the wallet-connect MVP — all subsequent capability that uses the same screen as its home.
 
@@ -405,6 +405,8 @@ This is a **policy decision** outside the scope of this doc — the engineering 
 
 ## 5. Phase 5 — Buyback & Burn dashboard (ROADMAP tab)
 
+**Status**: shipped (2026-05-01) — terminal-side dashboard is live; buyback worker endpoint is **not yet deployed**, so the producers ship in mock mode (`is_mock=true` on every payload, "DEMO" pill on every panel head). Configure SecureStorage keys `fincept.treasury_endpoint` and `fincept.treasury_pubkey` to flip to live data. See `docs/CRYPTO_CENTER_PHASE_5.md`.
+
 **Goal**: make the value loop visible. Every user can see exactly how much terminal revenue has been spent buying $FNCPT off the market and burning it. This is the **demand engine** that justifies the token long-term.
 
 ### 5.1 Capabilities
@@ -581,3 +583,24 @@ If any of these is < 30 % of target after the corresponding phase, **stop** and 
 - Update this doc at each phase kickoff with refined estimates and any scope deltas.
 - When a phase ships, **archive** its section into `plans/crypto-center-phase<N>-shipped.md` with the actual implementation diffs from the plan, so future phases inherit verified patterns rather than design speculation.
 - Topic catalogue (`docs/DATAHUB_TOPICS.md`) is the source of truth for all hub topics; this doc is the user-story-level map. Discrepancies → fix `DATAHUB_TOPICS.md` first.
+
+---
+
+## 12. Shipped state (2026-05-01)
+
+Snapshot of what is wired in `main` vs. what still requires off-tree infrastructure (Anchor programs, Fincept-operated workers, hosted matching engine). Each phase below has a fully connected UI + service surface; the right-hand column lists what has to land before the demo / mock chips disappear.
+
+| Phase | UI tab | Services / producers | Hub topics | Ships in mock mode? | Unblocks live mode |
+|---|---|---|---|---|---|
+| **1 + 1.5** | HOME | `WalletService`, `WalletBalanceProducer`, `TokenPriceProducer`, `TokenMetadataService` | `wallet:balance:*`, `market:price:token:*`, `market:price:fncpt` (deprecated alias) | No — fully live | — |
+| **2** | TRADE, ACTIVITY | `PumpFunSwapService`, `WalletActivityProducer`, `FeeDiscountService` | `wallet:activity:*`, `billing:fncpt_discount:*` | No — fully live (PumpPortal) | — |
+| **3** | STAKE | `StakingService`, `RealYieldService`, `TierService`, `TierConfig` | `wallet:locks:*`, `wallet:vefncpt:*`, `wallet:yield:*`, `treasury:revenue`, `billing:tier:*` | **Yes** — `is_mock=true` on every payload | Deploy `fincept_lock` Anchor program; configure `fincept.lock_program_id`, `fincept.yield_endpoint` |
+| **4** | MARKETS | `FinceptInternalAdapter` (joins `PredictionExchangeRegistry`); panel reads via Qt signals | `prediction:fincept:markets`, `prediction:fincept:orderbook:*`, `prediction:fincept:price:*` (policies registered, no producer publishing yet) | **Yes** — curated 3-market dataset emitted via `markets_ready` signal | Deploy `fincept_market` Anchor program; stand up `markets.fincept.in`; configure `fincept.markets_endpoint`, `fincept.market_program_id` |
+| **5** | ROADMAP | `BuybackBurnService`, `TreasuryService` | `treasury:buyback_epoch`, `treasury:burn_total`, `treasury:supply_history`, `treasury:reserves`, `treasury:runway` | **Yes** — `is_mock=true` on every payload | Deploy buyback worker (Python or TS, off-tree) that POSTs per-epoch summaries; configure `fincept.treasury_endpoint`, `fincept.treasury_pubkey` |
+
+**No on-chain code in this tree.** Phases 3 and 4 require Solana programs written in Rust (`solana/programs/fincept_lock/` and `solana/programs/fincept_market/`), maintained in a separate repo. The C++ side stays pure Qt + DataHub.
+
+**Cross-screen tier gating** (Phase 3 §3.6) is wired via `TierService::tier_changed`. Paid screens that connect to that signal will react when a user's tier transitions, even though the producer is currently in mock mode (the mock returns `Tier::Free`, so no screens light up until the program ships and real veFNCPT weight is observable).
+
+**User-facing docs** corresponding to each phase live in `docs/CRYPTO_CENTER_PHASE_<N>.md` — written for Fincept Terminal users, not engineers. The walkthroughs in this directory are the engineering-side decision records.
+

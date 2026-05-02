@@ -28,14 +28,24 @@ import math
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 
-# Setup paths for both direct execution and package import
+# Setup paths for both direct execution and package import.
+#
+# IMPORTANT: this folder is named `zipline/` to match the C++ host's path
+# convention (Analytics/backtesting/<provider>/<provider>_provider.py), but
+# that name shadows the real `zipline-reloaded` package on sys.path. Putting
+# _BACKTESTING_DIR at the FRONT of sys.path makes `import zipline` resolve
+# to this local folder, breaking every `from zipline.api import ...` call
+# below. We therefore APPEND it instead — site-packages remains earlier on
+# sys.path so the installed zipline-reloaded wins, while sibling imports
+# like `from base.base_provider import ...` still work because nothing else
+# on sys.path provides a `base` package.
 _SCRIPT_DIR = Path(__file__).parent
 _BACKTESTING_DIR = _SCRIPT_DIR.parent
 
 if str(_BACKTESTING_DIR) not in sys.path:
-    sys.path.insert(0, str(_BACKTESTING_DIR))
+    sys.path.append(str(_BACKTESTING_DIR))
 if str(_SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPT_DIR))
+    sys.path.append(str(_SCRIPT_DIR))
 
 from base.base_provider import (
     BacktestingProviderBase,
@@ -919,13 +929,13 @@ class ZiplineProvider(BacktestingProviderBase):
             # Parse request
             strategy_def = request.get('strategy', {})
             strategy_type = strategy_def.get('type', 'sma_crossover')
-            strategy_params = strategy_def.get('parameters', {})
+            # Frontend sends params under `params`; legacy callers used `parameters`.
+            strategy_params = strategy_def.get('params') or strategy_def.get('parameters', {})
             start_date = request.get('startDate', '2023-01-01')
             end_date = request.get('endDate', '2024-01-01')
             initial_capital = float(request.get('initialCapital', 100000))
             commission_rate = float(request.get('commission', 0.001))
             slippage_bps = float(request.get('slippage', 0.0))
-            assets = request.get('assets', [])
 
             # Commission/slippage model from request
             commission_model_type = request.get('commissionModel', 'per_dollar')
@@ -936,7 +946,13 @@ class ZiplineProvider(BacktestingProviderBase):
             max_leverage = float(request.get('maxLeverage', 0)) or float('inf')
             benchmark = request.get('benchmark', None)
 
-            symbols = [a.get('symbol', 'SPY') for a in assets] if assets else ['SPY']
+            # Canonical input: `symbols: [str]`. Fallback: `assets: [{symbol}]`.
+            symbols = request.get('symbols', [])
+            if not symbols:
+                assets = request.get('assets', [])
+                symbols = [a.get('symbol') for a in assets if isinstance(a, dict) and a.get('symbol')]
+            if not symbols:
+                symbols = ['SPY']
             primary_symbol = symbols[0]
 
             logs.append(f'Strategy: {strategy_type}')
@@ -998,6 +1014,9 @@ class ZiplineProvider(BacktestingProviderBase):
 
             logs.append(f'Backtest completed: {performance.get("total_trades", 0)} trades')
 
+            from zl_data import was_last_fetch_synthetic
+            using_synthetic = was_last_fetch_synthetic()
+
             result_data = {
                 'id': backtest_id,
                 'status': 'completed',
@@ -1006,7 +1025,14 @@ class ZiplineProvider(BacktestingProviderBase):
                 'equity': equity,
                 'statistics': statistics,
                 'logs': logs,
+                'using_synthetic_data': using_synthetic,
             }
+            if using_synthetic:
+                result_data['synthetic_data_warning'] = (
+                    'WARNING: This backtest used SYNTHETIC (fake) data because real market data '
+                    'could not be loaded. Install yfinance and ensure internet connectivity for '
+                    'real results. These results have NO financial meaning.'
+                )
             if recorded_data:
                 result_data['recorded'] = recorded_data
 
@@ -1294,7 +1320,12 @@ class ZiplineProvider(BacktestingProviderBase):
         return True
 
     def optimize(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Parameter optimization via grid/random search."""
+        """Parameter optimization via grid/random search.
+
+        Returns the same wire shape as run_backtest (`data.performance`,
+        `data.trades`, `data.equity`) populated from the winning iteration,
+        plus an `optimization` block with the chosen params and metric.
+        """
         import numpy as np
 
         opt_id = self._generate_id()
@@ -1303,27 +1334,31 @@ class ZiplineProvider(BacktestingProviderBase):
         try:
             strategy_def = request.get('strategy', {})
             strategy_type = strategy_def.get('type', 'sma_crossover')
-            param_ranges = request.get('parameters', {})
-            objective = request.get('objective', 'sharpe')
-            method = request.get('method', 'grid')
-            max_iter = int(request.get('maxIterations', 100))
+            # Frontend canonical names: paramRanges / optimizeObjective / optimizeMethod.
+            # Legacy fallbacks: parameters / objective / method.
+            param_ranges = request.get('paramRanges', {}) or request.get('parameters', {})
+            objective = request.get('optimizeObjective') or request.get('objective', 'sharpe')
+            method = request.get('optimizeMethod') or request.get('method', 'grid')
+            max_iter = int(request.get('maxIterations', 100) or 100)
 
             if not param_ranges:
-                return {'success': False, 'error': 'No parameter ranges specified'}
+                return self._create_error_result('No parameter ranges supplied (expected paramRanges)')
 
-            # Generate parameter combinations
             combos = self._generate_param_combos(param_ranges, method, max_iter)
+            if not combos:
+                return self._create_error_result('paramRanges produced zero combinations')
             logs.append(f'Testing {len(combos)} parameter combinations')
 
             best_score = -np.inf
-            best_params = {}
+            best_params: Dict[str, Any] = {}
             best_result = None
-            all_results = []
+            all_results: List[Dict[str, Any]] = []
 
             for i, params in enumerate(combos):
+                # Use canonical `params` (zl_strategies builders read via params dict).
                 bt_request = {**request, 'strategy': {
                     'type': strategy_type,
-                    'parameters': params,
+                    'params': params,
                 }}
                 result = self.run_backtest(bt_request)
 
@@ -1333,10 +1368,12 @@ class ZiplineProvider(BacktestingProviderBase):
                     all_results.append({
                         'parameters': params,
                         'score': score,
+                        # Inner perf is snake_case here (json_response runs only
+                        # at dispatcher exit). The dispatcher will camelCase
+                        # these keys when emitting to stdout.
                         'total_return': perf.get('total_return', 0),
                         'sharpe_ratio': perf.get('sharpe_ratio', 0),
                     })
-
                     if score > best_score:
                         best_score = score
                         best_params = params
@@ -1346,104 +1383,116 @@ class ZiplineProvider(BacktestingProviderBase):
                     print(f'[ZL-OPT] Completed {i + 1}/{len(combos)} iterations', file=sys.stderr)
 
             if best_result is None:
-                return {'success': False, 'error': 'All optimization iterations failed'}
+                return self._create_error_result('All optimization iterations failed')
 
             logs.append(f'Best {objective}: {best_score:.4f}')
             logs.append(f'Best params: {best_params}')
 
-            return {
-                'success': True,
-                'data': {
-                    'id': opt_id,
-                    'status': 'completed',
-                    'best_parameters': best_params,
-                    'best_result': best_result.get('data', {}),
-                    'all_results': all_results[:100],
-                    'iterations': len(combos),
-                    'duration': 0,
-                    'logs': logs,
-                }
+            # Surface the best iteration's run shape so display_result() renders.
+            data = (best_result or {}).get('data') or {}
+            data.setdefault('id', opt_id)
+            data.setdefault('status', 'completed')
+            data['optimization'] = {
+                'objective': objective,
+                'method': method,
+                'objective_value': float(best_score) if best_score != -np.inf else 0.0,
+                'best_params': best_params,
+                'iterations': len(combos),
+                'all_results': all_results[:100],
             }
+            return {'success': True, 'message': 'Optimization completed', 'data': data}
 
         except Exception as e:
             import traceback
             print(f'[ZL-OPT] ERROR: {e}', file=sys.stderr)
             traceback.print_exc(file=sys.stderr)
-            return {'success': False, 'error': str(e)}
+            return self._create_error_result(f'Optimization failed: {str(e)}')
 
     def walk_forward(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Walk-forward analysis with train/test splits."""
+        """Walk-forward analysis with train/test splits.
+
+        Surfaces the last fold's test result in run_backtest shape so
+        display_result() renders performance/trades, plus per-fold detail
+        in `data.walk_forward.folds`.
+        """
         import pandas as pd
 
         wf_id = self._generate_id()
         logs = []
 
         try:
-            n_splits = int(request.get('nSplits', 5))
-            train_ratio = float(request.get('trainRatio', 0.7))
+            # Frontend canonical names: wfSplits / wfTrainRatio. Legacy fallbacks.
+            n_splits = int(request.get('wfSplits', request.get('nSplits', 5)) or 5)
+            train_ratio = float(request.get('wfTrainRatio', request.get('trainRatio', 0.7)) or 0.7)
             start_date = request.get('startDate', '2023-01-01')
             end_date = request.get('endDate', '2024-01-01')
+
+            if not (1 <= n_splits <= 20):
+                return self._create_error_result(f'wfSplits must be between 1 and 20 (got {n_splits})')
+            if not (0.1 <= train_ratio <= 0.95):
+                return self._create_error_result(f'wfTrainRatio must be between 0.1 and 0.95 (got {train_ratio})')
 
             start_dt = pd.Timestamp(start_date)
             end_dt = pd.Timestamp(end_date)
             total_days = (end_dt - start_dt).days
             split_days = total_days // n_splits
+            if split_days < 5:
+                return self._create_error_result(
+                    f'Date range too short for {n_splits} folds (got {total_days} days)'
+                )
 
-            split_results = []
+            folds: List[Dict[str, Any]] = []
+            last_result = None
+
             for i in range(n_splits):
                 split_start = start_dt + pd.Timedelta(days=i * split_days)
                 split_end = split_start + pd.Timedelta(days=split_days)
                 train_end = split_start + pd.Timedelta(days=int(split_days * train_ratio))
 
-                # Run test period
-                test_request = {**request}
-                test_request['startDate'] = train_end.strftime('%Y-%m-%d')
-                test_request['endDate'] = split_end.strftime('%Y-%m-%d')
-
+                # Run test period (zipline run_backtest doesn't optimize per fold;
+                # this measures parameter robustness across periods).
+                test_request = {**request,
+                                'startDate': train_end.strftime('%Y-%m-%d'),
+                                'endDate': split_end.strftime('%Y-%m-%d')}
                 result = self.run_backtest(test_request)
-                if result.get('success') and result.get('data', {}).get('performance'):
-                    perf = result['data']['performance']
-                    split_results.append({
-                        'split': i + 1,
-                        'train_start': split_start.strftime('%Y-%m-%d'),
-                        'train_end': train_end.strftime('%Y-%m-%d'),
-                        'test_start': train_end.strftime('%Y-%m-%d'),
-                        'test_end': split_end.strftime('%Y-%m-%d'),
-                        'total_return': perf.get('total_return', 0),
-                        'sharpe_ratio': perf.get('sharpe_ratio', 0),
-                        'max_drawdown': perf.get('max_drawdown', 0),
-                    })
-                    logs.append(f'Split {i + 1}: return={perf.get("total_return", 0):.4f}')
+                last_result = result if (result.get('success') and result.get('data')) else last_result
+                perf = result.get('data', {}).get('performance', {}) if result.get('success') else {}
 
-            if not split_results:
-                return {'success': False, 'error': 'All walk-forward splits failed'}
+                # Inner perf is snake_case (it's the raw extract_performance
+                # output before the dispatcher's json_response runs camelCase
+                # conversion). Read snake_case here, accept camelCase as a
+                # fallback for safety.
+                folds.append({
+                    'fold': i,
+                    'trainStart': split_start.strftime('%Y-%m-%d'),
+                    'trainEnd': train_end.strftime('%Y-%m-%d'),
+                    'testStart': train_end.strftime('%Y-%m-%d'),
+                    'testEnd': split_end.strftime('%Y-%m-%d'),
+                    'testReturn': float(perf.get('total_return', perf.get('totalReturn', 0))),
+                    'testSharpe': float(perf.get('sharpe_ratio', perf.get('sharpeRatio', 0))),
+                    'testMaxDrawdown': float(perf.get('max_drawdown', perf.get('maxDrawdown', 0))),
+                })
+
+            if last_result is None or not folds:
+                return self._create_error_result('All walk-forward splits failed')
 
             import numpy as np
-            avg_return = float(np.mean([s['total_return'] for s in split_results]))
-            avg_sharpe = float(np.mean([s['sharpe_ratio'] for s in split_results]))
-
-            logs.append(f'Average return: {avg_return:.4f}')
-            logs.append(f'Average Sharpe: {avg_sharpe:.4f}')
-
-            return {
-                'success': True,
-                'data': {
-                    'id': wf_id,
-                    'status': 'completed',
-                    'splits': split_results,
-                    'summary': {
-                        'avg_return': avg_return,
-                        'avg_sharpe': avg_sharpe,
-                        'n_splits': n_splits,
-                    },
-                    'logs': logs,
-                }
+            data = (last_result or {}).get('data') or {}
+            data.setdefault('id', wf_id)
+            data.setdefault('status', 'completed')
+            data['walk_forward'] = {
+                'n_splits': n_splits,
+                'train_ratio': train_ratio,
+                'folds': folds,
+                'mean_test_return': float(np.mean([f['testReturn'] for f in folds])),
+                'mean_test_sharpe': float(np.mean([f['testSharpe'] for f in folds])),
             }
+            return {'success': True, 'message': 'Walk-forward completed', 'data': data}
 
         except Exception as e:
             import traceback
             traceback.print_exc(file=sys.stderr)
-            return {'success': False, 'error': str(e)}
+            return self._create_error_result(f'Walk-forward failed: {str(e)}')
 
     def get_historical_data(self, request: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Get historical price data."""
@@ -1685,8 +1734,19 @@ class ZiplineProvider(BacktestingProviderBase):
             symbols = request.get('symbols', ['SPY'])
             start_date = request.get('startDate', '2023-01-01')
             end_date = request.get('endDate', '2024-01-01')
-            mode = request.get('mode', 'crossover_signals')
-            params = request.get('parameters', {})
+            # The frontend (BacktestingScreen.cpp::gather_args) sends short
+            # mode names matching `get_command_options.indicator_signal_modes`.
+            # Accept both the short form ('crossover') and the long form
+            # ('crossover_signals') so older callers don't break.
+            mode = request.get('mode', 'crossover')
+            if mode.endswith('_signals'):
+                mode = mode[:-len('_signals')]
+            # Frontend (BacktestingScreen.cpp::gather_args) puts the indicator id
+            # at the top level for the indicator_signals command. Fold it into
+            # the params dict so the threshold/filter branches can read it.
+            params = dict(request.get('parameters') or {})
+            if 'indicator' in request and 'indicator' not in params:
+                params['indicator'] = request['indicator']
 
             close_series, synthetic = self._load_close_series(symbols, start_date, end_date)
             close = np.asarray(close_series, dtype=float)
@@ -1696,7 +1756,7 @@ class ZiplineProvider(BacktestingProviderBase):
             entries = np.zeros(n, dtype=bool)
             exits = np.zeros(n, dtype=bool)
 
-            if mode == 'crossover_signals':
+            if mode == 'crossover':
                 fast_p = int(params.get('fastPeriod', 10))
                 slow_p = int(params.get('slowPeriod', 20))
                 ma_type = params.get('maType', 'sma')
@@ -1713,7 +1773,7 @@ class ZiplineProvider(BacktestingProviderBase):
                         elif fast_ma[i] < slow_ma[i] and fast_ma[i-1] >= slow_ma[i-1]:
                             exits[i] = True
 
-            elif mode == 'threshold_signals':
+            elif mode == 'threshold':
                 indicator = params.get('indicator', 'rsi')
                 period = int(params.get('period', 14))
                 oversold = float(params.get('oversold', 30))
@@ -1733,7 +1793,7 @@ class ZiplineProvider(BacktestingProviderBase):
                         elif vals[i] > overbought and vals[i-1] <= overbought:
                             exits[i] = True
 
-            elif mode == 'breakout_signals':
+            elif mode == 'breakout':
                 period = int(params.get('period', 20))
                 channel = params.get('channel', 'donchian')
                 if channel == 'keltner':
@@ -1748,7 +1808,7 @@ class ZiplineProvider(BacktestingProviderBase):
                         elif close[i] < lower[i-1]:
                             exits[i] = True
 
-            elif mode == 'mean_reversion_signals':
+            elif mode == 'mean_reversion':
                 period = int(params.get('period', 20))
                 threshold = float(params.get('threshold', 2.0))
                 zscores = _zscore_calc(close, period)
@@ -1759,7 +1819,7 @@ class ZiplineProvider(BacktestingProviderBase):
                         elif zscores[i] > threshold and zscores[i-1] <= threshold:
                             exits[i] = True
 
-            elif mode == 'signal_filter':
+            elif mode == 'filter':
                 # Apply base signals and filter with another indicator
                 fast_p = int(params.get('fastPeriod', 10))
                 slow_p = int(params.get('slowPeriod', 20))
@@ -2630,17 +2690,26 @@ class ZiplineProvider(BacktestingProviderBase):
         import numpy as np
         import itertools
 
+        # Cast to native Python ints/floats up front so the values produced
+        # here aren't numpy scalars — json_response uses `default=str` which
+        # would render np.int64(5) as the string '5' in the wire output.
+        def _native(x):
+            try:
+                return int(x) if float(x).is_integer() else float(x)
+            except (TypeError, ValueError):
+                return x
+
         param_values = {}
         for name, spec in param_ranges.items():
             if isinstance(spec, dict):
                 mn = spec.get('min', 0)
                 mx = spec.get('max', 100)
                 step = spec.get('step', 1)
-                param_values[name] = list(np.arange(mn, mx + step, step))
+                param_values[name] = [_native(v) for v in np.arange(mn, mx + step, step)]
             elif isinstance(spec, list):
-                param_values[name] = spec
+                param_values[name] = [_native(v) for v in spec]
             else:
-                param_values[name] = [spec]
+                param_values[name] = [_native(spec)]
 
         if method == 'grid':
             keys = list(param_values.keys())

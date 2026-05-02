@@ -13,6 +13,18 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 
 
+# Symbols that fell back to synthetic data on the most recent fetch. Callers
+# (zipline_provider.run_backtest) inspect this to flag the result with
+# `usingSyntheticData: true` so the UI can warn the user. Reset on each call.
+_LAST_FETCH_SYNTHETIC_SYMBOLS: set = set()
+
+
+def was_last_fetch_synthetic() -> bool:
+    """True if the most recent fetch_yfinance_data fell back to synthetic data
+    for at least one symbol."""
+    return bool(_LAST_FETCH_SYNTHETIC_SYMBOLS)
+
+
 def fetch_yfinance_data(
     symbols: List[str],
     start_date: str,
@@ -26,10 +38,12 @@ def fetch_yfinance_data(
         Dict mapping symbol -> DataFrame with columns:
         [open, high, low, close, volume] (lowercase, tz-aware UTC index)
     """
+    _LAST_FETCH_SYNTHETIC_SYMBOLS.clear()
     try:
         import yfinance as yf
     except ImportError:
         print('[ZL-DATA] yfinance not installed, using synthetic data', file=sys.stderr)
+        _LAST_FETCH_SYNTHETIC_SYMBOLS.update(symbols)
         return _generate_synthetic_data(symbols, start_date, end_date)
 
     result = {}
@@ -41,6 +55,7 @@ def fetch_yfinance_data(
 
             if df.empty:
                 print(f'[ZL-DATA] No data for {sym}, using synthetic', file=sys.stderr)
+                _LAST_FETCH_SYNTHETIC_SYMBOLS.add(sym)
                 synth = _generate_synthetic_data([sym], start_date, end_date)
                 result[sym] = synth[sym]
                 continue
@@ -70,6 +85,7 @@ def fetch_yfinance_data(
 
         except Exception as e:
             print(f'[ZL-DATA] Error fetching {sym}: {e}, using synthetic', file=sys.stderr)
+            _LAST_FETCH_SYNTHETIC_SYMBOLS.add(sym)
             synth = _generate_synthetic_data([sym], start_date, end_date)
             result[sym] = synth[sym]
 

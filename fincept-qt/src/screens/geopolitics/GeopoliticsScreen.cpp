@@ -12,6 +12,7 @@
 #include "ui/theme/ThemeManager.h"
 
 #include <QDateTime>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QScrollArea>
 
@@ -43,7 +44,7 @@ void GeopoliticsScreen::showEvent(QShowEvent* e) {
     clock_timer_->start();
     if (first_show_) {
         first_show_ = false;
-        country_edit_->setText("Ukraine");
+        // Fetch latest events with no filter — newest first, server side.
         on_apply_filters();
         GeopoliticsService::instance().fetch_unique_countries();
         GeopoliticsService::instance().fetch_unique_categories();
@@ -65,14 +66,9 @@ void GeopoliticsScreen::refresh_theme() {
 
 void GeopoliticsScreen::connect_service() {
     auto& svc = GeopoliticsService::instance();
-    connect(&svc, &GeopoliticsService::events_loaded, this, &GeopoliticsScreen::on_events_loaded);
-    connect(&svc, &GeopoliticsService::error_occurred, this, &GeopoliticsScreen::on_error);
-    connect(&svc, &GeopoliticsService::categories_loaded, this, [this](QVector<UniqueCategory> cats) {
-        category_combo_->clear();
-        category_combo_->addItem("All Categories", "");
-        for (const auto& c : cats)
-            category_combo_->addItem(QString("%1 (%2)").arg(c.category).arg(c.event_count), c.category);
-    });
+    connect(&svc, &GeopoliticsService::events_loaded,    this, &GeopoliticsScreen::on_events_loaded);
+    connect(&svc, &GeopoliticsService::error_occurred,   this, &GeopoliticsScreen::on_error);
+    connect(&svc, &GeopoliticsService::categories_loaded, this, &GeopoliticsScreen::on_categories_loaded);
 }
 
 // ── Build UI ─────────────────────────────────────────────────────────────────
@@ -243,9 +239,9 @@ QWidget* GeopoliticsScreen::build_filter_panel() {
     vl->addWidget(cat_lbl);
     category_combo_ = new QComboBox(panel);
     category_combo_->setStyleSheet(input_style);
+    // Populated from API once categories_loaded fires — start with a single
+    // "All" entry so the combo renders before the network round-trip.
     category_combo_->addItem("All Categories", "");
-    for (const auto& cat : event_categories())
-        category_combo_->addItem(cat, cat);
     vl->addWidget(category_combo_);
 
     vl->addSpacing(4);
@@ -294,25 +290,30 @@ QWidget* GeopoliticsScreen::build_filter_panel() {
             .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(legend_title);
 
-    for (const auto& cat : event_categories()) {
-        auto* row = new QWidget(panel);
-        auto* rl = new QHBoxLayout(row);
-        rl->setContentsMargins(0, 1, 0, 1);
-        rl->setSpacing(6);
-        auto* dot = new QWidget(row);
-        dot->setFixedSize(8, 8);
-        dot->setStyleSheet(QString("background:%1; border-radius:4px;").arg(category_color(cat).name()));
-        rl->addWidget(dot);
-        auto* lbl = new QLabel(cat, row);
-        lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                               .arg(ui::colors::TEXT_SECONDARY())
-                               .arg(ui::fonts::SMALL)
-                               .arg(ui::fonts::DATA_FAMILY));
-        rl->addWidget(lbl, 1);
-        vl->addWidget(row);
-    }
+    // Legend rows are added by rebuild_legend() once categories_loaded fires.
+    // Wrapped in a scroll area because the API now exposes ~26 categories;
+    // without scrolling the legend would push the filter panel taller than
+    // the viewport, which forces the parent screen to scroll and breaks the
+    // map widget's painting (the map paints into whatever screen-space slot
+    // the layout gives it on first show).
+    auto* legend_scroll = new QScrollArea(panel);
+    legend_scroll->setWidgetResizable(true);
+    legend_scroll->setFrameShape(QFrame::NoFrame);
+    legend_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    legend_scroll->setStyleSheet(QString("QScrollArea { background:transparent; border:none; }"
+                                         "QScrollBar:vertical { background:%1; width:6px; }"
+                                         "QScrollBar::handle:vertical { background:%2; border-radius:3px; }"
+                                         "QScrollBar::add-line, QScrollBar::sub-line { height:0px; }")
+                                     .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED()));
 
-    vl->addStretch();
+    legend_container_ = new QWidget(legend_scroll);
+    legend_container_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_SURFACE()));
+    legend_layout_ = new QVBoxLayout(legend_container_);
+    legend_layout_->setContentsMargins(0, 0, 4, 0);
+    legend_layout_->setSpacing(2);
+    legend_scroll->setWidget(legend_container_);
+    vl->addWidget(legend_scroll, 1);  // stretch — legend takes remaining space
+
     return panel;
 }
 
@@ -354,6 +355,13 @@ QWidget* GeopoliticsScreen::build_status_bar() {
     hl->addWidget(val2);
 
     hl->addStretch();
+
+    credits_label_ = new QLabel("CREDITS: —", bar);
+    credits_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
+                                      .arg(ui::colors::TEXT_TERTIARY())
+                                      .arg(ui::fonts::TINY)
+                                      .arg(ui::fonts::DATA_FAMILY));
+    hl->addWidget(credits_label_);
 
     status_label_ = new QLabel("READY", bar);
     status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
@@ -423,9 +431,25 @@ void GeopoliticsScreen::on_tab_changed(int index) {
     }
 }
 
-void GeopoliticsScreen::on_events_loaded(QVector<services::geo::NewsEvent> events, int total) {
-    event_count_label_->setText(QString("%1 EVENTS").arg(total));
-    const QString color = total > 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
+void GeopoliticsScreen::on_events_loaded(services::geo::EventsPage page) {
+    const int shown = page.events.size();
+    const int total = page.total_events;
+    int mapped = 0;
+    for (const auto& ev : page.events)
+        if (ev.has_coords) ++mapped;
+
+    auto fmt_count = [](int n) -> QString {
+        if (n >= 1'000'000) return QString::number(n / 1'000'000.0, 'f', 1) + "M";
+        if (n >= 1'000)     return QString::number(n / 1'000.0,     'f', 1) + "K";
+        return QString::number(n);
+    };
+    // "30 MAPPED / 100 LOADED · 1.2K TOTAL" — surfaces the API gap (most events
+    // arrive without lat/lng, so the map only ever shows the geocoded subset).
+    event_count_label_->setText(QString("%1 MAPPED / %2 LOADED")
+                                    .arg(fmt_count(mapped), fmt_count(shown)));
+    event_count_label_->setToolTip(QString("Events on map: %1\nEvents loaded: %2\nTotal in API: %3")
+                                       .arg(mapped).arg(shown).arg(total));
+    const QString color = mapped > 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
     QColor clr(color);
     auto clr_rgb = QString("%1,%2,%3").arg(clr.red()).arg(clr.green()).arg(clr.blue());
     event_count_label_->setStyleSheet(
@@ -435,12 +459,79 @@ void GeopoliticsScreen::on_events_loaded(QVector<services::geo::NewsEvent> event
             .arg(ui::fonts::TINY)
             .arg(ui::fonts::DATA_FAMILY)
             .arg(clr_rgb));
+
+    // Credits — colour-coded so depletion is glanceable.
+    if (page.remaining_credits >= 0 && credits_label_) {
+        const int rc = page.remaining_credits;
+        const QString credit_color = rc < 20  ? ui::colors::NEGATIVE()
+                                  : rc < 100 ? ui::colors::WARNING()
+                                             : ui::colors::POSITIVE();
+        credits_label_->setText(QString("CREDITS: %1").arg(rc));
+        credits_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
+                                          .arg(credit_color)
+                                          .arg(ui::fonts::TINY)
+                                          .arg(ui::fonts::DATA_FAMILY));
+    }
+
     status_label_->setText("READY");
     status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
                                      .arg(ui::colors::POSITIVE())
                                      .arg(ui::fonts::TINY)
                                      .arg(ui::fonts::DATA_FAMILY));
-    monitor_panel_->set_events(events);
+    monitor_panel_->set_events(page.events);
+}
+
+void GeopoliticsScreen::on_categories_loaded(QVector<services::geo::UniqueCategory> cats) {
+    // Sort by event_count desc — most active categories first in both filter
+    // dropdown and legend.
+    std::sort(cats.begin(), cats.end(),
+              [](const services::geo::UniqueCategory& a, const services::geo::UniqueCategory& b) {
+                  return a.event_count > b.event_count;
+              });
+
+    if (category_combo_) {
+        const QString prev = category_combo_->currentData().toString();
+        category_combo_->clear();
+        category_combo_->addItem("All Categories", "");
+        for (const auto& c : cats)
+            category_combo_->addItem(
+                QString("%1 (%2)").arg(services::geo::pretty_category(c.category)).arg(c.event_count),
+                c.category);
+        if (!prev.isEmpty()) {
+            const int idx = category_combo_->findData(prev);
+            if (idx >= 0) category_combo_->setCurrentIndex(idx);
+        }
+    }
+    rebuild_legend(cats);
+}
+
+void GeopoliticsScreen::rebuild_legend(const QVector<services::geo::UniqueCategory>& cats) {
+    if (!legend_layout_)
+        return;
+    while (legend_layout_->count() > 0) {
+        auto* item = legend_layout_->takeAt(0);
+        if (item->widget()) item->widget()->deleteLater();
+        delete item;
+    }
+    for (const auto& c : cats) {
+        auto* row = new QWidget(legend_container_);
+        auto* rl = new QHBoxLayout(row);
+        rl->setContentsMargins(0, 1, 0, 1);
+        rl->setSpacing(6);
+        auto* dot = new QWidget(row);
+        dot->setFixedSize(8, 8);
+        dot->setStyleSheet(QString("background:%1; border-radius:4px;")
+                               .arg(services::geo::category_color(c.category).name()));
+        rl->addWidget(dot);
+        auto* lbl = new QLabel(services::geo::pretty_category(c.category), row);
+        lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
+                               .arg(ui::colors::TEXT_SECONDARY())
+                               .arg(ui::fonts::SMALL)
+                               .arg(ui::fonts::DATA_FAMILY));
+        rl->addWidget(lbl, 1);
+        legend_layout_->addWidget(row);
+    }
+    legend_layout_->addStretch();
 }
 
 void GeopoliticsScreen::on_error(const QString& context, const QString& message) {

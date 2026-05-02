@@ -43,6 +43,12 @@ class CryptoBottomPanel : public QWidget {
     void set_depth_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks,
                         double spread, double spread_pct);
 
+    /// Patch the positions table with fresh WS ticker prices. Works in both
+    /// paper and live mode — recalculates current_price, unrealized PnL, and
+    /// PnL% from the latest mark price without hitting SQLite or the daemon.
+    /// Call at every WS flush tick.
+    void update_position_prices(const QHash<QString, double>& last_prices);
+
   signals:
     void cancel_order_requested(const QString& order_id);
     void close_position_requested(const QString& symbol);

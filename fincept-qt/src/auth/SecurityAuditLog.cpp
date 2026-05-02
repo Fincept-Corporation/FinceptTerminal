@@ -16,8 +16,14 @@ SecurityAuditLog& SecurityAuditLog::instance() {
 void SecurityAuditLog::record(const QString& event, const QString& detail) {
     auto& db = Database::instance();
     if (!db.is_open()) {
-        // No DB yet — likely pre-migration startup. Skip silently; callers
-        // still log via the normal Logger so the information is not lost.
+        // DB closed — pre-migration startup is the expected case (events
+        // recorded during AuthManager::initialize() before the DB is open),
+        // but it can also mean disk-full / migration failure / shutdown
+        // race. The latter cases must NOT be silent — a missed
+        // max_attempts_exceeded entry hides a brute-force attempt. Log
+        // loudly so ops sees it; the normal Logger still has the event.
+        LOG_ERROR("SecurityAudit",
+                  QString("DB unavailable while recording '%1' — audit gap").arg(event));
         return;
     }
 

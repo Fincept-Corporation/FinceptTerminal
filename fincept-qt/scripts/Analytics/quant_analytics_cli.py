@@ -1,6 +1,6 @@
 """
-CFA Quant Analytics CLI - Unified Command Line Interface
-Provides a unified entry point for CFA-level quantitative analytics in Fincept Terminal.
+Quant Analytics CLI - Unified Command Line Interface
+Provides a unified entry point for quantitative analytics in Fincept Terminal.
 
 Categories:
 - Time Series: Trend analysis, stationarity tests, ARIMA, forecasting

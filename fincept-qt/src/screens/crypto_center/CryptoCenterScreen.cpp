@@ -3,9 +3,11 @@
 #include "core/logging/Logger.h"
 #include "screens/crypto_center/HoldingsBar.h"
 #include "screens/crypto_center/tabs/ActivityTab.h"
-#include "screens/crypto_center/tabs/ComingSoonTab.h"
 #include "screens/crypto_center/tabs/HomeTab.h"
+#include "screens/crypto_center/tabs/MarketsTab.h"
+#include "screens/crypto_center/tabs/RoadmapTab.h"
 #include "screens/crypto_center/tabs/SettingsTab.h"
+#include "screens/crypto_center/tabs/StakeTab.h"
 #include "screens/crypto_center/tabs/TradeTab.h"
 #include "services/wallet/WalletService.h"
 #include "ui/theme/Theme.h"
@@ -197,27 +199,20 @@ void CryptoCenterScreen::build_connected_page() {
     activity_tab_ = new ActivityTab(tab_widget_);
     settings_tab_ = new SettingsTab(tab_widget_);
 
-    stake_tab_ = new ComingSoonTab(
-        QStringLiteral("STAKE"),
-        QStringLiteral("PHASE 3"),
-        tr("veFNCPT lock for 3 months – 4 years. Real-yield share of terminal "
-           "revenue and tier badges (bronze / silver / gold) gating premium "
-           "features across the terminal."),
-        tab_widget_);
-    markets_tab_ = new ComingSoonTab(
-        QStringLiteral("MARKETS"),
-        QStringLiteral("PHASE 4"),
-        tr("Internal prediction markets settling in $FNCPT — Fed rate moves, "
-           "CPI prints, S&P close, weather, crypto milestones. YES / NO order "
-           "book with on-chain settlement."),
-        tab_widget_);
-    roadmap_tab_ = new ComingSoonTab(
-        QStringLiteral("ROADMAP"),
-        QStringLiteral("PHASE 5"),
-        tr("Buyback & burn dashboard — live epoch buyback, cumulative burn, "
-           "supply chart, and treasury runway. Replaces the static roadmap "
-           "panel on HOME once Phase 5 ships."),
-        tab_widget_);
+    // Phase 3 ships the real STAKE tab (veFNCPT lock + active locks + tier).
+    // Until the fincept_lock Anchor program is deployed, the producers ship
+    // mock data with `is_mock=true` and the panel pills read "DEMO".
+    stake_tab_ = new StakeTab(tab_widget_);
+    // Phase 4 §4.2: internal prediction markets. Ships in demo mode (curated
+    // 3-market dataset) until `fincept.markets_endpoint` is configured and
+    // the `fincept_market` Anchor program is deployed. The status pill on
+    // MarketsListPanel reads "DEMO" until then.
+    markets_tab_ = new MarketsTab(tab_widget_);
+    // Phase 5 ships the real roadmap dashboard (buyback ticker, supply
+    // chart, treasury card). Until the buyback worker is deployed, the
+    // service publishes mock data with `is_mock=true` and the panel head
+    // pills read "DEMO".
+    roadmap_tab_ = new RoadmapTab(tab_widget_);
 
     tab_widget_->addTab(home_tab_, tr("HOME"));
     tab_widget_->addTab(trade_tab_, tr("TRADE"));
@@ -226,6 +221,17 @@ void CryptoCenterScreen::build_connected_page() {
     tab_widget_->addTab(stake_tab_, tr("STAKE"));
     tab_widget_->addTab(markets_tab_, tr("MARKETS"));
     tab_widget_->addTab(roadmap_tab_, tr("ROADMAP"));
+
+    // Bridge HomeTab → TradeTab: clicking a row in the holdings table
+    // pre-fills SwapPanel's FROM combo and switches the user to TRADE.
+    // (Stage 2A.5.10.)
+    connect(home_tab_, &HomeTab::select_token, this,
+            [this](const QString& mint) {
+                if (mint.isEmpty()) return;
+                if (trade_tab_) trade_tab_->set_from_mint(mint);
+                const int trade_idx = tab_widget_->indexOf(trade_tab_);
+                if (trade_idx >= 0) tab_widget_->setCurrentIndex(trade_idx);
+            });
 
     root->addWidget(tab_widget_, 1);
     stack_->addWidget(connected_page_);

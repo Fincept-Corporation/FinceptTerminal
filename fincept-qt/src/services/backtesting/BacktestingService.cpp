@@ -59,8 +59,24 @@ void BacktestingService::execute(const QString& provider, const QString& command
                 emit self->error_occurred(ctx, "Invalid JSON response");
                 return;
             }
+            // All Python providers wrap their payload in {success, data, error?}.
+            // Surface failures via error_occurred and emit the inner `data` so
+            // the screen sees the raw result (performance/trades/etc.) directly.
+            auto root = doc.object();
+            const bool ok = root.value("success").toBool(true);
+            if (!ok) {
+                auto err = root.value("error").toString();
+                if (err.isEmpty())
+                    err = root.value("message").toString("Backtest failed");
+                LOG_ERROR("Backtesting", QString("[%1] Provider error: %2").arg(ctx, err));
+                emit self->error_occurred(ctx, err);
+                return;
+            }
+            QJsonObject payload = root.contains("data") && root.value("data").isObject()
+                                      ? root.value("data").toObject()
+                                      : root;
             LOG_INFO("Backtesting", QString("[%1] Result ready").arg(ctx));
-            emit self->result_ready(provider, command, doc.object());
+            emit self->result_ready(provider, command, payload);
         });
 }
 

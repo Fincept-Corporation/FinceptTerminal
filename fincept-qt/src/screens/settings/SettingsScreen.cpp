@@ -21,6 +21,8 @@
 #include "screens/settings/VoiceConfigSection.h"
 #include "services/notifications/NotificationService.h"
 #include "services/stt/SpeechService.h"
+#include "services/tts/TtsService.h"
+#include "services/voice_trigger/ClapDetectorService.h"
 #include "storage/StorageManager.h"
 #include "storage/cache/CacheManager.h"
 #include "storage/repositories/DataSourceRepository.h"
@@ -224,10 +226,22 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
                 []() { ai_chat::LlmService::instance().reload_config(); });
     }
 
-    // Wire Voice config changes → reload STT service (picks up provider / API key / model)
+    // Wire Voice config changes — reload BOTH STT and TTS services and
+    // restart the clap detector so the user's new provider / key / voice /
+    // wake-trigger picks take effect on the next session.
     if (auto* voice = qobject_cast<VoiceConfigSection*>(sections_->widget(13))) {
-        connect(voice, &VoiceConfigSection::config_changed, this,
-                []() { fincept::services::SpeechService::instance().reload_config(); });
+        connect(voice, &VoiceConfigSection::config_changed, this, []() {
+            fincept::services::SpeechService::instance().reload_config();
+            fincept::services::TtsService::instance().reload_config();
+
+            // Apply the clap-to-start toggle live: stop the detector
+            // unconditionally (in case mode/sensitivity changed) and
+            // restart only if the toggle is on.
+            auto& clap = fincept::services::ClapDetectorService::instance();
+            clap.stop();
+            if (fincept::services::ClapDetectorService::is_enabled_in_config())
+                clap.start();
+        });
     }
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
@@ -249,13 +263,66 @@ void SettingsScreen::refresh_theme() {
 
 void SettingsScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
+    reload_all_sections();
+    subscribe_mcp_events();
+}
+
+void SettingsScreen::hideEvent(QHideEvent* e) {
+    QWidget::hideEvent(e);
+    unsubscribe_mcp_events();
+}
+
+void SettingsScreen::reload_all_sections() {
     load_credentials();
     load_appearance();
     load_notifications();
     load_security();
     refresh_storage_stats();
-    if (auto* llm = qobject_cast<LlmConfigSection*>(sections_->widget(5)))
-        llm->reload();
+    if (sections_) {
+        if (auto* llm = qobject_cast<LlmConfigSection*>(sections_->widget(5)))
+            llm->reload();
+    }
+}
+
+// ── MCP-driven UI sync ──────────────────────────────────────────────────────
+// MCP settings tools publish settings.changed (with {key, value}) and
+// llm.provider_changed (with {provider}). Both warrant a full reload —
+// settings.changed could touch any section, and llm.provider_changed
+// requires LlmConfigSection to refresh + the active LlmService to pick
+// up the new provider.
+
+void SettingsScreen::subscribe_mcp_events() {
+    if (!mcp_event_subs_.isEmpty()) return; // idempotent
+
+    QPointer<SettingsScreen> self = this;
+    auto on_settings_changed = [self](const QVariantMap&) {
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self]() {
+            if (!self) return;
+            self->reload_all_sections();
+        }, Qt::QueuedConnection);
+    };
+    auto on_provider_changed = [self](const QVariantMap&) {
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self]() {
+            if (!self) return;
+            self->reload_all_sections();
+            // LlmService consumes the new active config; pick it up immediately
+            // so the AiChatScreen subscriber (Phase 2.9) doesn't race.
+            ai_chat::LlmService::instance().reload_config();
+        }, Qt::QueuedConnection);
+    };
+
+    auto& bus = EventBus::instance();
+    mcp_event_subs_.append(bus.subscribe("settings.changed",     on_settings_changed));
+    mcp_event_subs_.append(bus.subscribe("llm.provider_changed", on_provider_changed));
+}
+
+void SettingsScreen::unsubscribe_mcp_events() {
+    auto& bus = EventBus::instance();
+    for (auto id : mcp_event_subs_)
+        bus.unsubscribe(id);
+    mcp_event_subs_.clear();
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -2660,21 +2727,45 @@ QWidget* SettingsScreen::build_security() {
         const QString new_pin = sec_new_pin_->text();
         const QString confirm = sec_confirm_pin_->text();
 
+        // Surface lockout BEFORE attempting change_pin — otherwise change_pin
+        // returns "Current PIN is incorrect" because verify_pin's locked-out
+        // path also returns false. Misleading: the user thinks they typed
+        // the wrong PIN when actually they're rate-limited.
+        if (pm.is_locked_out()) {
+            int secs = pm.lockout_remaining_seconds();
+            sec_pin_error_->setText(
+                QString("Locked out — try again in %1s").arg(secs));
+            sec_pin_error_->show();
+            sec_current_pin_->clear();
+            sec_new_pin_->clear();
+            sec_confirm_pin_->clear();
+            return;
+        }
+
         if (new_pin != confirm) {
             sec_pin_error_->setText("New PINs do not match");
             sec_pin_error_->show();
+            // Clear both new-PIN fields, not just confirm — leaving the
+            // entered PIN visible-as-text in the masked field is mild
+            // process-memory exposure and forces a full retype anyway.
+            sec_new_pin_->clear();
             sec_confirm_pin_->clear();
-            sec_confirm_pin_->setFocus();
+            sec_new_pin_->setFocus();
             return;
         }
 
         auto result = pm.change_pin(current, new_pin);
         if (result.is_err()) {
-            sec_pin_error_->setText(QString::fromStdString(result.error()));
+            // If verify_pin tripped the lockout on this very attempt, show
+            // the countdown rather than the generic "incorrect" message.
+            if (pm.is_locked_out()) {
+                int secs = pm.lockout_remaining_seconds();
+                sec_pin_error_->setText(
+                    QString("Too many failed attempts — locked for %1s").arg(secs));
+            } else {
+                sec_pin_error_->setText(QString::fromStdString(result.error()));
+            }
             sec_pin_error_->show();
-            // On a wrong current PIN the manager incremented the attempt
-            // counter; clear the field and let the user try again (up to
-            // kMaxAttempts, at which point the lock screen takes over).
             sec_current_pin_->clear();
             sec_current_pin_->setFocus();
             return;
@@ -2735,6 +2826,7 @@ QWidget* SettingsScreen::build_security() {
     connect(save_btn, &QPushButton::clicked, this, [this]() {
         auto& repo = SettingsRepository::instance();
         auto& guard = auth::InactivityGuard::instance();
+        auto& pm = auth::PinManager::instance();
 
         bool autolock = sec_autolock_toggle_->isChecked();
         int minutes = sec_lock_timeout_->currentData().toInt();
@@ -2746,10 +2838,17 @@ QWidget* SettingsScreen::build_security() {
                      sec_lock_on_minimize_->isChecked() ? "true" : "false", "security");
         }
 
+        // Always update the interval so the change takes effect on the next
+        // run regardless of current PIN state. Only flip the enabled flag if
+        // a PIN is configured — otherwise the timer fires and lock_requested
+        // is suppressed by show_lock_screen()'s no-PIN guard, leaving the
+        // timer churning invisibly.
         guard.set_timeout_minutes(minutes);
-        guard.set_enabled(autolock);
+        guard.set_enabled(autolock && pm.has_pin());
 
-        LOG_INFO("Settings", QString("Security settings saved: autolock=%1, timeout=%2min").arg(autolock).arg(minutes));
+        LOG_INFO("Settings",
+                 QString("Security settings saved: autolock=%1, timeout=%2min, has_pin=%3")
+                     .arg(autolock).arg(minutes).arg(pm.has_pin()));
     });
     vl->addWidget(save_btn);
 

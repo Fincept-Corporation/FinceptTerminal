@@ -28,6 +28,10 @@ TradeTab::TradeTab(QWidget* parent) : QWidget(parent) {
 
 TradeTab::~TradeTab() = default;
 
+void TradeTab::set_from_mint(const QString& mint) {
+    if (swap_panel_) swap_panel_->set_from_mint(mint);
+}
+
 void TradeTab::build_ui() {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(14, 14, 14, 14);
@@ -61,43 +65,6 @@ void TradeTab::build_ui() {
         top_row->addWidget(fee_discount_placeholder_, 1);
     }
     root->addLayout(top_row, 1);
-
-    // Burn placeholder (Stage 2.3)
-    {
-        burn_placeholder_ = new QFrame(this);
-        burn_placeholder_->setObjectName(QStringLiteral("tradeTabPanelHost"));
-        auto* outer = new QVBoxLayout(burn_placeholder_);
-        outer->setContentsMargins(0, 0, 0, 0);
-        outer->setSpacing(0);
-
-        auto* head = new QWidget(burn_placeholder_);
-        head->setObjectName(QStringLiteral("tradeTabPanelHead"));
-        head->setFixedHeight(34);
-        auto* head_l = new QHBoxLayout(head);
-        head_l->setContentsMargins(12, 0, 12, 0);
-        head_l->setSpacing(0);
-        auto* title = new QLabel(QStringLiteral("BURN $FNCPT"), head);
-        title->setObjectName(QStringLiteral("tradeTabPanelTitle"));
-        auto* status = new QLabel(QStringLiteral("STAGE 2.3"), head);
-        status->setObjectName(QStringLiteral("tradeTabPanelStatus"));
-        head_l->addWidget(title);
-        head_l->addStretch();
-        head_l->addWidget(status);
-        outer->addWidget(head);
-
-        auto* body = new QLabel(
-            tr("Permanently destroy $FNCPT through the on-chain fincept_burn program. "
-               "The terminal builds the burn transaction, you sign in your wallet, "
-               "and the receipt lands here. Lands with the Anchor program in Stage 2.3."),
-            burn_placeholder_);
-        body->setObjectName(QStringLiteral("tradeTabPlaceholderBody"));
-        body->setWordWrap(true);
-        body->setContentsMargins(14, 12, 14, 14);
-        outer->addWidget(body);
-        outer->addStretch(1);
-        root->addWidget(burn_placeholder_);
-    }
-
     root->addStretch(1);
 }
 

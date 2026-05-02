@@ -2,6 +2,7 @@
 
 #include "auth/AuthApi.h"
 #include "auth/AuthManager.h"
+#include "auth/InactivityGuard.h"
 #include "core/logging/Logger.h"
 
 namespace fincept::auth {
@@ -22,10 +23,17 @@ SessionGuard::SessionGuard(QObject* parent) : QObject(parent) {
 }
 
 void SessionGuard::start() {
-    if (!timer_.isActive()) {
-        check_pulse();
-        timer_.start();
-    }
+    if (timer_.isActive())
+        return;
+    // Do NOT pulse synchronously here. On startup the PIN gate routes the
+    // user to the lock screen via auth_state_changed; firing a pulse on
+    // the same signal raced ahead and could log the user out (via stale
+    // session_token + recovery failure) before they ever saw the PIN
+    // screen. Defer the first pulse by 15s so the PIN gate has time to
+    // settle and InactivityGuard::is_terminal_locked() answers truthfully
+    // when check_pulse() consults it.
+    QTimer::singleShot(15000, this, &SessionGuard::check_pulse);
+    timer_.start();
 }
 
 void SessionGuard::stop() {
@@ -37,6 +45,12 @@ void SessionGuard::check_pulse() {
     if (!s.authenticated || s.api_key.isEmpty())
         return;
     if (is_checking_)
+        return;
+    // Skip while the terminal is on the lock screen. A 401 here would force
+    // a logout-to-login-screen behind the lock UI, so when the user enters
+    // their PIN the unlock would land on the login screen instead of the
+    // dashboard. Validation will resume on the next tick after unlock.
+    if (InactivityGuard::instance().is_terminal_locked())
         return;
 
     is_checking_ = true;

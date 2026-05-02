@@ -386,8 +386,15 @@ class BacktestingProviderBase(ABC):
         }
 
     def _log(self, message: str) -> None:
-        """Log message"""
-        print(f"[{self.name}] {message}")
+        """Log message.
+
+        Routed to stderr so the C++ host's `extract_json` (which scans stdout
+        for the first '{' or '[') is never fooled by a leading bracket from
+        a log line like "[Backtesting.py] Starting...". Stdout is reserved
+        exclusively for the final JSON response.
+        """
+        import sys
+        print(f"[{self.name}] {message}", file=sys.stderr)
 
     def _error(self, message: str, exception: Optional[Exception] = None) -> None:
         """Log error message"""

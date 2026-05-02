@@ -4,6 +4,7 @@
 
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
+#include "mcp/ToolSchemaBuilder.h"
 #include "mcp/tools/ThreadHelper.h"
 #include "services/news/NewsClusterService.h"
 #include "services/news/NewsMonitorService.h"
@@ -150,16 +151,27 @@ std::vector<ToolDef> get_news_tools() {
                         "Time ranges: 1H, 6H, 24H (default), 48H, 7D, 30D. "
                         "Sentiment: ALL (default), BULLISH, BEARISH, NEUTRAL.";
         t.category = "news";
-        t.input_schema.properties = QJsonObject{
-            {"category", QJsonObject{{"type", "string"}, {"description", "Category filter (default: ALL)"}}},
-            {"time_range",
-             QJsonObject{{"type", "string"}, {"description", "Time window: 1H, 6H, 24H, 48H, 7D, 30D"}}},
-            {"sentiment", QJsonObject{{"type", "string"}, {"description", "BULLISH, BEARISH, NEUTRAL, or ALL"}}},
-            {"query", QJsonObject{{"type", "string"},
-                                  {"description", "Keyword search across headline, summary, source, tickers"}}},
-            {"limit", QJsonObject{{"type", "integer"}, {"description", "Max articles (default: 20, max: 100)"}}},
-            {"force", QJsonObject{{"type", "boolean"}, {"description", "Force refresh ignoring cache"}}}};
+        t.input_schema = ToolSchemaBuilder()
+            .string("category", "Category filter")
+                .default_str("ALL")
+                .enums({"ALL", "MARKETS", "MKT", "EARNINGS", "EARN", "ECONOMIC", "ECO",
+                        "CRYPTO", "CRPT", "GEOPOLITICS", "GEO", "ENERGY", "NRG",
+                        "DEFENSE", "DEF", "TECH", "REGULATORY"})
+            .string("time_range", "Time window")
+                .default_str("24H")
+                .enums({"1H", "6H", "24H", "48H", "7D", "30D"})
+            .string("sentiment", "Sentiment filter")
+                .default_str("ALL")
+                .enums({"ALL", "BULLISH", "BEARISH", "NEUTRAL"})
+            .string("query", "Keyword search across headline, summary, source, tickers")
+            .integer("limit", "Max articles")
+                .default_int(20).between(1, 100)
+            .boolean("force", "Force refresh ignoring cache")
+                .default_bool(false)
+            .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
+            // Defaults are now injected by the validator; the .toString(...)
+            // fallback args remain harmless but unnecessary.
             QString category = args["category"].toString("ALL");
             QString time_range = args["time_range"].toString("24H");
             QString sentiment = args["sentiment"].toString("ALL");

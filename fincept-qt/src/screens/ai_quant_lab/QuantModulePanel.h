@@ -39,6 +39,10 @@ class QuantModulePanel : public QWidget {
     QWidget* build_rd_agent_tab(QComboBox* llm_combo);
     QWidget* build_generic_panel();
     QWidget* build_gs_quant_panel();
+    QWidget* build_functime_panel();
+    QWidget* build_statsmodels_panel();
+    QWidget* build_fortitudo_panel();
+    QWidget* build_gluonts_panel();
     QWidget* build_cfa_quant_panel();
     QWidget* build_backtesting_panel();
     QWidget* build_rl_trading_panel();
@@ -67,6 +71,13 @@ class QuantModulePanel : public QWidget {
     void display_result(const QJsonObject& data);
     void display_backtest_result(const QJsonObject& data);
     void display_cfa_result(const QString& command, const QJsonObject& data);
+    void display_gs_result(const QString& command, const QJsonObject& data);
+    void display_functime_result(const QString& command, const QJsonObject& data);
+    void display_statsmodels_result(const QString& command, const QJsonObject& data);
+    void display_fortitudo_result(const QString& command, const QJsonObject& data);
+    void display_quant_reporting_result(const QString& command, const QJsonObject& data);
+    void display_gluonts_result(const QString& command, const QJsonObject& data);
+    void show_loading(const QString& message);
     void display_error(const QString& msg);
     void clear_results();
 

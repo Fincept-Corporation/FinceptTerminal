@@ -8,7 +8,7 @@
 
 ### **Tu pensamiento es el único límite. Los datos no lo son.**
 
-Plataforma de inteligencia financiera de última generación con análisis de nivel CFA, automatización de IA y conectividad de datos ilimitada.
+Plataforma de inteligencia financiera de última generación con análisis financiero de nivel institucional, automatización de IA y conectividad de datos ilimitada.
 
 [📥 Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases)·[📚 Documentos](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)·[💬 Discusiones](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)·[💬 Discordia](https://discord.gg/ae87a8ygbN)·[🤝 Socio](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
@@ -28,7 +28,7 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 | **Característica**                   | **Descripción**                                                                                                                                                                                                                            |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 📊**Análisis a nivel CFA**           | Modelos DCF, optimización de cartera, métricas de riesgo (VaR, Sharpe), precios de derivados a través de Python integrado                                                                                                                  |
+| 📊**Análisis multiactivo**           | Modelos DCF, optimización de cartera, métricas de riesgo (VaR, Sharpe), valoración de derivados en renta variable, renta fija, derivados, cartera y alternativos a través de Python integrado                                              |
 | 🤖**Agentes de IA**                  | Más de 20 personas de inversores (Buffett, Dalio, Graham), estrategias de fondos de cobertura, soporte de LLM local, múltiples proveedores (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama)                        |
 | 🌐**Más de 100 conectores de datos** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, FMI, Banco Mundial, AkShare, API gubernamentales, además de superposiciones de datos alternativos opcionales, como el sentimiento del mercado de Adanos para la investigación de acciones. |
 | 📈**Comercio en tiempo real**        | Cripto (Kraken/HyperLiquid WebSocket), acciones, comercio algorítmico, motor de comercio de papel                                                                                                                                          |
@@ -125,7 +125,7 @@ Las versiones recientes también admiten opciones opcionales.**Sentimiento del m
 
 -   **Rendimiento nativo**— C++20 con Qt6, sin sobrecarga de Electron/web
 -   **binario único**— sin Node.js, sin tiempo de ejecución del navegador, sin paquete de JavaScript
--   **Análisis a nivel CFA**— cobertura curricular completa a través de módulos de Python
+-   **Kit completo de analista buy-side**— renta variable, cartera, derivados, renta fija, finanzas corporativas, alternativos
 -   **Más de 100 conectores de datos**— desde Yahoo Finance hasta las bases de datos gubernamentales
 -   **Gratis y de código abierto**(AGPL-3.0) con licencias comerciales disponibles
 
@@ -163,7 +163,7 @@ Estamos construyendo juntos el futuro del análisis financiero.
 -   **$799/mes**por 20 cuentas
 -   Acceso completo a los datos y API de Fincept
 -   Perfecto para cursos de finanzas, economía y ciencia de datos
--   Análisis curricular CFA integrado
+-   Análisis integrado de renta variable, cartera, derivados, renta fija y economía
 
 **¿Interesado?**Correo electrónico**[support@fincept.in](mailto:support@fincept.in)**con el nombre de su institución.
 

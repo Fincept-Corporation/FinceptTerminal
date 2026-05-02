@@ -157,6 +157,46 @@ void BacktestingScreen::build_ui() {
 
 // ── Top Bar: Provider tabs + Run button ──────────────────────────────────────
 
+namespace {
+
+// Every chip on the top bar (brand label, provider tabs, RUN, status) shares
+// the same outer geometry. The global QSS in ThemeManager applies a default
+// `padding` to every QPushButton — we override that here with explicit
+// min-height / max-height / padding so all chips render at exactly the same
+// box size regardless of widget type or selection state.
+constexpr int kPillHeight = 24;
+constexpr int kPillPadH = 10;
+
+QString pill_qss(const QString& selector,
+                 const QString& fg,
+                 const QString& bg,
+                 const QString& border,
+                 int font_px,
+                 const QString& font_family,
+                 const QString& weight = "700") {
+    // Subtract 2px (the 1px top + bottom border) from min/max-height so the
+    // total outer box equals kPillHeight in Qt's stylesheet box model.
+    return QString("%1 {"
+                   "  color:%2; background:%3; border:1px solid %4;"
+                   "  font-family:%5; font-size:%6px; font-weight:%7;"
+                   "  padding:0 %8px;"
+                   "  min-height:%9px; max-height:%9px;"
+                   "}")
+        .arg(selector, fg, bg, border, font_family)
+        .arg(font_px)
+        .arg(weight)
+        .arg(kPillPadH)
+        .arg(kPillHeight - 2);
+}
+
+void apply_pill_geometry(QWidget* w) {
+    w->setFixedHeight(kPillHeight);
+    w->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    w->setContentsMargins(0, 0, 0, 0);
+}
+
+} // namespace
+
 QWidget* BacktestingScreen::build_top_bar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(34);
@@ -167,14 +207,18 @@ QWidget* BacktestingScreen::build_top_bar() {
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(8);
 
+    const QString font_family = ui::fonts::DATA_FAMILY;
+    const int font_px = ui::fonts::TINY;
+
+    // Brand chip
     auto* brand = new QLabel("BACKTESTING", bar);
-    brand->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                                 "padding:4px 12px; background:rgba(217,119,6,0.1);"
-                                 "border:1px solid %4;")
-                             .arg(ui::colors::AMBER())
-                             .arg(ui::fonts::TINY)
-                             .arg(ui::fonts::DATA_FAMILY)
-                             .arg(ui::colors::AMBER_DIM()));
+    brand->setAlignment(Qt::AlignCenter);
+    apply_pill_geometry(brand);
+    brand->setStyleSheet(pill_qss("QLabel",
+                                  ui::colors::AMBER(),
+                                  "rgba(217,119,6,0.1)",
+                                  ui::colors::AMBER_DIM(),
+                                  font_px, font_family));
     hl->addWidget(brand);
 
     auto* div = new QWidget(bar);
@@ -182,11 +226,13 @@ QWidget* BacktestingScreen::build_top_bar() {
     div->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
     hl->addWidget(div);
 
-    // Provider tabs
+    // Provider tabs — geometry pinned here, colour applied later in
+    // update_provider_buttons() using the same pill_qss template.
     for (int i = 0; i < providers_.size(); ++i) {
         const auto& p = providers_[i];
         auto* btn = new QPushButton(p.display_name, bar);
         btn->setCursor(Qt::PointingHandCursor);
+        apply_pill_geometry(btn);
         connect(btn, &QPushButton::clicked, this, [this, i]() { on_provider_changed(i); });
         hl->addWidget(btn);
         provider_buttons_.append(btn);
@@ -194,34 +240,32 @@ QWidget* BacktestingScreen::build_top_bar() {
 
     hl->addStretch(1);
 
-    // Run button — accent amber style per DESIGN_SYSTEM 5.5
+    // Run button
     run_button_ = new QPushButton("RUN", bar);
     run_button_->setCursor(Qt::PointingHandCursor);
+    apply_pill_geometry(run_button_);
     run_button_->setStyleSheet(
-        QString("QPushButton { background:rgba(217,119,6,0.1); color:%1; font-family:%2; font-size:%3px;"
-                "font-weight:700; border:1px solid %4; padding:0 12px;"
-                "letter-spacing:1px; }"
-                "QPushButton:hover { background:%1; color:%5; }"
-                "QPushButton:disabled { background:%6; color:%7; border-color:%8; }")
-            .arg(ui::colors::AMBER())
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::SMALL)
-            .arg(ui::colors::AMBER_DIM())
-            .arg(ui::colors::BG_BASE())
-            .arg(ui::colors::BG_RAISED())
-            .arg(ui::colors::TEXT_DIM())
-            .arg(ui::colors::BORDER_DIM()));
+        pill_qss("QPushButton",
+                 ui::colors::AMBER(),
+                 "rgba(217,119,6,0.1)",
+                 ui::colors::AMBER_DIM(),
+                 font_px, font_family) +
+        QString("QPushButton:hover { background:%1; color:%2; }"
+                "QPushButton:disabled { background:%3; color:%4; border-color:%5; }")
+            .arg(ui::colors::AMBER(), ui::colors::BG_BASE(),
+                 ui::colors::BG_RAISED(), ui::colors::TEXT_DIM(), ui::colors::BORDER_DIM()));
     connect(run_button_, &QPushButton::clicked, this, &BacktestingScreen::on_run);
     hl->addWidget(run_button_);
 
-    // Status dot
+    // Status chip
     status_dot_ = new QLabel("READY", bar);
-    status_dot_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                                       "padding:3px 8px; background:rgba(22,163,74,0.08);"
-                                       "border:1px solid rgba(22,163,74,0.25);")
-                                   .arg(ui::colors::POSITIVE())
-                                   .arg(ui::fonts::TINY)
-                                   .arg(ui::fonts::DATA_FAMILY));
+    status_dot_->setAlignment(Qt::AlignCenter);
+    apply_pill_geometry(status_dot_);
+    status_dot_->setStyleSheet(pill_qss("QLabel",
+                                        ui::colors::POSITIVE(),
+                                        "rgba(22,163,74,0.08)",
+                                        "rgba(22,163,74,0.25)",
+                                        font_px, font_family));
     hl->addWidget(status_dot_);
 
     return bar;
@@ -1032,21 +1076,18 @@ void BacktestingScreen::on_provider_changed(int index) {
 void BacktestingScreen::update_provider_buttons() {
     for (int i = 0; i < provider_buttons_.size(); ++i) {
         const auto& p = providers_[i];
-        bool active = (i == active_provider_);
+        const bool active = (i == active_provider_);
+        const QString rgb = QString("%1,%2,%3").arg(p.color.red()).arg(p.color.green()).arg(p.color.blue());
+        const QString fg = active ? p.color.name() : ui::colors::TEXT_TERTIARY();
+        const QString bg = active ? QString("rgba(%1,0.12)").arg(rgb) : QString("transparent");
+        const QString border = active ? QString("rgba(%1,0.3)").arg(rgb) : ui::colors::BORDER_DIM();
+        const QString weight = active ? "700" : "400";
+
+        // Same pill template as the brand / RUN / status chips so geometry is
+        // identical regardless of selection state.
         provider_buttons_[i]->setStyleSheet(
-            QString("QPushButton { color:%1; font-size:%2px; font-family:%3;"
-                    "padding:0 10px; border:1px solid %4;"
-                    "background:%5; font-weight:%6; }"
-                    "QPushButton:hover { background:rgba(%7,0.15); }")
-                .arg(active ? p.color.name() : ui::colors::TEXT_TERTIARY())
-                .arg(ui::fonts::TINY)
-                .arg(ui::fonts::DATA_FAMILY)
-                .arg(active ? QString("rgba(%1,%2,%3,0.3)").arg(p.color.red()).arg(p.color.green()).arg(p.color.blue())
-                            : ui::colors::BORDER_DIM())
-                .arg(active ? QString("rgba(%1,%2,%3,0.12)").arg(p.color.red()).arg(p.color.green()).arg(p.color.blue())
-                            : "transparent")
-                .arg(active ? "700" : "400")
-                .arg(QString("%1,%2,%3").arg(p.color.red()).arg(p.color.green()).arg(p.color.blue())));
+            pill_qss("QPushButton", fg, bg, border, ui::fonts::TINY, ui::fonts::DATA_FAMILY, weight) +
+            QString("QPushButton:hover { background:rgba(%1,0.15); }").arg(rgb));
     }
 }
 
@@ -1558,14 +1599,23 @@ void BacktestingScreen::on_command_options_loaded(const QString& provider, const
         combo->setCurrentIndex(0);
     };
 
-    repopulate(pos_sizing_combo_, options.value("position_sizing_methods").toArray());
-    repopulate(opt_objective_combo_, options.value("optimize_objectives").toArray());
-    repopulate(opt_method_combo_, options.value("optimize_methods").toArray());
-    repopulate(labels_type_combo_, options.value("label_types").toArray());
-    repopulate(splitter_type_combo_, options.value("splitter_types").toArray());
-    repopulate(signal_gen_combo_, options.value("signal_generators").toArray());
-    repopulate(ind_signal_mode_combo_, options.value("indicator_signal_modes").toArray());
-    repopulate(returns_type_combo_, options.value("returns_analysis_types").toArray());
+    // Providers using json_response() emit camelCase keys; fincept_provider
+    // uses raw json.dumps so its keys stay snake_case. Try camelCase first
+    // (the dominant form across vectorbt/bt/backtestingpy/fasttrade/zipline),
+    // then fall back to snake_case for fincept.
+    auto pick = [&](const char* camel, const char* snake) -> QJsonArray {
+        auto a = options.value(camel).toArray();
+        return a.isEmpty() ? options.value(snake).toArray() : a;
+    };
+
+    repopulate(pos_sizing_combo_, pick("positionSizingMethods", "position_sizing_methods"));
+    repopulate(opt_objective_combo_, pick("optimizeObjectives", "optimize_objectives"));
+    repopulate(opt_method_combo_, pick("optimizeMethods", "optimize_methods"));
+    repopulate(labels_type_combo_, pick("labelTypes", "label_types"));
+    repopulate(splitter_type_combo_, pick("splitterTypes", "splitter_types"));
+    repopulate(signal_gen_combo_, pick("signalGenerators", "signal_generators"));
+    repopulate(ind_signal_mode_combo_, pick("indicatorSignalModes", "indicator_signal_modes"));
+    repopulate(returns_type_combo_, pick("returnsAnalysisTypes", "returns_analysis_types"));
 
     LOG_INFO("Backtesting", QString("[%1] Command options loaded").arg(provider));
 }

@@ -278,8 +278,15 @@ Result<void> PinManager::change_pin(const QString& old_pin, const QString& new_p
     // Verify old PIN via the same path as an unlock attempt. This means a wrong
     // old_pin increments failed_attempts_ and can trigger the normal lockout
     // ladder, so an attacker who momentarily has an unlocked terminal cannot
-    // silently swap the PIN by guessing the old one.
-    if (!verify_pin(old_pin))
+    // silently swap the PIN by guessing the old one. The audit log distinguishes
+    // these failures from lock-screen failures via the source flag below — a
+    // flood of source=change_pin failures has a different forensic meaning
+    // (someone fiddling with Settings on an unattended unlocked terminal) than
+    // source=lock_screen failures (someone trying to break in cold).
+    audit_source_change_pin_ = true;
+    const bool ok = verify_pin(old_pin);
+    audit_source_change_pin_ = false;
+    if (!ok)
         return Result<void>::err("Current PIN is incorrect");
 
     // Disallow reusing the same PIN so users don't think the flow did nothing.
@@ -322,11 +329,17 @@ bool PinManager::verify_pin(const QString& pin) {
         return true;
     }
 
-    // Failed attempt
+    // Failed attempt — tag the audit detail with the originating surface
+    // (lock_screen vs change_pin) so the audit reader can distinguish a
+    // brute-force attempt at the lock screen from a legitimate user
+    // fat-fingering their old PIN inside Settings → Change PIN.
     failed_attempts_++;
-    LOG_WARN("Auth", QString("PIN verification failed (attempt %1/%2)").arg(failed_attempts_).arg(kMaxAttempts));
+    const QString source = audit_source_change_pin_ ? "change_pin" : "lock_screen";
+    LOG_WARN("Auth", QString("PIN verification failed via %1 (attempt %2/%3)")
+                          .arg(source).arg(failed_attempts_).arg(kMaxAttempts));
     SecurityAuditLog::instance().record(
-        "pin_verify_fail", QString("attempt=%1/%2").arg(failed_attempts_).arg(kMaxAttempts));
+        "pin_verify_fail",
+        QString("attempt=%1/%2 source=%3").arg(failed_attempts_).arg(kMaxAttempts).arg(source));
 
     if (failed_attempts_ >= kMaxAttempts) {
         // Permanent lockout — require server re-auth

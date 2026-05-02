@@ -1,5 +1,6 @@
-#include "ai_chat/LlmService.h"
-#include "app/MainWindow.h"
+﻿#include "ai_chat/LlmService.h"
+#include "app/WindowFrame.h"
+#include "app/TerminalShell.h"
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
 #include "auth/PinManager.h"
@@ -19,7 +20,11 @@
 #include "mcp/McpInit.h"
 #include "network/http/HttpClient.h"
 #include "python/PythonSetupManager.h"
+#include "screens/launchpad/LaunchpadScreen.h"
+#include "screens/recovery/CrashRecoveryDialog.h"
 #include "screens/setup/SetupScreen.h"
+#include "storage/workspace/CrashRecovery.h"
+#include "storage/workspace/WorkspaceSnapshotRing.h"
 #include "services/agents/AgentService.h"
 #include "services/dbnomics/DBnomicsService.h"
 #include "services/economics/EconomicsService.h"
@@ -27,11 +32,13 @@
 #include "services/gov_data/GovDataService.h"
 #include "services/ma_analytics/MAAnalyticsService.h"
 #include "services/maritime/MaritimeService.h"
+#include "services/maritime/PortsCatalog.h"
 #include "services/markets/MarketDataService.h"
 #include "services/news/NewsService.h"
 #include "services/polymarket/PolymarketWebSocket.h"
 #include "services/prediction/PredictionCredentialStore.h"
 #include "services/prediction/PredictionExchangeRegistry.h"
+#include "services/prediction/fincept_internal/FinceptInternalAdapter.h"
 #include "services/prediction/kalshi/KalshiAdapter.h"
 #include "services/prediction/polymarket/PolymarketAdapter.h"
 #include "services/relationship_map/RelationshipMapService.h"
@@ -39,7 +46,12 @@
 #include "datahub/DataHub.h"
 #include "datahub/TopicPolicy.h"
 #include "services/billing/FeeDiscountService.h"
+#include "services/billing/TierService.h"
+#include "services/wallet/BuybackBurnService.h"
+#include "services/wallet/RealYieldService.h"
+#include "services/wallet/StakingService.h"
 #include "services/wallet/TokenMetadataService.h"
+#include "services/wallet/TreasuryService.h"
 #include "services/wallet/WalletService.h"
 #include "trading/DataStreamManager.h"
 #include "trading/ExchangeService.h"
@@ -71,7 +83,16 @@
 #    include <Windows.h>
 #endif
 
+// FT_MARK: write a sequence number to a file so we can see how far startup progressed.
+// GUI-subsystem apps don't have a useful stderr, so we go straight to disk.
+#ifdef Q_OS_WIN
+#  define FT_MARK(n) do { char _msg[64]; _snprintf_s(_msg, 64, _TRUNCATE, "FT_MARK %d\n", (n)); OutputDebugStringA(_msg); HANDLE _h = CreateFileA("C:\\Users\\Tilak\\AppData\\Local\\Temp\\ft_marks.txt", FILE_APPEND_DATA, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL); if (_h != INVALID_HANDLE_VALUE) { DWORD _w; SetFilePointer(_h, 0, NULL, FILE_END); WriteFile(_h, _msg, (DWORD)strlen(_msg), &_w, NULL); CloseHandle(_h); } } while(0)
+#else
+#  define FT_MARK(n) do { fprintf(stderr, "FT_MARK %d\n", (n)); fflush(stderr); } while(0)
+#endif
+
 int main(int argc, char* argv[]) {
+    FT_MARK(1);
     // ── Parse --profile <name> from argv before Qt initialises ───────────────
     // This must happen first so that:
     //   1. AppPaths returns the correct per-profile directories
@@ -88,6 +109,7 @@ int main(int argc, char* argv[]) {
         // write the manifest. Create root now (single mkdir, idempotent).
         QDir().mkpath(fincept::AppPaths::root());
     }
+    FT_MARK(2);
 
     // Install the unhandled-exception filter BEFORE any Qt object is
     // constructed. On Windows this writes a minidump to AppPaths::crashdumps()
@@ -129,6 +151,21 @@ int main(int argc, char* argv[]) {
 
     // ── Primary instance from here on ────────────────────────────────────────
 
+    // Bring up the TerminalShell. This is the multi-window refactor's
+    // process-level coordinator. Phase 1 ships a skeleton: it bootstraps
+    // ProfilePaths, resolves the active ProfileId, and warms the registries
+    // (WindowRegistry, ActionRegistry) so WindowFrame constructors don't race
+    // their singleton init.
+    //
+    // Must run BEFORE any service init so future phases that lift services
+    // into the shell can rely on it being present.
+    FT_MARK(10);
+    fincept::TerminalShell::instance().initialise();
+    FT_MARK(11);
+    QObject::connect(&app, &QCoreApplication::aboutToQuit,
+                     []() { fincept::TerminalShell::instance().shutdown(); });
+    FT_MARK(12);
+
     // Register DataHub payload meta-types (QuoteData, HistoryPoint, InfoData,
     // NewsArticle, EconomicsResult) so they can flow through QVariant-keyed
     // topics and cross-thread queued signals. Phase 0 — see
@@ -147,7 +184,9 @@ int main(int argc, char* argv[]) {
         QCoreApplication::applicationDirPath() + "/component_catalog.json",
         "resources/component_catalog.json",
     });
+    FT_MARK(20);
     fincept::services::MarketDataService::instance().ensure_registered_with_hub();
+    FT_MARK(21);
     // Phase 2 (multi-broker refactor): ExchangeSessionManager is the hub
     // producer for `ws:kraken:*` / `ws:hyperliquid:*`. Individual sessions
     // (created lazily by the manager) publish through its SessionPublisher
@@ -165,6 +204,12 @@ int main(int argc, char* argv[]) {
             std::make_unique<fincept::services::prediction::polymarket_ns::PolymarketAdapter>());
         reg.register_adapter(
             std::make_unique<fincept::services::prediction::kalshi_ns::KalshiAdapter>());
+        // Phase 4 §4.3: Fincept internal prediction-market adapter joins the
+        // registry as a sibling of Polymarket / Kalshi. Ships in demo mode
+        // (curated mock dataset) until `fincept.markets_endpoint` is
+        // configured and the `fincept_market` Anchor program is deployed.
+        reg.register_adapter(
+            std::make_unique<fincept::services::prediction::fincept_internal::FinceptInternalAdapter>());
 
         // Hydrate credentials from SecureStorage if previously saved. This
         // has to happen after registration so the adapters exist.
@@ -177,6 +222,9 @@ int main(int argc, char* argv[]) {
             if (auto creds = fincept::services::prediction::PredictionCredentialStore::load_kalshi()) {
                 ks->set_credentials(*creds);
             }
+        }
+        if (auto* fi = reg.adapter(QStringLiteral("fincept"))) {
+            fi->ensure_registered_with_hub();
         }
     }
     // Phase 5: NewsService as the news:general / news:symbol:* /
@@ -193,6 +241,7 @@ int main(int argc, char* argv[]) {
     // Phase 8: Geopolitics / Maritime / RelationshipMap / MAAnalytics.
     fincept::services::geo::GeopoliticsService::instance().ensure_registered_with_hub();
     fincept::services::maritime::MaritimeService::instance().ensure_registered_with_hub();
+    fincept::services::maritime::PortsCatalog::instance().ensure_registered_with_hub();
     fincept::services::RelationshipMapService::instance().ensure_registered_with_hub();
     fincept::services::ma::MAAnalyticsService::instance().ensure_registered_with_hub();
     // Phase 9: AgentService as agent:* push-only producer (output/stream/status/routing/error).
@@ -201,12 +250,18 @@ int main(int argc, char* argv[]) {
     // TokenMetadataService loads its symbol/name cache from SecureStorage
     // first so the very first balance publish has labels for known tokens;
     // a daily background refresh fires in the background after.
+    FT_MARK(30);
     fincept::wallet::TokenMetadataService::instance().load_from_storage();
+    FT_MARK(31);
     fincept::wallet::TokenMetadataService::instance().refresh_from_jupiter_async();
+    FT_MARK(32);
     // Restore_from_storage runs after the hub is up so a soft-connected
     // wallet's balance topic resolves to a registered producer immediately.
+    FT_MARK(33);
     fincept::wallet::WalletService::instance().ensure_registered_with_hub();
+    FT_MARK(34);
     fincept::wallet::WalletService::instance().restore_from_storage();
+    FT_MARK(35);
 
     // Phase 2 §2C: fee-discount eligibility producer. Lives in billing/
     // because it's consumed by other paid screens later; for Phase 2 it
@@ -224,8 +279,83 @@ int main(int argc, char* argv[]) {
         hub.set_policy_pattern(QStringLiteral("billing:fncpt_discount:*"), p);
     }
 
+    // Phase 5: buyback & burn dashboard producers (terminal-wide treasury:*
+    // topics). Both producers ship in mock mode until the buyback worker
+    // endpoint is configured via SecureStorage `fincept.treasury_endpoint`
+    // and `fincept.treasury_pubkey`.
+    {
+        static fincept::wallet::BuybackBurnService buyback_burn_service;
+        static fincept::wallet::TreasuryService treasury_service;
+        auto& hub = fincept::datahub::DataHub::instance();
+        hub.register_producer(&buyback_burn_service);
+        hub.register_producer(&treasury_service);
+
+        // Per-topic policies. Cadences mirror Phase 5 plan §5.3.
+        fincept::datahub::TopicPolicy epoch_p;
+        epoch_p.ttl_ms = 60 * 1000;
+        epoch_p.min_interval_ms = 30 * 1000;
+        hub.set_policy_pattern(QStringLiteral("treasury:buyback_epoch"), epoch_p);
+
+        fincept::datahub::TopicPolicy burn_p;
+        burn_p.ttl_ms = 5 * 60 * 1000;
+        burn_p.min_interval_ms = 60 * 1000;
+        hub.set_policy_pattern(QStringLiteral("treasury:burn_total"), burn_p);
+
+        fincept::datahub::TopicPolicy supply_p;
+        supply_p.ttl_ms = 60 * 60 * 1000;
+        supply_p.min_interval_ms = 5 * 60 * 1000;
+        hub.set_policy_pattern(QStringLiteral("treasury:supply_history"), supply_p);
+
+        fincept::datahub::TopicPolicy reserves_p;
+        reserves_p.ttl_ms = 5 * 60 * 1000;
+        reserves_p.min_interval_ms = 60 * 1000;
+        hub.set_policy_pattern(QStringLiteral("treasury:reserves"), reserves_p);
+
+        fincept::datahub::TopicPolicy runway_p;
+        runway_p.ttl_ms = 5 * 60 * 1000;
+        runway_p.min_interval_ms = 60 * 1000;
+        hub.set_policy_pattern(QStringLiteral("treasury:runway"), runway_p);
+    }
+
+    // Phase 3: STAKE tab producers (veFNCPT lock + real-yield + tier system).
+    // All three ship in mock mode until SecureStorage `fincept.lock_program_id`
+    // and `fincept.yield_endpoint` are configured. The mock payloads carry
+    // `is_mock=true` so panels can surface a "not yet deployed" chip.
+    {
+        auto& hub = fincept::datahub::DataHub::instance();
+        hub.register_producer(&fincept::wallet::StakingService::instance());
+        hub.register_producer(&fincept::wallet::RealYieldService::instance());
+        hub.register_producer(&fincept::billing::TierService::instance());
+
+        // Plan §3.4 cadences.
+        fincept::datahub::TopicPolicy locks_p;
+        locks_p.ttl_ms = 60 * 1000;
+        locks_p.min_interval_ms = 30 * 1000;
+        hub.set_policy_pattern(QStringLiteral("wallet:locks:*"), locks_p);
+        hub.set_policy_pattern(QStringLiteral("wallet:vefncpt:*"), locks_p);
+
+        fincept::datahub::TopicPolicy yield_p;
+        yield_p.ttl_ms = 5 * 60 * 1000;
+        yield_p.min_interval_ms = 60 * 1000;
+        hub.set_policy_pattern(QStringLiteral("wallet:yield:*"), yield_p);
+
+        fincept::datahub::TopicPolicy revenue_p;
+        revenue_p.ttl_ms = 60 * 60 * 1000;
+        revenue_p.min_interval_ms = 5 * 60 * 1000;
+        hub.set_policy_pattern(QStringLiteral("treasury:revenue"), revenue_p);
+
+        // billing:tier:* is derived from wallet:vefncpt:* — TTL is just a
+        // safety net; the service republishes whenever vefncpt emits.
+        fincept::datahub::TopicPolicy tier_p;
+        tier_p.ttl_ms = 60 * 1000;
+        tier_p.min_interval_ms = 15 * 1000;
+        hub.set_policy_pattern(QStringLiteral("billing:tier:*"), tier_p);
+    }
+
+    FT_MARK(40);
     // Create all application directories under %LOCALAPPDATA%/com.fincept.terminal
     fincept::AppPaths::ensure_all();
+    FT_MARK(41);
 
     // ── One-time migration from legacy %APPDATA% location ─────────────────
     // Current locations (under %LOCALAPPDATA%\com.fincept.terminal\):
@@ -273,7 +403,9 @@ int main(int argc, char* argv[]) {
         QFile::remove(legacy2 + "-shm");
     }
 
+    FT_MARK(50);
     fincept::Logger::instance().set_file(fincept::AppPaths::logs() + "/fincept.log");
+    FT_MARK(51);
 
     // P3.18 — route Qt's own qDebug/qWarning/qCritical messages into our log
     // file so framework/3rd-party warnings are visible in Release builds.
@@ -463,7 +595,7 @@ int main(int argc, char* argv[]) {
             if (minutes > 0)
                 guard.set_timeout_minutes(minutes);
         }
-        // Guard is installed on qApp and enabled by MainWindow::on_terminal_unlocked()
+        // Guard is installed on qApp and enabled by WindowFrame::on_terminal_unlocked()
         // after the user successfully enters their PIN.
     }
 
@@ -505,20 +637,40 @@ int main(int argc, char* argv[]) {
             screen_guard->hide();
             screen_guard->deleteLater();
 
-            fincept::KeyConfigManager::instance(); // init before MainWindow registers shortcuts
-            auto* window = new fincept::MainWindow(0); // primary window
-            window->setAttribute(Qt::WA_DeleteOnClose);
-            window->show();
+            fincept::KeyConfigManager::instance(); // init before WindowFrame registers shortcuts
+
+            // Phase 6 final: if the previous session ended uncleanly and a
+            // workspace snapshot is available, give the user the option to
+            // restore. On accept, WorkspaceShell::apply already constructs
+            // the frames it needs — we skip our own primary-window creation
+            // path. On skip (or no recovery available), fall through.
+            bool recovered = false;
+            if (auto* recovery = fincept::TerminalShell::instance().crash_recovery();
+                recovery && recovery->needs_recovery()) {
+                fincept::screens::CrashRecoveryDialog dlg(
+                    recovery, fincept::TerminalShell::instance().snapshot_ring());
+                dlg.exec();
+                recovered = dlg.was_restored();
+            }
+
+            if (!recovered) {
+                auto* window = new fincept::WindowFrame(0); // primary window
+                window->setAttribute(Qt::WA_DeleteOnClose);
+                window->show();
+            }
 
             // Restore any secondary windows that were open at last shutdown so
             // multi-monitor layouts survive across relaunches. Each window
             // restores its own geometry + dock layout from SessionManager.
+            // Skip when recovered — WorkspaceShell::apply has already built
+            // the right frame set.
+            if (!recovered)
             {
                 const QList<int> saved_ids =
                     fincept::SessionManager::instance().load_window_ids();
                 for (int id : saved_ids) {
                     if (id <= 0) continue; // 0 = primary, already created
-                    auto* w = new fincept::MainWindow(id);
+                    auto* w = new fincept::WindowFrame(id);
                     w->setAttribute(Qt::WA_DeleteOnClose);
                     w->show();
                 }
@@ -530,14 +682,18 @@ int main(int argc, char* argv[]) {
             // Wire new-window handler now that the primary window exists
             QObject::connect(&app, &SingleApplication::receivedMessage,
                              [](quint32 /*instanceId*/, QByteArray /*message*/) {
-                                 auto* w = new fincept::MainWindow(fincept::MainWindow::next_window_id());
+                                 auto* w = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
                                  w->setAttribute(Qt::WA_DeleteOnClose);
                                  w->show();
                                  w->raise();
                                  w->activateWindow();
                                  LOG_INFO("App", "New window opened via secondary instance request");
                              });
-            QObject::connect(&app, &QApplication::lastWindowClosed, &app, &QApplication::quit);
+            // Phase 9 trim: surface Launchpad instead of quitting on last
+            // frame close. Closing the Launchpad itself quits.
+            QObject::connect(&app, &QApplication::lastWindowClosed, &app, []() {
+                fincept::screens::LaunchpadScreen::instance()->surface();
+            });
 
             if (!fincept::ai_chat::LlmService::instance().is_configured())
                 LOG_WARN("App",
@@ -554,22 +710,43 @@ int main(int argc, char* argv[]) {
         return app.exec();
     }
 
-    // Ensure KeyConfigManager is initialized before MainWindow registers shortcuts
+    // Ensure KeyConfigManager is initialized before WindowFrame registers shortcuts
     fincept::KeyConfigManager::instance();
 
-    // Python already set up — launch main window directly
-    fincept::MainWindow window;
-    window.show();
+    // Phase 6 final: offer crash recovery before constructing the primary
+    // window. If the user accepts and restoration succeeds, WorkspaceShell
+    // has already built the frames it needs from the snapshot — we skip
+    // both the primary-window creation and the SessionManager-based
+    // secondary-window restoration paths to avoid duplicating windows.
+    bool recovered = false;
+    if (auto* recovery = fincept::TerminalShell::instance().crash_recovery();
+        recovery && recovery->needs_recovery()) {
+        fincept::screens::CrashRecoveryDialog dlg(
+            recovery, fincept::TerminalShell::instance().snapshot_ring());
+        dlg.exec();
+        recovered = dlg.was_restored();
+    }
+
+    // Heap-allocate the primary window so we can skip it on a successful
+    // recovery without leaving a dead stack object behind. WA_DeleteOnClose
+    // matches the secondary-window lifecycle below.
+    if (!recovered) {
+        auto* primary = new fincept::WindowFrame(0);
+        primary->setAttribute(Qt::WA_DeleteOnClose);
+        primary->show();
+    }
 
     // Restore any secondary windows that were open at last shutdown. The
-    // primary window on the stack owns its own lifetime; restored secondaries
-    // use WA_DeleteOnClose and self-remove from QApplication::topLevelWidgets.
-    {
+    // primary window owns its own lifetime via WA_DeleteOnClose; restored
+    // secondaries use WA_DeleteOnClose and self-remove from
+    // QApplication::topLevelWidgets. Skip when recovered — WorkspaceShell
+    // has already built the right frame set.
+    if (!recovered) {
         const QList<int> saved_ids =
             fincept::SessionManager::instance().load_window_ids();
         for (int id : saved_ids) {
             if (id <= 0) continue; // 0 = primary, already created
-            auto* w = new fincept::MainWindow(id);
+            auto* w = new fincept::WindowFrame(id);
             w->setAttribute(Qt::WA_DeleteOnClose);
             w->show();
         }
@@ -580,10 +757,10 @@ int main(int argc, char* argv[]) {
 
     // ── New-window handler: fires when the user re-launches the exe ──────────
     // The secondary instance sends "--new-window" and exits. We construct a new
-    // independent MainWindow in this process. WA_DeleteOnClose ensures cleanup.
+    // independent WindowFrame in this process. WA_DeleteOnClose ensures cleanup.
     // QApplication::lastWindowClosed() → quit() handles the final exit.
     QObject::connect(&app, &SingleApplication::receivedMessage, [](quint32 /*instanceId*/, QByteArray /*message*/) {
-        auto* w = new fincept::MainWindow(fincept::MainWindow::next_window_id());
+        auto* w = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
         w->setAttribute(Qt::WA_DeleteOnClose);
         w->show();
         w->raise();
@@ -591,8 +768,11 @@ int main(int argc, char* argv[]) {
         LOG_INFO("App", "New window opened via secondary instance request");
     });
 
-    // Quit when the last window is closed (standard Qt SDI behaviour).
-    QObject::connect(&app, &QApplication::lastWindowClosed, &app, &QApplication::quit);
+    // Phase 9 trim: surface Launchpad instead of quitting on last frame
+    // close. The launchpad's own close event quits explicitly.
+    QObject::connect(&app, &QApplication::lastWindowClosed, &app, []() {
+        fincept::screens::LaunchpadScreen::instance()->surface();
+    });
 
     // If requirements files changed (app update), sync packages in background
     // without blocking the user. Connect setup_complete so failures are logged

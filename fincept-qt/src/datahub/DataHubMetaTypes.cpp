@@ -56,8 +56,11 @@ void register_metatypes() {
     qRegisterMetaType<QVector<fincept::services::geo::HDXDataset>>("QVector<fincept::services::geo::HDXDataset>");
     qRegisterMetaType<QVector<fincept::services::geo::UniqueCountry>>("QVector<fincept::services::geo::UniqueCountry>");
     qRegisterMetaType<QVector<fincept::services::geo::UniqueCategory>>("QVector<fincept::services::geo::UniqueCategory>");
+    qRegisterMetaType<fincept::services::geo::EventsPage>("fincept::services::geo::EventsPage");
     qRegisterMetaType<fincept::services::maritime::VesselData>("fincept::services::maritime::VesselData");
     qRegisterMetaType<QVector<fincept::services::maritime::VesselData>>("QVector<fincept::services::maritime::VesselData>");
+    qRegisterMetaType<fincept::services::maritime::VesselsPage>("fincept::services::maritime::VesselsPage");
+    qRegisterMetaType<fincept::services::maritime::VesselHistoryPage>("fincept::services::maritime::VesselHistoryPage");
     qRegisterMetaType<fincept::relmap::RelationshipData>("fincept::relmap::RelationshipData");
 
     // Crypto / Wallet (Phase 1 + Phase 2 Stage 2A.5 multi-token holdings)
@@ -75,7 +78,26 @@ void register_metatypes() {
     // Phase 2 §2C fee-discount eligibility.
     qRegisterMetaType<fincept::wallet::FncptDiscount>("fincept::wallet::FncptDiscount");
 
-    LOG_INFO("DataHub", "Registered 42 payload meta-types");
+    // Phase 5 — buyback & burn dashboard (terminal-wide treasury:* topics).
+    qRegisterMetaType<fincept::wallet::BuybackEpoch>("fincept::wallet::BuybackEpoch");
+    qRegisterMetaType<fincept::wallet::BurnTotal>("fincept::wallet::BurnTotal");
+    qRegisterMetaType<fincept::wallet::SupplyHistoryPoint>(
+        "fincept::wallet::SupplyHistoryPoint");
+    qRegisterMetaType<QVector<fincept::wallet::SupplyHistoryPoint>>(
+        "QVector<fincept::wallet::SupplyHistoryPoint>");
+    qRegisterMetaType<fincept::wallet::TreasuryReserves>("fincept::wallet::TreasuryReserves");
+    qRegisterMetaType<fincept::wallet::TreasuryRunway>("fincept::wallet::TreasuryRunway");
+
+    // Phase 3 — STAKE tab (veFNCPT lock + tier system).
+    qRegisterMetaType<fincept::wallet::LockPosition>("fincept::wallet::LockPosition");
+    qRegisterMetaType<QVector<fincept::wallet::LockPosition>>(
+        "QVector<fincept::wallet::LockPosition>");
+    qRegisterMetaType<fincept::wallet::VeFncptAggregate>("fincept::wallet::VeFncptAggregate");
+    qRegisterMetaType<fincept::wallet::YieldSnapshot>("fincept::wallet::YieldSnapshot");
+    qRegisterMetaType<fincept::wallet::TreasuryRevenue>("fincept::wallet::TreasuryRevenue");
+    qRegisterMetaType<fincept::wallet::TierStatus>("fincept::wallet::TierStatus");
+
+    LOG_INFO("DataHub", "Registered 73 payload meta-types");
 }
 
 } // namespace fincept::datahub

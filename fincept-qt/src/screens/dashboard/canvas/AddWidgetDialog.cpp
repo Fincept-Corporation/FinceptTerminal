@@ -26,6 +26,8 @@ QString AddWidgetDialog::accent_for_category(const QString& category) {
         return ui::colors::NEGATIVE();
     if (category == "Tools")
         return ui::colors::AMBER();
+    if (category == "Geopolitics")
+        return ui::colors::NEGATIVE();
     return ui::colors::TEXT_SECONDARY();
 }
 
@@ -51,6 +53,9 @@ QString AddWidgetDialog::icon_for_widget(const QString& type_id) {
         {"risk_metrics", QString(QChar(0x26A0))},      // ⚠
         {"quick_trade", QString(QChar(0x26A1))},       // ⚡
         {"video_player", QString(QChar(0x25B6))},      // ▶
+        {"geopolitics_events", QString(QChar(0x2691))}, // ⚑
+        {"maritime_vessels", QString(QChar(0x2693))},   // ⚓
+        {"notes", QString(QChar(0x270E))},              // ✎
     };
     return icons.value(type_id, QString(QChar(0x25CF))); // ● default
 }

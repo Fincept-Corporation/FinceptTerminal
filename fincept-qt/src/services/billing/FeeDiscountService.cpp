@@ -12,7 +12,7 @@ namespace fincept::billing {
 
 namespace {
 
-constexpr const char* kFamilyPrefix = "billing:fncpt_discount:";
+constexpr const char* kFeeDiscountFamilyPrefix = "billing:fncpt_discount:";
 
 quint64 fncpt_raw_amount(const fincept::wallet::WalletBalance& bal) {
     if (auto* h = bal.fncpt_holding()) {
@@ -34,7 +34,7 @@ QStringList FeeDiscountService::topic_patterns() const {
 }
 
 QString FeeDiscountService::pubkey_from_topic(const QString& topic) {
-    return topic.mid(static_cast<int>(qstrlen(kFamilyPrefix)));
+    return topic.mid(static_cast<int>(qstrlen(kFeeDiscountFamilyPrefix)));
 }
 
 QString FeeDiscountService::balance_topic_for(const QString& pubkey) {
@@ -88,7 +88,7 @@ void FeeDiscountService::wire_balance_listener() {
         if (!topic.startsWith(prefix)) return;
         const auto pubkey = topic.mid(prefix.size());
         if (pubkey.isEmpty()) return;
-        const auto out_topic = QString::fromLatin1(kFamilyPrefix) + pubkey;
+        const auto out_topic = QString::fromLatin1(kFeeDiscountFamilyPrefix) + pubkey;
         // Only republish if someone is actually listening (cheap check —
         // if nobody subscribed, the hub will skip the publish anyway,
         // but we save the QVariant copy).

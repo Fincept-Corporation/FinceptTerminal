@@ -6,7 +6,7 @@
     "role": "owner",
     "name": "Fincept Corporation",
     "email": "support@fincept.in",
-    "description": "Fincept Corporation develops the Fincept Terminal, a state-of-the-art open-source financial intelligence platform with CFA-level analytics, AI automation, and unlimited data connectivity. We build professional-grade financial tools that compete on analytics depth and data accessibility.",
+    "description": "Fincept Corporation develops the Fincept Terminal, a state-of-the-art open-source financial intelligence platform with institutional-grade financial analytics, AI automation, and unlimited data connectivity. We build professional-grade financial tools that compete on analytics depth and data accessibility.",
     "webpageUrl": {
       "url": "https://github.com/Fincept-Corporation/FinceptTerminal"
     }
@@ -15,7 +15,7 @@
     {
       "guid": "fincept-terminal",
       "name": "Fincept Terminal",
-      "description": "Native C++20 financial intelligence terminal built with Dear ImGui and embedded Python. Features complete CFA Level 1-3 analytics, 20+ AI investor personas, 100+ data connectors, visual workflow automation, maritime tracking, and geopolitical intelligence frameworks. A professional alternative to Bloomberg Terminal, built for analysts who refuse to be limited by traditional software.",
+      "description": "Native C++20 financial intelligence terminal built with Dear ImGui and embedded Python. Features full multi-asset analytics across equity, portfolio, derivatives, fixed income, and alternatives, 20+ AI investor personas, 100+ data connectors, visual workflow automation, maritime tracking, and geopolitical intelligence frameworks. A professional alternative to Bloomberg Terminal, built for analysts who refuse to be limited by traditional software.",
       "webpageUrl": {
         "url": "https://github.com/Fincept-Corporation/FinceptTerminal"
       },

@@ -8,15 +8,19 @@
 
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
+#include "mcp/ToolSchemaBuilder.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QElapsedTimer>
-#include <QEventLoop>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointer>
+#include <QPromise>
 #include <QTimer>
 #include <QVariantList>
+
+#include <memory>
 
 namespace fincept::mcp::tools {
 
@@ -137,11 +141,11 @@ std::vector<ToolDef> get_datahub_tools() {
     }
 
     // ── datahub_subscribe_briefly ───────────────────────────────────────
-    // Subscribes a disposable QObject-owned listener to the topic for
-    // `duration_ms` (clamped to [100, 30000]). Accumulates every delivered
-    // value then returns the vector. Synchronous on purpose — MCP tools
-    // are called from a thread where a local QEventLoop is the simplest
-    // way to wait without blocking the Qt UI thread.
+    // Phase 4 streaming exemplar (replaces the previous nested-QEventLoop
+    // hack). Async handler: subscribes a heap-allocated owner to the topic
+    // on the DataHub's thread, collects samples until duration elapses or
+    // cancellation fires, then resolves the promise with the accumulated
+    // payload. No worker-thread blocking, no nested event loops.
     {
         ToolDef t;
         t.name = "datahub_subscribe_briefly";
@@ -150,38 +154,61 @@ std::vector<ToolDef> get_datahub_tools() {
                         "Useful for sampling a volatile topic (e.g. a live ticker) to "
                         "reason about its recent behaviour.";
         t.category = "datahub";
-        t.input_schema.properties = QJsonObject{
-            {"topic", QJsonObject{{"type", "string"}, {"description", "Topic name"}}},
-            {"duration_ms", QJsonObject{{"type", "integer"}, {"description", "Window length in milliseconds"}}}};
-        t.input_schema.required = {"topic", "duration_ms"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        t.input_schema = ToolSchemaBuilder()
+            .string("topic", "Topic name (e.g. market:quote:AAPL)")
+                .required().length(1, 256)
+            .integer("duration_ms", "Window length in milliseconds")
+                .required().between(100, 30000)
+            .build();
+        // Generous timeout = max duration + slack. Provider's watchdog kicks
+        // in only if the unsubscribe-and-resolve dance gets stuck.
+        t.default_timeout_ms = 35000;
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
+                              std::shared_ptr<QPromise<ToolResult>> promise) {
             const QString topic = args["topic"].toString().trimmed();
-            if (topic.isEmpty()) return ToolResult::fail("Missing 'topic'");
-            int duration = args["duration_ms"].toInt();
-            duration = std::clamp(duration, 100, 30000);
-            auto& hub = fincept::datahub::DataHub::instance();
-            QObject owner;
-            QJsonArray collected;
-            QElapsedTimer clock;
-            clock.start();
-            hub.subscribe(&owner, topic, [&collected, &clock](const QVariant& v) {
-                QJsonObject e;
-                e["t_ms"] = static_cast<qint64>(clock.elapsed());
-                e["value"] = variant_to_json(v);
-                collected.append(e);
-            });
+            int duration = std::clamp(args["duration_ms"].toInt(), 100, 30000);
 
-            QEventLoop loop;
-            QTimer::singleShot(duration, &loop, &QEventLoop::quit);
-            loop.exec();
-            hub.unsubscribe(&owner);
+            // Marshal the entire setup onto qApp's thread so:
+            //   • DataHub::subscribe runs on the hub's thread (consistent
+            //     with how the rest of the codebase uses it)
+            //   • the owner QObject's affinity is qApp — its deleteLater
+            //     posts to a thread that actually has a running event loop
+            //     (the worker thread that called the handler may have no
+            //     event loop and would leak the owner)
+            QMetaObject::invokeMethod(qApp, [topic, duration, ctx, promise]() {
+                auto* owner = new QObject;
+                owner->setObjectName("mcp.subscribe_briefly:" + topic);
 
-            QJsonObject out;
-            out["topic"] = topic;
-            out["duration_ms"] = duration;
-            out["count"] = collected.size();
-            out["samples"] = collected;
-            return ToolResult::ok_data(out);
+                auto collected = std::make_shared<QJsonArray>();
+                auto clock = std::make_shared<QElapsedTimer>();
+                clock->start();
+
+                fincept::datahub::DataHub::instance().subscribe(
+                    owner, topic, [collected, clock](const QVariant& v) {
+                        QJsonObject e;
+                        e["t_ms"] = static_cast<qint64>(clock->elapsed());
+                        e["value"] = variant_to_json(v);
+                        collected->append(e);
+                    });
+
+                QTimer::singleShot(duration, qApp, [topic, duration, collected, owner, promise, ctx]() {
+                    fincept::datahub::DataHub::instance().unsubscribe(owner);
+                    owner->deleteLater();
+
+                    if (promise->future().isFinished()) return; // watchdog already fired
+                    QJsonObject out;
+                    out["topic"] = topic;
+                    out["duration_ms"] = duration;
+                    out["count"] = collected->size();
+                    out["samples"] = *collected;
+                    if (ctx.cancelled()) {
+                        promise->addResult(ToolResult::fail("cancelled"));
+                    } else {
+                        promise->addResult(ToolResult::ok_data(out));
+                    }
+                    promise->finish();
+                });
+            }, Qt::QueuedConnection);
         };
         tools.push_back(std::move(t));
     }

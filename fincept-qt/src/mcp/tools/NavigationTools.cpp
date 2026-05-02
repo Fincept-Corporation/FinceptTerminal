@@ -1,11 +1,18 @@
-// NavigationTools.cpp — Tab switching MCP tools (Qt port)
+﻿// NavigationTools.cpp — Tab switching MCP tools (Qt port)
 
 #include "mcp/tools/NavigationTools.h"
 
+#include "app/DockScreenRouter.h"
+#include "app/WindowFrame.h"
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
+#include "mcp/ToolSchemaBuilder.h"
+#include "mcp/tools/ThreadHelper.h"
 
+#include <QApplication>
+#include <QPointer>
 #include <QVariantMap>
+#include <QWidget>
 
 #include <algorithm>
 
@@ -13,70 +20,50 @@ namespace fincept::mcp::tools {
 
 static constexpr const char* TAG = "NavTools";
 
-struct TabEntry {
-    const char* name;
-    const char* display_name;
-    int index;
-};
+// ── Live router lookup ──────────────────────────────────────────────────────
+// MCP tool handlers run on a worker thread. QApplication's widget tree must
+// be queried from the main thread. We marshal via run_on_target_thread_sync
+// (qApp lives on the main thread) and pick the active or primary WindowFrame.
+namespace {
 
-// Indices must match ScreenRouter screen IDs used in MainWindow
-static const TabEntry TAB_MAP[] = {
-    {"dashboard", "Dashboard", 0},
-    {"markets", "Markets", 1},
-    {"crypto_trading", "Crypto Trading", 2},
-    {"news", "News", 3},
-    {"watchlist", "Watchlist", 4},
-    {"dbnomics", "DBnomics", 5},
-    {"surface_analytics", "Surface Analytics", 6},
-    {"notes", "Notes", 7},
-    {"report_builder", "Report Builder", 8},
-    {"profile", "Profile", 9},
-    {"settings", "Settings", 10},
-    {"about", "About", 11},
-    {"support", "Support", 12},
-    {"ai_chat", "AI Chat", 13},
-    {"agent_config", "Agent Studio", 14},
-    {"economics", "Economics", 15},
-    {"geopolitics", "Geopolitics", 16},
-    {"quantlib", "QuantLib Suite", 17},
-    {"algo_trading", "Algo Trading", 18},
-    {"backtesting", "Backtesting", 19},
-    {"node_editor", "Node Editor", 20},
-    {"code_editor", "Code Editor", 21},
-    {"ma_analytics", "M&A Analytics", 22},
-    {"data_sources", "Data Sources", 23},
-    {"gov_data", "Government Data", 24},
-    {"forum", "Forum", 25},
-    {"docs", "Documentation", 26},
-};
-
-static constexpr int TAB_COUNT = static_cast<int>(sizeof(TAB_MAP) / sizeof(TAB_MAP[0]));
-
-static int find_tab_index(const QString& name) {
-    QString lower = name.toLower();
-
-    // Exact match on id
-    for (int i = 0; i < TAB_COUNT; ++i) {
-        if (lower == TAB_MAP[i].name)
-            return TAB_MAP[i].index;
+// Must be called on the main thread.
+fincept::DockScreenRouter* find_active_router_main_thread() {
+    // Prefer the focused window — that's where the user just typed.
+    if (auto* active = QApplication::activeWindow()) {
+        if (auto* mw = qobject_cast<fincept::WindowFrame*>(active))
+            return mw->dock_router();
     }
-
-    // Partial match on display name
-    for (int i = 0; i < TAB_COUNT; ++i) {
-        if (QString(TAB_MAP[i].display_name).toLower().contains(lower))
-            return TAB_MAP[i].index;
+    // Fall back to the primary window (window_id == 0). Multi-window mode is
+    // possible; we deliberately don't pick "any" WindowFrame because that
+    // would surprise users running two terminals.
+    const auto top_widgets = QApplication::topLevelWidgets();
+    for (QWidget* w : top_widgets) {
+        if (auto* mw = qobject_cast<fincept::WindowFrame*>(w)) {
+            if (mw->window_id() == 0)
+                return mw->dock_router();
+        }
     }
-
-    return -1;
+    return nullptr;
 }
 
-static QString find_tab_name(int idx) {
-    for (int i = 0; i < TAB_COUNT; ++i) {
-        if (TAB_MAP[i].index == idx)
-            return TAB_MAP[i].name;
-    }
-    return {};
+struct ScreenSnapshot {
+    QStringList ids;
+    QString current_id;
+};
+
+ScreenSnapshot snapshot_screens() {
+    ScreenSnapshot snap;
+    detail::run_on_target_thread_sync(qApp, [&]() {
+        if (auto* router = find_active_router_main_thread()) {
+            snap.ids = router->all_screen_ids();
+            snap.current_id = router->current_screen_id();
+        }
+    });
+    std::sort(snap.ids.begin(), snap.ids.end());
+    return snap;
 }
+
+} // anonymous namespace
 
 std::vector<ToolDef> get_navigation_tools() {
     std::vector<ToolDef> tools;
@@ -85,38 +72,57 @@ std::vector<ToolDef> get_navigation_tools() {
     {
         ToolDef t;
         t.name = "navigate_to_tab";
-        t.description = "Navigate to a specific terminal screen by name. "
-                        "Available screens: dashboard, markets, news, watchlist, crypto_trading, "
-                        "dbnomics, surface_analytics, notes, report_builder, profile, settings, "
-                        "about, support, ai_chat, agent_config, economics, geopolitics, quantlib, "
-                        "algo_trading, backtesting, node_editor, code_editor, ma_analytics, data_sources, "
-                        "gov_data, forum, docs.";
+        t.description = "Navigate to a specific terminal screen by id. "
+                        "Use list_tabs to see the live registry of available "
+                        "screen ids — the set is determined at runtime by "
+                        "DockScreenRouter, not hardcoded.";
         t.category = "navigation";
-        t.input_schema.properties =
-            QJsonObject{{"tab", QJsonObject{{"type", "string"}, {"description", "Screen name to navigate to"}}}};
-        t.input_schema.required = {"tab"};
+        t.input_schema = ToolSchemaBuilder()
+            .string("tab", "Screen id to navigate to (use list_tabs to discover live ids)")
+                .required()
+                .length(1, 64)
+            .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
-            QString tab = args["tab"].toString();
+            const QString tab = args["tab"].toString().trimmed();
             if (tab.isEmpty())
                 return ToolResult::fail("Missing 'tab' parameter");
 
-            int idx = find_tab_index(tab);
-            if (idx < 0) {
-                QString valid;
-                for (int i = 0; i < TAB_COUNT; ++i) {
-                    if (!valid.isEmpty())
-                        valid += ", ";
-                    valid += TAB_MAP[i].name;
+            auto snap = snapshot_screens();
+            if (snap.ids.isEmpty())
+                return ToolResult::fail("No active terminal window — DockScreenRouter unavailable");
+
+            // Resolve: exact id, then case-insensitive id, then first id that
+            // contains the query as substring (lets the LLM say "news" and
+            // get "news" or "ai_chat" and get "ai_chat" without remembering
+            // exact ids). Stricter than the previous TAB_MAP partial-match
+            // because we go off the live registry, no display-name aliases.
+            QString resolved;
+            for (const auto& id : snap.ids) {
+                if (id == tab) { resolved = id; break; }
+            }
+            if (resolved.isEmpty()) {
+                for (const auto& id : snap.ids) {
+                    if (id.compare(tab, Qt::CaseInsensitive) == 0) { resolved = id; break; }
                 }
-                return ToolResult::fail("Unknown tab '" + tab + "'. Valid tabs: " + valid);
+            }
+            if (resolved.isEmpty()) {
+                const QString tab_lower = tab.toLower();
+                for (const auto& id : snap.ids) {
+                    if (id.toLower().contains(tab_lower)) { resolved = id; break; }
+                }
             }
 
-            // Publish event — NavigationBar listens for this
-            EventBus::instance().publish("nav.switch_screen",
-                                         QVariantMap{{"screen_id", find_tab_name(idx)}, {"tab_index", idx}});
+            if (resolved.isEmpty()) {
+                return ToolResult::fail("Unknown tab '" + tab + "'. Valid ids: " + snap.ids.join(", "));
+            }
 
-            LOG_INFO(TAG, "Navigate to tab: " + tab);
-            return ToolResult::ok("Navigated to " + tab, QJsonObject{{"tab_index", idx}, {"tab", tab}});
+            // Hand off to WindowFrame's existing nav.switch_screen subscriber.
+            // The subscriber marshals onto dock_router_'s thread, so we don't
+            // duplicate that logic here.
+            EventBus::instance().publish("nav.switch_screen", QVariantMap{{"screen_id", resolved}});
+
+            LOG_INFO(TAG, "Navigate to tab: " + resolved);
+            return ToolResult::ok("Navigated to " + resolved, QJsonObject{{"tab", resolved}});
         };
         tools.push_back(std::move(t));
     }
@@ -125,15 +131,23 @@ std::vector<ToolDef> get_navigation_tools() {
     {
         ToolDef t;
         t.name = "list_tabs";
-        t.description = "List all available terminal screens with their names and indices.";
+        t.description = "List all available terminal screens currently registered with the active "
+                        "window's DockScreenRouter. Returns each id plus its human-readable title.";
         t.category = "navigation";
         t.handler = [](const QJsonObject&) -> ToolResult {
+            auto snap = snapshot_screens();
+            if (snap.ids.isEmpty())
+                return ToolResult::fail("No active terminal window — DockScreenRouter unavailable");
+
             QJsonArray tabs;
-            for (int i = 0; i < TAB_COUNT; ++i) {
-                tabs.append(QJsonObject{
-                    {"name", TAB_MAP[i].name}, {"display_name", TAB_MAP[i].display_name}, {"index", TAB_MAP[i].index}});
+            // title_for_id is a thread-safe static lookup (string→string map).
+            for (const auto& id : snap.ids) {
+                tabs.append(QJsonObject{{"id", id},
+                                        {"title", fincept::DockScreenRouter::title_for_id(id)}});
             }
-            return ToolResult::ok_data(tabs);
+            return ToolResult::ok_data(QJsonObject{{"count", tabs.size()},
+                                                   {"current", snap.current_id},
+                                                   {"tabs", tabs}});
         };
         tools.push_back(std::move(t));
     }
@@ -142,11 +156,17 @@ std::vector<ToolDef> get_navigation_tools() {
     {
         ToolDef t;
         t.name = "get_current_tab";
-        t.description = "Query the currently active screen (publishes event, screen responds).";
+        t.description = "Return the currently focused screen id (and its human-readable title) "
+                        "from the active terminal window.";
         t.category = "navigation";
         t.handler = [](const QJsonObject&) -> ToolResult {
-            EventBus::instance().publish("nav.get_current_screen", {});
-            return ToolResult::ok("Current screen query sent via event bus");
+            auto snap = snapshot_screens();
+            if (snap.current_id.isEmpty())
+                return ToolResult::fail("No active screen — terminal may not be ready yet");
+
+            return ToolResult::ok_data(QJsonObject{
+                {"id", snap.current_id},
+                {"title", fincept::DockScreenRouter::title_for_id(snap.current_id)}});
         };
         tools.push_back(std::move(t));
     }

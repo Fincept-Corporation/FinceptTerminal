@@ -73,6 +73,26 @@ class SolanaRpcClient : public QObject {
     using SignaturesForAddressCallback =
         std::function<void(Result<std::vector<SignatureRow>>)>;
 
+    /// Result of `simulateTransaction`. `err` is the JSON-RPC `err` field
+    /// stringified — empty if simulation succeeded; non-empty (e.g.
+    /// "InstructionError" / "InsufficientFundsForFee") if the tx would fail
+    /// on-chain. `units_consumed` is informational only.
+    ///
+    /// Phase 2 plan §2 uses this as a pre-sign MITM gate: a malicious
+    /// PumpPortal response that would actually revert (drain attempt with a
+    /// failing safety check, malformed instructions, account mismatches) is
+    /// caught here before the wallet is asked to sign. Non-trivial token
+    /// balance-delta inspection (parsing inner instructions to verify only
+    /// SOL/wSOL/$FNCPT change hands) is a Phase 2.5 polish — this gate
+    /// catches the structural-error class of attacks.
+    struct SimulationResult {
+        bool ok = false;          ///< true iff err is empty
+        QString err;              ///< stringified JSON-RPC err; empty on success
+        QStringList logs;         ///< program log output, for diagnostics
+        quint64 units_consumed = 0;
+    };
+    using SimulateTransactionCallback = std::function<void(Result<SimulationResult>)>;
+
     /// `getBalance` — returns lamports (1 SOL = 1e9 lamports).
     void get_sol_balance(const QString& pubkey_b58, BalanceCallback callback);
 
@@ -109,6 +129,24 @@ class SolanaRpcClient : public QObject {
                                     int limit,
                                     const QString& before_signature,
                                     SignaturesForAddressCallback callback);
+
+    /// `simulateTransaction` — runs the unsigned transaction against the
+    /// resolved RPC and returns whether it would succeed. The wallet doesn't
+    /// have to sign anything for this; `sigVerify: false` is always set.
+    ///
+    /// `replace_recent_blockhash` controls how staleness is treated:
+    ///   - `true` (default): the simulator swaps in a fresh blockhash before
+    ///     running. Use this for the **MITM gate** (Phase 2 §2) — we want to
+    ///     know whether the tx logic itself would revert, independent of
+    ///     blockhash freshness.
+    ///   - `false`: the simulator uses the tx's own embedded blockhash and
+    ///     fails with `BlockhashNotFound` if it's expired. Use this for the
+    ///     **freshness gate** (Phase 2 §2) immediately before `sign_and_send`,
+    ///     so a stale tx that has been sitting in the confirm dialog is
+    ///     caught before the wallet pops.
+    void simulate_transaction(const QString& tx_base64,
+                              SimulateTransactionCallback callback,
+                              bool replace_recent_blockhash = true);
 
     /// Refresh the resolved endpoint from KeyConfigManager. Cheap; safe to call.
     void reload_endpoint();

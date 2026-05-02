@@ -6,6 +6,8 @@
 #include <QMetaObject>
 #include <QMutexLocker>
 #include <QThread>
+#include <QVariant>
+#include <QWidget>
 
 #include <algorithm>
 
@@ -14,6 +16,31 @@ namespace fincept::datahub {
 namespace {
 qint64 now_ms() {
     return QDateTime::currentMSecsSinceEpoch();
+}
+
+// Phase 8 / decision 9.2: walk up from the owner to its top-level widget
+// and read the `fincept.active_for_work` dynamic property that WindowFrame
+// sets in its constructor + changeEvent. If the owner is not a QWidget or
+// has no top-level ancestor (rare — module-level singletons that subscribe),
+// treat as active (better to over-deliver than starve a legitimate consumer).
+//
+// We look at QWidget::window() rather than walking QObject::parent() chain
+// because the latter can stop at an intermediate QObject that isn't a
+// widget. window() handles widget-graph reparenting correctly and is what
+// Qt itself uses for "the top-level for this widget."
+//
+// No caching — the lookup is one virtual call + one property read, both
+// cheap. Caching adds cache-invalidation work that'd run on every
+// subscribe/unsubscribe and on Phase 5 cross-frame panel reparenting.
+bool is_owner_active_for_work(QObject* owner) {
+    if (!owner) return true;
+    auto* widget = qobject_cast<QWidget*>(owner);
+    if (!widget) return true; // non-widget owner (a service) — always active
+    QWidget* top = widget->window();
+    if (!top) return true;
+    const QVariant v = top->property("fincept.active_for_work");
+    if (!v.isValid()) return true; // top isn't a frame that reports — assume active
+    return v.toBool();
 }
 } // namespace
 
@@ -329,25 +356,75 @@ void DataHub::unsubscribe(QObject* owner, const QString& topic) {
 // ── Publishing ─────────────────────────────────────────────────────────────
 
 void DataHub::emit_to_subscribers(const QString& topic, const QVariant& value) {
-    // Snapshot slots under the lock, invoke without.
-    QVector<std::function<void(const QVariant&)>> direct_slots;
-    QVector<std::function<void(const QString&, const QVariant&)>> pattern_slots;
+    // Snapshot slots + their owners under the lock; invoke without.
+    // Phase 8: pause_when_inactive policy filters fanout to subscribers
+    // whose top-level window reports `fincept.active_for_work == false`.
+    // The cached value is already updated (do_publish writes it before
+    // calling this method), so when the user brings the window forward
+    // the next subscribe / peek immediately sees the latest.
+    struct Pending {
+        QPointer<QObject> owner;
+        std::function<void(const QVariant&)> slot;
+    };
+    struct PendingPattern {
+        QPointer<QObject> owner;
+        std::function<void(const QString&, const QVariant&)> slot;
+    };
+    QVector<Pending> direct;
+    QVector<PendingPattern> pattern;
+    bool pause_when_inactive = false;
     {
         QMutexLocker lock(&mutex_);
+        // Topic policy: explicit overrides win; otherwise check pattern
+        // policies via the existing resolver. Cheap lookup since we're
+        // already holding the lock for the subscription scan.
+        if (auto it = topics_.find(topic); it != topics_.end())
+            pause_when_inactive = it.value().policy.pause_when_inactive;
+
         if (auto it = subscriptions_.find(topic); it != subscriptions_.end()) {
             for (const auto& s : it.value())
-                if (s.owner) direct_slots.append(s.slot);
+                if (s.owner) direct.append({s.owner, s.slot});
         }
         for (auto it = pattern_subscriptions_.begin();
              it != pattern_subscriptions_.end(); ++it) {
             if (!pattern_matches(it.key(), topic)) continue;
             for (const auto& s : it.value())
-                if (s.owner) pattern_slots.append(s.pattern_slot);
+                if (s.owner) pattern.append({s.owner, s.pattern_slot});
         }
     }
-    for (const auto& s : direct_slots) s(value);
-    for (const auto& s : pattern_slots) s(topic, value);
-    emit topic_updated(topic, value);
+
+    int suppressed = 0;
+    for (const auto& p : direct) {
+        if (!p.owner) continue; // owner died between snapshot and invoke
+        if (pause_when_inactive && !is_owner_active_for_work(p.owner.data())) {
+            ++suppressed;
+            continue;
+        }
+        p.slot(value);
+    }
+    for (const auto& p : pattern) {
+        if (!p.owner) continue;
+        if (pause_when_inactive && !is_owner_active_for_work(p.owner.data())) {
+            ++suppressed;
+            continue;
+        }
+        p.slot(topic, value);
+    }
+
+    // Topic-level signal mirrors fanout: fire only if at least one active
+    // subscriber received the value (or pause is off). Avoids waking
+    // global topic_updated listeners when the only consumers are
+    // inactive-frame panels.
+    const bool any_delivered =
+        !pause_when_inactive ||
+        (suppressed < direct.size() + pattern.size());
+    if (any_delivered)
+        emit topic_updated(topic, value);
+
+    if (suppressed > 0) {
+        LOG_DEBUG("DataHub", QString("Suppressed %1 inactive-frame fanout(s) for topic '%2'")
+                                 .arg(suppressed).arg(topic));
+    }
 }
 
 void DataHub::do_publish(const QString& topic, const QVariant& value,

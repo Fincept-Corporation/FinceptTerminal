@@ -2,7 +2,7 @@
 Quantitative Analytics Module
 ============================
 
-CFA-level quantitative analysis for financial modeling and analysis.
+Quantitative analysis for financial modeling and analysis.
 
 Modules:
 - base_calculator: Base class for all quantitative calculators

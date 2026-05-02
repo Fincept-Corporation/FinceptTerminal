@@ -243,7 +243,7 @@ QWidget* DocsScreen::page_welcome() {
                                      "■  Real-time market data across equities, crypto, forex, commodities\n"
                                      "■  Multi-exchange crypto trading (Kraken, HyperLiquid, Binance, etc.)\n"
                                      "■  Paper trading engine with simulated order matching\n"
-                                     "■  100+ Python analytics scripts (CFA-level: equity, portfolio, derivatives)\n"
+                                     "■  100+ Python analytics scripts (equity, portfolio, derivatives)\n"
                                      "■  18-module QuantLib quantitative analysis suite (590+ endpoints)\n"
                                      "■  AI Quant Lab with ML models, factor discovery, HFT, RL trading\n"
                                      "■  Multiple AI agent frameworks (Geopolitics, Economic, Hedge Fund)\n"

@@ -514,11 +514,15 @@ void LockScreen::on_setup_submit() {
     const QString confirm = setup_confirm_input_->text();
 
     // Match check is UI-only — PinManager has no concept of a confirm field.
+    // Clear BOTH fields on mismatch — leaving the original PIN sitting in
+    // the masked first field is mild process-memory exposure (text() still
+    // returns plaintext) and forces the user to re-type both anyway.
     if (pin != confirm) {
         setup_error_->setText("PINs do not match");
         setup_error_->show();
+        setup_pin_input_->clear();
         setup_confirm_input_->clear();
-        setup_confirm_input_->setFocus();
+        setup_pin_input_->setFocus();
         return;
     }
 

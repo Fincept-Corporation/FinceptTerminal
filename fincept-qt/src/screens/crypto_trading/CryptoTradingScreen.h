@@ -94,7 +94,13 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen {
     QPushButton* mode_btn_ = nullptr;
     QPushButton* api_btn_ = nullptr;
     QLabel* ws_status_ = nullptr;
+    QLabel* ws_transport_ = nullptr;  // tiny hint: "NATIVE" for Kraken, "DAEMON" for ccxt
     QLabel* clock_label_ = nullptr;
+
+    /// Context object that owns all direct connections to the native Kraken
+    /// WS client. Destroyed (and recreated) on symbol/exchange swap so every
+    /// connection is auto-disconnected in one move.
+    QObject* ws_subscription_owner_ = nullptr;
 
     // ── Sub-widgets ──
     crypto::CryptoTickerBar* ticker_bar_ = nullptr;

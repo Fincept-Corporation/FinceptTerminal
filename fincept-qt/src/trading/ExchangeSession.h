@@ -30,6 +30,13 @@
 
 #include <atomic>
 #include <functional>
+#include <memory>
+
+class QThread;
+
+namespace fincept::trading::kraken {
+class KrakenWsClient;
+} // namespace fincept::trading::kraken
 
 namespace fincept::trading {
 
@@ -79,6 +86,14 @@ class ExchangeSession : public QObject {
     bool is_ws_active() const;
     void set_ws_primary_symbol(const QString& symbol);
     QString get_ws_primary_symbol() const;
+
+    /// Direct access to the native Kraken WS client when this session is the
+    /// Kraken session and the stream is running. Returns nullptr otherwise.
+    /// Screens connect to its signals directly to bypass the hub — the
+    /// hub-based fan-out for Kraken caused intermittent crashes under high
+    /// BBO update rates (Phase 6 design coupled coalesce + pattern matching
+    /// + per-policy retention; the native path doesn't need that machinery).
+    kraken::KrakenWsClient* kraken_ws_client() const { return kraken_ws_; }
 
     // ── Watch management (for paper-trading bookkeeping) ───────────────────
     void watch_symbol(const QString& symbol, const QString& portfolio_id);
@@ -138,6 +153,12 @@ class ExchangeSession : public QObject {
     ExchangeCredentials credentials_;
 
     QProcess* ws_process_ = nullptr;
+    // Kraken native WS — production-grade dedicated I/O thread so socket reads
+    // never starve under main-thread pressure (paint storms, modals, SQLite).
+    // The worker thread owns kraken_ws_; we never touch *kraken_ws_ from the
+    // main thread except through QMetaObject::invokeMethod or via signals.
+    QThread* kraken_ws_thread_ = nullptr;
+    kraken::KrakenWsClient* kraken_ws_ = nullptr;  // raw — owned by thread
     std::atomic<bool> ws_connected_{false};
     QString ws_primary_symbol_;
     QStringList ws_all_symbols_;

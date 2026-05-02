@@ -191,14 +191,19 @@ class BacktestingPyProvider(BacktestingProviderBase):
             start_date = request.get('startDate')
             end_date = request.get('endDate')
             initial_capital = request.get('initialCapital', 10000)
-            assets = request.get('assets', [])
 
-            if not assets:
-                return self._create_error_result('No assets specified')
+            # Canonical input is `symbols: [str]` (sent by the C++ screen).
+            # `assets: [{symbol, ...}]` is accepted as a fallback for legacy
+            # callers that pass per-asset metadata.
+            symbols = request.get('symbols', [])
+            if not symbols:
+                assets = request.get('assets', [])
+                symbols = [a.get('symbol') for a in assets if isinstance(a, dict) and a.get('symbol')]
 
-            # Get primary asset
-            primary_asset = assets[0]
-            symbol = primary_asset.get('symbol', 'SPY')
+            if not symbols:
+                return self._create_error_result('No symbols specified')
+
+            symbol = symbols[0]
 
             # Load or generate data
             data = self._load_data(symbol, start_date, end_date)
@@ -325,98 +330,303 @@ class BacktestingPyProvider(BacktestingProviderBase):
     # ========================================================================
 
     def optimize(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Run parameter optimization
+        """Run parameter optimization via backtesting.py's `bt.optimize`.
 
-        Args:
-            request: Optimization configuration with parameters and constraints
+        The frontend sweeps strategy params under their *frontend* names (e.g.
+        `fastPeriod`); backtesting.py optimizes class-level attribute names
+        (e.g. `n1`). `btp_strategies.STRATEGY_OPTIMIZE_PARAM_MAP` translates.
 
-        Returns:
-            OptimizationResult with best parameters and performance
+        Returns the same shape as run_backtest (`data.performance`, `data.trades`,
+        `data.equity`) so the existing screen renderer works unchanged, plus
+        optimization-specific fields under `data.optimization`.
         """
         try:
             self._log('Starting parameter optimization')
 
-            # Extract request parameters
             strategy_def = request.get('strategy', {})
-            parameters = request.get('parameters', {})
-            metric = request.get('metric', 'Sharpe Ratio')
+            strategy_type = strategy_def.get('type', 'sma_crossover')
+            # Frontend canonical name is `paramRanges`; legacy callers used `parameters`.
+            param_ranges = request.get('paramRanges', {}) or request.get('parameters', {})
+            objective = request.get('optimizeObjective') or request.get('metric', 'sharpe')
             start_date = request.get('startDate')
             end_date = request.get('endDate')
             initial_capital = request.get('initialCapital', 10000)
-            assets = request.get('assets', [])
+            max_iterations = int(request.get('maxIterations', 500) or 500)
 
-            if not parameters:
-                return self._create_error_result('No parameters to optimize')
+            # Canonical: `symbols: [str]`. Fallback: `assets: [{symbol, ...}]`.
+            symbols = request.get('symbols', [])
+            if not symbols:
+                assets = request.get('assets', [])
+                symbols = [a.get('symbol') for a in assets if isinstance(a, dict) and a.get('symbol')]
 
-            # Get primary asset
-            primary_asset = assets[0] if assets else {'symbol': 'SPY'}
-            symbol = primary_asset.get('symbol', 'SPY')
+            if not param_ranges:
+                return self._create_error_result('No parameter ranges supplied (expected paramRanges)')
 
-            # Load data
+            symbol = symbols[0] if symbols else 'SPY'
             data = self._load_data(symbol, start_date, end_date)
+            if data is None or len(data) == 0:
+                return self._create_error_result(f'No data available for {symbol}')
 
-            # Create strategy class
-            strategy_class = self._create_strategy_class(strategy_def, parameters)
+            # Build the strategy class with default params; bt.optimize will
+            # sweep class-level attributes from there.
+            strategy_class = self._create_strategy_class(strategy_def)
 
-            # Configure backtest
+            # Translate frontend param names -> class attribute names per strategy.
+            import btp_strategies as _strat
+            mapped_ranges = _strat.map_optimize_params(strategy_type, param_ranges)
+
+            # Build python ranges. Drop any range that targets an attribute the
+            # strategy class doesn't declare — backtesting.py would reject it
+            # otherwise and we'd get the cryptic "missing parameter X" error.
+            opt_kwargs = {}
+            skipped: List[str] = []
+            for cattr, cfg in mapped_ranges.items():
+                if not hasattr(strategy_class, cattr):
+                    skipped.append(cattr)
+                    continue
+                try:
+                    lo = int(cfg.get('min', 1))
+                    hi = int(cfg.get('max', 100))
+                    step = max(1, int(cfg.get('step', 1)))
+                except Exception:
+                    continue
+                if hi < lo:
+                    lo, hi = hi, lo
+                opt_kwargs[cattr] = range(lo, hi + 1, step)
+
+            if not opt_kwargs:
+                return self._create_error_result(
+                    f"No optimizable parameters for strategy '{strategy_type}'. "
+                    f"Mapped attrs not present on class: {skipped}"
+                )
+
+            if skipped:
+                self._log(f'Skipped non-class attrs during optimize: {skipped}')
+
             from backtesting import Backtest
-
             bt = Backtest(
-                data,
-                strategy_class,
+                data, strategy_class,
                 cash=initial_capital,
-                commission=request.get('commission', 0.0)
+                commission=request.get('commission', 0.0),
             )
 
-            # Convert parameter ranges
-            opt_params = {}
-            for param_name, param_config in parameters.items():
-                min_val = param_config.get('min', 1)
-                max_val = param_config.get('max', 100)
-                step = param_config.get('step', 1)
-                opt_params[param_name] = range(min_val, max_val + 1, step)
-
-            # Map metric name
+            # Map frontend objective to backtesting.py stat key.
             metric_map = {
+                'sharpe':  'Sharpe Ratio',
+                'sortino': 'Sortino Ratio',
+                'calmar':  'Calmar Ratio',
+                'return':  'Return [%]',
+                # Tolerate human-readable variants for callers outside the screen.
                 'Sharpe Ratio': 'Sharpe Ratio',
-                'Return': 'Return [%]',
+                'Sortino Ratio': 'Sortino Ratio',
+                'Calmar Ratio': 'Calmar Ratio',
                 'Total Return': 'Return [%]',
-                'Win Rate': 'Win Rate [%]',
-                'Profit Factor': 'Profit Factor'
             }
-            maximize_metric = metric_map.get(metric, 'Sharpe Ratio')
+            maximize_metric = metric_map.get(objective, 'Sharpe Ratio')
 
-            # Run optimization
-            self._log(f'Optimizing {len(opt_params)} parameters')
-            stats = bt.optimize(**opt_params, maximize=maximize_metric, max_tries=500)
+            self._log(f'Optimizing {len(opt_kwargs)} attrs (max_tries={max_iterations}) maximize={maximize_metric}')
+            stats = bt.optimize(**opt_kwargs, maximize=maximize_metric, max_tries=max_iterations)
 
-            # Extract optimal parameters
-            optimal_params = {}
-            for param_name in parameters.keys():
-                if hasattr(stats._strategy, param_name):
-                    optimal_params[param_name] = getattr(stats._strategy, param_name)
+            # Extract chosen optimal params back under frontend names.
+            inverse_map = {cattr: fname for fname, cattr in
+                           _strat.STRATEGY_OPTIMIZE_PARAM_MAP.get(strategy_type, {}).items()}
+            optimal_params: Dict[str, Any] = {}
+            for cattr in opt_kwargs.keys():
+                if not hasattr(stats._strategy, cattr):
+                    continue
+                fname = inverse_map.get(cattr, cattr)
+                val = getattr(stats._strategy, cattr)
+                optimal_params[fname] = int(val) if hasattr(val, '__int__') else val
 
-            # Create result
-            result = OptimizationResult(
-                optimal_parameters=optimal_params,
-                performance=self._extract_performance_metrics(stats),
-                iterations=500,
-                best_iteration=0,
-                metric_name=metric,
-                metric_value=float(stats.get(maximize_metric, 0))
+            # Wire shape: same as run_backtest so display_result() renders performance/trades.
+            result_dict = self._convert_results(
+                stats, symbol, start_date, end_date, initial_capital
+            ).to_dict()
+
+            using_synthetic = not self._has_real_data(symbol)
+            result_dict['using_synthetic_data'] = using_synthetic
+            result_dict['optimization'] = {
+                'objective': objective,
+                'objective_value': float(stats.get(maximize_metric, 0)),
+                'best_params': optimal_params,
+                'iterations': int(max_iterations),
+                'attrs_optimized': list(opt_kwargs.keys()),
+                'attrs_skipped': skipped,
+            }
+
+            self._log(
+                f"Optimization done: best {maximize_metric} = "
+                f"{result_dict['optimization']['objective_value']:.4f} with {optimal_params}"
             )
-
-            self._log(f'Optimization completed. Best {metric}: {result.metric_value:.4f}')
-            return {
-                'success': True,
-                'message': 'Optimization completed',
-                'data': asdict(result)
-            }
+            return {'success': True, 'message': 'Optimization completed', 'data': result_dict}
 
         except Exception as e:
             self._error('Optimization failed', e)
-            return self._create_error_result(f'Optimization failed: {str(e)}')
+            import traceback
+            return self._create_error_result(f'Optimization failed: {str(e)}\n{traceback.format_exc()}')
+
+    def walk_forward(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Anchored walk-forward optimization.
+
+        Split the price history into N folds. For each fold:
+          - Train segment = first `trainRatio` portion of the fold's window.
+          - Test segment  = the remainder.
+          - Optimize on train, then run a single backtest on test using the
+            best params found on train (genuine out-of-sample evaluation).
+
+        Aggregate metric = mean Sharpe Ratio across the test segments. The
+        returned shape mirrors run_backtest (`performance`, `trades`, `equity`)
+        on the final fold's test run, so the screen renders without changes.
+        Per-fold detail goes into `data.walkForward.folds`.
+        """
+        try:
+            self._log('Starting walk-forward optimization')
+
+            strategy_def = request.get('strategy', {})
+            strategy_type = strategy_def.get('type', 'sma_crossover')
+            param_ranges = request.get('paramRanges', {}) or request.get('parameters', {})
+            objective = request.get('optimizeObjective') or request.get('metric', 'sharpe')
+            n_splits = int(request.get('wfSplits', request.get('nSplits', 5)) or 5)
+            train_ratio = float(request.get('wfTrainRatio', request.get('trainRatio', 0.7)) or 0.7)
+            start_date = request.get('startDate')
+            end_date = request.get('endDate')
+            initial_capital = request.get('initialCapital', 10000)
+            commission = request.get('commission', 0.0)
+
+            symbols = request.get('symbols', [])
+            if not symbols:
+                assets = request.get('assets', [])
+                symbols = [a.get('symbol') for a in assets if isinstance(a, dict) and a.get('symbol')]
+            if not param_ranges:
+                return self._create_error_result('No parameter ranges supplied (expected paramRanges)')
+            if not (1 <= n_splits <= 20):
+                return self._create_error_result(f'wfSplits must be between 1 and 20 (got {n_splits})')
+            if not (0.1 <= train_ratio <= 0.95):
+                return self._create_error_result(f'wfTrainRatio must be between 0.1 and 0.95 (got {train_ratio})')
+
+            symbol = symbols[0] if symbols else 'SPY'
+            full_data = self._load_data(symbol, start_date, end_date)
+            if full_data is None or len(full_data) < n_splits * 20:
+                return self._create_error_result(
+                    f'Need at least {n_splits * 20} bars for {n_splits} folds; got {0 if full_data is None else len(full_data)}'
+                )
+
+            import btp_strategies as _strat
+            from backtesting import Backtest
+
+            metric_map = {
+                'sharpe': 'Sharpe Ratio', 'sortino': 'Sortino Ratio',
+                'calmar': 'Calmar Ratio', 'return': 'Return [%]',
+            }
+            maximize_metric = metric_map.get(objective, 'Sharpe Ratio')
+
+            n = len(full_data)
+            fold_size = n // n_splits
+            folds: List[Dict[str, Any]] = []
+            test_returns: List[float] = []
+            test_sharpes: List[float] = []
+            last_test_stats = None
+            last_test_data = None
+
+            for i in range(n_splits):
+                fold_start = i * fold_size
+                fold_end = (i + 1) * fold_size if i < n_splits - 1 else n
+                window = full_data.iloc[fold_start:fold_end]
+                if len(window) < 20:
+                    continue
+                split = int(len(window) * train_ratio)
+                train, test = window.iloc[:split], window.iloc[split:]
+                if len(train) < 10 or len(test) < 5:
+                    continue
+
+                # Train: optimize on this slice.
+                train_class = self._create_strategy_class(strategy_def)
+                mapped = _strat.map_optimize_params(strategy_type, param_ranges)
+                opt_kwargs: Dict[str, Any] = {}
+                for cattr, cfg in mapped.items():
+                    if not hasattr(train_class, cattr):
+                        continue
+                    try:
+                        lo, hi = int(cfg.get('min', 1)), int(cfg.get('max', 100))
+                        step = max(1, int(cfg.get('step', 1)))
+                    except Exception:
+                        continue
+                    if hi < lo:
+                        lo, hi = hi, lo
+                    opt_kwargs[cattr] = range(lo, hi + 1, step)
+
+                if not opt_kwargs:
+                    continue
+
+                bt_train = Backtest(train, train_class, cash=initial_capital, commission=commission)
+                train_stats = bt_train.optimize(**opt_kwargs, maximize=maximize_metric, max_tries=100)
+
+                # Best params back -> frontend names.
+                inverse = {c: f for f, c in _strat.STRATEGY_OPTIMIZE_PARAM_MAP.get(strategy_type, {}).items()}
+                best_params: Dict[str, Any] = {}
+                for cattr in opt_kwargs.keys():
+                    if hasattr(train_stats._strategy, cattr):
+                        v = getattr(train_stats._strategy, cattr)
+                        best_params[inverse.get(cattr, cattr)] = int(v) if hasattr(v, '__int__') else v
+
+                # Test: backtest the *test* slice with those params.
+                test_strategy_def = dict(strategy_def)
+                test_strategy_def['params'] = {**(strategy_def.get('params') or {}), **best_params}
+                test_class = self._create_strategy_class(test_strategy_def)
+                bt_test = Backtest(test, test_class, cash=initial_capital, commission=commission)
+                test_stats = bt_test.run()
+                last_test_stats = test_stats
+                last_test_data = test
+
+                test_ret = float(test_stats.get('Return [%]', 0))
+                test_sharpe = float(test_stats.get('Sharpe Ratio', 0))
+                test_returns.append(test_ret)
+                test_sharpes.append(test_sharpe)
+
+                folds.append({
+                    'fold': i,
+                    'trainStart': str(train.index[0]),
+                    'trainEnd': str(train.index[-1]),
+                    'trainBars': len(train),
+                    'testStart': str(test.index[0]),
+                    'testEnd': str(test.index[-1]),
+                    'testBars': len(test),
+                    'bestParams': best_params,
+                    'trainObjective': float(train_stats.get(maximize_metric, 0)),
+                    'testReturnPct': test_ret,
+                    'testSharpe': test_sharpe,
+                })
+
+            if not folds or last_test_stats is None:
+                return self._create_error_result('No usable folds — try fewer splits or a longer date range')
+
+            # Surface the LAST fold's test result via the standard
+            # run_backtest shape so display_result() renders something useful.
+            result_dict = self._convert_results(
+                last_test_stats, symbol,
+                str(last_test_data.index[0]), str(last_test_data.index[-1]),
+                initial_capital,
+            ).to_dict()
+            result_dict['using_synthetic_data'] = not self._has_real_data(symbol)
+            result_dict['walk_forward'] = {
+                'objective': objective,
+                'n_splits': n_splits,
+                'train_ratio': train_ratio,
+                'folds': folds,
+                'mean_test_return_pct': sum(test_returns) / len(test_returns),
+                'mean_test_sharpe': sum(test_sharpes) / len(test_sharpes),
+            }
+
+            self._log(
+                f'Walk-forward done: {len(folds)} folds, mean test Sharpe = '
+                f'{result_dict["walk_forward"]["mean_test_sharpe"]:.4f}'
+            )
+            return {'success': True, 'message': 'Walk-forward completed', 'data': result_dict}
+
+        except Exception as e:
+            self._error('Walk-forward failed', e)
+            import traceback
+            return self._create_error_result(f'Walk-forward failed: {str(e)}\n{traceback.format_exc()}')
 
     # ========================================================================
     # Data and Indicators (Required Abstract Methods)
@@ -461,8 +671,14 @@ class BacktestingPyProvider(BacktestingProviderBase):
     def calculate_indicator(self, indicator_type: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate technical indicator"""
         try:
-            symbol = params.get('symbol', 'SPY')
-            period = params.get('period', 20)
+            # Accept both `symbol: str` (legacy) and `symbols: [str]` (canonical).
+            symbol = params.get('symbol')
+            if not symbol:
+                syms = params.get('symbols') or []
+                symbol = syms[0] if syms else 'SPY'
+            # Support nested params dict (legacy) and flat top-level args (canonical).
+            inner = params.get('params') if isinstance(params.get('params'), dict) else params
+            period = inner.get('period', 20)
             start_date = params.get('startDate')
             end_date = params.get('endDate')
 
@@ -705,517 +921,63 @@ class BacktestingPyProvider(BacktestingProviderBase):
             return None
 
     def _create_strategy_class(self, strategy_def: Dict[str, Any], opt_params: Dict = None):
-        """Create a backtesting.py Strategy class from strategy definition"""
+        """Build a backtesting.py Strategy class.
+
+        For registered strategy ids (the 26 in btp_strategies.STRATEGY_BUILDERS)
+        the builder lives in btp_strategies and uses class-level attributes that
+        the optimize path can sweep. Frontend params (e.g. `fastPeriod`) are
+        consumed by the builder; class-level names (e.g. `n1`, `n2`) are what
+        backtesting.py's `bt.optimize(**ranges)` operates on.
+
+        For custom user code we keep the existing sandboxed exec path.
+        """
         from backtesting import Strategy
-        from backtesting.lib import crossover
+        from backtesting.lib import crossover  # noqa: F401  (used by user code)
 
-        # Extract strategy code or type
-        code = strategy_def.get('code', '')
         strategy_type = strategy_def.get('type', 'sma_crossover')
-
-        # Default parameters
-        params = strategy_def.get('parameters', {})
-
-        # Create dynamic strategy class
-        class_name = strategy_def.get('name', 'CustomStrategy').replace(' ', '')
-
-        # EMA Crossover strategy
-        if strategy_type == 'ema_crossover':
-            class EMAStrategy(Strategy):
-                n1 = opt_params.get('n1', params.get('fast_period', params.get('fastPeriod', 12))) if opt_params else params.get('fast_period', params.get('fastPeriod', 12))
-                n2 = opt_params.get('n2', params.get('slow_period', params.get('slowPeriod', 26))) if opt_params else params.get('slow_period', params.get('slowPeriod', 26))
-
-                def init(self):
-                    close = self.data.Close
-                    self.ema1 = self.I(self._ema, close, self.n1)
-                    self.ema2 = self.I(self._ema, close, self.n2)
-
-                def next(self):
-                    if crossover(self.ema1, self.ema2):
-                        if self.position.is_short:
-                            self.position.close()
-                        self.buy()
-                    elif crossover(self.ema2, self.ema1):
-                        if self.position.is_long:
-                            self.position.close()
-                        self.sell()
-
-                @staticmethod
-                def _ema(values, n):
-                    return pd.Series(values).ewm(span=n, adjust=False).mean()
-
-            return EMAStrategy
-
-        # RSI Strategy
-        if strategy_type == 'rsi':
-            class RSIStrategy(Strategy):
-                period = params.get('period', 14)
-                oversold = params.get('oversold', 30)
-                overbought = params.get('overbought', 70)
-
-                def init(self):
-                    close = self.data.Close
-                    self.rsi = self.I(self._rsi, close, self.period)
-
-                def next(self):
-                    if self.rsi[-1] < self.oversold:
-                        if not self.position.is_long:
-                            if self.position.is_short:
-                                self.position.close()
-                            self.buy()
-                    elif self.rsi[-1] > self.overbought:
-                        if not self.position.is_short:
-                            if self.position.is_long:
-                                self.position.close()
-                            self.sell()
-
-                @staticmethod
-                def _rsi(values, period):
-                    s = pd.Series(values)
-                    delta = s.diff()
-                    gain = delta.where(delta > 0, 0).rolling(window=period).mean()
-                    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-                    rs = gain / loss
-                    return 100 - (100 / (1 + rs))
-
-            return RSIStrategy
-
-        # MACD Strategy
-        if strategy_type == 'macd':
-            class MACDStrategy(Strategy):
-                fast_period = params.get('fast_period', params.get('fastPeriod', 12))
-                slow_period = params.get('slow_period', params.get('slowPeriod', 26))
-                signal_period = params.get('signal_period', params.get('signalPeriod', 9))
-
-                def init(self):
-                    close = self.data.Close
-                    self.macd_line = self.I(self._macd_line, close, self.fast_period, self.slow_period)
-                    self.signal_line = self.I(self._signal_line, close, self.fast_period, self.slow_period, self.signal_period)
-
-                def next(self):
-                    if crossover(self.macd_line, self.signal_line):
-                        if self.position.is_short:
-                            self.position.close()
-                        self.buy()
-                    elif crossover(self.signal_line, self.macd_line):
-                        if self.position.is_long:
-                            self.position.close()
-                        self.sell()
-
-                @staticmethod
-                def _macd_line(values, fast, slow):
-                    s = pd.Series(values)
-                    fast_ema = s.ewm(span=fast, adjust=False).mean()
-                    slow_ema = s.ewm(span=slow, adjust=False).mean()
-                    return fast_ema - slow_ema
-
-                @staticmethod
-                def _signal_line(values, fast, slow, signal):
-                    s = pd.Series(values)
-                    fast_ema = s.ewm(span=fast, adjust=False).mean()
-                    slow_ema = s.ewm(span=slow, adjust=False).mean()
-                    macd = fast_ema - slow_ema
-                    return macd.ewm(span=signal, adjust=False).mean()
-
-            return MACDStrategy
-
-        # Bollinger Bands Strategy
-        if strategy_type == 'bollinger_bands':
-            class BollingerBandsStrategy(Strategy):
-                period = params.get('period', 20)
-                std_dev = params.get('std_dev', params.get('stdDev', 2.0))
-
-                def init(self):
-                    close = self.data.Close
-                    self.sma = self.I(self._sma, close, self.period)
-                    self.upper = self.I(self._upper_band, close, self.period, self.std_dev)
-                    self.lower = self.I(self._lower_band, close, self.period, self.std_dev)
-
-                def next(self):
-                    price = self.data.Close[-1]
-                    # Buy when price crosses below lower band (oversold)
-                    if price < self.lower[-1]:
-                        if not self.position.is_long:
-                            if self.position.is_short:
-                                self.position.close()
-                            self.buy()
-                    # Sell when price crosses above upper band (overbought)
-                    elif price > self.upper[-1]:
-                        if not self.position.is_short:
-                            if self.position.is_long:
-                                self.position.close()
-                            self.sell()
-
-                @staticmethod
-                def _sma(values, n):
-                    return pd.Series(values).rolling(n).mean()
-
-                @staticmethod
-                def _upper_band(values, n, std_dev):
-                    s = pd.Series(values)
-                    sma = s.rolling(n).mean()
-                    std = s.rolling(n).std()
-                    return sma + (std * std_dev)
-
-                @staticmethod
-                def _lower_band(values, n, std_dev):
-                    s = pd.Series(values)
-                    sma = s.rolling(n).mean()
-                    std = s.rolling(n).std()
-                    return sma - (std * std_dev)
-
-            return BollingerBandsStrategy
-
-        # Mean Reversion (Z-Score based)
-        if strategy_type == 'mean_reversion':
-            class MeanReversionStrategy(Strategy):
-                period = params.get('period', 20)
-                z_threshold = params.get('z_threshold', params.get('zThreshold', 2.0))
-
-                def init(self):
-                    close = self.data.Close
-                    self.sma = self.I(self._sma, close, self.period)
-                    self.zscore = self.I(self._zscore, close, self.period)
-
-                def next(self):
-                    if self.zscore[-1] < -self.z_threshold:
-                        if not self.position.is_long:
-                            if self.position.is_short:
-                                self.position.close()
-                            self.buy()
-                    elif self.zscore[-1] > self.z_threshold:
-                        if not self.position.is_short:
-                            if self.position.is_long:
-                                self.position.close()
-                            self.sell()
-                    elif abs(self.zscore[-1]) < 0.5:
-                        if self.position:
-                            self.position.close()
-
-                @staticmethod
-                def _sma(values, n):
-                    return pd.Series(values).rolling(n).mean()
-
-                @staticmethod
-                def _zscore(values, n):
-                    s = pd.Series(values)
-                    mean = s.rolling(n).mean()
-                    std = s.rolling(n).std()
-                    return (s - mean) / std.replace(0, 1)
-
-            return MeanReversionStrategy
-
-        # Momentum (N-bar lookback return)
-        if strategy_type == 'momentum':
-            class MomentumStrategy(Strategy):
-                lookback = params.get('lookback', 20)
-                threshold = params.get('threshold', 0.0) / 100.0  # Convert from pct
-
-                def init(self):
-                    close = self.data.Close
-                    self.returns = self.I(self._lookback_return, close, self.lookback)
-
-                def next(self):
-                    if self.returns[-1] > self.threshold:
-                        if not self.position.is_long:
-                            if self.position.is_short:
-                                self.position.close()
-                            self.buy()
-                    elif self.returns[-1] < -self.threshold:
-                        if not self.position.is_short:
-                            if self.position.is_long:
-                                self.position.close()
-                            self.sell()
-
-                @staticmethod
-                def _lookback_return(values, n):
-                    s = pd.Series(values)
-                    return s.pct_change(periods=n)
-
-            return MomentumStrategy
-
-        # Breakout (Donchian Channel with ATR filter)
-        if strategy_type == 'breakout':
-            class BreakoutStrategy(Strategy):
-                period = params.get('period', 20)
-                atr_mult = params.get('atr_mult', params.get('atrMult', 1.5))
-
-                def init(self):
-                    high = self.data.High
-                    low = self.data.Low
-                    close = self.data.Close
-                    self.upper = self.I(self._donchian_upper, high, self.period)
-                    self.lower = self.I(self._donchian_lower, low, self.period)
-                    self.atr = self.I(self._atr, high, low, close, self.period)
-
-                def next(self):
-                    price = self.data.Close[-1]
-                    atr_filter = self.atr[-1] * self.atr_mult
-                    if price > self.upper[-1] and self.atr[-1] > 0:
-                        if not self.position.is_long:
-                            if self.position.is_short:
-                                self.position.close()
-                            self.buy(sl=price - atr_filter)
-                    elif price < self.lower[-1] and self.atr[-1] > 0:
-                        if not self.position.is_short:
-                            if self.position.is_long:
-                                self.position.close()
-                            self.sell(sl=price + atr_filter)
-
-                @staticmethod
-                def _donchian_upper(values, n):
-                    return pd.Series(values).rolling(n).max()
-
-                @staticmethod
-                def _donchian_lower(values, n):
-                    return pd.Series(values).rolling(n).min()
-
-                @staticmethod
-                def _atr(high, low, close, n):
-                    h = pd.Series(high)
-                    l = pd.Series(low)
-                    c = pd.Series(close)
-                    prev_c = c.shift(1)
-                    tr = pd.concat([h - l, (h - prev_c).abs(), (l - prev_c).abs()], axis=1).max(axis=1)
-                    return tr.rolling(n).mean()
-
-            return BreakoutStrategy
-
-        # Stochastic (%K/%D crossover)
-        if strategy_type == 'stochastic':
-            class StochasticStrategy(Strategy):
-                k_period = params.get('k_period', params.get('kPeriod', 14))
-                d_period = params.get('d_period', params.get('dPeriod', 3))
-                oversold = params.get('oversold', 20)
-                overbought = params.get('overbought', 80)
-
-                def init(self):
-                    high = self.data.High
-                    low = self.data.Low
-                    close = self.data.Close
-                    self.k = self.I(self._stoch_k, high, low, close, self.k_period)
-                    self.d = self.I(self._stoch_d, high, low, close, self.k_period, self.d_period)
-
-                def next(self):
-                    if self.k[-1] < self.oversold and crossover(self.k, self.d):
-                        if not self.position.is_long:
-                            if self.position.is_short:
-                                self.position.close()
-                            self.buy()
-                    elif self.k[-1] > self.overbought and crossover(self.d, self.k):
-                        if not self.position.is_short:
-                            if self.position.is_long:
-                                self.position.close()
-                            self.sell()
-
-                @staticmethod
-                def _stoch_k(high, low, close, period):
-                    h = pd.Series(high)
-                    l = pd.Series(low)
-                    c = pd.Series(close)
-                    lowest = l.rolling(period).min()
-                    highest = h.rolling(period).max()
-                    denom = highest - lowest
-                    return ((c - lowest) / denom.replace(0, 1)) * 100
-
-                @staticmethod
-                def _stoch_d(high, low, close, k_period, d_period):
-                    h = pd.Series(high)
-                    l = pd.Series(low)
-                    c = pd.Series(close)
-                    lowest = l.rolling(k_period).min()
-                    highest = h.rolling(k_period).max()
-                    denom = highest - lowest
-                    k = ((c - lowest) / denom.replace(0, 1)) * 100
-                    return k.rolling(d_period).mean()
-
-            return StochasticStrategy
-
-        # ADX Trend (trade with trend when ADX > threshold)
-        if strategy_type == 'adx_trend':
-            class ADXTrendStrategy(Strategy):
-                period = params.get('period', 14)
-                threshold = params.get('threshold', 25)
-
-                def init(self):
-                    high = self.data.High
-                    low = self.data.Low
-                    close = self.data.Close
-                    self.adx = self.I(self._adx, high, low, close, self.period)
-                    self.plus_di = self.I(self._plus_di, high, low, close, self.period)
-                    self.minus_di = self.I(self._minus_di, high, low, close, self.period)
-
-                def next(self):
-                    if self.adx[-1] > self.threshold:
-                        if self.plus_di[-1] > self.minus_di[-1]:
-                            if not self.position.is_long:
-                                if self.position.is_short:
-                                    self.position.close()
-                                self.buy()
-                        elif self.minus_di[-1] > self.plus_di[-1]:
-                            if not self.position.is_short:
-                                if self.position.is_long:
-                                    self.position.close()
-                                self.sell()
-                    else:
-                        if self.position:
-                            self.position.close()
-
-                @staticmethod
-                def _adx(high, low, close, period):
-                    h = pd.Series(high)
-                    l = pd.Series(low)
-                    c = pd.Series(close)
-                    prev_h = h.shift(1)
-                    prev_l = l.shift(1)
-                    prev_c = c.shift(1)
-                    tr = pd.concat([h - l, (h - prev_c).abs(), (l - prev_c).abs()], axis=1).max(axis=1)
-                    plus_dm = ((h - prev_h).where((h - prev_h) > (prev_l - l), 0)).clip(lower=0)
-                    minus_dm = ((prev_l - l).where((prev_l - l) > (h - prev_h), 0)).clip(lower=0)
-                    atr = tr.ewm(span=period, adjust=False).mean()
-                    plus_di = 100 * (plus_dm.ewm(span=period, adjust=False).mean() / atr.replace(0, 1))
-                    minus_di = 100 * (minus_dm.ewm(span=period, adjust=False).mean() / atr.replace(0, 1))
-                    dx = (abs(plus_di - minus_di) / (plus_di + minus_di).replace(0, 1)) * 100
-                    return dx.ewm(span=period, adjust=False).mean()
-
-                @staticmethod
-                def _plus_di(high, low, close, period):
-                    h = pd.Series(high)
-                    l = pd.Series(low)
-                    c = pd.Series(close)
-                    prev_h = h.shift(1)
-                    prev_l = l.shift(1)
-                    prev_c = c.shift(1)
-                    tr = pd.concat([h - l, (h - prev_c).abs(), (l - prev_c).abs()], axis=1).max(axis=1)
-                    plus_dm = ((h - prev_h).where((h - prev_h) > (prev_l - l), 0)).clip(lower=0)
-                    atr = tr.ewm(span=period, adjust=False).mean()
-                    return 100 * (plus_dm.ewm(span=period, adjust=False).mean() / atr.replace(0, 1))
-
-                @staticmethod
-                def _minus_di(high, low, close, period):
-                    h = pd.Series(high)
-                    l = pd.Series(low)
-                    c = pd.Series(close)
-                    prev_h = h.shift(1)
-                    prev_l = l.shift(1)
-                    prev_c = c.shift(1)
-                    tr = pd.concat([h - l, (h - prev_c).abs(), (l - prev_c).abs()], axis=1).max(axis=1)
-                    minus_dm = ((prev_l - l).where((prev_l - l) > (h - prev_h), 0)).clip(lower=0)
-                    atr = tr.ewm(span=period, adjust=False).mean()
-                    return 100 * (minus_dm.ewm(span=period, adjust=False).mean() / atr.replace(0, 1))
-
-            return ADXTrendStrategy
-
-        # SMA Crossover strategy (default)
-        if strategy_type == 'sma_crossover' or not code:
-            class DynamicStrategy(Strategy):
-                # Class variables for optimization
-                n1 = opt_params.get('n1', params.get('fast_period', params.get('fastPeriod', 10))) if opt_params else params.get('fast_period', params.get('fastPeriod', 10))
-                n2 = opt_params.get('n2', params.get('slow_period', params.get('slowPeriod', 20))) if opt_params else params.get('slow_period', params.get('slowPeriod', 20))
-
-                # Risk management parameters
-                use_sl = params.get('use_stop_loss', False)
-                use_tp = params.get('use_take_profit', False)
-                sl_pct = params.get('stop_loss_pct', 0.02)  # 2% stop loss
-                tp_pct = params.get('take_profit_pct', 0.05)  # 5% take profit
-
-                def init(self):
-                    # Simple moving averages
-                    close = self.data.Close
-                    self.sma1 = self.I(self._sma, close, self.n1)
-                    self.sma2 = self.I(self._sma, close, self.n2)
-
-                def next(self):
-                    # Get current price
-                    price = self.data.Close[-1]
-
-                    # Calculate stop-loss and take-profit levels
-                    sl = price * (1 - self.sl_pct) if self.use_sl else None
-                    tp = price * (1 + self.tp_pct) if self.use_tp else None
-
-                    # Trading logic with SL/TP
-                    if crossover(self.sma1, self.sma2):
-                        if self.position.is_short:
-                            self.position.close()
-                        self.buy(sl=sl, tp=tp)
-                    elif crossover(self.sma2, self.sma1):
-                        if self.position.is_long:
-                            self.position.close()
-                        # For short positions, SL and TP are reversed
-                        sl_short = price * (1 + self.sl_pct) if self.use_sl else None
-                        tp_short = price * (1 - self.tp_pct) if self.use_tp else None
-                        self.sell(sl=sl_short, tp=tp_short)
-
-                @staticmethod
-                def _sma(values, n):
-                    return pd.Series(values).rolling(n).mean()
-
-            return DynamicStrategy
-
-        # Custom code strategy
-        else:
-            # Validate custom strategy code with restricted execution
-            # Only allow safe subset of Python for strategy definitions
+        # Frontend sends `params`; legacy callers used `parameters`.
+        params = strategy_def.get('params') or strategy_def.get('parameters') or {}
+        code = strategy_def.get('code', '')
+
+        # Registered strategy id -> delegate to btp_strategies builder.
+        import btp_strategies as _strat
+        if strategy_type in _strat.STRATEGY_BUILDERS:
+            return _strat.STRATEGY_BUILDERS[strategy_type](params, opt_params)
+
+        # Custom user-supplied strategy code (sandboxed).
+        if code:
             validation_error = self._validate_strategy_code(code)
             if validation_error:
                 self._error(f'Strategy code validation failed: {validation_error}')
-                # Fallback to default strategy
-                return self._create_strategy_class({'type': 'sma_crossover'}, opt_params)
-
-            # Execute with restricted globals - no access to dangerous modules
+                return _strat.STRATEGY_BUILDERS['sma_crossover'](params, opt_params)
             exec_globals = {
                 '__builtins__': {
-                    'range': range,
-                    'len': len,
-                    'abs': abs,
-                    'min': min,
-                    'max': max,
-                    'sum': sum,
-                    'round': round,
-                    'int': int,
-                    'float': float,
-                    'bool': bool,
-                    'str': str,
-                    'list': list,
-                    'dict': dict,
-                    'tuple': tuple,
-                    'enumerate': enumerate,
-                    'zip': zip,
-                    'map': map,
-                    'filter': filter,
-                    'sorted': sorted,
-                    'reversed': reversed,
-                    'isinstance': isinstance,
-                    'issubclass': issubclass,
-                    'hasattr': hasattr,
-                    'getattr': getattr,
-                    'setattr': setattr,
-                    'property': property,
-                    'staticmethod': staticmethod,
-                    'classmethod': classmethod,
-                    'super': super,
-                    'type': type,
-                    'True': True,
-                    'False': False,
-                    'None': None,
+                    'range': range, 'len': len, 'abs': abs, 'min': min, 'max': max,
+                    'sum': sum, 'round': round, 'int': int, 'float': float, 'bool': bool,
+                    'str': str, 'list': list, 'dict': dict, 'tuple': tuple,
+                    'enumerate': enumerate, 'zip': zip, 'map': map, 'filter': filter,
+                    'sorted': sorted, 'reversed': reversed, 'isinstance': isinstance,
+                    'issubclass': issubclass, 'hasattr': hasattr, 'getattr': getattr,
+                    'setattr': setattr, 'property': property, 'staticmethod': staticmethod,
+                    'classmethod': classmethod, 'super': super, 'type': type,
+                    'True': True, 'False': False, 'None': None,
                 },
                 'Strategy': Strategy,
                 'crossover': crossover,
                 'pd': pd,
                 'np': np,
             }
-
             try:
                 exec(code, exec_globals)
-                # Try to find the strategy class
-                for name, obj in exec_globals.items():
-                    if isinstance(obj, type) and issubclass(obj, Strategy) and obj != Strategy:
+                for _name, obj in exec_globals.items():
+                    if isinstance(obj, type) and issubclass(obj, Strategy) and obj is not Strategy:
                         return obj
             except Exception as e:
                 self._error('Failed to execute custom strategy code', e)
 
-            # Fallback to default strategy
-            return self._create_strategy_class({'type': 'sma_crossover'}, opt_params)
+        # Unknown id and no code -> sensible default so the run isn't a hard fail.
+        return _strat.STRATEGY_BUILDERS['sma_crossover'](params, opt_params)
+
 
     def _validate_strategy_code(self, code: str) -> Optional[str]:
         """
@@ -1596,11 +1358,16 @@ def main():
         elif command == 'get_historical_data':
             result = provider.get_historical_data(args)
         elif command == 'calculate_indicator':
-            indicator_type = args.get('type', '')
-            params = args.get('params', {})
-            result = provider.calculate_indicator(indicator_type, params)
+            # Frontend sends top-level `indicator` (id), `symbols`, `startDate`,
+            # `endDate`, plus a nested `params` dict with indicator-specific
+            # tuning (`period`, etc.). Pass the full args through so
+            # calculate_indicator can read both kinds.
+            indicator_type = args.get('indicator') or args.get('type', '')
+            result = provider.calculate_indicator(indicator_type, args)
         elif command == 'optimize':
             result = provider.optimize(args)
+        elif command == 'walk_forward':
+            result = provider.walk_forward(args)
         elif command == 'get_strategies':
             result = provider.get_strategies(args)
         elif command == 'get_indicators':

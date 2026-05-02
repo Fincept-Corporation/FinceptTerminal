@@ -42,6 +42,21 @@ struct TopicPolicy {
     /// Default is false — most topics benefit from keeping last-known-
     /// good values for `peek()` and for re-subscribe warm-start.
     bool drop_on_idle = false;
+
+    /// Phase 8 / decision 9.2: when true, fan-out to a subscriber is
+    /// suppressed if the WindowFrame the subscriber lives in reports
+    /// `is_active_for_work() == false` (minimised, hidden, etc.). The
+    /// cached value is still updated, so the panel sees the latest data
+    /// the moment the user brings the window forward.
+    ///
+    /// Use sparingly — only for high-frequency streams whose UI cost is
+    /// real (sparkline ticks, live quotes). Low-frequency families like
+    /// portfolio, news, or wallet balance should leave this false so the
+    /// user sees fresh data the moment they restore the window without a
+    /// re-fetch round-trip.
+    ///
+    /// Default false: zero behaviour change for existing producers.
+    bool pause_when_inactive = false;
 };
 
 } // namespace fincept::datahub

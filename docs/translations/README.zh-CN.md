@@ -8,7 +8,7 @@
 
 ### **你的思维是唯一的限制。数据不是。**
 
-最先进的金融情报平台，具有 CFA 级分析、人工智能自动化和无限数据连接。
+最先进的金融情报平台，具有机构级金融分析、人工智能自动化和无限数据连接。
 
 [📥 下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases)·[📚 文档](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)·[💬 讨论](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)·[💬 Discord](https://discord.gg/ae87a8ygbN)·[🤝 合作伙伴](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
@@ -232,7 +232,7 @@ cmake --build build --config Release --parallel
 -   **$799/月**20 个帐户
 -   完全访问 Fincept 数据和 API
 -   非常适合金融、经济学和数据科学课程
--   内置 CFA 课程分析
+-   内置股票、投资组合、衍生品、固定收益和经济学分析
 
 **感兴趣吗？** 请附上您的机构名称，发送电子邮件至**[support@fincept.in]。
 [大学许可详细信息](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)

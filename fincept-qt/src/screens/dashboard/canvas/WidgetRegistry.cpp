@@ -7,12 +7,15 @@
 #include "screens/dashboard/widgets/CryptoWidget.h"
 #include "screens/dashboard/widgets/EconomicCalendarWidget.h"
 #include "screens/dashboard/widgets/ForexWidget.h"
+#include "screens/dashboard/widgets/GeopoliticsEventsWidget.h"
 #include "screens/dashboard/widgets/IndicesWidget.h"
 #include "screens/dashboard/widgets/MarginUsageWidget.h"
+#include "screens/dashboard/widgets/MaritimeVesselsWidget.h"
 #include "screens/dashboard/widgets/MarketQuoteStripWidget.h"
 #include "screens/dashboard/widgets/MarketSentimentWidget.h"
 #include "screens/dashboard/widgets/NewsCategoryWidget.h"
 #include "screens/dashboard/widgets/NewsWidget.h"
+#include "screens/dashboard/widgets/NotesWidget.h"
 #include "screens/dashboard/widgets/OpenPositionsWidget.h"
 #include "screens/dashboard/widgets/OrderBookMiniWidget.h"
 #include "screens/dashboard/widgets/PerformanceWidget.h"
@@ -160,6 +163,19 @@ WidgetRegistry::WidgetRegistry() {
     register_widget({"web_scraper", "Web Scraper", "Tools",
                      "Scrape tables from any URL — auto-detects HTML, JSON, CSV, XML/RSS", 6, 5, 3,
                      3, [](const QJsonObject& cfg) { return new widgets::WebScraperWidget(cfg); }});
+
+    // ── Geopolitics ──────────────────────────────────────────────────────────
+    register_widget({"geopolitics_events", "Geopolitics Events", "Geopolitics",
+                     "Live conflict / political events — subscribes to geopolitics:events", 6, 5, 3, 3,
+                     [](const QJsonObject& cfg) { return new widgets::GeopoliticsEventsWidget(cfg); }});
+
+    register_widget({"maritime_vessels", "Maritime Vessels", "Geopolitics",
+                     "Live vessel positions — configurable IMO list, subscribes to maritime:vessel:*", 5, 5, 3, 3,
+                     [](const QJsonObject& cfg) { return new widgets::MaritimeVesselsWidget(cfg); }});
+
+    register_widget({"notes", "Notes", "Tools",
+                     "Recent / favorite financial notes — click to open Notes screen", 4, 5, 2, 3,
+                     [](const QJsonObject& cfg) { return new widgets::NotesWidget(cfg); }});
 }
 
 void WidgetRegistry::register_widget(WidgetMeta meta) {

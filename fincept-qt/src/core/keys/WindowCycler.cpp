@@ -1,8 +1,9 @@
-#include "core/keys/WindowCycler.h"
+﻿#include "core/keys/WindowCycler.h"
 
 #include "app/DockScreenRouter.h"
-#include "app/MainWindow.h"
+#include "app/WindowFrame.h"
 #include "core/logging/Logger.h"
+#include "core/window/WindowRegistry.h"
 
 #include <QApplication>
 #include <QGuiApplication>
@@ -17,49 +18,26 @@ WindowCycler& WindowCycler::instance() {
     return s;
 }
 
-void WindowCycler::register_window(MainWindow* w) {
-    if (!w)
-        return;
-    // Skip duplicates — idempotent register keeps callers simple.
-    for (const QPointer<MainWindow>& p : windows_) {
-        if (p == w)
-            return;
-    }
-    windows_.append(QPointer<MainWindow>(w));
+void WindowCycler::register_window(WindowFrame* w) {
+    WindowRegistry::instance().register_frame(w);
 }
 
-void WindowCycler::unregister_window(MainWindow* w) {
-    if (!w)
-        return;
-    windows_.erase(std::remove_if(windows_.begin(), windows_.end(),
-                                  [w](const QPointer<MainWindow>& p) { return p == w || p.isNull(); }),
-                   windows_.end());
+void WindowCycler::unregister_window(WindowFrame* w) {
+    WindowRegistry::instance().unregister_frame(w);
 }
 
-QList<MainWindow*> WindowCycler::windows() const {
-    QList<MainWindow*> out;
-    out.reserve(windows_.size());
-    for (const QPointer<MainWindow>& p : windows_) {
-        if (p)
-            out.append(p.data());
-    }
-    std::sort(out.begin(), out.end(),
-              [](MainWindow* a, MainWindow* b) { return a->window_id() < b->window_id(); });
-    return out;
-}
-
-MainWindow* WindowCycler::current_focused() const {
+WindowFrame* WindowCycler::current_focused() const {
     auto* aw = QApplication::activeWindow();
-    if (auto* mw = qobject_cast<MainWindow*>(aw))
+    if (auto* mw = qobject_cast<WindowFrame*>(aw))
         return mw;
     // Fallback: first sorted window. Useful when activeWindow() is a modal
     // dialog or the OS just handed focus to another app.
-    const auto list = windows();
+    const auto list = WindowRegistry::instance().frames();
     return list.isEmpty() ? nullptr : list.first();
 }
 
 void WindowCycler::focus_window_by_index(int n) {
-    const auto list = windows();
+    const auto list = WindowRegistry::instance().frames();
     if (n < 0 || n >= list.size())
         return;
     auto* w = list.at(n);
@@ -70,7 +48,7 @@ void WindowCycler::focus_window_by_index(int n) {
 }
 
 void WindowCycler::cycle_windows(bool forward) {
-    const auto list = windows();
+    const auto list = WindowRegistry::instance().frames();
     if (list.size() < 2)
         return;
     auto* current = current_focused();
@@ -96,24 +74,53 @@ void WindowCycler::cycle_panels_in_current_window(bool forward) {
 
 void WindowCycler::new_window_on_next_monitor() {
     auto* src = current_focused();
-    auto* w = new MainWindow(MainWindow::next_window_id());
+    auto* w = new WindowFrame(WindowFrame::next_window_id());
     w->setAttribute(Qt::WA_DeleteOnClose);
 
-    // Smart placement: find a screen that doesn't contain the source
-    // window's centre. Matches the "new window" action in MainWindow's
-    // toolbar handler — kept in sync intentionally.
+    // Decision 5.6: prefer the first monitor that has no frames at all,
+    // since that's the case the user most often wants ("put it on my empty
+    // 3rd monitor"). Fall back to "first monitor not containing focused
+    // window's centre" (the pre-Phase 1 behaviour) when every monitor is
+    // populated. Final fallback: don't reposition, let the constructor's
+    // default placement run.
     const auto screens = QGuiApplication::screens();
-    if (src && screens.size() > 1) {
-        const QPoint src_centre = src->geometry().center();
+    QScreen* target = nullptr;
+
+    if (screens.size() > 1) {
+        // Build a set of screens currently hosting at least one frame.
+        const auto frames = WindowRegistry::instance().frames();
+        QList<QScreen*> occupied;
+        for (WindowFrame* mw : frames) {
+            if (QScreen* s = mw->screen()) {
+                if (!occupied.contains(s))
+                    occupied.append(s);
+            }
+        }
+        // Tier 1: empty monitor.
         for (QScreen* s : screens) {
-            if (!s->geometry().contains(src_centre)) {
-                const QRect sg = s->availableGeometry();
-                w->resize(sg.width() * 9 / 10, sg.height() * 9 / 10);
-                w->move(sg.center() - w->rect().center());
+            if (!occupied.contains(s)) {
+                target = s;
                 break;
             }
         }
+        // Tier 2: monitor not containing source centre.
+        if (!target && src) {
+            const QPoint centre = src->geometry().center();
+            for (QScreen* s : screens) {
+                if (!s->geometry().contains(centre)) {
+                    target = s;
+                    break;
+                }
+            }
+        }
     }
+
+    if (target) {
+        const QRect sg = target->availableGeometry();
+        w->resize(sg.width() * 9 / 10, sg.height() * 9 / 10);
+        w->move(sg.center() - w->rect().center());
+    }
+
     w->show();
     w->raise();
     w->activateWindow();

@@ -24,7 +24,11 @@ class SessionGuard : public QObject {
     QTimer timer_;
     bool is_checking_ = false;
 
-    static constexpr int PULSE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+    // 30 minutes — long enough that a transient backend hiccup or a stale
+    // session_token doesn't yank a working user back to the login screen
+    // mid-session, short enough to catch a truly revoked api_key within the
+    // hour. Inactivity / lock are handled by InactivityGuard, not here.
+    static constexpr int PULSE_INTERVAL_MS = 30 * 60 * 1000;
 };
 
 } // namespace fincept::auth

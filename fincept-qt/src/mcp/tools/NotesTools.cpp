@@ -1,11 +1,18 @@
 // NotesTools.cpp — Notes tab MCP tools (research notes)
+//
+// Thread-safety note: see WatchlistTools.cpp for the rationale. MCP handlers
+// run on the LlmService worker thread, but Qt's QSqlDatabase connection is
+// bound to the main thread. Every NotesRepository call MUST be marshalled to
+// the main thread via run_async_wait or the writes won't survive a restart.
 
 #include "mcp/tools/NotesTools.h"
 
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
+#include "mcp/tools/ThreadHelper.h"
 #include "storage/repositories/NotesRepository.h"
 
+#include <QCoreApplication>
 #include <QVariantMap>
 
 namespace fincept::mcp::tools {
@@ -45,13 +52,22 @@ std::vector<ToolDef> get_notes_tools() {
             note.sentiment = args["sentiment"].toString("NEUTRAL");
             note.tags = args["tags"].toString();
 
-            auto result = NotesRepository::instance().create(note);
-            if (result.is_err())
-                return ToolResult::fail("Failed to create note: " + QString::fromStdString(result.error()));
+            qint64 new_id = -1;
+            QString error;
+            detail::run_async_wait(QCoreApplication::instance(), [&](auto signal_done) {
+                auto r = NotesRepository::instance().create(note);
+                if (r.is_err())
+                    error = "Failed to create note: " + QString::fromStdString(r.error());
+                else
+                    new_id = r.value();
+                signal_done();
+            });
+            if (!error.isEmpty())
+                return ToolResult::fail(error);
 
-            EventBus::instance().publish("notes.created", QVariantMap{{"id", static_cast<qlonglong>(result.value())}});
+            EventBus::instance().publish("notes.created", QVariantMap{{"id", static_cast<qlonglong>(new_id)}});
             return ToolResult::ok("Note created: " + title,
-                                  QJsonObject{{"id", static_cast<int>(result.value())}, {"title", title}});
+                                  QJsonObject{{"id", static_cast<int>(new_id)}, {"title", title}});
         };
         tools.push_back(std::move(t));
     }
@@ -66,24 +82,31 @@ std::vector<ToolDef> get_notes_tools() {
             QJsonObject{{"query", QJsonObject{{"type", "string"}, {"description", "Search query (optional)"}}}};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString query = args["query"].toString().trimmed();
-            auto result =
-                query.isEmpty() ? NotesRepository::instance().list_all() : NotesRepository::instance().search(query);
-
-            if (result.is_err())
-                return ToolResult::fail("Failed to load notes: " + QString::fromStdString(result.error()));
-
             QJsonArray arr;
-            for (const auto& n : result.value()) {
-                arr.append(QJsonObject{{"id", n.id},
-                                       {"title", n.title},
-                                       {"category", n.category},
-                                       {"priority", n.priority},
-                                       {"tickers", n.tickers},
-                                       {"sentiment", n.sentiment},
-                                       {"is_favorite", n.is_favorite},
-                                       {"created_at", n.created_at},
-                                       {"updated_at", n.updated_at}});
-            }
+            QString error;
+            detail::run_async_wait(QCoreApplication::instance(), [&](auto signal_done) {
+                auto r = query.isEmpty() ? NotesRepository::instance().list_all()
+                                         : NotesRepository::instance().search(query);
+                if (r.is_err()) {
+                    error = "Failed to load notes: " + QString::fromStdString(r.error());
+                    signal_done();
+                    return;
+                }
+                for (const auto& n : r.value()) {
+                    arr.append(QJsonObject{{"id", n.id},
+                                           {"title", n.title},
+                                           {"category", n.category},
+                                           {"priority", n.priority},
+                                           {"tickers", n.tickers},
+                                           {"sentiment", n.sentiment},
+                                           {"is_favorite", n.is_favorite},
+                                           {"created_at", n.created_at},
+                                           {"updated_at", n.updated_at}});
+                }
+                signal_done();
+            });
+            if (!error.isEmpty())
+                return ToolResult::fail(error);
             return ToolResult::ok_data(arr);
         };
         tools.push_back(std::move(t));
@@ -103,9 +126,15 @@ std::vector<ToolDef> get_notes_tools() {
             if (id < 0)
                 return ToolResult::fail("Missing or invalid 'id'");
 
-            auto r = NotesRepository::instance().remove(id);
-            if (r.is_err())
-                return ToolResult::fail("Failed to delete note: " + QString::fromStdString(r.error()));
+            QString error;
+            detail::run_async_wait(QCoreApplication::instance(), [&](auto signal_done) {
+                auto r = NotesRepository::instance().remove(id);
+                if (r.is_err())
+                    error = "Failed to delete note: " + QString::fromStdString(r.error());
+                signal_done();
+            });
+            if (!error.isEmpty())
+                return ToolResult::fail(error);
 
             EventBus::instance().publish("notes.deleted", QVariantMap{{"id", id}});
             return ToolResult::ok("Note deleted");

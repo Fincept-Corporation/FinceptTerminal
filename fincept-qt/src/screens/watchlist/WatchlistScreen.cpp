@@ -1,5 +1,6 @@
 #include "screens/watchlist/WatchlistScreen.h"
 
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
@@ -14,6 +15,7 @@
 #include <QHideEvent>
 #include <QInputDialog>
 #include <QMessageBox>
+#include <QPointer>
 #include <QShowEvent>
 #include <QSplitter>
 #include <QVBoxLayout>
@@ -113,11 +115,47 @@ void WatchlistScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     if (!current_wl_id_.isEmpty() && !stocks_.isEmpty())
         hub_resubscribe_stocks();
+    subscribe_mcp_events();
 }
 
 void WatchlistScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
     hub_unsubscribe_all();
+    unsubscribe_mcp_events();
+}
+
+// ── MCP-driven UI sync ──────────────────────────────────────────────────────
+// MCP watchlist tools publish watchlist.created / watchlist.deleted /
+// watchlist.updated when the LLM mutates watchlists via AI Chat or
+// Finagent. We always reload from DB — the events carry only id/symbol,
+// not enough to update the table incrementally.
+
+void WatchlistScreen::subscribe_mcp_events() {
+    if (!mcp_event_subs_.isEmpty()) return; // idempotent
+
+    QPointer<WatchlistScreen> self = this;
+    auto on_watchlists_changed = [self](const QVariantMap&) {
+        if (!self) return;
+        QMetaObject::invokeMethod(self.data(), [self]() {
+            if (!self) return;
+            self->load_watchlists();
+            // load_watchlists() preserves current_wl_id_ where possible;
+            // load_stocks() reloads the right-pane table.
+            self->load_stocks();
+        }, Qt::QueuedConnection);
+    };
+
+    auto& bus = EventBus::instance();
+    mcp_event_subs_.append(bus.subscribe("watchlist.created", on_watchlists_changed));
+    mcp_event_subs_.append(bus.subscribe("watchlist.deleted", on_watchlists_changed));
+    mcp_event_subs_.append(bus.subscribe("watchlist.updated", on_watchlists_changed));
+}
+
+void WatchlistScreen::unsubscribe_mcp_events() {
+    auto& bus = EventBus::instance();
+    for (auto id : mcp_event_subs_)
+        bus.unsubscribe(id);
+    mcp_event_subs_.clear();
 }
 
 void WatchlistScreen::build_ui() {
@@ -375,23 +413,15 @@ void WatchlistScreen::load_watchlists() {
         watchlists_ = r.value();
     }
 
-    // Ensure at least one default watchlist exists
+    // Ensure at least one default watchlist exists. We deliberately leave it
+    // empty rather than seeding US large-caps — those weren't user-chosen and
+    // confused the AI Chat flow ("I added RITES" appeared to fail because the
+    // user saw the stale starter set after restart).
     if (watchlists_.isEmpty()) {
         QColor acc(colors::AMBER());
         auto cr = fincept::WatchlistRepository::instance().create("Default", acc.name());
-        if (cr.is_ok()) {
+        if (cr.is_ok())
             watchlists_.append(cr.value());
-            // Add some starter symbols
-            auto& repo = fincept::WatchlistRepository::instance();
-            repo.add_stock(watchlists_.first().id, "AAPL", "Apple Inc");
-            repo.add_stock(watchlists_.first().id, "MSFT", "Microsoft Corp");
-            repo.add_stock(watchlists_.first().id, "GOOGL", "Alphabet Inc");
-            repo.add_stock(watchlists_.first().id, "AMZN", "Amazon.com Inc");
-            repo.add_stock(watchlists_.first().id, "NVDA", "NVIDIA Corp");
-            repo.add_stock(watchlists_.first().id, "TSLA", "Tesla Inc");
-            repo.add_stock(watchlists_.first().id, "META", "Meta Platforms");
-            repo.add_stock(watchlists_.first().id, "JPM", "JPMorgan Chase");
-        }
     }
 
     wl_list_->blockSignals(true);

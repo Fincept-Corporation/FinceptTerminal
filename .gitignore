@@ -152,3 +152,11 @@ fincept-qt/scripts/exchange/.cache/
 # ── Internal planning docs ────────────────────────────────────
 fincept-qt/docs/superpowers/
 docs/superpowers/
+
+# ── Grill-me session notes ────────────────────────────────────
+.grill-me/
+**/.grill-me/
+
+# ── Local planning docs ───────────────────────────────────────
+plans/
+**/plans/
