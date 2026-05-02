@@ -2,7 +2,7 @@
 
 ## Our Pledge
 
-We pledge to make participation in the Fincept Terminal community a harassment-free experience for everyone, regardless of age, body size, disability, ethnicity, gender identity, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity.
+We pledge to make participation in the Fincept Terminal community a harassment-free experience for everyone, regardless of their age, body size, disability, ethnicity, gender identity, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity.
 
 We pledge to act in ways that contribute to an open, welcoming, diverse, inclusive, and healthy community.
 
@@ -26,7 +26,7 @@ We pledge to act in ways that contribute to an open, welcoming, diverse, inclusi
 - Public or private harassment
 - Publishing others' private information without consent
 - Spam or excessive self-promotion
-- Other conduct inappropriate in a professional setting
+- Other inappropriate  conduct in a professional setting
 
 ---
 
@@ -42,7 +42,7 @@ Given the nature of this financial technology project:
 
 **Market Integrity**
 - No market manipulation features
-- Transparent conflict of interest disclosure
+- Transparent disclosure of conflicts of interest
 - Adherence to financial regulations
 - Responsible market data handling
 
