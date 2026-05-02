@@ -1,9 +1,12 @@
 #include "auth/AuthApi.h"
 
+#include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
 
 #include <QJsonDocument>
+
+#include <memory>
 
 namespace fincept::auth {
 
@@ -65,6 +68,22 @@ static QString parse_422_detail(const QJsonDocument& doc) {
 
 void AuthApi::request(const QString& method, const QString& endpoint, const QJsonObject& body, Callback cb) {
     auto& http = fincept::HttpClient::instance();
+    auto& config = fincept::AppConfig::instance();
+
+    auto make_url = [&endpoint](const QString& base) {
+        QString normalized = base.trimmed();
+        if (normalized.endsWith('/'))
+            normalized.chop(1);
+        return normalized + endpoint;
+    };
+
+    auto hosts = config.auth_base_urls();
+    const QString primary = config.api_base_url().trimmed();
+    if (!primary.isEmpty() && !hosts.contains(primary))
+        hosts.prepend(primary);
+    hosts.removeAll(QString{});
+    if (hosts.isEmpty())
+        hosts = {"https://api.fincept.in"};
 
     auto handle = [cb, endpoint](fincept::Result<QJsonDocument> result) {
         // ── No body / network error path ─────────────────────────────────────
@@ -162,14 +181,45 @@ void AuthApi::request(const QString& method, const QString& endpoint, const QJso
         cb({true, obj, {}, 200});
     };
 
-    if (method == "GET")
-        http.get(endpoint, handle);
-    else if (method == "POST")
-        http.post(endpoint, body, handle);
-    else if (method == "PUT")
-        http.put(endpoint, body, handle);
-    else if (method == "DELETE")
-        http.del(endpoint, handle);
+    auto should_retry = [](const fincept::Result<QJsonDocument>& result) {
+        if (!result.is_err())
+            return false;
+        QString err = QString::fromStdString(result.error());
+        int status = 0;
+        if (err.startsWith("HTTP_"))
+            status = err.mid(5).toInt();
+        return status == 0 || status == 502 || status == 503 || status == 504;
+    };
+
+    using RawResultCallback = std::function<void(fincept::Result<QJsonDocument>)>;
+    auto request_on_host = [&http, &method, &body](const QString& url, RawResultCallback done) {
+        if (method == "GET")
+            http.get(url, [done](fincept::Result<QJsonDocument> r) { done(std::move(r)); });
+        else if (method == "POST")
+            http.post(url, body, [done](fincept::Result<QJsonDocument> r) { done(std::move(r)); });
+        else if (method == "PUT")
+            http.put(url, body, [done](fincept::Result<QJsonDocument> r) { done(std::move(r)); });
+        else if (method == "DELETE")
+            http.del(url, [done](fincept::Result<QJsonDocument> r) { done(std::move(r)); });
+    };
+
+    auto idx = std::make_shared<int>(0);
+    auto attempt = std::make_shared<std::function<void()>>();
+    *attempt = [hosts, idx, handle, should_retry, request_on_host, make_url, endpoint, attempt]() {
+        const QString url = make_url(hosts.at(*idx));
+        request_on_host(url, [hosts, idx, handle, should_retry, endpoint, attempt](fincept::Result<QJsonDocument> r) {
+            if (should_retry(r) && (*idx + 1) < hosts.size()) {
+                const QString failed = hosts.at(*idx);
+                ++(*idx);
+                const QString next = hosts.at(*idx);
+                LOG_WARN("Auth", QString("Retrying %1 on fallback backend: %2 -> %3").arg(endpoint, failed, next));
+                (*attempt)();
+                return;
+            }
+            handle(std::move(r));
+        });
+    };
+    (*attempt)();
 }
 
 // ── Health ───────────────────────────────────────────────────────────────────
