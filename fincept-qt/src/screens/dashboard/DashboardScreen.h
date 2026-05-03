@@ -43,6 +43,7 @@ class DashboardScreen : public QWidget {
     void save_layout();
     void restore_layout();
     void refresh_ticker();
+    void on_refresh_clicked();
 
     void hub_resubscribe_ticker();
     void hub_unsubscribe_ticker();

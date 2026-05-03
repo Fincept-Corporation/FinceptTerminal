@@ -140,6 +140,7 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
 
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
+    tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // ── Indicators tab ──
     auto* ind = new QWidget(this);
@@ -271,6 +272,7 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
 
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
+    tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // ── Shared covariance / returns helper ──
     auto make_cov_tab = [&](const QString& method_id, const QString& btn_label, bool needs_returns) -> QWidget* {
@@ -407,6 +409,7 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
 
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
+    tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // ── IC Metrics tab ──
     auto* ic = new QWidget(this);
@@ -541,6 +544,7 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
 
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
+    tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // ── TopK-Dropout ──
     auto* topk = new QWidget(this);
@@ -670,6 +674,7 @@ QWidget* QuantModulePanel::build_data_processors_panel() {
 
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
+    tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // ── List Processors ──
     auto* list_tab = new QWidget(this);
@@ -767,6 +772,7 @@ QWidget* QuantModulePanel::build_factor_discovery_panel() {
 
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
+    tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // ── Factor Library ──
     auto* lib_tab = new QWidget(this);
@@ -890,6 +896,7 @@ QWidget* QuantModulePanel::build_model_library_panel() {
 
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
+    tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // ── Model Browser ──
     auto* browse_tab = new QWidget(this);
@@ -1026,6 +1033,7 @@ QWidget* QuantModulePanel::build_live_signals_panel() {
 
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
+    tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // ── Signal Data ──
     auto* sig_tab = new QWidget(this);
@@ -1153,6 +1161,7 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
 
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
+    tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // ── Models ──
     auto* models_tab = new QWidget(this);
@@ -1293,6 +1302,7 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
 
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
+    tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // ── Model Selection ──
     auto* sel_tab = new QWidget(this);

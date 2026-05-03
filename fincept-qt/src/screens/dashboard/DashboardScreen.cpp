@@ -4,6 +4,7 @@
 #include "screens/dashboard/canvas/DashboardTemplates.h"
 #include "screens/dashboard/canvas/TemplatePicker.h"
 #include "screens/dashboard/canvas/WidgetRegistry.h"
+#include "screens/dashboard/widgets/BaseWidget.h"
 #include "services/markets/MarketDataService.h"
 #include "services/notifications/NotificationService.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -145,6 +146,8 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
 
     connect(toolbar_, &DashboardToolBar::save_layout_clicked, this, &DashboardScreen::save_layout);
 
+    connect(toolbar_, &DashboardToolBar::refresh_clicked, this, &DashboardScreen::on_refresh_clicked);
+
     connect(toolbar_, &DashboardToolBar::toggle_compact_clicked, this, [this]() {
         static bool compact = false;
         compact = !compact;
@@ -233,6 +236,33 @@ void DashboardScreen::refresh_ticker() {
     // Hub path: user edited symbols → drop old subs, attach to new set,
     // kick the hub so consumers see data immediately.
     hub_resubscribe_ticker();
+}
+
+void DashboardScreen::on_refresh_clicked() {
+    // Toolbar REFRESH button — force-refresh every live data source on the
+    // dashboard. The hub's per-producer rate limit is still honoured, so
+    // rage-clicking can't hammer upstream APIs.
+    if (ticker_bar_ && !ticker_subscribed_.isEmpty()) {
+        QStringList topics;
+        topics.reserve(ticker_subscribed_.size());
+        for (const QString& sym : ticker_subscribed_)
+            topics.append(QStringLiteral("market:quote:") + sym);
+        datahub::DataHub::instance().request(topics, /*force=*/true);
+    }
+    if (market_pulse_)
+        market_pulse_->refresh_data();
+    // Fan refresh out to every visible BaseWidget tile on the canvas.
+    // Hidden tiles (collapsed, off-screen, on a non-visible workspace) are
+    // skipped — refreshing them burns the producer's rate limit on data
+    // the user can't see, and the visibility-driven subscribe/unsubscribe
+    // (P3) means hidden widgets aren't subscribed anyway.
+    if (canvas_) {
+        const auto widgets = canvas_->findChildren<widgets::BaseWidget*>();
+        for (auto* w : widgets) {
+            if (w && w->isVisible())
+                w->request_refresh();
+        }
+    }
 }
 
 

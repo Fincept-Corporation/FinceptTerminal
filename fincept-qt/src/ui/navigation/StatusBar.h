@@ -4,7 +4,7 @@
 #include <QWidget>
 
 namespace fincept {
-class SymbolRef;
+struct SymbolRef;
 enum class SymbolGroup : char;
 } // namespace fincept
 

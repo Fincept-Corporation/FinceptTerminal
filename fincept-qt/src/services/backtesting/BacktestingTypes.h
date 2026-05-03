@@ -1,4 +1,13 @@
 // src/services/backtesting/BacktestingTypes.h
+//
+// This file is the UI's view of provider capability. The `commands` array on
+// each Provider gates which buttons the BacktestingScreen renders and which
+// commands the user can invoke. It is a SUBSET of what each Python provider
+// actually dispatches — the source of truth for capability is each provider's
+// scripts/Analytics/backtesting/{provider}/{provider}_provider.py::main()
+// dispatcher. When a Python provider grows a new command, this file and the
+// matching cmd_config_stack_ page in BacktestingScreen.cpp must be updated
+// together to surface it.
 #pragma once
 #include <QColor>
 #include <QJsonArray>
@@ -24,14 +33,19 @@ inline QVector<Provider> all_providers() {
          "VectorBT",
          QColor("#00E5FF"),
          {"backtest", "optimize", "walk_forward", "indicator", "indicator_signals", "labels", "splits", "returns",
-          "signals"}},
+          "signals", "labels_to_signals", "indicator_sweep"}},
         {"backtestingpy", "Backtesting.py", QColor("#00D66F"), {"backtest", "optimize", "walk_forward", "indicator"}},
-        {"fasttrade", "FastTrade", QColor("#FFC400"), {"backtest"}},
+        {"fasttrade", "FastTrade", QColor("#FFC400"), {"backtest", "indicator"}},
         {"zipline",
          "Zipline",
          QColor("#FF3B8E"),
-         {"backtest", "optimize", "walk_forward", "indicator", "indicator_signals"}},
-        {"bt", "BT", QColor("#FF6B35"), {"backtest", "optimize", "walk_forward", "indicator", "indicator_signals"}},
+         {"backtest", "optimize", "walk_forward", "indicator", "indicator_signals", "labels", "splits", "returns",
+          "signals", "labels_to_signals"}},
+        {"bt",
+         "BT",
+         QColor("#FF6B35"),
+         {"backtest", "optimize", "walk_forward", "indicator", "indicator_signals", "labels", "splits", "returns",
+          "signals", "labels_to_signals"}},
         {"fincept", "Fincept", QColor("#d97706"), {"backtest", "optimize", "walk_forward"}},
     };
 }
@@ -45,6 +59,10 @@ struct CommandDef {
 };
 
 inline QVector<CommandDef> all_commands() {
+    // New commands MUST be appended at the end. BacktestingScreen persists
+    // the active command as an integer index in save_state(), and the
+    // cmd_config_stack_ pages are looked up by the same index — reordering
+    // would break saved-state restore for existing users.
     return {
         {"backtest", "Run Backtest", QColor("#FF6B35")},
         {"optimize", "Optimize", QColor("#00D66F")},
@@ -55,6 +73,8 @@ inline QVector<CommandDef> all_commands() {
         {"splits", "CV Splits", QColor("#0088FF")},
         {"returns", "Returns Analysis", QColor("#00D66F")},
         {"signals", "Signal Generators", QColor("#FFC400")},
+        {"labels_to_signals", "Labels -> Signals", QColor("#9D4EDD")},
+        {"indicator_sweep", "Indicator Sweep", QColor("#00E5FF")},
     };
 }
 

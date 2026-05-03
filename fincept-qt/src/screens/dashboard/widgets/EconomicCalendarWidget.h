@@ -1,15 +1,18 @@
 #pragma once
 #include "screens/dashboard/widgets/BaseWidget.h"
 
+#include <QHideEvent>
 #include <QJsonArray>
 #include <QLabel>
 #include <QScrollArea>
+#include <QShowEvent>
 #include <QVBoxLayout>
 
 namespace fincept::screens::widgets {
 
-/// Economic Calendar Widget — fetches real macro events from
-/// GET http://api.fincept.in/macro/upcoming-events via HttpClient.
+/// Economic Calendar Widget — consumes the DataHub topic
+/// `econ:fincept:upcoming_events` (HTTP-backed by `MacroCalendarService`).
+/// All cadence is owned by the hub scheduler.
 class EconomicCalendarWidget : public BaseWidget {
     Q_OBJECT
   public:
@@ -17,10 +20,13 @@ class EconomicCalendarWidget : public BaseWidget {
 
   protected:
     void on_theme_changed() override;
+    void showEvent(QShowEvent* e) override;
+    void hideEvent(QHideEvent* e) override;
 
   private:
     void apply_styles();
-    void refresh_data();
+    void hub_subscribe();
+    void hub_unsubscribe();
     void populate(const QJsonArray& events);
 
     QWidget* header_widget_ = nullptr;
@@ -30,6 +36,7 @@ class EconomicCalendarWidget : public BaseWidget {
     QLabel* status_label_ = nullptr;
     QVector<QLabel*> header_labels_;
     QJsonArray last_events_; // cached for theme-change re-populate
+    bool hub_active_ = false;
 };
 
 } // namespace fincept::screens::widgets

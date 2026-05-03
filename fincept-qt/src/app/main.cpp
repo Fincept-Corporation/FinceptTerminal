@@ -28,6 +28,7 @@
 #include "services/agents/AgentService.h"
 #include "services/dbnomics/DBnomicsService.h"
 #include "services/economics/EconomicsService.h"
+#include "services/economics/MacroCalendarService.h"
 #include "services/geopolitics/GeopoliticsService.h"
 #include "services/gov_data/GovDataService.h"
 #include "services/ma_analytics/MAAnalyticsService.h"
@@ -91,6 +92,27 @@
 #  define FT_MARK(n) do { fprintf(stderr, "FT_MARK %d\n", (n)); fflush(stderr); } while(0)
 #endif
 
+// Wire the two app-level lifecycle handlers that fire after the primary
+// window exists: SingleApplication::receivedMessage (a re-launch of the exe
+// asks us to open another WindowFrame) and QApplication::lastWindowClosed
+// (surface the Launchpad instead of quitting; the Launchpad's own close
+// handler quits explicitly). Called from both the post-setup-screen path
+// and the no-setup path so the two branches stay in sync.
+static void wire_app_lifecycle(SingleApplication& app) {
+    QObject::connect(&app, &SingleApplication::receivedMessage,
+                     [](quint32 /*instanceId*/, QByteArray /*message*/) {
+                         auto* w = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
+                         w->setAttribute(Qt::WA_DeleteOnClose);
+                         w->show();
+                         w->raise();
+                         w->activateWindow();
+                         LOG_INFO("App", "New window opened via secondary instance request");
+                     });
+    QObject::connect(&app, &QApplication::lastWindowClosed, &app, []() {
+        fincept::screens::LaunchpadScreen::instance()->surface();
+    });
+}
+
 int main(int argc, char* argv[]) {
     FT_MARK(1);
     // ── Parse --profile <name> from argv before Qt initialises ───────────────
@@ -136,6 +158,14 @@ int main(int argc, char* argv[]) {
 #    define FINCEPT_VERSION_STRING "0.0.0-dev"
 #endif
     app.setApplicationVersion(QStringLiteral(FINCEPT_VERSION_STRING));
+
+    // Quit only when LaunchpadScreen::closeEvent calls QCoreApplication::quit().
+    // Default Qt behaviour fires lastWindowClosed AND schedules an auto-quit;
+    // we connect a slot to surface() the Launchpad on lastWindowClosed, and
+    // the auto-quit would race that slot — sometimes killing the app while
+    // the launchpad is mid-show. With this off, the only quit path is the
+    // explicit one in LaunchpadScreen::closeEvent.
+    app.setQuitOnLastWindowClosed(false);
 
     // ── Secondary instance: signal primary to open a new window, then exit ───
     // The primary receives receivedMessage() and calls open_new_window().
@@ -234,6 +264,9 @@ int main(int argc, char* argv[]) {
     fincept::services::EconomicsService::instance().ensure_registered_with_hub();
     fincept::services::DBnomicsService::instance().ensure_registered_with_hub();
     fincept::services::GovDataService::instance().ensure_registered_with_hub();
+    // Macro calendar: HTTP-backed `econ:fincept:upcoming_events` producer
+    // serving the dashboard EconomicCalendarWidget.
+    fincept::services::MacroCalendarService::instance().ensure_registered_with_hub();
     // Phase 7: DataStreamManager as the broker:* producer (positions,
     // orders, balance, holdings, quote, ticks). Per-account topic shape
     // `broker:<id>:<account_id>:<channel>`.
@@ -480,6 +513,7 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v019();
     fincept::register_migration_v020();
     fincept::register_migration_v021();
+    fincept::register_migration_v022();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -679,21 +713,10 @@ int main(int argc, char* argv[]) {
                                         .arg(saved_ids.size() > 0 ? saved_ids.size() - 1 : 0));
             }
 
-            // Wire new-window handler now that the primary window exists
-            QObject::connect(&app, &SingleApplication::receivedMessage,
-                             [](quint32 /*instanceId*/, QByteArray /*message*/) {
-                                 auto* w = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
-                                 w->setAttribute(Qt::WA_DeleteOnClose);
-                                 w->show();
-                                 w->raise();
-                                 w->activateWindow();
-                                 LOG_INFO("App", "New window opened via secondary instance request");
-                             });
-            // Phase 9 trim: surface Launchpad instead of quitting on last
-            // frame close. Closing the Launchpad itself quits.
-            QObject::connect(&app, &QApplication::lastWindowClosed, &app, []() {
-                fincept::screens::LaunchpadScreen::instance()->surface();
-            });
+            // Wire new-window handler + Launchpad surface now that the
+            // primary window exists. Single source of truth — see
+            // wire_app_lifecycle() at the top of this file.
+            wire_app_lifecycle(app);
 
             if (!fincept::ai_chat::LlmService::instance().is_configured())
                 LOG_WARN("App",
@@ -755,24 +778,9 @@ int main(int argc, char* argv[]) {
                                 .arg(saved_ids.size() - 1));
     }
 
-    // ── New-window handler: fires when the user re-launches the exe ──────────
-    // The secondary instance sends "--new-window" and exits. We construct a new
-    // independent WindowFrame in this process. WA_DeleteOnClose ensures cleanup.
-    // QApplication::lastWindowClosed() → quit() handles the final exit.
-    QObject::connect(&app, &SingleApplication::receivedMessage, [](quint32 /*instanceId*/, QByteArray /*message*/) {
-        auto* w = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
-        w->setAttribute(Qt::WA_DeleteOnClose);
-        w->show();
-        w->raise();
-        w->activateWindow();
-        LOG_INFO("App", "New window opened via secondary instance request");
-    });
-
-    // Phase 9 trim: surface Launchpad instead of quitting on last frame
-    // close. The launchpad's own close event quits explicitly.
-    QObject::connect(&app, &QApplication::lastWindowClosed, &app, []() {
-        fincept::screens::LaunchpadScreen::instance()->surface();
-    });
+    // Wire new-window handler + Launchpad surface — see wire_app_lifecycle()
+    // at the top of this file for the contract.
+    wire_app_lifecycle(app);
 
     // If requirements files changed (app update), sync packages in background
     // without blocking the user. Connect setup_complete so failures are logged

@@ -31,6 +31,11 @@ class BaseWidget : public QFrame {
     void set_error(const QString& error);
     void set_title(const QString& title);
 
+    /// External-trigger entry point — emits `refresh_requested` so the
+    /// widget runs the same refresh path as a user clicking the title-bar
+    /// refresh button. Used by the dashboard "REFRESH ALL" toolbar button.
+    void request_refresh() { emit refresh_requested(); }
+
     /// Current per-instance config. Default: empty — subclasses override to
     /// return their live state (symbol, broker id, filters, etc.).
     virtual QJsonObject config() const { return {}; }

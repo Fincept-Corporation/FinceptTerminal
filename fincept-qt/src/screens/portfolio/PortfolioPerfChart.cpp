@@ -469,17 +469,46 @@ void PortfolioPerfChart::update_chart() {
     chart->addSeries(area);
     chart->addSeries(nav_line);
 
-    // ── Cost basis reference line ────────────────────────────────────────────
+    // ── Cost basis reference line (per-day, from replay snapshots) ───────────
     // Skipped in indexed mode (where the period baseline IS the reference at 100).
+    // Each snapshot now carries its own cost basis (BUYs add, SELLs reduce by
+    // weighted-average cost), so the cost line is a real step-shaped series
+    // that rises whenever the user added capital — not a flat horizontal at
+    // today's cost.
     QLineSeries* cost_line = nullptr;
-    if (cost_basis > 0 && !indexed_mode_) {
+    if (!indexed_mode_) {
         cost_line = new QLineSeries;
         cost_line->setName("Cost basis");
-        cost_line->append(nav_pts.first().x(), cost_disp);
-        cost_line->append(nav_pts.last().x(), cost_disp);
-        QPen cp(QColor(ui::colors::TEXT_TERTIARY()), 1, Qt::DashLine);
-        cost_line->setPen(cp);
-        chart->addSeries(cost_line);
+
+        // Map snapshot_date → total_cost_basis for the filtered window. Each
+        // nav_pts x-coordinate is a ms_utc timestamp matching a snapshot date;
+        // pair them up and append a point per day so the line steps with the
+        // actual cost-basis trajectory. The synthesized "now" point at the
+        // tail (when filtered.size() < 2) reuses today's cost basis.
+        for (int i = 0; i < filtered.size() && i < nav_pts.size(); ++i) {
+            cost_line->append(nav_pts[i].x(), filtered[i].total_cost_basis);
+        }
+        // Pin the trailing "now" point to today's cost so the line meets the
+        // x-axis end (NAV series does the same).
+        if (!nav_pts.isEmpty() && cost_line->count() < nav_pts.size()) {
+            cost_line->append(nav_pts.last().x(), cost_basis);
+        }
+
+        if (cost_line->count() > 0) {
+            QPen cp(QColor(ui::colors::TEXT_TERTIARY()), 1, Qt::DashLine);
+            cost_line->setPen(cp);
+            chart->addSeries(cost_line);
+            // Update y-axis range to include the full cost-basis trajectory,
+            // not just today's value.
+            for (int i = 0; i < cost_line->count(); ++i) {
+                const double y = cost_line->at(i).y();
+                y_min = std::min(y_min, y);
+                y_max = std::max(y_max, y);
+            }
+        } else {
+            delete cost_line;
+            cost_line = nullptr;
+        }
     }
 
     // ── Axes ──────────────────────────────────────────────────────────────────

@@ -3,12 +3,14 @@
 
 #include "screens/portfolio/PortfolioSparkline.h"
 #include "services/markets/MarketDataService.h"
+#include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 
 #    include "datahub/DataHub.h"
 #    include "datahub/DataHubMetaTypes.h"
 
 #include <QAction>
+#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -26,6 +28,19 @@ static const QStringList kColumns = {"SYMBOL", "QTY",  "LAST", "AVG COST", "MKT 
                                      "P&L",    "P&L%", "CHG%", "TREND",    "WT%"};
 
 PortfolioBlotter::PortfolioBlotter(QWidget* parent) : QWidget(parent) {
+    // Restore persisted page size before building the UI so the combo and
+    // populate_table see the right value on first paint.
+    {
+        auto r = SettingsRepository::instance().get("portfolio.blotter.page_size");
+        if (r.is_ok() && !r.value().isEmpty()) {
+            bool ok = false;
+            const int saved = r.value().toInt(&ok);
+            // Only accept the four sanctioned page sizes — anything else
+            // (corrupted setting, future value) silently falls back to 10.
+            if (ok && (saved == 10 || saved == 20 || saved == 50 || saved == 100))
+                page_size_ = saved;
+        }
+    }
     build_ui();
 }
 
@@ -85,7 +100,133 @@ void PortfolioBlotter::build_ui() {
     table_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(table_, &QTableWidget::customContextMenuRequested, this, &PortfolioBlotter::on_context_menu);
 
-    layout->addWidget(table_);
+    layout->addWidget(table_, 1);
+
+    // Pagination footer sits flush at the bottom of the panel.
+    build_pagination_footer();
+    layout->addWidget(footer_);
+}
+
+void PortfolioBlotter::build_pagination_footer() {
+    footer_ = new QWidget(this);
+    footer_->setObjectName("pfBlotterFooter");
+    footer_->setFixedHeight(28);
+    footer_->setStyleSheet(
+        QString("#pfBlotterFooter { background:%1; border-top:1px solid %2; }")
+            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+
+    auto* h = new QHBoxLayout(footer_);
+    h->setContentsMargins(12, 0, 10, 0);
+    h->setSpacing(8);
+
+    // ── Left: "Showing X-Y of Z" ─────────────────────────────────────────────
+    footer_status_ = new QLabel("Showing 0 of 0");
+    footer_status_->setStyleSheet(
+        QString("color:%1; font-size:10px; font-weight:600; background:transparent;")
+            .arg(ui::colors::TEXT_TERTIARY()));
+    h->addWidget(footer_status_);
+
+    h->addStretch(1);
+
+    // ── Center: nav buttons + page label ─────────────────────────────────────
+    // All four buttons share the same neutral square style. Disabled state
+    // dims to TEXT_DIM and removes hover hint.
+    auto make_nav_btn = [this](const QString& glyph, const QString& tip) {
+        auto* b = new QPushButton(glyph);
+        b->setFixedSize(22, 22);
+        b->setCursor(Qt::PointingHandCursor);
+        b->setToolTip(tip);
+        b->setStyleSheet(
+            QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                    "  font-size:11px; font-weight:700; }"
+                    "QPushButton:hover:enabled { color:%3; border-color:%3; }"
+                    "QPushButton:disabled { color:%4; border-color:%5; }")
+                .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
+                     ui::colors::AMBER(), ui::colors::TEXT_DIM(), ui::colors::BORDER_DIM()));
+        return b;
+    };
+
+    btn_first_ = make_nav_btn(QStringLiteral("«"), "First page");  // «
+    btn_prev_  = make_nav_btn(QStringLiteral("‹"), "Previous page"); // ‹
+    h->addWidget(btn_first_);
+    h->addWidget(btn_prev_);
+
+    footer_page_label_ = new QLabel("Page 1 of 1");
+    footer_page_label_->setMinimumWidth(80);
+    footer_page_label_->setAlignment(Qt::AlignCenter);
+    footer_page_label_->setStyleSheet(
+        QString("color:%1; font-size:11px; font-weight:700; background:transparent;")
+            .arg(ui::colors::TEXT_PRIMARY()));
+    h->addWidget(footer_page_label_);
+
+    btn_next_ = make_nav_btn(QStringLiteral("›"), "Next page");  // ›
+    btn_last_ = make_nav_btn(QStringLiteral("»"), "Last page");  // »
+    h->addWidget(btn_next_);
+    h->addWidget(btn_last_);
+
+    h->addStretch(1);
+
+    // ── Right: "Rows: [10 ▾]" ───────────────────────────────────────────────
+    auto* rows_label = new QLabel("Rows:");
+    rows_label->setStyleSheet(
+        QString("color:%1; font-size:10px; font-weight:600; background:transparent;")
+            .arg(ui::colors::TEXT_TERTIARY()));
+    h->addWidget(rows_label);
+
+    page_size_combo_ = new QComboBox(footer_);
+    page_size_combo_->setFixedHeight(22);
+    page_size_combo_->setCursor(Qt::PointingHandCursor);
+    page_size_combo_->addItem("10", 10);
+    page_size_combo_->addItem("20", 20);
+    page_size_combo_->addItem("50", 50);
+    page_size_combo_->addItem("100", 100);
+    page_size_combo_->setStyleSheet(
+        QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                "  padding:0 6px; font-size:11px; font-weight:700; min-width:48px; }"
+                "QComboBox::drop-down { border:none; width:14px; }"
+                "QComboBox QAbstractItemView { background:%1; color:%2;"
+                "  selection-background-color:%4; selection-color:%5; }")
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
+                 ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(), ui::colors::AMBER()));
+    // Set initial selection to the persisted (or default) value.
+    for (int i = 0; i < page_size_combo_->count(); ++i) {
+        if (page_size_combo_->itemData(i).toInt() == page_size_) {
+            QSignalBlocker block(page_size_combo_);
+            page_size_combo_->setCurrentIndex(i);
+            break;
+        }
+    }
+    h->addWidget(page_size_combo_);
+
+    // ── Wiring ───────────────────────────────────────────────────────────────
+    connect(btn_first_, &QPushButton::clicked, this, [this]() {
+        if (current_page_ != 1) { current_page_ = 1; populate_table(); }
+    });
+    connect(btn_prev_, &QPushButton::clicked, this, [this]() {
+        if (current_page_ > 1) { --current_page_; populate_table(); }
+    });
+    connect(btn_next_, &QPushButton::clicked, this, [this]() {
+        if (current_page_ < total_pages()) { ++current_page_; populate_table(); }
+    });
+    connect(btn_last_, &QPushButton::clicked, this, [this]() {
+        const int last = total_pages();
+        if (current_page_ != last) { current_page_ = last; populate_table(); }
+    });
+    connect(page_size_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int idx) {
+                const int new_size = page_size_combo_->itemData(idx).toInt();
+                if (new_size <= 0 || new_size == page_size_)
+                    return;
+                // Preserve the topmost visible row across page-size changes:
+                // figure out which row is at the top right now, then jump to
+                // the page that contains it under the new page size.
+                const int top_row_idx = (current_page_ - 1) * page_size_;
+                page_size_ = new_size;
+                current_page_ = (top_row_idx / page_size_) + 1;
+                SettingsRepository::instance().set("portfolio.blotter.page_size",
+                                                   QString::number(page_size_), "portfolio");
+                populate_table();
+            });
 }
 
 void PortfolioBlotter::set_holdings(const QVector<portfolio::HoldingWithQuote>& holdings) {
@@ -217,14 +358,94 @@ void PortfolioBlotter::on_header_clicked(int section) {
     }
 
     emit sort_changed(sort_col_, sort_dir_);
+    // Sorting changes which rows are at the top — jump to page 1 so users
+    // see the new "highest" rows instead of staying on a deep page that may
+    // now contain unrelated content.
+    current_page_ = 1;
     populate_table();
 }
 
 void PortfolioBlotter::on_row_clicked(int row, int) {
-    if (row >= 0 && row < sorted_.size()) {
-        selected_symbol_ = sorted_[row].symbol;
+    // Row index is into the current page slice (paged_view), not sorted_.
+    const auto page = paged_view();
+    if (row >= 0 && row < page.size()) {
+        selected_symbol_ = page[row].symbol;
         emit symbol_selected(selected_symbol_);
     }
+}
+
+// ── Pagination helpers ──────────────────────────────────────────────────────
+
+QVector<portfolio::HoldingWithQuote> PortfolioBlotter::visible_view() const {
+    // Apply text filter + sector filter on top of the already-sorted set.
+    // We rebuild this every populate_table — the dataset is bounded (a few
+    // hundred holdings at most for a real portfolio).
+    QVector<portfolio::HoldingWithQuote> out;
+    out.reserve(sorted_.size());
+    const QString needle = filter_text_.toLower();
+    const bool has_sector = !sector_symbols_.isEmpty();
+
+    QSet<QString> sector_set;
+    if (has_sector) {
+        for (const auto& s : sector_symbols_)
+            sector_set.insert(s.toLower());
+    }
+
+    for (const auto& h : sorted_) {
+        if (!needle.isEmpty() && !h.symbol.toLower().contains(needle))
+            continue;
+        if (has_sector && !sector_set.contains(h.symbol.toLower()))
+            continue;
+        out.append(h);
+    }
+    return out;
+}
+
+QVector<portfolio::HoldingWithQuote> PortfolioBlotter::paged_view() const {
+    const auto all = visible_view();
+    if (page_size_ <= 0)
+        return all;
+    const int start = (current_page_ - 1) * page_size_;
+    if (start >= all.size())
+        return {};
+    const int end = std::min<int>(start + page_size_, all.size());
+    return all.mid(start, end - start);
+}
+
+int PortfolioBlotter::total_pages() const {
+    const int total = visible_view().size();
+    if (total == 0 || page_size_ <= 0)
+        return 1;
+    return (total + page_size_ - 1) / page_size_;
+}
+
+void PortfolioBlotter::clamp_current_page() {
+    const int last = total_pages();
+    if (current_page_ < 1) current_page_ = 1;
+    if (current_page_ > last) current_page_ = last;
+}
+
+void PortfolioBlotter::update_pagination_controls() {
+    if (!footer_status_)
+        return;
+
+    const int total = visible_view().size();
+    const int last_page = total_pages();
+    const int start_idx = (total == 0) ? 0 : (current_page_ - 1) * page_size_ + 1;
+    const int end_idx = std::min<int>(current_page_ * page_size_, total);
+
+    if (total == 0) {
+        footer_status_->setText("No positions");
+    } else {
+        footer_status_->setText(QString("Showing %1-%2 of %3").arg(start_idx).arg(end_idx).arg(total));
+    }
+
+    footer_page_label_->setText(QString("Page %1 of %2").arg(current_page_).arg(last_page));
+
+    btn_first_->setEnabled(current_page_ > 1);
+    btn_prev_->setEnabled(current_page_ > 1);
+    btn_next_->setEnabled(current_page_ < last_page);
+    btn_last_->setEnabled(current_page_ < last_page);
 }
 
 void PortfolioBlotter::populate_table() {
@@ -275,10 +496,15 @@ void PortfolioBlotter::populate_table() {
     };
     std::stable_sort(sorted_.begin(), sorted_.end(), cmp);
 
-    table_->setRowCount(sorted_.size());
+    // Compute the current page's row slice — the rest of the function only
+    // populates the visible window. clamp_current_page handles the case where
+    // a filter/sort change shrinks the view below the current page index.
+    clamp_current_page();
+    const auto page_rows = paged_view();
+    table_->setRowCount(page_rows.size());
 
-    for (int r = 0; r < sorted_.size(); ++r) {
-        const auto& h = sorted_[r];
+    for (int r = 0; r < page_rows.size(); ++r) {
+        const auto& h = page_rows[r];
         table_->setRowHeight(r, 28);
 
         auto set_cell = [&](int col, const QString& text, const char* color = nullptr,
@@ -356,6 +582,9 @@ void PortfolioBlotter::populate_table() {
             table_->selectRow(r);
         }
     }
+
+    // Footer status + nav button enabled-state must reflect what we just rendered.
+    update_pagination_controls();
 }
 
 QString PortfolioBlotter::format_value(double v, int dp) const {
@@ -373,34 +602,21 @@ void PortfolioBlotter::set_sector_filter(const QStringList& symbols) {
 }
 
 void PortfolioBlotter::apply_filter() {
-    for (int r = 0; r < table_->rowCount(); ++r) {
-        auto* item = table_->item(r, 0); // symbol column
-        if (!item)
-            continue;
-        const QString sym = item->text().toLower();
-
-        const bool text_ok = filter_text_.isEmpty() || sym.contains(filter_text_);
-
-        bool sector_ok = sector_symbols_.isEmpty();
-        if (!sector_ok) {
-            for (const auto& s : sector_symbols_) {
-                if (sym == s.toLower()) {
-                    sector_ok = true;
-                    break;
-                }
-            }
-        }
-
-        table_->setRowHidden(r, !(text_ok && sector_ok));
-    }
+    // With pagination, the table only contains the current page slice — there
+    // are no hidden rows to toggle. Filter changes shrink the visible_view, so
+    // jump to page 1 and rebuild. visible_view() inside populate_table re-applies
+    // both filter_text_ and sector_symbols_ from scratch.
+    current_page_ = 1;
+    populate_table();
 }
 
 void PortfolioBlotter::on_context_menu(const QPoint& pos) {
     const int row = table_->rowAt(pos.y());
-    if (row < 0 || row >= sorted_.size())
+    const auto page = paged_view();
+    if (row < 0 || row >= page.size())
         return;
 
-    const QString symbol = sorted_[row].symbol;
+    const QString symbol = page[row].symbol;
 
     QMenu menu(this);
     menu.setStyleSheet(QString("QMenu { background:%1; color:%2; border:1px solid %3; padding:4px; }"

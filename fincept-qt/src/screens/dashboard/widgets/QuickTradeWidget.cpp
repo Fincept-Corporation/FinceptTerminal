@@ -254,9 +254,13 @@ void QuickTradeWidget::apply_quote(const services::QuoteData& q) {
     change_label_->setText(chg_str);
     change_label_->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(chg_col));
 
-    double spread = q.price * 0.0005;
-    bid_label_->setText(QString("BID %1").arg(q.price - spread, 0, 'f', 2));
-    ask_label_->setText(QString("ASK %1").arg(q.price + spread, 0, 'f', 2));
+    // QuoteData from yfinance has no bid/ask — show em-dashes rather than
+    // a fabricated spread (the previous price*0.0005 placeholder was
+    // misleading on a trade-entry widget). Real bid/ask must come from a
+    // broker quote stream (`broker:<id>:<account>:quote:<sym>`) which the
+    // user wires up via the gear-icon config — wiring deferred.
+    bid_label_->setText(QStringLiteral("BID  —"));
+    ask_label_->setText(QStringLiteral("ASK  —"));
 
     double qty = qty_input_->text().toDouble();
     if (qty > 0)

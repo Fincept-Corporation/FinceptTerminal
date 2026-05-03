@@ -78,10 +78,39 @@ class DataHub : public QObject {
         const QString& pattern,
         std::function<void(const QString&, const QVariant&)> slot);
 
-    /// Remove every subscription owned by `owner`.
+    /// Remove every subscription (concrete + pattern) owned by `owner`.
     void unsubscribe(QObject* owner);
-    /// Remove only the subscription for `owner` on `topic`.
+    /// Remove only the concrete-topic subscription for `owner` on `topic`.
+    /// Does NOT touch pattern subscriptions — use `unsubscribe_pattern()`
+    /// for that. The two registries are separate.
     void unsubscribe(QObject* owner, const QString& topic);
+    /// Remove only the wildcard-pattern subscription for `owner` on `pattern`.
+    /// Symmetric to `subscribe_pattern()`. No-op if not currently subscribed.
+    void unsubscribe_pattern(QObject* owner, const QString& pattern);
+
+    // ── Error subscriptions ─────────────────────────────────────────────────
+    //
+    // The `topic_error` Qt signal fans every error to every connected slot;
+    // each handler then has to filter by topic name. For consumers that
+    // only care about errors on one specific topic family, the
+    // `subscribe_errors` family below provides per-topic / per-pattern
+    // filtering inside the hub. The `owner` lifetime contract is identical
+    // to the data subscribe API: auto-cleanup on destroyed().
+
+    /// Receive `publish_error()` events for a single concrete topic.
+    QMetaObject::Connection subscribe_errors(
+        QObject* owner,
+        const QString& topic,
+        std::function<void(const QString& error)> slot);
+
+    /// Receive `publish_error()` events for every topic matching `pattern`.
+    QMetaObject::Connection subscribe_pattern_errors(
+        QObject* owner,
+        const QString& pattern,
+        std::function<void(const QString& topic, const QString& error)> slot);
+
+    void unsubscribe_errors(QObject* owner, const QString& topic);
+    void unsubscribe_pattern_errors(QObject* owner, const QString& pattern);
 
     // ── Publishing (producer side) ──────────────────────────────────────────
 
@@ -212,6 +241,19 @@ class DataHub : public QObject {
         // Coalesce state — non-zero policy.coalesce_within_ms only.
         bool coalesce_pending = false;   ///< a deferred publish is armed
         QVariant coalesce_latest;        ///< most recent value inside window
+        // Gap 3 fix: a per-publish ttl override used to be written into
+        // policy.ttl_ms, leaking the override into subsequent publishes.
+        // Stored separately now; do_publish reads policy.ttl_ms unless
+        // ttl_override_ms > 0, in which case the override is applied
+        // ONLY for the current publish's freshness window.
+        int ttl_override_ms = 0;
+    };
+
+    struct ErrorSub {
+        QPointer<QObject> owner;
+        std::function<void(const QString&)> single_slot;        // subscribe_errors
+        std::function<void(const QString&, const QString&)> pattern_slot; // subscribe_pattern_errors
+        bool is_pattern = false;
     };
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -240,6 +282,14 @@ class DataHub : public QObject {
     QHash<QObject*, QSet<QString>> owner_patterns_;
 
     QHash<QString, TopicState> topics_;
+
+    // Per-topic / per-pattern error subscriptions (Gap 7 fix). Symmetric
+    // to subscriptions_ / pattern_subscriptions_ but keyed for the error
+    // fan-out path inside publish_error().
+    QHash<QString, QVector<ErrorSub>> error_subscriptions_;
+    QHash<QString, QVector<ErrorSub>> error_pattern_subscriptions_;
+    QHash<QObject*, QSet<QString>> error_owner_topics_;
+    QHash<QObject*, QSet<QString>> error_owner_patterns_;
 
     // Policies applied by pattern — lower-priority than explicit set_policy().
     QList<QPair<QString, TopicPolicy>> pattern_policies_;

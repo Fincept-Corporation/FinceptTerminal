@@ -30,8 +30,12 @@ class MarketPulsePanel : public QWidget {
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
 
-  private slots:
+  public slots:
+    /// Public so the Dashboard REFRESH button can drive it directly. The
+    /// internal timer also wires to this slot.
     void refresh_data();
+
+  private slots:
     void refresh_market_hours();
 
   private:

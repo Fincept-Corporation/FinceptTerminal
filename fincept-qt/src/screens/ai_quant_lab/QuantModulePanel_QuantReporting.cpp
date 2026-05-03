@@ -56,6 +56,7 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
 
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
+    tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // Local LOAD SAMPLE helper — same shape as the other panels.
     auto add_sample_btn = [this](QLineEdit* edit, QWidget* parent, unsigned seed,
@@ -398,13 +399,14 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     fqvl->addStretch();
     tabs->addTab(fq_tab, "Factor Quantiles");
 
-    vl->addWidget(tabs, 1);
+    vl->addWidget(tabs);
 
     auto* rc = new QWidget(w);
     results_layout_ = new QVBoxLayout(rc);
     results_layout_->setContentsMargins(0, 8, 0, 0);
     results_layout_->setSpacing(8);
     vl->addWidget(rc);
+    vl->addStretch();
 
     return w;
 }

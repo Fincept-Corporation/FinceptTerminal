@@ -730,6 +730,7 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v019_sector_cache.cpp
     src/storage/sqlite/migrations/v020_security_audit_log.cpp
     src/storage/sqlite/migrations/v021_max_tokens_default.cpp
+    src/storage/sqlite/migrations/v022_portfolio_broker_link.cpp
 )
 
 # Python runner
@@ -871,6 +872,7 @@ set(SERVICE_SOURCES
     src/services/portfolio/PortfolioAnalyticsService.cpp
     src/services/quantlib/QuantLibClient.cpp
     src/services/economics/EconomicsService.cpp
+    src/services/economics/MacroCalendarService.cpp
     src/services/agents/AgentService.cpp
     src/services/file_manager/FileManagerService.cpp
 
@@ -1227,6 +1229,9 @@ set(SCREEN_SOURCES
     src/screens/ai_quant_lab/QuantModulePanel_RL.cpp
     src/screens/ai_quant_lab/QuantModulePanel_DeepAgent.cpp
     src/screens/ai_quant_lab/QuantModulePanel_QuantReporting.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_AdvancedDisplays.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_AIMLDisplays.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_CoreDisplays.cpp
     src/screens/ai_quant_lab/QuantModulePanel_Misc.cpp
 
     # Backtesting
@@ -1432,6 +1437,9 @@ set_source_files_properties(
     src/screens/ai_quant_lab/QuantModulePanel_RL.cpp
     src/screens/ai_quant_lab/QuantModulePanel_DeepAgent.cpp
     src/screens/ai_quant_lab/QuantModulePanel_QuantReporting.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_AdvancedDisplays.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_AIMLDisplays.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_CoreDisplays.cpp
     src/screens/ai_quant_lab/QuantModulePanel_Misc.cpp
     src/screens/akshare/AkShareScreen.cpp
     src/screens/algo_trading/AlgoTradingScreen.cpp
@@ -1485,7 +1493,6 @@ set_source_files_properties(
     src/screens/dashboard/DashboardToolBar.cpp
     src/screens/dashboard/MarketPulsePanel.cpp
     src/screens/dashboard/TickerBar.cpp
-    src/screens/dashboard/WidgetGrid.cpp
     src/screens/dashboard/canvas/AddWidgetDialog.cpp
     src/screens/dashboard/canvas/DashboardCanvas.cpp
     src/screens/dashboard/canvas/DashboardTemplates.cpp

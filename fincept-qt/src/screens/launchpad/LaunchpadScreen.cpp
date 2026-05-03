@@ -28,9 +28,8 @@ constexpr const char* kLaunchpadTag = "Launchpad";
 } // namespace
 
 LaunchpadScreen* LaunchpadScreen::instance() {
-    // Lazy singleton owned by Qt's top-level-widget tracking. Set
-    // WA_QuitOnClose to true via the close handler so the user explicitly
-    // closing the launchpad quits the app.
+    // Lazy singleton; lives until process exit. closeEvent calls
+    // QCoreApplication::quit() so we don't need WA_DeleteOnClose.
     static LaunchpadScreen* s = new LaunchpadScreen(nullptr);
     return s;
 }
@@ -97,12 +96,17 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
 }
 
 void LaunchpadScreen::surface() {
+    // Profile may have changed since construction (Switch Profile relaunches
+    // a new process today, but this keeps the label honest if that ever
+    // becomes in-process). Cheap to refresh on every surface.
+    if (greeting_)
+        greeting_->setText(QString("Profile: %1").arg(ProfileManager::instance().active()));
+
     if (isVisible() && !isMinimized()) {
         raise();
         activateWindow();
         return;
     }
-    user_initiated_close_ = false;
     showNormal();
     raise();
     activateWindow();
@@ -111,14 +115,11 @@ void LaunchpadScreen::surface() {
 }
 
 void LaunchpadScreen::closeEvent(QCloseEvent* event) {
-    if (!user_initiated_close_) {
-        // Path: a button handler (on_new_window etc.) called hide() and
-        // closeEvent never fires for hide() — but if Qt does send one
-        // via window-close protocol while we're in the middle of
-        // surfacing a frame, accept it without quitting.
-        event->accept();
-        return;
-    }
+    // Reaching closeEvent always means the OS sent a window-close (X button
+    // / Alt-F4 / system menu). Programmatic dismissals from button handlers
+    // use hide() and never enter here. Treat every close as a user quit so
+    // the app actually exits — otherwise lastWindowClosed re-surfaces this
+    // window in an unkillable loop.
     LOG_INFO(kLaunchpadTag, "User closed Launchpad — quitting");
     event->accept();
     QCoreApplication::quit();
@@ -133,23 +134,46 @@ void LaunchpadScreen::on_new_window() {
 }
 
 void LaunchpadScreen::on_switch_profile() {
-    // Minimal v1: prompt for a profile name. The full UI (list of all
-    // profiles + per-profile metadata) lands when Phase 6 / Settings
-    // hierarchy gets attention.
+    // Show known profiles + a "Create new…" entry. Picking an existing
+    // profile relaunches with --profile <name>. Picking the create entry
+    // falls through to a text prompt.
     LOG_INFO(kLaunchpadTag, "Switch Profile button clicked");
+
+    static const QString kCreateNew = QStringLiteral("+ Create new profile…");
+    QStringList items = ProfileManager::instance().list_profiles();
+    items.removeDuplicates();
+    items.append(kCreateNew);
+
+    const QString current = ProfileManager::instance().active();
+    int current_idx = items.indexOf(current);
+    if (current_idx < 0) current_idx = 0;
+
     bool ok = false;
-    const QString name = QInputDialog::getText(
-        this, "Switch Profile",
-        "Enter profile name (will create if not exists):",
-        QLineEdit::Normal, ProfileManager::instance().active(), &ok);
-    if (!ok || name.trimmed().isEmpty())
+    const QString picked = QInputDialog::getItem(
+        this, "Switch Profile", "Pick a profile or create one:",
+        items, current_idx, /*editable=*/false, &ok);
+    if (!ok)
         return;
-    // Profile switch is a process-level operation today (set_active +
-    // relaunch). The full in-process switch lands with Phase 1b's auth
-    // lift. For now: spawn a new instance with --profile arg and quit.
+
+    QString target = picked;
+    if (picked == kCreateNew) {
+        bool name_ok = false;
+        target = QInputDialog::getText(
+            this, "Create Profile", "New profile name:",
+            QLineEdit::Normal, QString(), &name_ok).trimmed();
+        if (!name_ok || target.isEmpty())
+            return;
+    }
+
+    if (target == current) {
+        LOG_INFO(kLaunchpadTag, "Switch Profile: target equals current — no-op");
+        return;
+    }
+
+    // Process-level switch today (set_active + relaunch). In-process switch
+    // lands with Phase 1b's auth lift.
     const QString exe = QCoreApplication::applicationFilePath();
-    user_initiated_close_ = true; // ensures closeEvent quits
-    QProcess::startDetached(exe, {"--profile", name.trimmed()});
+    QProcess::startDetached(exe, {"--profile", target});
     QCoreApplication::quit();
 }
 

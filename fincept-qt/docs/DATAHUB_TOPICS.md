@@ -45,6 +45,7 @@ hub registrant for `ws:<exchange>:*`.
 | Pattern | Producer | TTL | Min interval | Notes |
 |---|---|---|---|---|
 | `econ:<source>:<request_id>` | `EconomicsService` | 1 h | 60 s | `source` = fred, worldbank, imf, oecd, etc. |
+| `econ:fincept:upcoming_events` | `MacroCalendarService` | 5 min | 60 s | HTTP-backed (`api.fincept.in/macro/upcoming-events?limit=25`). Payload: `QJsonArray` of `{event, country, date, time, importance, actual, forecast, previous}`. Consumed by the dashboard `EconomicCalendarWidget`. |
 | `dbnomics:<provider>:<dataset>:<series>` | `DBnomicsService` | 1 h | 60 s | Observations endpoint only |
 | `govdata:<provider>:<request_id>` | `GovDataService` | 1 h | 60 s | Gov open-data APIs |
 

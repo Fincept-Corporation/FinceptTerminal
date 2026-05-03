@@ -139,6 +139,13 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
     QSpinBox* returns_window_spin_ = nullptr;
     // Signals config
     QComboBox* signal_gen_combo_ = nullptr;
+    // Labels-to-signals config
+    QComboBox* l2s_label_type_combo_ = nullptr;
+    // Indicator sweep config
+    QComboBox* sweep_indicator_combo_ = nullptr;
+    QSpinBox* sweep_min_spin_ = nullptr;
+    QSpinBox* sweep_max_spin_ = nullptr;
+    QSpinBox* sweep_step_spin_ = nullptr;
 
     // Center - results
     QTabWidget* result_tabs_ = nullptr;

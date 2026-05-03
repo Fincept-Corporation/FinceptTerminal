@@ -18,17 +18,28 @@ struct Portfolio {
     QString description;
     QString created_at;
     QString updated_at;
+    /// Empty for manually-created portfolios. Set when imported from a
+    /// connected broker account — links back to broker_accounts.id so
+    /// PortfolioService can route live quote fetches through the broker
+    /// instead of yfinance. See migration v022.
+    QString broker_account_id;
 };
 
 struct PortfolioAsset {
     int id = 0;
     QString portfolio_id;
-    QString symbol;
+    QString symbol;          // canonical: yfinance-format ("RELIANCE.NS"). Used by sparklines, replay, news, sectors.
     double quantity = 0;
     double avg_buy_price = 0;
     QString first_purchase_date;
     QString last_updated;
-    QString sector; // empty = not yet resolved; filled from import JSON or SectorResolver
+    QString sector;          // empty = not yet resolved; filled from import JSON or SectorResolver
+    /// Broker-native ticker (e.g. "RELIANCE", no exchange suffix). Empty for
+    /// manually-imported assets. Combined with `exchange` to form the
+    /// EXCHANGE:SYMBOL key brokers like Zerodha need for /quote calls.
+    QString broker_symbol;
+    /// Exchange code (e.g. "NSE", "BSE"). Empty for non-broker imports.
+    QString exchange;
 };
 
 struct Transaction {

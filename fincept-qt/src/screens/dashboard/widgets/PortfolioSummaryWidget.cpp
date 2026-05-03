@@ -12,11 +12,11 @@
 
 namespace fincept::screens::widgets {
 
-// Demo holdings if no DB portfolio exists
-static const QVector<PortfolioSummaryWidget::Holding> kDemoHoldings = {
-    {"AAPL", 10.0, 178.50}, {"MSFT", 5.0, 415.00}, {"NVDA", 8.0, 880.00},
-    {"GOOGL", 3.0, 165.00}, {"TSLA", 6.0, 210.00}, {"SPY", 12.0, 520.00},
-};
+// Empty-state placeholder used when portfolio_holdings is empty. Previously
+// this fell back to a hardcoded `{AAPL, MSFT, NVDA, GOOGL, TSLA, SPY}` list,
+// which looked indistinguishable from a real portfolio — confusing for users
+// who'd just connected a broker. We now render a clear empty-state banner
+// instead so there's no ambiguity about what data they're looking at.
 
 PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
     : BaseWidget("PORTFOLIO SUMMARY", parent, ui::colors::POSITIVE) {
@@ -141,9 +141,32 @@ void PortfolioSummaryWidget::load_holdings() {
         }
     }
 
-    // Fall back to demo portfolio
     if (holdings.isEmpty()) {
-        holdings = kDemoHoldings;
+        // Render empty-state instead of fake demo holdings.
+        set_loading(false);
+        last_holdings_.clear();
+        last_quotes_.clear();
+        hub_unsubscribe_all();
+        // Wipe rows + zero the summary counters.
+        while (list_layout_->count() > 0) {
+            auto* item = list_layout_->takeAt(0);
+            if (item->widget())
+                item->widget()->deleteLater();
+            delete item;
+        }
+        auto* empty = new QLabel(QStringLiteral(
+            "No holdings configured.\nAdd positions via the Portfolio screen."));
+        empty->setAlignment(Qt::AlignCenter);
+        empty->setWordWrap(true);
+        empty->setStyleSheet(QString("color: %1; font-size: 11px; padding: 20px; background: transparent;")
+                                 .arg(ui::colors::TEXT_TERTIARY()));
+        list_layout_->addWidget(empty);
+        list_layout_->addStretch();
+        total_value_lbl_->setText(QStringLiteral("$0"));
+        day_pnl_lbl_->setText(QStringLiteral("$0"));
+        total_pnl_lbl_->setText(QStringLiteral("$0"));
+        num_holdings_lbl_->setText(QStringLiteral("0"));
+        return;
     }
 
     fetch_prices(holdings);

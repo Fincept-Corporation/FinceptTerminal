@@ -54,11 +54,6 @@ class LaunchpadScreen : public QMainWindow {
     QPushButton* btn_new_window_ = nullptr;
     QPushButton* btn_switch_profile_ = nullptr;
     QPushButton* btn_open_layout_ = nullptr;
-
-    /// True once the user explicitly clicks the OS close button on the
-    /// launchpad — distinguishes "user wants to quit" from "we're hiding
-    /// because they spawned a new window from a button click."
-    bool user_initiated_close_ = false;
 };
 
 } // namespace fincept::screens

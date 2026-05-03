@@ -77,6 +77,28 @@ class QuantModulePanel : public QWidget {
     void display_fortitudo_result(const QString& command, const QJsonObject& data);
     void display_quant_reporting_result(const QString& command, const QJsonObject& data);
     void display_gluonts_result(const QString& command, const QJsonObject& data);
+    // ADVANCED-category panel renderers (card-based, mirror analytics pattern).
+    // hft and rolling_retraining have bespoke per-tab UI in on_result() (in-tab
+    // cards/tables, progress bar, schedule cards) — these display_*_result
+    // versions exist as fallbacks for direct invocation but are not dispatched
+    // by on_result() because the bespoke UI is the primary surface.
+    void display_hft_result(const QString& command, const QJsonObject& data);
+    void display_rolling_retraining_result(const QString& command, const QJsonObject& data);
+    void display_advanced_models_result(const QString& command, const QJsonObject& data);
+    void display_feature_engineering_result(const QString& command, const QJsonObject& data);
+    // AI/ML-category renderers (rl_trading, online_learning, meta_learning)
+    void display_rl_trading_result(const QString& command, const QJsonObject& data);
+    void display_online_learning_result(const QString& command, const QJsonObject& data);
+    void display_meta_learning_result(const QString& command, const QJsonObject& data);
+    // CORE-category renderers (factor_discovery, model_library, live_signals)
+    // backtesting kept on its existing display_backtest_result KPI grid.
+    void display_factor_discovery_result(const QString& command, const QJsonObject& data);
+    void display_model_library_result(const QString& command, const QJsonObject& data);
+    void display_live_signals_result(const QString& command, const QJsonObject& data);
+    void display_portfolio_opt_result(const QString& command, const QJsonObject& data);
+    void display_factor_evaluation_result(const QString& command, const QJsonObject& data);
+    void display_strategy_builder_result(const QString& command, const QJsonObject& data);
+    void display_data_processors_result(const QString& command, const QJsonObject& data);
     void show_loading(const QString& message);
     void display_error(const QString& msg);
     void clear_results();

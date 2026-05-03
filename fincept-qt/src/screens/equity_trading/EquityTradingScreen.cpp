@@ -1268,8 +1268,14 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
     QObject::disconnect(conn);
 
     // Collect selected rows with their (possibly edited) yfinance tickers.
+    // We carry the broker-native pair (symbol + exchange) alongside the
+    // yfinance form so PortfolioService can route live quote calls through
+    // the broker instead of yfinance for portfolios linked to a connected
+    // account. See migration v022.
     struct ImportRow {
-        QString symbol;
+        QString symbol;          // yfinance-format ("RELIANCE.NS"). Canonical key.
+        QString broker_symbol;   // broker-native ("RELIANCE")
+        QString exchange;        // "NSE" / "BSE" / etc.
         double quantity = 0;
         double avg_price = 0;
     };
@@ -1283,7 +1289,11 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
         const QString yf = table->item(r, 3)->text().trimmed().toUpper();
         if (yf.isEmpty())
             continue;
-        rows.push_back({yf, holdings[r].quantity, holdings[r].avg_price});
+        rows.push_back({yf,
+                        holdings[r].symbol,    // broker-native ticker as returned by broker
+                        holdings[r].exchange,
+                        holdings[r].quantity,
+                        holdings[r].avg_price});
     }
     if (rows.isEmpty()) {
         QMessageBox::information(this, "Import Holdings", "Nothing selected to import.");
@@ -1296,7 +1306,8 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
         for (const auto& row : rows) {
             if (row.quantity <= 0 || row.symbol.isEmpty())
                 continue;
-            svc.add_asset(portfolio_id, row.symbol, row.quantity, row.avg_price, today);
+            svc.add_asset(portfolio_id, row.symbol, row.quantity, row.avg_price, today,
+                          row.broker_symbol, row.exchange);
         }
     };
 
@@ -1323,7 +1334,11 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
                                                          .arg(count)
                                                          .arg(p.name));
                         });
-        ps.create_portfolio(name, account.display_name, currency, "Imported from " + broker_id.toUpper());
+        // Stamp the new portfolio with the broker account_id so live quotes
+        // route through the broker (PortfolioService::build_summary).
+        ps.create_portfolio(name, account.display_name, currency,
+                            "Imported from " + broker_id.toUpper(),
+                            account.account_id);
     } else {
         const QString pid = existing_combo->currentData().toString();
         if (pid.isEmpty()) {

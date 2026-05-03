@@ -995,6 +995,82 @@ QWidget* BacktestingScreen::build_right_panel() {
         cmd_config_stack_->addWidget(page);
     }
 
+    // Page 9: labels_to_signals — converts ML labels into trading signals.
+    // Reuses the same horizon/threshold spinboxes from the labels page (they
+    // describe the underlying label generation) and only adds a label-type
+    // selector here.
+    {
+        auto* page = new QWidget(this);
+        auto* pl = new QVBoxLayout(page);
+        pl->setContentsMargins(0, 0, 0, 0);
+        pl->setSpacing(4);
+        auto* t = new QLabel("LABELS -> SIGNALS", page);
+        t->setStyleSheet(section_style);
+        pl->addWidget(t);
+
+        auto* tl = new QLabel("LABEL TYPE", page);
+        tl->setStyleSheet(label_style);
+        pl->addWidget(tl);
+        l2s_label_type_combo_ = new QComboBox(page);
+        l2s_label_type_combo_->setStyleSheet(combo_style);
+        for (const auto& lt : label_types())
+            l2s_label_type_combo_->addItem(lt);
+        pl->addWidget(l2s_label_type_combo_);
+
+        pl->addStretch();
+        cmd_config_stack_->addWidget(page);
+    }
+
+    // Page 10: indicator_sweep — runs an indicator across a parameter grid
+    // and returns aggregated stats per parameter value. Indicator combo is
+    // populated dynamically via on_result("get_indicators").
+    {
+        auto* page = new QWidget(this);
+        auto* pl = new QVBoxLayout(page);
+        pl->setContentsMargins(0, 0, 0, 0);
+        pl->setSpacing(4);
+        auto* t = new QLabel("INDICATOR SWEEP", page);
+        t->setStyleSheet(section_style);
+        pl->addWidget(t);
+
+        auto* il = new QLabel("INDICATOR", page);
+        il->setStyleSheet(label_style);
+        pl->addWidget(il);
+        sweep_indicator_combo_ = new QComboBox(page);
+        sweep_indicator_combo_->setStyleSheet(combo_style);
+        pl->addWidget(sweep_indicator_combo_);
+
+        auto* mnl = new QLabel("MIN", page);
+        mnl->setStyleSheet(label_style);
+        pl->addWidget(mnl);
+        sweep_min_spin_ = new QSpinBox(page);
+        sweep_min_spin_->setRange(1, 1000);
+        sweep_min_spin_->setValue(5);
+        sweep_min_spin_->setStyleSheet(input_style);
+        pl->addWidget(sweep_min_spin_);
+
+        auto* mxl = new QLabel("MAX", page);
+        mxl->setStyleSheet(label_style);
+        pl->addWidget(mxl);
+        sweep_max_spin_ = new QSpinBox(page);
+        sweep_max_spin_->setRange(1, 1000);
+        sweep_max_spin_->setValue(50);
+        sweep_max_spin_->setStyleSheet(input_style);
+        pl->addWidget(sweep_max_spin_);
+
+        auto* sl = new QLabel("STEP", page);
+        sl->setStyleSheet(label_style);
+        pl->addWidget(sl);
+        sweep_step_spin_ = new QSpinBox(page);
+        sweep_step_spin_->setRange(1, 100);
+        sweep_step_spin_->setValue(1);
+        sweep_step_spin_->setStyleSheet(input_style);
+        pl->addWidget(sweep_step_spin_);
+
+        pl->addStretch();
+        cmd_config_stack_->addWidget(page);
+    }
+
     cmd_config_stack_->setCurrentIndex(0);
     vl->addWidget(cmd_config_stack_);
 
@@ -1098,9 +1174,13 @@ void BacktestingScreen::on_command_changed(int index) {
     active_command_ = index;
     update_command_buttons();
 
-    // Map command index to config stack page
+    // Map command index to config stack page. The page order in
+    // build_left_panel must match the command order in
+    // BacktestingTypes::all_commands() — adding a new command requires
+    // appending a matching cmd_config_stack_ page in the same position.
     // commands: backtest(0), optimize(1), walk_forward(2), indicator(3),
-    //           indicator_signals(4), labels(5), splits(6), returns(7), signals(8)
+    //           indicator_signals(4), labels(5), splits(6), returns(7),
+    //           signals(8), labels_to_signals(9), indicator_sweep(10)
     cmd_config_stack_->setCurrentIndex(index);
 }
 
@@ -1319,6 +1399,26 @@ QJsonObject BacktestingScreen::gather_args() {
 
     if (cmd_id == "signals") {
         args["generatorType"] = signal_gen_combo_->currentText();
+    }
+
+    if (cmd_id == "labels_to_signals") {
+        // Wire the same horizon/threshold inputs the labels page uses — the
+        // Python pipeline first generates labels and then converts them to
+        // signals, so the upstream label config still applies.
+        args["labelType"] = l2s_label_type_combo_->currentText();
+        QJsonObject params;
+        params["horizon"] = labels_horizon_spin_->value();
+        params["threshold"] = labels_threshold_spin_->value();
+        args["params"] = params;
+    }
+
+    if (cmd_id == "indicator_sweep") {
+        args["indicator"] = sweep_indicator_combo_->currentData().toString();
+        QJsonObject range;
+        range["min"] = sweep_min_spin_->value();
+        range["max"] = sweep_max_spin_->value();
+        range["step"] = sweep_step_spin_->value();
+        args["paramRange"] = range;
     }
 
     return args;
@@ -1562,10 +1662,14 @@ void BacktestingScreen::on_result(const QString& provider, const QString& comman
     if (command == "get_indicators") {
         if (provider != providers_[active_provider_].slug)
             return;
-        // Populate both indicator combos from {indicators:{Cat:[{id,name}]}}
+        // Populate all three indicator combos from {indicators:{Cat:[{id,name}]}}.
+        // sweep_indicator_combo_ may be null if a future refactor strips the
+        // sweep page — guard so we don't crash older builds during migration.
         auto ind_obj = payload.value("indicators").toObject();
         indicator_combo_->clear();
         ind_signal_indicator_combo_->clear();
+        if (sweep_indicator_combo_)
+            sweep_indicator_combo_->clear();
         for (const auto& cat : ind_obj.keys()) {
             for (const auto& iv : ind_obj.value(cat).toArray()) {
                 auto o = iv.toObject();
@@ -1573,6 +1677,8 @@ void BacktestingScreen::on_result(const QString& provider, const QString& comman
                 auto name = o.value("name").toString(id);
                 indicator_combo_->addItem(name, id);
                 ind_signal_indicator_combo_->addItem(name, id);
+                if (sweep_indicator_combo_)
+                    sweep_indicator_combo_->addItem(name, id);
             }
         }
         return;

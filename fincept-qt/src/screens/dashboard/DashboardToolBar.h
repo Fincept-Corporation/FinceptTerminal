@@ -1,5 +1,6 @@
 #pragma once
 #include <QDateTime>
+#include <QHideEvent>
 #include <QLabel>
 #include <QPushButton>
 #include <QShowEvent>
@@ -21,11 +22,13 @@ class DashboardToolBar : public QWidget {
     void add_widget_clicked();
     void save_layout_clicked();
     void reset_layout_clicked();
+    void refresh_clicked();
     void toggle_pulse_clicked();
     void toggle_compact_clicked();
 
   protected:
     void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
   private:
     void update_clock();
@@ -39,8 +42,6 @@ class DashboardToolBar : public QWidget {
     QPushButton* pulse_btn_ = nullptr;
     QPushButton* compact_btn_ = nullptr;
     QTimer clock_timer_;
-    bool connected_ = true;
-    bool pulse_visible_ = true;
 };
 
 } // namespace fincept::screens

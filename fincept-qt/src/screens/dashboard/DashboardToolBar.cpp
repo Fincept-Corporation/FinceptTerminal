@@ -100,6 +100,13 @@ DashboardToolBar::DashboardToolBar(QWidget* parent) : QWidget(parent) {
 
     make_sep(rl);
 
+    auto* refresh_btn = new QPushButton("REFRESH");
+    refresh_btn->setFixedHeight(20);
+    refresh_btn->setObjectName("dtBtn");
+    refresh_btn->setToolTip(QStringLiteral("Force-refresh all live data on the dashboard"));
+    connect(refresh_btn, &QPushButton::clicked, this, &DashboardToolBar::refresh_clicked);
+    rl->addWidget(refresh_btn);
+
     auto* add_btn = new QPushButton("+ ADD");
     add_btn->setFixedHeight(20);
     add_btn->setObjectName("dtAddBtn");
@@ -123,10 +130,17 @@ DashboardToolBar::DashboardToolBar(QWidget* parent) : QWidget(parent) {
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this](const ui::ThemeTokens&) { refresh_theme(); });
 
+    // P3: timer interval is set here, but start() is deferred to showEvent()
+    // so the toolbar doesn't tick when the dashboard tab isn't visible.
+    clock_timer_.setInterval(1000);
     connect(&clock_timer_, &QTimer::timeout, this, &DashboardToolBar::update_clock);
-    clock_timer_.start(1000);
 
     refresh_theme();
+}
+
+void DashboardToolBar::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    clock_timer_.stop();
 }
 
 void DashboardToolBar::refresh_theme() {
@@ -181,6 +195,9 @@ void DashboardToolBar::refresh_theme() {
 void DashboardToolBar::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     refresh_theme();
+    update_clock();
+    if (!clock_timer_.isActive())
+        clock_timer_.start();
 }
 
 void DashboardToolBar::update_clock() {
@@ -192,7 +209,6 @@ void DashboardToolBar::set_widget_count(int count) {
 }
 
 void DashboardToolBar::set_connected(bool connected) {
-    connected_ = connected;
     status_text_->setText(connected ? "LIVE" : "OFFLINE");
     // refresh_theme handles the base color; override just this label dynamically
     status_text_->setStyleSheet(QString("color:%1;font-weight:bold;background:transparent;")

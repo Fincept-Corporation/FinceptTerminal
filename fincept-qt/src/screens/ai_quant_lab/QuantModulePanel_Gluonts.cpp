@@ -57,6 +57,7 @@ QWidget* QuantModulePanel::build_gluonts_panel() {
 
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
+    tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     auto add_sample_btn = [this](QLineEdit* edit, QWidget* parent, unsigned seed,
                                   const QString& tip) -> QPushButton* {
@@ -445,6 +446,7 @@ QWidget* QuantModulePanel::build_gluonts_panel() {
     results_layout_->setContentsMargins(0, 8, 0, 0);
     results_layout_->setSpacing(8);
     vl->addWidget(rc);
+    vl->addStretch();
 
     return w;
 }

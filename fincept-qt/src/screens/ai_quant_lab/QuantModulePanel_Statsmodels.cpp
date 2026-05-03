@@ -57,6 +57,7 @@ QWidget* QuantModulePanel::build_statsmodels_panel() {
 
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
+    tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // Same LOAD SAMPLE helper shape as functime
     auto add_sample_btn = [this](QLineEdit* edit, QWidget* parent, unsigned seed,
@@ -420,6 +421,7 @@ QWidget* QuantModulePanel::build_statsmodels_panel() {
     results_layout_->setContentsMargins(0, 8, 0, 0);
     results_layout_->setSpacing(8);
     vl->addWidget(rc);
+    vl->addStretch();
 
     return w;
 }

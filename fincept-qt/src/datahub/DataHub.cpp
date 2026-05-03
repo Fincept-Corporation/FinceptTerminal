@@ -18,6 +18,13 @@ qint64 now_ms() {
     return QDateTime::currentMSecsSinceEpoch();
 }
 
+// Gap 3 helper: returns the freshness window in ms for a topic state.
+// Picks the per-publish override if set; otherwise the policy TTL.
+template <typename TopicStateT>
+inline int effective_ttl_ms(const TopicStateT& st) {
+    return st.ttl_override_ms > 0 ? st.ttl_override_ms : st.policy.ttl_ms;
+}
+
 // Phase 8 / decision 9.2: walk up from the owner to its top-level widget
 // and read the `fincept.active_for_work` dynamic property that WindowFrame
 // sets in its constructor + changeEvent. If the owner is not a QWidget or
@@ -166,45 +173,87 @@ void DataHub::rebuild_pattern_index() {
 void DataHub::on_owner_destroyed(QObject* owner) {
     // Note: owner is being destroyed, do NOT dereference it as QObject*.
     // We only use the pointer value as a map key.
-    QMutexLocker lock(&mutex_);
+    QStringList newly_idle;  // emitted outside the lock at the end
+    {
+        QMutexLocker lock(&mutex_);
 
-    auto topics_it = owner_topics_.find(owner);
-    if (topics_it != owner_topics_.end()) {
-        for (const auto& topic : topics_it.value()) {
-            auto sub_it = subscriptions_.find(topic);
-            if (sub_it == subscriptions_.end()) continue;
-            auto& vec = sub_it.value();
-            vec.erase(std::remove_if(vec.begin(), vec.end(),
-                         [owner](const Subscription& s) { return s.owner.data() == owner; }),
-                      vec.end());
-            if (vec.isEmpty()) {
-                subscriptions_.erase(sub_it);
-                // Topic just went idle — drop cached state if policy opted in.
-                // Done under the same lock to keep state coherent.
-                if (auto ts_it = topics_.find(topic);
-                    ts_it != topics_.end() && ts_it->policy.drop_on_idle) {
-                    topics_.erase(ts_it);
+        // Gap 1 fix: also drop owner from the per-topic error map. Done
+        // first because the data unsubscribe path uses the same maps for
+        // bookkeeping cleanup.
+        if (auto eit = error_owner_topics_.find(owner); eit != error_owner_topics_.end()) {
+            for (const auto& topic : eit.value()) {
+                auto bucket = error_subscriptions_.find(topic);
+                if (bucket == error_subscriptions_.end()) continue;
+                bucket.value().erase(std::remove_if(bucket.value().begin(), bucket.value().end(),
+                    [owner](const ErrorSub& e) { return e.owner.data() == owner; }), bucket.value().end());
+                if (bucket.value().isEmpty()) error_subscriptions_.erase(bucket);
+            }
+            error_owner_topics_.erase(eit);
+        }
+        if (auto epit = error_owner_patterns_.find(owner); epit != error_owner_patterns_.end()) {
+            for (const auto& pattern : epit.value()) {
+                auto bucket = error_pattern_subscriptions_.find(pattern);
+                if (bucket == error_pattern_subscriptions_.end()) continue;
+                bucket.value().erase(std::remove_if(bucket.value().begin(), bucket.value().end(),
+                    [owner](const ErrorSub& e) { return e.owner.data() == owner; }), bucket.value().end());
+                if (bucket.value().isEmpty()) error_pattern_subscriptions_.erase(bucket);
+            }
+            error_owner_patterns_.erase(epit);
+        }
+
+        auto topics_it = owner_topics_.find(owner);
+        if (topics_it != owner_topics_.end()) {
+            for (const auto& topic : topics_it.value()) {
+                auto sub_it = subscriptions_.find(topic);
+                if (sub_it == subscriptions_.end()) continue;
+                auto& vec = sub_it.value();
+                vec.erase(std::remove_if(vec.begin(), vec.end(),
+                             [owner](const Subscription& s) { return s.owner.data() == owner; }),
+                          vec.end());
+                if (vec.isEmpty()) {
+                    subscriptions_.erase(sub_it);
+                    // Topic just went idle — drop cached state if policy opted in.
+                    if (auto ts_it = topics_.find(topic);
+                        ts_it != topics_.end() && ts_it->policy.drop_on_idle) {
+                        topics_.erase(ts_it);
+                    }
+                    newly_idle.append(topic);
                 }
-                emit topic_idle(topic);
+            }
+            owner_topics_.erase(topics_it);
+        }
+
+        auto pats_it = owner_patterns_.find(owner);
+        if (pats_it != owner_patterns_.end()) {
+            for (const auto& pattern : pats_it.value()) {
+                auto sub_it = pattern_subscriptions_.find(pattern);
+                if (sub_it == pattern_subscriptions_.end()) continue;
+                auto& vec = sub_it.value();
+                vec.erase(std::remove_if(vec.begin(), vec.end(),
+                             [owner](const Subscription& s) { return s.owner.data() == owner; }),
+                          vec.end());
+                if (vec.isEmpty())
+                    pattern_subscriptions_.erase(sub_it);
+            }
+            owner_patterns_.erase(pats_it);
+        }
+
+        // Gap 4 fix: any topics that just lost their final subscriber must
+        // also be removed from coalesce_pending_ — otherwise we'd dispatch
+        // a producer refresh() for a topic nobody is listening to anymore.
+        if (!newly_idle.isEmpty()) {
+            QSet<QString> idle_set;
+            for (const auto& t : newly_idle) idle_set.insert(t);
+            for (auto it = coalesce_pending_.begin(); it != coalesce_pending_.end(); ) {
+                it.value().erase(std::remove_if(it.value().begin(), it.value().end(),
+                    [&idle_set](const QString& t) { return idle_set.contains(t); }),
+                    it.value().end());
+                if (it.value().isEmpty()) it = coalesce_pending_.erase(it);
+                else ++it;
             }
         }
-        owner_topics_.erase(topics_it);
     }
-
-    auto pats_it = owner_patterns_.find(owner);
-    if (pats_it != owner_patterns_.end()) {
-        for (const auto& pattern : pats_it.value()) {
-            auto sub_it = pattern_subscriptions_.find(pattern);
-            if (sub_it == pattern_subscriptions_.end()) continue;
-            auto& vec = sub_it.value();
-            vec.erase(std::remove_if(vec.begin(), vec.end(),
-                         [owner](const Subscription& s) { return s.owner.data() == owner; }),
-                      vec.end());
-            if (vec.isEmpty())
-                pattern_subscriptions_.erase(sub_it);
-        }
-        owner_patterns_.erase(pats_it);
-    }
+    for (const auto& topic : newly_idle) emit topic_idle(topic);
 }
 
 void DataHub::deliver_initial_value(
@@ -220,7 +269,7 @@ void DataHub::deliver_initial_value(
         if (it != topics_.end() && it->value.isValid()) {
             const auto policy = it->policy;
             if (policy.push_only ||
-                (now_ms() - it->last_publish_ms) < policy.ttl_ms) {
+                (now_ms() - it->last_publish_ms) < effective_ttl_ms(it.value())) {
                 snapshot = it->value;
                 have_value = true;
             }
@@ -263,7 +312,7 @@ QMetaObject::Connection DataHub::subscribe(
         // topics have no producer-side pull, so skip — they only get data via
         // explicit publish() calls.
         const bool have_fresh_value = st.value.isValid() && st.last_publish_ms > 0 &&
-                                       (now_ms() - st.last_publish_ms) < st.policy.ttl_ms;
+                                       (now_ms() - st.last_publish_ms) < effective_ttl_ms(st);
         if (!have_fresh_value && !st.in_flight && !st.policy.push_only) {
             needs_cold_start_fetch = true;
         }
@@ -272,9 +321,15 @@ QMetaObject::Connection DataHub::subscribe(
     // Auto-cleanup on owner destruction. The QObject::destroyed signal
     // fires on the owner's thread — marshal to ours via QueuedConnection
     // so mutex_ is acquired from the hub thread.
+    // Gap 8 fix: bind to the member function (not a fresh lambda) so
+    // Qt::UniqueConnection actually deduplicates the connection for
+    // owners that re-subscribe repeatedly (show/hide cycles). Lambdas
+    // would create a fresh slot pointer per call, defeating dedup.
+    // The destroyed signal hands us the dying QObject* — use it directly
+    // instead of capturing.
     auto conn = connect(owner, &QObject::destroyed, this,
-        [this, owner](QObject*) { on_owner_destroyed(owner); },
-        Qt::QueuedConnection);
+        &DataHub::on_owner_destroyed,
+        Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
 
     if (became_active) {
         emit topic_active(topic);
@@ -315,13 +370,19 @@ QMetaObject::Connection DataHub::subscribe_pattern(
             if (it->in_flight) continue;
             const bool have_fresh =
                 it->value.isValid() && it->last_publish_ms > 0 &&
-                (t - it->last_publish_ms) < it->policy.ttl_ms;
+                (t - it->last_publish_ms) < effective_ttl_ms(it.value());
             if (!have_fresh) cold_start_topics.append(it.key());
         }
     }
+    // Gap 8 fix: bind to the member function (not a fresh lambda) so
+    // Qt::UniqueConnection actually deduplicates the connection for
+    // owners that re-subscribe repeatedly (show/hide cycles). Lambdas
+    // would create a fresh slot pointer per call, defeating dedup.
+    // The destroyed signal hands us the dying QObject* — use it directly
+    // instead of capturing.
     auto conn = connect(owner, &QObject::destroyed, this,
-        [this, owner](QObject*) { on_owner_destroyed(owner); },
-        Qt::QueuedConnection);
+        &DataHub::on_owner_destroyed,
+        Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
     if (!cold_start_topics.isEmpty())
         request(cold_start_topics, /*force=*/true);
     return conn;
@@ -332,24 +393,127 @@ void DataHub::unsubscribe(QObject* owner) {
 }
 
 void DataHub::unsubscribe(QObject* owner, const QString& topic) {
-    QMutexLocker lock(&mutex_);
-    auto sub_it = subscriptions_.find(topic);
-    if (sub_it == subscriptions_.end()) return;
-    auto& vec = sub_it.value();
-    vec.erase(std::remove_if(vec.begin(), vec.end(),
-                 [owner](const Subscription& s) { return s.owner.data() == owner; }),
-              vec.end());
-    if (vec.isEmpty()) {
-        subscriptions_.erase(sub_it);
-        if (auto ts_it = topics_.find(topic);
-            ts_it != topics_.end() && ts_it->policy.drop_on_idle) {
-            topics_.erase(ts_it);
+    bool became_idle = false;
+    {
+        QMutexLocker lock(&mutex_);
+        auto sub_it = subscriptions_.find(topic);
+        if (sub_it == subscriptions_.end()) {
+            // Still need to clean owner_topics_ in case of bookkeeping skew.
+            if (auto it = owner_topics_.find(owner); it != owner_topics_.end()) {
+                it.value().remove(topic);
+                if (it.value().isEmpty()) owner_topics_.erase(it);
+            }
+            return;
         }
-        emit topic_idle(topic);
+        auto& vec = sub_it.value();
+        vec.erase(std::remove_if(vec.begin(), vec.end(),
+                     [owner](const Subscription& s) { return s.owner.data() == owner; }),
+                  vec.end());
+        if (vec.isEmpty()) {
+            subscriptions_.erase(sub_it);
+            if (auto ts_it = topics_.find(topic);
+                ts_it != topics_.end() && ts_it->policy.drop_on_idle) {
+                topics_.erase(ts_it);
+            }
+            became_idle = true;
+            // Gap 4 fix: if the topic was buffered for a coalesced refresh,
+            // drop it now — there's no point dispatching a producer call for
+            // a topic that has no subscribers left.
+            for (auto it = coalesce_pending_.begin(); it != coalesce_pending_.end(); ) {
+                it.value().removeAll(topic);
+                if (it.value().isEmpty()) it = coalesce_pending_.erase(it);
+                else ++it;
+            }
+        }
+        if (auto it = owner_topics_.find(owner); it != owner_topics_.end()) {
+            it.value().remove(topic);
+            if (it.value().isEmpty()) owner_topics_.erase(it);
+        }
     }
-    if (auto it = owner_topics_.find(owner); it != owner_topics_.end()) {
+    if (became_idle) emit topic_idle(topic);
+}
+
+void DataHub::unsubscribe_pattern(QObject* owner, const QString& pattern) {
+    QMutexLocker lock(&mutex_);
+    auto sub_it = pattern_subscriptions_.find(pattern);
+    if (sub_it != pattern_subscriptions_.end()) {
+        auto& vec = sub_it.value();
+        vec.erase(std::remove_if(vec.begin(), vec.end(),
+                     [owner](const Subscription& s) { return s.owner.data() == owner; }),
+                  vec.end());
+        if (vec.isEmpty()) pattern_subscriptions_.erase(sub_it);
+    }
+    if (auto it = owner_patterns_.find(owner); it != owner_patterns_.end()) {
+        it.value().remove(pattern);
+        if (it.value().isEmpty()) owner_patterns_.erase(it);
+    }
+}
+
+// ── Error subscriptions (Gap 7 fix) ────────────────────────────────────────
+
+QMetaObject::Connection DataHub::subscribe_errors(
+    QObject* owner, const QString& topic,
+    std::function<void(const QString&)> slot) {
+    Q_ASSERT(owner && "subscribe_errors requires a non-null owner");
+    {
+        QMutexLocker lock(&mutex_);
+        ErrorSub e;
+        e.owner = owner;
+        e.single_slot = std::move(slot);
+        e.is_pattern = false;
+        error_subscriptions_[topic].append(std::move(e));
+        error_owner_topics_[owner].insert(topic);
+    }
+    return connect(owner, &QObject::destroyed, this,
+        &DataHub::on_owner_destroyed,
+        Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
+}
+
+QMetaObject::Connection DataHub::subscribe_pattern_errors(
+    QObject* owner, const QString& pattern,
+    std::function<void(const QString&, const QString&)> slot) {
+    Q_ASSERT(owner && "subscribe_pattern_errors requires a non-null owner");
+    {
+        QMutexLocker lock(&mutex_);
+        ErrorSub e;
+        e.owner = owner;
+        e.pattern_slot = std::move(slot);
+        e.is_pattern = true;
+        error_pattern_subscriptions_[pattern].append(std::move(e));
+        error_owner_patterns_[owner].insert(pattern);
+    }
+    return connect(owner, &QObject::destroyed, this,
+        &DataHub::on_owner_destroyed,
+        Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
+}
+
+void DataHub::unsubscribe_errors(QObject* owner, const QString& topic) {
+    QMutexLocker lock(&mutex_);
+    if (auto it = error_subscriptions_.find(topic); it != error_subscriptions_.end()) {
+        auto& vec = it.value();
+        vec.erase(std::remove_if(vec.begin(), vec.end(),
+                     [owner](const ErrorSub& e) { return e.owner.data() == owner; }),
+                  vec.end());
+        if (vec.isEmpty()) error_subscriptions_.erase(it);
+    }
+    if (auto it = error_owner_topics_.find(owner); it != error_owner_topics_.end()) {
         it.value().remove(topic);
-        if (it.value().isEmpty()) owner_topics_.erase(it);
+        if (it.value().isEmpty()) error_owner_topics_.erase(it);
+    }
+}
+
+void DataHub::unsubscribe_pattern_errors(QObject* owner, const QString& pattern) {
+    QMutexLocker lock(&mutex_);
+    if (auto it = error_pattern_subscriptions_.find(pattern); it != error_pattern_subscriptions_.end()) {
+        auto& vec = it.value();
+        vec.erase(std::remove_if(vec.begin(), vec.end(),
+                     [owner](const ErrorSub& e) { return e.owner.data() == owner; }),
+                  vec.end());
+        if (vec.isEmpty()) error_pattern_subscriptions_.erase(it);
+    }
+    if (auto it = error_owner_patterns_.find(owner); it != error_owner_patterns_.end()) {
+        it.value().remove(pattern);
+        if (it.value().isEmpty()) error_owner_patterns_.erase(it);
     }
 }
 
@@ -439,9 +603,12 @@ void DataHub::do_publish(const QString& topic, const QVariant& value,
         st.total_publishes += 1;
         st.in_flight = false;
         st.last_error.clear();  // successful publish clears any stored error
-        if (ttl_override.count() > 0) {
-            st.policy.ttl_ms = static_cast<int>(ttl_override.count());
-        }
+        // Gap 3 fix: store the per-publish TTL separately so the next
+        // override-less publish reverts to policy.ttl_ms. Zero = no
+        // override, fall back to policy.ttl_ms.
+        st.ttl_override_ms = ttl_override.count() > 0
+                                 ? static_cast<int>(ttl_override.count())
+                                 : 0;
         coalesce_ms = st.policy.coalesce_within_ms;
         if (coalesce_ms > 0) {
             st.coalesce_latest = value;
@@ -508,6 +675,16 @@ void DataHub::publish_error(const QString& topic, const QString& error) {
         }, Qt::QueuedConnection);
         return;
     }
+
+    // Snapshot per-topic error subscribers under the lock so we invoke
+    // their slots outside it (same pattern as emit_to_subscribers).
+    struct PendingErr {
+        QPointer<QObject> owner;
+        std::function<void(const QString&)> single_slot;
+        std::function<void(const QString&, const QString&)> pattern_slot;
+        bool is_pattern = false;
+    };
+    QVector<PendingErr> error_targets;
     {
         QMutexLocker lock(&mutex_);
         auto& st = state_for(topic);
@@ -515,7 +692,24 @@ void DataHub::publish_error(const QString& topic, const QString& error) {
         st.last_error = error;
         st.last_error_ms = now_ms();
         st.total_errors += 1;
+
+        if (auto it = error_subscriptions_.find(topic); it != error_subscriptions_.end()) {
+            for (const auto& e : it.value())
+                if (e.owner) error_targets.append({e.owner, e.single_slot, {}, false});
+        }
+        for (auto it = error_pattern_subscriptions_.begin();
+             it != error_pattern_subscriptions_.end(); ++it) {
+            if (!pattern_matches(it.key(), topic)) continue;
+            for (const auto& e : it.value())
+                if (e.owner) error_targets.append({e.owner, {}, e.pattern_slot, true});
+        }
     }
+    for (const auto& t : error_targets) {
+        if (!t.owner) continue;
+        if (t.is_pattern) t.pattern_slot(topic, error);
+        else              t.single_slot(error);
+    }
+
     LOG_WARN("DataHub", QString("publish_error topic='%1' error='%2'").arg(topic).arg(error.left(200)));
     emit topic_error(topic, error);
 }
@@ -594,7 +788,7 @@ QVariant DataHub::peek(const QString& topic) const {
         return it->value;
     if (it->last_publish_ms <= 0)
         return {};
-    if ((now_ms() - it->last_publish_ms) >= it->policy.ttl_ms)
+    if ((now_ms() - it->last_publish_ms) >= effective_ttl_ms(it.value()))
         return {};  // stale
     return it->value;
 }
@@ -659,14 +853,19 @@ void DataHub::request(const QStringList& topics, bool force) {
 
     if (!orphan_topics.isEmpty()) {
         // Topic requested by a consumer but no producer claims a matching
-        // pattern. This is almost always a typo in the topic string or a
-        // missing ensure_registered_with_hub() call — log once per request
-        // so the miss surfaces during development.
-        LOG_WARN("DataHub",
-                 QString("request(): %1 topic(s) have no producer — likely unregistered "
-                         "service or typo. First few: %2")
-                     .arg(orphan_topics.size())
-                     .arg(orphan_topics.mid(0, 3).join(QStringLiteral(", "))));
+        // pattern. This is almost always a missing
+        // ensure_registered_with_hub() call in main.cpp (the producer
+        // didn't run before the consumer subscribed) or a typo in the
+        // topic string. Surface it loudly so the miss is obvious during
+        // development — silent orphans cause "subscribe but never get
+        // data" bugs that are hard to trace.
+        LOG_ERROR("DataHub",
+                  QString("ORPHAN TOPIC(S) — %1 topic(s) have no registered producer. "
+                          "Check that the owning service ran ensure_registered_with_hub() "
+                          "in main.cpp BEFORE any consumer subscribed, and verify the "
+                          "topic string spelling. First few: %2")
+                      .arg(orphan_topics.size())
+                      .arg(orphan_topics.mid(0, 5).join(QStringLiteral(", "))));
     }
     if (need_arm) {
         // The coalesce timer lives on the hub thread; arming from another
@@ -748,7 +947,7 @@ void DataHub::scheduler_body() {
 
             const bool have_value = st.value.isValid() && st.last_publish_ms > 0;
             const bool ttl_expired = !have_value ||
-                (t - st.last_publish_ms) >= st.policy.ttl_ms;
+                (t - st.last_publish_ms) >= effective_ttl_ms(st);
             const bool min_interval_ok =
                 (t - st.last_refresh_request_ms) >= st.policy.min_interval_ms;
             if (!ttl_expired || !min_interval_ok) continue;

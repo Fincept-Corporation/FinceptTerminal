@@ -534,11 +534,37 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         return;
 
     // RL Trading: training finished → re-enable button, keep progress/logs visible so
-    // the user can inspect the run. The generic result display below still runs.
+    // the user can inspect the run. The card-based renderer below paints into
+    // the bottom results pane (in addition to the bespoke log/progress widgets).
     if (module_id == "rl_trading" && command == "train" && rl_train_button_) {
         rl_train_button_->setEnabled(true);
         if (rl_progress_bar_)
             rl_progress_bar_->setValue(100);
+    }
+    if (module_id == "rl_trading") {
+        display_rl_trading_result(command, payload);
+        return;
+    }
+    if (module_id == "online_learning") {
+        display_online_learning_result(command, payload);
+        return;
+    }
+    if (module_id == "meta_learning") {
+        display_meta_learning_result(command, payload);
+        return;
+    }
+    // CORE-category renderers (backtesting handled later via display_backtest_result)
+    if (module_id == "factor_discovery") {
+        display_factor_discovery_result(command, payload);
+        return;
+    }
+    if (module_id == "model_library") {
+        display_model_library_result(command, payload);
+        return;
+    }
+    if (module_id == "live_signals") {
+        display_live_signals_result(command, payload);
+        return;
     }
 
     // ── CFA Quant: uniform result shape across all analyses ──────────────────
@@ -580,6 +606,37 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
     // ── GluonTS: rich card-based display per sub-tab ─────────────────────────
     if (module_id == "gluonts") {
         display_gluonts_result(command, payload);
+        return;
+    }
+
+    // ── ADVANCED-category panels: card-based displays ────────────────────────
+    // hft and rolling_retraining are intentionally NOT dispatched here — they
+    // have bespoke per-tab UI (in-tab card grid + order-book tables for HFT;
+    // progress bar + schedule cards for Rolling Retraining) handled later in
+    // this function. Re-routing them to the generic results pane would create
+    // a duplicate, disconnected display.
+    if (module_id == "advanced_models") {
+        display_advanced_models_result(command, payload);
+        return;
+    }
+    if (module_id == "feature_engineering") {
+        display_feature_engineering_result(command, payload);
+        return;
+    }
+    if (module_id == "portfolio_opt") {
+        display_portfolio_opt_result(command, payload);
+        return;
+    }
+    if (module_id == "factor_evaluation") {
+        display_factor_evaluation_result(command, payload);
+        return;
+    }
+    if (module_id == "strategy_builder") {
+        display_strategy_builder_result(command, payload);
+        return;
+    }
+    if (module_id == "data_processors") {
+        display_data_processors_result(command, payload);
         return;
     }
 
@@ -807,361 +864,13 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         return;
     }
 
-    // ── Factor Discovery ─────────────────────────────────────────────────────
-    if (module_id == "factor_discovery") {
-        if (!payload["success"].toBool()) {
-            display_error(payload["error"].toString());
-            return;
-        }
-        clear_results();
-        if (command == "get_factor_library") {
-            auto factors = payload["factors"].toArray();
-            QString out = QString("Factor Library — %1 factors\n\n").arg(factors.size());
-            for (const auto& f : factors) {
-                auto obj = f.toObject();
-                out += QString("• %1\n  Category: %2  |  Expression: %3\n")
-                           .arg(obj["name"].toString(), obj["category"].toString("-"), obj["expression"].toString("-"));
-            }
-            auto* lbl = new QLabel(out, this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(QString("%1 factors").arg(factors.size()));
-            return;
-        }
-        if (command == "get_data") {
-            auto total = payload["total_records"].toInt();
-            auto range = payload["date_range"].toObject();
-            auto warning = payload["warning"].toString();
-            QString summary = QString("Data fetched — %1 records  |  %2 → %3")
-                                  .arg(total)
-                                  .arg(range["start"].toString())
-                                  .arg(range["end"].toString());
-            if (!warning.isEmpty())
-                summary += QString("\n⚠ %1").arg(warning);
-            auto* lbl = new QLabel(summary, this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(QString("%1 records").arg(total));
-            return;
-        }
-        if (command == "get_instruments") {
-            auto instruments = payload["instruments"].toArray();
-            QStringList names;
-            for (const auto& i : instruments)
-                names << i.toString();
-            auto* lbl = new QLabel(QString("Instruments (%1): %2").arg(names.size()).arg(names.join(", ")), this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(QString("%1 instruments").arg(names.size()));
-            return;
-        }
-        display_result(payload);
-        return;
-    }
-
-    // ── Model Library ────────────────────────────────────────────────────────
-    if (module_id == "model_library") {
-        if (!payload["success"].toBool()) {
-            display_error(payload["error"].toString());
-            return;
-        }
-        clear_results();
-        if (command == "list_models") {
-            auto models = payload["models"].toArray();
-            QString out = QString("Available Models (%1)\n\n").arg(models.size());
-            for (const auto& m : models) {
-                auto obj = m.toObject();
-                out += QString("• %1  [%2]\n  %3\n")
-                           .arg(obj["name"].toString(), obj["id"].toString(), obj["description"].toString("-"));
-            }
-            if (models.isEmpty())
-                out += "No models listed (check qlib availability)";
-            auto* lbl = new QLabel(out, this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(QString("%1 models").arg(models.size()));
-            return;
-        }
-        if (command == "check_status") {
-            auto qlib_ok = payload["qlib_available"].toBool();
-            auto models_avail = payload["models_available"].toObject();
-            QStringList available, unavailable;
-            for (auto it = models_avail.begin(); it != models_avail.end(); ++it)
-                (it.value().toBool() ? available : unavailable) << it.key();
-            auto* lbl = new QLabel(QString("Qlib: %1\nAvailable: %2\nUnavailable: %3")
-                                       .arg(qlib_ok ? "✓ Ready" : "✗ Not installed")
-                                       .arg(available.join(", "))
-                                       .arg(unavailable.join(", ")),
-                                   this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(qlib_ok ? "Qlib ready" : "Qlib unavailable");
-            return;
-        }
-        if (command == "train_model") {
-            auto model_id = payload["model_id"].toString();
-            auto metrics = payload["metrics"].toObject();
-            QString out = QString("Model Trained: %1\n").arg(model_id);
-            for (auto it = metrics.begin(); it != metrics.end(); ++it)
-                out += QString("  %1: %2\n").arg(it.key()).arg(it.value().toDouble(), 0, 'f', 4);
-            auto* lbl = new QLabel(out, this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(QString("Trained: %1").arg(model_id));
-            return;
-        }
-        display_result(payload);
-        return;
-    }
-
-    // ── Live Signals ─────────────────────────────────────────────────────────
-    if (module_id == "live_signals") {
-        if (!payload["success"].toBool()) {
-            display_error(payload["error"].toString());
-            return;
-        }
-        clear_results();
-        if (command == "get_data") {
-            auto total = payload["total_records"].toInt();
-            auto range = payload["date_range"].toObject();
-            auto warning = payload["warning"].toString();
-            auto instr = payload["instruments"].toArray();
-            QStringList names;
-            for (const auto& i : instr)
-                names << i.toString();
-            QString out = QString("Signal Data — %1 records\nInstruments: %2\nRange: %3 → %4")
-                              .arg(total)
-                              .arg(names.join(", "))
-                              .arg(range["start"].toString())
-                              .arg(range["end"].toString());
-            if (!warning.isEmpty())
-                out += QString("\n⚠ %1").arg(warning);
-            auto* lbl = new QLabel(out, this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(QString("%1 records").arg(total));
-            return;
-        }
-        if (command == "get_factor_analysis") {
-            auto factors = payload["factors"].toArray();
-            QString out = QString("Factor Analysis — %1 factors\n\n").arg(factors.size());
-            for (const auto& f : factors) {
-                auto obj = f.toObject();
-                out += QString("• %1  IC: %2  Sharpe: %3\n")
-                           .arg(obj["name"].toString("-"))
-                           .arg(obj["ic"].isNull() ? "N/A" : QString::number(obj["ic"].toDouble(), 'f', 4))
-                           .arg(obj["sharpe"].isNull() ? "N/A" : QString::number(obj["sharpe"].toDouble(), 'f', 3));
-            }
-            auto* lbl = new QLabel(out, this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(QString("%1 factors").arg(factors.size()));
-            return;
-        }
-        if (command == "get_feature_importance") {
-            auto features = payload["feature_importance"].toObject();
-            QString out = "Feature Importance\n\n";
-            QVector<QPair<QString, double>> sorted;
-            for (auto it = features.begin(); it != features.end(); ++it)
-                sorted.append({it.key(), it.value().toDouble()});
-            std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
-            for (const auto& p : sorted)
-                out += QString("• %-20s %1\n").arg(p.second, 0, 'f', 4).arg(p.first, -20);
-            auto* lbl = new QLabel(out, this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText("Feature importance loaded");
-            return;
-        }
-        display_result(payload);
-        return;
-    }
-
-    // ── Online Learning ──────────────────────────────────────────────────────
-    if (module_id == "online_learning") {
-        if (!payload["success"].toBool()) {
-            display_error(payload["error"].toString());
-            return;
-        }
-        clear_results();
-        if (command == "list_models") {
-            auto models = payload["models"].toArray();
-            auto river = payload["river_available"].toBool();
-            QString out = QString("Online Models (%1)  |  River: %2\n\n")
-                              .arg(models.size())
-                              .arg(river ? "available" : "not installed");
-            for (const auto& m : models) {
-                auto obj = m.toObject();
-                out += QString("• %1  [%2]\n  Trained: %3 samples  |  Updated: %4\n")
-                           .arg(obj["model_id"].toString(), obj["type"].toString())
-                           .arg(obj["samples_trained"].toInt())
-                           .arg(obj["last_updated"].isNull() ? "never" : obj["last_updated"].toString());
-            }
-            auto* lbl = new QLabel(out, this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(QString("%1 model(s)").arg(models.size()));
-            return;
-        }
-        if (command == "create_model") {
-            auto* lbl = new QLabel(
-                QString("Created: %1  [%2]").arg(payload["model_id"].toString(), payload["model_type"].toString()), this);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText("Model created");
-            return;
-        }
-        if (command == "train") {
-            auto mae = payload["current_mae"].toDouble();
-            auto samples = payload["samples_trained"].toInt();
-            auto drift = payload["drift_detected"].toBool();
-            auto pred = payload["prediction"];
-            QString out = QString("Trained — Samples: %1  |  MAE: %2\nDrift: %3")
-                              .arg(samples)
-                              .arg(mae, 0, 'f', 6)
-                              .arg(drift ? "DETECTED" : "none");
-            if (!pred.isNull())
-                out += QString("\nPrediction: %1  →  Actual: %2  |  Error: %3")
-                           .arg(pred.toDouble(), 0, 'f', 6)
-                           .arg(payload["actual"].toDouble(), 0, 'f', 6)
-                           .arg(payload["error"].toDouble(), 0, 'f', 6);
-            auto* lbl = new QLabel(out, this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(drift ? ui::colors::NEGATIVE() : ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(drift ? "⚠ Drift detected" : QString("MAE: %1").arg(mae, 0, 'f', 4));
-            return;
-        }
-        if (command == "predict") {
-            auto pred = payload["prediction"];
-            auto* lbl = new QLabel(
-                QString("Prediction: %1").arg(pred.isNull() ? "N/A" : QString::number(pred.toDouble(), 'f', 6)), this);
-            lbl->setStyleSheet(QString("color:%1; font-weight:700;").arg(module_.color.name()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText("Prediction ready");
-            return;
-        }
-        if (command == "performance") {
-            auto mae = payload["current_mae"].toDouble();
-            auto samples = payload["samples_trained"].toInt();
-            auto drift = payload["drift_detected"].toBool();
-            auto* lbl = new QLabel(QString("Model: %1  [%2]\nSamples: %3  |  MAE: %4\nDrift: %5\nLast updated: %6")
-                                       .arg(payload["model_id"].toString(), payload["model_type"].toString())
-                                       .arg(samples)
-                                       .arg(mae, 0, 'f', 6)
-                                       .arg(drift ? "DETECTED" : "none")
-                                       .arg(payload["last_updated"].isNull() ? "never" : payload["last_updated"].toString()),
-                                   this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(QString("MAE: %1").arg(mae, 0, 'f', 4));
-            return;
-        }
-        display_result(payload);
-        return;
-    }
-
-    // ── Meta Learning ────────────────────────────────────────────────────────
-    if (module_id == "meta_learning") {
-        if (!payload["success"].toBool()) {
-            display_error(payload["error"].toString());
-            return;
-        }
-        clear_results();
-        if (command == "list_models") {
-            auto models = payload["models"].toArray();
-            QString out = QString("Available Models (%1)\n\n").arg(models.size());
-            for (const auto& m : models) {
-                auto obj = m.toObject();
-                out += QString("• %1  [%2 / %3]\n  %4\n")
-                           .arg(obj["name"].toString(), obj["type"].toString(), obj["library"].toString(),
-                                obj["description"].toString("-"));
-            }
-            auto* lbl = new QLabel(out, this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(QString("%1 models").arg(models.size()));
-            return;
-        }
-        if (command == "run_selection") {
-            auto best = payload["best_model"].toString();
-            auto trained = payload["trained_count"].toInt();
-            auto ranking = payload["ranking"].toArray();
-            QString out = QString("Best Model: %1  |  Trained: %2\n\nRanking:\n").arg(best).arg(trained);
-            int rank = 1;
-            for (const auto& r : ranking) {
-                auto obj = r.toObject();
-                auto metrics = obj["metrics"].toObject();
-                out += QString("  %1. %2  R²: %3  RMSE: %4\n")
-                           .arg(rank++)
-                           .arg(obj["model_id"].toString())
-                           .arg(metrics["r2_score"].toDouble(), 0, 'f', 4)
-                           .arg(metrics["rmse"].toDouble(), 0, 'f', 4);
-            }
-            auto* lbl = new QLabel(out, this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(QString("Best: %1").arg(best));
-            return;
-        }
-        if (command == "create_ensemble") {
-            auto* lbl = new QLabel(QString("Ensemble: %1  [%2]\nModels: %3")
-                                       .arg(payload["ensemble_id"].toString("-"), payload["method"].toString("-"))
-                                       .arg(payload["models"].toArray().size()),
-                                   this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText("Ensemble created");
-            return;
-        }
-        if (command == "tune_hyperparameters") {
-            auto best_params = payload["best_params"].toObject();
-            auto best_score = payload["best_score"].toDouble();
-            QString out = QString("Best score: %1\nBest params:\n").arg(best_score, 0, 'f', 4);
-            for (auto it = best_params.begin(); it != best_params.end(); ++it)
-                out += QString("  %1: %2\n").arg(it.key()).arg(it.value().toVariant().toString());
-            auto* lbl = new QLabel(out, this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(QString("Best score: %1").arg(best_score, 0, 'f', 4));
-            return;
-        }
-        if (command == "get_results") {
-            auto results = payload["results"].toObject();
-            QString out = QString("All Results (%1)\n\n").arg(results.size());
-            for (auto it = results.begin(); it != results.end(); ++it) {
-                auto obj = it.value().toObject();
-                auto metrics = obj["metrics"].toObject();
-                out += QString("• %1\n  R²: %2  RMSE: %3\n")
-                           .arg(it.key())
-                           .arg(metrics["r2_score"].toDouble(), 0, 'f', 4)
-                           .arg(metrics["rmse"].toDouble(), 0, 'f', 4);
-            }
-            auto* lbl = new QLabel(out, this);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_PRIMARY()));
-            results_layout_->addWidget(lbl);
-            status_label_->setText(QString("%1 result(s)").arg(results.size()));
-            return;
-        }
-        display_result(payload);
-        return;
-    }
+    // factor_discovery, model_library, live_signals are now rendered by the
+    // card-based dispatch at the top of this function (display_*_result in
+    // QuantModulePanel_CoreDisplays.cpp).
+    //
+    // online_learning and meta_learning are also rendered by card-based
+    // dispatches at the top (display_*_result in
+    // QuantModulePanel_AIMLDisplays.cpp).
 
     // ── HFT ──────────────────────────────────────────────────────────────────
     if (module_id == "hft") {

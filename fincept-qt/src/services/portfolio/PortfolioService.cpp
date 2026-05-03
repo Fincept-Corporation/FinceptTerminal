@@ -6,13 +6,18 @@
 #include "services/sectors/SectorResolver.h"
 #include "storage/repositories/PortfolioRepository.h"
 #include "storage/repositories/SettingsRepository.h"
+#include "trading/AccountManager.h"
+#include "trading/BrokerInterface.h"
+#include "trading/BrokerRegistry.h"
 
 #include <QDateTime>
+#include <QDir>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMutexLocker>
+#include <QStandardPaths>
 #include <QtConcurrent>
 
 #include <algorithm>
@@ -71,8 +76,8 @@ void PortfolioService::load_portfolios() {
 }
 
 void PortfolioService::create_portfolio(const QString& name, const QString& owner, const QString& currency,
-                                        const QString& description) {
-    auto r = PortfolioRepository::instance().create_portfolio(name, owner, currency, description);
+                                        const QString& description, const QString& broker_account_id) {
+    auto r = PortfolioRepository::instance().create_portfolio(name, owner, currency, description, broker_account_id);
     if (r.is_ok()) {
         auto p = PortfolioRepository::instance().get_portfolio(r.value());
         if (p.is_ok())
@@ -141,112 +146,251 @@ void PortfolioService::refresh_summary(const QString& portfolio_id) {
 
 void PortfolioService::build_summary(const QString& portfolio_id, const QVector<portfolio::PortfolioAsset>& assets,
                                      const portfolio::Portfolio& portfolio) {
-    // Collect symbols for batch quote fetch
+    // Routing decision: broker-first when the portfolio is linked to a
+    // connected broker account (broker_account_id non-empty + creds present
+    // + broker exposes get_quotes). yfinance is the universal fallback.
+    if (try_broker_quotes(portfolio_id, assets, portfolio))
+        return;
+
+    // ── yfinance path (legacy / unlinked portfolios) ─────────────────────────
     QStringList symbols;
     symbols.reserve(assets.size());
-    for (const auto& a : assets) {
+    for (const auto& a : assets)
         symbols.append(a.symbol);
-    }
 
-    // Use QPointer for safe async callback (P8)
     QPointer<PortfolioService> self = this;
-
     MarketDataService::instance().fetch_quotes(symbols, [self, portfolio_id, assets,
                                                          portfolio](bool ok, QVector<QuoteData> quotes) {
         if (!self)
             return;
-
-        // Build quote lookup
         QHash<QString, QuoteData> quote_map;
         if (ok) {
             for (const auto& q : quotes)
                 quote_map[q.symbol] = q;
         }
+        self->finalize_summary(portfolio_id, assets, portfolio, quote_map);
+    });
+}
 
-        portfolio::PortfolioSummary summary;
-        summary.portfolio = portfolio;
-        summary.holdings.reserve(assets.size());
+bool PortfolioService::try_broker_quotes(const QString& portfolio_id,
+                                         const QVector<portfolio::PortfolioAsset>& assets,
+                                         const portfolio::Portfolio& portfolio) {
+    if (portfolio.broker_account_id.isEmpty())
+        return false; // unlinked portfolio — yfinance owns it.
 
-        double total_mv = 0;
-        double total_cost = 0;
-        double total_day = 0;
+    // Resolve broker + creds. Any of these missing → fall back silently.
+    auto& acct_mgr = trading::AccountManager::instance();
+    const auto account = acct_mgr.get_account(portfolio.broker_account_id);
+    if (account.account_id.isEmpty() || account.broker_id.isEmpty()) {
+        LOG_WARN("PortfolioSvc",
+                 QString("broker_account_id %1 not found — falling back to yfinance for %2")
+                     .arg(portfolio.broker_account_id, portfolio_id));
+        return false;
+    }
 
-        for (const auto& asset : assets) {
-            portfolio::HoldingWithQuote h;
-            h.symbol = asset.symbol;
-            h.quantity = asset.quantity;
-            h.avg_buy_price = asset.avg_buy_price;
-            h.cost_basis = asset.quantity * asset.avg_buy_price;
-            // Prefer stored sector; fall back to resolver cache (which may
-            // populate async — see sector_resolved handler in constructor).
-            h.sector = asset.sector.isEmpty()
-                           ? SectorResolver::instance().sector_for(asset.symbol)
-                           : asset.sector;
+    auto* broker = trading::BrokerRegistry::instance().get(account.broker_id);
+    if (!broker) {
+        LOG_WARN("PortfolioSvc",
+                 QString("broker '%1' not registered — falling back to yfinance for %2")
+                     .arg(account.broker_id, portfolio_id));
+        return false;
+    }
 
-            auto it = quote_map.find(asset.symbol);
-            if (it != quote_map.end()) {
-                h.current_price = it->price;
-                h.day_change = it->change;
-                h.day_change_percent = it->change_pct;
+    const auto creds = acct_mgr.load_credentials(portfolio.broker_account_id);
+    if (creds.access_token.isEmpty()) {
+        LOG_WARN("PortfolioSvc",
+                 QString("broker account %1 has no access_token — falling back to yfinance for %2")
+                     .arg(portfolio.broker_account_id, portfolio_id));
+        return false;
+    }
+
+    // Build the broker-native key list. Each asset stores broker_symbol +
+    // exchange (populated at import time). Skip assets without a broker
+    // pair — those slipped in before the v022 link or are non-broker rows
+    // mixed into a broker-linked portfolio. They get current_price = 0 from
+    // the lookup and the existing fallback (avg_buy_price) kicks in.
+    QVector<QString> broker_keys;
+    QHash<QString, QString> key_to_yf; // EXCHANGE:SYMBOL → asset.symbol (yfinance)
+    broker_keys.reserve(assets.size());
+    for (const auto& a : assets) {
+        if (a.broker_symbol.isEmpty() || a.exchange.isEmpty())
+            continue;
+        const QString key = a.exchange + ":" + a.broker_symbol;
+        broker_keys.append(key);
+        key_to_yf.insert(key, a.symbol);
+    }
+    if (broker_keys.isEmpty()) {
+        // Linked portfolio but no asset has a broker pair — nothing to fetch
+        // via broker. Fall back to yfinance so the portfolio still renders.
+        LOG_WARN("PortfolioSvc",
+                 QString("broker-linked portfolio %1 has no broker_symbol/exchange on any asset — yfinance fallback")
+                     .arg(portfolio_id));
+        return false;
+    }
+
+    // BrokerHttp::execute blocks on QEventLoop (memory: project_broker_http_blocking).
+    // Wrap the broker call in QtConcurrent::run so the UI thread stays responsive.
+    // P8: capture a QPointer; result is posted back via QMetaObject::invokeMethod.
+    // The QFuture return value is intentionally discarded — we don't need to
+    // wait or cancel; lifetime is governed by the captured QPointer guards.
+    QPointer<PortfolioService> self = this;
+    (void)QtConcurrent::run([self, portfolio_id, assets, portfolio, broker, creds, broker_keys, key_to_yf]() {
+        const auto resp = broker->get_quotes(creds, broker_keys);
+
+        // Hop back to the UI thread (the one that owns *self) before touching
+        // any shared state — finalize_summary writes to the cache mutex and
+        // emits a signal that drives UI updates.
+        QMetaObject::invokeMethod(self, [self, portfolio_id, assets, portfolio, resp, key_to_yf]() {
+            if (!self)
+                return;
+
+            QHash<QString, QuoteData> quote_map;
+            if (resp.success && resp.data.has_value()) {
+                for (const auto& bq : resp.data.value()) {
+                    // bq.symbol is the EXCHANGE:SYMBOL key (Zerodha echoes the
+                    // request key in its response). Translate back to the
+                    // canonical yfinance key the rest of the pipeline uses.
+                    const QString yf_key = key_to_yf.value(bq.symbol);
+                    if (yf_key.isEmpty())
+                        continue; // unknown key — broker returned a row we didn't ask for, skip.
+
+                    QuoteData q;
+                    q.symbol = yf_key;
+                    q.name = yf_key; // brokers don't return a friendly name on /quote.
+                    q.price = bq.ltp;
+                    q.change = bq.change;
+                    q.change_pct = bq.change_pct;
+                    q.high = bq.high;
+                    q.low = bq.low;
+                    q.volume = bq.volume;
+                    quote_map.insert(yf_key, q);
+                }
+                LOG_INFO("PortfolioSvc",
+                         QString("Broker quotes: %1 of %2 for portfolio %3")
+                             .arg(quote_map.size()).arg(key_to_yf.size()).arg(portfolio_id));
             } else {
-                // Fallback to avg buy price if no quote
-                h.current_price = asset.avg_buy_price;
+                // Broker call failed — log and fall back to yfinance for
+                // _this_ refresh. The portfolio stays linked; next refresh
+                // will retry the broker.
+                LOG_WARN("PortfolioSvc",
+                         QString("broker get_quotes failed for %1: %2 — falling back to yfinance")
+                             .arg(portfolio_id, resp.error.left(200)));
+                QStringList symbols;
+                symbols.reserve(assets.size());
+                for (const auto& a : assets)
+                    symbols.append(a.symbol);
+                MarketDataService::instance().fetch_quotes(symbols, [self, portfolio_id, assets,
+                                                                     portfolio](bool ok, QVector<QuoteData> quotes) {
+                    if (!self)
+                        return;
+                    QHash<QString, QuoteData> qm;
+                    if (ok)
+                        for (const auto& q : quotes)
+                            qm.insert(q.symbol, q);
+                    self->finalize_summary(portfolio_id, assets, portfolio, qm);
+                });
+                return;
             }
 
-            h.market_value = h.quantity * h.current_price;
-            h.unrealized_pnl = h.market_value - h.cost_basis;
-            h.unrealized_pnl_percent = (h.cost_basis > 0) ? (h.unrealized_pnl / h.cost_basis) * 100.0 : 0;
-
-            total_mv += h.market_value;
-            total_cost += h.cost_basis;
-            total_day += h.day_change * h.quantity;
-
-            if (h.unrealized_pnl >= 0)
-                summary.gainers++;
-            else
-                summary.losers++;
-
-            summary.holdings.append(h);
-        }
-
-        // Compute weights
-        for (auto& h : summary.holdings) {
-            h.weight = (total_mv > 0) ? (h.market_value / total_mv) * 100.0 : 0;
-        }
-
-        summary.total_market_value = total_mv;
-        summary.total_cost_basis = total_cost;
-        summary.total_unrealized_pnl = total_mv - total_cost;
-        summary.total_unrealized_pnl_percent = (total_cost > 0) ? ((total_mv - total_cost) / total_cost) * 100.0 : 0;
-        summary.total_day_change = total_day;
-        summary.total_day_change_percent =
-            (total_mv - total_day > 0) ? (total_day / (total_mv - total_day)) * 100.0 : 0;
-        summary.total_positions = assets.size();
-        summary.last_updated = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-
-        // Cache the result (P11)
-        {
-            QMutexLocker lock(&self->cache_mutex_);
-            self->summary_cache_[portfolio_id] = {summary, QDateTime::currentSecsSinceEpoch()};
-        }
-
-        // Save snapshot for performance history
-        QString today = QDate::currentDate().toString(Qt::ISODate);
-        PortfolioRepository::instance().save_snapshot(portfolio_id, summary.total_market_value,
-                                                      summary.total_cost_basis, summary.total_unrealized_pnl,
-                                                      summary.total_unrealized_pnl_percent, today);
-
-        emit self->summary_loaded(summary);
+            self->finalize_summary(portfolio_id, assets, portfolio, quote_map);
+        }, Qt::QueuedConnection);
     });
+
+    return true; // broker path was taken
+}
+
+void PortfolioService::finalize_summary(const QString& portfolio_id,
+                                        const QVector<portfolio::PortfolioAsset>& assets,
+                                        const portfolio::Portfolio& portfolio,
+                                        const QHash<QString, QuoteData>& quote_map) {
+    portfolio::PortfolioSummary summary;
+    summary.portfolio = portfolio;
+    summary.holdings.reserve(assets.size());
+
+    double total_mv = 0;
+    double total_cost = 0;
+    double total_day = 0;
+
+    for (const auto& asset : assets) {
+        portfolio::HoldingWithQuote h;
+        h.symbol = asset.symbol;
+        h.quantity = asset.quantity;
+        h.avg_buy_price = asset.avg_buy_price;
+        h.cost_basis = asset.quantity * asset.avg_buy_price;
+        // Prefer stored sector; fall back to resolver cache (which may
+        // populate async — see sector_resolved handler in constructor).
+        h.sector = asset.sector.isEmpty()
+                       ? SectorResolver::instance().sector_for(asset.symbol)
+                       : asset.sector;
+
+        auto it = quote_map.find(asset.symbol);
+        if (it != quote_map.end()) {
+            h.current_price = it->price;
+            h.day_change = it->change;
+            h.day_change_percent = it->change_pct;
+        } else {
+            // Fallback to avg buy price if no quote (broker missed the symbol,
+            // or yfinance returned nothing).
+            h.current_price = asset.avg_buy_price;
+        }
+
+        h.market_value = h.quantity * h.current_price;
+        h.unrealized_pnl = h.market_value - h.cost_basis;
+        h.unrealized_pnl_percent = (h.cost_basis > 0) ? (h.unrealized_pnl / h.cost_basis) * 100.0 : 0;
+
+        total_mv += h.market_value;
+        total_cost += h.cost_basis;
+        total_day += h.day_change * h.quantity;
+
+        if (h.unrealized_pnl >= 0)
+            summary.gainers++;
+        else
+            summary.losers++;
+
+        summary.holdings.append(h);
+    }
+
+    // Compute weights
+    for (auto& h : summary.holdings) {
+        h.weight = (total_mv > 0) ? (h.market_value / total_mv) * 100.0 : 0;
+    }
+
+    summary.total_market_value = total_mv;
+    summary.total_cost_basis = total_cost;
+    summary.total_unrealized_pnl = total_mv - total_cost;
+    summary.total_unrealized_pnl_percent = (total_cost > 0) ? ((total_mv - total_cost) / total_cost) * 100.0 : 0;
+    summary.total_day_change = total_day;
+    summary.total_day_change_percent =
+        (total_mv - total_day > 0) ? (total_day / (total_mv - total_day)) * 100.0 : 0;
+    summary.total_positions = assets.size();
+    summary.last_updated = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+
+    // Cache the result (P11)
+    {
+        QMutexLocker lock(&cache_mutex_);
+        summary_cache_[portfolio_id] = {summary, QDateTime::currentSecsSinceEpoch()};
+    }
+
+    // Save snapshot for performance history
+    QString today = QDate::currentDate().toString(Qt::ISODate);
+    PortfolioRepository::instance().save_snapshot(portfolio_id, summary.total_market_value,
+                                                  summary.total_cost_basis, summary.total_unrealized_pnl,
+                                                  summary.total_unrealized_pnl_percent, today);
+
+    emit summary_loaded(summary);
 }
 
 // ── Asset operations ─────────────────────────────────────────────────────────
 
 void PortfolioService::add_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
-                                 const QString& date) {
+                                 const QString& date,
+                                 const QString& broker_symbol, const QString& exchange) {
     auto& repo = PortfolioRepository::instance();
 
-    auto r = repo.add_asset(portfolio_id, symbol, qty, price, date);
+    // Sector left empty here — SectorResolver fills it asynchronously after
+    // the asset lands in the DB. Broker fields pass through verbatim.
+    auto r = repo.add_asset(portfolio_id, symbol, qty, price, date, /*sector=*/QString(),
+                            broker_symbol, exchange);
     if (r.is_err()) {
         LOG_ERROR("PortfolioSvc", "Failed to add asset: " + QString::fromStdString(r.error()));
         return;
@@ -1052,32 +1196,65 @@ void PortfolioService::load_snapshots(const QString& portfolio_id, int days) {
     }
 }
 
-void PortfolioService::backfill_history(const QString& portfolio_id, const QString& period) {
+void PortfolioService::backfill_history(const QString& portfolio_id, const QString& /*period*/) {
     if (portfolio_id.isEmpty())
         return;
 
     auto& repo = PortfolioRepository::instance();
-    auto assets_r = repo.get_assets(portfolio_id);
-    if (assets_r.is_err() || assets_r.value().isEmpty()) {
+
+    // Pull the full transaction history (not just the latest 50 — we need
+    // every BUY/SELL since the portfolio was created so the replay walks the
+    // whole timeline).
+    auto txns_r = repo.get_transactions(portfolio_id, /*limit=*/100000);
+    if (txns_r.is_err() || txns_r.value().isEmpty()) {
+        // No transactions → nothing to replay. Emit zero so callers don't wait.
         emit history_backfilled(portfolio_id, 0);
         return;
     }
-    const auto assets = assets_r.value();
+    const auto txns = txns_r.value();
 
-    // Build the args list: [portfolio_nav_history, period, sym1, qty1, sym2, qty2, ...]
-    // Cost basis is the same for every backfilled day (we don't have transaction-time
-    // cost basis), so save_snapshot's pnl_pct uses today's cost — see comment below.
-    QStringList args;
-    args << "portfolio_nav_history" << period;
-    double total_cost_basis = 0.0;
-    for (const auto& a : assets) {
-        args << a.symbol << QString::number(a.quantity, 'f', 8);
-        total_cost_basis += a.quantity * a.avg_buy_price;
+    // Serialize transactions to a temp JSON file. The Python side (action
+    // `portfolio_nav_history_replay`) reads it and walks the transactions in
+    // order to reconstruct daily position vectors and per-day cost basis.
+    // A file is used rather than CLI args because a portfolio with 500
+    // transactions × ~40 chars each would exceed Windows' 8191-char arg limit.
+    QJsonArray tx_arr;
+    for (const auto& t : txns) {
+        QJsonObject obj;
+        obj["date"] = t.transaction_date.left(10); // YYYY-MM-DD
+        obj["symbol"] = t.symbol;
+        obj["type"] = t.transaction_type;
+        obj["quantity"] = t.quantity;
+        obj["price"] = t.price;
+        tx_arr.append(obj);
     }
+
+    const QString tmp_dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    QDir().mkpath(tmp_dir);
+    const QString tmp_path = QDir(tmp_dir).filePath(
+        QString("fincept_replay_%1_%2.json")
+            .arg(portfolio_id.left(16))
+            .arg(QDateTime::currentMSecsSinceEpoch()));
+
+    QFile f(tmp_path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        LOG_WARN("PortfolioSvc", "backfill_history: cannot open temp file " + tmp_path);
+        emit history_backfilled(portfolio_id, 0);
+        return;
+    }
+    f.write(QJsonDocument(tx_arr).toJson(QJsonDocument::Compact));
+    f.close();
+
+    QStringList args;
+    args << "portfolio_nav_history_replay" << tmp_path;
 
     QPointer<PortfolioService> self = this;
     python::PythonRunner::instance().run("yfinance_data.py", args,
-                                         [self, portfolio_id, total_cost_basis](python::PythonResult result) {
+                                         [self, portfolio_id, tmp_path](python::PythonResult result) {
+        // Always remove the temp file when we're done with it, regardless of
+        // success — leaks add up if a user re-imports often.
+        QFile::remove(tmp_path);
+
         if (!self)
             return;
         if (!result.success || result.output.trimmed().isEmpty()) {
@@ -1101,28 +1278,32 @@ void PortfolioService::backfill_history(const QString& portfolio_id, const QStri
         }
         const auto dates = obj["dates"].toArray();
         const auto navs = obj["navs"].toArray();
+        const auto costs = obj["costs"].toArray();
         if (dates.isEmpty() || dates.size() != navs.size()) {
             emit self->history_backfilled(portfolio_id, 0);
             return;
         }
+        const bool have_costs = (costs.size() == dates.size());
 
         // Upsert each row. INSERT OR REPLACE keyed by (portfolio_id, snapshot_date)
-        // so re-running backfill (with a different period or after the user adds
-        // holdings) corrects existing rows in place.
+        // so re-running backfill corrects existing rows in place. Per-day cost
+        // basis comes from the replay (BUY adds, SELL reduces by WAC); falls
+        // back to NAV if the Python side didn't return a costs array.
         auto& repo = PortfolioRepository::instance();
         int written = 0;
         for (int i = 0; i < dates.size(); ++i) {
             const QString d = dates[i].toString();
             const double nav = navs[i].toDouble();
-            const double pnl = nav - total_cost_basis;
-            const double pnl_pct = total_cost_basis > 0 ? (pnl / total_cost_basis) * 100.0 : 0.0;
-            auto wr = repo.save_snapshot(portfolio_id, nav, total_cost_basis, pnl, pnl_pct, d);
+            const double cost_basis = have_costs ? costs[i].toDouble() : 0.0;
+            const double pnl = nav - cost_basis;
+            const double pnl_pct = cost_basis > 0 ? (pnl / cost_basis) * 100.0 : 0.0;
+            auto wr = repo.save_snapshot(portfolio_id, nav, cost_basis, pnl, pnl_pct, d);
             if (wr.is_ok())
                 ++written;
         }
 
         LOG_INFO("PortfolioSvc",
-                 QString("Backfilled %1 historical snapshots for %2").arg(written).arg(portfolio_id));
+                 QString("Replayed %1 historical snapshots for %2").arg(written).arg(portfolio_id));
         self->invalidate_cache(portfolio_id);
         emit self->history_backfilled(portfolio_id, written);
     });

@@ -29,7 +29,7 @@ void ErrorPipeline::report_panel_error(const QString& panel_id, Severity sev,
 }
 
 void ErrorPipeline::clear_panel_errors(const QString& panel_id) {
-    if (panel_errors_.remove(panel_id) > 0)
+    if (panel_errors_.remove(panel_id))
         emit panel_errors_changed(panel_id);
 }
 
@@ -54,7 +54,7 @@ void ErrorPipeline::report_shell_error(const QString& category, Severity sev,
 }
 
 void ErrorPipeline::clear_shell_error(const QString& category) {
-    if (shell_errors_.remove(category) > 0)
+    if (shell_errors_.remove(category))
         emit shell_errors_changed();
 }
 

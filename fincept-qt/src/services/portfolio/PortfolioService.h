@@ -23,8 +23,12 @@ class PortfolioService : public QObject {
 
     // ── Portfolio CRUD ───────────────────────────────────────────────────────
     void load_portfolios();
+    /// `broker_account_id` links the new portfolio to a broker account so
+    /// PortfolioService routes live quotes via that broker instead of yfinance.
+    /// Empty for manual / JSON imports — yfinance fallback applies.
     void create_portfolio(const QString& name, const QString& owner, const QString& currency,
-                          const QString& description = {});
+                          const QString& description = {},
+                          const QString& broker_account_id = {});
     void delete_portfolio(const QString& id);
 
     // ── Summary (assets + live quotes) ───────────────────────────────────────
@@ -32,8 +36,12 @@ class PortfolioService : public QObject {
     void refresh_summary(const QString& portfolio_id); // invalidates cache first
 
     // ── Asset operations ─────────────────────────────────────────────────────
+    /// `broker_symbol`+`exchange` are stored alongside the canonical
+    /// yfinance-format `symbol` so broker quote calls can use the native
+    /// pair. Both empty for manual / JSON imports.
     void add_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
-                   const QString& date = {});
+                   const QString& date = {},
+                   const QString& broker_symbol = {}, const QString& exchange = {});
     void sell_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
                     const QString& date = {});
 
@@ -136,6 +144,24 @@ class PortfolioService : public QObject {
 
     void build_summary(const QString& portfolio_id, const QVector<portfolio::PortfolioAsset>& assets,
                        const portfolio::Portfolio& portfolio);
+
+    /// Common "I have quotes, build the summary and emit" path used by both
+    /// the broker and yfinance routes. quote_map is keyed by the asset's
+    /// canonical (yfinance) `symbol` field.
+    void finalize_summary(const QString& portfolio_id,
+                          const QVector<portfolio::PortfolioAsset>& assets,
+                          const portfolio::Portfolio& portfolio,
+                          const QHash<QString, QuoteData>& quote_map);
+
+    /// Try to fetch live quotes via the broker linked to `portfolio.broker_account_id`.
+    /// On success, calls finalize_summary with broker-sourced QuoteData.
+    /// On any failure (no account, disconnected, broker null, API error),
+    /// silently falls back to the yfinance path. Returns true if the broker
+    /// path was attempted (even if it ultimately failed); false if we should
+    /// go straight to yfinance.
+    bool try_broker_quotes(const QString& portfolio_id,
+                           const QVector<portfolio::PortfolioAsset>& assets,
+                           const portfolio::Portfolio& portfolio);
 
     // ── Summary cache (P11) ──────────────────────────────────────────────────
     // In-memory (not CacheManager) intentionally: PortfolioSummary holds nested

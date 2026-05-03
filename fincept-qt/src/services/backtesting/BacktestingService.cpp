@@ -37,6 +37,9 @@ void BacktestingService::execute(const QString& provider, const QString& command
         {"labels", "generate_labels"},
         {"splits", "generate_splits"},
         {"returns", "analyze_returns"},
+        {"indicator_sweep", "indicator_param_sweep"},
+        // labels_to_signals, walk_forward, optimize, indicator_signals: UI
+        // short-id matches the Python long name; pass through unchanged.
     };
     const QString py_command = kPyCommandMap.value(command, command);
 

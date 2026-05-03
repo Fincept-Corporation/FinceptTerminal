@@ -380,8 +380,29 @@ void PythonRunner::start_next() {
         QStringList full_args;
 
         // If the script is inside a sub-package (contains '/'), use -m <module>
-        // so Python can resolve relative imports (from .core import ...).
+        // so Python can resolve relative imports (from .core import ...). This
+        // only works if every directory along the path has an `__init__.py` —
+        // otherwise the package's `__init__.py` may rely on absolute imports
+        // (e.g. `from finagent_core.x import ...`) that resolve against the
+        // top-level `sys.path` entry the bare-script invocation sets up via
+        // its own `sys.path.insert(...)` bootstrap. When any ancestor dir is
+        // missing `__init__.py`, fall back to direct script invocation so the
+        // script's bootstrap can run before the failing import.
+        bool use_module_form = false;
         if (!is_code && req.script.contains('/')) {
+            use_module_form = true;
+            QString check_path = scripts_dir_;
+            QStringList parts = req.script.split('/');
+            parts.removeLast(); // drop the file itself
+            for (const QString& p : parts) {
+                check_path += "/" + p;
+                if (!QFileInfo::exists(check_path + "/__init__.py")) {
+                    use_module_form = false;
+                    break;
+                }
+            }
+        }
+        if (use_module_form) {
             QString module = req.script;
             module.remove(".py");
             module.replace('/', '.');

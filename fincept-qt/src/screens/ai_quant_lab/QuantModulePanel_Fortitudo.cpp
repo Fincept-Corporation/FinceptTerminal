@@ -128,6 +128,7 @@ QWidget* QuantModulePanel::build_fortitudo_panel() {
 
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(module_.color.name()));
+    tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // ── Portfolio Metrics ────────────────────────────────────────────────────
     auto* pm = new QWidget(this);
@@ -444,6 +445,7 @@ QWidget* QuantModulePanel::build_fortitudo_panel() {
     results_layout_->setContentsMargins(0, 8, 0, 0);
     results_layout_->setSpacing(8);
     vl->addWidget(rc);
+    vl->addStretch();
 
     return w;
 }
@@ -850,7 +852,6 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
 
     // ── 6. EXPONENTIAL DECAY PROBABILITIES ──────────────────────────────────
     if (command == "exp_decay_probabilities") {
-        const int n = d.value("n_scenarios").toInt();
         const int hl = d.value("half_life").toInt();
         const double ess = d.value("effective_sample_size").toDouble();
         const double ess_pct = d.value("ess_pct_of_n").toDouble();

@@ -5,12 +5,25 @@
 #include "ui/widgets/NotifBell.h"
 #include "ui/widgets/NotifPanel.h"
 
+#include <QApplication>
 #include <QDateTime>
+#include <QFile>
 #include <QHBoxLayout>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPalette>
 #include <QUrl>
+
+#if defined(Q_OS_WIN)
+// windows.h must come first — psapi.h depends on its types (BOOL, WINAPI, …)
+// and including psapi.h alone yields C2146 / C2086 cascades.
+#    include <windows.h>
+#    include <psapi.h>
+#elif defined(Q_OS_MAC)
+#    include <mach/mach.h>
+#elif defined(Q_OS_LINUX)
+#    include <unistd.h>
+#endif
 
 namespace {
 
@@ -54,7 +67,9 @@ DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
     ll->setContentsMargins(0, 0, 0, 0);
     ll->setSpacing(8);
 
-    ll->addWidget(make_lbl("v4.0.0", "dsVersion"));
+    const QString version_text = QStringLiteral("v") + QApplication::applicationVersion();
+    version_label_ = make_lbl(version_text, "dsVersion");
+    ll->addWidget(version_label_);
     ll->addWidget(make_sep());
 
     const char* feed_names[] = {"EQ", "FX", "CM", "FI", "CR"};
@@ -93,7 +108,9 @@ DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
     rl->setContentsMargins(0, 0, 0, 0);
     rl->setSpacing(8);
 
-    rl->addWidget(make_lbl("MEM: OPTIMAL", "dsMem"));
+    mem_label_ = new QLabel(QStringLiteral("MEM: ---"));
+    mem_label_->setObjectName("dsMem");
+    rl->addWidget(mem_label_);
     rl->addWidget(make_sep());
 
     latency_label_ = new QLabel("LAT: ---");
@@ -115,13 +132,18 @@ DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this](const ui::ThemeTokens&) { refresh_theme(); });
 
+    // P3: only set intervals + connect signals here. Timer.start() is
+    // deferred to showEvent so the status bar doesn't tick when the
+    // dashboard is hidden.
+    uptime_timer_.setInterval(1000);
     connect(&uptime_timer_, &QTimer::timeout, this, &DashboardStatusBar::update_uptime);
-    uptime_timer_.start(1000);
 
     nam_ = new QNetworkAccessManager(this);
+    ping_timer_.setInterval(30000);
     connect(&ping_timer_, &QTimer::timeout, this, &DashboardStatusBar::ping_api);
-    ping_timer_.start(30000);
-    ping_api();
+
+    mem_timer_.setInterval(5000); // 5s — memory probe is cheap; this is just a status hint
+    connect(&mem_timer_, &QTimer::timeout, this, &DashboardStatusBar::update_memory);
 
     refresh_theme();
 }
@@ -153,6 +175,24 @@ void DashboardStatusBar::refresh_theme() {
 void DashboardStatusBar::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     refresh_theme();
+    // P3: start every owned QTimer here, stop in hideEvent.
+    if (!uptime_timer_.isActive())
+        uptime_timer_.start();
+    if (!ping_timer_.isActive())
+        ping_timer_.start();
+    if (!mem_timer_.isActive())
+        mem_timer_.start();
+    // Kick once immediately so the bar isn't blank on first show.
+    update_uptime();
+    update_memory();
+    ping_api();
+}
+
+void DashboardStatusBar::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    uptime_timer_.stop();
+    ping_timer_.stop();
+    mem_timer_.stop();
 }
 
 void DashboardStatusBar::update_uptime() {
@@ -171,10 +211,48 @@ void DashboardStatusBar::set_widget_count(int count) {
 }
 
 void DashboardStatusBar::set_connected(bool connected) {
-    connected_ = connected;
     feeds_label_->setText(connected ? "CONNECTED" : "DISCONNECTED");
     feeds_label_->setStyleSheet(QString("color:%1;font-weight:bold;background:transparent;")
                                     .arg(connected ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+}
+
+void DashboardStatusBar::update_memory() {
+    if (!mem_label_)
+        return;
+    double rss_mb = -1.0;
+#if defined(Q_OS_WIN)
+    PROCESS_MEMORY_COUNTERS_EX pmc{};
+    if (GetProcessMemoryInfo(GetCurrentProcess(),
+                             reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&pmc), sizeof(pmc))) {
+        rss_mb = static_cast<double>(pmc.WorkingSetSize) / (1024.0 * 1024.0);
+    }
+#elif defined(Q_OS_MAC)
+    mach_task_basic_info_data_t info{};
+    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO,
+                  reinterpret_cast<task_info_t>(&info), &count) == KERN_SUCCESS) {
+        rss_mb = static_cast<double>(info.resident_size) / (1024.0 * 1024.0);
+    }
+#elif defined(Q_OS_LINUX)
+    QFile statm(QStringLiteral("/proc/self/statm"));
+    if (statm.open(QIODevice::ReadOnly)) {
+        const auto parts = QString::fromLatin1(statm.readLine()).split(QChar(' '), Qt::SkipEmptyParts);
+        if (parts.size() >= 2) {
+            const long page_kb = sysconf(_SC_PAGESIZE) / 1024;
+            rss_mb = parts[1].toDouble() * page_kb / 1024.0;
+        }
+    }
+#endif
+    if (rss_mb < 0) {
+        mem_label_->setText(QStringLiteral("MEM: ---"));
+        return;
+    }
+    // Colour: green < 512 MB, amber < 1024 MB, red beyond.
+    const QString color = rss_mb < 512.0 ? ui::colors::POSITIVE()
+                          : rss_mb < 1024.0 ? ui::colors::AMBER()
+                                            : ui::colors::NEGATIVE();
+    mem_label_->setText(QStringLiteral("MEM: %1 MB").arg(rss_mb, 0, 'f', 0));
+    mem_label_->setStyleSheet(QString("color:%1;background:transparent;").arg(color));
 }
 
 void DashboardStatusBar::ping_api() {

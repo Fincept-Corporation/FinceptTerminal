@@ -160,3 +160,10 @@ docs/superpowers/
 # ── Local planning docs ───────────────────────────────────────
 plans/
 **/plans/
+
+# ── Internal Crypto Center phase notes ────────────────────────
+fincept-qt/docs/CRYPTO_CENTER_PHASE_2.md
+fincept-qt/docs/CRYPTO_CENTER_PHASE_3.md
+fincept-qt/docs/CRYPTO_CENTER_PHASE_4.md
+fincept-qt/docs/CRYPTO_CENTER_PHASE_5.md
+fincept-qt/docs/CRYPTO_WALLET_CONNECT.md

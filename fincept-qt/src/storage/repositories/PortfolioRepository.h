@@ -12,16 +12,25 @@ class PortfolioRepository : public BaseRepository<portfolio::Portfolio> {
     // ── Portfolios CRUD ──────────────────────────────────────────────────────
     Result<QVector<portfolio::Portfolio>> list_portfolios();
     Result<portfolio::Portfolio> get_portfolio(const QString& id);
+    /// `broker_account_id` ties this portfolio to a broker account so live
+    /// quotes can be sourced from the broker instead of yfinance. Empty for
+    /// manually-created / JSON-imported portfolios. See migration v022.
     Result<QString> create_portfolio(const QString& name, const QString& owner, const QString& currency,
-                                     const QString& description = {});
+                                     const QString& description = {},
+                                     const QString& broker_account_id = {});
     Result<void> update_portfolio(const QString& id, const QString& name, const QString& owner, const QString& currency,
                                   const QString& description = {});
     Result<void> delete_portfolio(const QString& id);
 
     // ── Assets CRUD ──────────────────────────────────────────────────────────
     Result<QVector<portfolio::PortfolioAsset>> get_assets(const QString& portfolio_id);
+    /// `broker_symbol` + `exchange` are the broker-native pair (e.g.
+    /// "RELIANCE" + "NSE"); both empty for manual / JSON imports. The
+    /// canonical `symbol` arg stays in yfinance-format ("RELIANCE.NS")
+    /// regardless — every downstream consumer treats it as such.
     Result<qint64> add_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
-                             const QString& date = {}, const QString& sector = {});
+                             const QString& date = {}, const QString& sector = {},
+                             const QString& broker_symbol = {}, const QString& exchange = {});
     Result<void> update_asset(const QString& portfolio_id, const QString& symbol, double qty, double avg_price);
     Result<void> set_asset_sector(const QString& portfolio_id, const QString& symbol, const QString& sector);
     Result<void> remove_asset(const QString& portfolio_id, const QString& symbol);

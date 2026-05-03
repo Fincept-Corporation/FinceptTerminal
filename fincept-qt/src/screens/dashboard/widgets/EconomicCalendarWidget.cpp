@@ -1,11 +1,15 @@
 #include "screens/dashboard/widgets/EconomicCalendarWidget.h"
 
-#include "network/http/HttpClient.h"
+#include "datahub/DataHub.h"
 #include "ui/theme/Theme.h"
 
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QJsonObject>
+
+namespace {
+constexpr const char* kTopic = "econ:fincept:upcoming_events";
+} // namespace
 
 namespace fincept::screens::widgets {
 
@@ -56,11 +60,15 @@ EconomicCalendarWidget::EconomicCalendarWidget(QWidget* parent)
     scroll_area_->setWidget(list_widget);
     vl->addWidget(scroll_area_, 1);
 
-    connect(this, &BaseWidget::refresh_requested, this, &EconomicCalendarWidget::refresh_data);
+    // User-driven refresh button on the BaseWidget title bar — force the
+    // hub to refresh the topic. Per-producer rate limit (2/sec) still
+    // applies, so rage-clicking can't hammer api.fincept.in.
+    connect(this, &BaseWidget::refresh_requested, this, []() {
+        datahub::DataHub::instance().request(QString::fromLatin1(kTopic), /*force=*/true);
+    });
 
     apply_styles();
     set_loading(true);
-    refresh_data();
 }
 
 void EconomicCalendarWidget::apply_styles() {
@@ -85,50 +93,61 @@ void EconomicCalendarWidget::on_theme_changed() {
         populate(last_events_);
 }
 
-void EconomicCalendarWidget::refresh_data() {
-    set_loading(true);
+void EconomicCalendarWidget::showEvent(QShowEvent* e) {
+    BaseWidget::showEvent(e);
+    if (!hub_active_)
+        hub_subscribe();
+}
 
-    // Response shape: {"success":true,"data":{"events":[...],"total_count":N,...}}
-    QString url = "https://api.fincept.in/macro/upcoming-events?limit=25";
+void EconomicCalendarWidget::hideEvent(QHideEvent* e) {
+    BaseWidget::hideEvent(e);
+    if (hub_active_)
+        hub_unsubscribe();
+}
 
-    fincept::HttpClient::instance().get(url, [this](fincept::Result<QJsonDocument> result) {
+void EconomicCalendarWidget::hub_subscribe() {
+    auto& hub = datahub::DataHub::instance();
+    hub.subscribe(this, QString::fromLatin1(kTopic), [this](const QVariant& v) {
         set_loading(false);
-        if (!result.is_ok()) {
-            status_label_->setVisible(true);
-            status_label_->setText("Failed to load calendar");
-            return;
-        }
-
-        auto doc = result.value();
         QJsonArray events;
-
-        if (doc.isObject()) {
-            auto root = doc.object();
-            // {"success":true,"data":{"events":[...]}}
-            if (root.contains("data") && root["data"].isObject()) {
-                auto data = root["data"].toObject();
-                if (data.contains("events") && data["events"].isArray())
-                    events = data["events"].toArray();
-            }
-            // fallback: {"data":[...]}
-            if (events.isEmpty() && root.contains("data") && root["data"].isArray())
-                events = root["data"].toArray();
-            // fallback: {"events":[...]}
-            if (events.isEmpty() && root.contains("events") && root["events"].isArray())
-                events = root["events"].toArray();
-        } else if (doc.isArray()) {
-            events = doc.array();
-        }
-
+        if (v.canConvert<QJsonArray>())
+            events = v.value<QJsonArray>();
         if (events.isEmpty()) {
             status_label_->setVisible(true);
-            status_label_->setText("No events available");
+            status_label_->setText(QStringLiteral("No events available"));
             return;
         }
-
         status_label_->setVisible(false);
         populate(events);
     });
+    // Per-topic error subscription — fires only when *our* topic errors,
+    // unlike the global topic_error signal which fans every error to every
+    // listener. Keeps the widget out of the global error broadcast path.
+    hub.subscribe_errors(this, QString::fromLatin1(kTopic),
+        [this](const QString& /*error*/) {
+            set_loading(false);
+            status_label_->setVisible(true);
+            status_label_->setText(QStringLiteral("Failed to load calendar"));
+        });
+    hub_active_ = true;
+    // Cold-cache fallback: if the producer warmed the topic earlier, paint
+    // it now even if it's slightly stale — beats a blank panel.
+    QVariant cached = hub.peek_raw(QString::fromLatin1(kTopic));
+    if (cached.canConvert<QJsonArray>()) {
+        const auto events = cached.value<QJsonArray>();
+        if (!events.isEmpty()) {
+            set_loading(false);
+            status_label_->setVisible(false);
+            populate(events);
+        }
+    }
+}
+
+void EconomicCalendarWidget::hub_unsubscribe() {
+    auto& hub = datahub::DataHub::instance();
+    hub.unsubscribe(this, QString::fromLatin1(kTopic));
+    hub.unsubscribe_errors(this, QString::fromLatin1(kTopic));
+    hub_active_ = false;
 }
 
 void EconomicCalendarWidget::populate(const QJsonArray& events) {

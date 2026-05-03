@@ -757,6 +757,161 @@ def get_portfolio_nav_history(positions, period='6mo'):
         return {"dates": [], "navs": [], "error": str(e)}
 
 
+def get_portfolio_nav_history_replay(transactions):
+    """Reconstruct true daily NAV by replaying transactions over time.
+
+    Unlike get_portfolio_nav_history (which back-projects today's quantities),
+    this walks the transaction list and computes position[sym](t) = running
+    sum of BUY qty − SELL qty for transactions whose date ≤ t. The chart line
+    therefore reflects when capital was actually deployed: it starts at the
+    first BUY date (not 1y back from today), steps when buys/sells occur, and
+    moves with market prices in between.
+
+    transactions: list of {"date": "YYYY-MM-DD", "symbol": str, "type": str,
+                           "quantity": float, "price": float}.
+                  Types BUY / SELL drive position changes. DIVIDEND and SPLIT
+                  are ignored for now (DIVIDEND adds cash but we don't model
+                  cash; SPLIT would multiply qty but is a future addition).
+
+    Returns: {
+        "dates":  ["YYYY-MM-DD", ...],   # ascending, trading days only
+        "navs":   [float, ...],           # market value of positions on each day
+        "costs":  [float, ...],           # cost basis on each day (BUY-WAC, SELL reduces proportionally)
+        "resolved": {sym: yf_sym}, "missing": [sym, ...]
+    }
+    """
+    try:
+        from datetime import date as _date, timedelta
+        import pandas as pd
+
+        if not transactions:
+            return {"dates": [], "navs": [], "costs": []}
+
+        # Filter to BUY / SELL only (DIVIDEND / SPLIT don't move position).
+        txns = [t for t in transactions
+                if str(t.get("type", "")).upper() in ("BUY", "SELL")
+                and t.get("symbol") and t.get("date")]
+        if not txns:
+            return {"dates": [], "navs": [], "costs": []}
+
+        # Sort ascending by date so the replay walk is monotonic.
+        txns.sort(key=lambda t: t["date"])
+
+        symbols = sorted({t["symbol"] for t in txns})
+        first_date = pd.Timestamp(txns[0]["date"]).normalize()
+        today = pd.Timestamp(_date.today()).normalize()
+        if first_date > today:
+            return {"dates": [], "navs": [], "costs": [],
+                    "error": "earliest transaction date is in the future"}
+
+        # Pick a yfinance period string that covers first_date → today with a
+        # bit of slack. yfinance period accepts {1mo,3mo,6mo,1y,2y,5y,10y,ytd,max}.
+        days_back = (today - first_date).days + 7
+        if days_back <= 31:
+            period = "1mo"
+        elif days_back <= 95:
+            period = "3mo"
+        elif days_back <= 190:
+            period = "6mo"
+        elif days_back <= 370:
+            period = "1y"
+        elif days_back <= 740:
+            period = "2y"
+        elif days_back <= 1850:
+            period = "5y"
+        elif days_back <= 3700:
+            period = "10y"
+        else:
+            period = "max"
+
+        resolved = _resolve_for_history(symbols, period)
+        if not resolved:
+            return {"dates": [], "navs": [], "costs": [],
+                    "error": "no historical data for any symbol",
+                    "missing": symbols}
+
+        # Build a DataFrame of close prices, columns = symbols, indexed by date.
+        # Forward-fill so a symbol that listed mid-period contributes a stable
+        # price across non-trading gaps in its own series.
+        closes_df = pd.DataFrame({s: ser for s, (_yf, ser) in resolved.items()})
+        closes_df = closes_df.sort_index().ffill()
+
+        # Trim the index to the replay window: first_date → today.
+        closes_df = closes_df[closes_df.index >= first_date]
+        if closes_df.empty:
+            return {"dates": [], "navs": [], "costs": [],
+                    "error": "no trading days in the requested window"}
+
+        # Walk transactions and the price index in lockstep. For each trading
+        # day we know the cumulative position vector — apply close prices to
+        # get NAV. Cost basis uses weighted-average cost (WAC): BUYs add to
+        # invested capital; SELLs reduce by (sold_qty × current_avg_cost).
+        positions = {s: 0.0 for s in symbols}        # qty per symbol
+        wac_cost = {s: 0.0 for s in symbols}         # avg cost per share
+        cost_basis_total = 0.0                       # running cost basis
+        tx_idx = 0
+        n_tx = len(txns)
+
+        out_dates = []
+        out_navs = []
+        out_costs = []
+
+        for ts, row in closes_df.iterrows():
+            day = ts.date().isoformat()
+
+            # Apply every transaction whose date ≤ today's trading day.
+            while tx_idx < n_tx and txns[tx_idx]["date"] <= day:
+                tx = txns[tx_idx]
+                sym = tx["symbol"]
+                qty = float(tx.get("quantity", 0))
+                price = float(tx.get("price", 0))
+                kind = str(tx["type"]).upper()
+                if sym not in positions:
+                    # Symbol has no resolved price history — track position
+                    # anyway so we don't desync, but it won't contribute to NAV.
+                    positions[sym] = 0.0
+                    wac_cost[sym] = 0.0
+                if kind == "BUY":
+                    new_qty = positions[sym] + qty
+                    if new_qty > 0:
+                        # Weighted-average cost update.
+                        wac_cost[sym] = (positions[sym] * wac_cost[sym] + qty * price) / new_qty
+                    positions[sym] = new_qty
+                    cost_basis_total += qty * price
+                elif kind == "SELL":
+                    sell_qty = min(qty, positions[sym])
+                    cost_basis_total -= sell_qty * wac_cost[sym]
+                    positions[sym] -= sell_qty
+                    if positions[sym] <= 1e-9:
+                        positions[sym] = 0.0
+                        wac_cost[sym] = 0.0
+                tx_idx += 1
+
+            # NAV = Σ close × qty for symbols we have prices for on this day.
+            nav = 0.0
+            for s in symbols:
+                if s not in row.index:
+                    continue
+                close = row[s]
+                if pd.isna(close):
+                    continue
+                nav += float(close) * positions.get(s, 0.0)
+
+            out_dates.append(day)
+            out_navs.append(round(nav, 4))
+            out_costs.append(round(cost_basis_total, 4))
+
+        return {
+            "dates": out_dates,
+            "navs": out_navs,
+            "costs": out_costs,
+            "resolved": {s: yf for s, (yf, _) in resolved.items()},
+            "missing": [s for s in symbols if s not in resolved],
+        }
+    except Exception as e:
+        return {"dates": [], "navs": [], "costs": [], "error": str(e)}
+
+
 def get_historical_period(symbol, period='6mo', interval='1d'):
     """Fetch historical data using a period string (e.g., '1mo', '6mo', '1y', '5y')"""
     try:
@@ -952,6 +1107,24 @@ def main(args=None):
                         break
                 if positions is not None:
                     result = get_portfolio_nav_history(positions, period)
+
+    elif command == "portfolio_nav_history_replay":
+        # Args layout: <transactions_json_path>
+        # The JSON file contains a list of {date, symbol, type, quantity, price}
+        # objects. We replay them over time to compute true historical NAV
+        # and cost basis instead of back-projecting today's positions.
+        if len(args) < 2:
+            result = {"error": "Usage: yfinance_data.py portfolio_nav_history_replay <transactions_json_path>"}
+        else:
+            try:
+                with open(args[1], "r", encoding="utf-8") as f:
+                    txns = json.load(f)
+                if not isinstance(txns, list):
+                    result = {"error": "transactions JSON must be a list"}
+                else:
+                    result = get_portfolio_nav_history_replay(txns)
+            except Exception as e:
+                result = {"error": f"failed to read transactions JSON: {e}"}
 
     elif command == "historical_period":
         if len(args) < 2:
