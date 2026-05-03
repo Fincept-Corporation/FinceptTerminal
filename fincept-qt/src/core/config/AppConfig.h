@@ -1,6 +1,7 @@
 #pragma once
 #include <QSettings>
 #include <QString>
+#include <QStringList>
 #include <QVariant>
 
 namespace fincept {
@@ -16,6 +17,7 @@ class AppConfig {
 
     // Typed accessors for common settings
     QString api_base_url() const;
+    QStringList auth_base_urls() const;
     bool dark_mode() const;
     int refresh_interval_ms() const;
 

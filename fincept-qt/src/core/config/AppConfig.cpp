@@ -25,6 +25,18 @@ QString AppConfig::api_base_url() const {
     return settings_.value("api/base_url", "https://api.fincept.in").toString();
 }
 
+QStringList AppConfig::auth_base_urls() const {
+    QStringList urls = settings_.value("auth/base_urls").toStringList();
+    if (urls.isEmpty()) {
+        urls = {
+            "https://api.fincept.in",
+            "https://finceptbackend.share.zrok.io",
+        };
+    }
+    urls.removeDuplicates();
+    return urls;
+}
+
 bool AppConfig::dark_mode() const {
     return settings_.value("ui/dark_mode", true).toBool();
 }
