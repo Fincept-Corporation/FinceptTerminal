@@ -150,16 +150,24 @@ void EconomicCalendarWidget::hub_unsubscribe() {
     hub_active_ = false;
 }
 
+void EconomicCalendarWidget::clear_list() {
+    // Clear only dynamic event rows, preserving the persistent status_label_
+    while (list_layout_->count() > 0) {
+        auto* item = list_layout_->takeAt(0);
+        if (auto* w = item->widget()) {
+            // Skip the persistent status_label_ - only delete dynamic row widgets
+            if (w != status_label_) {
+                w->deleteLater();
+            }
+        }
+        delete item;
+    }
+}
+
 void EconomicCalendarWidget::populate(const QJsonArray& events) {
     last_events_ = events;
 
-    // Clear list
-    while (list_layout_->count() > 0) {
-        auto* item = list_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
+    clear_list();
 
     bool alt = false;
     int count = 0;
@@ -250,6 +258,12 @@ void EconomicCalendarWidget::populate(const QJsonArray& events) {
     }
 
     list_layout_->addStretch();
+}
+
+void EconomicCalendarWidget::show_status(const QString& text) {
+    clear_list();
+    status_label_->setText(text);
+    status_label_->setVisible(true);
 }
 
 } // namespace fincept::screens::widgets
