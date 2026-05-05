@@ -135,13 +135,23 @@ void TerminalShell::initialise() {
     FT_TS(115);
     QString _ws_path = ProfilePaths::workspace_db();
     FT_TS(1150);
-    char _path_msg[512];
-    _snprintf_s(_path_msg, 512, _TRUNCATE, "FT_TS workspace_db path: %s\n", _ws_path.toUtf8().constData());
-    OutputDebugStringA(_path_msg);
+#if defined(_WIN32)
     {
+        char _path_msg[512];
+        _snprintf_s(_path_msg, 512, _TRUNCATE, "FT_TS workspace_db path: %s\n", _ws_path.toUtf8().constData());
+        OutputDebugStringA(_path_msg);
         HANDLE _h = CreateFileA("C:\\Users\\Tilak\\AppData\\Local\\Temp\\ft_marks.txt", FILE_APPEND_DATA, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
         if (_h != INVALID_HANDLE_VALUE) { DWORD _w; SetFilePointer(_h, 0, NULL, FILE_END); WriteFile(_h, _path_msg, (DWORD)strlen(_path_msg), &_w, NULL); CloseHandle(_h); }
     }
+#else
+    {
+        char _path_msg[512];
+        std::snprintf(_path_msg, sizeof(_path_msg), "FT_TS workspace_db path: %s\n", _ws_path.toUtf8().constData());
+        const char* _log_path = "/tmp/ft_marks.txt";
+        if (FILE* _f = std::fopen(_log_path, "a")) { std::fputs(_path_msg, _f); std::fclose(_f); }
+        std::fputs(_path_msg, stderr);
+    }
+#endif
     auto db_open = workspace_db_->open(_ws_path);
     FT_TS(116);
     if (db_open.is_err()) {
