@@ -1,8 +1,4 @@
-// LlmService.cpp — Multi-provider LLM API client (Qt port)
-// Translated from fincept-cpp llm_service.cpp:
-//   libcurl  → QNetworkAccessManager + QEventLoop (blocking on bg thread)
-//   std::future → QtConcurrent::run + signal
-//   nlohmann/json → QJsonObject/QJsonArray
+// Multi-provider LLM API client. Sync paths block on QEventLoop and must run on a worker thread.
 
 #include "ai_chat/LlmService.h"
 
@@ -43,10 +39,6 @@ static constexpr const char* kLlmSvcTag = "LlmService";
 
 
 
-// ============================================================================
-// Singleton
-// ============================================================================
-
 LlmService::LlmService() = default;
 
 LlmService& LlmService::instance() {
@@ -64,14 +56,8 @@ void LlmService::reload_config() {
 }
 
 void LlmService::ensure_config() const {
-    // Called with mutex_ held.
-    //
-    // Fincept credentials are refreshed on every call regardless of cache
-    // state — the cache is a one-shot for everything else (tool-RAG hint
-    // generation walks the entire MCP registry), but credentials track the
-    // auth lifecycle. The user can authenticate AFTER the first
-    // ensure_config() ran (e.g. AI chat opened before login completes), and
-    // a stale cached empty key would 401 every subsequent request.
+    // Called with mutex_ held. Cache is one-shot except for Fincept credentials —
+    // those re-resolve every call so a login that happens after first ensure_config() doesn't 401 forever.
     if (config_loaded_) {
         if (provider_ == "fincept") {
             const auto& sess = fincept::auth::AuthManager::instance().session();
@@ -88,11 +74,7 @@ void LlmService::ensure_config() const {
 
     provider_ = model_ = api_key_ = base_url_ = system_prompt_ = {};
     temperature_ = 0.7;
-    // 0 = "no user override; use ModelCatalog::output_cap(provider, model)".
-    // The DB still holds whatever the user picked (including the legacy
-    // 2000-token default). A v15 migration resets historical 2000 values
-    // to 0; users who deliberately picked 2000 will get the model default
-    // — that's the right call given 2000 was never a meaningful user choice.
+    // 0 means "no user override → ModelCatalog::output_cap()". The v15 migration reset legacy 2000 defaults.
     max_tokens_ = 0;
     tools_enabled_ = true;
 
@@ -108,7 +90,7 @@ void LlmService::ensure_config() const {
                 break;
             }
         }
-        // Fallback: first config if none active
+        // No active provider — pick the first one.
         if (provider_.isEmpty() && !providers.value().isEmpty()) {
             const auto& c = providers.value().first();
             provider_ = c.provider.toLower();
@@ -119,7 +101,7 @@ void LlmService::ensure_config() const {
         }
     }
 
-    // Fallback: if no provider configured, use Fincept with session API key
+    // Nothing configured — default to Fincept with the session key.
     if (provider_.isEmpty()) {
         provider_ = "fincept";
         model_ = "MiniMax-M2.7";
@@ -127,10 +109,7 @@ void LlmService::ensure_config() const {
         LOG_INFO(kLlmSvcTag, "No LLM provider configured — using Fincept default");
     }
 
-    // Fincept always resolves API key from the authenticated session, never
-    // from llm_configs. Prefer AuthManager's in-memory session (authoritative
-    // and live); fall back to SettingsRepository("fincept_api_key") which
-    // AuthManager writes during auto_configure_fincept_llm (legacy path).
+    // Fincept key always comes from the live AuthManager session; SettingsRepository fallback is the legacy path.
     if (provider_ == "fincept") {
         const auto& sess = fincept::auth::AuthManager::instance().session();
         if (!sess.api_key.isEmpty()) {
@@ -149,10 +128,7 @@ void LlmService::ensure_config() const {
         system_prompt_ = gs.value().system_prompt;
     }
 
-    // Inject default system prompt when user hasn't configured one.
-    // This tells the model it is running inside the Fincept Terminal and
-    // should use the provided tools (navigation, market data, portfolio, etc.)
-    // rather than declining requests it can actually fulfil via a tool call.
+    // Default system prompt — primes the model to actually use tools instead of declining tool-feasible requests.
     if (system_prompt_.trimmed().isEmpty()) {
         system_prompt_ =
             "You are Fincept AI, the intelligent assistant embedded inside the Fincept Terminal — "
@@ -195,26 +171,10 @@ void LlmService::ensure_config() const {
             "Be concise, accurate, and finance-focused.";
     }
 
-    // ── Tier-3 / Tool RAG discovery hint ─────────────────────────────────
-    //
-    // Tool RAG (Tool Search) ships only ~6 tools to the LLM each turn (the
-    // Tier-0 set: tool.list, tool.describe, navigate, list_tabs,
-    // get_current_tab, get_auth_status). Everything else is discovered on
-    // demand via tool.list(query) — this fixes the 30-50-tool accuracy
-    // collapse documented by Anthropic.
-    //
-    // For the LLM to form good queries it needs to know WHAT categories
-    // exist. We enumerate them dynamically from the registered tools so the
-    // hint stays accurate when categories are added/removed. Built once per
-    // ensure_config() pass, cached statically across requests so the prompt
-    // prefix is byte-stable for prompt-cache hits.
-    //
-    // Idempotent append (`[Tool discovery]` sentinel guards against
-    // double-stacking on reload).
+    // Tool RAG discovery hint: lists categories dynamically so the model can form good tool.list() queries.
+    // The `[Tool discovery]` sentinel makes append idempotent across reloads. Cached static for prompt-cache stability.
     if (tools_enabled_ && !system_prompt_.contains("[Tool discovery]")) {
-        // Static cache — the tool registry is immutable after McpInit. Any
-        // future runtime registrations will see a stale category list until
-        // the next process restart, which is acceptable for a hint string.
+        // Tool registry is immutable after McpInit; runtime additions won't appear until restart (acceptable here).
         static const QString kHint = []() -> QString {
             const auto all = mcp::McpProvider::instance().list_all_tools();
             QSet<QString> cats;
@@ -313,9 +273,8 @@ ResolvedLlmProfile LlmService::resolve_profile(const QString& context_type, cons
 
 // static
 QJsonObject LlmService::profile_to_json(const ResolvedLlmProfile& p) {
-    // Only include fields the Python model constructor accepts.
-    // profile_id / profile_name are internal metadata — never send them to Python
-    // or they land in extra_model_kwargs and fail as unexpected kwargs (e.g. Claude(profile_id=...)).
+    // Only fields the Python model constructor accepts. profile_id / profile_name are internal metadata —
+    // sending them lands in extra_model_kwargs and fails as unexpected kwargs.
     QJsonObject obj;
     obj["provider"] = p.provider;
     obj["model_id"] = p.model_id;
@@ -328,20 +287,13 @@ QJsonObject LlmService::profile_to_json(const ResolvedLlmProfile& p) {
     return obj;
 }
 
-// ============================================================================
-// Endpoint + headers
-// ============================================================================
-
 int LlmService::resolved_max_tokens() const {
-    // Called with mutex_ held by the caller (build_*_request paths).
+    // Called with mutex_ held.
     constexpr int kFallback = 8192;
     const int catalog_cap = ModelCatalog::output_cap(provider_, model_);
 
-    // User-set value (loaded from llm_global_settings or per-profile).
-    // Treat <=0 as "unset — use model default".
+    // <=0 = unset; clamp user values to the model's published cap to avoid a 400.
     if (max_tokens_ > 0) {
-        // User asked for a specific number — honour it but clamp to the
-        // model's published cap so we don't get a 400 from the API.
         if (catalog_cap > 0 && max_tokens_ > catalog_cap)
             return catalog_cap;
         return max_tokens_;
@@ -353,17 +305,15 @@ int LlmService::resolved_max_tokens() const {
 }
 
 QString LlmService::get_endpoint_url() const {
-    // Called with mutex_ held
+    // Called with mutex_ held.
     const QString& p = provider_;
 
-    // Fincept: two endpoints — sync chat and async LLM
-    // base_url_ stores the base domain; append path here.
+    // Fincept sync chat endpoint (async lives in fincept_async_request).
     if (p == "fincept") {
-        // sync endpoint for chat (short replies)
         return "https://api.fincept.in/research/chat";
     }
 
-    // Custom base_url takes priority for other providers
+    // Custom base_url wins over hard-coded defaults.
     if (!base_url_.isEmpty()) {
         QString base = base_url_;
         if (base.endsWith('/'))
@@ -397,7 +347,7 @@ QString LlmService::get_endpoint_url() const {
 }
 
 QMap<QString, QString> LlmService::get_headers() const {
-    // Called with mutex_ held
+    // Called with mutex_ held.
     QMap<QString, QString> h;
     const QString& p = provider_;
 
@@ -409,24 +359,18 @@ QMap<QString, QString> LlmService::get_headers() const {
         if (!api_key_.isEmpty())
             h["x-goog-api-key"] = api_key_;
     } else if (p == "fincept") {
-        // api_key_ is refreshed from AuthManager on every ensure_config() call,
-        // so it tracks the auth lifecycle even if it was empty when the cache
-        // was first populated.
         if (!api_key_.isEmpty())
             h["X-API-Key"] = api_key_;
-        // session_token lives only in AuthManager (never written to
-        // SettingsRepository) — read it live so it's always current.
+        // session_token only lives in AuthManager — read live, never cached.
         const auto& sess = fincept::auth::AuthManager::instance().session();
         if (!sess.session_token.isEmpty())
             h["X-Session-Token"] = sess.session_token;
-        // Cloudflare requires a User-Agent header
-        h["User-Agent"] = "FinceptTerminal/4.0";
+        h["User-Agent"] = "FinceptTerminal/4.0"; // Cloudflare requires it.
     } else {
-        // OpenAI-compatible
         if (!api_key_.isEmpty())
             h["Authorization"] = "Bearer " + api_key_;
         if (p == "openrouter") {
-            // Optional attribution — appears on openrouter.ai/rankings leaderboard
+            // Attribution for the openrouter.ai/rankings leaderboard.
             h["HTTP-Referer"] = "https://fincept.in";
             h["X-Title"] = "Fincept Terminal";
         }
@@ -435,10 +379,6 @@ QMap<QString, QString> LlmService::get_headers() const {
 }
 
 
-
-// ============================================================================
-// Non-streaming request
-// ============================================================================
 
 LlmResponse LlmService::do_request(const QString& user_message, const std::vector<ConversationMessage>& history) {
     LlmResponse resp;
@@ -456,8 +396,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
         req_body = build_anthropic_request(user_message, history, false);
     } else if (provider_ == "gemini" || provider_ == "google") {
         req_body = build_gemini_request(user_message, history);
-        // Auth goes via x-goog-api-key header (set by get_headers()).
-        // Do not append ?key= to URL — it leaks the key into access logs.
+        // Auth via x-goog-api-key header — do NOT append ?key= (would leak into access logs).
     } else if (provider_ == "fincept") {
         // Fincept uses two separate endpoints:
         // Primary response → async (submit + poll, returns richer model output)
@@ -484,8 +423,6 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
     }
     QJsonObject rj = doc.object();
 
-    // ── Extract content by provider ──────────────────────────────────────
-
     if (provider_ == "anthropic") {
         QJsonArray content = rj["content"].toArray();
         QString stop_reason = rj["stop_reason"].toString();
@@ -497,15 +434,13 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
             // Build follow-up messages: original + assistant turn + tool results
             QJsonArray loop_msgs;
             if (!system_prompt_.isEmpty()) {
-            } // system is top-level in Anthropic, not in messages
+            } // Anthropic puts system at top level, not in messages.
             for (const auto& h : history)
                 if (h.role != "system")
                     loop_msgs.append(QJsonObject{{"role", h.role}, {"content", h.content}});
             loop_msgs.append(QJsonObject{{"role", "user"}, {"content", user_message}});
-            // Assistant message with the tool_use content blocks
             loop_msgs.append(QJsonObject{{"role", "assistant"}, {"content", content}});
 
-            // Execute each tool_use block and collect results
             QJsonArray tool_results;
             for (const auto& block_val : content) {
                 QJsonObject block = block_val.toObject();
@@ -523,15 +458,13 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     {"content", QString::fromUtf8(QJsonDocument(tr.to_json()).toJson(QJsonDocument::Compact))}});
             }
 
-            // Follow-up: user turn with tool_result blocks
             loop_msgs.append(QJsonObject{{"role", "user"}, {"content", tool_results}});
 
-            // Build follow-up request (no tools to avoid infinite loop)
+            // No tools in follow-up — prevents infinite loop.
             QJsonObject fu;
             fu["model"] = model_;
             fu["messages"] = loop_msgs;
             fu["max_tokens"] = resolved_max_tokens();
-            // Temperature intentionally omitted — Anthropic default.
             if (!system_prompt_.isEmpty())
                 fu["system"] = system_prompt_;
 
@@ -545,9 +478,6 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                 return resp;
             }
         } else {
-            // Normal text response — concatenate all text blocks and fall back
-            // to extended-thinking content if no text was emitted (e.g. when
-            // max_tokens is exhausted mid-thinking).
             resp.content = extract_anthropic_content_text(content);
         }
 
@@ -556,7 +486,6 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
         if (!cands.isEmpty()) {
             QJsonArray parts = cands[0].toObject()["content"].toObject()["parts"].toArray();
 
-            // Check for functionCall parts (Gemini tool use)
             bool has_function_calls = false;
             for (const auto& part_val : parts) {
                 if (part_val.toObject().contains("functionCall")) {
@@ -582,8 +511,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     LOG_INFO(kLlmSvcTag, "Executing Gemini tool: " + fn_name);
                     auto tr = mcp::McpService::instance().execute_openai_function(fn_name, fn_args);
 
-                    // Build a JSON response object. Gemini requires response to be an
-                    // object (string values are wrapped under a key).
+                    // Gemini requires response to be an object — wrap strings under "result".
                     QJsonObject response_obj;
                     if (!tr.data.isNull() && !tr.data.isUndefined() && tr.data.isObject())
                         response_obj = tr.data.toObject();
@@ -598,7 +526,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                 }
 
                 if (!fn_response_parts.isEmpty()) {
-                    // Rebuild contents: prior history + original user + model(functionCall) + user(functionResponse)
+                    // history + original user + model(functionCall) + user(functionResponse).
                     QJsonArray fu_contents;
                     for (const auto& m : history) {
                         if (m.role == "system")
@@ -613,7 +541,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                         {"parts", QJsonArray{QJsonObject{{"text", user_message}}}}});
                     fu_contents.append(QJsonObject{
                         {"role", "model"},
-                        {"parts", parts}}); // echo the functionCall parts verbatim
+                        {"parts", parts}}); // echo functionCall parts verbatim
                     fu_contents.append(QJsonObject{
                         {"role", "user"},
                         {"parts", fn_response_parts}});
@@ -621,7 +549,6 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     QJsonObject fu_body;
                     fu_body["contents"] = fu_contents;
                     QJsonObject gen_cfg;
-                    // Temperature intentionally omitted — Gemini default.
                     gen_cfg["maxOutputTokens"] = resolved_max_tokens();
                     fu_body["generationConfig"] = gen_cfg;
                     if (!system_prompt_.isEmpty())
@@ -639,7 +566,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                         }
                     }
                     if (resp.content.isEmpty()) {
-                        // Fallback: render function responses as readable text
+                        // Render function responses as readable text.
                         QString fallback;
                         for (const auto& pv : fn_response_parts) {
                             QJsonObject fr = pv.toObject()["functionResponse"].toObject();
@@ -656,20 +583,17 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     }
                 }
             } else {
-                // Normal text response — concatenate all text parts; fall back
-                // to `thought:true` parts if no normal text was emitted.
                 resp.content = extract_gemini_parts_text(parts);
             }
         }
 
     } else if (provider_ == "fincept") {
-        // /research/chat returns OpenAI-compatible choices array:
-        // {"success":true,"data":{"choices":[{"message":{"role":"assistant","content":"..."}}],...}}
+        // {"success":..., "data":{"choices":[{"message":{"content":...}}]}} or top-level shape.
         QJsonObject data = rj.contains("data") ? rj["data"].toObject() : rj;
         QJsonArray choices = data["choices"].toArray();
         if (!choices.isEmpty())
             resp.content = extract_openai_message_text(choices[0].toObject()["message"].toObject());
-        // API returned success=true but empty response text — treat as soft error
+        // success=true with empty content is a soft error.
         if (resp.content.isEmpty()) {
             resp.error = "Fincept LLM returned an empty response. Please try again.";
             LOG_WARN(kLlmSvcTag, "Fincept /research/chat returned empty choices or content");
@@ -677,7 +601,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
         }
 
     } else {
-        // OpenAI-compatible — check for tool calls
+        // OpenAI-compatible.
         QJsonArray choices = rj["choices"].toArray();
         if (!choices.isEmpty()) {
             QJsonObject msg = choices[0].toObject()["message"].toObject();
@@ -686,16 +610,14 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
             if (!tcs.isEmpty()) {
                 LOG_INFO(kLlmSvcTag, QString("LLM requested %1 tool calls").arg(tcs.size()));
 
-                // Build initial messages array for tool loop
                 QJsonArray loop_msgs;
                 if (!system_prompt_.isEmpty())
                     loop_msgs.append(QJsonObject{{"role", "system"}, {"content", system_prompt_}});
                 for (const auto& h : history)
                     loop_msgs.append(QJsonObject{{"role", h.role}, {"content", h.content}});
                 loop_msgs.append(QJsonObject{{"role", "user"}, {"content", user_message}});
-                loop_msgs.append(msg); // assistant message with tool_calls
+                loop_msgs.append(msg); // assistant turn with tool_calls
 
-                // Execute tool calls and append results
                 for (const auto& tc_val : tcs) {
                     QJsonObject tc = tc_val.toObject();
                     QString call_id = tc["id"].toString();
@@ -721,9 +643,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                 return resp;
 
             } else {
-                // Normal text response — helper handles plain content, reasoning
-                // models (kimi-k2.x / deepseek-reasoner), content-as-parts arrays,
-                // and refusal messages in one place.
+                // Helper handles reasoning models, content-as-parts arrays, and refusal messages.
                 resp.content = extract_openai_message_text(msg);
             }
         }
@@ -749,16 +669,10 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
     return resp;
 }
 
-// ============================================================================
-// Streaming request (SSE)
-// ============================================================================
-
 LlmResponse LlmService::do_streaming_request(const QString& user_message,
                                              const std::vector<ConversationMessage>& history, StreamCallback on_chunk) {
-    // All providers fall back to non-streaming do_request so the full tool-call /
-    // follow-up loop runs correctly regardless of provider.
-    // Streaming is disabled globally until per-provider SSE tool-call handling is
-    // implemented for each backend.
+    // Streaming disabled globally — falls back to do_request so the tool-call/follow-up loop runs.
+    // Re-enable per-provider once each backend has SSE tool-call handling.
     {
         auto resp = do_request(user_message, history);
         if (resp.success && !resp.content.isEmpty())
@@ -776,12 +690,10 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
     }
 
     auto hdr = get_headers();
-    // Send tools for OpenAI-compatible streaming; Anthropic streaming doesn't
-    // support tool_choice in the same SSE flow so we handle that separately.
+    // Anthropic streaming handles tools out-of-band so it goes through a different request shape.
     QJsonObject req_body = (provider_ == "anthropic") ? build_anthropic_request(user_message, history, true)
                                                       : build_openai_request(user_message, history, true, true);
 
-    // Use dedicated NAM on this background thread
     QNetworkAccessManager nam;
     QNetworkRequest req{QUrl(url)};
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
@@ -809,7 +721,6 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
         loop.quit();
     });
     QObject::connect(reply, &QNetworkReply::readyRead, &loop, [&]() {
-        // Drain all available data
         partial_line += reply->readAll();
         while (true) {
             int nl = partial_line.indexOf('\n');
@@ -818,7 +729,6 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
             QByteArray raw_line = partial_line.left(nl);
             partial_line.remove(0, nl + 1);
 
-            // Remove \r
             if (!raw_line.isEmpty() && raw_line.back() == '\r')
                 raw_line.chop(1);
 
@@ -826,7 +736,7 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
             if (line.isEmpty() || !line.startsWith("data: "))
                 continue;
 
-            QString data = line.mid(6); // remove "data: "
+            QString data = line.mid(6); // strip "data: "
             if (data == "[DONE]") {
                 if (!tool_call_detected)
                     on_chunk("", true);
@@ -835,8 +745,7 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                 return;
             }
 
-            // Capture usage chunk (OpenAI sends usage in a trailing chunk with
-            // empty choices[] when stream_options.include_usage=true)
+            // OpenAI sends a trailing usage chunk (empty choices[]) when stream_options.include_usage=true.
             {
                 auto usage_doc = QJsonDocument::fromJson(data.toUtf8());
                 if (!usage_doc.isNull() && usage_doc.isObject()) {
@@ -846,13 +755,11 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                 }
             }
 
-            // Detect tool calls in streaming SSE — all providers
             if (!tool_call_detected) {
                 auto doc = QJsonDocument::fromJson(data.toUtf8());
                 if (!doc.isNull() && doc.isObject()) {
                     QJsonObject obj = doc.object();
 
-                    // Anthropic native SSE format
                     if (provider_ == "anthropic") {
                         const QString type = obj["type"].toString();
                         if (type == "content_block_start" &&
@@ -871,13 +778,9 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                         }
                     }
 
-                    // OpenAI-compatible format (used by fincept, openai, and others)
                     QJsonArray choices = obj["choices"].toArray();
                     if (!choices.isEmpty()) {
                         const QString finish = choices[0].toObject()["finish_reason"].toString();
-                        if (finish == "tool_calls" || finish == "stop") {
-                            // "stop" with accumulated tool XML → also check
-                        }
                         if (finish == "tool_calls") {
                             LOG_INFO(kLlmSvcTag,
                                      QString("STREAM: OpenAI-compat finish_reason=tool_calls detected (%1)")
@@ -896,7 +799,7 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                         }
                     }
 
-                    // Fincept may also return tool_calls at top level
+                    // Fincept can also surface tool_calls at top level.
                     if (!obj["tool_calls"].isUndefined() && !obj["tool_calls"].isNull() &&
                         obj["tool_calls"].toArray().size() > 0) {
                         LOG_INFO(kLlmSvcTag, "STREAM: top-level tool_calls detected (fincept)");
@@ -911,10 +814,7 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
             if (!chunk.isEmpty()) {
                 accumulated += chunk;
 
-                // Detect tool calls embedded as XML in the streamed text.
-                // Some APIs return tool calls as text XML rather than
-                // structured JSON. Detect early, suppress output, fallback
-                // to non-streaming path which handles tool execution.
+                // Some providers stream tool calls as XML text — detect, suppress output, fall back to do_request.
                 if (!tool_call_detected &&
                     (accumulated.contains("<tool_call>") || accumulated.contains("<invoke name=") ||
                      accumulated.contains("tool_call>"))) {
@@ -932,15 +832,12 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
     loop.exec();
     timeout.stop();
 
-    // If the model requested tool calls, fall back to non-streaming do_request
-    // which already handles the full tool-call/follow-up loop correctly.
     if (tool_call_detected) {
         LOG_INFO(kLlmSvcTag, "Tool call detected in stream — falling back to tool loop");
         reply->abort();
         reply->deleteLater();
 
-        // Clear any partial XML that was already streamed to the UI.
-        // Send a special "clear" sentinel so the chat screen can reset the bubble.
+        // Sentinel tells the chat screen to reset the bubble before the real reply arrives.
         on_chunk("\x01__TOOL_CALL_CLEAR__", false);
 
         auto tool_resp = do_request(user_message, history);
@@ -968,7 +865,7 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
     reply->deleteLater();
 
     if (!done)
-        on_chunk("", true); // ensure done fires
+        on_chunk("", true);
 
     return resp;
 }
@@ -984,15 +881,13 @@ LlmResponse LlmService::chat(const QString& user_message, const std::vector<Conv
     if (provider_.isEmpty())
         return LlmResponse{.content = {}, .error = "No LLM provider configured"};
 
-    // Take config snapshot — release lock before blocking network call
+    // Snapshot config; release lock before the blocking network call.
     QString p = provider_, k = api_key_, b = base_url_, m = model_, sp = system_prompt_;
     double t = temperature_;
     int mx = max_tokens_;
     lock.unlock();
 
-    // Restore snapshot into members for use by helper methods
-    // (helpers read member variables, so we need them set)
-    // This is safe because chat() is always called from a background thread.
+    // Helpers read members directly. Safe because chat() runs on a background thread.
     provider_ = p;
     api_key_ = k;
     base_url_ = b;
@@ -1001,19 +896,11 @@ LlmResponse LlmService::chat(const QString& user_message, const std::vector<Conv
     temperature_ = t;
     max_tokens_ = mx;
 
-    // Per-message intent classifier removed. Tool RAG (tool.list) replaces
-    // it — instead of guessing categories from keywords server-side, the LLM
-    // now searches the catalog itself with a natural-language query. Higher
-    // accuracy, no English-only keyword list to maintain.
-
-    // Per-request tools-off override (thread_local). Replaces the old
-    // pattern of mutating tools_enabled_ on the singleton, which raced with
-    // concurrent chat_streaming calls from the floating bubble.
+    // thread_local guard avoids racing with concurrent chat_streaming calls from the floating bubble.
     detail::ToolPolicyGuard guard(use_tools ? ToolPolicy::All : ToolPolicy::None);
     return do_request(user_message, history);
 }
 
-// Back-compat boolean overload — delegates to the enum form.
 void LlmService::chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,
                                 StreamCallback on_chunk, bool use_tools) {
     chat_streaming(user_message, history, std::move(on_chunk),
@@ -1022,7 +909,6 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
 
 void LlmService::chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,
                                 StreamCallback on_chunk, ToolPolicy policy) {
-    // Snapshot config under lock
     QString p, k, b, m, sp;
     double t;
     int mx;
@@ -1044,20 +930,13 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
         return;
     }
 
-    // Copy history for lambda capture
     std::vector<ConversationMessage> history_copy = history;
 
     QPointer<LlmService> self = this;
-    // Phase 9: shadow-publish every stream chunk to the DataHub under a
-    // per-stream session id. Subscribers (future observer panels, LLM
-    // diagnostics, agent MCP bridges) can tail `llm:session:*:stream`
-    // without being wired into the original caller. Push-only, coalesced
-    // at the policy layer so a token firehose doesn't spam subscribers.
+    // Shadow-publish every chunk to DataHub under a per-stream session id so observer panels
+    // can tail `llm:session:*:stream` without being wired in. Push-only, coalesced.
     const QString stream_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     const QString stream_topic = QStringLiteral("llm:session:") + stream_id + QStringLiteral(":stream");
-    // One-shot pattern registration — LlmService is not a Producer (no
-    // pull semantics), just a publisher. The policy caps cached state
-    // and applies coalescing across the topic family.
     [[maybe_unused]] static bool policy_once = []() {
         auto& hub = fincept::datahub::DataHub::instance();
         fincept::datahub::TopicPolicy policy;
@@ -1068,8 +947,7 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
         LOG_INFO("LlmService", "Registered DataHub policy for llm:session:*");
         return true;
     }();
-    // Guard on_chunk: if LlmService is destroyed before a chunk arrives,
-    // skip the callback entirely rather than invoking into a dead context.
+    // Skip on_chunk if LlmService dies before the chunk arrives.
     StreamCallback guarded_chunk = [self, on_chunk
         , stream_id, stream_topic
     ](const QString& chunk, bool done) {
@@ -1084,8 +962,7 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
         auto& hub = fincept::datahub::DataHub::instance();
         hub.publish(stream_topic, QVariant(payload));
         if (done) {
-            // Retire the per-session topic; subscribers remain attached
-            // but cached state is discarded. Phase 9.
+            // Subscribers stay attached but cached state is discarded.
             hub.retire_topic(stream_topic);
         }
     };
@@ -1094,11 +971,7 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
             if (!self)
                 return;
 
-            // Apply the config snapshot under the mutex so do_request /
-            // do_streaming_request see a consistent state and don't race with
-            // reload_config() on the UI thread. We no longer mutate
-            // tools_enabled_ — per-request opt-out is conveyed via the
-            // thread_local detail::ToolPolicyGuard below.
+            // Snapshot under mutex so do_*_request see consistent state and don't race with reload_config().
             {
                 QMutexLocker lock(&self->mutex_);
                 self->provider_ = p;

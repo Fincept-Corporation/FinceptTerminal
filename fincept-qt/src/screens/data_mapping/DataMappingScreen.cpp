@@ -267,7 +267,6 @@ struct MappingTemplate {
     QString schema;
     QStringList tags;
     bool verified;
-    // Real API details
     QString base_url;
     QString endpoint;
     QString method;
@@ -649,7 +648,6 @@ void DataMappingScreen::setup_ui() {
 
     root->addWidget(create_status_bar());
 
-    // Default to list view
     on_view_changed(0);
 }
 
@@ -672,7 +670,6 @@ QWidget* DataMappingScreen::create_header() {
     hl->addLayout(title_col);
     hl->addSpacing(24);
 
-    // View buttons
     const QStringList views = {"MAPPINGS", "TEMPLATES", "CREATE"};
     for (int i = 0; i < views.size(); ++i) {
         auto* btn = new QPushButton(views[i]);
@@ -722,24 +719,21 @@ QWidget* DataMappingScreen::create_main_area() {
     auto* splitter = new QSplitter(Qt::Horizontal);
     splitter->setHandleWidth(1);
 
-    // Left panel
     auto* left = create_left_panel();
     left->setMinimumWidth(180);
     left->setMaximumWidth(220);
 
-    // Center: view stack
     auto* center = new QWidget(this);
     auto* cvl = new QVBoxLayout(center);
     cvl->setContentsMargins(0, 0, 0, 0);
     cvl->setSpacing(0);
 
     view_stack_ = new QStackedWidget;
-    // Stack order must match header button order: MAPPINGS=0, TEMPLATES=1, CREATE=2
+    // Stack order must match header buttons: MAPPINGS=0, TEMPLATES=1, CREATE=2.
     view_stack_->addWidget(create_list_view());
 
     view_stack_->addWidget(create_template_view());
 
-    // Create view contains step stack
     auto* create_scroll = new QScrollArea;
     create_scroll->setWidgetResizable(true);
     auto* create_content = new QWidget(this);
@@ -759,7 +753,6 @@ QWidget* DataMappingScreen::create_main_area() {
     view_stack_->addWidget(create_scroll);
     cvl->addWidget(view_stack_, 1);
 
-    // Right panel
     auto* right = create_right_panel();
     right->setMinimumWidth(190);
     right->setMaximumWidth(220);
@@ -786,7 +779,6 @@ QWidget* DataMappingScreen::create_left_panel() {
     title->setObjectName("dmPanelTitle");
     vl->addWidget(title);
 
-    // Step navigation
     const QStringList step_labels = {"API Configuration", "Schema Selection", "Field Mapping", "Cache Settings",
                                      "Test & Save"};
     const QStringList step_icons = {"1", "2", "3", "4", "5"};
@@ -805,7 +797,6 @@ QWidget* DataMappingScreen::create_left_panel() {
 
     vl->addStretch(1);
 
-    // Quick stats
     auto* stats = new QWidget(this);
     auto* sl = new QVBoxLayout(stats);
     sl->setContentsMargins(10, 8, 10, 8);
@@ -847,7 +838,6 @@ QWidget* DataMappingScreen::create_right_panel() {
     il->setContentsMargins(10, 8, 10, 8);
     il->setSpacing(6);
 
-    // Engine status
     auto* eng_title = new QLabel("MAPPING ENGINE");
     eng_title->setObjectName("dmLabel");
     il->addWidget(eng_title);
@@ -858,7 +848,6 @@ QWidget* DataMappingScreen::create_right_panel() {
 
     il->addSpacing(8);
 
-    // Parser list
     auto* par_title = new QLabel("PARSER ENGINES");
     par_title->setObjectName("dmLabel");
     il->addWidget(par_title);
@@ -882,7 +871,6 @@ QWidget* DataMappingScreen::create_right_panel() {
 
     il->addSpacing(8);
 
-    // Current info
     auto* cur_title = new QLabel("CURRENT MAPPING");
     cur_title->setObjectName("dmLabel");
     il->addWidget(cur_title);
@@ -912,7 +900,6 @@ QWidget* DataMappingScreen::create_api_config_panel() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    // Header
     auto* hdr = new QWidget(this);
     hdr->setObjectName("dmPanelHeader");
     hdr->setFixedHeight(34);
@@ -972,7 +959,6 @@ QWidget* DataMappingScreen::create_api_config_panel() {
     api_timeout_->setSuffix(" sec");
     bl->addWidget(create_form_row("TIMEOUT", api_timeout_));
 
-    // Test button + status
     auto* test_row = new QWidget(this);
     auto* trl = new QHBoxLayout(test_row);
     trl->setContentsMargins(0, 0, 0, 0);
@@ -1030,7 +1016,6 @@ QWidget* DataMappingScreen::create_schema_panel() {
     connect(schema_select_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         if (idx >= 0 && idx < g_schemas.size()) {
             schema_desc_->setText(g_schemas[idx].description);
-            // Populate fields table
             const auto& fields = g_schemas[idx].fields;
             schema_fields_table_->setRowCount(fields.size());
             for (int i = 0; i < fields.size(); ++i) {
@@ -1052,7 +1037,6 @@ QWidget* DataMappingScreen::create_schema_panel() {
     schema_desc_->setWordWrap(true);
     bl->addWidget(schema_desc_);
 
-    // Fields table
     schema_fields_table_ = new QTableWidget;
     schema_fields_table_->setColumnCount(4);
     schema_fields_table_->setHorizontalHeaderLabels({"Field", "Type", "Required", "Description"});
@@ -1062,7 +1046,6 @@ QWidget* DataMappingScreen::create_schema_panel() {
     schema_fields_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     schema_fields_table_->setMinimumHeight(200);
 
-    // Populate with first schema
     if (!g_schemas.isEmpty()) {
         schema_select_->setCurrentIndex(0);
         emit schema_select_->currentIndexChanged(0);
@@ -1094,18 +1077,15 @@ QWidget* DataMappingScreen::create_field_mapping_panel() {
     hl->addWidget(t);
     hl->addStretch(1);
 
-    // Parser engine selector
     parser_engine_ = new QComboBox;
     parser_engine_->addItems({"JSONPath", "JSONata", "JMESPath", "Direct", "JavaScript", "Regex"});
     hl->addWidget(new QLabel("Parser:"));
     hl->addWidget(parser_engine_);
     vl->addWidget(hdr);
 
-    // Split: JSON tree | mapping table
     auto* split = new QSplitter(Qt::Horizontal);
     split->setHandleWidth(1);
 
-    // JSON explorer
     json_tree_ = new QTreeWidget;
     json_tree_->setHeaderLabels({"Key", "Value", "Type"});
     json_tree_->setColumnWidth(0, 160);
@@ -1113,7 +1093,6 @@ QWidget* DataMappingScreen::create_field_mapping_panel() {
     json_tree_->setMinimumWidth(250);
     split->addWidget(json_tree_);
 
-    // Mapping table
     mapping_table_ = new QTableWidget;
     mapping_table_->setColumnCount(4);
     mapping_table_->setHorizontalHeaderLabels({"Target Field", "Expression", "Transform", "Default"});
@@ -1166,7 +1145,6 @@ QWidget* DataMappingScreen::create_cache_panel() {
     cache_ttl_->setSuffix(" sec");
     bl->addWidget(create_form_row("CACHE TTL", cache_ttl_));
 
-    // Security info
     auto* sec_box = new QWidget(this);
     sec_box->setStyleSheet(
         QString("background: rgba(22,163,74,0.05); border: 1px solid %1; padding: 8px;").arg(colors::BORDER_DIM()));
@@ -1214,7 +1192,6 @@ QWidget* DataMappingScreen::create_test_save_panel() {
     bl->setContentsMargins(12, 12, 12, 12);
     bl->setSpacing(10);
 
-    // Test controls
     auto* test_row = new QWidget(this);
     auto* trl = new QHBoxLayout(test_row);
     trl->setContentsMargins(0, 0, 0, 0);
@@ -1233,7 +1210,6 @@ QWidget* DataMappingScreen::create_test_save_panel() {
     trl->addStretch(1);
     bl->addWidget(test_row);
 
-    // Test output
     test_output_ = new QTextEdit;
     test_output_->setObjectName("dmTestOutput");
     test_output_->setReadOnly(true);
@@ -1241,7 +1217,6 @@ QWidget* DataMappingScreen::create_test_save_panel() {
     test_output_->setPlaceholderText("Test results will appear here...");
     bl->addWidget(test_output_);
 
-    // Save button
     save_btn_ = new QPushButton("SAVE MAPPING CONFIGURATION");
     save_btn_->setObjectName("dmSaveBtn");
     save_btn_->setCursor(Qt::PointingHandCursor);
@@ -1292,11 +1267,9 @@ QWidget* DataMappingScreen::create_list_view() {
     tbl->addWidget(new_btn);
     vl->addWidget(toolbar);
 
-    // Mapping list
     mapping_list_ = new QListWidget;
     vl->addWidget(mapping_list_, 1);
 
-    // Empty state
     auto* empty = new QLabel("No mappings saved yet.\nClick CREATE to build your first data mapping.");
     empty->setObjectName("dmEmptyState");
     empty->setAlignment(Qt::AlignCenter);
@@ -1312,7 +1285,6 @@ QWidget* DataMappingScreen::create_template_view() {
     auto* split = new QSplitter(Qt::Horizontal);
     split->setHandleWidth(1);
 
-    // Template list
     template_list_ = new QListWidget;
     for (int i = 0; i < g_templates.size(); ++i) {
         auto* item = new QListWidgetItem(g_templates[i].name);
@@ -1323,7 +1295,6 @@ QWidget* DataMappingScreen::create_template_view() {
     connect(template_list_, &QListWidget::currentRowChanged, this, &DataMappingScreen::on_template_selected);
     split->addWidget(template_list_);
 
-    // Template detail
     auto* detail_scroll = new QScrollArea;
     detail_scroll->setWidgetResizable(true);
     auto* detail_content = new QWidget(this);
@@ -1345,7 +1316,6 @@ QWidget* DataMappingScreen::create_template_view() {
         int row = template_list_->currentRow();
         if (row >= 0 && row < g_templates.size()) {
             const auto& tmpl = g_templates[row];
-            // Pre-populate all form fields from template
             api_name_->setText(tmpl.name);
             api_base_url_->setText(tmpl.base_url);
             api_endpoint_->setText(tmpl.endpoint);
@@ -1356,7 +1326,6 @@ QWidget* DataMappingScreen::create_template_view() {
             schema_select_->setCurrentText(tmpl.schema);
             parser_engine_->setCurrentText(tmpl.parser);
 
-            // Pre-populate field mapping table
             mapping_table_->setRowCount(tmpl.field_mappings.size());
             for (int i = 0; i < tmpl.field_mappings.size(); ++i) {
                 const auto& fm = tmpl.field_mappings[i];
@@ -1457,7 +1426,6 @@ QWidget* DataMappingScreen::create_status_bar() {
     return bar;
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
 
 QWidget* DataMappingScreen::create_form_row(const QString& label_text, QWidget* input) {
     auto* w = new QWidget(this);
@@ -1531,7 +1499,6 @@ void DataMappingScreen::populate_json_tree(const QJsonValue& val, QTreeWidgetIte
 }
 
 void DataMappingScreen::populate_mapping_list() {
-    // Populate the mapping table with schema fields
     int schema_idx = schema_select_->currentIndex();
     if (schema_idx < 0 || schema_idx >= g_schemas.size())
         return;
@@ -1548,7 +1515,6 @@ void DataMappingScreen::populate_mapping_list() {
     }
 }
 
-// ── Slots ───────────────────────────────────────────────────────────────────
 
 void DataMappingScreen::on_view_changed(int view) {
     current_view_ = view;
@@ -1563,7 +1529,7 @@ void DataMappingScreen::on_view_changed(int view) {
     const QStringList names = {"MAPPINGS", "TEMPLATES", "CREATE"};
     status_view_->setText("VIEW: " + names[view]);
 
-    // Show/hide step bar and nav footer — CREATE is index 2
+    // CREATE is index 2 — show step bar + nav footer only there.
     nav_footer_->setVisible(view == 2); // only in create mode
 
     if (view == 2) {
@@ -1581,10 +1547,8 @@ void DataMappingScreen::on_step_changed(int step) {
     step_stack_->setCurrentIndex(step);
     update_step_indicators();
 
-    // Populate field mapping table when entering step 2
     if (step == 2) {
         populate_mapping_list();
-        // Populate JSON tree if we have sample data
         if (!sample_data_.isNull()) {
             json_tree_->clear();
             populate_json_tree(sample_data_.isObject() ? QJsonValue(sample_data_.object())
@@ -1619,7 +1583,6 @@ void DataMappingScreen::on_test_api() {
     api_test_btn_->setEnabled(false);
     api_test_status_->setText("Testing...");
 
-    // Use HttpClient for the test request
     auto callback = [this](Result<QJsonDocument> result) {
         api_test_btn_->setEnabled(true);
         if (result.is_ok()) {
@@ -1662,7 +1625,6 @@ void DataMappingScreen::on_test_mapping() {
     test_btn_->setEnabled(false);
     test_status_->setText("Running test...");
 
-    // Build a summary of the mapping configuration
     QJsonObject summary;
     summary["name"] = api_name_->text();
     summary["schema"] = schema_select_->currentText();
@@ -1670,7 +1632,6 @@ void DataMappingScreen::on_test_mapping() {
     summary["cache_enabled"] = cache_enabled_->currentIndex() == 0;
     summary["cache_ttl"] = cache_ttl_->value();
 
-    // Collect field mappings from the table
     QJsonArray mappings;
     for (int r = 0; r < mapping_table_->rowCount(); ++r) {
         auto* expr_item = mapping_table_->item(r, 1);
@@ -1690,7 +1651,6 @@ void DataMappingScreen::on_test_mapping() {
     summary["field_mappings"] = mappings;
     summary["mapping_count"] = mappings.size();
 
-    // Display test result
     QJsonObject result;
     result["success"] = mappings.size() > 0;
     result["config"] = summary;
@@ -1815,7 +1775,6 @@ void DataMappingScreen::on_template_selected(int index) {
 }
 
 void DataMappingScreen::on_new_mapping() {
-    // Reset form
     api_name_->clear();
     api_base_url_->clear();
     api_endpoint_->clear();
@@ -1899,7 +1858,6 @@ void DataMappingScreen::build_mapping_config(QJsonObject& config) {
     config["field_mappings"] = mappings;
 }
 
-// ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap DataMappingScreen::save_state() const {
     return {
@@ -1909,7 +1867,7 @@ QVariantMap DataMappingScreen::save_state() const {
 
 void DataMappingScreen::restore_state(const QVariantMap& state) {
     const int view = state.value("view", 0).toInt();
-    // Only restore the list/templates view — don't resume a partial wizard
+    // Restore list/templates view only — never resume a partial wizard.
     if (view == 0 || view == 1)
         on_view_changed(view);
 }
