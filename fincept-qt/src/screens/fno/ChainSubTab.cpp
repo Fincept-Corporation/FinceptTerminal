@@ -1,6 +1,8 @@
 #include "screens/fno/ChainSubTab.h"
 
 #include "core/logging/Logger.h"
+#include "core/symbol/IGroupLinked.h"
+#include "core/symbol/SymbolContext.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "screens/fno/FnoHeaderBar.h"
@@ -10,6 +12,8 @@
 #include "trading/AccountManager.h"
 #include "trading/instruments/InstrumentService.h"
 #include "ui/theme/Theme.h"
+
+#include <QSet>
 
 #include <QHideEvent>
 #include <QShowEvent>
@@ -102,6 +106,21 @@ void ChainSubTab::restore_state(const QVariantMap& state) {
     // Picker repopulation in the deferred lambda above will pick these up.
 }
 
+void ChainSubTab::request_underlying(const QString& underlying) {
+    if (!header_ || underlying.isEmpty())
+        return;
+    last_underlying_ = underlying;  // sticky across picker rebuilds
+    // If the combo already has it, flip — the underlying_changed signal
+    // wires through to on_underlying_changed which rebuilds expiries +
+    // resubscribes. If the symbol isn't in the broker's NFO list yet,
+    // select_underlying is a no-op and we silently ignore the link event.
+    header_->select_underlying(underlying);
+}
+
+QString ChainSubTab::active_underlying() const {
+    return header_ ? header_->underlying() : QString();
+}
+
 void ChainSubTab::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     is_visible_ = true;
@@ -125,6 +144,32 @@ void ChainSubTab::on_broker_changed(const QString& broker_id) {
 void ChainSubTab::on_underlying_changed(const QString& underlying) {
     last_underlying_ = underlying;
     rebuild_expiries_for_underlying(header_->broker_id(), underlying, /*keep_selection*/ true);
+
+    // Broadcast to the parent FnoScreen's symbol-link group so other
+    // Yellow-group panels (watchlist, equity research, etc.) follow the
+    // F&O underlying change. Walks up the parent chain looking for an
+    // IGroupLinked screen — if found and its group != None, publish.
+    if (underlying.isEmpty())
+        return;
+    fincept::SymbolGroup link_group = fincept::SymbolGroup::None;
+    for (QObject* p = parent(); p; p = p->parent()) {
+        if (auto* gl = dynamic_cast<fincept::IGroupLinked*>(p)) {
+            link_group = gl->group();
+            break;
+        }
+    }
+    if (link_group == fincept::SymbolGroup::None)
+        return;
+    static const QSet<QString> kIndexNames = {
+        QStringLiteral("NIFTY"), QStringLiteral("BANKNIFTY"),
+        QStringLiteral("FINNIFTY"), QStringLiteral("MIDCPNIFTY"),
+    };
+    fincept::SymbolRef ref;
+    ref.symbol = underlying;
+    ref.asset_class = kIndexNames.contains(underlying) ? QStringLiteral("index")
+                                                       : QStringLiteral("equity");
+    ref.exchange = QStringLiteral("NSE");
+    fincept::SymbolContext::instance().set_group_symbol(link_group, ref, this);
 }
 
 void ChainSubTab::on_expiry_changed(const QString& expiry) {

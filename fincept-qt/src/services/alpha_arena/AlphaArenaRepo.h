@@ -110,6 +110,7 @@ class AlphaArenaRepo {
     /// `instruments` is the perp universe for this run (subset of kPerpUniverse()).
     Result<void> insert_competition(const CompetitionRow& comp);
     Result<void> update_competition_status(const QString& id, const QString& status);
+    Result<void> update_competition_cadence(const QString& id, int cadence_seconds);
     Result<void> mark_live_mode_ack(const QString& id, const QString& host);
     Result<void> increment_cycle_count(const QString& id);
     std::optional<CompetitionRow> find_competition(const QString& id);
@@ -213,6 +214,18 @@ class AlphaArenaRepo {
     Result<void> resolve_hitl(const QString& approval_id,
                               const QString& status,    // approved|rejected|timeout
                               const QString& resolved_by);
+
+    /// Pending HITL approvals (status='pending') for a competition. Used by
+    /// HitlPanel to re-surface unresolved approvals after a screen toggle or
+    /// app restart.
+    struct PendingHitlRow {
+        QString approval_id;
+        QString agent_id;
+        QString prompt_text;
+        QString action_json;
+        QString requested_at;
+    };
+    Result<QVector<PendingHitlRow>> pending_hitl_for(const QString& competition_id);
 
   private:
     AlphaArenaRepo() = default;

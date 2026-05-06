@@ -20,6 +20,8 @@ using namespace fincept::services::ma;
 
 namespace fincept::screens {
 
+using namespace fincept::services::ma;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODULE 8: DEAL COMPARISON
 // ═══════════════════════════════════════════════════════════════════════════════

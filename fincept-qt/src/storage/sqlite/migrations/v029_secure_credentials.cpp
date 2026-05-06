@@ -1,4 +1,8 @@
-// v025_secure_credentials — pure-SQL credential store backing SecureStorage.
+// v029_secure_credentials — pure-SQL credential store backing SecureStorage.
+//
+// Renumbered from v025 → v029 during the merge with a8 (which introduced
+// v025_oi_snapshots, v026_strategies, v027_fii_dii, v028_iv_history). This
+// migration is otherwise unchanged.
 //
 // Replaces the OS-native keychain backends (Windows Credential Manager,
 // macOS Keychain via SecItem, Linux libsecret/QSettings). Values are
@@ -16,15 +20,15 @@
 namespace fincept {
 namespace {
 
-static Result<void> v025_sql(QSqlDatabase& db, const char* stmt) {
+static Result<void> v029_sql(QSqlDatabase& db, const char* stmt) {
     QSqlQuery q(db);
     if (!q.exec(stmt))
         return Result<void>::err(q.lastError().text().toStdString());
     return Result<void>::ok();
 }
 
-Result<void> apply_v025(QSqlDatabase& db) {
-    auto r = v025_sql(db, R"sql(
+Result<void> apply_v029(QSqlDatabase& db) {
+    auto r = v029_sql(db, R"sql(
         CREATE TABLE IF NOT EXISTS secure_credentials (
             key        TEXT PRIMARY KEY,
             ciphertext BLOB NOT NULL,
@@ -38,11 +42,11 @@ Result<void> apply_v025(QSqlDatabase& db) {
 
 } // anonymous namespace
 
-void register_migration_v025() {
+void register_migration_v029() {
     static bool done = false;
     if (done) return;
     done = true;
-    MigrationRunner::register_migration({25, "secure_credentials", apply_v025});
+    MigrationRunner::register_migration({29, "secure_credentials", apply_v029});
 }
 
 } // namespace fincept

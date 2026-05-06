@@ -2,6 +2,9 @@
 
 #include "ai_chat/LlmService.h"
 #include "core/events/EventBus.h"
+#include "core/symbol/IGroupLinked.h"
+#include "core/symbol/SymbolGroup.h"
+#include "core/symbol/SymbolRef.h"
 #include "screens/IStatefulScreen.h"
 
 #include <QLabel>
@@ -22,8 +25,9 @@
 
 namespace fincept::screens {
 
-class AiChatScreen : public QWidget, public IStatefulScreen {
+class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGroupLinked {
     Q_OBJECT
+    Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit AiChatScreen(QWidget* parent = nullptr);
 
@@ -33,6 +37,17 @@ class AiChatScreen : public QWidget, public IStatefulScreen {
     // v2 adds: draft text, search text, scroll position, attached file path.
     // v3 adds: sidebar_collapsed.
     int state_version() const override { return 3; }
+
+    // IGroupLinked — Phase 7: AI Chat is a consumer-only participant. When a
+    // panel in the same group selects a symbol, the chat input gets a
+    // gentle "Context: <SYMBOL>" prefix appended (visible to the user) so
+    // their next prompt has the security in scope. Chat itself never
+    // publishes — the symbol leaving here would not match any meaningful
+    // user intent (the user typed a question, not a ticker selection).
+    void set_group(fincept::SymbolGroup g) override;
+    fincept::SymbolGroup group() const override { return link_group_; }
+    void on_group_symbol_changed(const fincept::SymbolRef& ref) override;
+    fincept::SymbolRef current_symbol() const override { return linked_symbol_; }
 
   protected:
     void showEvent(QShowEvent* e) override;
@@ -138,6 +153,16 @@ class AiChatScreen : public QWidget, public IStatefulScreen {
     QList<EventBus::HandlerId> mcp_event_subs_;
     void subscribe_mcp_events();
     void unsubscribe_mcp_events();
+
+    // Phase 7 linking. SymbolGroup::None when unlinked.
+    fincept::SymbolGroup link_group_ = fincept::SymbolGroup::None;
+    // Last symbol received from the linked group. Saved as the screen's
+    // "current_symbol" so the link badge reflects the most recent context.
+    // Used to prefix the next user-sent message with "[Context: <SYMBOL>]"
+    // so the LLM has the security in scope without the user having to type
+    // it. Consumed (one-shot) on send; the linked symbol persists so the
+    // badge keeps showing until the group changes.
+    fincept::SymbolRef linked_symbol_;
 };
 
 } // namespace fincept::screens

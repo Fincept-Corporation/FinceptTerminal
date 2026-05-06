@@ -408,6 +408,7 @@ QMenu* ToolBar::build_view_menu() {
     qs_research->setStyleSheet(popup_ss());
     qs_research->addAction("Equity Research", this, [this]() { emit action_triggered("perspective_research"); });
     qs_research->addAction("Derivatives", this, [this]() { emit action_triggered("perspective_derivatives"); });
+    qs_research->addAction("F&&O", this, [this]() { emit action_triggered("perspective_fno"); });
     qs_research->addAction("M&&A Analytics", this, [this]() { emit action_triggered("perspective_ma"); });
 
     persp->addAction("Portfolio View", this, [this]() { emit action_triggered("perspective_portfolio"); });

@@ -62,6 +62,12 @@ void register_metatypes() {
         "QVector<fincept::services::options::PayoffPoint>");
     qRegisterMetaType<QVector<fincept::services::options::StrategyLeg>>(
         "QVector<fincept::services::options::StrategyLeg>");
+    qRegisterMetaType<fincept::services::options::OISample>("fincept::services::options::OISample");
+    qRegisterMetaType<QVector<fincept::services::options::OISample>>(
+        "QVector<fincept::services::options::OISample>");
+    qRegisterMetaType<fincept::services::options::FiiDiiDay>("fincept::services::options::FiiDiiDay");
+    qRegisterMetaType<QVector<fincept::services::options::FiiDiiDay>>(
+        "QVector<fincept::services::options::FiiDiiDay>");
 
     // Phase 8 — Geopolitics / Maritime / RelationshipMap
     qRegisterMetaType<fincept::services::geo::NewsEvent>("fincept::services::geo::NewsEvent");

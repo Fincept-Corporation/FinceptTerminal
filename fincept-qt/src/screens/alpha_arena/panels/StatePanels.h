@@ -15,6 +15,7 @@
 //
 // Reference: fincept-qt/.grill-me/alpha-arena-grill.md §11 (Frontend C++ surface).
 
+#include <QLabel>
 #include <QListWidget>
 #include <QString>
 #include <QTableWidget>
@@ -62,6 +63,7 @@ class RiskPanel : public QWidget {
   private:
     QString competition_id_;
     QTableWidget* table_;
+    QLabel* telemetry_label_ = nullptr;  // p50/p99 + rates summary
 };
 
 class AuditPanel : public QWidget {

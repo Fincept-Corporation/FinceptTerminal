@@ -79,6 +79,10 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
         btn->setFixedHeight(32);
         btn->setCheckable(true);
         btn->setStyleSheet(nav_btn_ss());
+        // Tag the button with its target section index so restore_state
+        // can re-highlight the right nav row without depending on
+        // section count or string-matching button text.
+        btn->setProperty("settingsSectionIndex", idx);
         connect(btn, &QPushButton::clicked, this, [this, btn, idx]() {
             if (auto* parent = btn->parentWidget()) {
                 for (auto* sibling : parent->findChildren<QPushButton*>())
@@ -92,23 +96,40 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
         return btn;
     };
 
-    auto* first = make_btn("Credentials",    0);
-    make_btn("Appearance",       1);
-    make_btn("Notifications",    2);
-    make_btn("Storage & Cache",  3);
-    make_btn("Data Sources",     4);
-    make_btn("LLM Config",       5);
-    make_btn("MCP Servers",      6);
-    make_btn("Logging",          7);
-    make_btn("Security",         8);
-    make_btn("Profiles",         9);
-    make_btn("Keybindings",     10);
-    make_btn("Python Env",      11);
-    make_btn("Developer",       12);
-    make_btn("Voice",           13);
-    make_btn("General",         14);
+    // Decision 10.9: hierarchical scopes. Each section is tagged by which
+    // tier it lives at — Shell-wide settings (theme, hotkeys, telemetry)
+    // versus per-Profile settings (credentials, brokers, sync). Frame and
+    // Panel scopes are owned by their respective UI surfaces (status bar,
+    // panel context menus) and don't appear here.
+    auto add_scope_header = [&](const QString& label) {
+        auto* h = new QLabel(label);
+        h->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;"
+                                 "letter-spacing:1.2px;padding:8px 6px 4px 6px;")
+                              .arg(ui::colors::TEXT_DIM()));
+        nvl->addWidget(h);
+    };
+
+    add_scope_header("SHELL");
+    auto* first = make_btn("General",       14);
+    make_btn("Appearance",      1);
+    make_btn("Notifications",   2);
+    make_btn("Keybindings",    10);
+    make_btn("Voice",          13);
+    make_btn("Logging",         7);
+    make_btn("Developer",      12);
+
+    add_scope_header("PROFILE");
+    make_btn("Profiles",        9);
+    make_btn("Credentials",     0);
+    make_btn("Security",        8);
+    make_btn("Data Sources",    4);
+    make_btn("LLM Config",      5);
+    make_btn("MCP Servers",     6);
+    make_btn("Python Env",     11);
+    make_btn("Storage & Cache", 3);
 
     first->setChecked(true);
+    sections_->setCurrentIndex(14);
 
     nvl->addStretch();
     root->addWidget(nav_);
@@ -148,6 +169,18 @@ void SettingsScreen::refresh_theme() {
                                 .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         for (auto* btn : nav_->findChildren<QPushButton*>())
             btn->setStyleSheet(nav_btn_ss());
+        // Re-apply scope-header colour. Headers carry no objectName, so
+        // tag them by stylesheet content prefix to avoid clobbering the
+        // SETTINGS title at the top of the nav.
+        for (auto* lbl : nav_->findChildren<QLabel*>()) {
+            const QString text = lbl->text();
+            if (text == QStringLiteral("SHELL") || text == QStringLiteral("PROFILE")) {
+                lbl->setStyleSheet(
+                    QString("color:%1;font-size:10px;font-weight:700;"
+                            "letter-spacing:1.2px;padding:8px 6px 4px 6px;")
+                        .arg(ui::colors::TEXT_DIM()));
+            }
+        }
     }
 }
 
@@ -217,9 +250,23 @@ QVariantMap SettingsScreen::save_state() const {
 
 void SettingsScreen::restore_state(const QVariantMap& state) {
     if (!sections_) return;
-    const int idx = state.value("section", 0).toInt();
-    if (idx >= 0 && idx < sections_->count())
-        sections_->setCurrentIndex(idx);
+    // Default to General (index 14) — landing page after the hierarchical
+    // refactor. Users who had previously visited a different section get
+    // it back via the saved index.
+    const int idx = state.value("section", 14).toInt();
+    if (idx < 0 || idx >= sections_->count())
+        return;
+    sections_->setCurrentIndex(idx);
+
+    // Sync the nav-button checked-state so the highlight matches the
+    // restored section. Buttons are tagged with `settingsSectionIndex`
+    // by `make_btn`; un-check everything, then check the matching one.
+    if (!nav_)
+        return;
+    for (auto* btn : nav_->findChildren<QPushButton*>()) {
+        const QVariant tag = btn->property("settingsSectionIndex");
+        btn->setChecked(tag.isValid() && tag.toInt() == idx);
+    }
 }
 
 } // namespace fincept::screens

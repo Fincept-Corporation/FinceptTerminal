@@ -23,6 +23,8 @@
 #include "services/alpha_arena/PaperVenue.h"
 #include "services/alpha_arena/TickClock.h"
 
+namespace fincept::trading::hyperliquid { class HyperliquidVenue; }
+
 #include <QHash>
 #include <QObject>
 #include <QString>
@@ -90,6 +92,17 @@ class AlphaArenaEngine : public QObject {
     /// User UI -> approve/reject a pending HITL request.
     void resume_after_hitl(const QString& approval_id, bool approved);
 
+    /// Hot-reload the active competition's tick cadence. Effective on the
+    /// next natural tick fire (does not interrupt an in-flight tick). Also
+    /// persisted on the competition row so a restart picks up the new value.
+    Result<void> set_cadence(int seconds);
+
+    // ── Test hooks (engine internals exposed for unit tests only) ──────────
+    TickClock* test_clock() { return clock_; }
+    ModelDispatcher* test_dispatcher() { return dispatcher_; }
+    OrderRouter* test_router() { return router_; }
+    PaperVenue* test_paper_venue() { return paper_venue_; }
+
     // ── Status / introspection ────────────────────────────────────────────
 
     QString active_competition_id() const { return active_competition_id_; }
@@ -98,6 +111,17 @@ class AlphaArenaEngine : public QObject {
     int next_tick_in_seconds() const;
     QString venue_kind() const { return venue_ ? venue_->venue_kind() : QString(); }
     IExchangeVenue::ConnectionState venue_connection_state() const;
+
+    /// Rolling telemetry over the last 100 ticks. Surfaced in RiskPanel.
+    struct TelemetrySnapshot {
+        double tick_latency_p50_ms = 0.0;
+        double tick_latency_p99_ms = 0.0;
+        double parse_failure_rate = 0.0;   // [0,1]
+        double risk_rejection_rate = 0.0;  // [0,1]
+        int venue_errors = 0;              // count over rolling window
+        int sample_count = 0;
+    };
+    TelemetrySnapshot telemetry() const;
 
   signals:
     void tick_fired(int seq);
@@ -153,6 +177,7 @@ class AlphaArenaEngine : public QObject {
     OrderRouter* router_ = nullptr;
 
     PaperVenue* paper_venue_ = nullptr;
+    fincept::trading::hyperliquid::HyperliquidVenue* hl_venue_ = nullptr;
     IExchangeVenue* venue_ = nullptr;  // alias to active venue
 };
 

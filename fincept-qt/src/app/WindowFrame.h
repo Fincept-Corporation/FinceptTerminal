@@ -38,9 +38,20 @@ namespace fincept {
 class WindowFrame : public QMainWindow {
     Q_OBJECT
   public:
-    /// @param window_id  Unique id for this window instance (0 = primary, 1+ = secondary).
-    ///                   Primary restores saved geometry; secondary uses smart placement.
-    explicit WindowFrame(int window_id = 0, QWidget* parent = nullptr);
+    /// @param window_id     Unique id for this window instance (0 = primary, 1+ = secondary).
+    ///                      Primary restores saved geometry; secondary uses smart placement.
+    /// @param parent        Qt parent (typically nullptr for top-level frames).
+    /// @param adopted_uuid  When non-null, this frame adopts the given WindowId
+    ///                      instead of minting a fresh one. Used by WorkspaceShell::apply
+    ///                      so spawned frames carry the persisted UUID and the saved
+    ///                      WorkspaceVariant geometry/screen lookups round-trip cleanly.
+    ///                      Must be set BEFORE any panel is created — that's why it
+    ///                      goes through the ctor rather than a setter (the default-
+    ///                      dashboard navigate at the end of setup_docking_mode() runs
+    ///                      before the ctor returns and would otherwise bind panels
+    ///                      to a freshly-minted UUID).
+    explicit WindowFrame(int window_id = 0, QWidget* parent = nullptr,
+                         const WindowId& adopted_uuid = {});
 
     int window_id() const { return window_id_; }
 
@@ -59,6 +70,15 @@ class WindowFrame : public QMainWindow {
     /// The allocator is seeded from saved state on first call so that IDs
     /// never collide with orphaned saved layouts from a previous session.
     static int next_window_id();
+
+    /// Adopt a saved WindowId UUID instead of minting a fresh one. Must be
+    /// called immediately after construction and BEFORE any panel is created
+    /// (i.e. before `apply_layout` or any `dock_router->navigate` call) —
+    /// PanelHandle::frame_id is captured at panel creation and we need that
+    /// to match the persisted layout's frame_id so subsequent saves round-
+    /// trip cleanly. No-op if `frame_uuid_` was already minted; logs a
+    /// warning in that case so the regression is visible.
+    void adopt_frame_uuid(const WindowId& id);
 
     /// Screen router used by this window. Exposed so WindowCycler can ask
     /// the currently-focused window to cycle its own panels.

@@ -7,6 +7,7 @@
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "core/symbol/SymbolContext.h"
 #include "mcp/McpService.h"
 #include "storage/repositories/ChatRepository.h"
 #include "ui/theme/Theme.h"
@@ -163,6 +164,17 @@ void AiChatScreen::showEvent(QShowEvent* e) {
             &AiChatScreen::on_streaming_done, Qt::UniqueConnection);
     connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::config_changed, this,
             &AiChatScreen::on_provider_changed, Qt::UniqueConnection);
+    // Phase 7: rehydrate the linked symbol from SymbolContext on every
+    // show. linked_symbol_ isn't part of save_state — link state is
+    // shell-scoped (per-group, not per-panel), so the most recent group
+    // symbol is the source of truth. Without this, a layout reload would
+    // leave linked_symbol_ empty until the publisher next changes it.
+    if (link_group_ != fincept::SymbolGroup::None) {
+        const fincept::SymbolRef rehydrated =
+            fincept::SymbolContext::instance().group_symbol(link_group_);
+        if (rehydrated.is_valid())
+            linked_symbol_ = rehydrated;
+    }
     update_stats();
     subscribe_mcp_events();
 }
@@ -907,6 +919,19 @@ void AiChatScreen::on_send() {
             attach_btn_->setProperty("active", false);
     }
 
+    // Phase 7: prepend the linked-group symbol context so the LLM has the
+    // security in scope. Only emitted on the wire — the visible bubble
+    // still shows the user's raw_text. The user's bubble below is
+    // unchanged, but `text` (the LLM payload) carries the prefix.
+    if (linked_symbol_.is_valid()) {
+        text = QString("[Context: %1 (%2)]\n\n%3")
+                   .arg(linked_symbol_.symbol,
+                        linked_symbol_.asset_class.isEmpty()
+                            ? QStringLiteral("equity")
+                            : linked_symbol_.asset_class,
+                        text);
+    }
+
     input_box_->clear();
     input_box_->setFixedHeight(44);
     set_input_enabled(false);
@@ -1246,6 +1271,30 @@ void AiChatScreen::restore_state(const QVariantMap& state) {
                 bar->setValue(scroll);
         });
     }
+}
+
+// ── IGroupLinked (Phase 7) ─────────────────────────────────────────────────
+
+void AiChatScreen::set_group(fincept::SymbolGroup g) {
+    if (link_group_ == g)
+        return;
+    link_group_ = g;
+    // Drop the cached symbol when leaving a group — otherwise the next send
+    // would still tag a context the user can't see was inherited.
+    if (g == fincept::SymbolGroup::None)
+        linked_symbol_ = {};
+}
+
+void AiChatScreen::on_group_symbol_changed(const fincept::SymbolRef& ref) {
+    // Consumer-only. Cache the inbound symbol so the next user-typed
+    // message is sent with a "[Context: SYM]" prefix on the wire (see
+    // on_send). UI is intentionally untouched — the bubble shows what
+    // the user typed; the prefix is only on the LLM payload.
+    if (!ref.is_valid()) {
+        linked_symbol_ = {};
+        return;
+    }
+    linked_symbol_ = ref;
 }
 
 } // namespace fincept::screens

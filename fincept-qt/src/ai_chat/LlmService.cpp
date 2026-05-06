@@ -39,7 +39,7 @@
 
 namespace fincept::ai_chat {
 
-static constexpr const char* TAG = "LlmService";
+static constexpr const char* kLlmSvcTag = "LlmService";
 
 
 
@@ -124,7 +124,7 @@ void LlmService::ensure_config() const {
         provider_ = "fincept";
         model_ = "MiniMax-M2.7";
         base_url_ = {};
-        LOG_INFO(TAG, "No LLM provider configured — using Fincept default");
+        LOG_INFO(kLlmSvcTag, "No LLM provider configured — using Fincept default");
     }
 
     // Fincept always resolves API key from the authenticated session, never
@@ -245,7 +245,7 @@ void LlmService::ensure_config() const {
     config_loaded_ = true;
     const int resolved = resolved_max_tokens();
     const int catalog_cap = ModelCatalog::output_cap(provider_, model_);
-    LOG_INFO(TAG, QString("LLM config loaded: provider=%1 model=%2 tools_enabled=%3 "
+    LOG_INFO(kLlmSvcTag, QString("LLM config loaded: provider=%1 model=%2 tools_enabled=%3 "
                           "max_tokens(user=%4 catalog=%5 resolved=%6)")
                       .arg(provider_, model_, tools_enabled_ ? "TRUE" : "FALSE")
                       .arg(max_tokens_).arg(catalog_cap).arg(resolved));
@@ -462,13 +462,13 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
         // Fincept uses two separate endpoints:
         // Primary response → async (submit + poll, returns richer model output)
         // Follow-ups (tool results) → sync /research/chat
-        LOG_INFO(TAG, "do_request: routing to fincept_async_request");
+        LOG_INFO(kLlmSvcTag, "do_request: routing to fincept_async_request");
         return fincept_async_request(user_message, history);
     } else {
         req_body = build_openai_request(user_message, history, false, true);
     }
 
-    LOG_DEBUG(TAG, QString("POST %1 provider=%2 model=%3").arg(url, provider_, model_));
+    LOG_DEBUG(kLlmSvcTag, QString("POST %1 provider=%2 model=%3").arg(url, provider_, model_));
 
     auto http = blocking_post(url, req_body, hdr);
 
@@ -492,7 +492,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
 
         // Check for tool_use blocks
         if (stop_reason == "tool_use") {
-            LOG_INFO(TAG, "Anthropic requested tool_use");
+            LOG_INFO(kLlmSvcTag, "Anthropic requested tool_use");
 
             // Build follow-up messages: original + assistant turn + tool results
             QJsonArray loop_msgs;
@@ -515,7 +515,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                 QString tool_name = block["name"].toString();
                 QJsonObject input = block["input"].toObject();
 
-                LOG_INFO(TAG, "Executing Anthropic tool: " + tool_name);
+                LOG_INFO(kLlmSvcTag, "Executing Anthropic tool: " + tool_name);
                 auto tr = mcp::McpService::instance().execute_openai_function(tool_name, input);
                 tool_results.append(QJsonObject{
                     {"type", "tool_result"},
@@ -566,7 +566,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
             }
 
             if (has_function_calls) {
-                LOG_INFO(TAG, "Gemini requested function call(s)");
+                LOG_INFO(kLlmSvcTag, "Gemini requested function call(s)");
                 // Execute each tool call and build matching functionResponse parts.
                 // Gemini's multi-turn contract: user turn → model turn with functionCall
                 // parts → user turn with functionResponse parts (NOT plain text).
@@ -579,7 +579,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     QString fn_name = fc["name"].toString();
                     QJsonObject fn_args = fc["args"].toObject();
 
-                    LOG_INFO(TAG, "Executing Gemini tool: " + fn_name);
+                    LOG_INFO(kLlmSvcTag, "Executing Gemini tool: " + fn_name);
                     auto tr = mcp::McpService::instance().execute_openai_function(fn_name, fn_args);
 
                     // Build a JSON response object. Gemini requires response to be an
@@ -672,7 +672,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
         // API returned success=true but empty response text — treat as soft error
         if (resp.content.isEmpty()) {
             resp.error = "Fincept LLM returned an empty response. Please try again.";
-            LOG_WARN(TAG, "Fincept /research/chat returned empty choices or content");
+            LOG_WARN(kLlmSvcTag, "Fincept /research/chat returned empty choices or content");
             return resp;
         }
 
@@ -684,7 +684,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
             QJsonArray tcs = msg["tool_calls"].toArray();
 
             if (!tcs.isEmpty()) {
-                LOG_INFO(TAG, QString("LLM requested %1 tool calls").arg(tcs.size()));
+                LOG_INFO(kLlmSvcTag, QString("LLM requested %1 tool calls").arg(tcs.size()));
 
                 // Build initial messages array for tool loop
                 QJsonArray loop_msgs;
@@ -704,10 +704,10 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                         QJsonDocument::fromJson(tc["function"].toObject()["arguments"].toString("{}").toUtf8())
                             .object();
 
-                    LOG_INFO(TAG, QString("Executing tool: %1 args=%2").arg(fn_name,
+                    LOG_INFO(kLlmSvcTag, QString("Executing tool: %1 args=%2").arg(fn_name,
                                   QString::fromUtf8(QJsonDocument(fn_args).toJson(QJsonDocument::Compact)).left(200)));
                     auto tr = mcp::McpService::instance().execute_openai_function(fn_name, fn_args);
-                    LOG_INFO(TAG, QString("Tool %1 -> %2 (msg=%3 err=%4)")
+                    LOG_INFO(kLlmSvcTag, QString("Tool %1 -> %2 (msg=%3 err=%4)")
                                       .arg(fn_name, tr.success ? "OK" : "FAIL",
                                            tr.message.left(120), tr.error.left(120)));
                     loop_msgs.append(QJsonObject{
@@ -735,7 +735,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
     // XML or custom markup in the text response. Detect these patterns and
     // execute the tools, then ask the LLM to summarize the results.
     if (!resp.content.isEmpty()) {
-        LOG_INFO(TAG, "Checking response for text-based tool calls, content starts with: " + resp.content.left(120));
+        LOG_INFO(kLlmSvcTag, "Checking response for text-based tool calls, content starts with: " + resp.content.left(120));
         auto text_tool_result = try_extract_and_execute_text_tool_calls(resp.content, user_message, url, hdr);
         if (text_tool_result.has_value()) {
             resp = text_tool_result.value();
@@ -857,14 +857,14 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                         const QString type = obj["type"].toString();
                         if (type == "content_block_start" &&
                             obj["content_block"].toObject()["type"].toString() == "tool_use") {
-                            LOG_INFO(TAG, "STREAM: Anthropic tool_use content_block_start detected");
+                            LOG_INFO(kLlmSvcTag, "STREAM: Anthropic tool_use content_block_start detected");
                             tool_call_detected = true;
                             loop.quit();
                             return;
                         }
                         if (type == "message_delta" &&
                             obj["delta"].toObject()["stop_reason"].toString() == "tool_use") {
-                            LOG_INFO(TAG, "STREAM: Anthropic stop_reason=tool_use detected");
+                            LOG_INFO(kLlmSvcTag, "STREAM: Anthropic stop_reason=tool_use detected");
                             tool_call_detected = true;
                             loop.quit();
                             return;
@@ -879,7 +879,7 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                             // "stop" with accumulated tool XML → also check
                         }
                         if (finish == "tool_calls") {
-                            LOG_INFO(TAG,
+                            LOG_INFO(kLlmSvcTag,
                                      QString("STREAM: OpenAI-compat finish_reason=tool_calls detected (%1)")
                                          .arg(provider_));
                             tool_call_detected = true;
@@ -888,7 +888,7 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                         }
                         QJsonObject delta = choices[0].toObject()["delta"].toObject();
                         if (!delta["tool_calls"].isUndefined() && !delta["tool_calls"].isNull()) {
-                            LOG_INFO(TAG, QString("STREAM: OpenAI-compat delta.tool_calls detected (%1)")
+                            LOG_INFO(kLlmSvcTag, QString("STREAM: OpenAI-compat delta.tool_calls detected (%1)")
                                               .arg(provider_));
                             tool_call_detected = true;
                             loop.quit();
@@ -899,7 +899,7 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                     // Fincept may also return tool_calls at top level
                     if (!obj["tool_calls"].isUndefined() && !obj["tool_calls"].isNull() &&
                         obj["tool_calls"].toArray().size() > 0) {
-                        LOG_INFO(TAG, "STREAM: top-level tool_calls detected (fincept)");
+                        LOG_INFO(kLlmSvcTag, "STREAM: top-level tool_calls detected (fincept)");
                         tool_call_detected = true;
                         loop.quit();
                         return;
@@ -919,7 +919,7 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                     (accumulated.contains("<tool_call>") || accumulated.contains("<invoke name=") ||
                      accumulated.contains("tool_call>"))) {
                     tool_call_detected = true;
-                    LOG_INFO(TAG, "Tool call XML detected in streamed text — falling back to non-streaming");
+                    LOG_INFO(kLlmSvcTag, "Tool call XML detected in streamed text — falling back to non-streaming");
                     loop.quit();
                     return;
                 }
@@ -935,7 +935,7 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
     // If the model requested tool calls, fall back to non-streaming do_request
     // which already handles the full tool-call/follow-up loop correctly.
     if (tool_call_detected) {
-        LOG_INFO(TAG, "Tool call detected in stream — falling back to tool loop");
+        LOG_INFO(kLlmSvcTag, "Tool call detected in stream — falling back to tool loop");
         reply->abort();
         reply->deleteLater();
 
@@ -953,7 +953,7 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
     int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     if (reply->error() != QNetworkReply::NoError) {
         resp.error = reply->errorString();
-        LOG_ERROR(TAG, "Stream request failed: " + resp.error);
+        LOG_ERROR(kLlmSvcTag, "Stream request failed: " + resp.error);
     } else if (status >= 200 && status < 300) {
         resp.content = accumulated;
         resp.success = true;

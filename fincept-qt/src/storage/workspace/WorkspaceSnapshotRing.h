@@ -95,6 +95,12 @@ class WorkspaceSnapshotRing {
     /// inside `add()` after each successful auto insert. Exposed for tests.
     Result<void> trim_auto();
 
+    /// True if a non-forced auto `add()` would be suppressed by the
+    /// min-interval rate limit right now. Lets callers skip an expensive
+    /// payload build (capture + thumbnail) when the write is going to be
+    /// dropped anyway. Always false when no auto write has happened yet.
+    bool would_throttle_auto() const;
+
   private:
     WorkspaceDb* db_;
     int max_auto_;

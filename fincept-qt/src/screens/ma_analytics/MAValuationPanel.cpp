@@ -21,6 +21,7 @@ using namespace fincept::services::ma;
 
 namespace fincept::screens {
 
+using namespace fincept::services::ma;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODULE 1: VALUATION TOOLKIT

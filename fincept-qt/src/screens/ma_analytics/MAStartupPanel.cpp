@@ -20,6 +20,8 @@ using namespace fincept::services::ma;
 
 namespace fincept::screens {
 
+using namespace fincept::services::ma;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 
 QWidget* MAModulePanel::build_startup_panel() {

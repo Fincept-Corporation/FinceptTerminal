@@ -952,7 +952,7 @@ QWidget* CodeEditorScreen::build_toolbar() {
                                      .arg(colors::POSITIVE(), fonts::DATA_FAMILY));
     hl->addWidget(kernel_label_);
 
-    auto* py_label = new QLabel("Python 3.12", bar);
+    auto* py_label = new QLabel("Python 3.11", bar);
     py_label->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; padding-left:8px;")
                                 .arg(colors::TEXT_TERTIARY(), fonts::DATA_FAMILY));
     hl->addWidget(py_label);

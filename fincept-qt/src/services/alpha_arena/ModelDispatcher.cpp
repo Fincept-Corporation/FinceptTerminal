@@ -80,6 +80,10 @@ void ModelDispatcher::configure(const QString& competition_id,
                  .arg(agents.size()));
 }
 
+void ModelDispatcher::set_stub_response_provider(StubResponseProvider p) {
+    stub_provider_ = std::move(p);
+}
+
 void ModelDispatcher::dispatch_tick(Tick t,
                                     TickContext ctx,
                                     QHash<QString, AgentAccountState> per_agent_state,
@@ -131,6 +135,42 @@ void ModelDispatcher::dispatch_tick(Tick t,
         const QString user_sha = sha256_hex(user_prompt);
         AlphaArenaRepo::instance().upsert_prompt(user_sha, user_prompt);
 
+        // Test-only short-circuit: if a stub provider is installed, build the
+        // decision directly off its return value and emit synchronously.
+        // Skips the request-file + subprocess path entirely.
+        if (stub_provider_) {
+            const QString raw = stub_provider_(agent.agent_id, system_prompt, user_prompt);
+            AlphaArenaRepo::DecisionInsert d;
+            d.tick_id = tick_id;
+            d.agent_id = agent.agent_id;
+            d.user_prompt_sha256 = user_sha;
+            d.raw_response = raw;
+            d.risk_verdict_json = QStringLiteral("[]");
+            ModelResponse parsed = parse_model_response(raw);
+            if (parsed.parse_error.has_value()) d.parse_error = *parsed.parse_error;
+            d.parsed_actions_json = QString::fromUtf8(
+                QJsonDocument(actions_to_json_array(parsed.actions))
+                    .toJson(QJsonDocument::Compact));
+            const auto dr = AlphaArenaRepo::instance().insert_decision(d);
+            const QString dec_id = dr.is_ok() ? dr.value() : QString();
+            QJsonObject p;
+            p[QStringLiteral("decision_id")] = dec_id;
+            p[QStringLiteral("latency_ms")] = 0;
+            p[QStringLiteral("parse_error")] = d.parse_error;
+            AlphaArenaRepo::instance().append_event(competition_id_, agent.agent_id,
+                                                    QStringLiteral("decision"), p);
+            emit decision_received(dec_id, agent.agent_id, parsed.actions, d.parse_error);
+            outstanding_[t.seq]--;
+            if (outstanding_[t.seq] == 0) {
+                close_secret_server_when_done();
+                AlphaArenaRepo::instance().close_tick(tick_id);
+                outstanding_.remove(t.seq);
+                tick_ids_.remove(t.seq);
+                emit tick_dispatch_complete(t.seq);
+            }
+            continue;
+        }
+
         // Write request file. Notice: API key is NOT in this file. Only the
         // secret_handle (SecureStorage key) is — and the subprocess fetches
         // the plaintext via the IPC server.
@@ -179,11 +219,12 @@ void ModelDispatcher::dispatch_tick(Tick t,
         const QString display_name = agent.display_name;
         const int seq = t.seq;
         const QString user_sha_capture = user_sha;
+        const QString comp_id = competition_id_;
 
         fincept::python::PythonRunner::instance().run(
             QStringLiteral("alpha_arena/llm_call.py"),
             {req_path},
-            [self, tick_id, agent_id, display_name, seq, user_sha_capture]
+            [self, tick_id, agent_id, display_name, seq, user_sha_capture, comp_id]
             (const fincept::python::PythonResult& result) {
                 if (!self) return;
 
@@ -226,6 +267,19 @@ void ModelDispatcher::dispatch_tick(Tick t,
 
                 const auto dr = AlphaArenaRepo::instance().insert_decision(d);
                 const QString dec_id = dr.is_ok() ? dr.value() : QString();
+
+                // Telemetry event for RiskPanel — captures latency, parse status,
+                // token usage. Always written, regardless of parse success.
+                {
+                    QJsonObject p;
+                    p[QStringLiteral("decision_id")] = dec_id;
+                    p[QStringLiteral("latency_ms")] = d.latency_ms;
+                    p[QStringLiteral("tokens_in")] = d.tokens_in;
+                    p[QStringLiteral("tokens_out")] = d.tokens_out;
+                    p[QStringLiteral("parse_error")] = d.parse_error;
+                    AlphaArenaRepo::instance().append_event(comp_id, agent_id,
+                                                            QStringLiteral("decision"), p);
+                }
 
                 emit self->decision_received(dec_id, agent_id, parsed.actions, d.parse_error);
 

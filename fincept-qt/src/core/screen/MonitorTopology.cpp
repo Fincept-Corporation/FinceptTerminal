@@ -12,14 +12,24 @@ namespace fincept {
 namespace {
 
 QString hash_fields(const QScreen* screen) {
-    // Compose a deterministic fingerprint from properties that are stable
-    // across reboots and dock reorderings:
-    //   manufacturer, model, physical size, current resolution, position
+    // Compose a deterministic fingerprint from properties that survive
+    // across reboots, dock reorderings, AND replugging the same monitor
+    // into a different physical slot:
+    //   manufacturer, model, current resolution, physical size
     //
-    // Position is included so two physically-identical monitors at different
-    // desk slots get distinct ids; otherwise a layout couldn't pin one panel
-    // to "the left monitor" vs "the right monitor" when both are the same
-    // make/model.
+    // Position is intentionally NOT in the fingerprint. The "where each
+    // window goes" question is answered by WorkspaceVariant.frame_screens,
+    // which maps each frame's WindowId to a stable monitor id and is
+    // applied by WorkspaceShell::apply. Folding desktop x/y into the id
+    // here would defeat that — the same physical screen would get a
+    // different id every time the user reorders monitors, and the
+    // WorkspaceMatcher's exact-topology tier would never hit.
+    //
+    // Two physically-identical monitors with no serial number do collide
+    // under this scheme. That's an inherent limit of the OS (vendors
+    // don't expose anything stronger than make/model/res for cheap
+    // panels). serialNumber()-based ids in MonitorTopology::stable_id
+    // are tried first and remain unaffected.
     QString fingerprint;
     fingerprint += screen->manufacturer();
     fingerprint += '/';
@@ -30,9 +40,6 @@ QString hash_fields(const QScreen* screen) {
     fingerprint += '/';
     fingerprint += QString::number(screen->physicalSize().width(), 'f', 1) + 'x';
     fingerprint += QString::number(screen->physicalSize().height(), 'f', 1);
-    fingerprint += '/';
-    const QRect g = screen->geometry();
-    fingerprint += QString::number(g.x()) + ',' + QString::number(g.y());
 
     const QByteArray digest =
         QCryptographicHash::hash(fingerprint.toUtf8(), QCryptographicHash::Sha256);

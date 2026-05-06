@@ -80,6 +80,7 @@
 #include "screens/watchlist/WatchlistScreen.h"
 #include "core/layout/LayoutCatalog.h"
 #include "core/layout/WorkspaceShell.h"
+#include "core/panel/PanelMaterialiser.h"
 #include "services/updater/UpdateService.h"
 #include "trading/instruments/InstrumentService.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -142,7 +143,12 @@ int WindowFrame::next_window_id() {
     return max_id + 1;
 }
 
-WindowFrame::WindowFrame(int window_id, QWidget* parent) : QMainWindow(parent), window_id_(window_id) {
+WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted_uuid)
+    : QMainWindow(parent), window_id_(window_id) {
+    // Adopt the saved UUID before any panel is created — see header rationale.
+    // Null adopted_uuid = mint a fresh one lazily on first frame_uuid() call.
+    if (!adopted_uuid.is_null())
+        frame_uuid_ = adopted_uuid;
     // Phase 8: seed the dynamic property DataHub uses to gate
     // pause_when_inactive topics. Initial state = active (we wouldn't be
     // constructing the frame if we didn't intend to show it). changeEvent
@@ -562,6 +568,7 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent) : QMainWindow(parent), 
                 // Research
                 {"perspective_research", {"equity_research", "markets", "screener", "news"}},
                 {"perspective_derivatives", {"derivatives", "surface_analytics"}},
+                {"perspective_fno", {"fno", "surface_analytics", "equity_trading"}},
                 {"perspective_ma", {"ma_analytics", "news"}},
                 // Portfolio
                 {"perspective_portfolio", {"portfolio", "markets", "watchlist", "news"}},
@@ -1517,6 +1524,23 @@ WindowId WindowFrame::frame_uuid() const {
     return frame_uuid_;
 }
 
+void WindowFrame::adopt_frame_uuid(const WindowId& id) {
+    if (id.is_null()) {
+        LOG_WARN("WindowFrame", "adopt_frame_uuid: null id ignored");
+        return;
+    }
+    if (!frame_uuid_.is_null() && frame_uuid_ != id) {
+        // The frame already minted (or adopted) a different UUID — too late,
+        // any panels created so far carry the old frame_id. Log and bail
+        // rather than corrupting the PanelRegistry view.
+        LOG_WARN("WindowFrame",
+                 QString("adopt_frame_uuid: refusing to overwrite existing %1 with %2")
+                     .arg(frame_uuid_.to_string(), id.to_string()));
+        return;
+    }
+    frame_uuid_ = id;
+}
+
 // ── Phase 6 final: capture / apply layout ───────────────────────────────────
 
 layout::FrameLayout WindowFrame::capture_layout() const {
@@ -1599,17 +1623,24 @@ bool WindowFrame::apply_layout(const layout::FrameLayout& fl) {
     LOG_INFO("WindowFrame", QString("apply_layout: window %1, %2 panels, dock_state=%3 bytes")
                                 .arg(window_id_).arg(fl.panels.size()).arg(fl.dock_state.size()));
 
-    // Phase 1: ensure every panel from the layout is registered with the
-    // router and PanelRegistry. The dock_state blob from ADS references
-    // dock widgets by objectName, so they must exist before restoreState
-    // can reattach them. The router's create_dock_widget mints a fresh
-    // PanelInstanceId; we override with the saved one so persisted state
-    // round-trips cleanly.
+    // Phase 8 staged materialisation (decision 9.3): split the per-panel
+    // work into a cheap "shell-only" pass that runs synchronously before
+    // ADS restoreState (which needs every dock widget to exist by
+    // objectName), and a "screen factory" pass that runs deferred via
+    // PanelMaterialiser so 50-panel workspaces don't freeze the UI.
+
+    // Track each panel's resolved string id alongside its FrameLayout
+    // entry so the deferred pass doesn't have to recompute the
+    // dup_index suffix.
+    QList<QString> panel_ids;
+    panel_ids.reserve(fl.panels.size());
+
+    // Phase 1: pre-create dock widget shells (no screen factory call yet)
+    // and adopt the saved instance UUIDs. The shells are what ADS's
+    // restoreState matches by objectName; the heavy widget construction
+    // is deferred to Phase 5 below.
     for (const auto& ps : fl.panels) {
         QString id = ps.type_id;
-        // Synthesise a #dup suffix for non-first instances of the same
-        // type_id. Walk earlier panels: if any prior panel shares this
-        // type_id, we need a suffix.
         int dup_index = 0;
         for (const auto& other : fl.panels) {
             if (&other == &ps) break;
@@ -1618,11 +1649,9 @@ bool WindowFrame::apply_layout(const layout::FrameLayout& fl) {
         if (dup_index > 0)
             id = QString("%1#dup%2").arg(ps.type_id).arg(dup_index + 1);
 
-        // Trigger create_dock_widget via navigate (false = non-exclusive).
-        // After navigate, override the minted UUID with the saved one so
-        // state restoration via TabSessionStore::load_screen_state_by_uuid
-        // finds the right row.
-        dock_router_->navigate(id, /*exclusive=*/false);
+        panel_ids.append(id);
+
+        dock_router_->prepare_dock_widget(id);
         if (!ps.instance_id.is_null())
             dock_router_->adopt_panel_instance(id, ps.instance_id);
     }
@@ -1645,19 +1674,60 @@ bool WindowFrame::apply_layout(const layout::FrameLayout& fl) {
     if (always_on_top_ != fl.always_on_top)
         set_always_on_top(fl.always_on_top);
 
-    // Phase 4: activate the saved active panel.
+    // Phase 4: materialise the active panel synchronously so the user sees
+    // populated content the moment the layout returns. Deferring this would
+    // briefly show an empty dock area while PanelMaterialiser drains.
+    QString active_id;
     if (!fl.active_panel.is_null()) {
         const auto map = dock_manager_->dockWidgetsMap();
         for (auto it = map.constBegin(); it != map.constEnd(); ++it) {
             if (dock_router_->panel_uuid_for(it.key()) == fl.active_panel) {
-                if (auto* dw = it.value()) {
-                    dw->raise();
-                    dw->setAsCurrentTab();
-                }
+                active_id = it.key();
                 break;
             }
         }
     }
+    if (!active_id.isEmpty()) {
+        dock_router_->materialize_now(active_id);
+        if (auto* dw = dock_router_->find_dock_widget(active_id)) {
+            dw->raise();
+            dw->setAsCurrentTab();
+        }
+    }
+
+    // Phase 5: enqueue the remaining panels with PanelMaterialiser. Priority:
+    //   1 — currently-visible panels on a frame the user is looking at
+    //       (foreground tab animation will fill in within ~16ms ticks)
+    //   2 — closed/hidden panels and anything on inactive frames (drained
+    //       at lower urgency; the user can't see them anyway)
+    //
+    // Each enqueued item is owned by `this` (the WindowFrame). If the
+    // frame is destroyed mid-stage, PanelMaterialiser drops the items
+    // on next tick instead of waking up to run no-op lambdas. Note the
+    // owner check coexists with the QPointer&lt;DockScreenRouter&gt; guard
+    // inside the lambda — the guard handles "frame still alive but
+    // router torn down" (rare; same teardown order in practice).
+    QPointer<DockScreenRouter> router_guard(dock_router_);
+    const bool frame_active = is_active_for_work();
+    for (const QString& id : panel_ids) {
+        if (id == active_id)
+            continue; // already materialised synchronously above
+        auto* dw = dock_router_->find_dock_widget(id);
+        const bool currently_visible = dw && !dw->isClosed();
+        const int priority = (frame_active && currently_visible) ? 1 : 2;
+
+        PanelMaterialiser::instance().enqueue(
+            id,
+            [router_guard, id]() {
+                if (!router_guard) return;
+                router_guard->materialize_now(id);
+            },
+            priority,
+            /*owner=*/this);
+    }
+
+    LOG_INFO("WindowFrame", QString("apply_layout: window %1 staged %2 panels (active='%3')")
+                                .arg(window_id_).arg(panel_ids.size()).arg(active_id));
 
     return ok;
 }

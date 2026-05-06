@@ -3,11 +3,16 @@
 #include "core/logging/Logger.h"
 #include "services/alpha_arena/ContextBuilder.h"
 #include "storage/secure/SecureStorage.h"
+#include "trading/exchanges/hyperliquid/HyperliquidVenue.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSysInfo>
 #include <QUuid>
+
+#include <algorithm>
 
 namespace fincept::services::alpha_arena {
 
@@ -46,10 +51,12 @@ void AlphaArenaEngine::init() {
     connect(dispatcher_, &ModelDispatcher::decision_received,
             router_, &OrderRouter::on_decision);
 
-    connect(router_, &OrderRouter::action_evaluated,
-            this, [this](const QString& agent_id, const QString& coin,
-                         fincept::services::alpha_arena::Signal sig,
-                         int risk_outcome, const QString& reason) {
+    // Router emits Signal enum; the engine forwards as int for the public-API
+    // surface. Lambda bridges the enum→int cast at connect time.
+    connect(router_, &OrderRouter::action_evaluated, this,
+            [this](const QString& agent_id, const QString& coin,
+                   fincept::services::alpha_arena::Signal sig,
+                   int risk_outcome, const QString& reason) {
                 emit action_evaluated(agent_id, coin, static_cast<int>(sig),
                                       risk_outcome, reason);
             });
@@ -432,8 +439,88 @@ void AlphaArenaEngine::detach_active() {
 
 IExchangeVenue* AlphaArenaEngine::select_venue_for_kind(const QString& venue_kind) {
     if (venue_kind == QLatin1String("paper")) return paper_venue_;
-    // hyperliquid path lands in Phase 5c.
+    if (venue_kind == QLatin1String("hyperliquid")) {
+        if (!hl_venue_) {
+            hl_venue_ = new fincept::trading::hyperliquid::HyperliquidVenue(this);
+            // Default to mainnet; the live-mode dialog can flip to testnet
+            // later via a settings hook in a follow-up.
+            hl_venue_->set_testnet(false);
+            hl_venue_->connect();
+            LOG_INFO("AlphaArena.Engine", "HyperliquidVenue instantiated and connecting");
+        }
+        return hl_venue_;
+    }
+    if (venue_kind == QLatin1String("us_equities")) {
+        LOG_WARN("AlphaArena.Engine", "us_equities venue is a Season 2 stub — not implemented");
+        return nullptr;
+    }
+    LOG_ERROR("AlphaArena.Engine", QString("unknown venue_kind: %1").arg(venue_kind));
     return nullptr;
+}
+
+Result<void> AlphaArenaEngine::set_cadence(int seconds) {
+    if (active_competition_id_.isEmpty()) return Result<void>::err("no active competition");
+    if (!clock_) return Result<void>::err("clock not initialised");
+    if (seconds < 10 || seconds > 3600)
+        return Result<void>::err("cadence_seconds out of range [10, 3600]");
+    clock_->set_cadence_seconds(seconds);
+    auto r = AlphaArenaRepo::instance().update_competition_cadence(
+        active_competition_id_, seconds);
+    if (r.is_err()) return Result<void>::err(r.error());
+
+    QJsonObject p;
+    p[QStringLiteral("cadence_seconds")] = seconds;
+    AlphaArenaRepo::instance().append_event(active_competition_id_, QString(),
+                                            QStringLiteral("cadence_updated"), p);
+    return Result<void>::ok();
+}
+
+AlphaArenaEngine::TelemetrySnapshot AlphaArenaEngine::telemetry() const {
+    TelemetrySnapshot t;
+    if (active_competition_id_.isEmpty()) return t;
+
+    // Pull the last 100 events for the active competition; derive metrics
+    // from event types. This is the lightweight, no-extra-table approach —
+    // refactor to dedicated counters if it ever becomes a hot path.
+    auto rows = AlphaArenaRepo::instance().events_since(active_competition_id_, 0, 200);
+    if (rows.is_err()) return t;
+
+    QVector<int> latencies_ms;
+    int parse_fails = 0;
+    int risk_rejects = 0;
+    int decisions = 0;
+    int venue_errors = 0;
+
+    for (const auto& e : rows.value()) {
+        if (e.type == QLatin1String("decision")) {
+            ++decisions;
+            // payload includes "latency_ms"
+            auto doc = QJsonDocument::fromJson(e.payload_json.toUtf8()).object();
+            if (doc.contains(QStringLiteral("latency_ms")))
+                latencies_ms.append(doc.value(QStringLiteral("latency_ms")).toInt());
+        } else if (e.type == QLatin1String("parse_error")) {
+            ++parse_fails;
+        } else if (e.type == QLatin1String("risk_reject")) {
+            ++risk_rejects;
+        } else if (e.type.contains(QLatin1String("venue_error")) ||
+                   e.type.contains(QLatin1String("order_rejected"))) {
+            ++venue_errors;
+        }
+    }
+
+    std::sort(latencies_ms.begin(), latencies_ms.end());
+    if (!latencies_ms.isEmpty()) {
+        t.tick_latency_p50_ms = latencies_ms[latencies_ms.size() / 2];
+        t.tick_latency_p99_ms = latencies_ms[std::min<int>(latencies_ms.size() - 1,
+                                                          (latencies_ms.size() * 99) / 100)];
+    }
+    if (decisions > 0) {
+        t.parse_failure_rate = static_cast<double>(parse_fails) / decisions;
+        t.risk_rejection_rate = static_cast<double>(risk_rejects) / decisions;
+    }
+    t.venue_errors = venue_errors;
+    t.sample_count = decisions;
+    return t;
 }
 
 } // namespace fincept::services::alpha_arena

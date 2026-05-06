@@ -19,10 +19,17 @@ PanelMaterialiser::PanelMaterialiser() {
     connect(&tick_timer_, &QTimer::timeout, this, &PanelMaterialiser::tick);
 }
 
-void PanelMaterialiser::enqueue(const QString& id, std::function<void()> work, int priority) {
+void PanelMaterialiser::enqueue(const QString& id, std::function<void()> work, int priority,
+                                QObject* owner) {
     if (!work)
         return;
-    Item item{id, std::move(work)};
+    Item item;
+    item.id = id;
+    item.work = std::move(work);
+    if (owner) {
+        item.owner = QPointer<QObject>(owner);
+        item.has_owner = true;
+    }
     switch (priority) {
         case 0:  q_priority_0_.enqueue(std::move(item)); break;
         case 1:  q_priority_1_.enqueue(std::move(item)); break;
@@ -30,6 +37,28 @@ void PanelMaterialiser::enqueue(const QString& id, std::function<void()> work, i
     }
     if (!tick_timer_.isActive())
         tick_timer_.start();
+}
+
+void PanelMaterialiser::cancel_for(QObject* owner) {
+    if (!owner)
+        return;
+    auto drop_matching = [owner](QQueue<Item>& q) {
+        if (q.isEmpty())
+            return;
+        QQueue<Item> kept;
+        kept.reserve(q.size());
+        while (!q.isEmpty()) {
+            Item it = q.dequeue();
+            if (!it.has_owner || it.owner.data() != owner)
+                kept.enqueue(std::move(it));
+        }
+        q = std::move(kept);
+    };
+    drop_matching(q_priority_0_);
+    drop_matching(q_priority_1_);
+    drop_matching(q_priority_2_);
+    if (pending_count() == 0)
+        tick_timer_.stop();
 }
 
 void PanelMaterialiser::drain_all_now() {
@@ -63,23 +92,29 @@ void PanelMaterialiser::set_max_per_tick(int n) {
 void PanelMaterialiser::tick() {
     int budget = max_per_tick_;
 
-    // Drain priority 0 first — foreground tabs are what the user actually
-    // sees, so spending the entire tick on them is fine.
-    while (budget > 0 && !q_priority_0_.isEmpty()) {
-        Item it = q_priority_0_.dequeue();
-        if (it.work) it.work();
-        --budget;
-    }
-    while (budget > 0 && !q_priority_1_.isEmpty()) {
-        Item it = q_priority_1_.dequeue();
-        if (it.work) it.work();
-        --budget;
-    }
-    while (budget > 0 && !q_priority_2_.isEmpty()) {
-        Item it = q_priority_2_.dequeue();
-        if (it.work) it.work();
-        --budget;
-    }
+    // Run an Item from `q`, decrementing budget. Items whose owner has
+    // been destroyed are silently dropped without consuming budget so
+    // dead items don't slow real materialisation.
+    auto run_one = [this, &budget](QQueue<Item>& q) {
+        while (!q.isEmpty()) {
+            Item it = q.dequeue();
+            if (it.has_owner && !it.owner) {
+                LOG_DEBUG(kMatTag, QString("Drop dead-owner item '%1'").arg(it.id));
+                continue;
+            }
+            if (it.work)
+                it.work();
+            --budget;
+            return; // exit inner while; outer loop re-enters until budget hits 0
+        }
+    };
+
+    while (budget > 0 && !q_priority_0_.isEmpty())
+        run_one(q_priority_0_);
+    while (budget > 0 && !q_priority_1_.isEmpty())
+        run_one(q_priority_1_);
+    while (budget > 0 && !q_priority_2_.isEmpty())
+        run_one(q_priority_2_);
 
     if (pending_count() == 0) {
         tick_timer_.stop();

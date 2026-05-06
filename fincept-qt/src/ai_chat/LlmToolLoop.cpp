@@ -1,6 +1,11 @@
-// Tool-execution layer for LlmService.
-// do_tool_loop: structured OpenAI-style follow-up (15 rounds of parallel calls).
-// try_extract_and_execute_text_tool_calls: XML/text fallback for models without structured tool_calls.
+// LlmToolLoop.cpp — tool-execution layer for LlmService.
+//
+// Two entry points:
+//   - do_tool_loop: structured OpenAI-compatible tool-call follow-up loop
+//     (handles up to 15 reasoning rounds with parallel tool execution).
+//   - try_extract_and_execute_text_tool_calls: detects XML/text tool calls
+//     emitted by models that don't support structured tool_calls (minimax,
+//     some OpenRouter models). Executes them and asks the LLM to summarise.
 
 #include "ai_chat/LlmService.h"
 
@@ -19,19 +24,22 @@
 
 namespace fincept::ai_chat {
 
-namespace { constexpr const char* kToolLoopTag = "LlmService"; }
+namespace { constexpr const char* kLlmToolLoopTag = "LlmService"; }
 
 LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& url,
                                      const QMap<QString, QString>& headers) {
     LlmResponse resp;
-    // 15 reasoning steps (each may issue many parallel tool calls).
+    // 15 rounds covers complex agentic workflows (multi-step research →
+    // template → fill → polish). Each round can contain many parallel
+    // tool calls so this isn't 15 tool calls — it's 15 reasoning steps.
     static constexpr int MAX_ROUNDS = 15;
-    LOG_INFO(kToolLoopTag, QString("TOOL LOOP: starting (max %1 rounds, model=%2)").arg(MAX_ROUNDS).arg(model_));
+    LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: starting (max %1 rounds, model=%2)").arg(MAX_ROUNDS).arg(model_));
 
     for (int round = 0; round < MAX_ROUNDS; ++round) {
         QJsonObject fu;
         fu["model"]      = model_;
         fu["messages"]   = loop_messages;
+        // Temperature intentionally omitted — provider default.
         fu["max_tokens"] = resolved_max_tokens();
 
         QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(detail::apply_request_policy(tool_filter_));
@@ -61,6 +69,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         QJsonArray tcs = msg["tool_calls"].toArray();
 
         if (!tcs.isEmpty()) {
+            // Another round
             loop_messages.append(msg);
             for (const auto& tc_val : tcs) {
                 QJsonObject tc = tc_val.toObject();
@@ -69,10 +78,10 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                 QJsonObject fa =
                     QJsonDocument::fromJson(tc["function"].toObject()["arguments"].toString("{}").toUtf8()).object();
 
-                LOG_INFO(kToolLoopTag, QString("TOOL LOOP r%1: executing %2 args=%3").arg(round).arg(fname,
+                LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP r%1: executing %2 args=%3").arg(round).arg(fname,
                               QString::fromUtf8(QJsonDocument(fa).toJson(QJsonDocument::Compact)).left(200)));
                 auto tr = mcp::McpService::instance().execute_openai_function(fname, fa);
-                LOG_INFO(kToolLoopTag, QString("TOOL LOOP r%1: %2 -> %3 (msg=%4 err=%5)")
+                LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP r%1: %2 -> %3 (msg=%4 err=%5)")
                                   .arg(round).arg(fname,
                                        tr.success ? "OK" : "FAIL", tr.message.left(120), tr.error.left(120)));
                 loop_messages.append(QJsonObject{
@@ -83,17 +92,21 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
             continue;
         }
 
+        // Final text response
         resp.content = extract_openai_message_text(msg);
         parse_usage(resp, rj, provider_);
         resp.success = !resp.content.isEmpty();
-        LOG_INFO(kToolLoopTag, QString("TOOL LOOP: finished after %1 round(s) — %2 chars of text")
+        LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: finished after %1 round(s) — %2 chars of text")
                           .arg(round + 1).arg(resp.content.length()));
         return resp;
     }
 
-    // Force one tool-less summary turn so the user doesn't see an empty bubble.
-    LOG_WARN(kToolLoopTag, "TOOL LOOP: exceeded max rounds — forcing summary turn (no tools)");
+    // Max rounds exhausted. The user would see an empty bubble. Force one
+    // final non-tool turn so the model summarizes whatever it accomplished
+    // so the chat doesn't go silent.
+    LOG_WARN(kLlmToolLoopTag, "TOOL LOOP: exceeded max rounds — forcing summary turn (no tools)");
     {
+        // Append a synthetic system nudge instructing the model to wrap up.
         loop_messages.append(QJsonObject{
             {"role", "system"},
             {"content", "You have used your tool-call budget. Reply now with a final answer to the user "
@@ -104,7 +117,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         fu["model"]      = model_;
         fu["messages"]   = loop_messages;
         fu["max_tokens"] = resolved_max_tokens();
-        // No tools field — forces a text response.
+        // Deliberately omit the tools field so the model is forced to produce text.
 
         auto http = blocking_post(url, fu, headers);
         if (http.success) {
@@ -117,7 +130,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                     resp.content = extract_openai_message_text(msg);
                     parse_usage(resp, rj, provider_);
                     resp.success = !resp.content.isEmpty();
-                    LOG_INFO(kToolLoopTag, QString("TOOL LOOP: summary fallback produced %1 chars")
+                    LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: summary fallback produced %1 chars")
                                       .arg(resp.content.length()));
                     if (resp.success)
                         return resp;
@@ -129,21 +142,32 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
     return resp;
 }
 
-/// Detect XML/text tool invocations from models without structured tool_calls.
+// ============================================================================
+// Text-based tool call extraction
+// ============================================================================
+// Models that don't support structured tool_calls (e.g. minimax, some
+// OpenRouter models) may emit tool invocations as XML/text markup in their
+// response. This method detects common patterns and executes the tools.
+
 std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(const QString& content,
                                                                                const QString& user_message,
                                                                                const QString& url,
                                                                                const QMap<QString, QString>& headers) {
-    // Patterns tried in order: <tool_call>JSON</tool_call>, <invoke name="..."/>,
-    // (ns:)tool_call ... /(ns:)tool_call, ```tool_call``` fenced blocks.
+    // ── Pattern 1: <tool_call>{"name":"...", "arguments":{...}}</tool_call>
+    // ── Pattern 2: <invoke name="..." args='{"key":"val"}'>
+    // ── Pattern 3: minimax:tool_call  CONTENT /minimax:tool_call
+    // ── Pattern 4: ```tool_call\n{"name":"...", "arguments":{...}}\n```
+    // ── Pattern 5: function_name(arg1, arg2) style calls embedded in text
+
     struct TextToolCall {
         QString name;
         QJsonObject args;
     };
     std::vector<TextToolCall> calls;
 
-    LOG_INFO(kToolLoopTag, "Checking for text-based tool calls in response (" + QString::number(content.length()) + " chars)");
+    LOG_INFO(kLlmToolLoopTag, "Checking for text-based tool calls in response (" + QString::number(content.length()) + " chars)");
 
+    // --- Pattern 1: XML <tool_call> blocks (without namespace prefix) ---
     {
         static const QRegularExpression rx("<tool_call>\\s*(\\{[\\s\\S]*?\\})\\s*</tool_call>",
                                            QRegularExpression::MultilineOption |
@@ -166,6 +190,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         }
     }
 
+    // --- Pattern 2: <invoke name="..."> with <parameter> children or JSON body ---
     if (calls.empty()) {
         static const QRegularExpression rx_invoke("<invoke\\s+name=\"([^\"]+)\"[^>]*>([\\s\\S]*?)</invoke>",
                                                   QRegularExpression::MultilineOption |
@@ -174,9 +199,9 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
                                                  QRegularExpression::MultilineOption |
                                                      QRegularExpression::DotMatchesEverythingOption);
 
-        LOG_INFO(kToolLoopTag, "Pattern 2: invoke regex valid=" + QString(rx_invoke.isValid() ? "yes" : "no"));
+        LOG_INFO(kLlmToolLoopTag, "Pattern 2: invoke regex valid=" + QString(rx_invoke.isValid() ? "yes" : "no"));
         auto dbg_match = rx_invoke.match(content);
-        LOG_INFO(kToolLoopTag, "Pattern 2: hasMatch=" + QString(dbg_match.hasMatch() ? "yes" : "no"));
+        LOG_INFO(kLlmToolLoopTag, "Pattern 2: hasMatch=" + QString(dbg_match.hasMatch() ? "yes" : "no"));
 
         auto it = rx_invoke.globalMatch(content);
         while (it.hasNext()) {
@@ -185,7 +210,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
             QString body = m.captured(2).trimmed();
             QJsonObject args;
 
-            // <parameter> children first.
+            // Try parsing <parameter> children first
             auto pit = rx_param.globalMatch(body);
             bool has_params = false;
             while (pit.hasNext()) {
@@ -194,6 +219,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
                 QString pval = pm.captured(2).trimmed();
                 has_params = true;
 
+                // Try to parse value as JSON (for arrays/objects)
                 auto pdoc = QJsonDocument::fromJson(pval.toUtf8());
                 if (!pdoc.isNull()) {
                     if (pdoc.isArray())
@@ -207,7 +233,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
                 }
             }
 
-            // No <parameter> tags — try the body as a JSON object.
+            // Fallback: try body as JSON object (no <parameter> tags)
             if (!has_params && !body.isEmpty()) {
                 auto jdoc = QJsonDocument::fromJson(body.toUtf8());
                 if (jdoc.isObject())
@@ -219,6 +245,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         }
     }
 
+    // --- Pattern 3: minimax:tool_call ... /minimax:tool_call or similar ---
     if (calls.empty()) {
         static const QRegularExpression rx("(?:\\w+:)?tool_call\\s+([\\s\\S]*?)\\s*/(?:\\w+:)?tool_call",
                                            QRegularExpression::MultilineOption);
@@ -227,6 +254,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
             auto m = it.next();
             QString body = m.captured(1).trimmed();
 
+            // Try as JSON first
             auto doc = QJsonDocument::fromJson(body.toUtf8());
             if (doc.isObject()) {
                 QJsonObject obj = doc.object();
@@ -242,7 +270,9 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
                 }
             }
 
-            // Not JSON — model emitted a raw query/SQL. Route to any external tool whose schema accepts query|sql|statement.
+            // Not JSON — treat as raw SQL/command from the model.
+            // Look for an external tool that accepts a "query"/"sql"/"statement" param
+            // (the user's case: model emits raw SQL inside minimax:tool_call tags).
             auto all_tools = mcp::McpService::instance().get_all_tools();
             for (const auto& tool : all_tools) {
                 if (tool.is_internal)
@@ -265,6 +295,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         }
     }
 
+    // --- Pattern 4: ```tool_call\n...\n``` code blocks ---
     if (calls.empty()) {
         static const QRegularExpression rx("```tool_call\\s*\\n([\\s\\S]*?)\\n\\s*```",
                                            QRegularExpression::MultilineOption);
@@ -287,11 +318,12 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
     if (calls.empty())
         return std::nullopt;
 
-    LOG_INFO(kToolLoopTag, QString("Detected %1 text-based tool call(s) in response").arg(calls.size()));
+    LOG_INFO(kLlmToolLoopTag, QString("Detected %1 text-based tool call(s) in response").arg(calls.size()));
 
+    // Execute each detected tool call
     QString tool_results;
     for (const auto& tc : calls) {
-        LOG_INFO(kToolLoopTag, "Executing text-detected tool: " + tc.name);
+        LOG_INFO(kLlmToolLoopTag, "Executing text-detected tool: " + tc.name);
         auto tr = mcp::McpService::instance().execute_openai_function(tc.name, tc.args);
 
         QString result_content;
@@ -311,6 +343,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
     if (tool_results.isEmpty())
         return std::nullopt;
 
+    // Build follow-up request asking the LLM to summarize the tool results
     LlmResponse resp;
     QString follow_prompt = "The user asked: \"" + user_message +
                             "\"\n\n"
@@ -326,9 +359,11 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         follow_body["model"]      = model_;
         follow_body["messages"]   = msgs;
         follow_body["max_tokens"] = resolved_max_tokens();
+        // Temperature intentionally omitted — Anthropic default.
         if (!system_prompt_.isEmpty())
             follow_body["system"] = system_prompt_;
     } else if (provider_ == "fincept") {
+        // /research/chat uses messages array
         QJsonArray msgs;
         if (!system_prompt_.isEmpty())
             msgs.append(QJsonObject{{"role", "system"}, {"content", system_prompt_}});
@@ -337,18 +372,21 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         if (!model_.isEmpty() && model_ != "fincept-llm")
             follow_body["model"] = model_;
     } else {
+        // OpenAI-compatible
         QJsonArray msgs;
         if (!system_prompt_.isEmpty())
             msgs.append(QJsonObject{{"role", "system"}, {"content", system_prompt_}});
         msgs.append(QJsonObject{{"role", "user"}, {"content", follow_prompt}});
         follow_body["model"]      = model_;
         follow_body["messages"]   = msgs;
+        // Temperature intentionally omitted — provider default.
         follow_body["max_tokens"] = resolved_max_tokens();
     }
 
-    // Follow-up has no tools — prevents infinite loop.
+    // No tools in follow-up to prevent infinite loop
     auto fu = blocking_post(url, follow_body, headers);
     if (!fu.success) {
+        // Even if follow-up fails, return the raw tool results
         resp.content = tool_results;
         resp.success = true;
         return resp;
@@ -363,10 +401,11 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
 
     QJsonObject fu_rj = fu_doc.object();
 
+    // Extract text from follow-up response (provider-aware)
     if (provider_ == "anthropic") {
         resp.content = extract_anthropic_content_text(fu_rj["content"].toArray());
     } else if (provider_ == "fincept") {
-        // {"success":..., "data":{"choices":[...]}} or top-level shape.
+        // /research/chat: {"success":true,"data":{"choices":[{"message":{"content":"..."}}]}}
         QJsonObject data = fu_rj.contains("data") ? fu_rj["data"].toObject() : fu_rj;
         QJsonArray fu_choices = data["choices"].toArray();
         if (!fu_choices.isEmpty())
@@ -378,7 +417,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
     }
 
     if (resp.content.isEmpty())
-        resp.content = tool_results;
+        resp.content = tool_results; // fallback to raw results
 
     resp.success = true;
     parse_usage(resp, fu_rj, provider_);

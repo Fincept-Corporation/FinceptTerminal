@@ -20,6 +20,9 @@
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QPixmap>
+#include <QScreen>
+#include <QSet>
+#include <QWindow>
 
 namespace fincept::layout {
 
@@ -30,10 +33,42 @@ constexpr const char* kShellTag = "WorkspaceShell";
 // is fine. Updated only on the UI thread inside apply().
 QString g_current_name;
 LayoutId g_current_id;
+
+// L7: ensure restored geometry lands somewhere visible. If the saved rect
+// has no overlap with any connected screen (e.g. external monitor was
+// disconnected since the layout was saved, or DPI/topology shifted the
+// geometry off-screen), recenter the window on the primary screen with
+// the saved size preserved. Conservative: we only intervene when the rect
+// is *entirely* off-screen — partially-visible windows are left alone so
+// users with intentional overflow placements aren't disrupted.
+QRect ensure_on_screen(const QRect& saved) {
+    if (!saved.isValid() || saved.isEmpty())
+        return saved;
+    const auto screens = QGuiApplication::screens();
+    for (auto* s : screens) {
+        if (s && s->availableGeometry().intersects(saved))
+            return saved;
+    }
+    auto* primary = QGuiApplication::primaryScreen();
+    if (!primary)
+        return saved; // headless / boot race — let Qt handle it
+    const QRect avail = primary->availableGeometry();
+    QSize sz = saved.size();
+    // Clamp to the primary screen if the saved size is larger than the
+    // current display (downsizing monitor case).
+    if (sz.width()  > avail.width())  sz.setWidth(avail.width());
+    if (sz.height() > avail.height()) sz.setHeight(avail.height());
+    return QRect(avail.center() - QPoint(sz.width()/2, sz.height()/2), sz);
+}
 } // namespace
 
 QString WorkspaceShell::current_name() { return g_current_name; }
 LayoutId WorkspaceShell::current_id()  { return g_current_id; }
+
+void WorkspaceShell::clear_current() {
+    g_current_name.clear();
+    g_current_id = LayoutId{};
+}
 
 Workspace WorkspaceShell::capture(const QString& name, const QString& kind,
                                   const Workspace* previous) {
@@ -99,8 +134,11 @@ Workspace WorkspaceShell::capture(const QString& name, const QString& kind,
     // a 320×180 PNG under <profile>/layouts/thumbs/<uuid>.png. Path is
     // stored relative so the layouts dir can be moved without breaking
     // refs. Skipped silently if there's no live frame yet (capture from
-    // Launchpad-only state) or if grab() returns null.
-    if (!frames.isEmpty() && frames.first()) {
+    // Launchpad-only state) or if grab() returns null. Also skipped for
+    // kind="auto" — those snapshots are throwaways trimmed by the ring,
+    // and the per-call grab+scale+PNG write is the dominant cost in the
+    // autosave hot path.
+    if (kind != QStringLiteral("auto") && !frames.isEmpty() && frames.first()) {
         if (auto* dm = frames.first()->dock_manager()) {
             const QPixmap shot = dm->grab().scaled(
                 320, 180, Qt::KeepAspectRatio, Qt::SmoothTransformation);
@@ -141,35 +179,59 @@ int WorkspaceShell::apply(const Workspace& workspace) {
 
     int applied = 0;
     auto frames_now = fincept::WindowRegistry::instance().frames();
+    QSet<fincept::WindowFrame*> bound; // frames already paired with a FrameLayout this call
 
     for (const auto& fl : workspace.frames) {
-        // Find an existing frame matching this window_id; else spawn new.
+        // Find an existing frame matching this window_id (and not already
+        // claimed by an earlier FrameLayout in this same apply() call).
         fincept::WindowFrame* target = nullptr;
         for (auto* f : frames_now) {
-            if (f && f->frame_uuid() == fl.window_id) {
+            if (f && !bound.contains(f) && f->frame_uuid() == fl.window_id) {
                 target = f;
                 break;
             }
         }
         if (!target) {
-            // Spawn a fresh frame. The constructor's frame_uuid_ is
-            // freshly generated; we can't easily override it because
-            // WindowId is process-stable per construction. Instead, reuse
-            // an unused existing frame if available; else create a new one.
-            // For v1 we accept that the new frame's UUID differs from the
-            // saved one — the FrameLayout's panel UUIDs are what really
-            // matter for state restoration.
-            target = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
+            // Spawn a fresh frame and adopt the persisted WindowId via the
+            // constructor — must happen before setup_docking_mode's default
+            // navigate creates panels that capture frame_uuid(). Without
+            // this, the variant geometry/screen lookups (keyed on
+            // fl.window_id) would miss for every spawned frame.
+            target = new fincept::WindowFrame(
+                fincept::WindowFrame::next_window_id(),
+                /*parent=*/nullptr,
+                /*adopted_uuid=*/fl.window_id);
             target->setAttribute(Qt::WA_DeleteOnClose);
             target->show();
             frames_now.append(target);
         }
+        bound.insert(target);
 
-        // Apply geometry from the matched variant (if any).
+        // Apply geometry from the matched variant (if any). With UUID
+        // round-trip the lookup hits both for reused live frames and for
+        // freshly-spawned ones. We bind the frame to its saved monitor
+        // FIRST (via stable_id lookup), then apply geometry — that way the
+        // saved coords are interpreted on the correct screen even when the
+        // user has reordered monitors since the layout was saved.
         if (variant) {
+            const auto scr_it = variant->frame_screens.constFind(fl.window_id);
+            if (scr_it != variant->frame_screens.constEnd()) {
+                if (QScreen* saved_screen =
+                        fincept::MonitorTopology::find_screen_by_stable_id(scr_it.value())) {
+                    if (auto* win = target->windowHandle()) {
+                        if (win->screen() != saved_screen)
+                            win->setScreen(saved_screen);
+                    } else {
+                        // No QWindow yet (frame not shown). Move to the
+                        // saved screen's available area as a best-effort
+                        // hint; the geometry call below refines this.
+                        target->move(saved_screen->availableGeometry().topLeft());
+                    }
+                }
+            }
             const auto geo_it = variant->frame_geometries.constFind(fl.window_id);
             if (geo_it != variant->frame_geometries.constEnd())
-                target->setGeometry(geo_it.value());
+                target->setGeometry(ensure_on_screen(geo_it.value()));
         }
 
         if (target->apply_layout(fl))

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QPointer>
 #include <QQueue>
 #include <QString>
 #include <QTimer>
@@ -15,7 +16,24 @@ class PanelMaterialiser : public QObject {
   public:
     static PanelMaterialiser& instance();
 
-    void enqueue(const QString& id, std::function<void()> work, int priority = 1);
+    /// Construction work to run later. The id is for logging/dedup;
+    /// the lambda is the actual constructor invocation (typically a call
+    /// into DockScreenRouter::navigate or materialize_screen).
+    ///
+    /// `owner` is an optional QObject whose lifetime the queued item is
+    /// tied to. When `owner` is destroyed, queued items referencing it
+    /// are silently dropped via `cancel_for(owner)`. Without an owner,
+    /// items remain in the queue indefinitely (or until they fire).
+    /// Pass `nullptr` for fire-and-forget semantics.
+    void enqueue(const QString& id, std::function<void()> work, int priority = 1,
+                 QObject* owner = nullptr);
+
+    /// Drop every queued item whose `owner` matches. Called from
+    /// WindowFrame's destructor so layouts that close mid-stage don't
+    /// burn UI ticks draining no-op lambdas. O(n) over the buffered
+    /// queue — buffered queues are typically &lt; 200 items so this is
+    /// fast enough on the destruction path.
+    void cancel_for(QObject* owner);
 
     /// Synchronous drain. Used by tests and tear-off paths; avoid during normal UI flow.
     void drain_all_now();
@@ -40,6 +58,13 @@ class PanelMaterialiser : public QObject {
     struct Item {
         QString id;
         std::function<void()> work;
+        // Optional owner. Item is dropped before invocation if the
+        // QPointer becomes null (i.e. owner was destroyed). Items
+        // enqueued without an owner have a default-constructed
+        // QPointer that stays "valid" (it never had a target) — the
+        // tick handler runs them unconditionally.
+        QPointer<QObject> owner;
+        bool has_owner = false;
     };
 
     QQueue<Item> q_priority_0_;

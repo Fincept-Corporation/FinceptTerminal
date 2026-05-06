@@ -60,7 +60,20 @@ class TerminalShell : public QObject {
     /// flushes can run before Qt destroys QApplication. Idempotent.
     void shutdown();
 
+    /// Phase 1 final lift (decision 1.5): bootstrap auth/lock services so
+    /// they live above any WindowFrame. Initialises AuthManager (loads
+    /// saved session, validates with server), warms PinManager from
+    /// SecureStorage, and configures InactivityGuard's lock timeout from
+    /// SettingsRepository.
+    ///
+    /// Called from main.cpp once `initialise()` has run and Qt's event
+    /// loop is alive — auth needs HTTP, which means QNetworkAccessManager
+    /// (and an event-loop-friendly stack). Idempotent: a second call is
+    /// a warning + no-op.
+    void bootstrap_auth();
+
     bool is_initialised() const { return initialised_; }
+    bool is_auth_bootstrapped() const { return auth_bootstrapped_; }
 
     /// Active profile UUID. Stable across the session. Null if shutdown()
     /// has been called or initialise() hasn't yet.
@@ -84,6 +97,13 @@ class TerminalShell : public QObject {
     /// The session_id minted in initialise(). Stable for this process. Used
     /// as the row key in workspace_db's session_history table.
     QString session_id() const { return session_id_; }
+
+    /// True iff `crash_recovery_->needs_recovery()` was true at the moment
+    /// `initialise()` ran. Latched at boot — `needs_recovery()` would start
+    /// returning false positives within ~60s of boot (latest auto snapshot
+    /// catches up to the clean-shutdown marker), so consumers that want
+    /// "did we boot after a crash" must read this latched flag instead.
+    bool started_after_crash() const { return started_after_crash_; }
 
   signals:
     /// Emitted at the end of initialise() once all bootstrapping has run.
@@ -109,6 +129,12 @@ class TerminalShell : public QObject {
     WorkspaceDb* workspace_db_ = nullptr;
     WorkspaceSnapshotRing* snapshot_ring_ = nullptr;
     CrashRecovery* crash_recovery_ = nullptr;
+
+    /// Latched at boot in initialise(); read via started_after_crash().
+    bool started_after_crash_ = false;
+
+    /// Latched at the end of bootstrap_auth() — guards re-entrancy.
+    bool auth_bootstrapped_ = false;
 };
 
 } // namespace fincept

@@ -1,40 +1,56 @@
 #pragma once
+// AlphaArenaScreen — viewer over AlphaArenaEngine.
+//
+// Engine-side (AlphaArenaEngine, ModelDispatcher, OrderRouter, …) drives the
+// competition. The screen subscribes to engine signals while visible, posts
+// user intents (create / start / kill / halt), and delegates rendering to
+// per-tab panels (LeaderboardPanel / ModelChatPanel / PositionsPanel /
+// HitlPanel / RiskPanel / AuditPanel).
+//
+// Lifecycle (P3):
+//   * showEvent  → connect engine signals + first refresh
+//   * hideEvent  → disconnect engine signals; engine keeps running
+//
+// Reference: .grill-me/alpha-arena-production-refactor.md §Phase 7.
 
 #include "screens/IStatefulScreen.h"
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
-#include <QJsonArray>
-#include <QJsonObject>
+#include <QHash>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMetaObject>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QSpinBox>
 #include <QStackedWidget>
-#include <QTableWidget>
-#include <QTextEdit>
+#include <QString>
+#include <QStringList>
 #include <QTimer>
 #include <QVector>
 #include <QWidget>
 
-namespace fincept::screens {
+namespace fincept::screens::alpha_arena {
+
+class LeaderboardPanel;
+class ModelChatPanel;
+class PositionsPanel;
+class HitlPanel;
+class RiskPanel;
+class AuditPanel;
 
 /// Lightweight descriptor for a user-configured LLM model entry.
-/// Populated from LlmConfigRepository providers and LlmProfileRepository profiles.
 struct ArenaModelEntry {
-    QString display_name; // shown in the list widget
-    QString provider;     // e.g. "openai", "anthropic"
-    QString model_id;     // e.g. "gpt-4o", "claude-sonnet-4-5-20250514"
+    QString display_name;
+    QString provider;
+    QString model_id;
     QString api_key;
     QString base_url;
-    QString profile_id; // non-empty when sourced from a named profile
+    QString profile_id;
 };
 
-/// Alpha Arena — AI trading competition platform.
-/// Pits multiple LLM agents against each other in crypto or prediction markets.
-/// Features: competition creation, leaderboard, performance charts, AI decisions,
-/// HITL approval, sentiment analysis, portfolio metrics, grid strategies, research.
 class AlphaArenaScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
@@ -42,111 +58,101 @@ class AlphaArenaScreen : public QWidget, public IStatefulScreen {
 
     void restore_state(const QVariantMap& state) override;
     QVariantMap save_state() const override;
-    QString state_key() const override { return "alpha_arena"; }
-    int state_version() const override { return 1; }
+    QString state_key() const override { return QStringLiteral("alpha_arena"); }
+    int state_version() const override { return 2; }
 
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
 
   private slots:
-    void on_create_competition();
-    void on_run_cycle();
-    void on_toggle_auto_run();
-    void on_reset();
-    void on_right_tab_changed(int tab);
-    void on_competition_type_changed(int index);
-    void on_refresh_leaderboard();
-    void on_past_competitions_toggle();
-    void on_past_competition_clicked(QListWidgetItem* item);
+    void on_create_clicked();
+    void on_start_clicked();
+    void on_force_tick_clicked();
+    void on_kill_all_clicked();
+    void on_live_mode_toggle_clicked();
+    void on_right_tab_changed(int idx);
+
+    void on_engine_tick(int seq);
+    void on_engine_decision_received(QString decision_id, QString agent_id);
+    void on_engine_hitl_requested(QString approval_id, QString agent_id, QString summary);
+    void on_engine_circuit_open(QString agent_id, QString reason);
+    void on_engine_status_changed(QString competition_id, QString status);
+    void on_engine_crash_recovery(QStringList competition_ids);
+
+    void on_hitl_resolved(QString approval_id, bool approved);
+
+    void on_countdown_tick();
 
   private:
-    void setup_ui();
-    QWidget* create_header();
-    QWidget* create_create_panel();
-    QWidget* create_controls_bar();
-    QWidget* create_main_content();
-    QWidget* create_leaderboard_panel();
-    QWidget* create_right_panel();
-    QWidget* create_past_competitions_panel();
-    QWidget* create_status_bar();
+    void build_ui();
+    QWidget* build_header();
+    QWidget* build_create_panel();
+    QWidget* build_main();
+    QWidget* build_right_stack();
 
-    void run_python_action(const QString& action, const QJsonObject& params);
-    void update_leaderboard(const QJsonArray& entries);
-    void update_decisions(const QJsonArray& decisions);
-    void load_past_competitions();
-    void set_loading(bool loading);
+    void connect_engine_signals();
+    void disconnect_engine_signals();
 
-    /// Repopulate model_list_ from configured LLM providers and profiles.
-    /// Called on construction and whenever the screen becomes visible.
     void populate_model_list();
+    void apply_competition_id(const QString& id);
+    void update_status_badge(const QString& status);
+    void update_venue_badge();
+    void show_disclaimer_if_live(bool live);
+    void refresh_all_panels();
 
-    // State
+    // State.
     QString competition_id_;
-    QString competition_status_; // created, running, paused, completed, failed
-    int cycle_count_ = 0;
-    bool is_auto_running_ = false;
-    bool loading_ = false;
-
-    // Model entries sourced from LlmConfigRepository / LlmProfileRepository.
-    // Index matches model_list_ row order.
+    QString competition_status_;
+    bool live_mode_engaged_ = false;
     QVector<ArenaModelEntry> model_entries_;
 
-    // Timer for auto-run
-    QTimer* auto_timer_ = nullptr;
+    // Engine connection handles (so we can disconnect cleanly in hideEvent).
+    QVector<QMetaObject::Connection> engine_conns_;
 
-    // UI — Header
+    // Header.
+    QLabel* venue_badge_ = nullptr;
     QLabel* status_badge_ = nullptr;
-    QLabel* cycle_label_ = nullptr;
-    QLabel* price_label_ = nullptr;
+    QLabel* tick_label_ = nullptr;
+    QLabel* countdown_label_ = nullptr;
+    QPushButton* force_tick_btn_ = nullptr;
+    QPushButton* kill_all_btn_ = nullptr;
+    QPushButton* live_mode_btn_ = nullptr;
+    QSpinBox* hot_cadence_spin_ = nullptr;
+    QLabel* disclaimer_ = nullptr;
 
-    // UI — Create panel
+    // Create panel.
     QWidget* create_panel_ = nullptr;
     QLineEdit* comp_name_ = nullptr;
-    QComboBox* comp_type_ = nullptr;
-    QComboBox* comp_symbol_ = nullptr;
     QComboBox* comp_mode_ = nullptr;
+    QRadioButton* venue_paper_ = nullptr;
+    QRadioButton* venue_hl_ = nullptr;
+    QRadioButton* venue_us_eq_ = nullptr;     // disabled — S2 stub
     QDoubleSpinBox* comp_capital_ = nullptr;
-    QSpinBox* comp_interval_ = nullptr;
+    QSpinBox* comp_cadence_ = nullptr;
+    QListWidget* comp_instruments_ = nullptr;
     QListWidget* model_list_ = nullptr;
     QPushButton* create_btn_ = nullptr;
+    QPushButton* start_btn_ = nullptr;
 
-    // UI — Controls
-    QPushButton* run_btn_ = nullptr;
-    QPushButton* auto_btn_ = nullptr;
-    QPushButton* reset_btn_ = nullptr;
-    QLabel* interval_label_ = nullptr;
+    // Main split panels.
+    LeaderboardPanel* leaderboard_ = nullptr;
+    ModelChatPanel* modelchat_ = nullptr;
+    PositionsPanel* positions_ = nullptr;
+    HitlPanel* hitl_ = nullptr;
+    RiskPanel* risk_ = nullptr;
+    AuditPanel* audit_ = nullptr;
 
-    // UI — Leaderboard
-    QTableWidget* leaderboard_table_ = nullptr;
-    QLabel* leaderboard_cycle_ = nullptr;
-
-    // UI — Right panel (7 tabs)
     QStackedWidget* right_stack_ = nullptr;
     QList<QPushButton*> right_tab_btns_;
 
-    // Right tab: Decisions
-    QListWidget* decisions_list_ = nullptr;
-
-    // Right tab: Metrics
-    QTableWidget* metrics_table_ = nullptr;
-
-    // Right tab: other content
-    QTextEdit* hitl_content_ = nullptr;
-    QTextEdit* sentiment_content_ = nullptr;
-    QTextEdit* grid_content_ = nullptr;
-    QTextEdit* research_content_ = nullptr;
-    QTextEdit* broker_content_ = nullptr;
-
-    // UI — Past competitions
-    QWidget* past_panel_ = nullptr;
-    QListWidget* past_list_ = nullptr;
-    bool past_visible_ = false;
-
-    // UI — Status bar
-    QLabel* status_comp_ = nullptr;
-    QLabel* status_models_ = nullptr;
-    QLabel* status_info_ = nullptr;
+    // Visibility-driven countdown timer.
+    QTimer* countdown_timer_ = nullptr;
 };
 
+} // namespace fincept::screens::alpha_arena
+
+namespace fincept::screens {
+// Backwards alias so the rest of the app's screen registry still finds us.
+using AlphaArenaScreen = fincept::screens::alpha_arena::AlphaArenaScreen;
 } // namespace fincept::screens

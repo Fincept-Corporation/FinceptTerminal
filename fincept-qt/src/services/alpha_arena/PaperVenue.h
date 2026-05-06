@@ -87,6 +87,10 @@ class PaperVenue : public QObject, public IExchangeVenue {
     void check_liquidations(const QString& coin, double mark, qint64 utc_ms);
     static double liquidation_price(const PaperPosition& p);
 
+    // Free function exposes seeding to the engine without making the
+    // private impl public on the venue interface.
+    friend void paper_seed_agent(PaperVenue&, const QString&, double);
+
     QHash<QString, AgentBook> books_;
     QHash<QString, double> marks_;          // coin -> last mark
     QHash<QString, double> mm_overrides_;   // coin -> maintenance margin frac

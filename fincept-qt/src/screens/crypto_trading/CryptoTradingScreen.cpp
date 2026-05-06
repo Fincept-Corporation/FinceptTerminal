@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "core/symbol/SymbolContext.h"
 #include "screens/crypto_trading/CryptoBottomPanel.h"
 #include "screens/crypto_trading/CryptoChart.h"
 #include "screens/crypto_trading/CryptoCredentials.h"
@@ -716,6 +717,44 @@ void CryptoTradingScreen::on_symbol_selected(const QString& symbol) {
         return;
     switch_symbol(symbol);
     ScreenStateManager::instance().notify_changed(this);
+
+    // Phase 7: publish to the linked group so other panels in the same
+    // group switch to this pair. Source = `this` so on_group_symbol_changed
+    // can suppress its own re-publish below.
+    if (link_group_ != SymbolGroup::None) {
+        SymbolRef ref;
+        ref.symbol = symbol;
+        ref.asset_class = QStringLiteral("crypto");
+        ref.exchange = exchange_id_;
+        SymbolContext::instance().set_group_symbol(link_group_, ref, this);
+    }
+}
+
+void CryptoTradingScreen::on_group_symbol_changed(const SymbolRef& ref) {
+    // Phase 7: subscribe-side. Only react to crypto symbols — an inbound
+    // equity ticker has nothing meaningful to do here. Empty asset_class
+    // is treated as "unknown" and ignored to avoid surprising the user
+    // with a stale cross-asset propagation.
+    if (!ref.is_valid())
+        return;
+    if (ref.asset_class != QStringLiteral("crypto"))
+        return;
+    if (ref.symbol == selected_symbol_)
+        return; // already showing this pair
+    // Reuse the existing publish-suppressing path: switch_symbol mutates
+    // selected_symbol_ but doesn't re-emit because we don't go through
+    // on_symbol_selected.
+    switch_symbol(ref.symbol);
+}
+
+SymbolRef CryptoTradingScreen::current_symbol() const {
+    if (selected_symbol_.isEmpty())
+        return {};
+    SymbolRef r;
+    r.symbol = selected_symbol_;
+    r.asset_class = QStringLiteral("crypto");
+    r.exchange = exchange_id_;
+    return r;
 }
 
 void CryptoTradingScreen::switch_symbol(const QString& symbol) {

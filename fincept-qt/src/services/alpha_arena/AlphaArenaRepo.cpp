@@ -68,6 +68,14 @@ Result<void> AlphaArenaRepo::insert_competition(const CompetitionRow& comp) {
     return Result<void>::ok();
 }
 
+Result<void> AlphaArenaRepo::update_competition_cadence(const QString& id, int cadence_seconds) {
+    auto r = db().execute(
+        QStringLiteral("UPDATE aa_competitions SET cadence_seconds=? WHERE id=?"),
+        {cadence_seconds, id});
+    if (r.is_err()) return log_and_forward_err<void>("update_competition_cadence", r.error());
+    return Result<void>::ok();
+}
+
 Result<void> AlphaArenaRepo::update_competition_status(const QString& id, const QString& status) {
     auto r = db().execute(
         QStringLiteral("UPDATE aa_competitions SET status=?, "
@@ -553,6 +561,33 @@ Result<void> AlphaArenaRepo::resolve_hitl(const QString& approval_id,
         {status, resolved_by, approval_id});
     if (r.is_err()) return log_and_forward_err<void>("resolve_hitl", r.error());
     return Result<void>::ok();
+}
+
+Result<QVector<AlphaArenaRepo::PendingHitlRow>>
+AlphaArenaRepo::pending_hitl_for(const QString& competition_id) {
+    auto r = db().execute(
+        QStringLiteral(
+            "SELECT h.id, h.agent_id, h.prompt_text, h.action_json, h.requested_at "
+            "FROM aa_hitl_approvals h "
+            "JOIN aa_decisions d ON d.id = h.decision_id "
+            "JOIN aa_ticks t ON t.id = d.tick_id "
+            "WHERE t.competition_id=? AND h.status='pending' "
+            "ORDER BY h.requested_at ASC"),
+        {competition_id});
+    if (r.is_err()) return log_and_forward_err<QVector<PendingHitlRow>>(
+        "pending_hitl_for", r.error());
+    QVector<PendingHitlRow> out;
+    auto& q = r.value();
+    while (q.next()) {
+        PendingHitlRow row;
+        row.approval_id = q.value(0).toString();
+        row.agent_id = q.value(1).toString();
+        row.prompt_text = q.value(2).toString();
+        row.action_json = q.value(3).toString();
+        row.requested_at = q.value(4).toString();
+        out.append(row);
+    }
+    return Result<QVector<PendingHitlRow>>::ok(out);
 }
 
 } // namespace fincept::services::alpha_arena

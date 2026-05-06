@@ -29,6 +29,7 @@
 #include <QObject>
 #include <QString>
 
+#include <functional>
 #include <optional>
 
 namespace fincept::services::alpha_arena {
@@ -52,6 +53,15 @@ class ModelDispatcher : public QObject {
     void configure(const QString& competition_id,
                    CompetitionMode mode,
                    const QVector<DispatchAgent>& agents);
+
+    /// Test-only hook: when set, ModelDispatcher routes prompts through this
+    /// callback instead of spawning the Python subprocess. The callback gets
+    /// the agent_id + system prompt + user prompt, returns the canned raw
+    /// response text. Tests use this to drive the engine deterministically.
+    using StubResponseProvider = std::function<QString(QString agent_id,
+                                                       QString system_prompt,
+                                                       QString user_prompt)>;
+    void set_stub_response_provider(StubResponseProvider p);
 
   public slots:
     /// Triggered by AlphaArenaEngine on TickClock::tick. Per-agent state
@@ -84,6 +94,7 @@ class ModelDispatcher : public QObject {
     QVector<DispatchAgent> agents_;
 
     SecretRedemptionServer* secrets_ = nullptr;
+    StubResponseProvider stub_provider_;
 
     /// Per-tick state — number of outstanding agent calls. When it hits 0,
     /// we close the SecretRedemptionServer and emit tick_dispatch_complete.

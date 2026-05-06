@@ -238,6 +238,9 @@ class CoreAgent:
             model_config=model_config,
             terminal_endpoint=cfg.get("terminal_mcp_endpoint"),
             terminal_tool_defs=cfg.get("terminal_tools", []),
+            terminal_token=cfg.get("terminal_mcp_token"),
+            terminal_destructive_token=cfg.get("terminal_mcp_destructive_token"),
+            terminal_dry_run=bool(cfg.get("tools_dry_run", False)),
         )
         return workflow.run(symbol)
 
@@ -251,6 +254,9 @@ class CoreAgent:
             model_config=model_config,
             terminal_endpoint=cfg.get("terminal_mcp_endpoint"),
             terminal_tool_defs=cfg.get("terminal_tools", []),
+            terminal_token=cfg.get("terminal_mcp_token"),
+            terminal_destructive_token=cfg.get("terminal_mcp_destructive_token"),
+            terminal_dry_run=bool(cfg.get("tools_dry_run", False)),
         )
         return workflow.run(portfolio_data)
 
@@ -264,6 +270,9 @@ class CoreAgent:
             model_config=model_config,
             terminal_endpoint=cfg.get("terminal_mcp_endpoint"),
             terminal_tool_defs=cfg.get("terminal_tools", []),
+            terminal_token=cfg.get("terminal_mcp_token"),
+            terminal_destructive_token=cfg.get("terminal_mcp_destructive_token"),
+            terminal_dry_run=bool(cfg.get("tools_dry_run", False)),
         )
         return workflow.run(portfolio_data)
 
@@ -620,15 +629,23 @@ class CoreAgent:
             all_tools.extend(mcp_tools)
 
         # Terminal MCP bridge — internal tools (navigation, market data, portfolio, etc.)
-        # endpoint is injected by agents.rs when the bridge is running
+        # endpoint + token are injected by AgentService when the bridge is running.
+        # destructive_token is only present when the agent config opts in via
+        # `allow_destructive_tools=true`.
         terminal_endpoint = config.get("terminal_mcp_endpoint")
+        terminal_token = config.get("terminal_mcp_token")
+        terminal_destructive_token = config.get("terminal_mcp_destructive_token")
         terminal_tool_defs = config.get("terminal_tools", [])
+        terminal_dry_run = bool(config.get("tools_dry_run", False))
         if terminal_endpoint and terminal_tool_defs:
             try:
                 from finagent_core.tools.terminal_toolkit import TerminalToolkit
                 terminal_toolkit = TerminalToolkit(
                     endpoint=terminal_endpoint,
                     tool_definitions=terminal_tool_defs,
+                    token=terminal_token,
+                    destructive_token=terminal_destructive_token,
+                    dry_run=terminal_dry_run,
                 )
                 all_tools.extend(terminal_toolkit.get_tools())
                 logger.info(f"TerminalToolkit: {len(terminal_toolkit.functions)} tools from MCP")

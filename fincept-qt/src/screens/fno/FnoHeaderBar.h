@@ -31,6 +31,13 @@ class FnoHeaderBar : public QWidget {
     void set_underlyings(const QStringList& names, const QString& selected = {});
     void set_expiries(const QStringList& exps, const QString& selected = {});
 
+    /// Selection-only setter — flips the underlying combo's currentIndex
+    /// to `underlying` if it's already in the dropdown. Returns false (and
+    /// is a no-op) when the value isn't present, e.g. the broker hasn't
+    /// loaded that instrument yet. Used by the Yellow-group sync path to
+    /// follow ticker changes without rebuilding the full picker.
+    bool select_underlying(const QString& underlying);
+
     /// Bulk update the ribbon labels from a chain snapshot.
     void update_from_chain(const fincept::services::options::OptionChain& chain);
 
@@ -58,6 +65,7 @@ class FnoHeaderBar : public QWidget {
     QLabel* lbl_max_pain_ = nullptr;
     QLabel* lbl_ce_oi_ = nullptr;
     QLabel* lbl_pe_oi_ = nullptr;
+    QLabel* lbl_iv_pctile_ = nullptr;
     QLabel* lbl_status_ = nullptr;
 };
 
