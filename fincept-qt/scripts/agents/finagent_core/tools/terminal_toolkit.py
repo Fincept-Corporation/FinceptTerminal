@@ -45,6 +45,7 @@ class TerminalToolkit:
         timeout_seconds: int = 85,
         token: Optional[str] = None,
         destructive_token: Optional[str] = None,
+        dry_run: bool = False,
         **kwargs,
     ):
         self.endpoint = endpoint.rstrip("/")
@@ -59,6 +60,10 @@ class TerminalToolkit:
         # tools tagged `is_destructive=true` (e.g. order placement,
         # file deletion, settings mutation).
         self.destructive_token = destructive_token
+        # Dry-run: when true, _call_tool returns a synthetic result instead
+        # of crossing the HTTP bridge. Lets agents be exercised without
+        # mutating real state (paper orders, file ops, settings, etc.).
+        self.dry_run = dry_run
         self.functions: List[Any] = []
 
         # Build Agno-compatible function wrappers
@@ -153,6 +158,18 @@ class TerminalToolkit:
             "tool": tool_name,
             "args": args,
         }
+
+        # Dry-run short-circuit — never crosses the bridge. The synthetic
+        # response tells the LLM the call would have succeeded so the agent
+        # loop can continue past the tool step without touching real state.
+        if self.dry_run:
+            logger.info(f"TerminalToolkit[dry-run] {tool_name}({args})")
+            return json.dumps({
+                "dry_run": True,
+                "tool": tool_name,
+                "args": args,
+                "message": f"[dry-run] {tool_name} would have been called with the supplied arguments",
+            })
 
         try:
             data = json.dumps(payload).encode("utf-8")

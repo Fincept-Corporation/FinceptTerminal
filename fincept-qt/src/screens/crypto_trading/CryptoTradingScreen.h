@@ -1,6 +1,8 @@
 #pragma once
 // Crypto Trading Screen — coordinator
 
+#include "core/symbol/IGroupLinked.h"
+#include "core/symbol/SymbolGroup.h"
 #include "screens/IStatefulScreen.h"
 #include "screens/crypto_trading/CryptoTypes.h"
 #include "trading/TradingTypes.h"
@@ -29,8 +31,9 @@ class CryptoBottomPanel;
 
 namespace fincept::screens {
 
-class CryptoTradingScreen : public QWidget, public IStatefulScreen {
+class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
     Q_OBJECT
+    Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit CryptoTradingScreen(QWidget* parent = nullptr);
     ~CryptoTradingScreen();
@@ -39,6 +42,13 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen {
     QVariantMap save_state() const override;
     QString state_key() const override { return "crypto_trading"; }
     int state_version() const override { return 1; }
+
+    // IGroupLinked — Phase 7: link crypto pairs across groups so a "BTC/USDT"
+    // selection in one panel propagates to a chart panel in the same group.
+    void set_group(SymbolGroup g) override { link_group_ = g; }
+    SymbolGroup group() const override { return link_group_; }
+    void on_group_symbol_changed(const SymbolRef& ref) override;
+    SymbolRef current_symbol() const override;
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -152,6 +162,12 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen {
     };
 
     bool initialized_ = false;
+
+    // Phase 7: symbol group link — SymbolGroup::None when unlinked.
+    // Crypto Trading publishes selected_symbol_ (a "BASE/QUOTE" pair) into
+    // the linked group with asset_class="crypto"; consumes inbound symbols
+    // tagged crypto by routing them through switch_symbol().
+    SymbolGroup link_group_ = SymbolGroup::None;
 
     // Cached market info — funding rate and open interest arrive on separate
     // workers so we merge into this cache and emit the union to the bottom

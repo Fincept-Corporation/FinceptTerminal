@@ -11,16 +11,26 @@ cmake_minimum_required(VERSION 3.27)
 if(WIN32 AND CMAKE_HOST_WIN32)
     # Heuristic: if CC/CXX env vars point to clang-cl, or the generator is likely
     # to pick up clang-cl from PATH, force MSVC rc.exe. Harmless on pure MSVC too.
-    find_program(_fincept_rc_exe NAMES rc rc.exe
-        HINTS
-            "$ENV{WindowsSdkVerBinPath}x64"
-            "$ENV{WindowsSdkDir}bin/$ENV{WindowsSDKVersion}x64"
-            "C:/Program Files (x86)/Windows Kits/10/bin/10.0.22621.0/x64"
-            "C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64")
+    #
+    # Discovery order:
+    #   1. WindowsSdkVerBinPath env var (set by VS Developer PowerShell)
+    #   2. WindowsSdkDir + WindowsSDKVersion env vars
+    #   3. Glob over installed SDK versions — survives SDK upgrades without code edits
+    set(_fincept_sdk_hints
+        "$ENV{WindowsSdkVerBinPath}x64"
+        "$ENV{WindowsSdkDir}bin/$ENV{WindowsSDKVersion}x64")
+    file(GLOB _fincept_sdk_dirs
+        "C:/Program Files (x86)/Windows Kits/10/bin/10.*/x64"
+        "C:/Program Files/Windows Kits/10/bin/10.*/x64")
+    list(SORT _fincept_sdk_dirs ORDER DESCENDING)  # newest first
+    list(APPEND _fincept_sdk_hints ${_fincept_sdk_dirs})
+    find_program(_fincept_rc_exe NAMES rc rc.exe HINTS ${_fincept_sdk_hints})
     if(_fincept_rc_exe)
         set(CMAKE_RC_COMPILER "${_fincept_rc_exe}" CACHE FILEPATH "Windows resource compiler" FORCE)
         set(CMAKE_RC_COMPILER_INIT "${_fincept_rc_exe}")
     endif()
+    unset(_fincept_sdk_hints)
+    unset(_fincept_sdk_dirs)
 endif()
 
 project(FinceptTerminal VERSION 4.0.2 LANGUAGES C CXX)
@@ -263,11 +273,29 @@ if(FINCEPT_UNSAFE_DISABLE_GEOFENCE)
 endif()
 
 # ── Qt packages ──────────────────────────────────────────────────────────────
-# Qt is pinned to 6.8.3 across all platforms. Releases must build
-# on exactly this version to guarantee binary/ABI stability of the shipped
-# installer. Developers may override for local experimentation with
-# -DFINCEPT_ALLOW_QT_DRIFT=ON (not for CI or release builds).
+# Qt is pinned across all platforms. The shipped release artifact must use
+# exactly the documented version to guarantee binary/ABI stability of the
+# installer. Local development can tolerate patch drift.
+#
+# Pin modes (set via -DFINCEPT_QT_PIN_MODE=...):
+#   EXACT  — require 6.8.3 exactly. Use for CI / release builds.
+#   MINOR  — require 6.8.x (any patch). Default for developer builds — lets
+#            "qt maintenance tool" patch updates work without breaking config.
+#   ANY    — accept any Qt6 found on the system. Local experimentation only.
+#
+# Legacy FINCEPT_ALLOW_QT_DRIFT=ON is honoured and maps to ANY for back-compat.
 set(FINCEPT_QT_VERSION 6.8.3)
+set(FINCEPT_QT_VERSION_MINOR 6.8)
+set(FINCEPT_QT_PIN_MODE "MINOR" CACHE STRING "Qt version pin mode: EXACT|MINOR|ANY")
+set_property(CACHE FINCEPT_QT_PIN_MODE PROPERTY STRINGS EXACT MINOR ANY)
+if(FINCEPT_ALLOW_QT_DRIFT)
+    set(FINCEPT_QT_PIN_MODE "ANY")
+endif()
+# Force EXACT for tagged release builds.
+if(FINCEPT_RELEASE_BUILD)
+    set(FINCEPT_QT_PIN_MODE "EXACT")
+    message(STATUS "FINCEPT_RELEASE_BUILD=ON → forcing Qt pin mode to EXACT (${FINCEPT_QT_VERSION})")
+endif()
 
 # Qt 6.8 FindWrapOpenGL.cmake hard-codes "-framework AGL" as a fallback when
 # find_library(AGL) fails. Apple removed AGL in macOS 14+ (Sonoma), causing
@@ -289,31 +317,46 @@ if(APPLE AND NOT TARGET WrapOpenGL::WrapOpenGL)
     endif()
 endif()
 
-if(FINCEPT_ALLOW_QT_DRIFT)
-    find_package(Qt6 REQUIRED COMPONENTS
-        Widgets Charts PrintSupport Network Sql Concurrent Multimedia)
+# Build the version arg list once based on pin mode, then reuse it.
+if(FINCEPT_QT_PIN_MODE STREQUAL "EXACT")
+    set(_FINCEPT_QT_VER_ARGS ${FINCEPT_QT_VERSION} EXACT)
+elseif(FINCEPT_QT_PIN_MODE STREQUAL "MINOR")
+    set(_FINCEPT_QT_VER_ARGS ${FINCEPT_QT_VERSION_MINOR})  # any 6.8.x
 else()
-    find_package(Qt6 ${FINCEPT_QT_VERSION} EXACT REQUIRED COMPONENTS
-        Widgets Charts PrintSupport Network Sql Concurrent Multimedia)
+    set(_FINCEPT_QT_VER_ARGS "")  # ANY: no version constraint
 endif()
 
+find_package(Qt6 ${_FINCEPT_QT_VER_ARGS} REQUIRED COMPONENTS
+    Widgets Charts PrintSupport Network Sql Concurrent Multimedia)
+
 # Optional: WebSockets (not always installed)
-find_package(Qt6 ${FINCEPT_QT_VERSION} EXACT QUIET COMPONENTS WebSockets)
+find_package(Qt6 ${_FINCEPT_QT_VER_ARGS} QUIET COMPONENTS WebSockets)
 if(Qt6WebSockets_FOUND)
     set(HAS_WEBSOCKETS TRUE)
 endif()
 
 # Optional: MultimediaWidgets (for inline video/stream playback)
 # Qt6::Multimedia is already required above (needed for QMediaPlayer in AiChatBubble / VideoPlayerWidget).
-find_package(Qt6 ${FINCEPT_QT_VERSION} EXACT QUIET COMPONENTS MultimediaWidgets)
+find_package(Qt6 ${_FINCEPT_QT_VER_ARGS} QUIET COMPONENTS MultimediaWidgets)
 if(Qt6MultimediaWidgets_FOUND)
     set(HAS_MULTIMEDIA TRUE)
 endif()
 
 # Optional: TextToSpeech (cross-platform TTS — SAPI/AVSpeech/speech-dispatcher)
-find_package(Qt6 ${FINCEPT_QT_VERSION} EXACT QUIET COMPONENTS TextToSpeech)
+find_package(Qt6 ${_FINCEPT_QT_VER_ARGS} QUIET COMPONENTS TextToSpeech)
 if(Qt6TextToSpeech_FOUND)
     set(HAS_TTS TRUE)
+endif()
+
+# Optional: WaylandClient — required to deploy Qt Wayland QPA plugin on Linux.
+# Without this plugin, apps fall back to XWayland (often visually broken on
+# fractional-scale Fedora/Ubuntu sessions) or fail outright on pure-Wayland
+# compositors. Detection only; install rule is below in the Linux block.
+if(UNIX AND NOT APPLE)
+    find_package(Qt6 ${_FINCEPT_QT_VER_ARGS} QUIET COMPONENTS WaylandClient)
+    if(Qt6WaylandClient_FOUND)
+        set(HAS_WAYLAND TRUE)
+    endif()
 endif()
 
 # macOS 14+ / Xcode 15+ removes the AGL framework. Qt6's WrapOpenGL target (pulled in
@@ -612,6 +655,7 @@ set(CORE_SOURCES
     src/core/screen/MonitorWatcher.cpp
     src/core/telemetry/TelemetryProvider.cpp
     src/core/telemetry/LocalTelemetrySink.cpp
+    src/core/telemetry/CloudTelemetryProvider.cpp
     src/core/debug/StressLoad.cpp
     src/core/session/SessionManager.cpp
     src/core/session/ScreenStateManager.cpp
@@ -688,6 +732,10 @@ set(STORAGE_SOURCES
 
     # Repositories
     src/storage/repositories/SettingsRepository.cpp
+    src/storage/repositories/OISnapshotsRepository.cpp
+    src/storage/repositories/StrategiesRepository.cpp
+    src/storage/repositories/FiiDiiRepository.cpp
+    src/storage/repositories/IvHistoryRepository.cpp
     src/storage/repositories/WatchlistRepository.cpp
     src/storage/repositories/NotesRepository.cpp
     src/storage/repositories/ReportRepository.cpp
@@ -742,6 +790,10 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v022_portfolio_broker_link.cpp
     src/storage/sqlite/migrations/v023_algo_trading_deploy.cpp
     src/storage/sqlite/migrations/v024_alpha_arena.cpp
+    src/storage/sqlite/migrations/v025_oi_snapshots.cpp
+    src/storage/sqlite/migrations/v026_strategies.cpp
+    src/storage/sqlite/migrations/v027_fii_dii.cpp
+    src/storage/sqlite/migrations/v028_iv_history.cpp
 )
 
 # Python runner
@@ -749,6 +801,7 @@ set(PYTHON_SOURCES
     src/python/PythonRunner.cpp
     src/python/PythonSetupManager.cpp
     src/python/PythonWorker.cpp
+    src/python/OptionGreeksWorker.cpp
 )
 
 # AI Chat
@@ -828,6 +881,7 @@ set(TRADING_SOURCES
     src/trading/exchanges/kraken/KrakenWsClient.cpp
     # Hyperliquid (Alpha Arena live mode — Phase 5c partial)
     src/trading/exchanges/hyperliquid/HyperliquidClient.cpp
+    src/trading/exchanges/hyperliquid/Keccak256.cpp
     src/trading/exchanges/hyperliquid/HyperliquidSigner.cpp
     src/trading/exchanges/hyperliquid/HyperliquidVenue.cpp
     src/trading/brokers/BrokerHttp.cpp
@@ -883,6 +937,11 @@ set(SERVICE_SOURCES
     src/services/python_cli/PythonCliService.cpp
     src/services/markets/MarketDataService.cpp
     src/services/options/OptionChainService.cpp
+    src/services/options/OISnapshotter.cpp
+    src/services/options/StrategyTemplates.cpp
+    src/services/options/OptionPricing.cpp
+    src/services/options/StrategyAnalytics.cpp
+    src/services/options/FiiDiiService.cpp
     src/services/data_normalization/DataNormalizationService.cpp
     src/services/news/NewsService.cpp
     src/services/news/NewsClusterService.cpp
@@ -1095,6 +1154,7 @@ set(SCREEN_SOURCES
     src/screens/chat_mode/TerminalToolBridge.cpp
     src/screens/setup/SetupScreen.cpp
     src/screens/launchpad/LaunchpadScreen.cpp
+    src/screens/launchpad/OnboardingTour.cpp
     src/screens/recovery/CrashRecoveryDialog.cpp
     src/screens/info/ContactScreen.cpp
     src/screens/info/TermsScreen.cpp
@@ -1250,6 +1310,22 @@ set(SCREEN_SOURCES
     src/screens/fno/OptionChainModel.cpp
     src/screens/fno/OptionChainTable.cpp
     src/screens/fno/ChainSubTab.cpp
+    src/screens/fno/BuilderSubTab.cpp
+    src/screens/fno/BuilderAnalyticsRibbon.cpp
+    src/screens/fno/TemplatePickerPanel.cpp
+    src/screens/fno/LegEditorTable.cpp
+    src/screens/fno/PayoffChartWidget.cpp
+    src/screens/fno/OrderConfirmDialog.cpp
+    src/screens/fno/OISubTab.cpp
+    src/screens/fno/MultiStrikeOIChart.cpp
+    src/screens/fno/MaxPainChart.cpp
+    src/screens/fno/OIBuildupTable.cpp
+    src/screens/fno/IntradayOIChart.cpp
+    src/screens/fno/FiiDiiSubTab.cpp
+    src/screens/fno/FiiDiiChart.cpp
+    src/screens/fno/MultiStraddleSubTab.cpp
+    src/screens/fno/MultiStraddleChart.cpp
+    src/screens/fno/ScreenerSubTab.cpp
 
     # AkShare Data Explorer
     src/screens/akshare/AkShareScreen.cpp
@@ -1640,6 +1716,22 @@ set_source_files_properties(
     src/screens/fno/OptionChainModel.cpp
     src/screens/fno/OptionChainTable.cpp
     src/screens/fno/ChainSubTab.cpp
+    src/screens/fno/BuilderSubTab.cpp
+    src/screens/fno/BuilderAnalyticsRibbon.cpp
+    src/screens/fno/TemplatePickerPanel.cpp
+    src/screens/fno/LegEditorTable.cpp
+    src/screens/fno/PayoffChartWidget.cpp
+    src/screens/fno/OrderConfirmDialog.cpp
+    src/screens/fno/OISubTab.cpp
+    src/screens/fno/MultiStrikeOIChart.cpp
+    src/screens/fno/MaxPainChart.cpp
+    src/screens/fno/OIBuildupTable.cpp
+    src/screens/fno/IntradayOIChart.cpp
+    src/screens/fno/FiiDiiSubTab.cpp
+    src/screens/fno/FiiDiiChart.cpp
+    src/screens/fno/MultiStraddleSubTab.cpp
+    src/screens/fno/MultiStraddleChart.cpp
+    src/screens/fno/ScreenerSubTab.cpp
     src/screens/economics/EconomicsScreen.cpp
     src/screens/equity_research/EquityAnalysisTab.cpp
     src/screens/equity_research/EquityFinancialsTab.cpp
@@ -1764,6 +1856,7 @@ set_source_files_properties(
     src/screens/settings/StorageSection.cpp
     src/screens/setup/SetupScreen.cpp
     src/screens/launchpad/LaunchpadScreen.cpp
+    src/screens/launchpad/OnboardingTour.cpp
     src/screens/recovery/CrashRecoveryDialog.cpp
     src/screens/support/SupportScreen.cpp
     src/screens/surface_analytics/Surface3DWidget.cpp
@@ -1881,6 +1974,7 @@ set_source_files_properties(
     src/services/alpha_arena/AlphaArenaEngine.cpp
     src/services/alpha_arena/AlphaArenaService.cpp
     src/trading/exchanges/hyperliquid/HyperliquidClient.cpp
+    src/trading/exchanges/hyperliquid/Keccak256.cpp
     src/trading/exchanges/hyperliquid/HyperliquidSigner.cpp
     src/trading/exchanges/hyperliquid/HyperliquidVenue.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
@@ -2390,12 +2484,17 @@ endif()
 
 # ── Windows: deploy Qt DLLs ──────────────────────────────────────────────────
 if(WIN32)
-    find_program(WINDEPLOYQT_EXE windeployqt
-        HINTS
-            "$ENV{QT_ROOT_DIR}/bin"
-            "C:/Qt/6.8.3/msvc2022_64/bin"
-            "C:/Qt/6.8.2/msvc2022_64/bin"
-    )
+    # Derive the Qt bin/ dir from Qt6_DIR (which CMake set during find_package),
+    # so we don't hardcode "C:/Qt/<version>/msvc2022_64/bin" — that path breaks
+    # the moment a developer installs to a non-default location or upgrades.
+    # Qt6_DIR points at <prefix>/lib/cmake/Qt6, so go up three levels.
+    set(_fincept_qt_bin_hints "$ENV{QT_ROOT_DIR}/bin")
+    if(Qt6_DIR)
+        get_filename_component(_fincept_qt_prefix "${Qt6_DIR}/../../.." ABSOLUTE)
+        list(APPEND _fincept_qt_bin_hints "${_fincept_qt_prefix}/bin")
+    endif()
+    find_program(WINDEPLOYQT_EXE windeployqt HINTS ${_fincept_qt_bin_hints})
+    unset(_fincept_qt_bin_hints)
     if(WINDEPLOYQT_EXE)
         # Always deploy Qt DLLs/plugins next to the exe. windeployqt is
         # idempotent and copy_if_different — incremental cost is ~1-2 s
@@ -2409,22 +2508,29 @@ if(WIN32)
         )
     endif()
 
-    # ── Fix: Qt Maintenance Tool partial-update leaves plugins mismatched ──────
-    # The local Qt 6.8.3 install has Qt6Core/Qt6Sql updated (March 2026) but
-    # sqldrivers/qsqlite.dll still at the original March 2025 build, causing a
-    # crash on startup (0xc0000005 in qsqlite.dll).
-    # Qt_temp contains a clean, fully-consistent Qt 6.8.3 install from aqtinstall.
-    # Always overwrite the sql plugins with the consistent set after every build.
-    set(QT_CONSISTENT_PLUGINS "C:/Qt_temp/6.8.3/msvc2022_64/plugins")
-    if(EXISTS "${QT_CONSISTENT_PLUGINS}/sqldrivers/qsqlite.dll")
+    # ── Optional: override sqldrivers from a known-consistent Qt install ──────
+    # Some local Qt installs end up with Qt6Core/Qt6Sql at one patch level and
+    # sqldrivers/qsqlite.dll at an older one (the Qt Maintenance Tool sometimes
+    # skips plugin updates), causing 0xc0000005 in qsqlite.dll on startup.
+    # If you have a clean Qt install (e.g. from aqtinstall) and want to source
+    # the SQL plugins from there, set FINCEPT_QT_CONSISTENT_PLUGINS_DIR to its
+    # plugins/ directory. Empty (default) = skip override entirely.
+    set(FINCEPT_QT_CONSISTENT_PLUGINS_DIR "" CACHE PATH
+        "Optional: path to a clean Qt plugins/ dir to overwrite sqldrivers from")
+    if(FINCEPT_QT_CONSISTENT_PLUGINS_DIR
+       AND EXISTS "${FINCEPT_QT_CONSISTENT_PLUGINS_DIR}/sqldrivers/qsqlite.dll")
         add_custom_command(TARGET FinceptTerminal POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_FILE_DIR:FinceptTerminal>/sqldrivers"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${QT_CONSISTENT_PLUGINS}/sqldrivers/qsqlite.dll"
+                "${FINCEPT_QT_CONSISTENT_PLUGINS_DIR}/sqldrivers/qsqlite.dll"
                 "$<TARGET_FILE_DIR:FinceptTerminal>/sqldrivers/qsqlite.dll"
-            COMMENT "Overwriting sqldrivers with consistent Qt_temp plugins..."
+            COMMENT "Overwriting sqldrivers from FINCEPT_QT_CONSISTENT_PLUGINS_DIR..."
         )
+    elseif(FINCEPT_QT_CONSISTENT_PLUGINS_DIR)
+        message(WARNING
+            "FINCEPT_QT_CONSISTENT_PLUGINS_DIR set to '${FINCEPT_QT_CONSISTENT_PLUGINS_DIR}' "
+            "but sqldrivers/qsqlite.dll not found there — skipping override.")
     endif()
 endif()
 
@@ -2551,9 +2657,35 @@ elseif(APPLE)
             DESTINATION "FinceptTerminal.app/Contents/Resources/resources" COMPONENT core)
 
 else()
-    # Linux: FHS-compliant layout
+    # Linux: FHS-compliant layout. Architecture-neutral — works for x86_64
+    # and aarch64 (ARM64) without changes; CMake just installs the binary
+    # produced for the target arch into share/fincept-terminal/. To build for
+    # ARM64 cross-compile, configure with `-DCMAKE_SYSTEM_PROCESSOR=aarch64`
+    # and an aarch64 Qt SDK on CMAKE_PREFIX_PATH.
     install(TARGETS FinceptTerminal
             RUNTIME DESTINATION "bin" COMPONENT core)
+
+    # Qt Wayland QPA plugin — required so the app renders correctly on
+    # Wayland sessions (Fedora 36+, Ubuntu 22.04+ default to Wayland).
+    # Without this, Qt falls back to XWayland which has fractional-scale
+    # bugs, broken HiDPI, and may fail entirely on pure-Wayland compositors.
+    if(HAS_WAYLAND AND Qt6_DIR)
+        get_filename_component(_fincept_qt_prefix "${Qt6_DIR}/../../.." ABSOLUTE)
+        set(_fincept_wayland_plugin "${_fincept_qt_prefix}/plugins/platforms/libqwayland-generic.so")
+        if(EXISTS "${_fincept_wayland_plugin}")
+            install(FILES "${_fincept_wayland_plugin}"
+                    DESTINATION "share/fincept-terminal/plugins/platforms"
+                    COMPONENT core)
+        endif()
+        # Also bundle wayland-decoration-client and wayland shell integration plugins.
+        foreach(_dir wayland-decoration-client wayland-shell-integration wayland-graphics-integration-client)
+            if(EXISTS "${_fincept_qt_prefix}/plugins/${_dir}")
+                install(DIRECTORY "${_fincept_qt_prefix}/plugins/${_dir}"
+                        DESTINATION "share/fincept-terminal/plugins"
+                        COMPONENT core)
+            endif()
+        endforeach()
+    endif()
 
     # Python analytics scripts
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scripts/"
@@ -2651,8 +2783,53 @@ if(FINCEPT_BUILD_INSTALLER)
     set(CPACK_PACKAGE_ICON
         "${CMAKE_CURRENT_SOURCE_DIR}/resources/fincept.ico")
 
-    # ── Generator: IFW only ──────────────────────────────────────────────────
+    # ── Generators ────────────────────────────────────────────────────────────
+    # Default: IFW everywhere. On Linux, additionally produce native package
+    # formats if the corresponding tools are present on PATH.
     set(CPACK_GENERATOR "IFW")
+    if(UNIX AND NOT APPLE)
+        find_program(_FINCEPT_DPKG_EXE dpkg)
+        find_program(_FINCEPT_RPMBUILD_EXE rpmbuild)
+        if(_FINCEPT_DPKG_EXE)
+            list(APPEND CPACK_GENERATOR "DEB")
+            set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Fincept Corporation <support@fincept.in>")
+            set(CPACK_DEBIAN_PACKAGE_SECTION "misc")
+            set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+            set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "${CPACK_PACKAGE_HOMEPAGE_URL}")
+            set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+            # Hard runtime deps: glibc 2.31+ (Ubuntu 22.04 baseline), libsecret
+            # for credential storage, fontconfig for Qt text rendering.
+            set(CPACK_DEBIAN_PACKAGE_DEPENDS
+                "libc6 (>= 2.31), libsecret-1-0, libfontconfig1, libxkbcommon0, libdbus-1-3")
+            # CPack DEB cannot generate arm64 from inside an x86_64 build host;
+            # CPACK_DEBIAN_ARCHITECTURE follows CMAKE_SYSTEM_PROCESSOR.
+            if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+                set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "arm64")
+            else()
+                set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
+            endif()
+            message(STATUS "CPack: DEB generator enabled (${CPACK_DEBIAN_PACKAGE_ARCHITECTURE})")
+        endif()
+        if(_FINCEPT_RPMBUILD_EXE)
+            list(APPEND CPACK_GENERATOR "RPM")
+            set(CPACK_RPM_PACKAGE_LICENSE "AGPL-3.0-or-later")
+            set(CPACK_RPM_PACKAGE_GROUP "Applications/Productivity")
+            set(CPACK_RPM_PACKAGE_URL "${CPACK_PACKAGE_HOMEPAGE_URL}")
+            set(CPACK_RPM_PACKAGE_REQUIRES
+                "glibc >= 2.31, libsecret, fontconfig, libxkbcommon, dbus-libs")
+            set(CPACK_RPM_PACKAGE_AUTOREQPROV ON)
+            if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+                set(CPACK_RPM_PACKAGE_ARCHITECTURE "aarch64")
+            else()
+                set(CPACK_RPM_PACKAGE_ARCHITECTURE "x86_64")
+            endif()
+            message(STATUS "CPack: RPM generator enabled (${CPACK_RPM_PACKAGE_ARCHITECTURE})")
+        endif()
+        if(NOT _FINCEPT_DPKG_EXE AND NOT _FINCEPT_RPMBUILD_EXE)
+            message(STATUS "CPack: only IFW generator enabled — install dpkg-dev / rpm-build "
+                           "for native .deb/.rpm output")
+        endif()
+    endif()
 
     # ── QtIFW tool discovery ─────────────────────────────────────────────────
     find_program(BINARYCREATOR_EXE binarycreator
@@ -2770,17 +2947,126 @@ if(FINCEPT_BUILD_INSTALLER)
         DEFAULT TRUE
         DEPENDS "com.fincept.terminal.core")
 
+    # ── Linux: AppImage helper target ────────────────────────────────────────
+    # `linuxdeploy` + `linuxdeploy-plugin-qt` are external tools; we don't
+    # install them ourselves. If found on PATH, expose `make appimage` (or
+    # `cmake --build . --target appimage`) so CI can produce a single-file
+    # portable AppImage. Distro-agnostic; runs on glibc 2.31+ targets.
+    if(UNIX AND NOT APPLE)
+        find_program(_FINCEPT_LINUXDEPLOY linuxdeploy)
+        find_program(_FINCEPT_LINUXDEPLOY_QT linuxdeploy-plugin-qt)
+        if(_FINCEPT_LINUXDEPLOY AND _FINCEPT_LINUXDEPLOY_QT)
+            add_custom_target(appimage
+                COMMAND ${CMAKE_COMMAND} --install "${CMAKE_BINARY_DIR}"
+                    --prefix "${CMAKE_BINARY_DIR}/AppDir/usr"
+                COMMAND ${CMAKE_COMMAND} -E env
+                    QMAKE=${_fincept_qt_prefix}/bin/qmake
+                    "${_FINCEPT_LINUXDEPLOY}"
+                    --appdir "${CMAKE_BINARY_DIR}/AppDir"
+                    --plugin qt
+                    --output appimage
+                    --desktop-file "${CMAKE_BINARY_DIR}/AppDir/usr/share/applications/fincept-terminal.desktop"
+                WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+                COMMENT "Building FinceptTerminal AppImage..."
+                VERBATIM)
+            message(STATUS "AppImage target available — run `cmake --build . --target appimage`")
+        else()
+            message(STATUS "linuxdeploy / linuxdeploy-plugin-qt not on PATH — "
+                           "AppImage target unavailable. See https://github.com/linuxdeploy")
+        endif()
+    endif()
+
 endif() # FINCEPT_BUILD_INSTALLER
+
+# ── Code signing helpers ─────────────────────────────────────────────────────
+# These are opt-in custom targets, not POST_BUILD steps, so signing only runs
+# when explicitly invoked (CI / release pipeline). All inputs live in cache
+# variables; nothing is hardcoded.
+
+# macOS: codesign + notarytool + stapler
+if(APPLE)
+    set(FINCEPT_MACOS_SIGN_IDENTITY "" CACHE STRING
+        "Codesign identity (e.g. 'Developer ID Application: Fincept Corp (TEAMID)')")
+    set(FINCEPT_MACOS_NOTARY_APPLE_ID "" CACHE STRING "Apple ID for notarytool submission")
+    set(FINCEPT_MACOS_NOTARY_TEAM_ID  "" CACHE STRING "Apple Developer Team ID")
+    set(FINCEPT_MACOS_NOTARY_PASSWORD "" CACHE STRING "App-specific password for notarytool")
+
+    if(FINCEPT_MACOS_SIGN_IDENTITY)
+        find_program(_FINCEPT_MACDEPLOYQT macdeployqt HINTS "${_fincept_qt_prefix}/bin")
+        find_program(_FINCEPT_NOTARYTOOL  notarytool)
+        find_program(_FINCEPT_STAPLER     stapler)
+        find_program(_FINCEPT_DITTO       ditto)
+
+        # Sign-only target: useful for dev signing (not notarized).
+        add_custom_target(sign-macos
+            COMMAND "${_FINCEPT_MACDEPLOYQT}"
+                "$<TARGET_BUNDLE_DIR:FinceptTerminal>"
+                "-sign-for-notarization=${FINCEPT_MACOS_SIGN_IDENTITY}"
+            COMMENT "Signing FinceptTerminal.app with ${FINCEPT_MACOS_SIGN_IDENTITY}..."
+            VERBATIM)
+
+        # Full release pipeline: sign → zip → submit → wait → staple.
+        if(FINCEPT_MACOS_NOTARY_APPLE_ID
+           AND FINCEPT_MACOS_NOTARY_TEAM_ID
+           AND FINCEPT_MACOS_NOTARY_PASSWORD)
+            add_custom_target(notarize-macos
+                COMMAND "${_FINCEPT_DITTO}" -c -k --keepParent
+                    "$<TARGET_BUNDLE_DIR:FinceptTerminal>"
+                    "${CMAKE_BINARY_DIR}/FinceptTerminal-notarize.zip"
+                COMMAND xcrun notarytool submit
+                    "${CMAKE_BINARY_DIR}/FinceptTerminal-notarize.zip"
+                    --apple-id "${FINCEPT_MACOS_NOTARY_APPLE_ID}"
+                    --team-id  "${FINCEPT_MACOS_NOTARY_TEAM_ID}"
+                    --password "${FINCEPT_MACOS_NOTARY_PASSWORD}"
+                    --wait
+                COMMAND xcrun stapler staple "$<TARGET_BUNDLE_DIR:FinceptTerminal>"
+                DEPENDS sign-macos
+                COMMENT "Notarizing + stapling FinceptTerminal.app..."
+                VERBATIM)
+        endif()
+    endif()
+endif()
+
+# Windows: Authenticode signing via signtool
+if(WIN32)
+    set(FINCEPT_WIN_SIGN_CERT     "" CACHE FILEPATH "Path to .pfx code-signing certificate")
+    set(FINCEPT_WIN_SIGN_PASSWORD "" CACHE STRING   "Password for the .pfx certificate")
+    set(FINCEPT_WIN_SIGN_TIMESTAMP_URL
+        "http://timestamp.digicert.com" CACHE STRING "RFC 3161 timestamp URL")
+
+    if(FINCEPT_WIN_SIGN_CERT)
+        find_program(_FINCEPT_SIGNTOOL signtool
+            HINTS ${_fincept_sdk_dirs}
+                  "$ENV{WindowsSdkVerBinPath}x64")
+        if(_FINCEPT_SIGNTOOL)
+            add_custom_target(sign-windows
+                COMMAND "${_FINCEPT_SIGNTOOL}" sign
+                    /fd SHA256
+                    /tr "${FINCEPT_WIN_SIGN_TIMESTAMP_URL}"
+                    /td SHA256
+                    /f  "${FINCEPT_WIN_SIGN_CERT}"
+                    /p  "${FINCEPT_WIN_SIGN_PASSWORD}"
+                    "$<TARGET_FILE:FinceptTerminal>"
+                COMMENT "Signing FinceptTerminal.exe with Authenticode..."
+                VERBATIM)
+        else()
+            message(WARNING "FINCEPT_WIN_SIGN_CERT set but signtool.exe not found")
+        endif()
+    endif()
+endif()
 
 # ── Build configuration summary ──────────────────────────────────────────────
 message(STATUS "")
 message(STATUS "============================================================")
 message(STATUS "  Fincept Terminal ${CMAKE_PROJECT_VERSION} — build summary")
 message(STATUS "============================================================")
-message(STATUS "  Qt version        : ${Qt6Core_VERSION}")
+message(STATUS "  Qt version        : ${Qt6Core_VERSION}  (pin mode: ${FINCEPT_QT_PIN_MODE})")
 message(STATUS "  Build type        : ${CMAKE_BUILD_TYPE}")
 message(STATUS "  Platform          : ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}")
 message(STATUS "  Compiler          : ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+if(APPLE AND CMAKE_OSX_ARCHITECTURES)
+message(STATUS "  macOS arch        : ${CMAKE_OSX_ARCHITECTURES}")
+endif()
 message(STATUS "------------------------------------------------------------")
 message(STATUS "  Excel export      : ${FINCEPT_HAS_PRIVATE_HEADERS}  (Qt6::GuiPrivate / QXlsx)")
 if(DEFINED HAS_WEBSOCKETS)
@@ -2791,6 +3077,15 @@ message(STATUS "  Multimedia        : ${HAS_MULTIMEDIA}")
 endif()
 if(DEFINED HAS_TTS)
 message(STATUS "  TextToSpeech      : ${HAS_TTS}")
+endif()
+if(DEFINED HAS_WAYLAND)
+message(STATUS "  Wayland (Linux)   : ${HAS_WAYLAND}")
+endif()
+if(APPLE AND FINCEPT_MACOS_SIGN_IDENTITY)
+message(STATUS "  macOS signing     : ON   (target: sign-macos / notarize-macos)")
+endif()
+if(WIN32 AND FINCEPT_WIN_SIGN_CERT)
+message(STATUS "  Windows signing   : ON   (target: sign-windows)")
 endif()
 message(STATUS "  Tests             : ${FINCEPT_BUILD_TESTS}")
 message(STATUS "============================================================")

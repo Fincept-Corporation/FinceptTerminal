@@ -42,6 +42,16 @@ class ChainSubTab : public QWidget {
     QVariantMap save_state() const;
     void restore_state(const QVariantMap& state);
 
+    /// Group-link entry point — request the picker switch to `underlying`
+    /// when it's already in the broker's loaded instrument set. No-op
+    /// otherwise. Used by FnoScreen::on_group_symbol_changed (Yellow sync).
+    void request_underlying(const QString& underlying);
+
+    /// Currently selected underlying as carried by the picker (empty when
+    /// no broker is connected). Used by FnoScreen::current_symbol() so
+    /// other Yellow-group panels can follow.
+    QString active_underlying() const;
+
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;

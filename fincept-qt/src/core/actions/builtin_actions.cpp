@@ -18,6 +18,7 @@
 #include "core/symbol/SymbolGroupRegistry.h"
 #include "core/symbol/SymbolRef.h"
 #include "core/window/WindowRegistry.h"
+#include "screens/launchpad/OnboardingTour.h"
 
 #include <QApplication>
 #include <QDateTime>
@@ -464,6 +465,19 @@ Result<void> handler_new_window_next_monitor(const CommandContext&) {
 
 Result<void> handler_move_window_to_monitor(int n, const CommandContext&) {
     WindowCycler::instance().move_current_window_to_monitor(n);
+    return Result<void>::ok();
+}
+
+Result<void> handler_replay_tour(const CommandContext& ctx) {
+    // Reset the seen-flag so subsequent launches also replay until the
+    // user finishes the tour, then surface it now over the focused frame
+    // (or with no parent if no frame is currently focused — the tour
+    // window-manages itself).
+    fincept::screens::OnboardingTour::reset_seen();
+    QWidget* parent = nullptr;
+    if (ctx.focused_frame)
+        parent = ctx.focused_frame;
+    fincept::screens::OnboardingTour::show_for(parent);
     return Result<void>::ok();
 }
 
@@ -923,6 +937,19 @@ void register_builtins() {
         current_key_for(KeyAction::LockNow),
         /*predicate*/ {}, // always available
         &handler_lock_now,
+        {},
+    });
+
+    // ── Help-level actions ──────────────────────────────────────────────────
+
+    register_one(ActionDef{
+        "help.replay_tour",
+        "Replay Welcome Tour",
+        "Help",
+        {"tour", "replay tour", "onboarding"},
+        QKeySequence{}, // no default hotkey — discoverable via palette
+        /*predicate*/ {},
+        &handler_replay_tour,
         {},
     });
 

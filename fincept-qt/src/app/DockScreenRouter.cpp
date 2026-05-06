@@ -1220,6 +1220,35 @@ ads::CDockWidget* DockScreenRouter::create_dock_widget(const QString& id) {
     return dw;
 }
 
+void DockScreenRouter::prepare_dock_widget(const QString& id) {
+    // Phase 8: pre-create the dock widget shell for restoreState matching.
+    // Idempotent — a no-op if the widget already exists (likely registered
+    // earlier by ensure_all_registered() at WindowFrame construction).
+    if (dock_widgets_.contains(id))
+        return;
+    if (!factories_.contains(id) && !screens_.contains(id)) {
+        LOG_WARN("DockRouter", QString("prepare_dock_widget: unknown id '%1'").arg(id));
+        return;
+    }
+    auto* dw = create_dock_widget(id);
+    if (!dw)
+        return;
+
+    // CRITICAL: register with the dock manager so restoreState can find
+    // the widget by objectName via CDockManager::dockWidgetsMap. Without
+    // this, the saved layout silently fails to restore. Mirrors
+    // ensure_all_registered's "tab into shared area, hide" pattern so
+    // we don't generate N vertical splits during the pre-restore pass.
+    if (manager_) {
+        manager_->addDockWidget(ads::CenterDockWidgetArea, dw);
+        dw->toggleView(false); // hidden until restoreState repositions it
+    }
+}
+
+void DockScreenRouter::materialize_now(const QString& id) {
+    materialize_screen(id);
+}
+
 void DockScreenRouter::materialize_screen(const QString& id) {
     if (screens_.contains(id))
         return;

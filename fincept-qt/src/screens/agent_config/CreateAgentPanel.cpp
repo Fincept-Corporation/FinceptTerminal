@@ -272,6 +272,16 @@ QWidget* CreateAgentPanel::build_form_panel() {
     sub_vl->setContentsMargins(12, 4, 0, 4);
     sub_vl->setSpacing(4);
 
+    // Style helpers — defined locally so we can reuse them across the
+    // sub-section without polluting the function scope.
+    const QString neutral_check_style =
+        QString("QCheckBox{color:%1;font-size:10px;spacing:5px;}"
+                "QCheckBox::indicator{width:8px;height:8px;}"
+                "QCheckBox::indicator:unchecked{background:%2;border:1px solid %3;}"
+                "QCheckBox::indicator:checked{background:%4;border:1px solid %4;}")
+            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(),
+                 ui::colors::BORDER_DIM(), ui::colors::AMBER());
+
     terminal_destructive_check_ = new QCheckBox("Allow destructive tools (place_order, delete_*, set_*, file ops)");
     terminal_destructive_check_->setStyleSheet(
         QString("QCheckBox{color:%1;font-size:10px;spacing:5px;}"
@@ -281,6 +291,17 @@ QWidget* CreateAgentPanel::build_form_panel() {
             .arg(ui::colors::NEGATIVE(), ui::colors::BG_RAISED(),
                  ui::colors::BORDER_DIM(), ui::colors::NEGATIVE()));
     sub_vl->addWidget(terminal_destructive_check_);
+
+    terminal_external_check_ = new QCheckBox(
+        "Include external MCP servers (Notion, Slack, etc., from MCP Servers tab)");
+    terminal_external_check_->setChecked(true);
+    terminal_external_check_->setStyleSheet(neutral_check_style);
+    sub_vl->addWidget(terminal_external_check_);
+
+    terminal_dry_run_check_ = new QCheckBox(
+        "Dry-run mode (return synthetic results — no real execution)");
+    terminal_dry_run_check_->setStyleSheet(neutral_check_style);
+    sub_vl->addWidget(terminal_dry_run_check_);
 
     auto* cat_lbl = new QLabel("Category whitelist (none checked = all enabled categories except UI-only)");
     cat_lbl->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
@@ -303,6 +324,25 @@ QWidget* CreateAgentPanel::build_form_panel() {
         terminal_categories_list_->addItem(item);
     }
     sub_vl->addWidget(terminal_categories_list_);
+
+    // Power-user filters — kept compact as single-line inputs. All optional.
+    terminal_exclude_cats_edit_ = new QLineEdit;
+    terminal_exclude_cats_edit_->setPlaceholderText(
+        "Exclude categories (comma-separated, on top of UI-only defaults)");
+    terminal_exclude_cats_edit_->setStyleSheet(input_style());
+    sub_vl->addWidget(terminal_exclude_cats_edit_);
+
+    terminal_name_include_edit_ = new QLineEdit;
+    terminal_name_include_edit_->setPlaceholderText(
+        "Tool name include regex (optional, e.g. ^get_)");
+    terminal_name_include_edit_->setStyleSheet(input_style());
+    sub_vl->addWidget(terminal_name_include_edit_);
+
+    terminal_name_exclude_edit_ = new QLineEdit;
+    terminal_name_exclude_edit_->setPlaceholderText(
+        "Tool name exclude regex (optional, e.g. ^delete_)");
+    terminal_name_exclude_edit_->setStyleSheet(input_style());
+    sub_vl->addWidget(terminal_name_exclude_edit_);
 
     auto* max_row = new QHBoxLayout;
     max_row->setSpacing(8);
@@ -890,6 +930,12 @@ void CreateAgentPanel::load_agent_into_form(const AgentConfig& cfg) {
     terminal_tools_check_->setChecked(tt_enabled);
     terminal_sub_->setVisible(tt_enabled);
     terminal_destructive_check_->setChecked(c["allow_destructive_tools"].toBool(false));
+    // Default ON for legacy configs (key absent) — matches build_payload's
+    // default-true semantics.
+    terminal_external_check_->setChecked(c.contains("include_external_mcp")
+                                              ? c["include_external_mcp"].toBool()
+                                              : true);
+    terminal_dry_run_check_->setChecked(c["tools_dry_run"].toBool(false));
     QSet<QString> cat_set;
     const QJsonObject tf = c["tool_filter"].toObject();
     for (const auto& v : tf["categories"].toArray())
@@ -898,6 +944,14 @@ void CreateAgentPanel::load_agent_into_form(const AgentConfig& cfg) {
         auto* it = terminal_categories_list_->item(i);
         it->setCheckState(cat_set.contains(it->text()) ? Qt::Checked : Qt::Unchecked);
     }
+    QStringList exc_cats;
+    for (const auto& v : tf["exclude_categories"].toArray())
+        exc_cats.append(v.toString());
+    terminal_exclude_cats_edit_->setText(exc_cats.join(", "));
+    const QJsonArray inc_pats = tf["name_patterns"].toArray();
+    terminal_name_include_edit_->setText(inc_pats.isEmpty() ? QString() : inc_pats.first().toString());
+    const QJsonArray exc_pats = tf["exclude_name_patterns"].toArray();
+    terminal_name_exclude_edit_->setText(exc_pats.isEmpty() ? QString() : exc_pats.first().toString());
     terminal_max_tools_spin_->setValue(tf["max_tools"].toInt(0));
 
     status_lbl_->setText(QString("Loaded: %1").arg(cfg.name));
@@ -929,8 +983,13 @@ void CreateAgentPanel::clear_form() {
     terminal_tools_check_->setChecked(true);
     terminal_sub_->setVisible(true);
     terminal_destructive_check_->setChecked(false);
+    terminal_external_check_->setChecked(true);
+    terminal_dry_run_check_->setChecked(false);
     for (int i = 0; i < terminal_categories_list_->count(); ++i)
         terminal_categories_list_->item(i)->setCheckState(Qt::Unchecked);
+    terminal_exclude_cats_edit_->clear();
+    terminal_name_include_edit_->clear();
+    terminal_name_exclude_edit_->clear();
     terminal_max_tools_spin_->setValue(0);
     test_result_->clear();
     test_status_lbl_->clear();
@@ -1025,15 +1084,32 @@ QJsonObject CreateAgentPanel::build_config_json() const {
     // grant the destructive capability token.
     config["terminal_tools_enabled"] = terminal_tools_check_->isChecked();
     config["allow_destructive_tools"] = terminal_destructive_check_->isChecked();
+    config["include_external_mcp"] = terminal_external_check_->isChecked();
+    config["tools_dry_run"] = terminal_dry_run_check_->isChecked();
     QJsonArray cat_whitelist;
     for (int i = 0; i < terminal_categories_list_->count(); ++i) {
         auto* it = terminal_categories_list_->item(i);
         if (it->checkState() == Qt::Checked)
             cat_whitelist.append(it->text());
     }
+    // Comma-separated additional excludes — split, trim, drop empties.
+    QJsonArray cat_blacklist;
+    for (const auto& part : terminal_exclude_cats_edit_->text().split(',', Qt::SkipEmptyParts)) {
+        const QString trimmed = part.trimmed();
+        if (!trimmed.isEmpty())
+            cat_blacklist.append(trimmed);
+    }
     QJsonObject tf;
     if (!cat_whitelist.isEmpty())
         tf["categories"] = cat_whitelist;
+    if (!cat_blacklist.isEmpty())
+        tf["exclude_categories"] = cat_blacklist;
+    const QString name_inc = terminal_name_include_edit_->text().trimmed();
+    if (!name_inc.isEmpty())
+        tf["name_patterns"] = QJsonArray{name_inc};
+    const QString name_exc = terminal_name_exclude_edit_->text().trimmed();
+    if (!name_exc.isEmpty())
+        tf["exclude_name_patterns"] = QJsonArray{name_exc};
     if (terminal_max_tools_spin_->value() > 0)
         tf["max_tools"] = terminal_max_tools_spin_->value();
     if (!tf.isEmpty())

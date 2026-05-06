@@ -30,6 +30,7 @@
 
 namespace fincept::screens::fno {
 
+class BuilderSubTab;
 class ChainSubTab;
 
 class FnoScreen : public QWidget,
@@ -90,8 +91,15 @@ class FnoScreen : public QWidget,
     // Direct pointer to the chain sub-tab so showEvent can poke its
     // visibility-driven subscription path.
     QPointer<ChainSubTab> chain_tab_;
+    QPointer<BuilderSubTab> builder_tab_;
+    QPointer<class OISubTab> oi_tab_;
+    QPointer<class FiiDiiSubTab> fii_dii_tab_;
+    QPointer<class MultiStraddleSubTab> multi_straddle_tab_;
+    QPointer<class ScreenerSubTab> screener_tab_;
 
-    fincept::SymbolGroup link_group_ = fincept::SymbolGroup::None;
+    // Group G is the "yellow" slot in the default palette (per SymbolGroup.h
+    // line 16). Plan called for Yellow as the F&O default — that's slot G.
+    fincept::SymbolGroup link_group_ = fincept::SymbolGroup::G;
 };
 
 } // namespace fincept::screens::fno

@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "services/alpha_arena/ContextBuilder.h"
 #include "storage/secure/SecureStorage.h"
+#include "trading/exchanges/hyperliquid/HyperliquidVenue.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -439,15 +440,17 @@ void AlphaArenaEngine::detach_active() {
 IExchangeVenue* AlphaArenaEngine::select_venue_for_kind(const QString& venue_kind) {
     if (venue_kind == QLatin1String("paper")) return paper_venue_;
     if (venue_kind == QLatin1String("hyperliquid")) {
-        // Phase 5c lands HyperliquidVenue. Until then, the user is gated to
-        // paper mode at the screen layer; this is the runtime backstop.
-        LOG_WARN("AlphaArena.Engine",
-                 "hyperliquid venue not yet wired (Phase 5c) — falling through to nullptr");
-        return nullptr;
+        if (!hl_venue_) {
+            hl_venue_ = new fincept::trading::hyperliquid::HyperliquidVenue(this);
+            // Default to mainnet; the live-mode dialog can flip to testnet
+            // later via a settings hook in a follow-up.
+            hl_venue_->set_testnet(false);
+            hl_venue_->connect();
+            LOG_INFO("AlphaArena.Engine", "HyperliquidVenue instantiated and connecting");
+        }
+        return hl_venue_;
     }
     if (venue_kind == QLatin1String("us_equities")) {
-        // Season 2 stub. Screen disables the radio; this guards programmatic
-        // create_competition() callers (tests, future scriptable launch).
         LOG_WARN("AlphaArena.Engine", "us_equities venue is a Season 2 stub — not implemented");
         return nullptr;
     }

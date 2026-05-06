@@ -23,6 +23,8 @@
 #include "services/alpha_arena/PaperVenue.h"
 #include "services/alpha_arena/TickClock.h"
 
+namespace fincept::trading::hyperliquid { class HyperliquidVenue; }
+
 #include <QHash>
 #include <QObject>
 #include <QString>
@@ -94,6 +96,12 @@ class AlphaArenaEngine : public QObject {
     /// next natural tick fire (does not interrupt an in-flight tick). Also
     /// persisted on the competition row so a restart picks up the new value.
     Result<void> set_cadence(int seconds);
+
+    // ── Test hooks (engine internals exposed for unit tests only) ──────────
+    TickClock* test_clock() { return clock_; }
+    ModelDispatcher* test_dispatcher() { return dispatcher_; }
+    OrderRouter* test_router() { return router_; }
+    PaperVenue* test_paper_venue() { return paper_venue_; }
 
     // ── Status / introspection ────────────────────────────────────────────
 
@@ -169,6 +177,7 @@ class AlphaArenaEngine : public QObject {
     OrderRouter* router_ = nullptr;
 
     PaperVenue* paper_venue_ = nullptr;
+    fincept::trading::hyperliquid::HyperliquidVenue* hl_venue_ = nullptr;
     IExchangeVenue* venue_ = nullptr;  // alias to active venue
 };
 

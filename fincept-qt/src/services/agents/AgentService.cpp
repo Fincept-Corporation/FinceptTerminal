@@ -240,12 +240,17 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
             enriched_config["terminal_mcp_destructive_token"] = bridge.destructive_token();
         }
         if (!enriched_config.contains("terminal_tools")) {
-            // Per-agent override via config["tool_filter"] = {categories,
-            // exclude_categories, max_tools}. Default excludes UI-only and
-            // recursive categories so agents don't drive the UI or call the
-            // chat LLM.
+            // Per-agent override via config["tool_filter"] supports:
+            //   categories[]              — whitelist (empty = all enabled)
+            //   exclude_categories[]      — blacklist, ON TOP of defaults below
+            //   name_patterns[]           — regex include on tool name
+            //   exclude_name_patterns[]   — regex exclude on tool name
+            //   max_tools (int)           — hard cap
+            // Default excludes UI-only and recursive categories so agents
+            // don't drive the UI or call the chat LLM.
             mcp::ToolFilter filter;
-            filter.exclude_categories = {"navigation", "system", "settings", "ai-chat", "meta"};
+            const QStringList default_excludes = {"navigation", "system", "settings", "ai-chat", "meta"};
+            filter.exclude_categories = default_excludes;
             const QJsonObject tf = enriched_config.value("tool_filter").toObject();
             if (!tf.isEmpty()) {
                 if (tf.contains("categories")) {
@@ -254,14 +259,39 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
                         filter.categories.append(v.toString());
                 }
                 if (tf.contains("exclude_categories")) {
-                    filter.exclude_categories.clear();
-                    for (const auto& v : tf["exclude_categories"].toArray())
-                        filter.exclude_categories.append(v.toString());
+                    // User excludes are ADDITIVE on top of defaults — defaults
+                    // are non-negotiable (UI tools are never safe for agents).
+                    for (const auto& v : tf["exclude_categories"].toArray()) {
+                        const QString cat = v.toString().trimmed();
+                        if (!cat.isEmpty() && !filter.exclude_categories.contains(cat))
+                            filter.exclude_categories.append(cat);
+                    }
+                }
+                if (tf.contains("name_patterns")) {
+                    for (const auto& v : tf["name_patterns"].toArray()) {
+                        const QString p = v.toString().trimmed();
+                        if (!p.isEmpty()) filter.name_patterns.append(p);
+                    }
+                }
+                if (tf.contains("exclude_name_patterns")) {
+                    for (const auto& v : tf["exclude_name_patterns"].toArray()) {
+                        const QString p = v.toString().trimmed();
+                        if (!p.isEmpty()) filter.exclude_name_patterns.append(p);
+                    }
                 }
                 filter.max_tools = tf.value("max_tools").toInt(0);
             }
-            enriched_config["terminal_tools"] = bridge.tool_definitions(filter);
+            const bool include_external = enriched_config.value("include_external_mcp").toBool(true);
+            enriched_config["terminal_tools"] = bridge.tool_definitions(filter, include_external);
         }
+
+        // Dry-run mode is opt-in and read by the Python TerminalToolkit. When
+        // true, the toolkit short-circuits each call and returns a synthetic
+        // result without crossing the bridge — useful for testing prompts /
+        // agent loops without touching real state. We just propagate the
+        // flag; nothing on the C++ side changes.
+        // (No-op here — `tools_dry_run` already lives in enriched_config if
+        // the agent set it; CreateAgentPanel writes the key at save time.)
     }
 
     if (!enriched_params.isEmpty())

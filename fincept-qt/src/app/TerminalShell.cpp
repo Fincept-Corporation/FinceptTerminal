@@ -1,6 +1,9 @@
 ﻿#include "app/TerminalShell.h"
 
 #include "ai_chat/ChatBubbleController.h"
+#include "auth/AuthManager.h"
+#include "auth/InactivityGuard.h"
+#include "auth/PinManager.h"
 #include "auth/lock/LockOverlayController.h"
 #include "core/actions/ActionRegistry.h"
 #include "core/actions/builtin_actions.h"
@@ -12,6 +15,7 @@
 #include "core/layout/WorkspaceShell.h"
 #include "storage/workspace/WorkspaceFwspImporter.h"
 #include "core/screen/MonitorWatcher.h"
+#include "core/telemetry/CloudTelemetryProvider.h"
 #include "core/telemetry/LocalTelemetrySink.h"
 #include "core/telemetry/TelemetryProvider.h"
 #include "core/window/WindowRegistry.h"
@@ -114,19 +118,36 @@ void TerminalShell::initialise() {
     }
     FT_TS(112);
 
-    // Phase 10: install LocalTelemetrySink iff the user opted in. Settings
-    // → Telemetry section (Phase 9 settings refactor) is the user-facing
-    // toggle; for now it's an explicit SettingsRepository key. Default off
-    // — no telemetry without consent.
+    // Phase 10: install telemetry providers per opt-in settings. Defaults
+    // off — no telemetry without consent.
+    //
+    //   telemetry.local_enabled  → LocalTelemetrySink writes to workspace.db
+    //   telemetry.cloud_enabled  → CloudTelemetryProvider also POSTs to
+    //                              telemetry.cloud_endpoint with bearer
+    //                              telemetry.cloud_api_key. Always wraps a
+    //                              LocalTelemetrySink so disk persistence
+    //                              survives network outages.
     {
-        auto r = SettingsRepository::instance().get("telemetry.local_enabled");
-        const bool enabled = r.is_ok() && r.value() == "true";
-        if (enabled) {
-            static telemetry::LocalTelemetrySink local_sink;
+        auto local_r = SettingsRepository::instance().get("telemetry.local_enabled");
+        const bool local_enabled = local_r.is_ok() && local_r.value() == "true";
+        auto cloud_r = SettingsRepository::instance().get("telemetry.cloud_enabled");
+        const bool cloud_enabled = cloud_r.is_ok() && cloud_r.value() == "true";
+
+        // Provider singletons live for the process lifetime; statics keep
+        // them out of the heap-leak audit. Construction order matters:
+        // local first so cloud can chain to it.
+        static telemetry::LocalTelemetrySink local_sink;
+        static telemetry::CloudTelemetryProvider cloud_sink(&local_sink);
+
+        if (cloud_enabled) {
+            cloud_sink.start();
+            telemetry::TelemetrySink::instance().set_provider(&cloud_sink);
+            LOG_INFO(kShellTag, "Cloud telemetry enabled (chains LocalTelemetrySink)");
+        } else if (local_enabled) {
             telemetry::TelemetrySink::instance().set_provider(&local_sink);
             LOG_INFO(kShellTag, "Local telemetry enabled");
         } else {
-            LOG_DEBUG(kShellTag, "Telemetry off (telemetry.local_enabled != true)");
+            LOG_DEBUG(kShellTag, "Telemetry off");
         }
     }
 
@@ -255,6 +276,43 @@ void TerminalShell::shutdown() {
     // themselves up via qAddPostRoutine and Qt's exit hooks. We don't
     // tear them down explicitly here — main.cpp's aboutToQuit handlers
     // own that.
+}
+
+void TerminalShell::bootstrap_auth() {
+    if (auth_bootstrapped_) {
+        LOG_WARN(kShellTag, "bootstrap_auth() called twice — ignoring");
+        return;
+    }
+
+    LOG_INFO(kShellTag, "Bootstrapping auth");
+
+    // 1. AuthManager — loads saved session, validates with server. The
+    //    HTTP-bearing call here means we MUST be on the UI thread post
+    //    QApplication construction; main.cpp calls bootstrap_auth() in
+    //    that window.
+    auth::AuthManager::instance().initialize();
+
+    // 2. PinManager — touch the singleton so it loads PIN state from
+    //    SecureStorage. Lazy construction would otherwise defer the load
+    //    to the first lock event, racing the InactivityGuard timer below.
+    (void)auth::PinManager::instance();
+
+    // 3. InactivityGuard — auto-lock after idle timeout. Read the user's
+    //    chosen timeout from SettingsRepository and apply it; the guard
+    //    stays disabled until WindowFrame::on_terminal_unlocked() flips
+    //    it on after a successful PIN verify.
+    {
+        auto& guard = auth::InactivityGuard::instance();
+        auto timeout_r = SettingsRepository::instance().get("security.lock_timeout_minutes");
+        if (timeout_r.is_ok() && !timeout_r.value().isEmpty()) {
+            const int minutes = timeout_r.value().toInt();
+            if (minutes > 0)
+                guard.set_timeout_minutes(minutes);
+        }
+    }
+
+    auth_bootstrapped_ = true;
+    LOG_INFO(kShellTag, "Auth bootstrapped");
 }
 
 ProfileId TerminalShell::active_profile_id() const {

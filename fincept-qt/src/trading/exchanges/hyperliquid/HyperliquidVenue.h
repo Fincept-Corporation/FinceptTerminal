@@ -38,6 +38,10 @@ class HyperliquidVenue : public QObject,
     /// HyperliquidSigner).
     void set_user_address(const QString& addr);
 
+    /// Bind to the active competition so reconcile_tick can compare local
+    /// positions persisted under that competition against the venue.
+    void set_competition_id(const QString& comp_id);
+
     /// Open WS, subscribe to public mark/trades feeds, start reconcile loop.
     void connect();
 
@@ -74,6 +78,7 @@ class HyperliquidVenue : public QObject,
     HyperliquidClient* client_;
     QTimer* reconcile_timer_;
     QString user_address_;
+    QString competition_id_;
     ConnectionState state_ = ConnectionState::Disconnected;
     QHash<QString, double> marks_;
 

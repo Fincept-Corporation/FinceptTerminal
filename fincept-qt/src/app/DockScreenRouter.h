@@ -162,6 +162,22 @@ class DockScreenRouter : public QObject {
     /// needs to read the saved-side UUID for each open panel.
     PanelInstanceId panel_uuid_for(const QString& id) const;
 
+    /// Phase 8 staged materialisation: pre-create the ADS dock widget shell
+    /// for `id` without invoking the screen factory. Used by
+    /// `WindowFrame::apply_layout` so `CDockManager::restoreState` can match
+    /// dock widgets by objectName before each panel's heavy screen widget
+    /// is constructed. The instance UUID is minted normally; callers that
+    /// want to adopt a saved UUID should call `adopt_panel_instance` after
+    /// this returns. Idempotent: a no-op if `id` is already registered.
+    void prepare_dock_widget(const QString& id);
+
+    /// Phase 8 staged materialisation: invoke the screen factory and
+    /// install the constructed widget into the dock widget. Idempotent.
+    /// Called by `PanelMaterialiser` during the staged drain triggered
+    /// from `WindowFrame::apply_layout`. Restores per-panel state via
+    /// the same path navigate() uses.
+    void materialize_now(const QString& id);
+
   signals:
     void screen_changed(const QString& id);
 

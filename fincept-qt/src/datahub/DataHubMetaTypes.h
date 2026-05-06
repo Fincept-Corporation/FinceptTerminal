@@ -24,6 +24,7 @@
 #include "services/maritime/MaritimeTypes.h"             // VesselData
 #include "services/markets/MarketDataService.h"         // QuoteData, HistoryPoint, InfoData
 #include "services/news/NewsService.h"                  // NewsArticle
+#include "services/options/FiiDiiTypes.h"                // FiiDiiDay
 #include "services/options/OptionChainTypes.h"          // OptionChain, OptionChainRow, Strategy, …
 #include "services/polymarket/PolymarketTypes.h"        // OrderBook
 #include "services/prediction/PredictionTypes.h"        // PredictionOrderBook, PredictionMarket, …

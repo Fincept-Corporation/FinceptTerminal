@@ -35,6 +35,8 @@
 #include "services/maritime/MaritimeService.h"
 #include "services/maritime/PortsCatalog.h"
 #include "services/markets/MarketDataService.h"
+#include "services/options/FiiDiiService.h"
+#include "services/options/OISnapshotter.h"
 #include "services/options/OptionChainService.h"
 #include "services/alpha_arena/AlphaArenaEngine.h"
 #include "services/news/NewsService.h"
@@ -232,10 +234,21 @@ int main(int argc, char* argv[]) {
     fincept::services::MarketDataService::instance().ensure_registered_with_hub();
     FT_MARK(21);
     // F&O / Options chain (Phase 11 — Sensibull-style tab). Sole hub
-    // producer for option:chain:*, option:atm_iv:*, fno:pcr:*, fno:max_pain:*.
-    // Reads instruments via InstrumentService (broker-loaded), batches
-    // get_quotes via the active IBroker, and publishes assembled chains.
+    // producer for option:chain:*, option:tick:*, option:atm_iv:*, fno:pcr:*,
+    // fno:max_pain:*. Reads instruments via InstrumentService (broker-loaded),
+    // batches get_quotes via the active IBroker, and publishes assembled
+    // chains. After each chain publish the service kicks off a Greeks/IV
+    // batch via OptionGreeksWorker (Phase 3) and republishes the enriched
+    // chain.
     fincept::services::options::OptionChainService::instance().ensure_registered_with_hub();
+    // F&O OI snapshotter (Phase 3 of the F&O work) — subscribes to
+    // option:chain:* and persists minute-aligned OI/LTP/Vol/IV rows to
+    // SQLite. Producer for oi:history:* (window queries).
+    fincept::services::options::OISnapshotter::instance().ensure_registered_with_hub();
+    // F&O FII/DII flows (Phase 8) — daily NSE cash-market institutional
+    // buy/sell, scraped via fii_dii_scraper.py. Producer for
+    // fno:fii_dii:daily.
+    fincept::services::options::FiiDiiService::instance().ensure_registered_with_hub();
     // Phase 2 (multi-broker refactor): ExchangeSessionManager is the hub
     // producer for `ws:kraken:*` / `ws:hyperliquid:*`. Individual sessions
     // (created lazily by the manager) publish through its SessionPublisher
@@ -540,6 +553,10 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v022();
     fincept::register_migration_v023();
     fincept::register_migration_v024();
+    fincept::register_migration_v025();
+    fincept::register_migration_v026();
+    fincept::register_migration_v027();
+    fincept::register_migration_v028();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -636,28 +653,16 @@ int main(int argc, char* argv[]) {
     // Start session
     fincept::SessionManager::instance().start_session();
 
-    // Initialize auth (loads saved session, validates with server)
-    fincept::auth::AuthManager::instance().initialize();
+    // Phase 1 final lift: shell owns auth/lock service initialisation.
+    // bootstrap_auth() runs AuthManager::initialize(), warms PinManager
+    // from SecureStorage, and configures InactivityGuard's lock timeout
+    // from SettingsRepository. The previous in-line block here is folded
+    // into TerminalShell::bootstrap_auth.
+    fincept::TerminalShell::instance().bootstrap_auth();
 
-    // Session guard — auto-logout on 401
+    // Session guard — auto-logout on 401. Lives on the stack here so its
+    // destructor runs on shutdown via QApplication::exec returning.
     fincept::auth::SessionGuard session_guard;
-
-    // Initialize PinManager — loads PIN state from SecureStorage
-    (void)fincept::auth::PinManager::instance();
-
-    // Inactivity guard — auto-lock after idle timeout.
-    // Load timeout setting from DB (default 10 minutes).
-    {
-        auto& guard = fincept::auth::InactivityGuard::instance();
-        auto timeout_r = fincept::SettingsRepository::instance().get("security.lock_timeout_minutes");
-        if (timeout_r.is_ok() && !timeout_r.value().isEmpty()) {
-            int minutes = timeout_r.value().toInt();
-            if (minutes > 0)
-                guard.set_timeout_minutes(minutes);
-        }
-        // Guard is installed on qApp and enabled by WindowFrame::on_terminal_unlocked()
-        // after the user successfully enters their PIN.
-    }
 
     // Force the ReportBuilderService singleton onto the main thread before
     // MCP tools register — tools route into it via QMetaObject::invokeMethod

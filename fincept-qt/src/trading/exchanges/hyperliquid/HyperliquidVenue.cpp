@@ -1,6 +1,7 @@
 #include "trading/exchanges/hyperliquid/HyperliquidVenue.h"
 
 #include "core/logging/Logger.h"
+#include "services/alpha_arena/AlphaArenaRepo.h"
 #include "trading/exchanges/hyperliquid/HyperliquidSigner.h"
 
 #include <QAbstractSocket>
@@ -8,8 +9,11 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonValue>
+#include <QPointer>
 #include <QString>
 #include <QStringList>
+
+#include <cmath>
 
 namespace fincept::trading::hyperliquid {
 
@@ -35,6 +39,7 @@ HyperliquidVenue::~HyperliquidVenue() = default;
 
 void HyperliquidVenue::set_testnet(bool testnet) { client_->set_testnet(testnet); }
 void HyperliquidVenue::set_user_address(const QString& addr) { user_address_ = addr; }
+void HyperliquidVenue::set_competition_id(const QString& comp_id) { competition_id_ = comp_id; }
 
 void HyperliquidVenue::connect() {
     state_ = ConnectionState::Connecting;
@@ -78,19 +83,53 @@ void HyperliquidVenue::on_ws_message(QJsonObject msg) {
 }
 
 void HyperliquidVenue::reconcile_tick() {
-    if (user_address_.isEmpty()) return;
+    if (user_address_.isEmpty() || competition_id_.isEmpty()) return;
     QJsonObject body;
     body[QStringLiteral("type")] = QStringLiteral("clearinghouseState");
     body[QStringLiteral("user")] = user_address_;
-    client_->info(body, [this](Result<QJsonDocument> r) {
+    const QString comp_id = competition_id_;
+    QPointer<HyperliquidVenue> self(this);
+    client_->info(body, [self, comp_id](Result<QJsonDocument> r) {
+        if (!self) return;
         if (r.is_err()) {
-            LOG_WARN("Hyperliquid", QString("reconcile failed: %1").arg(QString::fromStdString(r.error())));
+            LOG_WARN("Hyperliquid", QString("reconcile failed: %1")
+                                        .arg(QString::fromStdString(r.error())));
             return;
         }
-        // For each remote position, compare against local. Emit position_drift
-        // on mismatch. (Full impl pending — engine-side persistence has the
-        // local view; we surface it once HyperliquidVenue is wired into the
-        // engine in a follow-up patch.)
+        const QJsonObject doc = r.value().object();
+
+        // HL clearinghouseState shape: { "assetPositions": [{"position": {
+        //   "coin": "BTC", "szi": "0.123", ... }}, ...] }
+        QHash<QString, double> remote_qty;
+        for (const auto& v : doc.value(QStringLiteral("assetPositions")).toArray()) {
+            const auto pos = v.toObject().value(QStringLiteral("position")).toObject();
+            const QString coin = pos.value(QStringLiteral("coin")).toString();
+            const double szi = pos.value(QStringLiteral("szi")).toString().toDouble();
+            if (!coin.isEmpty()) remote_qty.insert(coin, szi);
+        }
+
+        // Walk local agents and their positions.
+        auto agents = fincept::services::alpha_arena::AlphaArenaRepo::instance()
+                          .agents_for(comp_id);
+        if (agents.is_err()) return;
+        for (const auto& agent : agents.value()) {
+            auto local = fincept::services::alpha_arena::AlphaArenaRepo::instance()
+                             .open_positions_for(agent.id);
+            if (local.is_err()) continue;
+            for (const auto& p : local.value()) {
+                const double r_qty = remote_qty.value(p.coin, 0.0);
+                if (std::fabs(r_qty - p.qty) > 1e-9) {
+                    emit self->position_drift(p.coin, p.qty, r_qty);
+                    QJsonObject pl;
+                    pl[QStringLiteral("coin")] = p.coin;
+                    pl[QStringLiteral("local_qty")] = p.qty;
+                    pl[QStringLiteral("remote_qty")] = r_qty;
+                    fincept::services::alpha_arena::AlphaArenaRepo::instance()
+                        .append_event(comp_id, agent.id,
+                                      QStringLiteral("position_drift"), pl);
+                }
+            }
+        }
     });
 }
 

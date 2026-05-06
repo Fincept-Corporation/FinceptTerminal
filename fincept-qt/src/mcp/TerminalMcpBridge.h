@@ -72,7 +72,12 @@ class TerminalMcpBridge : public QObject {
     ///   { "name": str, "description": str, "inputSchema": {JSON Schema} }
     /// Note: camelCase `inputSchema` — matches MCP wire spec and what the
     /// Python `TerminalToolkit` constructor expects.
-    QJsonArray tool_definitions(const ToolFilter& filter) const;
+    ///
+    /// `include_external` controls whether tools from user-configured
+    /// external MCP servers (Notion, Slack, etc., visible in the MCP Servers
+    /// tab) are included alongside internal Fincept tools. Defaults to true
+    /// to match prior behaviour.
+    QJsonArray tool_definitions(const ToolFilter& filter, bool include_external = true) const;
 
     TerminalMcpBridge(const TerminalMcpBridge&) = delete;
     TerminalMcpBridge& operator=(const TerminalMcpBridge&) = delete;

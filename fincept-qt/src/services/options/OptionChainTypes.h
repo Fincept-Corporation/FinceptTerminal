@@ -120,6 +120,17 @@ struct PayoffPoint {
     double pnl_expiry = 0;           // P/L at expiry (intrinsic only, piecewise linear)
 };
 
+// One row from `oi_snapshots` — minute-aligned per-token OI/LTP/Vol/IV
+// snapshot. Owned by OISnapshotter; consumed by OI Analytics charts via
+// `oi:history:<broker>:<token>:<window>`.
+struct OISample {
+    qint64 ts_minute = 0;   // unix epoch SECONDS, floored to its minute
+    qint64 oi = 0;
+    double ltp = 0;
+    qint64 vol = 0;
+    double iv = 0;          // decimal (0.142 = 14.2%); 0 when not yet computed
+};
+
 // Aggregated analytics for a Strategy at the current market state.
 struct StrategyAnalytics {
     OptionGreeks combined;            // sum of leg greeks × signed lots × lot_size
@@ -142,6 +153,8 @@ Q_DECLARE_METATYPE(fincept::services::options::StrategyLeg)
 Q_DECLARE_METATYPE(fincept::services::options::Strategy)
 Q_DECLARE_METATYPE(fincept::services::options::PayoffPoint)
 Q_DECLARE_METATYPE(fincept::services::options::StrategyAnalytics)
+Q_DECLARE_METATYPE(fincept::services::options::OISample)
 Q_DECLARE_METATYPE(QVector<fincept::services::options::OptionChainRow>)
 Q_DECLARE_METATYPE(QVector<fincept::services::options::PayoffPoint>)
 Q_DECLARE_METATYPE(QVector<fincept::services::options::StrategyLeg>)
+Q_DECLARE_METATYPE(QVector<fincept::services::options::OISample>)

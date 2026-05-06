@@ -118,7 +118,7 @@ QString TerminalMcpBridge::endpoint() const {
 
 // ── Tool catalog serialisation ───────────────────────────────────────────────
 
-QJsonArray TerminalMcpBridge::tool_definitions(const ToolFilter& filter) const {
+QJsonArray TerminalMcpBridge::tool_definitions(const ToolFilter& filter, bool include_external) const {
     // Goes through McpService so external MCP servers (configured via the
     // MCP Servers tab) are visible to agents too. The returned UnifiedTool
     // list is already filter-applied and capped.
@@ -126,6 +126,10 @@ QJsonArray TerminalMcpBridge::tool_definitions(const ToolFilter& filter) const {
 
     QJsonArray out;
     for (const auto& t : tools) {
+        // Honour the per-agent opt-out for externals — UnifiedTool::is_internal
+        // is set true for the Fincept catalog and false for everything else.
+        if (!include_external && !t.is_internal)
+            continue;
         QJsonObject schema = t.input_schema;
         if (schema.isEmpty()) {
             schema["type"] = "object";

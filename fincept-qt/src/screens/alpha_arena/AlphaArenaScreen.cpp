@@ -1,12 +1,14 @@
 #include "screens/alpha_arena/AlphaArenaScreen.h"
 
 #include "core/logging/Logger.h"
+#include "screens/alpha_arena/panels/Geofence.h"
 #include "screens/alpha_arena/panels/LeaderboardPanel.h"
 #include "screens/alpha_arena/panels/LiveModeGateDialog.h"
 #include "screens/alpha_arena/panels/ModelChatPanel.h"
 #include "screens/alpha_arena/panels/StatePanels.h"
 #include "services/alpha_arena/AlphaArenaEngine.h"
 #include "services/alpha_arena/AlphaArenaSchema.h"
+#include "trading/exchanges/hyperliquid/HyperliquidSigner.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
 #include "ui/theme/Theme.h"
@@ -410,12 +412,15 @@ void AlphaArenaScreen::on_live_mode_toggle_clicked() {
                                  tr("Create a competition first, then engage live mode."));
         return;
     }
+    if (!fincept::trading::hyperliquid::HyperliquidSigner::is_wired()) {
+        QMessageBox::critical(this, tr("Alpha Arena"),
+            tr("Live mode is not available in this build — the Hyperliquid signer "
+               "(secp256k1 + keccak256) failed to initialise. Check the build log."));
+        return;
+    }
     // Geofence (best-effort).
 #ifndef FINCEPT_UNSAFE_DISABLE_GEOFENCE
-    const auto territory = QLocale::system().territory();
-    if (territory == QLocale::UnitedStates ||
-        territory == QLocale::NorthKorea ||
-        territory == QLocale::Iran) {
+    if (is_jurisdiction_blocked(QLocale::system().territory())) {
         QMessageBox::critical(this, tr("Alpha Arena"),
                               tr("Live mode is unavailable in your jurisdiction."));
         return;

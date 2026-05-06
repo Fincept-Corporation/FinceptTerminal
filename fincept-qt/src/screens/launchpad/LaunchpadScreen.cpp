@@ -2,6 +2,7 @@
 
 #include "app/TerminalShell.h"
 #include "app/WindowFrame.h"
+#include "screens/launchpad/OnboardingTour.h"
 #include "storage/workspace/WorkspaceDb.h"
 #include "core/config/ProfileManager.h"
 #include "core/keys/WindowCycler.h"
@@ -451,13 +452,29 @@ void LaunchpadScreen::on_template_picked(const QString& persona_id) {
     ws.id = sr.value();
 
     hide();
-    QMetaObject::invokeMethod(this, [ws]() {
+    const bool first_run_tour = !OnboardingTour::has_been_seen();
+    QMetaObject::invokeMethod(this, [ws, first_run_tour]() {
+        fincept::WindowFrame* anchor = nullptr;
         if (fincept::WindowRegistry::instance().frames().isEmpty()) {
-            auto* fr = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
-            fr->setAttribute(Qt::WA_DeleteOnClose);
-            fr->show();
+            anchor = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
+            anchor->setAttribute(Qt::WA_DeleteOnClose);
+            anchor->show();
+        } else {
+            anchor = fincept::WindowRegistry::instance().frames().first();
         }
         layout::WorkspaceShell::apply(ws);
+
+        // Phase 9 / decision 10.10: kick off the tour after a fresh
+        // template pick on first run. Defer one tick so the frame's
+        // panels have laid out first — the tour parents itself to
+        // `anchor` so it appears centred over the frame, not behind it.
+        if (first_run_tour && anchor) {
+            QPointer<fincept::WindowFrame> guard(anchor);
+            QMetaObject::invokeMethod(anchor, [guard]() {
+                if (!guard) return;
+                OnboardingTour::show_for(guard.data());
+            }, Qt::QueuedConnection);
+        }
     }, Qt::QueuedConnection);
 }
 

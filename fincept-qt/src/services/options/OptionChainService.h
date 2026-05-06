@@ -24,6 +24,7 @@
 #include "services/options/OptionChainTypes.h"
 
 #include <QHash>
+#include <QJsonObject>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -89,12 +90,47 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
     /// broker's get_quotes for the underlying on first call per session.
     double resolve_spot(const QString& broker_id, const QString& underlying);
 
+    /// Phase 3 — Greeks/IV via py_vollib daemon. Builds the contract list
+    /// from `chain` (skipping per-token throttled strikes which use cached
+    /// values), submits to OptionGreeksWorker, and on success patches the
+    /// chain rows in place + republishes on `topic`. Also publishes
+    /// `option:atm_iv:<broker>:<underlying>` and per-leg `option:tick:*`.
+    void enrich_with_greeks(const fincept::services::options::OptionChain& chain, const QString& topic);
+
+    /// Push per-leg `option:tick:<broker>:<token>` BrokerQuote snapshots
+    /// for every CE/PE row with a non-zero token. Phase 3 fan-out is
+    /// chain-derived; broker-WS-driven publishes will replace this in a
+    /// later phase without breaking subscribers.
+    void publish_per_leg_ticks(const fincept::services::options::OptionChain& chain);
+
+    /// Average ATM CE/PE IV after Greeks land. Publishes
+    /// `option:atm_iv:<broker>:<underlying>` (decimal IV).
+    void publish_atm_iv(const fincept::services::options::OptionChain& chain);
+
+    /// Risk-free rate from settings (`fno.risk_free_rate`), default 0.067
+    /// (RBI 91-day T-bill ballpark). Cached after first read.
+    double risk_free_rate();
+
+    /// Time to expiry in years, actual/365. Floors at one calendar day so
+    /// expiry-day options don't blow up the BSM model.
+    static double compute_t_years(const QString& expiry);
+
     bool hub_registered_ = false;
     /// In-flight guard per topic to avoid duplicate refresh fan-out when the
     /// hub scheduler races with a manual request.
     QHash<QString, bool> in_flight_;
     /// Last spot snapshot per (broker, underlying) — refreshed each tick.
     QHash<QString, double> spot_cache_;
+    /// Per-token last Greeks compute timestamp (ms since epoch) — used to
+    /// throttle py_vollib invocations to ≤1/500ms per strike per side.
+    QHash<qint64, qint64> last_greeks_compute_ms_;
+    /// Per-token IV cache (decimal) — reused when throttle skips compute.
+    QHash<qint64, double> iv_cache_;
+    /// Per-token Greeks cache — reused when throttle skips compute.
+    QHash<qint64, fincept::services::options::OptionGreeks> greeks_cache_;
+    /// Cached risk-free rate; populated on first refresh.
+    double risk_free_rate_ = 0.0;
+    bool risk_free_rate_loaded_ = false;
 };
 
 } // namespace fincept::services::options

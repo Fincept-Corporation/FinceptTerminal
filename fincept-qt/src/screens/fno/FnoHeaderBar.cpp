@@ -1,13 +1,16 @@
 #include "screens/fno/FnoHeaderBar.h"
 
+#include "storage/repositories/IvHistoryRepository.h"
 #include "ui/theme/Theme.h"
 
+#include <QDate>
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QLocale>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
 
 namespace fincept::screens::fno {
@@ -111,6 +114,7 @@ void FnoHeaderBar::setup_ui() {
     ribbon_lay->addWidget(make_kv(ribbon, lbl_max_pain_, "Max Pain"));
     ribbon_lay->addWidget(make_kv(ribbon, lbl_ce_oi_, "CE OI"));
     ribbon_lay->addWidget(make_kv(ribbon, lbl_pe_oi_, "PE OI"));
+    ribbon_lay->addWidget(make_kv(ribbon, lbl_iv_pctile_, "IV Pctile"));
     root->addWidget(ribbon, 0, Qt::AlignVCenter);
 
     lbl_status_ = new QLabel("", this);
@@ -156,6 +160,17 @@ void FnoHeaderBar::set_underlyings(const QStringList& names, const QString& sele
     }
 }
 
+bool FnoHeaderBar::select_underlying(const QString& underlying) {
+    if (!under_combo_ || underlying.isEmpty())
+        return false;
+    const int idx = under_combo_->findText(underlying);
+    if (idx < 0)
+        return false;
+    if (under_combo_->currentIndex() != idx)
+        under_combo_->setCurrentIndex(idx);
+    return true;
+}
+
 void FnoHeaderBar::set_expiries(const QStringList& exps, const QString& selected) {
     QSignalBlocker block(expiry_combo_);
     expiry_combo_->clear();
@@ -183,12 +198,58 @@ void FnoHeaderBar::update_from_chain(const OptionChain& chain) {
     lbl_ce_oi_->setText(fmt_compact(qint64(chain.total_ce_oi)));
     lbl_pe_oi_->setText(fmt_compact(qint64(chain.total_pe_oi)));
 
+    // ── IV Pctile pill ────────────────────────────────────────────────────
+    // Compute today's ATM IV from the chain's ATM row, then percentile-rank
+    // it against the trailing 90-day history in `iv_history_daily`. Needs
+    // ≥30 days of accumulated data — empty/dim until then.
+    if (lbl_iv_pctile_) {
+        double atm_iv = 0;
+        for (const auto& row : chain.rows) {
+            if (!row.is_atm)
+                continue;
+            if (row.ce_iv > 0 && row.pe_iv > 0)
+                atm_iv = 0.5 * (row.ce_iv + row.pe_iv);
+            else if (row.ce_iv > 0)
+                atm_iv = row.ce_iv;
+            else
+                atm_iv = row.pe_iv;
+            break;
+        }
+        if (atm_iv > 0 && !chain.underlying.isEmpty()) {
+            const QString since = QDate::currentDate().addDays(-90).toString(Qt::ISODate);
+            auto r = fincept::IvHistoryRepository::instance().get_window(chain.underlying, since);
+            if (r.is_ok()) {
+                const auto& hist = r.value();
+                if (hist.size() >= 30) {
+                    int below = 0;
+                    for (const auto& row : hist)
+                        if (row.atm_iv < atm_iv)
+                            ++below;
+                    const double pctile = 100.0 * double(below) / double(hist.size());
+                    lbl_iv_pctile_->setText(QString::number(pctile, 'f', 0) + "%");
+                    lbl_iv_pctile_->setToolTip(QString("Current ATM IV %1 ranks at %2th percentile of %3 days of history.")
+                                                   .arg(atm_iv * 100.0, 0, 'f', 1)
+                                                   .arg(pctile, 0, 'f', 0)
+                                                   .arg(hist.size()));
+                } else {
+                    lbl_iv_pctile_->setText("—");
+                    lbl_iv_pctile_->setToolTip(QString("Needs ≥30 days of data — have %1.").arg(hist.size()));
+                }
+            } else {
+                lbl_iv_pctile_->setText("—");
+            }
+        } else {
+            lbl_iv_pctile_->setText("—");
+        }
+    }
+
     const QDateTime ts = QDateTime::fromMSecsSinceEpoch(chain.timestamp_ms);
     lbl_status_->setText(QString("Updated %1").arg(ts.toString("hh:mm:ss")));
 }
 
 void FnoHeaderBar::clear_ribbon() {
-    for (QLabel* l : {lbl_spot_, lbl_change_, lbl_atm_, lbl_pcr_, lbl_max_pain_, lbl_ce_oi_, lbl_pe_oi_})
+    for (QLabel* l : {lbl_spot_, lbl_change_, lbl_atm_, lbl_pcr_, lbl_max_pain_, lbl_ce_oi_, lbl_pe_oi_,
+                      lbl_iv_pctile_})
         if (l)
             l->setText("--");
     if (lbl_status_)
