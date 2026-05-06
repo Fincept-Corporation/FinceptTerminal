@@ -141,13 +141,19 @@ void TerminalShell::initialise() {
     FT_TS(115);
     QString _ws_path = ProfilePaths::workspace_db();
     FT_TS(1150);
+    const QByteArray _ws_path_utf8 = _ws_path.toUtf8();
+#ifdef Q_OS_WIN
     char _path_msg[512];
-    _snprintf_s(_path_msg, 512, _TRUNCATE, "FT_TS workspace_db path: %s\n", _ws_path.toUtf8().constData());
+    _snprintf_s(_path_msg, 512, _TRUNCATE, "FT_TS workspace_db path: %s\n", _ws_path_utf8.constData());
     OutputDebugStringA(_path_msg);
     {
         HANDLE _h = CreateFileA("C:\\Users\\Tilak\\AppData\\Local\\Temp\\ft_marks.txt", FILE_APPEND_DATA, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
         if (_h != INVALID_HANDLE_VALUE) { DWORD _w; SetFilePointer(_h, 0, NULL, FILE_END); WriteFile(_h, _path_msg, (DWORD)strlen(_path_msg), &_w, NULL); CloseHandle(_h); }
     }
+#else
+    fprintf(stderr, "FT_TS workspace_db path: %s\n", _ws_path_utf8.constData());
+    fflush(stderr);
+#endif
     auto db_open = workspace_db_->open(_ws_path);
     FT_TS(116);
     if (db_open.is_err()) {
