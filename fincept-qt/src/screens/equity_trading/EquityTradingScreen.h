@@ -6,7 +6,6 @@
 #include "core/symbol/IGroupLinked.h"
 #include "screens/IStatefulScreen.h"
 #include "screens/equity_trading/EquityTypes.h"
-#include "services/workspace/IWorkspaceParticipant.h"
 #include "trading/BrokerAccount.h"
 #include "trading/TradingTypes.h"
 
@@ -32,15 +31,12 @@ class EquityBottomPanel;
 
 namespace fincept::screens {
 
-class EquityTradingScreen : public QWidget, public IWorkspaceParticipant, public IGroupLinked {
+class EquityTradingScreen : public QWidget, public IGroupLinked {
     Q_OBJECT
     Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit EquityTradingScreen(QWidget* parent = nullptr);
     ~EquityTradingScreen();
-
-    QJsonObject save_state() const override;
-    void restore_state(const QJsonObject& state) override;
 
     // IGroupLinked — see WatchlistScreen for the propagation contract.
     void set_group(SymbolGroup g) override { link_group_ = g; }

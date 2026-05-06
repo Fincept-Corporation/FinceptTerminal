@@ -85,6 +85,15 @@ Result<void> LayoutCatalog::ensure_index_schema() {
                 "ON layouts(kind, updated_at_unix DESC)")) {
         LOG_WARN(kCatalogTag, QString("idx create failed: %1").arg(q.lastError().text()));
     }
+    // `_meta` is a generic key/value store. Used today by:
+    //   last_loaded_uuid    — Phase 3 cold-boot restore pointer.
+    //   fwsp_import_done    — Phase 7 one-shot legacy import flag.
+    if (!q.exec("CREATE TABLE IF NOT EXISTS _meta ("
+                "  key TEXT PRIMARY KEY,"
+                "  value TEXT NOT NULL"
+                ")")) {
+        return Result<void>::err(q.lastError().text().toStdString());
+    }
     return Result<void>::ok();
 }
 
@@ -181,6 +190,8 @@ Result<void> LayoutCatalog::remove_layout(const LayoutId& id) {
         if (r.is_err()) return r;
     }
     QFile::remove(file_path_for_(id));
+    // Best-effort thumbnail cleanup; not fatal if it's missing.
+    QFile::remove(ProfilePaths::layouts_dir() + "/thumbs/" + id.to_string() + ".png");
     QSqlDatabase db = QSqlDatabase::database(kConnectionName);
     if (db.isOpen()) {
         QSqlQuery q(db);
@@ -188,6 +199,11 @@ Result<void> LayoutCatalog::remove_layout(const LayoutId& id) {
         q.addBindValue(id.to_string());
         q.exec();
     }
+    // If the removed layout was pinned as last_loaded, clear the pointer so
+    // cold-boot doesn't try to restore a dead UUID.
+    auto last = meta(QStringLiteral("last_loaded_uuid"));
+    if (last.is_ok() && last.value() == id.to_string())
+        set_meta(QStringLiteral("last_loaded_uuid"), QString());
     emit layout_removed(id);
     return Result<void>::ok();
 }
@@ -254,6 +270,46 @@ Result<void> LayoutCatalog::export_to(const LayoutId& id, const QString& path) {
     f.write(QJsonDocument(wr.value().to_json()).toJson(QJsonDocument::Indented));
     f.close();
     return Result<void>::ok();
+}
+
+Result<QString> LayoutCatalog::meta(const QString& key) const {
+    QSqlDatabase db = QSqlDatabase::database(kConnectionName);
+    if (!db.isOpen())
+        return Result<QString>::err("index db not open");
+    QSqlQuery q(db);
+    q.prepare("SELECT value FROM _meta WHERE key = ?");
+    q.addBindValue(key);
+    if (!q.exec())
+        return Result<QString>::err(q.lastError().text().toStdString());
+    if (q.next())
+        return Result<QString>::ok(q.value(0).toString());
+    return Result<QString>::ok(QString());
+}
+
+Result<void> LayoutCatalog::set_meta(const QString& key, const QString& value) {
+    QSqlDatabase db = QSqlDatabase::database(kConnectionName);
+    if (!db.isOpen())
+        return Result<void>::err("index db not open");
+    QSqlQuery q(db);
+    q.prepare("INSERT INTO _meta(key, value) VALUES(?, ?) "
+              "ON CONFLICT(key) DO UPDATE SET value = excluded.value");
+    q.addBindValue(key);
+    q.addBindValue(value);
+    if (!q.exec())
+        return Result<void>::err(q.lastError().text().toStdString());
+    return Result<void>::ok();
+}
+
+Result<LayoutId> LayoutCatalog::last_loaded_id() const {
+    auto m = meta(QStringLiteral("last_loaded_uuid"));
+    if (m.is_err()) return Result<LayoutId>::err(m.error());
+    if (m.value().isEmpty()) return Result<LayoutId>::ok(LayoutId());
+    return Result<LayoutId>::ok(LayoutId::from_string(m.value()));
+}
+
+Result<void> LayoutCatalog::set_last_loaded_id(const LayoutId& id) {
+    return set_meta(QStringLiteral("last_loaded_uuid"),
+                    id.is_null() ? QString() : id.to_string());
 }
 
 Result<LayoutId> LayoutCatalog::import_from(const QString& path) {

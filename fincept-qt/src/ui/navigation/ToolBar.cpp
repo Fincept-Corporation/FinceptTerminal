@@ -294,13 +294,16 @@ QMenu* ToolBar::build_file_menu() {
     });
 
     m->addSeparator();
-    m->addAction("New Workspace", this, [this]() { emit action_triggered("new_workspace"); });
-    m->addAction("Open Workspace", this, [this]() { emit action_triggered("open_workspace"); });
-    m->addAction("Save Workspace", this, [this]() { emit action_triggered("save_workspace"); });
-    m->addAction("Save Workspace As", this, [this]() { emit action_triggered("save_workspace_as"); });
+    // Layout = "named arrangement of frames + panels + dock state". Replaces
+    // the old "Workspace" terminology. Routes through builtin_actions
+    // (layout.new / .open / .save / .save_as) via WindowFrame's dispatch.
+    m->addAction("New Layout",       this, [this]() { emit action_triggered("layout_new"); });
+    m->addAction("Open Layout…",     this, [this]() { emit action_triggered("layout_open"); });
+    m->addAction("Save Layout",      this, [this]() { emit action_triggered("layout_save"); });
+    m->addAction("Save Layout As…",  this, [this]() { emit action_triggered("layout_save_as"); });
     m->addSeparator();
-    m->addAction("Import Workspace", this, [this]() { emit action_triggered("import_data"); });
-    m->addAction("Export Workspace", this, [this]() { emit action_triggered("export_data"); });
+    m->addAction("Import Layout", this, [this]() { emit action_triggered("import_data"); });
+    m->addAction("Export Layout", this, [this]() { emit action_triggered("export_data"); });
     m->addSeparator();
     m->addAction("File Manager", this, [this]() { emit navigate_to("file_manager"); });
     m->addSeparator();
@@ -349,6 +352,7 @@ QMenu* ToolBar::build_navigate_menu() {
     nav(trd, "Alpha Arena", "alpha_arena");
     nav(trd, "Prediction Markets", "polymarket");
     nav(trd, "Derivatives", "derivatives");
+    nav(trd, "F&&O", "fno");
     nav(trd, "Watchlist", "watchlist");
 
     // Crypto / on-chain identity

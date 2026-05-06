@@ -76,6 +76,31 @@ class InstrumentService : public QObject {
     QVector<Instrument> search(const QString& query, const QString& exchange, const QString& broker_id,
                                int limit = 50) const;
 
+    // ── F&O / Options chain helpers ──────────────────────────────────────────
+    //
+    // All three read the in-memory cache; they expect refresh()/load_from_db()
+    // to have populated NFO instruments first. Empty results when cache is
+    // not loaded — callers should check is_loaded(broker_id).
+
+    /// All option-bearing underlyings on a given exchange (default NFO).
+    /// Distinct `name` field across CE/PE/FUT entries — typically yields
+    /// {"NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", ...stock symbols...}.
+    QStringList list_underlyings(const QString& broker_id,
+                                 const QString& exchange = "NFO") const;
+
+    /// Distinct expiries (display format "DD-MMM-YY") for a given underlying,
+    /// sorted ascending by date.
+    QStringList list_expiries(const QString& broker_id, const QString& underlying,
+                              const QString& exchange = "NFO") const;
+
+    /// All CE+PE+FUT instruments matching (underlying, expiry). Strikes
+    /// returned in ascending order. FUT entries (strike==0) are included
+    /// last; chain assembly callers should filter by `instrument_type`.
+    QVector<Instrument> find_options_for_underlying(const QString& broker_id,
+                                                    const QString& underlying,
+                                                    const QString& expiry,
+                                                    const QString& exchange = "NFO") const;
+
     /// How many instruments are cached for this broker.
     int cached_count(const QString& broker_id) const;
 

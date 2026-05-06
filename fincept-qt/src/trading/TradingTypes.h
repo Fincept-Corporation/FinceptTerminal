@@ -247,6 +247,11 @@ struct BrokerQuote {
     double bid_size = 0;
     double ask_size = 0;
     int64_t timestamp = 0;
+    // F&O fields — populated when the symbol is a derivative (CE/PE/FUT)
+    // and the broker quote response carries OI. Default zero is safe for
+    // equity / spot quotes where OI is not applicable.
+    qint64 oi = 0;
+    double oi_change_pct = 0;
 };
 
 struct BrokerCandle {

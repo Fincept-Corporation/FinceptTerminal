@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "_comment": "Mirror of src/services/alpha_arena/AlphaArenaSchema.h. Single source of truth is the C++ header — if you edit one, edit the other (CI verifies parity in Phase 6).",
+  "signals": ["buy_to_enter", "sell_to_enter", "hold", "close"],
+  "modes": ["baseline", "monk", "situational"],
+  "perp_universe": ["BTC", "ETH", "SOL", "BNB", "DOGE", "XRP"],
+  "limits": {
+    "min_leverage": 1,
+    "max_leverage": 20,
+    "invalidation_condition_max_chars": 280,
+    "justification_max_chars": 1000,
+    "risk_usd_recompute_tolerance_frac": 0.05,
+    "max_risk_per_trade_frac": 0.02,
+    "min_liquidation_buffer_frac": 0.15
+  },
+  "action_object": {
+    "signal":                 {"type": "string",  "required": true,  "enum": "signals"},
+    "coin":                   {"type": "string",  "required": true,  "enum": "perp_universe"},
+    "quantity":               {"type": "number",  "required": true,  "positive_for_entry": true},
+    "leverage":               {"type": "integer", "required": true,  "range": [1, 20]},
+    "profit_target":          {"type": "number",  "required": true,  "positive_for_entry": true},
+    "stop_loss":              {"type": "number",  "required": true,  "positive_for_entry": true},
+    "invalidation_condition": {"type": "string",  "required": true,  "max_chars": 280},
+    "confidence":             {"type": "number",  "required": true,  "range": [0, 1]},
+    "risk_usd":               {"type": "number",  "required": true,  "server_recomputed": true},
+    "justification":          {"type": "string",  "required": true,  "max_chars": 1000}
+  },
+  "response_envelope": {
+    "actions": {"type": "array", "items": "action_object", "required": true}
+  }
+}

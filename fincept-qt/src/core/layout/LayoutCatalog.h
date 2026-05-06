@@ -83,6 +83,20 @@ class LayoutCatalog : public QObject {
     /// users importing the same shared file don't collide).
     Result<LayoutId> import_from(const QString& path);
 
+    /// Persisted "last applied layout" pointer. Stored in the index DB's
+    /// `_meta` table under key `last_loaded_uuid`. Set by
+    /// `WorkspaceShell::apply()` on every successful apply of a non-auto
+    /// workspace. Read by `WorkspaceShell::load_last_or_default()` on
+    /// startup. Returns null id if unset.
+    Result<LayoutId> last_loaded_id() const;
+    Result<void> set_last_loaded_id(const LayoutId& id);
+
+    /// Read/write any key in the index DB's `_meta` table. Empty string
+    /// returned on miss (no error). Used by both the last_loaded_id pair
+    /// above and Phase 7's `WorkspaceFwspImporter` (key=`fwsp_import_done`).
+    Result<QString> meta(const QString& key) const;
+    Result<void> set_meta(const QString& key, const QString& value);
+
   signals:
     void layout_saved(const LayoutId& id);
     void layout_removed(const LayoutId& id);

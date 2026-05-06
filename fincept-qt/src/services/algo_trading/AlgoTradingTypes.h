@@ -9,6 +9,47 @@
 
 namespace fincept::services::algo {
 
+// ── Kind & backend enums ────────────────────────────────────────────────────
+
+/// Strategy kind. Derived from the ID prefix — never persisted as a column.
+///   FCT-XXXXXXXX → Qc (code-based, lives under scripts/strategies/<file>.py)
+///   anything else → Dsl (indicator-rule-based, persisted in algo_strategies table)
+enum class StrategyKind { Dsl, Qc };
+
+inline StrategyKind kind_from_id(const QString& id) {
+    return id.startsWith(QStringLiteral("FCT-")) ? StrategyKind::Qc : StrategyKind::Dsl;
+}
+
+inline QString kind_to_string(StrategyKind k) {
+    return k == StrategyKind::Qc ? QStringLiteral("qc") : QStringLiteral("dsl");
+}
+
+/// Routing target for an algo deployment's order signals.
+///   Paper           → routed to PaperTrading.h's PtPortfolio
+///   EquityBroker    → routed to BrokerRegistry::get(broker_id)->place_order
+///   CryptoExchange  → routed to ExchangeService / native exchange client
+enum class TradingBackend { Paper, EquityBroker, CryptoExchange };
+
+inline QString backend_to_string(TradingBackend b) {
+    switch (b) {
+    case TradingBackend::Paper:
+        return QStringLiteral("paper");
+    case TradingBackend::EquityBroker:
+        return QStringLiteral("equity_broker");
+    case TradingBackend::CryptoExchange:
+        return QStringLiteral("crypto_exchange");
+    }
+    return QStringLiteral("paper");
+}
+
+inline TradingBackend backend_from_string(const QString& s) {
+    if (s == QStringLiteral("equity_broker"))
+        return TradingBackend::EquityBroker;
+    if (s == QStringLiteral("crypto_exchange"))
+        return TradingBackend::CryptoExchange;
+    return TradingBackend::Paper;
+}
+
 // ── Strategy ────────────────────────────────────────────────────────────────
 
 struct AlgoStrategy {
@@ -27,6 +68,12 @@ struct AlgoStrategy {
     QString created_at;
     QString updated_at;
     QJsonObject last_backtest; // in-memory only — populated when backtest runs, not persisted
+
+    // For QC strategies, this is the .py file path relative to scripts/strategies/.
+    // Empty for DSL strategies (their definition lives in entry_conditions/exit_conditions).
+    QString script_path;
+
+    StrategyKind kind() const { return kind_from_id(id); }
 };
 
 // ── Deployment ──────────────────────────────────────────────────────────────
@@ -35,12 +82,22 @@ struct AlgoDeployment {
     QString id;
     QString strategy_id;
     QString strategy_name;
+    QString strategy_kind = "dsl";              // 'dsl' | 'qc' — cached from strategy_id prefix at deploy time
     QString symbol;
-    QString mode;   // paper, live
-    QString status; // pending, starting, running, stopped, error
+    QString exchange;                            // e.g. "NSE", "NASDAQ" — from broker profile
+    QString product_type;                        // e.g. "MIS", "CNC" — broker-specific
+    QString mode;                                // paper | live
+    QString backend = "paper";                   // paper | equity_broker | crypto_exchange
+    QString broker_id;                           // BrokerRegistry id; empty for paper
+    QString broker_account_id;                   // AccountManager id; empty for paper or single-account brokers
+    QString paper_portfolio_id;                  // PtPortfolio id (paper backend only)
+    QString status;                              // pending | starting | running | stopped | error | crashed
     QString timeframe;
     double quantity = 1.0;
+    double max_order_value = 0;                  // 0 = no limit
+    double max_daily_loss = 0;                   // 0 = no limit
     QString error_message;
+    qint64 pid = 0;                              // OS pid of runner process; 0 if not running
     QString created_at;
     QString updated_at;
 
@@ -53,6 +110,10 @@ struct AlgoDeployment {
     double position_qty = 0;
     QString position_side;
     double position_entry = 0;
+
+    StrategyKind kind() const { return kind_from_id(strategy_id); }
+    TradingBackend backend_enum() const { return backend_from_string(backend); }
+    bool is_live() const { return mode == QStringLiteral("live"); }
 };
 
 inline QColor deployment_status_color(const QString& status) {

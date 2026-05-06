@@ -1,5 +1,8 @@
 #pragma once
+#include "core/identity/Uuid.h"
 #include "core/layout/LayoutTypes.h"
+
+#include <QString>
 
 namespace fincept::layout {
 
@@ -40,6 +43,27 @@ class WorkspaceShell {
     ///
     /// Returns the number of frames successfully applied.
     static int apply(const Workspace& workspace);
+
+    /// Name of the most recently applied workspace this session. Empty if
+    /// nothing has been applied yet. Updated by `apply()` on success.
+    /// Drives the title bar suffix.
+    static QString current_name();
+
+    /// UUID of the most recently applied workspace this session. Null if
+    /// nothing applied yet. Drives the toolbar's "Save Layout" (vs "Save
+    /// Layout As…") decision.
+    static LayoutId current_id();
+
+    /// Cold-boot restore. Tries, in order:
+    ///   1. `LayoutCatalog::last_loaded_id()` → `load_workspace` → `apply`
+    ///   2. Most recent `kind='auto'` snapshot from the
+    ///      `TerminalShell::snapshot_ring()` → `apply`
+    ///   3. No-op (first run / fresh profile — Launchpad's template picker
+    ///      handles this case).
+    /// Returns the number of frames restored (0 if nothing restored).
+    /// Safe to call before any frame exists; will spawn frames as needed
+    /// via the standard `apply()` path.
+    static int load_last_or_default();
 };
 
 } // namespace fincept::layout

@@ -35,6 +35,8 @@
 #include "services/maritime/MaritimeService.h"
 #include "services/maritime/PortsCatalog.h"
 #include "services/markets/MarketDataService.h"
+#include "services/options/OptionChainService.h"
+#include "services/alpha_arena/AlphaArenaEngine.h"
 #include "services/news/NewsService.h"
 #include "services/polymarket/PolymarketWebSocket.h"
 #include "services/prediction/PredictionCredentialStore.h"
@@ -109,7 +111,19 @@ static void wire_app_lifecycle(SingleApplication& app) {
                          LOG_INFO("App", "New window opened via secondary instance request");
                      });
     QObject::connect(&app, &QApplication::lastWindowClosed, &app, []() {
-        fincept::screens::LaunchpadScreen::instance()->surface();
+        // Settings → General → "On last window close" controls behaviour.
+        // Default = "quit" so closing the last window quits the app like
+        // every normal desktop app. Power users opt in to the Launchpad.
+        const auto r = fincept::SettingsRepository::instance().get(
+            QStringLiteral("general.on_last_window_close"), QStringLiteral("quit"));
+        const QString choice = r.is_ok() ? r.value() : QStringLiteral("quit");
+
+        if (choice == QStringLiteral("show_launchpad")) {
+            fincept::screens::LaunchpadScreen::instance()->surface();
+        } else {
+            // "quit" or any unknown value → quit (the safe default).
+            QCoreApplication::quit();
+        }
     });
 }
 
@@ -217,6 +231,11 @@ int main(int argc, char* argv[]) {
     FT_MARK(20);
     fincept::services::MarketDataService::instance().ensure_registered_with_hub();
     FT_MARK(21);
+    // F&O / Options chain (Phase 11 — Sensibull-style tab). Sole hub
+    // producer for option:chain:*, option:atm_iv:*, fno:pcr:*, fno:max_pain:*.
+    // Reads instruments via InstrumentService (broker-loaded), batches
+    // get_quotes via the active IBroker, and publishes assembled chains.
+    fincept::services::options::OptionChainService::instance().ensure_registered_with_hub();
     // Phase 2 (multi-broker refactor): ExchangeSessionManager is the hub
     // producer for `ws:kraken:*` / `ws:hyperliquid:*`. Individual sessions
     // (created lazily by the manager) publish through its SessionPublisher
@@ -228,6 +247,11 @@ int main(int argc, char* argv[]) {
     // the adapter layer translates exchange-local types into the unified
     // prediction::* data model for the screen.
     fincept::services::polymarket::PolymarketWebSocket::instance().ensure_registered_with_hub();
+    // Alpha Arena engine — singleton runtime owning TickClock, ModelDispatcher,
+    // OrderRouter, PaperVenue. Not a DataHub Producer (callback-style by
+    // design — see .grill-me/alpha-arena-grill.md §1). init() is idempotent;
+    // calling it pre-resolves crash-recovery state from aa_competitions.
+    fincept::services::alpha_arena::AlphaArenaEngine::instance().init();
     {
         auto& reg = fincept::services::prediction::PredictionExchangeRegistry::instance();
         reg.register_adapter(
@@ -514,6 +538,8 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v020();
     fincept::register_migration_v021();
     fincept::register_migration_v022();
+    fincept::register_migration_v023();
+    fincept::register_migration_v024();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";

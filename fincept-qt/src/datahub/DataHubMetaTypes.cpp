@@ -47,6 +47,22 @@ void register_metatypes() {
     qRegisterMetaType<QVector<fincept::trading::BrokerOrderInfo>>("QVector<fincept::trading::BrokerOrderInfo>");
     qRegisterMetaType<QVector<fincept::trading::BrokerQuote>>("QVector<fincept::trading::BrokerQuote>");
 
+    // F&O / Options chain (Phase 11 — Sensibull-style tab)
+    qRegisterMetaType<fincept::services::options::OptionGreeks>("fincept::services::options::OptionGreeks");
+    qRegisterMetaType<fincept::services::options::OptionChainRow>("fincept::services::options::OptionChainRow");
+    qRegisterMetaType<fincept::services::options::OptionChain>("fincept::services::options::OptionChain");
+    qRegisterMetaType<fincept::services::options::StrategyLeg>("fincept::services::options::StrategyLeg");
+    qRegisterMetaType<fincept::services::options::Strategy>("fincept::services::options::Strategy");
+    qRegisterMetaType<fincept::services::options::PayoffPoint>("fincept::services::options::PayoffPoint");
+    qRegisterMetaType<fincept::services::options::StrategyAnalytics>(
+        "fincept::services::options::StrategyAnalytics");
+    qRegisterMetaType<QVector<fincept::services::options::OptionChainRow>>(
+        "QVector<fincept::services::options::OptionChainRow>");
+    qRegisterMetaType<QVector<fincept::services::options::PayoffPoint>>(
+        "QVector<fincept::services::options::PayoffPoint>");
+    qRegisterMetaType<QVector<fincept::services::options::StrategyLeg>>(
+        "QVector<fincept::services::options::StrategyLeg>");
+
     // Phase 8 — Geopolitics / Maritime / RelationshipMap
     qRegisterMetaType<fincept::services::geo::NewsEvent>("fincept::services::geo::NewsEvent");
     qRegisterMetaType<fincept::services::geo::HDXDataset>("fincept::services::geo::HDXDataset");
@@ -97,7 +113,7 @@ void register_metatypes() {
     qRegisterMetaType<fincept::wallet::TreasuryRevenue>("fincept::wallet::TreasuryRevenue");
     qRegisterMetaType<fincept::wallet::TierStatus>("fincept::wallet::TierStatus");
 
-    LOG_INFO("DataHub", "Registered 73 payload meta-types");
+    LOG_INFO("DataHub", "Registered 83 payload meta-types");
 }
 
 } // namespace fincept::datahub

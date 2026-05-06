@@ -197,6 +197,31 @@ Reserved topic family for the `FinceptInternalAdapter` matching engine. Topics a
 | `prediction:fincept:orderbook:<asset_id>` | `FinceptInternalAdapter` (planned) | 5 s | 1 s | Per-asset order book. Shape: `PredictionOrderBook{asset_id, bids[], asks[]}` matching the Polymarket/Kalshi shape. WebSocket-driven once live. |
 | `prediction:fincept:price:<asset_id>` | `FinceptInternalAdapter` (planned) | 5 s | 1 s | Last-trade price scalar. Same shape as `prediction:polymarket:price:*`. |
 
+## F&O / Options (Phase 11 — Sensibull-style tab)
+
+The F&O screen owns its own producer family. `OptionChainService` is the sole hub registrant for `option:*` and the derived `fno:pcr:*` / `fno:max_pain:*` topics. Phase 1 ships polled REST refresh; WebSocket OI fan-out (Phase 3 of the F&O work) republishes through the same topics so consumers don't change.
+
+### Chain & per-leg streams
+
+| Pattern | Producer | TTL | Min interval | Notes |
+|---|---|---|---|---|
+| `option:chain:<broker>:<underlying>:<expiry>` | `OptionChainService` | 5 s | 3 s | Coalesce 250 ms. `pause_when_inactive=true`. Payload: `OptionChain` (rows[] sorted by strike asc, spot, ATM, PCR, max_pain, total OI). Producer batches CE+PE+underlying quotes via `IBroker::get_quotes` then assembles. Chain refresh runs on a worker thread to avoid blocking the UI. |
+| `option:tick:<broker>:<token>` | `DataStreamManager` (Phase 3) | push-only | — | Per-leg LTP + OI updates from broker WebSocket. Coalesce 100 ms. Reserved — Phase 1 of the F&O work does not publish here yet; consumers should subscribe to `option:chain:*` for snapshot + signal. |
+| `option:atm_iv:<broker>:<underlying>` | `OptionChainService` | 5 s | 3 s | ATM implied volatility scalar (decimal, 0.142 = 14.2%). Computed locally via py_vollib in Phase 3; stubbed at 0 in Phase 1 until the Greeks worker lands. |
+
+### Derived analytics
+
+| Pattern | Producer | TTL | Min interval | Notes |
+|---|---|---|---|---|
+| `fno:pcr:<broker>:<underlying>:<expiry>` | `OptionChainService` | push-only | — | Put/Call Ratio = sum(PE OI) / sum(CE OI). Republished on every chain publish (coalesce 250 ms). Payload: `double`. |
+| `fno:max_pain:<broker>:<underlying>:<expiry>` | `OptionChainService` | push-only | — | Strike minimising total option-writer pain at expiry. Payload: `double`. |
+| `fno:fii_dii:daily` | `FiiDiiService` (Phase 8 of F&O work) | 1 h | 30 min | Daily institutional flows scraped from NSE. Refreshed once per session post 6 PM IST. Payload: `QVector<FiiDiiDay>`. Reserved — not yet implemented. |
+| `oi:history:<broker>:<token>:<window>` | `OISnapshotter` (Phase 3 of F&O work) | 60 s | 30 s | Intraday OI series (rolling minute snapshots) for the OI Analytics sub-tab. `<window>` = `1d` / `5d`. Reserved — not yet implemented. |
+
+> **Underlying spot:** the chain producer always re-fetches the underlying quote alongside the option quotes in the same `get_quotes` batch, so subscribers don't need to cross-subscribe to `market:quote:<sym>`. Index symbols use `NSE_INDEX:<NAME>` (NIFTY/BANKNIFTY/FINNIFTY/MIDCPNIFTY); stocks use `NSE:<SYM>`.
+
+> **Broker requirement:** F&O topics require a connected, instruments-loaded broker. The producer publishes `publish_error("no instruments cached for …")` when the InstrumentService cache is empty; consumers should surface a "connect a broker" prompt when this happens.
+
 ## Force refresh
 
 `DataHub::request(topic, force=true)` bypasses `min_interval_ms` (so user-driven refresh buttons work inside the interval gate). Per-producer `max_requests_per_sec()` is still honoured — rage-clicking cannot hammer upstream.

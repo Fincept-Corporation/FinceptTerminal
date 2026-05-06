@@ -86,6 +86,7 @@ static QVector<AlgoStrategy> parse_strategies(const QJsonArray& arr) {
         s.trailing_stop = o["trailing_stop"].toDouble();
         s.created_at = o["created_at"].toString();
         s.updated_at = o["updated_at"].toString();
+        s.script_path = o["script_path"].toString(); // empty for DSL, file path for QC
         strategies.append(s);
     }
     return strategies;
@@ -180,12 +181,22 @@ static QVector<AlgoDeployment> parse_deployments(const QJsonArray& arr) {
         d.id = o["id"].toString();
         d.strategy_id = o["strategy_id"].toString();
         d.strategy_name = o["strategy_name"].toString();
+        d.strategy_kind = o["strategy_kind"].toString("dsl");
         d.symbol = o["symbol"].toString();
+        d.exchange = o["exchange"].toString();
+        d.product_type = o["product_type"].toString();
         d.mode = o["mode"].toString();
+        d.backend = o["backend"].toString("paper");
+        d.broker_id = o["broker_id"].toString();
+        d.broker_account_id = o["broker_account_id"].toString();
+        d.paper_portfolio_id = o["paper_portfolio_id"].toString();
         d.status = o["status"].toString();
         d.timeframe = o["timeframe"].toString();
         d.quantity = o["quantity"].toDouble();
+        d.max_order_value = o["max_order_value"].toDouble();
+        d.max_daily_loss = o["max_daily_loss"].toDouble();
         d.error_message = o["error_message"].toString();
+        d.pid = static_cast<qint64>(o["pid"].toDouble());
         d.total_pnl = o["total_pnl"].toDouble();
         d.unrealized_pnl = o["unrealized_pnl"].toDouble();
         d.total_trades = o["total_trades"].toInt();

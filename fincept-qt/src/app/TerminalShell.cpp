@@ -9,6 +9,7 @@
 #include "core/panel/PanelRegistry.h"
 #include "core/profile/ProfilePaths.h"
 #include "core/layout/LayoutCatalog.h"
+#include "storage/workspace/WorkspaceFwspImporter.h"
 #include "core/screen/MonitorWatcher.h"
 #include "core/telemetry/LocalTelemetrySink.h"
 #include "core/telemetry/TelemetryProvider.h"
@@ -103,6 +104,11 @@ void TerminalShell::initialise() {
         if (r.is_err()) {
             LOG_WARN(kShellTag, QString("LayoutCatalog open failed: %1")
                                     .arg(QString::fromStdString(r.error())));
+        } else {
+            // One-shot: import legacy v3 *.fwsp filenames as empty named
+            // layouts so users see them in the Launchpad list. No-op after
+            // first successful run (tracked via _meta.fwsp_import_done).
+            WorkspaceFwspImporter::run_once_if_needed();
         }
     }
     FT_TS(112);

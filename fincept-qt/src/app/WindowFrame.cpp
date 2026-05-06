@@ -44,6 +44,7 @@
 #include "screens/data_sources/DataSourcesScreen.h"
 #include "screens/dbnomics/DBnomicsScreen.h"
 #include "screens/derivatives/DerivativesScreen.h"
+#include "screens/fno/FnoScreen.h"
 #include "screens/docs/DocsScreen.h"
 #include "screens/crypto_center/CryptoCenterScreen.h"
 #include "screens/economics/EconomicsScreen.h"
@@ -77,8 +78,9 @@
 #include "screens/surface_analytics/SurfaceAnalyticsScreen.h"
 #include "screens/trade_viz/TradeVizScreen.h"
 #include "screens/watchlist/WatchlistScreen.h"
+#include "core/layout/LayoutCatalog.h"
+#include "core/layout/WorkspaceShell.h"
 #include "services/updater/UpdateService.h"
-#include "services/workspace/WorkspaceManager.h"
 #include "trading/instruments/InstrumentService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/navigation/DockStatusBar.h"
@@ -93,9 +95,8 @@
 #include "ui/navigation/ToolBar.h"
 #include "ui/pushpins/PushpinBar.h"
 #include "ui/theme/Theme.h"
-#include "ui/workspace/WorkspaceNewDialog.h"
-#include "ui/workspace/WorkspaceOpenDialog.h"
-#include "ui/workspace/WorkspaceSaveAsDialog.h"
+#include "ui/workspace/LayoutOpenDialog.h"
+#include "ui/workspace/LayoutSaveAsDialog.h"
 
 #include <QApplication>
 #include <QCloseEvent>
@@ -328,15 +329,14 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent) : QMainWindow(parent), 
     stack_ = master_stack;
     auto* toolbar = dock_toolbar_->inner();
 
-    // ── Workspace + signal wiring ───────────────────────────────────────────
-    WorkspaceManager::instance().set_main_window(this);
+    // ── Window registry wiring ──────────────────────────────────────────────
+    // Layout/workspace persistence lives in core/layout (LayoutCatalog +
+    // WorkspaceShell + WorkspaceSnapshotRing). Title bar reads the active
+    // layout name from WorkspaceShell::current_name() inside
+    // update_window_title(), so no signal wiring is needed here.
     WindowCycler::instance().register_window(this);
     connect(this, &QObject::destroyed, this,
             [this]() { WindowCycler::instance().unregister_window(this); });
-    connect(&WorkspaceManager::instance(), &WorkspaceManager::workspace_loaded, this,
-            [this](const WorkspaceDef&) { update_window_title(); });
-    connect(&WorkspaceManager::instance(), &WorkspaceManager::workspace_error, this,
-            [this](const QString& msg) { QMessageBox::warning(this, "Workspace Error", msg); });
 
     dock_router_ = new DockScreenRouter(dock_manager_, this);
     setup_dock_screens();
@@ -357,8 +357,6 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent) : QMainWindow(parent), 
     // the rest via tool.list — making per-screen scoping unnecessary and
     // counterproductive (it would prevent the LLM from finding tools the
     // user might want regardless of which screen happens to be active).
-
-    connect(this, &QObject::destroyed, this, [this]() { WorkspaceManager::instance().remove_window(this); });
 
     // Chat bubble — floats over dock_manager_ content area
     chat_bubble_ = new AiChatBubble(dock_manager_);
@@ -398,9 +396,10 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent) : QMainWindow(parent), 
     connect(dock_layout_save_timer_, &QTimer::timeout, this, [this]() {
         if (!dock_manager_)
             return;
+        // SessionManager.save_dock_layout fans out to WorkspaceSnapshotRing
+        // (60s rate-limited auto snapshot). That covers what the legacy
+        // 5-min WorkspaceManager autosave used to do, with better cadence.
         SessionManager::instance().save_dock_layout(window_id_, dock_manager_->saveState());
-        if (WorkspaceManager::instance().has_current_workspace())
-            WorkspaceManager::instance().save_workspace();
     });
 
     connect(toolbar, &ui::ToolBar::dock_command, this,
@@ -613,34 +612,82 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent) : QMainWindow(parent), 
                 if (focused && focused->widget())
                     QMetaObject::invokeMethod(focused->widget(), "refresh", Qt::QueuedConnection);
             }
-        } else if (action == "new_workspace") {
-            auto* dlg = new ui::WorkspaceNewDialog(this);
-            if (dlg->exec() == QDialog::Accepted)
-                WorkspaceManager::instance().new_workspace(dlg->workspace_name(), dlg->workspace_description(),
-                                                           dlg->selected_template_id());
-            dlg->deleteLater();
-        } else if (action == "open_workspace") {
-            auto* dlg = new ui::WorkspaceOpenDialog(this);
-            if (dlg->exec() == QDialog::Accepted && !dlg->selected_path().isEmpty())
-                WorkspaceManager::instance().open_workspace(dlg->selected_path());
-            dlg->deleteLater();
-        } else if (action == "save_workspace") {
-            WorkspaceManager::instance().save_workspace();
-        } else if (action == "save_workspace_as") {
-            auto* dlg = new ui::WorkspaceSaveAsDialog(this);
-            if (dlg->exec() == QDialog::Accepted)
-                WorkspaceManager::instance().save_workspace_as(dlg->new_name(), dlg->chosen_path());
-            dlg->deleteLater();
+        } else if (action == "layout_new" || action == "layout_save_as") {
+            // Both routes prompt for a name then save. layout.new = blank
+            // workspace under that name; layout.save_as = capture-current
+            // under that name. Handlers in builtin_actions distinguish.
+            ui::LayoutSaveAsDialog dlg(this);
+            if (dlg.exec() == QDialog::Accepted) {
+                CommandContext ctx;
+                ctx.shell = &TerminalShell::instance();
+                ctx.focused_frame = this;
+                ctx.args.insert(QStringLiteral("name"), dlg.name());
+                const QString action_id = (action == "layout_new")
+                    ? QStringLiteral("layout.new") : QStringLiteral("layout.save_as");
+                auto r = ActionRegistry::instance().invoke(action_id, ctx);
+                if (r.is_err())
+                    LOG_WARN("WindowFrame", QString("%1 failed: %2")
+                                                .arg(action_id, QString::fromStdString(r.error())));
+            }
+        } else if (action == "layout_open") {
+            ui::LayoutOpenDialog dlg(this);
+            if (dlg.exec() == QDialog::Accepted && !dlg.selected_id().is_null()) {
+                CommandContext ctx;
+                ctx.shell = &TerminalShell::instance();
+                ctx.focused_frame = this;
+                ctx.args.insert(QStringLiteral("name"), dlg.selected_id().to_string());
+                auto r = ActionRegistry::instance().invoke(QStringLiteral("layout.switch"), ctx);
+                if (r.is_err())
+                    LOG_WARN("WindowFrame", QString("layout.switch failed: %1")
+                                                .arg(QString::fromStdString(r.error())));
+            }
+        } else if (action == "layout_save") {
+            // If a layout is currently loaded, save under its name. Otherwise
+            // prompt for one (treat as save-as with no initial name).
+            const QString cur = layout::WorkspaceShell::current_name();
+            QString target = cur;
+            if (target.isEmpty()) {
+                ui::LayoutSaveAsDialog dlg(this);
+                if (dlg.exec() != QDialog::Accepted) {
+                    return;
+                }
+                target = dlg.name();
+            }
+            CommandContext ctx;
+            ctx.shell = &TerminalShell::instance();
+            ctx.focused_frame = this;
+            ctx.args.insert(QStringLiteral("name"), target);
+            auto r = ActionRegistry::instance().invoke(QStringLiteral("layout.save"), ctx);
+            if (r.is_err())
+                LOG_WARN("WindowFrame", QString("layout.save failed: %1")
+                                            .arg(QString::fromStdString(r.error())));
         } else if (action == "import_data") {
-            QString path =
-                QFileDialog::getOpenFileName(this, "Import Workspace", QDir::homePath(), "Fincept Workspace (*.fwsp)");
-            if (!path.isEmpty())
-                WorkspaceManager::instance().import_workspace(path);
+            QString path = QFileDialog::getOpenFileName(
+                this, "Import Layout", QDir::homePath(),
+                "Fincept Layout (*.flayout *.fwsp);;All Files (*)");
+            if (!path.isEmpty()) {
+                auto r = LayoutCatalog::instance().import_from(path);
+                if (r.is_err())
+                    QMessageBox::warning(this, "Import Failed",
+                                         QString::fromStdString(r.error()));
+            }
         } else if (action == "export_data") {
-            QString path =
-                QFileDialog::getSaveFileName(this, "Export Workspace", QDir::homePath(), "Fincept Workspace (*.fwsp)");
-            if (!path.isEmpty())
-                WorkspaceManager::instance().export_workspace(path);
+            const LayoutId cur_id = layout::WorkspaceShell::current_id();
+            if (cur_id.is_null()) {
+                QMessageBox::information(
+                    this, "Export Layout",
+                    "Open or save a layout first, then export it.");
+            } else {
+                QString path = QFileDialog::getSaveFileName(
+                    this, "Export Layout", QDir::homePath(),
+                    "Fincept Layout (*.flayout)");
+                if (!path.isEmpty()) {
+                    auto r = LayoutCatalog::instance().export_to(cur_id, path);
+                    if (r.is_err())
+                        QMessageBox::warning(this, "Export Failed",
+                                             QString::fromStdString(r.error()));
+                }
+            }
         } else if (action == "screenshot") {
             QScreen* scr = this->screen();
             if (!scr)
@@ -1009,6 +1056,7 @@ void WindowFrame::setup_dock_screens() {
     dock_router_->register_factory("alpha_arena", []() { return new screens::AlphaArenaScreen; });
     dock_router_->register_factory("polymarket", []() { return new screens::PolymarketScreen; });
     dock_router_->register_factory("derivatives", []() { return new screens::DerivativesScreen; });
+    dock_router_->register_factory("fno", []() { return new screens::fno::FnoScreen; });
     dock_router_->register_factory("equity_research", []() { return new screens::EquityResearchScreen; });
     dock_router_->register_factory("ma_analytics", []() { return new screens::MAAnalyticsScreen; });
     dock_router_->register_factory("alt_investments", []() { return new screens::AltInvestmentsScreen; });
@@ -1153,7 +1201,9 @@ void WindowFrame::on_auth_state_changed() {
             // Paid user → straight to dashboard
             set_shell_visible(true);
             stack_->setCurrentIndex(1);
-            WorkspaceManager::instance().load_last_workspace();
+            // Cold-boot restore: try last_loaded layout, then most recent
+            // auto snapshot, then no-op (first run).
+            layout::WorkspaceShell::load_last_or_default();
             // Trigger silent update check after login (delayed so UI settles first).
             // UpdateService de-dupes silent checks across the session, so the
             // post-PIN-unlock path below won't fire a second request.
@@ -1347,7 +1397,9 @@ void WindowFrame::on_terminal_unlocked() {
                 chat_bubble_->raise();
             }
         }
-        WorkspaceManager::instance().load_last_workspace();
+        // Cold-boot restore via the new system (frame layouts, panels, dock
+        // state, monitor variants).
+        layout::WorkspaceShell::load_last_or_default();
         // Silent update check — UpdateService de-dupes across call sites so
         // the login path + this post-unlock path won't fire two requests.
         QTimer::singleShot(3000, this, [this]() {
@@ -1396,11 +1448,11 @@ void WindowFrame::update_window_title() {
     // to an unauthenticated viewer.
     const bool shell_visible = stack_ && stack_->currentIndex() == 1;
     if (shell_visible) {
-        if (WorkspaceManager::instance().has_current_workspace()) {
-            const QString ws = WorkspaceManager::instance().current_workspace_name();
-            if (!ws.isEmpty())
-                title += QString(" — %1").arg(ws);
-        }
+        // Layout name set by WorkspaceShell::apply on every successful
+        // layout switch / cold-boot restore. Empty until first apply.
+        const QString ws = layout::WorkspaceShell::current_name();
+        if (!ws.isEmpty())
+            title += QString(" — %1").arg(ws);
 
         if (dock_router_) {
             const QString id = dock_router_->current_screen_id();
@@ -1724,7 +1776,11 @@ void WindowFrame::schedule_dock_layout_save() {
 }
 
 void WindowFrame::closeEvent(QCloseEvent* event) {
-    WorkspaceManager::instance().save_workspace();
+    // Force an immediate snapshot bypassing the 60s rate limit so a real
+    // shutdown always has fresh state to restore from. Per Phase 6 the
+    // legacy WorkspaceManager autosave is gone — the snapshot ring is the
+    // single persistence path.
+    SessionManager::instance().flush_snapshot_now();
     SessionManager::instance().save_geometry(window_id_, saveGeometry(), saveState());
     // Record the monitor this window is currently on so startup can place
     // it back on the same screen even if saveGeometry's absolute coordinates

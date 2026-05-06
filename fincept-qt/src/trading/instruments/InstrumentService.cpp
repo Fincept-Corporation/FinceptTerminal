@@ -7,11 +7,13 @@
 #include "trading/instruments/InstrumentRepository.h"
 #include "trading/instruments/ZerodhaInstrumentParser.h"
 
+#include <QDate>
 #include <QDateTime>
 #include <QEventLoop>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMap>
 #include <QMetaObject>
 #include <QMutexLocker>
 #include <QNetworkAccessManager>
@@ -19,6 +21,7 @@
 #include <QNetworkRequest>
 #include <QPointer>
 #include <QRegularExpression>
+#include <QSet>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -26,6 +29,8 @@
 #include <QUrl>
 #include <QUuid>
 #include <QtConcurrent/QtConcurrent>
+
+#include <algorithm>
 
 namespace fincept::trading {
 
@@ -399,6 +404,83 @@ QVector<Instrument> InstrumentService::search(const QString& query, const QStrin
                                               int limit) const {
     // Delegate to DB for search (cache doesn't hold a text index)
     return InstrumentRepository::instance().search(query, exchange, broker_id, limit);
+}
+
+// ── F&O / Options chain helpers ─────────────────────────────────────────────
+
+QStringList InstrumentService::list_underlyings(const QString& broker_id, const QString& exchange) const {
+    QMutexLocker lock(&mutex_);
+    auto it = caches_.find(broker_id);
+    if (it == caches_.end())
+        return {};
+    QSet<QString> seen;
+    for (const auto& inst : it->by_token) {
+        if (inst.exchange != exchange)
+            continue;
+        if (inst.instrument_type != InstrumentType::CE && inst.instrument_type != InstrumentType::PE
+            && inst.instrument_type != InstrumentType::FUT)
+            continue;
+        if (!inst.name.isEmpty())
+            seen.insert(inst.name);
+    }
+    QStringList out(seen.begin(), seen.end());
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+QStringList InstrumentService::list_expiries(const QString& broker_id, const QString& underlying,
+                                             const QString& exchange) const {
+    QMutexLocker lock(&mutex_);
+    auto it = caches_.find(broker_id);
+    if (it == caches_.end())
+        return {};
+    // Use a map keyed by parsed date so we can sort chronologically. Display
+    // string ("DD-MMM-YY") sorts lexically wrong (e.g. "01-DEC-25" lex-before
+    // "01-NOV-25"). The map's value collapses duplicates automatically.
+    QMap<QDate, QString> by_date;
+    for (const auto& inst : it->by_token) {
+        if (inst.exchange != exchange || inst.name != underlying)
+            continue;
+        if (inst.instrument_type != InstrumentType::CE && inst.instrument_type != InstrumentType::PE
+            && inst.instrument_type != InstrumentType::FUT)
+            continue;
+        if (inst.expiry.isEmpty())
+            continue;
+        QDate d = QDate::fromString(inst.expiry, "dd-MMM-yy");
+        if (!d.isValid())
+            d = QDate::fromString(inst.expiry, "yyyy-MM-dd");
+        if (d.isValid())
+            by_date.insert(d, inst.expiry);
+    }
+    return QStringList(by_date.values().begin(), by_date.values().end());
+}
+
+QVector<Instrument> InstrumentService::find_options_for_underlying(const QString& broker_id,
+                                                                   const QString& underlying,
+                                                                   const QString& expiry,
+                                                                   const QString& exchange) const {
+    QMutexLocker lock(&mutex_);
+    auto it = caches_.find(broker_id);
+    if (it == caches_.end())
+        return {};
+    QVector<Instrument> options;  // CE/PE
+    QVector<Instrument> futures;  // FUT (appended last)
+    for (const auto& inst : it->by_token) {
+        if (inst.exchange != exchange || inst.name != underlying || inst.expiry != expiry)
+            continue;
+        if (inst.instrument_type == InstrumentType::CE || inst.instrument_type == InstrumentType::PE)
+            options.append(inst);
+        else if (inst.instrument_type == InstrumentType::FUT)
+            futures.append(inst);
+    }
+    std::sort(options.begin(), options.end(), [](const Instrument& a, const Instrument& b) {
+        if (a.strike != b.strike)
+            return a.strike < b.strike;
+        // Same strike: CE before PE for stable iteration
+        return int(a.instrument_type) < int(b.instrument_type);
+    });
+    options.append(futures);
+    return options;
 }
 
 int InstrumentService::cached_count(const QString& broker_id) const {

@@ -3,6 +3,7 @@
 #include <QMainWindow>
 
 class QLabel;
+class QLineEdit;
 class QListWidget;
 class QPushButton;
 class QVBoxLayout;
@@ -40,6 +41,7 @@ class LaunchpadScreen : public QMainWindow {
 
   protected:
     void closeEvent(QCloseEvent* event) override;
+    bool eventFilter(QObject* obj, QEvent* event) override;
 
   private:
     explicit LaunchpadScreen(QWidget* parent = nullptr);
@@ -47,10 +49,18 @@ class LaunchpadScreen : public QMainWindow {
     void on_new_window();
     void on_switch_profile();
     void on_open_layout();
+    void on_continue();
+    void on_template_picked(const QString& persona_id);
     void refresh_recent_layouts();
+    void refresh_continue_visibility();
+    void refresh_first_run_picker();
 
     QLabel* greeting_ = nullptr;
+    QLineEdit* filter_edit_ = nullptr;    ///< Type-to-filter the recent layouts list.
     QListWidget* recent_layouts_ = nullptr;
+    QWidget* template_picker_ = nullptr;  ///< 5-card grid; visible on first run.
+    QLabel* recent_label_ = nullptr;      ///< "Recent Layouts" header — hidden on first run.
+    QPushButton* btn_continue_ = nullptr;
     QPushButton* btn_new_window_ = nullptr;
     QPushButton* btn_switch_profile_ = nullptr;
     QPushButton* btn_open_layout_ = nullptr;

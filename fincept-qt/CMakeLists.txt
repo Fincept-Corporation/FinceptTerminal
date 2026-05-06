@@ -589,6 +589,7 @@ set(CORE_SOURCES
     src/core/events/EventBus.cpp
     src/core/layout/LayoutTypes.cpp
     src/core/layout/LayoutCatalog.cpp
+    src/core/layout/LayoutTemplates.cpp
     src/core/layout/WorkspaceMatcher.cpp
     src/core/layout/WorkspaceShell.cpp
     src/core/panel/PanelHandle.cpp
@@ -652,6 +653,7 @@ set(STORAGE_SOURCES
     src/storage/workspace/WorkspaceDb.cpp
     src/storage/workspace/WorkspaceSnapshotRing.cpp
     src/storage/workspace/CrashRecovery.cpp
+    src/storage/workspace/WorkspaceFwspImporter.cpp
 
     # Migration system
     src/storage/sqlite/migrations/MigrationRunner.cpp
@@ -676,6 +678,7 @@ set(STORAGE_SOURCES
     src/storage/workspace/WorkspaceDb.cpp
     src/storage/workspace/WorkspaceSnapshotRing.cpp
     src/storage/workspace/CrashRecovery.cpp
+    src/storage/workspace/WorkspaceFwspImporter.cpp
 
     # Repositories
     src/storage/repositories/SettingsRepository.cpp
@@ -731,6 +734,8 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v020_security_audit_log.cpp
     src/storage/sqlite/migrations/v021_max_tokens_default.cpp
     src/storage/sqlite/migrations/v022_portfolio_broker_link.cpp
+    src/storage/sqlite/migrations/v023_algo_trading_deploy.cpp
+    src/storage/sqlite/migrations/v024_alpha_arena.cpp
 )
 
 # Python runner
@@ -743,6 +748,12 @@ set(PYTHON_SOURCES
 # AI Chat
 set(AI_CHAT_SOURCES
     src/ai_chat/LlmService.cpp
+    src/ai_chat/LlmContentExtractors.cpp
+    src/ai_chat/LlmHttpHelpers.cpp
+    src/ai_chat/LlmRequestBuilders.cpp
+    src/ai_chat/LlmModelsApi.cpp
+    src/ai_chat/LlmFinceptAsync.cpp
+    src/ai_chat/LlmToolLoop.cpp
     src/ai_chat/ModelCatalog.cpp
     src/ai_chat/ChatBubbleFactory.cpp
     src/ai_chat/AiChatScreen.cpp
@@ -844,11 +855,22 @@ set(TRADING_SOURCES
 # Services
 set(SERVICE_SOURCES
     src/services/akshare/AkShareService.cpp
-    src/services/alpha_arena/AlphaArenaService.cpp
+    src/services/alpha_arena/AlphaArenaJson.cpp
+    src/services/alpha_arena/Indicators.cpp
+    src/services/alpha_arena/ContextBuilder.cpp
+    src/services/alpha_arena/AlphaArenaRepo.cpp
+    src/services/alpha_arena/RiskEngine.cpp
+    src/services/alpha_arena/PaperVenue.cpp
+    src/services/alpha_arena/SecretRedemptionServer.cpp
+    src/services/alpha_arena/TickClock.cpp
+    src/services/alpha_arena/ModelDispatcher.cpp
+    src/services/alpha_arena/OrderRouter.cpp
+    src/services/alpha_arena/AlphaArenaEngine.cpp
     src/services/asia_markets/AsiaMarketsService.cpp
     src/services/crypto/TotpService.cpp
     src/services/python_cli/PythonCliService.cpp
     src/services/markets/MarketDataService.cpp
+    src/services/options/OptionChainService.cpp
     src/services/data_normalization/DataNormalizationService.cpp
     src/services/news/NewsService.cpp
     src/services/news/NewsClusterService.cpp
@@ -909,9 +931,6 @@ set(SERVICE_SOURCES
     src/services/workflow/WorkflowExecutor.cpp
     src/services/workflow/ExpressionEngine.cpp
 
-    src/services/workspace/WorkspaceSerializer.cpp
-    src/services/workspace/WorkspaceManager.cpp
-    src/services/workspace/WorkspaceTemplates.cpp
     src/services/pushpins/PushpinService.cpp
     src/services/workflow/nodes/TriggerNodes.cpp
     src/services/workflow/nodes/ControlFlowNodes.cpp
@@ -1017,9 +1036,8 @@ set(UI_SOURCES
     src/ui/notifications/NotificationService.cpp
     src/ui/error/ErrorPipeline.cpp
 
-    src/ui/workspace/WorkspaceNewDialog.cpp
-    src/ui/workspace/WorkspaceOpenDialog.cpp
-    src/ui/workspace/WorkspaceSaveAsDialog.cpp
+    src/ui/workspace/LayoutOpenDialog.cpp
+    src/ui/workspace/LayoutSaveAsDialog.cpp
 
     # In-app notification widgets
     src/ui/widgets/NotifToast.cpp
@@ -1037,10 +1055,20 @@ set(SCREEN_SOURCES
     src/screens/devtools/DataHubInspector.cpp
     src/screens/profile/ProfileScreen.cpp
     src/screens/settings/SettingsScreen.cpp
+    src/screens/settings/CredentialsSection.cpp
+    src/screens/settings/AppearanceSection.cpp
+    src/screens/settings/GeneralSection.cpp
+    src/screens/settings/NotificationsSection.cpp
+    src/screens/settings/StorageSection.cpp
+    src/screens/settings/DataSourcesSection.cpp
     src/screens/settings/LlmConfigSection.cpp
     src/screens/settings/McpServersSection.cpp
+    src/screens/settings/LoggingSection.cpp
+    src/screens/settings/SecuritySection.cpp
+    src/screens/settings/ProfilesSection.cpp
     src/screens/settings/KeybindingsSection.cpp
     src/screens/settings/PythonEnvSection.cpp
+    src/screens/settings/DeveloperSection.cpp
     src/screens/settings/VoiceConfigSection.cpp
     src/screens/about/AboutScreen.cpp
     src/screens/support/SupportScreen.cpp
@@ -1154,6 +1182,10 @@ set(SCREEN_SOURCES
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
     src/screens/data_sources/DataSourcesScreen.cpp
+    src/screens/data_sources/DataSourcesHelpers.cpp
+    src/screens/data_sources/ConnectionConfigDialog.cpp
+    src/screens/data_sources/ConnectionTester.cpp
+    src/screens/data_sources/ImportExportConnections.cpp
     src/screens/data_sources/ConnectorRegistry.cpp
     src/screens/data_sources/connectors/RelationalDatabases.cpp
     src/screens/data_sources/connectors/NoSqlDatabases.cpp
@@ -1199,6 +1231,13 @@ set(SCREEN_SOURCES
 
     # Derivatives Pricing
     src/screens/derivatives/DerivativesScreen.cpp
+
+    # F&O / Options (Sensibull-style tab)
+    src/screens/fno/FnoScreen.cpp
+    src/screens/fno/FnoHeaderBar.cpp
+    src/screens/fno/OptionChainModel.cpp
+    src/screens/fno/OptionChainTable.cpp
+    src/screens/fno/ChainSubTab.cpp
 
     # AkShare Data Explorer
     src/screens/akshare/AkShareScreen.cpp
@@ -1312,6 +1351,14 @@ set(SCREEN_SOURCES
     # M&A Analytics
     src/screens/ma_analytics/MAAnalyticsScreen.cpp
     src/screens/ma_analytics/MAModulePanel.cpp
+    src/screens/ma_analytics/MAValuationPanel.cpp
+    src/screens/ma_analytics/MAMergerPanel.cpp
+    src/screens/ma_analytics/MADealsPanel.cpp
+    src/screens/ma_analytics/MAStartupPanel.cpp
+    src/screens/ma_analytics/MAFairnessPanel.cpp
+    src/screens/ma_analytics/MAIndustryPanel.cpp
+    src/screens/ma_analytics/MAAdvancedPanel.cpp
+    src/screens/ma_analytics/MAComparisonPanel.cpp
 
     # Equity Research (7 tabs)
     src/screens/equity_research/EquityResearchScreen.cpp
@@ -1477,6 +1524,10 @@ set_source_files_properties(
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
     src/screens/data_sources/DataSourcesScreen.cpp
+    src/screens/data_sources/DataSourcesHelpers.cpp
+    src/screens/data_sources/ConnectionConfigDialog.cpp
+    src/screens/data_sources/ConnectionTester.cpp
+    src/screens/data_sources/ImportExportConnections.cpp
     src/screens/data_sources/ConnectorRegistry.cpp
     src/screens/data_sources/connectors/RelationalDatabases.cpp
     src/screens/data_sources/connectors/NoSqlDatabases.cpp
@@ -1560,6 +1611,11 @@ set_source_files_properties(
     src/screens/dbnomics/DBnomicsSelectionPanel.cpp
     src/screens/docs/DocsScreen.cpp
     src/screens/derivatives/DerivativesScreen.cpp
+    src/screens/fno/FnoScreen.cpp
+    src/screens/fno/FnoHeaderBar.cpp
+    src/screens/fno/OptionChainModel.cpp
+    src/screens/fno/OptionChainTable.cpp
+    src/screens/fno/ChainSubTab.cpp
     src/screens/economics/EconomicsScreen.cpp
     src/screens/equity_research/EquityAnalysisTab.cpp
     src/screens/equity_research/EquityFinancialsTab.cpp
@@ -1599,6 +1655,14 @@ set_source_files_properties(
     src/screens/info/TrademarksScreen.cpp
     src/screens/ma_analytics/MAAnalyticsScreen.cpp
     src/screens/ma_analytics/MAModulePanel.cpp
+    src/screens/ma_analytics/MAValuationPanel.cpp
+    src/screens/ma_analytics/MAMergerPanel.cpp
+    src/screens/ma_analytics/MADealsPanel.cpp
+    src/screens/ma_analytics/MAStartupPanel.cpp
+    src/screens/ma_analytics/MAFairnessPanel.cpp
+    src/screens/ma_analytics/MAIndustryPanel.cpp
+    src/screens/ma_analytics/MAAdvancedPanel.cpp
+    src/screens/ma_analytics/MAComparisonPanel.cpp
     src/screens/maritime/MaritimeScreen.cpp
     src/screens/markets/MarketPanel.cpp
     src/screens/markets/MarketPanelStore.cpp
@@ -1659,11 +1723,21 @@ set_source_files_properties(
     src/screens/report_builder/DocumentCanvas.cpp
     src/screens/report_builder/PropertiesPanel.cpp
     src/screens/report_builder/ReportBuilderScreen.cpp
+    src/screens/settings/AppearanceSection.cpp
+    src/screens/settings/CredentialsSection.cpp
+    src/screens/settings/DataSourcesSection.cpp
+    src/screens/settings/DeveloperSection.cpp
+    src/screens/settings/GeneralSection.cpp
     src/screens/settings/KeybindingsSection.cpp
-    src/screens/settings/PythonEnvSection.cpp
     src/screens/settings/LlmConfigSection.cpp
+    src/screens/settings/LoggingSection.cpp
     src/screens/settings/McpServersSection.cpp
+    src/screens/settings/NotificationsSection.cpp
+    src/screens/settings/ProfilesSection.cpp
+    src/screens/settings/PythonEnvSection.cpp
+    src/screens/settings/SecuritySection.cpp
     src/screens/settings/SettingsScreen.cpp
+    src/screens/settings/StorageSection.cpp
     src/screens/setup/SetupScreen.cpp
     src/screens/launchpad/LaunchpadScreen.cpp
     src/screens/recovery/CrashRecoveryDialog.cpp

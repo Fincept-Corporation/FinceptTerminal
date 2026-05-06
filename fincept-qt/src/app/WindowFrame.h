@@ -100,6 +100,11 @@ class WindowFrame : public QMainWindow {
     /// or default layout.
     bool apply_layout(const layout::FrameLayout& layout);
 
+    /// Live dock manager (ADS). Exposed for layout capture/thumbnail code
+    /// that needs to grab the dock area's pixmap. Nullable during early
+    /// init before setup_ui completes.
+    ads::CDockManager* dock_manager() const { return dock_manager_; }
+
     /// True while the lock/PIN screen is active on this frame. Action
     /// handlers consult this to short-circuit when the user has locked
     /// the terminal — actions are inert behind the lock overlay.

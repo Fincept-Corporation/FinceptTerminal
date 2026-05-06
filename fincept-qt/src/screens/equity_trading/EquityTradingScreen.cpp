@@ -17,7 +17,6 @@
 #include "screens/equity_trading/EquityTickerBar.h"
 #include "screens/equity_trading/EquityWatchlist.h"
 #include "services/portfolio/PortfolioService.h"
-#include "services/workspace/WorkspaceManager.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
@@ -73,7 +72,6 @@ EquityTradingScreen::EquityTradingScreen(QWidget* parent) : QWidget(parent) {
     setup_ui();
     setup_timers();
     connect_data_stream_signals();
-    WorkspaceManager::instance().register_participant("equity_trading", this);
 
     // Accept symbol drops anywhere on the screen — route through the
     // existing selection path so sub-panels resync and the linked group is
@@ -85,42 +83,8 @@ EquityTradingScreen::EquityTradingScreen(QWidget* parent) : QWidget(parent) {
 }
 
 EquityTradingScreen::~EquityTradingScreen() {
-    WorkspaceManager::instance().unregister_participant("equity_trading");
     if (fill_cb_id_ >= 0)
         OrderMatcher::instance().remove_fill_callback(fill_cb_id_);
-}
-
-QJsonObject EquityTradingScreen::save_state() const {
-    QJsonObject s;
-    s["focused_account_id"] = focused_account_id_;
-    s["symbol"] = selected_symbol_;
-    s["exchange"] = selected_exchange_;
-    QJsonArray wl;
-    for (const auto& sym : watchlist_symbols_)
-        wl.append(sym);
-    s["watchlist_symbols"] = QJsonValue(wl);
-    return s;
-}
-
-void EquityTradingScreen::restore_state(const QJsonObject& state) {
-    if (state.contains("focused_account_id"))
-        focused_account_id_ = state["focused_account_id"].toString();
-    // Legacy migration: old state used broker_id
-    if (focused_account_id_.isEmpty() && state.contains("broker_id")) {
-        const QString old_broker = state["broker_id"].toString();
-        auto accounts = AccountManager::instance().list_accounts(old_broker);
-        if (!accounts.isEmpty())
-            focused_account_id_ = accounts.first().account_id;
-    }
-    if (state.contains("symbol"))
-        selected_symbol_ = state["symbol"].toString();
-    if (state.contains("exchange"))
-        selected_exchange_ = state["exchange"].toString();
-    if (state.contains("watchlist_symbols")) {
-        watchlist_symbols_.clear();
-        for (const auto& v : state["watchlist_symbols"].toArray())
-            watchlist_symbols_.append(v.toString());
-    }
 }
 
 // ============================================================================

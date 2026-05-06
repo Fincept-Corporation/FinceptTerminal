@@ -17,10 +17,10 @@ namespace fincept {
 /// originated the change; subscribers can compare against `this` to
 /// suppress their own re-publish and avoid feedback loops.
 ///
-/// Lifetime: process-global. State persists per workspace via to_json() /
-/// from_json() — WorkspaceManager serialises the blob into the workspace
-/// file so the user's group→symbol assignments come back when the
-/// workspace is reloaded.
+/// Lifetime: process-global. State persists per layout via to_json() /
+/// from_json() — WorkspaceShell stores the blob in
+/// `Workspace.link_state["symbol_context"]` so the user's group→symbol
+/// assignments come back when the layout is reloaded.
 class SymbolContext : public QObject {
     Q_OBJECT
   public:
