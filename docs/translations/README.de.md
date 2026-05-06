@@ -20,7 +20,7 @@ Hochmoderne Financial-Intelligence-Plattform mit Finanzanalysen auf institutione
 
 ## Um
 
-**Fincept Terminal vch**ist eine rein native C++20-Desktopanwendung. Es nutzt**Qt6**für Benutzeroberfläche und Rendering, eingebettet**Python**für Analysen und liefert eine Leistung der Bloomberg-Terminal-Klasse in einer einzigen nativen Binärdatei.
+**Fincept Terminal vch**ist eine rein native C++20-Desktopanwendung. Es nutzt**Qt6**für Benutzeroberfläche und Rendering, eingebettet**Python**für Analysen und liefert eine Leistung professioneller Terminal-Klasse in einer einzigen nativen Binärdatei.
 
 * * *
 

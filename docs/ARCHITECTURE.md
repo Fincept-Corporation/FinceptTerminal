@@ -14,7 +14,7 @@ This document provides a comprehensive overview of Fincept Terminal v4's archite
 │                         User Interface Layer                       │
 │  ┌─────────────────────────────────────────────────────────────┐  │
 │  │  Qt6 Widgets + Qt6 Charts                                   │  │
-│  │  - Obsidian design system (Bloomberg-style terminal UI)     │  │
+│  │  - Obsidian design system (professional terminal UI)        │  │
 │  │  - Real-time data visualization                             │  │
 │  │  - Native platform rendering                                │  │
 │  └─────────────────────────────────────────────────────────────┘  │

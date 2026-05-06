@@ -72,8 +72,8 @@ inline ReportTheme dark_corporate() {
             "#e5e5e5", "#d97706", "#1e1e1e", "#cccccc", "#2a2a2a",
             "#e5e5e5", "#111111", "#1a1a1a", "#808080", "#444444"};
 }
-inline ReportTheme bloomberg() {
-    return {"Bloomberg Terminal",
+inline ReportTheme fincept_terminal() {
+    return {"Fincept Terminal",
             "#ff8c00", "#ff8c00", "#0a0a0a", "#d4d4d4", "#1a0a00",
             "#ff8c00", "#050505", "#0f0f0f", "#888888", "#333300"};
 }
@@ -89,15 +89,15 @@ inline ReportTheme midnight_blue() {
 inline ReportTheme by_name(const QString& name) {
     if (name == "Dark Corporate")
         return dark_corporate();
-    if (name == "Bloomberg Terminal")
-        return bloomberg();
+    if (name == "Fincept Terminal")
+        return fincept_terminal();
     if (name == "Midnight Blue")
         return midnight_blue();
     return light_professional();
 }
 
 inline QStringList all_names() {
-    return {"Light Professional", "Dark Corporate", "Bloomberg Terminal", "Midnight Blue"};
+    return {"Light Professional", "Dark Corporate", "Fincept Terminal", "Midnight Blue"};
 }
 
 } // namespace themes

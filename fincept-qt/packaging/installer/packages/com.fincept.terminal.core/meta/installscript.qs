@@ -30,22 +30,41 @@
 
 function Component()
 {
-    console.log("[Fincept] Component() constructor — isInstaller=" +
-                installer.isInstaller() +
-                " isUninstaller=" + installer.isUninstaller() +
-                " isUpdater=" + installer.isUpdater() +
-                " isPackageManager=" + installer.isPackageManager());
+    try {
+        console.log("[Fincept] Component() constructor — isInstaller=" +
+                    installer.isInstaller() +
+                    " isUninstaller=" + installer.isUninstaller() +
+                    " isUpdater=" + installer.isUpdater() +
+                    " isPackageManager=" + installer.isPackageManager());
 
-    // Connect signals using the 1-arg form. The 2-arg form (thisObj, fn) is
-    // not reliably supported by the QJSEngine that backs QtIFW component
-    // scripts — connections silently no-op on some versions.
-    if (installer.isInstaller()) {
-        installer.installationFinished.connect(onInstallationFinished);
-    }
+        // Pre-register the auto-answer for the data-cleanup confirmation
+        // dialog. Without this, headless invocations (`purge --default-answer`)
+        // deadlock on QMessageBox.question() in onUninstallationStarted —
+        // --default-answer only handles IFW's *own* dialogs, not script-
+        // spawned ones. This is what was causing the bug reported in #240
+        // where `purge` exited 1 with no cleanup.
+        // ID must match the first arg of QMessageBox.question() below.
+        if (typeof QMessageBox !== "undefined" && installer.setMessageBoxAutomaticAnswer) {
+            installer.setMessageBoxAutomaticAnswer(
+                "fincept.uninstall.data", QMessageBox.No);
+        }
 
-    if (installer.isUninstaller()) {
-        installer.uninstallationStarted.connect(onUninstallationStarted);
-        installer.uninstallationFinished.connect(onUninstallationFinished);
+        // Connect signals using the 1-arg form. The 2-arg form (thisObj, fn) is
+        // not reliably supported by the QJSEngine that backs QtIFW component
+        // scripts — connections silently no-op on some versions.
+        if (installer.isInstaller()) {
+            installer.installationFinished.connect(onInstallationFinished);
+        }
+
+        if (installer.isUninstaller()) {
+            installer.uninstallationStarted.connect(onUninstallationStarted);
+            installer.uninstallationFinished.connect(onUninstallationFinished);
+        }
+    } catch (e) {
+        // Never throw out of Component() — IFW treats that as a fatal load
+        // error and aborts before any UI shows (the "GUI flashes and closes"
+        // symptom in #240). Log and continue with defaults.
+        console.log("[Fincept] Component() constructor error: " + e);
     }
 }
 
@@ -111,35 +130,72 @@ function onInstallationFinished()
 
 function onUninstallationStarted()
 {
-    console.log("[Fincept] uninstallationStarted — prompting for user-data removal.");
+    try {
+        console.log("[Fincept] uninstallationStarted.");
 
-    var answer = QMessageBox.question(
-        "fincept.uninstall.data",
-        "Remove Fincept Terminal User Data?",
-        "Do you want to remove all Fincept Terminal user data?\n\n" +
-        "This includes:\n" +
-        "  - Databases (chat history, portfolio, watchlists)\n" +
-        "  - Log files\n" +
-        "  - Downloaded files and cached data\n" +
-        "  - ML models (Whisper, etc.)\n" +
-        "  - Python runtime and virtual environments\n" +
-        "  - Workspaces and profiles\n" +
-        "  - Saved credentials and API keys\n" +
-        "  - Application settings\n\n" +
-        "Choose 'No' to keep your data for a future reinstall.",
-        QMessageBox.Yes | QMessageBox.No,
-        QMessageBox.No
-    );
-
-    if (answer === QMessageBox.Yes) {
-        console.log("[Fincept] User chose Yes — cleaning all user data.");
-        try {
-            cleanUserData();
-        } catch (e) {
-            console.log("[Fincept] cleanUserData threw: " + e);
+        // Per-machine install at C:\Program Files\... requires elevation to
+        // delete files. Without this, the cmd.exe / reg.exe calls below
+        // silently fail and IFW's own RemoveTargetDir step hits ACCESS_DENIED.
+        // gainAdminRights() is a no-op if we're already elevated, and on
+        // non-Windows it just returns. Failure here is non-fatal — log and
+        // continue; some Windows configurations let `cmd /c rmdir` work
+        // unelevated for user-owned trees.
+        if (systemInfo.kernelType === "winnt") {
+            try {
+                installer.gainAdminRights();
+            } catch (e) {
+                console.log("[Fincept] gainAdminRights failed (continuing): " + e);
+            }
         }
-    } else {
-        console.log("[Fincept] User chose No — keeping user data.");
+
+        // Headless invocations (`purge --default-answer`, `--accept-messages`)
+        // skip script-spawned QMessageBox confirmation entirely. The auto-
+        // answer registered in Component() handles IFW's accounting; we just
+        // need to not block here.
+        var headless =
+            (typeof installer.isCommandLineInstance === "function" &&
+                installer.isCommandLineInstance()) ||
+            (typeof gui === "undefined" || gui === null);
+
+        var clean = false;
+        if (headless) {
+            console.log("[Fincept] Headless uninstall — skipping data-cleanup prompt.");
+        } else {
+            var answer = QMessageBox.question(
+                "fincept.uninstall.data",
+                "Remove Fincept Terminal User Data?",
+                "Do you want to remove all Fincept Terminal user data?\n\n" +
+                "This includes:\n" +
+                "  - Databases (chat history, portfolio, watchlists)\n" +
+                "  - Log files\n" +
+                "  - Downloaded files and cached data\n" +
+                "  - ML models (Whisper, etc.)\n" +
+                "  - Python runtime and virtual environments\n" +
+                "  - Workspaces and profiles\n" +
+                "  - Saved credentials and API keys\n" +
+                "  - Application settings\n\n" +
+                "Choose 'No' to keep your data for a future reinstall.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            );
+            clean = (answer === QMessageBox.Yes);
+        }
+
+        if (clean) {
+            console.log("[Fincept] Cleaning user data.");
+            try {
+                cleanUserData();
+            } catch (e) {
+                console.log("[Fincept] cleanUserData threw: " + e);
+            }
+        } else {
+            console.log("[Fincept] Keeping user data.");
+        }
+    } catch (e) {
+        // Never propagate — IFW treats a thrown signal handler as a fatal
+        // uninstall error and exits 1 with no cleanup, which is exactly the
+        // symptom from #240.
+        console.log("[Fincept] onUninstallationStarted error: " + e);
     }
 }
 
@@ -191,14 +247,15 @@ function cleanUserDataWindows()
     runAndLog("reg.exe", ["delete", "HKCU\\Software\\Fincept", "/f"]);
 
     // 5. Windows Credential Manager entries: FinceptTerminal/*
-    //    cmdkey has no wildcard delete. Enumerate via PowerShell and delete each.
-    runAndLog("powershell.exe", [
-        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$list = cmdkey /list 2>$null | Select-String -Pattern 'FinceptTerminal/'; " +
-        "foreach ($line in $list) { " +
-        "  $target = ($line.ToString() -replace '^\\s*Target:\\s*','').Trim(); " +
-        "  if ($target) { cmdkey /delete:$target | Out-Null } " +
-        "}"
+    //    cmdkey has no wildcard delete. Enumerate via a cmd.exe FOR loop —
+    //    we used PowerShell originally but #240 confirmed the maintenance
+    //    tool fails on locked-down Win11 boxes where AppLocker/Defender
+    //    blocks installer-spawned powershell.exe. cmd.exe has no such
+    //    restrictions. The FOR /F parses `cmdkey /list` lines that match
+    //    "Target: FinceptTerminal/..." and deletes each.
+    runAndLog("cmd.exe", ["/c",
+        "for /f \"tokens=1,* delims=:\" %a in ('cmdkey /list 2^>nul ^| findstr /i \"FinceptTerminal/\"') do " +
+        "(for /f \"tokens=*\" %c in (\"%b\") do cmdkey /delete:\"%c\" >nul 2>&1) & exit /b 0"
     ]);
 
     // 6. Temp files — single shell string so wildcards expand inside cmd.
@@ -210,16 +267,17 @@ function cleanUserDataWindows()
         "exit /b 0"]);
 
     // 7. Screenshots saved under %USERPROFILE% by MainWindow "save screenshot"
-    //    with the strict pattern fincept_YYYYMMDD_HHMMSS.png. Only match that
-    //    exact shape so we don't delete unrelated user files.
+    //    with the strict pattern fincept_YYYYMMDD_HHMMSS.png. cmd.exe's `del`
+    //    wildcards aren't strict enough on their own ("fincept_*.png" would
+    //    nuke any user file matching), so we narrow with a FOR loop that
+    //    checks the digit-shape via findstr.
     var userProfile = installer.environmentVariable("USERPROFILE");
     if (userProfile) {
-        runAndLog("powershell.exe", [
-            "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-            "Get-ChildItem -LiteralPath '" + toWin(userProfile) + "' -File " +
-            "-Filter 'fincept_*.png' -ErrorAction SilentlyContinue | " +
-            "Where-Object { $_.Name -match '^fincept_\\d{8}_\\d{6}\\.png$' } | " +
-            "Remove-Item -Force -ErrorAction SilentlyContinue"
+        var up = toWin(userProfile);
+        runAndLog("cmd.exe", ["/c",
+            "for /f \"delims=\" %f in ('dir /b /a-d \"" + up + "\\fincept_*.png\" 2^>nul ^| " +
+            "findstr /r \"^fincept_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9]\\.png$\"') do " +
+            "del /q /f \"" + up + "\\%f\" 2>nul & exit /b 0"
         ]);
     }
 }

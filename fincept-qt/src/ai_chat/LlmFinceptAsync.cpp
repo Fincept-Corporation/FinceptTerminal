@@ -1,10 +1,5 @@
-// LlmFinceptAsync.cpp — Fincept-specific async LLM path.
-//
-// POST /research/llm/async to submit, then poll /research/llm/status/{id}
-// every 3s up to 120s. The submit endpoint takes a flat prompt (not OpenAI
-// messages), so we synthesise system + tool catalog + history into a single
-// string here. Follow-ups after tool execution use the sync /research/chat
-// endpoint via try_extract_and_execute_text_tool_calls.
+// Fincept async LLM path: POST /research/llm/async then poll status every 3s up to 120s.
+// Submit takes a flat prompt, so system + tool catalog + history are flattened here.
 
 #include "ai_chat/LlmService.h"
 
@@ -26,20 +21,11 @@
 
 namespace fincept::ai_chat {
 
-namespace { constexpr const char* TAG = "LlmService"; }
+namespace { constexpr const char* kFinceptAsyncTag = "LlmService"; }
 
-// Build a compact tool catalog string for injection into the system prompt.
-// This allows models that don't support structured tool_calls to still emit
-// text-based tool invocations that try_extract_and_execute_text_tool_calls
-// can detect and execute.
-//
-// Two modes:
-//   • Tool RAG ON + default filter: emit only the Tier-0 tools + explicit
-//     instructions to use tool.list for everything else. Same disclosure
-//     model as structured providers — keeps the catalog small and forces
-//     deliberate discovery.
-//   • Tool RAG OFF or explicit filter: legacy behaviour — list up to 60
-//     filtered tools inline.
+/// Tool catalog injected into the system prompt for models without structured tool_calls.
+/// RAG mode (default filter): Tier-0 tools only + tool.list discovery hint.
+/// Otherwise: up to 60 filtered tools inline.
 static QString build_tool_catalog_for_prompt(const mcp::ToolFilter& filter) {
     auto all_tools = mcp::McpService::instance().get_all_tools(filter);
     if (all_tools.empty())
@@ -60,8 +46,7 @@ static QString build_tool_catalog_for_prompt(const mcp::ToolFilter& filter) {
     catalog += "<tool_call>{\"name\": \"TOOL_NAME\", \"arguments\": {\"param\": \"value\"}}</tool_call>\n\n";
 
     if (use_rag) {
-        // Mirror McpService::tier_0_tool_names() (kept in sync manually — small
-        // list, low churn).
+        // Mirrors McpService::tier_0_tool_names() — kept in sync manually.
         static const QSet<QString> kTier0 = {
             "tool.list", "tool.describe", "navigate_to_tab", "list_tabs",
             "get_current_tab", "get_auth_status",
@@ -84,7 +69,6 @@ static QString build_tool_catalog_for_prompt(const mcp::ToolFilter& filter) {
         return catalog;
     }
 
-    // ── Legacy mode ──
     catalog += "Available tools:\n";
     int count = 0;
     for (const auto& tool : all_tools) {
@@ -111,12 +95,11 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
                                               const std::vector<ConversationMessage>& history) {
     LlmResponse resp;
 
-    // Build prompt string for the async endpoint (it takes a plain prompt, not messages)
+    // Endpoint takes a plain prompt, not OpenAI messages.
     QString prompt;
     if (!system_prompt_.isEmpty())
         prompt += system_prompt_ + "\n\n";
 
-    // Inject tool catalog so the model can emit text-based tool calls
     if (detail::effective_tools_enabled(tools_enabled_)) {
         QString tool_catalog = build_tool_catalog_for_prompt(detail::apply_request_policy(tool_filter_));
         if (!tool_catalog.isEmpty())
@@ -134,13 +117,12 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
     QJsonObject submit_body;
     submit_body["prompt"]     = prompt;
     submit_body["max_tokens"] = resolved_max_tokens();
-    // Temperature intentionally omitted — Fincept backend uses its own default.
 
     auto hdr = get_headers();
     const QString async_url   = "https://api.fincept.in/research/llm/async";
     const QString status_base = "https://api.fincept.in/research/llm/status/";
 
-    LOG_INFO(TAG, QString("Fincept async: submitting to %1 (api_key=%2, prompt_len=%3)")
+    LOG_INFO(kFinceptAsyncTag, QString("Fincept async: submitting to %1 (api_key=%2, prompt_len=%3)")
                       .arg(async_url)
                       .arg(api_key_.isEmpty() ? "EMPTY" : api_key_.left(12) + "...")
                       .arg(prompt.length()));
@@ -149,7 +131,7 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
     auto submit = eventloop_request("POST", async_url, json_data, hdr, 30000);
     if (!submit.success) {
         resp.error = "Fincept async submit failed: " + submit.error;
-        LOG_ERROR(TAG, resp.error);
+        LOG_ERROR(kFinceptAsyncTag, resp.error);
         return resp;
     }
 
@@ -159,7 +141,7 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
         return resp;
     }
 
-    // Response can nest task_id at top level or inside data
+    // task_id may be top-level or under data.
     QJsonObject sj = submit_doc.object();
     QString task_id = sj["task_id"].toString();
     if (task_id.isEmpty())
@@ -168,9 +150,8 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
         resp.error = "Fincept async: no task_id in submit response";
         return resp;
     }
-    LOG_INFO(TAG, "Fincept async task_id: " + task_id);
+    LOG_INFO(kFinceptAsyncTag, "Fincept async task_id: " + task_id);
 
-    // Poll every 3 seconds, up to 120 seconds total
     const QString poll_url = status_base + task_id;
     constexpr int MAX_POLLS = 40;
     for (int i = 0; i < MAX_POLLS; ++i) {
@@ -178,7 +159,7 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
 
         auto poll = eventloop_request("GET", poll_url, {}, hdr, 15000);
         if (!poll.success) {
-            LOG_WARN(TAG, "Fincept async poll failed: " + poll.error);
+            LOG_WARN(kFinceptAsyncTag, "Fincept async poll failed: " + poll.error);
             continue;
         }
 
@@ -192,16 +173,15 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
         if (status.isEmpty())
             status = data_obj["status"].toString();
 
-        LOG_INFO(TAG, QString("Fincept async poll %1 status=%2").arg(i + 1).arg(status));
+        LOG_INFO(kFinceptAsyncTag, QString("Fincept async poll %1 status=%2").arg(i + 1).arg(status));
 
         if (status == "completed") {
-            // data.data.response
             QString response = data_obj["data"].toObject()["response"].toString();
             if (response.isEmpty())
                 response = data_obj["response"].toString();
             if (response.isEmpty()) {
                 resp.error = "Fincept async completed but response is empty";
-                LOG_WARN(TAG, "Fincept async task completed with empty response field");
+                LOG_WARN(kFinceptAsyncTag, "Fincept async task completed with empty response field");
                 return resp;
             }
             resp.content = response;
@@ -214,17 +194,15 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
                 resp.total_tokens      = usage["total_tokens"].toInt();
             }
 
-            // Check for text-based tool calls in the response.
-            // The model may have emitted <tool_call>...</tool_call> blocks.
+            // Detect <tool_call>...</tool_call> blocks the model may have emitted; follow up via sync /research/chat.
             if (!resp.content.isEmpty()) {
-                LOG_INFO(TAG, "Fincept: checking response for text-based tool calls");
-                // Use the sync /research/chat endpoint for follow-up after tool execution
+                LOG_INFO(kFinceptAsyncTag, "Fincept: checking response for text-based tool calls");
                 QString followup_url = get_endpoint_url();
                 auto followup_hdr    = get_headers();
                 auto tool_result =
                     try_extract_and_execute_text_tool_calls(resp.content, user_message, followup_url, followup_hdr);
                 if (tool_result.has_value()) {
-                    LOG_INFO(TAG, "Fincept: text tool calls detected and executed");
+                    LOG_INFO(kFinceptAsyncTag, "Fincept: text tool calls detected and executed");
                     return tool_result.value();
                 }
             }

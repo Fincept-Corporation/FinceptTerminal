@@ -23,11 +23,8 @@ QNetworkRequest HttpClient::build_request(const QString& url) const {
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     req.setHeader(QNetworkRequest::UserAgentHeader, "FinceptTerminal/4.0");
 
-    // Only attach Fincept auth headers when the request targets the configured
-    // Fincept API host. Notification providers (Slack, Discord, Telegram,
-    // PagerDuty, user webhooks, …) and other services pass absolute third-party
-    // URLs through this same singleton — without this guard their servers would
-    // receive the user's X-API-Key and X-Session-Token in every call.
+    // Only attach auth on same-host requests — third-party absolute URLs (Slack/Discord/webhooks)
+    // share this singleton and must NOT receive X-API-Key / X-Session-Token.
     const bool same_host = is_relative || [&]() {
         const QUrl base(base_url_);
         return !base.host().isEmpty() && qurl.host().compare(base.host(), Qt::CaseInsensitive) == 0;
@@ -44,8 +41,10 @@ QNetworkRequest HttpClient::build_request(const QString& url) const {
     return req;
 }
 
-void HttpClient::handle_reply(QNetworkReply* reply, JsonCallback callback) {
-    connect(reply, &QNetworkReply::finished, this, [reply, cb = std::move(callback)]() {
+void HttpClient::handle_reply(QNetworkReply* reply, JsonCallback callback, const QObject* context) {
+    // Connect to caller-provided context so caller destruction auto-disconnects before the lambda fires.
+    const QObject* receiver = context ? context : static_cast<const QObject*>(this);
+    connect(reply, &QNetworkReply::finished, receiver, [reply, cb = std::move(callback)]() {
         reply->deleteLater();
 
         QByteArray data = reply->readAll();
@@ -55,27 +54,23 @@ void HttpClient::handle_reply(QNetworkReply* reply, JsonCallback callback) {
         QJsonDocument doc = QJsonDocument::fromJson(data, &parse_err);
 
         if (reply->error() != QNetworkReply::NoError) {
-            // Strip query string to avoid logging embedded tokens/keys
             QUrl sanitized = reply->url();
-            sanitized.setQuery(QString{});
+            sanitized.setQuery(QString{}); // strip query to keep tokens out of logs
             LOG_WARN("HTTP",
                      QString("HTTP %1: %2 — %3").arg(status).arg(sanitized.toString()).arg(reply->errorString()));
 
-            // 401/403 must always be returned as err() so session expiry detection
-            // in AuthApi/SessionGuard works correctly — even when the body is valid JSON.
+            // 401/403 must always be err() — session-expiry detection in AuthApi/SessionGuard depends on it.
             if (status == 401 || status == 403) {
                 cb(Result<QJsonDocument>::err(QString("HTTP_%1").arg(status).toStdString()));
                 return;
             }
 
-            // For other HTTP errors with a parseable JSON body, pass it through
-            // so callers (AuthApi) can extract server-side error messages.
+            // Pass through parseable JSON bodies so AuthApi can extract server error messages.
             if (!data.isEmpty() && parse_err.error == QJsonParseError::NoError && doc.isObject()) {
                 cb(Result<QJsonDocument>::ok(doc));
                 return;
             }
 
-            // No parseable body — return sentinel so callers map status to fallback message
             cb(Result<QJsonDocument>::err(QString("HTTP_%1").arg(status).toStdString()));
             return;
         }
@@ -88,30 +83,30 @@ void HttpClient::handle_reply(QNetworkReply* reply, JsonCallback callback) {
     });
 }
 
-void HttpClient::get(const QString& url, JsonCallback callback) {
+void HttpClient::get(const QString& url, JsonCallback callback, const QObject* context) {
     LOG_DEBUG("HTTP", "GET " + url);
     auto* reply = nam_->get(build_request(url));
-    handle_reply(reply, std::move(callback));
+    handle_reply(reply, std::move(callback), context);
 }
 
-void HttpClient::post(const QString& url, const QJsonObject& body, JsonCallback callback) {
+void HttpClient::post(const QString& url, const QJsonObject& body, JsonCallback callback, const QObject* context) {
     LOG_DEBUG("HTTP", "POST " + url);
     QJsonDocument doc(body);
     auto* reply = nam_->post(build_request(url), doc.toJson());
-    handle_reply(reply, std::move(callback));
+    handle_reply(reply, std::move(callback), context);
 }
 
-void HttpClient::put(const QString& url, const QJsonObject& body, JsonCallback callback) {
+void HttpClient::put(const QString& url, const QJsonObject& body, JsonCallback callback, const QObject* context) {
     LOG_DEBUG("HTTP", "PUT " + url);
     QJsonDocument doc(body);
     auto* reply = nam_->put(build_request(url), doc.toJson());
-    handle_reply(reply, std::move(callback));
+    handle_reply(reply, std::move(callback), context);
 }
 
-void HttpClient::del(const QString& url, JsonCallback callback) {
+void HttpClient::del(const QString& url, JsonCallback callback, const QObject* context) {
     LOG_DEBUG("HTTP", "DELETE " + url);
     auto* reply = nam_->deleteResource(build_request(url));
-    handle_reply(reply, std::move(callback));
+    handle_reply(reply, std::move(callback), context);
 }
 
 void HttpClient::set_auth_header(const QString& api_key) {

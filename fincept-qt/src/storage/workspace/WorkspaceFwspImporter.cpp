@@ -21,7 +21,7 @@ constexpr const char* kFlagKey = "fwsp_import_done";
 } // namespace
 
 void WorkspaceFwspImporter::run_once_if_needed() {
-    auto done = LayoutCatalog::instance().meta(QStringLiteral(kFlagKey));
+    auto done = LayoutCatalog::instance().meta(QString::fromLatin1(kFlagKey));
     if (done.is_ok() && done.value() == QStringLiteral("1")) {
         // Already imported — fast path.
         return;
@@ -31,7 +31,7 @@ void WorkspaceFwspImporter::run_once_if_needed() {
     QDir d(dir_path);
     if (!d.exists()) {
         // Nothing to import; mark done so we don't keep checking.
-        LayoutCatalog::instance().set_meta(QStringLiteral(kFlagKey), QStringLiteral("1"));
+        LayoutCatalog::instance().set_meta(QString::fromLatin1(kFlagKey), QStringLiteral("1"));
         return;
     }
 
@@ -80,7 +80,7 @@ void WorkspaceFwspImporter::run_once_if_needed() {
             ++skipped;
     }
 
-    LayoutCatalog::instance().set_meta(QStringLiteral(kFlagKey), QStringLiteral("1"));
+    LayoutCatalog::instance().set_meta(QString::fromLatin1(kFlagKey), QStringLiteral("1"));
     LOG_INFO(kTag, QString("Imported %1 legacy workspace name(s); %2 skipped")
                        .arg(imported).arg(skipped));
 }

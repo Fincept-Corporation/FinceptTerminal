@@ -81,7 +81,7 @@ void DBnomicsService::fetch_providers() {
             kProviderCacheSec, "dbnomics");
         LOG_INFO("DBnomicsService", QString("Loaded %1 providers").arg(out.size()));
         emit providers_loaded(out);
-    });
+    }, this);
 }
 
 void DBnomicsService::fetch_datasets(const QString& provider_code, int offset) {
@@ -146,7 +146,7 @@ void DBnomicsService::fetch_datasets(const QString& provider_code, int offset) {
         }
         LOG_INFO("DBnomicsService", QString("Loaded %1 datasets (total=%2)").arg(out.size()).arg(total));
         emit datasets_loaded(out, page, append);
-    });
+    }, this);
 }
 
 void DBnomicsService::fetch_series(const QString& provider_code, const QString& dataset_code, const QString& query,
@@ -221,7 +221,8 @@ void DBnomicsService::fetch_series(const QString& provider_code, const QString& 
             }
             LOG_INFO("DBnomicsService", QString("Loaded %1 series (total=%2)").arg(out.size()).arg(total));
             emit series_loaded(out, page, append);
-        });
+        },
+        this);
 }
 
 void DBnomicsService::fetch_observations(const QString& provider_code, const QString& dataset_code,
@@ -273,7 +274,7 @@ void DBnomicsService::fetch_observations(const QString& provider_code, const QSt
             const QString topic = hub_topic(provider_code, dataset_code, series_code);
             fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(dp));
         }
-    });
+    }, this);
 }
 
 void DBnomicsService::global_search(const QString& query, int offset) {
@@ -303,7 +304,7 @@ void DBnomicsService::global_search(const QString& query, int offset) {
         }
         DbnPagination page{offset, 20, total};
         emit search_results_loaded(out, page, offset > 0);
-    });
+    }, this);
 }
 
 void DBnomicsService::schedule_series_search(const QString& prov, const QString& ds, const QString& query) {

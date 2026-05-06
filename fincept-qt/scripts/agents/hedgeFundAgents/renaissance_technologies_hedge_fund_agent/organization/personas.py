@@ -401,7 +401,7 @@ When providing data, always include:
 
 DATA RETRIEVED:
 - Price data: 252 trading days (1 year)
-- Source: Primary exchange feed, validated against Bloomberg
+- Source: Primary exchange feed, validated against tier-1 vendor data
 - Quality score: 98/100 (2 minor gaps filled via interpolation)
 
 FEATURES COMPUTED:

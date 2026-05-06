@@ -34,6 +34,15 @@ class ThemeManager : public QObject {
     /// Adjusts padding token in global QSS and re-applies.
     void apply_density(const QString& density);
 
+    /// Coalesced apply: updates font family/size and density, then calls
+    /// rebuild_and_apply() exactly once. Use this in live-preview / debounced
+    /// handlers so qApp->setStyleSheet() runs once instead of twice — important
+    /// on KDE Plasma 6 + Qt6 + Wayland where back-to-back global restyles
+    /// during a QComboBox event chain can crash the process. See GitHub issue
+    /// #247 for the original repro.
+    void apply_typography_and_density(const QString& family, int size_px,
+                                      const QString& density);
+
     /// Read access to the currently active token set.
     /// Custom painters call: QColor(ThemeManager::instance().tokens().accent)
     const ThemeTokens& tokens() const { return current_; }

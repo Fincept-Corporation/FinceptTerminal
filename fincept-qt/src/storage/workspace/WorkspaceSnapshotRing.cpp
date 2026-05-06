@@ -147,6 +147,20 @@ Result<void> WorkspaceSnapshotRing::erase(qint64 snapshot_id) {
     return Result<void>::ok();
 }
 
+Result<void> WorkspaceSnapshotRing::rename(qint64 snapshot_id, const QString& name) {
+    if (!db_ || !db_->is_open())
+        return Result<void>::err("WorkspaceDb not open");
+    // Empty name → store NULL so the dialog falls back to the auto-generated
+    // timestamp label. Trimming protects against whitespace-only renames.
+    const QString trimmed = name.trimmed();
+    QVariant value = trimmed.isEmpty() ? QVariant() : QVariant(trimmed);
+    auto r = db_->execute("UPDATE workspace_snapshot SET name = ? WHERE snapshot_id = ?",
+                          {value, snapshot_id});
+    if (r.is_err())
+        return Result<void>::err(r.error());
+    return Result<void>::ok();
+}
+
 Result<void> WorkspaceSnapshotRing::trim_auto() {
     if (!db_ || !db_->is_open())
         return Result<void>::err("WorkspaceDb not open");

@@ -112,6 +112,8 @@ void CryptoTickerWidget::build_rows() {
 void CryptoTickerWidget::hub_resubscribe() {
     auto& hub = datahub::DataHub::instance();
     hub.unsubscribe(this);
+    received_.clear();
+    set_loading_progress(received_.size(), pairs_.size());
     for (const auto& pair : pairs_) {
         const QString topic =
             QStringLiteral("ws:") + exchange_ + QStringLiteral(":ticker:") + pair;
@@ -153,7 +155,8 @@ void CryptoTickerWidget::on_ticker(const QString& pair, const fincept::trading::
     const QColor col = t.percentage >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
     r.change->setStyleSheet(
         QString("color:%1;font-size:11px;font-weight:600;background:transparent;").arg(col.name()));
-    set_loading(false);
+    received_.insert(pair);
+    set_loading_progress(received_.size(), pairs_.size());
 }
 
 QDialog* CryptoTickerWidget::make_config_dialog(QWidget* parent) {

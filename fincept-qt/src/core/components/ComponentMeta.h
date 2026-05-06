@@ -6,13 +6,8 @@
 
 namespace fincept {
 
-/// Metadata describing a single "component" (screen) that can be discovered,
-/// browsed, and spawned via the Component Browser (Phase 6 — Bloomberg
-/// Launchpad Component Catalogue equivalent).
-///
-/// Populated from resources/component_catalog.json at startup. `popularity`
-/// is *not* stored in the catalogue file — it's read live from
-/// PopularityTracker at query time, so sort order reflects actual usage.
+/// One screen's catalogue entry. Loaded from resources/component_catalog.json.
+/// `popularity` is filled live by ComponentCatalog from PopularityTracker, not stored on disk.
 struct ComponentMeta {
     QString id;           // matches DockScreenRouter screen id
     QString title;        // human-readable, e.g. "Equity Trading"

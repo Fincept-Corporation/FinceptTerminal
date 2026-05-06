@@ -9,8 +9,7 @@ namespace fincept::ui {
 
 namespace {
 
-// Tokenise respecting double-quoted strings: `layout switch "Earnings Day"`
-// → ["layout", "switch", "Earnings Day"].
+/// Splits on whitespace but preserves double-quoted strings as single tokens.
 QStringList tokenise(const QString& s) {
     QStringList out;
     QString cur;
@@ -49,29 +48,21 @@ ParsedCommand CommandParser::parse(const QString& input) {
         return p;
     }
 
-    // Function-code precedence first. A bare uppercase token (with optional
-    // dots/underscores/digits) is more likely a Bloomberg-style code or a
-    // ticker than a verb. Verbs typically start lowercase or have a space.
     auto fc = try_function_code_(trimmed);
     if (fc.kind != ParsedCommand::Kind::Unknown && fc.kind != ParsedCommand::Kind::Empty)
         return fc;
 
-    // Else fall through to verb-object.
     return try_verb_object_(trimmed);
 }
 
 ParsedCommand CommandParser::try_function_code_(const QString& input) {
-    // Match: alphanumeric/digit-led single token, no spaces, no dots either
-    // (a dotted form like "layout.switch" is the action-id form, handled
-    // by verb-object). Examples that match: AAPL, MSFT, 1, 25, WEI.
+    // Single token without dots — dotted forms go through verb-object.
     static const QRegularExpression rx(
         R"(^[A-Z0-9][A-Z0-9_]*$)",
         QRegularExpression::CaseInsensitiveOption);
     if (!rx.match(input).hasMatch())
         return ParsedCommand{ParsedCommand::Kind::Unknown, {}, {}, input, {}};
 
-    // Two paths — try ActionRegistry first (for registered numeric/short
-    // codes if any), else treat as a symbol publish.
     const QString upper = input.toUpper();
     if (auto* action = ActionRegistry::instance().find(upper.toLower())) {
         ParsedCommand p;
@@ -80,8 +71,6 @@ ParsedCommand CommandParser::try_function_code_(const QString& input) {
         return p;
     }
 
-    // Treat as symbol. Caller maps to link.publish_to_group with the active
-    // (or first enabled) group.
     ParsedCommand p;
     p.kind = ParsedCommand::Kind::Symbol;
     p.raw_remainder = upper;
@@ -95,9 +84,7 @@ ParsedCommand CommandParser::try_verb_object_(const QString& input) {
         return ParsedCommand{ParsedCommand::Kind::Empty, {}, {}, {}, {}};
     }
 
-    // Greedy match: try the longest prefix as a dotted action id.
-    // "layout switch foo" → try "layout.switch.foo", "layout.switch", "layout".
-    // First registered match wins.
+    // Greedy: longest prefix wins. "layout switch foo" → tries "layout.switch.foo", then "layout.switch", then "layout".
     auto& reg = ActionRegistry::instance();
     for (int n = tokens.size(); n > 0; --n) {
         QStringList prefix = tokens.mid(0, n);
@@ -113,8 +100,6 @@ ParsedCommand CommandParser::try_verb_object_(const QString& input) {
         }
     }
 
-    // No prefix matched — also try matching aliases. Cheaper to walk all
-    // actions once with their full-string display + alias forms.
     for (const QString& id : reg.all_ids()) {
         const ActionDef* def = reg.find(id);
         if (!def) continue;
@@ -145,8 +130,7 @@ QVariantMap CommandParser::bind_positional_(const QList<ParameterSlot>& slot_lis
         const ParameterSlot& slot = slot_list.at(i);
         out.insert(slot.name, positionals.at(i));
     }
-    // Defaults for required slots that weren't supplied. Caller's predicate
-    // / handler should detect missing required args.
+    // Apply slot defaults. Handler validates required slots.
     for (int i = positionals.size(); i < slot_list.size(); ++i) {
         const ParameterSlot& slot = slot_list.at(i);
         if (slot.default_value.isValid())

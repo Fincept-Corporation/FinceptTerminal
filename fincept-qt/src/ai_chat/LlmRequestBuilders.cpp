@@ -1,6 +1,4 @@
-// LlmRequestBuilders.cpp — per-provider JSON request shape builders.
-// Each method translates the conversation + active config into the wire
-// format the provider's chat-completion endpoint expects.
+// Per-provider chat-completion request shape builders.
 
 #include "ai_chat/LlmService.h"
 
@@ -15,17 +13,15 @@
 
 namespace fincept::ai_chat {
 
-namespace { constexpr const char* TAG = "LlmService"; }
+namespace { constexpr const char* kRequestBuildersTag = "LlmService"; }
 
 QJsonObject LlmService::build_openai_request(const QString& user_message,
                                              const std::vector<ConversationMessage>& history, bool stream,
                                              bool with_tools) {
     const QString model_lower = model_.toLower();
 
-    // deepseek-reasoner doesn't accept `tools`.
+    // Models that reject `tools`: deepseek-reasoner, groq whisper-* (audio), groq llama-guard-* (classifier).
     const bool is_ds_reasoner = (provider_ == "deepseek" && model_lower.contains("reasoner"));
-
-    // Groq's whisper-* (audio) and llama-guard-* (safety classifier) do not accept tools.
     const bool groq_no_tools =
         (provider_ == "groq" && (model_lower.startsWith("whisper-") || model_lower.contains("llama-guard")));
 
@@ -39,10 +35,7 @@ QJsonObject LlmService::build_openai_request(const QString& user_message,
     QJsonObject req;
     req["model"]    = model_;
     req["messages"] = messages;
-    // Temperature intentionally omitted — each provider uses its own default.
-    // OpenAI deprecated max_tokens; gpt-5 / o-series require max_completion_tokens.
-    // xAI also prefers max_completion_tokens. Other OpenAI-compatible providers
-    // still expect max_tokens.
+    // Temperature omitted — each provider's default. OpenAI/xAI use max_completion_tokens; others max_tokens.
     const int mx = resolved_max_tokens();
     if (provider_ == "openai" || provider_ == "xai")
         req["max_completion_tokens"] = mx;
@@ -50,29 +43,24 @@ QJsonObject LlmService::build_openai_request(const QString& user_message,
         req["max_tokens"] = mx;
     if (stream) {
         req["stream"] = true;
-        // Streamed OpenAI / xAI responses omit usage unless we opt in
+        // OpenAI/xAI omit usage on streamed responses unless we opt in.
         if (provider_ == "openai" || provider_ == "xai")
             req["stream_options"] = QJsonObject{{"include_usage", true}};
     }
 
-    // Send tools on BOTH streaming and non-streaming requests. The streaming
-    // path detects a tool-call response (finish_reason="tool_calls" or
-    // delta.tool_calls) and falls back to non-streaming do_request, which
-    // executes the tools and follows up. Without sending tools on stream,
-    // the model has no idea they exist and answers from training data —
-    // which silently breaks live tool calling for OpenAI/Kimi/Groq/etc.
-    // deepseek-reasoner rejects tools entirely; some Groq models also.
+    // Send tools on streaming requests too — the stream path detects tool_calls and falls back
+    // to do_request to execute. Otherwise the model answers from training and tool calling silently breaks.
     const bool tools_effectively_on = detail::effective_tools_enabled(tools_enabled_);
     if (with_tools && tools_effectively_on && !is_ds_reasoner && !groq_no_tools) {
         QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(detail::apply_request_policy(tool_filter_));
         if (!tools.isEmpty())
             req["tools"] = tools;
-        LOG_INFO(TAG, QString("OpenAI request: stream=%1 provider=%2 tools=%3 (count=%4)")
+        LOG_INFO(kRequestBuildersTag, QString("OpenAI request: stream=%1 provider=%2 tools=%3 (count=%4)")
                           .arg(stream ? "true" : "false", provider_,
                                tools.isEmpty() ? "none" : "attached")
                           .arg(tools.size()));
     } else {
-        LOG_WARN(TAG, QString("OpenAI request: stream=%1 provider=%2 NO TOOLS — "
+        LOG_WARN(kRequestBuildersTag, QString("OpenAI request: stream=%1 provider=%2 NO TOOLS — "
                               "with_tools=%3 tools_effectively_on=%4 ds_reasoner=%5 groq_no_tools=%6")
                           .arg(stream ? "true" : "false", provider_)
                           .arg(with_tools ? "true" : "false")
@@ -96,17 +84,12 @@ QJsonObject LlmService::build_anthropic_request(const QString& user_message,
     req["model"]      = model_;
     req["messages"]   = messages;
     req["max_tokens"] = resolved_max_tokens();
-    // Temperature intentionally omitted — Anthropic defaults to 1.0.
     if (!system_prompt_.isEmpty())
         req["system"] = system_prompt_;
     if (stream)
         req["stream"] = true;
 
-    // Anthropic tool format: array of {name, description, input_schema}
-    // (no "type":"function" wrapper like OpenAI). Tools are sent for both
-    // streaming and non-streaming requests so the model can request a
-    // tool_use even mid-stream — the streaming code path detects this and
-    // falls back to do_request to execute and follow up.
+    // Anthropic tools: bare {name, description, input_schema} — no OpenAI-style "type":"function" wrapper.
     if (detail::effective_tools_enabled(tools_enabled_)) {
         QJsonArray ant_tools;
         auto all_tools = mcp::McpService::instance().get_all_tools(detail::apply_request_policy(tool_filter_));
@@ -138,7 +121,6 @@ QJsonObject LlmService::build_gemini_request(const QString& user_message,
     contents.append(QJsonObject{{"role", "user"}, {"parts", QJsonArray{QJsonObject{{"text", user_message}}}}});
 
     QJsonObject gen_cfg;
-    // Temperature intentionally omitted — Gemini defaults to 1.0.
     gen_cfg["maxOutputTokens"] = resolved_max_tokens();
 
     QJsonObject req;
@@ -148,7 +130,7 @@ QJsonObject LlmService::build_gemini_request(const QString& user_message,
         req["systemInstruction"] = QJsonObject{{"parts", QJsonArray{QJsonObject{{"text", system_prompt_}}}}};
     }
 
-    // Gemini tool format: tools[{functionDeclarations:[{name, description, parameters}]}]
+    // Gemini tools: tools[{functionDeclarations:[{name, description, parameters}]}].
     auto all_tools = detail::effective_tools_enabled(tools_enabled_)
                          ? mcp::McpService::instance().get_all_tools(detail::apply_request_policy(tool_filter_))
                          : std::vector<mcp::UnifiedTool>{};
@@ -172,7 +154,7 @@ QJsonObject LlmService::build_gemini_request(const QString& user_message,
 
 QJsonObject LlmService::build_fincept_request(const QString& user_message,
                                               const std::vector<ConversationMessage>& history, bool with_tools) {
-    // Fincept /research/chat uses the OpenAI messages array format
+    // /research/chat uses OpenAI messages format.
     QJsonArray messages;
     if (!system_prompt_.isEmpty())
         messages.append(QJsonObject{{"role", "system"}, {"content", system_prompt_}});
@@ -182,11 +164,11 @@ QJsonObject LlmService::build_fincept_request(const QString& user_message,
 
     QJsonObject req;
     req["messages"] = messages;
-    // Pass model if set to a real model name (not the legacy placeholder)
+    // Skip the legacy "fincept-llm" placeholder.
     if (!model_.isEmpty() && model_ != "fincept-llm")
         req["model"] = model_;
 
-    Q_UNUSED(with_tools) // Fincept /research/chat does not support tools yet
+    Q_UNUSED(with_tools) // /research/chat does not support tools yet.
     return req;
 }
 

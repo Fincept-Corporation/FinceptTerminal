@@ -114,7 +114,7 @@ KeyConfigManager::KeyConfigManager() {
     defaults_[KeyAction::ToggleAlwaysOnTop] = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T);
 
     // Phase 12 — Manual lock. Ctrl+L is the most common "lock" binding across
-    // terminal / Bloomberg workflows. Users can rebind in Settings.
+    // terminal / Fincept workflows. Users can rebind in Settings.
     defaults_[KeyAction::LockNow] = QKeySequence(Qt::CTRL | Qt::Key_L);
 
     // Create QActions with default sequences

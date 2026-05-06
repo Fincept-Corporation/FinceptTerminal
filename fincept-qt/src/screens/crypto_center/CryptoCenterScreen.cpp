@@ -284,7 +284,7 @@ void CryptoCenterScreen::apply_theme() {
         "  letter-spacing:1.5px; padding:0 16px; }"
         "QPushButton#cryptoCenterPrimaryButton:hover { background:%4; color:%1; }"
 
-        // Tab bar — Bloomberg-flat with object-name styling (Phase 1.5 §1.5.3)
+        // Tab bar — Fincept-flat with object-name styling (Phase 1.5 §1.5.3)
         "QTabWidget#cryptoCenterTabs::pane { background:%1; border:none;"
         "  border-top:1px solid %3; }"
         "QTabWidget#cryptoCenterTabs QTabBar::tab { background:%2; color:%8;"

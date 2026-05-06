@@ -2,7 +2,7 @@
 // ExchangeSessionManager — registry of live ExchangeSession objects.
 //
 // Lazy-creates one ExchangeSession per exchange id on demand. Sessions stay
-// warm for the application lifetime (Bloomberg-style) — switching exchanges
+// warm for the application lifetime (Fincept-style) — switching exchanges
 // does not tear down the previous session's WS stream. This buys sub-500ms
 // exchange switches because the daemon + WS handshake were already paid.
 //

@@ -174,7 +174,7 @@ class WindowFrame : public QMainWindow {
     void toggle_debug_overlay();
 
     /// Phase 9: toggle the per-frame CommandBar (line-edit at the bottom).
-    /// Lazily constructed on first invocation. Bloomberg-style "just type"
+    /// Lazily constructed on first invocation. Fincept-style "just type"
     /// surface that reads ActionRegistry and CommandParser.
     void toggle_command_bar();
 

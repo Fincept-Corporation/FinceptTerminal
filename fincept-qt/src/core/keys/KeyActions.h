@@ -1,36 +1,33 @@
-﻿// src/core/keys/KeyActions.h
-#pragma once
+﻿#pragma once
 
 namespace fincept {
 
 enum class KeyAction {
-    // Global (WindowFrame)
+    // Global
     Refresh,
     ToggleChat,
     FocusMode,
     Fullscreen,
     Screenshot,
 
-    // Navigation (CommandBar)
+    // CommandBar navigation
     NavNext,
     NavPrev,
     NavAccept,
     NavEscape,
 
-    // News Screen
+    // News
     NewsNext,
     NewsPrev,
     NewsOpen,
     NewsClose,
 
-    // Code Editor
+    // Code editor
     RunCell,
     RunAndNext,
     RenameCell,
 
-    // Window / Panel Navigation (Phase 3)
-    // Focus a specific WindowFrame by its 1-based ordinal across open windows
-    // (Ctrl+1..9 by default). Ctrl+1 always targets window_id = 0.
+    // Focus WindowFrame N (Ctrl+1..9; Ctrl+1 = window_id 0).
     FocusWindow1,
     FocusWindow2,
     FocusWindow3,
@@ -41,18 +38,15 @@ enum class KeyAction {
     FocusWindow8,
     FocusWindow9,
 
-    // Cycle active dock widget inside the focused WindowFrame.
     CyclePanelsForward,
     CyclePanelsBack,
 
-    // Cycle focus between WindowFrame instances (Bloomberg PANEL key).
     CycleWindowsForward,
     CycleWindowsBack,
 
-    // Spawn a new WindowFrame, placed on the next available monitor.
     NewWindowNextMonitor,
 
-    // Move the current WindowFrame to monitor N (Ctrl+Shift+1..9).
+    // Move WindowFrame to monitor N (Ctrl+Shift+1..9).
     MoveWindowToMonitor1,
     MoveWindowToMonitor2,
     MoveWindowToMonitor3,
@@ -63,14 +57,10 @@ enum class KeyAction {
     MoveWindowToMonitor8,
     MoveWindowToMonitor9,
 
-    // Phase 6 — Component Browser
     BrowseComponents,
-
-    // Phase 11 — Always-on-top toggle on the focused window.
     ToggleAlwaysOnTop,
 
-    // Phase 12 — Manual lock. Immediately shows the PIN-unlock screen
-    // without waiting for inactivity. Default binding: Ctrl+L.
+    /// Manual lock — bypasses inactivity timer. Default Ctrl+L.
     LockNow,
 };
 

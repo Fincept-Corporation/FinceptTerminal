@@ -182,13 +182,14 @@ void MarketSentimentWidget::refresh_data() {
 
 void MarketSentimentWidget::hub_subscribe_all() {
     auto& hub = datahub::DataHub::instance();
+    set_loading_progress(row_cache_.size(), kSentimentSymbols.size());
     for (const auto& sym : kSentimentSymbols) {
         const QString topic = QStringLiteral("market:quote:") + sym;
         hub.subscribe(this, topic, [this, sym](const QVariant& v) {
             if (!v.canConvert<services::QuoteData>())
                 return;
             row_cache_.insert(sym, v.value<services::QuoteData>());
-            set_loading(false);
+            set_loading_progress(row_cache_.size(), kSentimentSymbols.size());
             rebuild_from_cache();
         });
     }

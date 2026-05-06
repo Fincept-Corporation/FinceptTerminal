@@ -59,7 +59,7 @@ class FnoScreen : public QWidget,
   private slots:
     void on_tab_clicked(int index);
 
-  private:
+  public:
     enum SubTab : int {
         TabChain = 0,
         TabBuilder = 1,
@@ -70,6 +70,7 @@ class FnoScreen : public QWidget,
         TabCount
     };
 
+  private:
     void setup_ui();
     QWidget* build_tab_bar();
     QWidget* build_placeholder(const QString& tab_name, const QString& detail);

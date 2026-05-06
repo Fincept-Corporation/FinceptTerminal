@@ -6,20 +6,8 @@
 
 namespace fincept {
 
-/// Symbol link groups (Bloomberg Launchpad "Security Groups" equivalent).
-/// A panel can be assigned to a group; all panels in the same group share
-/// the same "active security" and update in lockstep when any member panel
-/// publishes a symbol change.
-///
-/// `None` = unlinked; the panel ignores group traffic and publishes nothing.
-/// A–J = ten slots. Default colour palette: A=amber, B=cyan, C=magenta,
-/// D=green, E=purple, F=red, G=yellow, H=orange, I=teal, J=pink. The first
-/// seven (A–G) are enabled by default; H/I/J start disabled and the user
-/// activates them from the badge menu. Names and colours per slot are
-/// user-editable via SymbolGroupRegistry.
-///
-/// Stored as a single byte so it can live inside QSettings and JSON without
-/// ambiguity. Do NOT renumber — persisted workspaces reference these literals.
+/// Symbol link groups. None = unlinked; A–J are ten slots (A–G enabled by default).
+/// Stored as a single byte for QSettings/JSON; do NOT renumber — persisted layouts reference these literals.
 enum class SymbolGroup : char {
     None = '\0',
     A = 'A',
@@ -34,9 +22,7 @@ enum class SymbolGroup : char {
     J = 'J',
 };
 
-/// Returns all concrete slots in order (A..J); excludes None. Includes
-/// disabled slots — callers that only want active groups should consult
-/// SymbolGroupRegistry::enabled_groups() instead.
+/// All slots A..J (excludes None, includes disabled). For active-only, see SymbolGroupRegistry::enabled_groups().
 inline const QList<SymbolGroup>& all_symbol_groups() {
     static const QList<SymbolGroup> k = {SymbolGroup::A, SymbolGroup::B, SymbolGroup::C,
                                          SymbolGroup::D, SymbolGroup::E, SymbolGroup::F,
@@ -66,10 +52,7 @@ inline SymbolGroup symbol_group_from_char(QChar c) {
     }
 }
 
-/// Cycle forward through the static slot list, ignoring enabled/disabled
-/// state. GroupBadge uses the enabled-aware variant in SymbolGroupRegistry
-/// for click-cycle; this raw version exists for callers that need a stable
-/// total ordering (tests, deterministic enumeration).
+/// Cycle forward ignoring enabled/disabled — stable total ordering. For UI cycling, use SymbolGroupRegistry.
 inline SymbolGroup next_symbol_group(SymbolGroup g) {
     switch (g) {
         case SymbolGroup::None: return SymbolGroup::A;

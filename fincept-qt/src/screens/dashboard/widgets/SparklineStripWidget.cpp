@@ -147,6 +147,8 @@ void SparklineStripWidget::build_rows() {
 void SparklineStripWidget::hub_resubscribe() {
     auto& hub = datahub::DataHub::instance();
     hub.unsubscribe(this);
+    received_.clear();
+    set_loading_progress(received_.size(), symbols_.size());
     for (const auto& sym : symbols_) {
         const QString topic = QStringLiteral("market:sparkline:") + sym;
         const QString sym_copy = sym;
@@ -182,7 +184,8 @@ void SparklineStripWidget::on_points(const QString& symbol, const QVector<double
         return;
     it->spark->set_points(points);
     it->last->setText(QString::number(points.last(), 'f', 2));
-    set_loading(false);
+    received_.insert(symbol);
+    set_loading_progress(received_.size(), symbols_.size());
 }
 
 QDialog* SparklineStripWidget::make_config_dialog(QWidget* parent) {

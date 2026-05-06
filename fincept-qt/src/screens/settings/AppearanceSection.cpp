@@ -9,8 +9,11 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QApplication>
 #include <QFontDatabase>
 #include <QLabel>
+#include <QMetaObject>
+#include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QShowEvent>
@@ -76,21 +79,49 @@ void AppearanceSection::build_ui() {
     app_font_family_->setStyleSheet(combo_ss());
     vl->addWidget(make_row("Font Family", app_font_family_));
 
-    // Debounced live preview — coalesce rapid changes into one apply after 300ms idle
+    // Debounced live preview — coalesce rapid changes into one apply after 300ms idle.
+    //
+    // Two safety properties beyond the debounce window matter for KDE Plasma 6 +
+    // Qt6 + Wayland (issue #247: app segfaulted on Font Size / Font Family change):
+    //
+    //   1. apply_typography_and_density() coalesces font + density into ONE
+    //      qApp->setStyleSheet() call. Two back-to-back global restyles during
+    //      a QComboBox event chain are a documented crash trigger on Wayland —
+    //      the second restyle mutates surface state while the popup is still
+    //      tearing down.
+    //
+    //   2. The apply is dispatched via Qt::QueuedConnection (singleShot(0))
+    //      so the QComboBox::currentTextChanged → debounce::timeout call stack
+    //      fully unwinds before we re-style every widget in the app, including
+    //      the combo box that started the chain.
     appearance_debounce_ = new QTimer(this);
     appearance_debounce_->setSingleShot(true);
     appearance_debounce_->setInterval(300);
     connect(appearance_debounce_, &QTimer::timeout, this, [this]() {
-        auto& tm = ui::ThemeManager::instance();
-        int px = QString(app_font_size_->currentText()).replace("px", "").toInt();
-        if (px > 0)
-            tm.apply_font(app_font_family_->currentText(), px);
-        tm.apply_density(app_density_->currentText());
+        if (!app_font_size_ || !app_font_family_ || !app_density_)
+            return;
+        const QString family  = app_font_family_->currentText();
+        const QString density = app_density_->currentText();
+        const int px = QString(app_font_size_->currentText()).replace("px", "").toInt();
+        // Skip families that aren't actually installed — Qt would otherwise
+        // hand QFont an invalid family which on some Wayland font backends
+        // turns into a setPointSizeF(0) / null-glyph crash.
+        if (!family.isEmpty() && !QFontDatabase::families().contains(family))
+            return;
+
+        QPointer<AppearanceSection> guard(this);
+        QMetaObject::invokeMethod(qApp, [guard, family, px, density]() {
+            if (!guard)
+                return;
+            ui::ThemeManager::instance().apply_typography_and_density(family, px, density);
+        }, Qt::QueuedConnection);
     });
 
     auto restart_debounce = [this]() { appearance_debounce_->start(); };
-    connect(app_font_size_,   &QComboBox::currentTextChanged, this, restart_debounce);
-    connect(app_font_family_, &QComboBox::currentTextChanged, this, restart_debounce);
+    connect(app_font_size_,   &QComboBox::currentTextChanged, this, restart_debounce,
+            Qt::UniqueConnection);
+    connect(app_font_family_, &QComboBox::currentTextChanged, this, restart_debounce,
+            Qt::UniqueConnection);
 
     vl->addSpacing(8);
     vl->addWidget(make_sep());
@@ -108,7 +139,8 @@ void AppearanceSection::build_ui() {
     app_density_->setStyleSheet(combo_ss());
     vl->addWidget(make_row("Content Density", app_density_, "Controls padding and spacing throughout the UI."));
 
-    connect(app_density_, &QComboBox::currentTextChanged, this, restart_debounce);
+    connect(app_density_, &QComboBox::currentTextChanged, this, restart_debounce,
+            Qt::UniqueConnection);
 
     vl->addSpacing(8);
     vl->addWidget(make_sep());
@@ -144,7 +176,6 @@ void AppearanceSection::build_ui() {
     apply_btn->setStyleSheet(btn_primary_ss());
     connect(apply_btn, &QPushButton::clicked, this, [this]() {
         auto& repo = SettingsRepository::instance();
-        auto& tm = ui::ThemeManager::instance();
 
         repo.set("appearance.font_size",         app_font_size_->currentText(),                            "appearance");
         repo.set("appearance.font_family",       app_font_family_->currentText(),                          "appearance");
@@ -153,13 +184,22 @@ void AppearanceSection::build_ui() {
         repo.set("appearance.show_ticker_bar",   ticker_bar_toggle_->isChecked()  ? "true" : "false",      "appearance");
         repo.set("appearance.animations",        animations_toggle_->isChecked()  ? "true" : "false",      "appearance");
 
-        // Flush any pending debounce immediately on save
+        // Flush any pending debounce immediately on save. Same coalesced +
+        // queued path as the live-preview lambda above so a Save click that
+        // happens while a combo box just changed cannot trigger the
+        // back-to-back-restyle Wayland crash.
         if (appearance_debounce_->isActive()) {
             appearance_debounce_->stop();
+            const QString family  = app_font_family_->currentText();
+            const QString density = app_density_->currentText();
             int px = QString(app_font_size_->currentText()).replace("px", "").toInt();
             if (px <= 0) px = 14;
-            tm.apply_font(app_font_family_->currentText(), px);
-            tm.apply_density(app_density_->currentText());
+            QPointer<AppearanceSection> guard(this);
+            QMetaObject::invokeMethod(qApp, [guard, family, px, density]() {
+                if (!guard)
+                    return;
+                ui::ThemeManager::instance().apply_typography_and_density(family, px, density);
+            }, Qt::QueuedConnection);
         }
 
         LOG_INFO("Settings", "Appearance saved and applied");

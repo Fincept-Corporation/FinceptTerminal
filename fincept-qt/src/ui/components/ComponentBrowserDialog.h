@@ -12,28 +12,14 @@ namespace fincept::ui {
 
 class ComponentCard;
 
-/// Modal dialog letting users browse every registered screen (component)
-/// and launch one into the active workspace. Bloomberg Launchpad
-/// Component Browser equivalent.
-///
-/// Layout:
-///   Left  — category sidebar ("All" at top, then distinct categories in
-///           catalogue order)
-///   Top   — search box (matches against title + tags, case-insensitive)
-///   Main  — grid of ComponentCards, sorted by popularity desc
-///
-/// Keyboard: Esc closes, Enter activates the current selection, arrow keys
-/// navigate between cards when the list-view equivalent focus is wired up
-/// (grid cards don't natively support keyboard focus yet — future polish).
+/// Modal browser of registered screens. Cards sorted by popularity desc; search matches title+tags.
 class ComponentBrowserDialog : public QDialog {
     Q_OBJECT
   public:
     explicit ComponentBrowserDialog(QWidget* parent = nullptr);
 
   signals:
-    /// Emitted when the user double-clicks a card or presses Enter.
-    /// The caller (WindowFrame) is expected to navigate to the screen.
-    /// The dialog closes itself after emitting.
+    /// Dialog closes itself after emitting; caller navigates.
     void component_chosen(const QString& screen_id);
 
   private:

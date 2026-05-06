@@ -41,7 +41,7 @@ State-of-the-art financial intelligence platform with institutional-grade financ
 
 ## About
 
-**Fincept Terminal v4** is a pure native C++20 desktop application. It uses **Qt6** for UI and rendering, embedded **Python** for analytics, and delivers Bloomberg-terminal-class performance in a single native binary.
+**Fincept Terminal v4** is a pure native C++20 desktop application. It uses **Qt6** for UI and rendering, embedded **Python** for analytics, and delivers professional terminal-class performance in a single native binary.
 
 ---
 
@@ -153,6 +153,8 @@ cmake --build --preset win-release      # Windows
 cmake --build --preset linux-release    # Linux
 cmake --build --preset macos-release    # macOS
 ```
+
+> **Older or RAM-constrained machines:** add `--parallel 4` (or any small number) to cap concurrent compile jobs. The default saturates every core, which can overheat older CPUs and slow the rest of your system. Example: `cmake --build --preset macos-release --parallel 4`.
 
 Debug variants: replace `release` with `debug` (e.g. `win-debug`, `linux-debug`, `macos-debug`).
 

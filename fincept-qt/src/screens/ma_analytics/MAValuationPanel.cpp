@@ -4,6 +4,7 @@
 
 #include "screens/ma_analytics/MAModulePanel.h"
 
+#include "services/ma_analytics/MAAnalyticsService.h"
 #include "ui/theme/Theme.h"
 
 #include <QComboBox>
@@ -15,6 +16,8 @@
 #include <QTabWidget>
 #include <QVBoxLayout>
 #include <QWidget>
+
+using namespace fincept::services::ma;
 
 namespace fincept::screens {
 

@@ -16,8 +16,6 @@
 #include <QUuid>
 #include <QVBoxLayout>
 
-// ── Stylesheet ──────────────────────────────────────────────────────────────
-
 namespace {
 using namespace fincept::ui;
 static const QString kStyle =
@@ -140,7 +138,6 @@ namespace fincept::screens {
 
 using namespace fincept::ui;
 
-// ── Schema definitions ──────────────────────────────────────────────────────
 
 struct SchemaField {
     QString name;
@@ -254,7 +251,6 @@ static QList<SchemaInfo> build_schemas() {
 
 static QList<SchemaInfo> g_schemas = build_schemas();
 
-// ── Template definitions ────────────────────────────────────────────────────
 
 struct FieldMapping {
     QString target;
@@ -284,7 +280,7 @@ struct MappingTemplate {
 
 static QList<MappingTemplate> build_templates() {
     return {
-        // ── Free Public APIs (no auth) ─────────────────────────────────────
+        // Free public APIs.
 
         {"coingecko_quote",
          "CoinGecko Coin Price → QUOTE",
@@ -430,7 +426,7 @@ static QList<MappingTemplate> build_templates() {
           {"trades", "$.result.XXBTZUSD[*][7]", "to_number", "0"},
           {"symbol", "", "", "XBTUSD"}}},
 
-        // ── API Key Required (Free Tier) ───────────────────────────────────
+        // API key required (free tier).
 
         {"alphavantage_ohlcv",
          "Alpha Vantage Intraday → OHLCV",
@@ -525,7 +521,7 @@ static QList<MappingTemplate> build_templates() {
           {"changePercent", "$.data.BTC.quote.USD.percent_change_24h", "", "0"},
           {"timestamp", "$.data.BTC.quote.USD.last_updated", "", ""}}},
 
-        // ── Global Broker APIs (Auth Required) ─────────────────────────────
+        // Global broker APIs.
 
         {"alpaca_ohlcv",
          "Alpaca Bars → OHLCV",
@@ -604,7 +600,7 @@ static QList<MappingTemplate> build_templates() {
           {"low", "$.quotes.quote.low", "", "0"},
           {"previousClose", "$.quotes.quote.prevclose", "", "0"}}},
 
-        // ── Macro / Economic Data ──────────────────────────────────────────
+        // Macro / economic data.
 
         {"dbnomics_ohlcv",
          "DBnomics Series → OHLCV",
@@ -629,7 +625,6 @@ static QList<MappingTemplate> build_templates() {
 
 static QList<MappingTemplate> g_templates = build_templates();
 
-// ── Constructor ─────────────────────────────────────────────────────────────
 
 DataMappingScreen::DataMappingScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("dmScreen");
@@ -638,7 +633,6 @@ DataMappingScreen::DataMappingScreen(QWidget* parent) : QWidget(parent) {
     LOG_INFO("DataMapping", "Screen constructed");
 }
 
-// ── UI Setup ────────────────────────────────────────────────────────────────
 
 void DataMappingScreen::setup_ui() {
     auto* root = new QVBoxLayout(this);
@@ -910,7 +904,6 @@ QWidget* DataMappingScreen::create_right_panel() {
     return panel;
 }
 
-// ── Step panels ─────────────────────────────────────────────────────────────
 
 QWidget* DataMappingScreen::create_api_config_panel() {
     auto* panel = new QWidget(this);
@@ -1261,7 +1254,6 @@ QWidget* DataMappingScreen::create_test_save_panel() {
     return panel;
 }
 
-// ── View panels ─────────────────────────────────────────────────────────────
 
 QWidget* DataMappingScreen::create_list_view() {
     auto* scroll = new QScrollArea;
@@ -1407,7 +1399,6 @@ QWidget* DataMappingScreen::create_template_view() {
     return outer;
 }
 
-// ── Footer / Status ─────────────────────────────────────────────────────────
 
 QWidget* DataMappingScreen::create_nav_footer() {
     auto* bar = new QWidget(this);
@@ -1654,11 +1645,11 @@ void DataMappingScreen::on_test_api() {
                 body = doc.object();
         }
         if (method == "POST")
-            HttpClient::instance().post(url, body, callback);
+            HttpClient::instance().post(url, body, callback, this);
         else
-            HttpClient::instance().put(url, body, callback);
+            HttpClient::instance().put(url, body, callback, this);
     } else {
-        HttpClient::instance().get(url, callback);
+        HttpClient::instance().get(url, callback, this);
     }
 }
 

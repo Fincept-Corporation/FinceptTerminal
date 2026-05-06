@@ -80,7 +80,7 @@
 
 #include <memory>
 
-#include <singleapplication.h>
+#include "app/InstanceLock.h"
 
 #ifdef Q_OS_WIN
 #    include <Windows.h>
@@ -95,14 +95,15 @@
 #endif
 
 // Wire the two app-level lifecycle handlers that fire after the primary
-// window exists: SingleApplication::receivedMessage (a re-launch of the exe
-// asks us to open another WindowFrame) and QApplication::lastWindowClosed
-// (surface the Launchpad instead of quitting; the Launchpad's own close
-// handler quits explicitly). Called from both the post-setup-screen path
-// and the no-setup path so the two branches stay in sync.
-static void wire_app_lifecycle(SingleApplication& app) {
-    QObject::connect(&app, &SingleApplication::receivedMessage,
-                     [](quint32 /*instanceId*/, QByteArray /*message*/) {
+// window exists: InstanceLock::message_received (a re-launch of the exe
+// asks us to open another WindowFrame — args ignored, the request itself is
+// the trigger) and QApplication::lastWindowClosed (surface the Launchpad
+// instead of quitting; the Launchpad's own close handler quits explicitly).
+// Called from both the post-setup-screen path and the no-setup path so the
+// two branches stay in sync.
+static void wire_app_lifecycle(QApplication& app, fincept::InstanceLock& lock) {
+    QObject::connect(&lock, &fincept::InstanceLock::message_received,
+                     [](const QStringList& /*args*/) {
                          auto* w = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
                          w->setAttribute(Qt::WA_DeleteOnClose);
                          w->show();
@@ -132,7 +133,7 @@ int main(int argc, char* argv[]) {
     // ── Parse --profile <name> from argv before Qt initialises ───────────────
     // This must happen first so that:
     //   1. AppPaths returns the correct per-profile directories
-    //   2. SingleApplication uses a profile-scoped IPC key so two different
+    //   2. InstanceLock uses a profile-scoped IPC key so two different
     //      profiles can run simultaneously as independent primary instances
     {
         for (int i = 1; i < argc - 1; ++i) {
@@ -158,14 +159,19 @@ int main(int argc, char* argv[]) {
     // (Qt Charts, QOpenGLWidget) — prevents black rendering in floating windows.
     QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 
-    // SingleApplication enforces one process per profile.
+    // QApplication first — InstanceLock's QLocalServer needs an event loop
+    // owner. Then the lock probes for an existing primary; if found, it
+    // ships our argv to the primary (which opens a new WindowFrame in
+    // response) and we exit cleanly.
+    //
+    // Why not SingleApplication? Its QSharedMemory + QSystemSemaphore lock
+    // leaks on macOS Qt 6.6+ (QTBUG-111855), causing silent exits on Finder
+    // launch. See InstanceLock.h for the fuller story (issues #234, #252).
+    //
     // The instance key is scoped to the active profile name, so
     // "FinceptTerminal --profile work" and "FinceptTerminal --profile personal"
-    // are treated as two separate primary instances and run simultaneously.
-    // allowSecondary=true: secondary instances send "--new-window" and exit.
-    const QString profile_key = QString("FinceptTerminal-%1").arg(fincept::ProfileManager::instance().active());
-    SingleApplication app(argc, argv, /*allowSecondary=*/true, SingleApplication::Mode::User, 100,
-                          profile_key.toUtf8());
+    // run as two independent primaries.
+    QApplication app(argc, argv);
     app.setApplicationName("FinceptTerminal");
     app.setOrganizationName("Fincept");
 #ifndef FINCEPT_VERSION_STRING
@@ -181,15 +187,21 @@ int main(int argc, char* argv[]) {
     // explicit one in LaunchpadScreen::closeEvent.
     app.setQuitOnLastWindowClosed(false);
 
-    // ── Secondary instance: signal primary to open a new window, then exit ───
-    // The primary receives receivedMessage() and calls open_new_window().
-    if (app.isSecondary()) {
+    // ── Single-instance lock + new-window IPC ────────────────────────────────
+    const QString profile_key = QString("FinceptTerminal-%1").arg(fincept::ProfileManager::instance().active());
+    fincept::InstanceLock instance_lock;
+    const auto lock_status = instance_lock.acquire(profile_key, QCoreApplication::arguments());
+
+    // ── Secondary instance: argv was already shipped to the primary. Exit. ──
+    if (lock_status == fincept::InstanceLock::Status::Secondary) {
 #ifdef Q_OS_WIN
-        // Grant the primary process permission to bring its new window to the
-        // foreground — Windows blocks focus-steal without this.
-        AllowSetForegroundWindow(static_cast<DWORD>(app.primaryPid()));
+        // Grant the primary process permission to bring its new window to
+        // the foreground — Windows blocks focus-steal without this. Pre-
+        // SingleApplication this used app.primaryPid(); without that we
+        // call AllowSetForegroundWindow(ASFW_ANY) which whitelists the
+        // whole foreground request from this process.
+        AllowSetForegroundWindow(ASFW_ANY);
 #endif
-        app.sendMessage(QByteArray("--new-window"));
         return 0;
     }
 
@@ -540,6 +552,7 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v022();
     fincept::register_migration_v023();
     fincept::register_migration_v024();
+    fincept::register_migration_v025();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -691,7 +704,7 @@ int main(int argc, char* argv[]) {
         // The connection uses Qt::SingleShotConnection (Qt 6.0+) so the lambda
         // fires exactly once even if setup_complete is somehow emitted twice.
         QObject::connect(setup_screen, &fincept::screens::SetupScreen::setup_complete,
-                         [&app, screen_guard]() {
+                         [&app, &instance_lock, screen_guard]() {
             if (!screen_guard)
                 return; // already cleaned up — ignore
             screen_guard->hide();
@@ -742,7 +755,7 @@ int main(int argc, char* argv[]) {
             // Wire new-window handler + Launchpad surface now that the
             // primary window exists. Single source of truth — see
             // wire_app_lifecycle() at the top of this file.
-            wire_app_lifecycle(app);
+            wire_app_lifecycle(app, instance_lock);
 
             if (!fincept::ai_chat::LlmService::instance().is_configured())
                 LOG_WARN("App",
@@ -806,7 +819,7 @@ int main(int argc, char* argv[]) {
 
     // Wire new-window handler + Launchpad surface — see wire_app_lifecycle()
     // at the top of this file for the contract.
-    wire_app_lifecycle(app);
+    wire_app_lifecycle(app, instance_lock);
 
     // If requirements files changed (app update), sync packages in background
     // without blocking the user. Connect setup_complete so failures are logged

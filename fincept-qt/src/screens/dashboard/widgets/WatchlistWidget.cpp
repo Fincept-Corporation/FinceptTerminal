@@ -106,13 +106,19 @@ void WatchlistWidget::hub_resubscribe() {
     auto& hub = datahub::DataHub::instance();
     // Drop old subscriptions wholesale — symbol set may have changed.
     hub.unsubscribe(this);
+    // Kick off the determinate loading overlay — count is the live symbol
+    // count, not a hardcoded constant, so adding/removing symbols via the
+    // GO button updates the denominator correctly.
+    set_loading_progress(row_cache_.size(), symbols_.size());
     for (const auto& sym : symbols_) {
         const QString topic = QStringLiteral("market:quote:") + sym;
         hub.subscribe(this, topic, [this, sym](const QVariant& v) {
             if (!v.canConvert<services::QuoteData>())
                 return;
             row_cache_.insert(sym, v.value<services::QuoteData>());
-            set_loading(false);
+            // Numerator = unique symbols delivered so far; the overlay
+            // animates the count up and fades out when row_cache_ is full.
+            set_loading_progress(row_cache_.size(), symbols_.size());
             render_from_cache();
         });
     }

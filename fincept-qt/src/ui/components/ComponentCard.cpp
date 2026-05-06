@@ -12,14 +12,8 @@ namespace fincept::ui {
 
 namespace {
 
-// Shared MIME type for dragging a screen id out of the browser. Kept as a
-// constexpr free name so a future drop-on-dock-area handler can include
-// this header and share the string.
 constexpr const char* kScreenIdMime = "application/x-fincept-screen-id";
 
-// Per-category accent colour. Keeps the browser visually parseable at a
-// glance — the same Bloomberg trick of colour-coding asset classes in the
-// Function Menu.
 QString category_color(const QString& category) {
     if (category == "Core")        return "#d97706"; // amber
     if (category == "Trading")     return "#16a34a"; // green
@@ -33,10 +27,8 @@ QString category_color(const QString& category) {
     return "#4b5563";
 }
 
+/// Logarithmic thresholds: one star after a couple visits, five at 150+.
 QString popularity_stars(int count) {
-    // Cap at 5 stars; thresholds are logarithmic-ish so low-use components
-    // still earn one filled star after a couple of visits, and popular ones
-    // eventually max out.
     int filled = 0;
     if (count >= 1)  filled = 1;
     if (count >= 5)  filled = 2;
@@ -67,7 +59,6 @@ void ComponentCard::build_ui() {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    // Category strip across the top.
     auto* strip = new QWidget(this);
     strip->setFixedHeight(6);
     strip->setStyleSheet(QString("background:%1;").arg(category_color(meta_.category)));
@@ -101,7 +92,7 @@ void ComponentCard::build_ui() {
     desc->setStyleSheet("color:#9ca3af;font-size:11px;");
     const QString text = meta_.description.isEmpty() ? QStringLiteral(" ") : meta_.description;
     desc->setText(text);
-    desc->setMaximumHeight(36); // clamps to ~2 lines
+    desc->setMaximumHeight(36);
     bl->addWidget(desc);
     bl->addStretch(1);
 
@@ -148,13 +139,10 @@ void ComponentCard::mouseMoveEvent(QMouseEvent* e) {
         return;
     pressed_ = false;
 
-    // Drag-out: the MIME payload is just the screen id, no extra
-    // serialisation. A future drop handler on the dock manager can call
-    // DockScreenRouter::navigate with it.
     auto* drag = new QDrag(this);
     auto* mime = new QMimeData;
     mime->setData(kScreenIdMime, meta_.id.toUtf8());
-    mime->setText(meta_.title); // fallback for generic text drop targets
+    mime->setText(meta_.title); // fallback for generic text targets
     drag->setMimeData(mime);
     drag->exec(Qt::CopyAction, Qt::CopyAction);
 }

@@ -95,6 +95,8 @@ cmake --build --preset linux-release      # Linux
 cmake --build --preset macos-release      # macOS
 ```
 
+> **Older or RAM-constrained machines:** add `--parallel 4` (or any small number) to cap concurrent compile jobs. The default saturates every core, which can overheat older CPUs and slow the rest of your system. Example: `cmake --build --preset macos-release --parallel 4`.
+
 Debug builds: replace `release` with `debug` in both commands.
 
 Manual configure if presets can't resolve Qt:

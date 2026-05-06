@@ -91,7 +91,38 @@ elif [ "$PLATFORM" = "macos" ]; then
         info "Homebrew not found. Installing..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
-    brew install cmake ninja python@3.11 openssl@3 yt-dlp
+    # portaudio: C dep for pyaudio; without it pyaudio's source build fails
+    # at `#include "portaudio.h"` and the analytical-library setup loops on
+    # every launch (see PythonSetupManager::install_packages — a partial
+    # install leaves venv-numpy2's marker absent → setup screen reappears).
+    brew install cmake ninja python@3.11 openssl@3 yt-dlp expat portaudio
+
+    # ── Self-heal brewed Python's pyexpat on macOS 26+ ──────────────────────
+    # On macOS Tahoe (Darwin 25+), the Homebrew python@3.11 / python@3.14
+    # bottles' pyexpat extension links to /usr/lib/libexpat.1.dylib but expects
+    # symbols (e.g. _XML_SetAllocTrackerActivationThreshold) that are absent
+    # from the system dylib in the dyld shared cache. Result: `python -m venv`
+    # aborts because ensurepip's bootstrap of pip imports xmlrpc → xml.parsers
+    # → pyexpat and fails with a Symbol-not-found ImportError.
+    #
+    # Fix: rewrite the install-name reference in pyexpat.cpython-*-darwin.so
+    # to point at brew's libexpat (which has the symbol), then re-sign the
+    # binary so the kernel will load it. Idempotent — install_name_tool is a
+    # no-op on the second run.
+    BREW_EXPAT_LIB="$(brew --prefix expat)/lib/libexpat.1.dylib"
+    if [ -f "$BREW_EXPAT_LIB" ]; then
+        for py_ver in 3.11 3.14; do
+            py_bin="$(command -v "python$py_ver" || true)"
+            [ -z "$py_bin" ] && continue
+            # Quick probe: does pyexpat import? If yes, nothing to do.
+            if "$py_bin" -c "import pyexpat" 2>/dev/null; then continue; fi
+            so_path="$("$py_bin" -c 'import importlib.util,sys; s=importlib.util.find_spec("pyexpat"); print(s.origin or "")' 2>/dev/null || true)"
+            [ -f "$so_path" ] || continue
+            info "Patching $so_path → $BREW_EXPAT_LIB"
+            install_name_tool -change /usr/lib/libexpat.1.dylib "$BREW_EXPAT_LIB" "$so_path" 2>/dev/null || true
+            codesign --force --sign - "$so_path" 2>/dev/null || true
+        done
+    fi
 fi
 ok
 

@@ -1,6 +1,6 @@
 """
 OpenFIGI Data Fetcher
-Map tickers/ISINs/CUSIPs to Bloomberg FIGI identifiers. 1700+ asset classes globally.
+Map tickers/ISINs/CUSIPs to global FIGI identifiers. 1700+ asset classes globally.
 No key for basic use (higher rate with OPENFIGI_API_KEY).
 """
 import sys

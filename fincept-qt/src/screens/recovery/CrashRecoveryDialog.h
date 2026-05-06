@@ -55,19 +55,27 @@ class CrashRecoveryDialog : public QDialog {
     void on_selection_changed();
     void on_restore_clicked();
     void on_skip_clicked();
+    void on_rename_clicked();
+    void on_delete_clicked();
 
   private:
     void build_ui();
     void populate_snapshots();
+    void apply_styles();
     QString format_timestamp(qint64 unix_ms) const;
+    QString format_relative(qint64 unix_ms) const;
     QString format_kind(const QString& kind) const;
+    QString display_name(const fincept::WorkspaceSnapshotRing::Entry& e) const;
 
     fincept::CrashRecovery* recovery_ = nullptr;
     fincept::WorkspaceSnapshotRing* ring_ = nullptr;
 
     QLabel* heading_ = nullptr;
     QLabel* explainer_ = nullptr;
+    QLabel* empty_label_ = nullptr;
     QListWidget* list_ = nullptr;
+    QPushButton* rename_button_ = nullptr;
+    QPushButton* delete_button_ = nullptr;
     QPushButton* restore_button_ = nullptr;
     QPushButton* skip_button_ = nullptr;
 

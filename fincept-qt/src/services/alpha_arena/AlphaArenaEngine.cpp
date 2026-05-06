@@ -47,7 +47,12 @@ void AlphaArenaEngine::init() {
             router_, &OrderRouter::on_decision);
 
     connect(router_, &OrderRouter::action_evaluated,
-            this, &AlphaArenaEngine::action_evaluated);
+            this, [this](const QString& agent_id, const QString& coin,
+                         fincept::services::alpha_arena::Signal sig,
+                         int risk_outcome, const QString& reason) {
+                emit action_evaluated(agent_id, coin, static_cast<int>(sig),
+                                      risk_outcome, reason);
+            });
     connect(router_, &OrderRouter::order_placed,
             this, &AlphaArenaEngine::order_placed);
     connect(router_, &OrderRouter::hitl_requested,

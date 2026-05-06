@@ -143,13 +143,14 @@ void ScreenerWidget::refresh_data() {
 
 void ScreenerWidget::hub_subscribe_all() {
     auto& hub = datahub::DataHub::instance();
+    set_loading_progress(row_cache_.size(), kScreenerSymbols.size());
     for (const auto& sym : kScreenerSymbols) {
         const QString topic = QStringLiteral("market:quote:") + sym;
         hub.subscribe(this, topic, [this, sym](const QVariant& v) {
             if (!v.canConvert<services::QuoteData>())
                 return;
             row_cache_.insert(sym, v.value<services::QuoteData>());
-            set_loading(false);
+            set_loading_progress(row_cache_.size(), kScreenerSymbols.size());
             rebuild_all_quotes();
         });
     }

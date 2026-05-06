@@ -5,15 +5,8 @@
 
 namespace fincept {
 
-/// Strongly-typed reference to a tradable/observable security. Used as the
-/// payload for cross-panel symbol links (SymbolContext) so that receivers
-/// can disambiguate a ticker across asset classes (e.g. "AAPL" equity vs.
-/// "AAPL" option chain root) without string-munging.
-///
-/// `asset_class` uses lowercased slugs: "equity", "crypto", "fx", "future",
-/// "bond", "index", "commodity", "option". Empty string = unknown; consumers
-/// should treat unknown as equity for backward compatibility with older
-/// single-string symbol flows.
+/// Typed security reference used as SymbolContext payload.
+/// `asset_class` slugs: equity|crypto|fx|future|bond|index|commodity|option. Empty = treat as equity.
 struct SymbolRef {
     QString symbol;
     QString asset_class;
@@ -21,8 +14,7 @@ struct SymbolRef {
 
     bool is_valid() const { return !symbol.isEmpty(); }
 
-    /// Bloomberg-style display: "AAPL US Equity", "BTCUSD Binance Crypto",
-    /// falling back to the raw symbol if context is unknown.
+    /// "AAPL US Equity" / "BTCUSD Binance Crypto"; falls back to raw symbol.
     QString display() const {
         QString out = symbol;
         if (!exchange.isEmpty())
@@ -57,9 +49,6 @@ struct SymbolRef {
         return r;
     }
 
-    /// Convenience for call sites that only have a ticker string; defaults
-    /// to equity asset class, which matches every existing single-string
-    /// flow in the codebase.
     static SymbolRef equity(const QString& sym, const QString& exch = {}) {
         return SymbolRef{sym.toUpper(), QStringLiteral("equity"), exch};
     }

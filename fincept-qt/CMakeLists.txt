@@ -487,38 +487,14 @@ if(APPLE)
     endforeach()
 endif()
 
-# ── SingleApplication (single-process enforcement + new-window IPC) ──────────
-# When the user re-launches the exe, the secondary instance sends "--new-window"
-# to the primary, which opens a new MainWindow instead of a second process.
-# QAPPLICATION_CLASS must be set before FetchContent_MakeAvailable so the lib
-# compiles inheriting QApplication (not QCoreApplication).
-set(QT_DEFAULT_MAJOR_VERSION 6 CACHE STRING "" FORCE)
-set(QAPPLICATION_CLASS QApplication CACHE STRING "" FORCE)
-FetchContent_Declare(
-    SingleApplication
-    GIT_REPOSITORY https://github.com/itay-grudev/SingleApplication.git
-    GIT_TAG        a8da87d78238ac9ac92d2cda41793d4879c188b3  # v3.5.4
-    GIT_SHALLOW    TRUE
-    UPDATE_DISCONNECTED TRUE
-)
-FetchContent_MakeAvailable(SingleApplication)
-# ── Patch SingleApplication for Qt 6.8 QSharedMemory compat ────────────────────
-# Qt 6.8 changed the default QSharedMemory backend to PosixRealtime, but macOS's
-# shm_open rejects the keys that SingleApplication generates ("bad name").
-# Fix: use SystemV type which works on macOS (and Linux) with Qt 6.6+.
-if(UNIX)
-    file(READ ${SingleApplication_SOURCE_DIR}/singleapplication.cpp _sa_src)
-    string(REPLACE
-        "d->memory = new QSharedMemory( QNativeIpcKey( d->blockServerName ) );"
-        "d->memory = new QSharedMemory(); d->memory->setNativeKey(d->blockServerName, QNativeIpcKey::Type::SystemV);"
-        _sa_src "${_sa_src}")
-    file(WRITE ${SingleApplication_SOURCE_DIR}/singleapplication.cpp "${_sa_src}")
-endif()
-if(MSVC)
-    target_compile_options(SingleApplication PRIVATE /W0 /WX-)
-else()
-    target_compile_options(SingleApplication PRIVATE -w -Wno-error)
-endif()
+# ── Single-instance enforcement: in-tree InstanceLock (replaced SingleApplication)
+# Previously used the SingleApplication library, which combined QSharedMemory
+# and QSystemSemaphore. That stack leaked on macOS Qt 6.6+ (QTBUG-111855),
+# silently exiting on Finder / `open` launches — see issues #234 and #252.
+# We now ship src/app/InstanceLock.{h,cpp}: a small QLocalServer-based lock
+# that uses Unix domain sockets / Windows named pipes. Same effective API
+# (primary/secondary + IPC for "open new window"), no semaphore leaks, no
+# path-length traps, no sandbox quirks.
 
 # ── Qt Advanced Docking System (detachable panels) ───────────────────────────
 # Panels become CDockWidgets — drag to float, dock, move to any monitor.
@@ -736,6 +712,7 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v022_portfolio_broker_link.cpp
     src/storage/sqlite/migrations/v023_algo_trading_deploy.cpp
     src/storage/sqlite/migrations/v024_alpha_arena.cpp
+    src/storage/sqlite/migrations/v025_secure_credentials.cpp
 )
 
 # Python runner
@@ -866,6 +843,7 @@ set(SERVICE_SOURCES
     src/services/alpha_arena/ModelDispatcher.cpp
     src/services/alpha_arena/OrderRouter.cpp
     src/services/alpha_arena/AlphaArenaEngine.cpp
+    src/services/alpha_arena/AlphaArenaService.cpp
     src/services/asia_markets/AsiaMarketsService.cpp
     src/services/crypto/TotpService.cpp
     src/services/python_cli/PythonCliService.cpp
@@ -1112,6 +1090,7 @@ set(SCREEN_SOURCES
     src/screens/dashboard/canvas/AddWidgetDialog.cpp
     src/screens/dashboard/canvas/TemplatePicker.cpp
     src/screens/dashboard/widgets/BaseWidget.cpp
+    src/screens/dashboard/widgets/LoadingOverlay.cpp
     src/screens/dashboard/widgets/QuoteTableWidget.cpp
     src/screens/dashboard/widgets/TopMoversWidget.cpp
     src/screens/dashboard/widgets/NewsWidget.cpp
@@ -1272,6 +1251,8 @@ set(SCREEN_SOURCES
     src/screens/ai_quant_lab/QuantModulePanel_AIMLDisplays.cpp
     src/screens/ai_quant_lab/QuantModulePanel_CoreDisplays.cpp
     src/screens/ai_quant_lab/QuantModulePanel_Misc.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_HFT.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_LiveLearning.cpp
 
     # Backtesting
     src/screens/backtesting/BacktestingScreen.cpp
@@ -1451,6 +1432,7 @@ set(SCREEN_SOURCES
 # App
 set(APP_SOURCES
     src/app/main.cpp
+    src/app/InstanceLock.cpp
     src/app/WindowFrame.cpp
     src/app/ScreenRouter.cpp
     src/app/DockScreenRouter.cpp
@@ -1488,6 +1470,8 @@ set_source_files_properties(
     src/screens/ai_quant_lab/QuantModulePanel_AIMLDisplays.cpp
     src/screens/ai_quant_lab/QuantModulePanel_CoreDisplays.cpp
     src/screens/ai_quant_lab/QuantModulePanel_Misc.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_HFT.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_LiveLearning.cpp
     src/screens/akshare/AkShareScreen.cpp
     src/screens/algo_trading/AlgoTradingScreen.cpp
     src/screens/algo_trading/DeploymentDashboard.cpp
@@ -1552,6 +1536,7 @@ set_source_files_properties(
     src/screens/dashboard/canvas/WidgetRegistry.cpp
     src/screens/dashboard/canvas/WidgetTile.cpp
     src/screens/dashboard/widgets/BaseWidget.cpp
+    src/screens/dashboard/widgets/LoadingOverlay.cpp
     src/screens/dashboard/widgets/EconomicCalendarWidget.cpp
     src/screens/dashboard/widgets/MarketSentimentWidget.cpp
     src/screens/dashboard/widgets/NewsWidget.cpp
@@ -1977,7 +1962,6 @@ add_executable(FinceptTerminal ${_FINCEPT_EXE_FLAGS}
 
 target_include_directories(FinceptTerminal PRIVATE
     src
-    ${SingleApplication_SOURCE_DIR}
 )
 
 # ── macOS bundle properties ───────────────────────────────────────────────────
@@ -2216,48 +2200,20 @@ target_link_libraries(FinceptTerminal PRIVATE
     qgeoview
     md4c
     md4c-html
-    SingleApplication::SingleApplication
     qtadvanceddocking-qt6
     OpenSSL::SSL
     OpenSSL::Crypto
     fincept_ed25519
 )
 
-# macOS: link Security.framework + CoreFoundation for SecItem API in SecureStorage
-if(APPLE)
-    target_link_libraries(FinceptTerminal PRIVATE "-framework Security" "-framework CoreFoundation")
-endif()
-
-# Linux: optionally link libsecret for cryptographically-secure credential
-# storage (Secret Service / GNOME Keyring / KWallet via the freedesktop
-# compatibility layer). Without libsecret, SecureStorage falls back to
-# XOR-obfuscated QSettings which is NOT secure. Install libsecret-1-dev
-# (Debian/Ubuntu), libsecret-devel (Fedora), or libsecret (Arch) and
-# reconfigure to enable.
-if(UNIX AND NOT APPLE)
-    find_package(PkgConfig QUIET)
-    if(PkgConfig_FOUND)
-        pkg_check_modules(LIBSECRET IMPORTED_TARGET libsecret-1)
-        if(LIBSECRET_FOUND)
-            target_link_libraries(FinceptTerminal PRIVATE PkgConfig::LIBSECRET)
-            target_compile_definitions(FinceptTerminal PRIVATE FINCEPT_HAVE_LIBSECRET)
-            message(STATUS "libsecret found — Linux SecureStorage will use Secret Service backend")
-        else()
-            message(WARNING
-                "libsecret-1 not found — Linux credential storage falls back to "
-                "XOR-obfuscated QSettings (NOT cryptographically secure). "
-                "Install libsecret-1-dev and rebuild for production deployments.")
-        endif()
-    endif()
-endif()
+# SecureStorage no longer needs platform-specific credential frameworks —
+# it's pure SQLite + AES-256-GCM (OpenSSL) on every platform. See
+# storage/secure/SecureStorage.cpp.
 
 # Windows: link dbghelp for the crash-handler minidump writer (see
-# src/core/crash/CrashHandler.cpp). Also link Advapi32/Crypt32 explicitly for
-# SecureStorage — they're normally pulled in transitively, but when MSVC runs
-# /OPT:REF aggressively on release builds the indirect reference via wincred.h
-# can get stripped, producing late-link errors.
+# src/core/crash/CrashHandler.cpp).
 if(WIN32)
-    target_link_libraries(FinceptTerminal PRIVATE dbghelp Advapi32 Crypt32)
+    target_link_libraries(FinceptTerminal PRIVATE dbghelp)
 endif()
 
 # Copy OpenSSL DLLs to build output — Windows only
@@ -2636,6 +2592,17 @@ if(FINCEPT_BUILD_INSTALLER)
     set(CPACK_IFW_PACKAGE_WIZARD_STYLE "Modern")
     set(CPACK_IFW_PACKAGE_ALLOW_SPACE_IN_PATH ON)
     set(CPACK_IFW_PACKAGE_ALLOW_NON_ASCII_CHARACTERS ON)
+    # Explicitly enable target-dir removal on uninstall. Defaults to ON in
+    # CPackIFW, but #240 surfaced a case where the install root survived a
+    # `purge` run — set explicit so the generated config.xml always carries
+    # <RemoveTargetDir>true</RemoveTargetDir> regardless of CPackIFW version.
+    set(CPACK_IFW_PACKAGE_REMOVE_TARGET_DIR ON)
+    # Controller script for headless invocations (e.g. `purge --confirm-command
+    # --accept-messages --default-answer`). Without it, IFW blocks on wizard
+    # pages even with --confirm-command set, because page auto-advance is only
+    # wired for the install path.
+    set(CPACK_IFW_PACKAGE_CONTROL_SCRIPT
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/installer/config/controlscript.qs")
 
     # Target directory defaults per platform
     if(WIN32)

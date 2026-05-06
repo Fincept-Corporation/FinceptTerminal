@@ -215,6 +215,10 @@ void LaunchpadScreen::surface() {
     LOG_INFO(kLaunchpadTag, "Surfaced");
 }
 
+bool LaunchpadScreen::eventFilter(QObject* obj, QEvent* event) {
+    return QMainWindow::eventFilter(obj, event);
+}
+
 void LaunchpadScreen::closeEvent(QCloseEvent* event) {
     // Reaching closeEvent always means the OS sent a window-close (X button
     // / Alt-F4 / system menu). Programmatic dismissals from button handlers

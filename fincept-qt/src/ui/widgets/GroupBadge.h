@@ -8,19 +8,8 @@ class QLabel;
 
 namespace fincept::ui {
 
-/// Small coloured letter pill shown in the top-left of any dock widget
-/// whose screen implements IGroupLinked. Mirrors Bloomberg Launchpad's
-/// group indicator:
-///   - `[A]` amber, `[B]` cyan, `[C]` magenta, `[D]` green, `[E]` purple, `[F]` red
-///   - Empty badge ("·") when the panel is unlinked (SymbolGroup::None)
-///
-/// Left-click: cycle None→A→B→…→F→None.
-/// Right-click: context menu with explicit pick + "Unlink" + "Show current".
-///
-/// The badge does not talk to SymbolContext directly — it only emits
-/// group_change_requested(). DockScreenRouter owns the wiring so that a
-/// single code path updates both the screen's IGroupLinked::set_group()
-/// and the SymbolContext subscription.
+/// Coloured letter pill on dock titles whose screen implements IGroupLinked.
+/// Click cycles group; emits group_change_requested only — DockScreenRouter owns the wiring to SymbolContext.
 class GroupBadge : public QWidget {
     Q_OBJECT
   public:
@@ -28,9 +17,7 @@ class GroupBadge : public QWidget {
 
     SymbolGroup group() const { return group_; }
 
-    /// Update the displayed group without emitting a change request. Used
-    /// by DockScreenRouter to reflect external state changes (workspace
-    /// load, programmatic set_group).
+    /// Update display without emitting — for workspace load and programmatic set_group.
     void set_group_silent(SymbolGroup g);
 
     static QColor color_for_group(SymbolGroup g);

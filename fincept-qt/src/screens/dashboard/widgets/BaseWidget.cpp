@@ -1,5 +1,6 @@
 #include "screens/dashboard/widgets/BaseWidget.h"
 
+#include "screens/dashboard/widgets/LoadingOverlay.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -126,6 +127,12 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     content_layout_->setSpacing(0);
 
     vl->addWidget(content_, 1);
+
+    // ── Loading overlay ──
+    // Lives as a child of the content area so it covers exactly the data
+    // region (not the title bar). Sized via an event filter on `content_`.
+    loading_overlay_ = new LoadingOverlay(content_);
+    loading_overlay_->attach_to(content_);
 }
 
 void BaseWidget::refresh_base_theme() {
@@ -158,11 +165,34 @@ void BaseWidget::refresh_base_theme() {
 void BaseWidget::set_loading(bool loading) {
     loading_label_->setVisible(loading);
     loading_label_->setText(loading ? "LOADING..." : "");
+    if (!loading_overlay_)
+        return;
+    if (loading)
+        loading_overlay_->start_indeterminate();
+    else
+        loading_overlay_->finish();
+}
+
+void BaseWidget::set_loading_progress(int loaded, int expected) {
+    if (!loading_overlay_)
+        return;
+    const bool active = (expected > 0) && (loaded < expected);
+    loading_label_->setVisible(active);
+    loading_label_->setText(active ? QStringLiteral("LOADING...") : QString());
+    loading_overlay_->set_progress(loaded, expected);
 }
 
 void BaseWidget::set_error(const QString& error) {
     if (error.isEmpty())
         return;
+
+    // Hide loading state — error overrides any in-flight progress.
+    if (loading_overlay_)
+        loading_overlay_->finish();
+    if (loading_label_) {
+        loading_label_->setVisible(false);
+        loading_label_->setText(QString());
+    }
 
     // Clear content and show error
     QLayoutItem* item;

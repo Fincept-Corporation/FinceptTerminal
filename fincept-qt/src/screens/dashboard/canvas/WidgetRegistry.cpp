@@ -125,7 +125,7 @@ WidgetRegistry::WidgetRegistry() {
 
     // ── Tools ────────────────────────────────────────────────────────────────
     register_widget({"video_player", "Live TV / Streams", "Tools",
-                     "Financial TV — Bloomberg, CNBC, Reuters and custom streams", 4, 5, 3, 4,
+                     "Financial TV — major networks and custom streams", 4, 5, 3, 4,
                      [](const QJsonObject&) { return widgets::create_video_player_widget(); }});
 
     register_widget({"recent_files", "Recent Files", "Tools",

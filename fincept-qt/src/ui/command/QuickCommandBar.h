@@ -8,23 +8,15 @@ class QLabel;
 
 namespace fincept::ui {
 
-/// Phase 9: persistent status-line command input on every frame.
-/// Reads `ActionRegistry`, parses with `CommandParser`, invokes via
-/// `ActionRegistry::invoke(id, ctx)`. Bloomberg-style "just type" UX.
-///
-/// Sits at the bottom of WindowFrame above the status bar. Hidden by
-/// default — toggle with Ctrl+\ or via the `cmdbar.toggle` action.
-/// Phase 9 follow-up adds inline autocomplete + ?-prefix help.
+/// "Just type" command input above the status bar. Hidden by default; toggle with Ctrl+\ or `cmdbar.toggle`.
 class QuickCommandBar : public QFrame {
     Q_OBJECT
   public:
     explicit QuickCommandBar(QWidget* parent = nullptr);
 
-    /// Toggle visibility. Focuses the input on show.
     void toggle_visible();
 
-    /// Surface the bar (show + focus). Used when palette/launchpad
-    /// dispatch a "type a command" action.
+    /// Show + focus. Used by palette/launchpad "type a command" dispatch.
     void surface();
 
   private:

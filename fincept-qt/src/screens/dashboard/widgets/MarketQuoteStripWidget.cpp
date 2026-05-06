@@ -107,6 +107,10 @@ void MarketQuoteStripWidget::build_rows() {
 void MarketQuoteStripWidget::hub_resubscribe() {
     auto& hub = datahub::DataHub::instance();
     hub.unsubscribe(this);
+    // Drop the cross-config received set so a re-subscribe after a config
+    // change shows the loading overlay until each new symbol publishes once.
+    received_.clear();
+    set_loading_progress(received_.size(), symbols_.size());
     for (const auto& sym : symbols_) {
         const QString topic = QStringLiteral("market:quote:") + sym;
         hub.subscribe(this, topic, [this](const QVariant& v) {
@@ -146,7 +150,8 @@ void MarketQuoteStripWidget::on_quote(const fincept::services::QuoteData& q) {
     const QColor col = q.change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
     r.change->setStyleSheet(
         QString("color:%1;font-size:11px;font-weight:600;background:transparent;").arg(col.name()));
-    set_loading(false);
+    received_.insert(q.symbol);
+    set_loading_progress(received_.size(), symbols_.size());
 }
 
 QDialog* MarketQuoteStripWidget::make_config_dialog(QWidget* parent) {

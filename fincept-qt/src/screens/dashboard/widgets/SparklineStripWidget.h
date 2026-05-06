@@ -7,6 +7,7 @@
 #include "screens/dashboard/widgets/BaseWidget.h"
 
 #include <QHash>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -46,6 +47,7 @@ class SparklineStripWidget : public BaseWidget {
 
     QStringList symbols_;
     QHash<QString, Row> rows_;
+    QSet<QString> received_;  // symbols whose sparkline has rendered at least once
     bool hub_active_ = false;
 };
 

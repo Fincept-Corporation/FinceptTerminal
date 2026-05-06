@@ -43,7 +43,6 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     hl->setContentsMargins(4, 0, 6, 0);
     hl->setSpacing(0);
 
-    // Menus
     menu_bar_ = new QMenuBar(this);
     menu_bar_->setStyleSheet(menu_ss());
     menu_bar_->addMenu(build_file_menu());
@@ -52,7 +51,6 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     menu_bar_->addMenu(build_help_menu());
     hl->addWidget(menu_bar_);
 
-    // Command bar — shrinks gracefully
     command_bar_ = new CommandBar(this);
     command_bar_->setMinimumWidth(80);
     command_bar_->setMaximumWidth(240);
@@ -145,19 +143,15 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
 }
 
 void ToolBar::refresh_theme() {
-    // Bar background
     setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_BASE()).arg(colors::BORDER_DIM()));
-    // Menu bar + popup menus
     if (menu_bar_) {
         menu_bar_->setStyleSheet(menu_ss());
         for (auto* action : menu_bar_->actions())
             if (action->menu())
                 action->menu()->setStyleSheet(popup_ss());
     }
-    // Separators
     for (auto* s : separators_)
         s->setStyleSheet(QString("color:%1;background:transparent;padding:0 3px;").arg(colors::TEXT_DIM()));
-    // Branding labels
     auto lbl = [](QLabel* l, const QString& c, bool b = false) {
         if (l)
             l->setStyleSheet(QString("color:%1;%2background:transparent;").arg(c, b ? "font-weight:700;" : ""));
@@ -170,7 +164,6 @@ void ToolBar::refresh_theme() {
     lbl(clock_label_, colors::TEXT_PRIMARY());
     lbl(user_label_, colors::AMBER());
     lbl(credits_label_, colors::POSITIVE());
-    // Buttons
     if (plan_btn_)
         plan_btn_->setStyleSheet(QString("QPushButton{color:%1;background:transparent;border:none;padding:0 2px;}"
                                          "QPushButton:hover{color:%2;}")
@@ -197,13 +190,7 @@ void ToolBar::resizeEvent(QResizeEvent* e) {
 }
 
 void ToolBar::apply_responsive_layout(int w) {
-    // Progressive disclosure: hide less-critical elements as width shrinks
-    // >= 1200: everything visible
-    // >= 1000: hide subtitle
-    //  >= 800: also hide clock, LIVE label
-    //  >= 650: also hide credits, chat button
-    //  <  650: minimal — menus + branding + user + plan + logout
-
+    // Progressive disclosure thresholds: 1200=subtitle, 800=clock+LIVE, 650=credits+chat.
     bool show_subtitle = (w >= 1200);
     bool show_clock = (w >= 800);
     bool show_live = (w >= 800);
@@ -223,12 +210,9 @@ void ToolBar::apply_responsive_layout(int w) {
     if (chat_mode_btn_)
         chat_mode_btn_->setVisible(show_chat);
 
-    // Hide separators adjacent to hidden widgets — check each separator's neighbors
-    // Simple approach: hide seps 3 (after credits) and 4 (after plan/before chat)
-    // when their adjacent content is hidden
     if (separators_.size() >= 5) {
-        separators_[2]->setVisible(show_credits); // sep before credits
-        separators_[3]->setVisible(show_chat);    // sep before chat
+        separators_[2]->setVisible(show_credits);
+        separators_[3]->setVisible(show_chat);
     }
 }
 
@@ -246,13 +230,11 @@ void ToolBar::refresh_user_display() {
         return;
     }
 
-    // Elide username/email to fit within maxWidth
     QString name = s.user_info.username.isEmpty() ? s.user_info.email : s.user_info.username;
     QFontMetrics fm(user_label_->font());
     user_label_->setText(fm.elidedText(name, Qt::ElideRight, user_label_->maximumWidth() - 4));
     user_label_->setToolTip(name);
 
-    // Credits — compact format
     int credits = static_cast<int>(s.user_info.credit_balance);
     credits_label_->setText(QString("%1 CR").arg(credits));
     credits_label_->setStyleSheet(
@@ -268,9 +250,7 @@ QMenu* ToolBar::build_file_menu() {
     m->setStyleSheet(popup_ss());
     m->addAction("New Window", this, [this]() { emit action_triggered("new_window"); });
 
-    // "Move to Monitor" — rebuilt on every popup so plug/unplug events are
-    // reflected without restarting the app. Emits "move_to_monitor:<name>"
-    // so WindowFrame can look the screen up by name (indices are unstable).
+    // Rebuilt on popup so plug/unplug is reflected. Emits "move_to_monitor:<name>" — names are stable, indices aren't.
     auto* monitors = m->addMenu("Move to Monitor");
     monitors->setStyleSheet(popup_ss());
     connect(monitors, &QMenu::aboutToShow, this, [this, monitors]() {
@@ -294,9 +274,6 @@ QMenu* ToolBar::build_file_menu() {
     });
 
     m->addSeparator();
-    // Layout = "named arrangement of frames + panels + dock state". Replaces
-    // the old "Workspace" terminology. Routes through builtin_actions
-    // (layout.new / .open / .save / .save_as) via WindowFrame's dispatch.
     m->addAction("New Layout",       this, [this]() { emit action_triggered("layout_new"); });
     m->addAction("Open Layout…",     this, [this]() { emit action_triggered("layout_open"); });
     m->addAction("Save Layout",      this, [this]() { emit action_triggered("layout_save"); });
@@ -326,7 +303,6 @@ QMenu* ToolBar::build_navigate_menu() {
                          .arg(colors::BG_RAISED())
                          .arg(colors::AMBER()));
 
-    // Use submenus for each group — cleaner and no scroll needed
     auto add_sub = [&](const QString& title) -> QMenu* {
         auto* sub = m->addMenu(title);
         sub->setStyleSheet(m->styleSheet());
@@ -337,7 +313,6 @@ QMenu* ToolBar::build_navigate_menu() {
         menu->addAction(label, this, [this, id]() { emit navigate_to(id); });
     };
 
-    // Markets & Data
     auto* mkt = add_sub("Markets & Data");
     nav(mkt, "Economics", "economics");
     nav(mkt, "GOVT Data", "gov_data");
@@ -346,7 +321,6 @@ QMenu* ToolBar::build_navigate_menu() {
     nav(mkt, "Asia Markets", "asia_markets");
     nav(mkt, "Relationship Map", "relationship_map");
 
-    // Trading & Portfolio
     auto* trd = add_sub("Trading & Portfolio");
     nav(trd, "Equity Trading", "equity_trading");
     nav(trd, "Alpha Arena", "alpha_arena");
@@ -355,11 +329,9 @@ QMenu* ToolBar::build_navigate_menu() {
     nav(trd, "F&&O", "fno");
     nav(trd, "Watchlist", "watchlist");
 
-    // Crypto / on-chain identity
     auto* crypto = add_sub("Crypto");
     nav(crypto, "Crypto Center", "crypto_center");
 
-    // Research & Intelligence
     auto* res = add_sub("Research & Intelligence");
     nav(res, "Equity Research", "equity_research");
     nav(res, "M&A Analytics", "ma_analytics");
@@ -368,7 +340,6 @@ QMenu* ToolBar::build_navigate_menu() {
     nav(res, "Maritime", "maritime");
     nav(res, "Surface Analytics", "surface_analytics");
 
-    // Tools
     auto* tools = add_sub("Tools");
     nav(tools, "Agent Config", "agent_config");
     nav(tools, "MCP Servers", "mcp_servers");
@@ -382,7 +353,6 @@ QMenu* ToolBar::build_navigate_menu() {
 
     m->addSeparator();
 
-    // Direct items (no submenu)
     nav(m, "Forum", "forum");
     nav(m, "Docs", "docs");
     nav(m, "Support", "support");
@@ -394,23 +364,17 @@ QMenu* ToolBar::build_navigate_menu() {
 QMenu* ToolBar::build_view_menu() {
     auto* m = new QMenu("View", this);
     m->setStyleSheet(popup_ss());
-    // Component Browser at the top — Bloomberg's discoverability hook.
     m->addAction("Component Browser\tCtrl+K", this,
                  [this]() { emit action_triggered("browse_components"); });
     m->addSeparator();
     m->addAction("Fullscreen\tF11", this, [this]() { emit action_triggered("fullscreen"); });
     m->addSeparator();
     m->addAction("Focus Mode\tF10", this, [this]() { emit action_triggered("focus_mode"); });
-    // Phase 11: the shortcut is Ctrl+Shift+T; we don't mark the QAction as
-    // checkable because its state is owned by WindowFrame::always_on_top_ —
-    // a checkable toolbar action would drift out of sync on window focus
-    // changes. If the user cares about the visual, the window's title bar
-    // retains the OS-level "always on top" decoration on most platforms.
+    // Not checkable — state lives on WindowFrame::always_on_top_; a checkable QAction would drift on focus changes.
     m->addAction("Always on Top\tCtrl+Shift+T", this,
                  [this]() { emit action_triggered("always_on_top"); });
     m->addSeparator();
 
-    // Float any screen as a separate window on another monitor
     auto* panels = m->addMenu("Float Panel");
     panels->setStyleSheet(popup_ss());
     panels->addAction("Dashboard", this, [this]() { emit action_triggered("panel_dashboard"); });
@@ -429,47 +393,39 @@ QMenu* ToolBar::build_view_menu() {
     panels->addAction("AI Chat", this, [this]() { emit action_triggered("panel_ai_chat"); });
     m->addSeparator();
 
-    // Quick Switch — jump to a preset screen layout
     auto* persp = m->addMenu("Quick Switch");
     persp->setStyleSheet(popup_ss());
     persp->addAction("Save Workspace", this, [this]() { emit action_triggered("perspective_save"); });
     persp->addSeparator();
 
-    // Trading
     auto* qs_trading = persp->addMenu("Trading");
     qs_trading->setStyleSheet(popup_ss());
     qs_trading->addAction("Crypto Trading", this, [this]() { emit action_triggered("perspective_trading"); });
     qs_trading->addAction("Equity Trading", this, [this]() { emit action_triggered("perspective_equity"); });
     qs_trading->addAction("Algo Trading", this, [this]() { emit action_triggered("perspective_algo"); });
 
-    // Research
     auto* qs_research = persp->addMenu("Research");
     qs_research->setStyleSheet(popup_ss());
     qs_research->addAction("Equity Research", this, [this]() { emit action_triggered("perspective_research"); });
     qs_research->addAction("Derivatives", this, [this]() { emit action_triggered("perspective_derivatives"); });
     qs_research->addAction("M&&A Analytics", this, [this]() { emit action_triggered("perspective_ma"); });
 
-    // Portfolio & Markets
     persp->addAction("Portfolio View", this, [this]() { emit action_triggered("perspective_portfolio"); });
     persp->addAction("Markets View", this, [this]() { emit action_triggered("perspective_markets"); });
     persp->addAction("News View", this, [this]() { emit action_triggered("perspective_news"); });
 
-    // Economics & Data
     auto* qs_econ = persp->addMenu("Economics && Data");
     qs_econ->setStyleSheet(popup_ss());
     qs_econ->addAction("Economics", this, [this]() { emit action_triggered("perspective_economics"); });
     qs_econ->addAction("Data Sources", this, [this]() { emit action_triggered("perspective_data"); });
 
-    // Geopolitics
     persp->addAction("Geopolitics View", this, [this]() { emit action_triggered("perspective_geopolitics"); });
 
-    // AI & Quant
     auto* qs_ai = persp->addMenu("AI && Quant");
     qs_ai->setStyleSheet(popup_ss());
     qs_ai->addAction("Quant Lab", this, [this]() { emit action_triggered("perspective_quant"); });
     qs_ai->addAction("AI Chat", this, [this]() { emit action_triggered("perspective_ai"); });
 
-    // Tools
     persp->addAction("Tools View", this, [this]() { emit action_triggered("perspective_tools"); });
     m->addSeparator();
 

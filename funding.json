@@ -15,7 +15,7 @@
     {
       "guid": "fincept-terminal",
       "name": "Fincept Terminal",
-      "description": "Native C++20 financial intelligence terminal built with Dear ImGui and embedded Python. Features full multi-asset analytics across equity, portfolio, derivatives, fixed income, and alternatives, 20+ AI investor personas, 100+ data connectors, visual workflow automation, maritime tracking, and geopolitical intelligence frameworks. A professional alternative to Bloomberg Terminal, built for analysts who refuse to be limited by traditional software.",
+      "description": "Native C++20 financial intelligence terminal built with Dear ImGui and embedded Python. Features full multi-asset analytics across equity, portfolio, derivatives, fixed income, and alternatives, 20+ AI investor personas, 100+ data connectors, visual workflow automation, maritime tracking, and geopolitical intelligence frameworks. A professional, open-source alternative to legacy financial terminals, built for analysts who refuse to be limited by traditional software.",
       "webpageUrl": {
         "url": "https://github.com/Fincept-Corporation/FinceptTerminal"
       },

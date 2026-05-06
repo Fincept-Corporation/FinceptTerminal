@@ -7,13 +7,13 @@ Welcome to Fincept Terminal! This guide will get you from zero to your first con
 
 ## What is Fincept Terminal?
 
-Fincept Terminal is an **open-source financial analysis platform** — a free, open-source alternative to Bloomberg Terminal. Version 4 is a native C++20 application built with Qt6.
+Fincept Terminal is an **open-source financial analysis platform** — a free, open-source alternative to legacy professional financial terminals. Version 4 is a native C++20 application built with Qt6.
 
 ### The Big Picture
 
 **Current Reality:**
-- Bloomberg Terminal: $24,000/year per user
-- Refinitiv Eikon: $20,000+/year
+- Legacy professional terminals: $20,000+/year per user
+- Industry-standard market data subscriptions: $20,000+/year
 - Professional tools locked behind paywalls
 
 **Our Vision:**
@@ -92,6 +92,10 @@ cd FinceptTerminal/fincept-qt
 cmake --preset win-release     && cmake --build --preset win-release     # Windows (Dev Cmd for VS 2022)
 cmake --preset linux-release   && cmake --build --preset linux-release   # Linux
 cmake --preset macos-release   && cmake --build --preset macos-release   # macOS
+
+# Older or RAM-constrained machines: cap concurrent compile jobs to avoid
+# saturating every core (the default behaviour). Example:
+#   cmake --build --preset macos-release --parallel 4
 
 # 3. Run
 ./build/linux-release/FinceptTerminal              # Linux

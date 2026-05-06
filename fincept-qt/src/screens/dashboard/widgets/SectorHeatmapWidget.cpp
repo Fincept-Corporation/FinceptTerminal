@@ -75,13 +75,15 @@ void SectorHeatmapWidget::refresh_data() {
 
 void SectorHeatmapWidget::hub_subscribe_all() {
     auto& hub = datahub::DataHub::instance();
-    for (const auto& sym : sector_symbols()) {
+    const auto syms = sector_symbols();
+    set_loading_progress(row_cache_.size(), syms.size());
+    for (const auto& sym : syms) {
         const QString topic = QStringLiteral("market:quote:") + sym;
-        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+        hub.subscribe(this, topic, [this, sym, total = syms.size()](const QVariant& v) {
             if (!v.canConvert<services::QuoteData>())
                 return;
             row_cache_.insert(sym, v.value<services::QuoteData>());
-            set_loading(false);
+            set_loading_progress(row_cache_.size(), total);
             rebuild_from_cache();
         });
     }

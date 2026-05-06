@@ -90,7 +90,8 @@ QStringList LlmConfigSection::fallback_models(const QString& provider) {
                 "moonshot-v1-32k-vision-preview",
                 "moonshot-v1-128k-vision-preview"};
     if (p == "ollama")
-        return {"llama3.1:8b", "qwen2.5:7b", "mistral:7b"};
+        return {}; // Local provider — models fetched live from /api/tags. No fallback so the
+                   // combo only shows what the user actually has installed locally.
     if (p == "xai")
         return {"grok-4-latest", "grok-4", "grok-3", "grok-3-mini"};
     if (p == "fincept")
@@ -613,8 +614,9 @@ void LlmConfigSection::populate_form(const QString& provider) {
     provider_edit_->setText(provider);
 
     bool is_fincept = (provider.toLower() == "fincept");
+    bool is_ollama = (provider.toLower() == "ollama");
 
-    // Populate model combo with fallback suggestions
+    // Populate model combo with fallback suggestions (empty for ollama — see fallback_models).
     model_combo_->blockSignals(true);
     model_combo_->clear();
     model_combo_->addItems(fallback_models(provider));
@@ -657,6 +659,21 @@ void LlmConfigSection::populate_form(const QString& provider) {
                 model_combo_->setVisible(false);
                 fetch_btn_->setVisible(false);
                 base_url_edit_->setVisible(false);
+            } else if (is_ollama) {
+                // Local provider — no API key needed. Mark the field clearly so users
+                // don't think it's broken or required.
+                api_key_edit_->clear();
+                api_key_edit_->setEnabled(false);
+                api_key_edit_->setPlaceholderText("Not required — local provider");
+                model_combo_->setVisible(true);
+                model_combo_->setEnabled(true);
+                fetch_btn_->setVisible(true);
+                fetch_btn_->setEnabled(true);
+                base_url_edit_->setVisible(true);
+                base_url_edit_->setEnabled(true);
+                // Auto-fetch installed models from the local Ollama server so the
+                // combo only shows what the user actually has, not hardcoded guesses.
+                QTimer::singleShot(0, this, [this]() { on_fetch_models(); });
             } else {
                 api_key_edit_->setText(p.api_key);
                 api_key_edit_->setEnabled(true);
@@ -674,7 +691,7 @@ void LlmConfigSection::populate_form(const QString& provider) {
 
     // New provider — clear form
     api_key_edit_->clear();
-    api_key_edit_->setEnabled(!is_fincept);
+    api_key_edit_->setEnabled(!is_fincept && !is_ollama);
     if (is_fincept) {
         auto stored = SettingsRepository::instance().get("fincept_api_key");
         if (stored.is_ok() && !stored.value().isEmpty())
@@ -684,7 +701,18 @@ void LlmConfigSection::populate_form(const QString& provider) {
         model_combo_->setVisible(false);
         fetch_btn_->setVisible(false);
         base_url_edit_->setVisible(false);
+    } else if (is_ollama) {
+        api_key_edit_->setPlaceholderText("Not required — local provider");
+        model_combo_->setVisible(true);
+        model_combo_->setEnabled(true);
+        fetch_btn_->setVisible(true);
+        fetch_btn_->setEnabled(true);
+        base_url_edit_->setVisible(true);
+        base_url_edit_->setEnabled(true);
+        base_url_edit_->setText(def_url);
+        QTimer::singleShot(0, this, [this]() { on_fetch_models(); });
     } else {
+        api_key_edit_->setPlaceholderText("sk-...");
         model_combo_->setVisible(true);
         model_combo_->setEnabled(true);
         fetch_btn_->setVisible(true);
@@ -900,7 +928,13 @@ void LlmConfigSection::on_models_fetched(const QString& provider, const QStringL
         return;
 
     if (!error.isEmpty()) {
-        show_status("Fetch failed: " + error + " — using suggestions", true);
+        // Show the actual error so users can act on it (timeout, 401, host
+        // not found, etc.) instead of guessing. For ollama add a hint about
+        // the local server in case that's the cause.
+        if (provider.toLower() == "ollama")
+            show_status("Ollama fetch failed: " + error + " — check `ollama serve` and base URL", true);
+        else
+            show_status("Fetch failed: " + error, true);
         return;
     }
 
@@ -1241,9 +1275,43 @@ void LlmConfigSection::on_profile_selected(int row) {
 }
 
 void LlmConfigSection::on_profile_provider_changed(const QString& provider) {
+    const bool is_ollama = (provider.toLower() == "ollama");
+
     profile_model_combo_->clear();
     profile_model_combo_->addItems(fallback_models(provider));
     profile_base_url_edit_->setText(default_base_url(provider));
+
+    if (is_ollama) {
+        // Local provider — no API key needed. One-shot listener pulls live models
+        // from the local Ollama server into the profile combo. Receiver is `this`,
+        // so the connection is auto-severed if the section is destroyed.
+        profile_api_key_edit_->clear();
+        profile_api_key_edit_->setEnabled(false);
+        profile_api_key_edit_->setPlaceholderText("Not required — local provider");
+
+        auto conn = std::make_shared<QMetaObject::Connection>();
+        *conn = connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::models_fetched, this,
+                        [this, conn](const QString& p, const QStringList& models, const QString& err) {
+                            if (p.toLower() != "ollama")
+                                return;
+                            disconnect(*conn);
+                            if (!err.isEmpty()) {
+                                show_profile_status(
+                                    "Cannot reach Ollama — is `ollama serve` running locally?", true);
+                                return;
+                            }
+                            const QString current = profile_model_combo_->currentText();
+                            profile_model_combo_->clear();
+                            profile_model_combo_->addItems(models);
+                            if (!current.isEmpty())
+                                profile_model_combo_->setCurrentText(current);
+                        });
+        ai_chat::LlmService::instance().fetch_models("ollama", {}, profile_base_url_edit_->text().trimmed());
+        return;
+    }
+
+    profile_api_key_edit_->setEnabled(true);
+    profile_api_key_edit_->setPlaceholderText("Leave blank to inherit from provider");
 
     // Pre-fill api_key from saved provider if present and field is empty
     if (profile_api_key_edit_->text().isEmpty()) {

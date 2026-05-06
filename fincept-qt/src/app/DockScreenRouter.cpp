@@ -280,7 +280,7 @@ void DockScreenRouter::navigate(const QString& id, bool exclusive) {
         // existing right-click "Float Panel" / "Tear off into new window"
         // entries also remain). The pre-Phase-4 hard-coded
         // "right-of-TL → below-TL → right-of-BL" cycle was a v1
-        // simplification; this is the cleaner Bloomberg-grade behaviour
+        // simplification; this is the cleaner Fincept-grade behaviour
         // (everything tabs into centre by default; user splits explicitly).
         const auto opened = manager_->openedDockAreas();
         ads::CDockAreaWidget* target = nullptr;

@@ -6,7 +6,7 @@
 
 namespace fincept {
 
-/// Singleton model backing the persistent symbol chip strip (Bloomberg
+/// Singleton model backing the persistent symbol chip strip (Fincept
 /// "Pushpins" equivalent). Pins are user-scoped — they follow the user
 /// across workspaces and terminal sessions, stored in QSettings under
 /// "pushpins/list".

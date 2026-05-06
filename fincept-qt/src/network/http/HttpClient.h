@@ -12,8 +12,7 @@
 
 namespace fincept {
 
-/// Async HTTP client wrapping QNetworkAccessManager.
-/// All responses delivered via callbacks on the Qt event loop.
+/// Async HTTP client wrapping QNetworkAccessManager. Responses delivered on the Qt event loop.
 class HttpClient : public QObject {
     Q_OBJECT
   public:
@@ -21,10 +20,12 @@ class HttpClient : public QObject {
 
     using JsonCallback = std::function<void(Result<QJsonDocument>)>;
 
-    void get(const QString& url, JsonCallback callback);
-    void post(const QString& url, const QJsonObject& body, JsonCallback callback);
-    void put(const QString& url, const QJsonObject& body, JsonCallback callback);
-    void del(const QString& url, JsonCallback callback);
+    /// `context` scopes callback lifetime — pass `this` from anything that can outlive its reply.
+    /// nullptr is safe only for objects whose lifetime equals the app's (singletons).
+    void get(const QString& url, JsonCallback callback, const QObject* context = nullptr);
+    void post(const QString& url, const QJsonObject& body, JsonCallback callback, const QObject* context = nullptr);
+    void put(const QString& url, const QJsonObject& body, JsonCallback callback, const QObject* context = nullptr);
+    void del(const QString& url, JsonCallback callback, const QObject* context = nullptr);
 
     void set_auth_header(const QString& api_key);
     void set_session_token(const QString& token);
@@ -34,7 +35,7 @@ class HttpClient : public QObject {
   private:
     HttpClient();
     QNetworkRequest build_request(const QString& url) const;
-    void handle_reply(QNetworkReply* reply, JsonCallback callback);
+    void handle_reply(QNetworkReply* reply, JsonCallback callback, const QObject* context);
 
     QNetworkAccessManager* nam_ = nullptr;
     QString base_url_;

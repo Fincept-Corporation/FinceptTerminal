@@ -4,11 +4,16 @@
 #include <QHash>
 #include <QLabel>
 #include <QScrollArea>
+#include <QSet>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
 
 class QFrame;
+
+namespace fincept::screens::widgets {
+class LoadingOverlay;
+}
 
 namespace fincept::screens {
 
@@ -139,6 +144,13 @@ class MarketPulsePanel : public QWidget {
     QHash<QString, services::QuoteData> snapshot_cache_;
     bool hub_active_ = false;
     QTimer* hours_timer_ = nullptr;
+
+    // Loading overlay shown over the scroll area while the union of the
+    // breadth/movers/snapshot caches fills up. The denominator is the
+    // unique-symbol union size (~70), updated every time a cache changes.
+    int total_expected_symbols_ = 0;
+    widgets::LoadingOverlay* loading_overlay_ = nullptr;
+    void update_loading_progress();
 };
 
 } // namespace fincept::screens

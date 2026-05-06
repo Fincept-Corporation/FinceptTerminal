@@ -87,6 +87,10 @@ class WorkspaceSnapshotRing {
     /// Drop one snapshot. Used when the user dismisses a stale recovery row.
     Result<void> erase(qint64 snapshot_id);
 
+    /// Set or clear the user-visible name on a snapshot. Pass an empty string
+    /// to clear (stored as NULL). Used by the recovery dialog's rename action.
+    Result<void> rename(qint64 snapshot_id, const QString& name);
+
     /// Trim auto rows so at most `max_auto` remain. Called automatically
     /// inside `add()` after each successful auto insert. Exposed for tests.
     Result<void> trim_auto();

@@ -11,6 +11,8 @@
 
 namespace fincept::screens::widgets {
 
+class LoadingOverlay;
+
 /// Reusable widget container — title bar with accent color, close/refresh/config buttons.
 ///
 /// Configurable widgets override `make_config_dialog(parent)` to return a
@@ -28,6 +30,16 @@ class BaseWidget : public QFrame {
     QWidget* drag_handle() const { return title_bar_; }
 
     void set_loading(bool loading);
+
+    /// Determinate-progress variant of `set_loading`. Shows an animated
+    /// "LOADING X / Y ITEMS" overlay over the content area; widget
+    /// subclasses call this from their data-arrival slot with the running
+    /// (loaded, expected) counts. When `loaded >= expected` the overlay
+    /// fades out automatically. If `expected <= 0`, falls back to the
+    /// indeterminate "LOADING…" animation. The title-bar text indicator is
+    /// also toggled in lockstep.
+    void set_loading_progress(int loaded, int expected);
+
     void set_error(const QString& error);
     void set_title(const QString& title);
 
@@ -77,6 +89,7 @@ class BaseWidget : public QFrame {
     QVBoxLayout* content_layout_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;
     QPushButton* config_btn_ = nullptr;
+    LoadingOverlay* loading_overlay_ = nullptr;
     QString accent_color_;
 };
 

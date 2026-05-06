@@ -7,10 +7,6 @@
 
 namespace fincept::ui {
 
-// ---------------------------------------------------------------------------
-// Built-in theme preset definitions
-// ---------------------------------------------------------------------------
-
 const ThemeTokens THEME_OBSIDIAN = {
     .name = "Obsidian",
     .bg_base = "#080808",
@@ -45,10 +41,6 @@ const ThemeTokens THEME_OBSIDIAN = {
     .chart_colors = {"#d97706", "#0891b2", "#16a34a", "#dc2626", "#2563eb", "#ca8a04"},
 };
 
-// ---------------------------------------------------------------------------
-// ThemeManager implementation
-// ---------------------------------------------------------------------------
-
 ThemeManager::ThemeManager() : QObject(nullptr), current_(THEME_OBSIDIAN) {}
 
 ThemeManager& ThemeManager::instance() {
@@ -64,7 +56,6 @@ void ThemeManager::apply_theme(const QString& /*name*/) {
 void ThemeManager::apply_font(const QString& family, int size_px) {
     font_family_ = family;
     font_size_px_ = (size_px > 0) ? size_px : 14;
-    // rebuild_and_apply() will sync qApp->setFont() and QSS together.
     rebuild_and_apply();
 }
 
@@ -76,6 +67,20 @@ void ThemeManager::apply_density(const QString& density) {
     else
         density_pad_ = 4;
 
+    rebuild_and_apply();
+}
+
+void ThemeManager::apply_typography_and_density(const QString& family, int size_px,
+                                                const QString& density) {
+    if (!family.isEmpty())
+        font_family_ = family;
+    font_size_px_ = (size_px > 0) ? size_px : 14;
+    if (density == "Compact")
+        density_pad_ = 2;
+    else if (density == "Comfortable")
+        density_pad_ = 8;
+    else
+        density_pad_ = 4;
     rebuild_and_apply();
 }
 
@@ -121,8 +126,8 @@ void ThemeManager::rebuild_and_apply() {
 
 QString ThemeManager::build_global_qss() const {
     const auto& t = current_;
-    const int p = density_pad_;      // padding px
-    const int p2 = density_pad_ * 2; // double padding
+    const int p = density_pad_;
+    const int p2 = density_pad_ * 2;
 
     return QString(R"(
         * {
@@ -211,14 +216,9 @@ QString ThemeManager::build_global_qss() const {
         QMenu::separator { background: %6; height: 1px; }
 
         QScrollArea { border: none; background: %1; }
-        /* QFrame transparent background — EXCLUDE ADS classes that extend QFrame
-           (CDockWidgetTab, CDockAreaTitleBar) because this app-level rule would
-           override their widget-level styling from CDockManager, making tabs
-           transparent and labels invisible. We use :!property selectors are not
-           available, so we explicitly re-set ADS widgets after. */
+        /* App-level QFrame transparent rule would erase ADS tab/title styling,
+           so re-assert ADS widget backgrounds below — later, more-specific rules win. */
         QFrame { background: transparent; border: none; }
-        /* Re-assert ADS widget backgrounds AFTER the QFrame rule.
-           In app-level QSS, later rules with more specific selectors win. */
         ads--CDockContainerWidget { background: %1; border: none; }
         ads--CDockAreaWidget { background: %1; border: none; }
         ads--CDockWidget { background: %1; border: none; }
@@ -427,69 +427,40 @@ QString ThemeManager::build_global_qss() const {
         #negativeText { color: %21; }
         #warningText  { color: %22; }
     )")
-        // %1  bg_base
-        .arg(t.bg_base)
-        // %2  text_primary
-        .arg(t.text_primary)
-        // %3  border_med
-        .arg(t.border_med)
-        // %4  border_bright
-        .arg(t.border_bright)
-        // %5  bg_surface
-        .arg(t.bg_surface)
-        // %6  border_dim
-        .arg(t.border_dim)
-        // %7  padding (density)
-        .arg(p)
-        // %8  double padding
-        .arg(p2)
-        // %9  accent
-        .arg(t.accent)
-        // %10 text_secondary
-        .arg(t.text_secondary)
-        // %11 bg_hover
-        .arg(t.bg_hover)
-        // %12 bg_raised
-        .arg(t.bg_raised)
-        // %13 text_dim
-        .arg(t.text_dim)
-        // %14 row_alt
-        .arg(t.row_alt)
-        // %15 font-family
-        .arg(font_family_)
-        // %16 font-size
-        .arg(font_size_px_)
-        // %17 text_on_accent
-        .arg(t.text_on_accent)
-        // %18 icon_dim
-        .arg(t.icon_dim)
-        // %19 icon_hover
-        .arg(t.icon_hover)
-        // %20 positive
-        .arg(t.positive)
-        // %21 negative
-        .arg(t.negative)
-        // %22 warning
-        .arg(t.warning)
-        // %23 positive_dim
-        .arg(t.positive_dim)
-        // %24 negative_dim
-        .arg(t.negative_dim)
-        // %25 accent_bg
-        .arg(t.accent_bg)
-        // %26 positive_bg
-        .arg(t.positive_bg)
-        // %27 negative_bg
-        .arg(t.negative_bg);
+        .arg(t.bg_base)         // %1
+        .arg(t.text_primary)    // %2
+        .arg(t.border_med)      // %3
+        .arg(t.border_bright)   // %4
+        .arg(t.bg_surface)      // %5
+        .arg(t.border_dim)      // %6
+        .arg(p)                 // %7  padding
+        .arg(p2)                // %8  double padding
+        .arg(t.accent)          // %9
+        .arg(t.text_secondary)  // %10
+        .arg(t.bg_hover)        // %11
+        .arg(t.bg_raised)       // %12
+        .arg(t.text_dim)        // %13
+        .arg(t.row_alt)         // %14
+        .arg(font_family_)      // %15
+        .arg(font_size_px_)     // %16
+        .arg(t.text_on_accent)  // %17
+        .arg(t.icon_dim)        // %18
+        .arg(t.icon_hover)      // %19
+        .arg(t.positive)        // %20
+        .arg(t.negative)        // %21
+        .arg(t.warning)         // %22
+        .arg(t.positive_dim)    // %23
+        .arg(t.negative_dim)    // %24
+        .arg(t.accent_bg)       // %25
+        .arg(t.positive_bg)     // %26
+        .arg(t.negative_bg);    // %27
 }
 
 QString ThemeManager::build_ads_qss() const {
     const auto& t = current_;
     LOG_INFO("ThemeManager", QString("build_ads_qss: bg_base=%1 bg_raised=%2 bg_surface=%3 accent=%4 border_dim=%5")
         .arg(t.bg_base).arg(t.bg_raised).arg(t.bg_surface).arg(t.accent).arg(t.border_dim));
-    // This stylesheet is applied directly to CDockManager to completely override
-    // ADS's internally loaded default.css / focus_highlighting.css which use
-    // palette(window)/palette(highlight) — the Windows system gray/blue colors.
+    // Applied to CDockManager to override ADS's default.css/focus_highlighting.css palette() colours.
     QString qss = QString(R"(
         ads--CDockContainerWidget { background: %1; }
         ads--CDockAreaWidget { background: %1; }
@@ -545,11 +516,7 @@ QString ThemeManager::build_ads_qss() const {
         ads--CAutoHideSideBar { background: %1; border: none; }
         QScrollArea#dockWidgetScrollArea { padding: 0px; border: none; }
 
-        /* Phase 14 — auto-dock polish. Echoes Bloomberg Launchpad's amber
-           yellow snap-line when two components touch. ADS paints the drop
-           preview (COverlayDropArea / COverlayCrossWidget) and the splitter
-           handle hover — both styled with the accent colour so the visual
-           intent across drag + resize is consistent. */
+        /* Drop overlay + splitter hover both use accent for visual consistency across drag/resize. */
         ads--CDockOverlay { background: transparent; }
         ads--CDockOverlayCross { background: transparent; }
         ads--CDockSplitter::handle:hover { background-color: %4; }

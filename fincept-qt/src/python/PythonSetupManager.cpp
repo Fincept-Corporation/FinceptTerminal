@@ -862,19 +862,26 @@ bool PythonSetupManager::install_packages(const QString& venv_name, const QStrin
         // Write the requirements hash as the marker — all packages installed.
         write_marker_hash(venv_name, compute_requirements_hash(requirements_file));
         emit_progress(step_key, 100, "All packages installed");
-    } else {
-        LOG_WARN("PythonSetup", QString("[%1] %2 package(s) failed: %3")
-                                    .arg(venv_name)
-                                    .arg(failed.size())
-                                    .arg(failed.join(", ").left(300)));
-        // Do NOT write the marker when any packages failed — the stale/absent
-        // marker ensures check_status() returns needs_setup=true on the next
-        // launch so the failed packages are retried automatically.
-        emit_progress(step_key, 100,
-                      QString("Done — %1 package(s) failed (will retry on next launch)").arg(failed.size()));
+        return true;
     }
 
-    return true;
+    LOG_WARN("PythonSetup", QString("[%1] %2 package(s) failed: %3")
+                                .arg(venv_name)
+                                .arg(failed.size())
+                                .arg(failed.join(", ").left(300)));
+    // Do NOT write the marker when any packages failed — the stale/absent
+    // marker ensures check_status() returns needs_setup=true on the next
+    // launch so the failed packages are retried automatically.
+    emit_progress(step_key, 100,
+                  QString("Done — %1 package(s) failed (will retry on next launch)").arg(failed.size()),
+                  /*is_error=*/true);
+    // Returning false here prevents run_setup() from writing the .setup_complete
+    // sentinel. Without this, the sentinel would be written even though one or
+    // more packages are missing, and the user would be stuck looping on the
+    // setup screen forever (every launch detects the absent marker, every
+    // re-run hits the same package failure, every successful-looking finish
+    // re-writes the sentinel without writing the marker).
+    return false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

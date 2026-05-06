@@ -1,5 +1,6 @@
 #include "screens/dashboard/MarketPulsePanel.h"
 
+#include "screens/dashboard/widgets/LoadingOverlay.h"
 #include "services/markets/MarketDataService.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -119,6 +120,13 @@ MarketPulsePanel::MarketPulsePanel(QWidget* parent) : QWidget(parent) {
 
     scroll_area_->setWidget(content);
     vl->addWidget(scroll_area_, 1);
+
+    // ── Loading overlay ──
+    // Layered over the scroll area so the user sees an animated "LOADING X
+    // / Y" while quotes for the breadth/movers/snapshot symbol union are
+    // streaming in. Denominator is the unique union size, computed once.
+    loading_overlay_ = new widgets::LoadingOverlay(scroll_area_);
+    loading_overlay_->attach_to(scroll_area_);
 
     // ── Timers ──
 
@@ -940,6 +948,9 @@ void MarketPulsePanel::hub_subscribe_all() {
     for (const auto& s : kSnapshotSymbols)
         all_syms.insert(s);
 
+    total_expected_symbols_ = all_syms.size();
+    update_loading_progress();
+
     for (const QString& sym : all_syms) {
         const QString topic = QStringLiteral("market:quote:") + sym;
         const bool in_breadth = kBreadthSymbols.contains(sym);
@@ -962,9 +973,26 @@ void MarketPulsePanel::hub_subscribe_all() {
                 snapshot_cache_.insert(sym, q);
                 rebuild_snapshot_from_cache();
             }
+            update_loading_progress();
         });
     }
     hub_active_ = true;
+}
+
+void MarketPulsePanel::update_loading_progress() {
+    if (!loading_overlay_)
+        return;
+    // Numerator = unique symbols received across the three caches. Each
+    // cache only holds its own subset, but a symbol can be in more than
+    // one — union via QSet to avoid double-counting.
+    QSet<QString> seen;
+    for (auto it = breadth_cache_.constBegin(); it != breadth_cache_.constEnd(); ++it)
+        seen.insert(it.key());
+    for (auto it = movers_cache_.constBegin(); it != movers_cache_.constEnd(); ++it)
+        seen.insert(it.key());
+    for (auto it = snapshot_cache_.constBegin(); it != snapshot_cache_.constEnd(); ++it)
+        seen.insert(it.key());
+    loading_overlay_->set_progress(seen.size(), total_expected_symbols_);
 }
 
 void MarketPulsePanel::hub_unsubscribe_all() {

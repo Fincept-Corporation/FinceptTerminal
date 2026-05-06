@@ -10,8 +10,7 @@ enum class SymbolGroup : char;
 
 namespace fincept::ui {
 
-/// Bottom status bar — version, feed indicators, ready status, and the
-/// Phase 7-polish active-symbol indicator.
+/// Bottom status bar: version, feed indicators, ready status, active-symbol indicator.
 class StatusBar : public QWidget {
     Q_OBJECT
   public:
@@ -21,12 +20,7 @@ class StatusBar : public QWidget {
   private:
     void refresh_theme();
 
-    /// Phase 7 polish: subscribe to SymbolContext to display the most-
-    /// recently-published symbol + which colour group it lives in.
-    /// Bloomberg's bottom bar shows the active security; this is the
-    /// equivalent. Drives off SymbolContext::active_symbol_changed
-    /// (which fires whenever any panel anywhere publishes via
-    /// set_group_symbol).
+    /// Subscribes to SymbolContext::active_symbol_changed to mirror the most recent group publish.
     void wire_link_indicator();
     void update_link_label(SymbolGroup g, const SymbolRef& ref);
 

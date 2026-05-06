@@ -9,6 +9,7 @@
 #include "ai_chat/LlmContentExtractors.h"
 #include "ai_chat/LlmRequestPolicy.h"
 #include "ai_chat/ModelCatalog.h"
+#include "auth/AuthManager.h"
 
 #include "core/logging/Logger.h"
 #include "core/config/AppConfig.h"
@@ -63,9 +64,27 @@ void LlmService::reload_config() {
 }
 
 void LlmService::ensure_config() const {
-    // Called with mutex_ held
-    if (config_loaded_)
+    // Called with mutex_ held.
+    //
+    // Fincept credentials are refreshed on every call regardless of cache
+    // state — the cache is a one-shot for everything else (tool-RAG hint
+    // generation walks the entire MCP registry), but credentials track the
+    // auth lifecycle. The user can authenticate AFTER the first
+    // ensure_config() ran (e.g. AI chat opened before login completes), and
+    // a stale cached empty key would 401 every subsequent request.
+    if (config_loaded_) {
+        if (provider_ == "fincept") {
+            const auto& sess = fincept::auth::AuthManager::instance().session();
+            if (!sess.api_key.isEmpty()) {
+                api_key_ = sess.api_key;
+            } else {
+                auto stored = SettingsRepository::instance().get("fincept_api_key");
+                if (stored.is_ok() && !stored.value().isEmpty())
+                    api_key_ = stored.value();
+            }
+        }
         return;
+    }
 
     provider_ = model_ = api_key_ = base_url_ = system_prompt_ = {};
     temperature_ = 0.7;
@@ -108,11 +127,19 @@ void LlmService::ensure_config() const {
         LOG_INFO(TAG, "No LLM provider configured — using Fincept default");
     }
 
-    // Fincept always resolves API key from session (never stored in llm_configs)
+    // Fincept always resolves API key from the authenticated session, never
+    // from llm_configs. Prefer AuthManager's in-memory session (authoritative
+    // and live); fall back to SettingsRepository("fincept_api_key") which
+    // AuthManager writes during auto_configure_fincept_llm (legacy path).
     if (provider_ == "fincept") {
-        auto stored_key = SettingsRepository::instance().get("fincept_api_key");
-        if (stored_key.is_ok() && !stored_key.value().isEmpty())
-            api_key_ = stored_key.value();
+        const auto& sess = fincept::auth::AuthManager::instance().session();
+        if (!sess.api_key.isEmpty()) {
+            api_key_ = sess.api_key;
+        } else {
+            auto stored_key = SettingsRepository::instance().get("fincept_api_key");
+            if (stored_key.is_ok() && !stored_key.value().isEmpty())
+                api_key_ = stored_key.value();
+        }
     }
 
     auto gs = LlmConfigRepository::instance().get_global_settings();
@@ -382,12 +409,16 @@ QMap<QString, QString> LlmService::get_headers() const {
         if (!api_key_.isEmpty())
             h["x-goog-api-key"] = api_key_;
     } else if (p == "fincept") {
-        // api_key_ already resolved from session by ensure_config()
+        // api_key_ is refreshed from AuthManager on every ensure_config() call,
+        // so it tracks the auth lifecycle even if it was empty when the cache
+        // was first populated.
         if (!api_key_.isEmpty())
             h["X-API-Key"] = api_key_;
-        auto tok = SettingsRepository::instance().get("session_token");
-        if (tok.is_ok() && !tok.value().isEmpty())
-            h["X-Session-Token"] = tok.value();
+        // session_token lives only in AuthManager (never written to
+        // SettingsRepository) — read it live so it's always current.
+        const auto& sess = fincept::auth::AuthManager::instance().session();
+        if (!sess.session_token.isEmpty())
+            h["X-Session-Token"] = sess.session_token;
         // Cloudflare requires a User-Agent header
         h["User-Agent"] = "FinceptTerminal/4.0";
     } else {

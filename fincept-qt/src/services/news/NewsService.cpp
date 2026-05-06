@@ -30,9 +30,9 @@ static constexpr int kFeedTransferTimeoutMs = 8000;   // 8s per RSS feed request
 static constexpr int kWsReconnectDelayMs    = 10000;  // 10s before WebSocket reconnect
 static constexpr int kSummaryMaxChars       = 300;    // max chars for article summary
 
-// Use a real browser User-Agent — Bloomberg, WSJ, FT and other major
-// publishers reject "FinceptTerminal/4.0" as scraper traffic. Browser UA
-// gets us 200s on the same endpoints.
+// Use a real browser User-Agent — major financial publishers reject
+// "FinceptTerminal/4.0" as scraper traffic. Browser UA gets us 200s on
+// the same endpoints.
 static constexpr const char* kBrowserUserAgent =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -366,6 +366,8 @@ void NewsService::analyze_article(const QString& url, AnalysisCallback cb) {
     QJsonObject body;
     body["url"] = url;
 
+    // context = `this` ensures the callback drops if NewsService ever stops
+    // being a singleton — today it always outlives the request.
     HttpClient::instance().post("/news/analyze", body, [this, cb](Result<QJsonDocument> result) {
         if (result.is_err()) {
             LOG_ERROR("NewsService", "Analysis failed: " + QString::fromStdString(result.error()));
@@ -411,7 +413,7 @@ void NewsService::analyze_article(const QString& url, AnalysisCallback cb) {
 
         cb(true, analysis);
         emit this->analysis_ready(analysis);
-    });
+    }, this);
 }
 
 // ── AI Headline Summarization ────────────────────────────────────────────────
@@ -991,7 +993,7 @@ QVector<RSSFeed> NewsService::default_feeds() {
     return {
         // Tier 1 — Wire Services & Regulators
         // Reuters discontinued public RSS in 2020 (feeds.reuters.com is dead).
-        // We keep tier-1 coverage via AP, BBC, FT, Bloomberg, WSJ instead.
+        // We keep tier-1 coverage via AP, BBC, FT, WSJ and other majors instead.
         {"ap-top", "AP Top News", "https://rsshub.app/apnews/topics/ap-top-news", "GEOPOLITICS", "GLOBAL", "AP", 1},
         {"sec-press", "SEC Press Releases", "https://www.sec.gov/news/pressreleases.rss", "REGULATORY", "US", "SEC", 1},
         {"fed-press", "Federal Reserve", "https://www.federalreserve.gov/feeds/press_all.xml", "REGULATORY", "US",
@@ -999,8 +1001,8 @@ QVector<RSSFeed> NewsService::default_feeds() {
         {"un-news", "UN News", "https://news.un.org/feed/subscribe/en/news/all/rss.xml", "GEOPOLITICS", "GLOBAL", "UN",
          1},
         // (IMF News removed — endpoint serves an Akamai access-denied HTML page,
-        //  not RSS. Fincept's macro coverage is already provided by Bloomberg /
-        //  WSJ / Economist / IMF press is reachable via UN feeds.)
+        //  not RSS. Fincept's macro coverage is already provided by WSJ /
+        //  Economist / IMF press is reachable via UN feeds.)
 
         // Tier 2 — Major Financial Media
         {"bloomberg-mkts", "Bloomberg Markets", "https://feeds.bloomberg.com/markets/news.rss", "MARKETS", "GLOBAL",

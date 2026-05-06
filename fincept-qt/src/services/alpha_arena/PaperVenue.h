@@ -98,6 +98,8 @@ class PaperVenue : public QObject, public IExchangeVenue {
 
     /// Sequential venue-order-id generator (paper only).
     quint64 next_order_seq_ = 1;
+
+    friend void paper_seed_agent(PaperVenue& venue, const QString& agent_id, double initial_capital);
 };
 
 /// Convenience — the engine seeds each agent's paper book at agent-add time.

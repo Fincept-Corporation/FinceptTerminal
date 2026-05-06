@@ -42,8 +42,7 @@ void SymbolChip::mouseMoveEvent(QMouseEvent* e) {
         return;
     if ((e->pos() - press_pos_).manhattanLength() < QApplication::startDragDistance())
         return;
-    // Threshold crossed — hand off to the drag machinery. Clear pressed_
-    // so the subsequent mouseReleaseEvent doesn't also fire the click.
+    // Clear pressed_ so the release doesn't also fire as a click.
     pressed_ = false;
     symbol_dnd::startSymbolDrag(this, ref_);
 }
@@ -88,8 +87,8 @@ void SymbolChip::paintEvent(QPaintEvent*) {
 
     QPainterPath path;
     path.addRoundedRect(r, r.height() / 2.0, r.height() / 2.0);
-    p.fillPath(path, QColor("#1f2937")); // slate-800
-    p.setPen(QColor("#d97706")); // amber border — echoes Bloomberg's amber
+    p.fillPath(path, QColor("#1f2937"));
+    p.setPen(QColor("#d97706"));
     p.drawPath(path);
 
     p.setPen(QColor("#f3f4f6"));

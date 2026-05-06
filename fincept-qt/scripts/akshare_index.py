@@ -443,11 +443,11 @@ def get_index_news_sentiment_scope():
     return safe_call(ak.index_news_sentiment_scope)
 
 def get_index_bloomberg_billionaires():
-    """Get Bloomberg Billionaires Index"""
+    """Get global billionaires index (akshare endpoint: index_bloomberg_billionaires)"""
     return safe_call(ak.index_bloomberg_billionaires)
 
 def get_index_bloomberg_billionaires_hist(symbol="�马化腾"):
-    """Get Bloomberg Billionaires historical data"""
+    """Get global billionaires historical data (akshare endpoint: index_bloomberg_billionaires_hist)"""
     return safe_call(ak.index_bloomberg_billionaires_hist, symbol=symbol)
 
 
@@ -542,7 +542,7 @@ ENDPOINTS = {
     "index_yiwu": {"func": get_index_yw, "desc": "YiWu Small Commodity Index", "category": "Other Index"},
     "index_fashion": {"func": get_index_kq_fashion, "desc": "KQ Fashion Index", "category": "Other Index"},
     "index_news_sentiment": {"func": get_index_news_sentiment_scope, "desc": "News sentiment index", "category": "Other Index"},
-    "index_billionaires": {"func": get_index_bloomberg_billionaires, "desc": "Bloomberg Billionaires", "category": "Other Index"},
+    "index_billionaires": {"func": get_index_bloomberg_billionaires, "desc": "Global Billionaires Index", "category": "Other Index"},
 }
 
 

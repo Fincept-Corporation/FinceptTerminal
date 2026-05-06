@@ -7,6 +7,7 @@
 // flow through DataHub topics.
 
 #include "trading/TradingTypes.h"
+#include "trading/instruments/InstrumentTypes.h"
 
 #include <QDateTime>
 #include <QMetaType>

@@ -207,13 +207,14 @@ void RiskMetricsWidget::refresh_data() {
 
 void RiskMetricsWidget::hub_subscribe_all() {
     auto& hub = datahub::DataHub::instance();
+    set_loading_progress(row_cache_.size(), kRiskSymbols.size());
     for (const auto& sym : kRiskSymbols) {
         const QString topic = QStringLiteral("market:quote:") + sym;
         hub.subscribe(this, topic, [this, sym](const QVariant& v) {
             if (!v.canConvert<services::QuoteData>())
                 return;
             row_cache_.insert(sym, v.value<services::QuoteData>());
-            set_loading(false);
+            set_loading_progress(row_cache_.size(), kRiskSymbols.size());
             rebuild_from_cache();
         });
     }
