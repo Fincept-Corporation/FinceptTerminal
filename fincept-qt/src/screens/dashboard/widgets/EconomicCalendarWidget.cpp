@@ -93,6 +93,28 @@ void EconomicCalendarWidget::on_theme_changed() {
         populate(last_events_);
 }
 
+void EconomicCalendarWidget::clear_list() {
+    while (list_layout_->count() > 0) {
+        auto* item = list_layout_->takeAt(0);
+        if (auto* widget = item->widget()) {
+            if (widget == status_label_) {
+                status_label_->hide();
+            } else {
+                widget->deleteLater();
+            }
+        }
+        delete item;
+    }
+}
+
+void EconomicCalendarWidget::show_status(const QString& text) {
+    clear_list();
+    status_label_->setText(text);
+    status_label_->setVisible(true);
+    list_layout_->addWidget(status_label_);
+    list_layout_->addStretch();
+}
+
 void EconomicCalendarWidget::showEvent(QShowEvent* e) {
     BaseWidget::showEvent(e);
     if (!hub_active_)
@@ -113,11 +135,9 @@ void EconomicCalendarWidget::hub_subscribe() {
         if (v.canConvert<QJsonArray>())
             events = v.value<QJsonArray>();
         if (events.isEmpty()) {
-            status_label_->setVisible(true);
-            status_label_->setText(QStringLiteral("No events available"));
+            show_status(QStringLiteral("No events available"));
             return;
         }
-        status_label_->setVisible(false);
         populate(events);
     });
     // Per-topic error subscription — fires only when *our* topic errors,
@@ -126,8 +146,7 @@ void EconomicCalendarWidget::hub_subscribe() {
     hub.subscribe_errors(this, QString::fromLatin1(kTopic),
         [this](const QString& /*error*/) {
             set_loading(false);
-            status_label_->setVisible(true);
-            status_label_->setText(QStringLiteral("Failed to load calendar"));
+            show_status(QStringLiteral("Failed to load calendar"));
         });
     hub_active_ = true;
     // Cold-cache fallback: if the producer warmed the topic earlier, paint
@@ -137,7 +156,6 @@ void EconomicCalendarWidget::hub_subscribe() {
         const auto events = cached.value<QJsonArray>();
         if (!events.isEmpty()) {
             set_loading(false);
-            status_label_->setVisible(false);
             populate(events);
         }
     }
@@ -153,13 +171,7 @@ void EconomicCalendarWidget::hub_unsubscribe() {
 void EconomicCalendarWidget::populate(const QJsonArray& events) {
     last_events_ = events;
 
-    // Clear list
-    while (list_layout_->count() > 0) {
-        auto* item = list_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
+    clear_list();
 
     bool alt = false;
     int count = 0;
@@ -247,6 +259,11 @@ void EconomicCalendarWidget::populate(const QJsonArray& events) {
         list_layout_->addWidget(row);
         alt = !alt;
         ++count;
+    }
+
+    if (count == 0) {
+        show_status(QStringLiteral("No events available"));
+        return;
     }
 
     list_layout_->addStretch();

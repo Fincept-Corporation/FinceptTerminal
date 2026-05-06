@@ -25,6 +25,8 @@ class EconomicCalendarWidget : public BaseWidget {
 
   private:
     void apply_styles();
+    void clear_list();
+    void show_status(const QString& text);
     void hub_subscribe();
     void hub_unsubscribe();
     void populate(const QJsonArray& events);
