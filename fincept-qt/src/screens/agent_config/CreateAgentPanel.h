@@ -11,6 +11,7 @@
 #include <QListWidget>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QTextEdit>
 #include <QWidget>
 
@@ -107,6 +108,13 @@ class CreateAgentPanel : public QWidget {
 
     // MCP servers
     QListWidget* mcp_servers_list_ = nullptr;
+
+    // Terminal MCP bridge — internal tools exposed to this agent
+    QCheckBox* terminal_tools_check_ = nullptr;
+    QCheckBox* terminal_destructive_check_ = nullptr;
+    QListWidget* terminal_categories_list_ = nullptr;
+    QSpinBox* terminal_max_tools_spin_ = nullptr;
+    QWidget* terminal_sub_ = nullptr;
 
     // Form actions
     QPushButton* save_btn_ = nullptr;

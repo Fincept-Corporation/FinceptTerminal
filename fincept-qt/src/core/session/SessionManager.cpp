@@ -1,15 +1,16 @@
 ﻿#include "core/session/SessionManager.h"
 
 #include "app/TerminalShell.h"
+#include "core/layout/LayoutTypes.h"
+#include "core/layout/WorkspaceShell.h"
 #include "core/logging/Logger.h"
 #include "core/screen/MonitorTopology.h"
+#include "core/window/WindowRegistry.h"
 #include "storage/workspace/WorkspaceSnapshotRing.h"
 
 #include <QGuiApplication>
-#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonValue>
 #include <QScreen>
 #include <QStringList>
 
@@ -233,14 +234,17 @@ void SessionManager::request_snapshot_(bool force) {
     if (!ring)
         return;
 
+    // Fast path: if a non-forced auto write would be dropped by the ring's
+    // 60s rate limit anyway, skip the (now expensive) Workspace::capture
+    // call. Forced flushes (closeEvent, named-save, manual flush) always
+    // build a payload.
+    if (!force && ring->would_throttle_auto())
+        return;
+
     const QByteArray payload = build_snapshot_payload_();
     if (payload.isEmpty())
-        return; // QSettings empty — nothing useful to snapshot.
+        return; // No live frames to snapshot — Launchpad-only state, etc.
 
-    // For non-forced calls the ring rate-limits to 60s; this is the auto-
-    // save throttle. Forced flushes (closeEvent, manual layout-save) write
-    // immediately. Either way, ring trims oldest auto rows when we exceed
-    // the ring size.
     auto r = ring->add(payload, "auto", force);
     if (r.is_err()) {
         LOG_WARN("SessionManager", QString("Snapshot write failed: %1")
@@ -249,86 +253,27 @@ void SessionManager::request_snapshot_(bool force) {
 }
 
 QByteArray SessionManager::build_snapshot_payload_() const {
-    // Phase 2 payload format: a flat JSON object mirroring the QSettings
-    // state that's relevant to multi-window restoration.
+    // Snapshot payload is a Workspace JSON produced by WorkspaceShell::capture
+    // — same schema the LayoutCatalog uses for named saves and the same
+    // schema WorkspaceShell::load_last_or_default + CrashRecoveryDialog
+    // expect to parse back via Workspace::from_json. kind="auto" tells
+    // capture() to skip the thumbnail PNG (the dominant per-call cost) and
+    // tells apply() not to pin last_loaded_id when restoring from this
+    // snapshot.
     //
-    //   {
-    //     "schema": "phase2-mirror",
-    //     "window_ids": [0, 1, 3],
-    //     "last_screen": "dashboard",
-    //     "windows": {
-    //       "0": { "geometry": "<base64>", "state": "<base64>",
-    //              "dock_layout": "<base64>", "screen_name": "...",
-    //              "flags": { "always_on_top": true } },
-    //       ...
-    //     }
-    //   }
-    //
-    // Phase 6 swaps this for proper Workspace::to_json() once UUIDs and
-    // FrameLayout/PanelState are wired through WindowFrame. Until then the
-    // mirror format is what the recovery path will read back.
-    QJsonObject root;
-    root["schema"] = "phase2-mirror";
+    // Returns an empty QByteArray if there are no live frames yet — caller
+    // skips the ring write in that case.
+    if (fincept::WindowRegistry::instance().frames().isEmpty())
+        return {};
 
-    // window_ids
-    {
-        QJsonArray arr;
-        const QVariantList v = settings_.value("window_ids").toList();
-        for (const QVariant& x : v) {
-            bool ok = false;
-            const int id = x.toInt(&ok);
-            if (ok)
-                arr.append(id);
-        }
-        root["window_ids"] = arr;
-    }
+    const layout::Workspace ws =
+        layout::WorkspaceShell::capture(QStringLiteral("autosave"),
+                                        QStringLiteral("auto"),
+                                        /*previous=*/nullptr);
+    if (ws.frames.isEmpty())
+        return {};
 
-    root["last_screen"] = settings_.value("session/last_screen", "dashboard").toString();
-
-    // Per-window keys. Walk QSettings groups instead of taking a window-id
-    // list as input — handles the case where QSettings has stale keys for
-    // windows that no longer exist (we want them in the snapshot too so
-    // recovery can offer to restore them).
-    QJsonObject windows_obj;
-    const QStringList top_groups = settings_.childGroups();
-    for (const QString& g : top_groups) {
-        if (!g.startsWith("window_"))
-            continue;
-        const QString id_str = g.mid(QStringLiteral("window_").size());
-        bool ok = false;
-        (void) id_str.toInt(&ok);
-        if (!ok)
-            continue;
-
-        QJsonObject win;
-        settings_.beginGroup(g);
-        const QByteArray geom = settings_.value("geometry").toByteArray();
-        if (!geom.isEmpty()) win["geometry"] = QString::fromLatin1(geom.toBase64());
-        const QByteArray state = settings_.value("state").toByteArray();
-        if (!state.isEmpty()) win["state"] = QString::fromLatin1(state.toBase64());
-        const QByteArray dock = settings_.value("dock_layout").toByteArray();
-        if (!dock.isEmpty()) win["dock_layout"] = QString::fromLatin1(dock.toBase64());
-        const int dlv = settings_.value("dock_layout_version", 0).toInt();
-        if (dlv != 0) win["dock_layout_version"] = dlv;
-        const QString sn = settings_.value("screen_name").toString();
-        if (!sn.isEmpty()) win["screen_name"] = sn;
-
-        // Flags subgroup. QSettings nests flat under window_<id>/flags/<name>.
-        QJsonObject flags;
-        settings_.beginGroup("flags");
-        const QStringList flag_keys = settings_.childKeys();
-        for (const QString& fk : flag_keys)
-            flags[fk] = settings_.value(fk).toBool();
-        settings_.endGroup();
-        if (!flags.isEmpty()) win["flags"] = flags;
-
-        settings_.endGroup();
-        if (!win.isEmpty())
-            windows_obj[id_str] = win;
-    }
-    root["windows"] = windows_obj;
-
-    return QJsonDocument(root).toJson(QJsonDocument::Compact);
+    return QJsonDocument(ws.to_json()).toJson(QJsonDocument::Compact);
 }
 
 } // namespace fincept

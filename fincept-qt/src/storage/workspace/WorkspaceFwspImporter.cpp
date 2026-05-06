@@ -17,11 +17,13 @@ namespace fincept {
 
 namespace {
 constexpr const char* kTag = "FwspImporter";
-constexpr const char* kFlagKey = "fwsp_import_done";
+// QStringLiteral requires a string literal — keep the key inline at the
+// call sites below rather than wrapping a const char* identifier (which
+// MSVC rightly rejects as a syntax error).
 } // namespace
 
 void WorkspaceFwspImporter::run_once_if_needed() {
-    auto done = LayoutCatalog::instance().meta(QStringLiteral(kFlagKey));
+    auto done = LayoutCatalog::instance().meta(QStringLiteral("fwsp_import_done"));
     if (done.is_ok() && done.value() == QStringLiteral("1")) {
         // Already imported — fast path.
         return;
@@ -31,7 +33,7 @@ void WorkspaceFwspImporter::run_once_if_needed() {
     QDir d(dir_path);
     if (!d.exists()) {
         // Nothing to import; mark done so we don't keep checking.
-        LayoutCatalog::instance().set_meta(QStringLiteral(kFlagKey), QStringLiteral("1"));
+        LayoutCatalog::instance().set_meta(QStringLiteral("fwsp_import_done"), QStringLiteral("1"));
         return;
     }
 
@@ -80,7 +82,7 @@ void WorkspaceFwspImporter::run_once_if_needed() {
             ++skipped;
     }
 
-    LayoutCatalog::instance().set_meta(QStringLiteral(kFlagKey), QStringLiteral("1"));
+    LayoutCatalog::instance().set_meta(QStringLiteral("fwsp_import_done"), QStringLiteral("1"));
     LOG_INFO(kTag, QString("Imported %1 legacy workspace name(s); %2 skipped")
                        .arg(imported).arg(skipped));
 }

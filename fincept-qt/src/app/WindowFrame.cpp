@@ -142,7 +142,12 @@ int WindowFrame::next_window_id() {
     return max_id + 1;
 }
 
-WindowFrame::WindowFrame(int window_id, QWidget* parent) : QMainWindow(parent), window_id_(window_id) {
+WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted_uuid)
+    : QMainWindow(parent), window_id_(window_id) {
+    // Adopt the saved UUID before any panel is created — see header rationale.
+    // Null adopted_uuid = mint a fresh one lazily on first frame_uuid() call.
+    if (!adopted_uuid.is_null())
+        frame_uuid_ = adopted_uuid;
     // Phase 8: seed the dynamic property DataHub uses to gate
     // pause_when_inactive topics. Initial state = active (we wouldn't be
     // constructing the frame if we didn't intend to show it). changeEvent
@@ -1515,6 +1520,23 @@ WindowId WindowFrame::frame_uuid() const {
     if (frame_uuid_.is_null())
         frame_uuid_ = WindowId::generate();
     return frame_uuid_;
+}
+
+void WindowFrame::adopt_frame_uuid(const WindowId& id) {
+    if (id.is_null()) {
+        LOG_WARN("WindowFrame", "adopt_frame_uuid: null id ignored");
+        return;
+    }
+    if (!frame_uuid_.is_null() && frame_uuid_ != id) {
+        // The frame already minted (or adopted) a different UUID — too late,
+        // any panels created so far carry the old frame_id. Log and bail
+        // rather than corrupting the PanelRegistry view.
+        LOG_WARN("WindowFrame",
+                 QString("adopt_frame_uuid: refusing to overwrite existing %1 with %2")
+                     .arg(frame_uuid_.to_string(), id.to_string()));
+        return;
+    }
+    frame_uuid_ = id;
 }
 
 // ── Phase 6 final: capture / apply layout ───────────────────────────────────

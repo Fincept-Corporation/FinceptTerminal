@@ -4,6 +4,9 @@
 #include "ai_chat/LlmService.h"
 #include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
+#include "mcp/McpProvider.h"
+#include "mcp/McpTypes.h"
+#include "mcp/TerminalMcpBridge.h"
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 #include "storage/repositories/LlmConfigRepository.h"
@@ -31,7 +34,40 @@ AgentService& AgentService::instance() {
     return inst;
 }
 
-AgentService::AgentService(QObject* parent) : QObject(parent) {}
+AgentService::AgentService(QObject* parent) : QObject(parent) {
+    // Phase 1/2 wiring — start the local HTTP bridge that exposes internal
+    // MCP tools to the Python finagent subprocess, and install the auth
+    // checker that gates agent-originated tool calls. Both are idempotent;
+    // failure to bind the port is logged but not fatal — agents simply lose
+    // terminal-tool access.
+    if (mcp::TerminalMcpBridge::instance().start()) {
+        LOG_INFO("AgentService", "Terminal MCP bridge started: " +
+                                     mcp::TerminalMcpBridge::instance().endpoint());
+    } else {
+        LOG_WARN("AgentService", "Terminal MCP bridge failed to start — agents will run "
+                                 "without internal tool access");
+    }
+
+    // Auth checker — process-wide. Distinguishes agent-originated calls
+    // (via TerminalMcpBridge::is_call_in_progress) from chat-path calls so
+    // chat behaviour is unchanged. Rules:
+    //   - AuthLevel >= Verified  → always deny (no path can prove the
+    //     gate non-interactively)
+    //   - is_destructive + agent → deny (agents can't show a confirm modal;
+    //     opt-in via per-agent config is Phase 5 work)
+    //   - is_destructive + chat  → allow (matches current advisory behaviour
+    //     until the Phase 6.12 modal lands)
+    //   - everything else        → allow
+    mcp::McpProvider::instance().set_auth_checker(
+        [](mcp::AuthLevel required, bool is_destructive) -> bool {
+            if (required >= mcp::AuthLevel::Verified)
+                return false;
+            if (is_destructive && mcp::TerminalMcpBridge::is_call_in_progress() &&
+                !mcp::TerminalMcpBridge::is_destructive_allowed())
+                return false;
+            return true;
+        });
+}
 
 // ── Cache helpers ────────────────────────────────────────────────────────────
 
@@ -181,10 +217,57 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
         enriched_params["user_id"] = uid;
     }
 
+    // Phase 3 — inject the local MCP bridge endpoint + filtered tool catalog
+    // into the config the Python toolkit reads. Skip if the caller already set
+    // these (lets explicit overrides win) or if the bridge is not running.
+    QJsonObject enriched_config = config;
+    auto& bridge = mcp::TerminalMcpBridge::instance();
+    // Honour an explicit opt-out from the agent config: if the agent author
+    // set `terminal_tools_enabled=false`, skip all bridge wiring and let the
+    // agent run with only its declared `tools` (yfinance/duckduckgo/etc.).
+    const bool terminal_tools_enabled = enriched_config.value("terminal_tools_enabled").toBool(true);
+
+    if (bridge.is_active() && terminal_tools_enabled) {
+        if (!enriched_config.contains("terminal_mcp_endpoint"))
+            enriched_config["terminal_mcp_endpoint"] = bridge.endpoint();
+        if (!enriched_config.contains("terminal_mcp_token"))
+            enriched_config["terminal_mcp_token"] = bridge.token();
+        // Capability token — only injected when the agent config opts in.
+        // Without this header on each request the bridge will block any
+        // `is_destructive=true` tool call even if the agent's LLM tries one.
+        if (enriched_config.value("allow_destructive_tools").toBool(false) &&
+            !enriched_config.contains("terminal_mcp_destructive_token")) {
+            enriched_config["terminal_mcp_destructive_token"] = bridge.destructive_token();
+        }
+        if (!enriched_config.contains("terminal_tools")) {
+            // Per-agent override via config["tool_filter"] = {categories,
+            // exclude_categories, max_tools}. Default excludes UI-only and
+            // recursive categories so agents don't drive the UI or call the
+            // chat LLM.
+            mcp::ToolFilter filter;
+            filter.exclude_categories = {"navigation", "system", "settings", "ai-chat", "meta"};
+            const QJsonObject tf = enriched_config.value("tool_filter").toObject();
+            if (!tf.isEmpty()) {
+                if (tf.contains("categories")) {
+                    filter.categories.clear();
+                    for (const auto& v : tf["categories"].toArray())
+                        filter.categories.append(v.toString());
+                }
+                if (tf.contains("exclude_categories")) {
+                    filter.exclude_categories.clear();
+                    for (const auto& v : tf["exclude_categories"].toArray())
+                        filter.exclude_categories.append(v.toString());
+                }
+                filter.max_tools = tf.value("max_tools").toInt(0);
+            }
+            enriched_config["terminal_tools"] = bridge.tool_definitions(filter);
+        }
+    }
+
     if (!enriched_params.isEmpty())
         payload["params"] = enriched_params;
-    if (!config.isEmpty())
-        payload["config"] = config;
+    if (!enriched_config.isEmpty())
+        payload["config"] = enriched_config;
     return payload;
 }
 

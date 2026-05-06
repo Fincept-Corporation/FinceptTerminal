@@ -15,7 +15,7 @@
 
 namespace fincept::ai_chat {
 
-namespace { constexpr const char* TAG = "LlmService"; }
+namespace { constexpr const char* kLlmBuildersTag = "LlmService"; }
 
 QJsonObject LlmService::build_openai_request(const QString& user_message,
                                              const std::vector<ConversationMessage>& history, bool stream,
@@ -67,12 +67,12 @@ QJsonObject LlmService::build_openai_request(const QString& user_message,
         QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(detail::apply_request_policy(tool_filter_));
         if (!tools.isEmpty())
             req["tools"] = tools;
-        LOG_INFO(TAG, QString("OpenAI request: stream=%1 provider=%2 tools=%3 (count=%4)")
+        LOG_INFO(kLlmBuildersTag, QString("OpenAI request: stream=%1 provider=%2 tools=%3 (count=%4)")
                           .arg(stream ? "true" : "false", provider_,
                                tools.isEmpty() ? "none" : "attached")
                           .arg(tools.size()));
     } else {
-        LOG_WARN(TAG, QString("OpenAI request: stream=%1 provider=%2 NO TOOLS — "
+        LOG_WARN(kLlmBuildersTag, QString("OpenAI request: stream=%1 provider=%2 NO TOOLS — "
                               "with_tools=%3 tools_effectively_on=%4 ds_reasoner=%5 groq_no_tools=%6")
                           .arg(stream ? "true" : "false", provider_)
                           .arg(with_tools ? "true" : "false")

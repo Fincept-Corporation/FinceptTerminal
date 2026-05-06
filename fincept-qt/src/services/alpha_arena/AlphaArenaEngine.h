@@ -90,6 +90,11 @@ class AlphaArenaEngine : public QObject {
     /// User UI -> approve/reject a pending HITL request.
     void resume_after_hitl(const QString& approval_id, bool approved);
 
+    /// Hot-reload the active competition's tick cadence. Effective on the
+    /// next natural tick fire (does not interrupt an in-flight tick). Also
+    /// persisted on the competition row so a restart picks up the new value.
+    Result<void> set_cadence(int seconds);
+
     // ── Status / introspection ────────────────────────────────────────────
 
     QString active_competition_id() const { return active_competition_id_; }
@@ -98,6 +103,17 @@ class AlphaArenaEngine : public QObject {
     int next_tick_in_seconds() const;
     QString venue_kind() const { return venue_ ? venue_->venue_kind() : QString(); }
     IExchangeVenue::ConnectionState venue_connection_state() const;
+
+    /// Rolling telemetry over the last 100 ticks. Surfaced in RiskPanel.
+    struct TelemetrySnapshot {
+        double tick_latency_p50_ms = 0.0;
+        double tick_latency_p99_ms = 0.0;
+        double parse_failure_rate = 0.0;   // [0,1]
+        double risk_rejection_rate = 0.0;  // [0,1]
+        int venue_errors = 0;              // count over rolling window
+        int sample_count = 0;
+    };
+    TelemetrySnapshot telemetry() const;
 
   signals:
     void tick_fired(int seq);

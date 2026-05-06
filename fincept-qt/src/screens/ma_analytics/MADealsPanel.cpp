@@ -17,6 +17,7 @@
 
 namespace fincept::screens {
 
+using namespace fincept::services::ma;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODULE 3: DEAL DATABASE

@@ -250,6 +250,18 @@ add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
 # fincept-qt/tests/. Run via `ctest` in the build directory.
 option(FINCEPT_BUILD_TESTS "Build the Fincept Terminal test suite" OFF)
 
+# ── Alpha Arena live-mode geofencing ─────────────────────────────────────────
+# Live mode is gated by best-effort locale detection in AlphaArenaScreen.
+# A handful of jurisdictions (US, NK, IR, …) are blocked. This flag exists
+# *only* for development on machines that report a blocked locale; release
+# builds must leave it OFF.
+option(FINCEPT_UNSAFE_DISABLE_GEOFENCE
+       "Alpha Arena: disable live-mode geofence (DEV ONLY)" OFF)
+if(FINCEPT_UNSAFE_DISABLE_GEOFENCE)
+    add_compile_definitions(FINCEPT_UNSAFE_DISABLE_GEOFENCE=1)
+    message(WARNING "Alpha Arena: geofence DISABLED — do not ship this build.")
+endif()
+
 # ── Qt packages ──────────────────────────────────────────────────────────────
 # Qt is pinned to 6.8.3 across all platforms. Releases must build
 # on exactly this version to guarantee binary/ABI stability of the shipped
@@ -674,12 +686,6 @@ set(STORAGE_SOURCES
     # Secure storage (unchanged)
     src/storage/secure/SecureStorage.cpp
 
-    # Workspace persistence (multi-window refactor Phase 2/4/10)
-    src/storage/workspace/WorkspaceDb.cpp
-    src/storage/workspace/WorkspaceSnapshotRing.cpp
-    src/storage/workspace/CrashRecovery.cpp
-    src/storage/workspace/WorkspaceFwspImporter.cpp
-
     # Repositories
     src/storage/repositories/SettingsRepository.cpp
     src/storage/repositories/WatchlistRepository.cpp
@@ -771,6 +777,7 @@ set(MCP_SOURCES
     src/mcp/McpInit.cpp
     src/mcp/SchemaValidator.cpp
     src/mcp/ToolRetriever.cpp
+    src/mcp/TerminalMcpBridge.cpp
 
     # Phase 5 — provider-neutral tool-call dispatcher + adapters.
     src/mcp/dispatch/ToolDispatcher.cpp
@@ -819,6 +826,10 @@ set(TRADING_SOURCES
     src/trading/exchanges/kraken/KrakenSymbolMapper.cpp
     src/trading/exchanges/kraken/KrakenBook.cpp
     src/trading/exchanges/kraken/KrakenWsClient.cpp
+    # Hyperliquid (Alpha Arena live mode — Phase 5c partial)
+    src/trading/exchanges/hyperliquid/HyperliquidClient.cpp
+    src/trading/exchanges/hyperliquid/HyperliquidSigner.cpp
+    src/trading/exchanges/hyperliquid/HyperliquidVenue.cpp
     src/trading/brokers/BrokerHttp.cpp
     # Trading WebSocket
     src/trading/websocket/ZerodhaWebSocket.cpp
@@ -866,6 +877,7 @@ set(SERVICE_SOURCES
     src/services/alpha_arena/ModelDispatcher.cpp
     src/services/alpha_arena/OrderRouter.cpp
     src/services/alpha_arena/AlphaArenaEngine.cpp
+    src/services/alpha_arena/AlphaArenaService.cpp
     src/services/asia_markets/AsiaMarketsService.cpp
     src/services/crypto/TotpService.cpp
     src/services/python_cli/PythonCliService.cpp
@@ -1272,6 +1284,8 @@ set(SCREEN_SOURCES
     src/screens/ai_quant_lab/QuantModulePanel_AIMLDisplays.cpp
     src/screens/ai_quant_lab/QuantModulePanel_CoreDisplays.cpp
     src/screens/ai_quant_lab/QuantModulePanel_Misc.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_HFT.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_LiveLearning.cpp
 
     # Backtesting
     src/screens/backtesting/BacktestingScreen.cpp
@@ -1338,6 +1352,10 @@ set(SCREEN_SOURCES
 
     # Alpha Arena
     src/screens/alpha_arena/AlphaArenaScreen.cpp
+    src/screens/alpha_arena/panels/LeaderboardPanel.cpp
+    src/screens/alpha_arena/panels/ModelChatPanel.cpp
+    src/screens/alpha_arena/panels/StatePanels.cpp
+    src/screens/alpha_arena/panels/LiveModeGateDialog.cpp
 
     # Alternative Investments
     src/screens/alt_investments/AltInvestmentsScreen.cpp
@@ -1488,6 +1506,8 @@ set_source_files_properties(
     src/screens/ai_quant_lab/QuantModulePanel_AIMLDisplays.cpp
     src/screens/ai_quant_lab/QuantModulePanel_CoreDisplays.cpp
     src/screens/ai_quant_lab/QuantModulePanel_Misc.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_HFT.cpp
+    src/screens/ai_quant_lab/QuantModulePanel_LiveLearning.cpp
     src/screens/akshare/AkShareScreen.cpp
     src/screens/algo_trading/AlgoTradingScreen.cpp
     src/screens/algo_trading/DeploymentDashboard.cpp
@@ -1495,6 +1515,10 @@ set_source_files_properties(
     src/screens/algo_trading/StrategyBuilderPanel.cpp
     src/screens/algo_trading/StrategyListPanel.cpp
     src/screens/alpha_arena/AlphaArenaScreen.cpp
+    src/screens/alpha_arena/panels/LeaderboardPanel.cpp
+    src/screens/alpha_arena/panels/ModelChatPanel.cpp
+    src/screens/alpha_arena/panels/StatePanels.cpp
+    src/screens/alpha_arena/panels/LiveModeGateDialog.cpp
     src/screens/alt_investments/AltInvestmentsScreen.cpp
     src/screens/asia_markets/AsiaMarketsScreen.cpp
     src/screens/auth/ForgotPasswordScreen.cpp
@@ -1840,6 +1864,28 @@ set_source_files_properties(
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
+# Alpha Arena services and Hyperliquid integration use anonymous namespaces
+# and Q_OBJECT-bearing helpers — exclude from unity to avoid the kind of
+# ODR clashes that masked compile errors in early Phase 5c integration.
+set_source_files_properties(
+    src/services/alpha_arena/AlphaArenaJson.cpp
+    src/services/alpha_arena/Indicators.cpp
+    src/services/alpha_arena/ContextBuilder.cpp
+    src/services/alpha_arena/AlphaArenaRepo.cpp
+    src/services/alpha_arena/RiskEngine.cpp
+    src/services/alpha_arena/PaperVenue.cpp
+    src/services/alpha_arena/SecretRedemptionServer.cpp
+    src/services/alpha_arena/TickClock.cpp
+    src/services/alpha_arena/ModelDispatcher.cpp
+    src/services/alpha_arena/OrderRouter.cpp
+    src/services/alpha_arena/AlphaArenaEngine.cpp
+    src/services/alpha_arena/AlphaArenaService.cpp
+    src/trading/exchanges/hyperliquid/HyperliquidClient.cpp
+    src/trading/exchanges/hyperliquid/HyperliquidSigner.cpp
+    src/trading/exchanges/hyperliquid/HyperliquidVenue.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
+)
+
 # MCP core + tools: each defines TAG or kTimeoutMs in shared namespaces —
 # must stay excluded from unity (batch size 1 = each file its own TU)
 set_source_files_properties(
@@ -1850,6 +1896,7 @@ set_source_files_properties(
     src/mcp/McpInit.cpp
     src/mcp/SchemaValidator.cpp
     src/mcp/ToolRetriever.cpp
+    src/mcp/TerminalMcpBridge.cpp
     src/mcp/dispatch/ToolDispatcher.cpp
     src/mcp/dispatch/OpenAiAdapter.cpp
     src/mcp/dispatch/AdapterFactory.cpp

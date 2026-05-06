@@ -1,5 +1,6 @@
 #include "core/layout/LayoutCatalog.h"
 
+#include "core/layout/WorkspaceShell.h"
 #include "core/logging/Logger.h"
 #include "core/profile/ProfilePaths.h"
 
@@ -204,6 +205,13 @@ Result<void> LayoutCatalog::remove_layout(const LayoutId& id) {
     auto last = meta(QStringLiteral("last_loaded_uuid"));
     if (last.is_ok() && last.value() == id.to_string())
         set_meta(QStringLiteral("last_loaded_uuid"), QString());
+
+    // If the removed layout is also the one this session has loaded, drop
+    // the in-memory current-name/id pointer so the title bar suffix and
+    // the toolbar's Save-vs-Save-As decision stop pointing at a dead UUID.
+    if (layout::WorkspaceShell::current_id() == id)
+        layout::WorkspaceShell::clear_current();
+
     emit layout_removed(id);
     return Result<void>::ok();
 }

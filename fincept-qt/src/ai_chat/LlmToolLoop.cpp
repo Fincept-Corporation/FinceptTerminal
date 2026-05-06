@@ -24,7 +24,7 @@
 
 namespace fincept::ai_chat {
 
-namespace { constexpr const char* TAG = "LlmService"; }
+namespace { constexpr const char* kLlmToolLoopTag = "LlmService"; }
 
 LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& url,
                                      const QMap<QString, QString>& headers) {
@@ -33,7 +33,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
     // template → fill → polish). Each round can contain many parallel
     // tool calls so this isn't 15 tool calls — it's 15 reasoning steps.
     static constexpr int MAX_ROUNDS = 15;
-    LOG_INFO(TAG, QString("TOOL LOOP: starting (max %1 rounds, model=%2)").arg(MAX_ROUNDS).arg(model_));
+    LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: starting (max %1 rounds, model=%2)").arg(MAX_ROUNDS).arg(model_));
 
     for (int round = 0; round < MAX_ROUNDS; ++round) {
         QJsonObject fu;
@@ -78,10 +78,10 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                 QJsonObject fa =
                     QJsonDocument::fromJson(tc["function"].toObject()["arguments"].toString("{}").toUtf8()).object();
 
-                LOG_INFO(TAG, QString("TOOL LOOP r%1: executing %2 args=%3").arg(round).arg(fname,
+                LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP r%1: executing %2 args=%3").arg(round).arg(fname,
                               QString::fromUtf8(QJsonDocument(fa).toJson(QJsonDocument::Compact)).left(200)));
                 auto tr = mcp::McpService::instance().execute_openai_function(fname, fa);
-                LOG_INFO(TAG, QString("TOOL LOOP r%1: %2 -> %3 (msg=%4 err=%5)")
+                LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP r%1: %2 -> %3 (msg=%4 err=%5)")
                                   .arg(round).arg(fname,
                                        tr.success ? "OK" : "FAIL", tr.message.left(120), tr.error.left(120)));
                 loop_messages.append(QJsonObject{
@@ -96,7 +96,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         resp.content = extract_openai_message_text(msg);
         parse_usage(resp, rj, provider_);
         resp.success = !resp.content.isEmpty();
-        LOG_INFO(TAG, QString("TOOL LOOP: finished after %1 round(s) — %2 chars of text")
+        LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: finished after %1 round(s) — %2 chars of text")
                           .arg(round + 1).arg(resp.content.length()));
         return resp;
     }
@@ -104,7 +104,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
     // Max rounds exhausted. The user would see an empty bubble. Force one
     // final non-tool turn so the model summarizes whatever it accomplished
     // so the chat doesn't go silent.
-    LOG_WARN(TAG, "TOOL LOOP: exceeded max rounds — forcing summary turn (no tools)");
+    LOG_WARN(kLlmToolLoopTag, "TOOL LOOP: exceeded max rounds — forcing summary turn (no tools)");
     {
         // Append a synthetic system nudge instructing the model to wrap up.
         loop_messages.append(QJsonObject{
@@ -130,7 +130,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                     resp.content = extract_openai_message_text(msg);
                     parse_usage(resp, rj, provider_);
                     resp.success = !resp.content.isEmpty();
-                    LOG_INFO(TAG, QString("TOOL LOOP: summary fallback produced %1 chars")
+                    LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: summary fallback produced %1 chars")
                                       .arg(resp.content.length()));
                     if (resp.success)
                         return resp;
@@ -165,7 +165,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
     };
     std::vector<TextToolCall> calls;
 
-    LOG_INFO(TAG, "Checking for text-based tool calls in response (" + QString::number(content.length()) + " chars)");
+    LOG_INFO(kLlmToolLoopTag, "Checking for text-based tool calls in response (" + QString::number(content.length()) + " chars)");
 
     // --- Pattern 1: XML <tool_call> blocks (without namespace prefix) ---
     {
@@ -199,9 +199,9 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
                                                  QRegularExpression::MultilineOption |
                                                      QRegularExpression::DotMatchesEverythingOption);
 
-        LOG_INFO(TAG, "Pattern 2: invoke regex valid=" + QString(rx_invoke.isValid() ? "yes" : "no"));
+        LOG_INFO(kLlmToolLoopTag, "Pattern 2: invoke regex valid=" + QString(rx_invoke.isValid() ? "yes" : "no"));
         auto dbg_match = rx_invoke.match(content);
-        LOG_INFO(TAG, "Pattern 2: hasMatch=" + QString(dbg_match.hasMatch() ? "yes" : "no"));
+        LOG_INFO(kLlmToolLoopTag, "Pattern 2: hasMatch=" + QString(dbg_match.hasMatch() ? "yes" : "no"));
 
         auto it = rx_invoke.globalMatch(content);
         while (it.hasNext()) {
@@ -318,12 +318,12 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
     if (calls.empty())
         return std::nullopt;
 
-    LOG_INFO(TAG, QString("Detected %1 text-based tool call(s) in response").arg(calls.size()));
+    LOG_INFO(kLlmToolLoopTag, QString("Detected %1 text-based tool call(s) in response").arg(calls.size()));
 
     // Execute each detected tool call
     QString tool_results;
     for (const auto& tc : calls) {
-        LOG_INFO(TAG, "Executing text-detected tool: " + tc.name);
+        LOG_INFO(kLlmToolLoopTag, "Executing text-detected tool: " + tc.name);
         auto tr = mcp::McpService::instance().execute_openai_function(tc.name, tc.args);
 
         QString result_content;

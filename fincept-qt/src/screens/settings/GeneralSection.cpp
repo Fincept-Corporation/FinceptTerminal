@@ -72,7 +72,7 @@ void GeneralSection::build_ui() {
             [this](int idx) {
                 const QString val = on_close_combo_->itemData(idx).toString();
                 SettingsRepository::instance().set(
-                    QStringLiteral(kKeyOnClose), val, QStringLiteral("general"));
+                    QStringLiteral("general.on_last_window_close"), val, QStringLiteral("general"));
                 LOG_INFO("Settings", QString("on_last_window_close → %1").arg(val));
             });
 
@@ -85,8 +85,8 @@ void GeneralSection::build_ui() {
 void GeneralSection::reload() {
     if (!on_close_combo_) return;
     const auto r = SettingsRepository::instance().get(
-        QStringLiteral(kKeyOnClose), QStringLiteral(kDefaultOnClose));
-    const QString cur = r.is_ok() ? r.value() : QStringLiteral(kDefaultOnClose);
+        QStringLiteral("general.on_last_window_close"), QStringLiteral("quit"));
+    const QString cur = r.is_ok() ? r.value() : QStringLiteral("quit");
     const int idx = on_close_combo_->findData(cur);
     QSignalBlocker block(on_close_combo_);
     on_close_combo_->setCurrentIndex(idx >= 0 ? idx : 0);

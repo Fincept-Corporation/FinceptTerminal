@@ -147,6 +147,13 @@ Result<void> WorkspaceSnapshotRing::erase(qint64 snapshot_id) {
     return Result<void>::ok();
 }
 
+bool WorkspaceSnapshotRing::would_throttle_auto() const {
+    if (last_auto_ms_ == 0)
+        return false;
+    const qint64 now_ms = QDateTime::currentMSecsSinceEpoch();
+    return (now_ms - last_auto_ms_) < min_interval_ms_;
+}
+
 Result<void> WorkspaceSnapshotRing::trim_auto() {
     if (!db_ || !db_->is_open())
         return Result<void>::err("WorkspaceDb not open");

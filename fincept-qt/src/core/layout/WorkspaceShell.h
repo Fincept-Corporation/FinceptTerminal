@@ -54,6 +54,13 @@ class WorkspaceShell {
     /// Layout As…") decision.
     static LayoutId current_id();
 
+    /// Reset the process-wide "currently loaded" pointers (`current_name` /
+    /// `current_id`). Called by `LayoutCatalog::remove_layout` when the
+    /// deleted layout is the currently-loaded one (so the title bar suffix
+    /// and the toolbar's Save-vs-Save-As decision don't keep pointing at a
+    /// dead UUID), and by `TerminalShell::shutdown` for hygiene.
+    static void clear_current();
+
     /// Cold-boot restore. Tries, in order:
     ///   1. `LayoutCatalog::last_loaded_id()` → `load_workspace` → `apply`
     ///   2. Most recent `kind='auto'` snapshot from the

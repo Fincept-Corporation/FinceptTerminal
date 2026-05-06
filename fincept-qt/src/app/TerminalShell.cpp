@@ -9,6 +9,7 @@
 #include "core/panel/PanelRegistry.h"
 #include "core/profile/ProfilePaths.h"
 #include "core/layout/LayoutCatalog.h"
+#include "core/layout/WorkspaceShell.h"
 #include "storage/workspace/WorkspaceFwspImporter.h"
 #include "core/screen/MonitorWatcher.h"
 #include "core/telemetry/LocalTelemetrySink.h"
@@ -165,7 +166,13 @@ void TerminalShell::initialise() {
         // dialog UI. The clean-shutdown marker write below would mask
         // the unclean state if it ran first, so check_for_recovery
         // happens *before* the new session row is opened.
-        if (crash_recovery_->needs_recovery()) {
+        // Latch the answer at boot. needs_recovery() compares against
+        // the latest auto snapshot, which the *current* session also
+        // writes to — so within ~60s of startup the same call would start
+        // returning false positives. Consumers that want a stable "we
+        // started after a crash" signal must read started_after_crash_.
+        started_after_crash_ = crash_recovery_->needs_recovery();
+        if (started_after_crash_) {
             LOG_WARN(kShellTag, "Previous session ended uncleanly — recovery candidates available");
         }
 
@@ -220,6 +227,12 @@ void TerminalShell::shutdown() {
         if (crash_recovery_)
             crash_recovery_->mark_clean_shutdown();
     }
+
+    // Drop the in-memory "currently loaded layout" pointers so any code that
+    // peeks at WorkspaceShell::current_id() during teardown (or across a
+    // future profile-switch) doesn't see a stale value pointing at a layout
+    // catalogue we're about to close.
+    layout::WorkspaceShell::clear_current();
 
     // Tear down owned objects in reverse construction order.
     delete crash_recovery_;

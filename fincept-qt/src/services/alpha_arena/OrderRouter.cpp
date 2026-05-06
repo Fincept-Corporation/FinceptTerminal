@@ -121,6 +121,13 @@ void OrderRouter::on_decision(QString decision_id, QString agent_id,
 
     // Update circuit on parse failure (no actions at all).
     const bool tick_parse_failure = !parse_error.isEmpty() && actions.isEmpty();
+    if (tick_parse_failure) {
+        QJsonObject p;
+        p[QStringLiteral("decision_id")] = decision_id;
+        p[QStringLiteral("error")] = parse_error;
+        AlphaArenaRepo::instance().append_event(competition_id_, agent_id,
+                                                QStringLiteral("parse_error"), p);
+    }
 
     // Run RiskEngine on every action.
     QVector<RiskVerdict> verdicts;
@@ -136,6 +143,15 @@ void OrderRouter::on_decision(QString decision_id, QString agent_id,
         rs.mark_price = venue_ ? venue_->last_mark(a.coin) : 0.0;
         const auto v = evaluate_action(a, rs, mode_);
         verdicts.append(v);
+        if (v.outcome == RiskVerdict::Outcome::Reject) {
+            QJsonObject p;
+            p[QStringLiteral("decision_id")] = decision_id;
+            p[QStringLiteral("coin")] = a.coin;
+            p[QStringLiteral("signal")] = signal_to_wire(a.signal);
+            p[QStringLiteral("reason")] = v.reason;
+            AlphaArenaRepo::instance().append_event(competition_id_, agent_id,
+                                                    QStringLiteral("risk_reject"), p);
+        }
         emit action_evaluated(agent_id, a.coin, a.signal,
                               static_cast<int>(v.outcome), v.reason);
         if (v.outcome == RiskVerdict::Outcome::Reject) any_rejected = true;
@@ -154,7 +170,9 @@ void OrderRouter::on_decision(QString decision_id, QString agent_id,
             o["reason"] = v.reason;
             arr.append(o);
         }
-        Q_UNUSED(verdict_reason_json); // alternate compact form available if needed
+        // verdict_reason_json() is an alternate compact form, retained as a
+        // helper for future logging tooling — silence "unused" with a cast.
+        (void)&verdict_reason_json;
     }
 
     // Advance the agent's circuit. Caller already set max_drawdown via state.
@@ -262,10 +280,18 @@ void OrderRouter::route_to_venue(const QString& decision_id,
 
     QPointer<OrderRouter> self = this;
     const QString agent_id = agent.agent_id;
-    venue_->place_order(req, [self, order_id, agent_id](OrderAck ack) {
+    const QString comp_id = competition_id_;
+    venue_->place_order(req, [self, order_id, agent_id, comp_id](OrderAck ack) {
         if (!self) return;
         AlphaArenaRepo::instance().mark_order_status(order_id, ack.status,
                                                      ack.venue_order_id, ack.error);
+        if (ack.status == QLatin1String("rejected")) {
+            QJsonObject p;
+            p[QStringLiteral("order_id")] = order_id;
+            p[QStringLiteral("error")] = ack.error;
+            AlphaArenaRepo::instance().append_event(comp_id, agent_id,
+                                                    QStringLiteral("venue_error"), p);
+        }
     });
 }
 

@@ -70,6 +70,24 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     sub->setWordWrap(true);
     vl->addWidget(sub);
 
+    // L8: crash recovery banner. Shown only when TerminalShell latched
+    // started_after_crash at boot. Encourages the user to use Continue (which
+    // restores the most recent auto-snapshot from the moments before the
+    // crash). Auto-hides on the first navigation away from the Launchpad.
+    crash_banner_ = new QLabel(
+        "Last session ended unexpectedly — your work was auto-saved. "
+        "Click \"Continue from last session\" to restore.");
+    crash_banner_->setVisible(false);
+    crash_banner_->setWordWrap(true);
+    crash_banner_->setObjectName("launchpadCrashBanner");
+    crash_banner_->setStyleSheet(
+        "QLabel#launchpadCrashBanner {"
+        "  background: #422006; color: #fbbf24;"
+        "  border: 1px solid #d97706; border-radius: 4px;"
+        "  padding: 8px 10px; font-size: 11px; font-weight: 600;"
+        "}");
+    vl->addWidget(crash_banner_);
+
     // "Continue from last session" — the most-common user intent on relaunch.
     // One click restores the most-recent saved or auto-snapshot layout.
     // Hidden when nothing restorable exists (first run / fresh profile).
@@ -212,7 +230,56 @@ void LaunchpadScreen::surface() {
     refresh_recent_layouts();
     refresh_continue_visibility();
     refresh_first_run_picker();
+    refresh_crash_banner();
+    // L6: drop focus into the filter line edit so the user can immediately
+    // type / arrow / Enter without reaching for the mouse.
+    if (filter_edit_ && filter_edit_->isVisible()) {
+        filter_edit_->clear();
+        filter_edit_->setFocus(Qt::OtherFocusReason);
+    }
     LOG_INFO(kLaunchpadTag, "Surfaced");
+}
+
+bool LaunchpadScreen::eventFilter(QObject* obj, QEvent* event) {
+    // L6: keyboard-first navigation. The filter runs on filter_edit_, which
+    // is the keyboard focus target on surface(). We forward Up/Down to the
+    // recent layouts list, Enter to open, Esc to dismiss (when there's
+    // somewhere to dismiss to).
+    if (obj == filter_edit_ && event->type() == QEvent::KeyPress) {
+        auto* ke = static_cast<QKeyEvent*>(event);
+        const int key = ke->key();
+        if ((key == Qt::Key_Down || key == Qt::Key_Up) && recent_layouts_) {
+            // Walk visible rows only — hidden rows are filtered out so
+            // arrow keys must skip them.
+            const int n = recent_layouts_->count();
+            if (n == 0) return true;
+            int row = recent_layouts_->currentRow();
+            const int step = (key == Qt::Key_Down) ? 1 : -1;
+            for (int i = 0; i < n; ++i) {
+                row = (row + step + n) % n;
+                auto* it = recent_layouts_->item(row);
+                if (it && !it->isHidden() && (it->flags() & Qt::ItemIsSelectable)) {
+                    recent_layouts_->setCurrentRow(row);
+                    break;
+                }
+            }
+            return true;
+        }
+        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+            on_open_layout();
+            return true;
+        }
+        if (key == Qt::Key_Escape) {
+            // Only dismiss if there's already a frame to return to —
+            // otherwise hide() would leave the user with no UI.
+            if (!WindowRegistry::instance().frames().isEmpty()) {
+                hide();
+                return true;
+            }
+            // Fall through; no-op rather than triggering a quit accidentally.
+        }
+    }
+    return QMainWindow::eventFilter(obj, event);
 }
 
 void LaunchpadScreen::closeEvent(QCloseEvent* event) {
@@ -417,6 +484,14 @@ void LaunchpadScreen::refresh_first_run_picker() {
     template_picker_->setVisible(first_run);
     if (recent_layouts_) recent_layouts_->setVisible(!first_run);
     if (recent_label_)   recent_label_->setVisible(!first_run);
+}
+
+void LaunchpadScreen::refresh_crash_banner() {
+    if (!crash_banner_) return;
+    // The shell latches the answer at boot — using needs_recovery() directly
+    // would false-positive within the first minute (latest auto-snapshot
+    // catches up to the marker).
+    crash_banner_->setVisible(TerminalShell::instance().started_after_crash());
 }
 
 void LaunchpadScreen::refresh_continue_visibility() {

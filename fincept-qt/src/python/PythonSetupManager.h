@@ -4,7 +4,7 @@
 //
 // Flow:
 //   1. Download UV standalone binary (~13MB) — single download, no pip/get-pip.py
-//   2. uv python install 3.12                — UV handles Python download internally
+//   2. uv python install 3.11.9              — UV handles Python download internally
 //   3. uv venv venv-numpy1 + venv-numpy2     — PARALLEL venv creation
 //   4. uv pip install requirements            — PARALLEL package install (UV is 10-100x faster than pip)
 //
@@ -112,10 +112,9 @@ class PythonSetupManager : public QObject {
                                    const QString& requirements_file) const;
 
     // Pinned to an exact patch so `uv python install <ver>` resolves to the
-    // same build on every machine. Previously set to "3.12" which let uv pick
-    // the latest patch, producing non-reproducible installs and contributing
-    // to confusion during crash triage (see issue #215).
-    static constexpr const char* kPythonVersion = "3.12.7";
+    // same build on every machine. Must match the version documented in
+    // README.md / CONTRIBUTING.md / GETTING_STARTED.md.
+    static constexpr const char* kPythonVersion = "3.11.9";
     static constexpr const char* kUvVersion = "0.7.12";
 
     // Session-lifetime caches — requirements files never change at runtime.

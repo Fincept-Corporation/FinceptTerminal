@@ -247,6 +247,77 @@ QWidget* CreateAgentPanel::build_form_panel() {
     tools_list_->setStyleSheet(list_style());
     vl->addWidget(tools_list_);
 
+    // ── TERMINAL TOOLS ───────────────────────────────────────────────────────
+    // Internal Fincept MCP tools exposed via the local HTTP bridge. The toggle
+    // controls whether the bridge endpoint + tool catalog get injected into
+    // the agent config; the category list is a category-whitelist filter
+    // (empty = include everything except the default exclusions); the
+    // destructive toggle issues the capability token that lets the agent
+    // call tools tagged is_destructive=true.
+    vl->addWidget(section_label("TERMINAL TOOLS"));
+
+    terminal_tools_check_ = new QCheckBox("Enable internal terminal tools (markets, portfolio, news, edgar...)");
+    terminal_tools_check_->setChecked(true);
+    terminal_tools_check_->setStyleSheet(
+        QString("QCheckBox{color:%1;font-size:10px;spacing:5px;}"
+                "QCheckBox::indicator{width:8px;height:8px;}"
+                "QCheckBox::indicator:unchecked{background:%2;border:1px solid %3;}"
+                "QCheckBox::indicator:checked{background:%4;border:1px solid %4;}")
+            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(),
+                 ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+    vl->addWidget(terminal_tools_check_);
+
+    terminal_sub_ = new QWidget;
+    auto* sub_vl = new QVBoxLayout(terminal_sub_);
+    sub_vl->setContentsMargins(12, 4, 0, 4);
+    sub_vl->setSpacing(4);
+
+    terminal_destructive_check_ = new QCheckBox("Allow destructive tools (place_order, delete_*, set_*, file ops)");
+    terminal_destructive_check_->setStyleSheet(
+        QString("QCheckBox{color:%1;font-size:10px;spacing:5px;}"
+                "QCheckBox::indicator{width:8px;height:8px;}"
+                "QCheckBox::indicator:unchecked{background:%2;border:1px solid %3;}"
+                "QCheckBox::indicator:checked{background:%4;border:1px solid %4;}")
+            .arg(ui::colors::NEGATIVE(), ui::colors::BG_RAISED(),
+                 ui::colors::BORDER_DIM(), ui::colors::NEGATIVE()));
+    sub_vl->addWidget(terminal_destructive_check_);
+
+    auto* cat_lbl = new QLabel("Category whitelist (none checked = all enabled categories except UI-only)");
+    cat_lbl->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
+    sub_vl->addWidget(cat_lbl);
+
+    terminal_categories_list_ = new QListWidget;
+    terminal_categories_list_->setFixedHeight(110);
+    terminal_categories_list_->setStyleSheet(list_style());
+    // Categories sourced from src/mcp/tools/*.cpp registrations. Excludes
+    // UI-only categories (navigation/system/settings) and recursive ones
+    // (ai-chat/meta) — agents shouldn't drive the UI or call the chat LLM.
+    for (const auto& cat : {"markets", "watchlist", "news", "portfolio", "notes",
+                             "crypto-trading", "paper-trading", "sec-edgar",
+                             "ma-analytics", "alt-investments", "data-sources",
+                             "forum", "profile", "file_manager", "report-builder",
+                             "python", "datahub", "analytics"}) {
+        auto* item = new QListWidgetItem(cat);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Unchecked);
+        terminal_categories_list_->addItem(item);
+    }
+    sub_vl->addWidget(terminal_categories_list_);
+
+    auto* max_row = new QHBoxLayout;
+    max_row->setSpacing(8);
+    max_row->addWidget(field_lbl("Max tools (0 = no cap)"));
+    terminal_max_tools_spin_ = new QSpinBox;
+    terminal_max_tools_spin_->setRange(0, 500);
+    terminal_max_tools_spin_->setValue(0);
+    terminal_max_tools_spin_->setStyleSheet(input_style());
+    max_row->addWidget(terminal_max_tools_spin_);
+    max_row->addStretch();
+    sub_vl->addLayout(max_row);
+
+    vl->addWidget(terminal_sub_);
+    connect(terminal_tools_check_, &QCheckBox::toggled, terminal_sub_, &QWidget::setVisible);
+
     // ── FEATURES ─────────────────────────────────────────────────────────────
     vl->addWidget(section_label("FEATURES"));
 
@@ -811,6 +882,24 @@ void CreateAgentPanel::load_agent_into_form(const AgentConfig& cfg) {
 
     agentic_memory_user_id_edit_->setText(c["agentic_memory_user_id"].toString());
 
+    // Terminal MCP bridge — default ON if the key is absent (matches
+    // build_payload's default-true semantics for legacy configs).
+    const bool tt_enabled = c.contains("terminal_tools_enabled")
+                                ? c["terminal_tools_enabled"].toBool()
+                                : true;
+    terminal_tools_check_->setChecked(tt_enabled);
+    terminal_sub_->setVisible(tt_enabled);
+    terminal_destructive_check_->setChecked(c["allow_destructive_tools"].toBool(false));
+    QSet<QString> cat_set;
+    const QJsonObject tf = c["tool_filter"].toObject();
+    for (const auto& v : tf["categories"].toArray())
+        cat_set.insert(v.toString());
+    for (int i = 0; i < terminal_categories_list_->count(); ++i) {
+        auto* it = terminal_categories_list_->item(i);
+        it->setCheckState(cat_set.contains(it->text()) ? Qt::Checked : Qt::Unchecked);
+    }
+    terminal_max_tools_spin_->setValue(tf["max_tools"].toInt(0));
+
     status_lbl_->setText(QString("Loaded: %1").arg(cfg.name));
     status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::CYAN()));
 }
@@ -837,6 +926,12 @@ void CreateAgentPanel::clear_form() {
     guardrails_compliance_check_->setChecked(false);
     memory_user_memories_check_->setChecked(false);
     memory_session_summary_check_->setChecked(false);
+    terminal_tools_check_->setChecked(true);
+    terminal_sub_->setVisible(true);
+    terminal_destructive_check_->setChecked(false);
+    for (int i = 0; i < terminal_categories_list_->count(); ++i)
+        terminal_categories_list_->item(i)->setCheckState(Qt::Unchecked);
+    terminal_max_tools_spin_->setValue(0);
     test_result_->clear();
     test_status_lbl_->clear();
     status_lbl_->setText("Form cleared");
@@ -924,6 +1019,25 @@ QJsonObject CreateAgentPanel::build_config_json() const {
     }
     if (agentic_memory_check_->isChecked())
         config["agentic_memory_user_id"] = agentic_memory_user_id_edit_->text();
+
+    // Terminal MCP bridge — read by AgentService::build_payload to decide
+    // whether to inject the bridge endpoint + tool catalog and whether to
+    // grant the destructive capability token.
+    config["terminal_tools_enabled"] = terminal_tools_check_->isChecked();
+    config["allow_destructive_tools"] = terminal_destructive_check_->isChecked();
+    QJsonArray cat_whitelist;
+    for (int i = 0; i < terminal_categories_list_->count(); ++i) {
+        auto* it = terminal_categories_list_->item(i);
+        if (it->checkState() == Qt::Checked)
+            cat_whitelist.append(it->text());
+    }
+    QJsonObject tf;
+    if (!cat_whitelist.isEmpty())
+        tf["categories"] = cat_whitelist;
+    if (terminal_max_tools_spin_->value() > 0)
+        tf["max_tools"] = terminal_max_tools_spin_->value();
+    if (!tf.isEmpty())
+        config["tool_filter"] = tf;
 
     return config;
 }

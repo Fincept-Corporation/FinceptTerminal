@@ -1,5 +1,6 @@
 // src/screens/ma_analytics/MAModulePanel.h
 #pragma once
+#include "services/ma_analytics/MAAnalyticsService.h"
 #include "services/ma_analytics/MAAnalyticsTypes.h"
 
 #include <QComboBox>
@@ -16,6 +17,10 @@
 #include <QWidget>
 
 namespace fincept::screens {
+
+// Make MAAnalyticsService visible to every panel TU that includes this
+// header — each panel calls MAAnalyticsService::instance() unqualified.
+using fincept::services::ma::MAAnalyticsService;
 
 /// Renders the input form + results area for a single M&A module.
 /// Each module has sub-tabs (methods), input fields, a Run button, and result display.

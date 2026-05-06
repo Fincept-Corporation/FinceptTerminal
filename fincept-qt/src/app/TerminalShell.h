@@ -85,6 +85,13 @@ class TerminalShell : public QObject {
     /// as the row key in workspace_db's session_history table.
     QString session_id() const { return session_id_; }
 
+    /// True iff `crash_recovery_->needs_recovery()` was true at the moment
+    /// `initialise()` ran. Latched at boot — `needs_recovery()` would start
+    /// returning false positives within ~60s of boot (latest auto snapshot
+    /// catches up to the clean-shutdown marker), so consumers that want
+    /// "did we boot after a crash" must read this latched flag instead.
+    bool started_after_crash() const { return started_after_crash_; }
+
   signals:
     /// Emitted at the end of initialise() once all bootstrapping has run.
     /// Subscribers can hook startup-time work here without knowing about
@@ -109,6 +116,9 @@ class TerminalShell : public QObject {
     WorkspaceDb* workspace_db_ = nullptr;
     WorkspaceSnapshotRing* snapshot_ring_ = nullptr;
     CrashRecovery* crash_recovery_ = nullptr;
+
+    /// Latched at boot in initialise(); read via started_after_crash().
+    bool started_after_crash_ = false;
 };
 
 } // namespace fincept

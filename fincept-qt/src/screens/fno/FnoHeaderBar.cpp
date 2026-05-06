@@ -28,7 +28,7 @@ QString fmt_compact(qint64 v) {
     return QLocale(QLocale::English).toString(v);
 }
 
-QLabel* make_kv(QWidget* parent, QLabel*& value_out, const QString& key) {
+QWidget* make_kv(QWidget* parent, QLabel*& value_out, const QString& key) {
     auto* wrap = new QWidget(parent);
     auto* lay = new QVBoxLayout(wrap);
     lay->setContentsMargins(0, 0, 0, 0);

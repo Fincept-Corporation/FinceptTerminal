@@ -179,11 +179,12 @@ void ModelDispatcher::dispatch_tick(Tick t,
         const QString display_name = agent.display_name;
         const int seq = t.seq;
         const QString user_sha_capture = user_sha;
+        const QString comp_id = competition_id_;
 
         fincept::python::PythonRunner::instance().run(
             QStringLiteral("alpha_arena/llm_call.py"),
             {req_path},
-            [self, tick_id, agent_id, display_name, seq, user_sha_capture]
+            [self, tick_id, agent_id, display_name, seq, user_sha_capture, comp_id]
             (const fincept::python::PythonResult& result) {
                 if (!self) return;
 
@@ -226,6 +227,19 @@ void ModelDispatcher::dispatch_tick(Tick t,
 
                 const auto dr = AlphaArenaRepo::instance().insert_decision(d);
                 const QString dec_id = dr.is_ok() ? dr.value() : QString();
+
+                // Telemetry event for RiskPanel — captures latency, parse status,
+                // token usage. Always written, regardless of parse success.
+                {
+                    QJsonObject p;
+                    p[QStringLiteral("decision_id")] = dec_id;
+                    p[QStringLiteral("latency_ms")] = d.latency_ms;
+                    p[QStringLiteral("tokens_in")] = d.tokens_in;
+                    p[QStringLiteral("tokens_out")] = d.tokens_out;
+                    p[QStringLiteral("parse_error")] = d.parse_error;
+                    AlphaArenaRepo::instance().append_event(comp_id, agent_id,
+                                                            QStringLiteral("decision"), p);
+                }
 
                 emit self->decision_received(dec_id, agent_id, parsed.actions, d.parse_error);
 

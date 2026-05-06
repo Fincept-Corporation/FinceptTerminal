@@ -43,11 +43,22 @@ class TerminalToolkit:
         endpoint: str,
         tool_definitions: List[Dict[str, Any]],
         timeout_seconds: int = 85,
+        token: Optional[str] = None,
+        destructive_token: Optional[str] = None,
         **kwargs,
     ):
         self.endpoint = endpoint.rstrip("/")
         self.tool_definitions = tool_definitions
         self.timeout_seconds = timeout_seconds
+        # Per-process auth token issued by the Qt host (TerminalMcpBridge).
+        # Sent as X-MCP-Token on every request — bridge rejects mismatches
+        # with HTTP 401.
+        self.token = token
+        # Capability token. Only present when the agent config has
+        # `allow_destructive_tools=true`. When sent, the bridge permits
+        # tools tagged `is_destructive=true` (e.g. order placement,
+        # file deletion, settings mutation).
+        self.destructive_token = destructive_token
         self.functions: List[Any] = []
 
         # Build Agno-compatible function wrappers
@@ -145,13 +156,18 @@ class TerminalToolkit:
 
         try:
             data = json.dumps(payload).encode("utf-8")
+            headers = {
+                "Content-Type": "application/json",
+                "Content-Length": str(len(data)),
+            }
+            if self.token:
+                headers["X-MCP-Token"] = self.token
+            if self.destructive_token:
+                headers["X-MCP-Allow-Destructive"] = self.destructive_token
             req = urllib.request.Request(
                 f"{self.endpoint}/tool",
                 data=data,
-                headers={
-                    "Content-Type": "application/json",
-                    "Content-Length": str(len(data)),
-                },
+                headers=headers,
                 method="POST",
             )
 
