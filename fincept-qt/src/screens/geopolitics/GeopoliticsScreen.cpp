@@ -514,21 +514,48 @@ void GeopoliticsScreen::rebuild_legend(const QVector<services::geo::UniqueCatego
         delete item;
     }
     for (const auto& c : cats) {
+        const QColor cat_col = services::geo::category_color(c.category);
+        const QString col_hex = cat_col.name();
+        const QString col_rgb =
+            QString("%1,%2,%3").arg(cat_col.red()).arg(cat_col.green()).arg(cat_col.blue());
+
         auto* row = new QWidget(legend_container_);
+        row->setObjectName("legend_row");
+        row->setStyleSheet(QString("QWidget#legend_row { background:transparent; }"
+                                   "QWidget#legend_row:hover { background:rgba(%1,0.06); }")
+                               .arg(col_rgb));
         auto* rl = new QHBoxLayout(row);
-        rl->setContentsMargins(0, 1, 0, 1);
-        rl->setSpacing(6);
-        auto* dot = new QWidget(row);
-        dot->setFixedSize(8, 8);
-        dot->setStyleSheet(QString("background:%1; border-radius:4px;")
-                               .arg(services::geo::category_color(c.category).name()));
-        rl->addWidget(dot);
+        rl->setContentsMargins(4, 3, 4, 3);
+        rl->setSpacing(8);
+
+        // Square swatch — colored fill with a subtle darker outline so the
+        // chip reads cleanly against the surface background.
+        auto* swatch = new QWidget(row);
+        swatch->setFixedSize(11, 11);
+        swatch->setStyleSheet(QString("background:%1; border:1px solid rgba(0,0,0,0.35);")
+                                  .arg(col_hex));
+        rl->addWidget(swatch, 0, Qt::AlignVCenter);
+
         auto* lbl = new QLabel(services::geo::pretty_category(c.category), row);
-        lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
+        lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;"
+                                   "background:transparent;")
                                .arg(ui::colors::TEXT_SECONDARY())
                                .arg(ui::fonts::SMALL)
                                .arg(ui::fonts::DATA_FAMILY));
         rl->addWidget(lbl, 1);
+
+        if (c.event_count > 0) {
+            auto* cnt = new QLabel(QString::number(c.event_count), row);
+            cnt->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; font-weight:700;"
+                                       "background:rgba(%4,0.10); border:1px solid rgba(%4,0.30);"
+                                       "padding:1px 5px;")
+                                   .arg(col_hex)
+                                   .arg(ui::fonts::TINY)
+                                   .arg(ui::fonts::DATA_FAMILY())
+                                   .arg(col_rgb));
+            cnt->setAlignment(Qt::AlignCenter);
+            rl->addWidget(cnt, 0, Qt::AlignRight | Qt::AlignVCenter);
+        }
         legend_layout_->addWidget(row);
     }
     legend_layout_->addStretch();

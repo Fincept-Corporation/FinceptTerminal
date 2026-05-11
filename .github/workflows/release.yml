@@ -946,25 +946,101 @@ jobs:
           # signature the moment the DMG is copied to /Applications on
           # macOS 14+ Apple Silicon (root cause of SIGKILL reports in #139,
           # #173, #191).
+          # ── Fix bundled yt-dlp shebang ───────────────────────────────────
+          # CMake bundles yt-dlp via `find_program(... NAMES yt-dlp)`, which
+          # on macOS picks up Homebrew's wrapper at
+          # /opt/homebrew/Cellar/yt-dlp/<ver>/libexec/bin/yt-dlp. That
+          # wrapper's first line is a builder-local shebang:
+          #   #!/opt/homebrew/Cellar/yt-dlp/<ver>/libexec/bin/python
+          # That path doesn't exist on a user's Mac so dashboard YouTube
+          # playback fails at runtime. Rewrite to `/usr/bin/env python3`
+          # which resolves via the user's PATH (macOS 12.3+ ships
+          # /usr/bin/python3 by default; we also embed python3 ourselves
+          # at Contents/MacOS/python3 for callers that prepend the bundle
+          # dir to PATH). Note: yt-dlp is not a Mach-O, so this rewrite is
+          # invisible to the notary service — but the modified content
+          # must be sealed by codesign, so do it BEFORE the xattr strip
+          # and signing.
+          YTDLP="${APP_BUNDLE}/Contents/MacOS/yt-dlp"
+          if [ -f "${YTDLP}" ]; then
+              FIRST_LINE=$(head -1 "${YTDLP}" 2>/dev/null || true)
+              if [ "${FIRST_LINE#'#!'}" != "${FIRST_LINE}" ] && \
+                 [ "${FIRST_LINE}" != "#!/usr/bin/env python3" ]; then
+                  echo "Rewriting yt-dlp shebang (was: ${FIRST_LINE})"
+                  TMP_YT="${YTDLP}.fix"
+                  { echo "#!/usr/bin/env python3"; tail -n +2 "${YTDLP}"; } > "${TMP_YT}"
+                  chmod +x "${TMP_YT}"
+                  mv "${TMP_YT}" "${YTDLP}"
+              fi
+          fi
+
           echo "Stripping extended attributes from bundle..."
           xattr -cr "${APP_BUNDLE}" 2>/dev/null || true
 
-          echo "Removing existing signatures (leaves first)..."
-          # Strip signatures from every Mach-O in the bundle. Must be done
-          # leaf-to-root so nested frameworks are unsigned before we re-sign
-          # their parents. NOTE: site-packages .so files inside Python.framework
-          # ship as 0644 (not exec), so -perm +111 misses them — explicitly
-          # catch *.so via the filename predicate.
-          find "${APP_BUNDLE}" -type f \( -name "*.dylib" -o -name "*.so" -o -perm +111 \) 2>/dev/null | \
-            while read -r f; do
-              if file "$f" 2>/dev/null | grep -q "Mach-O"; then
-                codesign --remove-signature "$f" 2>/dev/null || true
-              fi
-            done
+          # ── Sign every nested Mach-O explicitly, leaves-first ────────────
+          # `codesign --deep` is deprecated and does NOT propagate the
+          # `--options runtime` or `--timestamp` flags to nested binaries,
+          # so a bundled Python.framework comes out with ~80 unsigned .so
+          # files and no secure timestamp anywhere. The notary service then
+          # rejects every one of them ("The binary is not signed.",
+          # "The signature does not include a secure timestamp.", "The
+          # executable does not have the hardened runtime enabled.").
+          #
+          # Fix: walk each Mach-O / framework / nested .app and sign it
+          # individually with the same identity + runtime + timestamp.
+          # Then sign the top-level bundle (with entitlements) last.
+          # Reference:
+          #   https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution/resolving_common_notarization_issues#3087721
+
+          SIGN_FLAGS=(--force --options runtime --timestamp --sign "$SIGNING_IDENTITY")
+
+          # ── Enumerate every Mach-O via `file -h`, not by filename ────────
+          # Previously we filtered on `*.dylib | *.so | -perm +111`. That
+          # misses three real-world cases:
+          #   1. Mach-O files with no extension shipped as 0644 (some Python
+          #      C extensions, some plugin systems)
+          #   2. Linker stubs / utility binaries inside frameworks
+          #   3. Anything macdeployqt or bundle_external_deps drops in with
+          #      a non-standard name
+          # `file -h` (no follow-symlinks) inspects bytes, not the path —
+          # bulletproof. Cost: a few seconds extra to stat every file.
+          echo "Enumerating Mach-O files in bundle..."
+          MACHO_LIST="$RUNNER_TEMP/macho-files.txt"
+          : > "${MACHO_LIST}"
+          while IFS= read -r f; do
+            if file -h "$f" 2>/dev/null | grep -q "Mach-O"; then
+              printf '%s\n' "$f" >> "${MACHO_LIST}"
+            fi
+          done < <(find "${APP_BUNDLE}" -type f 2>/dev/null)
+          MACHO_COUNT=$(wc -l < "${MACHO_LIST}" | tr -d ' ')
+          echo "  found ${MACHO_COUNT} Mach-O file(s)"
+
+          echo "Stripping existing signatures from every Mach-O..."
+          while IFS= read -r f; do
+            codesign --remove-signature "$f" 2>/dev/null || true
+          done < "${MACHO_LIST}"
           codesign --remove-signature "${APP_BUNDLE}" 2>/dev/null || true
 
-          echo "Signing bundle with Developer ID..."
-          codesign --force --deep --options runtime --timestamp \
+          echo "Signing every Mach-O with hardened runtime + timestamp..."
+          while IFS= read -r f; do
+            codesign "${SIGN_FLAGS[@]}" "$f" >/dev/null
+          done < "${MACHO_LIST}"
+
+          echo "Signing nested frameworks and .app bundles (deepest-first)..."
+          # `-depth` makes find emit each directory AFTER its contents, so
+          # nested Tcl.framework / Tk.framework / Python.app are signed
+          # before the Python.framework that contains them, and every
+          # framework is signed before the top-level .app below.
+          BUNDLE_COUNT=0
+          while IFS= read -r d; do
+            codesign "${SIGN_FLAGS[@]}" "$d" >/dev/null
+            BUNDLE_COUNT=$((BUNDLE_COUNT + 1))
+          done < <(find "${APP_BUNDLE}/Contents" -mindepth 1 -depth -type d \
+                        \( -name "*.framework" -o -name "*.app" \) 2>/dev/null)
+          echo "  signed ${BUNDLE_COUNT} nested bundles"
+
+          echo "Signing top-level bundle with entitlements..."
+          codesign --force --options runtime --timestamp \
                    --entitlements "$ENT" \
                    --sign "$SIGNING_IDENTITY" \
                    "${APP_BUNDLE}"
@@ -979,11 +1055,72 @@ jobs:
           echo "Signature OK:"
           codesign --display --verbose=2 "${APP_BUNDLE}" 2>&1 | head -20
 
+          # ── Pre-flight: catch notary-fatal issues locally ────────────────
+          # `codesign --verify` above validates that signatures are *present
+          # and consistent*, but it does NOT enforce the three things Apple's
+          # notary actually rejects on:
+          #   • hardened-runtime flag set on every Mach-O
+          #   • secure timestamp on every Mach-O
+          #   • only the architectures we shipped (arm64)
+          # We walk every Mach-O and assert each one. If any fails, we abort
+          # here — that saves a 2-5 min notary round-trip for an issue we
+          # could've caught on the runner.
+          echo "Pre-flight: validating every Mach-O..."
+          BAD_RUNTIME=()
+          BAD_TIMESTAMP=()
+          BAD_ARCH=()
+          while IFS= read -r f; do
+            DISPLAY=$(codesign --display --verbose=2 "$f" 2>&1 || true)
+            if ! echo "${DISPLAY}" | grep -q "flags=.*runtime"; then
+              BAD_RUNTIME+=("$f")
+            fi
+            if ! echo "${DISPLAY}" | grep -q "Timestamp="; then
+              BAD_TIMESTAMP+=("$f")
+            fi
+            # `file -h` returns one line per arch slice for a fat binary.
+            # We want exactly one arm64 slice and nothing else.
+            ARCHS=$(file -h "$f" 2>/dev/null | grep -oE "(arm64|x86_64|i386|ppc)" | sort -u | tr '\n' ',' | sed 's/,$//')
+            if [ "${ARCHS}" != "arm64" ]; then
+              BAD_ARCH+=("${f} [${ARCHS}]")
+            fi
+          done < "${MACHO_LIST}"
+
+          PREFLIGHT_OK=1
+          if [ "${#BAD_RUNTIME[@]}" -gt 0 ]; then
+            PREFLIGHT_OK=0
+            echo "::error::${#BAD_RUNTIME[@]} Mach-O(s) missing hardened runtime (notary will reject):"
+            printf '    %s\n' "${BAD_RUNTIME[@]}" | head -20
+          fi
+          if [ "${#BAD_TIMESTAMP[@]}" -gt 0 ]; then
+            PREFLIGHT_OK=0
+            echo "::error::${#BAD_TIMESTAMP[@]} Mach-O(s) missing secure timestamp (notary will reject):"
+            printf '    %s\n' "${BAD_TIMESTAMP[@]}" | head -20
+          fi
+          if [ "${#BAD_ARCH[@]}" -gt 0 ]; then
+            PREFLIGHT_OK=0
+            echo "::error::${#BAD_ARCH[@]} Mach-O(s) with unexpected architecture (this build is arm64-only):"
+            printf '    %s\n' "${BAD_ARCH[@]}" | head -20
+          fi
+
+          # Sanity: `get-task-allow` must not appear in any signed entitlement
+          # — it's a development debugging flag and Apple's notary rejects it.
+          if codesign --display --entitlements - "${APP_BUNDLE}" 2>/dev/null | grep -q "get-task-allow"; then
+            PREFLIGHT_OK=0
+            echo "::error::get-task-allow entitlement is present — must be removed for distribution"
+          fi
+
+          if [ "${PREFLIGHT_OK}" -ne 1 ]; then
+            echo "::error::Pre-flight checks failed — fix above issues before notary submission"
+            exit 1
+          fi
+          echo "  pre-flight passed: all ${MACHO_COUNT} Mach-Os are arm64, hardened-runtime, timestamped"
+
+          rm -f "${MACHO_LIST}"
+
           # Do NOT add `spctl --assess` here. spctl is a Gatekeeper
           # *post*-flight (needs a notarization ticket stapled), so on a
           # freshly-signed bundle it always fails with
-          # `source=Unnotarized Developer ID`. The signature pre-flight is
-          # `codesign --verify` above; notarization below is the
+          # `source=Unnotarized Developer ID`. Notarization below is the
           # authoritative check.
 
       # ── Notarize + staple the .app BEFORE building the DMG ───────────────
