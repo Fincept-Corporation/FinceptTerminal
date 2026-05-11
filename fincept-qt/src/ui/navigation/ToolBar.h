@@ -10,6 +10,8 @@
 
 namespace fincept::ui {
 
+class PushpinBar;
+
 /// Combined toolbar: File/Navigate/View/Help menus + branding + clock + user info + logout.
 /// Replaces both ToolBar and NavigationBar in a single row.
 class ToolBar : public QWidget {
@@ -18,6 +20,8 @@ class ToolBar : public QWidget {
     explicit ToolBar(QWidget* parent = nullptr);
 
     void refresh_user_display();
+
+    PushpinBar* pushpin_bar() const { return pushpin_bar_; }
 
   signals:
     void navigate_to(const QString& tab_id);
@@ -50,6 +54,7 @@ class ToolBar : public QWidget {
     QLabel* fincept_label_ = nullptr;
 
     CommandBar* command_bar_ = nullptr;
+    PushpinBar* pushpin_bar_ = nullptr;
 
     void refresh_theme();
     void apply_responsive_layout(int width);

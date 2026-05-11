@@ -238,8 +238,7 @@ class WindowFrame : public QMainWindow {
     DockScreenRouter* dock_router_ = nullptr;
     ui::DockToolBar* dock_toolbar_ = nullptr;
     ui::DockStatusBar* dock_status_bar_ = nullptr;
-    ui::PushpinBar* pushpin_bar_ = nullptr;
-    QToolBar* pushpin_toolbar_ = nullptr; // outer QToolBar that hosts pushpin_bar_
+    ui::PushpinBar* pushpin_bar_ = nullptr; // owned by ui::ToolBar (inline in main toolbar)
     ui::TabBar* tab_bar_ = nullptr;
 
     // View state

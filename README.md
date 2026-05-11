@@ -65,13 +65,13 @@ State-of-the-art financial intelligence platform with institutional-grade financ
 <!-- DOWNLOAD-TABLE-START -->
 ### Option 1 — Download Installer (Recommended)
 
-Latest release: **v4.0.2** — [View all releases](https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.0.2)
+Latest release: **v4.0.3** — [View all releases](https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.0.3)
 
 | Platform | Download | Run |
 |----------|----------|-----|
-| **Windows x64** | [FinceptTerminal-Windows-x64-setup.exe](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.0.2/FinceptTerminal-4.0.2-windows-x64-setup.exe) | Run installer → launch `FinceptTerminal.exe` |
-| **Linux x64** | [FinceptTerminal-Linux-x64.run](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.0.2/FinceptTerminal-4.0.2-linux-x64-setup.run) | `chmod +x` → run installer |
-| **macOS Apple Silicon** | [FinceptTerminal-macOS-arm64.dmg](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.0.2/FinceptTerminal-4.0.2-macos-arm64-setup.dmg) | Open DMG → drag to Applications |
+| **Windows x64** | [FinceptTerminal-Windows-x64-setup.exe](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.0.3/FinceptTerminal-4.0.3-windows-x64-setup.exe) | Run installer → launch `FinceptTerminal.exe` |
+| **Linux x64** | [FinceptTerminal-Linux-x64.run](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.0.3/FinceptTerminal-4.0.3-linux-x64-setup.run) | `chmod +x` → run installer |
+| **macOS Apple Silicon** | [FinceptTerminal-macOS-arm64.dmg](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.0.3/FinceptTerminal-4.0.3-macos-arm64-setup.dmg) | Open DMG → drag to Applications |
 <!-- DOWNLOAD-TABLE-END -->
 
 ---

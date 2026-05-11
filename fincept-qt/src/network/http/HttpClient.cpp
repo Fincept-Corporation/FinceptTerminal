@@ -109,6 +109,13 @@ void HttpClient::del(const QString& url, JsonCallback callback, const QObject* c
     handle_reply(reply, std::move(callback), context);
 }
 
+void HttpClient::del(const QString& url, const QJsonObject& body, JsonCallback callback, const QObject* context) {
+    LOG_DEBUG("HTTP", "DELETE " + url);
+    QJsonDocument doc(body);
+    auto* reply = nam_->sendCustomRequest(build_request(url), "DELETE", doc.toJson(QJsonDocument::Compact));
+    handle_reply(reply, std::move(callback), context);
+}
+
 void HttpClient::set_auth_header(const QString& api_key) {
     api_key_ = api_key;
 }

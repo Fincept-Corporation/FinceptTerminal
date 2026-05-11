@@ -681,18 +681,26 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
     order_entry_->set_symbol(selected_symbol_);
     order_entry_->set_exchange(selected_exchange_);
 
-    // Ensure stream is running and configure it
+    // Ensure stream is running and configure it. Skip data fetches when the
+    // account has no credentials yet — every fetch_* spawns a QtConcurrent
+    // thread that bails on an empty api_key check inside the lambda. Firing
+    // ~11 of those at once trips _pthread_create on macOS and crashes the
+    // process (see crash report 2026-05-08-123609.ips). The credentials_saved
+    // handler will re-run the data-fetch path once the user connects.
+    const bool has_creds = !AccountManager::instance().load_credentials(account_id).api_key.isEmpty();
     auto& dsm = DataStreamManager::instance();
-    dsm.start_stream(account_id);
-    auto* stream = dsm.stream_for(account_id);
-    if (stream) {
-        stream->set_selected_symbol(selected_symbol_, selected_exchange_);
-        stream->subscribe_symbols(watchlist_symbols_);
-        stream->fetch_candles(selected_symbol_, chart_->current_timeframe());
-        stream->fetch_orderbook(selected_symbol_);
-        stream->fetch_time_sales(selected_symbol_);
-        stream->fetch_calendar();
-        stream->fetch_clock();
+    if (has_creds) {
+        dsm.start_stream(account_id);
+        auto* stream = dsm.stream_for(account_id);
+        if (stream) {
+            stream->set_selected_symbol(selected_symbol_, selected_exchange_);
+            stream->subscribe_symbols(watchlist_symbols_);
+            stream->fetch_candles(selected_symbol_, chart_->current_timeframe());
+            stream->fetch_orderbook(selected_symbol_);
+            stream->fetch_time_sales(selected_symbol_);
+            stream->fetch_calendar();
+            stream->fetch_clock();
+        }
     }
 
     // Load paper portfolio orders into matcher
@@ -811,10 +819,13 @@ void EquityTradingScreen::on_accounts_clicked() {
     auto* dlg = new AccountManagementDialog(this);
 
     connect(dlg, &AccountManagementDialog::account_added, this, [this](const QString& account_id) {
+        Q_UNUSED(account_id);
         update_account_menu();
-        // If no focused account, auto-focus the new one
-        if (focused_account_id_.isEmpty())
-            on_account_changed(account_id);
+        // Don't auto-focus a freshly-added account: it has no credentials yet,
+        // so on_account_changed() would spawn ~11 QtConcurrent::run fetches that
+        // all bail at the empty-api_key check. On macOS that thread-storm trips
+        // pthread_create inside QThreadPool and crashes the main thread (see
+        // crash report 2026-05-08-123609.ips). Defer focus to credentials_saved.
     });
 
     connect(dlg, &AccountManagementDialog::account_removed, this, [this](const QString& account_id) {
@@ -833,6 +844,15 @@ void EquityTradingScreen::on_accounts_clicked() {
 
     connect(dlg, &AccountManagementDialog::credentials_saved, this, [this](const QString& account_id) {
         token_expired_shown_.store(false);
+        // First account ever connected: focus it now (account_added intentionally
+        // does not auto-focus — see comment there). on_account_changed() does its
+        // own start_stream() + symbol/watchlist setup, so we're done after that.
+        if (focused_account_id_.isEmpty()) {
+            on_account_changed(account_id);
+            AccountManager::instance().set_connection_state(account_id, ConnectionState::Connected);
+            update_connection_status();
+            return;
+        }
         // Start/restart the stream with new credentials
         DataStreamManager::instance().start_stream(account_id);
         auto* stream = DataStreamManager::instance().stream_for(account_id);

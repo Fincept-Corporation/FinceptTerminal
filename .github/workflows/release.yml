@@ -432,8 +432,8 @@ jobs:
 
           # Filename must match the regex in update-manifest:
           #   FinceptTerminal-<version>-linux-x64-setup.run
-          # where <version> is CMAKE_PROJECT_VERSION (e.g. 4.0.2), NOT the
-          # tag (v4.0.2). Parse project() VERSION from CMakeLists.txt so we
+          # where <version> is CMAKE_PROJECT_VERSION (e.g. 4.0.3), NOT the
+          # tag (v4.0.3). Parse project() VERSION from CMakeLists.txt so we
           # stay in sync even when triggered via workflow_dispatch (no tag).
           VERSION=$(grep -Po 'project\(FinceptTerminal VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
           if [ -z "${VERSION}" ]; then
@@ -632,8 +632,8 @@ jobs:
             <key>CFBundleIdentifier</key><string>com.fincept.terminal</string>
             <key>CFBundleName</key><string>FinceptTerminal</string>
             <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>4.0.2</string>
-            <key>CFBundleVersion</key><string>4.0.2</string>
+            <key>CFBundleShortVersionString</key><string>4.0.3</string>
+            <key>CFBundleVersion</key><string>4.0.3</string>
             <key>LSMinimumSystemVersion</key><string>13.0</string>
             <key>NSHighResolutionCapable</key><true/>
           </dict></plist>
@@ -896,30 +896,65 @@ jobs:
           echo "=== Bundle Frameworks/ contents ==="
           ls -la "${FRAMEWORKS}" | head -50
 
-      # ── Deep ad-hoc re-sign the entire bundle ─────────────────────────────
+      # ── Import Developer ID certificate into a temp keychain ──────────────
+      # The cert + private key live in repo secrets (base64-encoded .p12).
+      # We provision a throwaway keychain for this job so the runner's
+      # default login keychain stays untouched and the cert is gone the
+      # moment the job ends.
+      - name: Import Developer ID certificate
+        env:
+          P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          P12_PATH="$RUNNER_TEMP/cert.p12"
+          echo "$P12_BASE64" | base64 -d > "$P12_PATH"
+          security create-keychain -p "$P12_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$P12_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$P12_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$P12_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          rm -f "$P12_PATH"
+
+      # ── Deep re-sign the entire bundle with Developer ID ─────────────────
       # This is the fix for issue #139. macdeployqt's signing of nested
       # frameworks is unreliable (known Qt bug — see GDATASoftwareAG fork).
       # We strip every existing signature and re-sign the whole bundle from
-      # leaves to root with a single identity (`-` = ad-hoc). On macOS 14+
-      # on Apple Silicon this is what prevents dyld from killing the process
-      # with SIGKILL Code Signature Invalid at launch.
-      #
-      # Until Apple Developer ID cert + notarization is added (Tier 2),
-      # users will still see "unidentified developer" on first launch and
-      # must right-click → Open (or `xattr -d com.apple.quarantine`).
-      - name: Deep ad-hoc codesign bundle
+      # leaves to root with the Developer ID Application cert, hardened
+      # runtime enabled, and entitlements that permit Python's JIT / dynamic
+      # library loading. Notarization later requires hardened runtime.
+      - name: Codesign bundle (Developer ID + hardened runtime)
         working-directory: fincept-qt
+        env:
+          SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
         run: |
           set -euxo pipefail
           APP_BUNDLE="build/${{ env.APP_NAME }}.app"
 
+          ENT="$RUNNER_TEMP/entitlements.plist"
+          cat > "$ENT" <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>com.apple.security.cs.allow-jit</key><true/>
+            <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+            <key>com.apple.security.cs.allow-dyld-environment-variables</key><true/>
+            <key>com.apple.security.cs.disable-library-validation</key><true/>
+            <key>com.apple.security.network.client</key><true/>
+            <key>com.apple.security.network.server</key><true/>
+          </dict></plist>
+          EOF
+
           # Strip extended attributes (quarantine / provenance / Finder info)
           # from the whole bundle. macdeployqt copies Qt frameworks out of the
           # aqtinstall kit, which may carry com.apple.quarantine from the
-          # install-qt-action download. Leftover xattrs on individual pages
-          # invalidate the signature the moment the DMG is copied to
-          # /Applications on macOS 14+ Apple Silicon (root cause of the
-          # SIGKILL "Code Signature Invalid" reports in #139, #173, #191).
+          # install-qt-action download. Leftover xattrs invalidate the
+          # signature the moment the DMG is copied to /Applications on
+          # macOS 14+ Apple Silicon (root cause of SIGKILL reports in #139,
+          # #173, #191).
           echo "Stripping extended attributes from bundle..."
           xattr -cr "${APP_BUNDLE}" 2>/dev/null || true
 
@@ -928,10 +963,7 @@ jobs:
           # leaf-to-root so nested frameworks are unsigned before we re-sign
           # their parents. NOTE: site-packages .so files inside Python.framework
           # ship as 0644 (not exec), so -perm +111 misses them — explicitly
-          # catch *.so via the filename predicate. Same for *.dylib nested in
-          # frameworks. The `file ... Mach-O` check still gates actual action
-          # so text files accidentally named .so (none today, but belt and
-          # suspenders) won't trigger spurious codesign calls.
+          # catch *.so via the filename predicate.
           find "${APP_BUNDLE}" -type f \( -name "*.dylib" -o -name "*.so" -o -perm +111 \) 2>/dev/null | \
             while read -r f; do
               if file "$f" 2>/dev/null | grep -q "Mach-O"; then
@@ -940,14 +972,10 @@ jobs:
             done
           codesign --remove-signature "${APP_BUNDLE}" 2>/dev/null || true
 
-          echo "Re-signing bundle ad-hoc (deep)..."
-          # Ad-hoc sign ("-"): do NOT pass --preserve-metadata — the bundle has
-          # no prior entitlements/requirements to preserve, and the flag will
-          # fail with "resource fork, Finder information, or similar detritus
-          # not allowed" on fresh macdeployqt output. Entitlements are only
-          # needed with a real Developer ID cert + hardened runtime (Tier 2).
-          codesign --force --deep --sign - \
-                   --timestamp=none \
+          echo "Signing bundle with Developer ID..."
+          codesign --force --deep --options runtime --timestamp \
+                   --entitlements "$ENT" \
+                   --sign "$SIGNING_IDENTITY" \
                    "${APP_BUNDLE}"
 
           echo "Verifying signature..."
@@ -959,6 +987,47 @@ jobs:
 
           echo "Signature OK:"
           codesign --display --verbose=2 "${APP_BUNDLE}" 2>&1 | head -20
+
+          # Strict Gatekeeper pre-flight. Notarization will reject the bundle
+          # if spctl says no — fail here with a clearer error than the notary
+          # response 30 seconds from now.
+          echo "Running spctl assessment..."
+          spctl --assess --type execute --verbose=4 "${APP_BUNDLE}" || {
+            echo "::error::spctl rejected the bundle — notarization will fail"
+            exit 1
+          }
+
+      # ── Notarize + staple the .app BEFORE building the DMG ───────────────
+      # Stapling the .app means Gatekeeper validates offline on first launch
+      # after the user drags it to /Applications. Without this, the .app
+      # carries no ticket — Gatekeeper would have to phone home, and offline
+      # users would see "Apple could not verify ... is free of malware".
+      # The DMG gets its own notarization + staple in a later step.
+      - name: Notarize and staple .app
+        working-directory: fincept-qt
+        env:
+          APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          APP_BUNDLE="build/${{ env.APP_NAME }}.app"
+          ZIP_PATH="$RUNNER_TEMP/app-for-notary.zip"
+
+          # ditto preserves symlinks + xattrs correctly; `zip` doesn't.
+          /usr/bin/ditto -c -k --keepParent "${APP_BUNDLE}" "${ZIP_PATH}"
+
+          echo "Submitting .app to Apple notary (this can take a few minutes)..."
+          xcrun notarytool submit "${ZIP_PATH}" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$TEAM_ID" \
+            --password "$NOTARY_PASSWORD" \
+            --wait
+
+          echo "Stapling ticket to .app..."
+          xcrun stapler staple "${APP_BUNDLE}"
+          xcrun stapler validate "${APP_BUNDLE}"
+          rm -f "${ZIP_PATH}"
 
       # ── Copy signed bundle to dist/ ───────────────────────────────────────
       - name: Finalize dist
@@ -1000,6 +1069,42 @@ jobs:
             "build/${DMG_NAME}"
 
           ls -lh "build/${DMG_NAME}"
+
+      # ── Sign + Notarize + Staple DMG ──────────────────────────────────────
+      # Sign the DMG itself, submit to Apple's notary service, and staple
+      # the resulting ticket so Gatekeeper can verify offline. After this
+      # step the DMG opens on any Mac without "unidentified developer"
+      # warnings.
+      - name: Sign and notarize DMG
+        working-directory: fincept-qt
+        env:
+          SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DMG=$(ls build/FinceptTerminal-*-macos-arm64-setup.dmg | head -1)
+          echo "Signing DMG: ${DMG}"
+          codesign --force --sign "$SIGNING_IDENTITY" --timestamp "$DMG"
+
+          echo "Submitting to Apple notary service (this can take a few minutes)..."
+          xcrun notarytool submit "$DMG" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$TEAM_ID" \
+            --password "$NOTARY_PASSWORD" \
+            --wait
+
+          echo "Stapling ticket..."
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
+          spctl --assess --type open --context context:primary-signature -vv "$DMG" || true
+
+      # ── Clean up the temp keychain ────────────────────────────────────────
+      - name: Clean up keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/build.keychain-db" 2>/dev/null || true
 
       # ── Upload ────────────────────────────────────────────────────────────
       - name: Upload artifact
@@ -1242,7 +1347,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Strip leading 'v' so "v4.0.2" → "4.0.2" for latest-version
+          # Strip leading 'v' so "v4.0.3" → "4.0.3" for latest-version
           VERSION="${TAG#v}"
 
           WORK="$(mktemp -d)"

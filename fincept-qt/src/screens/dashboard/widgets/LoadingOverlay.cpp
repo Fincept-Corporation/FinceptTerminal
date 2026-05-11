@@ -7,7 +7,6 @@
 #include <QEvent>
 #include <QFont>
 #include <QFontMetrics>
-#include <QGraphicsOpacityEffect>
 #include <QLinearGradient>
 #include <QPaintEvent>
 #include <QPainter>
@@ -39,9 +38,12 @@ LoadingOverlay::LoadingOverlay(QWidget* parent) : QWidget(parent) {
     setFocusPolicy(Qt::NoFocus);
     setVisible(false);
 
-    opacity_effect_ = new QGraphicsOpacityEffect(this);
-    opacity_effect_->setOpacity(0.0);
-    setGraphicsEffect(opacity_effect_);
+    // QGraphicsOpacityEffect was previously used here. Removed: on Qt6 the
+    // effect forces an offscreen render pass + composite on every paint even
+    // when opacity is 1.0, which adds ~ms per frame per overlay. With ~30
+    // dashboard widgets each owning an overlay this dominated paint time on
+    // low-end GPUs. We now apply opacity directly via QPainter::setOpacity
+    // in paintEvent and drive it through the `fadeOpacity` Q_PROPERTY.
 
     shimmer_anim_ = new QPropertyAnimation(this, "shimmerPhase", this);
     shimmer_anim_->setDuration(kShimmerPeriodMs);
@@ -53,11 +55,11 @@ LoadingOverlay::LoadingOverlay(QWidget* parent) : QWidget(parent) {
     progress_anim_->setDuration(kProgressEaseMs);
     progress_anim_->setEasingCurve(QEasingCurve::OutCubic);
 
-    fade_anim_ = new QPropertyAnimation(opacity_effect_, "opacity", this);
+    fade_anim_ = new QPropertyAnimation(this, "fadeOpacity", this);
     fade_anim_->setDuration(kFadeMs);
     connect(fade_anim_, &QPropertyAnimation::finished, this, [this]() {
         // If we faded out, actually hide so we stop drawing on top.
-        if (opacity_effect_->opacity() <= 0.001) {
+        if (fade_opacity_ <= 0.001) {
             setVisible(false);
             stop_shimmer();
         }
@@ -93,10 +95,17 @@ void LoadingOverlay::set_displayed_progress(qreal v) {
     update();
 }
 
+void LoadingOverlay::set_fade_opacity(qreal v) {
+    fade_opacity_ = v;
+    update();
+}
+
 void LoadingOverlay::start_indeterminate() {
     indeterminate_ = true;
     loaded_ = 0;
     expected_ = 0;
+    error_mode_ = false;
+    error_text_.clear();
     progress_anim_->stop();
     displayed_progress_ = 0.0;
 
@@ -118,6 +127,8 @@ void LoadingOverlay::set_progress(int loaded, int expected) {
     }
 
     indeterminate_ = false;
+    error_mode_ = false;
+    error_text_.clear();
     loaded_ = std::clamp(loaded, 0, expected);
     expected_ = expected;
 
@@ -143,10 +154,27 @@ void LoadingOverlay::set_progress(int loaded, int expected) {
 }
 
 void LoadingOverlay::finish() {
+    error_mode_ = false;
+    error_text_.clear();
     if (!active_)
         return;
     active_ = false;
     fade_out_and_hide();
+}
+
+void LoadingOverlay::set_error(const QString& message) {
+    error_mode_ = true;
+    error_text_ = message;
+    stop_shimmer();
+    progress_anim_->stop();
+    if (!active_) {
+        active_ = true;
+        sync_geometry();
+        setVisible(true);
+        raise();
+        fade_in();
+    }
+    update();
 }
 
 void LoadingOverlay::start_shimmer() {
@@ -160,16 +188,32 @@ void LoadingOverlay::stop_shimmer() {
 
 void LoadingOverlay::fade_in() {
     fade_anim_->stop();
-    fade_anim_->setStartValue(opacity_effect_->opacity());
+    fade_anim_->setStartValue(fade_opacity_);
     fade_anim_->setEndValue(1.0);
     fade_anim_->start();
 }
 
 void LoadingOverlay::fade_out_and_hide() {
     fade_anim_->stop();
-    fade_anim_->setStartValue(opacity_effect_->opacity());
+    fade_anim_->setStartValue(fade_opacity_);
     fade_anim_->setEndValue(0.0);
     fade_anim_->start();
+}
+
+void LoadingOverlay::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    // Resume the shimmer animation when our parent widget tree becomes
+    // visible again (e.g. user switches back to the dashboard tab). Without
+    // this the QPropertyAnimation central timer would keep ticking ~60Hz on
+    // every overlay regardless of visibility — 30+ overlays × 60Hz is
+    // measurable on weak hardware.
+    if (active_ && !error_mode_)
+        start_shimmer();
+}
+
+void LoadingOverlay::hideEvent(QHideEvent* e) {
+    QWidget::hideEvent(e);
+    stop_shimmer();
 }
 
 void LoadingOverlay::sync_geometry() {
@@ -192,6 +236,9 @@ void LoadingOverlay::paintEvent(QPaintEvent* /*e*/) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing, true);
     p.setRenderHint(QPainter::TextAntialiasing, true);
+    // Apply our fade opacity directly via the painter (was previously a
+    // QGraphicsOpacityEffect — see comment in the constructor).
+    p.setOpacity(fade_opacity_);
 
     const QRect r = rect();
     if (r.isEmpty())
@@ -202,6 +249,20 @@ void LoadingOverlay::paintEvent(QPaintEvent* /*e*/) {
     // through and look like a glitch — but tinted with the surface color so
     // the loading state still feels like part of the widget.
     p.fillRect(r, with_alpha(ui::colors::BG_SURFACE(), 235));
+
+    // ── Error mode ──
+    if (error_mode_) {
+        QFont err_font;
+        err_font.setFamily(ui::fonts::DATA_FAMILY);
+        err_font.setPixelSize(11);
+        err_font.setBold(true);
+        err_font.setLetterSpacing(QFont::AbsoluteSpacing, 0.6);
+        p.setFont(err_font);
+        p.setPen(QColor(ui::colors::NEGATIVE()));
+        const QRect text_rect = r.adjusted(12, 12, -12, -12);
+        p.drawText(text_rect, Qt::AlignCenter | Qt::TextWordWrap, error_text_);
+        return;
+    }
 
     // ── Skeleton bars ──
     // Three rows of varying widths simulate where content will appear. The

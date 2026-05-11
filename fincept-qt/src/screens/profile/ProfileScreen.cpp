@@ -784,10 +784,10 @@ void ProfileScreen::show_delete_account_dialog() {
     if (first != QMessageBox::Yes)
         return;
 
-    // Second confirmation — type email to confirm
+    // Second confirmation — type email + enter password to confirm
     auto* dlg = new QDialog(this);
     dlg->setWindowTitle("Confirm Account Deletion");
-    dlg->setFixedSize(400, 200);
+    dlg->setFixedSize(400, 260);
     dlg->setStyleSheet(QString("background:%1;color:%2;font-family:'Consolas',monospace;")
                            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY()));
     auto* vl = new QVBoxLayout(dlg);
@@ -807,6 +807,16 @@ void ProfileScreen::show_delete_account_dialog() {
     input->setPlaceholderText(email);
     vl->addWidget(input);
 
+    auto* pw_lbl = new QLabel("ENTER YOUR PASSWORD:");
+    pw_lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;background:transparent;").arg(ui::colors::NEGATIVE()));
+    vl->addWidget(pw_lbl);
+
+    auto* pw_input = new QLineEdit;
+    pw_input->setFixedHeight(28);
+    pw_input->setEchoMode(QLineEdit::Password);
+    pw_input->setPlaceholderText("Current password");
+    vl->addWidget(pw_input);
+
     auto* brl = new QHBoxLayout;
     brl->addStretch();
     auto* cancel = new QPushButton("CANCEL");
@@ -822,16 +832,21 @@ void ProfileScreen::show_delete_account_dialog() {
                 "font-size:11px;font-weight:700;font-family:'Consolas',monospace;}"
                 "QPushButton:disabled{background:#3f1515;color:#7f3333;}")
             .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
-    connect(input, &QLineEdit::textChanged, this, [confirm, email](const QString& text) {
-        confirm->setEnabled(text.trimmed() == email);
-    });
+    auto reeval = [confirm, input, pw_input, email]() {
+        const bool email_ok = input->text().trimmed() == email;
+        const bool pw_ok = !pw_input->text().isEmpty();
+        confirm->setEnabled(email_ok && pw_ok);
+    };
+    connect(input, &QLineEdit::textChanged, this, [reeval](const QString&) { reeval(); });
+    connect(pw_input, &QLineEdit::textChanged, this, [reeval](const QString&) { reeval(); });
 
     QPointer<ProfileScreen> self = this;
     QPointer<QDialog> dlg_ptr = dlg;
-    connect(confirm, &QPushButton::clicked, this, [self, dlg_ptr]() {
+    connect(confirm, &QPushButton::clicked, this, [self, dlg_ptr, email, pw_input]() {
         if (!self) return;
+        const QString password = pw_input->text();
         if (dlg_ptr) dlg_ptr->accept();
-        auth::UserApi::instance().delete_user_account([self](auth::ApiResponse r) {
+        auth::UserApi::instance().delete_user_account(email, password, [self](auth::ApiResponse r) {
             if (!self) return;
             if (r.success) {
                 LOG_INFO("Profile", "Account deleted successfully");

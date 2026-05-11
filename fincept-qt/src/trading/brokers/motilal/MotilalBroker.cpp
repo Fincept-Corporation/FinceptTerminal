@@ -118,7 +118,7 @@ QMap<QString, QString> MotilalBroker::auth_headers(const BrokerCredentials& cred
         {"devicemodel", "PC"},
         {"manufacturer", "Generic"},
         {"productname", "FinceptTerminal"},
-        {"productversion", "4.0.2"},
+        {"productversion", "4.0.3"},
         {"browsername", "Chrome"},
         {"browserversion", "120.0"},
     };
@@ -161,7 +161,7 @@ TokenExchangeResponse MotilalBroker::exchange_token(const QString& api_key, cons
         {"devicemodel", "PC"},
         {"manufacturer", "Generic"},
         {"productname", "FinceptTerminal"},
-        {"productversion", "4.0.2"},
+        {"productversion", "4.0.3"},
         {"browsername", "Chrome"},
         {"browserversion", "120.0"},
     };

@@ -462,6 +462,10 @@ void WatchlistScreen::fetch_quotes() {
     }
 
     hub_resubscribe_stocks();
+    // Render placeholder rows synchronously so a newly-added symbol appears
+    // in the table immediately. Real prices fill in as the hub delivers
+    // quotes via the subscription callbacks.
+    rebuild_from_cache();
 }
 
 
@@ -501,12 +505,16 @@ void WatchlistScreen::hub_resubscribe_stocks() {
         const QString topic = QStringLiteral("market:quote:") + sym;
         topics.append(topic);
         hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+            LOG_INFO("Watchlist", QString("hub callback fired for %1 (canConvert=%2)")
+                                      .arg(sym).arg(v.canConvert<services::QuoteData>()));
             if (!v.canConvert<services::QuoteData>())
                 return;
             row_cache_.insert(sym, v.value<services::QuoteData>());
             rebuild_from_cache();
         });
     }
+    LOG_INFO("Watchlist", QString("subscribed + requesting %1 topics: %2")
+                              .arg(topics.size()).arg(topics.join(", ")));
     // force=true: watchlist symbols change on user edit; bypass min_interval
     // so newly-added tickers resolve immediately instead of waiting for the
     // scheduler tick.

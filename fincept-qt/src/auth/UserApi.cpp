@@ -62,8 +62,12 @@ void UserApi::request(const QString& method, const QString& endpoint, const QJso
         http.post(endpoint, body, handle);
     else if (method == "PUT")
         http.put(endpoint, body, handle);
-    else if (method == "DELETE")
-        http.del(endpoint, handle);
+    else if (method == "DELETE") {
+        if (body.isEmpty())
+            http.del(endpoint, handle);
+        else
+            http.del(endpoint, body, handle);
+    }
 }
 
 // ── Profile ──────────────────────────────────────────────────────────────────
@@ -80,8 +84,12 @@ void UserApi::regenerate_api_key(Callback cb) {
 void UserApi::get_user_credits(Callback cb) {
     request("GET", "/user/credits", {}, cb);
 }
-void UserApi::delete_user_account(Callback cb) {
-    request("DELETE", "/user/account", {}, cb);
+void UserApi::delete_user_account(const QString& confirm_email, const QString& password, Callback cb) {
+    QJsonObject body;
+    body.insert("confirm", true);
+    body.insert("email", confirm_email);
+    body.insert("password", password);
+    request("DELETE", "/user/account", body, cb);
 }
 
 void UserApi::get_user_usage(int days, Callback cb) {

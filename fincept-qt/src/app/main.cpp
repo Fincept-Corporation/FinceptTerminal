@@ -46,6 +46,7 @@
 #include "services/prediction/fincept_internal/FinceptInternalAdapter.h"
 #include "services/prediction/kalshi/KalshiAdapter.h"
 #include "services/prediction/polymarket/PolymarketAdapter.h"
+#include "services/forum/ForumService.h"
 #include "services/relationship_map/RelationshipMapService.h"
 #include "services/report_builder/ReportBuilderService.h"
 #include "datahub/DataHub.h"
@@ -72,10 +73,11 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
-#include <QLockFile>
+#include <QLibrary>
 #include <QPointer>
 #include <QSqlDatabase>
 #include <QSqlQuery>
+#include <QSslSocket>
 #include <QStandardPaths>
 #include <QTimer>
 #include <QUuid>
@@ -132,6 +134,45 @@ static void wire_app_lifecycle(QApplication& app, fincept::InstanceLock& lock) {
 
 int main(int argc, char* argv[]) {
     FT_MARK(1);
+
+    // ── TLS backend selection (must happen before any Qt plugin loading) ────
+    // Force QtNetwork to use the OpenSSL TLS backend across platforms.
+    //   - macOS: Apple SecureTransport (qtls_st.cpp) double-frees inside
+    //     SSLWrite when QWebSocket sends a close frame after a protocol
+    //     error. Reproducible by opening the crypto tab — Kraken/Polymarket
+    //     WS reconnect path crashes the main thread. SecureTransport was
+    //     deprecated by Apple in 10.15.
+    //   - Windows: Schannel has had similar instability around WS close
+    //     and certificate revocation paths in Qt 6.8. OpenSSL is the
+    //     consistent backend on every platform Qt supports.
+    // QT_TLS_BACKEND is read by QTlsBackendFactory at plugin-loader time, so
+    // it has to be set BEFORE QCoreApplication/QApplication is constructed —
+    // setActiveBackend() after the fact does not always take effect because
+    // singleton factories may already be bound.
+    qputenv("QT_TLS_BACKEND", "openssl");
+
+#ifdef Q_OS_MACOS
+    // Pre-load OpenSSL from Homebrew so the openssl plugin's runtime dlopen
+    // succeeds. Qt's QLibrary search defaults don't include /opt/homebrew/...
+    // Order matters: libcrypto first (libssl depends on it).
+    {
+        const QStringList crypto_candidates = {
+            QStringLiteral("/opt/homebrew/opt/openssl@3/lib/libcrypto.3.dylib"),
+            QStringLiteral("/usr/local/opt/openssl@3/lib/libcrypto.3.dylib"),
+        };
+        const QStringList ssl_candidates = {
+            QStringLiteral("/opt/homebrew/opt/openssl@3/lib/libssl.3.dylib"),
+            QStringLiteral("/usr/local/opt/openssl@3/lib/libssl.3.dylib"),
+        };
+        for (const auto& p : crypto_candidates) {
+            if (QFile::exists(p)) { QLibrary(p).load(); break; }
+        }
+        for (const auto& p : ssl_candidates) {
+            if (QFile::exists(p)) { QLibrary(p).load(); break; }
+        }
+    }
+#endif
+
     // ── Parse --profile <name> from argv before Qt initialises ───────────────
     // This must happen first so that:
     //   1. AppPaths returns the correct per-profile directories
@@ -189,6 +230,17 @@ int main(int argc, char* argv[]) {
     // explicit one in LaunchpadScreen::closeEvent.
     app.setQuitOnLastWindowClosed(false);
 
+    // Belt-and-braces: if QT_TLS_BACKEND wasn't honoured for some reason
+    // (e.g. plugin load order on a particular platform), retry the switch
+    // explicitly. This is a no-op if openssl is already active.
+    {
+        const auto backends = QSslSocket::availableBackends();
+        if (QSslSocket::activeBackend() != QStringLiteral("openssl")
+            && backends.contains(QStringLiteral("openssl"))) {
+            QSslSocket::setActiveBackend(QStringLiteral("openssl"));
+        }
+    }
+
     // ── Single-instance lock + new-window IPC ────────────────────────────────
     const QString profile_key = QString("FinceptTerminal-%1").arg(fincept::ProfileManager::instance().active());
     fincept::InstanceLock instance_lock;
@@ -245,194 +297,166 @@ int main(int argc, char* argv[]) {
     FT_MARK(20);
     fincept::services::MarketDataService::instance().ensure_registered_with_hub();
     FT_MARK(21);
-    // F&O / Options chain (Phase 11 — Sensibull-style tab). Sole hub
-    // producer for option:chain:*, option:tick:*, option:atm_iv:*, fno:pcr:*,
-    // fno:max_pain:*. Reads instruments via InstrumentService (broker-loaded),
-    // batches get_quotes via the active IBroker, and publishes assembled
-    // chains. After each chain publish the service kicks off a Greeks/IV
-    // batch via OptionGreeksWorker (Phase 3) and republishes the enriched
-    // chain.
-    fincept::services::options::OptionChainService::instance().ensure_registered_with_hub();
-    // F&O OI snapshotter (Phase 3 of the F&O work) — subscribes to
-    // option:chain:* and persists minute-aligned OI/LTP/Vol/IV rows to
-    // SQLite. Producer for oi:history:* (window queries).
-    fincept::services::options::OISnapshotter::instance().ensure_registered_with_hub();
-    // F&O FII/DII flows (Phase 8) — daily NSE cash-market institutional
-    // buy/sell, scraped via fii_dii_scraper.py. Producer for
-    // fno:fii_dii:daily.
-    fincept::services::options::FiiDiiService::instance().ensure_registered_with_hub();
-    // Phase 2 (multi-broker refactor): ExchangeSessionManager is the hub
-    // producer for `ws:kraken:*` / `ws:hyperliquid:*`. Individual sessions
-    // (created lazily by the manager) publish through its SessionPublisher
-    // seam. ExchangeService keeps a back-compat shim but no longer registers
-    // itself with the hub.
-    fincept::trading::ExchangeSessionManager::instance().ensure_registered_with_hub();
-    // Prediction Markets — multi-exchange tab (Polymarket, Kalshi, …).
-    // PolymarketWebSocket is the hub producer for `prediction:polymarket:*`;
-    // the adapter layer translates exchange-local types into the unified
-    // prediction::* data model for the screen.
-    fincept::services::polymarket::PolymarketWebSocket::instance().ensure_registered_with_hub();
-    // Alpha Arena engine — singleton runtime owning TickClock, ModelDispatcher,
-    // OrderRouter, PaperVenue. Not a DataHub Producer (callback-style by
-    // design — see .grill-me/alpha-arena-grill.md §1). init() is idempotent;
-    // calling it pre-resolves crash-recovery state from aa_competitions.
-    fincept::services::alpha_arena::AlphaArenaEngine::instance().init();
-    {
-        auto& reg = fincept::services::prediction::PredictionExchangeRegistry::instance();
-        reg.register_adapter(
-            std::make_unique<fincept::services::prediction::polymarket_ns::PolymarketAdapter>());
-        reg.register_adapter(
-            std::make_unique<fincept::services::prediction::kalshi_ns::KalshiAdapter>());
-        // Phase 4 §4.3: Fincept internal prediction-market adapter joins the
-        // registry as a sibling of Polymarket / Kalshi. Ships in demo mode
-        // (curated mock dataset) until `fincept.markets_endpoint` is
-        // configured and the `fincept_market` Anchor program is deployed.
-        reg.register_adapter(
-            std::make_unique<fincept::services::prediction::fincept_internal::FinceptInternalAdapter>());
 
-        // Hydrate credentials from SecureStorage if previously saved. This
-        // has to happen after registration so the adapters exist.
-        if (auto* pm = dynamic_cast<fincept::services::prediction::polymarket_ns::PolymarketAdapter*>(
-                reg.adapter(QStringLiteral("polymarket")))) {
-            pm->reload_credentials();
-        }
-        if (auto* ks = dynamic_cast<fincept::services::prediction::kalshi_ns::KalshiAdapter*>(
-                reg.adapter(QStringLiteral("kalshi")))) {
-            if (auto creds = fincept::services::prediction::PredictionCredentialStore::load_kalshi()) {
-                ks->set_credentials(*creds);
-            }
-        }
-        if (auto* fi = reg.adapter(QStringLiteral("fincept"))) {
-            fi->ensure_registered_with_hub();
-        }
-    }
-    // Phase 5: NewsService as the news:general / news:symbol:* /
-    // news:category:* / news:cluster:* producer.
+    // ── Sync services needed by the default dashboard ─────────────────────────
+    // Anything a default dashboard widget subscribes to during its first show
+    // must be registered with the hub before the window paints. Everything
+    // else is deferred to a single QTimer::singleShot(0) below — the event
+    // loop runs that batch immediately after the first paint, so cold-start
+    // perceived latency drops without changing functional behavior.
     fincept::services::NewsService::instance().ensure_registered_with_hub();
-    // Phase 6: Economics + DBnomics + GovData producers.
     fincept::services::EconomicsService::instance().ensure_registered_with_hub();
-    fincept::services::DBnomicsService::instance().ensure_registered_with_hub();
-    fincept::services::GovDataService::instance().ensure_registered_with_hub();
-    // Macro calendar: HTTP-backed `econ:fincept:upcoming_events` producer
-    // serving the dashboard EconomicCalendarWidget.
     fincept::services::MacroCalendarService::instance().ensure_registered_with_hub();
-    // Phase 7: DataStreamManager as the broker:* producer (positions,
-    // orders, balance, holdings, quote, ticks). Per-account topic shape
-    // `broker:<id>:<account_id>:<channel>`.
     fincept::trading::DataStreamManager::instance().ensure_registered_with_hub();
-    // Phase 8: Geopolitics / Maritime / RelationshipMap / MAAnalytics.
     fincept::services::geo::GeopoliticsService::instance().ensure_registered_with_hub();
     fincept::services::maritime::MaritimeService::instance().ensure_registered_with_hub();
     fincept::services::maritime::PortsCatalog::instance().ensure_registered_with_hub();
     fincept::services::RelationshipMapService::instance().ensure_registered_with_hub();
     fincept::services::ma::MAAnalyticsService::instance().ensure_registered_with_hub();
-    // Phase 9: AgentService as agent:* push-only producer (output/stream/status/routing/error).
-    fincept::services::AgentService::instance().ensure_registered_with_hub();
-    // Crypto: WalletService owns wallet:balance:* and market:price:token:*.
-    // TokenMetadataService loads its symbol/name cache from SecureStorage
-    // first so the very first balance publish has labels for known tokens;
-    // a daily background refresh fires in the background after.
     FT_MARK(30);
     fincept::wallet::TokenMetadataService::instance().load_from_storage();
-    FT_MARK(31);
-    fincept::wallet::TokenMetadataService::instance().refresh_from_jupiter_async();
-    FT_MARK(32);
-    // Restore_from_storage runs after the hub is up so a soft-connected
-    // wallet's balance topic resolves to a registered producer immediately.
-    FT_MARK(33);
-    fincept::wallet::WalletService::instance().ensure_registered_with_hub();
-    FT_MARK(34);
-    fincept::wallet::WalletService::instance().restore_from_storage();
     FT_MARK(35);
 
-    // Phase 2 §2C: fee-discount eligibility producer. Lives in billing/
-    // because it's consumed by other paid screens later; for Phase 2 it
-    // only feeds HoldingsBar's chip and TradeTab's FeeDiscountPanel.
-    {
-        static fincept::billing::FeeDiscountService discount_service;
-        auto& hub = fincept::datahub::DataHub::instance();
-        hub.register_producer(&discount_service);
-        fincept::datahub::TopicPolicy p;
-        // Eligibility is derived from wallet:balance — refresh cadence here
-        // is just a fallback; the service also republishes whenever the
-        // balance topic emits.
-        p.ttl_ms = 60 * 1000;
-        p.min_interval_ms = 15 * 1000;
-        hub.set_policy_pattern(QStringLiteral("billing:fncpt_discount:*"), p);
-    }
+    // ── Deferred service init — fires after first window paint ───────────────
+    // These services back tab-specific screens (F&O, prediction markets,
+    // alpha arena, agents, wallet/treasury/staking, etc.) — none of them is
+    // needed for the dashboard's first paint, so registering them here would
+    // only add latency to the user-visible cold start. Late registration is
+    // safe: the hub's scheduler tick picks up matching subscriptions on the
+    // next pass once the producer is registered.
+    QTimer::singleShot(0, qApp, []() {
+        // F&O / Options chain — `option:chain:*`, `option:tick:*`,
+        // `option:atm_iv:*`, `fno:pcr:*`, `fno:max_pain:*`.
+        fincept::services::options::OptionChainService::instance().ensure_registered_with_hub();
+        // F&O OI snapshotter — subscribes to option:chain:* and persists
+        // minute-aligned OI/LTP/Vol/IV rows to SQLite. Producer for
+        // oi:history:* (window queries).
+        fincept::services::options::OISnapshotter::instance().ensure_registered_with_hub();
+        // F&O FII/DII flows — daily NSE cash-market institutional buy/sell.
+        fincept::services::options::FiiDiiService::instance().ensure_registered_with_hub();
+        // Multi-broker session manager — `ws:kraken:*` / `ws:hyperliquid:*`.
+        fincept::trading::ExchangeSessionManager::instance().ensure_registered_with_hub();
+        // Prediction Markets — `prediction:polymarket:*`.
+        fincept::services::polymarket::PolymarketWebSocket::instance().ensure_registered_with_hub();
+        // Alpha Arena engine — TickClock, ModelDispatcher, OrderRouter,
+        // PaperVenue. Not a DataHub Producer (callback-style by design).
+        // init() is idempotent; pre-resolves crash-recovery state.
+        fincept::services::alpha_arena::AlphaArenaEngine::instance().init();
+        {
+            auto& reg = fincept::services::prediction::PredictionExchangeRegistry::instance();
+            reg.register_adapter(
+                std::make_unique<fincept::services::prediction::polymarket_ns::PolymarketAdapter>());
+            reg.register_adapter(
+                std::make_unique<fincept::services::prediction::kalshi_ns::KalshiAdapter>());
+            // Fincept internal prediction-market adapter (demo mode until
+            // `fincept.markets_endpoint` is configured).
+            reg.register_adapter(
+                std::make_unique<fincept::services::prediction::fincept_internal::FinceptInternalAdapter>());
 
-    // Phase 5: buyback & burn dashboard producers (terminal-wide treasury:*
-    // topics). Both producers ship in mock mode until the buyback worker
-    // endpoint is configured via SecureStorage `fincept.treasury_endpoint`
-    // and `fincept.treasury_pubkey`.
-    {
-        static fincept::wallet::BuybackBurnService buyback_burn_service;
-        static fincept::wallet::TreasuryService treasury_service;
-        auto& hub = fincept::datahub::DataHub::instance();
-        hub.register_producer(&buyback_burn_service);
-        hub.register_producer(&treasury_service);
+            // Hydrate credentials from SecureStorage if previously saved.
+            if (auto* pm = dynamic_cast<fincept::services::prediction::polymarket_ns::PolymarketAdapter*>(
+                    reg.adapter(QStringLiteral("polymarket")))) {
+                pm->reload_credentials();
+            }
+            if (auto* ks = dynamic_cast<fincept::services::prediction::kalshi_ns::KalshiAdapter*>(
+                    reg.adapter(QStringLiteral("kalshi")))) {
+                if (auto creds = fincept::services::prediction::PredictionCredentialStore::load_kalshi()) {
+                    ks->set_credentials(*creds);
+                }
+            }
+            if (auto* fi = reg.adapter(QStringLiteral("fincept"))) {
+                fi->ensure_registered_with_hub();
+            }
+        }
+        // Specialized data sources.
+        fincept::services::DBnomicsService::instance().ensure_registered_with_hub();
+        fincept::services::GovDataService::instance().ensure_registered_with_hub();
+        // Agents — `agent:*` push-only producer.
+        fincept::services::AgentService::instance().ensure_registered_with_hub();
+        // Token metadata refresh — network call to Jupiter aggregator.
+        fincept::wallet::TokenMetadataService::instance().refresh_from_jupiter_async();
+        // Wallet — `wallet:balance:*`, `market:price:token:*`.
+        fincept::wallet::WalletService::instance().ensure_registered_with_hub();
+        fincept::wallet::WalletService::instance().restore_from_storage();
 
-        // Per-topic policies. Cadences mirror Phase 5 plan §5.3.
-        fincept::datahub::TopicPolicy epoch_p;
-        epoch_p.ttl_ms = 60 * 1000;
-        epoch_p.min_interval_ms = 30 * 1000;
-        hub.set_policy_pattern(QStringLiteral("treasury:buyback_epoch"), epoch_p);
+        // Fee-discount eligibility producer (paid screens only).
+        {
+            static fincept::billing::FeeDiscountService discount_service;
+            auto& hub = fincept::datahub::DataHub::instance();
+            hub.register_producer(&discount_service);
+            fincept::datahub::TopicPolicy p;
+            p.ttl_ms = 60 * 1000;
+            p.min_interval_ms = 15 * 1000;
+            hub.set_policy_pattern(QStringLiteral("billing:fncpt_discount:*"), p);
+        }
 
-        fincept::datahub::TopicPolicy burn_p;
-        burn_p.ttl_ms = 5 * 60 * 1000;
-        burn_p.min_interval_ms = 60 * 1000;
-        hub.set_policy_pattern(QStringLiteral("treasury:burn_total"), burn_p);
+        // Buyback & burn / treasury producers (treasury:*).
+        {
+            static fincept::wallet::BuybackBurnService buyback_burn_service;
+            static fincept::wallet::TreasuryService treasury_service;
+            auto& hub = fincept::datahub::DataHub::instance();
+            hub.register_producer(&buyback_burn_service);
+            hub.register_producer(&treasury_service);
 
-        fincept::datahub::TopicPolicy supply_p;
-        supply_p.ttl_ms = 60 * 60 * 1000;
-        supply_p.min_interval_ms = 5 * 60 * 1000;
-        hub.set_policy_pattern(QStringLiteral("treasury:supply_history"), supply_p);
+            fincept::datahub::TopicPolicy epoch_p;
+            epoch_p.ttl_ms = 60 * 1000;
+            epoch_p.min_interval_ms = 30 * 1000;
+            hub.set_policy_pattern(QStringLiteral("treasury:buyback_epoch"), epoch_p);
 
-        fincept::datahub::TopicPolicy reserves_p;
-        reserves_p.ttl_ms = 5 * 60 * 1000;
-        reserves_p.min_interval_ms = 60 * 1000;
-        hub.set_policy_pattern(QStringLiteral("treasury:reserves"), reserves_p);
+            fincept::datahub::TopicPolicy burn_p;
+            burn_p.ttl_ms = 5 * 60 * 1000;
+            burn_p.min_interval_ms = 60 * 1000;
+            hub.set_policy_pattern(QStringLiteral("treasury:burn_total"), burn_p);
 
-        fincept::datahub::TopicPolicy runway_p;
-        runway_p.ttl_ms = 5 * 60 * 1000;
-        runway_p.min_interval_ms = 60 * 1000;
-        hub.set_policy_pattern(QStringLiteral("treasury:runway"), runway_p);
-    }
+            fincept::datahub::TopicPolicy supply_p;
+            supply_p.ttl_ms = 60 * 60 * 1000;
+            supply_p.min_interval_ms = 5 * 60 * 1000;
+            hub.set_policy_pattern(QStringLiteral("treasury:supply_history"), supply_p);
 
-    // Phase 3: STAKE tab producers (veFNCPT lock + real-yield + tier system).
-    // All three ship in mock mode until SecureStorage `fincept.lock_program_id`
-    // and `fincept.yield_endpoint` are configured. The mock payloads carry
-    // `is_mock=true` so panels can surface a "not yet deployed" chip.
-    {
-        auto& hub = fincept::datahub::DataHub::instance();
-        hub.register_producer(&fincept::wallet::StakingService::instance());
-        hub.register_producer(&fincept::wallet::RealYieldService::instance());
-        hub.register_producer(&fincept::billing::TierService::instance());
+            fincept::datahub::TopicPolicy reserves_p;
+            reserves_p.ttl_ms = 5 * 60 * 1000;
+            reserves_p.min_interval_ms = 60 * 1000;
+            hub.set_policy_pattern(QStringLiteral("treasury:reserves"), reserves_p);
 
-        // Plan §3.4 cadences.
-        fincept::datahub::TopicPolicy locks_p;
-        locks_p.ttl_ms = 60 * 1000;
-        locks_p.min_interval_ms = 30 * 1000;
-        hub.set_policy_pattern(QStringLiteral("wallet:locks:*"), locks_p);
-        hub.set_policy_pattern(QStringLiteral("wallet:vefncpt:*"), locks_p);
+            fincept::datahub::TopicPolicy runway_p;
+            runway_p.ttl_ms = 5 * 60 * 1000;
+            runway_p.min_interval_ms = 60 * 1000;
+            hub.set_policy_pattern(QStringLiteral("treasury:runway"), runway_p);
+        }
 
-        fincept::datahub::TopicPolicy yield_p;
-        yield_p.ttl_ms = 5 * 60 * 1000;
-        yield_p.min_interval_ms = 60 * 1000;
-        hub.set_policy_pattern(QStringLiteral("wallet:yield:*"), yield_p);
+        // STAKE tab producers (veFNCPT lock + real-yield + tier system).
+        {
+            auto& hub = fincept::datahub::DataHub::instance();
+            hub.register_producer(&fincept::wallet::StakingService::instance());
+            hub.register_producer(&fincept::wallet::RealYieldService::instance());
+            hub.register_producer(&fincept::billing::TierService::instance());
 
-        fincept::datahub::TopicPolicy revenue_p;
-        revenue_p.ttl_ms = 60 * 60 * 1000;
-        revenue_p.min_interval_ms = 5 * 60 * 1000;
-        hub.set_policy_pattern(QStringLiteral("treasury:revenue"), revenue_p);
+            fincept::datahub::TopicPolicy locks_p;
+            locks_p.ttl_ms = 60 * 1000;
+            locks_p.min_interval_ms = 30 * 1000;
+            hub.set_policy_pattern(QStringLiteral("wallet:locks:*"), locks_p);
+            hub.set_policy_pattern(QStringLiteral("wallet:vefncpt:*"), locks_p);
 
-        // billing:tier:* is derived from wallet:vefncpt:* — TTL is just a
-        // safety net; the service republishes whenever vefncpt emits.
-        fincept::datahub::TopicPolicy tier_p;
-        tier_p.ttl_ms = 60 * 1000;
-        tier_p.min_interval_ms = 15 * 1000;
-        hub.set_policy_pattern(QStringLiteral("billing:tier:*"), tier_p);
-    }
+            fincept::datahub::TopicPolicy yield_p;
+            yield_p.ttl_ms = 5 * 60 * 1000;
+            yield_p.min_interval_ms = 60 * 1000;
+            hub.set_policy_pattern(QStringLiteral("wallet:yield:*"), yield_p);
+
+            fincept::datahub::TopicPolicy revenue_p;
+            revenue_p.ttl_ms = 60 * 60 * 1000;
+            revenue_p.min_interval_ms = 5 * 60 * 1000;
+            hub.set_policy_pattern(QStringLiteral("treasury:revenue"), revenue_p);
+
+            // billing:tier:* derived from wallet:vefncpt:* — TTL is just a
+            // safety net; the service republishes whenever vefncpt emits.
+            fincept::datahub::TopicPolicy tier_p;
+            tier_p.ttl_ms = 60 * 1000;
+            tier_p.min_interval_ms = 15 * 1000;
+            hub.set_policy_pattern(QStringLiteral("billing:tier:*"), tier_p);
+        }
+
+        LOG_INFO("App", "Deferred service init complete");
+    });
 
     FT_MARK(40);
     // Create all application directories under %LOCALAPPDATA%/com.fincept.terminal
@@ -459,21 +483,17 @@ int main(int argc, char* argv[]) {
         QFile::remove(old_base + "/cache.db-shm");
     }
 
-    // ── WAL/SHM cleanup — gated behind QLockFile ────────────────────────────
-    // Deleting WAL/SHM files while another process has the DB open corrupts it.
-    // We only clean up orphaned files from a previous crash when we are the sole
-    // running instance. The lock file is held for the entire process lifetime.
-    QLockFile db_lock(fincept::AppPaths::data() + "/fincept.db.lock");
-    db_lock.setStaleLockTime(0); // never auto-expire; we control the lifecycle
-    const bool sole_instance = db_lock.tryLock(0);
-    if (sole_instance) {
-        QFile::remove(fincept::AppPaths::data() + "/fincept.db-wal");
-        QFile::remove(fincept::AppPaths::data() + "/fincept.db-shm");
-        QFile::remove(fincept::AppPaths::data() + "/cache.db-wal");
-        QFile::remove(fincept::AppPaths::data() + "/cache.db-shm");
-    }
-    // db_lock remains held (stack-allocated) until main() returns.
-    // Also clean legacy v3 DB location
+    // SQLite owns its own .db-wal / .db-shm files. Pre-deleting them is
+    // destructive: any committed transaction that has not yet been checkpointed
+    // back into the main .db file lives entirely in the WAL. Auto-checkpoint
+    // only fires past ~1000 pages, and the on-close checkpoint can fail
+    // silently — small writes (e.g. pin_hash on the secure_credentials table)
+    // routinely persist only in the WAL across runs. SQLite reads the WAL on
+    // open to recover any uncheckpointed or crash-truncated state, so we leave
+    // these files for SQLite to manage. Single-instance enforcement is owned
+    // by InstanceLock above.
+
+    // Clean legacy v3 DB location (these paths are no longer live DBs)
     {
         const QString local_dir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
         const QString legacy1 = local_dir.section('/', 0, -3) + "/FinceptTerminal/fincept_settings.db";
@@ -530,7 +550,10 @@ int main(int argc, char* argv[]) {
                 log.set_tag_level(tag, lvl_map.value(level));
         }
     }
-    LOG_INFO("App", "Fincept Terminal v4.0.2 starting...");
+    LOG_INFO("App", "Fincept Terminal v4.0.3 starting...");
+    LOG_INFO("App", QString("TLS backend: %1 (available: %2)")
+                        .arg(QSslSocket::activeBackend(),
+                             QSslSocket::availableBackends().join(", ")));
 
     // Theme is applied after DB is open so saved font/theme are respected from the start.
 
@@ -682,6 +705,15 @@ int main(int argc, char* argv[]) {
     // with BlockingQueuedConnection from worker threads, so the service must
     // already exist with main-thread affinity.
     (void)fincept::services::ReportBuilderService::instance();
+
+    // Same reason for ForumService: ForumTools (MCP) and ForumScreen (GUI)
+    // share one singleton that owns a QNetworkAccessManager. Whichever caller
+    // hits instance() first dictates thread affinity. If a worker thread
+    // touches it before the GUI does, every subsequent fetch from the Forum
+    // tab queues its reply onto a thread with no live event loop and the
+    // callback never fires — the tab spins on "loading" forever. Forcing
+    // construction here pins it to the main thread up front.
+    (void)fincept::services::ForumService::instance();
 
     // Initialize MCP tool system — registers all internal tools and starts
     // external MCP servers in the background (non-blocking).

@@ -6,6 +6,7 @@
 
 #include <QJsonArray>
 #include <QLabel>
+#include <QStackedWidget>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QVector>
@@ -63,6 +64,7 @@ class CryptoBottomPanel : public QWidget {
     void setup_stats_tab();
 
     static QTableWidgetItem* ensure_item(QTableWidget* table, int row, int col);
+    void update_empty_state(QTableWidget* table, QStackedWidget* stack, int row_count);
 
     QTabWidget* tabs_ = nullptr;
 
@@ -71,6 +73,15 @@ class CryptoBottomPanel : public QWidget {
     QTableWidget* trades_table_ = nullptr;
     QTableWidget* my_trades_table_ = nullptr;
     QTableWidget* fees_table_ = nullptr;
+
+    // Each table is wrapped in a QStackedWidget so we can swap between the
+    // table (page 0) and an empty-state placeholder (page 1) when the data
+    // set is empty. Avoids the "blank table with header only" UX.
+    QStackedWidget* positions_stack_ = nullptr;
+    QStackedWidget* orders_stack_ = nullptr;
+    QStackedWidget* trades_stack_ = nullptr;
+    QStackedWidget* my_trades_stack_ = nullptr;
+    QStackedWidget* fees_stack_ = nullptr;
 
     // Market Info
     QLabel* funding_label_ = nullptr;

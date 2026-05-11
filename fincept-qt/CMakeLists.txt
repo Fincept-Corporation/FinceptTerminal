@@ -33,7 +33,7 @@ if(WIN32 AND CMAKE_HOST_WIN32)
     unset(_fincept_sdk_dirs)
 endif()
 
-project(FinceptTerminal VERSION 4.0.2 LANGUAGES C CXX)
+project(FinceptTerminal VERSION 4.0.3 LANGUAGES C CXX)
 
 # Strip C/C++ flags out of RC invocations — rc.exe only understands /D, /I, /fo.
 if(WIN32)
@@ -2319,6 +2319,40 @@ endif()
 
 find_package(OpenSSL REQUIRED)
 message(STATUS "OpenSSL found: ${OPENSSL_VERSION} — include: ${OPENSSL_INCLUDE_DIR}")
+
+# ── macOS: make Qt's openssl TLS plugin discoverable ─────────────────────────
+# Qt's libqopensslbackend.dylib only searches /usr/local/lib, /opt/local/lib,
+# /sw/lib, /usr/lib and Qt's own lib dir for libssl/libcrypto. Homebrew on
+# Apple Silicon installs to /opt/homebrew which Qt does not search, so the
+# openssl plugin fails to register and Qt falls back to the deprecated Apple
+# SecureTransport backend — which double-frees in SSLWrite during QWebSocket
+# close and crashes the crypto tab.
+#
+# Symlink the OpenSSL dylibs from OPENSSL_ROOT_DIR into Qt's lib dir at
+# configure time so the openssl plugin loads and `QT_TLS_BACKEND=openssl`
+# (set in main.cpp) actually takes effect. Runs at configure (idempotent),
+# so it survives clean checkouts and Qt updates.
+if(APPLE AND OPENSSL_ROOT_DIR)
+    cmake_path(GET Qt6_DIR PARENT_PATH _ft_qt_cmake_dir)            # .../lib/cmake
+    cmake_path(GET _ft_qt_cmake_dir PARENT_PATH _ft_qt_lib_dir)     # .../lib
+    set(_ft_openssl_libs
+        libcrypto.dylib       libssl.dylib
+        libcrypto.3.dylib     libssl.3.dylib
+    )
+    foreach(_ft_lib IN LISTS _ft_openssl_libs)
+        set(_ft_src "${OPENSSL_ROOT_DIR}/lib/${_ft_lib}")
+        set(_ft_dst "${_ft_qt_lib_dir}/${_ft_lib}")
+        if(EXISTS "${_ft_src}" AND NOT EXISTS "${_ft_dst}")
+            execute_process(
+                COMMAND "${CMAKE_COMMAND}" -E create_symlink "${_ft_src}" "${_ft_dst}"
+                RESULT_VARIABLE _ft_rc
+            )
+            if(_ft_rc EQUAL 0)
+                message(STATUS "Symlinked ${_ft_lib} into Qt lib dir for TLS plugin discovery")
+            endif()
+        endif()
+    endforeach()
+endif()
 
 target_include_directories(FinceptTerminal PRIVATE
     "${OPENSSL_INCLUDE_DIR}"

@@ -54,12 +54,27 @@ class CryptoOrderEntry : public QWidget {
     QWidget* advanced_section_ = nullptr;
     QPushButton* advanced_toggle_ = nullptr;
 
-    // Labels
+    // Container rows so price/stop can be shown/hidden as a unit when the
+    // selected order type doesn't need them.
+    QWidget* price_row_ = nullptr;
+    QWidget* stop_row_ = nullptr;
+
+    // Header / account card labels
     QLabel* balance_label_ = nullptr;
     QLabel* market_price_label_ = nullptr;
-    QLabel* cost_label_ = nullptr;
-    QLabel* status_label_ = nullptr;
+    QLabel* avail_label_ = nullptr;
     QLabel* mode_label_ = nullptr;
+
+    // Order breakdown
+    QLabel* cost_label_ = nullptr;
+    QLabel* fee_label_ = nullptr;
+    QLabel* total_label_ = nullptr;
+    QLabel* recv_label_ = nullptr;
+    QLabel* pct_used_label_ = nullptr;
+
+    // Submit subtitle (rendered as a second line under the main button label)
+    QLabel* submit_subtitle_ = nullptr;
+    QLabel* status_label_ = nullptr;
 
     // Futures controls
     QWidget* futures_section_ = nullptr;

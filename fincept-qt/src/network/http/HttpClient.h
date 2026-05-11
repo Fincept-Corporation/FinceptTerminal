@@ -26,6 +26,7 @@ class HttpClient : public QObject {
     void post(const QString& url, const QJsonObject& body, JsonCallback callback, const QObject* context = nullptr);
     void put(const QString& url, const QJsonObject& body, JsonCallback callback, const QObject* context = nullptr);
     void del(const QString& url, JsonCallback callback, const QObject* context = nullptr);
+    void del(const QString& url, const QJsonObject& body, JsonCallback callback, const QObject* context = nullptr);
 
     void set_auth_header(const QString& api_key);
     void set_session_token(const QString& token);

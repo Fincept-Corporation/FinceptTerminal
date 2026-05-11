@@ -122,6 +122,20 @@ void MarketDataService::refresh(const QStringList& topics) {
             if (!ok) {
                 LOG_WARN("MarketData",
                          QString("batch_all failed in %1ms: %2").arg(elapsed).arg(err.left(200)));
+                // Notify hub so subscribers can react (clear spinner / show
+                // error) and so the scheduler clears the in_flight flag for
+                // retry on the next pass. Without this widgets that depend
+                // on these topics would spin forever on producer failure.
+                auto& hub = datahub::DataHub::instance();
+                const QString msg = err.isEmpty()
+                                        ? QStringLiteral("Market data refresh failed")
+                                        : err.left(200);
+                for (const auto& s : quote_syms)
+                    hub.publish_error(QStringLiteral("market:quote:") + s, msg);
+                for (const auto& s : spark_syms)
+                    hub.publish_error(QStringLiteral("market:sparkline:") + s, msg);
+                for (const auto& h : hist_reqs)
+                    hub.publish_error(h.topic, msg);
                 return;
             }
 

@@ -1179,6 +1179,11 @@ void CryptoTradingScreen::refresh_portfolio() {
             self->bottom_panel_->set_orders(s.orders);
             self->bottom_panel_->set_trades(s.trades);
             self->bottom_panel_->set_stats(s.stats);
+            LOG_INFO(TAG, QString("Paper portfolio refreshed: %1 positions, %2 orders, %3 trades, balance=%4")
+                              .arg(s.positions.size())
+                              .arg(s.orders.size())
+                              .arg(s.trades.size())
+                              .arg(s.portfolio.balance, 0, 'f', 2));
         }, Qt::QueuedConnection);
     });
 }

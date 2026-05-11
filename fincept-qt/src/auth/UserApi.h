@@ -22,7 +22,7 @@ class UserApi : public QObject {
     void regenerate_api_key(Callback cb);
     void get_user_usage(int days, Callback cb);
     void get_user_credits(Callback cb);
-    void delete_user_account(Callback cb);
+    void delete_user_account(const QString& confirm_email, const QString& password, Callback cb);
 
     // Session
     void logout(Callback cb);

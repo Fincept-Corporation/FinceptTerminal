@@ -41,7 +41,12 @@ class WebSocketClient : public QObject {
 
   private:
 #ifdef HAS_QT_WEBSOCKETS
-    QWebSocket socket_;
+    // Heap-allocated and parented to `this` so moveToThread on
+    // WebSocketClient also relocates the socket (and its internal
+    // QSocketNotifier / QTimer children). A value member would have no
+    // parent and therefore would not be carried by Qt's child-move
+    // machinery — leading to cross-thread socket access on every method.
+    QWebSocket* socket_ = nullptr;
 #endif
     QTimer reconnect_timer_;
     QString url_;

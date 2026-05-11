@@ -26,7 +26,7 @@
 
 namespace fincept::services {
 
-static constexpr int kFeedTransferTimeoutMs = 8000;   // 8s per RSS feed request
+static constexpr int kFeedTransferTimeoutMs = 4000;   // 4s per RSS feed request — was 8s; many tail feeds time out anyway so we'd rather show the fast majority within 1-2s than wait on the slow 5%
 static constexpr int kWsReconnectDelayMs    = 10000;  // 10s before WebSocket reconnect
 static constexpr int kSummaryMaxChars       = 300;    // max chars for article summary
 
@@ -1293,6 +1293,41 @@ void NewsService::refresh(const QStringList& topics) {
         }
     }
     if (!needs_general) return;
+
+    // Cache-first: prime the hub with last-known-good articles from disk so
+    // subscribers (NewsWidget etc.) render in ~50 ms on cold start instead
+    // of waiting for RSS feeds to resolve. The network refresh below then
+    // overwrites with fresh data when it lands.
+    const QVariant cached = fincept::CacheManager::instance().get("news:articles");
+    if (!cached.isNull()) {
+        const QJsonArray arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
+        if (!arr.isEmpty()) {
+            QVector<NewsArticle> articles;
+            articles.reserve(arr.size());
+            for (const auto& v : arr) {
+                const QJsonObject o = v.toObject();
+                NewsArticle a;
+                a.id = o["id"].toString();
+                a.time = o["time"].toString();
+                a.headline = o["headline"].toString();
+                a.summary = o["summary"].toString();
+                a.source = o["source"].toString();
+                a.region = o["region"].toString();
+                a.category = o["category"].toString();
+                a.link = o["link"].toString();
+                a.sort_ts = o["sort_ts"].toVariant().toLongLong();
+                a.tier = o["tier"].toInt(4);
+                a.priority = priority_from_string(o["priority"].toString());
+                a.sentiment = sentiment_from_string(o["sentiment"].toString());
+                a.impact = impact_from_string(o["impact"].toString());
+                a.lang = o["lang"].toString();
+                for (const auto& t : o["tickers"].toArray())
+                    a.tickers << t.toString();
+                articles.append(a);
+            }
+            publish_articles_to_hub(articles);
+        }
+    }
 
     // All non-cluster topics derive from the general feed; one fetch
     // fans out via publish_articles_to_hub.

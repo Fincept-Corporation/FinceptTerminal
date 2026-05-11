@@ -1,4 +1,21 @@
-// CryptoBottomPanel.cpp — tabbed panel with Time&Sales and Depth Chart
+// CryptoBottomPanel.cpp — production trading-terminal bottom panel.
+//
+// Tabs: POS · ORD · HIST · MY TRADES · FEES · T&S · DEPTH · MKT · STATS
+//
+// Design goals:
+//  • Fully responsive across desktop/laptop/HiDPI: column resize modes are
+//    explicit (Stretch / ResizeToContents / Interactive / Fixed) so tables
+//    expand into available width without horizontal scrollbars on common
+//    layouts and don't collapse below readable widths on narrow ones.
+//  • Row heights derive from QFontMetrics so they scale with the user's
+//    terminal font setting instead of being pinned to a hard-coded pixel.
+//  • Empty states: each table-tab is wrapped in a QStackedWidget that
+//    flips to a centered placeholder when the data set is empty — no more
+//    "header-only" tables on relaunch before the first WS tick lands.
+//  • MKT / STATS use a 3-column card grid (responsive via QGridLayout)
+//    instead of a row stack of labels, so they read like a Bloomberg-style
+//    dashboard rather than a ledger.
+
 #include "screens/crypto_trading/CryptoBottomPanel.h"
 
 #include "screens/crypto_trading/CryptoDepthChart.h"
@@ -6,10 +23,13 @@
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
+#include <QFontMetrics>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonObject>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <QVBoxLayout>
 
 #include <cmath>
@@ -19,27 +39,127 @@ namespace fincept::screens::crypto {
 using namespace fincept::ui;
 
 namespace {
-inline QColor kRowEven() {
-    return QColor(colors::BG_BASE());
+
+inline QColor kRowEven() { return QColor(colors::BG_BASE()); }
+inline QColor kRowOdd() { return QColor(colors::ROW_ALT()); }
+inline QColor kColorPos() { return QColor(colors::POSITIVE()); }
+inline QColor kColorNeg() { return QColor(colors::NEGATIVE()); }
+inline QColor kColorSec() { return QColor(colors::TEXT_SECONDARY()); }
+inline QColor kColorTert() { return QColor(colors::TEXT_TERTIARY()); }
+
+// Per-column resize policy.
+//  Stretch:     fills remaining horizontal space (use for the "primary" column
+//               like Symbol — at least one per table or the last col stretches
+//               by default).
+//  Numeric:     Interactive with a width derived from font metrics (e.g.
+//               "1234567890.12" worth of digits). User-resizable.
+//  Compact:     ResizeToContents — best for short categorical text like
+//               "BUY"/"LONG"/"FILLED".
+//  Action:      Fixed pixel width — for cancel/close buttons.
+enum class ColMode { Stretch, Numeric, Compact, Action };
+
+struct ColSpec {
+    QString header;
+    ColMode mode = ColMode::Stretch;
+    int width_chars = 8;     // hint for Numeric mode
+    int fixed_px = 32;       // for Action mode
+    Qt::Alignment align = Qt::AlignLeft | Qt::AlignVCenter;
+};
+
+QTableWidget* make_table(const QList<ColSpec>& cols) {
+    auto* t = new QTableWidget;
+    t->setObjectName("cryptoBottomTable");
+    t->setColumnCount(cols.size());
+
+    QStringList headers;
+    headers.reserve(cols.size());
+    for (const auto& c : cols) headers << c.header;
+    t->setHorizontalHeaderLabels(headers);
+
+    t->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    t->setSelectionBehavior(QAbstractItemView::SelectRows);
+    t->setSelectionMode(QAbstractItemView::SingleSelection);
+    t->setFocusPolicy(Qt::NoFocus);
+    t->setAlternatingRowColors(false); // we paint zebra stripes ourselves
+    t->setShowGrid(false);
+    t->setWordWrap(false);
+    t->setTextElideMode(Qt::ElideRight);
+    t->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+    t->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+
+    auto* vh = t->verticalHeader();
+    vh->hide();
+    // Row height scales with the active font — important for HiDPI and for
+    // users who bump the terminal font size in Settings → Appearance.
+    const int row_h = std::max(22, QFontMetrics(t->font()).height() + 8);
+    vh->setDefaultSectionSize(row_h);
+
+    auto* hh = t->horizontalHeader();
+    hh->setSectionsClickable(false);
+    hh->setHighlightSections(false);
+    hh->setStretchLastSection(false);
+    // Don't let any column collapse below ~48px or text becomes ellipsis-only.
+    hh->setMinimumSectionSize(48);
+    hh->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+
+    const QFontMetrics fm(hh->font());
+    bool any_stretch = false;
+    for (int i = 0; i < cols.size(); ++i) {
+        const auto& c = cols[i];
+        switch (c.mode) {
+        case ColMode::Stretch:
+            hh->setSectionResizeMode(i, QHeaderView::Stretch);
+            any_stretch = true;
+            break;
+        case ColMode::Numeric: {
+            hh->setSectionResizeMode(i, QHeaderView::Interactive);
+            // Width: max of header text and `width_chars` worth of '0'.
+            const int header_w = fm.horizontalAdvance(c.header) + 24;
+            const int data_w = fm.horizontalAdvance(QString(c.width_chars, QLatin1Char('0'))) + 16;
+            t->setColumnWidth(i, std::max(header_w, data_w));
+            break;
+        }
+        case ColMode::Compact:
+            hh->setSectionResizeMode(i, QHeaderView::ResizeToContents);
+            break;
+        case ColMode::Action:
+            hh->setSectionResizeMode(i, QHeaderView::Fixed);
+            t->setColumnWidth(i, c.fixed_px);
+            break;
+        }
+    }
+    // Fail-safe: if the caller forgot to mark a column as Stretch, stretch
+    // the last numeric/compact column to fill remaining space.
+    if (!any_stretch) hh->setStretchLastSection(true);
+
+    return t;
 }
-inline QColor kRowOdd() {
-    return QColor(colors::ROW_ALT());
+
+QWidget* wrap_with_empty_state(QTableWidget* table, QStackedWidget*& out_stack,
+                                const QString& empty_text) {
+    out_stack = new QStackedWidget;
+    out_stack->setObjectName("cryptoBottomStack");
+    out_stack->addWidget(table);
+
+    auto* placeholder_host = new QWidget;
+    placeholder_host->setObjectName("cryptoEmptyHost");
+    auto* h_layout = new QVBoxLayout(placeholder_host);
+    h_layout->setContentsMargins(0, 0, 0, 0);
+    auto* lbl = new QLabel(empty_text);
+    lbl->setObjectName("cryptoEmptyState");
+    lbl->setAlignment(Qt::AlignCenter);
+    lbl->setWordWrap(true);
+    h_layout->addStretch();
+    h_layout->addWidget(lbl);
+    h_layout->addStretch();
+    out_stack->addWidget(placeholder_host);
+
+    out_stack->setCurrentIndex(1); // start in empty state
+    return out_stack;
 }
-inline QColor kColorPos() {
-    return QColor(colors::POSITIVE());
-}
-inline QColor kColorNeg() {
-    return QColor(colors::NEGATIVE());
-}
-inline QColor kColorSec() {
-    return QColor(colors::TEXT_SECONDARY());
-}
-inline QColor kColorTert() {
-    return QColor(colors::TEXT_TERTIARY());
-}
+
 } // namespace
 
-// Static helper: ensure QTableWidgetItem exists at (row, col)
 QTableWidgetItem* CryptoBottomPanel::ensure_item(QTableWidget* table, int row, int col) {
     auto* it = table->item(row, col);
     if (!it) {
@@ -49,29 +169,27 @@ QTableWidgetItem* CryptoBottomPanel::ensure_item(QTableWidget* table, int row, i
     return it;
 }
 
-static QTableWidget* make_table(int cols, const QStringList& headers) {
-    auto* t = new QTableWidget;
-    t->setObjectName("cryptoBottomTable");
-    t->setColumnCount(cols);
-    t->setHorizontalHeaderLabels(headers);
-    t->horizontalHeader()->setStretchLastSection(true);
-    t->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    t->verticalHeader()->hide();
-    t->setShowGrid(false);
-    t->setSelectionMode(QAbstractItemView::NoSelection);
-    t->setFocusPolicy(Qt::NoFocus);
-    t->verticalHeader()->setDefaultSectionSize(22);
-    return t;
+void CryptoBottomPanel::update_empty_state(QTableWidget* /*table*/, QStackedWidget* stack, int row_count) {
+    if (!stack) return;
+    const int target = (row_count > 0) ? 0 : 1;
+    if (stack->currentIndex() != target)
+        stack->setCurrentIndex(target);
 }
 
 CryptoBottomPanel::CryptoBottomPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("cryptoBottomPanel");
+    setMinimumHeight(180); // keep at least a couple of rows visible on resize
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
 
     tabs_ = new QTabWidget;
     tabs_->setObjectName("cryptoBottomTabs");
+    tabs_->setDocumentMode(true);
+    tabs_->tabBar()->setExpanding(false);
+    tabs_->tabBar()->setUsesScrollButtons(true);
+    tabs_->setUsesScrollButtons(true);
 
     setup_positions_tab();
     setup_orders_tab();
@@ -94,91 +212,152 @@ CryptoBottomPanel::CryptoBottomPanel(QWidget* parent) : QWidget(parent) {
 }
 
 void CryptoBottomPanel::setup_positions_tab() {
-    positions_table_ = make_table(7, {"Symbol", "Side", "Qty", "Entry", "Current", "P&L", "Lev"});
-    tabs_->addTab(positions_table_, "POS");
+    positions_table_ = make_table({
+        {"Symbol", ColMode::Stretch},
+        {"Side",   ColMode::Compact},
+        {"Qty",    ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {"Entry",  ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {"Mark",   ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {"P&L",    ColMode::Numeric, 11, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {"Lev",    ColMode::Compact},
+    });
+    auto* host = wrap_with_empty_state(positions_table_, positions_stack_, "No open positions.");
+    tabs_->addTab(host, "POSITIONS");
 }
 
 void CryptoBottomPanel::setup_orders_tab() {
-    orders_table_ = make_table(7, {"Symbol", "Side", "Type", "Qty", "Price", "Status", ""});
-    tabs_->addTab(orders_table_, "ORD");
+    orders_table_ = make_table({
+        {"Symbol", ColMode::Stretch},
+        {"Side",   ColMode::Compact},
+        {"Type",   ColMode::Compact},
+        {"Qty",    ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {"Price",  ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {"Status", ColMode::Compact},
+        {"",       ColMode::Action,  0, 36}, // cancel button column
+    });
+    auto* host = wrap_with_empty_state(orders_table_, orders_stack_, "No active orders.");
+    tabs_->addTab(host, "ORDERS");
 }
 
 void CryptoBottomPanel::setup_trades_tab() {
-    trades_table_ = make_table(7, {"Symbol", "Side", "Price", "Qty", "Fee", "P&L", "Time"});
-    tabs_->addTab(trades_table_, "HIST");
+    trades_table_ = make_table({
+        {"Symbol", ColMode::Stretch},
+        {"Side",   ColMode::Compact},
+        {"Price",  ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {"Qty",    ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {"Fee",    ColMode::Numeric,  8, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {"P&L",    ColMode::Numeric, 11, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {"Time",   ColMode::Compact},
+    });
+    auto* host = wrap_with_empty_state(trades_table_, trades_stack_, "No trade history yet.");
+    tabs_->addTab(host, "HISTORY");
 }
 
 void CryptoBottomPanel::setup_my_trades_tab() {
-    my_trades_table_ = make_table(8, {"Symbol", "Side", "Price", "Amount", "Cost", "Fee", "Ccy", "Time"});
-    tabs_->addTab(my_trades_table_, "MY TRADES");
+    my_trades_table_ = make_table({
+        {"Symbol", ColMode::Stretch},
+        {"Side",   ColMode::Compact},
+        {"Price",  ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {"Amount", ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {"Cost",   ColMode::Numeric, 11, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {"Fee",    ColMode::Numeric,  9, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {"Ccy",    ColMode::Compact},
+        {"Time",   ColMode::Compact},
+    });
+    auto* host = wrap_with_empty_state(my_trades_table_, my_trades_stack_,
+                                        "No exchange-side fills.\nConnect an API key in LIVE mode to populate.");
+    tabs_->addTab(host, "MY TRADES");
 }
 
 void CryptoBottomPanel::setup_fees_tab() {
-    fees_table_ = make_table(3, {"Symbol", "Maker %", "Taker %"});
-    tabs_->addTab(fees_table_, "FEES");
+    fees_table_ = make_table({
+        {"Symbol",  ColMode::Stretch},
+        {"Maker %", ColMode::Numeric, 8, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {"Taker %", ColMode::Numeric, 8, 0, Qt::AlignRight | Qt::AlignVCenter},
+    });
+    auto* host = wrap_with_empty_state(fees_table_, fees_stack_, "No fee schedule loaded.");
+    tabs_->addTab(host, "FEES");
 }
+
+namespace {
+// Build a single dashboard card and return a pointer to its value-label.
+// Used by both the MARKET INFO and STATS tabs so they share visual language.
+QLabel* build_card(QGridLayout* grid, int row, int col, const QString& label_text) {
+    auto* card = new QFrame;
+    card->setObjectName("cryptoCard");
+    card->setFrameShape(QFrame::NoFrame);
+    auto* v = new QVBoxLayout(card);
+    v->setContentsMargins(12, 8, 12, 8);
+    v->setSpacing(4);
+
+    auto* lbl = new QLabel(label_text);
+    lbl->setObjectName("cryptoCardLabel");
+    auto* val = new QLabel(QStringLiteral("--"));
+    val->setObjectName("cryptoCardValue");
+    val->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+
+    v->addWidget(lbl);
+    v->addWidget(val);
+    grid->addWidget(card, row, col);
+    return val;
+}
+} // namespace
 
 void CryptoBottomPanel::setup_market_info_tab() {
     auto* widget = new QWidget(this);
-    auto* grid = new QVBoxLayout(widget);
-    grid->setContentsMargins(8, 4, 8, 4);
-    grid->setSpacing(0);
+    widget->setObjectName("cryptoCardHost");
+    auto* outer = new QVBoxLayout(widget);
+    outer->setContentsMargins(12, 12, 12, 12);
+    outer->setSpacing(0);
 
-    auto make_row = [&](const QString& label) -> QLabel* {
-        auto* row_widget = new QWidget(this);
-        row_widget->setObjectName("cryptoInfoRow");
-        row_widget->setFixedHeight(24);
-        auto* row = new QHBoxLayout(row_widget);
-        row->setContentsMargins(0, 0, 0, 0);
+    auto* grid = new QGridLayout;
+    grid->setHorizontalSpacing(10);
+    grid->setVerticalSpacing(10);
+    // 3 cards per row at standard width — collapses gracefully because each
+    // card's QFrame has expanding size policy.
+    for (int c = 0; c < 3; ++c) grid->setColumnStretch(c, 1);
 
-        auto* lbl = new QLabel(label);
-        lbl->setObjectName("cryptoInfoLabel");
-        auto* val = new QLabel("--");
-        val->setObjectName("cryptoInfoValue");
-        val->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        row->addWidget(lbl);
-        row->addStretch();
-        row->addWidget(val);
-        grid->addWidget(row_widget);
-        return val;
-    };
+    funding_label_      = build_card(grid, 0, 0, "FUNDING RATE");
+    mark_label_         = build_card(grid, 0, 1, "MARK PRICE");
+    index_label_        = build_card(grid, 0, 2, "INDEX PRICE");
+    oi_label_           = build_card(grid, 1, 0, "OPEN INTEREST");
+    fees_label_         = build_card(grid, 1, 1, "MAKER / TAKER");
+    next_funding_label_ = build_card(grid, 1, 2, "NEXT FUNDING");
 
-    funding_label_ = make_row("FUNDING RATE");
-    mark_label_ = make_row("MARK PRICE");
-    index_label_ = make_row("INDEX PRICE");
-    oi_label_ = make_row("OPEN INTEREST");
-    fees_label_ = make_row("MAKER / TAKER");
-    next_funding_label_ = make_row("NEXT FUNDING");
-    grid->addStretch();
+    outer->addLayout(grid);
+    outer->addStretch();
 
-    tabs_->addTab(widget, "MKT");
+    tabs_->addTab(widget, "MARKET");
 }
 
 void CryptoBottomPanel::setup_stats_tab() {
     auto* widget = new QWidget(this);
-    auto* grid = new QVBoxLayout(widget);
-    grid->setContentsMargins(8, 4, 8, 4);
-    grid->setSpacing(0);
+    widget->setObjectName("cryptoCardHost");
+    auto* outer = new QVBoxLayout(widget);
+    outer->setContentsMargins(12, 12, 12, 12);
+    outer->setSpacing(0);
 
-    const char* labels[] = {"TOTAL P&L", "WIN RATE", "TOTAL TRADES", "BEST TRADE", "WORST TRADE"};
-    for (int i = 0; i < 5; ++i) {
-        auto* row = new QWidget(this);
-        row->setObjectName("cryptoStatRow");
-        row->setFixedHeight(24);
-        auto* h = new QHBoxLayout(row);
-        h->setContentsMargins(0, 0, 0, 0);
+    auto* grid = new QGridLayout;
+    grid->setHorizontalSpacing(10);
+    grid->setVerticalSpacing(10);
+    for (int c = 0; c < 3; ++c) grid->setColumnStretch(c, 1);
 
-        auto* lbl = new QLabel(labels[i]);
-        lbl->setObjectName("cryptoStatLabel");
-        stat_values_[i] = new QLabel("--");
-        stat_values_[i]->setObjectName("cryptoStatValue");
-        stat_values_[i]->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        h->addWidget(lbl);
-        h->addStretch();
-        h->addWidget(stat_values_[i]);
-        grid->addWidget(row);
-    }
-    grid->addStretch();
+    static const char* labels[] = {"TOTAL P&L", "WIN RATE", "TOTAL TRADES", "BEST TRADE", "WORST TRADE"};
+    // Row 0: P&L card spans 1 col (most prominent metric), then Win Rate, Trades.
+    // Row 1: Best / Worst.
+    stat_values_[0] = build_card(grid, 0, 0, labels[0]);
+    stat_values_[1] = build_card(grid, 0, 1, labels[1]);
+    stat_values_[2] = build_card(grid, 0, 2, labels[2]);
+    stat_values_[3] = build_card(grid, 1, 0, labels[3]);
+    stat_values_[4] = build_card(grid, 1, 1, labels[4]);
+
+    // Mark P&L cards as such so the QSS can colour them via the [pnl] property.
+    stat_values_[0]->setProperty("pnl", "neutral");
+    stat_values_[3]->setProperty("pnl", "positive");
+    stat_values_[4]->setProperty("pnl", "negative");
+
+    outer->addLayout(grid);
+    outer->addStretch();
 
     tabs_->addTab(widget, "STATS");
 }
@@ -194,7 +373,7 @@ void CryptoBottomPanel::set_depth_data(const QVector<QPair<double, double>>& bid
     depth_chart_->set_data(bids, asks, spread, spread_pct);
 }
 
-// ── Data setters (with ensure_item pattern) ─────────────────────────────────
+// ── Data setters ────────────────────────────────────────────────────────────
 
 void CryptoBottomPanel::set_positions(const QVector<trading::PtPosition>& positions) {
     const int n = positions.size();
@@ -206,9 +385,6 @@ void CryptoBottomPanel::set_positions(const QVector<trading::PtPosition>& positi
         const auto& pos = positions[i];
         const QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
 
-        // Diff every attribute — this table updates at 10 Hz on the paper
-        // bookkeeping flush, and only P&L + current_price actually change per
-        // tick. Skipping untouched cells cuts the repaint footprint sharply.
         auto set = [&](int col, const QString& text, const QColor& fg = QColor(),
                        Qt::Alignment align = Qt::AlignLeft | Qt::AlignVCenter) {
             auto* it = ensure_item(positions_table_, i, col);
@@ -230,16 +406,13 @@ void CryptoBottomPanel::set_positions(const QVector<trading::PtPosition>& positi
         set(4, QString::number(pos.current_price, 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(5, QString::number(pos.unrealized_pnl, 'f', 2), pos.unrealized_pnl >= 0 ? kColorPos() : kColorNeg(),
             Qt::AlignRight | Qt::AlignVCenter);
-        set(6, QString::number(pos.leverage, 'f', 1), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(6, QString::number(pos.leverage, 'f', 1) + QStringLiteral("x"), QColor(), Qt::AlignRight | Qt::AlignVCenter);
     }
     positions_table_->setUpdatesEnabled(true);
+    update_empty_state(positions_table_, positions_stack_, n);
 }
 
 void CryptoBottomPanel::update_position_prices(const QHash<QString, double>& last_prices) {
-    // Live mark-to-market patch driven directly by WS ticks. Reads symbol +
-    // side + qty + entry from the existing rows (no DB round-trip), computes
-    // fresh P&L from the new mark, and patches columns 4 (Current) and 5 (P&L)
-    // in place. Long: pnl = (mark - entry) * qty. Short: pnl = (entry - mark) * qty.
     if (last_prices.isEmpty() || !positions_table_)
         return;
     const int n = positions_table_->rowCount();
@@ -311,26 +484,27 @@ void CryptoBottomPanel::set_orders(const QVector<trading::PtOrder>& orders) {
         set(1, o.side.toUpper(), o.side == "buy" ? kColorPos() : kColorNeg());
         set(2, o.order_type.toUpper());
         set(3, QString::number(o.quantity, 'f', 6), QColor(), Qt::AlignRight | Qt::AlignVCenter);
-        set(4, o.price ? QString::number(*o.price, 'f', 2) : "MKT", QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(4, o.price ? QString::number(*o.price, 'f', 2) : QStringLiteral("MKT"), QColor(),
+            Qt::AlignRight | Qt::AlignVCenter);
         set(5, o.status.toUpper(), kColorSec());
 
-        // Cancel button — reuse existing widget, update its order_id property
         auto* existing = qobject_cast<QPushButton*>(orders_table_->cellWidget(i, 6));
         if (existing) {
-            // Update the stored order ID without recreating the widget
             existing->setProperty("order_id", o.id);
         } else {
-            auto* cancel_btn = new QPushButton("X");
+            auto* cancel_btn = new QPushButton(QStringLiteral("✕"));
             cancel_btn->setObjectName("cryptoCancelBtn");
-            cancel_btn->setFixedSize(20, 18);
+            cancel_btn->setToolTip("Cancel order");
             cancel_btn->setCursor(Qt::PointingHandCursor);
             cancel_btn->setProperty("order_id", o.id);
+            cancel_btn->setFocusPolicy(Qt::NoFocus);
             connect(cancel_btn, &QPushButton::clicked, this,
                     [this, cancel_btn]() { emit cancel_order_requested(cancel_btn->property("order_id").toString()); });
             orders_table_->setCellWidget(i, 6, cancel_btn);
         }
     }
     orders_table_->setUpdatesEnabled(true);
+    update_empty_state(orders_table_, orders_stack_, n);
 }
 
 void CryptoBottomPanel::set_trades(const QVector<trading::PtTrade>& trades) {
@@ -363,23 +537,30 @@ void CryptoBottomPanel::set_trades(const QVector<trading::PtTrade>& trades) {
         set(6, t.timestamp, kColorTert());
     }
     trades_table_->setUpdatesEnabled(true);
+    update_empty_state(trades_table_, trades_stack_, n);
 }
 
 void CryptoBottomPanel::set_stats(const trading::PtStats& stats) {
+    auto repolish = [](QLabel* lbl) {
+        if (!lbl || !lbl->style()) return;
+        lbl->style()->unpolish(lbl);
+        lbl->style()->polish(lbl);
+    };
+
     stat_values_[0]->setText(QString("$%1").arg(stats.total_pnl, 0, 'f', 2));
     stat_values_[0]->setProperty("pnl", stats.total_pnl >= 0 ? "positive" : "negative");
-    stat_values_[0]->style()->unpolish(stat_values_[0]);
-    stat_values_[0]->style()->polish(stat_values_[0]);
+    repolish(stat_values_[0]);
 
     stat_values_[1]->setText(QString("%1%").arg(stats.win_rate, 0, 'f', 1));
-    stat_values_[2]->setText(
-        QString("%1 (W:%2 L:%3)").arg(stats.total_trades).arg(stats.winning_trades).arg(stats.losing_trades));
+    stat_values_[2]->setText(QString("%1  W:%2 / L:%3").arg(stats.total_trades).arg(stats.winning_trades).arg(stats.losing_trades));
 
     stat_values_[3]->setText(QString("$%1").arg(stats.largest_win, 0, 'f', 2));
     stat_values_[3]->setProperty("pnl", "positive");
+    repolish(stat_values_[3]);
 
     stat_values_[4]->setText(QString("$%1").arg(stats.largest_loss, 0, 'f', 2));
     stat_values_[4]->setProperty("pnl", "negative");
+    repolish(stat_values_[4]);
 }
 
 void CryptoBottomPanel::set_market_info(const MarketInfoData& info) {
@@ -427,9 +608,11 @@ void CryptoBottomPanel::set_live_positions(const QJsonArray& positions) {
         set(4, QString::number(p.value("markPrice").toDouble(), 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         const double pnl = p.value("unrealizedPnl").toDouble();
         set(5, QString::number(pnl, 'f', 2), pnl >= 0 ? kColorPos() : kColorNeg(), Qt::AlignRight | Qt::AlignVCenter);
-        set(6, QString::number(p.value("leverage").toDouble(), 'f', 0), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(6, QString::number(p.value("leverage").toDouble(), 'f', 0) + QStringLiteral("x"), QColor(),
+            Qt::AlignRight | Qt::AlignVCenter);
     }
     positions_table_->setUpdatesEnabled(true);
+    update_empty_state(positions_table_, positions_stack_, n);
 }
 
 void CryptoBottomPanel::set_live_orders(const QJsonArray& orders) {
@@ -464,17 +647,19 @@ void CryptoBottomPanel::set_live_orders(const QJsonArray& orders) {
         if (existing_btn) {
             existing_btn->setProperty("order_id", o.value("id").toString());
         } else {
-            auto* cancel_btn = new QPushButton("X");
+            auto* cancel_btn = new QPushButton(QStringLiteral("✕"));
             cancel_btn->setObjectName("cryptoCancelBtn");
-            cancel_btn->setFixedSize(20, 18);
+            cancel_btn->setToolTip("Cancel order");
             cancel_btn->setCursor(Qt::PointingHandCursor);
             cancel_btn->setProperty("order_id", o.value("id").toString());
+            cancel_btn->setFocusPolicy(Qt::NoFocus);
             connect(cancel_btn, &QPushButton::clicked, this,
                     [this, cancel_btn]() { emit cancel_order_requested(cancel_btn->property("order_id").toString()); });
             orders_table_->setCellWidget(i, 6, cancel_btn);
         }
     }
     orders_table_->setUpdatesEnabled(true);
+    update_empty_state(orders_table_, orders_stack_, n);
 }
 
 void CryptoBottomPanel::update_my_trades(const QJsonObject& json) {
@@ -512,32 +697,35 @@ void CryptoBottomPanel::update_my_trades(const QJsonObject& json) {
         set(7, time_str, kColorTert());
     }
     my_trades_table_->setUpdatesEnabled(true);
+    update_empty_state(my_trades_table_, my_trades_stack_, n);
 }
 
 void CryptoBottomPanel::update_fees(const QJsonObject& json) {
-    // Single-symbol response
-    if (json.contains("symbol")) {
-        fees_table_->setUpdatesEnabled(false);
-        fees_table_->setRowCount(1);
-        const QColor bg = kRowEven();
-
-        auto set = [&](int col, const QString& text, const QColor& fg = QColor()) {
-            auto* it = ensure_item(fees_table_, 0, col);
+    auto write_row = [&](int row, const QColor& bg, const QString& sym, double maker, double taker) {
+        auto set = [&](int col, const QString& text, const QColor& fg = QColor(),
+                       Qt::Alignment align = Qt::AlignRight | Qt::AlignVCenter) {
+            auto* it = ensure_item(fees_table_, row, col);
             it->setText(text);
             if (fg.isValid())
                 it->setForeground(fg);
             it->setBackground(bg);
-            it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            it->setTextAlignment(align);
         };
+        set(0, sym, QColor(), Qt::AlignLeft | Qt::AlignVCenter);
+        set(1, QString::number(maker * 100.0, 'f', 4) + "%", kColorSec());
+        set(2, QString::number(taker * 100.0, 'f', 4) + "%", kColorSec());
+    };
 
-        set(0, json.value("symbol").toString());
-        set(1, QString::number(json.value("maker").toDouble() * 100.0, 'f', 4) + "%", kColorSec());
-        set(2, QString::number(json.value("taker").toDouble() * 100.0, 'f', 4) + "%", kColorSec());
+    if (json.contains("symbol")) {
+        fees_table_->setUpdatesEnabled(false);
+        fees_table_->setRowCount(1);
+        write_row(0, kRowEven(), json.value("symbol").toString(),
+                  json.value("maker").toDouble(), json.value("taker").toDouble());
         fees_table_->setUpdatesEnabled(true);
+        update_empty_state(fees_table_, fees_stack_, 1);
         return;
     }
 
-    // Multi-symbol response
     const QJsonArray fees = json.value("fees").toArray();
     const int n = fees.size();
     fees_table_->setUpdatesEnabled(false);
@@ -547,21 +735,11 @@ void CryptoBottomPanel::update_fees(const QJsonObject& json) {
     for (int i = 0; i < n; ++i) {
         const auto f = fees[i].toObject();
         const QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
-
-        auto set = [&](int col, const QString& text, const QColor& fg = QColor()) {
-            auto* it = ensure_item(fees_table_, i, col);
-            it->setText(text);
-            if (fg.isValid())
-                it->setForeground(fg);
-            it->setBackground(bg);
-            it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        };
-
-        set(0, f.value("symbol").toString());
-        set(1, QString::number(f.value("maker").toDouble() * 100.0, 'f', 4) + "%", kColorSec());
-        set(2, QString::number(f.value("taker").toDouble() * 100.0, 'f', 4) + "%", kColorSec());
+        write_row(i, bg, f.value("symbol").toString(),
+                  f.value("maker").toDouble(), f.value("taker").toDouble());
     }
     fees_table_->setUpdatesEnabled(true);
+    update_empty_state(fees_table_, fees_stack_, n);
 }
 
 void CryptoBottomPanel::set_live_balance(double balance, double equity, double used_margin) {

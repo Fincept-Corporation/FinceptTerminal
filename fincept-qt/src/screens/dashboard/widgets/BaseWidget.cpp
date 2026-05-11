@@ -133,6 +133,16 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     // region (not the title bar). Sized via an event filter on `content_`.
     loading_overlay_ = new LoadingOverlay(content_);
     loading_overlay_->attach_to(content_);
+
+    // ── Loading watchdog ──
+    // Single-shot guard against producers that never publish. If the
+    // overlay is still active 12 s after loading started with zero items
+    // delivered, swap to a terminal "no data" overlay so the spinner can't
+    // spin forever. Per-widget refresh still works to re-arm.
+    loading_watchdog_ = new QTimer(this);
+    loading_watchdog_->setSingleShot(true);
+    loading_watchdog_->setInterval(12000);
+    connect(loading_watchdog_, &QTimer::timeout, this, &BaseWidget::on_watchdog_fired);
 }
 
 void BaseWidget::refresh_base_theme() {
@@ -167,10 +177,14 @@ void BaseWidget::set_loading(bool loading) {
     loading_label_->setText(loading ? "LOADING..." : "");
     if (!loading_overlay_)
         return;
-    if (loading)
+    if (loading) {
         loading_overlay_->start_indeterminate();
-    else
+        last_progress_loaded_ = 0;
+        arm_watchdog();
+    } else {
         loading_overlay_->finish();
+        disarm_watchdog();
+    }
 }
 
 void BaseWidget::set_loading_progress(int loaded, int expected) {
@@ -180,6 +194,11 @@ void BaseWidget::set_loading_progress(int loaded, int expected) {
     loading_label_->setVisible(active);
     loading_label_->setText(active ? QStringLiteral("LOADING...") : QString());
     loading_overlay_->set_progress(loaded, expected);
+    last_progress_loaded_ = loaded;
+    if (active)
+        arm_watchdog();
+    else
+        disarm_watchdog();
 }
 
 void BaseWidget::set_error(const QString& error) {
@@ -193,6 +212,7 @@ void BaseWidget::set_error(const QString& error) {
         loading_label_->setVisible(false);
         loading_label_->setText(QString());
     }
+    disarm_watchdog();
 
     // Clear content and show error
     QLayoutItem* item;
@@ -227,6 +247,36 @@ void BaseWidget::on_config_clicked() {
     // Subclasses are expected to emit config_changed() inside the dialog's
     // accept flow; BaseWidget just opens the dialog modally.
     dlg->exec();
+}
+
+void BaseWidget::arm_watchdog() {
+    if (!loading_watchdog_)
+        return;
+    loading_watchdog_->start();
+}
+
+void BaseWidget::disarm_watchdog() {
+    if (!loading_watchdog_)
+        return;
+    loading_watchdog_->stop();
+}
+
+void BaseWidget::on_watchdog_fired() {
+    if (!loading_overlay_ || !loading_overlay_->is_active())
+        return;
+    if (loading_label_) {
+        loading_label_->setVisible(false);
+        loading_label_->setText(QString());
+    }
+    // If some data trickled in before the timeout, just hide the spinner so
+    // the partial content becomes visible. Otherwise surface a soft error so
+    // the user knows the widget hasn't simply hung.
+    if (last_progress_loaded_ > 0) {
+        loading_overlay_->finish();
+    } else {
+        loading_overlay_->set_error(
+            QStringLiteral("No data yet — click refresh to retry"));
+    }
 }
 
 } // namespace fincept::screens::widgets

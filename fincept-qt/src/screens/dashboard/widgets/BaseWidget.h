@@ -7,6 +7,7 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QPushButton>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace fincept::screens::widgets {
@@ -79,6 +80,9 @@ class BaseWidget : public QFrame {
   private:
     void refresh_base_theme();
     void on_config_clicked();
+    void arm_watchdog();
+    void disarm_watchdog();
+    void on_watchdog_fired();
 
   private:
     QWidget* title_bar_ = nullptr;
@@ -90,6 +94,8 @@ class BaseWidget : public QFrame {
     QPushButton* refresh_btn_ = nullptr;
     QPushButton* config_btn_ = nullptr;
     LoadingOverlay* loading_overlay_ = nullptr;
+    QTimer* loading_watchdog_ = nullptr;
+    int last_progress_loaded_ = 0;
     QString accent_color_;
 };
 

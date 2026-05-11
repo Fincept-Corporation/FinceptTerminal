@@ -314,20 +314,10 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     dock_toolbar_ = new ui::DockToolBar(this);
     addToolBar(Qt::TopToolBarArea, dock_toolbar_);
 
-    // Pushpin bar lives on its own toolbar row below the main toolbar so the
-    // chips are always visible and drop targets across all panels. Start a
-    // new toolbar line via addToolBarBreak().
-    addToolBarBreak(Qt::TopToolBarArea);
-    pushpin_bar_ = new ui::PushpinBar;
-    pushpin_toolbar_ = new QToolBar(this);
-    pushpin_toolbar_->setObjectName("pushpinToolbar");
-    pushpin_toolbar_->setMovable(false);
-    pushpin_toolbar_->setFloatable(false);
-    pushpin_toolbar_->setAllowedAreas(Qt::TopToolBarArea);
-    pushpin_toolbar_->addWidget(pushpin_bar_);
-    addToolBar(Qt::TopToolBarArea, pushpin_toolbar_);
-    // Hidden until auth completes; set_shell_visible() shows it.
-    pushpin_toolbar_->setVisible(false);
+    // Pushpin chips are embedded directly inside the main toolbar (see
+    // ToolBar::ToolBar). Visibility/enabled state now follows the parent
+    // toolbar — no explicit gating needed.
+    pushpin_bar_ = dock_toolbar_->inner()->pushpin_bar();
 
     dock_status_bar_ = new ui::DockStatusBar(this);
     setStatusBar(dock_status_bar_);
@@ -872,8 +862,6 @@ void WindowFrame::toggle_chat_mode() {
             dock_toolbar_->setVisible(false);
         if (dock_status_bar_)
             dock_status_bar_->setVisible(false);
-        if (pushpin_toolbar_)
-            pushpin_toolbar_->setVisible(false);
         if (chat_bubble_)
             chat_bubble_->setVisible(false);
         stack_->setCurrentIndex(2);
@@ -884,8 +872,6 @@ void WindowFrame::toggle_chat_mode() {
             dock_toolbar_->setVisible(true);
         if (dock_status_bar_)
             dock_status_bar_->setVisible(true);
-        if (pushpin_toolbar_)
-            pushpin_toolbar_->setVisible(true);
         // Restore chat bubble based on setting
         if (chat_bubble_) {
             auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
@@ -1327,7 +1313,6 @@ void WindowFrame::apply_lock_state(bool locked) {
         if (dock_manager_ && dock_manager_->parentWidget())
             dock_manager_->parentWidget()->setEnabled(false);
         if (dock_toolbar_)    dock_toolbar_->setEnabled(false);
-        if (pushpin_toolbar_) pushpin_toolbar_->setEnabled(false);
         if (dock_status_bar_) dock_status_bar_->setEnabled(false);
         return;
     }
@@ -1345,7 +1330,6 @@ void WindowFrame::apply_lock_state(bool locked) {
     if (dock_manager_ && dock_manager_->parentWidget())
         dock_manager_->parentWidget()->setEnabled(true);
     if (dock_toolbar_)    dock_toolbar_->setEnabled(true);
-    if (pushpin_toolbar_) pushpin_toolbar_->setEnabled(true);
     if (dock_status_bar_) dock_status_bar_->setEnabled(true);
     set_shell_visible(true);
     stack_->setCurrentIndex(1);
@@ -1364,7 +1348,6 @@ void WindowFrame::on_terminal_unlocked() {
     if (dock_manager_ && dock_manager_->parentWidget())
         dock_manager_->parentWidget()->setEnabled(true);
     if (dock_toolbar_)    dock_toolbar_->setEnabled(true);
-    if (pushpin_toolbar_) pushpin_toolbar_->setEnabled(true);
     if (dock_status_bar_) dock_status_bar_->setEnabled(true);
 
     // Enable/restart inactivity guard. It is disabled in show_lock_screen()
@@ -1433,8 +1416,6 @@ void WindowFrame::set_shell_visible(bool visible) {
         dock_toolbar_->setVisible(visible && !focus_mode_ && !chat_mode_);
     if (dock_status_bar_)
         dock_status_bar_->setVisible(visible && !focus_mode_ && !chat_mode_);
-    if (pushpin_toolbar_)
-        pushpin_toolbar_->setVisible(visible && !focus_mode_ && !chat_mode_);
     if (!visible) {
         // Reset title to plain app name — no screen suffix while on auth screens
         const QString profile = ProfileManager::instance().active();
@@ -1767,8 +1748,6 @@ void WindowFrame::toggle_focus_mode() {
         dock_toolbar_->setVisible(!focus_mode_);
     if (dock_status_bar_)
         dock_status_bar_->setVisible(!focus_mode_);
-    if (pushpin_toolbar_)
-        pushpin_toolbar_->setVisible(!focus_mode_);
 }
 
 void WindowFrame::toggle_chat_mode_action() {

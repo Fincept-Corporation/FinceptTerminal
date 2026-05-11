@@ -1,6 +1,7 @@
 ﻿#include "ui/navigation/ToolBar.h"
 
 #include "auth/AuthManager.h"
+#include "ui/pushpins/PushpinBar.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -44,6 +45,10 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     hl->setSpacing(0);
 
     menu_bar_ = new QMenuBar(this);
+    // Keep the menu inline in the toolbar on macOS. Without this, Qt migrates
+    // the QMenuBar into the native screen-top application menu, leaving
+    // File/Navigate/View/Help missing from the toolbar row on Mac builds.
+    menu_bar_->setNativeMenuBar(false);
     menu_bar_->setStyleSheet(menu_ss());
     menu_bar_->addMenu(build_file_menu());
     menu_bar_->addMenu(build_navigate_menu());
@@ -86,13 +91,21 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     live_label_ = mk(" LIVE");
     hl->addWidget(live_label_);
 
-    hl->addStretch(1);
+    sep();
+
+    // Inline pushpin chips — used to live in a separate toolbar row, now
+    // embedded directly so symbol pins share the row with menus and clock.
+    pushpin_bar_ = new PushpinBar(this);
+    pushpin_bar_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    hl->addWidget(pushpin_bar_, 1);
+
+    sep();
 
     clock_label_ = mk("");
     clock_label_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     hl->addWidget(clock_label_);
 
-    hl->addStretch(1);
+    hl->addStretch(0);
 
     user_label_ = mk("---");
     user_label_->setMaximumWidth(120);
@@ -210,9 +223,11 @@ void ToolBar::apply_responsive_layout(int w) {
     if (chat_mode_btn_)
         chat_mode_btn_->setVisible(show_chat);
 
-    if (separators_.size() >= 5) {
-        separators_[2]->setVisible(show_credits);
-        separators_[3]->setVisible(show_chat);
+    // Two extra separators were added to bracket the inline pushpin bar at
+    // the start of the layout, so the credits/chat separator indices shift by 2.
+    if (separators_.size() >= 7) {
+        separators_[4]->setVisible(show_credits);
+        separators_[5]->setVisible(show_chat);
     }
 }
 

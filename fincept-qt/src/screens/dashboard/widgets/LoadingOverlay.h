@@ -4,8 +4,6 @@
 #include <QPropertyAnimation>
 #include <QWidget>
 
-class QGraphicsOpacityEffect;
-
 namespace fincept::screens::widgets {
 
 /// Animated loading state shown on top of a widget's content area while data
@@ -30,6 +28,7 @@ class LoadingOverlay : public QWidget {
     Q_OBJECT
     Q_PROPERTY(qreal shimmerPhase READ shimmer_phase WRITE set_shimmer_phase)
     Q_PROPERTY(qreal displayedProgress READ displayed_progress WRITE set_displayed_progress)
+    Q_PROPERTY(qreal fadeOpacity READ fade_opacity WRITE set_fade_opacity)
 
   public:
     explicit LoadingOverlay(QWidget* parent = nullptr);
@@ -51,15 +50,26 @@ class LoadingOverlay : public QWidget {
     /// Hide the overlay (with fade-out) and stop animations.
     void finish();
 
+    /// Switch the overlay into an error state — keeps it visible, stops the
+    /// shimmer/progress animation, and renders `message` in place of the
+    /// "LOADING…" label. Use for terminal failures (network down, watchdog
+    /// fired, producer error). The next call to `start_indeterminate()` /
+    /// `set_progress()` clears error mode and resumes normal loading display.
+    void set_error(const QString& message);
+
     bool is_active() const { return active_; }
 
     qreal shimmer_phase() const { return shimmer_phase_; }
     void set_shimmer_phase(qreal v);
     qreal displayed_progress() const { return displayed_progress_; }
     void set_displayed_progress(qreal v);
+    qreal fade_opacity() const { return fade_opacity_; }
+    void set_fade_opacity(qreal v);
 
   protected:
     void paintEvent(QPaintEvent* e) override;
+    void showEvent(QShowEvent* e) override;
+    void hideEvent(QHideEvent* e) override;
     bool eventFilter(QObject* obj, QEvent* e) override;
 
   private:
@@ -74,14 +84,16 @@ class LoadingOverlay : public QWidget {
     bool indeterminate_ = true;
     int loaded_ = 0;
     int expected_ = 0;
+    bool error_mode_ = false;
+    QString error_text_;
 
     qreal shimmer_phase_ = 0.0;        ///< 0..1 — drives the sweeping highlight
     qreal displayed_progress_ = 0.0;   ///< 0..1 — eased toward loaded_/expected_
+    qreal fade_opacity_ = 0.0;         ///< 0..1 — applied directly via QPainter::setOpacity
 
     QPropertyAnimation* shimmer_anim_ = nullptr;
     QPropertyAnimation* progress_anim_ = nullptr;
     QPropertyAnimation* fade_anim_ = nullptr;
-    QGraphicsOpacityEffect* opacity_effect_ = nullptr;
 };
 
 } // namespace fincept::screens::widgets
