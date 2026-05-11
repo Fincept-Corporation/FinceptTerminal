@@ -505,7 +505,7 @@ jobs:
           retention-days: 30
 
 # ═════════════════════════════════════════════════════════════════════════════
-# JOB 3 — macOS arm64 Installer (DMG via QtIFW or hdiutil fallback)
+# JOB 3 — macOS arm64 Installer (DMG built with hdiutil)
 # ═════════════════════════════════════════════════════════════════════════════
   build-macos:
     name: macOS arm64 Installer
@@ -640,28 +640,20 @@ jobs:
           PLIST
           fi
 
-          # Note: CMake's POST_BUILD rule (CMakeLists.txt line 1907) copies
-          # scripts/ to Contents/MacOS/scripts/. This is REQUIRED — at runtime
-          # PythonRunner::find_scripts_dir() searches paths relative to
-          # applicationDirPath() (which is Contents/MacOS on macOS). Moving
-          # scripts to Contents/Resources/ would break script discovery.
-          # codesign can handle files in MacOS/; what it CANNOT handle is a
-          # malformed framework (see the Python.framework block below).
+          # CMake's POST_BUILD rule copies scripts/ to Contents/MacOS/scripts/.
+          # PythonRunner::find_scripts_dir() resolves relative to
+          # applicationDirPath() (= Contents/MacOS on macOS), so this layout
+          # is load-bearing — do not move scripts/ to Contents/Resources/.
 
-          # Embed Python framework (before codesign so it gets signed with the bundle).
-          # Root cause fixed here (issue #191): codesign --verify rejected the
-          # bundle with "embedded framework contains modified or invalid version"
-          # because `ditto` left the Versions/Current symlinks inside nested
-          # Tcl.framework / Tk.framework broken. We switch to rsync -a (which
-          # preserves symlinks as symlinks, unlike ditto under non-root) and
-          # then explicitly rebuild Versions/Current + the top-level convenience
-          # symlinks for Python.framework AND every nested framework inside it.
-          # Version pinned to match the Python runtime the C++ app is built
-          # and tested against. setup-python@v6 already provisions 3.12 into
-          # ${pythonLocation} and `brew install python@3.12` pours a clean
-          # single-version framework under $(brew --prefix python@3.12).
-          # Must be kept in sync with the PythonRunner/PythonSetupManager
-          # expectations in src/python/.
+          # Embed Python.framework before codesign so it's signed as part of
+          # the bundle. We use `rsync -a` (not `ditto`) because ditto under
+          # non-root breaks Versions/Current symlinks inside nested
+          # Tcl.framework / Tk.framework, which then makes codesign reject the
+          # bundle with "embedded framework contains modified or invalid
+          # version" (issue #191). The symlink layer is rebuilt explicitly
+          # below.
+          # Version is pinned to match the C++ build target. Must stay in
+          # sync with PythonRunner / PythonSetupManager in src/python/.
           PY_VER_KEEP="3.12"
 
           # Prefer the Homebrew-installed framework: on a fresh pour it holds
@@ -920,12 +912,11 @@ jobs:
           rm -f "$P12_PATH"
 
       # ── Deep re-sign the entire bundle with Developer ID ─────────────────
-      # This is the fix for issue #139. macdeployqt's signing of nested
-      # frameworks is unreliable (known Qt bug — see GDATASoftwareAG fork).
-      # We strip every existing signature and re-sign the whole bundle from
-      # leaves to root with the Developer ID Application cert, hardened
-      # runtime enabled, and entitlements that permit Python's JIT / dynamic
-      # library loading. Notarization later requires hardened runtime.
+      # macdeployqt's nested-framework signing is unreliable, so we strip
+      # every existing signature and re-sign the bundle leaves-to-root with
+      # the Developer ID Application cert. Hardened runtime is required by
+      # notarization; the entitlements below permit Python's JIT / dynamic
+      # library loading. (Originally fixed in issue #139.)
       - name: Codesign bundle (Developer ID + hardened runtime)
         working-directory: fincept-qt
         env:
@@ -988,14 +979,12 @@ jobs:
           echo "Signature OK:"
           codesign --display --verbose=2 "${APP_BUNDLE}" 2>&1 | head -20
 
-          # Strict Gatekeeper pre-flight. Notarization will reject the bundle
-          # if spctl says no — fail here with a clearer error than the notary
-          # response 30 seconds from now.
-          echo "Running spctl assessment..."
-          spctl --assess --type execute --verbose=4 "${APP_BUNDLE}" || {
-            echo "::error::spctl rejected the bundle — notarization will fail"
-            exit 1
-          }
+          # Do NOT add `spctl --assess` here. spctl is a Gatekeeper
+          # *post*-flight (needs a notarization ticket stapled), so on a
+          # freshly-signed bundle it always fails with
+          # `source=Unnotarized Developer ID`. The signature pre-flight is
+          # `codesign --verify` above; notarization below is the
+          # authoritative check.
 
       # ── Notarize + staple the .app BEFORE building the DMG ───────────────
       # Stapling the .app means Gatekeeper validates offline on first launch
