@@ -89,7 +89,7 @@ void run_async_callback_sync(QObject* target, Start&& start, OnDone&& on_done,
     };
     auto res = std::make_shared<Resolution>();
 
-    auto resolve = [res](auto&&... args) {
+    auto resolve = [res]([[maybe_unused]] auto&&... args) {
         QMutexLocker lock(&res->m);
         if (res->done)
             return; // ignore duplicate resolves

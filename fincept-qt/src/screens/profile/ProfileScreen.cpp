@@ -567,22 +567,22 @@ void ProfileScreen::fetch_usage_data() {
             LOG_WARN("Profile", "Usage fetch failed: " + r.error);
             return;
         }
-        auto data = r.data.contains("data") ? r.data["data"].toObject() : r.data;
-        if (data.contains("account")) {
-            auto a = data["account"].toObject();
+        auto payload = r.data.contains("data") ? r.data["data"].toObject() : r.data;
+        if (payload.contains("account")) {
+            auto a = payload["account"].toObject();
             self->usg_credits_->setText(QString::number(a["credit_balance"].toDouble(), 'f', 0));
             self->usg_plan_->setText(a["account_type"].toString().toUpper());
             self->usg_rate_->setText(QString::number(a["rate_limit_per_hour"].toInt()));
         }
-        if (data.contains("summary")) {
-            auto s = data["summary"].toObject();
+        if (payload.contains("summary")) {
+            auto s = payload["summary"].toObject();
             self->usg_total_req_->setText(QString::number(s["total_requests"].toInt()));
             self->usg_cred_used_->setText(QString::number(s["total_credits_used"].toDouble(), 'f', 0));
             self->usg_avg_cred_->setText(QString::number(s["avg_credits_per_request"].toDouble(), 'f', 2));
             self->usg_avg_resp_->setText(QString::number(s["avg_response_time_ms"].toDouble(), 'f', 0));
         }
-        if (data.contains("daily_usage")) {
-            auto d = data["daily_usage"].toArray();
+        if (payload.contains("daily_usage")) {
+            auto d = payload["daily_usage"].toArray();
             self->usg_daily_table_->setRowCount(0);
             for (int i = d.size() - 1; i >= 0 && i >= d.size() - 10; i--) {
                 auto e = d[i].toObject();
@@ -595,8 +595,8 @@ void ProfileScreen::fetch_usage_data() {
                     row, 2, new QTableWidgetItem(QString::number(e["credits_used"].toDouble(), 'f', 0)));
             }
         }
-        if (data.contains("endpoint_breakdown")) {
-            auto eps = data["endpoint_breakdown"].toArray();
+        if (payload.contains("endpoint_breakdown")) {
+            auto eps = payload["endpoint_breakdown"].toArray();
             self->usg_endpoint_table_->setRowCount(0);
             for (const auto& v : eps) {
                 auto e = v.toObject();

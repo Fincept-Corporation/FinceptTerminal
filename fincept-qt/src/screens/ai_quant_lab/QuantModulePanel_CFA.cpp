@@ -490,12 +490,12 @@ QString fmt_num_safe(const QJsonValue& v, int decimals = 4) {
     return QString::number(v.toDouble(), 'f', decimals);
 }
 
-QString fmt_pct(const QJsonValue& v, int decimals = 2) {
+[[maybe_unused]] QString fmt_pct(const QJsonValue& v, int decimals = 2) {
     if (v.isNull() || v.isUndefined()) return QStringLiteral("—");
     return QString::number(v.toDouble() * 100.0, 'f', decimals) + "%";
 }
 
-QString fmt_bool(const QJsonValue& v) {
+[[maybe_unused]] QString fmt_bool(const QJsonValue& v) {
     if (v.isNull() || v.isUndefined()) return QStringLiteral("—");
     return v.toBool() ? QStringLiteral("YES") : QStringLiteral("NO");
 }

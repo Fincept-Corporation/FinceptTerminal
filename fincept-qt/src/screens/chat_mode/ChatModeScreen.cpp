@@ -164,12 +164,12 @@ void ChatModeScreen::on_session_selected(const QString& uuid) {
             LOG_WARN("ChatModeScreen", "Load session failed: " + err);
             return;
         }
-        const QJsonObject data = doc.object().value("data").toObject();
+        const QJsonObject payload = doc.object().value("data").toObject();
 
-        const QString title = data.value("session").toObject().value("title").toString();
+        const QString title = payload.value("session").toObject().value("title").toString();
         self->message_panel_->set_session_title(title);
 
-        const QJsonArray msgs_arr = data.value("messages").toArray();
+        const QJsonArray msgs_arr = payload.value("messages").toArray();
         QVector<ChatMessage> messages;
         messages.reserve(msgs_arr.size());
         for (const auto& v : msgs_arr)

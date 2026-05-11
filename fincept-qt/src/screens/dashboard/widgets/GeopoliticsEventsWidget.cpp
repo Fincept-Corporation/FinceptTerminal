@@ -78,7 +78,7 @@ GeopoliticsEventsWidget::GeopoliticsEventsWidget(const QJsonObject& cfg, QWidget
     scroll_area_->setWidget(list_widget);
     vl->addWidget(scroll_area_, 1);
 
-    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+    connect(this, &BaseWidget::refresh_requested, this, []() {
         datahub::DataHub::instance().request(QStringLiteral("geopolitics:events"), /*force=*/true);
     });
 

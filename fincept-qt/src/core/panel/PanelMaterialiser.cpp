@@ -95,7 +95,7 @@ void PanelMaterialiser::tick() {
     // Run an Item from `q`, decrementing budget. Items whose owner has
     // been destroyed are silently dropped without consuming budget so
     // dead items don't slow real materialisation.
-    auto run_one = [this, &budget](QQueue<Item>& q) {
+    auto run_one = [&budget](QQueue<Item>& q) {
         while (!q.isEmpty()) {
             Item it = q.dequeue();
             if (it.has_owner && !it.owner) {

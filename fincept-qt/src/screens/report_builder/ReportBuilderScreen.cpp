@@ -105,7 +105,7 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
     connect(comp_toolbar_, &ComponentToolbar::move_down, this, &ReportBuilderScreen::move_down_at);
 
     // ── Properties panel wiring ───────────────────────────────────────────
-    connect(properties_, &PropertiesPanel::content_changed, this, [this](int idx, const QString& content) {
+    connect(properties_, &PropertiesPanel::content_changed, this, [](int idx, const QString& content) {
         const auto comps = Service::instance().components();
         if (idx < 0 || idx >= comps.size())
             return;

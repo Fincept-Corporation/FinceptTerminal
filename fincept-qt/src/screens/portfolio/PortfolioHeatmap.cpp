@@ -34,7 +34,7 @@ void PortfolioHeatmap::build_ui() {
     // Unified panel header — HOLDINGS title + 3 mode buttons in the controls slot.
     auto header = make_panel_header("HOLDINGS", this);
 
-    auto make_mode_btn = [this, &header](const QString& text) {
+    auto make_mode_btn = [&header](const QString& text) {
         auto* btn = new QPushButton(text);
         btn->setFixedSize(38, 20);
         btn->setCheckable(true);

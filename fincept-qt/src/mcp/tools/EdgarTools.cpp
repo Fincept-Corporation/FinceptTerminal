@@ -15,7 +15,7 @@ namespace fincept::mcp::tools {
 
 static constexpr const char* TAG = "EdgarTools";
 static constexpr const char* SCRIPT = "mcp/edgar/main.py";
-static constexpr int kTimeoutMs = 30000;
+[[maybe_unused]] static constexpr int kTimeoutMs = 30000;
 static constexpr int kEdgarTtlSec = 30 * 60; // 30 min — SEC filings rarely change intra-day
 
 // ── Helper: run mcp/edgar/main.py synchronously and return parsed JSON ───────

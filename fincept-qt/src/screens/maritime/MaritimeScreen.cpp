@@ -1049,10 +1049,10 @@ void MaritimeScreen::on_ports_error(const QString& context, const QString& messa
         ports_status_->setText("Lookup failed: " + message);
 }
 
-void MaritimeScreen::on_health_loaded(QJsonObject data) {
+void MaritimeScreen::on_health_loaded(QJsonObject payload) {
     // /marine/health envelope: {success, message, data:{module, status,
     //   database:{status, total_records}, mode, endpoints:{...}}}
-    const QJsonObject d = data.value("data").toObject();
+    const QJsonObject d = payload.value("data").toObject();
     const QString module = d.value("module").toString();
     const QString status = d.value("status").toString();
     const qint64 total   = d.value("database").toObject().value("total_records").toVariant().toLongLong();

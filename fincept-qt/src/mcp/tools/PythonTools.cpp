@@ -22,7 +22,7 @@ static constexpr const char* TAG = "PythonTools";
 // Synchronously run a Python script. Tool handlers run on a worker thread;
 // PythonRunner's QProcess lives on the main thread. We marshal the run()
 // call onto the runner's thread (see mcp/tools/ThreadHelper.h).
-static ToolResult run_script_sync(const QString& script, const QStringList& args) {
+[[maybe_unused]] static ToolResult run_script_sync(const QString& script, const QStringList& args) {
     if (!python::PythonRunner::instance().is_available())
         return ToolResult::fail("Python is not available — run setup first");
 

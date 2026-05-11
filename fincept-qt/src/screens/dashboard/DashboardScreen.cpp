@@ -383,8 +383,8 @@ void DashboardScreen::restore_layout() {
                     return;
                 }
 
-                QByteArray data = QByteArray::fromBase64(result.value().toUtf8());
-                QDataStream stream(&data, QIODevice::ReadOnly);
+                QByteArray payload = QByteArray::fromBase64(result.value().toUtf8());
+                QDataStream stream(&payload, QIODevice::ReadOnly);
 
                 GridLayout layout;
                 int count = 0;

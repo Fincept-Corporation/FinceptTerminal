@@ -52,7 +52,7 @@ QString strike_label(const OptionChainRow& row) {
 }
 
 /// Floor a millisecond timestamp to its minute boundary (in seconds).
-qint64 floor_to_minute_secs(qint64 ms) {
+[[maybe_unused]] qint64 floor_to_minute_secs(qint64 ms) {
     qint64 secs = ms / 1000;
     return (secs / 60) * 60;
 }

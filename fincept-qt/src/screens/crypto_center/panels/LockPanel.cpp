@@ -180,7 +180,7 @@ void LockPanel::build_ui() {
         pl->setContentsMargins(10, 8, 10, 8);
         pl->setSpacing(6);
 
-        auto add_kv = [preview, pl, body](const QString& k, QLabel*& v) {
+        auto add_kv = [preview, pl](const QString& k, QLabel*& v) {
             auto* row = new QHBoxLayout;
             row->setSpacing(8);
             auto* lbl = new QLabel(k, preview);

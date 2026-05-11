@@ -25,7 +25,7 @@ QRect rect_from_json(const QJsonObject& o) {
                  o.value("w").toInt(), o.value("h").toInt());
 }
 
-QString uuid_to_string(const QUuid& u) { return u.toString(QUuid::WithoutBraces); }
+[[maybe_unused]] QString uuid_to_string(const QUuid& u) { return u.toString(QUuid::WithoutBraces); }
 
 } // namespace
 

@@ -34,7 +34,7 @@ LayoutOpenDialog::LayoutOpenDialog(QWidget* parent) : QDialog(parent) {
     });
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(list_, &QListWidget::itemDoubleClicked, this,
-            [this, buttons](QListWidgetItem*) { emit buttons->accepted(); });
+            [buttons](QListWidgetItem*) { emit buttons->accepted(); });
 
     populate();
 }

@@ -33,7 +33,7 @@ inline RiskVerdict amend(const ProposedAction& a, const QString& reason) {
     return v;
 }
 
-bool is_entry_signal(Signal s) {
+[[maybe_unused]] bool is_entry_signal(Signal s) {
     return s == Signal::BuyToEnter || s == Signal::SellToEnter;
 }
 

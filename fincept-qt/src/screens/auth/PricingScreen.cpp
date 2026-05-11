@@ -199,12 +199,12 @@ void PricingScreen::fetch_plans() {
             return;
         }
 
-        QJsonObject data = r.data;
+        QJsonObject payload = r.data;
         QJsonArray plans_array;
-        if (data.contains("data") && data["data"].isArray()) {
-            plans_array = data["data"].toArray();
-        } else if (data.contains("data") && data["data"].isObject()) {
-            auto inner = data["data"].toObject();
+        if (payload.contains("data") && payload["data"].isArray()) {
+            plans_array = payload["data"].toArray();
+        } else if (payload.contains("data") && payload["data"].isObject()) {
+            auto inner = payload["data"].toObject();
             if (inner.contains("data") && inner["data"].isArray()) {
                 plans_array = inner["data"].toArray();
             }
@@ -472,11 +472,11 @@ void PricingScreen::on_select_plan(const QString& plan_id) {
             return;
         }
 
-        QJsonObject data = r.data;
-        if (data.contains("data") && data["data"].isObject())
-            data = data["data"].toObject();
+        QJsonObject payload = r.data;
+        if (payload.contains("data") && payload["data"].isObject())
+            payload = payload["data"].toObject();
 
-        QString token = data["token"].toString();
+        QString token = payload["token"].toString();
         if (token.isEmpty()) {
             error_label_->setText("No checkout token received from server");
             error_label_->show();

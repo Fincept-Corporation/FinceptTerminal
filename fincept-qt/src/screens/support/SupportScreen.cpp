@@ -238,13 +238,13 @@ SupportScreen::SupportScreen(QWidget* parent) : QWidget(parent) {
         if (r.success && category_combo_) {
             // Try common response shapes: {"categories":[...]} or bare array
             QJsonArray cats;
-            auto data = r.data;
-            if (data.contains("data") && data["data"].isObject())
-                data = data["data"].toObject();
-            if (data.contains("categories") && data["categories"].isArray())
-                cats = data["categories"].toArray();
-            else if (data.contains("items") && data["items"].isArray())
-                cats = data["items"].toArray();
+            auto payload = r.data;
+            if (payload.contains("data") && payload["data"].isObject())
+                payload = payload["data"].toObject();
+            if (payload.contains("categories") && payload["categories"].isArray())
+                cats = payload["categories"].toArray();
+            else if (payload.contains("items") && payload["items"].isArray())
+                cats = payload["items"].toArray();
 
             if (!cats.isEmpty()) {
                 category_combo_->clear();
@@ -817,20 +817,20 @@ void SupportScreen::load_tickets() {
         // or a bare array at top level, or {"success":true,"data":[...]}
         QJsonArray tickets;
         if (r.success) {
-            auto data = r.data;
+            auto payload = r.data;
             // Unwrap {"data": ...}
-            if (data.contains("data") && data["data"].isObject())
-                data = data["data"].toObject();
+            if (payload.contains("data") && payload["data"].isObject())
+                payload = payload["data"].toObject();
             // Try known array keys
-            if (data.contains("tickets") && data["tickets"].isArray())
-                tickets = data["tickets"].toArray();
-            else if (data.contains("items") && data["items"].isArray())
-                tickets = data["items"].toArray();
-            else if (data.contains("results") && data["results"].isArray())
-                tickets = data["results"].toArray();
+            if (payload.contains("tickets") && payload["tickets"].isArray())
+                tickets = payload["tickets"].toArray();
+            else if (payload.contains("items") && payload["items"].isArray())
+                tickets = payload["items"].toArray();
+            else if (payload.contains("results") && payload["results"].isArray())
+                tickets = payload["results"].toArray();
             // If the whole response data is itself an array key at root
             if (tickets.isEmpty()) {
-                for (auto it = data.begin(); it != data.end(); ++it) {
+                for (auto it = payload.begin(); it != payload.end(); ++it) {
                     if (it.value().isArray()) {
                         tickets = it.value().toArray();
                         break;

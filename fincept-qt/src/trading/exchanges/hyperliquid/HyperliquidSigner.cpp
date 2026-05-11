@@ -131,6 +131,20 @@ struct EcdsaSig {
     QString signer_address;  // 0x<20-byte hex>
 };
 
+// OpenSSL 3.0 deprecated the EC_KEY family in favour of EVP_PKEY. The
+// migration is non-trivial (EVP_PKEY/EVP_DigestSign with secp256k1, BN-level
+// signer-address recovery untouched) and out of scope for this build-hygiene
+// patch. Silencing the deprecation warning around this function so CI's
+// -Werror doesn't trip until we do the proper migration.
+// TODO(hyperliquid): port ecdsa_sign() to EVP_PKEY-based ECDSA.
+#if defined(__GNUC__) || defined(__clang__)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(_MSC_VER)
+#  pragma warning(push)
+#  pragma warning(disable: 4996)
+#endif
+
 EcdsaSig ecdsa_sign(const QByteArray& digest, const QByteArray& priv_key_32) {
     EcdsaSig out;
     EC_KEY* key = EC_KEY_new_by_curve_name(NID_secp256k1);
@@ -197,6 +211,12 @@ EcdsaSig ecdsa_sign(const QByteArray& digest, const QByteArray& priv_key_32) {
     EC_KEY_free(key);
     return out;
 }
+
+#if defined(__GNUC__) || defined(__clang__)
+#  pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#  pragma warning(pop)
+#endif
 
 } // namespace
 

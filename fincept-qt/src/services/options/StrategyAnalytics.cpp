@@ -75,7 +75,7 @@ double net_call_lots(const Strategy& s) {
 
 /// Net put lots — drives downside-tail behaviour (capped at S=0 always,
 /// but still useful when computing left-tail POP regions).
-double net_put_lots(const Strategy& s) {
+[[maybe_unused]] double net_put_lots(const Strategy& s) {
     double n = 0;
     for (const auto& leg : s.legs) {
         if (!leg.is_active)

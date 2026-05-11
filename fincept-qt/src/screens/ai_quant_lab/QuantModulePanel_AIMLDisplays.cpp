@@ -53,7 +53,7 @@ using namespace fincept::screens::quant_gs_helpers;
 
 namespace {
 
-QString fmt_num_safe(const QJsonValue& v, int decimals = 4) {
+[[maybe_unused]] QString fmt_num_safe(const QJsonValue& v, int decimals = 4) {
     if (v.isNull() || v.isUndefined()) return QStringLiteral("—");
     return QString::number(v.toDouble(), 'f', decimals);
 }

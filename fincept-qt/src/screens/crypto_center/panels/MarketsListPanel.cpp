@@ -205,10 +205,10 @@ void MarketsListPanel::on_error(const QString& context, const QString& message) 
 void MarketsListPanel::on_row_double_clicked(int row, int /*column*/) {
     auto* item = table_->item(row, 0);
     if (!item) return;
-    const auto data = item->data(Qt::UserRole).toString();
-    if (data.isEmpty()) return;
+    const auto market_id = item->data(Qt::UserRole).toString();
+    if (market_id.isEmpty()) return;
     LOG_INFO("MarketsListPanel",
-             QString("market double-clicked: %1").arg(data));
+             QString("market double-clicked: %1").arg(market_id));
     // The order-entry panel is part of Phase 4 polish — wired via a
     // signal in the next iteration. For now, surface the click via the
     // log so the seam is testable.

@@ -131,7 +131,7 @@ void PortfolioBlotter::build_pagination_footer() {
     // ── Center: nav buttons + page label ─────────────────────────────────────
     // All four buttons share the same neutral square style. Disabled state
     // dims to TEXT_DIM and removes hover hint.
-    auto make_nav_btn = [this](const QString& glyph, const QString& tip) {
+    auto make_nav_btn = [](const QString& glyph, const QString& tip) {
         auto* b = new QPushButton(glyph);
         b->setFixedSize(22, 22);
         b->setCursor(Qt::PointingHandCursor);
