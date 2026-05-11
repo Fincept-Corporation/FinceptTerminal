@@ -850,8 +850,11 @@ QString PythonSetupManager::find_requirements_file(const QString& filename) cons
     QString exe_dir = QCoreApplication::applicationDirPath();
     LOG_INFO("PythonSetup", "find_requirements_file: searching for " + filename + "  exe_dir=" + exe_dir);
 
-    // Search relative to executable
+    // Search relative to executable.
+    // macOS-canonical first: signed bundles must keep resources/ outside
+    // Contents/MacOS/ (codesign rejects anything non-Mach-O in MacOS/).
     QStringList candidates = {
+        exe_dir + "/../Resources/" + filename,  // macOS canonical (.app/Contents/Resources/...)
         exe_dir + "/resources/" + filename,
         exe_dir + "/../resources/" + filename,
         exe_dir + "/../../resources/" + filename,

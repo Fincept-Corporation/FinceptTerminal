@@ -251,7 +251,11 @@ QString VideoPlayerWidget::resolve_ytdlp_program() const {
     const QString exe_name = "yt-dlp";
 #endif
     const QString exe_dir = QCoreApplication::applicationDirPath();
+    // macOS-canonical first: signed bundles must keep yt-dlp in
+    // Contents/Resources/ (not Contents/MacOS/) — anything non-Mach-O in
+    // MacOS/ makes codesign reject the bundle.
     const QStringList local_candidates = {
+        QDir(exe_dir).filePath("../Resources/" + exe_name),  // macOS canonical
         QDir(exe_dir).filePath(exe_name),
         QDir(exe_dir).filePath("tools/" + exe_name),
         QDir(exe_dir).filePath("bin/" + exe_name),

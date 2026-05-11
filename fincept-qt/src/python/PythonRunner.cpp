@@ -259,7 +259,11 @@ QString PythonRunner::find_scripts_dir() const {
     QString exe_dir = QCoreApplication::applicationDirPath();
 
     // Check relative to exe: scripts/, ../scripts/, etc.
+    // macOS-canonical first: signed bundles must keep scripts/ in
+    // Contents/Resources/ (not Contents/MacOS/) — anything other than
+    // Mach-Os in MacOS/ makes codesign reject the bundle as malformed.
     QStringList candidates = {
+        exe_dir + "/../Resources/scripts",  // macOS canonical (.app/Contents/Resources/scripts)
         exe_dir + "/scripts",
         exe_dir + "/../scripts",
         exe_dir + "/../../scripts",

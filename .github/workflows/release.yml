@@ -640,10 +640,17 @@ jobs:
           PLIST
           fi
 
-          # CMake's POST_BUILD rule copies scripts/ to Contents/MacOS/scripts/.
-          # PythonRunner::find_scripts_dir() resolves relative to
-          # applicationDirPath() (= Contents/MacOS on macOS), so this layout
-          # is load-bearing — do not move scripts/ to Contents/Resources/.
+          # CMake's POST_BUILD rule copies scripts/ + resources/ + yt-dlp
+          # into Contents/MacOS/ (portable layout for Linux/Windows builds).
+          # On macOS that's not the canonical .app layout and codesign
+          # refuses to sign any bundle with non-Mach-Os in Contents/MacOS/,
+          # so the "Canonicalise bundle layout" block further down in this
+          # step moves them into Contents/Resources/ before signing.
+          # PythonRunner::find_scripts_dir(),
+          # PythonSetupManager::find_requirements_file(), and
+          # VideoPlayerWidget::resolve_ytdlp_program() each carry an
+          # `../Resources/...` candidate so the C++ side picks up the new
+          # location after the move.
 
           # Embed Python.framework before codesign so it's signed as part of
           # the bundle. We use `rsync -a` (not `ditto`) because ditto under
@@ -798,20 +805,55 @@ jobs:
             echo "Python.framework structure OK"
           fi
 
-          # Resources (icons, requirements-*.txt) go in Contents/Resources/ —
-          # macOS convention for non-code assets, read via QStandardPaths.
-          # Scripts are ALREADY in Contents/MacOS/scripts/ via CMake POST_BUILD;
-          # do not duplicate them into Resources/ (doubles bundle size and
-          # creates two trees for codesign to hash).
+          # Top-level Resources/ for icons (Info.plist's CFBundleIconFile
+          # is read from here).
           mkdir -p "${APP_BUNDLE}/Contents/Resources"
           cp -r resources "${APP_BUNDLE}/Contents/Resources/" 2>/dev/null || true
 
+          # ── Canonicalise bundle layout for codesign ──────────────────────
+          # CMake's POST_BUILD steps copy scripts/, resources/, and yt-dlp
+          # into Contents/MacOS/ (alongside the binary), which is portable
+          # to Linux/Windows where there's no .app bundle. On macOS that
+          # layout is FATAL for codesign: anything in Contents/MacOS/ that
+          # isn't a Mach-O makes codesign reject the bundle with
+          #   "code object is not signed at all
+          #    In subcomponent: .../Contents/MacOS/<...>"
+          # So we relocate the offending paths into Contents/Resources/
+          # before signing. PythonRunner / PythonSetupManager /
+          # VideoPlayerWidget all have `../Resources/...` in their
+          # candidate search lists, so the C++ side keeps working.
+          echo "Canonicalising bundle layout (moving non-Mach-O content out of MacOS/)..."
+
+          # scripts/ → Contents/Resources/scripts/  (preserve dir name)
+          if [ -d "${APP_BUNDLE}/Contents/MacOS/scripts" ]; then
+              rm -rf "${APP_BUNDLE}/Contents/Resources/scripts"
+              mv "${APP_BUNDLE}/Contents/MacOS/scripts" \
+                 "${APP_BUNDLE}/Contents/Resources/scripts"
+              echo "  moved Contents/MacOS/scripts → Contents/Resources/scripts"
+          fi
+
+          # MacOS/resources/* → Contents/Resources/  (FLATTEN — PythonSetupManager
+          # searches `../Resources/<filename>`, not `../Resources/resources/...`).
+          if [ -d "${APP_BUNDLE}/Contents/MacOS/resources" ]; then
+              rsync -a "${APP_BUNDLE}/Contents/MacOS/resources/" \
+                       "${APP_BUNDLE}/Contents/Resources/"
+              rm -rf "${APP_BUNDLE}/Contents/MacOS/resources"
+              echo "  merged Contents/MacOS/resources/* → Contents/Resources/"
+          fi
+
+          # yt-dlp → Contents/Resources/yt-dlp
+          if [ -f "${APP_BUNDLE}/Contents/MacOS/yt-dlp" ]; then
+              mv "${APP_BUNDLE}/Contents/MacOS/yt-dlp" \
+                 "${APP_BUNDLE}/Contents/Resources/yt-dlp"
+              echo "  moved Contents/MacOS/yt-dlp → Contents/Resources/yt-dlp"
+          fi
+
           echo "Bundle staged at: ${APP_BUNDLE}"
           echo "Pre-sign size: $(du -sh "${APP_BUNDLE}" | cut -f1)"
-          echo "=== Contents/MacOS/ top level ==="
+          echo "=== Contents/MacOS/ top level (should be Mach-Os only) ==="
           ls -la "${APP_BUNDLE}/Contents/MacOS/" | head -10
-          echo "=== Scripts count under MacOS/scripts ==="
-          find "${APP_BUNDLE}/Contents/MacOS/scripts" -type f 2>/dev/null | wc -l || true
+          echo "=== Scripts count under Contents/Resources/scripts ==="
+          find "${APP_BUNDLE}/Contents/Resources/scripts" -type f 2>/dev/null | wc -l || true
 
       # ── Run macdeployqt on the fully staged bundle ────────────────────────
       # macdeployqt copies Qt frameworks, fixes rpaths, and signs everything
