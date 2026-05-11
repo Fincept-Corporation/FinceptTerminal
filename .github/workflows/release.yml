@@ -1002,21 +1002,47 @@ jobs:
           set -euo pipefail
           APP_BUNDLE="build/${{ env.APP_NAME }}.app"
           ZIP_PATH="$RUNNER_TEMP/app-for-notary.zip"
+          SUBMIT_JSON="$RUNNER_TEMP/notary-app-submit.json"
 
           # ditto preserves symlinks + xattrs correctly; `zip` doesn't.
           /usr/bin/ditto -c -k --keepParent "${APP_BUNDLE}" "${ZIP_PATH}"
 
+          # Submit and wait. `--output-format json` makes the result
+          # machine-parseable. Important: `notarytool submit --wait` exits 0
+          # even when Apple returns status: Invalid — the exit code only
+          # signals "could we talk to Apple". The actual verdict lives in
+          # the .status field, so we MUST inspect it ourselves. If we don't,
+          # the next step (`stapler staple`) fails with a cryptic "Error 65"
+          # because Apple never minted a ticket.
           echo "Submitting .app to Apple notary (this can take a few minutes)..."
           xcrun notarytool submit "${ZIP_PATH}" \
             --apple-id "$APPLE_ID" \
             --team-id "$TEAM_ID" \
             --password "$NOTARY_PASSWORD" \
-            --wait
+            --wait \
+            --output-format json | tee "${SUBMIT_JSON}"
+
+          SUB_ID=$(jq -r '.id'     < "${SUBMIT_JSON}")
+          STATUS=$(jq -r '.status' < "${SUBMIT_JSON}")
+          echo "Notarization submission ${SUB_ID} → ${STATUS}"
+
+          if [ "${STATUS}" != "Accepted" ]; then
+            echo "::error::Notarization failed for .app (status: ${STATUS}). Fetching Apple's log..."
+            # `notarytool log <id>` returns the pretty-printed JSON log
+            # whose .issues[] array names the exact files Apple rejected
+            # and why (missing hardened runtime, unsigned Mach-O, etc.).
+            xcrun notarytool log "${SUB_ID}" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$TEAM_ID" \
+              --password "$NOTARY_PASSWORD" \
+              || echo "::warning::Could not fetch notarization log for ${SUB_ID}"
+            exit 1
+          fi
 
           echo "Stapling ticket to .app..."
           xcrun stapler staple "${APP_BUNDLE}"
           xcrun stapler validate "${APP_BUNDLE}"
-          rm -f "${ZIP_PATH}"
+          rm -f "${ZIP_PATH}" "${SUBMIT_JSON}"
 
       # ── Copy signed bundle to dist/ ───────────────────────────────────────
       - name: Finalize dist
@@ -1077,17 +1103,38 @@ jobs:
           echo "Signing DMG: ${DMG}"
           codesign --force --sign "$SIGNING_IDENTITY" --timestamp "$DMG"
 
+          # Same status-handling pattern as the .app notarization step
+          # above — submit --wait can exit 0 on Invalid, so we parse
+          # .status from the JSON and pull the log on rejection.
+          SUBMIT_JSON="$RUNNER_TEMP/notary-dmg-submit.json"
+
           echo "Submitting to Apple notary service (this can take a few minutes)..."
           xcrun notarytool submit "$DMG" \
             --apple-id "$APPLE_ID" \
             --team-id "$TEAM_ID" \
             --password "$NOTARY_PASSWORD" \
-            --wait
+            --wait \
+            --output-format json | tee "${SUBMIT_JSON}"
+
+          SUB_ID=$(jq -r '.id'     < "${SUBMIT_JSON}")
+          STATUS=$(jq -r '.status' < "${SUBMIT_JSON}")
+          echo "DMG notarization submission ${SUB_ID} → ${STATUS}"
+
+          if [ "${STATUS}" != "Accepted" ]; then
+            echo "::error::Notarization failed for DMG (status: ${STATUS}). Fetching Apple's log..."
+            xcrun notarytool log "${SUB_ID}" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$TEAM_ID" \
+              --password "$NOTARY_PASSWORD" \
+              || echo "::warning::Could not fetch notarization log for ${SUB_ID}"
+            exit 1
+          fi
 
           echo "Stapling ticket..."
           xcrun stapler staple "$DMG"
           xcrun stapler validate "$DMG"
           spctl --assess --type open --context context:primary-signature -vv "$DMG" || true
+          rm -f "${SUBMIT_JSON}"
 
       # ── Clean up the temp keychain ────────────────────────────────────────
       - name: Clean up keychain
