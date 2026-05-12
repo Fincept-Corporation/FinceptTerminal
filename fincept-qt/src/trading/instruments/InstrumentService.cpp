@@ -7,8 +7,10 @@
 #include "trading/instruments/InstrumentRepository.h"
 #include "trading/instruments/ZerodhaInstrumentParser.h"
 
+#include <QCoreApplication>
 #include <QDate>
 #include <QDateTime>
+#include <QEvent>
 #include <QEventLoop>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -625,12 +627,15 @@ QByteArray InstrumentService::download_angel_master_json() {
     // mutex (which would starve all concurrent quote/history API calls for 10-20s).
     static const QString kUrl = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json";
 
-    QNetworkAccessManager nam;
+    // Heap-allocate QNAM with deleteLater + DeferredDelete drain. A stack
+    // QNAM here would leak Qt's macOS CFSocket-notifier teardown onto the
+    // main runloop, causing a use-after-free crash hours later.
+    auto* nam = new QNetworkAccessManager;
     QNetworkRequest req{QUrl(kUrl)};
     req.setRawHeader("Accept", "application/json");
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
 
-    QNetworkReply* reply = nam.get(req);
+    QNetworkReply* reply = nam->get(req);
 
     QEventLoop loop;
     QTimer timer;
@@ -640,22 +645,28 @@ QByteArray InstrumentService::download_angel_master_json() {
     timer.start(60000); // 60s — large file on slow connection
     loop.exec();
 
+    auto drain = [&]() {
+        reply->deleteLater();
+        nam->deleteLater();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    };
+
     if (!timer.isActive()) {
         reply->abort();
-        reply->deleteLater();
         LOG_ERROR("InstrumentService", "AngelOne master contract download timed out");
+        drain();
         return {};
     }
     timer.stop();
 
     if (reply->error() != QNetworkReply::NoError) {
         LOG_ERROR("InstrumentService", "Failed to download AngelOne master contract: " + reply->errorString());
-        reply->deleteLater();
+        drain();
         return {};
     }
 
     QByteArray data = reply->readAll();
-    reply->deleteLater();
+    drain();
     LOG_INFO("InstrumentService", QString("Downloaded AngelOne master contract: %1 bytes").arg(data.size()));
     return data;
 }
@@ -666,12 +677,12 @@ QByteArray InstrumentService::download_groww_csv() {
     // mutex for 10-30s on slow links and would starve concurrent quote/order calls.
     static const QString kUrl = "https://growwapi-assets.groww.in/instruments/instrument.csv";
 
-    QNetworkAccessManager nam;
+    auto* nam = new QNetworkAccessManager;
     QNetworkRequest req{QUrl(kUrl)};
     req.setRawHeader("Accept", "text/csv");
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
 
-    QNetworkReply* reply = nam.get(req);
+    QNetworkReply* reply = nam->get(req);
 
     QEventLoop loop;
     QTimer timer;
@@ -681,22 +692,28 @@ QByteArray InstrumentService::download_groww_csv() {
     timer.start(60000); // 60s — ~27MB file on slow connection
     loop.exec();
 
+    auto drain = [&]() {
+        reply->deleteLater();
+        nam->deleteLater();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    };
+
     if (!timer.isActive()) {
         reply->abort();
-        reply->deleteLater();
         LOG_ERROR("InstrumentService", "Groww instrument CSV download timed out");
+        drain();
         return {};
     }
     timer.stop();
 
     if (reply->error() != QNetworkReply::NoError) {
         LOG_ERROR("InstrumentService", "Failed to download Groww instrument CSV: " + reply->errorString());
-        reply->deleteLater();
+        drain();
         return {};
     }
 
     QByteArray data = reply->readAll();
-    reply->deleteLater();
+    drain();
     LOG_INFO("InstrumentService", QString("Downloaded Groww instrument CSV: %1 bytes").arg(data.size()));
     return data;
 }

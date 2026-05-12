@@ -4,6 +4,8 @@
 
 #include "ai_chat/LlmService.h"
 
+#include <QCoreApplication>
+#include <QEvent>
 #include <QEventLoop>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -41,13 +43,24 @@ LlmService::HttpResult LlmService::blocking_get(const QString& url, const QMap<Q
 LlmService::HttpResult LlmService::eventloop_request(const QString& method, const QString& url, const QByteArray& body,
                                                      const QMap<QString, QString>& headers, int timeout_ms) {
     HttpResult result;
-    QNetworkAccessManager nam;
+
+    // ── Lifetime note ─────────────────────────────────────────────────────────
+    // The QNetworkAccessManager and its QNetworkReply MUST outlive the local
+    // QEventLoop *and* drain pending DeferredDelete events before this
+    // function returns. A stack-allocated QNAM here used to crash the main
+    // thread hours later (issue: KERN_INVALID_ADDRESS @ 0x3f inside
+    // QIODevice::channelReadyRead via qt_mac_socket_callback) — Qt's macOS
+    // CFSocket bridge fires runloop callbacks against socket QObjects whose
+    // d_ptr has been torn down with the NAM. Heap-allocate and explicitly
+    // process DeferredDelete so the socket-notifier teardown completes
+    // before the function returns.
+    auto* nam = new QNetworkAccessManager;
     QNetworkRequest req{QUrl(url)};
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     for (auto it = headers.constBegin(); it != headers.constEnd(); ++it)
         req.setRawHeader(it.key().toUtf8(), it.value().toUtf8());
 
-    QNetworkReply* reply = (method == "GET") ? nam.get(req) : nam.post(req, body);
+    QNetworkReply* reply = (method == "GET") ? nam->get(req) : nam->post(req, body);
 
     QEventLoop loop;
     QTimer timer;
@@ -57,10 +70,18 @@ LlmService::HttpResult LlmService::eventloop_request(const QString& method, cons
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
     loop.exec();
 
+    auto drain = [&]() {
+        reply->deleteLater();
+        nam->deleteLater();
+        // Drain DeferredDelete events on the current thread so the NAM and
+        // its socket subscribers tear down while a dispatcher still exists.
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    };
+
     if (!reply->isFinished()) {
         reply->abort();
-        reply->deleteLater();
         result.error = "Request timed out";
+        drain();
         return result;
     }
 
@@ -94,7 +115,7 @@ LlmService::HttpResult LlmService::eventloop_request(const QString& method, cons
         result.error = server_msg.isEmpty() ? QString("HTTP %1: %2").arg(result.status).arg(reply->errorString())
                                             : QString("HTTP %1: %2").arg(result.status).arg(server_msg);
     }
-    reply->deleteLater();
+    drain();
     return result;
 }
 

@@ -86,6 +86,21 @@
       "displayName": "macOS Debug (Apple Clang 15.0, Qt 6.8.3)",
       "inherits": "macos-release",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "macos-asan",
+      "displayName": "macOS AddressSanitizer (Apple Clang, Qt 6.8.3)",
+      "description": "Debug build with -fsanitize=address,undefined for catching use-after-free / heap-buffer-overflow / UB. Pair with scripts/stress_network.sh to exercise the network paths under load. Symbolicated reports go to stderr at the crash site with full alloc+free stacks.",
+      "inherits": "macos-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_PREFIX_PATH": "$env{HOME}/Qt/6.8.3/macos;$env{HOME}/projects/FinceptTerminal/.qt/6.8.3/macos",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls -g",
+        "CMAKE_C_FLAGS":   "-fsanitize=address,undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls -g",
+        "CMAKE_EXE_LINKER_FLAGS":    "-fsanitize=address,undefined",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined",
+        "CMAKE_UNITY_BUILD": "OFF"
+      }
     }
   ],
 
@@ -97,6 +112,7 @@
     { "name": "linux-release", "configurePreset": "linux-release" },
     { "name": "linux-debug",   "configurePreset": "linux-debug"   },
     { "name": "macos-release", "configurePreset": "macos-release" },
-    { "name": "macos-debug",   "configurePreset": "macos-debug"   }
+    { "name": "macos-debug",   "configurePreset": "macos-debug"   },
+    { "name": "macos-asan",    "configurePreset": "macos-asan"    }
   ]
 }
