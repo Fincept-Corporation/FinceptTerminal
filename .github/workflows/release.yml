@@ -1046,21 +1046,39 @@ jobs:
           #      a non-standard name
           # `file -h` (no follow-symlinks) inspects bytes, not the path —
           # bulletproof. Cost: a few seconds extra to stat every file.
+          #
+          # CRITICAL: we exclude the bundle's main executable
+          # (Contents/MacOS/${APP_NAME}, the file named in CFBundleExecutable)
+          # from this list. When you hand codesign a path that IS a bundle's
+          # main executable, codesign treats it as signing the .app bundle
+          # itself and walks every nested PlugIns / Frameworks / Resources
+          # entry to validate they are already signed. Signing it here —
+          # before the leaf loop has signed the plugins — produces:
+          #   "<MainBin>: code object is not signed at all
+          #    In subcomponent: ...PlugIns/tls/libqsecuretransportbackend.dylib"
+          # The main executable gets sealed by the final
+          # `codesign ... "${APP_BUNDLE}"` step below, which is the
+          # canonical way per Apple's "Creating Distribution-Signed Code
+          # for the Mac" (sign inside-out, pass the bundle path not the
+          # binary path).
           echo "Enumerating Mach-O files in bundle..."
           MACHO_LIST="$RUNNER_TEMP/macho-files.txt"
+          MAIN_EXE="${APP_BUNDLE}/Contents/MacOS/${{ env.APP_NAME }}"
           : > "${MACHO_LIST}"
           while IFS= read -r f; do
+            [ "$f" = "${MAIN_EXE}" ] && continue
             if file -h "$f" 2>/dev/null | grep -q "Mach-O"; then
               printf '%s\n' "$f" >> "${MACHO_LIST}"
             fi
           done < <(find "${APP_BUNDLE}" -type f 2>/dev/null)
           MACHO_COUNT=$(wc -l < "${MACHO_LIST}" | tr -d ' ')
-          echo "  found ${MACHO_COUNT} Mach-O file(s)"
+          echo "  found ${MACHO_COUNT} Mach-O file(s) (main executable signed separately at bundle root)"
 
           echo "Stripping existing signatures from every Mach-O..."
           while IFS= read -r f; do
             codesign --remove-signature "$f" 2>/dev/null || true
           done < "${MACHO_LIST}"
+          codesign --remove-signature "${MAIN_EXE}" 2>/dev/null || true
           codesign --remove-signature "${APP_BUNDLE}" 2>/dev/null || true
 
           echo "Signing every Mach-O with hardened runtime + timestamp..."
@@ -1107,7 +1125,11 @@ jobs:
           # We walk every Mach-O and assert each one. If any fails, we abort
           # here — that saves a 2-5 min notary round-trip for an issue we
           # could've caught on the runner.
+          # Validate the main executable too — it was excluded from
+          # MACHO_LIST (signed only at the bundle root step above) but
+          # the notary still expects it to carry runtime+timestamp+arm64.
           echo "Pre-flight: validating every Mach-O..."
+          printf '%s\n' "${MAIN_EXE}" >> "${MACHO_LIST}"
           BAD_RUNTIME=()
           BAD_TIMESTAMP=()
           BAD_ARCH=()
@@ -1155,7 +1177,7 @@ jobs:
             echo "::error::Pre-flight checks failed — fix above issues before notary submission"
             exit 1
           fi
-          echo "  pre-flight passed: all ${MACHO_COUNT} Mach-Os are arm64, hardened-runtime, timestamped"
+          echo "  pre-flight passed: all $((MACHO_COUNT + 1)) Mach-Os (incl. main exe) are arm64, hardened-runtime, timestamped"
 
           rm -f "${MACHO_LIST}"
 

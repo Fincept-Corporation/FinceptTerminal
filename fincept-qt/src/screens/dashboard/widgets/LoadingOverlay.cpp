@@ -36,7 +36,6 @@ LoadingOverlay::LoadingOverlay(QWidget* parent) : QWidget(parent) {
     setAttribute(Qt::WA_NoSystemBackground, true);
     setAttribute(Qt::WA_TranslucentBackground, true);
     setFocusPolicy(Qt::NoFocus);
-    setVisible(false);
 
     // QGraphicsOpacityEffect was previously used here. Removed: on Qt6 the
     // effect forces an offscreen render pass + composite on every paint even
@@ -57,6 +56,13 @@ LoadingOverlay::LoadingOverlay(QWidget* parent) : QWidget(parent) {
 
     fade_anim_ = new QPropertyAnimation(this, "fadeOpacity", this);
     fade_anim_->setDuration(kFadeMs);
+
+    // setVisible(false) dispatches a QHideEvent → hideEvent() → stop_shimmer(),
+    // so the animations must exist before this call. Keep it (we need
+    // WA_WState_ExplicitShowHide set so reparenting onto a visible target
+    // doesn't auto-show the overlay).
+    setVisible(false);
+
     connect(fade_anim_, &QPropertyAnimation::finished, this, [this]() {
         // If we faded out, actually hide so we stop drawing on top.
         if (fade_opacity_ <= 0.001) {
