@@ -930,6 +930,43 @@ jobs:
           echo "=== Bundle Frameworks/ contents ==="
           ls -la "${FRAMEWORKS}" | head -50
 
+          # ── Thin universal Mach-Os to arm64 ─────────────────────────────────
+          # jurplel/install-qt-action@v4 / aqtinstall ships Qt 6.x macOS as a
+          # universal (arm64+x86_64) binary — Qt 6.2+ only publishes one macOS
+          # archive labelled `clang_64` that contains both slices fused with
+          # lipo. macdeployqt copies those frameworks/plugins into the bundle
+          # untouched, which leaves ~36 fat Mach-Os in Contents/Frameworks/
+          # and Contents/PlugIns/ while the app binary itself was built
+          # arm64-only via -DCMAKE_OSX_ARCHITECTURES=arm64.
+          #
+          # The pre-flight architecture check below requires exactly one
+          # arm64 slice per Mach-O (we ship an arm64-only DMG), so we walk
+          # every Mach-O and strip x86_64 with `lipo -thin arm64`. Must run
+          # BEFORE codesign — any signature applied before thinning is
+          # invalidated the moment we rewrite the file.
+          echo "Thinning universal Mach-Os to arm64..."
+          THINNED_COUNT=0
+          while IFS= read -r f; do
+            file -h "$f" 2>/dev/null | grep -q "Mach-O" || continue
+            # Skip if already single-arch (saves a fork+exec per file).
+            ARCHS=$(file -h "$f" 2>/dev/null | grep -oE "(arm64|x86_64|i386|ppc)" | sort -u | tr '\n' ',' | sed 's/,$//')
+            [ "${ARCHS}" = "arm64" ] && continue
+            # Skip files with no arm64 slice at all (shouldn't happen for
+            # Qt's universal build, but guard against surprises in third-
+            # party dylibs that bundle_external_deps may have pulled in).
+            if ! echo "${ARCHS}" | grep -q "arm64"; then
+              echo "::warning::no arm64 slice in $f (archs: ${ARCHS}) — leaving as-is"
+              continue
+            fi
+            chmod u+w "$f" 2>/dev/null || true
+            if lipo -thin arm64 "$f" -output "$f" 2>/dev/null; then
+              THINNED_COUNT=$((THINNED_COUNT + 1))
+            else
+              echo "::warning::lipo -thin arm64 failed for $f"
+            fi
+          done < <(find "${APP_BUNDLE}" -type f 2>/dev/null)
+          echo "  thinned ${THINNED_COUNT} Mach-O(s) to arm64"
+
       # ── Import Developer ID certificate into a temp keychain ──────────────
       # The cert + private key live in repo secrets (base64-encoded .p12).
       # We provision a throwaway keychain for this job so the runner's
