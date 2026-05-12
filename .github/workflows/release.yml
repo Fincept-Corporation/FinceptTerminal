@@ -1245,25 +1245,82 @@ jobs:
           # ditto preserves symlinks + xattrs correctly; `zip` doesn't.
           /usr/bin/ditto -c -k --keepParent "${APP_BUNDLE}" "${ZIP_PATH}"
 
-          # Submit and wait. `--output-format json` makes the result
-          # machine-parseable. Important: `notarytool submit --wait` exits 0
-          # even when Apple returns status: Invalid — the exit code only
-          # signals "could we talk to Apple". The actual verdict lives in
-          # the .status field, so we MUST inspect it ourselves. If we don't,
-          # the next step (`stapler staple`) fails with a cryptic "Error 65"
-          # because Apple never minted a ticket.
-          echo "Submitting .app to Apple notary (this can take a few minutes)..."
-          xcrun notarytool submit "${ZIP_PATH}" \
-            --apple-id "$APPLE_ID" \
-            --team-id "$TEAM_ID" \
-            --password "$NOTARY_PASSWORD" \
-            --wait \
-            --output-format json | tee "${SUBMIT_JSON}"
+          # Submit WITHOUT --wait so we get the submission UUID immediately,
+          # then poll status ourselves with retries. `notarytool submit --wait`
+          # has no retry on transient network errors: a single dropped
+          # connection during the multi-minute poll loop kills the step
+          # (NSURLErrorDomain -1009 from the runner's network stack), even
+          # though Apple's side accepted and is processing the submission
+          # just fine. By owning the poll loop we can retry on TCP/DNS
+          # blips without losing the in-flight submission.
+          echo "Submitting .app to Apple notary..."
+          SUBMIT_ATTEMPTS=0
+          SUB_ID=""
+          while [ "${SUBMIT_ATTEMPTS}" -lt 3 ]; do
+            SUBMIT_ATTEMPTS=$((SUBMIT_ATTEMPTS + 1))
+            if xcrun notarytool submit "${ZIP_PATH}" \
+                 --apple-id "$APPLE_ID" \
+                 --team-id "$TEAM_ID" \
+                 --password "$NOTARY_PASSWORD" \
+                 --output-format json > "${SUBMIT_JSON}" 2>&1; then
+              SUB_ID=$(jq -r '.id // empty' < "${SUBMIT_JSON}")
+              [ -n "${SUB_ID}" ] && break
+            fi
+            echo "::warning::submit attempt ${SUBMIT_ATTEMPTS} failed:"
+            cat "${SUBMIT_JSON}" || true
+            sleep $((SUBMIT_ATTEMPTS * 30))
+          done
+          if [ -z "${SUB_ID}" ]; then
+            echo "::error::Could not submit to notary after ${SUBMIT_ATTEMPTS} attempts"
+            exit 1
+          fi
+          echo "Submitted: ${SUB_ID}"
 
-          SUB_ID=$(jq -r '.id'     < "${SUBMIT_JSON}")
-          STATUS=$(jq -r '.status' < "${SUBMIT_JSON}")
+          # Poll for completion. notarytool info returns one of: In Progress,
+          # Accepted, Invalid, Rejected. We retry network failures (curl/
+          # NSURLError) without resubmitting — the submission already exists
+          # on Apple's side, we just need to read its current state.
+          echo "Polling notarization status (this can take a few minutes)..."
+          STATUS="In Progress"
+          POLL_START=$(date +%s)
+          POLL_TIMEOUT_SEC=1800   # 30 min hard cap; Apple usually answers in 2-5 min
+          NETWORK_FAILS=0
+          INFO_JSON="$RUNNER_TEMP/notary-app-info.json"
+          while true; do
+            ELAPSED=$(( $(date +%s) - POLL_START ))
+            if [ "${ELAPSED}" -gt "${POLL_TIMEOUT_SEC}" ]; then
+              echo "::error::Notarization poll timed out after ${POLL_TIMEOUT_SEC}s (last status: ${STATUS})"
+              exit 1
+            fi
+
+            if xcrun notarytool info "${SUB_ID}" \
+                 --apple-id "$APPLE_ID" \
+                 --team-id "$TEAM_ID" \
+                 --password "$NOTARY_PASSWORD" \
+                 --output-format json > "${INFO_JSON}" 2>&1; then
+              NETWORK_FAILS=0
+              STATUS=$(jq -r '.status // "Unknown"' < "${INFO_JSON}")
+              echo "  [${ELAPSED}s] status=${STATUS}"
+              case "${STATUS}" in
+                Accepted)        break ;;
+                Invalid|Rejected) break ;;
+                "In Progress")   sleep 20 ;;
+                *)               sleep 20 ;;
+              esac
+            else
+              NETWORK_FAILS=$((NETWORK_FAILS + 1))
+              echo "::warning::notarytool info network failure #${NETWORK_FAILS}:"
+              cat "${INFO_JSON}" || true
+              if [ "${NETWORK_FAILS}" -ge 10 ]; then
+                echo "::error::10 consecutive network failures polling notarization — runner connectivity is broken"
+                exit 1
+              fi
+              # Exponential backoff capped at 60s — gives DNS/TCP time to recover.
+              sleep $(( NETWORK_FAILS * 5 < 60 ? NETWORK_FAILS * 5 : 60 ))
+            fi
+          done
+
           echo "Notarization submission ${SUB_ID} → ${STATUS}"
-
           if [ "${STATUS}" != "Accepted" ]; then
             echo "::error::Notarization failed for .app (status: ${STATUS}). Fetching Apple's log..."
             # `notarytool log <id>` returns the pretty-printed JSON log
@@ -1280,7 +1337,7 @@ jobs:
           echo "Stapling ticket to .app..."
           xcrun stapler staple "${APP_BUNDLE}"
           xcrun stapler validate "${APP_BUNDLE}"
-          rm -f "${ZIP_PATH}" "${SUBMIT_JSON}"
+          rm -f "${ZIP_PATH}" "${SUBMIT_JSON}" "${INFO_JSON}"
 
       # ── Copy signed bundle to dist/ ───────────────────────────────────────
       - name: Finalize dist
@@ -1341,23 +1398,72 @@ jobs:
           echo "Signing DMG: ${DMG}"
           codesign --force --sign "$SIGNING_IDENTITY" --timestamp "$DMG"
 
-          # Same status-handling pattern as the .app notarization step
-          # above — submit --wait can exit 0 on Invalid, so we parse
-          # .status from the JSON and pull the log on rejection.
+          # Same submit-then-poll pattern as the .app step: --wait has no
+          # retry on transient network errors (NSURLErrorDomain -1009 from
+          # the runner), so we own the poll loop.
           SUBMIT_JSON="$RUNNER_TEMP/notary-dmg-submit.json"
+          INFO_JSON="$RUNNER_TEMP/notary-dmg-info.json"
 
-          echo "Submitting to Apple notary service (this can take a few minutes)..."
-          xcrun notarytool submit "$DMG" \
-            --apple-id "$APPLE_ID" \
-            --team-id "$TEAM_ID" \
-            --password "$NOTARY_PASSWORD" \
-            --wait \
-            --output-format json | tee "${SUBMIT_JSON}"
+          echo "Submitting DMG to Apple notary..."
+          SUBMIT_ATTEMPTS=0
+          SUB_ID=""
+          while [ "${SUBMIT_ATTEMPTS}" -lt 3 ]; do
+            SUBMIT_ATTEMPTS=$((SUBMIT_ATTEMPTS + 1))
+            if xcrun notarytool submit "$DMG" \
+                 --apple-id "$APPLE_ID" \
+                 --team-id "$TEAM_ID" \
+                 --password "$NOTARY_PASSWORD" \
+                 --output-format json > "${SUBMIT_JSON}" 2>&1; then
+              SUB_ID=$(jq -r '.id // empty' < "${SUBMIT_JSON}")
+              [ -n "${SUB_ID}" ] && break
+            fi
+            echo "::warning::DMG submit attempt ${SUBMIT_ATTEMPTS} failed:"
+            cat "${SUBMIT_JSON}" || true
+            sleep $((SUBMIT_ATTEMPTS * 30))
+          done
+          if [ -z "${SUB_ID}" ]; then
+            echo "::error::Could not submit DMG to notary after ${SUBMIT_ATTEMPTS} attempts"
+            exit 1
+          fi
+          echo "Submitted: ${SUB_ID}"
 
-          SUB_ID=$(jq -r '.id'     < "${SUBMIT_JSON}")
-          STATUS=$(jq -r '.status' < "${SUBMIT_JSON}")
+          echo "Polling DMG notarization status..."
+          STATUS="In Progress"
+          POLL_START=$(date +%s)
+          POLL_TIMEOUT_SEC=1800
+          NETWORK_FAILS=0
+          while true; do
+            ELAPSED=$(( $(date +%s) - POLL_START ))
+            if [ "${ELAPSED}" -gt "${POLL_TIMEOUT_SEC}" ]; then
+              echo "::error::DMG notarization poll timed out after ${POLL_TIMEOUT_SEC}s (last: ${STATUS})"
+              exit 1
+            fi
+            if xcrun notarytool info "${SUB_ID}" \
+                 --apple-id "$APPLE_ID" \
+                 --team-id "$TEAM_ID" \
+                 --password "$NOTARY_PASSWORD" \
+                 --output-format json > "${INFO_JSON}" 2>&1; then
+              NETWORK_FAILS=0
+              STATUS=$(jq -r '.status // "Unknown"' < "${INFO_JSON}")
+              echo "  [${ELAPSED}s] status=${STATUS}"
+              case "${STATUS}" in
+                Accepted)        break ;;
+                Invalid|Rejected) break ;;
+                *)               sleep 20 ;;
+              esac
+            else
+              NETWORK_FAILS=$((NETWORK_FAILS + 1))
+              echo "::warning::notarytool info network failure #${NETWORK_FAILS}:"
+              cat "${INFO_JSON}" || true
+              if [ "${NETWORK_FAILS}" -ge 10 ]; then
+                echo "::error::10 consecutive network failures — runner connectivity is broken"
+                exit 1
+              fi
+              sleep $(( NETWORK_FAILS * 5 < 60 ? NETWORK_FAILS * 5 : 60 ))
+            fi
+          done
+
           echo "DMG notarization submission ${SUB_ID} → ${STATUS}"
-
           if [ "${STATUS}" != "Accepted" ]; then
             echo "::error::Notarization failed for DMG (status: ${STATUS}). Fetching Apple's log..."
             xcrun notarytool log "${SUB_ID}" \
@@ -1372,7 +1478,7 @@ jobs:
           xcrun stapler staple "$DMG"
           xcrun stapler validate "$DMG"
           spctl --assess --type open --context context:primary-signature -vv "$DMG" || true
-          rm -f "${SUBMIT_JSON}"
+          rm -f "${SUBMIT_JSON}" "${INFO_JSON}"
 
       # ── Clean up the temp keychain ────────────────────────────────────────
       - name: Clean up keychain
