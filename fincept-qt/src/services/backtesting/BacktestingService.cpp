@@ -78,6 +78,18 @@ void BacktestingService::execute(const QString& provider, const QString& command
             QJsonObject payload = root.contains("data") && root.value("data").isObject()
                                       ? root.value("data").toObject()
                                       : root;
+            // Some providers (optimize, walk_forward) historically returned
+            // `{success: True, data: {success: false, error: ...}}`. Surface the
+            // inner failure too so the UI doesn't render an empty result panel.
+            if (payload.contains("success") && payload.value("success").isBool()
+                && !payload.value("success").toBool()) {
+                auto err = payload.value("error").toString();
+                if (err.isEmpty())
+                    err = payload.value("message").toString("Command failed");
+                LOG_ERROR("Backtesting", QString("[%1] Provider inner error: %2").arg(ctx, err));
+                emit self->error_occurred(ctx, err);
+                return;
+            }
             LOG_INFO("Backtesting", QString("[%1] Result ready").arg(ctx));
             emit self->result_ready(provider, command, payload);
         });
@@ -115,7 +127,10 @@ void BacktestingService::load_strategies(const QString& provider) {
 }
 
 void BacktestingService::load_command_options(const QString& provider) {
-    const QString cache_key = "backtest:options:" + provider;
+    // Cache key versioned (v2) — Python option names changed (e.g. mode names,
+    // splitter names, returns analysis types) and older cached entries will
+    // serve UI strings that no longer round-trip through the provider.
+    const QString cache_key = "backtest:options:v2:" + provider;
     const QVariant cached = fincept::CacheManager::instance().get(cache_key);
     if (!cached.isNull()) {
         auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());

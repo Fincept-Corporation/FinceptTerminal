@@ -17,6 +17,8 @@
 #    include "datahub/DataHub.h"
 #    include "datahub/TopicPolicy.h"
 
+#include <QCoreApplication>
+#include <QEvent>
 #include <QEventLoop>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -694,7 +696,11 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
     QJsonObject req_body = (provider_ == "anthropic") ? build_anthropic_request(user_message, history, true)
                                                       : build_openai_request(user_message, history, true, true);
 
-    QNetworkAccessManager nam;
+    // Heap-allocate the QNAM so we can deleteLater() it and drain
+    // DeferredDelete before this function returns — a stack QNAM here used
+    // to leak socket-notifier teardown work onto the main runloop and crash
+    // hours later inside qt_mac_socket_callback. See eventloop_request().
+    auto* nam = new QNetworkAccessManager;
     QNetworkRequest req{QUrl(url)};
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     req.setRawHeader("Accept", "text/event-stream");
@@ -702,7 +708,7 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
         req.setRawHeader(it.key().toUtf8(), it.value().toUtf8());
 
     QByteArray json_data = QJsonDocument(req_body).toJson(QJsonDocument::Compact);
-    QNetworkReply* reply = nam.post(req, json_data);
+    QNetworkReply* reply = nam->post(req, json_data);
 
     QByteArray partial_line;
     QString accumulated;
@@ -832,10 +838,19 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
     loop.exec();
     timeout.stop();
 
+    auto drain_nam = [&]() {
+        reply->deleteLater();
+        nam->deleteLater();
+        // Pump DeferredDelete on this thread so socket-notifier teardown
+        // completes while a dispatcher still exists — prevents the
+        // qt_mac_socket_callback use-after-free on the main thread later.
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    };
+
     if (tool_call_detected) {
         LOG_INFO(kLlmSvcTag, "Tool call detected in stream — falling back to tool loop");
         reply->abort();
-        reply->deleteLater();
+        drain_nam();
 
         // Sentinel tells the chat screen to reset the bubble before the real reply arrives.
         on_chunk("\x01__TOOL_CALL_CLEAR__", false);
@@ -862,7 +877,7 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
         resp.error = QString("HTTP %1").arg(status);
     }
 
-    reply->deleteLater();
+    drain_nam();
 
     if (!done)
         on_chunk("", true);
