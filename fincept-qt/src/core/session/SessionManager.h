@@ -60,9 +60,12 @@ class SessionManager : public QObject {
     void save_perspectives(QSettings& source);
     void load_perspectives(QSettings& target) const;
 
-    // Last active screen
-    void set_last_screen(const QString& screen_id);
-    QString last_screen() const;
+    // Last active screen — scoped per window_id so multi-window users don't
+    // overwrite each other's restore target. Reads fall back to the legacy
+    // global key when no per-window value is recorded (migration path for
+    // existing users; auto-cleaned the first time the new key is written).
+    void set_last_screen(int window_id, const QString& screen_id);
+    QString last_screen(int window_id) const;
 
     /// Force an immediate snapshot of the current QSettings-backed state
     /// into the WorkspaceDb ring buffer. Used by closeEvent paths that

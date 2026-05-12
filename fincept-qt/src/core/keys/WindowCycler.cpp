@@ -1,6 +1,7 @@
 ﻿#include "core/keys/WindowCycler.h"
 
 #include "app/DockScreenRouter.h"
+#include "app/MonitorPickerDialog.h"
 #include "app/WindowFrame.h"
 #include "core/logging/Logger.h"
 #include "core/window/WindowRegistry.h"
@@ -73,53 +74,22 @@ void WindowCycler::cycle_panels_in_current_window(bool forward) {
 }
 
 void WindowCycler::new_window_on_next_monitor() {
+    // When more than one monitor is connected, ask the user which one. If
+    // they cancel, no window is created. With a single monitor the picker
+    // short-circuits and returns it directly. (Used by the toolbar action,
+    // Ctrl+Shift+N, the Launchpad "New Window" button, and right-click
+    // "Tear off into new window" — so the prompt covers all paths.)
     auto* src = current_focused();
+    QScreen* target = MonitorPickerDialog::pick(src, src ? src->screen() : nullptr);
+    if (!target)
+        return;
+
     auto* w = new WindowFrame(WindowFrame::next_window_id());
     w->setAttribute(Qt::WA_DeleteOnClose);
 
-    // Decision 5.6: prefer the first monitor that has no frames at all,
-    // since that's the case the user most often wants ("put it on my empty
-    // 3rd monitor"). Fall back to "first monitor not containing focused
-    // window's centre" (the pre-Phase 1 behaviour) when every monitor is
-    // populated. Final fallback: don't reposition, let the constructor's
-    // default placement run.
-    const auto screens = QGuiApplication::screens();
-    QScreen* target = nullptr;
-
-    if (screens.size() > 1) {
-        // Build a set of screens currently hosting at least one frame.
-        const auto frames = WindowRegistry::instance().frames();
-        QList<QScreen*> occupied;
-        for (WindowFrame* mw : frames) {
-            if (QScreen* s = mw->screen()) {
-                if (!occupied.contains(s))
-                    occupied.append(s);
-            }
-        }
-        // Tier 1: empty monitor.
-        for (QScreen* s : screens) {
-            if (!occupied.contains(s)) {
-                target = s;
-                break;
-            }
-        }
-        // Tier 2: monitor not containing source centre.
-        if (!target && src) {
-            const QPoint centre = src->geometry().center();
-            for (QScreen* s : screens) {
-                if (!s->geometry().contains(centre)) {
-                    target = s;
-                    break;
-                }
-            }
-        }
-    }
-
-    if (target) {
-        const QRect sg = target->availableGeometry();
-        w->resize(sg.width() * 9 / 10, sg.height() * 9 / 10);
-        w->move(sg.center() - w->rect().center());
-    }
+    const QRect sg = target->availableGeometry();
+    w->resize(sg.width() * 9 / 10, sg.height() * 9 / 10);
+    w->move(sg.center() - w->rect().center());
 
     w->show();
     w->raise();

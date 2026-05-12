@@ -213,11 +213,22 @@ void SessionManager::load_perspectives(QSettings& target) const {
     settings_.endGroup();
 }
 
-void SessionManager::set_last_screen(const QString& screen_id) {
-    settings_.setValue("session/last_screen", screen_id);
+void SessionManager::set_last_screen(int window_id, const QString& screen_id) {
+    const QString key = QString("window_%1/last_screen").arg(window_id);
+    settings_.setValue(key, screen_id);
+    // Legacy global key is no longer authoritative — clear it so future
+    // reads don't fall back to a stale window's choice. Keeping the per-
+    // window key alone is the new contract.
+    settings_.remove("session/last_screen");
 }
 
-QString SessionManager::last_screen() const {
+QString SessionManager::last_screen(int window_id) const {
+    const QString key = QString("window_%1/last_screen").arg(window_id);
+    const QString v = settings_.value(key).toString();
+    if (!v.isEmpty())
+        return v;
+    // Back-compat: fall back to the legacy global key once on first launch
+    // after upgrading. set_last_screen will overwrite it on the next nav.
     return settings_.value("session/last_screen", "dashboard").toString();
 }
 

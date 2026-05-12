@@ -89,7 +89,17 @@ void LoadingOverlay::paintEvent(QPaintEvent*) {
         QColor text_color = accent_color;
         text_color.setAlpha(200);
         p.setPen(text_color);
-        p.setFont(QFont(tokens_.font_family, 10, QFont::Bold));
+        // Use the app's resolved font (ThemeManager owns the proper
+        // cross-platform fallback chain). QFont(const QString&, …) takes
+        // a single family and fails silently for the CSS-style list
+        // stored in tokens_.font_family — on macOS that fell back to a
+        // proportional system font, which is the "fragmented" look the
+        // user reported. current_font() returns a QFont built via
+        // setFamilies() so Qt resolves the first available monospace.
+        QFont f = ThemeManager::instance().current_font();
+        f.setPixelSize(10);
+        f.setBold(true);
+        p.setFont(f);
         QRect text_rect(0, base_y + 14, width(), 24);
         p.drawText(text_rect, Qt::AlignHCenter | Qt::AlignTop, message_);
     }

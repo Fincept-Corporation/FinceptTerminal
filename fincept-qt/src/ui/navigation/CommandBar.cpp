@@ -670,8 +670,68 @@ void CommandBar::refresh_theme() {
 // ── event filter (keyboard nav in input) ─────────────────────────────────────
 
 bool CommandBar::eventFilter(QObject* obj, QEvent* event) {
-    // Navigation keys are handled via KeyConfigManager QActions (connected in setup_key_actions)
-    return QWidget::eventFilter(obj, event);
+    // The Nav* QActions in KeyConfigManager (Up/Down/Tab/Esc) are created with
+    // Qt::ApplicationShortcut context but never addAction()-ed to any widget
+    // (WindowFrame's loop skips them because action_id_for(NavNext)=="").
+    // So Qt's shortcut machinery never fires them. We intercept the keys
+    // here instead, by raw key code — that's portable across Qt versions
+    // / platforms and dodges the QKeySequence-equality quirks where the
+    // bound sequence is constructed differently than `key|modifiers`.
+
+    // QLineEdit also receives QEvent::ShortcutOverride for some keys before
+    // KeyPress; accepting it ensures KeyPress is delivered to us instead of
+    // being routed to the shortcut machinery. (Tab in particular hits
+    // QWidget::focusNextPrevChild via QEvent::KeyPress; consuming it in
+    // KeyPress is enough.)
+    if (obj != input_)
+        return QWidget::eventFilter(obj, event);
+
+    if (event->type() != QEvent::KeyPress && event->type() != QEvent::ShortcutOverride)
+        return QWidget::eventFilter(obj, event);
+
+    auto* ke = static_cast<QKeyEvent*>(event);
+    const int key = ke->key();
+    const Qt::KeyboardModifiers mods = ke->modifiers() & ~Qt::KeypadModifier;
+
+    // Map raw key to the corresponding nav handler. We only handle the
+    // default bindings here; user rebindings via Settings → Keybindings
+    // currently can't fire either (same orphan-QAction issue), so the
+    // default bindings are the de-facto contract.
+    const bool is_down   = (key == Qt::Key_Down)   && mods == Qt::NoModifier;
+    const bool is_up     = (key == Qt::Key_Up)     && mods == Qt::NoModifier;
+    const bool is_tab    = (key == Qt::Key_Tab)    && mods == Qt::NoModifier;
+    const bool is_btab   = (key == Qt::Key_Backtab); // Shift+Tab arrives as Backtab
+    const bool is_esc    = (key == Qt::Key_Escape) && mods == Qt::NoModifier;
+
+    if (!is_down && !is_up && !is_tab && !is_btab && !is_esc)
+        return QWidget::eventFilter(obj, event);
+
+    // Escape works even when dropdown is hidden (it clears + drops focus).
+    // The others only meaningfully act on a visible dropdown.
+    const bool dropdown_visible = dropdown_ && dropdown_->isVisible();
+    if (!dropdown_visible && !is_esc)
+        return QWidget::eventFilter(obj, event);
+
+    // For ShortcutOverride: accept it so the event is routed back to us as
+    // KeyPress instead of being claimed by any global shortcut. Don't run
+    // the actual handler here — that's KeyPress's job.
+    if (event->type() == QEvent::ShortcutOverride) {
+        event->accept();
+        return true;
+    }
+
+    auto trigger = [](KeyAction a) {
+        if (auto* act = KeyConfigManager::instance().action(a))
+            act->trigger();
+    };
+
+    if (is_down)        trigger(KeyAction::NavNext);
+    else if (is_up)     trigger(KeyAction::NavPrev);
+    else if (is_btab)   trigger(KeyAction::NavPrev);
+    else if (is_tab)    trigger(KeyAction::NavAccept);
+    else if (is_esc)    trigger(KeyAction::NavEscape);
+
+    return true; // consume — keep Tab from walking focus, etc.
 }
 
 // ── slots ────────────────────────────────────────────────────────────────────

@@ -1528,6 +1528,7 @@ set(APP_SOURCES
     src/app/ScreenRouter.cpp
     src/app/DockScreenRouter.cpp
     src/app/TerminalShell.cpp
+    src/app/MonitorPickerDialog.cpp
 )
 
 # All screen files compiled individually — they have local statics/functions that

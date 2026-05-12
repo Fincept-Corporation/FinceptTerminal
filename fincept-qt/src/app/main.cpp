@@ -1,6 +1,8 @@
 ﻿#include "ai_chat/LlmService.h"
+#include "app/MonitorPickerDialog.h"
 #include "app/WindowFrame.h"
 #include "app/TerminalShell.h"
+#include "core/keys/WindowCycler.h"
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
 #include "auth/PinManager.h"
@@ -108,11 +110,12 @@
 static void wire_app_lifecycle(QApplication& app, fincept::InstanceLock& lock) {
     QObject::connect(&lock, &fincept::InstanceLock::message_received,
                      [](const QStringList& /*args*/) {
-                         auto* w = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
-                         w->setAttribute(Qt::WA_DeleteOnClose);
-                         w->show();
-                         w->raise();
-                         w->activateWindow();
+                         // Route through the same picker the toolbar uses so
+                         // secondary-instance launches respect the user's
+                         // monitor choice on multi-monitor setups. Picker
+                         // short-circuits on single-monitor systems, so this
+                         // is a no-op cost there.
+                         fincept::WindowCycler::instance().new_window_on_next_monitor();
                          LOG_INFO("App", "New window opened via secondary instance request");
                      });
     QObject::connect(&app, &QApplication::lastWindowClosed, &app, []() {
@@ -316,6 +319,57 @@ int main(int argc, char* argv[]) {
     FT_MARK(30);
     fincept::wallet::TokenMetadataService::instance().load_from_storage();
     FT_MARK(35);
+
+    // ── Pre-warm the dashboard topics ────────────────────────────────────────
+    // The user spends real time on the login / setup / recovery flow before
+    // the dashboard ever paints. Kick the hub now so producers start fetching
+    // immediately; by the time the dashboard widgets subscribe in showEvent,
+    // peek() returns a fresh value and deliver_initial_value() paints it on
+    // the first frame instead of showing the loading overlay.
+    //
+    // Set is the union of topics used by every widget in the default
+    // `portfolio_manager` template plus the global indices/forex/crypto/
+    // commodities universes (so any user-customised default still hits the
+    // warm cache). Late-registered producers (the QTimer::singleShot(0)
+    // batch below) warm themselves on their own next scheduler pass once
+    // subscribers exist; pre-warming them here would orphan-log because
+    // ensure_registered_with_hub() hasn't run for them yet.
+    QTimer::singleShot(0, qApp, []() {
+        auto& hub = fincept::datahub::DataHub::instance();
+        QStringList topics;
+
+        auto add_quotes = [&](const QStringList& syms) {
+            topics.reserve(topics.size() + syms.size());
+            for (const auto& s : syms)
+                topics.append(QStringLiteral("market:quote:") + s);
+        };
+
+        // Default-template widget symbol sets (kept aligned with the widget
+        // source — if a widget's hardcoded list changes, update here too).
+        add_quotes(fincept::services::MarketDataService::indices_symbols());
+        add_quotes(fincept::services::MarketDataService::forex_symbols());
+        add_quotes(fincept::services::MarketDataService::crypto_symbols());
+        add_quotes(fincept::services::MarketDataService::commodity_symbols());
+        add_quotes({"^GSPC", "^IXIC", "^DJI", "^RUT", "^VIX", "GC=F"});           // performance
+        add_quotes({"^VIX", "SPY", "QQQ", "IWM", "TLT",
+                    "NVDA", "TSLA", "AMD", "META", "PLTR", "COIN"});              // risk_metrics
+        add_quotes({"AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META",
+                    "JPM"});                                                       // watchlist default
+
+        // Non-quote topics used by the default template.
+        topics.append(QStringLiteral("news:general"));
+        topics.append(QStringLiteral("econ:fincept:upcoming_events"));
+
+        // De-duplicate (several add_quotes calls overlap on common symbols).
+        topics.removeDuplicates();
+
+        // force=true bypasses min_interval_ms so the very first cold-start
+        // fetch isn't gated by an unrelated test refresh; producer rate
+        // limits still apply at dispatch (DataHub::flush_coalesced_requests).
+        hub.request(topics, /*force=*/true);
+        LOG_INFO("App", QString("Pre-warmed %1 dashboard topics during login screen")
+                            .arg(topics.size()));
+    });
 
     // ── Deferred service init — fires after first window paint ───────────────
     // These services back tab-specific screens (F&O, prediction markets,

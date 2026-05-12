@@ -4,6 +4,7 @@
 #include "ai_chat/AiChatScreen.h"
 #include "ai_chat/LlmService.h"
 #include "app/DockScreenRouter.h"
+#include "app/MonitorPickerDialog.h"
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
 #include "auth/PinManager.h"
@@ -481,22 +482,18 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
             return;
         }
         if (action == "new_window") {
+            // Ask the user which monitor when more than one is connected.
+            // pick() returns the only screen if there's just one, and
+            // nullptr if the user cancels the dialog — in which case no
+            // window is created.
+            QScreen* target = MonitorPickerDialog::pick(this, this->screen());
+            if (!target)
+                return;
             auto* w = new WindowFrame(WindowFrame::next_window_id());
             w->setAttribute(Qt::WA_DeleteOnClose);
-            // Place on the next available screen, or alongside this window
-            const QList<QScreen*> screens = QGuiApplication::screens();
-            if (screens.size() > 1) {
-                // Find a screen that doesn't already contain this window's centre
-                const QPoint this_centre = geometry().center();
-                for (QScreen* s : screens) {
-                    if (!s->geometry().contains(this_centre)) {
-                        const QRect sg = s->availableGeometry();
-                        w->resize(sg.width() * 9 / 10, sg.height() * 9 / 10);
-                        w->move(sg.center() - w->rect().center());
-                        break;
-                    }
-                }
-            }
+            const QRect sg = target->availableGeometry();
+            w->resize(sg.width() * 9 / 10, sg.height() * 9 / 10);
+            w->move(sg.center() - w->rect().center());
             w->show();
             w->raise();
             w->activateWindow();
@@ -781,14 +778,25 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     // Otherwise, navigate to dashboard as default.
     auto& auth_mgr = auth::AuthManager::instance();
     if (auth_mgr.is_authenticated() || auth_mgr.is_loading()) {
-        // If user is authenticated and has a PIN, show lock screen first.
-        // If no PIN, on_auth_state_changed will route to PIN setup.
-        if (auth_mgr.is_authenticated() && auth::PinManager::instance().has_pin()) {
+        // If user is authenticated and has a PIN, show lock screen first —
+        // UNLESS this is an additional window opened while an existing
+        // window has already cleared the PIN gate this session.
+        // pin_gate_cleared_ was bootstrapped above from the process-wide
+        // InactivityGuard flag (which is the single source of truth for
+        // "is the terminal locked?"); skipping the prompt here just
+        // mirrors the unlocked state into the new frame.
+        if (auth_mgr.is_authenticated() && auth::PinManager::instance().has_pin()
+            && !pin_gate_cleared_) {
             LOG_INFO("WindowFrame", "Session restored — showing PIN unlock");
             lock_screen_->show_unlock();
             locked_ = true;
             set_shell_visible(false);
             stack_->setCurrentIndex(3);
+        } else if (auth_mgr.is_authenticated() && auth::PinManager::instance().has_pin()) {
+            LOG_INFO("WindowFrame",
+                     "Session already unlocked — skipping PIN prompt for additional window");
+            set_shell_visible(true);
+            stack_->setCurrentIndex(1);
         } else if (auth_mgr.is_authenticated()) {
             // Authenticated but no PIN yet — will be caught by on_auth_state_changed
             on_auth_state_changed();
@@ -801,8 +809,9 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
             dock_router_->navigate("dashboard");
             LOG_INFO("WindowFrame", "Applied clean default dock layout");
         } else {
-            // Restore last-active screen as the focused tab and sync tab bar
-            const QString last = SessionManager::instance().last_screen();
+            // Restore last-active screen as the focused tab and sync tab bar.
+            // Per-window key so multi-window users don't override each other.
+            const QString last = SessionManager::instance().last_screen(window_id_);
             if (!last.isEmpty()) {
                 auto* dw = dock_router_->find_dock_widget(last);
                 if (dw && !dw->isClosed()) {
@@ -1545,15 +1554,25 @@ layout::FrameLayout WindowFrame::capture_layout() const {
             fl.active_panel = uuid;
     }
 
-    // Per-panel state. Walk every dock widget the manager knows about
-    // (not just openedDockWidgets) — closed-but-registered panels still
-    // belong in the layout so reopen restores their state. The router's
-    // panel_uuid_for() returns the stable PanelInstanceId minted at
-    // create_dock_widget() time.
+    // Per-panel state. Walk every dock widget the manager knows about,
+    // but skip the ones currently closed. The dock manager holds two
+    // populations:
+    //   1. Panels the user has actually opened (visible, or visible then
+    //      user-closed).
+    //   2. Placeholder shells pre-registered by ensure_all_registered() so
+    //      restoreState can match them by objectName — these sit as hidden
+    //      tabs in a single shared dock area and were never user-opened.
+    //
+    // Capturing population (2) silently poisoned the autosave: on the next
+    // apply_layout() the placeholders were re-injected as visible tabs in
+    // the source window (Profile, About, etc. would all appear next to
+    // the user's actual panel). Per-panel state for genuinely user-closed
+    // tabs is already persisted via save_screen_state(), so dropping them
+    // here is non-destructive — reopen restores the screen state from disk.
     for (const auto& entry : dock_manager_->dockWidgetsMap().toStdMap()) {
         const QString& id = entry.first;
         ads::CDockWidget* dw = entry.second;
-        if (!dw)
+        if (!dw || dw->isClosed())
             continue;
 
         layout::PanelState ps;

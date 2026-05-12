@@ -319,7 +319,8 @@ void DockScreenRouter::navigate(const QString& id, bool exclusive) {
     apply_ads_theme();
 
     current_id_ = id;
-    SessionManager::instance().set_last_screen(id);
+    if (auto* frame = qobject_cast<WindowFrame*>(parent()))
+        SessionManager::instance().set_last_screen(frame->window_id(), id);
     LOG_INFO("DockRouter", "Navigated to: " + id);
     emit screen_changed(id);
 }
@@ -378,7 +379,8 @@ void DockScreenRouter::tab_into(const QString& id) {
     dw->setAsCurrentTab();
 
     current_id_ = id;
-    SessionManager::instance().set_last_screen(id);
+    if (auto* frame = qobject_cast<WindowFrame*>(parent()))
+        SessionManager::instance().set_last_screen(frame->window_id(), id);
     LOG_INFO("DockRouter", "Tabbed into: " + id);
     emit screen_changed(id);
 }
@@ -482,6 +484,10 @@ void DockScreenRouter::ensure_all_registered() {
             all_ids.append(it.key());
     }
 
+    // Bulk register all factories. The transient visibilityChanged(true)
+    // each addDockWidget emits would otherwise eagerly materialise every
+    // screen — see suppress_visibility_materialize_ docs.
+    suppress_visibility_materialize_ = true;
     ads::CDockAreaWidget* first_area = nullptr;
     for (const QString& id : all_ids) {
         if (!dock_widgets_.contains(id)) {
@@ -496,6 +502,7 @@ void DockScreenRouter::ensure_all_registered() {
             dw->toggleView(false); // start hidden
         }
     }
+    suppress_visibility_materialize_ = false;
     // Apply theme directly to all title bars and tabs created above.
     apply_ads_theme();
 }
@@ -1209,6 +1216,14 @@ ads::CDockWidget* DockScreenRouter::create_dock_widget(const QString& id) {
     // Materialize on first show; save state on hide.
     connect(dw, &ads::CDockWidget::visibilityChanged, this, [this, id](bool visible) {
         if (visible) {
+            // Bulk-register paths (ensure_all_registered, prepare_dock_widget)
+            // transiently make the widget visible just to register it with the
+            // manager before hiding it again with toggleView(false). Skip the
+            // factory call in that window — the user hasn't asked to see this
+            // panel yet, and materialising every registered screen at startup
+            // is the cold-boot bug we're guarding against.
+            if (suppress_visibility_materialize_)
+                return;
             materialize_screen(id);
         } else {
             save_screen_state(id);
@@ -1240,8 +1255,13 @@ void DockScreenRouter::prepare_dock_widget(const QString& id) {
     // ensure_all_registered's "tab into shared area, hide" pattern so
     // we don't generate N vertical splits during the pre-restore pass.
     if (manager_) {
+        // Same rationale as ensure_all_registered: the transient
+        // visibilityChanged(true) the addDockWidget emits must not
+        // materialise the screen factory before the layout is restored.
+        suppress_visibility_materialize_ = true;
         manager_->addDockWidget(ads::CenterDockWidgetArea, dw);
         dw->toggleView(false); // hidden until restoreState repositions it
+        suppress_visibility_materialize_ = false;
     }
 }
 

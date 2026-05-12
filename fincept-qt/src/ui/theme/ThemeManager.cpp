@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 
 #include <QApplication>
+#include <QFontInfo>
 #include <QWidget>
 
 namespace fincept::ui {
@@ -48,13 +49,77 @@ ThemeManager& ThemeManager::instance() {
     return inst;
 }
 
+QString ThemeManager::qss_font_family_list() const {
+    QStringList parts;
+    parts.reserve(font_families_.size());
+    for (const QString& f : font_families_) {
+        // CSS spec: generic families (monospace, serif, sans-serif) are
+        // unquoted; named families get double-quoted to survive families
+        // with spaces ("SF Mono", "Cascadia Mono").
+        if (f.compare("monospace", Qt::CaseInsensitive) == 0 ||
+            f.compare("serif", Qt::CaseInsensitive) == 0 ||
+            f.compare("sans-serif", Qt::CaseInsensitive) == 0) {
+            parts.append(f.toLower());
+        } else {
+            parts.append(QStringLiteral("\"%1\"").arg(f));
+        }
+    }
+    return parts.join(QStringLiteral(", "));
+}
+
+QStringList ThemeManager::build_font_chain(const QString& preferred) {
+    // Cross-platform monospace fallback cascade. Qt's font matcher walks
+    // this list and picks the first family installed on the running
+    // system. The macOS entries (SF Mono / Menlo / Monaco) come first
+    // because that's where the original "Consolas only" default broke —
+    // macOS doesn't ship Consolas, the silent fallback was a proportional
+    // system font, and QLineEdit/QTextEdit rendered with mismatched
+    // glyph metrics (the visible "fragmented" text symptom).
+    static const QStringList kDefaults = {
+        QStringLiteral("SF Mono"),           // macOS Mojave+ (system monospace)
+        QStringLiteral("Menlo"),             // macOS standard
+        QStringLiteral("Monaco"),            // macOS classic
+        QStringLiteral("Cascadia Mono"),     // Windows 11 + Terminal
+        QStringLiteral("Cascadia Code"),     // Windows 11
+        QStringLiteral("Consolas"),          // Windows
+        QStringLiteral("DejaVu Sans Mono"),  // Linux (Debian/Ubuntu)
+        QStringLiteral("Liberation Mono"),   // Linux (Fedora/RHEL)
+        QStringLiteral("Source Code Pro"),   // Adobe — common 3rd-party
+        QStringLiteral("Courier New"),       // universal but ugly last resort
+        QStringLiteral("monospace"),         // Qt generic family
+    };
+    QStringList chain;
+    const QString trimmed = preferred.trimmed();
+    if (!trimmed.isEmpty()) {
+        // Allow the caller to pass a CSS-style list like
+        // "'Consolas','Courier New',monospace" without breaking the
+        // single-string font matcher — split, strip quotes, dedup.
+        const auto parts = trimmed.split(',', Qt::SkipEmptyParts);
+        for (const QString& raw : parts) {
+            QString name = raw.trimmed();
+            if (name.startsWith('\'') || name.startsWith('"'))
+                name = name.mid(1);
+            if (name.endsWith('\'') || name.endsWith('"'))
+                name.chop(1);
+            name = name.trimmed();
+            if (!name.isEmpty() && !chain.contains(name, Qt::CaseInsensitive))
+                chain.append(name);
+        }
+    }
+    for (const QString& f : kDefaults) {
+        if (!chain.contains(f, Qt::CaseInsensitive))
+            chain.append(f);
+    }
+    return chain;
+}
+
 void ThemeManager::apply_theme(const QString& /*name*/) {
     current_ = THEME_OBSIDIAN;
     rebuild_and_apply();
 }
 
 void ThemeManager::apply_font(const QString& family, int size_px) {
-    font_family_ = family;
+    font_families_ = build_font_chain(family);
     font_size_px_ = (size_px > 0) ? size_px : 14;
     rebuild_and_apply();
 }
@@ -73,7 +138,7 @@ void ThemeManager::apply_density(const QString& density) {
 void ThemeManager::apply_typography_and_density(const QString& family, int size_px,
                                                 const QString& density) {
     if (!family.isEmpty())
-        font_family_ = family;
+        font_families_ = build_font_chain(family);
     font_size_px_ = (size_px > 0) ? size_px : 14;
     if (density == "Compact")
         density_pad_ = 2;
@@ -93,20 +158,36 @@ QStringList ThemeManager::available_densities() {
 }
 
 QFont ThemeManager::current_font() const {
-    QFont f(font_family_);
+    QFont f;
+    // setFamilies (Qt 5.13+) accepts an explicit fallback list — Qt walks
+    // it natively and picks the first available family. This is the right
+    // primitive on macOS where the legacy single-string ctor with a
+    // missing primary (e.g. "Consolas") silently resolved to a proportional
+    // system font.
+    f.setFamilies(font_families_);
+    f.setStyleHint(QFont::Monospace);
+    f.setStyleStrategy(QFont::PreferAntialias);
     f.setPixelSize(font_size_px_);
     return f;
 }
 
 void ThemeManager::rebuild_and_apply() {
-    LOG_INFO("ThemeManager", QString("rebuild_and_apply: font=%1 size=%2px density_pad=%3")
-        .arg(font_family_).arg(font_size_px_).arg(density_pad_));
+    LOG_INFO("ThemeManager", QString("rebuild_and_apply: families=[%1] size=%2px density_pad=%3")
+        .arg(font_families_.join(", ")).arg(font_size_px_).arg(density_pad_));
 
-    QFont f(font_family_);
+    QFont f;
+    f.setFamilies(font_families_);
     f.setStyleHint(QFont::Monospace);
+    // PreferAntialias forces grayscale AA over subpixel, which on macOS
+    // dark themes is noticeably cleaner — subpixel AA on dark backgrounds
+    // produces coloured fringes around glyphs that look "fragmented" on
+    // small text sizes. Cross-platform safe (Windows/Linux ignore where
+    // the system chooses the AA strategy itself).
+    f.setStyleStrategy(QFont::PreferAntialias);
     f.setPixelSize(font_size_px_);
     if (qApp->font() != f) {
-        LOG_INFO("ThemeManager", "Applying new QFont to qApp");
+        LOG_INFO("ThemeManager", QString("Applying new QFont to qApp (resolved family: %1)")
+                                     .arg(QFontInfo(f).family()));
         qApp->setFont(f);
     }
 
@@ -441,7 +522,7 @@ QString ThemeManager::build_global_qss() const {
         .arg(t.bg_raised)       // %12
         .arg(t.text_dim)        // %13
         .arg(t.row_alt)         // %14
-        .arg(font_family_)      // %15
+        .arg(qss_font_family_list())  // %15
         .arg(font_size_px_)     // %16
         .arg(t.text_on_accent)  // %17
         .arg(t.icon_dim)        // %18

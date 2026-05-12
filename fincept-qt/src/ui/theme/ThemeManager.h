@@ -4,6 +4,7 @@
 #include <QFont>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 
 namespace fincept::ui {
 
@@ -66,8 +67,25 @@ class ThemeManager : public QObject {
     void rebuild_and_apply();
     QString build_global_qss() const;
 
+    /// Build a platform-aware monospace fallback chain by prepending the
+    /// user's preferred family (if any) to a cross-platform default list.
+    /// Qt's QFont::setFamilies / QSS resolver picks the first available
+    /// font on the running system. Including the macOS natives (SF Mono,
+    /// Menlo) is what stops text fields from "fragmenting" — on macOS,
+    /// Consolas isn't installed and the silent fallback to a proportional
+    /// system font breaks the glyph metrics QLineEdit/QTextEdit assume.
+    static QStringList build_font_chain(const QString& preferred);
+
+    /// Format `font_families_` as a CSS `font-family` value
+    /// (`"Family1", "Family2", monospace`) for the global QSS output. Qt's
+    /// CSS resolver walks the same way QFont::setFamilies does.
+    QString qss_font_family_list() const;
+
     ThemeTokens current_;
-    QString font_family_ = "Consolas";
+    /// Resolved font fallback chain. `font_families_.first()` is the user's
+    /// preferred family (or the cross-platform default head); subsequent
+    /// entries are the fallback cascade.
+    QStringList font_families_ = build_font_chain({});
     int font_size_px_ = 14;
     int density_pad_ = 4;        // px padding driven by density setting
     mutable QString cached_qss_; // last built QSS — skip rebuild if tokens unchanged

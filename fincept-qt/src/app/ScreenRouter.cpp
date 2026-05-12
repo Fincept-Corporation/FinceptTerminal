@@ -1,5 +1,6 @@
 #include "app/ScreenRouter.h"
 
+#include "app/WindowFrame.h"
 #include "core/logging/Logger.h"
 #include "core/session/SessionManager.h"
 
@@ -22,7 +23,8 @@ void ScreenRouter::navigate(const QString& id) {
     if (it != screens_.end()) {
         current_id_ = id;
         stack_->setCurrentWidget(it.value());
-        SessionManager::instance().set_last_screen(id);
+        if (auto* frame = qobject_cast<WindowFrame*>(parent()))
+            SessionManager::instance().set_last_screen(frame->window_id(), id);
         LOG_INFO("Router", "Navigated to: " + id);
         emit screen_changed(id);
         return;

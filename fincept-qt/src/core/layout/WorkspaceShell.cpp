@@ -185,6 +185,7 @@ int WorkspaceShell::apply(const Workspace& workspace) {
         // Find an existing frame matching this window_id (and not already
         // claimed by an earlier FrameLayout in this same apply() call).
         fincept::WindowFrame* target = nullptr;
+        bool spawned = false;
         for (auto* f : frames_now) {
             if (f && !bound.contains(f) && f->frame_uuid() == fl.window_id) {
                 target = f;
@@ -204,16 +205,23 @@ int WorkspaceShell::apply(const Workspace& workspace) {
             target->setAttribute(Qt::WA_DeleteOnClose);
             target->show();
             frames_now.append(target);
+            spawned = true;
         }
         bound.insert(target);
 
-        // Apply geometry from the matched variant (if any). With UUID
-        // round-trip the lookup hits both for reused live frames and for
-        // freshly-spawned ones. We bind the frame to its saved monitor
-        // FIRST (via stable_id lookup), then apply geometry — that way the
-        // saved coords are interpreted on the correct screen even when the
-        // user has reordered monitors since the layout was saved.
-        if (variant) {
+        // Apply geometry from the matched variant — but ONLY when we just
+        // spawned the frame. For an already-live frame the user is looking
+        // at, its position was set by the WindowFrame constructor's
+        // QSettings restore (and the user may have moved it). Re-applying
+        // the workspace's saved screen here teleports the window mid-
+        // session — e.g. on PIN unlock, load_last_or_default() runs and
+        // would yank the window from monitor 1 (where the lock screen sat)
+        // to monitor 2 (where the snapshot says it lived last). The user
+        // experiences this as the app "jumping" to another monitor.
+        //
+        // Freshly-spawned frames need the geometry hint because their
+        // constructor had no QSettings row for the adopted UUID.
+        if (variant && spawned) {
             const auto scr_it = variant->frame_screens.constFind(fl.window_id);
             if (scr_it != variant->frame_screens.constEnd()) {
                 if (QScreen* saved_screen =

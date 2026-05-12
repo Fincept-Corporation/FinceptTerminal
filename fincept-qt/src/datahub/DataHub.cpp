@@ -804,17 +804,24 @@ void DataHub::request(const QString& topic, bool force) {
 }
 
 void DataHub::request(const QStringList& topics, bool force) {
-    // Apply gates under the lock, then buffer into coalesce_pending_. The
-    // coalesce timer (kCoalesceWindowMs) merges bursts of request() calls —
-    // e.g., dashboard + markets subscribing simultaneously — into one
-    // producer->refresh() per producer.
+    // Apply per-topic gates under the lock, then buffer into
+    // coalesce_pending_. The coalesce timer (kCoalesceWindowMs) merges
+    // bursts of request() calls — e.g., dashboard + markets subscribing
+    // simultaneously — into one producer->refresh() per producer.
     //
-    // Gates applied here (same as before — gating is at buffer time, not
-    // flush time, because in_flight/min_interval reflect intent to fetch):
+    // Per-topic gates applied here (intent-to-fetch):
     //   - in_flight: always skip; the producer is already working.
     //   - min_interval_ms: skipped when `force=true` (user-driven refresh).
-    //   - max_requests_per_sec: always honoured — force doesn't open the
-    //     rate-limit floodgate.
+    //
+    // Per-producer rate limit (`max_requests_per_sec`) is enforced at
+    // dispatch in flush_coalesced_requests(), NOT here. A single
+    // coalesce flush issues exactly one refresh() call per producer
+    // regardless of how many topics it batches, so the rate limit only
+    // needs to gate dispatch. Gating at intake silently dropped every
+    // topic past the first when a widget cold-started N subscriptions
+    // back-to-back within the rate window — only the first cleared, the
+    // rest fell off the floor and spun in their loading state until the
+    // next 1 s scheduler tick (which had the same per-topic bug).
     int accepted = 0;
     bool need_arm = false;
     QStringList orphan_topics;
@@ -834,15 +841,8 @@ void DataHub::request(const QStringList& topics, bool force) {
                 orphan_topics.append(topic);
                 continue;
             }
-            const int rps = p->max_requests_per_sec();
-            if (rps > 0) {
-                const qint64 last = producer_last_refresh_ms_.value(p, 0);
-                const qint64 min_gap = 1000 / std::max(1, rps);
-                if (last > 0 && (t - last) < min_gap) continue;
-            }
             st.in_flight = true;
             st.last_refresh_request_ms = t;
-            producer_last_refresh_ms_[p] = t;
             // Buffer instead of dispatching — duplicate topics within the
             // window are naturally prevented by the in_flight gate above.
             coalesce_pending_[p].append(topic);
@@ -882,10 +882,45 @@ void DataHub::request(const QStringList& topics, bool force) {
 
 void DataHub::flush_coalesced_requests() {
     QHash<Producer*, QStringList> work;
+    bool defer_remaining = false;
     {
         QMutexLocker lock(&mutex_);
-        work.swap(coalesce_pending_);
+        if (coalesce_pending_.isEmpty())
+            return;
+        const qint64 t = now_ms();
+        // Per-producer rate limit enforced HERE (at the dispatch boundary)
+        // rather than per-topic at intake. One refresh() per producer per
+        // flush, so checking once per producer is the correct granularity.
+        // Producers caught inside the rate window keep their topics in
+        // coalesce_pending_ and the timer is re-armed below.
+        for (auto it = coalesce_pending_.begin(); it != coalesce_pending_.end(); ) {
+            Producer* p = it.key();
+            const int rps = p->max_requests_per_sec();
+            if (rps > 0) {
+                const qint64 last = producer_last_refresh_ms_.value(p, 0);
+                const qint64 min_gap = 1000 / std::max(1, rps);
+                if (last > 0 && (t - last) < min_gap) {
+                    defer_remaining = true;
+                    ++it;
+                    continue;
+                }
+            }
+            work.insert(p, std::move(it.value()));
+            producer_last_refresh_ms_[p] = t;
+            it = coalesce_pending_.erase(it);
+        }
     }
+
+    if (defer_remaining) {
+        // Re-arm the timer on the hub thread so the deferred batch flushes
+        // after another coalesce window. Producer rate limits this short
+        // (10 rps → 100 ms) almost always clear inside one window.
+        QMetaObject::invokeMethod(this, [this]() {
+            if (!coalesce_timer_.isActive())
+                coalesce_timer_.start();
+        }, Qt::QueuedConnection);
+    }
+
     if (work.isEmpty())
         return;
 
@@ -937,6 +972,11 @@ void DataHub::scheduler_body() {
                 ++it;
         }
 
+        // Phase 1 — collect eligible topics by producer (no rate-limit
+        // gate yet). The per-producer rate limit applies to refresh()
+        // *calls*, not to topic enrolment; one refresh() carries the
+        // whole batch.
+        QHash<Producer*, QStringList> candidates;
         for (auto it = subscriptions_.begin(); it != subscriptions_.end(); ++it) {
             const QString& topic = it.key();
             if (it.value().isEmpty()) continue;
@@ -954,20 +994,31 @@ void DataHub::scheduler_body() {
 
             Producer* p = find_producer(topic);
             if (!p) continue;
+            candidates[p].append(topic);
+        }
 
-            // Per-producer rate limit: if producer caps at N req/sec,
-            // ensure at least (1000/N) ms between refresh() calls to it.
+        // Phase 2 — apply per-producer rate limit ONCE, then promote
+        // the producer's whole batch into `work`. If a producer is
+        // inside its rate window, skip it this tick; its topics stay
+        // subscribed and will be picked up on the next tick (1 s away,
+        // well past any reasonable min_gap).
+        for (auto it = candidates.begin(); it != candidates.end(); ++it) {
+            Producer* p = it.key();
             const int rps = p->max_requests_per_sec();
             if (rps > 0) {
                 const qint64 last = producer_last_refresh_ms_.value(p, 0);
                 const qint64 min_gap = 1000 / std::max(1, rps);
                 if (last > 0 && (t - last) < min_gap) continue;
             }
-
-            st.in_flight = true;
-            st.last_refresh_request_ms = t;
+            QStringList& batch = work[p];
+            batch.reserve(batch.size() + it.value().size());
+            for (const QString& topic : it.value()) {
+                auto& st = state_for(topic);
+                st.in_flight = true;
+                st.last_refresh_request_ms = t;
+                batch.append(topic);
+            }
             producer_last_refresh_ms_[p] = t;
-            work[p].append(topic);
         }
     }
 

@@ -1,6 +1,7 @@
 ﻿#include "app/TerminalShell.h"
 
 #include "ai_chat/ChatBubbleController.h"
+#include "app/WindowFrame.h"
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
 #include "auth/PinManager.h"
@@ -25,6 +26,8 @@
 #include "storage/workspace/WorkspaceSnapshotRing.h"
 
 #include <QDateTime>
+#include <QGuiApplication>
+#include <QScreen>
 #include <QUuid>
 
 namespace fincept {
@@ -89,6 +92,51 @@ void TerminalShell::initialise() {
     // connections are in place before any frame restores. Phase 6's full
     // workspace-variant matcher will subscribe to topology_changed.
     (void) MonitorWatcher::instance();
+    // Rescue off-screen windows when monitors come or go at runtime. The
+    // raw `screenAdded` / `screenRemoved` signals fire mid-burst (some
+    // OSes emit removed-then-added on dock unplug/replug); MonitorWatcher
+    // debounces to a single topology_changed once the dust has settled.
+    QObject::connect(&MonitorWatcher::instance(), &MonitorWatcher::topology_changed,
+                     &MonitorWatcher::instance(), [](const layout::MonitorTopologyKey&) {
+        const auto screens = QGuiApplication::screens();
+        if (screens.isEmpty())
+            return;
+        for (WindowFrame* w : WindowRegistry::instance().frames()) {
+            if (!w)
+                continue;
+            const QRect frame = w->frameGeometry();
+            // A window is "rescued" only if no currently-connected screen's
+            // available geometry intersects it at all — i.e. it would be
+            // completely invisible. Partial overlap is fine; the user can
+            // still grab the title bar.
+            bool on_some_screen = false;
+            for (QScreen* s : screens) {
+                if (s && s->availableGeometry().intersects(frame)) {
+                    on_some_screen = true;
+                    break;
+                }
+            }
+            if (on_some_screen)
+                continue;
+            QScreen* target = QGuiApplication::primaryScreen();
+            if (!target)
+                target = screens.first();
+            if (!target)
+                continue;
+            const QRect ag = target->availableGeometry();
+            // Keep the window's size if it fits, otherwise clamp to 9/10
+            // of the target screen (same heuristic the constructor and the
+            // new-window path use).
+            QSize sz = w->size();
+            sz.setWidth(qMin(sz.width(), ag.width() * 9 / 10));
+            sz.setHeight(qMin(sz.height(), ag.height() * 9 / 10));
+            w->resize(sz);
+            w->move(ag.center() - QPoint(sz.width() / 2, sz.height() / 2));
+            LOG_INFO(kShellTag,
+                     QString("Rescued window %1 onto '%2' after topology change")
+                         .arg(w->window_id()).arg(target->name()));
+        }
+    });
     FT_TS(109);
     // Phase 1b skeleton: LockOverlayController construction. Currently a
     // no-op — the full lift is deferred (see auth/lock/LockOverlayController.h

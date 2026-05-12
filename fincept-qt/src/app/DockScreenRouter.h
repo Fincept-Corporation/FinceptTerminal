@@ -196,6 +196,16 @@ class DockScreenRouter : public QObject {
     /// by `~DockScreenRouter` indirectly via PanelRegistry::unregister_panel.
     QHash<QString, PanelInstanceId> instance_ids_;
 
+    /// When true, the visibilityChanged-→-materialize_screen autowire on
+    /// every CDockWidget short-circuits. Set during bulk widget registration
+    /// (ensure_all_registered / prepare_dock_widget) so adding a freshly-
+    /// created dock widget — which transiently emits visibilityChanged(true)
+    /// before toggleView(false) hides it — doesn't cascade into eagerly
+    /// instantiating every screen factory. Without this guard a multi-window
+    /// session's startup constructs all ~46 screens up front (DataHub
+    /// subscriptions, OpenGL surfaces, etc.), defeating the lazy intent.
+    bool suppress_visibility_materialize_ = false;
+
     // Phase 4 grid removal: the four `grid_*_` CDockAreaWidget pointers and
     // `panel_count_` int are gone. ADS handles arbitrary splits natively;
     // navigate() now tabs new panels into the focused dock area or creates
