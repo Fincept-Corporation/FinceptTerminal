@@ -136,7 +136,8 @@ ApiResponse<QJsonObject> FyersBroker::modify_order(const BrokerCredentials& cred
                                                    const QJsonObject& modifications) {
     QJsonObject payload = modifications;
     payload["id"] = order_id;
-    auto resp = BrokerHttp::instance().put_json(QString(base_url()) + "/api/v3/orders", payload, auth_headers(creds));
+    auto resp =
+        BrokerHttp::instance().patch_json(QString(base_url()) + "/api/v3/orders/sync", payload, auth_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
         return {false, std::nullopt, resp.error, ts};
