@@ -148,7 +148,7 @@ ApiResponse<QJsonObject> FyersBroker::modify_order(const BrokerCredentials& cred
 
 ApiResponse<QJsonObject> FyersBroker::cancel_order(const BrokerCredentials& creds, const QString& order_id) {
     QJsonObject payload{{"id", order_id}};
-    auto resp = BrokerHttp::instance().del(QString(base_url()) + "/api/v3/orders", auth_headers(creds), payload);
+    auto resp = BrokerHttp::instance().del(QString(base_url()) + "/api/v3/orders/sync", auth_headers(creds), payload);
     int64_t ts = now_ts();
     if (!resp.success)
         return {false, std::nullopt, resp.error, ts};
