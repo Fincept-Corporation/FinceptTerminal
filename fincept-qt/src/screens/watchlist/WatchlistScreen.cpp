@@ -11,6 +11,8 @@
 #    include "datahub/DataHub.h"
 #    include "datahub/DataHubMetaTypes.h"
 
+#include <QFile>
+#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QHideEvent>
 #include <QInputDialog>
@@ -18,6 +20,7 @@
 #include <QPointer>
 #include <QShowEvent>
 #include <QSplitter>
+#include <QTextStream>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -246,7 +249,13 @@ QWidget* WatchlistScreen::build_main_panel() {
 
     del_wl_btn_ = new QPushButton("DELETE LIST");
     connect(del_wl_btn_, &QPushButton::clicked, this, &WatchlistScreen::on_delete_watchlist);
+    del_wl_btn_->setEnabled(false);
     tl->addWidget(del_wl_btn_);
+
+    export_csv_btn_ = new QPushButton("EXPORT CSV");
+    connect(export_csv_btn_, &QPushButton::clicked, this, &WatchlistScreen::on_export_csv);
+    export_csv_btn_->setEnabled(false);
+    tl->addWidget(export_csv_btn_);
 
     lay->addWidget(top_bar_);
 
@@ -379,6 +388,9 @@ void WatchlistScreen::refresh_theme() {
 
     if (del_wl_btn_)
         del_wl_btn_->setStyleSheet(danger_btn_style());
+
+    if (export_csv_btn_)
+        export_csv_btn_->setStyleSheet(std_btn_style());
 
     // Add bar
     if (add_bar_)
@@ -569,6 +581,8 @@ void WatchlistScreen::on_watchlist_selected(int row) {
     panel_title_->setText(watchlists_[row].name.toUpper());
     load_stocks();
     ScreenStateManager::instance().notify_changed(this);
+    if (del_wl_btn_) del_wl_btn_->setEnabled(true);
+    if (export_csv_btn_) export_csv_btn_->setEnabled(true);
 }
 
 void WatchlistScreen::on_add_watchlist() {
@@ -601,6 +615,8 @@ void WatchlistScreen::on_delete_watchlist() {
     table_->clear_data();
     panel_title_->setText("Select a watchlist");
     stock_count_->clear();
+    if (del_wl_btn_) del_wl_btn_->setEnabled(false);
+    if (export_csv_btn_) export_csv_btn_->setEnabled(false);
     load_watchlists();
 }
 
@@ -640,6 +656,69 @@ void WatchlistScreen::on_remove_stock() {
 void WatchlistScreen::on_refresh() {
     if (!current_wl_id_.isEmpty()) {
         fetch_quotes();
+    }
+}
+
+void WatchlistScreen::on_export_csv() {
+    if (current_wl_id_.isEmpty())
+        return;
+
+    QString wl_name;
+    for (const auto& wl : watchlists_) {
+        if (wl.id == current_wl_id_) {
+            wl_name = wl.name;
+            break;
+        }
+    }
+    
+    if (wl_name.isEmpty()) return;
+
+    const QString suggested = wl_name + QStringLiteral(".csv");
+
+    const QString path = QFileDialog::getSaveFileName(
+        this, tr("Export Watchlist to CSV"), suggested,
+        tr("CSV Files (*.csv)"));
+    if (path.isEmpty())
+        return;
+
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Export failed"),
+                             tr("Could not open file for writing:\n%1")
+                                 .arg(path));
+        return;
+    }
+
+    QTextStream out(&f);
+    out.setEncoding(QStringConverter::Utf8);
+
+    out << "SYMBOL,NAME,PRICE,CHANGE,CHG %,HIGH,LOW,VOLUME\n";
+
+    auto csv_escape = [](const QString& s) -> QString {
+        if (s.contains(',') || s.contains('"') || s.contains('\n')) {
+            QString e = s;
+            e.replace('"', QStringLiteral("\"\""));
+            return '"' + e + '"';
+        }
+        return s;
+    };
+
+    for (const auto& s : stocks_) {
+        const auto it = row_cache_.find(s.symbol);
+        if (it == row_cache_.end()) {
+            out << csv_escape(s.symbol) << ','
+                << csv_escape(s.name) << ",,,,,,\n";
+            continue;
+        }
+        const auto& q = it.value();
+        out << csv_escape(q.symbol) << ','
+            << csv_escape(q.name.isEmpty() ? s.name : q.name) << ','
+            << QString::number(q.price, 'f', 2) << ','
+            << QString::number(q.change, 'f', 2) << ','
+            << QString::number(q.change_pct, 'f', 2) << ','
+            << QString::number(q.high, 'f', 2) << ','
+            << QString::number(q.low, 'f', 2) << ','
+            << QString::number(static_cast<qint64>(q.volume)) << '\n';
     }
 }
 
