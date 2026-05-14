@@ -1,7 +1,7 @@
 #pragma once
 
 #include "mcp/McpClient.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 
 #include <QLabel>
 #include <QLineEdit>

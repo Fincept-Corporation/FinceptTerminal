@@ -26,10 +26,13 @@ bool AliceBlueBroker::is_token_expired(const BrokerHttpResponse& resp) {
     if (resp.status_code == 401 || resp.status_code == 403)
         return true;
     if (!resp.json.isEmpty()) {
-        QString status = resp.json["status"].toString();
-        if (status == "Not_ok" || status == "Not_Ok" || status == "NOT_OK")
+        // ANT API returns the status indicator as `stat` (not `status`); accept
+        // both so detection works against legacy and current endpoints.
+        const QString stat = resp.json["stat"].toString();
+        const QString status = resp.json["status"].toString();
+        const QString s = !stat.isEmpty() ? stat : status;
+        if (s == "Not_Ok" || s == "Not_ok" || s == "NOT_OK")
             return true;
-        // emsg containing auth-related text
         QString emsg = resp.json["emsg"].toString().toLower();
         if (emsg.contains("session") || emsg.contains("token") || emsg.contains("unauthori"))
             return true;
@@ -56,6 +59,9 @@ QString AliceBlueBroker::checked_error(const BrokerHttpResponse& resp, const QSt
     return fallback;
 }
 
+// Vendor API product enum: INTRADAY, LONGTERM, MTF. The legacy NRML token
+// is from the ANT-Web product line and isn't accepted on /open-api/od/v1/* —
+// map Margin → MTF (margin trading facility, the new equivalent).
 QString AliceBlueBroker::ab_product(ProductType p) {
     switch (p) {
         case ProductType::Intraday:
@@ -63,7 +69,7 @@ QString AliceBlueBroker::ab_product(ProductType p) {
         case ProductType::Delivery:
             return "LONGTERM";
         case ProductType::Margin:
-            return "NRML";
+            return "MTF";
         default:
             return "INTRADAY";
     }
@@ -385,56 +391,65 @@ ApiResponse<QVector<BrokerPosition>> AliceBlueBroker::get_positions(const Broker
 ApiResponse<QVector<BrokerHolding>> AliceBlueBroker::get_holdings(const BrokerCredentials& creds) {
     int64_t ts = now_ts();
     auto hdrs = auth_headers(creds);
-
-    auto resp = BrokerHttp::instance().get(QString(API_BASE) + "/open-api/od/v1/holdings/CNC", hdrs);
-
-    if (!resp.success)
-        return {false, std::nullopt, checked_error(resp, "Network error"), ts};
-    if (is_token_expired(resp))
-        return {false, std::nullopt, "[TOKEN_EXPIRED]", ts};
-
-    if (resp.json["status"].toString() != "Ok") {
-        QString msg = resp.json["message"].toString();
-        if (msg.contains("No holding") || msg.contains("not found", Qt::CaseInsensitive) ||
-            msg.contains("Failed to retrieve"))
-            return {true, QVector<BrokerHolding>{}, "", ts};
-        return {false, std::nullopt, checked_error(resp, "Fetch holdings failed"), ts};
-    }
-
-    QJsonArray results = resp.json["result"].toArray();
     QVector<BrokerHolding> holdings;
-    holdings.reserve(results.size());
 
-    for (const auto& item : results) {
-        QJsonObject h = item.toObject();
+    // /open-api/od/v1/holdings/{productType} only returns one product at a time.
+    // Call both CNC (delivery) and MTF (margin trading facility) and merge.
+    auto fetch = [&](const QString& product_type) -> std::optional<QString> {
+        auto resp = BrokerHttp::instance().get(
+            QString(API_BASE) + "/open-api/od/v1/holdings/" + product_type, hdrs);
 
-        QString nse_sym = h["nseTradingSymbol"].toString();
-        QString bse_sym = h["bseTradingSymbol"].toString();
-        QString symbol = nse_sym.isEmpty() ? bse_sym : nse_sym;
-        if (symbol.isEmpty())
-            continue;
+        if (!resp.success)
+            return checked_error(resp, "Network error");
+        if (is_token_expired(resp))
+            return QString("[TOKEN_EXPIRED]");
 
-        QString exchange = nse_sym.isEmpty() ? "BSE" : "NSE";
+        if (resp.json["status"].toString() != "Ok") {
+            QString msg = resp.json["message"].toString();
+            if (msg.contains("No holding") || msg.contains("not found", Qt::CaseInsensitive) ||
+                msg.contains("Failed to retrieve"))
+                return std::nullopt; // empty bucket, not an error
+            return checked_error(resp, "Fetch holdings failed");
+        }
 
-        int qty = h["dpQuantity"].toInt();
-        if (qty == 0)
-            qty = h["totalQuantity"].toInt();
+        const QJsonArray results = resp.json["result"].toArray();
+        for (const auto& item : results) {
+            QJsonObject h = item.toObject();
+            QString nse_sym = h["nseTradingSymbol"].toString();
+            QString bse_sym = h["bseTradingSymbol"].toString();
+            QString symbol = nse_sym.isEmpty() ? bse_sym : nse_sym;
+            if (symbol.isEmpty())
+                continue;
+            QString exchange = nse_sym.isEmpty() ? "BSE" : "NSE";
 
-        double avg_price = h["averageTradedPrice"].toDouble();
-        if (avg_price == 0.0)
-            avg_price = h["investedPrice"].toDouble();
+            int qty = h["dpQuantity"].toInt();
+            if (qty == 0)
+                qty = h["totalQuantity"].toInt();
+            double avg_price = h["averageTradedPrice"].toDouble();
+            if (avg_price == 0.0)
+                avg_price = h["investedPrice"].toDouble();
+            double ltp = h["ltp"].toDouble();
 
-        double ltp = h["ltp"].toDouble();
+            BrokerHolding holding;
+            holding.symbol = symbol;
+            holding.exchange = exchange;
+            holding.quantity = qty;
+            holding.avg_price = avg_price;
+            holding.ltp = ltp;
+            holding.invested_value = qty * avg_price;
+            holding.current_value = qty * ltp;
+            holding.pnl = (ltp - avg_price) * qty;
+            if (avg_price > 0)
+                holding.pnl_pct = ((ltp - avg_price) / avg_price) * 100.0;
+            holdings.append(holding);
+        }
+        return std::nullopt;
+    };
 
-        BrokerHolding holding;
-        holding.symbol = symbol;
-        holding.exchange = exchange;
-        holding.quantity = qty;
-        holding.avg_price = avg_price;
-        holding.ltp = ltp;
-        holding.pnl = (ltp - avg_price) * qty;
-        holdings.append(holding);
-    }
+    // CNC is the primary bucket; MTF is best-effort (account may not have it enabled).
+    if (auto err = fetch("CNC"); err.has_value() && !err->isEmpty())
+        return {false, std::nullopt, *err, ts};
+    fetch("MTF"); // ignore MTF errors — many accounts have no MTF holdings
 
     return {true, holdings, "", ts};
 }

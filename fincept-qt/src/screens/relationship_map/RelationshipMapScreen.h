@@ -1,7 +1,7 @@
 // src/screens/relationship_map/RelationshipMapScreen.h
 #pragma once
 
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "screens/relationship_map/RelationshipMapTypes.h"
 
 #include <QComboBox>

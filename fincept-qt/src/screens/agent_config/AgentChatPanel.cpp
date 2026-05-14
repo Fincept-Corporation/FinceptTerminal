@@ -1,11 +1,13 @@
 // src/screens/agent_config/AgentChatPanel.cpp
 #include "screens/agent_config/AgentChatPanel.h"
 
-#include "ai_chat/LlmService.h"
+#include "services/llm/LlmService.h"
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/PortfolioRepository.h"
+#include "storage/repositories/SettingsRepository.h"
 #include "ui/markdown/MarkdownRenderer.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -220,6 +222,23 @@ void AgentChatPanel::build_ui() {
                 "QPushButton:hover{background:%4;}")
             .arg(col::TEXT_SECONDARY(), col::BORDER_MED(), col::POSITIVE(), col::BG_HOVER()));
     hl->addWidget(route_toggle_);
+
+    // Run-as-task toggle — visible only when Agentic Mode is enabled.
+    // When ON, send_message() dispatches via AgentService::start_task and the
+    // query becomes a durable background task (visible in the AGENTIC tab).
+    run_as_task_toggle_ = new QPushButton("RUN AS TASK");
+    run_as_task_toggle_->setCheckable(true);
+    run_as_task_toggle_->setCursor(Qt::PointingHandCursor);
+    run_as_task_toggle_->setFixedHeight(28);
+    run_as_task_toggle_->setToolTip("When ON, this query runs as a durable background task with per-step progress.");
+    run_as_task_toggle_->setStyleSheet(
+        QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
+                "padding:3px 10px;font-size:9px;font-weight:600;border-radius:3px;}"
+                "QPushButton:checked{color:%3;border-color:%3;background:rgba(245,158,11,0.08);}"
+                "QPushButton:hover{background:%4;}")
+            .arg(col::TEXT_SECONDARY(), col::BORDER_MED(), col::AMBER(), col::BG_HOVER()));
+    run_as_task_toggle_->setVisible(false); // gated by agentic_mode_enabled
+    hl->addWidget(run_as_task_toggle_);
 
     // Clear button
     clear_btn_ = new QPushButton("CLEAR");
@@ -437,6 +456,29 @@ void AgentChatPanel::setup_connections() {
         agent_selector_->setEnabled(!on);
     });
 
+    connect(run_as_task_toggle_, &QPushButton::toggled, this, [this](bool on) {
+        run_as_task_ = on;
+        run_as_task_toggle_->setText(on ? "RUN AS TASK: ON" : "RUN AS TASK");
+    });
+
+    // Visibility of the "RUN AS TASK" toggle follows the Agentic Mode setting.
+    auto apply_agentic_visibility = [this]() {
+        auto r = fincept::SettingsRepository::instance().get(
+            QStringLiteral("agentic_mode_enabled"), QStringLiteral("false"));
+        const bool on = r.is_ok() && r.value() == QStringLiteral("true");
+        run_as_task_toggle_->setVisible(on);
+        if (!on) {
+            run_as_task_toggle_->setChecked(false);
+            run_as_task_ = false;
+        }
+    };
+    apply_agentic_visibility();
+    connect(&fincept::EventBus::instance(), &fincept::EventBus::eventPublished, this,
+            [apply_agentic_visibility](const QString& event, const QVariantMap&) {
+                if (event == QStringLiteral("settings.agentic_mode_changed"))
+                    apply_agentic_visibility();
+            });
+
     // Agent selector repopulation on discovery
     auto& svc = services::AgentService::instance();
     connect(&svc, &services::AgentService::agents_discovered, this,
@@ -648,7 +690,24 @@ void AgentChatPanel::send_message() {
     show_typing(true);
     scroll_to_bottom();
 
-    if (auto_routing_) {
+    if (run_as_task_) {
+        // Agentic Mode: dispatch the query as a durable background task. The
+        // chat bubble closes immediately with a confirmation; live progress is
+        // shown in the AGENTIC tab (and on the task:event:* DataHub topic).
+        const QString agent_id = agent_selector_->currentData().toString();
+        QJsonObject config;
+        if (!agent_id.isEmpty())
+            config["agent_id"] = agent_id;
+        pending_request_id_ = services::AgentService::instance().start_task(last_query_, config);
+        if (streaming_bubble_widget_) {
+            streaming_bubble_widget_->setPlainText(
+                QStringLiteral("Task started. Open the AGENTIC tab to watch progress."));
+            streaming_bubble_widget_->setReadOnly(true);
+            streaming_bubble_widget_ = nullptr;
+        }
+        show_typing(false);
+        set_executing(false);
+    } else if (auto_routing_) {
         pending_request_id_ = services::AgentService::instance().route_query(last_query_);
     } else {
         const QString agent_id = agent_selector_->currentData().toString();

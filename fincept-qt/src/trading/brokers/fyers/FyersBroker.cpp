@@ -22,7 +22,8 @@ static int64_t now_ts() {
 QMap<QString, QString> FyersBroker::auth_headers(const BrokerCredentials& creds) const {
     return {{"Authorization", creds.api_key + ":" + creds.access_token},
             {"Content-Type", "application/json"},
-            {"Accept", "application/json"}};
+            {"Accept", "application/json"},
+            {"version", "3"}};
 }
 
 TokenExchangeResponse FyersBroker::exchange_token(const QString& api_key, const QString& api_secret,
@@ -43,6 +44,7 @@ TokenExchangeResponse FyersBroker::exchange_token(const QString& api_key, const 
     if (resp.json.value("s").toString() == "ok") {
         result.success = true;
         result.access_token = resp.json.value("access_token").toString();
+        result.refresh_token = resp.json.value("refresh_token").toString();
         result.user_id = resp.json.value("user_id").toString();
     } else {
         result.error = resp.json.value("message").toString("Token exchange failed");
@@ -178,14 +180,22 @@ ApiResponse<QVector<BrokerOrderInfo>> FyersBroker::get_orders(const BrokerCreden
         info.symbol = o.value("symbol").toString();
         info.exchange = o.value("exchange").toString();
         info.side = o.value("side").toInt() == 1 ? "buy" : "sell";
-        info.order_type = QString::number(o.value("type").toInt());
+        // Fyers v3 order type enum: 1=Limit, 2=Market, 3=StopMarket, 4=StopLimit
+        static const QMap<int, QString> type_map = {
+            {1, "LIMIT"}, {2, "MARKET"}, {3, "STOP"}, {4, "STOPLIMIT"}};
+        info.order_type = type_map.value(o.value("type").toInt(), QString::number(o.value("type").toInt()));
         info.product_type = o.value("productType").toString();
         info.quantity = o.value("qty").toDouble();
         info.price = o.value("limitPrice").toDouble();
         info.trigger_price = o.value("stopPrice").toDouble();
         info.filled_qty = o.value("filledQty").toDouble();
         info.avg_price = o.value("tradedPrice").toDouble();
-        info.status = QString::number(o.value("status").toInt());
+        // Fyers v3 order status enum: 1=Cancelled, 2=Traded/Filled, 3=Reserved,
+        // 4=Transit, 5=Rejected, 6=Pending/Open, 7=Expired
+        static const QMap<int, QString> status_map = {
+            {1, "cancelled"}, {2, "complete"}, {3, "reserved"},
+            {4, "transit"},   {5, "rejected"}, {6, "open"},      {7, "expired"}};
+        info.status = status_map.value(o.value("status").toInt(), QString::number(o.value("status").toInt()));
         info.message = o.value("message").toString();
         orders.append(info);
     }
@@ -265,16 +275,28 @@ ApiResponse<BrokerFunds> FyersBroker::get_funds(const BrokerCredentials& creds) 
 
     BrokerFunds funds;
     auto fl = resp.json.value("fund_limit").toArray();
+    // Fyers v3 fund_limit ids (stable; titles vary by tier/segment):
+    //   1=Total Balance, 2=Utilized Amount, 3=Realized P&L, 4=Limit at start of day,
+    //   5=Receivables, 6=Fund Transfer, 7=Adhoc Limit, 8=Notional Cash,
+    //   9=Available Balance, 10=Clear Balance
     for (const auto& v : fl) {
         auto item = v.toObject();
-        QString title = item.value("title").toString();
-        double val = item.value("equityAmount").toDouble();
-        if (title == "Total Balance")
-            funds.total_balance = val;
-        else if (title == "Available Balance")
-            funds.available_balance = val;
-        else if (title == "Used Margin")
-            funds.used_margin = val;
+        const int id = item.value("id").toInt(-1);
+        const double equity = item.value("equityAmount").toDouble();
+        const double commodity = item.value("commodityAmount").toDouble();
+        const double total = equity + commodity;
+        switch (id) {
+            case 1:
+                funds.total_balance = total;
+                break;
+            case 2:
+                funds.used_margin = total;
+                break;
+            case 9:
+            case 10:
+                funds.available_balance = total;
+                break;
+        }
     }
     funds.raw_data = resp.json;
     return {true, funds, "", ts};

@@ -15,7 +15,7 @@
 // (Anthropic's single-round bug, Gemini's single-round bug, OpenAI's 15-round
 // loop, text-regex's own loop, etc.).
 
-#include "ai_chat/LlmService.h"  // ConversationMessage, LlmResponse
+#include "services/llm/LlmService.h"  // ConversationMessage, LlmResponse
 #include "mcp/dispatch/ToolInvocation.h"
 
 #include <QJsonArray>

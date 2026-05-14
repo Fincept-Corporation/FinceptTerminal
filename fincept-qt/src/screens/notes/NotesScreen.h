@@ -1,6 +1,6 @@
 #pragma once
 #include "core/events/EventBus.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "storage/repositories/NotesRepository.h"
 
 #include <QComboBox>

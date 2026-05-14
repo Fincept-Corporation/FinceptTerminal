@@ -1,7 +1,7 @@
 // src/screens/backtesting/BacktestingScreen.h
 #pragma once
 #include "core/symbol/IGroupLinked.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/backtesting/BacktestingTypes.h"
 
 #include <QCheckBox>

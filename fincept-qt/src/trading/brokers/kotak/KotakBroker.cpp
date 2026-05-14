@@ -104,13 +104,22 @@ QString KotakBroker::generate_totp(const QString& base32_secret) {
 }
 
 // ── Token packing / unpacking ─────────────────────────────────────────────────
-// Packed format: "trading_token:::trading_sid:::base_url:::access_token"
+// Packed format: "trading_token:::trading_sid:::base_url:::access_token[:::server_id]"
+// 4-part (legacy) format is still accepted; server_id will be empty in that case.
 
 KotakBroker::TokenParts KotakBroker::unpack(const QString& packed) {
     const QStringList parts = packed.split(":::");
-    if (parts.size() != 4)
+    if (parts.size() < 4)
         return {};
-    return {parts[0], parts[1], parts[2], parts[3], true};
+    TokenParts p;
+    p.trading_token = parts[0];
+    p.trading_sid = parts[1];
+    p.base_url = parts[2];
+    p.access_token = parts[3];
+    if (parts.size() >= 5)
+        p.server_id = parts[4];
+    p.valid = true;
+    return p;
 }
 
 // ── Exchange segment mapping ──────────────────────────────────────────────────
@@ -170,11 +179,48 @@ QString KotakBroker::lookup_psymbol(const QString& symbol, const QString& exchan
     return {};
 }
 
-// ── jData params helper ───────────────────────────────────────────────────────
-// BrokerHttp::post_form takes a QMap and URL-encodes values automatically.
-// Kotak API expects: jData={json} as form body — pass as single-entry map.
-QMap<QString, QString> KotakBroker::jdata_params(const QJsonObject& obj) {
-    return {{"jData", QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))}};
+// ── Form-encoding helper ──────────────────────────────────────────────────────
+// PROD /quick/* endpoints expect plain form-encoded fields, not a single
+// `jData=<json>` wrapper (that was a v1-era convention; the current Kotak Neo
+// SDK posts each field on its own). Flatten the JSON object into a string-map;
+// BrokerHttp::post_form percent-encodes values.
+QMap<QString, QString> KotakBroker::jobj_to_form(const QJsonObject& obj) {
+    QMap<QString, QString> out;
+    for (auto it = obj.constBegin(); it != obj.constEnd(); ++it) {
+        const auto& v = it.value();
+        switch (v.type()) {
+            case QJsonValue::Bool:
+                out.insert(it.key(), v.toBool() ? "true" : "false");
+                break;
+            case QJsonValue::Double: {
+                // Preserve integer formatting where possible
+                const double d = v.toDouble();
+                if (d == static_cast<qint64>(d))
+                    out.insert(it.key(), QString::number(static_cast<qint64>(d)));
+                else
+                    out.insert(it.key(), QString::number(d, 'f', 2));
+                break;
+            }
+            case QJsonValue::String:
+                out.insert(it.key(), v.toString());
+                break;
+            case QJsonValue::Null:
+                out.insert(it.key(), QString());
+                break;
+            default:
+                out.insert(it.key(), QString::fromUtf8(QJsonDocument(v.toObject()).toJson(QJsonDocument::Compact)));
+                break;
+        }
+    }
+    return out;
+}
+
+// Append ?sId=<server_id> when known; required for multi-DC routing on PROD.
+QString KotakBroker::with_sid(const QString& base_path, const TokenParts& p) {
+    if (p.server_id.isEmpty())
+        return p.base_url + base_path;
+    const QChar sep = base_path.contains('?') ? QLatin1Char('&') : QLatin1Char('?');
+    return p.base_url + base_path + sep + "sId=" + p.server_id;
 }
 
 // ── Token expiry detection ────────────────────────────────────────────────────
@@ -310,14 +356,21 @@ TokenExchangeResponse KotakBroker::exchange_token(const QString& api_key, const 
     const QString trading_token = d2.value("token").toString();
     const QString trading_sid = d2.value("sid").toString();
     const QString base_url = d2.value("baseUrl").toString();
+    // hsServerId routes data-centre traffic; if absent fall back to dataCenter.
+    QString server_id = d2.value("hsServerId").toString();
+    if (server_id.isEmpty())
+        server_id = d2.value("dataCenter").toString();
 
     if (base_url.isEmpty())
         LOG_WARN(TAG, "baseUrl missing from MPIN response — API calls may fail");
+    if (server_id.isEmpty())
+        LOG_WARN(TAG, "hsServerId/dataCenter missing from MPIN response — sId routing disabled");
 
-    // Pack: trading_token:::trading_sid:::base_url:::access_token_portal
-    const QString packed = trading_token + ":::" + trading_sid + ":::" + base_url + ":::" + access_token_portal;
+    // Pack: trading_token:::trading_sid:::base_url:::access_token_portal:::server_id
+    const QString packed = trading_token + ":::" + trading_sid + ":::" + base_url + ":::" + access_token_portal +
+                           ":::" + server_id;
 
-    LOG_INFO(TAG, "Kotak auth complete, ucc=" + ucc + " base_url=" + base_url);
+    LOG_INFO(TAG, "Kotak auth complete, ucc=" + ucc + " base_url=" + base_url + " sId=" + server_id);
     return {true, packed, /*refresh*/ "", ucc, /*additional*/ "", ""};
 }
 
@@ -348,9 +401,10 @@ OrderPlaceResponse KotakBroker::place_order(const BrokerCredentials& creds, cons
     jobj["tp"] = QString::number(order.stop_price, 'f', 2);
     jobj["ts"] = psymbol;
     jobj["tt"] = order.side == OrderSide::Buy ? "B" : "S";
+    jobj["os"] = "NEOTRADEAPI"; // required ORDER_SOURCE tag on PROD
 
     auto hdrs = auth_headers(creds);
-    auto resp = BrokerHttp::instance().post_form(p.base_url + "/quick/order/rule/ms/place", jdata_params(jobj), hdrs);
+    auto resp = BrokerHttp::instance().post_form(with_sid("/quick/order/rule/ms/place", p), jobj_to_form(jobj), hdrs);
 
     if (!resp.success || resp.json.value("stat").toString() != "Ok") {
         const QString err = checked_error(resp, "place_order failed");
@@ -378,22 +432,26 @@ ApiResponse<QJsonObject> KotakBroker::modify_order(const BrokerCredentials& cred
 
     QJsonObject jobj;
     jobj["no"] = order_id;
+    // `tk` is the numeric scrip token; `ts` is the trading symbol — they're
+    // distinct in the current SDK. Previously both fields were psymbol.
     jobj["tk"] = psymbol;
-    jobj["dq"] = "0";
+    jobj["ts"] = symbol;
+    jobj["dq"] = QString::number(mods.value("disclosed_quantity").toInt(0));
     jobj["es"] = kotak_exchange(exchange);
     jobj["mp"] = "0";
-    jobj["dd"] = "NA";
-    jobj["vd"] = "DAY";
+    jobj["dd"] = mods.value("goodtilldate").toString(""); // empty by default
+    jobj["vd"] = mods.value("validity").toString("DAY");
     jobj["pc"] = mods.value("product").toString("MIS");
     jobj["pr"] = QString::number(mods.value("price").toDouble(0.0), 'f', 2);
     jobj["pt"] = mods.value("order_type").toString("L");
     jobj["qt"] = QString::number(mods.value("quantity").toInt(0));
+    jobj["fq"] = QString::number(mods.value("filled_quantity").toInt(0));
     jobj["tp"] = QString::number(mods.value("trigger_price").toDouble(0.0), 'f', 2);
-    jobj["ts"] = psymbol;
     jobj["tt"] = mods.value("side").toString("B");
+    jobj["os"] = "NEOTRADEAPI";
 
     auto hdrs = auth_headers(creds);
-    auto resp = BrokerHttp::instance().post_form(p.base_url + "/quick/order/vr/modify", jdata_params(jobj), hdrs);
+    auto resp = BrokerHttp::instance().post_form(with_sid("/quick/order/vr/modify", p), jobj_to_form(jobj), hdrs);
 
     if (!resp.success || resp.json.value("stat").toString() != "Ok")
         return {false, std::nullopt, checked_error(resp, "modify_order failed"), ts};
@@ -411,9 +469,10 @@ ApiResponse<QJsonObject> KotakBroker::cancel_order(const BrokerCredentials& cred
     QJsonObject jobj;
     jobj["on"] = order_id;
     jobj["am"] = "NO";
+    jobj["os"] = "NEOTRADEAPI";
 
     auto hdrs = auth_headers(creds);
-    auto resp = BrokerHttp::instance().post_form(p.base_url + "/quick/order/cancel", jdata_params(jobj), hdrs);
+    auto resp = BrokerHttp::instance().post_form(with_sid("/quick/order/cancel", p), jobj_to_form(jobj), hdrs);
 
     if (!resp.success || resp.json.value("stat").toString() != "Ok")
         return {false, std::nullopt, checked_error(resp, "cancel_order failed"), ts};
@@ -431,7 +490,7 @@ ApiResponse<QVector<BrokerOrderInfo>> KotakBroker::get_orders(const BrokerCreden
 
     auto hdrs = auth_headers(creds);
     hdrs["Content-Type"] = "application/json";
-    auto resp = BrokerHttp::instance().get(p.base_url + "/quick/user/orders", hdrs);
+    auto resp = BrokerHttp::instance().get(with_sid("/quick/user/orders", p), hdrs);
 
     if (!resp.success || resp.json.value("stat").toString() == "Not_Ok")
         return {false, std::nullopt, checked_error(resp, "get_orders failed"), ts};
@@ -471,7 +530,7 @@ ApiResponse<QJsonObject> KotakBroker::get_trade_book(const BrokerCredentials& cr
 
     auto hdrs = auth_headers(creds);
     hdrs["Content-Type"] = "application/json";
-    auto resp = BrokerHttp::instance().get(p.base_url + "/quick/user/trades", hdrs);
+    auto resp = BrokerHttp::instance().get(with_sid("/quick/user/trades", p), hdrs);
 
     if (!resp.success || resp.json.value("stat").toString() == "Not_Ok")
         return {false, std::nullopt, checked_error(resp, "get_trade_book failed"), ts};
@@ -489,7 +548,7 @@ ApiResponse<QVector<BrokerPosition>> KotakBroker::get_positions(const BrokerCred
 
     auto hdrs = auth_headers(creds);
     hdrs["Content-Type"] = "application/json";
-    auto resp = BrokerHttp::instance().get(p.base_url + "/quick/user/positions", hdrs);
+    auto resp = BrokerHttp::instance().get(with_sid("/quick/user/positions", p), hdrs);
 
     if (!resp.success || resp.json.value("stat").toString() == "Not_Ok")
         return {false, std::nullopt, checked_error(resp, "get_positions failed"), ts};
@@ -534,7 +593,7 @@ ApiResponse<QVector<BrokerHolding>> KotakBroker::get_holdings(const BrokerCreden
 
     auto hdrs = auth_headers(creds);
     hdrs["Content-Type"] = "application/json";
-    auto resp = BrokerHttp::instance().get(p.base_url + "/portfolio/v1/holdings", hdrs);
+    auto resp = BrokerHttp::instance().get(with_sid("/portfolio/v1/holdings", p), hdrs);
 
     if (!resp.success || resp.json.value("stat").toString() == "Not_Ok")
         return {false, std::nullopt, checked_error(resp, "get_holdings failed"), ts};
@@ -575,16 +634,19 @@ ApiResponse<BrokerFunds> KotakBroker::get_funds(const BrokerCredentials& creds) 
     jobj["prod"] = "ALL";
 
     auto hdrs = auth_headers(creds);
-    auto resp = BrokerHttp::instance().post_form(p.base_url + "/quick/user/limits", jdata_params(jobj), hdrs);
+    auto resp = BrokerHttp::instance().post_form(with_sid("/quick/user/limits", p), jobj_to_form(jobj), hdrs);
 
     if (!resp.success || resp.json.value("stat").toString() != "Ok")
         return {false, std::nullopt, checked_error(resp, "get_funds failed"), ts};
 
-    const double collateral_value = resp.json.value("CollateralValue").toString().toDouble();
-    const double pay_in = resp.json.value("RmsPayInAmt").toString().toDouble();
-    const double pay_out = resp.json.value("RmsPayOutAmt").toString().toDouble();
-    const double collateral = resp.json.value("Collateral").toString().toDouble();
-    const double margin_used = resp.json.value("MarginUsed").toString().toDouble();
+    // Limits payload is wrapped: {stat: "Ok", data: {CollateralValue, RmsPayInAmt, ...}}.
+    // Reading from the root made every field 0 — the values are nested under `data`.
+    const QJsonObject d = resp.json.value("data").toObject();
+    const double collateral_value = d.value("CollateralValue").toString().toDouble();
+    const double pay_in = d.value("RmsPayInAmt").toString().toDouble();
+    const double pay_out = d.value("RmsPayOutAmt").toString().toDouble();
+    const double collateral = d.value("Collateral").toString().toDouble();
+    const double margin_used = d.value("MarginUsed").toString().toDouble();
 
     BrokerFunds funds;
     funds.available_balance = collateral_value + pay_in - pay_out + collateral;
@@ -642,7 +704,11 @@ ApiResponse<QVector<BrokerQuote>> KotakBroker::get_quotes(const BrokerCredential
         {"accept", "application/json"},
     };
 
-    const QString url = p.base_url + "/script-details/1.0/quotes/neosymbol/" + encoded + "/all";
+    // Defensive: strip trailing slash from base_url so we don't produce "//script-details/..."
+    QString base = p.base_url;
+    while (base.endsWith('/'))
+        base.chop(1);
+    const QString url = base + "/script-details/1.0/quotes/neosymbol/" + encoded + "/all";
     auto resp = BrokerHttp::instance().get(url, quote_hdrs);
 
     if (!resp.success)

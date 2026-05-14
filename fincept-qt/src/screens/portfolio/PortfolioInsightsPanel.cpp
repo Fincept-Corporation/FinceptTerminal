@@ -1,7 +1,7 @@
 // src/screens/portfolio/PortfolioInsightsPanel.cpp
 #include "screens/portfolio/PortfolioInsightsPanel.h"
 
-#include "ai_chat/LlmService.h"
+#include "services/llm/LlmService.h"
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
 #include "ui/markdown/MarkdownRenderer.h"

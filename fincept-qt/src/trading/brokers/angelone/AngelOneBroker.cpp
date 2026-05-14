@@ -17,12 +17,58 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QNetworkInterface>
 #include <QRegularExpression>
 
 namespace fincept::trading {
 
 static constexpr const char* TAG_AO = "AngelOneBroker";
 static const QString BASE_AO = "https://apiconnect.angelone.in";
+
+// SmartAPI requires real-looking client-context headers on every request. The
+// previous stub (127.0.0.1 / 00:00:00:00:00:00) is associated with intermittent
+// AB1010 / AB1050 throttle/auth errors. Resolve once at first call and cache.
+struct ClientContext {
+    QString local_ip;
+    QString public_ip;
+    QString mac;
+};
+
+static const ClientContext& client_context() {
+    static const ClientContext ctx = []() {
+        ClientContext c;
+        for (const QNetworkInterface& iface : QNetworkInterface::allInterfaces()) {
+            const auto flags = iface.flags();
+            if (!flags.testFlag(QNetworkInterface::IsUp) || flags.testFlag(QNetworkInterface::IsLoopBack))
+                continue;
+            if (c.mac.isEmpty()) {
+                const QString hw = iface.hardwareAddress();
+                if (!hw.isEmpty() && hw != "00:00:00:00:00:00")
+                    c.mac = hw;
+            }
+            if (c.local_ip.isEmpty()) {
+                for (const QNetworkAddressEntry& entry : iface.addressEntries()) {
+                    const auto addr = entry.ip();
+                    if (addr.protocol() == QAbstractSocket::IPv4Protocol && !addr.isLoopback()) {
+                        c.local_ip = addr.toString();
+                        break;
+                    }
+                }
+            }
+            if (!c.mac.isEmpty() && !c.local_ip.isEmpty())
+                break;
+        }
+        if (c.local_ip.isEmpty())
+            c.local_ip = "192.168.1.1"; // last-resort placeholder; SmartAPI accepts non-loopback addrs
+        if (c.mac.isEmpty())
+            c.mac = "00:1A:2B:3C:4D:5E";
+        // Public IP discovery would require an external probe (api.ipify.org);
+        // sending the LAN IP here is what most retail SDKs do and SmartAPI accepts it.
+        c.public_ip = c.local_ip;
+        return c;
+    }();
+    return ctx;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TOTP Generation (RFC 6238, SHA-1, 30-second window, 6 digits)
@@ -174,14 +220,15 @@ QString AngelOneBroker::ao_transaction(OrderSide s) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 QMap<QString, QString> AngelOneBroker::auth_headers(const BrokerCredentials& creds) const {
+    const auto& ctx = client_context();
     return {
         {"Authorization", "Bearer " + creds.access_token},
         {"X-PrivateKey", creds.api_key},
         {"X-UserType", "USER"},
         {"X-SourceID", "WEB"},
-        {"X-ClientLocalIP", "127.0.0.1"},
-        {"X-ClientPublicIP", "127.0.0.1"},
-        {"X-MACAddress", "00:00:00:00:00:00"},
+        {"X-ClientLocalIP", ctx.local_ip},
+        {"X-ClientPublicIP", ctx.public_ip},
+        {"X-MACAddress", ctx.mac},
         {"Content-Type", "application/json"},
         {"Accept", "application/json"},
     };
@@ -220,13 +267,14 @@ TokenExchangeResponse AngelOneBroker::exchange_token(const QString& api_key, con
     LOG_INFO(TAG_AO, "Generated TOTP for login, client: " + client_code);
 
     // Login headers — X-PrivateKey = API key (from developer console)
+    const auto& ctx = client_context();
     QMap<QString, QString> login_headers = {
         {"X-PrivateKey", api_key},
         {"X-UserType", "USER"},
         {"X-SourceID", "WEB"},
-        {"X-ClientLocalIP", "127.0.0.1"},
-        {"X-ClientPublicIP", "127.0.0.1"},
-        {"X-MACAddress", "00:00:00:00:00:00"},
+        {"X-ClientLocalIP", ctx.local_ip},
+        {"X-ClientPublicIP", ctx.public_ip},
+        {"X-MACAddress", ctx.mac},
         {"Content-Type", "application/json"},
         {"Accept", "application/json"},
     };
@@ -437,8 +485,12 @@ ApiResponse<QVector<BrokerPosition>> AngelOneBroker::get_positions(const BrokerC
         pos.quantity = qty;
         pos.avg_price = p.value("avgnetprice").toString().toDouble(); // OpenAlgo: avgnetprice
         pos.ltp = p.value("ltp").toString().toDouble();
-        pos.pnl = p.value("pnl").toString().toDouble(); // OpenAlgo: pnl (not unrealised)
-        pos.day_pnl = p.value("realised").toString().toDouble();
+        // unrealised = floating P&L on the open position; pnl/realised = booked.
+        // day_pnl is the intraday mark-to-market, surfaced by SmartAPI as `unrealised`.
+        const double unreal = p.value("unrealised").toString().toDouble();
+        const double real = p.value("realised").toString().toDouble();
+        pos.pnl = unreal + real;
+        pos.day_pnl = unreal != 0.0 ? unreal : p.value("pnl").toString().toDouble();
         pos.side = qty >= 0 ? "buy" : "sell";
         if (pos.avg_price > 0)
             pos.pnl_pct = (pos.ltp - pos.avg_price) / pos.avg_price * 100.0 * (qty >= 0 ? 1 : -1);
@@ -496,11 +548,18 @@ ApiResponse<BrokerFunds> AngelOneBroker::get_funds(const BrokerCredentials& cred
 
     auto d = resp.json.value("data").toObject();
     BrokerFunds funds;
-    // OpenAlgo confirmed field names from getRMS response
+    // getRMS: `net` is the authoritative net cash balance; `availablecash` is
+    // free cash before considering used margin; `utiliseddebits` and friends
+    // are debit components, not additive to total. Compute used = sum of debits.
     funds.available_balance = d.value("availablecash").toString().toDouble();
-    funds.used_margin = d.value("utilisedpayout").toString().toDouble();
-    funds.total_balance = funds.available_balance + funds.used_margin;
-    funds.collateral = d.value("utiliseddebits").toString().toDouble();
+    funds.used_margin = d.value("utiliseddebits").toString().toDouble() +
+                        d.value("utilisedspan").toString().toDouble() +
+                        d.value("utilisedoptionpremium").toString().toDouble() +
+                        d.value("utilisedholdingsales").toString().toDouble() +
+                        d.value("utilisedexposure").toString().toDouble();
+    const double net = d.value("net").toString().toDouble();
+    funds.total_balance = net > 0 ? net : (funds.available_balance + funds.used_margin);
+    funds.collateral = d.value("collateral").toString().toDouble();
     funds.raw_data = d;
     return {true, funds, "", ts};
 }
@@ -545,7 +604,7 @@ ApiResponse<QVector<BrokerQuote>> AngelOneBroker::get_quotes(const BrokerCredent
         {"exchangeTokens", exchange_tokens},
     };
 
-    auto resp = BrokerHttp::instance().post_json(BASE_AO + "/rest/secure/angelbroking/market/v1/quote/", payload,
+    auto resp = BrokerHttp::instance().post_json(BASE_AO + "/rest/secure/angelbroking/market/v1/quote", payload,
                                                  auth_headers(creds));
 
     if (!resp.success || !resp.json.value("status").toBool())

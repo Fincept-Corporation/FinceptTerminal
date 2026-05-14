@@ -1,6 +1,6 @@
 #pragma once
 
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "screens/polymarket/ExchangePresentation.h"
 #include "services/polymarket/PolymarketTypes.h"
 #include "services/prediction/PredictionTypes.h"

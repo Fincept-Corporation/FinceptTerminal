@@ -62,24 +62,34 @@ const char* ZerodhaBroker::zerodha_product(ProductType p) {
 const char* ZerodhaBroker::zerodha_side(OrderSide s) {
     return s == OrderSide::Buy ? "BUY" : "SELL";
 }
+// Kite varieties: regular, amo, co, iceberg, auction.
+// Bracket Order (bo) was retired by SEBI and is no longer accepted — orders
+// with variety=bo come back rejected. Map BracketOrder → regular and rely on
+// GTT for stop-loss/target legs instead.
 const char* ZerodhaBroker::zerodha_variety(ProductType p) {
     switch (p) {
         case ProductType::CoverOrder:
             return "co";
         case ProductType::BracketOrder:
-            return "bo";
+            return "regular"; // BO deprecated; caller should use GTT for OCO
         default:
             return "regular";
     }
 }
 
+// Kite Connect v3 supports: minute, 3minute, 5minute, 10minute, 15minute,
+// 30minute, 60minute, day, week. 2hour / 3day are NOT accepted (older docs
+// listed them; current API rejects them with 400 invalid_input).
 QString ZerodhaBroker::zerodha_interval(const QString& resolution) {
     static const QMap<QString, QString> map = {
         {"1", "minute"},    {"1m", "minute"},    {"3", "3minute"},    {"3m", "3minute"},   {"5", "5minute"},
         {"5m", "5minute"},  {"10", "10minute"},  {"10m", "10minute"}, {"15", "15minute"},  {"15m", "15minute"},
         {"30", "30minute"}, {"30m", "30minute"}, {"60", "60minute"},  {"60m", "60minute"}, {"1h", "60minute"},
         {"D", "day"},       {"1D", "day"},       {"day", "day"},      {"W", "week"},       {"1W", "week"},
-        {"week", "week"},   {"2h", "2hour"},     {"2H", "2hour"},     {"3d", "3day"},      {"3D", "3day"},
+        {"week", "week"},
+        // Aliases that Kite rejects — coerce to the nearest supported interval.
+        {"2h", "60minute"}, {"2H", "60minute"},
+        {"3d", "day"},      {"3D", "day"},
     };
     return map.value(resolution, "day");
 }
@@ -348,12 +358,22 @@ ApiResponse<QVector<BrokerQuote>> ZerodhaBroker::get_quotes(const BrokerCredenti
         q.change = q_obj.value("net_change").toDouble();
         q.change_pct = q.close > 0 ? (q.change / q.close) * 100.0 : 0.0;
         auto depth = q_obj.value("depth").toObject();
-        auto buy0 = depth.value("buy").toArray().first().toObject();
-        auto sell0 = depth.value("sell").toArray().first().toObject();
+        // Illiquid contracts (esp. F&O on far-month options) can return empty
+        // buy/sell arrays. .first() on an empty QJsonArray is undefined; guard.
+        const auto buy_arr = depth.value("buy").toArray();
+        const auto sell_arr = depth.value("sell").toArray();
+        auto buy0 = buy_arr.isEmpty() ? QJsonObject{} : buy_arr.first().toObject();
+        auto sell0 = sell_arr.isEmpty() ? QJsonObject{} : sell_arr.first().toObject();
         q.bid = buy0.value("price").toDouble();
         q.bid_size = buy0.value("quantity").toDouble();
         q.ask = sell0.value("price").toDouble();
         q.ask_size = sell0.value("quantity").toDouble();
+        // F&O fields — present on derivatives, zero elsewhere. Safe to read either way.
+        q.oi = static_cast<qint64>(q_obj.value("oi").toDouble());
+        const double oi_high = q_obj.value("oi_day_high").toDouble();
+        const double oi_low = q_obj.value("oi_day_low").toDouble();
+        if (oi_high > 0)
+            q.oi_change_pct = ((static_cast<double>(q.oi) - oi_low) / oi_high) * 100.0;
         quotes.append(q);
     }
     return {true, quotes, "", ts};
@@ -523,12 +543,18 @@ static QJsonObject build_gtt_body(const GttOrder& g) {
         orders.append(leg);
     }
 
+    // Kite GTT API requires the symbol/exchange/triggers/last_price fields
+    // nested inside a `condition` object — they are NOT flat at the body root.
+    // The previous flat shape was rejected with 400 invalid_input.
+    QJsonObject condition;
+    condition["exchange"] = g.exchange;
+    condition["tradingsymbol"] = g.symbol;
+    condition["trigger_values"] = trigger_values;
+    condition["last_price"] = g.last_price;
+
     QJsonObject body;
     body["type"] = type;
-    body["tradingsymbol"] = g.symbol;
-    body["exchange"] = g.exchange;
-    body["trigger_values"] = trigger_values;
-    body["last_price"] = g.last_price;
+    body["condition"] = condition;
     body["orders"] = orders;
     return body;
 }
@@ -537,17 +563,23 @@ static QJsonObject build_gtt_body(const GttOrder& g) {
 static GttOrder parse_gtt(const QJsonObject& o) {
     GttOrder g;
     g.gtt_id = QString::number(o.value("id").toInt());
-    g.symbol = o.value("tradingsymbol").toString();
-    g.exchange = o.value("exchange").toString();
+    // Symbol/exchange live under `condition`, not at the response root.
+    const auto cond = o.value("condition").toObject();
+    g.symbol = cond.value("tradingsymbol").toString();
+    if (g.symbol.isEmpty())
+        g.symbol = o.value("tradingsymbol").toString(); // back-compat fallback
+    g.exchange = cond.value("exchange").toString();
+    if (g.exchange.isEmpty())
+        g.exchange = o.value("exchange").toString();
     g.status = o.value("status").toString();
     g.created_at = o.value("created_at").toString();
     g.updated_at = o.value("updated_at").toString();
-    g.last_price = o.value("condition").toObject().value("last_price").toDouble();
+    g.last_price = cond.value("last_price").toDouble();
 
     QString type = o.value("type").toString();
     g.type = (type == "two-leg") ? GttOrderType::OCO : GttOrderType::Single;
 
-    auto tv = o.value("condition").toObject().value("trigger_values").toArray();
+    auto tv = cond.value("trigger_values").toArray();
     auto ords = o.value("orders").toArray();
     for (int i = 0; i < ords.size(); ++i) {
         auto leg = ords[i].toObject();

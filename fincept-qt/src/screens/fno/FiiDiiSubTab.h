@@ -8,7 +8,7 @@
 // on the right. A REFRESH button forces a producer fetch on demand —
 // useful right after market close when the user wants today's number.
 
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/options/FiiDiiTypes.h"
 
 #include <QPointer>

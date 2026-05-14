@@ -63,6 +63,10 @@ QString DhanBroker::dhan_product(ProductType p) {
 }
 
 // ── Order type mapping ────────────────────────────────────────────────────────
+// Per DhanHQ v2 spec:
+//   STOP_LOSS         = SL  = stop-with-LIMIT (needs price + triggerPrice)
+//   STOP_LOSS_MARKET  = SL-M = stop-with-MARKET (needs triggerPrice only)
+// The previous mapping had these swapped.
 QString DhanBroker::dhan_order_type(OrderType t) {
     switch (t) {
         case OrderType::Market:
@@ -70,9 +74,9 @@ QString DhanBroker::dhan_order_type(OrderType t) {
         case OrderType::Limit:
             return "LIMIT";
         case OrderType::StopLoss:
-            return "STOP_LOSS"; // SL (trigger + limit price)
+            return "STOP_LOSS_MARKET"; // SL-M: market-with-trigger
         case OrderType::StopLossLimit:
-            return "STOP_LOSS_MARKET"; // SL-M (trigger only)
+            return "STOP_LOSS"; // SL: limit-with-trigger
     }
     return "MARKET";
 }
@@ -301,12 +305,20 @@ ApiResponse<QVector<BrokerPosition>> DhanBroker::get_positions(const BrokerCrede
         pos.exchange = canonical_exchange(p.value("exchangeSegment").toString());
         pos.product_type = p.value("productType").toString();
         pos.quantity = qty;
-        pos.avg_price = p.value("avgCostPrice").toDouble();
-        pos.ltp = p.value("lastTradedPrice").toDouble();
+        // Dhan v2 positions response uses buyAvg/sellAvg (not avgCostPrice).
+        // Pick the side that has volume — for net-long use buyAvg, for net-short sellAvg.
+        const double buy_avg = p.value("buyAvg").toDouble();
+        const double sell_avg = p.value("sellAvg").toDouble();
+        pos.avg_price = qty > 0 ? buy_avg : sell_avg;
+        if (pos.avg_price == 0.0) // older deployments do return avgCostPrice
+            pos.avg_price = p.value("avgCostPrice").toDouble();
+        // Positions don't carry an LTP field; callers wanting live MTM must
+        // refresh via /v2/marketfeed/ltp. Leave 0 here.
+        pos.ltp = 0.0;
         pos.pnl = p.value("unrealizedProfit").toDouble();
         pos.day_pnl = p.value("realizedProfit").toDouble();
         pos.side = qty > 0 ? "LONG" : "SHORT";
-        if (pos.avg_price > 0)
+        if (pos.avg_price > 0 && pos.ltp > 0)
             pos.pnl_pct = (pos.ltp - pos.avg_price) / pos.avg_price * 100.0;
         positions.append(pos);
     }
@@ -337,12 +349,13 @@ ApiResponse<QVector<BrokerHolding>> DhanBroker::get_holdings(const BrokerCredent
         holding.exchange = h.value("exchange").toString();
         holding.quantity = h.value("totalQty").toDouble();
         holding.avg_price = h.value("avgCostPrice").toDouble();
-        holding.ltp = h.value("lastTradedPrice").toDouble();
+        // /v2/holdings does NOT return an LTP field. Caller must hydrate via
+        // /v2/marketfeed/ltp using securityId — leave zero rather than fabricate.
+        holding.ltp = 0.0;
         holding.invested_value = holding.quantity * holding.avg_price;
-        holding.current_value = holding.quantity * holding.ltp;
-        holding.pnl = holding.current_value - holding.invested_value;
-        if (holding.invested_value > 0)
-            holding.pnl_pct = holding.pnl / holding.invested_value * 100.0;
+        holding.current_value = 0.0;
+        holding.pnl = 0.0;
+        holding.pnl_pct = 0.0;
         holdings.append(holding);
     }
     return {true, holdings, "", ts};
@@ -419,14 +432,18 @@ ApiResponse<QVector<BrokerQuote>> DhanBroker::get_quotes(const BrokerCredentials
             BrokerQuote quote;
             quote.symbol = id_to_symbol.value(seg + ":" + tok_it.key(), tok_it.key());
             quote.ltp = q.value("last_price").toDouble();
-            quote.open = q.value("open").toDouble();
-            quote.high = q.value("high").toDouble();
-            quote.low = q.value("low").toDouble();
-            quote.close = q.value("close").toDouble();
+            // Dhan nests OHLC under a sub-object: {"last_price":..., "ohlc":{open,high,low,close}}.
+            // Reading at the top level (the old code) returned 0 for OHLC every time.
+            const auto ohlc = q.value("ohlc").toObject();
+            quote.open = ohlc.value("open").toDouble(q.value("open").toDouble());
+            quote.high = ohlc.value("high").toDouble(q.value("high").toDouble());
+            quote.low = ohlc.value("low").toDouble(q.value("low").toDouble());
+            quote.close = ohlc.value("close").toDouble(q.value("close").toDouble());
             quote.volume = q.value("volume").toDouble();
-            if (quote.close > 0)
+            if (quote.close > 0) {
+                quote.change = quote.ltp - quote.close;
                 quote.change_pct = (quote.ltp - quote.close) / quote.close * 100.0;
-            quote.change = quote.ltp - quote.close;
+            }
             quote.timestamp = ts;
             quotes.append(quote);
         }
@@ -490,7 +507,25 @@ ApiResponse<QVector<BrokerCandle>> DhanBroker::get_history(const BrokerCredentia
         QJsonObject body;
         body["securityId"] = sec_id;
         body["exchangeSegment"] = seg;
-        body["instrument"] = "EQUITY";
+        // Map exchange segment → Dhan `instrument` enum. EQUITY is correct only
+        // for cash; F&O / currency / commodity each take a distinct value.
+        // Spec values: EQUITY, INDEX, FUTIDX, FUTSTK, OPTIDX, OPTSTK,
+        //              FUTCUR, OPTCUR, FUTCOM, OPTCOM.
+        QString instrument = "EQUITY";
+        if (seg == "NSE_FNO" || seg == "BSE_FNO") {
+            // Heuristic: option contract names end in CE/PE; futures end in FUT.
+            if (name.endsWith("CE") || name.endsWith("PE"))
+                instrument = "OPTSTK";
+            else if (name.contains("FUT"))
+                instrument = "FUTSTK";
+        } else if (seg == "IDX_I") {
+            instrument = "INDEX";
+        } else if (seg == "MCX_COMM") {
+            instrument = name.contains("FUT") ? "FUTCOM" : "OPTCOM";
+        } else if (seg == "NSE_CURRENCY" || seg == "BSE_CURRENCY") {
+            instrument = name.contains("FUT") ? "FUTCUR" : "OPTCUR";
+        }
+        body["instrument"] = instrument;
         body["fromDate"] = chunk_start.toString("yyyy-MM-dd");
         body["toDate"] = chunk_end.toString("yyyy-MM-dd");
 

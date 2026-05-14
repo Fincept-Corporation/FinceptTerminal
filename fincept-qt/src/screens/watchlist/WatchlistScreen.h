@@ -1,7 +1,7 @@
 #pragma once
 #include "core/events/EventBus.h"
 #include "core/symbol/IGroupLinked.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/markets/MarketDataService.h"
 #include "storage/repositories/WatchlistRepository.h"
 #include "ui/tables/DataTable.h"

@@ -13,7 +13,7 @@
 //
 // Reference: .grill-me/alpha-arena-production-refactor.md §Phase 7.
 
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 
 #include <QComboBox>
 #include <QDoubleSpinBox>

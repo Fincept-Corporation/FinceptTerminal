@@ -892,6 +892,125 @@ def dispatch_action(
         return {"success": True, "deleted": task_id}
 
     # =========================================================================
+    # Agentic Mode — cooperative pause/cancel signals.
+    # The running task subprocess polls agent_tasks.status between steps and
+    # exits cleanly when it sees pause_requested / cancel_requested.
+    # =========================================================================
+
+    if action == "agentic_pause_task":
+        from finagent_core.task_state import get_state_manager
+        task_id = params.get("task_id")
+        if not task_id:
+            return {"success": False, "error": "Missing 'task_id' in params"}
+        get_state_manager().update_status(task_id, "pause_requested")
+        return {"success": True, "task_id": task_id, "signal": "pause_requested"}
+
+    if action == "agentic_cancel_task":
+        from finagent_core.task_state import get_state_manager
+        task_id = params.get("task_id")
+        if not task_id:
+            return {"success": False, "error": "Missing 'task_id' in params"}
+        get_state_manager().update_status(task_id, "cancel_requested")
+        return {"success": True, "task_id": task_id, "signal": "cancel_requested"}
+
+    # ── Agentic Mode — Scheduled recurring tasks ────────────────────────────
+
+    if action == "agentic_schedule_create":
+        from finagent_core.agentic.scheduler import ScheduledTaskStore
+        name = params.get("name") or "Untitled schedule"
+        query = params.get("query")
+        schedule_expr = params.get("schedule")
+        sched_config = params.get("schedule_config") or {}
+        if not query or not schedule_expr:
+            return {"success": False, "error": "Missing 'query' or 'schedule' in params"}
+        try:
+            sid = ScheduledTaskStore().create(
+                name=name, query=query, schedule_expr=schedule_expr,
+                config=sched_config, start_now=bool(params.get("start_now")),
+            )
+        except ValueError as e:
+            return {"success": False, "error": f"Invalid schedule: {e}"}
+        return {"success": True, "schedule_id": sid}
+
+    if action == "agentic_schedule_list":
+        from finagent_core.agentic.scheduler import ScheduledTaskStore
+        return {"success": True,
+                "schedules": ScheduledTaskStore().list(
+                    enabled_only=bool(params.get("enabled_only")),
+                    limit=int(params.get("limit", 200)))}
+
+    if action == "agentic_schedule_delete":
+        from finagent_core.agentic.scheduler import ScheduledTaskStore
+        sid = params.get("schedule_id")
+        if not sid:
+            return {"success": False, "error": "Missing 'schedule_id'"}
+        ScheduledTaskStore().delete(sid)
+        return {"success": True, "deleted": sid}
+
+    if action == "agentic_schedule_set_enabled":
+        from finagent_core.agentic.scheduler import ScheduledTaskStore
+        sid = params.get("schedule_id")
+        if not sid:
+            return {"success": False, "error": "Missing 'schedule_id'"}
+        ScheduledTaskStore().set_enabled(sid, bool(params.get("enabled", True)))
+        return {"success": True, "schedule_id": sid}
+
+    if action == "agentic_schedule_tick":
+        # Lightweight poll: returns due schedules and advances their cursors.
+        # The C++ caller then fires each as an agentic streaming task. Keeping
+        # the firing on the C++ side means the streaming subprocess is owned
+        # by AgentService and emits events on task:event:* directly.
+        from finagent_core.agentic.scheduler import ScheduledTaskStore
+        due = ScheduledTaskStore().take_due()
+        return {"success": True, "due": due}
+
+    # ── Agentic Mode — Library inspection (read-only UI surface) ────────────
+
+    if action == "agentic_skills_list":
+        from finagent_core.agentic.skill_library import SkillLibrary
+        return {"success": True,
+                "skills": SkillLibrary().list(limit=int(params.get("limit", 200)))}
+
+    if action == "agentic_skill_delete":
+        from finagent_core.agentic.skill_library import SkillLibrary
+        sid = params.get("skill_id")
+        if not sid:
+            return {"success": False, "error": "Missing 'skill_id'"}
+        SkillLibrary().delete(sid)
+        return {"success": True, "deleted": sid}
+
+    if action == "agentic_memory_list":
+        from finagent_core.agentic.archival_memory import ArchivalMemoryStore
+        return {"success": True,
+                "memories": ArchivalMemoryStore().list(
+                    user_id=params.get("user_id"),
+                    memory_type=params.get("type"),
+                    limit=int(params.get("limit", 200)))}
+
+    if action == "agentic_memory_delete":
+        from finagent_core.agentic.archival_memory import ArchivalMemoryStore
+        mid = params.get("memory_id")
+        if not mid:
+            return {"success": False, "error": "Missing 'memory_id'"}
+        ArchivalMemoryStore().delete(mid)
+        return {"success": True, "deleted": mid}
+
+    if action == "agentic_reflexion_list":
+        # Returns recent reflections regardless of task. Mainly diagnostic.
+        from finagent_core.agentic.reflexion_store import ReflexionStore
+        import sqlite3 as _sql
+        rs = ReflexionStore()
+        with _sql.connect(rs.db_path) as c:
+            c.row_factory = _sql.Row
+            rows = c.execute(
+                "SELECT id, task_id, query, step_idx, decision, reason, "
+                "replan_hint, question, created_at FROM agent_reflections "
+                "ORDER BY created_at DESC LIMIT ?",
+                (int(params.get("limit", 200)),)
+            ).fetchall()
+        return {"success": True, "reflections": [dict(r) for r in rows]}
+
+    # =========================================================================
     # Unknown Action
     # =========================================================================
 
@@ -1062,6 +1181,62 @@ def dispatch_action_streaming(
         except Exception as e:
             stream_print("error", str(e))
             return {"success": False, "error": str(e)}
+
+    # =========================================================================
+    # Agentic Mode — durable, event-emitting task runners.
+    # Events arrive on stdout as AGENTIC_EVENT: <json> lines, parsed by the
+    # C++ host (AgentService_Execution.cpp) and republished on the DataHub
+    # topic task:event:<task_id>.
+    # =========================================================================
+
+    if action == "agentic_start_task":
+        from finagent_core.agentic.events import make_emitter
+        from finagent_core.agentic.runner import AgenticRunner
+
+        query = params.get("query")
+        if not query:
+            stream_print("error", "Missing 'query' in params")
+            return {"success": False, "error": "Missing 'query' in params"}
+
+        runner = AgenticRunner(api_keys=api_keys, emit=make_emitter())
+        result = runner.start_task(query, config)
+        stream_print("done", "completed")
+        return result
+
+    if action == "agentic_resume_task":
+        from finagent_core.agentic.events import make_emitter
+        from finagent_core.agentic.runner import AgenticRunner
+
+        task_id = params.get("task_id")
+        if not task_id:
+            stream_print("error", "Missing 'task_id' in params")
+            return {"success": False, "error": "Missing 'task_id' in params"}
+
+        runner = AgenticRunner(api_keys=api_keys, emit=make_emitter())
+        result = runner.resume_task(task_id)
+        stream_print("done", "completed")
+        return result
+
+    if action == "agentic_reply_question":
+        # HITL: user replied to a clarifying question. Persist the answer
+        # atomically, then resume the task — same code path as agentic_resume_task
+        # (which calls TaskStateManager.consume_answer and threads the reply into
+        # the next step's prompt).
+        from finagent_core.agentic.events import make_emitter
+        from finagent_core.agentic.runner import AgenticRunner
+        from finagent_core.task_state import get_state_manager
+
+        task_id = params.get("task_id")
+        answer = params.get("answer", "")
+        if not task_id:
+            stream_print("error", "Missing 'task_id' in params")
+            return {"success": False, "error": "Missing 'task_id' in params"}
+
+        get_state_manager().save_answer(task_id, answer)
+        runner = AgenticRunner(api_keys=api_keys, emit=make_emitter())
+        result = runner.resume_task(task_id)
+        stream_print("done", "completed")
+        return result
 
     # For non-streaming actions, fall back to regular dispatch
     stream_print("thinking", f"Executing action: {action}")

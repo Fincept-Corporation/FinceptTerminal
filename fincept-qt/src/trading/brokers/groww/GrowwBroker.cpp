@@ -128,23 +128,49 @@ int GrowwBroker::resolution_to_minutes(const QString& resolution) {
 // and 10080 (1W). Windows are capped per interval: ≤5m → 30d, 10–30m → 90d, ≥1h → 180d.
 int GrowwBroker::history_interval_minutes(const QString& resolution) {
     const QString r = resolution.toLower();
-    if (r == "1" || r == "1m")
+    if (r == "1" || r == "1m" || r == "1min")
         return 1;
-    if (r == "5" || r == "5m")
+    if (r == "3" || r == "3m" || r == "3min")
+        return 3;
+    if (r == "5" || r == "5m" || r == "5min")
         return 5;
-    if (r == "10" || r == "10m")
+    if (r == "10" || r == "10m" || r == "10min")
         return 10;
-    if (r == "15" || r == "15m")
+    if (r == "15" || r == "15m" || r == "15min")
         return 15;
-    if (r == "30" || r == "30m")
+    if (r == "30" || r == "30m" || r == "30min")
         return 30;
-    if (r == "60" || r == "1h")
+    if (r == "60" || r == "1h" || r == "1hour")
         return 60;
-    if (r == "d" || r == "1d" || r == "day")
+    if (r == "240" || r == "4h" || r == "4hours")
+        return 240;
+    if (r == "d" || r == "1d" || r == "day" || r == "1day")
         return 1440;
-    if (r == "w" || r == "1w" || r == "week")
+    if (r == "w" || r == "1w" || r == "week" || r == "1week")
         return 10080;
+    if (r == "1month")
+        return 43200;
     return 1;
+}
+
+// Groww /v1/historical/candles takes a string token, NOT a number.
+// Token enum per docs: 1min, 3min, 5min, 10min, 15min, 30min, 1hour, 4hours,
+// 1day, 1week, 1month.
+QString GrowwBroker::history_interval_token(const QString& resolution) {
+    switch (history_interval_minutes(resolution)) {
+        case 1:    return "1min";
+        case 3:    return "3min";
+        case 5:    return "5min";
+        case 10:   return "10min";
+        case 15:   return "15min";
+        case 30:   return "30min";
+        case 60:   return "1hour";
+        case 240:  return "4hours";
+        case 1440: return "1day";
+        case 10080:return "1week";
+        case 43200:return "1month";
+        default:   return "1min";
+    }
 }
 
 // ============================================================================
@@ -231,7 +257,13 @@ OrderPlaceResponse GrowwBroker::place_order(const BrokerCredentials& creds, cons
         return {false, "", "[TOKEN_EXPIRED]"};
 
     QJsonObject payload = resp.json["payload"].toObject();
-    QString order_id = payload["order_id"].toString();
+    // Groww returns `groww_order_id` (their canonical ID); fall back to
+    // `order_reference_id` (exchange-side) then plain `order_id` for older deployments.
+    QString order_id = payload["groww_order_id"].toString();
+    if (order_id.isEmpty())
+        order_id = payload["order_reference_id"].toString();
+    if (order_id.isEmpty())
+        order_id = payload["order_id"].toString();
     if (order_id.isEmpty())
         return {false, "", checked_error(resp, "No order_id in response")};
 
@@ -254,7 +286,10 @@ ApiResponse<QJsonObject> GrowwBroker::modify_order(const BrokerCredentials& cred
     QJsonObject body;
     body["groww_order_id"] = order_id;
     body["segment"] = segment;
-    body["order_type"] = mods.contains("order_type") ? mods["order_type"].toString() : QStringLiteral("LIMIT");
+    // Only forward order_type when caller passes it. Defaulting to "LIMIT"
+    // would silently flip a MARKET order to LIMIT on a price-only modify.
+    if (mods.contains("order_type"))
+        body["order_type"] = mods["order_type"].toString();
     if (mods.contains("quantity"))
         body["quantity"] = mods["quantity"];
     if (mods.contains("price"))
@@ -290,7 +325,11 @@ ApiResponse<QJsonObject> GrowwBroker::cancel_order(const BrokerCredentials& cred
     };
 
     auto resp = do_cancel(QStringLiteral("CASH"));
-    if (resp.success && resp.json["status"].toString() != "SUCCESS")
+    // Retry on FNO if CASH cancel didn't succeed. BrokerHttp marks 4xx as
+    // success=false, so the previous `success && !SUCCESS` form never
+    // triggered the FNO retry; widen to "anything not a SUCCESS response".
+    const bool cash_ok = resp.success && resp.json["status"].toString() == "SUCCESS";
+    if (!cash_ok)
         resp = do_cancel(QStringLiteral("FNO"));
 
     if (!resp.success)
@@ -347,18 +386,28 @@ ApiResponse<QVector<BrokerOrderInfo>> GrowwBroker::get_orders(const BrokerCreden
             for (const auto& item : list) {
                 QJsonObject o = item.toObject();
                 BrokerOrderInfo info;
-                info.order_id = o["order_id"].toString();
+                // Groww canonical id is groww_order_id; fall back for legacy responses.
+                info.order_id = o["groww_order_id"].toString();
+                if (info.order_id.isEmpty())
+                    info.order_id = o["order_id"].toString();
                 info.symbol = o["trading_symbol"].toString();
                 info.exchange = o["exchange"].toString();
                 info.quantity = o["quantity"].toInt();
                 info.filled_qty = o["filled_quantity"].toInt();
                 info.price = o["price"].toDouble();
                 info.trigger_price = o["trigger_price"].toDouble();
-                info.status = parse_status(o["status"].toString());
+                // Doc-canonical status field is `order_status`; older endpoints used `status`.
+                QString raw_status = o["order_status"].toString();
+                if (raw_status.isEmpty())
+                    raw_status = o["status"].toString();
+                info.status = parse_status(raw_status);
                 info.side = (o["transaction_type"].toString() == "BUY") ? "buy" : "sell";
                 info.order_type = o["order_type"].toString();
                 info.product_type = o["product"].toString();
-                info.timestamp = o["order_time"].toString();
+                // Spec: created_at (ISO8601). Fallback: legacy order_time.
+                info.timestamp = o["created_at"].toString();
+                if (info.timestamp.isEmpty())
+                    info.timestamp = o["order_time"].toString();
                 orders.append(info);
             }
             if (list.size() < PAGE_SIZE)
@@ -534,15 +583,26 @@ ApiResponse<BrokerFunds> GrowwBroker::get_funds(const BrokerCredentials& creds) 
         return {false, std::nullopt, "[TOKEN_EXPIRED]", ts};
 
     QJsonObject payload = resp.json["payload"].toObject();
+    // Spec shape: top-level has clear_cash, net_margin_used, adhoc_margin, payin_amount.
+    // Collateral can live at top level as `collateral_available` (older deployments)
+    // OR nested under `equity_margin_details.collateral_available` / `collateral`
+    // (current docs). Try both.
     double clear_cash = payload["clear_cash"].toDouble();
-    double collateral = payload["collateral_available"].toDouble();
     double used = payload["net_margin_used"].toDouble();
+    double collateral = payload["collateral_available"].toDouble();
+    if (collateral == 0.0) {
+        const QJsonObject eq = payload["equity_margin_details"].toObject();
+        collateral = eq["collateral_available"].toDouble();
+        if (collateral == 0.0)
+            collateral = eq["collateral"].toDouble();
+    }
 
     BrokerFunds funds;
     funds.available_balance = clear_cash + collateral;
     funds.used_margin = used;
     funds.total_balance = funds.available_balance + funds.used_margin;
     funds.collateral = collateral;
+    funds.raw_data = payload;
 
     return {true, funds, "", ts};
 }
@@ -755,22 +815,27 @@ ApiResponse<QVector<BrokerCandle>> GrowwBroker::get_history(const BrokerCredenti
 
     QString segment = groww_segment(exchange);
     QString ex = groww_exchange(exchange);
-    int interval = history_interval_minutes(resolution);
+    const QString interval_token = history_interval_token(resolution);
 
     // Groww /v1/historical/candles is the current endpoint (replaces /candle/range).
     // Expects datetime format "YYYY-MM-DD HH:MM:SS"; callers pass bare dates, so pin
-    // to the NSE session window. groww_symbol = trading_symbol for cash/F&O.
+    // to the NSE session window.
+    //
+    // groww_symbol is "EXCHANGE-TRADINGSYMBOL" (e.g. "NSE-WIPRO"); for options the
+    // suffix is the option-contract code (e.g. "NSE-NIFTY-30Sep25-24650-CE"). The
+    // hyphen prefix is required — passing the bare trading symbol returns 4xx.
     QString start_time = from_date + " 09:15:00";
     QString end_time = to_date + " 15:30:00";
+    const QString groww_symbol = ex + "-" + trading_symbol;
 
     QUrl qurl(QStringLiteral("https://api.groww.in/v1/historical/candles"));
     QUrlQuery qq;
     qq.addQueryItem(QStringLiteral("exchange"), ex);
     qq.addQueryItem(QStringLiteral("segment"), segment);
-    qq.addQueryItem(QStringLiteral("groww_symbol"), trading_symbol);
+    qq.addQueryItem(QStringLiteral("groww_symbol"), groww_symbol);
     qq.addQueryItem(QStringLiteral("start_time"), start_time);
     qq.addQueryItem(QStringLiteral("end_time"), end_time);
-    qq.addQueryItem(QStringLiteral("candle_interval"), QString::number(interval));
+    qq.addQueryItem(QStringLiteral("candle_interval"), interval_token);
     qurl.setQuery(qq);
     const QString url = qurl.toString();
 

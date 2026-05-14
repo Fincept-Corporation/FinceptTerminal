@@ -1,7 +1,7 @@
 // src/screens/portfolio/PortfolioScreen.h
 #pragma once
 #include "core/symbol/IGroupLinked.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "screens/portfolio/PortfolioTypes.h"
 
 #include <QHideEvent>

@@ -48,9 +48,9 @@ QString MotilalBroker::mo_order_type(OrderType t) {
         case OrderType::Limit:
             return "LIMIT";
         case OrderType::StopLoss:
-            return "STOPLOSS";
+            return "STOPLOSSMARKET"; // SL-M: market-with-trigger
         case OrderType::StopLossLimit:
-            return "STOPLOSS";
+            return "STOPLOSS"; // SL: limit-with-trigger
         default:
             return "MARKET";
     }
@@ -102,6 +102,10 @@ QString MotilalBroker::checked_error(const BrokerHttpResponse& resp, const QStri
 // ---------- Auth headers ----------
 
 QMap<QString, QString> MotilalBroker::auth_headers(const BrokerCredentials& creds) const {
+    // vendorinfo carries the trading account identifier (UCC). Motilal's credential
+    // model exposes only api_key + password; the login flow uses api_key as both
+    // the user-id and vendorinfo, so reuse user_id (= api_key after login) here.
+    // An empty vendorinfo causes a class of permission errors on dealer-flagged accounts.
     return {
         {"Authorization", creds.access_token},
         {"Content-Type", "application/json"},
@@ -112,7 +116,7 @@ QMap<QString, QString> MotilalBroker::auth_headers(const BrokerCredentials& cred
         {"ClientPublicIp", "127.0.0.1"},
         {"MacAddress", "00:00:00:00:00:00"},
         {"SourceId", "WEB"},
-        {"vendorinfo", ""},
+        {"vendorinfo", creds.user_id.isEmpty() ? creds.api_key : creds.user_id},
         {"osname", "Windows 10"},
         {"osversion", "10.0"},
         {"devicemodel", "PC"},
@@ -199,17 +203,20 @@ OrderPlaceResponse MotilalBroker::place_order(const BrokerCredentials& creds, co
     body["orderduration"] = "DAY";
     body["price"] = order.price;
     body["triggerprice"] = order.stop_price;
-    body["quantity"] = static_cast<int>(order.quantity);
+    // Motilal's place endpoint expects `quantityinlot` (lots, not pieces). Sending
+    // `quantity` is silently ignored — orders go through with 0 quantity and reject.
+    body["quantityinlot"] = static_cast<int>(order.quantity);
     body["disclosedquantity"] = 0;
     body["amoorder"] = order.amo ? "Y" : "N";
     body["algoid"] = "";
     body["goodtilldate"] = "";
-    body["tag"] = "";
+    body["tag"] = "fincept";
     body["participantcode"] = "";
-    body["clientcode"] = "";
+    body["clientcode"] = creds.user_id; // required for dealer accounts; harmless for investor
 
     auto& http = BrokerHttp::instance();
-    auto resp = http.post_json(QString("%1/rest/trans/v1/placeorder").arg(BASE), body, auth_headers(creds));
+    // v2 is the current place-order endpoint per docs; v1 is deprecated.
+    auto resp = http.post_json(QString("%1/rest/trans/v2/placeorder").arg(BASE), body, auth_headers(creds));
 
     if (!resp.success)
         return {false, "", checked_error(resp, "place_order failed")};
@@ -232,21 +239,28 @@ ApiResponse<QJsonObject> MotilalBroker::modify_order(const BrokerCredentials& cr
                                                      const QJsonObject& mods) {
     int64_t ts = now_ts();
 
+    // Only forward what the caller supplied — defaulting newprice/qty to 0 will
+    // overwrite the original order with a zero-priced/zero-qty LIMIT.
     QJsonObject body;
     body["uniqueorderid"] = order_id;
-    body["newordertype"] = mods.value("orderType").toString("LIMIT");
-    body["neworderduration"] = "DAY";
-    body["newprice"] = mods.value("price").toDouble(0);
-    body["newtriggerprice"] = mods.value("triggerPrice").toDouble(0);
-    body["newquantityinlot"] = mods.value("quantity").toInt(0);
+    if (mods.contains("orderType"))
+        body["newordertype"] = mods.value("orderType").toString();
+    body["neworderduration"] = mods.value("orderDuration").toString("DAY");
+    if (mods.contains("price"))
+        body["newprice"] = mods.value("price").toDouble();
+    if (mods.contains("triggerPrice"))
+        body["newtriggerprice"] = mods.value("triggerPrice").toDouble();
+    if (mods.contains("quantity"))
+        body["newquantityinlot"] = mods.value("quantity").toInt();
     body["newdisclosedquantity"] = 0;
-    body["newgoodtilldate"] = "";
+    body["newgoodtilldate"] = mods.value("goodtilldate").toString("");
     body["lastmodifiedtime"] = mods.value("lastmodifiedtime").toString("");
     body["qtytradedtoday"] = mods.value("qtytradedtoday").toInt(0);
-    body["clientcode"] = "";
+    body["clientcode"] = creds.user_id;
 
     auto& http = BrokerHttp::instance();
-    auto resp = http.post_json(QString("%1/rest/trans/v2/modifyorder").arg(BASE), body, auth_headers(creds));
+    // v5 is the current modify endpoint; v2 is being phased out.
+    auto resp = http.post_json(QString("%1/rest/trans/v5/modifyorder").arg(BASE), body, auth_headers(creds));
 
     if (!resp.success)
         return {false, std::nullopt, checked_error(resp, "modify_order failed"), ts};
@@ -269,10 +283,11 @@ ApiResponse<QJsonObject> MotilalBroker::cancel_order(const BrokerCredentials& cr
 
     QJsonObject body;
     body["uniqueorderid"] = order_id;
-    body["clientcode"] = "";
+    body["clientcode"] = creds.user_id;
 
     auto& http = BrokerHttp::instance();
-    auto resp = http.post_json(QString("%1/rest/trans/v1/cancelorder").arg(BASE), body, auth_headers(creds));
+    // v2 cancel endpoint; v1 is deprecated.
+    auto resp = http.post_json(QString("%1/rest/trans/v2/cancelorder").arg(BASE), body, auth_headers(creds));
 
     if (!resp.success)
         return {false, std::nullopt, checked_error(resp, "cancel_order failed"), ts};
@@ -294,7 +309,8 @@ ApiResponse<QVector<BrokerOrderInfo>> MotilalBroker::get_orders(const BrokerCred
     int64_t ts = now_ts();
 
     auto& http = BrokerHttp::instance();
-    auto resp = http.post_json(QString("%1/rest/book/v2/getorderbook").arg(BASE), QJsonObject{}, auth_headers(creds));
+    // v5 is the current orderbook endpoint.
+    auto resp = http.post_json(QString("%1/rest/book/v5/getorderbook").arg(BASE), QJsonObject{}, auth_headers(creds));
 
     if (!resp.success)
         return {false, std::nullopt, checked_error(resp, "get_orders failed"), ts};
@@ -339,7 +355,8 @@ ApiResponse<QJsonObject> MotilalBroker::get_trade_book(const BrokerCredentials& 
     int64_t ts = now_ts();
 
     auto& http = BrokerHttp::instance();
-    auto resp = http.post_json(QString("%1/rest/book/v1/gettradebook").arg(BASE), QJsonObject{}, auth_headers(creds));
+    // v4 is current; v1 is deprecated.
+    auto resp = http.post_json(QString("%1/rest/book/v4/gettradebook").arg(BASE), QJsonObject{}, auth_headers(creds));
 
     if (!resp.success)
         return {false, std::nullopt, checked_error(resp, "get_trade_book failed"), ts};
@@ -357,7 +374,8 @@ ApiResponse<QVector<BrokerPosition>> MotilalBroker::get_positions(const BrokerCr
     int64_t ts = now_ts();
 
     auto& http = BrokerHttp::instance();
-    auto resp = http.post_json(QString("%1/rest/book/v1/getposition").arg(BASE), QJsonObject{}, auth_headers(creds));
+    // v4 is the current position endpoint.
+    auto resp = http.post_json(QString("%1/rest/book/v4/getposition").arg(BASE), QJsonObject{}, auth_headers(creds));
 
     if (!resp.success)
         return {false, std::nullopt, checked_error(resp, "get_positions failed"), ts};
@@ -406,7 +424,8 @@ ApiResponse<QVector<BrokerHolding>> MotilalBroker::get_holdings(const BrokerCred
     int64_t ts = now_ts();
 
     auto& http = BrokerHttp::instance();
-    auto resp = http.post_json(QString("%1/rest/report/v1/getdpholding").arg(BASE), QJsonObject{}, auth_headers(creds));
+    // v3 dpholding endpoint.
+    auto resp = http.post_json(QString("%1/rest/report/v3/getdpholding").arg(BASE), QJsonObject{}, auth_headers(creds));
 
     if (!resp.success)
         return {false, std::nullopt, checked_error(resp, "get_holdings failed"), ts};
@@ -426,7 +445,11 @@ ApiResponse<QVector<BrokerHolding>> MotilalBroker::get_holdings(const BrokerCred
         QJsonObject o = v.toObject();
         BrokerHolding h;
         h.symbol = o.value("scripname").toString();
-        h.exchange = "NSE";
+        // Exchange comes from the holdings row when present; fall back to NSE
+        // (the dpholdings endpoint is primarily NSE-listed equities).
+        h.exchange = o.value("exchange").toString();
+        if (h.exchange.isEmpty())
+            h.exchange = "NSE";
         h.quantity = o.value("dpquantity").toInt();
         h.avg_price = o.value("buyavgprice").toDouble();
         // No LTP in holdings response — leave as 0; caller can fetch quotes separately
@@ -446,7 +469,8 @@ ApiResponse<BrokerFunds> MotilalBroker::get_funds(const BrokerCredentials& creds
     int64_t ts = now_ts();
 
     auto& http = BrokerHttp::instance();
-    auto resp = http.post_json(QString("%1/rest/report/v1/getreportmargindetail").arg(BASE), QJsonObject{},
+    // v3 margin detail endpoint.
+    auto resp = http.post_json(QString("%1/rest/report/v3/getreportmargindetail").arg(BASE), QJsonObject{},
                                auth_headers(creds));
 
     if (!resp.success)
@@ -534,7 +558,8 @@ ApiResponse<QVector<BrokerQuote>> MotilalBroker::get_quotes(const BrokerCredenti
         body["exchange"] = mo_exchange(exch);
         body["scripcode"] = token_str.isEmpty() ? 0 : token_str.toInt();
 
-        auto resp = http.post_json(QString("%1/rest/report/v1/getltpdata").arg(BASE), body, auth_headers(creds));
+        // v3 ltpdata endpoint.
+        auto resp = http.post_json(QString("%1/rest/report/v3/getltpdata").arg(BASE), body, auth_headers(creds));
         if (!resp.success)
             continue;
 

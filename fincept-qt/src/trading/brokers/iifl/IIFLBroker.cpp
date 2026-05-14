@@ -119,20 +119,25 @@ QString IIFLBroker::iifl_product(ProductType p) {
 }
 
 QString IIFLBroker::iifl_compression(const QString& resolution) {
-    if (resolution == "1")
+    // Intraday compressions are seconds (per XTS doc); daily/weekly/monthly take
+    // letter codes "D"/"W"/"M". Previously sending 1440/10080 for daily was
+    // wrong — XTS rejects those minute values for daily bars.
+    if (resolution == "1" || resolution == "1m")
         return "60";
-    if (resolution == "5")
+    if (resolution == "5" || resolution == "5m")
         return "300";
-    if (resolution == "15")
+    if (resolution == "15" || resolution == "15m")
         return "900";
-    if (resolution == "30")
+    if (resolution == "30" || resolution == "30m")
         return "1800";
-    if (resolution == "60")
+    if (resolution == "60" || resolution == "1h")
         return "3600";
-    if (resolution == "D")
-        return "1440";
-    if (resolution == "W")
-        return "10080";
+    if (resolution == "D" || resolution == "1D" || resolution == "day")
+        return "D";
+    if (resolution == "W" || resolution == "1W" || resolution == "week")
+        return "W";
+    if (resolution == "M" || resolution == "1M" || resolution == "month")
+        return "M";
     return "60";
 }
 
@@ -164,7 +169,7 @@ TokenExchangeResponse IIFLBroker::exchange_token(const QString& api_key, const Q
     QJsonObject trade_body;
     trade_body["appKey"] = trade_keys.app_key;
     trade_body["secretKey"] = trade_keys.secret;
-    trade_body["source"] = "WebAPI";
+    trade_body["source"] = "WEBAPI";
 
     auto& http = BrokerHttp::instance();
     auto trade_resp = http.post_json(QString("%1/user/session").arg(INTERACTIVE_URL), trade_body,
@@ -188,7 +193,7 @@ TokenExchangeResponse IIFLBroker::exchange_token(const QString& api_key, const Q
     QJsonObject market_body;
     market_body["appKey"] = market_keys.app_key;
     market_body["secretKey"] = market_keys.secret;
-    market_body["source"] = "WebAPI";
+    market_body["source"] = "WEBAPI";
 
     auto market_resp = http.post_json(QString("%1/auth/login").arg(MARKET_DATA_URL), market_body,
                                       {{"Content-Type", "application/json"}, {"Accept", "application/json"}});
@@ -222,15 +227,18 @@ OrderPlaceResponse IIFLBroker::place_order(const BrokerCredentials& creds, const
 
     QJsonObject body;
     body["exchangeSegment"] = iifl_exchange(order.exchange);
-    body["exchangeInstrumentID"] = order.instrument_token;
+    // exchangeInstrumentID must be a JSON number per XTS spec; passing as string
+    // works for some endpoints but is silently rejected for derivatives.
+    body["exchangeInstrumentID"] = order.instrument_token.toLongLong();
     body["productType"] = iifl_product(order.product_type);
     body["orderType"] = iifl_order_type(order.order_type);
     body["orderSide"] = (order.side == OrderSide::Buy) ? "BUY" : "SELL";
     body["timeInForce"] = "DAY";
-    body["disclosedQuantity"] = "0";
-    body["orderQuantity"] = QString::number(order.quantity);
-    body["limitPrice"] = QString::number(order.price, 'f', 2);
-    body["stopPrice"] = QString::number(order.stop_price, 'f', 2);
+    // XTS spec: integer/double, not stringified.
+    body["disclosedQuantity"] = 0;
+    body["orderQuantity"] = static_cast<int>(order.quantity);
+    body["limitPrice"] = order.price;
+    body["stopPrice"] = order.stop_price;
     body["orderUniqueIdentifier"] = "fincept";
 
     auto& http = BrokerHttp::instance();
@@ -264,10 +272,10 @@ ApiResponse<QJsonObject> IIFLBroker::modify_order(const BrokerCredentials& creds
     body["modifiedProductType"] = mods.value("productType").toString("MIS");
     body["modifiedOrderType"] = mods.value("orderType").toString("MARKET");
     body["modifiedOrderQuantity"] = mods.value("quantity").toInt(0);
-    body["modifiedDisclosedQuantity"] = "0";
-    body["modifiedLimitPrice"] = mods.value("limitPrice").toString("0");
-    body["modifiedStopPrice"] = mods.value("stopPrice").toString("0");
-    body["modifiedTimeInForce"] = "DAY";
+    body["modifiedDisclosedQuantity"] = 0;
+    body["modifiedLimitPrice"] = mods.value("limitPrice").toDouble(0.0);
+    body["modifiedStopPrice"] = mods.value("stopPrice").toDouble(0.0);
+    body["modifiedTimeInForce"] = mods.value("timeInForce").toString("DAY");
     body["orderUniqueIdentifier"] = "fincept";
 
     auto& http = BrokerHttp::instance();
@@ -403,7 +411,7 @@ ApiResponse<QVector<BrokerPosition>> IIFLBroker::get_positions(const BrokerCrede
 
     auto& http = BrokerHttp::instance();
     auto resp =
-        http.get(QString("%1/portfolio/positions?dayOrNet=NetWise").arg(INTERACTIVE_URL),
+        http.get(QString("%1/portfolio/positions?dayOrNet=NET").arg(INTERACTIVE_URL),
                  {{"authorization", tok.trade}, {"Content-Type", "application/json"}, {"Accept", "application/json"}});
     if (!resp.success)
         return {false, std::nullopt, checked_error(resp, "get_positions failed"), ts};
@@ -466,10 +474,14 @@ ApiResponse<QVector<BrokerHolding>> IIFLBroker::get_holdings(const BrokerCredent
     for (const QJsonValue& v : arr) {
         QJsonObject o = v.toObject();
         BrokerHolding h;
+        // Holding rows carry tradingsymbol + both NSE and BSE exchange codes.
+        // Prefer NSE when present, otherwise fall back to BSE.
         h.symbol = o.value("TradingSymbol").toString();
         if (h.symbol.isEmpty())
             h.symbol = o.value("ExchangeNSECode").toString();
-        h.exchange = "NSE";
+        if (h.symbol.isEmpty())
+            h.symbol = o.value("ExchangeBSECode").toString();
+        h.exchange = !o.value("ExchangeNSECode").toString().isEmpty() ? "NSE" : "BSE";
         h.quantity = o.value("HoldingQuantity").toInt();
         h.avg_price = o.value("BuyPrice").toDouble();
         h.ltp = o.value("Price").toDouble();
@@ -551,7 +563,10 @@ ApiResponse<QVector<BrokerQuote>> IIFLBroker::get_quotes(const BrokerCredentials
 
     QJsonObject body;
     body["instruments"] = instruments;
-    body["xtsMessageCode"] = 1502;
+    // 1501 = Touchline (lightweight LTP/OHLC); 1502 = MarketDepth (heavier, full book).
+    // Touchline is the canonical "get_quotes" target and stays within standard
+    // data-tier permissions.
+    body["xtsMessageCode"] = 1501;
     body["publishFormat"] = "JSON";
 
     auto& http = BrokerHttp::instance();
@@ -635,7 +650,12 @@ ApiResponse<QVector<BrokerCandle>> IIFLBroker::get_history(const BrokerCredentia
         return {false, std::nullopt, obj.value("description").toString("get_history failed"), ts};
 
     // result.dataReponse is a pipe-delimited string: "ts|o|h|l|c|v,ts|o|h|l|c|v,..."
-    QString data_response = obj.value("result").toObject().value("dataReponse").toString();
+    // The doc field name has the historical typo "dataReponse" but some XTS
+    // deployments now return the corrected "dataResponse" — try both.
+    const QJsonObject result_obj = obj.value("result").toObject();
+    QString data_response = result_obj.value("dataReponse").toString();
+    if (data_response.isEmpty())
+        data_response = result_obj.value("dataResponse").toString();
     if (data_response.isEmpty())
         return {true, QVector<BrokerCandle>{}, "", ts};
 

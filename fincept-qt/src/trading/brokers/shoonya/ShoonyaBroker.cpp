@@ -169,15 +169,18 @@ OrderPlaceResponse ShoonyaBroker::place_order(const BrokerCredentials& creds, co
     jdata["trantype"] = (order.side == OrderSide::Buy) ? "B" : "S";
     jdata["prd"] = sh_product(order.product_type);
     jdata["exch"] = order.exchange;
-    jdata["tsym"] = QString(QUrl::toPercentEncoding(order.symbol));
+    // tsym goes in raw — make_body percent-encodes the JSON wrapper exactly once.
+    // Pre-encoding here would double-encode special chars (M&M-EQ → M%2526M-EQ).
+    jdata["tsym"] = order.symbol;
     jdata["qty"] = QString::number(static_cast<int>(order.quantity));
     jdata["dscqty"] = "0";
     jdata["prctyp"] = sh_order_type(order.order_type);
     jdata["prc"] = QString::number(order.price, 'f', 2);
     jdata["trgprc"] = QString::number(order.stop_price, 'f', 2);
-    jdata["ret"] = "DAY";
+    jdata["ret"] = order.validity.isEmpty() ? "DAY" : order.validity;
     jdata["remarks"] = "fincept";
-    jdata["ordersource"] = "API";
+    // ordersource is a PlaceOrder-only field per NorenAPI spec (values: WEB/MOB/TT).
+    jdata["ordersource"] = "WEB";
 
     auto& http = BrokerHttp::instance();
     auto resp = http.post_raw(QString("%1/PlaceOrder").arg(BASE), make_body(jdata, creds.access_token),
@@ -208,14 +211,15 @@ ApiResponse<QJsonObject> ShoonyaBroker::modify_order(const BrokerCredentials& cr
     jdata["actid"] = creds.user_id;
     jdata["norenordno"] = order_id;
     jdata["exch"] = mods.value("exchange").toString();
-    jdata["tsym"] = QString(QUrl::toPercentEncoding(mods.value("symbol").toString()));
+    // No pre-encoding — make_body handles the form-body percent-encoding pass.
+    jdata["tsym"] = mods.value("symbol").toString();
     jdata["qty"] = QString::number(mods.value("quantity").toInt(0));
     jdata["prctyp"] = mods.value("orderType").toString("LMT");
     jdata["prc"] = QString::number(mods.value("price").toDouble(0), 'f', 2);
     jdata["trgprc"] = QString::number(mods.value("triggerPrice").toDouble(0), 'f', 2);
     jdata["dscqty"] = "0";
-    jdata["ret"] = "DAY";
-    jdata["ordersource"] = "API";
+    jdata["ret"] = mods.value("validity").toString("DAY");
+    // ordersource not part of ModifyOrder spec — omit.
 
     auto& http = BrokerHttp::instance();
     auto resp = http.post_raw(QString("%1/ModifyOrder").arg(BASE), make_body(jdata, creds.access_token),
@@ -243,7 +247,7 @@ ApiResponse<QJsonObject> ShoonyaBroker::cancel_order(const BrokerCredentials& cr
     QJsonObject jdata;
     jdata["uid"] = creds.user_id;
     jdata["norenordno"] = order_id;
-    jdata["ordersource"] = "API";
+    // ordersource not part of CancelOrder spec — omit.
 
     auto& http = BrokerHttp::instance();
     auto resp = http.post_raw(QString("%1/CancelOrder").arg(BASE), make_body(jdata, creds.access_token),
@@ -270,7 +274,7 @@ ApiResponse<QVector<BrokerOrderInfo>> ShoonyaBroker::get_orders(const BrokerCred
 
     QJsonObject jdata;
     jdata["uid"] = creds.user_id;
-    jdata["ordersource"] = "API";
+    // ordersource not part of OrderBook spec — omit.
 
     auto& http = BrokerHttp::instance();
     auto resp = http.post_raw(QString("%1/OrderBook").arg(BASE), make_body(jdata, creds.access_token),
@@ -554,9 +558,15 @@ ApiResponse<QVector<BrokerQuote>> ShoonyaBroker::get_quotes(const BrokerCredenti
         quote.low = o.value("l").toString().toDouble();
         quote.close = o.value("c").toString().toDouble();
         quote.volume = o.value("v").toString().toLongLong();
-        if (quote.close > 0)
+        // Guard both change and change_pct: when prev-close is missing (illiquid
+        // contracts, first session), don't publish an LTP-equals-change artifact.
+        if (quote.close > 0) {
+            quote.change = quote.ltp - quote.close;
             quote.change_pct = (quote.ltp - quote.close) / quote.close * 100.0;
-        quote.change = quote.ltp - quote.close;
+        } else {
+            quote.change = 0.0;
+            quote.change_pct = 0.0;
+        }
         quote.timestamp = ts;
         quotes.append(quote);
     }

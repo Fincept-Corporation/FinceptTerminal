@@ -3,7 +3,7 @@
 
 #include "core/symbol/IGroupLinked.h"
 #include "core/symbol/SymbolGroup.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "screens/crypto_trading/CryptoTypes.h"
 #include "trading/TradingTypes.h"
 
