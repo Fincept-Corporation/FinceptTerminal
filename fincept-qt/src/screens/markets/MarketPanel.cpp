@@ -3,8 +3,8 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -14,6 +14,21 @@
 #include <QStackedWidget>
 #include <QVBoxLayout>
 
+namespace {                              //function added to format large volume numbers in a compact form (e.g. 1.5M for 1,500,000)
+
+QString format_compact_volume(double v) {
+    if (v <= 0)
+        return QStringLiteral("--");
+    if (v >= 1e9)
+        return QString::number(v / 1e9, 'f', 2) + QStringLiteral("B");
+    if (v >= 1e6)
+        return QString::number(v / 1e6, 'f', 2) + QStringLiteral("M");
+    if (v >= 1e3)
+        return QString::number(v / 1e3, 'f', 1) + QStringLiteral("K");
+    return QString::number(qint64(v));
+}
+
+}
 namespace fincept::screens {
 
 MarketPanel::MarketPanel(const MarketPanelConfig& config, QWidget* parent)
@@ -364,7 +379,7 @@ void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {
             else if (col == "CHG%")   table_->setItem(row, ci, mk(QString("%1%2%").arg(arr).arg(std::abs(q.change_pct), 0, 'f', 2), cc));
             else if (col == "HIGH")   table_->setItem(row, ci, mk(QString::number(q.high, 'f', 2), ui::colors::TEXT_SECONDARY()));
             else if (col == "LOW")    table_->setItem(row, ci, mk(QString::number(q.low,  'f', 2), ui::colors::TEXT_SECONDARY()));
-            else if (col == "VOL")    table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));  // TODO: wire volume from API response
+            else if (col == "VOL")    table_->setItem(row, ci, mk(format_compact_volume(q.volume), ui::colors::TEXT_DIM()));  // TODO: wire volume from API response // change made here to use the new format_compact_volume function to display volume in a more readable format (e.g. 1.5M instead of 1500000)
             else if (col == "BID")    table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
             else if (col == "ASK")    table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
             else if (col == "OPEN")   table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
