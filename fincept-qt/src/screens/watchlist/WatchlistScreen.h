@@ -50,6 +50,7 @@ class WatchlistScreen : public QWidget, public IStatefulScreen, public IGroupLin
     void on_add_stock();
     void on_remove_stock();
     void on_refresh();
+    void on_export_csv();
     void refresh_theme();
 
   private:
@@ -88,6 +89,7 @@ class WatchlistScreen : public QWidget, public IStatefulScreen, public IGroupLin
     QLineEdit* add_input_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;
     QPushButton* del_wl_btn_ = nullptr;
+    QPushButton* export_csv_btn_ = nullptr;
     QPushButton* add_btn_ = nullptr;
     QPushButton* remove_btn_ = nullptr;
     ui::DataTable* table_ = nullptr;
