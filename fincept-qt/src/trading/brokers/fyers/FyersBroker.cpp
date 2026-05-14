@@ -110,7 +110,8 @@ OrderPlaceResponse FyersBroker::place_order(const BrokerCredentials& creds, cons
     if (order.take_profit > 0)
         payload["takeProfit"] = order.take_profit;
 
-    auto resp = BrokerHttp::instance().post_json(QString(base_url()) + "/api/v3/orders", payload, auth_headers(creds));
+    auto resp =
+        BrokerHttp::instance().post_json(QString(base_url()) + "/api/v3/orders/sync", payload, auth_headers(creds));
 
     OrderPlaceResponse result;
     if (!resp.success) {
