@@ -7,6 +7,8 @@
 #    include "datahub/DataHub.h"
 #    include "datahub/DataHubMetaTypes.h"
 
+#include <QApplication>
+#include <QClipboard>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QMenu>
@@ -96,6 +98,11 @@ void MarketPanel::build_ui() {
     // causing the first panel in each column to grab disproportionate space.
     table_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Ignored);
     setup_table_columns();
+    
+    table_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(table_, &QTableWidget::customContextMenuRequested,
+            this, &MarketPanel::show_row_context_menu);
+
     table_->setVisible(false);  // hidden until first data arrives
     bl->addWidget(table_);
 
@@ -472,6 +479,21 @@ void MarketPanel::refresh_theme() {
                      ui::colors::TEXT_DIM(), ui::colors::BORDER_DIM())
                 .arg(fhdr).arg(ff));
     }
+}
+
+void MarketPanel::show_row_context_menu(const QPoint& pos) {
+    auto* it = table_->itemAt(pos);
+    if (!it) return;
+
+    QMenu menu(this);
+    QAction* copy_act = menu.addAction("Copy Symbol");
+    connect(copy_act, &QAction::triggered, this, [this, it]() {
+        auto* sym_item = table_->item(it->row(), 0);
+        if (sym_item) {
+            QApplication::clipboard()->setText(sym_item->text());
+        }
+    });
+    menu.exec(table_->viewport()->mapToGlobal(pos));
 }
 
 } // namespace fincept::screens

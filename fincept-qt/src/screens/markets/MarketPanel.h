@@ -57,6 +57,7 @@ class MarketPanel : public QWidget {
     void tick_loading_anim();
     void refresh_theme();
     void open_cols_dropdown();
+    void show_row_context_menu(const QPoint& pos);
 
     void hub_resubscribe();
     void hub_unsubscribe_all();
