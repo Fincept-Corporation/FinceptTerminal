@@ -106,7 +106,7 @@ node_modules/
 dist-ssr/
 
 # ── Claude Code — never commit ───────────────────────────────
-.claude/settings.local.json
+.claude/
 CLAUDE.md
 fincept-qt/DESIGN_SYSTEM.md
 
