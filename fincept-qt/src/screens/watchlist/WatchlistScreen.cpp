@@ -7,6 +7,7 @@
 #include "core/symbol/SymbolDragSource.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/formatting/NumberFormat.h"
 
 #    include "datahub/DataHub.h"
 #    include "datahub/DataHubMetaTypes.h"
@@ -559,7 +560,7 @@ void WatchlistScreen::populate_table(const QVector<services::QuoteData>& quotes)
                              QString("%1%2").arg(q.change >= 0 ? "+" : "").arg(q.change, 0, 'f', 2),
                              QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2),
                              QString("$%1").arg(q.high, 0, 'f', 2), QString("$%1").arg(q.low, 0, 'f', 2),
-                             QString::number(static_cast<qint64>(q.volume))});
+                             fincept::ui::formatting::format_compact_volume(static_cast<qint64>(q.volume))});
 
             int row = table_->rowCount() - 1;
             // Green = good, Red = bad
@@ -718,7 +719,7 @@ void WatchlistScreen::on_export_csv() {
             << QString::number(q.change_pct, 'f', 2) << ','
             << QString::number(q.high, 'f', 2) << ','
             << QString::number(q.low, 'f', 2) << ','
-            << QString::number(static_cast<qint64>(q.volume)) << '\n';
+            << fincept::ui::formatting::format_compact_volume(static_cast<qint64>(q.volume)) << '\n';
     }
 }
 

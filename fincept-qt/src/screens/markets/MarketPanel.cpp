@@ -2,6 +2,7 @@
 
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/formatting/NumberFormat.h"
 
 #    include "datahub/DataHub.h"
 #    include "datahub/DataHubMetaTypes.h"
@@ -364,7 +365,7 @@ void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {
             else if (col == "CHG%")   table_->setItem(row, ci, mk(QString("%1%2%").arg(arr).arg(std::abs(q.change_pct), 0, 'f', 2), cc));
             else if (col == "HIGH")   table_->setItem(row, ci, mk(QString::number(q.high, 'f', 2), ui::colors::TEXT_SECONDARY()));
             else if (col == "LOW")    table_->setItem(row, ci, mk(QString::number(q.low,  'f', 2), ui::colors::TEXT_SECONDARY()));
-            else if (col == "VOL")    table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));  // TODO: wire volume from API response
+            else if (col == "VOL")    table_->setItem(row, ci, mk(fincept::ui::formatting::format_compact_volume(static_cast<qint64>(q.volume)), ui::colors::TEXT_DIM()));
             else if (col == "BID")    table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
             else if (col == "ASK")    table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
             else if (col == "OPEN")   table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
