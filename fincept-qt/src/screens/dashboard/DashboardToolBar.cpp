@@ -64,7 +64,7 @@ DashboardToolBar::DashboardToolBar(QWidget* parent) : QWidget(parent) {
 
     make_sep(ll);
 
-   clock_btn_ = new QPushButton;
+    clock_btn_ = new QPushButton;
     clock_btn_->setObjectName("dtBtn");
     clock_btn_->setFlat(true);
     clock_btn_->setCursor(Qt::PointingHandCursor);
@@ -189,7 +189,8 @@ void DashboardToolBar::refresh_theme() {
     // Force child containers to re-evaluate their background after stylesheet change.
     // Without this, Qt may repaint them with the default palette grey on show events.
     auto repolish = [](QWidget* w) {
-        if (!w) return;
+        if (!w)
+            return;
         w->style()->unpolish(w);
         w->style()->polish(w);
         w->update();
@@ -209,13 +210,9 @@ void DashboardToolBar::showEvent(QShowEvent* event) {
 
 void DashboardToolBar::update_clock() {
     const QString suffix = clock_is_utc_ ? " UTC" : " LOC";
-    const QDateTime now  = clock_is_utc_ ? QDateTime::currentDateTimeUtc()
-                                         : QDateTime::currentDateTime();
+    const QDateTime now = clock_is_utc_ ? QDateTime::currentDateTimeUtc() : QDateTime::currentDateTime();
     clock_btn_->setText(now.toString("yyyy-MM-dd HH:mm:ss") + suffix);
 }
-    
-   
-
 
 void DashboardToolBar::set_widget_count(int count) {
     widget_count_->setText(QString("%1 WIDGETS").arg(count));
