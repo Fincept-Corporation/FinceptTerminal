@@ -1,5 +1,6 @@
 #include "trading/brokers/aliceblue/AliceBlueBroker.h"
 
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 #include <QCryptographicHash>
@@ -62,32 +63,24 @@ QString AliceBlueBroker::checked_error(const BrokerHttpResponse& resp, const QSt
 // Vendor API product enum: INTRADAY, LONGTERM, MTF. The legacy NRML token
 // is from the ANT-Web product line and isn't accepted on /open-api/od/v1/* —
 // map Margin → MTF (margin trading facility, the new equivalent).
-QString AliceBlueBroker::ab_product(ProductType p) {
-    switch (p) {
-        case ProductType::Intraday:
-            return "INTRADAY";
-        case ProductType::Delivery:
-            return "LONGTERM";
-        case ProductType::Margin:
-            return "MTF";
-        default:
-            return "INTRADAY";
-    }
-}
-
-QString AliceBlueBroker::ab_order_type(OrderType t) {
-    switch (t) {
-        case OrderType::Market:
-            return "MARKET";
-        case OrderType::Limit:
-            return "LIMIT";
-        case OrderType::StopLoss:
-            return "SLM"; // SL-M: trigger only, market fill
-        case OrderType::StopLossLimit:
-            return "SL"; // SL:   trigger + limit price
-        default:
-            return "MARKET";
-    }
+// Vendor API enums:
+//   Product: INTRADAY, LONGTERM, MTF. Legacy NRML is from ANT-Web and isn't
+//   accepted on /open-api/od/v1/* — Margin and MTF both map to MTF.
+//   OrderType: MARKET, LIMIT, SLM (trigger-only market), SL (trigger+limit).
+const BrokerEnumMap<QString>& AliceBlueBroker::ab_enum_map() {
+    static const auto m = [] {
+        BrokerEnumMap<QString> x;
+        x.set(OrderType::Market, "MARKET");
+        x.set(OrderType::Limit, "LIMIT");
+        x.set(OrderType::StopLoss, "SLM");
+        x.set(OrderType::StopLossLimit, "SL");
+        x.set(ProductType::Intraday, "INTRADAY");
+        x.set(ProductType::Delivery, "LONGTERM");
+        x.set(ProductType::Margin, "MTF");
+        x.set(ProductType::MTF, "MTF");
+        return x;
+    }();
+    return m;
 }
 
 // AliceBlue history API: "1" for intraday (all resolutions), "D" for daily
@@ -165,9 +158,9 @@ OrderPlaceResponse AliceBlueBroker::place_order(const BrokerCredentials& creds, 
     item["instrumentId"] = instrument_id;
     item["transactionType"] = (order.side == OrderSide::Buy) ? "BUY" : "SELL";
     item["quantity"] = order.quantity;
-    item["product"] = ab_product(order.product_type);
+    item["product"] = ab_enum_map().product_or(order.product_type, "INTRADAY");
     item["orderComplexity"] = "REGULAR";
-    item["orderType"] = ab_order_type(order.order_type);
+    item["orderType"] = ab_enum_map().order_type_or(order.order_type, "MARKET");
     item["validity"] = "DAY";
     item["price"] = (order.order_type == OrderType::Market) ? "0" : QString::number(order.price, 'f', 2);
     item["slTriggerPrice"] = (order.order_type == OrderType::StopLoss || order.order_type == OrderType::StopLossLimit)

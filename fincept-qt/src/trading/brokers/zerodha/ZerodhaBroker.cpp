@@ -1,6 +1,7 @@
 #include "trading/brokers/zerodha/ZerodhaBroker.h"
 
 #include "core/logging/Logger.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/zerodha/ZerodhaAutoLogin.h"
 #include "trading/instruments/InstrumentService.h"
@@ -34,33 +35,26 @@ QMap<QString, QString> ZerodhaBroker::auth_headers(const BrokerCredentials& cred
             {"X-Kite-Version", kite_api_version}};
 }
 
-const char* ZerodhaBroker::zerodha_order_type(OrderType t) {
-    switch (t) {
-        case OrderType::Market:
-            return "MARKET";
-        case OrderType::Limit:
-            return "LIMIT";
-        case OrderType::StopLoss:
-            return "SL-M";
-        case OrderType::StopLossLimit:
-            return "SL";
-    }
-    return "MARKET";
-}
-const char* ZerodhaBroker::zerodha_product(ProductType p) {
-    switch (p) {
-        case ProductType::Intraday:
-            return "MIS";
-        case ProductType::Delivery:
-            return "CNC";
-        case ProductType::Margin:
-            return "NRML";
-        default:
-            return "MIS";
-    }
-}
-const char* ZerodhaBroker::zerodha_side(OrderSide s) {
-    return s == OrderSide::Buy ? "BUY" : "SELL";
+const BrokerEnumMap<QString>& ZerodhaBroker::kite_enum_map() {
+    static const auto m = [] {
+        BrokerEnumMap<QString> x;
+        // Order types
+        x.set(OrderType::Market, "MARKET");
+        x.set(OrderType::Limit, "LIMIT");
+        x.set(OrderType::StopLoss, "SL-M");
+        x.set(OrderType::StopLossLimit, "SL");
+        // Sides
+        x.set(OrderSide::Buy, "BUY");
+        x.set(OrderSide::Sell, "SELL");
+        // Products
+        x.set(ProductType::Intraday, "MIS");
+        x.set(ProductType::Delivery, "CNC");
+        x.set(ProductType::Margin, "NRML");
+        x.set(ProductType::MTF, "MTF"); // equities only
+        // Cover/Bracket → variety (handled separately by zerodha_variety)
+        return x;
+    }();
+    return m;
 }
 // Kite varieties: regular, amo, co, iceberg, auction.
 // Bracket Order (bo) was retired by SEBI and is no longer accepted — orders
@@ -155,14 +149,19 @@ TokenExchangeResponse ZerodhaBroker::exchange_token(const QString& api_key, cons
 }
 
 OrderPlaceResponse ZerodhaBroker::place_order(const BrokerCredentials& creds, const UnifiedOrder& order) {
+    // Variety is derived from order flags, not ProductType. AMO orders take
+    // variety="amo" regardless of MIS/CNC/NRML; CoverOrder takes "co".
+    // Iceberg/Auction would need new UnifiedOrder flags — not wired yet.
     QString variety = zerodha_variety(order.product_type);
+    if (order.amo)
+        variety = "amo";
     QMap<QString, QString> params = {
         {"tradingsymbol", order.symbol},
         {"exchange", order.exchange},
-        {"transaction_type", zerodha_side(order.side)},
-        {"order_type", zerodha_order_type(order.order_type)},
+        {"transaction_type", kite_enum_map().side_or(order.side, "BUY")},
+        {"order_type", kite_enum_map().order_type_or(order.order_type, "MARKET")},
         {"quantity", QString::number(static_cast<int>(order.quantity))},
-        {"product", zerodha_product(order.product_type)},
+        {"product", kite_enum_map().product_or(order.product_type, "MIS")},
         {"validity", order.validity.isEmpty() ? "DAY" : order.validity},
         {"disclosed_quantity", "0"},
         {"tag", "fincept"},
@@ -423,7 +422,17 @@ ApiResponse<QVector<BrokerCandle>> ZerodhaBroker::get_history(const BrokerCreden
         qint64 epoch = QDateTime::fromString(c[0].toString(), Qt::ISODateWithMs).toSecsSinceEpoch();
         if (epoch == 0)
             epoch = QDateTime::fromString(c[0].toString(), Qt::ISODate).toSecsSinceEpoch();
-        candles.append({epoch, c[1].toDouble(), c[2].toDouble(), c[3].toDouble(), c[4].toDouble(), c[5].toDouble()});
+        BrokerCandle bc;
+        bc.timestamp = epoch;
+        bc.open = c[1].toDouble();
+        bc.high = c[2].toDouble();
+        bc.low = c[3].toDouble();
+        bc.close = c[4].toDouble();
+        bc.volume = c[5].toDouble();
+        // c[6] is Open Interest when oi=1 is requested (F&O only); 0 elsewhere.
+        if (c.size() >= 7)
+            bc.oi = c[6].toDouble();
+        candles.append(bc);
     }
     return {true, candles, "", ts};
 }

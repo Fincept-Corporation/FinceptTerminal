@@ -139,33 +139,22 @@ static QString canonical_exchange(const QString& seg) {
     return map.value(seg, seg);
 }
 
-// ── Product mapping ───────────────────────────────────────────────────────────
-QString KotakBroker::kotak_product(ProductType p) {
-    switch (p) {
-        case ProductType::Intraday:
-            return "MIS";
-        case ProductType::Delivery:
-            return "CNC";
-        case ProductType::Margin:
-            return "NRML";
-        default:
-            return "MIS";
-    }
-}
-
-// ── Order type mapping ────────────────────────────────────────────────────────
-QString KotakBroker::kotak_order_type(OrderType t) {
-    switch (t) {
-        case OrderType::Market:
-            return "MKT";
-        case OrderType::Limit:
-            return "L";
-        case OrderType::StopLoss:
-            return "SL";
-        case OrderType::StopLossLimit:
-            return "SL-M";
-    }
-    return "MKT";
+// Per Kotak Neo SDK order_type map:
+//   "SL"   = Stop loss LIMIT  (trigger + limit price) → StopLossLimit
+//   "SL-M" = Stop loss MARKET (trigger only)          → StopLoss
+const BrokerEnumMap<QString>& KotakBroker::kotak_enum_map() {
+    static const auto m = [] {
+        BrokerEnumMap<QString> x;
+        x.set(OrderType::Market, "MKT");
+        x.set(OrderType::Limit, "L");
+        x.set(OrderType::StopLoss, "SL-M");
+        x.set(OrderType::StopLossLimit, "SL");
+        x.set(ProductType::Intraday, "MIS");
+        x.set(ProductType::Delivery, "CNC");
+        x.set(ProductType::Margin, "NRML");
+        return x;
+    }();
+    return m;
 }
 
 // ── pSymbol lookup ────────────────────────────────────────────────────────────
@@ -392,10 +381,10 @@ OrderPlaceResponse KotakBroker::place_order(const BrokerCredentials& creds, cons
     jobj["bc"] = "1";
     jobj["es"] = kotak_exchange(order.exchange);
     jobj["mp"] = "0";
-    jobj["pc"] = kotak_product(order.product_type);
+    jobj["pc"] = kotak_enum_map().product_or(order.product_type, "MIS");
     jobj["pf"] = "N";
     jobj["pr"] = QString::number(order.price, 'f', 2);
-    jobj["pt"] = kotak_order_type(order.order_type);
+    jobj["pt"] = kotak_enum_map().order_type_or(order.order_type, "MKT");
     jobj["qt"] = QString::number(static_cast<int>(order.quantity));
     jobj["rt"] = order.validity.isEmpty() ? "DAY" : order.validity;
     jobj["tp"] = QString::number(order.stop_price, 'f', 2);

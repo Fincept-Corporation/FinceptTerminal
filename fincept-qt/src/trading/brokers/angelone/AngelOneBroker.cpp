@@ -9,6 +9,7 @@
 #include "trading/brokers/angelone/AngelOneBroker.h"
 
 #include "core/logging/Logger.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/instruments/InstrumentService.h"
 
@@ -172,18 +173,27 @@ QString AngelOneBroker::lookup_token(const QString& symbol, const QString& excha
 // Mapping helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-QString AngelOneBroker::ao_order_type(OrderType t) {
-    switch (t) {
-        case OrderType::Market:
-            return "MARKET";
-        case OrderType::Limit:
-            return "LIMIT";
-        case OrderType::StopLoss:
-            return "STOPLOSS_MARKET";
-        case OrderType::StopLossLimit:
-            return "STOPLOSS_LIMIT";
-    }
-    return "MARKET";
+// SmartAPI v2 enums: order/product wire values + transaction sides.
+// CoverOrder/BracketOrder are not natively supported and downgrade to INTRADAY
+// at the product level; the variety string is derived separately by ao_variety.
+const BrokerEnumMap<QString>& AngelOneBroker::ao_enum_map() {
+    static const auto m = [] {
+        BrokerEnumMap<QString> x;
+        x.set(OrderType::Market, "MARKET");
+        x.set(OrderType::Limit, "LIMIT");
+        x.set(OrderType::StopLoss, "STOPLOSS_MARKET");
+        x.set(OrderType::StopLossLimit, "STOPLOSS_LIMIT");
+        x.set(OrderSide::Buy, "BUY");
+        x.set(OrderSide::Sell, "SELL");
+        x.set(ProductType::Intraday, "INTRADAY");
+        x.set(ProductType::Delivery, "DELIVERY");
+        x.set(ProductType::Margin, "CARRYFORWARD");
+        x.set(ProductType::MTF, "MARGIN");
+        x.set(ProductType::CoverOrder, "INTRADAY");
+        x.set(ProductType::BracketOrder, "INTRADAY");
+        return x;
+    }();
+    return m;
 }
 
 QString AngelOneBroker::ao_variety(OrderType t, bool amo) {
@@ -194,25 +204,7 @@ QString AngelOneBroker::ao_variety(OrderType t, bool amo) {
     return "NORMAL";
 }
 
-QString AngelOneBroker::ao_product(ProductType p) {
-    switch (p) {
-        case ProductType::Intraday:
-            return "INTRADAY";
-        case ProductType::Delivery:
-            return "DELIVERY";
-        case ProductType::Margin:
-            return "CARRYFORWARD";
-        case ProductType::CoverOrder:
-            return "INTRADAY"; // not natively supported
-        case ProductType::BracketOrder:
-            return "INTRADAY";
-    }
-    return "INTRADAY";
-}
 
-QString AngelOneBroker::ao_transaction(OrderSide s) {
-    return s == OrderSide::Buy ? "BUY" : "SELL";
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Auth headers
@@ -319,6 +311,55 @@ TokenExchangeResponse AngelOneBroker::exchange_token(const QString& api_key, con
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Refresh JWT pair using stored refresh_token
+// POST /rest/auth/angelbroking/jwt/v1/generateTokens { refreshToken }
+// On success returns new jwtToken + refreshToken + feedToken (sometimes).
+// Callers should swap creds.access_token / refresh_token on success.
+// ─────────────────────────────────────────────────────────────────────────────
+
+TokenExchangeResponse AngelOneBroker::refresh_token(const BrokerCredentials& creds) {
+    TokenExchangeResponse result;
+    if (creds.refresh_token.isEmpty()) {
+        result.error = "refresh_token: no stored refresh token";
+        return result;
+    }
+    const auto& ctx = client_context();
+    QMap<QString, QString> headers = {
+        {"X-PrivateKey", creds.api_key},
+        {"X-UserType", "USER"},
+        {"X-SourceID", "WEB"},
+        {"X-ClientLocalIP", ctx.local_ip},
+        {"X-ClientPublicIP", ctx.public_ip},
+        {"X-MACAddress", ctx.mac},
+        {"Content-Type", "application/json"},
+        {"Accept", "application/json"},
+        {"Authorization", "Bearer " + creds.access_token},
+    };
+    QJsonObject body{{"refreshToken", creds.refresh_token}};
+    auto resp = BrokerHttp::instance().post_json(
+        BASE_AO + "/rest/auth/angelbroking/jwt/v1/generateTokens", body, headers);
+    if (!resp.success) {
+        result.error = checked_error(resp, "refresh_token: network error");
+        return result;
+    }
+    if (!resp.json.value("status").toBool()) {
+        result.error = checked_error(resp, "refresh_token: rejected");
+        return result;
+    }
+    const auto d = resp.json.value("data").toObject();
+    result.success = true;
+    result.access_token = d.value("jwtToken").toString();
+    result.refresh_token = d.value("refreshToken").toString();
+    if (result.refresh_token.isEmpty())
+        result.refresh_token = creds.refresh_token; // some responses omit it
+    result.user_id = creds.user_id;
+    // Preserve additional_data (feed_token + client_code + totp_secret).
+    result.additional_data = creds.additional_data;
+    LOG_INFO(TAG_AO, "Token refreshed for user " + result.user_id);
+    return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Place Order
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -329,10 +370,10 @@ OrderPlaceResponse AngelOneBroker::place_order(const BrokerCredentials& creds, c
         {"variety", ao_variety(order.order_type, order.amo)},
         {"tradingsymbol", order.symbol},
         {"symboltoken", token},
-        {"transactiontype", ao_transaction(order.side)},
+        {"transactiontype", ao_enum_map().side_or(order.side, "BUY")},
         {"exchange", order.exchange},
-        {"ordertype", ao_order_type(order.order_type)},
-        {"producttype", ao_product(order.product_type)},
+        {"ordertype", ao_enum_map().order_type_or(order.order_type, "MARKET")},
+        {"producttype", ao_enum_map().product_or(order.product_type, "INTRADAY")},
         {"duration", order.validity.isEmpty() ? "DAY" : order.validity},
         {"price", QString::number(order.price, 'f', 2)},
         {"triggerprice", QString::number(order.stop_price, 'f', 2)},
@@ -826,10 +867,10 @@ ApiResponse<OrderMargin> AngelOneBroker::get_order_margins(const BrokerCredentia
         {"exchange", order.exchange},
         {"qty", int(order.quantity)},
         {"price", order.price},
-        {"productType", ao_product(order.product_type)},
+        {"productType", ao_enum_map().product_or(order.product_type, "INTRADAY")},
         {"token", token},
-        {"tradeType", ao_transaction(order.side)},
-        {"orderType", ao_order_type(order.order_type)},
+        {"tradeType", ao_enum_map().side_or(order.side, "BUY")},
+        {"orderType", ao_enum_map().order_type_or(order.order_type, "MARKET")},
     };
 
     QJsonObject payload{{"positions", QJsonArray{leg}}};
@@ -859,10 +900,10 @@ ApiResponse<BasketMargin> AngelOneBroker::get_basket_margins(const BrokerCredent
             {"exchange", o.exchange},
             {"qty", int(o.quantity)},
             {"price", o.price},
-            {"productType", ao_product(o.product_type)},
+            {"productType", ao_enum_map().product_or(o.product_type, "INTRADAY")},
             {"token", token},
-            {"tradeType", ao_transaction(o.side)},
-            {"orderType", ao_order_type(o.order_type)},
+            {"tradeType", ao_enum_map().side_or(o.side, "BUY")},
+            {"orderType", ao_enum_map().order_type_or(o.order_type, "MARKET")},
         });
     }
 

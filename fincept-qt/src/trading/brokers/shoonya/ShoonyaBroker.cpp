@@ -30,32 +30,19 @@ QByteArray ShoonyaBroker::make_login_body(const QJsonObject& jdata) {
 
 // ---------- Static helpers ----------
 
-QString ShoonyaBroker::sh_product(ProductType p) {
-    switch (p) {
-        case ProductType::Intraday:
-            return "I";
-        case ProductType::Delivery:
-            return "C";
-        case ProductType::Margin:
-            return "M";
-        default:
-            return "I";
-    }
-}
-
-QString ShoonyaBroker::sh_order_type(OrderType t) {
-    switch (t) {
-        case OrderType::Market:
-            return "MKT";
-        case OrderType::Limit:
-            return "LMT";
-        case OrderType::StopLoss:
-            return "SL-MKT"; // SL-M: trigger only, market fill
-        case OrderType::StopLossLimit:
-            return "SL-LMT"; // SL:   trigger + limit price
-        default:
-            return "MKT";
-    }
+const BrokerEnumMap<QString>& ShoonyaBroker::sh_enum_map() {
+    static const auto m = [] {
+        BrokerEnumMap<QString> x;
+        x.set(OrderType::Market, "MKT");
+        x.set(OrderType::Limit, "LMT");
+        x.set(OrderType::StopLoss, "SL-MKT");      // SL-M: trigger only, market fill
+        x.set(OrderType::StopLossLimit, "SL-LMT"); // SL:   trigger + limit price
+        x.set(ProductType::Intraday, "I");
+        x.set(ProductType::Delivery, "C");
+        x.set(ProductType::Margin, "M");
+        return x;
+    }();
+    return m;
 }
 
 QString ShoonyaBroker::sh_status(const QString& s) {
@@ -167,14 +154,14 @@ OrderPlaceResponse ShoonyaBroker::place_order(const BrokerCredentials& creds, co
     jdata["uid"] = creds.user_id;
     jdata["actid"] = creds.user_id;
     jdata["trantype"] = (order.side == OrderSide::Buy) ? "B" : "S";
-    jdata["prd"] = sh_product(order.product_type);
+    jdata["prd"] = sh_enum_map().product_or(order.product_type, "I");
     jdata["exch"] = order.exchange;
     // tsym goes in raw — make_body percent-encodes the JSON wrapper exactly once.
     // Pre-encoding here would double-encode special chars (M&M-EQ → M%2526M-EQ).
     jdata["tsym"] = order.symbol;
     jdata["qty"] = QString::number(static_cast<int>(order.quantity));
     jdata["dscqty"] = "0";
-    jdata["prctyp"] = sh_order_type(order.order_type);
+    jdata["prctyp"] = sh_enum_map().order_type_or(order.order_type, "MKT");
     jdata["prc"] = QString::number(order.price, 'f', 2);
     jdata["trgprc"] = QString::number(order.stop_price, 'f', 2);
     jdata["ret"] = order.validity.isEmpty() ? "DAY" : order.validity;
@@ -432,22 +419,28 @@ ApiResponse<QVector<BrokerHolding>> ShoonyaBroker::get_holdings(const BrokerCred
         return {false, std::nullopt, "get_holdings: invalid response", ts};
 
     QVector<BrokerHolding> holdings;
+    // Cache (exch, token) per holding so we can hydrate LTP via /GetQuotes after parsing.
+    struct LtpRef {
+        int holding_index;
+        QString exch;
+        QString token;
+    };
+    QVector<LtpRef> ltp_refs;
 
     for (const QJsonValue& v : doc.array()) {
         QJsonObject o = v.toObject();
 
-        // Extract symbol from exch_tsym array
-        QString symbol, exchange;
+        QString symbol, exchange, token;
         QJsonArray exch_tsym = o.value("exch_tsym").toArray();
         if (!exch_tsym.isEmpty()) {
             QJsonObject et = exch_tsym[0].toObject();
             symbol = et.value("tsym").toString();
             exchange = et.value("exch").toString();
+            token = et.value("token").toString();
         }
         if (symbol.isEmpty())
             continue;
 
-        // Total qty = btstqty + holdqty + brkcolqty + unplgdqty + benqty + max(npoadqty, dpqty) - usedqty
         int btstqty = o.value("btstqty").toString().toInt();
         int holdqty = o.value("holdqty").toString().toInt();
         int brkcolqty = o.value("brkcolqty").toString().toInt();
@@ -463,9 +456,45 @@ ApiResponse<QVector<BrokerHolding>> ShoonyaBroker::get_holdings(const BrokerCred
         h.exchange = exchange;
         h.quantity = total_qty;
         h.avg_price = o.value("upldprc").toString().toDouble();
-        h.ltp = 0.0; // not provided in holdings response
+        h.ltp = 0.0;
+        h.invested_value = total_qty * h.avg_price;
+        h.current_value = 0.0;
         h.pnl = 0.0;
+        h.pnl_pct = 0.0;
         holdings.append(h);
+        if (!token.isEmpty() && !exchange.isEmpty())
+            ltp_refs.push_back({static_cast<int>(holdings.size()) - 1, exchange, token});
+    }
+
+    // Best-effort LTP hydration via /GetQuotes (per-symbol). NorenAPI has no
+    // batch quote endpoint, so this is N calls; cap to a reasonable bound to
+    // avoid blocking the UI on huge portfolios. Failures are silently ignored.
+    constexpr int kMaxLtpFetch = 50;
+    auto& q_http = BrokerHttp::instance();
+    for (int i = 0; i < ltp_refs.size() && i < kMaxLtpFetch; ++i) {
+        QJsonObject jq;
+        jq["uid"] = creds.user_id;
+        jq["exch"] = ltp_refs[i].exch;
+        jq["token"] = ltp_refs[i].token;
+        auto q_resp = q_http.post_raw(QString("%1/GetQuotes").arg(BASE), make_body(jq, creds.access_token),
+                                      {{"Content-Type", "application/x-www-form-urlencoded"}});
+        if (!q_resp.success)
+            continue;
+        QJsonDocument q_doc = QJsonDocument::fromJson(q_resp.raw_body.toUtf8());
+        if (!q_doc.isObject())
+            continue;
+        QJsonObject qo = q_doc.object();
+        if (qo.value("stat").toString() != "Ok")
+            continue;
+        const int idx = ltp_refs[i].holding_index;
+        const double ltp = qo.value("lp").toString().toDouble();
+        if (ltp <= 0)
+            continue;
+        holdings[idx].ltp = ltp;
+        holdings[idx].current_value = holdings[idx].quantity * ltp;
+        holdings[idx].pnl = (ltp - holdings[idx].avg_price) * holdings[idx].quantity;
+        if (holdings[idx].avg_price > 0)
+            holdings[idx].pnl_pct = ((ltp - holdings[idx].avg_price) / holdings[idx].avg_price) * 100.0;
     }
 
     return {true, holdings, "", ts};
@@ -496,16 +525,23 @@ ApiResponse<BrokerFunds> ShoonyaBroker::get_funds(const BrokerCredentials& creds
     if (obj.value("stat").toString() != "Ok")
         return {false, std::nullopt, checked_error(resp, obj.value("emsg").toString("get_funds failed")), ts};
 
-    double cash = obj.value("cash").toString().toDouble();
-    double payin = obj.value("payin").toString().toDouble();
-    double margin_used = obj.value("marginused").toString().toDouble();
-    double collateral = obj.value("brkcollamt").toString().toDouble();
+    // NorenAPI Limits payload: cash + payin reflect the day-cash float; payout is
+    // money pulled out today (debit); daycash is intraday cash float; rpnl is
+    // realised PnL booked today and counts toward total balance.
+    const double cash = obj.value("cash").toString().toDouble();
+    const double payin = obj.value("payin").toString().toDouble();
+    const double payout = obj.value("payout").toString().toDouble();
+    const double daycash = obj.value("daycash").toString().toDouble();
+    const double rpnl = obj.value("rpnl").toString().toDouble();
+    const double margin_used = obj.value("marginused").toString().toDouble();
+    const double collateral = obj.value("brkcollamt").toString().toDouble();
 
     BrokerFunds funds;
-    funds.available_balance = cash + payin - margin_used;
+    funds.available_balance = cash + payin - payout + daycash - margin_used;
     funds.used_margin = margin_used;
-    funds.total_balance = cash + payin;
+    funds.total_balance = cash + payin - payout + daycash + rpnl;
     funds.collateral = collateral;
+    funds.raw_data = obj;
 
     return {true, funds, "", ts};
 }
@@ -604,7 +640,9 @@ ApiResponse<QVector<BrokerCandle>> ShoonyaBroker::get_history(const BrokerCreden
     QVector<BrokerCandle> candles;
 
     if (is_daily) {
-        // EODChartData uses sym="EXCHANGE:SYMBOL" and fields from/to
+        // Try /EODChartData first; if the endpoint is unavailable on this
+        // NorenAPI deployment, fall back to /TPSeries with an aggregated daily
+        // window (callers will get fewer candles but the call will succeed).
         QJsonObject jdata;
         jdata["uid"] = creds.user_id;
         jdata["sym"] = exchange + ":" + name;
@@ -613,25 +651,50 @@ ApiResponse<QVector<BrokerCandle>> ShoonyaBroker::get_history(const BrokerCreden
 
         auto resp = http.post_raw(QString("%1/EODChartData").arg(BASE), make_body(jdata, creds.access_token),
                                   {{"Content-Type", "application/x-www-form-urlencoded"}});
-        if (!resp.success)
-            return {false, std::nullopt, checked_error(resp, "get_history failed"), ts};
+        const bool eod_ok = resp.success && !resp.raw_body.isEmpty() &&
+                            QJsonDocument::fromJson(resp.raw_body.toUtf8()).isArray();
 
-        QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
-        if (doc.isObject())
-            return {false, std::nullopt, doc.object().value("emsg").toString("get_history failed"), ts};
-        if (!doc.isArray())
-            return {false, std::nullopt, "get_history: invalid response", ts};
-
-        for (const QJsonValue& v : doc.array()) {
-            QJsonObject o = v.toObject();
-            BrokerCandle c;
-            c.timestamp = static_cast<int64_t>(o.value("ssboe").toDouble()) * 1000LL;
-            c.open = o.value("into").toString().toDouble();
-            c.high = o.value("inth").toString().toDouble();
-            c.low = o.value("intl").toString().toDouble();
-            c.close = o.value("intc").toString().toDouble();
-            c.volume = o.value("intv").toString().toLongLong();
-            candles.append(c);
+        if (eod_ok) {
+            for (const QJsonValue& v : QJsonDocument::fromJson(resp.raw_body.toUtf8()).array()) {
+                QJsonObject o = v.toObject();
+                BrokerCandle c;
+                c.timestamp = static_cast<int64_t>(o.value("ssboe").toDouble()) * 1000LL;
+                c.open = o.value("into").toString().toDouble();
+                c.high = o.value("inth").toString().toDouble();
+                c.low = o.value("intl").toString().toDouble();
+                c.close = o.value("intc").toString().toDouble();
+                c.volume = o.value("intv").toString().toLongLong();
+                candles.append(c);
+            }
+        } else if (!token.isEmpty()) {
+            // Fallback: pull /TPSeries 1-day bars. Requires the numeric token.
+            QJsonObject tp;
+            tp["uid"] = creds.user_id;
+            tp["exch"] = exchange;
+            tp["token"] = token;
+            tp["st"] = QString::number(from_epoch);
+            tp["et"] = QString::number(to_epoch);
+            tp["intrv"] = "1440"; // minutes per day
+            auto tp_resp = http.post_raw(QString("%1/TPSeries").arg(BASE), make_body(tp, creds.access_token),
+                                         {{"Content-Type", "application/x-www-form-urlencoded"}});
+            if (!tp_resp.success)
+                return {false, std::nullopt, checked_error(tp_resp, "get_history failed (EOD + TPSeries fallback)"), ts};
+            QJsonDocument tp_doc = QJsonDocument::fromJson(tp_resp.raw_body.toUtf8());
+            if (!tp_doc.isArray())
+                return {false, std::nullopt, "get_history: invalid TPSeries fallback response", ts};
+            for (const QJsonValue& v : tp_doc.array()) {
+                QJsonObject o = v.toObject();
+                BrokerCandle c;
+                c.timestamp = static_cast<int64_t>(o.value("ssboe").toDouble()) * 1000LL;
+                c.open = o.value("into").toString().toDouble();
+                c.high = o.value("inth").toString().toDouble();
+                c.low = o.value("intl").toString().toDouble();
+                c.close = o.value("intc").toString().toDouble();
+                c.volume = o.value("intv").toString().toLongLong();
+                candles.append(c);
+            }
+        } else {
+            return {false, std::nullopt, checked_error(resp, "get_history failed (EOD unavailable; provide token for fallback)"), ts};
         }
     } else {
         // TPSeries — needs numeric token

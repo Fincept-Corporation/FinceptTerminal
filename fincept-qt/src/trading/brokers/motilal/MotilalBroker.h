@@ -1,5 +1,6 @@
 #pragma once
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 namespace fincept::trading {
@@ -67,13 +68,16 @@ class MotilalBroker : public IBroker {
     static bool is_token_expired(const BrokerHttpResponse& resp);
     static QString checked_error(const BrokerHttpResponse& resp, const QString& fallback);
 
+    // Master contract CSV per exchange (NSE/BSE/NFO/MCX/NCDEX) — InstrumentService
+    // calls this to seed symbol→scripcode lookups. Result.data["csv"] is the raw body.
+    ApiResponse<QJsonObject> get_master_contract(const BrokerCredentials& creds, const QString& exchange);
+
   protected:
     QMap<QString, QString> auth_headers(const BrokerCredentials& creds) const override;
 
   private:
     static QString mo_exchange(const QString& exchange);
-    static QString mo_product(ProductType p);
-    static QString mo_order_type(OrderType t);
+    static const BrokerEnumMap<QString>& mo_enum_map();
     static QString mo_status(const QString& s);
 };
 

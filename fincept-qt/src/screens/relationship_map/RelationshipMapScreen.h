@@ -3,10 +3,12 @@
 
 #include "screens/common/IStatefulScreen.h"
 #include "screens/relationship_map/RelationshipMapTypes.h"
+#include "services/markets/MarketSearchService.h"
 
 #include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
+#include <QList>
 #include <QListWidget>
 #include <QProgressBar>
 #include <QPushButton>
@@ -42,7 +44,7 @@ class RelationshipMapScreen : public QWidget, public IStatefulScreen {
     void on_search();
     void on_search_text_changed(const QString& text);
     void fire_asset_search(const QString& query);
-    void on_asset_results(const QJsonArray& results);
+    void on_asset_results(const QList<fincept::services::MarketSearchService::Item>& results);
     void show_dropdown();
     void hide_dropdown();
     void on_data_ready(const fincept::relmap::RelationshipData& data);
@@ -64,6 +66,7 @@ class RelationshipMapScreen : public QWidget, public IStatefulScreen {
     QListWidget* search_dropdown_ = nullptr;
     QTimer* search_debounce_ = nullptr;
     QString pending_query_;
+    bool search_connected_ = false;
     QComboBox* layout_combo_ = nullptr;
     QPushButton* filter_btn_ = nullptr;
     QProgressBar* progress_bar_ = nullptr;

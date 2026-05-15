@@ -1,5 +1,6 @@
 #pragma once
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 namespace fincept::trading {
@@ -81,8 +82,7 @@ class KotakBroker : public IBroker {
     };
     static TokenParts unpack(const QString& packed);
     static QString kotak_exchange(const QString& exchange);
-    static QString kotak_product(ProductType p);
-    static QString kotak_order_type(OrderType t);
+    static const BrokerEnumMap<QString>& kotak_enum_map();
     static QString lookup_psymbol(const QString& symbol, const QString& exchange, const QString& broker_id);
     static QString generate_totp(const QString& base32_secret);
     // Build form-encoded params for /quick/* endpoints from a JSON object —

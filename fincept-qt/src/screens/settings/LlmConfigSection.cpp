@@ -10,7 +10,6 @@
 
 #include "services/llm/LlmService.h"
 #include "core/logging/Logger.h"
-#include "network/http/HttpClient.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
 #include "storage/repositories/SettingsRepository.h"

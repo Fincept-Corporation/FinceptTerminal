@@ -90,32 +90,19 @@ int IIFLBroker::iifl_exchange_id(const QString& exchange) {
     return 1;
 }
 
-QString IIFLBroker::iifl_order_type(OrderType t) {
-    switch (t) {
-        case OrderType::Market:
-            return "MARKET";
-        case OrderType::Limit:
-            return "LIMIT";
-        case OrderType::StopLoss:
-            return "STOPMARKET"; // SL-M: trigger only, market fill
-        case OrderType::StopLossLimit:
-            return "STOPLIMIT"; // SL:   trigger + limit price
-        default:
-            return "MARKET";
-    }
-}
-
-QString IIFLBroker::iifl_product(ProductType p) {
-    switch (p) {
-        case ProductType::Intraday:
-            return "MIS";
-        case ProductType::Delivery:
-            return "CNC";
-        case ProductType::Margin:
-            return "NRML";
-        default:
-            return "MIS";
-    }
+const BrokerEnumMap<QString>& IIFLBroker::iifl_enum_map() {
+    static const auto m = [] {
+        BrokerEnumMap<QString> x;
+        x.set(OrderType::Market, "MARKET");
+        x.set(OrderType::Limit, "LIMIT");
+        x.set(OrderType::StopLoss, "STOPMARKET");      // SL-M: trigger only, market fill
+        x.set(OrderType::StopLossLimit, "STOPLIMIT"); // SL:   trigger + limit price
+        x.set(ProductType::Intraday, "MIS");
+        x.set(ProductType::Delivery, "CNC");
+        x.set(ProductType::Margin, "NRML");
+        return x;
+    }();
+    return m;
 }
 
 QString IIFLBroker::iifl_compression(const QString& resolution) {
@@ -230,8 +217,8 @@ OrderPlaceResponse IIFLBroker::place_order(const BrokerCredentials& creds, const
     // exchangeInstrumentID must be a JSON number per XTS spec; passing as string
     // works for some endpoints but is silently rejected for derivatives.
     body["exchangeInstrumentID"] = order.instrument_token.toLongLong();
-    body["productType"] = iifl_product(order.product_type);
-    body["orderType"] = iifl_order_type(order.order_type);
+    body["productType"] = iifl_enum_map().product_or(order.product_type, "MIS");
+    body["orderType"] = iifl_enum_map().order_type_or(order.order_type, "MARKET");
     body["orderSide"] = (order.side == OrderSide::Buy) ? "BUY" : "SELL";
     body["timeInForce"] = "DAY";
     // XTS spec: integer/double, not stringified.

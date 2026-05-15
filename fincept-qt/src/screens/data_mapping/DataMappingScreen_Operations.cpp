@@ -10,7 +10,7 @@
 #include "screens/data_mapping/DataMappingScreen_internal.h"
 
 #include "core/logging/Logger.h"
-#include "network/http/HttpClient.h"
+#include "services/data_normalization/DataMappingTestClient.h"
 #include "services/data_normalization/DataNormalizationService.h"
 #include "storage/repositories/DataMappingRepository.h"
 #include "ui/theme/Theme.h"
@@ -52,21 +52,23 @@ void DataMappingScreen::on_test_api() {
         }
     };
 
-    QString method = api_method_->currentText();
+    const QString method = api_method_->currentText();
+    using fincept::services::DataMappingTestClient;
+    DataMappingTestClient::Method m = DataMappingTestClient::Method::Get;
+    QJsonObject body;
     if (method == "POST" || method == "PUT" || method == "PATCH") {
-        QJsonObject body;
         if (!api_body_->toPlainText().trimmed().isEmpty()) {
             auto doc = QJsonDocument::fromJson(api_body_->toPlainText().toUtf8());
             if (doc.isObject())
                 body = doc.object();
         }
-        if (method == "POST")
-            HttpClient::instance().post(url, body, callback, this);
-        else
-            HttpClient::instance().put(url, body, callback, this);
-    } else {
-        HttpClient::instance().get(url, callback, this);
+        // PATCH historically routed through PUT — preserve that.
+        m = (method == "POST") ? DataMappingTestClient::Method::Post
+                               : DataMappingTestClient::Method::Put;
+    } else if (method == "DELETE") {
+        m = DataMappingTestClient::Method::Delete;
     }
+    DataMappingTestClient::instance().test_api(m, url, body, this, callback);
 }
 
 void DataMappingScreen::on_test_mapping() {

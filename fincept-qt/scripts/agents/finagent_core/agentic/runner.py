@@ -408,27 +408,32 @@ class AgenticRunner(ResumableTaskRunner):
         all_results: List[Dict[str, Any]],
         config: Dict[str, Any],
     ) -> None:
-        """Ask the LLM if a reusable recipe emerged from this run; save if yes.
+        """Decide whether to distill a reusable recipe from this run.
 
-        Skipped when the run is already over 80% budget — distillation is a
-        bonus, never a blocker. Distillation off by config flag for tests.
+        Architecture: structural reusability score FIRST (model-agnostic,
+        deterministic). HIGH → auto-distill templated, no LLM call. LOW → skip
+        with reason. MEDIUM → fall back to LLM as a tiebreaker.
 
-        Also skipped when the plan is trivially small (< 2 steps) — single-step
-        tasks rarely generalise, so we save the LLM call. (Task #23.)
+        Every skip emits `skill_skipped` so observability into the decision is
+        complete regardless of which path fires.
         """
         if not bool(config.get("agentic", {}).get("distill_skills", True)):
+            self._emit("skill_skipped",
+                       {"task_id": task_id, "reason": "config_disabled"})
             return
-        # Triviality skip: a 0- or 1-step plan is almost never a reusable
-        # recipe. Avoid the LLM round-trip on simple lookups.
+
         plan_steps = plan.get("steps") or []
         if len(plan_steps) < 2:
+            self._emit("skill_skipped",
+                       {"task_id": task_id, "reason": "trivial_plan",
+                        "step_count": len(plan_steps)})
             return
-        # If existing skills already covered this task, we don't need a new one.
-        # The retrieved list is reset to [] inside _record_used_skills, but at
-        # the moment we reach here it still holds the run's retrieved ids
-        # (distillation is called *before* _record_used_skills... checking order).
         if self._retrieved_skill_ids:
+            self._emit("skill_skipped",
+                       {"task_id": task_id, "reason": "existing_skill_covered_task",
+                        "skill_ids": self._retrieved_skill_ids})
             return
+
         budget = self._budget.snapshot() if self._budget else None
         if budget:
             burn_pct = max(
@@ -438,7 +443,42 @@ class AgenticRunner(ResumableTaskRunner):
                 budget["steps_used"] / max(budget["max_steps"], 1),
             )
             if burn_pct > 0.8:
+                self._emit("skill_skipped",
+                           {"task_id": task_id, "reason": "budget_burned",
+                            "burn_pct": round(burn_pct, 3)})
                 return
+
+        # ── Structural reusability score (model-agnostic) ─────────────────
+        # Drives the distillation decision without an LLM call when the score
+        # is unambiguous. Only ambiguous middle-ground cases consult the LLM.
+        score, score_reasons = _reusability_score(plan, query)
+        self._emit("reusability_score",
+                   {"task_id": task_id, "score": score, "factors": score_reasons})
+
+        if score <= 1:
+            self._emit("skill_skipped",
+                       {"task_id": task_id, "reason": "structural_score_low",
+                        "score": score, "factors": score_reasons})
+            return
+
+        if score >= 3:
+            # Auto-distill: templated recipe, no LLM. Deterministic naming
+            # from the plan's name; description from plan's description.
+            tmpl = _template_plan(plan)
+            name = _derive_skill_name(plan)
+            description = (plan.get("description") or "").strip()[:200] or name
+            try:
+                sid = self._skills.add(name=name, description=description, recipe=tmpl)
+                self._emit("skill_saved",
+                           {"task_id": task_id, "skill_id": sid, "name": name,
+                            "source": "structural", "score": score})
+            except Exception as e:
+                self._emit("skill_skipped",
+                           {"task_id": task_id, "reason": "structural_save_failed",
+                            "error": str(e)})
+            return
+
+        # score == 2 — ambiguous middle ground; let the LLM cast the deciding vote.
 
         outline = "\n".join(
             f"- {s.get('name', '')}: {s.get('config', {}).get('query', '')}"
@@ -498,18 +538,26 @@ class AgenticRunner(ResumableTaskRunner):
 
             parsed = self._parse_distill_json(raw)
             if not parsed or not parsed.get("is_reusable"):
+                self._emit("skill_skipped",
+                           {"task_id": task_id, "reason": "llm_not_reusable",
+                            "raw": (raw or "")[:300]})
                 return
             name = (parsed.get("name") or "").strip()
             description = (parsed.get("description") or "").strip()
             recipe = parsed.get("recipe") or {}
             if not name or not description or not recipe.get("steps"):
+                self._emit("skill_skipped",
+                           {"task_id": task_id, "reason": "llm_malformed_response"})
                 return
             sid = self._skills.add(name=name, description=description, recipe=recipe)
             self._emit("skill_saved",
-                       {"task_id": task_id, "skill_id": sid, "name": name})
-        except Exception:
+                       {"task_id": task_id, "skill_id": sid, "name": name,
+                        "source": "llm"})
+        except Exception as e:
             # Distillation is best-effort; never raise into the success path.
-            pass
+            self._emit("skill_skipped",
+                       {"task_id": task_id, "reason": "distill_error",
+                        "error": str(e)})
 
     @staticmethod
     def _parse_distill_json(raw: str) -> Optional[Dict[str, Any]]:
@@ -526,6 +574,140 @@ class AgenticRunner(ResumableTaskRunner):
             return _json.loads(text)
         except Exception:
             return None
+
+
+# ── Module-level helpers: structural reusability + templating ────────────────
+# Kept at module scope (not on the class) so they're independently testable
+# and easy to extend / swap with stronger structural analyzers later.
+
+import re as _re
+
+# Hardcoded uppercase-only tokens 1-5 chars long that look like tickers/symbols
+# (NVDA, AAPL, MSFT, etc.). The presence of these in step QUERIES is a signal
+# the plan is entity-specific and needs templating.
+_TICKER_RE = _re.compile(r"\b([A-Z]{1,5}(?:\.[A-Z]{1,2})?)\b")
+
+# Uppercase tokens that look like tickers but aren't — English words, corporate
+# titles, financial abbreviations, country codes. Single point of truth used by
+# BOTH the score's hardcoded-entities check AND the templater so we never
+# clobber e.g. "CEO" or "USD".
+_NON_TICKER_TOKENS = frozenset({
+    # 1-2 letter common
+    "A", "I", "AI", "AM", "AN", "AS", "AT", "BE", "BY", "DO", "GO", "HE",
+    "IF", "IN", "IS", "IT", "MY", "NO", "OF", "ON", "OR", "SO", "TO", "UP",
+    "US", "WE",
+    # 3-letter common English
+    "THE", "AND", "FOR", "BUT", "ARE", "YOU", "ALL", "CAN", "HAS", "HAD",
+    "HER", "HIS", "OUR", "OUT", "WAS", "WHO", "WHY", "HOW", "ANY", "NEW",
+    "NOT", "NOW", "ONE", "TWO", "GET", "HAVE", "ITS",
+    # Corporate / finance / regulatory abbreviations
+    "CEO", "CFO", "CTO", "COO", "CIO", "CMO", "SVP", "VP", "EVP", "IR",
+    "EPS", "PE", "PEG", "ROE", "ROA", "ROI", "DCF", "IRR", "WACC", "EBIT",
+    "EBITDA", "NAV", "AUM", "AUC", "BPS", "YOY", "QOQ", "TTM", "LTM", "YTD",
+    "MTD", "FY", "Q1", "Q2", "Q3", "Q4", "H1", "H2", "FCF", "FCFE", "FCFF",
+    # Filings / regulators
+    "SEC", "FED", "FOMC", "FDIC", "IRS", "IPO", "ETF", "REIT", "LBO",
+    # Country / currency
+    "USA", "USD", "EUR", "GBP", "JPY", "CNY", "INR", "EU", "UK", "UN", "GDP",
+    # Tech / generic acronyms
+    "API", "URL", "PDF", "CSV", "JSON", "XML", "HTTP", "TCP", "OS",
+})
+
+# Tool category hints from a step's tool spec or query keywords.
+_TOOL_CATEGORY_KEYWORDS = (
+    "fetch", "retrieve", "extract", "compute", "calculate", "analyze",
+    "summarize", "compare", "draft", "synthesize", "screen", "lookup",
+)
+
+
+def _reusability_score(plan: Dict[str, Any], query: str) -> tuple[int, list[str]]:
+    """Score a plan's structural reusability. Returns (score, reasons[]).
+
+    Score interpretation (used by _try_distill_skill):
+      <= 1   not reusable           → skip
+      == 2   ambiguous              → fall back to LLM critic
+      >= 3   clearly reusable       → auto-distill, no LLM
+    """
+    reasons: list[str] = []
+    score = 0
+
+    steps = plan.get("steps") or []
+    # +1: ≥2 steps using distinct tool/action verbs (multi-stage workflow)
+    verbs = set()
+    for s in steps:
+        text = ((s.get("name") or "") + " " + ((s.get("config") or {}).get("query") or "")).lower()
+        for kw in _TOOL_CATEGORY_KEYWORDS:
+            if kw in text:
+                verbs.add(kw)
+                break
+    if len(verbs) >= 2:
+        score += 1
+        reasons.append(f"multi-stage:{sorted(verbs)}")
+
+    # +1: at least one inter-step dependency (DAG, not a flat list)
+    has_deps = any((s.get("dependencies") or []) for s in steps)
+    if has_deps:
+        score += 1
+        reasons.append("has_deps")
+
+    # +1: step queries reference templated placeholders ({ticker}, {sector}, …)
+    has_template = any(
+        _re.search(r"\{[a-z_]+\}", (s.get("config") or {}).get("query", "") or "")
+        for s in steps
+    )
+    if has_template:
+        score += 1
+        reasons.append("templated_slots")
+
+    # -1: plan name/description hardcodes a unique entity (specific ticker/company)
+    plan_text = ((plan.get("name") or "") + " " + (plan.get("description") or ""))
+    tickers_in_plan = set(_TICKER_RE.findall(plan_text))
+    # Filter out obvious false positives (English words occasionally match).
+    common_words = _NON_TICKER_TOKENS
+    real_tickers = tickers_in_plan - common_words
+    if real_tickers:
+        score -= 1
+        reasons.append(f"hardcoded_entities:{sorted(real_tickers)}")
+
+    # +1: plan has 3+ steps (deeper workflows are more likely to be patterns)
+    if len(steps) >= 3:
+        score += 1
+        reasons.append(f"depth_{len(steps)}")
+
+    return score, reasons
+
+
+def _template_plan(plan: Dict[str, Any]) -> Dict[str, Any]:
+    """Replace concrete tickers in step queries with {ticker} placeholders so
+    the saved recipe is reusable across companies. Best-effort — keeps unknown
+    entity types as-is.
+    """
+    out_steps = []
+    for s in plan.get("steps") or []:
+        new_step = dict(s)
+        cfg = dict(new_step.get("config") or {})
+        q = cfg.get("query", "") or ""
+        # Replace any uppercase 1-5 char token that looks like a ticker. Uses
+        # the same _NON_TICKER_TOKENS set as the scorer so "CEO"/"FY"/"USD"
+        # stay intact while real tickers get templated.
+        templated = _TICKER_RE.sub(
+            lambda m: "{ticker}" if m.group(0) not in _NON_TICKER_TOKENS else m.group(0),
+            q,
+        )
+        cfg["query"] = templated
+        new_step["config"] = cfg
+        # Status / result / error don't belong in a saved recipe.
+        for k in ("status", "result", "error"):
+            new_step.pop(k, None)
+        out_steps.append({"name": new_step.get("name", ""), "query": templated})
+    return {"version": 1, "steps": out_steps}
+
+
+def _derive_skill_name(plan: Dict[str, Any]) -> str:
+    """Produce a short kebab-case slug from the plan's name."""
+    name = (plan.get("name") or "skill").lower()
+    name = _re.sub(r"[^a-z0-9]+", "-", name).strip("-")
+    return (name or "skill")[:60]
 
     # ── Re-plan helper ───────────────────────────────────────────────────────
 

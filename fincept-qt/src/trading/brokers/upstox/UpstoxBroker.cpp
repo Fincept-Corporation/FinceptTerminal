@@ -1,6 +1,7 @@
 #include "trading/brokers/upstox/UpstoxBroker.h"
 
 #include "core/logging/Logger.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/instruments/InstrumentService.h"
 
@@ -47,34 +48,22 @@ static QString instrument_key(const QString& symbol, const QString& exchange, co
     return seg + "|" + symbol.toUpper();
 }
 
-// ── Product / OrderType mapping ───────────────────────────────────────────────
-static const char* upstox_product(ProductType p, const QString& exchange) {
-    // Delivery on derivatives → D (NRML equivalent), Intraday → I
-    switch (p) {
-        case ProductType::Intraday:
-            return "I";
-        case ProductType::Delivery:
-            return "D";
-        case ProductType::Margin:
-            return "D"; // MTF maps to Delivery segment
-        default:
-            return "I";
-    }
-    (void)exchange;
-}
-
-static const char* upstox_order_type(OrderType t) {
-    switch (t) {
-        case OrderType::Market:
-            return "MARKET";
-        case OrderType::Limit:
-            return "LIMIT";
-        case OrderType::StopLoss:
-            return "SL-M";
-        case OrderType::StopLossLimit:
-            return "SL";
-    }
-    return "MARKET";
+// Upstox order/product enums. File-static — only used inside this TU.
+static const BrokerEnumMap<QString>& upstox_enum_map() {
+    static const auto m = [] {
+        BrokerEnumMap<QString> x;
+        x.set(OrderType::Market, "MARKET");
+        x.set(OrderType::Limit, "LIMIT");
+        x.set(OrderType::StopLoss, "SL-M");
+        x.set(OrderType::StopLossLimit, "SL");
+        // Delivery on derivatives → D (NRML equivalent), Intraday → I.
+        // MTF maps to Delivery segment (D).
+        x.set(ProductType::Intraday, "I");
+        x.set(ProductType::Delivery, "D");
+        x.set(ProductType::Margin, "D");
+        return x;
+    }();
+    return m;
 }
 
 // Reverse product mapping from Upstox response → display string.
@@ -202,8 +191,8 @@ OrderPlaceResponse UpstoxBroker::place_order(const BrokerCredentials& creds, con
     body["instrument_token"] = ikey;
     body["transaction_type"] = order.side == OrderSide::Buy ? "BUY" : "SELL";
     body["quantity"] = static_cast<int>(order.quantity);
-    body["product"] = upstox_product(order.product_type, order.exchange);
-    body["order_type"] = upstox_order_type(order.order_type);
+    body["product"] = upstox_enum_map().product_or(order.product_type, "I");
+    body["order_type"] = upstox_enum_map().order_type_or(order.order_type, "MARKET");
     body["validity"] = "DAY";
     body["price"] = order.price;
     body["trigger_price"] = order.stop_price;

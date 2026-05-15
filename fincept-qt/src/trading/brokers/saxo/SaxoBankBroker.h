@@ -1,5 +1,6 @@
 #pragma once
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 namespace fincept::trading {
@@ -81,8 +82,8 @@ class SaxoBankBroker : public IBroker {
     QMap<QString, QString> auth_headers(const BrokerCredentials& creds) const override;
 
   private:
-    static QString saxo_order_type(OrderType t);
-    static QString saxo_duration(ProductType p);
+    /// Saxo "Duration": Delivery → GoodTillCancel; everything else → DayOrder (fallback).
+    static const BrokerEnumMap<QString>& saxo_enum_map();
     static int saxo_horizon(const QString& resolution);
     // Extract Uic from symbol "NYSE:AAPL:211" → "211"
     static QString extract_uic(const QString& symbol);

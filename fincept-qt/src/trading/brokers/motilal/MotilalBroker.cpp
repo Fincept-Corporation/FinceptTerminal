@@ -28,32 +28,19 @@ QString MotilalBroker::mo_exchange(const QString& exchange) {
     return exchange.toUpper();
 }
 
-QString MotilalBroker::mo_product(ProductType p) {
-    switch (p) {
-        case ProductType::Intraday:
-            return "VALUEPLUS";
-        case ProductType::Delivery:
-            return "DELIVERY";
-        case ProductType::Margin:
-            return "NORMAL";
-        default:
-            return "DELIVERY";
-    }
-}
-
-QString MotilalBroker::mo_order_type(OrderType t) {
-    switch (t) {
-        case OrderType::Market:
-            return "MARKET";
-        case OrderType::Limit:
-            return "LIMIT";
-        case OrderType::StopLoss:
-            return "STOPLOSSMARKET"; // SL-M: market-with-trigger
-        case OrderType::StopLossLimit:
-            return "STOPLOSS"; // SL: limit-with-trigger
-        default:
-            return "MARKET";
-    }
+const BrokerEnumMap<QString>& MotilalBroker::mo_enum_map() {
+    static const auto m = [] {
+        BrokerEnumMap<QString> x;
+        x.set(OrderType::Market, "MARKET");
+        x.set(OrderType::Limit, "LIMIT");
+        x.set(OrderType::StopLoss, "STOPLOSSMARKET"); // SL-M: market-with-trigger
+        x.set(OrderType::StopLossLimit, "STOPLOSS"); // SL:    limit-with-trigger
+        x.set(ProductType::Intraday, "VALUEPLUS");
+        x.set(ProductType::Delivery, "DELIVERY");
+        x.set(ProductType::Margin, "NORMAL");
+        return x;
+    }();
+    return m;
 }
 
 QString MotilalBroker::mo_status(const QString& s) {
@@ -102,15 +89,22 @@ QString MotilalBroker::checked_error(const BrokerHttpResponse& resp, const QStri
 // ---------- Auth headers ----------
 
 QMap<QString, QString> MotilalBroker::auth_headers(const BrokerCredentials& creds) const {
-    // vendorinfo carries the trading account identifier (UCC). Motilal's credential
-    // model exposes only api_key + password; the login flow uses api_key as both
-    // the user-id and vendorinfo, so reuse user_id (= api_key after login) here.
-    // An empty vendorinfo causes a class of permission errors on dealer-flagged accounts.
+    // Motilal's API documentation lists both `accesstoken` and `Authorization`
+    // as mandatory on authenticated calls — current deployments accept either
+    // alone, but sending both is the safe form per FAQ. ApiSecretKey is also
+    // documented as mandatory; we don't have a separate API-secret slot in
+    // our credential model (api_secret = login password), so use api_secret
+    // here and let the user-facing UI document this packing.
+    //
+    // vendorinfo carries the trading account identifier (UCC). An empty
+    // vendorinfo causes a class of permission errors on dealer-flagged accounts.
     return {
         {"Authorization", creds.access_token},
+        {"accesstoken", creds.access_token}, // duplicate of Authorization per doc
         {"Content-Type", "application/json"},
         {"Accept", "application/json"},
         {"ApiKey", creds.api_key},
+        {"ApiSecretKey", creds.api_secret},
         {"User-Agent", "MOSL/V.1.1.0"},
         {"ClientLocalIp", "127.0.0.1"},
         {"ClientPublicIp", "127.0.0.1"},
@@ -198,8 +192,8 @@ OrderPlaceResponse MotilalBroker::place_order(const BrokerCredentials& creds, co
     body["exchange"] = mo_exchange(order.exchange);
     body["symboltoken"] = order.instrument_token.toInt();
     body["buyorsell"] = (order.side == OrderSide::Buy) ? "BUY" : "SELL";
-    body["ordertype"] = mo_order_type(order.order_type);
-    body["producttype"] = mo_product(order.product_type);
+    body["ordertype"] = mo_enum_map().order_type_or(order.order_type, "MARKET");
+    body["producttype"] = mo_enum_map().product_or(order.product_type, "DELIVERY");
     body["orderduration"] = "DAY";
     body["price"] = order.price;
     body["triggerprice"] = order.stop_price;
@@ -592,14 +586,91 @@ ApiResponse<QVector<BrokerQuote>> MotilalBroker::get_quotes(const BrokerCredenti
 }
 
 // ---------- get_history ----------
-// Motilal Oswal does not provide historical candle data via REST API.
+// Motilal Oswal exposes EOD candles via /rest/report/v3/geteoddatabyexchangename.
+// Request body: { clientcode, exchange, scripcode, fromdate, todate }.
+// Response: { status: "SUCCESS", data: [{ date, open, high, low, close, volume }, ...] }
+// Intraday is NOT supported on the public REST API — only daily.
+//
+// Symbol format expected: "NSE:RELIANCE:1660" (exchange:name:token). Token is
+// required since the endpoint keys on scripcode.
 
-ApiResponse<QVector<BrokerCandle>> MotilalBroker::get_history(const BrokerCredentials& /*creds*/,
-                                                              const QString& /*symbol*/, const QString& /*resolution*/,
-                                                              const QString& /*from_date*/,
-                                                              const QString& /*to_date*/) {
+ApiResponse<QVector<BrokerCandle>> MotilalBroker::get_history(const BrokerCredentials& creds, const QString& symbol,
+                                                              const QString& resolution, const QString& from_date,
+                                                              const QString& to_date) {
     int64_t ts = now_ts();
-    return {false, std::nullopt, "Historical data not supported by Motilal Oswal API", ts};
+
+    // Only daily / weekly / monthly are supported.
+    const QString r = resolution.toUpper();
+    const bool is_daily = r == "D" || r == "1D" || r == "DAY" || r == "W" || r == "1W" || r == "WEEK" ||
+                          r == "M" || r == "1M" || r == "MONTH";
+    if (!is_daily)
+        return {false, std::nullopt,
+                "Motilal Oswal historical API supports only EOD bars (D/W/M). Intraday is unavailable.", ts};
+
+    // Parse "EX:SYMBOL:TOKEN" — token is required.
+    QStringList parts = symbol.split(':');
+    QString exch = parts.size() >= 1 ? parts[0] : "NSE";
+    QString name = parts.size() >= 2 ? parts[1] : symbol;
+    QString token = parts.size() >= 3 ? parts[2] : QString();
+    if (token.isEmpty())
+        return {false, std::nullopt, "MO history requires instrument token (format EXCHANGE:SYMBOL:TOKEN)", ts};
+
+    QJsonObject body;
+    body["clientcode"] = creds.user_id;
+    body["exchange"] = mo_exchange(exch);
+    body["scripcode"] = token.toInt();
+    body["fromdate"] = from_date;
+    body["todate"] = to_date;
+
+    auto& http = BrokerHttp::instance();
+    auto resp = http.post_json(QString("%1/rest/report/v3/geteoddatabyexchangename").arg(BASE), body,
+                               auth_headers(creds));
+    if (!resp.success)
+        return {false, std::nullopt, checked_error(resp, "get_history failed"), ts};
+
+    QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
+    if (!doc.isObject())
+        return {false, std::nullopt, "get_history: invalid response", ts};
+    QJsonObject obj = doc.object();
+    if (obj.value("status").toString() != "SUCCESS")
+        return {false, std::nullopt, obj.value("message").toString("get_history failed"), ts};
+
+    QVector<BrokerCandle> candles;
+    const QJsonArray rows = obj.value("data").toArray();
+    candles.reserve(rows.size());
+    for (const auto& v : rows) {
+        const QJsonObject o = v.toObject();
+        BrokerCandle c;
+        const QString date_str = o.value("date").toString();
+        // MO returns "yyyy-MM-dd" or "dd-MMM-yyyy" depending on the deployment.
+        QDate d = QDate::fromString(date_str, "yyyy-MM-dd");
+        if (!d.isValid())
+            d = QDate::fromString(date_str, "dd-MMM-yyyy");
+        c.timestamp = d.isValid() ? QDateTime(d, QTime(15, 30)).toSecsSinceEpoch() : 0;
+        c.open = o.value("open").toDouble();
+        c.high = o.value("high").toDouble();
+        c.low = o.value("low").toDouble();
+        c.close = o.value("close").toDouble();
+        c.volume = o.value("volume").toDouble();
+        candles.append(c);
+    }
+    return {true, candles, "", ts};
+}
+
+// ---------- get_master_contract ----------
+// Per-exchange scrip dump: GET /getscripmastercsv?name={exchange}
+// Returns a CSV stream with columns: scripcode, name, exchange, symbol, expiry, ...
+// We surface the raw body to the caller (typically InstrumentService) for parsing.
+ApiResponse<QJsonObject> MotilalBroker::get_master_contract(const BrokerCredentials& creds, const QString& exchange) {
+    int64_t ts = now_ts();
+    const QString url = QString("%1/getscripmastercsv?name=%2").arg(BASE, mo_exchange(exchange));
+    auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
+    if (!resp.success)
+        return {false, std::nullopt, checked_error(resp, "get_master_contract failed"), ts};
+    QJsonObject out;
+    out["exchange"] = mo_exchange(exchange);
+    out["csv"] = resp.raw_body;
+    return {true, out, "", ts};
 }
 
 } // namespace fincept::trading

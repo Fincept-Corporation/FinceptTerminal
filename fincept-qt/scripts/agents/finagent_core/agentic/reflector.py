@@ -51,6 +51,12 @@ class ReflectorDecision:
     reason: str
     question: Optional[str] = None
     replan_hint: Optional[str] = None
+    # `source` makes every verdict auditable. Values:
+    #   "structural:<pattern>"  → deterministic pre-check fired
+    #   "skip-obvious"          → cheap-critic fast-path
+    #   "llm-critic"            → real LLM call
+    #   "parse_error" / "reflector_error" → fallback paths
+    source: str = "llm-critic"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -58,6 +64,7 @@ class ReflectorDecision:
             "reason": self.reason,
             "question": self.question,
             "replan_hint": self.replan_hint,
+            "source": self.source,
         }
 
 
@@ -77,11 +84,22 @@ class Reflector:
         config: Dict[str, Any],
         budget_snapshot: Optional[Dict[str, Any]] = None,
     ) -> ReflectorDecision:
-        # Cheap-critic fast-path: when the step result looks unambiguously
-        # successful, skip the LLM round-trip and emit a synthetic `continue`.
-        # Saves roughly one LLM call per happy-path step. (Task #24.)
+        # ── Layer 1: deterministic structural signals (model-agnostic) ──────
+        # Pattern-match the step output for cues NO model should miss. Fires
+        # for: explicit "plan is wrong" overrides, repeated tool/access errors,
+        # surfaced unanswered questions. The point is to give predictable
+        # verdicts that hold across MiniMax, Claude, GPT-4o, Llama — anything.
+        struct = _structural_signals(step_result, plan, prior_results)
+        if struct is not None:
+            return struct
+
+        # ── Layer 2: cheap-critic fast-path (heuristic, no LLM) ─────────────
+        # When the step result looks unambiguously successful, skip the LLM
+        # round-trip and emit a synthetic `continue`. Saves ~1 LLM call per
+        # happy-path step.
         if _is_obviously_continue(step_result):
-            return ReflectorDecision(decision="continue", reason="skip-obvious")
+            return ReflectorDecision(decision="continue", reason="skip-obvious",
+                                     source="skip-obvious")
 
         # The critic should be a fast / cheap model — we don't want it
         # blowing budget. Override config tools to none (pure reasoning).
@@ -139,14 +157,113 @@ class Reflector:
             agent = CoreAgent(api_keys=self.api_keys)
             response = agent.run(prompt, critic_config)
             raw = (agent.get_response_content(response) or "").strip()
-            decision = _parse_decision(raw)
-            return decision
+            return _parse_decision(raw)  # source="llm-critic" baked in
         except Exception:
             # Reflector failures must NOT break the task. Default to continue.
-            return ReflectorDecision(decision="continue", reason="reflector_error")
+            return ReflectorDecision(decision="continue", reason="reflector_error",
+                                     source="reflector_error")
 
 
-# ── Heuristics ───────────────────────────────────────────────────────────────
+# ── Layer 1: structural signals (model-agnostic, deterministic) ─────────────
+
+# Plan-override patterns: explicit language saying "this plan is wrong" or
+# "we should take different steps". These are STRONG cues that should force
+# replan regardless of what an LLM critic decides. Compiled once at import.
+_PLAN_OVERRIDE_PATTERNS = (
+    re.compile(r"\bWAIT\b", re.IGNORECASE),
+    re.compile(r"\b(this|the) plan is (wrong|incorrect|flawed|broken)\b", re.IGNORECASE),
+    re.compile(r"\bcorrection needed\b", re.IGNORECASE),
+    re.compile(r"\b(we|you) (should|need to|must) (instead|actually|take different)\b", re.IGNORECASE),
+    re.compile(r"\bdifferent steps\b", re.IGNORECASE),
+    re.compile(r"\binstead of\b.+\bstep\b", re.IGNORECASE),
+    re.compile(r"\bplan needs (to be )?(revis|chang|fix)", re.IGNORECASE),
+)
+
+# Tool-failure / capability-gap patterns. Repeated firing across consecutive
+# steps means the plan is asking for things the agent can't do — also a
+# replan signal (different plan, different tools).
+_TOOL_ERROR_PATTERNS = (
+    re.compile(r"\bTraceback\b"),
+    re.compile(r"\b(API error|HTTP \d{3})\b"),
+    re.compile(r"\bI (cannot|can't) (access|fetch|retrieve|reach)\b", re.IGNORECASE),
+    re.compile(r"\b(tool not available|no such tool|tool failed)\b", re.IGNORECASE),
+)
+
+# Explicit unanswered question patterns. Step output containing a real
+# question to the user → HITL.
+_QUESTION_PATTERNS = (
+    re.compile(r"(could you|can you) (please )?(specify|clarify|provide|tell me)", re.IGNORECASE),
+    re.compile(r"(which|what) (specific |particular )?(ticker|stock|company|symbol|date|period|sector)", re.IGNORECASE),
+    re.compile(r"please (provide|clarify|specify)", re.IGNORECASE),
+    re.compile(r"\bi (don't|do not) (know|have) (which|what|the)", re.IGNORECASE),
+)
+
+
+def _structural_signals(
+    step_result: Dict[str, Any],
+    plan: Dict[str, Any],
+    prior_results: List[Dict[str, Any]],
+) -> Optional[ReflectorDecision]:
+    """Deterministic pre-check that overrides the LLM critic when a strong
+    cue is present in the step output.
+
+    Returns None when no signal fires — caller falls through to skip-obvious
+    or the LLM critic. When a signal fires, the returned decision carries
+    `source="structural:<pattern>"` so downstream observability is clean.
+    """
+    response = step_result.get("response") or ""
+    if not response:
+        return None
+
+    # 1. Plan-override → replan
+    for pat in _PLAN_OVERRIDE_PATTERNS:
+        if pat.search(response):
+            snippet = (pat.search(response).group(0))[:80]
+            return ReflectorDecision(
+                decision="replan",
+                reason=f"step output contains plan-override cue: {snippet!r}",
+                replan_hint=response[:300],
+                source="structural:plan_override",
+            )
+
+    # 2. Tool error: 2 consecutive steps showing access failures → replan
+    if _tool_error_in(response):
+        prior_response = ""
+        if prior_results:
+            prev = prior_results[-1]
+            if isinstance(prev, dict):
+                prior_response = prev.get("response") or ""
+        if _tool_error_in(prior_response):
+            return ReflectorDecision(
+                decision="replan",
+                reason="two consecutive steps hit tool/access errors — plan needs different tools",
+                source="structural:tool_error_repeated",
+            )
+
+    # 3. Surfaced clarifying question → question
+    matches = sum(1 for pat in _QUESTION_PATTERNS if pat.search(response))
+    if matches >= 2:
+        # Extract the first sentence containing a "?".
+        q_match = re.search(r"([^.!?\n]*\?)", response)
+        q_text = q_match.group(1).strip() if q_match else "Agent needs clarification."
+        return ReflectorDecision(
+            decision="question",
+            reason="step output contains explicit unanswered question(s)",
+            question=q_text[:400],
+            source="structural:explicit_question",
+        )
+
+    return None
+
+
+def _tool_error_in(text: str) -> bool:
+    for pat in _TOOL_ERROR_PATTERNS:
+        if pat.search(text):
+            return True
+    return False
+
+
+# ── Layer 2: cheap-critic fast-path (heuristic) ─────────────────────────────
 
 # Substring patterns suggesting the step had a problem worth a real critique.
 # Case-insensitive. Order doesn't matter — any match disables the fast-path.
@@ -198,7 +315,8 @@ def _parse_decision(raw: str) -> ReflectorDecision:
     try:
         obj = json.loads(text)
     except Exception:
-        return ReflectorDecision(decision="continue", reason="parse_error")
+        return ReflectorDecision(decision="continue", reason="parse_error",
+                                 source="parse_error")
 
     decision = (obj.get("decision") or "continue").lower()
     if decision not in _VALID:
@@ -208,4 +326,5 @@ def _parse_decision(raw: str) -> ReflectorDecision:
         reason=str(obj.get("reason") or "")[:280],
         question=obj.get("question"),
         replan_hint=obj.get("replan_hint"),
+        source="llm-critic",
     )

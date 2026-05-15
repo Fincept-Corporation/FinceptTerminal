@@ -922,6 +922,7 @@ set(TRADING_SOURCES
     src/trading/instruments/ZerodhaInstrumentParser.cpp
     src/trading/instruments/GrowwInstrumentParser.cpp
     src/trading/instruments/InstrumentService.cpp
+    src/trading/instruments/SymbolResolver.cpp
 )
 
 # Services
@@ -943,6 +944,7 @@ set(SERVICE_SOURCES
     src/services/crypto/TotpService.cpp
     src/services/python_cli/PythonCliService.cpp
     src/services/markets/MarketDataService.cpp
+    src/services/markets/MarketSearchService.cpp
     src/services/options/OptionChainService.cpp
     src/services/options/OISnapshotter.cpp
     src/services/options/StrategyTemplates.cpp
@@ -950,6 +952,9 @@ set(SERVICE_SOURCES
     src/services/options/StrategyAnalytics.cpp
     src/services/options/FiiDiiService.cpp
     src/services/data_normalization/DataNormalizationService.cpp
+    src/services/data_normalization/DataMappingTestClient.cpp
+    src/core/services/Services.cpp
+    src/python/ScriptCatalog.cpp
     # NewsService split; see NewsService.cpp header.
     src/services/news/NewsService.cpp
     src/services/news/NewsService_LiveFeed.cpp

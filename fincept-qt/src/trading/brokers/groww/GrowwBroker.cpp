@@ -91,32 +91,19 @@ QString GrowwBroker::groww_segment(const QString& exchange) {
     return "CASH";
 }
 
-QString GrowwBroker::groww_product(ProductType p) {
-    switch (p) {
-        case ProductType::Intraday:
-            return "MIS";
-        case ProductType::Delivery:
-            return "CNC";
-        case ProductType::Margin:
-            return "NRML";
-        default:
-            return "CNC";
-    }
-}
-
-QString GrowwBroker::groww_order_type(OrderType t) {
-    switch (t) {
-        case OrderType::Market:
-            return "MARKET";
-        case OrderType::Limit:
-            return "LIMIT";
-        case OrderType::StopLoss:
-            return "STOP_LOSS_MARKET"; // SL-M: trigger only, market fill
-        case OrderType::StopLossLimit:
-            return "STOP_LOSS_LIMIT"; // SL:   trigger + limit price
-        default:
-            return "MARKET";
-    }
+const BrokerEnumMap<QString>& GrowwBroker::groww_enum_map() {
+    static const auto m = [] {
+        BrokerEnumMap<QString> x;
+        x.set(OrderType::Market, "MARKET");
+        x.set(OrderType::Limit, "LIMIT");
+        x.set(OrderType::StopLoss, "STOP_LOSS_MARKET");      // SL-M: trigger only, market fill
+        x.set(OrderType::StopLossLimit, "STOP_LOSS_LIMIT"); // SL:   trigger + limit price
+        x.set(ProductType::Intraday, "MIS");
+        x.set(ProductType::Delivery, "CNC");
+        x.set(ProductType::Margin, "NRML");
+        return x;
+    }();
+    return m;
 }
 
 // resolution string → interval_in_minutes for Groww historical API
@@ -239,8 +226,8 @@ OrderPlaceResponse GrowwBroker::place_order(const BrokerCredentials& creds, cons
     body["validity"] = "DAY";
     body["exchange"] = groww_exchange(order.exchange);
     body["segment"] = groww_segment(order.exchange);
-    body["product"] = groww_product(order.product_type);
-    body["order_type"] = groww_order_type(order.order_type);
+    body["product"] = groww_enum_map().product_or(order.product_type, "CNC");
+    body["order_type"] = groww_enum_map().order_type_or(order.order_type, "MARKET");
     body["transaction_type"] = (order.side == OrderSide::Buy) ? "BUY" : "SELL";
 
     if (order.order_type != OrderType::Market)
@@ -877,8 +864,8 @@ QJsonObject GrowwBroker::order_to_margin_row(const UnifiedOrder& order) {
     row["trading_symbol"] = order.symbol;
     row["quantity"] = order.quantity;
     row["exchange"] = groww_exchange(order.exchange);
-    row["product"] = groww_product(order.product_type);
-    row["order_type"] = groww_order_type(order.order_type);
+    row["product"] = groww_enum_map().product_or(order.product_type, "CNC");
+    row["order_type"] = groww_enum_map().order_type_or(order.order_type, "MARKET");
     row["transaction_type"] = (order.side == OrderSide::Buy) ? "BUY" : "SELL";
     // Margin API wants the price for LIMIT/SL-L orders; MARKET can be omitted.
     if (order.order_type != OrderType::Market)
@@ -1009,42 +996,53 @@ ApiResponse<QJsonObject> GrowwBroker::get_profile(const BrokerCredentials& creds
 // expose GTT + OCO through the standard IBroker::gtt_* interface.
 // ============================================================================
 
+// Build the body for Groww Smart Orders. The current spec uses:
+//   transaction_type / quantity / net_position_quantity at the top level,
+//   product_type (not "product"), duration (DAY/IOC),
+//   For OCO: nested `target` and `stop_loss` objects each with `trigger_price`
+//   and optional `price` (limit). Previously the impl used `order`/`secondary_order`
+//   with a `product` key which Smart Orders rejects.
 QJsonObject GrowwBroker::gtt_to_advance_body(const GttOrder& g, bool is_create) {
     QJsonObject body;
     if (is_create)
         body["reference_id"] = g.gtt_id.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : g.gtt_id;
     body["smart_order_type"] = (g.type == GttOrderType::OCO) ? "OCO" : "GTT";
     body["segment"] = groww_segment(g.exchange);
+    body["exchange"] = groww_exchange(g.exchange);
     body["trading_symbol"] = g.symbol;
 
-    if (!g.triggers.isEmpty()) {
-        const GttTrigger& t0 = g.triggers.first();
-        body["quantity"] = t0.quantity;
-        body["trigger_price"] = t0.trigger_price;
+    if (g.triggers.isEmpty())
+        return body;
 
-        QJsonObject leg;
-        leg["transaction_type"] = (t0.side == OrderSide::Buy) ? "BUY" : "SELL";
-        leg["order_type"] = groww_order_type(t0.order_type);
-        leg["product"] = groww_product(t0.product);
-        leg["exchange"] = groww_exchange(g.exchange);
+    const GttTrigger& t0 = g.triggers.first();
+    body["transaction_type"] = (t0.side == OrderSide::Buy) ? "BUY" : "SELL";
+    body["net_position_quantity"] = t0.quantity;
+    body["quantity"] = t0.quantity;
+    body["product_type"] = groww_enum_map().product_or(t0.product, "CNC");
+    body["order_type"] = groww_enum_map().order_type_or(t0.order_type, "MARKET");
+    body["duration"] = "DAY";
+
+    if (g.type == GttOrderType::OCO && g.triggers.size() > 1) {
+        const GttTrigger& t1 = g.triggers.at(1);
+        // Convention: triggers[0] = target leg (higher price for long),
+        // triggers[1] = stop-loss leg. Callers should order them this way;
+        // we don't second-guess the prices.
+        QJsonObject target;
+        target["trigger_price"] = t0.trigger_price;
         if (t0.limit_price > 0)
-            leg["price"] = t0.limit_price;
-        body["order"] = leg;
+            target["price"] = t0.limit_price;
+        body["target"] = target;
 
-        if (g.type == GttOrderType::OCO && g.triggers.size() > 1) {
-            const GttTrigger& t1 = g.triggers.at(1);
-            QJsonObject leg2;
-            leg2["transaction_type"] = (t1.side == OrderSide::Buy) ? "BUY" : "SELL";
-            leg2["order_type"] = groww_order_type(t1.order_type);
-            leg2["product"] = groww_product(t1.product);
-            leg2["exchange"] = groww_exchange(g.exchange);
-            if (t1.limit_price > 0)
-                leg2["price"] = t1.limit_price;
-            QJsonObject oco;
-            oco["trigger_price"] = t1.trigger_price;
-            oco["order"] = leg2;
-            body["secondary_order"] = oco;
-        }
+        QJsonObject stop;
+        stop["trigger_price"] = t1.trigger_price;
+        if (t1.limit_price > 0)
+            stop["price"] = t1.limit_price;
+        body["stop_loss"] = stop;
+    } else {
+        // Single GTT: flat trigger_price + optional price (limit).
+        body["trigger_price"] = t0.trigger_price;
+        if (t0.limit_price > 0)
+            body["price"] = t0.limit_price;
     }
     return body;
 }
@@ -1055,30 +1053,39 @@ GttOrder GrowwBroker::parse_advance_to_gtt(const QJsonObject& payload) {
     if (g.gtt_id.isEmpty())
         g.gtt_id = payload["reference_id"].toString();
     g.symbol = payload["trading_symbol"].toString();
-    // Groww stores exchange inside the leg payload; fall back to NSE if segment-only.
-    QJsonObject leg = payload["order"].toObject();
-    g.exchange = leg.contains("exchange") ? leg["exchange"].toString() : QStringLiteral("NSE");
+    g.exchange = payload.contains("exchange") ? payload["exchange"].toString() : QStringLiteral("NSE");
     g.type = (payload["smart_order_type"].toString() == "OCO") ? GttOrderType::OCO : GttOrderType::Single;
     g.status = payload["status"].toString().toLower();
     g.created_at = payload["created_at"].toString();
     g.updated_at = payload["updated_at"].toString();
 
-    GttTrigger t0;
-    t0.trigger_price = payload["trigger_price"].toDouble();
-    t0.quantity = payload["quantity"].toDouble();
-    t0.side = (leg["transaction_type"].toString() == "BUY") ? OrderSide::Buy : OrderSide::Sell;
-    t0.limit_price = leg["price"].toDouble();
-    g.triggers.append(t0);
+    const QString tx = payload["transaction_type"].toString();
+    const auto side = (tx == "BUY") ? OrderSide::Buy : OrderSide::Sell;
+    const double qty = payload["quantity"].toDouble(payload["net_position_quantity"].toDouble());
 
     if (g.type == GttOrderType::OCO) {
-        QJsonObject sec = payload["secondary_order"].toObject();
-        QJsonObject leg2 = sec["order"].toObject();
+        // OCO: target + stop_loss nested objects.
+        const QJsonObject target = payload["target"].toObject();
+        const QJsonObject stop = payload["stop_loss"].toObject();
+        GttTrigger t0;
+        t0.trigger_price = target["trigger_price"].toDouble();
+        t0.limit_price = target["price"].toDouble();
+        t0.quantity = qty;
+        t0.side = side;
+        g.triggers.append(t0);
         GttTrigger t1;
-        t1.trigger_price = sec["trigger_price"].toDouble();
-        t1.quantity = t0.quantity;
-        t1.side = (leg2["transaction_type"].toString() == "BUY") ? OrderSide::Buy : OrderSide::Sell;
-        t1.limit_price = leg2["price"].toDouble();
+        t1.trigger_price = stop["trigger_price"].toDouble();
+        t1.limit_price = stop["price"].toDouble();
+        t1.quantity = qty;
+        t1.side = side;
         g.triggers.append(t1);
+    } else {
+        GttTrigger t0;
+        t0.trigger_price = payload["trigger_price"].toDouble();
+        t0.limit_price = payload["price"].toDouble();
+        t0.quantity = qty;
+        t0.side = side;
+        g.triggers.append(t0);
     }
     return g;
 }

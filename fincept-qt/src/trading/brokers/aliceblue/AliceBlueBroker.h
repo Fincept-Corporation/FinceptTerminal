@@ -1,5 +1,6 @@
 #pragma once
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 namespace fincept::trading {
@@ -68,8 +69,7 @@ class AliceBlueBroker : public IBroker {
     QMap<QString, QString> auth_headers(const BrokerCredentials& creds) const override;
 
   private:
-    static QString ab_product(ProductType p);
-    static QString ab_order_type(OrderType t);
+    static const BrokerEnumMap<QString>& ab_enum_map();
     static QString ab_resolution(const QString& resolution);
 };
 

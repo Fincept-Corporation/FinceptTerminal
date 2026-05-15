@@ -3,17 +3,14 @@
 
 #include "core/events/EventBus.h"
 #include "core/session/ScreenStateManager.h"
-#include "network/http/HttpClient.h"
 #include "screens/relationship_map/RelationshipGraphScene.h"
+#include "services/markets/MarketSearchService.h"
 #include "services/relationship_map/RelationshipMapService.h"
 #include "ui/theme/Theme.h"
 
 #include <QCheckBox>
 #include <QGraphicsItem>
 #include <QHBoxLayout>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QPointer>
 #include <QScrollArea>
 #include <QShowEvent>
@@ -525,28 +522,24 @@ void RelationshipMapScreen::on_search_text_changed(const QString& text) {
 }
 
 void RelationshipMapScreen::fire_asset_search(const QString& query) {
-    const QString url = QString("/market/search?q=%1&type=stock&limit=%2").arg(query).arg(kMaxSearchResults);
-
-    QPointer<RelationshipMapScreen> self = this;
-    fincept::HttpClient::instance().get(url, [self, query](Result<QJsonDocument> result) {
-        if (!self) return;
-        if (self->pending_query_ != query) return;
-        if (!result.is_ok()) return;
-
-        const auto doc = result.value();
-        QJsonArray arr;
-        if (doc.isArray()) {
-            arr = doc.array();
-        } else if (doc.isObject()) {
-            const auto obj = doc.object();
-            if (obj.contains("results")) arr = obj["results"].toArray();
-            else if (obj.contains("data")) arr = obj["data"].toArray();
-        }
-        self->on_asset_results(arr);
-    });
+    auto& svc = fincept::services::MarketSearchService::instance();
+    const QString rid = QString::number(reinterpret_cast<quintptr>(this), 16);
+    if (!search_connected_) {
+        connect(&svc, &fincept::services::MarketSearchService::results_ready, this,
+                [this](const QString& request_id, const QString& q,
+                       const QList<fincept::services::MarketSearchService::Item>& items) {
+                    const QString my_rid = QString::number(reinterpret_cast<quintptr>(this), 16);
+                    if (request_id != my_rid) return;
+                    if (pending_query_ != q) return;
+                    on_asset_results(items);
+                });
+        search_connected_ = true;
+    }
+    svc.search(query, /*type=*/QStringLiteral("stock"), kMaxSearchResults, rid);
 }
 
-void RelationshipMapScreen::on_asset_results(const QJsonArray& results) {
+void RelationshipMapScreen::on_asset_results(
+    const QList<fincept::services::MarketSearchService::Item>& results) {
     search_dropdown_->clear();
 
     if (results.isEmpty()) {
@@ -566,13 +559,12 @@ void RelationshipMapScreen::on_asset_results(const QJsonArray& results) {
         return;
     }
 
-    for (const auto& val : results) {
-        auto obj = val.toObject();
-        QString symbol   = obj["symbol"].toString();
-        QString name     = obj["name"].toString();
-        QString exchange = obj["exchange"].toString();
-        QString country  = obj["country"].toString();
-        QString type     = obj["type"].toString("stock");
+    for (const auto& entry : results) {
+        const QString& symbol   = entry.symbol;
+        const QString& name     = entry.name;
+        const QString& exchange = entry.exchange;
+        const QString& country  = entry.country;
+        const QString  type     = entry.type.isEmpty() ? QStringLiteral("stock") : entry.type;
 
         if (symbol.isEmpty()) continue;
 

@@ -24,23 +24,18 @@ QString TradierBroker::base(const BrokerCredentials& creds) {
     return "https://api.tradier.com";
 }
 
-QString TradierBroker::tr_order_type(OrderType t) {
-    switch (t) {
-        case OrderType::Market:
-            return "market";
-        case OrderType::Limit:
-            return "limit";
-        case OrderType::StopLoss:
-            return "stop";
-        case OrderType::StopLossLimit:
-            return "stop_limit";
-        default:
-            return "market";
-    }
-}
-
-QString TradierBroker::tr_duration(ProductType p) {
-    return (p == ProductType::Delivery) ? "gtc" : "day";
+const BrokerEnumMap<QString>& TradierBroker::tr_enum_map() {
+    static const auto m = [] {
+        BrokerEnumMap<QString> x;
+        x.set(OrderType::Market, "market");
+        x.set(OrderType::Limit, "limit");
+        x.set(OrderType::StopLoss, "stop");
+        x.set(OrderType::StopLossLimit, "stop_limit");
+        // Duration: Delivery → gtc; everything else falls back to "day" at callsite.
+        x.set(ProductType::Delivery, "gtc");
+        return x;
+    }();
+    return m;
 }
 
 QJsonArray TradierBroker::normalize_array(const QJsonValue& val) {
@@ -137,8 +132,8 @@ OrderPlaceResponse TradierBroker::place_order(const BrokerCredentials& creds, co
     form.addQueryItem("symbol", order.symbol);
     form.addQueryItem("side", (order.side == OrderSide::Buy) ? "buy" : "sell");
     form.addQueryItem("quantity", QString::number(static_cast<int>(order.quantity)));
-    form.addQueryItem("type", tr_order_type(order.order_type));
-    form.addQueryItem("duration", tr_duration(order.product_type));
+    form.addQueryItem("type", tr_enum_map().order_type_or(order.order_type, "market"));
+    form.addQueryItem("duration", tr_enum_map().product_or(order.product_type, "day"));
     if (order.price > 0)
         form.addQueryItem("price", QString::number(order.price, 'f', 2));
     if (order.stop_price > 0)

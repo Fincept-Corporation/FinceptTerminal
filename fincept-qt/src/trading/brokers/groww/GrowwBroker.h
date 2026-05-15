@@ -1,5 +1,6 @@
 #pragma once
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 namespace fincept::trading {
@@ -94,8 +95,7 @@ class GrowwBroker : public IBroker {
   private:
     static QString groww_exchange(const QString& exchange);
     static QString groww_segment(const QString& exchange);
-    static QString groww_product(ProductType p);
-    static QString groww_order_type(OrderType t);
+    static const BrokerEnumMap<QString>& groww_enum_map();
     static int resolution_to_minutes(const QString& resolution);
 
     // Batch helpers for /v1/live-data/ltp and /v1/live-data/ohlc.

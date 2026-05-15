@@ -2,7 +2,6 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
-#include "network/http/HttpClient.h"
 #include "services/data_normalization/DataNormalizationService.h"
 #include "storage/repositories/DataMappingRepository.h"
 #include "ui/theme/Theme.h"

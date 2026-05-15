@@ -7,6 +7,7 @@
 
 #include "screens/equity_research/EquityFinancialsTab.h"
 
+#include "screens/equity_research/EquityFinancialsTab_internal.h"
 #include "services/equity/EquityResearchService.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
@@ -38,129 +39,7 @@
 
 namespace fincept::screens {
 
-namespace {
-
-static const QString kAmber = "#f59e0b";
-static const QString kCyan = "#22d3ee";
-static const QString kGreen = ui::colors::POSITIVE;
-static const QString kRed = ui::colors::NEGATIVE;
-static const QString kBlue = "#3b82f6";
-static const QString kPurple = "#a855f7";
-static const QString kOrange = "#f97316";
-static const QString kYellow = "#eab308";
-
-QFrame* section_frame(const QString& title, const QString& color) {
-    auto* f = new QFrame;
-    f->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2; border-radius:4px; }")
-                         .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
-    auto* vl = new QVBoxLayout(f);
-    vl->setContentsMargins(10, 8, 10, 10);
-    vl->setSpacing(8);
-
-    auto* hdr = new QHBoxLayout;
-    hdr->setSpacing(6);
-    auto* title_lbl = new QLabel(title);
-    title_lbl->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; "
-                                     "letter-spacing:1px; background:transparent; border:0;")
-                                 .arg(color));
-    hdr->addWidget(title_lbl);
-    hdr->addStretch();
-    vl->addLayout(hdr);
-
-    auto* sep = new QFrame;
-    sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet(
-        QString("border:0; border-top:1px solid %1; background:transparent;").arg(ui::colors::BORDER_DIM()));
-    vl->addWidget(sep);
-    return f;
-}
-
-// Large metric card: label on top, big value, optional subtitle
-QWidget* metric_card(const QString& label, QLabel*& val_out, QLabel*& sub_out, const QString& val_color,
-                     const QString& initial_val = "—", const QString& initial_sub = {}) {
-    auto* f = new QFrame;
-    f->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2; border-radius:4px; }")
-                         .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
-    auto* vl = new QVBoxLayout(f);
-    vl->setContentsMargins(8, 6, 8, 6);
-    vl->setSpacing(2);
-
-    auto* lbl = new QLabel(label);
-    lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600; letter-spacing:1px; "
-                               "background:transparent; border:0;")
-                           .arg(ui::colors::TEXT_SECONDARY()));
-    vl->addWidget(lbl);
-
-    val_out = new QLabel(initial_val);
-    val_out->setStyleSheet(QString("color:%1; font-size:14px; font-weight:700; "
-                                   "background:transparent; border:0;")
-                               .arg(val_color));
-    vl->addWidget(val_out);
-
-    if (!initial_sub.isNull()) {
-        sub_out = new QLabel(initial_sub.isEmpty() ? "" : initial_sub);
-        sub_out->setStyleSheet(
-            QString("color:%1; font-size:9px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
-        vl->addWidget(sub_out);
-    } else {
-        sub_out = nullptr;
-    }
-    return f;
-}
-
-// Small ratio row
-QLabel* ratio_row(QWidget* parent_vl_owner, const QString& label, const QString& color) {
-    auto* hl = new QHBoxLayout;
-    hl->setSpacing(4);
-    hl->setContentsMargins(0, 0, 0, 0);
-    auto* k = new QLabel(label);
-    k->setStyleSheet(
-        QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_SECONDARY()));
-    auto* v = new QLabel("—");
-    v->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:600; background:transparent; border:0;").arg(color));
-    v->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    hl->addWidget(k);
-    hl->addStretch();
-    hl->addWidget(v);
-    static_cast<QVBoxLayout*>(parent_vl_owner->layout())->addLayout(hl);
-    return v;
-}
-
-QTableWidget* make_table() {
-    auto* t = new QTableWidget;
-    t->setAlternatingRowColors(true);
-    t->setStyleSheet(QString(R"(
-        QTableWidget {
-            background:%1; alternate-background-color:%2;
-            gridline-color:%3; color:%4; border:0; font-size:10px;
-        }
-        QHeaderView::section {
-            background:%5; color:%6; font-size:9px; font-weight:700;
-            padding:4px; border:0; border-bottom:1px solid %3;
-        }
-        QTableWidget::item { padding:2px 6px; }
-    )")
-                         .arg(ui::colors::BG_SURFACE(), ui::colors::BG_BASE(), ui::colors::BORDER_DIM(),
-                              ui::colors::TEXT_PRIMARY(), ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY()));
-    t->horizontalHeader()->setStretchLastSection(false);
-    t->verticalHeader()->setDefaultSectionSize(24);
-    t->verticalHeader()->hide();
-    t->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    t->setSelectionBehavior(QAbstractItemView::SelectRows);
-    return t;
-}
-
-QChartView* make_chart_view(int fixed_height = 0) {
-    auto* cv = new QChartView;
-    cv->setRenderHint(QPainter::Antialiasing, false);
-    cv->setStyleSheet("background:transparent; border:0;");
-    if (fixed_height > 0)
-        cv->setFixedHeight(fixed_height);
-    return cv;
-}
-
-} // anonymous namespace
+using namespace financials_internal;
 
 
 void EquityFinancialsTab::build_ui() {

@@ -14,6 +14,7 @@
 #include "trading/brokers/dhan/DhanBroker.h"
 
 #include "core/logging/Logger.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/instruments/InstrumentService.h"
 
@@ -48,37 +49,22 @@ static QString canonical_exchange(const QString& seg) {
     return map.value(seg, seg);
 }
 
-// ── Product mapping ───────────────────────────────────────────────────────────
-QString DhanBroker::dhan_product(ProductType p) {
-    switch (p) {
-        case ProductType::Intraday:
-            return "INTRADAY";
-        case ProductType::Delivery:
-            return "CNC";
-        case ProductType::Margin:
-            return "MARGIN";
-        default:
-            return "INTRADAY";
-    }
-}
-
-// ── Order type mapping ────────────────────────────────────────────────────────
 // Per DhanHQ v2 spec:
-//   STOP_LOSS         = SL  = stop-with-LIMIT (needs price + triggerPrice)
+//   STOP_LOSS         = SL   = stop-with-LIMIT (needs price + triggerPrice)
 //   STOP_LOSS_MARKET  = SL-M = stop-with-MARKET (needs triggerPrice only)
-// The previous mapping had these swapped.
-QString DhanBroker::dhan_order_type(OrderType t) {
-    switch (t) {
-        case OrderType::Market:
-            return "MARKET";
-        case OrderType::Limit:
-            return "LIMIT";
-        case OrderType::StopLoss:
-            return "STOP_LOSS_MARKET"; // SL-M: market-with-trigger
-        case OrderType::StopLossLimit:
-            return "STOP_LOSS"; // SL: limit-with-trigger
-    }
-    return "MARKET";
+const BrokerEnumMap<QString>& DhanBroker::dhan_enum_map() {
+    static const auto m = [] {
+        BrokerEnumMap<QString> x;
+        x.set(OrderType::Market, "MARKET");
+        x.set(OrderType::Limit, "LIMIT");
+        x.set(OrderType::StopLoss, "STOP_LOSS_MARKET");
+        x.set(OrderType::StopLossLimit, "STOP_LOSS");
+        x.set(ProductType::Intraday, "INTRADAY");
+        x.set(ProductType::Delivery, "CNC");
+        x.set(ProductType::Margin, "MARGIN");
+        return x;
+    }();
+    return m;
 }
 
 // ── Security ID lookup ────────────────────────────────────────────────────────
@@ -168,8 +154,8 @@ OrderPlaceResponse DhanBroker::place_order(const BrokerCredentials& creds, const
     body["dhanClientId"] = creds.api_key;
     body["transactionType"] = order.side == OrderSide::Buy ? "BUY" : "SELL";
     body["exchangeSegment"] = dhan_exchange(order.exchange);
-    body["productType"] = dhan_product(order.product_type);
-    body["orderType"] = dhan_order_type(order.order_type);
+    body["productType"] = dhan_enum_map().product_or(order.product_type, "INTRADAY");
+    body["orderType"] = dhan_enum_map().order_type_or(order.order_type, "MARKET");
     body["validity"] = order.validity.isEmpty() ? "DAY" : order.validity;
     body["securityId"] = sec_id;
     body["quantity"] = static_cast<int>(order.quantity);

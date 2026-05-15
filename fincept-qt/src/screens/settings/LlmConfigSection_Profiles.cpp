@@ -8,7 +8,6 @@
 #include "screens/settings/LlmConfigSection.h"
 
 #include "core/logging/Logger.h"
-#include "network/http/HttpClient.h"
 #include "services/llm/LlmService.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
