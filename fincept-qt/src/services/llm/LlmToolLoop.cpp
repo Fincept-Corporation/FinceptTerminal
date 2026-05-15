@@ -29,10 +29,11 @@ namespace { constexpr const char* kLlmToolLoopTag = "LlmService"; }
 LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& url,
                                      const QMap<QString, QString>& headers) {
     LlmResponse resp;
-    // 15 rounds covers complex agentic workflows (multi-step research →
-    // template → fill → polish). Each round can contain many parallel
-    // tool calls so this isn't 15 tool calls — it's 15 reasoning steps.
-    static constexpr int MAX_ROUNDS = 15;
+    // 40 rounds. MiniMax-style models spend 3 rounds per action
+    // (tool.list → tool.describe → actual call) so 15 rounds left almost
+    // nothing for actual report mutations. 40 gives ~13 actions, enough
+    // for a full template fill. Bump higher only if real workflows hit it.
+    static constexpr int MAX_ROUNDS = 40;
     LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: starting (max %1 rounds, model=%2)").arg(MAX_ROUNDS).arg(model_));
 
     for (int round = 0; round < MAX_ROUNDS; ++round) {
@@ -80,6 +81,13 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
 
                 LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP r%1: executing %2 args=%3").arg(round).arg(fname,
                               QString::fromUtf8(QJsonDocument(fa).toJson(QJsonDocument::Compact)).left(200)));
+                // Strip "<server>__" prefix for user-visible label; restore "tool.list" from wire form.
+                QString display = fname;
+                int sep = display.indexOf(QStringLiteral("__"));
+                if (sep > 0)
+                    display = display.mid(sep + 2);
+                display.replace(QStringLiteral("-dot-"), QStringLiteral("."));
+                detail::emit_progress(QStringLiteral("• ") + display + QStringLiteral("\n"));
                 auto tr = mcp::McpService::instance().execute_openai_function(fname, fa);
                 LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP r%1: %2 -> %3 (msg=%4 err=%5)")
                                   .arg(round).arg(fname,
@@ -93,31 +101,56 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         }
 
         // Final text response
-        resp.content = extract_openai_message_text(msg);
+        resp.content = strip_think_blocks(extract_openai_message_text(msg));
         parse_usage(resp, rj, provider_);
         resp.success = !resp.content.isEmpty();
         LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: finished after %1 round(s) — %2 chars of text")
                           .arg(round + 1).arg(resp.content.length()));
+
+        // The "final" text may actually contain text-based tool markup
+        // (<minimax:tool_call>, <invoke name=…>, etc.) that the model emitted
+        // in place of structured tool_calls. If so, route through the
+        // text-extraction path so the markup gets executed instead of leaking
+        // into the chat bubble as raw XML.
+        static const QRegularExpression rx_has_text_markup(
+            QStringLiteral("<\\s*/?\\s*(?:\\w+\\s*:\\s*)?tool_call\\b|<\\s*invoke\\s+name="),
+            QRegularExpression::CaseInsensitiveOption);
+        if (resp.success && rx_has_text_markup.match(resp.content).hasMatch()) {
+            LOG_INFO(kLlmToolLoopTag, "TOOL LOOP: final content has text-tool markup — re-routing through text-extraction");
+            QString user_msg;
+            for (const auto& v : loop_messages) {
+                QJsonObject o = v.toObject();
+                if (o["role"].toString() == "user") {
+                    user_msg = o["content"].toString();
+                    break; // first user msg is the original prompt
+                }
+            }
+            auto text_result = try_extract_and_execute_text_tool_calls(resp.content, user_msg, url, headers);
+            if (text_result.has_value() && text_result->success)
+                return text_result.value();
+        }
         return resp;
     }
 
-    // Max rounds exhausted. The user would see an empty bubble. Force one
-    // final non-tool turn so the model summarizes whatever it accomplished
-    // so the chat doesn't go silent.
-    LOG_WARN(kLlmToolLoopTag, "TOOL LOOP: exceeded max rounds — forcing summary turn (no tools)");
+    // Max rounds exhausted. Force one final turn so the chat doesn't go silent.
+    LOG_WARN(kLlmToolLoopTag, "TOOL LOOP: exceeded max rounds — forcing summary turn");
     {
-        // Append a synthetic system nudge instructing the model to wrap up.
         loop_messages.append(QJsonObject{
             {"role", "system"},
-            {"content", "You have used your tool-call budget. Reply now with a final answer to the user "
-                        "summarizing what you accomplished and what (if anything) is incomplete. Do not "
-                        "request any more tools."}});
+            {"content", "You have used your tool-call budget. Reply now with a final summary of what "
+                        "you accomplished and what (if anything) is incomplete. If there are critical "
+                        "remaining tool calls, you may make them, but prefer summarising."}});
 
         QJsonObject fu;
         fu["model"]      = model_;
         fu["messages"]   = loop_messages;
         fu["max_tokens"] = resolved_max_tokens();
-        // Deliberately omit the tools field so the model is forced to produce text.
+        // Keep tools available so structured tool_calls still work. Stripping
+        // them used to force text-markup mode (raw <minimax:tool_call> blobs)
+        // which leaked into the chat bubble.
+        QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(detail::apply_request_policy(tool_filter_));
+        if (!tools.isEmpty())
+            fu["tools"] = tools;
 
         auto http = blocking_post(url, fu, headers);
         if (http.success) {
@@ -127,11 +160,32 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                 QJsonArray choices = rj["choices"].toArray();
                 if (!choices.isEmpty()) {
                     QJsonObject msg = choices[0].toObject()["message"].toObject();
-                    resp.content = extract_openai_message_text(msg);
+                    resp.content = strip_think_blocks(extract_openai_message_text(msg));
                     parse_usage(resp, rj, provider_);
                     resp.success = !resp.content.isEmpty();
                     LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: summary fallback produced %1 chars")
                                       .arg(resp.content.length()));
+
+                    // If the model emitted text-tool markup instead of structured
+                    // tool_calls, run it through extraction so the markup is
+                    // executed instead of dumped raw into the chat bubble.
+                    static const QRegularExpression rx_has_text_markup(
+                        QStringLiteral("<\\s*/?\\s*(?:\\w+\\s*:\\s*)?tool_call\\b|<\\s*invoke\\s+name="),
+                        QRegularExpression::CaseInsensitiveOption);
+                    if (resp.success && rx_has_text_markup.match(resp.content).hasMatch()) {
+                        LOG_INFO(kLlmToolLoopTag, "TOOL LOOP: summary fallback has text-tool markup — re-routing");
+                        QString user_msg;
+                        for (const auto& v : loop_messages) {
+                            QJsonObject o = v.toObject();
+                            if (o["role"].toString() == "user") {
+                                user_msg = o["content"].toString();
+                                break;
+                            }
+                        }
+                        auto text_result = try_extract_and_execute_text_tool_calls(resp.content, user_msg, url, headers);
+                        if (text_result.has_value() && text_result->success)
+                            return text_result.value();
+                    }
                     if (resp.success)
                         return resp;
                 }
@@ -324,6 +378,10 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
     QString tool_results;
     for (const auto& tc : calls) {
         LOG_INFO(kLlmToolLoopTag, "Executing text-detected tool: " + tc.name);
+        int sep_disp = tc.name.indexOf(QStringLiteral("__"));
+        QString display = (sep_disp >= 0) ? tc.name.mid(sep_disp + 2) : tc.name;
+        display.replace(QStringLiteral("-dot-"), QStringLiteral("."));
+        detail::emit_progress(QStringLiteral("Using `") + display + QStringLiteral("` …\n"));
         auto tr = mcp::McpService::instance().execute_openai_function(tc.name, tc.args);
 
         QString result_content;

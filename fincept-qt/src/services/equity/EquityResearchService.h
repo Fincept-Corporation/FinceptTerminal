@@ -18,8 +18,17 @@ class EquityResearchService : public QObject {
     void search_symbols(const QString& query);
     void schedule_search(const QString& query); // debounced entry point
 
-    /// Fetches quote + info + historical in parallel (three Python calls)
+    /// Fetches quote + info + historical in parallel (three Python calls).
+    /// Used by the UI panels that need all three. Tool handlers that only
+    /// need one slice should use the per-data loaders below to avoid wasting
+    /// daemon slots and Yahoo API calls.
     void load_symbol(const QString& symbol, const QString& period = "1y");
+
+    /// Per-data loaders. Each fires exactly one Python call and emits the
+    /// matching *_loaded signal. Cache-aware: re-emits immediately on hit.
+    void load_quote_only(const QString& symbol);
+    void load_info_only(const QString& symbol);
+    void load_historical_only(const QString& symbol, const QString& period = "1y");
 
     void fetch_financials(const QString& symbol);
     void fetch_technicals(const QString& symbol, const QString& period = "1y");

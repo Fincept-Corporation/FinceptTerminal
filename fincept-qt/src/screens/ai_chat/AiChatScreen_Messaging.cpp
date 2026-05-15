@@ -170,7 +170,9 @@ void AiChatScreen::on_send() {
                         self->on_stream_chunk(chunk, done);
                     },
                     Qt::QueuedConnection);
-            });
+            },
+            ai_chat::LlmService::ToolPolicy::All,
+            active_session_id_);
     } else {
         QPointer<AiChatScreen> self = this;
         (void)QtConcurrent::run([self, text, hist_copy]() {
@@ -312,7 +314,14 @@ void AiChatScreen::clear_messages() {
 }
 
 void AiChatScreen::scroll_to_bottom() {
-    QTimer::singleShot(50, this, [this]() {
+    // Debounce: a single scroll lands at the end of the current event-loop batch.
+    // Without this, a 100-chunk stream queued 100 independent 50ms timers, each
+    // racing to setValue() and starving paint events.
+    if (scroll_pending_)
+        return;
+    scroll_pending_ = true;
+    QTimer::singleShot(0, this, [this]() {
+        scroll_pending_ = false;
         if (scroll_area_ && scroll_area_->verticalScrollBar())
             scroll_area_->verticalScrollBar()->setValue(scroll_area_->verticalScrollBar()->maximum());
     });

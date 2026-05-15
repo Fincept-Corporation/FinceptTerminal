@@ -468,7 +468,15 @@ std::vector<ToolDef> get_equity_research_tools() {
                                           resolve(ToolResult::fail(msg));
                                           holder->deleteLater();
                                       });
-                    svc->load_symbol(sym, period);
+                    // Fire only the slice this tool variant listens for —
+                    // load_symbol() would queue three daemon requests and
+                    // serialise behind two we don't even consume.
+                    if (which == 'q')
+                        svc->load_quote_only(sym);
+                    else if (which == 'i')
+                        svc->load_info_only(sym);
+                    else
+                        svc->load_historical_only(sym, period);
                 });
         };
         return t;

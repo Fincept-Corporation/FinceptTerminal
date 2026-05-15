@@ -804,9 +804,21 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
             set_shell_visible(true);
             stack_->setCurrentIndex(1);
         }
-        if (!dock_restored) {
+        // Recovery / "Continue from last session" path: WorkspaceShell::apply
+        // spawns this frame with a non-null adopted_uuid and will call
+        // apply_layout(fl) immediately after construction returns. Skip the
+        // default dashboard navigate so we don't (a) leave a stray dashboard
+        // dock widget for ADS restoreState to flag-as-unassigned, and
+        // (b) pay the cost of constructing DashboardScreen just to discard it.
+        // If apply_layout subsequently fails, the caller is responsible for
+        // falling back to a default screen.
+        if (!dock_restored && adopted_uuid.is_null()) {
             dock_router_->navigate("dashboard");
             LOG_INFO("WindowFrame", "Applied clean default dock layout");
+        } else if (!dock_restored) {
+            LOG_INFO("WindowFrame",
+                     QString("Deferring default navigate — frame spawned with adopted uuid %1 "
+                             "(apply_layout will populate)").arg(adopted_uuid.to_string()));
         } else {
             // Restore last-active screen as the focused tab and sync tab bar.
             // Per-window key so multi-window users don't override each other.

@@ -118,6 +118,7 @@ std::vector<ToolDef> get_notes_tools() {
         t.name = "delete_note";
         t.description = "Delete a research note by ID.";
         t.category = "notes";
+        t.is_destructive = true;  // mutation tool — penalise on read-style queries
         t.input_schema.properties =
             QJsonObject{{"id", QJsonObject{{"type", "integer"}, {"description", "Note ID to delete"}}}};
         t.input_schema.required = {"id"};

@@ -236,6 +236,10 @@ static const QSet<QString>& tier_0_tool_names() {
         "list_tabs",
         "get_current_tab",
         "get_auth_status",
+        // Always-visible so the model checks chat→report linkage before any
+        // report-builder work — prevents new chats from accidentally appending
+        // to the previous chat's report.
+        "report_session_context",
     };
     return kTier0;
 }
