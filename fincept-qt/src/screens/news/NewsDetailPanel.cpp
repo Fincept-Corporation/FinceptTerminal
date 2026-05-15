@@ -163,8 +163,9 @@ QWidget* NewsDetailPanel::build_content_view() {
     copy_btn_->setObjectName("newsDetailCopyBtn");
     copy_btn_->setFixedHeight(24);
     copy_title_btn_ = new QPushButton("COPY TITLE", content);
-    copy_title_btn_->setObjectName("newsDetailCopyBtn");   // reuse existing style
+    copy_title_btn_->setObjectName("newsDetailCopyTitleBtn");
     copy_title_btn_->setFixedHeight(24);
+    copy_title_btn_->setFixedWidth(copy_title_btn_->fontMetrics().horizontalAdvance("COPY TITLE") + 20);
     copy_title_btn_->setToolTip("Copy article headline to clipboard");
     analyze_btn_ = new QPushButton("ANALYZE", content);
     analyze_btn_->setObjectName("newsDetailAnalyzeBtn");
@@ -210,8 +211,7 @@ QWidget* NewsDetailPanel::build_content_view() {
         // Brief visual confirmation — flip label for ~1 s, then revert.
         copy_title_btn_->setText("COPIED");
         QTimer::singleShot(1000, this, [this]() {
-            if (copy_title_btn_)
-                copy_title_btn_->setText("COPY TITLE");
+            copy_title_btn_->setText("COPY TITLE");
         });
     });
     connect(analyze_btn_, &QPushButton::clicked, this, [this]() {
