@@ -253,6 +253,11 @@ QWidget* WatchlistScreen::build_main_panel() {
     del_wl_btn_->setEnabled(false);
     tl->addWidget(del_wl_btn_);
 
+    import_csv_btn_ = new QPushButton("IMPORT CSV");
+    connect(import_csv_btn_, &QPushButton::clicked, this, &WatchlistScreen::on_import_csv);
+    import_csv_btn_->setEnabled(false);
+    tl->addWidget(import_csv_btn_);
+
     export_csv_btn_ = new QPushButton("EXPORT CSV");
     connect(export_csv_btn_, &QPushButton::clicked, this, &WatchlistScreen::on_export_csv);
     export_csv_btn_->setEnabled(false);
@@ -389,6 +394,9 @@ void WatchlistScreen::refresh_theme() {
 
     if (del_wl_btn_)
         del_wl_btn_->setStyleSheet(danger_btn_style());
+
+    if (import_csv_btn_)
+        import_csv_btn_->setStyleSheet(std_btn_style());
 
     if (export_csv_btn_)
         export_csv_btn_->setStyleSheet(std_btn_style());
@@ -583,6 +591,7 @@ void WatchlistScreen::on_watchlist_selected(int row) {
     load_stocks();
     ScreenStateManager::instance().notify_changed(this);
     if (del_wl_btn_) del_wl_btn_->setEnabled(true);
+    if (import_csv_btn_) import_csv_btn_->setEnabled(true);
     if (export_csv_btn_) export_csv_btn_->setEnabled(true);
 }
 
@@ -617,6 +626,7 @@ void WatchlistScreen::on_delete_watchlist() {
     panel_title_->setText("Select a watchlist");
     stock_count_->clear();
     if (del_wl_btn_) del_wl_btn_->setEnabled(false);
+    if (import_csv_btn_) import_csv_btn_->setEnabled(false);
     if (export_csv_btn_) export_csv_btn_->setEnabled(false);
     load_watchlists();
 }
@@ -721,6 +731,107 @@ void WatchlistScreen::on_export_csv() {
             << QString::number(q.low, 'f', 2) << ','
             << fincept::ui::formatting::format_compact_volume(static_cast<qint64>(q.volume)) << '\n';
     }
+}
+
+void WatchlistScreen::on_import_csv() {
+    if (current_wl_id_.isEmpty()) return;
+
+    const QString path = QFileDialog::getOpenFileName(
+        this, tr("Import CSV"), "", tr("CSV Files (*.csv)"));
+    if (path.isEmpty()) return;
+
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Import failed"),
+                             tr("Could not open file for reading:\n%1").arg(path));
+        return;
+    }
+
+    QTextStream in(&f);
+    in.setEncoding(QStringConverter::Utf8);
+
+    QString header_line = in.readLine();
+    if (header_line.isEmpty()) return;
+
+    auto parse_csv_line = [](const QString& line) -> QStringList {
+        QStringList fields;
+        QString current;
+        bool in_quotes = false;
+        for (int i = 0; i < line.length(); ++i) {
+            QChar c = line[i];
+            if (c == '"') {
+                if (i + 1 < line.length() && line[i+1] == '"') {
+                    current += '"';
+                    ++i;
+                } else {
+                    in_quotes = !in_quotes;
+                }
+            } else if (c == ',' && !in_quotes) {
+                fields.append(current);
+                current.clear();
+            } else {
+                current += c;
+            }
+        }
+        fields.append(current);
+        return fields;
+    };
+
+    QStringList headers = parse_csv_line(header_line);
+    int sym_col = -1;
+    int name_col = -1;
+    for (int i = 0; i < headers.size(); ++i) {
+        QString h = headers[i].trimmed().toUpper();
+        if (h == "SYMBOL") sym_col = i;
+        else if (h == "NAME") name_col = i;
+    }
+
+    if (sym_col == -1) {
+        QMessageBox::warning(this, tr("Import failed"), tr("CSV missing SYMBOL column."));
+        return;
+    }
+
+    QSet<QString> existing;
+    for (const auto& s : stocks_) {
+        existing.insert(s.symbol.trimmed().toUpper());
+    }
+
+    int imported = 0;
+    int skipped = 0;
+
+    auto& repo = fincept::WatchlistRepository::instance();
+
+    while (!in.atEnd()) {
+        QString line = in.readLine();
+        if (line.trimmed().isEmpty()) continue;
+
+        QStringList fields = parse_csv_line(line);
+        if (fields.size() <= sym_col) continue;
+
+        QString sym = fields[sym_col].trimmed();
+        if (sym.isEmpty()) continue;
+
+        QString upper_sym = sym.toUpper();
+        if (existing.contains(upper_sym)) {
+            skipped++;
+            continue;
+        }
+
+        QString name = "";
+        if (name_col != -1 && fields.size() > name_col) {
+            name = fields[name_col].trimmed();
+        }
+
+        repo.add_stock(current_wl_id_, sym, name);
+        existing.insert(upper_sym);
+        imported++;
+    }
+
+    load_stocks();
+
+    QMessageBox::information(this, tr("Import Complete"),
+                             tr("Imported %1, skipped %2 duplicates.")
+                             .arg(imported).arg(skipped));
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
