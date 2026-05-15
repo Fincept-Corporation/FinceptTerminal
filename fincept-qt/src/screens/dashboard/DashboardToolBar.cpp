@@ -64,9 +64,16 @@ DashboardToolBar::DashboardToolBar(QWidget* parent) : QWidget(parent) {
 
     make_sep(ll);
 
-    clock_label_ = new QLabel;
-    clock_label_->setObjectName("dtClock");
-    ll->addWidget(clock_label_);
+   clock_btn_ = new QPushButton;
+    clock_btn_->setObjectName("dtBtn");
+    clock_btn_->setFlat(true);
+    clock_btn_->setCursor(Qt::PointingHandCursor);
+    clock_btn_->setToolTip("Click to toggle UTC / local time");
+    connect(clock_btn_, &QPushButton::clicked, this, [this]() {
+        clock_is_utc_ = !clock_is_utc_;
+        update_clock();
+    });
+    ll->addWidget(clock_btn_);
     update_clock();
 
     make_sep(ll);
@@ -201,8 +208,14 @@ void DashboardToolBar::showEvent(QShowEvent* event) {
 }
 
 void DashboardToolBar::update_clock() {
-    clock_label_->setText(QDateTime::currentDateTimeUtc().toString("yyyy-MM-dd HH:mm:ss") + " UTC");
+    const QString suffix = clock_is_utc_ ? " UTC" : " LOC";
+    const QDateTime now  = clock_is_utc_ ? QDateTime::currentDateTimeUtc()
+                                         : QDateTime::currentDateTime();
+    clock_btn_->setText(now.toString("yyyy-MM-dd HH:mm:ss") + suffix);
 }
+    
+   
+
 
 void DashboardToolBar::set_widget_count(int count) {
     widget_count_->setText(QString("%1 WIDGETS").arg(count));

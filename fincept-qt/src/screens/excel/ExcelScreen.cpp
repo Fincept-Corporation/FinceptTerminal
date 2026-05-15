@@ -332,11 +332,12 @@ void ExcelScreen::on_export_csv() {
         return;
 
     QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)){
-         QMessageBox::warning(this, "Export failed", "Could not open file for writing:\n" + path);
-    return;
-    }
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, "Export failed", "Could not open file for writing:\n" + path);
         return;
+    
+    }
+        
 
     QTextStream out(&file);
     out.setEncoding(QStringConverter::Utf8);
