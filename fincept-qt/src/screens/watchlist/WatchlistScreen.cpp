@@ -19,6 +19,7 @@
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QPointer>
+#include <QSet>
 #include <QShowEvent>
 #include <QSplitter>
 #include <QTextStream>
@@ -791,15 +792,18 @@ void WatchlistScreen::on_import_csv() {
         return;
     }
 
+    auto& repo = fincept::WatchlistRepository::instance();
+
     QSet<QString> existing;
-    for (const auto& s : stocks_) {
-        existing.insert(s.symbol.trimmed().toUpper());
+    auto stocks_res = repo.get_stocks(current_wl_id_);
+    if (stocks_res.is_ok()) {
+        for (const auto& s : stocks_res.value()) {
+            existing.insert(s.symbol.trimmed().toUpper());
+        }
     }
 
     int imported = 0;
     int skipped = 0;
-
-    auto& repo = fincept::WatchlistRepository::instance();
 
     while (!in.atEnd()) {
         QString line = in.readLine();
@@ -827,7 +831,9 @@ void WatchlistScreen::on_import_csv() {
         imported++;
     }
 
-    load_stocks();
+    if (wl_list_) {
+        on_watchlist_selected(wl_list_->currentRow());
+    }
 
     QMessageBox::information(this, tr("Import Complete"),
                              tr("Imported %1, skipped %2 duplicates.")
