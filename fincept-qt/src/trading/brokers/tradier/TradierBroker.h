@@ -1,5 +1,6 @@
 #pragma once
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 namespace fincept::trading {
@@ -76,8 +77,8 @@ class TradierBroker : public IBroker {
   private:
     // Returns base URL based on environment credential
     static QString base(const BrokerCredentials& creds);
-    static QString tr_order_type(OrderType t);
-    static QString tr_duration(ProductType p);
+    /// Tradier "duration": Delivery → gtc; everything else falls back to "day" at callsite.
+    static const BrokerEnumMap<QString>& tr_enum_map();
     // Tradier returns single object or array — always normalize to array
     static QJsonArray normalize_array(const QJsonValue& val);
 };

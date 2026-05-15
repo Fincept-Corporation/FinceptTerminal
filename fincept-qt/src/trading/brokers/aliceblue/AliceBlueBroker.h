@@ -1,5 +1,6 @@
 #pragma once
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 namespace fincept::trading {
@@ -22,12 +23,14 @@ class AliceBlueBroker : public IBroker {
                     {CredentialField::ApiSecret, "API SECRET", "Enter API Secret...", true},
                     {CredentialField::AuthCode, "AUTH CODE", "Enter Auth/Request Token...", false},
                 },
-            .exchanges = {"NSE", "BSE", "NFO", "MCX", "NCDEX"},
+            // AliceBlue ANT supports NSE/BSE equity + NFO/BFO/CDS derivatives +
+            // MCX commodities + INDICES. NCDEX is not on the supported list.
+            .exchanges = {"NSE", "BSE", "NFO", "BFO", "CDS", "MCX", "INDICES"},
             .product_types =
                 {
-                    {"Intraday (MIS)", ProductType::Intraday},
-                    {"Delivery (CNC)", ProductType::Delivery},
-                    {"Margin (NRML)", ProductType::Margin},
+                    {"Intraday (INTRADAY)", ProductType::Intraday},
+                    {"Delivery (LONGTERM)", ProductType::Delivery},
+                    {"Margin (MTF)", ProductType::Margin},
                 },
             .supports_intraday = true,
             .supports_bracket_order = false,
@@ -66,8 +69,7 @@ class AliceBlueBroker : public IBroker {
     QMap<QString, QString> auth_headers(const BrokerCredentials& creds) const override;
 
   private:
-    static QString ab_product(ProductType p);
-    static QString ab_order_type(OrderType t);
+    static const BrokerEnumMap<QString>& ab_enum_map();
     static QString ab_resolution(const QString& resolution);
 };
 

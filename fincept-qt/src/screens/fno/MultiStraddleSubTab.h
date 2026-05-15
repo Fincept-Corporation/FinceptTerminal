@@ -16,7 +16,7 @@
 // Per-token sample caches let a single side update trigger a recompute of
 // all selections that include that token.
 
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/options/OptionChainTypes.h"
 
 #include <QHash>

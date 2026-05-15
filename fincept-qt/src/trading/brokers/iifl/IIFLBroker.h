@@ -1,5 +1,6 @@
 #pragma once
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 namespace fincept::trading {
@@ -86,10 +87,8 @@ class IIFLBroker : public IBroker {
     static QString iifl_exchange(const QString& exchange);
     // Exchange segment numeric ID for market data API (e.g. NSE → 1)
     static int iifl_exchange_id(const QString& exchange);
-    // Order type mapping
-    static QString iifl_order_type(OrderType t);
-    // Product type pass-through
-    static QString iifl_product(ProductType p);
+    // Order type + product mapping
+    static const BrokerEnumMap<QString>& iifl_enum_map();
     // compressionValue for history (resolution string → seconds or "D")
     static QString iifl_compression(const QString& resolution);
     // Format QDateTime to IIFL time string "Jan 01 2024 091500"

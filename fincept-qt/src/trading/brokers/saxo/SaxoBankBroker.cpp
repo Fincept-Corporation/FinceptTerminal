@@ -30,23 +30,18 @@ QString SaxoBankBroker::extract_uic(const QString& symbol) {
     return {};
 }
 
-QString SaxoBankBroker::saxo_order_type(OrderType t) {
-    switch (t) {
-        case OrderType::Market:
-            return "Market";
-        case OrderType::Limit:
-            return "Limit";
-        case OrderType::StopLoss:
-            return "StopIfTraded";
-        case OrderType::StopLossLimit:
-            return "StopLimit";
-        default:
-            return "Market";
-    }
-}
-
-QString SaxoBankBroker::saxo_duration(ProductType p) {
-    return (p == ProductType::Delivery) ? "GoodTillCancel" : "DayOrder";
+const BrokerEnumMap<QString>& SaxoBankBroker::saxo_enum_map() {
+    static const auto m = [] {
+        BrokerEnumMap<QString> x;
+        x.set(OrderType::Market, "Market");
+        x.set(OrderType::Limit, "Limit");
+        x.set(OrderType::StopLoss, "StopIfTraded");
+        x.set(OrderType::StopLossLimit, "StopLimit");
+        // Duration: Delivery → GoodTillCancel; everything else falls back to "DayOrder" at callsite.
+        x.set(ProductType::Delivery, "GoodTillCancel");
+        return x;
+    }();
+    return m;
 }
 
 int SaxoBankBroker::saxo_horizon(const QString& resolution) {
@@ -189,7 +184,7 @@ OrderPlaceResponse SaxoBankBroker::place_order(const BrokerCredentials& creds, c
     order_obj["AssetType"] = "Stock";
     order_obj["BuySell"] = (order.side == OrderSide::Buy) ? "Buy" : "Sell";
     order_obj["Amount"] = order.quantity;
-    order_obj["OrderType"] = saxo_order_type(order.order_type);
+    order_obj["OrderType"] = saxo_enum_map().order_type_or(order.order_type, "Market");
     order_obj["ManualOrder"] = false;
 
     if (order.order_type != OrderType::Market)
@@ -198,7 +193,7 @@ OrderPlaceResponse SaxoBankBroker::place_order(const BrokerCredentials& creds, c
         order_obj["StopLimitPrice"] = order.stop_price;
 
     QJsonObject duration;
-    duration["DurationType"] = saxo_duration(order.product_type);
+    duration["DurationType"] = saxo_enum_map().product_or(order.product_type, "DayOrder");
     order_obj["OrderDuration"] = duration;
 
     auto& http = BrokerHttp::instance();

@@ -5,6 +5,7 @@
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/instruments/GrowwInstrumentParser.h"
 #include "trading/instruments/InstrumentRepository.h"
+#include "trading/instruments/SymbolResolver.h"
 #include "trading/instruments/ZerodhaInstrumentParser.h"
 
 #include <QCoreApplication>
@@ -191,8 +192,32 @@ static QVector<Instrument> parse_angel_master_json(const QByteArray& json_data) 
 
 } // namespace
 
+namespace {
+
+/// Register the three first-party instrument sources with SymbolResolver.
+/// Idempotent — replacing an existing entry is harmless.
+void ensure_builtin_sources_registered() {
+    static bool registered = []() {
+        auto& r = SymbolResolver::instance();
+        r.register_source({QStringLiteral("zerodha"),
+                           [](const BrokerCredentials& c) { return InstrumentService::download_zerodha_csv(c); },
+                           [](const QByteArray& p) { return ZerodhaInstrumentParser::parse(p); }});
+        r.register_source({QStringLiteral("angelone"),
+                           [](const BrokerCredentials&) { return InstrumentService::download_angel_master_json(); },
+                           [](const QByteArray& p) { return parse_angel_master_json(p); }});
+        r.register_source({QStringLiteral("groww"),
+                           [](const BrokerCredentials&) { return InstrumentService::download_groww_csv(); },
+                           [](const QByteArray& p) { return GrowwInstrumentParser::parse(p); }});
+        return true;
+    }();
+    Q_UNUSED(registered);
+}
+
+} // namespace
+
 InstrumentService& InstrumentService::instance() {
     static InstrumentService inst;
+    ensure_builtin_sources_registered();
     return inst;
 }
 
@@ -519,14 +544,8 @@ void InstrumentService::build_cache(const QString& broker_id, const QVector<Inst
 void InstrumentService::do_refresh(const QString& broker_id, const BrokerCredentials& creds) {
     LOG_INFO("InstrumentService", "Downloading instruments for " + broker_id);
 
-    QByteArray payload;
-    if (broker_id == "zerodha") {
-        payload = download_zerodha_csv(creds);
-    } else if (broker_id == "angelone") {
-        payload = download_angel_master_json();
-    } else if (broker_id == "groww") {
-        payload = download_groww_csv();
-    } else {
+    const InstrumentSource* src = SymbolResolver::instance().find(broker_id);
+    if (!src || !src->download || !src->parse) {
         QMetaObject::invokeMethod(
             this,
             [this, broker_id]() {
@@ -534,12 +553,13 @@ void InstrumentService::do_refresh(const QString& broker_id, const BrokerCredent
                     QMutexLocker lock(&mutex_);
                     refreshing_.remove(broker_id);
                 }
-                emit refresh_failed(broker_id, "Instrument download not implemented for " + broker_id);
+                emit refresh_failed(broker_id, "Instrument source not registered for " + broker_id);
             },
             Qt::QueuedConnection);
         return;
     }
 
+    const QByteArray payload = src->download(creds);
     if (payload.isEmpty()) {
         QMetaObject::invokeMethod(
             this,
@@ -554,14 +574,7 @@ void InstrumentService::do_refresh(const QString& broker_id, const BrokerCredent
         return;
     }
 
-    QVector<Instrument> instruments;
-    if (broker_id == "zerodha") {
-        instruments = ZerodhaInstrumentParser::parse(payload);
-    } else if (broker_id == "angelone") {
-        instruments = parse_angel_master_json(payload);
-    } else if (broker_id == "groww") {
-        instruments = GrowwInstrumentParser::parse(payload);
-    }
+    QVector<Instrument> instruments = src->parse(payload);
 
     if (instruments.isEmpty()) {
         QMetaObject::invokeMethod(

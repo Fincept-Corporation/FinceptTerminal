@@ -16,7 +16,7 @@
 //   - Screener      (Phase 9)
 
 #include "core/symbol/IGroupLinked.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 
 #include <QHash>
 #include <QPointer>

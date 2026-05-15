@@ -133,6 +133,11 @@ class InstrumentService : public QObject {
 
     void build_cache(const QString& broker_id, const QVector<Instrument>& instruments);
     void do_refresh(const QString& broker_id, const BrokerCredentials& creds);
+
+  public:
+    // Built-in source downloaders — public so SymbolResolver registration
+    // (in the .cpp file) can wire them as `InstrumentSource::download` lambdas.
+    // They have no instance state; they are static helpers.
     static QByteArray download_zerodha_csv(const BrokerCredentials& creds);
     static QByteArray download_angel_master_json();
     static QByteArray download_groww_csv();

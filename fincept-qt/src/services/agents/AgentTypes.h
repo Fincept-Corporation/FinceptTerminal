@@ -9,7 +9,7 @@ namespace fincept::services {
 
 // ── View modes for the Agent Config screen ──────────────────────────────────
 
-enum class AgentViewMode { Agents, Create, Teams, Workflows, Planner, Tools, Chat, System };
+enum class AgentViewMode { Agents, Create, Teams, Workflows, Planner, Tools, Chat, System, Agentic };
 
 // ── Agent discovery ─────────────────────────────────────────────────────────
 

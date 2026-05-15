@@ -3,7 +3,7 @@
 // Responsive cells, markdown rendering, keyboard shortcuts, collapsible output.
 #pragma once
 
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 
 #include <QHideEvent>
 #include <QJsonArray>

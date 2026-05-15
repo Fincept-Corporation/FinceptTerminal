@@ -3,7 +3,7 @@
 
 #include "screens/settings/SettingsScreen.h"
 
-#include "ai_chat/LlmService.h"
+#include "services/llm/LlmService.h"
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"

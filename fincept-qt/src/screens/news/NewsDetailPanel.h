@@ -92,6 +92,7 @@ class NewsDetailPanel : public QWidget {
     // Action buttons
     QPushButton* open_btn_ = nullptr;
     QPushButton* copy_btn_ = nullptr;
+    QPushButton* copy_title_btn_ = nullptr;
     QPushButton* save_btn_ = nullptr;
     QPushButton* bookmark_btn_ = nullptr;
     QPushButton* close_btn_ = nullptr;

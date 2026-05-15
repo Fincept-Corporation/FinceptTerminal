@@ -1,5 +1,6 @@
 #pragma once
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 namespace fincept::trading {
@@ -94,8 +95,7 @@ class GrowwBroker : public IBroker {
   private:
     static QString groww_exchange(const QString& exchange);
     static QString groww_segment(const QString& exchange);
-    static QString groww_product(ProductType p);
-    static QString groww_order_type(OrderType t);
+    static const BrokerEnumMap<QString>& groww_enum_map();
     static int resolution_to_minutes(const QString& resolution);
 
     // Batch helpers for /v1/live-data/ltp and /v1/live-data/ohlc.
@@ -116,9 +116,11 @@ class GrowwBroker : public IBroker {
     bool fetch_ohlc_batch(const BrokerCredentials& creds, const QString& segment,
                           const QVector<SymbolRef>& refs, QVector<BrokerQuote>& out);
 
-    // /v1/historical/candles candle_interval mapping. Groww accepts integer minutes
-    // for 1,5,10,15,30,60; "1D" and "1W" map to 1440 / 10080.
+    // /v1/historical/candles candle_interval mapping. Groww's current API takes a
+    // string token (e.g. "1min", "1day"); we keep the minutes helper around for
+    // window-size math and use history_interval_token() for the wire value.
     static int history_interval_minutes(const QString& resolution);
+    static QString history_interval_token(const QString& resolution);
     // Build the order JSON used by /v1/margins/detail/orders (per-order object inside the array).
     static QJsonObject order_to_margin_row(const UnifiedOrder& order);
     // Smart-order helpers

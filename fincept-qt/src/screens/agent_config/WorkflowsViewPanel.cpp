@@ -1,7 +1,7 @@
 // src/screens/agent_config/WorkflowsViewPanel.cpp
 #include "screens/agent_config/WorkflowsViewPanel.h"
 
-#include "ai_chat/LlmService.h"
+#include "services/llm/LlmService.h"
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
 #include "storage/repositories/LlmProfileRepository.h"

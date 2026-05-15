@@ -27,24 +27,18 @@ QString IBKRBroker::gateway_url(const BrokerCredentials& creds) {
     return url;
 }
 
-QString IBKRBroker::ibkr_order_type(OrderType t) {
-    switch (t) {
-        case OrderType::Market:
-            return "MKT";
-        case OrderType::Limit:
-            return "LMT";
-        case OrderType::StopLoss:
-            return "STP";
-        case OrderType::StopLossLimit:
-            return "STPLMT";
-        default:
-            return "MKT";
-    }
-}
-
-QString IBKRBroker::ibkr_tif(ProductType p) {
-    // Delivery = GTC, everything else = DAY
-    return (p == ProductType::Delivery) ? "GTC" : "DAY";
+const BrokerEnumMap<QString>& IBKRBroker::ibkr_enum_map() {
+    static const auto m = [] {
+        BrokerEnumMap<QString> x;
+        x.set(OrderType::Market, "MKT");
+        x.set(OrderType::Limit, "LMT");
+        x.set(OrderType::StopLoss, "STP");
+        x.set(OrderType::StopLossLimit, "STPLMT");
+        // TIF: Delivery → GTC; all other products fall through to "DAY" at callsite.
+        x.set(ProductType::Delivery, "GTC");
+        return x;
+    }();
+    return m;
 }
 
 IBKRBroker::HistoryParams IBKRBroker::ibkr_history_params(const QString& resolution, const QString& from_date,
@@ -191,9 +185,9 @@ OrderPlaceResponse IBKRBroker::place_order(const BrokerCredentials& creds, const
 
     QJsonObject order_obj;
     order_obj["conid"] = conid.toLongLong();
-    order_obj["orderType"] = ibkr_order_type(order.order_type);
+    order_obj["orderType"] = ibkr_enum_map().order_type_or(order.order_type, "MKT");
     order_obj["side"] = (order.side == OrderSide::Buy) ? "BUY" : "SELL";
-    order_obj["tif"] = ibkr_tif(order.product_type);
+    order_obj["tif"] = ibkr_enum_map().product_or(order.product_type, "DAY");
     order_obj["quantity"] = order.quantity;
     order_obj["price"] = order.price;
     if (order.stop_price > 0)

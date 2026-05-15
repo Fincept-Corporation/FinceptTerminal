@@ -1,15 +1,12 @@
 #include "screens/markets/MarketPanelEditor.h"
 
-#include "network/http/HttpClient.h"
+#include "services/markets/MarketSearchService.h"
 #include "ui/theme/Theme.h"
 
 #include <QDialogButtonBox>
 #include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QListWidgetItem>
@@ -230,39 +227,31 @@ void MarketPanelEditor::on_search_text_changed(const QString& text) {
 void MarketPanelEditor::fire_search(const QString& query) {
     if (query.isEmpty()) return;
 
-    const QString url = QString("/market/search?q=%1&limit=%2").arg(query).arg(kMaxResults);
-
-    QPointer<MarketPanelEditor> self = this;
-    HttpClient::instance().get(url, [self, query](Result<QJsonDocument> result) {
-        if (!self) return;
-        if (self->pending_query_ != query) return; // stale response
-        if (!result.is_ok()) return;
-
-        const auto doc = result.value();
-        QJsonArray arr;
-        if (doc.isArray()) {
-            arr = doc.array();
-        } else if (doc.isObject()) {
-            const auto obj = doc.object();
-            if (obj.contains("results"))      arr = obj["results"].toArray();
-            else if (obj.contains("data"))    arr = obj["data"].toArray();
-        }
-        self->on_search_results(arr);
-    });
+    auto& svc = services::MarketSearchService::instance();
+    const QString rid = QString::number(reinterpret_cast<quintptr>(this), 16);
+    if (!search_connected_) {
+        connect(&svc, &services::MarketSearchService::results_ready, this,
+                [this](const QString& request_id, const QString& q,
+                       const QList<services::MarketSearchService::Item>& items) {
+                    const QString my_rid = QString::number(reinterpret_cast<quintptr>(this), 16);
+                    if (request_id != my_rid) return;
+                    if (pending_query_ != q) return; // stale response
+                    on_search_results(items);
+                });
+        search_connected_ = true;
+    }
+    svc.search(query, /*type=*/QString(), kMaxResults, rid);
 }
 
-void MarketPanelEditor::on_search_results(const QJsonArray& results) {
+void MarketPanelEditor::on_search_results(const QList<services::MarketSearchService::Item>& results) {
     dropdown_->clear();
 
-    for (const auto& v : results) {
-        const auto obj    = v.toObject();
-        const QString sym = obj["symbol"].toString();
-        const QString name = obj["name"].toString();
-        if (sym.isEmpty()) continue;
-
-        const QString display = name.isEmpty() ? sym : QString("%1  ·  %2").arg(sym, name);
+    for (const auto& entry : results) {
+        if (entry.symbol.isEmpty()) continue;
+        const QString display =
+            entry.name.isEmpty() ? entry.symbol : QString("%1  ·  %2").arg(entry.symbol, entry.name);
         auto* item = new QListWidgetItem(display);
-        item->setData(Qt::UserRole, sym); // store raw symbol for adding
+        item->setData(Qt::UserRole, entry.symbol); // store raw symbol for adding
         dropdown_->addItem(item);
     }
 

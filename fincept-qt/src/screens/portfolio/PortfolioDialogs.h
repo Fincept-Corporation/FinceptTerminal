@@ -1,6 +1,7 @@
 // src/screens/portfolio/PortfolioDialogs.h
 #pragma once
 #include "screens/portfolio/PortfolioTypes.h"
+#include "services/markets/MarketSearchService.h"
 
 #include <QComboBox>
 #include <QDateEdit>
@@ -8,6 +9,7 @@
 #include <QFrame>
 #include <QLabel>
 #include <QLineEdit>
+#include <QList>
 #include <QListWidget>
 #include <QRadioButton>
 #include <QString>
@@ -56,7 +58,7 @@ class AddAssetDialog : public QDialog {
   private:
     void schedule_search(const QString& query);
     void fire_search(const QString& query);
-    void show_results(const QJsonArray& results);
+    void show_results(const QList<fincept::services::MarketSearchService::Item>& results);
     void select_result(const QString& symbol);
     void position_dropdown();
 
@@ -69,7 +71,8 @@ class AddAssetDialog : public QDialog {
     QListWidget* search_list_ = nullptr;
     QTimer* search_debounce_ = nullptr;
     QString pending_query_;
-    bool selecting_ = false; // guard against recursive text-changed
+    bool selecting_ = false;        // guard against recursive text-changed
+    bool search_connected_ = false; // one-shot signal hookup
 };
 
 /// Dialog for selling an asset.

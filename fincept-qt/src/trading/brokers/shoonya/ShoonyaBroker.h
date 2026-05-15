@@ -1,5 +1,6 @@
 #pragma once
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 namespace fincept::trading {
@@ -75,8 +76,7 @@ class ShoonyaBroker : public IBroker {
     QMap<QString, QString> auth_headers(const BrokerCredentials& creds) const override;
 
   private:
-    static QString sh_product(ProductType p);
-    static QString sh_order_type(OrderType t);
+    static const BrokerEnumMap<QString>& sh_enum_map();
     static QString sh_status(const QString& s);
 
     // Build form body: jData=<json>&jKey=<token>

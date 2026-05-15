@@ -15,6 +15,11 @@ jobs:
     steps:
       - uses: actions/stale@v9
         with:
+          # Scope this workflow to PRs only — without -1, actions/stale would
+          # also process issues using its 60-day default and could close
+          # unrelated open issues.
+          days-before-issue-stale: -1
+          days-before-issue-close: -1
           days-before-pr-stale: 7
           days-before-pr-close: 0
           only-pr-labels: needs-scope-approval

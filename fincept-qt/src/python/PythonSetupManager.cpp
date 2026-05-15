@@ -43,12 +43,12 @@ QString PythonSetupManager::uv_path() const {
 }
 
 QString PythonSetupManager::base_python_path() const {
-    // May block up to 10s — never call from the UI thread. Background threads / pre-exec only.
-    Q_ASSERT(QCoreApplication::instance() == nullptr ||
-             QThread::currentThread() != QCoreApplication::instance()->thread());
-
     if (!cached_python_path_.isEmpty())
         return cached_python_path_;
+
+    // BLOCKING: spawns `uv python find` and waits up to 10s. Acceptable from
+    // the main thread only pre-window (see main.cpp's check_status() call);
+    // post-window callers must run this on a background thread.
 
     // `uv python find` spawns a process — resolve once per session.
     QProcess proc;

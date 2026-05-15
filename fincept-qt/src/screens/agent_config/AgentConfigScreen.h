@@ -1,6 +1,6 @@
 // src/screens/agent_config/AgentConfigScreen.h
 #pragma once
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/agents/AgentTypes.h"
 
 #include <QLabel>
@@ -19,6 +19,7 @@ class PlannerViewPanel;
 class ToolsViewPanel;
 class AgentChatPanel;
 class SystemViewPanel;
+class AgenticTasksPanel;
 } // namespace fincept::screens
 
 namespace fincept::screens {
@@ -66,9 +67,15 @@ class AgentConfigScreen : public QWidget, public IStatefulScreen {
     ToolsViewPanel* tools_panel_ = nullptr;
     AgentChatPanel* chat_panel_ = nullptr;
     SystemViewPanel* system_panel_ = nullptr;
+    AgenticTasksPanel* agentic_panel_ = nullptr;
 
-    // Track which stack slots have been populated
-    bool panel_built_[8] = {};
+    // Track which stack slots have been populated (one per AgentViewMode value).
+    bool panel_built_[9] = {};
+    // Nav-button index for the AGENTIC tab — kept so the visibility toggle
+    // (Settings > Developer > Agentic Mode) can show/hide it at runtime.
+    int agentic_nav_idx_ = -1;
+    bool agentic_mode_enabled_ = false;
+    void apply_agentic_visibility();
 
     services::AgentViewMode current_view_ = services::AgentViewMode::Agents;
     bool first_show_ = true;

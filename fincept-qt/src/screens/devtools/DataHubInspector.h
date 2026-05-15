@@ -24,6 +24,7 @@ class DataHubInspector : public QWidget {
 
     QTableWidget* table_ = nullptr;
     QTimer refresh_timer_;
+    bool initial_sized_ = false;
 };
 
 } // namespace fincept::screens::devtools
