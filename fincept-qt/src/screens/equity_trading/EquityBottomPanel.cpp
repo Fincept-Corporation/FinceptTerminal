@@ -233,9 +233,9 @@ void EquityBottomPanel::set_paper_positions(const QVector<trading::PtPosition>& 
         const auto& p = positions[i];
         ensure_item(positions_table_, i, 0)->setText(p.symbol);
 
-        // Col 1 — "Opened": format ISO timestamp; fall back to raw string on parse failure
+        // Col 1 — "Opened": parse ISO timestamp, convert to local time, fall back to raw string
         {
-            const QDateTime dt = QDateTime::fromString(p.opened_at, Qt::ISODate);
+            const QDateTime dt = QDateTime::fromString(p.opened_at, Qt::ISODate).toLocalTime();
             ensure_item(positions_table_, i, 1)
                 ->setText(dt.isValid() ? dt.toString("yyyy-MM-dd HH:mm") : p.opened_at);
         }
@@ -252,8 +252,11 @@ void EquityBottomPanel::set_paper_positions(const QVector<trading::PtPosition>& 
                                                       : QColor(fincept::ui::colors::NEGATIVE()));
 
         // Col 7 — P&L %
-        const double pct = p.entry_price > 0
-            ? (p.unrealized_pnl / (p.entry_price * p.quantity)) * 100.0
+        // Use notional as the divisor so both entry_price == 0 and quantity == 0
+        // are safely handled by a single guard (avoids divide-by-zero).
+        const double notional = p.entry_price * p.quantity;
+        const double pct = notional != 0.0
+            ? (p.unrealized_pnl / notional) * 100.0
             : 0.0;
         auto* pct_item = ensure_item(positions_table_, i, 7);
         pct_item->setText(QString::number(pct, 'f', 2) + "%");

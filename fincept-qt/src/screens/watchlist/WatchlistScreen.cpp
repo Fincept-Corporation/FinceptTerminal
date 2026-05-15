@@ -296,6 +296,7 @@ QWidget* WatchlistScreen::build_main_panel() {
     table_ = new ui::DataTable;
     table_->set_headers({"SYMBOL", "NAME", "PRICE", "CHANGE", "CHG %", "HIGH", "LOW", "VOLUME"});
     table_->set_column_widths({100, 160, 100, 90, 80, 90, 90, 110});
+    table_->setSortingEnabled(true); // opt-in: WatchlistScreen stamps numeric EditRole values
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
 
