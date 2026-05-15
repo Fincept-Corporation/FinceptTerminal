@@ -17,6 +17,7 @@
 #include <QLabel>
 #include <QScrollArea>
 #include <QTextStream>
+#include <QMessageBox>
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -801,9 +802,12 @@ void export_table_to_csv(QTableWidget* table, const QString& default_name, QWidg
         return;
 
     QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(parent, "Export failed", "Unable to open file for writing.");
         return;
+    }
     QTextStream out(&file);
+    out.setEncoding(QStringConverter::Utf8);
 
     QStringList headers;
     for (int c = 0; c < table->columnCount(); ++c) {
@@ -817,7 +821,7 @@ void export_table_to_csv(QTableWidget* table, const QString& default_name, QWidg
         for (int c = 0; c < table->columnCount(); ++c) {
             auto* item = table->item(r, c);
             QString val = item ? item->text() : "";
-            if (val.contains(',') || val.contains('"'))
+            if (val.contains(',') || val.contains('"') || val.contains('\n'))
                 val = "\"" + val.replace("\"", "\"\"") + "\"";
             row << val;
         }
