@@ -3,7 +3,7 @@
 // formula bar, import/export (.xlsx), snapshots, and dark theme.
 #pragma once
 
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 
 #include <QHideEvent>
 #include <QLabel>

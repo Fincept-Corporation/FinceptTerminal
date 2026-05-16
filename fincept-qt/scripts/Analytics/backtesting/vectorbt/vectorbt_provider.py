@@ -332,43 +332,64 @@ class VectorBTProvider(BacktestingProviderBase):
             return error_result
 
     def optimize(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Run parameter optimization."""
+        """Run parameter optimization. Accepts the UI's arg shape:
+        - symbols (flat list)              ← UI sends this
+        - strategy: {type, params}          ← strategy.params holds the seed values
+        - paramRanges: {<name>: {min,max,step}}  ← UI's ranges (also accepts `parameters`)
+        - optimizeObjective / objective
+        - optimizeMethod / method
+        - maxIterations
+        """
         try:
             vbt = self._import_vbt()
         except Exception as e:
             return self._create_error_result(str(e))
 
         try:
-            import pandas as pd
             import vbt_optimization as opt
 
             strategy = request.get('strategy', {})
             strategy_type = strategy.get('type', 'sma_crossover')
-            parameters = request.get('parameters', {})
-            objective = request.get('objective', 'sharpe')
+
+            # Accept both UI's `paramRanges` and legacy `parameters` / strategy.params seeds
+            parameters = (request.get('paramRanges')
+                          or request.get('parameters')
+                          or strategy.get('params', {}))
+            objective = request.get('optimizeObjective') or request.get('objective', 'sharpe')
+            method = request.get('optimizeMethod') or request.get('method', 'grid')
             initial_capital = request.get('initialCapital', 100000)
             start_date = request.get('startDate')
             end_date = request.get('endDate')
-            assets = request.get('assets', [])
-            method = request.get('method', 'grid')
             max_iterations = request.get('maxIterations', 500)
 
-            symbols = [asset['symbol'] for asset in assets]
-            close_series, _ = self._load_market_data(symbols, start_date, end_date)
+            # Accept UI's flat symbols OR legacy assets list
+            symbols = request.get('symbols') or [a.get('symbol') for a in request.get('assets', []) if a.get('symbol')]
+            if not symbols:
+                return {'success': False, 'error': 'No symbols provided'}
+            close_series, using_synthetic = self._load_market_data(self._normalize_symbols(symbols), start_date, end_date)
 
             result = opt.optimize(
                 vbt, close_series, strategy_type, parameters,
                 objective, initial_capital, method, max_iterations, request
             )
 
+            # opt.optimize returns its own success flag — surface failures
+            if not result.get('success', True):
+                return {'success': False, 'error': result.get('error', 'Optimization failed')}
+
+            result['usingSyntheticData'] = using_synthetic
             return {'success': True, 'data': result}
 
         except Exception as e:
             self._error('Optimization failed', e)
-            return self._create_error_result(f'Optimization failed: {str(e)}')
+            return {'success': False, 'error': f'Optimization failed: {str(e)}'}
 
     def walk_forward(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Run walk-forward optimization."""
+        """Walk-forward optimization. Accepts UI's arg shape:
+        - symbols, strategy.{type,params}
+        - paramRanges (or parameters or strategy.params)
+        - wfSplits / nSplits, wfTrainRatio / trainRatio
+        """
         try:
             vbt = self._import_vbt()
         except Exception as e:
@@ -379,28 +400,35 @@ class VectorBTProvider(BacktestingProviderBase):
 
             strategy = request.get('strategy', {})
             strategy_type = strategy.get('type', 'sma_crossover')
-            parameters = request.get('parameters', {})
-            objective = request.get('objective', 'sharpe')
+            parameters = (request.get('paramRanges')
+                          or request.get('parameters')
+                          or strategy.get('params', {}))
+            objective = request.get('optimizeObjective') or request.get('objective', 'sharpe')
             initial_capital = request.get('initialCapital', 100000)
             start_date = request.get('startDate')
             end_date = request.get('endDate')
-            assets = request.get('assets', [])
-            n_splits = request.get('nSplits', 5)
-            train_ratio = request.get('trainRatio', 0.7)
+            n_splits = request.get('wfSplits') or request.get('nSplits', 5)
+            train_ratio = request.get('wfTrainRatio') or request.get('trainRatio', 0.7)
 
-            symbols = [asset['symbol'] for asset in assets]
-            close_series, _ = self._load_market_data(symbols, start_date, end_date)
+            symbols = request.get('symbols') or [a.get('symbol') for a in request.get('assets', []) if a.get('symbol')]
+            if not symbols:
+                return {'success': False, 'error': 'No symbols provided'}
+            close_series, using_synthetic = self._load_market_data(self._normalize_symbols(symbols), start_date, end_date)
 
             result = opt.walk_forward_optimize(
                 vbt, close_series, strategy_type, parameters,
                 objective, initial_capital, n_splits, train_ratio, request
             )
 
+            if not result.get('success', True):
+                return {'success': False, 'error': result.get('error', 'Walk-forward failed')}
+
+            result['usingSyntheticData'] = using_synthetic
             return {'success': True, 'data': result}
 
         except Exception as e:
             self._error('Walk-forward optimization failed', e)
-            return self._create_error_result(f'Walk-forward failed: {str(e)}')
+            return {'success': False, 'error': f'Walk-forward failed: {str(e)}'}
 
     def get_strategies(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Return available strategy catalog."""
@@ -421,18 +449,22 @@ class VectorBTProvider(BacktestingProviderBase):
         return {'indicators': grouped}
 
     def get_command_options(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Return provider-specific option lists for all command dropdowns."""
+        """Return provider-specific option lists for all command dropdowns.
+        Names here MUST match what the Python dispatchers below actually accept —
+        these strings are sent back unchanged in execute() requests.
+        """
         return {
             'success': True,
             'data': {
                 'position_sizing_methods': ['percent', 'fixed', 'kelly', 'vol_target', 'risk'],
                 'optimize_objectives':     ['sharpe', 'sortino', 'calmar', 'return', 'omega'],
-                'optimize_methods':        ['grid', 'random', 'optuna'],
+                'optimize_methods':        ['grid', 'random'],
                 'label_types':             ['FIXLB', 'MEANLB', 'LEXLB', 'TRENDLB', 'BOLB'],
-                'splitter_types':          ['RollingSplitter', 'ExpandingSplitter', 'PurgedKFold'],
+                'splitter_types':          ['RollingSplitter', 'ExpandingSplitter', 'PurgedKFoldSplitter'],
                 'signal_generators':       ['RAND', 'RANDX', 'RANDNX', 'RPROB', 'RPROBX'],
-                'indicator_signal_modes':  ['crossover', 'threshold', 'breakout', 'mean_reversion', 'filter'],
-                'returns_analysis_types':  ['cumulative', 'rolling', 'drawdown', 'distribution', 'benchmark_comparison'],
+                'indicator_signal_modes':  ['crossover_signals', 'threshold_signals', 'breakout_signals',
+                                            'mean_reversion_signals', 'signal_filter'],
+                'returns_analysis_types':  ['returns_stats', 'drawdowns', 'ranges', 'rolling'],
             },
         }
 
@@ -653,16 +685,21 @@ class VectorBTProvider(BacktestingProviderBase):
             else:
                 index = pd.date_range(start='2020-01-01', end='2024-01-01', freq='B')
 
+            # Accept both snake_case Python names AND the UI's camelCase aliases.
+            # The UI exposes generic WINDOW LENGTH / STEP SIZE inputs — for the
+            # test window we derive a sensible split (1/3 of window) so users get
+            # non-empty splits without having to expose every internal knob.
+            window_len = params.get('window_len') or params.get('windowLength') or 60
+            step = params.get('step') or params.get('stepSize') or max(1, window_len // 4)
+            test_len = params.get('test_len') or params.get('testLength') or max(5, window_len // 3)
+
             splitter_map = {
                 'RollingSplitter': lambda: sp.RollingSplitter(
-                    window_len=params.get('window_len', 252),
-                    test_len=params.get('test_len', 63),
-                    step=params.get('step', 21),
+                    window_len=window_len, test_len=test_len, step=step,
                 ),
                 'ExpandingSplitter': lambda: sp.ExpandingSplitter(
-                    min_len=params.get('min_len', 252),
-                    test_len=params.get('test_len', 63),
-                    step=params.get('step', 21),
+                    min_len=params.get('min_len') or params.get('windowLength') or window_len,
+                    test_len=test_len, step=step,
                 ),
                 'PurgedKFoldSplitter': lambda: sp.PurgedKFoldSplitter(
                     n_splits=params.get('n_splits', 5),
@@ -670,6 +707,9 @@ class VectorBTProvider(BacktestingProviderBase):
                     embargo_len=params.get('embargo_len', 5),
                 ),
             }
+            # Back-compat alias — older UI may send the short form
+            if splitter_type == 'PurgedKFold':
+                splitter_type = 'PurgedKFoldSplitter'
 
             # RangeSplitter: user supplies date ranges directly
             if splitter_type == 'RangeSplitter':
@@ -701,15 +741,20 @@ class VectorBTProvider(BacktestingProviderBase):
 
             splitter = splitter_map[splitter_type]()
             splits = []
-            for i, (train_idx, test_idx) in enumerate(splitter.split(index)):
+            for i, (train_mask, test_mask) in enumerate(splitter.split(index)):
+                # Splitters yield boolean masks — convert to positional indices.
+                train_pos = np.where(np.asarray(train_mask))[0]
+                test_pos = np.where(np.asarray(test_mask))[0]
+                if len(train_pos) == 0 or len(test_pos) == 0:
+                    continue
                 splits.append({
                     'fold': i,
-                    'trainStart': str(index[train_idx[0]]),
-                    'trainEnd': str(index[train_idx[-1]]),
-                    'trainSize': len(train_idx),
-                    'testStart': str(index[test_idx[0]]),
-                    'testEnd': str(index[test_idx[-1]]),
-                    'testSize': len(test_idx),
+                    'trainStart': str(index[train_pos[0]]),
+                    'trainEnd': str(index[train_pos[-1]]),
+                    'trainSize': int(len(train_pos)),
+                    'testStart': str(index[test_pos[0]]),
+                    'testEnd': str(index[test_pos[-1]]),
+                    'testSize': int(len(test_pos)),
                 })
 
             result_data = {
@@ -737,8 +782,12 @@ class VectorBTProvider(BacktestingProviderBase):
             symbols = request.get('symbols', ['SPY'])
             start_date = request.get('startDate')
             end_date = request.get('endDate')
-            benchmark = request.get('benchmark', '')
-            params = request.get('params', {})
+            # UI sends benchmarkSymbol; legacy callers pass benchmark
+            benchmark = request.get('benchmark') or request.get('benchmarkSymbol') or ''
+            params = dict(request.get('params') or {})
+            # UI surfaces a "ROLLING WINDOW" spinbox at the top level — fold it into params.
+            if 'rollingWindow' in request and 'window' not in params:
+                params['window'] = request['rollingWindow']
 
             close_series, using_synthetic = self._load_market_data(
                 self._normalize_symbols(symbols), start_date, end_date
@@ -1152,11 +1201,33 @@ class VectorBTProvider(BacktestingProviderBase):
             import pandas as pd
             import vbt_indicators as ind
 
+            # UI alias: `sma` is the same as `ma` in this provider's indicator catalog
             indicator = request.get('indicator', 'rsi')
+            if indicator == 'sma':
+                indicator = 'ma'
             symbols = request.get('symbols', ['SPY'])
             start_date = request.get('startDate')
             end_date = request.get('endDate')
-            param_ranges = request.get('paramRanges', {})
+
+            # Accept either paramRanges (keyed-by-name dict) OR paramRange (singular
+            # min/max/step from the UI). For the singular form we sweep the
+            # indicator's primary period-style argument.
+            primary_param_by_indicator = {
+                'momentum': 'lookback',
+                'macd': 'fast', 'stoch': 'k_period',
+                'obv': None, 'vwap': None,
+            }
+            param_ranges = request.get('paramRanges')
+            if not param_ranges:
+                pr = request.get('paramRange')
+                if pr:
+                    primary = primary_param_by_indicator.get(indicator, 'period')
+                    if primary:
+                        param_ranges = {primary: pr}
+                    else:
+                        return {'success': False, 'error': f'Indicator {indicator} has no sweep parameter'}
+                else:
+                    param_ranges = {}
 
             print(f"[INDICATOR_SWEEP] Got request: indicator={indicator}, symbols={symbols}", flush=True)
             print(f"[INDICATOR_SWEEP] param_ranges={param_ranges}", flush=True)
@@ -1391,9 +1462,129 @@ class VectorBTProvider(BacktestingProviderBase):
         except Exception as e:
             return {'success': False, 'error': str(e), 'traceback': __import__('traceback').format_exc()}
 
-    def calculate_indicator(self, indicator_type: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Calculate a technical indicator."""
-        raise NotImplementedError('Use VectorBT indicators within backtests')
+    def calculate_indicator(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Compute one indicator over a symbol's close series and return a value series.
+        The UI's Indicators page picks one of the IDs from get_indicators() and a
+        date range; we return enough samples to plot a small preview.
+        """
+        try:
+            import numpy as np
+            import pandas as pd
+            import vbt_indicators as ind
+
+            indicator = request.get('indicator', 'sma')
+            if indicator == 'sma':
+                indicator = 'ma'
+            symbols = request.get('symbols', ['SPY'])
+            start_date = request.get('startDate')
+            end_date = request.get('endDate')
+            params = request.get('params', {}) or {}
+            period = int(params.get('period', 14))
+
+            close_series, using_synthetic = self._load_market_data(
+                self._normalize_symbols(symbols), start_date, end_date
+            )
+
+            # Try to grab full OHLCV for indicators that need high/low/volume.
+            high = low = volume = None
+            try:
+                import yfinance as yf
+                normalized = self._normalize_symbols(symbols)
+                raw = yf.download(normalized if len(normalized) > 1 else normalized[0],
+                                  start=start_date, end=end_date, progress=False)
+                if raw is not None and not raw.empty:
+                    high = raw['High'].values.flatten() if 'High' in raw.columns else None
+                    low = raw['Low'].values.flatten() if 'Low' in raw.columns else None
+                    volume = raw['Volume'].values.flatten() if 'Volume' in raw.columns else None
+            except Exception:
+                pass
+            if high is None:
+                high = close_series.values * 1.02
+                low = close_series.values * 0.98
+                volume = np.random.randint(1_000_000, 10_000_000, len(close_series))
+
+            close_arr = close_series.values
+            calc_map = {
+                'sma': lambda: ind.calculate_ma(None, close_arr, period, ewm=False),
+                'ma':  lambda: ind.calculate_ma(None, close_arr, period, ewm=False),
+                'ema': lambda: ind.calculate_ma(None, close_arr, period, ewm=True),
+                'mstd':lambda: ind.calculate_mstd(None, close_arr, period, ewm=False),
+                'rsi': lambda: ind.calculate_rsi(None, close_arr, period),
+                'momentum': lambda: ind.calculate_momentum(close_arr, period),
+                'zscore':   lambda: ind.calculate_zscore(close_arr, period),
+                'donchian': lambda: ind.calculate_donchian(close_arr, period),
+                'bbands':   lambda: ind.calculate_bbands(None, close_arr, period, alpha=2.0),
+                'macd':     lambda: ind.calculate_macd(None, close_arr, 12, 26, 9),
+                'adx':      lambda: ind.calculate_adx(close_arr, high=high, low=low, period=period),
+                'atr':      lambda: ind.calculate_atr(None, high, low, close_arr, period),
+                'cci':      lambda: ind.calculate_cci(high, low, close_arr, period),
+                'williams_r': lambda: ind.calculate_williams_r(high, low, close_arr, period),
+                'keltner':  lambda: ind.calculate_keltner(high, low, close_arr, ema_period=period, atr_period=10, multiplier=2.0),
+                'stochastic': lambda: ind.calculate_stoch(None, high, low, close_arr, period, 3),
+                'stoch':    lambda: ind.calculate_stoch(None, high, low, close_arr, period, 3),
+                'obv':      lambda: ind.calculate_obv(None, close_arr, volume),
+                'vwap':     lambda: ind.calculate_vwap(high, low, close_arr, volume),
+            }
+            if indicator not in calc_map:
+                return {'success': False, 'error': f'Unknown indicator: {indicator}'}
+
+            out = calc_map[indicator]()
+
+            # Indicators return either an array (single output) or dict (multi-output).
+            def sample_series(arr):
+                arr = np.asarray(arr, dtype=float)
+                idx = close_series.index
+                # Down-sample to ~200 points for the UI
+                stride = max(1, len(arr) // 200)
+                return [
+                    {'date': str(idx[i]), 'value': (None if np.isnan(arr[i]) else float(arr[i]))}
+                    for i in range(0, len(arr), stride)
+                ]
+
+            result_data = {
+                'indicator': indicator,
+                'period': period,
+                'symbol': symbols[0] if symbols else '',
+                'totalBars': len(close_arr),
+                'usingSyntheticData': using_synthetic,
+            }
+
+            if isinstance(out, dict):
+                # Multi-output indicator: emit one series per component
+                series = {}
+                stats = {}
+                for name, comp in out.items():
+                    if comp is None or not hasattr(comp, '__len__'):
+                        continue
+                    series[name] = sample_series(comp)
+                    vals = np.asarray(comp, dtype=float)
+                    vals = vals[~np.isnan(vals)]
+                    if len(vals):
+                        stats[name] = {
+                            'mean': float(np.mean(vals)),
+                            'std':  float(np.std(vals)),
+                            'min':  float(np.min(vals)),
+                            'max':  float(np.max(vals)),
+                            'last': float(vals[-1]),
+                        }
+                result_data['series'] = series
+                result_data['stats'] = stats
+            else:
+                vals = np.asarray(out, dtype=float)
+                clean = vals[~np.isnan(vals)]
+                result_data['series'] = sample_series(vals)
+                if len(clean):
+                    result_data['stats'] = {
+                        'mean': float(np.mean(clean)),
+                        'std':  float(np.std(clean)),
+                        'min':  float(np.min(clean)),
+                        'max':  float(np.max(clean)),
+                        'last': float(clean[-1]),
+                    }
+
+            return {'success': True, 'data': result_data}
+        except Exception as e:
+            return {'success': False, 'error': str(e), 'traceback': __import__('traceback').format_exc()}
 
     # ========================================================================
     # Private Helpers
@@ -1889,6 +2080,9 @@ def main():
             result_str = json_response(result)
         elif command == 'indicator_signals':
             result = provider.indicator_signals(args)
+            result_str = json_response(result)
+        elif command == 'calculate_indicator':
+            result = provider.calculate_indicator(args)
             result_str = json_response(result)
         elif command == 'indicator_param_sweep':
             print("[MAIN] About to call indicator_param_sweep")

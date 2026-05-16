@@ -5,7 +5,7 @@
 // event subscription that triggers a cross-section reload.
 
 #include "core/events/EventBus.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 
 #include <QHideEvent>
 #include <QList>

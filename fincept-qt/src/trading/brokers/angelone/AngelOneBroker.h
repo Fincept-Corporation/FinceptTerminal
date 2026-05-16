@@ -1,5 +1,6 @@
 #pragma once
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 namespace fincept::trading {
@@ -67,6 +68,11 @@ class AngelOneBroker : public IBroker {
     static bool is_token_expired(const BrokerHttpResponse& resp);
     static QString checked_error(const BrokerHttpResponse& resp, const QString& fallback);
 
+    /// Refresh the JWT pair using the stored refresh_token. On success the
+    /// updated tokens are returned in the result; caller persists them.
+    /// Endpoint: POST /rest/auth/angelbroking/jwt/v1/generateTokens.
+    TokenExchangeResponse refresh_token(const BrokerCredentials& creds);
+
     /// Look up the numeric instrument token for a symbol+exchange.
     /// Returns 0 if not found. Used by AngelOneWebSocket subscription.
     static quint32 lookup_token_int(const QString& symbol, const QString& exchange);
@@ -77,10 +83,8 @@ class AngelOneBroker : public IBroker {
   private:
     static QString generate_totp(const QString& base32_secret);
     static QString lookup_token(const QString& symbol, const QString& exchange);
-    static QString ao_order_type(OrderType t);
+    static const BrokerEnumMap<QString>& ao_enum_map();
     static QString ao_variety(OrderType t, bool amo);
-    static QString ao_product(ProductType p);
-    static QString ao_transaction(OrderSide s);
 };
 
 } // namespace fincept::trading

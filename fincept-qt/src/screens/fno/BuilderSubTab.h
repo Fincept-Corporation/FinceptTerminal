@@ -22,7 +22,7 @@
 // Pure D3/D4 compliance — no timers of our own; analytics recompute is
 // driven by chain publish callbacks + leg-edit signals.
 
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/options/OptionChainTypes.h"
 #include "services/options/StrategyTemplates.h"
 

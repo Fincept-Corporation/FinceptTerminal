@@ -8,7 +8,7 @@
 // observes service signals and re-renders live.
 
 #include "core/report/ReportDocument.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "screens/report_builder/ComponentToolbar.h"
 #include "screens/report_builder/DocumentCanvas.h"
 #include "screens/report_builder/PropertiesPanel.h"

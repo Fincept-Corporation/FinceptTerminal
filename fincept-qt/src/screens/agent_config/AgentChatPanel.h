@@ -59,6 +59,7 @@ class AgentChatPanel : public QWidget {
     QLabel* hdr_agent_lbl_ = nullptr;  // selected agent badge
     QComboBox* agent_selector_ = nullptr;
     QPushButton* route_toggle_ = nullptr;
+    QPushButton* run_as_task_toggle_ = nullptr; // visible only when agentic_mode_enabled
     QPushButton* clear_btn_ = nullptr;
 
     // Messages
@@ -84,6 +85,7 @@ class AgentChatPanel : public QWidget {
 
     // ── State ──────────────────────────────────────────────────────────────────
     bool auto_routing_ = false;
+    bool run_as_task_ = false;
     bool executing_ = false;
     bool data_loaded_ = false;
     int typing_step_ = 0;

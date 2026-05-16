@@ -1,7 +1,7 @@
 #pragma once
 // Data Sources Screen — data connector command center.
 
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "screens/data_sources/DataSourceTypes.h"
 #include "storage/repositories/DataSourceRepository.h"
 

@@ -1,5 +1,5 @@
 #pragma once
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "screens/chat_mode/ChatModeTypes.h"
 
 #include <QWidget>

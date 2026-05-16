@@ -136,12 +136,17 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
 
     // ── Loading watchdog ──
     // Single-shot guard against producers that never publish. If the
-    // overlay is still active 12 s after loading started with zero items
+    // overlay is still active 20 s after loading started with zero items
     // delivered, swap to a terminal "no data" overlay so the spinner can't
     // spin forever. Per-widget refresh still works to re-arm.
+    //
+    // 20 s (not 12 s) because dashboard restore fans out 20+ subscribe()
+    // calls in one tick; producer-side rate limits then serialise the
+    // cold-start fetches and tail widgets routinely take >12 s to see
+    // their first payload even on healthy networks.
     loading_watchdog_ = new QTimer(this);
     loading_watchdog_->setSingleShot(true);
-    loading_watchdog_->setInterval(12000);
+    loading_watchdog_->setInterval(20000);
     connect(loading_watchdog_, &QTimer::timeout, this, &BaseWidget::on_watchdog_fired);
 }
 
@@ -247,6 +252,19 @@ void BaseWidget::on_config_clicked() {
     // Subclasses are expected to emit config_changed() inside the dialog's
     // accept flow; BaseWidget just opens the dialog modally.
     dlg->exec();
+}
+
+void BaseWidget::showEvent(QShowEvent* event) {
+    QFrame::showEvent(event);
+    // Subclasses commonly call set_loading(true) from their constructor,
+    // which arms the watchdog before the widget is mounted. During
+    // dashboard layout restore that gap is small but non-zero, and any
+    // widget that's constructed but not immediately shown (collapsed
+    // workspace, off-screen tile) would otherwise burn its 20 s budget
+    // before the subscription is even dispatched. Restart the timer so
+    // the budget begins when the user can actually see the spinner.
+    if (loading_overlay_ && loading_overlay_->is_active() && last_progress_loaded_ == 0)
+        arm_watchdog();
 }
 
 void BaseWidget::arm_watchdog() {

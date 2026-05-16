@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "ai_chat/AiChatBubble.h"
+#include "screens/ai_chat/AiChatBubble.h"
 #include "app/ScreenRouter.h"
 #include "core/identity/Uuid.h"
 #include "core/layout/LayoutTypes.h"

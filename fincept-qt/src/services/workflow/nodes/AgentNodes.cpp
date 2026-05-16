@@ -1,6 +1,6 @@
 #include "services/workflow/nodes/AgentNodes.h"
 
-#include "ai_chat/LlmService.h"
+#include "services/llm/LlmService.h"
 #include "mcp/McpService.h"
 #include "services/agents/AgentService.h"
 #include "services/agents/AgentTypes.h"

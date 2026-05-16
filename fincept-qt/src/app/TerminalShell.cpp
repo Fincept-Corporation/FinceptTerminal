@@ -1,6 +1,6 @@
 ﻿#include "app/TerminalShell.h"
 
-#include "ai_chat/ChatBubbleController.h"
+#include "screens/ai_chat/ChatBubbleController.h"
 #include "app/WindowFrame.h"
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
