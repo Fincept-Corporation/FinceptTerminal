@@ -1,10 +1,12 @@
 #include "screens/about/AboutScreen.h"
 
+#include "core/config/AppPaths.h"
 #include "services/updater/UpdateService.h"
 #include "ui/theme/Theme.h"
 
 #include <QApplication>
 #include <QDesktopServices>
+#include <QDir>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -244,6 +246,51 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         }
 
         vl->addWidget(row);
+    }
+
+    // ── Diagnostics ───────────────────────────────────────────────────────────
+    // Surfaces the crash-dump folder path so users filing bug reports can
+    // attach minidumps without hunting through %LOCALAPPDATA% (see issue #215).
+    {
+        auto* panel = makePanel();
+        auto* pvl = new QVBoxLayout(panel);
+        pvl->setContentsMargins(0, 0, 0, 0);
+        pvl->setSpacing(0);
+        pvl->addWidget(makePanelHeader("⚙", "DIAGNOSTICS", ui::colors::AMBER));
+
+        auto* body = new QWidget(this);
+        body->setStyleSheet("background: transparent;");
+        auto* bhl = new QHBoxLayout(body);
+        bhl->setContentsMargins(14, 10, 14, 10);
+        bhl->setSpacing(12);
+
+        auto* left = new QVBoxLayout;
+        left->setSpacing(2);
+        auto* lbl = new QLabel("CRASH DUMPS");
+        lbl->setStyleSheet(SECTION_LABEL());
+        left->addWidget(lbl);
+        const QString crash_dir = QDir::toNativeSeparators(AppPaths::crashdumps());
+        auto* path = new QLabel(crash_dir);
+        path->setStyleSheet(MUTED());
+        path->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        path->setWordWrap(true);
+        left->addWidget(path);
+        bhl->addLayout(left, 1);
+
+        auto* open_btn = new QPushButton(QStringLiteral("Open Folder"));
+        open_btn->setStyleSheet(LINK_BTN());
+        open_btn->setCursor(Qt::PointingHandCursor);
+        connect(open_btn, &QPushButton::clicked, this, [crash_dir]() {
+            // mkpath is idempotent; ensures the folder exists before
+            // QDesktopServices::openUrl on a freshly installed terminal
+            // that hasn't crashed yet.
+            QDir().mkpath(crash_dir);
+            QDesktopServices::openUrl(QUrl::fromLocalFile(crash_dir));
+        });
+        bhl->addWidget(open_btn, 0, Qt::AlignTop);
+
+        pvl->addWidget(body);
+        vl->addWidget(panel);
     }
 
     // ── Trademarks ────────────────────────────────────────────────────────────

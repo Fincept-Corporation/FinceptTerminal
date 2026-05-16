@@ -55,11 +55,15 @@ set(CMAKE_AUTOUIC ON)
 # Fincept Terminal ships on 3 platforms and cannot tolerate compiler-version
 # drift. These checks fail the build early with an actionable message rather
 # than letting the user hit a cryptic template error 10 minutes into compile.
-if(MSVC AND MSVC_VERSION LESS 1938)
+if(MSVC AND MSVC_VERSION LESS 1940)
     message(FATAL_ERROR
-        "MSVC 19.38 (Visual Studio 2022 17.8) or newer required.\n"
+        "MSVC 19.40 (Visual Studio 2022 17.10) or newer required.\n"
         "Detected MSVC_VERSION: ${MSVC_VERSION}\n"
-        "Install VS 2022 17.8+ from https://visualstudio.microsoft.com/downloads/")
+        "Install VS 2022 17.10+ from https://visualstudio.microsoft.com/downloads/\n"
+        "Rationale: pinning to 17.10+ keeps the UCRT import lib in sync with "
+        "Windows 11 26H2 / Server 2025 shipped UCRT (10.0.26100+). Older toolchains "
+        "have been observed to produce STATUS_STACK_BUFFER_OVERRUN at startup on "
+        "26H2 (see issue #215).")
 endif()
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12.3)
     message(FATAL_ERROR
