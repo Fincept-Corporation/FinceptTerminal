@@ -367,8 +367,14 @@ void UpdateService::on_download_reply_finished() {
             return;
         }
         LOG_INFO("UpdateService", QString("Sha256 verified: %1").arg(actual));
-    } else {
-        LOG_WARN("UpdateService", "No sha256 in manifest — skipping integrity verification");
+    }else{
+        LOG_ERROR("UpdateService",
+                "Manifest missing sha256 — refusing to launch installer");
+        show_error(QStringLiteral(
+            "This update cannot be verified (missing checksum). Aborting."));
+        QFile::remove(pending_local_path_);
+        finish_check(true);
+        return;
     }
 
     emit download_finished(pending_local_path_);
