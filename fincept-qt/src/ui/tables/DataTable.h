@@ -19,6 +19,11 @@ class DataTable : public QTableWidget {
 
     // Color a specific cell
     void set_cell_color(int row, int col, const QString& color);
+
+    /// Set a numeric sort key on a cell without changing its display text.
+    /// Call after add_row() for columns that should sort numerically
+    /// (price, change, volume, etc.).
+    void set_cell_numeric(int row, int col, double value);
 };
 
 } // namespace fincept::ui

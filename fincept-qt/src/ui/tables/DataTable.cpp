@@ -15,6 +15,11 @@ DataTable::DataTable(QWidget* parent) : QTableWidget(parent) {
     verticalHeader()->setVisible(false);
     horizontalHeader()->setStretchLastSection(true);
     horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    // NOTE: sorting is intentionally NOT enabled here.
+    // Callers that need sorting (e.g. WatchlistScreen) opt in with
+    // setSortingEnabled(true) after attaching numeric EditRole values.
+    // Enabling it globally causes lexicographic sort on tables that only
+    // use setText() — e.g. "$10" sorts before "$2", "100K" before "2M".
     setStyleSheet(QString("QTableWidget { background: %1; alternate-background-color: %2; "
                           "gridline-color: %3; border: none; }"
                           "QTableWidget::item { padding: 4px 8px; height: 26px; }"
@@ -59,6 +64,12 @@ void DataTable::set_cell_color(int row, int col, const QString& color) {
     auto* it = item(row, col);
     if (it)
         it->setForeground(QColor(color));
+}
+
+void DataTable::set_cell_numeric(int row, int col, double value) {
+    auto* it = item(row, col);
+    if (it)
+        it->setData(Qt::EditRole, value);
 }
 
 } // namespace fincept::ui
