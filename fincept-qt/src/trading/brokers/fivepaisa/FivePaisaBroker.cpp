@@ -6,6 +6,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRandomGenerator>
 
 namespace fincept::trading {
 
@@ -108,14 +109,18 @@ QJsonObject FivePaisaBroker::make_body(const QString& app_key, const QString& /*
 }
 
 // ============================================================================
-// Auth headers — lowercase "bearer" (5paisa quirk)
+// Auth headers
 // ============================================================================
+// 5Paisa-API-Uid is a vendor identifier required on every authenticated request;
+// missing it returns generic 4xx errors. The literal value is shipped in the
+// official py5paisa SDK and is currently the only accepted token.
 
 QMap<QString, QString> FivePaisaBroker::auth_headers(const BrokerCredentials& creds) const {
     return {
-        {"Authorization", "bearer " + creds.access_token},
+        {"Authorization", "Bearer " + creds.access_token},
         {"Content-Type", "application/json"},
         {"Accept", "application/json"},
+        {"5Paisa-API-Uid", "ka7SFqAU6SC"},
     };
 }
 
@@ -145,6 +150,7 @@ TokenExchangeResponse FivePaisaBroker::exchange_token(const QString& api_key, co
     QMap<QString, QString> headers = {
         {"Content-Type", "application/json"},
         {"Accept", "application/json"},
+        {"5Paisa-API-Uid", "ka7SFqAU6SC"},
     };
 
     // Step 1: TOTP login
@@ -165,10 +171,15 @@ TokenExchangeResponse FivePaisaBroker::exchange_token(const QString& api_key, co
         if (!resp.success)
             return {false, "", "", "", checked_error(resp, "TOTP login network error"), ""};
 
-        QString req_token = resp.json["body"].toObject()["RequestToken"].toString();
-        if (req_token.isEmpty()) {
-            QString msg = resp.json["body"].toObject()["Message"].toString();
-            return {false, "", "", "", msg.isEmpty() ? "No RequestToken in TOTP response" : msg, ""};
+        // Per SDK, success is indicated by head.statusDescription=="Success" AND
+        // body.Status==0; bypassing the status check buries auth errors in an
+        // empty-RequestToken message.
+        const QJsonObject body_obj = resp.json["body"].toObject();
+        const int status_code = body_obj["Status"].toInt(-1);
+        const QString req_token = body_obj["RequestToken"].toString();
+        if (req_token.isEmpty() || (status_code != 0 && status_code != -1)) {
+            const QString msg = body_obj["Message"].toString();
+            return {false, "", "", "", msg.isEmpty() ? "TOTP login failed (no RequestToken)" : msg, ""};
         }
 
         // Step 2: Get access token
@@ -209,7 +220,9 @@ OrderPlaceResponse FivePaisaBroker::place_order(const BrokerCredentials& creds, 
     bool is_intraday = (order.product_type == ProductType::Intraday);
 
     QJsonObject body;
-    body["OrderType"] = (order.side == OrderSide::Buy) ? "B" : "S";
+    // PlaceOrderRequest uses the long-form transaction string ("BUY"/"SELL");
+    // the legacy "B"/"S" short form is reserved for the BO/CO BuySell field.
+    body["OrderType"] = (order.side == OrderSide::Buy) ? "BUY" : "SELL";
     body["Exchange"] = fp_exchange(order.exchange);
     body["ExchangeType"] = fp_exchange_type(order.exchange);
     body["ScripCode"] = order.instrument_token.isEmpty() ? 0 : order.instrument_token.toInt();
@@ -220,8 +233,19 @@ OrderPlaceResponse FivePaisaBroker::place_order(const BrokerCredentials& creds, 
                                 : 0.0;
     body["DisQty"] = 0;
     body["IsIntraday"] = is_intraday;
-    body["AHPlaced"] = "N";
-    body["RemoteOrderID"] = "fincept";
+    body["AHPlaced"] = order.amo ? "Y" : "N";
+    // Per-order UUID-ish — 5Paisa rejects duplicates with the same RemoteOrderID.
+    body["RemoteOrderID"] =
+        "FCPT-" + QString::number(QDateTime::currentMSecsSinceEpoch()) + "-" + QString::number(QRandomGenerator::global()->bounded(10000));
+    body["AppSource"] = 0; // required: 0 = open API
+    body["IOCOrder"] = false;
+    body["IsStopLossOrder"] = (order.order_type == OrderType::StopLoss || order.order_type == OrderType::StopLossLimit);
+    body["iOrderValidity"] = 0; // 0 = DAY
+    // ValidTillDate uses Microsoft JSON Date format (epoch ms wrapped).
+    const qint64 tomorrow_ms = QDateTime::currentDateTime().addDays(1).toMSecsSinceEpoch();
+    body["ValidTillDate"] = "/Date(" + QString::number(tomorrow_ms) + ")/";
+    body["PublicIP"] = "0.0.0.0"; // server fills in the real IP; placeholder is accepted
+    body["OrderRequesterCode"] = kp.client_id;
 
     QJsonObject req = make_body(kp.app_key, kp.client_id, body);
 
@@ -237,8 +261,13 @@ OrderPlaceResponse FivePaisaBroker::place_order(const BrokerCredentials& creds, 
     if (status != "Success")
         return {false, "", checked_error(resp, "Place order failed")};
 
-    // BrokerOrderID may come as int or string
-    QJsonValue broker_id = resp.json["body"].toObject()["BrokerOrderID"];
+    // Response field casing varies across endpoints: PlaceOrder may return
+    // BrokerOrderID (upper-D) while OrderBook returns BrokerOrderId (lower-d).
+    // Try both. The value can be int or string.
+    const QJsonObject body_obj = resp.json["body"].toObject();
+    QJsonValue broker_id = body_obj["BrokerOrderID"];
+    if (broker_id.isUndefined() || broker_id.isNull())
+        broker_id = body_obj["BrokerOrderId"];
     QString order_id = broker_id.isString() ? broker_id.toString() : QString::number(broker_id.toInt());
     if (order_id.isEmpty() || order_id == "0")
         return {false, "", "No BrokerOrderID in response"};
@@ -543,21 +572,25 @@ ApiResponse<QVector<BrokerQuote>> FivePaisaBroker::get_quotes(const BrokerCreden
         QString token = parts.size() >= 3 ? parts[2] : "0";
 
         QJsonObject entry;
-        entry["Exchange"] = fp_exchange(exchange);
-        entry["ExchangeType"] = fp_exchange_type(exchange);
+        // MarketFeed family expects Exch/ExchType (short keys), not Exchange/ExchangeType.
+        entry["Exch"] = fp_exchange(exchange);
+        entry["ExchType"] = fp_exchange_type(exchange);
         entry["ScripCode"] = token.toInt();
-        entry["ScripData"] = (token == "0") ? scrip : "";
+        entry["Symbol"] = (token == "0") ? scrip : "";
         data_arr.append(entry);
         sym_keys.append(sym);
     }
 
     QJsonObject body;
     body["ClientCode"] = kp.client_id;
-    body["Data"] = data_arr;
+    body["Count"] = static_cast<int>(data_arr.size());
+    body["MarketFeedData"] = data_arr;
     QJsonObject req = make_body(kp.app_key, kp.client_id, body);
 
+    // V1/MarketFeed is the canonical quotes endpoint; MarketSnapshot is the
+    // older alias and rejects the MarketFeedData/Exch/ExchType field shape.
     auto resp =
-        BrokerHttp::instance().post_json(QString(BASE_URL) + "/VendorsAPI/Service1.svc/MarketSnapshot", req, hdrs);
+        BrokerHttp::instance().post_json(QString(BASE_URL) + "/VendorsAPI/Service1.svc/V1/MarketFeed", req, hdrs);
 
     if (!resp.success)
         return {false, std::nullopt, checked_error(resp, "Network error"), ts};

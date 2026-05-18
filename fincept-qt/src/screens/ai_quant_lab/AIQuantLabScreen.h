@@ -1,6 +1,6 @@
 // src/screens/ai_quant_lab/AIQuantLabScreen.h
 #pragma once
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/ai_quant_lab/AIQuantLabTypes.h"
 
 #include <QHideEvent>

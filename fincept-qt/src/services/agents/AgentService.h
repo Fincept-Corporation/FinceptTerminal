@@ -57,6 +57,47 @@ class AgentService : public QObject
     // ── Workflow execution ───────────────────────────────────────────────────
     QString run_workflow(const QString& workflow_type, const QJsonObject& params = {});
 
+    // ── Agentic Mode (gated by `agentic_mode_enabled` setting) ───────────────
+    // Spawns a streaming Python subprocess that runs an AgenticRunner against
+    // the existing TaskStateManager / ResumableTaskRunner. Each per-step event
+    // is emitted on the `task_event` signal AND published on DataHub topic
+    // `task:event:<task_id>`. Crash-resume works because state is persisted
+    // in the existing agent_tasks SQLite table.
+    //
+    // For start_task: returns the C++ request_id; the durable Python task_id
+    //   arrives in the first `task_started` event payload.
+    // For resume/pause/cancel/get/list: returns the request_id correlator;
+    //   the task_id is the input.
+    QString start_task(const QString& query, const QJsonObject& config);
+    QString resume_task(const QString& task_id);
+    QString pause_task(const QString& task_id);
+    QString cancel_task(const QString& task_id);
+    QString list_tasks(const QString& status_filter = {}, int limit = 50);
+    QString get_task(const QString& task_id);
+    /// HITL: user replies to a clarifying question persisted on the task row.
+    /// Returns the streaming request_id; events arrive on task:event:<task_id>.
+    QString reply_to_question(const QString& task_id, const QString& answer);
+
+    // ── Scheduled recurring tasks (Phase 3D) ─────────────────────────────────
+    /// Register a recurring agentic task. `schedule_expr` uses the small DSL
+    /// in scheduler.py: "every 30m", "hourly", "daily 09:30", "weekday 16:00".
+    /// `start_now=true` fires once on the next tick instead of waiting for the
+    /// first cadence boundary.
+    QString schedule_create_task(const QString& name, const QString& query,
+                                 const QString& schedule_expr,
+                                 const QJsonObject& config = {},
+                                 bool start_now = false);
+    QString schedule_list();
+    QString schedule_delete(const QString& schedule_id);
+    QString schedule_set_enabled(const QString& schedule_id, bool enabled);
+
+    // ── Phase 3 library inspection (read-only UI surface) ───────────────────
+    QString skills_list();
+    QString skill_delete(const QString& skill_id);
+    QString archival_list(const QString& user_id = {}, const QString& type = {});
+    QString archival_delete(const QString& memory_id);
+    QString reflexion_list();
+
     // ── Planner ──────────────────────────────────────────────────────────────
     QString create_plan(const QString& query, const QJsonObject& config = {});
     QString create_stock_analysis_plan(const QString& symbol, const QJsonObject& config = {});
@@ -123,6 +164,27 @@ class AgentService : public QObject
     void multi_query_result(QJsonObject result);
     void error_occurred(const QString& context, const QString& message);
 
+    // ── Agentic Mode signals ─────────────────────────────────────────────────
+    /// Per-step event from a running agentic task. `event` includes kind
+    /// ∈ {task_started, task_resumed, plan_ready, step_start, step_end,
+    /// paused, cancelled, done, error} plus kind-specific fields.
+    void task_event(const QString& task_id, const QJsonObject& event);
+    /// Result of list_tasks(): full agent_tasks rows as JSON.
+    void tasks_listed(const QJsonArray& tasks);
+    /// Result of get_task(): single agent_tasks row as JSON.
+    void task_loaded(const QJsonObject& task);
+    /// Scheduled-task management signals.
+    void schedules_listed(const QJsonArray& schedules);
+    void schedule_created(const QString& schedule_id);
+    void schedule_deleted(const QString& schedule_id);
+    /// Emitted when a scheduled task auto-fires; carries the new agentic task_id.
+    void scheduled_task_fired(const QString& schedule_id, const QString& schedule_name,
+                              const QString& task_id);
+    /// Phase 3 library inspection signals.
+    void skills_listed(const QJsonArray& skills);
+    void archival_listed(const QJsonArray& memories);
+    void reflexion_listed(const QJsonArray& reflections);
+
   private:
     explicit AgentService(QObject* parent = nullptr);
     Q_DISABLE_COPY(AgentService)
@@ -157,6 +219,20 @@ class AgentService : public QObject
     void publish_agent_status(const QString& run_id, const QString& status);
     void publish_routing_result(const RoutingResult& r);
     void publish_agent_error(const QString& context, const QString& message);
+    /// Publishes a parsed AGENTIC_EVENT to task:event:<task_id> and emits task_event().
+    /// Retires the topic when the event is terminal (done/error/cancelled).
+    void publish_task_event(const QString& task_id, const QJsonObject& event);
+    /// Streaming runner for the `agentic_start_task` / `agentic_resume_task`
+    /// Python actions. Parses AGENTIC_EVENT: <json> lines and routes them
+    /// through publish_task_event(). Returns the request_id correlator.
+    QString run_agentic_streaming(const QString& action, const QJsonObject& params,
+                                  const QJsonObject& config, const QString& known_task_id = {});
+    /// One tick of the scheduler — pulls due schedules from Python and fires
+    /// each as a fresh agentic task. Called on a QTimer (30s) once any
+    /// schedule exists.
+    void tick_schedules();
+    void ensure_schedule_timer();
+    QObject* schedule_timer_ = nullptr;
     bool hub_registered_ = false;
 };
 

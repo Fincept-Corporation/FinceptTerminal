@@ -1,6 +1,7 @@
 #include "trading/brokers/upstox/UpstoxBroker.h"
 
 #include "core/logging/Logger.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/instruments/InstrumentService.h"
 
@@ -47,44 +48,35 @@ static QString instrument_key(const QString& symbol, const QString& exchange, co
     return seg + "|" + symbol.toUpper();
 }
 
-// ── Product / OrderType mapping ───────────────────────────────────────────────
-static const char* upstox_product(ProductType p, const QString& exchange) {
-    // Delivery on derivatives → D (NRML equivalent), Intraday → I
-    switch (p) {
-        case ProductType::Intraday:
-            return "I";
-        case ProductType::Delivery:
-            return "D";
-        case ProductType::Margin:
-            return "D"; // MTF maps to Delivery segment
-        default:
-            return "I";
-    }
-    (void)exchange;
+// Upstox order/product enums. File-static — only used inside this TU.
+static const BrokerEnumMap<QString>& upstox_enum_map() {
+    static const auto m = [] {
+        BrokerEnumMap<QString> x;
+        x.set(OrderType::Market, "MARKET");
+        x.set(OrderType::Limit, "LIMIT");
+        x.set(OrderType::StopLoss, "SL-M");
+        x.set(OrderType::StopLossLimit, "SL");
+        // Delivery on derivatives → D (NRML equivalent), Intraday → I.
+        // MTF maps to Delivery segment (D).
+        x.set(ProductType::Intraday, "I");
+        x.set(ProductType::Delivery, "D");
+        x.set(ProductType::Margin, "D");
+        return x;
+    }();
+    return m;
 }
 
-static const char* upstox_order_type(OrderType t) {
-    switch (t) {
-        case OrderType::Market:
-            return "MARKET";
-        case OrderType::Limit:
-            return "LIMIT";
-        case OrderType::StopLoss:
-            return "SL-M";
-        case OrderType::StopLossLimit:
-            return "SL";
-    }
-    return "MARKET";
-}
-
-// Reverse product mapping from Upstox response → display string
-static QString rev_product(const QString& seg, const QString& product) {
+// Reverse product mapping from Upstox response → display string.
+// Upstox order/position responses return `exchange` as canonical "NSE"/"NFO"/...
+// (not segment codes), so this accepts both forms and also derives the segment
+// from an instrument_token like "NSE_FO|12345" when caller passes one in.
+static QString rev_product(const QString& exchange_or_seg, const QString& product) {
     if (product == "I")
         return "Intraday";
-    // "D" on derivatives = NRML, on equities = CNC/Delivery
-    if (seg == "NSE_FO" || seg == "BSE_FO" || seg == "MCX_FO" || seg == "NSE_CD")
-        return "NRML";
-    return "Delivery";
+    const QString s = exchange_or_seg.toUpper();
+    const bool is_deriv = s == "NSE_FO" || s == "BSE_FO" || s == "MCX_FO" || s == "NSE_CD" ||
+                          s == "NFO" || s == "BFO" || s == "MCX" || s == "CDS";
+    return is_deriv ? "NRML" : "Delivery";
 }
 
 // ── Token expiry detection ────────────────────────────────────────────────────
@@ -199,16 +191,18 @@ OrderPlaceResponse UpstoxBroker::place_order(const BrokerCredentials& creds, con
     body["instrument_token"] = ikey;
     body["transaction_type"] = order.side == OrderSide::Buy ? "BUY" : "SELL";
     body["quantity"] = static_cast<int>(order.quantity);
-    body["product"] = upstox_product(order.product_type, order.exchange);
-    body["order_type"] = upstox_order_type(order.order_type);
+    body["product"] = upstox_enum_map().product_or(order.product_type, "I");
+    body["order_type"] = upstox_enum_map().order_type_or(order.order_type, "MARKET");
     body["validity"] = "DAY";
     body["price"] = order.price;
     body["trigger_price"] = order.stop_price;
     body["disclosed_quantity"] = 0;
     body["is_amo"] = order.amo;
+    body["tag"] = "fincept"; // visible in order history for reconciliation
 
     auto& http = BrokerHttp::instance();
-    auto resp = http.post_json("https://api.upstox.com/v2/order/place", body, auth_headers(creds));
+    // v2 order mutations live on the HFT host; api.upstox.com returns 404 for /order/*
+    auto resp = http.post_json("https://api-hft.upstox.com/v2/order/place", body, auth_headers(creds));
 
     if (!resp.success || resp.json.value("status").toString() != "success") {
         const QString err = checked_error(resp, "place_order failed");
@@ -225,17 +219,26 @@ OrderPlaceResponse UpstoxBroker::place_order(const BrokerCredentials& creds, con
 // PUT /v2/order/modify
 ApiResponse<QJsonObject> UpstoxBroker::modify_order(const BrokerCredentials& creds, const QString& order_id,
                                                     const QJsonObject& mods) {
+    // Only forward fields the caller actually supplied. Per v3 docs, missing
+    // optional fields inherit the original order's values — sending 0/empty
+    // would overwrite price/qty/trigger to zero.
     QJsonObject body;
     body["order_id"] = order_id;
-    body["quantity"] = mods.value("quantity").toInt(0);
-    body["price"] = mods.value("price").toDouble(0);
-    body["order_type"] = mods.value("order_type").toString("LIMIT");
-    body["trigger_price"] = mods.value("trigger_price").toDouble(0);
-    body["disclosed_quantity"] = mods.value("disclosed_quantity").toInt(0);
-    body["validity"] = "DAY";
+    if (mods.contains("quantity"))
+        body["quantity"] = mods.value("quantity").toInt();
+    if (mods.contains("price"))
+        body["price"] = mods.value("price").toDouble();
+    if (mods.contains("order_type"))
+        body["order_type"] = mods.value("order_type").toString();
+    if (mods.contains("trigger_price"))
+        body["trigger_price"] = mods.value("trigger_price").toDouble();
+    if (mods.contains("disclosed_quantity"))
+        body["disclosed_quantity"] = mods.value("disclosed_quantity").toInt();
+    body["validity"] = mods.value("validity").toString("DAY");
 
     auto& http = BrokerHttp::instance();
-    auto resp = http.put_json("https://api.upstox.com/v2/order/modify", body, auth_headers(creds));
+    // HFT host for order mutations
+    auto resp = http.put_json("https://api-hft.upstox.com/v2/order/modify", body, auth_headers(creds));
 
     int64_t ts = now_ts();
     if (!resp.success || resp.json.value("status").toString() != "success")
@@ -247,7 +250,7 @@ ApiResponse<QJsonObject> UpstoxBroker::modify_order(const BrokerCredentials& cre
 // DELETE /v2/order/cancel?order_id={id}
 ApiResponse<QJsonObject> UpstoxBroker::cancel_order(const BrokerCredentials& creds, const QString& order_id) {
     auto& http = BrokerHttp::instance();
-    auto resp = http.del("https://api.upstox.com/v2/order/cancel?order_id=" + order_id, auth_headers(creds));
+    auto resp = http.del("https://api-hft.upstox.com/v2/order/cancel?order_id=" + order_id, auth_headers(creds));
 
     int64_t ts = now_ts();
     if (!resp.success || resp.json.value("status").toString() != "success")
@@ -430,11 +433,18 @@ ApiResponse<QVector<BrokerQuote>> UpstoxBroker::get_quotes(const BrokerCredentia
         const auto ohlc = entry.value("ohlc").toObject();
 
         BrokerQuote q;
-        // Key is like "NSE_EQ|12345" — extract symbol from instrument key
+        // Key may arrive as "NSE_EQ|12345" or "NSE_EQ:NHPC" depending on
+        // endpoint version — fall back through both separators.
         const QString key = it.key();
         q.symbol = entry.value("symbol").toString();
-        if (q.symbol.isEmpty())
-            q.symbol = key.section('|', 1); // fallback: token part
+        if (q.symbol.isEmpty()) {
+            if (key.contains('|'))
+                q.symbol = key.section('|', 1);
+            else if (key.contains(':'))
+                q.symbol = key.section(':', 1);
+            else
+                q.symbol = key;
+        }
         q.ltp = entry.value("last_price").toDouble();
         q.open = ohlc.value("open").toDouble();
         q.high = ohlc.value("high").toDouble();
@@ -498,8 +508,18 @@ ApiResponse<QVector<BrokerCandle>> UpstoxBroker::get_history(const BrokerCredent
             if (c.size() < 6)
                 continue;
             BrokerCandle candle;
-            // Upstox returns ISO8601 timestamp string
-            candle.timestamp = QDateTime::fromString(c[0].toString(), Qt::ISODate).toSecsSinceEpoch();
+            // v3 returns ISO8601 string; some endpoints/snapshots return epoch ms.
+            // Try string first, fall back to numeric.
+            const QString ts_str = c[0].toString();
+            if (!ts_str.isEmpty()) {
+                candle.timestamp = QDateTime::fromString(ts_str, Qt::ISODate).toSecsSinceEpoch();
+                if (candle.timestamp == 0)
+                    candle.timestamp = QDateTime::fromString(ts_str, Qt::ISODateWithMs).toSecsSinceEpoch();
+            }
+            if (candle.timestamp == 0) {
+                const qint64 ms = c[0].toVariant().toLongLong();
+                candle.timestamp = ms > 1'000'000'000'000LL ? ms / 1000 : ms;
+            }
             candle.open = c[1].toDouble();
             candle.high = c[2].toDouble();
             candle.low = c[3].toDouble();

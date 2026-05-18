@@ -36,7 +36,8 @@ class DashboardToolBar : public QWidget {
 
     QWidget* left_container_ = nullptr;
     QWidget* right_container_ = nullptr;
-    QLabel* clock_label_ = nullptr;
+    QPushButton* clock_btn_ = nullptr;
+    bool clock_is_utc_ = true;
     QLabel* status_text_ = nullptr;
     QLabel* widget_count_ = nullptr;
     QPushButton* pulse_btn_ = nullptr;

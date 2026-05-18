@@ -5,7 +5,6 @@
 #include "core/logging/Logger.h"
 #include "storage/secure/SecureStorage.h"
 #include "storage/sqlite/Database.h"
-#include "trading/brokers/GenericBroker.h"
 #include "trading/brokers/aliceblue/AliceBlueBroker.h"
 #include "trading/brokers/alpaca/AlpacaBroker.h"
 #include "trading/brokers/angelone/AngelOneBroker.h"

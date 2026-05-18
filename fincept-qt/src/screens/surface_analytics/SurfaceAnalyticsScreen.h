@@ -6,7 +6,7 @@
 #include "SurfaceDemoData.h"
 #include "SurfaceTypes.h"
 #include "core/symbol/IGroupLinked.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/databento/DatabentoService.h"
 
 #include <QHash>

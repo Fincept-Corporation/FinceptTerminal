@@ -1,5 +1,6 @@
 #pragma once
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 namespace fincept::trading {
@@ -67,21 +68,28 @@ class KotakBroker : public IBroker {
     QMap<QString, QString> auth_headers(const BrokerCredentials& creds) const override;
 
   private:
-    // Packed token: "trading_token:::trading_sid:::base_url:::access_token"
+    // Packed token: "trading_token:::trading_sid:::base_url:::access_token:::server_id"
+    // server_id (hsServerId / dataCenter) is required as ?sId= on every PROD call to
+    // route to the correct data-centre cluster. 4-part packs from older sessions
+    // remain readable (server_id will be empty).
     struct TokenParts {
         QString trading_token;
         QString trading_sid;
         QString base_url;
         QString access_token;
+        QString server_id;
         bool valid = false;
     };
     static TokenParts unpack(const QString& packed);
     static QString kotak_exchange(const QString& exchange);
-    static QString kotak_product(ProductType p);
-    static QString kotak_order_type(OrderType t);
+    static const BrokerEnumMap<QString>& kotak_enum_map();
     static QString lookup_psymbol(const QString& symbol, const QString& exchange, const QString& broker_id);
     static QString generate_totp(const QString& base32_secret);
-    static QMap<QString, QString> jdata_params(const QJsonObject& obj);
+    // Build form-encoded params for /quick/* endpoints from a JSON object —
+    // the current SDK posts plain form fields (no `jData=` wrapper).
+    static QMap<QString, QString> jobj_to_form(const QJsonObject& obj);
+    // Build a /quick/* URL with the ?sId= routing param when a server_id is known.
+    static QString with_sid(const QString& base_path, const TokenParts& p);
 };
 
 } // namespace fincept::trading

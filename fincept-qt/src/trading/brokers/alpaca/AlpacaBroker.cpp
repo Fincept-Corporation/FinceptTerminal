@@ -1,6 +1,7 @@
 #include "trading/brokers/alpaca/AlpacaBroker.h"
 
 #include "core/logging/Logger.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 #include <QDateTime>
@@ -77,20 +78,23 @@ TokenExchangeResponse AlpacaBroker::exchange_token(const QString& api_key, const
     return result;
 }
 
+namespace {
+const BrokerEnumMap<QString>& alpaca_enum_map() {
+    static const auto m = [] {
+        BrokerEnumMap<QString> x;
+        x.set(OrderType::Market, "market");
+        x.set(OrderType::Limit, "limit");
+        x.set(OrderType::StopLoss, "stop");
+        x.set(OrderType::StopLossLimit, "stop_limit");
+        x.set(OrderSide::Buy, "buy");
+        x.set(OrderSide::Sell, "sell");
+        return x;
+    }();
+    return m;
+}
+} // namespace
+
 OrderPlaceResponse AlpacaBroker::place_order(const BrokerCredentials& creds, const UnifiedOrder& order) {
-    static auto alpaca_type = [](OrderType t) -> const char* {
-        switch (t) {
-            case OrderType::Market:
-                return "market";
-            case OrderType::Limit:
-                return "limit";
-            case OrderType::StopLoss:
-                return "stop";
-            case OrderType::StopLossLimit:
-                return "stop_limit";
-        }
-        return "market";
-    };
     // time_in_force rules:
     // - Market orders: "day" + extended_hours=true so they work pre/post market
     // - Limit/Stop orders: "gtc" so they queue and fill when market opens
@@ -99,8 +103,8 @@ OrderPlaceResponse AlpacaBroker::place_order(const BrokerCredentials& creds, con
 
     QJsonObject payload{{"symbol", order.symbol},
                         {"qty", QString::number(order.quantity)},
-                        {"side", order.side == OrderSide::Buy ? "buy" : "sell"},
-                        {"type", alpaca_type(order.order_type)},
+                        {"side", alpaca_enum_map().side_or(order.side, "buy")},
+                        {"type", alpaca_enum_map().order_type_or(order.order_type, "market")},
                         {"time_in_force", tif}};
     if (is_market)
         payload["extended_hours"] = true; // allow pre/post market execution

@@ -1523,7 +1523,7 @@ class ZiplineProvider(BacktestingProviderBase):
         start_date = request.get('startDate', '2023-01-01')
         end_date = request.get('endDate', '2024-01-01')
         indicator = request.get('indicator', 'ma')
-        params = request.get('parameters', {})
+        params = request.get('params') or request.get('parameters') or {}
 
         if isinstance(symbols, str):
             symbols = [s.strip() for s in symbols.split(',')]
@@ -1665,18 +1665,22 @@ class ZiplineProvider(BacktestingProviderBase):
         return {'indicators': grouped}
 
     def get_command_options(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Return provider-specific option lists for all command dropdowns."""
+        """Return provider-specific option lists for all command dropdowns.
+        Names match the canonical strings the dispatchers below accept (any UI→python
+        aliases get normalized at command entry).
+        """
         return {
             'success': True,
             'data': {
                 'position_sizing_methods': ['percent', 'fixed', 'kelly', 'vol_target', 'risk'],
                 'optimize_objectives':     ['sharpe', 'sortino', 'calmar', 'return'],
                 'optimize_methods':        ['grid', 'random'],
-                'label_types':             [],
-                'splitter_types':          [],
-                'signal_generators':       [],
-                'indicator_signal_modes':  ['crossover', 'threshold', 'breakout', 'mean_reversion', 'filter'],
-                'returns_analysis_types':  [],
+                'label_types':             ['FIXLB', 'MEANLB', 'LEXLB', 'TRENDLB', 'BOLB'],
+                'splitter_types':          ['RollingSplitter', 'ExpandingSplitter', 'PurgedKFoldSplitter'],
+                'signal_generators':       ['RAND', 'RANDX', 'RANDNX', 'RPROB', 'RPROBX'],
+                'indicator_signal_modes':  ['crossover_signals', 'threshold_signals', 'breakout_signals',
+                                            'mean_reversion_signals', 'signal_filter'],
+                'returns_analysis_types':  ['returns_stats', 'drawdowns', 'ranges', 'rolling'],
             },
         }
 
@@ -1873,7 +1877,7 @@ class ZiplineProvider(BacktestingProviderBase):
             start_date = request.get('startDate', '2023-01-01')
             end_date = request.get('endDate', '2024-01-01')
             gen_type = request.get('generatorType', 'RAND')
-            params = request.get('parameters', {})
+            params = request.get('params') or request.get('parameters') or {}
             seed = int(params.get('seed', 42))
 
             close_series, synthetic = self._load_close_series(symbols, start_date, end_date)
@@ -2061,7 +2065,7 @@ class ZiplineProvider(BacktestingProviderBase):
             start_date = request.get('startDate', '2023-01-01')
             end_date = request.get('endDate', '2024-01-01')
             label_type = request.get('labelType', 'FIXLB')
-            params = request.get('parameters', {})
+            params = request.get('params') or request.get('parameters') or {}
 
             close_series, synthetic = self._load_close_series(symbols, start_date, end_date)
             close = np.asarray(close_series, dtype=float)
@@ -2183,8 +2187,22 @@ class ZiplineProvider(BacktestingProviderBase):
             symbols = request.get('symbols', ['SPY'])
             start_date = request.get('startDate', '2023-01-01')
             end_date = request.get('endDate', '2024-01-01')
-            splitter_type = request.get('splitterType', 'rolling')
-            params = request.get('parameters', {})
+            # UI sends camelCase splitter names matching vectorbt; map to zipline's
+            # internal short names ('rolling' / 'expanding' / 'purged_kfold' / 'range').
+            splitter_alias = {
+                'RollingSplitter': 'rolling',
+                'ExpandingSplitter': 'expanding',
+                'PurgedKFoldSplitter': 'purged_kfold',
+                'PurgedKFold': 'purged_kfold',
+                'RangeSplitter': 'range',
+            }
+            raw_type = request.get('splitterType', 'rolling')
+            splitter_type = splitter_alias.get(raw_type, raw_type)
+            params = dict(request.get('params') or request.get('parameters') or {})
+            # UI exposes a generic WINDOW LENGTH spinbox; map to zipline's windowLen.
+            if 'windowLength' in params and 'windowLen' not in params:
+                params['windowLen'] = params['windowLength']
+                params.setdefault('testLen', max(5, int(params['windowLength']) // 3))
 
             close_series, synthetic = self._load_close_series(symbols, start_date, end_date)
             dates = [str(d.date()) if hasattr(d, 'date') else str(d) for d in close_series.index]
@@ -2302,7 +2320,7 @@ class ZiplineProvider(BacktestingProviderBase):
             start_date = request.get('startDate', '2023-01-01')
             end_date = request.get('endDate', '2024-01-01')
             analysis_type = request.get('analysisType', 'returns_stats')
-            params = request.get('parameters', {})
+            params = request.get('params') or request.get('parameters') or {}
 
             close_series, synthetic = self._load_close_series(symbols, start_date, end_date)
             close = np.asarray(close_series, dtype=float)
@@ -2585,7 +2603,7 @@ class ZiplineProvider(BacktestingProviderBase):
             start_date = request.get('startDate', '2023-01-01')
             end_date = request.get('endDate', '2024-01-01')
             label_type = request.get('labelType', 'FIXLB')
-            params = request.get('parameters', {})
+            params = request.get('params') or request.get('parameters') or {}
             entry_label = int(params.get('entryLabel', 1))
             exit_label = int(params.get('exitLabel', -1))
 

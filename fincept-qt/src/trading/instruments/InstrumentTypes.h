@@ -39,8 +39,8 @@ inline const char* instrument_type_str(InstrumentType t) {
 
 /// One row in the instruments table.
 struct Instrument {
-    qint64 instrument_token = 0; // Zerodha numeric token (used in historical API)
-    qint64 exchange_token = 0;   // Zerodha exchange-level token
+    qint64 instrument_token = 0; // Broker numeric token (used in historical/market-data APIs)
+    qint64 exchange_token = 0;   // Exchange-level token (broker-specific)
     QString symbol;              // Normalised symbol  e.g. "NIFTY28MAR24FUT"
     QString brsymbol;            // Broker native      e.g. "NIFTY 50 MAR24 FUT"
     QString name;                // Underlying         e.g. "NIFTY"
@@ -52,6 +52,13 @@ struct Instrument {
     InstrumentType instrument_type = InstrumentType::UNKNOWN;
     double tick_size = 0.05;
     QString broker_id; // "zerodha", "angelone", etc.
+
+    /// Canonical DataHub topic id for this instrument: "<exchange>:<symbol>"
+    /// when exchange is set, else just the symbol. Stable across brokers.
+    /// Used to compose topics like "market:quote:NSE:RELIANCE".
+    QString canonical_topic_id() const {
+        return exchange.isEmpty() ? symbol : exchange + ":" + symbol;
+    }
 };
 
 } // namespace fincept::trading

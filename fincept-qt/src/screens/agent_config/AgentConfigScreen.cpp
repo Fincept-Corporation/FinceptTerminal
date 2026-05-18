@@ -3,7 +3,9 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "core/events/EventBus.h"
 #include "screens/agent_config/AgentChatPanel.h"
+#include "screens/agent_config/AgenticTasksPanel.h"
 #include "screens/agent_config/AgentsViewPanel.h"
 #include "screens/agent_config/CreateAgentPanel.h"
 #include "screens/agent_config/PlannerViewPanel.h"
@@ -12,6 +14,7 @@
 #include "screens/agent_config/ToolsViewPanel.h"
 #include "screens/agent_config/WorkflowsViewPanel.h"
 #include "services/agents/AgentService.h"
+#include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -33,6 +36,7 @@ static constexpr ViewMeta kViews[] = {
     {services::AgentViewMode::Teams, "TEAMS"},     {services::AgentViewMode::Workflows, "WORKFLOWS"},
     {services::AgentViewMode::Planner, "PLANNER"}, {services::AgentViewMode::Tools, "TOOLS"},
     {services::AgentViewMode::Chat, "CHAT"},       {services::AgentViewMode::System, "SYSTEM"},
+    {services::AgentViewMode::Agentic, "AGENTIC"},
 };
 
 // ── Constructor ──────────────────────────────────────────────────────────────
@@ -43,6 +47,23 @@ AgentConfigScreen::AgentConfigScreen(QWidget* parent) : QWidget(parent) {
     setup_service_connections();
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this](const ui::ThemeTokens&) { update(); });
+
+    // Read the Agentic-Mode setting and apply visibility. The toggle widget
+    // (DeveloperSection) publishes settings.agentic_mode_changed via EventBus
+    // on user change; we react in-place without restart.
+    {
+        auto r = fincept::SettingsRepository::instance().get(
+            QStringLiteral("agentic_mode_enabled"), QStringLiteral("false"));
+        agentic_mode_enabled_ = r.is_ok() && r.value() == QStringLiteral("true");
+    }
+    connect(&fincept::EventBus::instance(), &fincept::EventBus::eventPublished, this,
+            [this](const QString& event, const QVariantMap& data) {
+                if (event == QStringLiteral("settings.agentic_mode_changed")) {
+                    agentic_mode_enabled_ = data.value("enabled").toBool();
+                    apply_agentic_visibility();
+                }
+            });
+    apply_agentic_visibility();
 }
 
 // ── UI construction ──────────────────────────────────────────────────────────
@@ -88,6 +109,8 @@ void AgentConfigScreen::build_nav_bar(QVBoxLayout* root) {
 
     for (const auto& vm : kViews) {
         auto* btn = make_nav_btn(vm.label, vm.mode);
+        if (vm.mode == services::AgentViewMode::Agentic)
+            agentic_nav_idx_ = nav_buttons_.size();
         hl->addWidget(btn);
         nav_buttons_.append(btn);
     }
@@ -190,6 +213,10 @@ void AgentConfigScreen::ensure_panel_built(services::AgentViewMode mode) {
             system_panel_ = new SystemViewPanel;
             panel = system_panel_;
             break;
+        case services::AgentViewMode::Agentic:
+            agentic_panel_ = new AgenticTasksPanel;
+            panel = agentic_panel_;
+            break;
     }
 
     // Add panel to stack — no placeholder removal needed, index tracked via pointer
@@ -219,8 +246,20 @@ QWidget* AgentConfigScreen::panel_widget(services::AgentViewMode mode) const {
             return chat_panel_;
         case services::AgentViewMode::System:
             return system_panel_;
+        case services::AgentViewMode::Agentic:
+            return agentic_panel_;
     }
     return nullptr;
+}
+
+void AgentConfigScreen::apply_agentic_visibility() {
+    if (agentic_nav_idx_ < 0 || agentic_nav_idx_ >= nav_buttons_.size())
+        return;
+    nav_buttons_[agentic_nav_idx_]->setVisible(agentic_mode_enabled_);
+    // If the user toggles agentic mode off while the panel is current, fall
+    // back to the chat view so they don't sit on a hidden tab.
+    if (!agentic_mode_enabled_ && current_view_ == services::AgentViewMode::Agentic)
+        set_view(services::AgentViewMode::Chat);
 }
 
 void AgentConfigScreen::wire_cross_panel_signals() {

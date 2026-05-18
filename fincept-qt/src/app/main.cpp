@@ -1,4 +1,4 @@
-﻿#include "ai_chat/LlmService.h"
+﻿#include "services/llm/LlmService.h"
 #include "app/MonitorPickerDialog.h"
 #include "app/WindowFrame.h"
 #include "app/TerminalShell.h"

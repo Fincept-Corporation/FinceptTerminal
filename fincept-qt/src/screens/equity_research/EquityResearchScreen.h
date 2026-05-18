@@ -1,7 +1,7 @@
 // src/screens/equity_research/EquityResearchScreen.h
 #pragma once
 #include "core/symbol/IGroupLinked.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/equity/EquityResearchModels.h"
 
 #include <QHideEvent>
