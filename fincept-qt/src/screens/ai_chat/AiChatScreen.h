@@ -64,6 +64,11 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     void on_rename_session();
     void on_stream_chunk(const QString& chunk, bool done);
     void on_streaming_done(ai_chat::LlmResponse response);
+    // New helper that receives the LLM response together with the request snapshot
+    void handle_response(const ai_chat::LlmResponse &response,
+                         const QString &req_session,
+                         const QString &req_provider,
+                         const QString &req_model);
     void on_provider_changed();
     void on_search_changed(const QString& text);
     void on_typing_indicator_tick();
@@ -114,6 +119,10 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
 
     // ── State ────────────────────────────────────────────────────────────
     QString active_session_id_;
+    // Snapshot of request‑time context – used by the async response handler
+    QString pending_req_session_;
+    QString pending_req_provider_;
+    QString pending_req_model_;
     QString active_session_title_;
     mutable QMutex history_mutex_;
     std::vector<ai_chat::ConversationMessage> history_;

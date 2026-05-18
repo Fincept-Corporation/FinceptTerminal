@@ -131,7 +131,14 @@ void AiChatScreen::on_send() {
                         text);
     }
 
-    input_box_->clear();
+// Capture request‑time context for correct persistence
+    const QString req_session = active_session_id_;
+    const QString req_provider = ai_chat::LlmService::instance().active_provider();
+    const QString req_model = ai_chat::LlmService::instance().active_model();
+    // Store in member variables so on_streaming_done can use them
+    pending_req_session_ = req_session;
+    pending_req_provider_ = req_provider;
+    pending_req_model_ = req_model;
     input_box_->setFixedHeight(44);
     set_input_enabled(false);
     streaming_ = true;
@@ -262,9 +269,13 @@ void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
         total_messages_++;
         total_tokens_ += response.total_tokens;
         update_stats();
-        ChatRepository::instance().add_message(active_session_id_, "assistant", content,
-                                               ai_chat::LlmService::instance().active_provider(),
-                                               ai_chat::LlmService::instance().active_model(), response.total_tokens);
+        // Use request‑time captured context to persist the assistant message
+        ChatRepository::instance().add_message(pending_req_session_, "assistant", content,
+                                               pending_req_provider_, pending_req_model_, response.total_tokens);
+        // Clear pending request context to avoid accidental reuse
+        pending_req_session_.clear();
+        pending_req_provider_.clear();
+        pending_req_model_.clear();
     }
     scroll_to_bottom();
     input_box_->setFocus();
