@@ -5,7 +5,7 @@
 // Each panel is lazy-constructed on first activation.
 #pragma once
 
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 
 #include <QHBoxLayout>
 #include <QLabel>

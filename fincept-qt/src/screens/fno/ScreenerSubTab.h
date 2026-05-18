@@ -12,7 +12,7 @@
 // QAbstractTableModel that swaps its internal vector on every filter or
 // chain change.
 
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/options/OptionChainTypes.h"
 
 #include <QAbstractTableModel>

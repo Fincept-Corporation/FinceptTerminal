@@ -1,6 +1,6 @@
 // src/screens/maritime/MaritimeScreen.h
 #pragma once
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/maritime/MaritimePortTypes.h"
 #include "services/maritime/MaritimeTypes.h"
 #include "ui/theme/Theme.h"

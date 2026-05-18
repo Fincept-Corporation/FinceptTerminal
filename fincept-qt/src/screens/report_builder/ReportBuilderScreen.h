@@ -8,7 +8,7 @@
 // observes service signals and re-renders live.
 
 #include "core/report/ReportDocument.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "screens/report_builder/ComponentToolbar.h"
 #include "screens/report_builder/DocumentCanvas.h"
 #include "screens/report_builder/PropertiesPanel.h"
@@ -104,6 +104,17 @@ class ReportBuilderScreen : public QWidget, public IStatefulScreen {
     void on_new();
     void on_export_pdf();
     void on_preview();
+
+  public slots:
+    /// MCP-invocable PDF export: skips the file dialog and writes directly to
+    /// the given absolute path. Exposed for the `report_export_pdf` tool.
+    void export_pdf_to(const QString& path);
+
+  public:
+    /// Returns the currently-constructed Report Builder screen (or nullptr if
+    /// none). Used by MCP tools that need to invoke screen-owned operations
+    /// (PDF export, preview, etc.) without going through the user-facing UI.
+    static ReportBuilderScreen* current();
 
   protected:
     void showEvent(QShowEvent* e) override;

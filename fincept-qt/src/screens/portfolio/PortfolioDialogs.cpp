@@ -1,8 +1,8 @@
 // src/screens/portfolio/PortfolioDialogs.cpp
 #include "screens/portfolio/PortfolioDialogs.h"
 
-#include "network/http/HttpClient.h"
 #include "services/file_manager/FileManagerService.h"
+#include "services/markets/MarketSearchService.h"
 #include "ui/theme/Theme.h"
 
 #include <QDate>
@@ -304,37 +304,23 @@ void AddAssetDialog::schedule_search(const QString& query) {
 }
 
 void AddAssetDialog::fire_search(const QString& query) {
-    const QString url = QString("/market/search?q=%1&type=stock&limit=%2").arg(query).arg(kAssetSearchLimit);
-
-    QPointer<AddAssetDialog> self = this;
-    fincept::HttpClient::instance().get(url, [self, query](fincept::Result<QJsonDocument> result) {
-        if (!self || self->pending_query_ != query)
-            return;
-        if (!result.is_ok())
-            return;
-
-        const auto doc = result.value();
-        QJsonArray arr;
-        if (doc.isArray()) {
-            arr = doc.array();
-        } else if (doc.isObject()) {
-            const auto obj = doc.object();
-            if (obj.contains("results"))
-                arr = obj["results"].toArray();
-            else if (obj.contains("data"))
-                arr = obj["data"].toArray();
-        }
-        QMetaObject::invokeMethod(
-            self,
-            [self, arr]() {
-                if (self)
-                    self->show_results(arr);
-            },
-            Qt::QueuedConnection);
-    });
+    auto& svc = fincept::services::MarketSearchService::instance();
+    const QString rid = QString::number(reinterpret_cast<quintptr>(this), 16);
+    if (!search_connected_) {
+        connect(&svc, &fincept::services::MarketSearchService::results_ready, this,
+                [this](const QString& request_id, const QString& q,
+                       const QList<fincept::services::MarketSearchService::Item>& items) {
+                    const QString my_rid = QString::number(reinterpret_cast<quintptr>(this), 16);
+                    if (request_id != my_rid) return;
+                    if (pending_query_ != q) return;
+                    show_results(items);
+                });
+        search_connected_ = true;
+    }
+    svc.search(query, /*type=*/QStringLiteral("stock"), kAssetSearchLimit, rid);
 }
 
-void AddAssetDialog::show_results(const QJsonArray& results) {
+void AddAssetDialog::show_results(const QList<fincept::services::MarketSearchService::Item>& results) {
     search_list_->clear();
 
     if (results.isEmpty()) {
@@ -356,12 +342,11 @@ void AddAssetDialog::show_results(const QJsonArray& results) {
         return;
     }
 
-    for (const auto& val : results) {
-        const auto obj = val.toObject();
-        const QString sym = obj["symbol"].toString();
-        const QString name = obj["name"].toString();
-        const QString exch = obj["exchange"].toString();
-        const QString type = obj["type"].toString("stock");
+    for (const auto& entry : results) {
+        const QString& sym  = entry.symbol;
+        const QString& name = entry.name;
+        const QString& exch = entry.exchange;
+        const QString  type = entry.type.isEmpty() ? QStringLiteral("stock") : entry.type;
         if (sym.isEmpty())
             continue;
 

@@ -5,10 +5,13 @@
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/instruments/GrowwInstrumentParser.h"
 #include "trading/instruments/InstrumentRepository.h"
+#include "trading/instruments/SymbolResolver.h"
 #include "trading/instruments/ZerodhaInstrumentParser.h"
 
+#include <QCoreApplication>
 #include <QDate>
 #include <QDateTime>
+#include <QEvent>
 #include <QEventLoop>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -189,8 +192,32 @@ static QVector<Instrument> parse_angel_master_json(const QByteArray& json_data) 
 
 } // namespace
 
+namespace {
+
+/// Register the three first-party instrument sources with SymbolResolver.
+/// Idempotent — replacing an existing entry is harmless.
+void ensure_builtin_sources_registered() {
+    static bool registered = []() {
+        auto& r = SymbolResolver::instance();
+        r.register_source({QStringLiteral("zerodha"),
+                           [](const BrokerCredentials& c) { return InstrumentService::download_zerodha_csv(c); },
+                           [](const QByteArray& p) { return ZerodhaInstrumentParser::parse(p); }});
+        r.register_source({QStringLiteral("angelone"),
+                           [](const BrokerCredentials&) { return InstrumentService::download_angel_master_json(); },
+                           [](const QByteArray& p) { return parse_angel_master_json(p); }});
+        r.register_source({QStringLiteral("groww"),
+                           [](const BrokerCredentials&) { return InstrumentService::download_groww_csv(); },
+                           [](const QByteArray& p) { return GrowwInstrumentParser::parse(p); }});
+        return true;
+    }();
+    Q_UNUSED(registered);
+}
+
+} // namespace
+
 InstrumentService& InstrumentService::instance() {
     static InstrumentService inst;
+    ensure_builtin_sources_registered();
     return inst;
 }
 
@@ -517,14 +544,8 @@ void InstrumentService::build_cache(const QString& broker_id, const QVector<Inst
 void InstrumentService::do_refresh(const QString& broker_id, const BrokerCredentials& creds) {
     LOG_INFO("InstrumentService", "Downloading instruments for " + broker_id);
 
-    QByteArray payload;
-    if (broker_id == "zerodha") {
-        payload = download_zerodha_csv(creds);
-    } else if (broker_id == "angelone") {
-        payload = download_angel_master_json();
-    } else if (broker_id == "groww") {
-        payload = download_groww_csv();
-    } else {
+    const InstrumentSource* src = SymbolResolver::instance().find(broker_id);
+    if (!src || !src->download || !src->parse) {
         QMetaObject::invokeMethod(
             this,
             [this, broker_id]() {
@@ -532,12 +553,13 @@ void InstrumentService::do_refresh(const QString& broker_id, const BrokerCredent
                     QMutexLocker lock(&mutex_);
                     refreshing_.remove(broker_id);
                 }
-                emit refresh_failed(broker_id, "Instrument download not implemented for " + broker_id);
+                emit refresh_failed(broker_id, "Instrument source not registered for " + broker_id);
             },
             Qt::QueuedConnection);
         return;
     }
 
+    const QByteArray payload = src->download(creds);
     if (payload.isEmpty()) {
         QMetaObject::invokeMethod(
             this,
@@ -552,14 +574,7 @@ void InstrumentService::do_refresh(const QString& broker_id, const BrokerCredent
         return;
     }
 
-    QVector<Instrument> instruments;
-    if (broker_id == "zerodha") {
-        instruments = ZerodhaInstrumentParser::parse(payload);
-    } else if (broker_id == "angelone") {
-        instruments = parse_angel_master_json(payload);
-    } else if (broker_id == "groww") {
-        instruments = GrowwInstrumentParser::parse(payload);
-    }
+    QVector<Instrument> instruments = src->parse(payload);
 
     if (instruments.isEmpty()) {
         QMetaObject::invokeMethod(
@@ -625,12 +640,15 @@ QByteArray InstrumentService::download_angel_master_json() {
     // mutex (which would starve all concurrent quote/history API calls for 10-20s).
     static const QString kUrl = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json";
 
-    QNetworkAccessManager nam;
+    // Heap-allocate QNAM with deleteLater + DeferredDelete drain. A stack
+    // QNAM here would leak Qt's macOS CFSocket-notifier teardown onto the
+    // main runloop, causing a use-after-free crash hours later.
+    auto* nam = new QNetworkAccessManager;
     QNetworkRequest req{QUrl(kUrl)};
     req.setRawHeader("Accept", "application/json");
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
 
-    QNetworkReply* reply = nam.get(req);
+    QNetworkReply* reply = nam->get(req);
 
     QEventLoop loop;
     QTimer timer;
@@ -640,22 +658,28 @@ QByteArray InstrumentService::download_angel_master_json() {
     timer.start(60000); // 60s — large file on slow connection
     loop.exec();
 
+    auto drain = [&]() {
+        reply->deleteLater();
+        nam->deleteLater();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    };
+
     if (!timer.isActive()) {
         reply->abort();
-        reply->deleteLater();
         LOG_ERROR("InstrumentService", "AngelOne master contract download timed out");
+        drain();
         return {};
     }
     timer.stop();
 
     if (reply->error() != QNetworkReply::NoError) {
         LOG_ERROR("InstrumentService", "Failed to download AngelOne master contract: " + reply->errorString());
-        reply->deleteLater();
+        drain();
         return {};
     }
 
     QByteArray data = reply->readAll();
-    reply->deleteLater();
+    drain();
     LOG_INFO("InstrumentService", QString("Downloaded AngelOne master contract: %1 bytes").arg(data.size()));
     return data;
 }
@@ -666,12 +690,12 @@ QByteArray InstrumentService::download_groww_csv() {
     // mutex for 10-30s on slow links and would starve concurrent quote/order calls.
     static const QString kUrl = "https://growwapi-assets.groww.in/instruments/instrument.csv";
 
-    QNetworkAccessManager nam;
+    auto* nam = new QNetworkAccessManager;
     QNetworkRequest req{QUrl(kUrl)};
     req.setRawHeader("Accept", "text/csv");
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
 
-    QNetworkReply* reply = nam.get(req);
+    QNetworkReply* reply = nam->get(req);
 
     QEventLoop loop;
     QTimer timer;
@@ -681,22 +705,28 @@ QByteArray InstrumentService::download_groww_csv() {
     timer.start(60000); // 60s — ~27MB file on slow connection
     loop.exec();
 
+    auto drain = [&]() {
+        reply->deleteLater();
+        nam->deleteLater();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    };
+
     if (!timer.isActive()) {
         reply->abort();
-        reply->deleteLater();
         LOG_ERROR("InstrumentService", "Groww instrument CSV download timed out");
+        drain();
         return {};
     }
     timer.stop();
 
     if (reply->error() != QNetworkReply::NoError) {
         LOG_ERROR("InstrumentService", "Failed to download Groww instrument CSV: " + reply->errorString());
-        reply->deleteLater();
+        drain();
         return {};
     }
 
     QByteArray data = reply->readAll();
-    reply->deleteLater();
+    drain();
     LOG_INFO("InstrumentService", QString("Downloaded Groww instrument CSV: %1 bytes").arg(data.size()));
     return data;
 }

@@ -45,6 +45,9 @@ class MarketPanel : public QWidget {
   protected:
     void resizeEvent(QResizeEvent* event) override;
 
+  private slots:
+    void show_row_context_menu(const QPoint& pos);
+
   private:
     void build_ui();
     void setup_table_columns();

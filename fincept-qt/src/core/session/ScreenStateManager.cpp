@@ -1,7 +1,7 @@
 #include "core/session/ScreenStateManager.h"
 
 #include "core/logging/Logger.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "storage/cache/TabSessionStore.h"
 
 #include <QJsonObject>

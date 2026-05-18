@@ -136,7 +136,7 @@ struct BrokerCredentials {
 
 enum class OrderSide { Buy, Sell };
 enum class OrderType { Market, Limit, StopLoss, StopLossLimit };
-enum class ProductType { Intraday, Delivery, Margin, CoverOrder, BracketOrder };
+enum class ProductType { Intraday, Delivery, Margin, CoverOrder, BracketOrder, MTF };
 
 inline const char* order_side_str(OrderSide s) {
     return s == OrderSide::Buy ? "buy" : "sell";
@@ -168,6 +168,8 @@ inline const char* product_type_str(ProductType p) {
             return "cover_order";
         case ProductType::BracketOrder:
             return "bracket_order";
+        case ProductType::MTF:
+            return "mtf";
     }
     return "intraday";
 }
@@ -261,6 +263,10 @@ struct BrokerCandle {
     double low = 0;
     double close = 0;
     double volume = 0;
+    // Open Interest — populated when the broker historical endpoint returns it
+    // (Zerodha c[6] when oi=1 is requested; F&O contracts only). Defaults to 0
+    // so existing 6-arg brace-init call sites remain source-compatible.
+    double oi = 0;
 };
 
 struct BrokerFunds {

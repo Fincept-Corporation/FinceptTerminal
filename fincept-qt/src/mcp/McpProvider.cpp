@@ -25,6 +25,17 @@ McpProvider& McpProvider::instance() {
     return s;
 }
 
+// Build the LLM-facing snapshot for a tool. Serialises input_schema once —
+// the QJsonObject copy is cheap (CoW), so list_tools() can hand out copies
+// without re-walking the schema each call.
+static UnifiedTool make_snapshot(const ToolDef& t) {
+    return UnifiedTool{
+        QString(INTERNAL_SERVER_ID), QString(INTERNAL_SERVER_NAME),
+        t.name, t.description, t.input_schema.to_json(),
+        /*is_internal=*/true, t.category, t.is_destructive,
+    };
+}
+
 // ============================================================================
 // Registration
 // ============================================================================
@@ -32,6 +43,7 @@ McpProvider& McpProvider::instance() {
 void McpProvider::register_tool(ToolDef tool) {
     QMutexLocker lock(&mutex_);
     QString name = tool.name;
+    snapshots_.insert(name, make_snapshot(tool));  // serialise schema once
     tools_.insert(name, std::move(tool));
     ++generation_;
 }
@@ -40,6 +52,7 @@ void McpProvider::register_tools(std::vector<ToolDef> tools) {
     QMutexLocker lock(&mutex_);
     for (auto& t : tools) {
         QString name = t.name;
+        snapshots_.insert(name, make_snapshot(t));
         tools_.insert(name, std::move(t));
     }
     ++generation_;
@@ -48,6 +61,7 @@ void McpProvider::register_tools(std::vector<ToolDef> tools) {
 void McpProvider::unregister_tool(const QString& name) {
     QMutexLocker lock(&mutex_);
     tools_.remove(name);
+    snapshots_.remove(name);
     ++generation_;
 }
 
@@ -76,14 +90,11 @@ bool McpProvider::is_tool_enabled(const QString& name) const {
 std::vector<UnifiedTool> McpProvider::list_tools() const {
     QMutexLocker lock(&mutex_);
     std::vector<UnifiedTool> result;
-    result.reserve(static_cast<std::size_t>(tools_.size()));
-
-    for (auto it = tools_.cbegin(); it != tools_.cend(); ++it) {
+    result.reserve(static_cast<std::size_t>(snapshots_.size()));
+    for (auto it = snapshots_.cbegin(); it != snapshots_.cend(); ++it) {
         if (disabled_tools_.contains(it.key()))
             continue;
-        const auto& t = it.value();
-        result.push_back({QString(INTERNAL_SERVER_ID), QString(INTERNAL_SERVER_NAME), t.name, t.description,
-                          t.input_schema.to_json(), true, t.category, t.is_destructive});
+        result.push_back(it.value());
     }
     return result;
 }
@@ -91,14 +102,20 @@ std::vector<UnifiedTool> McpProvider::list_tools() const {
 std::vector<UnifiedTool> McpProvider::list_all_tools() const {
     QMutexLocker lock(&mutex_);
     std::vector<UnifiedTool> result;
-    result.reserve(static_cast<std::size_t>(tools_.size()));
-
-    for (auto it = tools_.cbegin(); it != tools_.cend(); ++it) {
-        const auto& t = it.value();
-        result.push_back({QString(INTERNAL_SERVER_ID), QString(INTERNAL_SERVER_NAME), t.name, t.description,
-                          t.input_schema.to_json(), true, t.category, t.is_destructive});
-    }
+    result.reserve(static_cast<std::size_t>(snapshots_.size()));
+    for (auto it = snapshots_.cbegin(); it != snapshots_.cend(); ++it)
+        result.push_back(it.value());
     return result;
+}
+
+std::optional<UnifiedTool> McpProvider::find_tool(const QString& name) const {
+    QMutexLocker lock(&mutex_);
+    auto it = snapshots_.constFind(name);
+    if (it == snapshots_.constEnd())
+        return std::nullopt;
+    if (disabled_tools_.contains(name))
+        return std::nullopt;
+    return it.value();
 }
 
 std::size_t McpProvider::tool_count() const {
@@ -351,9 +368,22 @@ QJsonArray McpProvider::format_tools_for_openai() const {
 
 QPair<QString, QString> McpProvider::parse_openai_function_name(const QString& fn_name) {
     int pos = fn_name.indexOf("__");
-    if (pos <= 0 || pos >= fn_name.length() - 2)
-        return {"", ""};
-    return {fn_name.left(pos), decode_tool_name_from_wire(fn_name.mid(pos + 2))};
+    if (pos > 0 && pos < fn_name.length() - 2)
+        return {fn_name.left(pos), decode_tool_name_from_wire(fn_name.mid(pos + 2))};
+
+    // Fallback: some models (minimax, certain OpenRouter routes) drop the
+    // "<server>__" prefix and call the tool by its bare advertised name
+    // (e.g. "tool.list" instead of "fincept-terminal__tool-dot-list").
+    // Accept either the raw dotted form or the wire-encoded form if it
+    // matches a known internal tool — anything else is still rejected.
+    if (!fn_name.isEmpty()) {
+        const QString decoded = decode_tool_name_from_wire(fn_name);
+        if (instance().has_tool(decoded))
+            return {QString(INTERNAL_SERVER_ID), decoded};
+        if (instance().has_tool(fn_name))
+            return {QString(INTERNAL_SERVER_ID), fn_name};
+    }
+    return {"", ""};
 }
 
 // Tightest common-subset regex for tool function names across every supported
@@ -403,6 +433,7 @@ QString McpProvider::decode_tool_name_from_wire(const QString& wire_name) {
 void McpProvider::clear() {
     QMutexLocker lock(&mutex_);
     tools_.clear();
+    snapshots_.clear();
     disabled_tools_.clear();
     ++generation_;
 }

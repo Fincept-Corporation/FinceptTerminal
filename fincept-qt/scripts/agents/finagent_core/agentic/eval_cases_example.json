@@ -1,0 +1,28 @@
+[
+  {
+    "name": "nvda_fundamentals_brief",
+    "query": "Briefly summarise NVIDIA's most recent quarterly fundamentals.",
+    "expected_phrases": ["revenue", "margin", "data center"],
+    "max_steps": 6,
+    "max_wall_s": 300,
+    "max_cost_usd": 0.50,
+    "expected_min_citations": 1
+  },
+  {
+    "name": "60_40_rebalance_basic",
+    "query": "Outline a 60/40 stock-bond rebalance for a $100k portfolio that drifted to 70/30.",
+    "expected_phrases": ["sell", "buy", "60%", "40%"],
+    "max_steps": 5,
+    "max_wall_s": 180,
+    "max_cost_usd": 0.30
+  },
+  {
+    "name": "sector_rotation_check",
+    "query": "Which S&P 500 sectors have outperformed energy YTD?",
+    "expected_phrases": ["sector", "energy"],
+    "max_steps": 6,
+    "max_wall_s": 240,
+    "max_cost_usd": 0.40,
+    "expected_min_citations": 1
+  }
+]

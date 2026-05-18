@@ -55,7 +55,7 @@ void EquityBottomPanel::setup_positions_tab() {
     positions_table_->setObjectName("eqTable");
     positions_table_->setColumnCount(8);
     positions_table_->setHorizontalHeaderLabels(
-        {"Symbol", "Exchange", "Side", "Qty", "Avg Price", "LTP", "P&L", "P&L %"});
+        {"Symbol", "Opened", "Side", "Qty", "Avg Price", "LTP", "P&L", "P&L %"});
     positions_table_->verticalHeader()->setVisible(false);
     positions_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     positions_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -232,16 +232,37 @@ void EquityBottomPanel::set_paper_positions(const QVector<trading::PtPosition>& 
     for (int i = 0; i < positions.size(); ++i) {
         const auto& p = positions[i];
         ensure_item(positions_table_, i, 0)->setText(p.symbol);
-        ensure_item(positions_table_, i, 1)->setText("--");
+
+        // Col 1 — "Opened": parse ISO timestamp, convert to local time, fall back to raw string
+        {
+            const QDateTime dt = QDateTime::fromString(p.opened_at, Qt::ISODate).toLocalTime();
+            ensure_item(positions_table_, i, 1)
+                ->setText(dt.isValid() ? dt.toString("yyyy-MM-dd HH:mm") : p.opened_at);
+        }
+
         ensure_item(positions_table_, i, 2)->setText(p.side);
         ensure_item(positions_table_, i, 3)->setText(QString::number(p.quantity, 'f', 0));
         ensure_item(positions_table_, i, 4)->setText(QString::number(p.entry_price, 'f', 2));
         ensure_item(positions_table_, i, 5)->setText(QString::number(p.current_price, 'f', 2));
 
+        // Col 6 — P&L
         auto* pnl_item = ensure_item(positions_table_, i, 6);
         pnl_item->setText(QString::number(p.unrealized_pnl, 'f', 2));
         pnl_item->setForeground(p.unrealized_pnl >= 0 ? QColor(fincept::ui::colors::POSITIVE())
                                                       : QColor(fincept::ui::colors::NEGATIVE()));
+
+        // Col 7 — P&L %
+        // Use notional as the divisor so both entry_price == 0 and quantity == 0
+        // are safely handled by a single guard (avoids divide-by-zero).
+        const double notional = p.entry_price * p.quantity;
+        const double pct = notional != 0.0
+            ? (p.unrealized_pnl / notional) * 100.0
+            : 0.0;
+        auto* pct_item = ensure_item(positions_table_, i, 7);
+        pct_item->setText(QString::number(pct, 'f', 2) + "%");
+        pct_item->setForeground(
+            pct >= 0 ? QColor(fincept::ui::colors::POSITIVE())
+                     : QColor(fincept::ui::colors::NEGATIVE()));
     }
 }
 

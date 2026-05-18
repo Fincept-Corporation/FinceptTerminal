@@ -1,5 +1,6 @@
 #pragma once
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 #include <functional>
@@ -31,6 +32,7 @@ class ZerodhaBroker : public IBroker {
                     {"Intraday (MIS)", ProductType::Intraday},
                     {"Delivery (CNC)", ProductType::Delivery},
                     {"Margin (NRML)", ProductType::Margin},
+                    {"MTF (Margin Trading Facility)", ProductType::MTF},
                     {"Cover Order", ProductType::CoverOrder},
                     {"Bracket Order", ProductType::BracketOrder},
                 },
@@ -97,9 +99,9 @@ class ZerodhaBroker : public IBroker {
 
   private:
     static constexpr const char* kite_api_version = "3";
-    static const char* zerodha_order_type(OrderType t);
-    static const char* zerodha_product(ProductType p);
-    static const char* zerodha_side(OrderSide s);
+    /// Single source of truth for OrderType/OrderSide/ProductType → Kite wire values.
+    /// Replaces the three `zerodha_order_type/side/product` switches.
+    static const BrokerEnumMap<QString>& kite_enum_map();
     static const char* zerodha_variety(ProductType p);
     static QString zerodha_interval(const QString& resolution);
     static QString checked_error(const BrokerHttpResponse& resp, const QString& fallback);

@@ -7,6 +7,7 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -76,6 +77,13 @@ class BaseWidget : public QFrame {
     /// Subclasses call this from their ctor once they support configuration
     /// so the gear icon appears. Also hides the icon if set to false later.
     void set_configurable(bool configurable);
+
+    /// Re-arms the loading watchdog on becoming visible. Many subclasses call
+    /// `set_loading(true)` from their constructor, which arms the watchdog
+    /// before the widget is mounted and before any subscription has been
+    /// dispatched. Without this override the 20 s budget would burn while
+    /// the widget is still off-screen.
+    void showEvent(QShowEvent* event) override;
 
   private:
     void refresh_base_theme();

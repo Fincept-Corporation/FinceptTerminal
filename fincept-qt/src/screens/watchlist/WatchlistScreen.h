@@ -1,7 +1,7 @@
 #pragma once
 #include "core/events/EventBus.h"
 #include "core/symbol/IGroupLinked.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/markets/MarketDataService.h"
 #include "storage/repositories/WatchlistRepository.h"
 #include "ui/tables/DataTable.h"
@@ -51,6 +51,7 @@ class WatchlistScreen : public QWidget, public IStatefulScreen, public IGroupLin
     void on_remove_stock();
     void on_refresh();
     void on_export_csv();
+    void on_import_csv();
     void refresh_theme();
 
   private:
@@ -90,6 +91,7 @@ class WatchlistScreen : public QWidget, public IStatefulScreen, public IGroupLin
     QPushButton* refresh_btn_ = nullptr;
     QPushButton* del_wl_btn_ = nullptr;
     QPushButton* export_csv_btn_ = nullptr;
+    QPushButton* import_csv_btn_ = nullptr;
     QPushButton* add_btn_ = nullptr;
     QPushButton* remove_btn_ = nullptr;
     ui::DataTable* table_ = nullptr;

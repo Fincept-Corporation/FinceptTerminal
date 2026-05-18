@@ -26,6 +26,7 @@
 
 #include <QHash>
 #include <QMutex>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -83,6 +84,11 @@ class ToolRetriever {
         // index build time so BM25 TF naturally accounts for it.
         QStringList all_tokens;    // Concatenated weighted token stream
         int length = 0;            // |D| in BM25 formula
+
+        // Unique name-tokens — used by the exact-name-match bonus in search()
+        // so a query token that literally appears in the tool's name beats
+        // tools that merely mention the term in their description.
+        QSet<QString> name_token_set;
     };
 
     // ── Index state — guarded by mutex_ ────────────────────────────────

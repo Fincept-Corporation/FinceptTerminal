@@ -4,7 +4,7 @@
 // Each account has its own data stream (WS/polling), portfolio, and credentials.
 
 #include "core/symbol/IGroupLinked.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "screens/equity_trading/EquityTypes.h"
 #include "trading/BrokerAccount.h"
 #include "trading/TradingTypes.h"

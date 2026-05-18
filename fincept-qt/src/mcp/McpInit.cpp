@@ -5,28 +5,40 @@
 #include "core/logging/Logger.h"
 #include "mcp/McpProvider.h"
 #include "mcp/McpService.h"
+#include "mcp/tools/AgentsTools.h"
 #include "mcp/tools/AiChatTools.h"
 #include "mcp/tools/AltInvestmentsTools.h"
 #include "mcp/tools/CryptoTradingTools.h"
+#include "mcp/tools/DashboardTools.h"
 #include "mcp/tools/DataHubTools.h"
 #include "mcp/tools/DataSourcesTools.h"
+#include "mcp/tools/DBnomicsTools.h"
 #include "mcp/tools/EdgarTools.h"
+#include "mcp/tools/EquityResearchTools.h"
+#include "mcp/tools/ExcelTools.h"
 #include "mcp/tools/FileManagerTools.h"
 #include "mcp/tools/ForumTools.h"
+#include "mcp/tools/GeopoliticsTools.h"
+#include "mcp/tools/GovDataTools.h"
 #include "mcp/tools/MAAnalyticsTools.h"
 #include "mcp/tools/MarketsTools.h"
+#include "mcp/tools/McpServersTools.h"
 #include "mcp/tools/MetaTools.h"
 #include "mcp/tools/NavigationTools.h"
 #include "mcp/tools/NewsTools.h"
+#include "mcp/tools/AgenticMemoryTools.h"
 #include "mcp/tools/NotesTools.h"
 #include "mcp/tools/PaperTradingTools.h"
 #include "mcp/tools/PortfolioTools.h"
 #include "mcp/tools/ProfileTools.h"
 #include "mcp/tools/PythonTools.h"
+#include "mcp/tools/QuantLabTools.h"
 #include "mcp/tools/ReportBuilderTools.h"
 #include "mcp/tools/SettingsTools.h"
+#include "mcp/tools/SurfaceAnalyticsTools.h"
 #include "mcp/tools/SystemTools.h"
 #include "mcp/tools/WatchlistTools.h"
+#include "mcp/tools/WorkspaceTools.h"
 
 #include <QJsonDocument>
 
@@ -92,6 +104,9 @@ void initialize_all_tools() {
     // notes tab
     provider.register_tools(tools::get_notes_tools());
 
+    // agentic mode — Letta tier-3 archival memory (agent-callable mid-step)
+    provider.register_tools(tools::get_agentic_memory_tools());
+
     // ai chat tab
     provider.register_tools(tools::get_ai_chat_tools());
 
@@ -132,6 +147,39 @@ void initialize_all_tools() {
 
     // datahub introspection (Phase 9)
     provider.register_tools(tools::get_datahub_tools());
+
+    // external mcp server management (list/install/start/stop/call-through)
+    provider.register_tools(tools::get_mcp_servers_tools());
+
+    // ai quant lab — 24-module quantitative research platform (96 specific + 3 generic)
+    provider.register_tools(tools::get_quant_lab_tools());
+
+    // agent studio — discovery, execution, planner, memory, config CRUD
+    provider.register_tools(tools::get_agents_tools());
+
+    // dbnomics — economic data series (providers/datasets/series/observations/search)
+    provider.register_tools(tools::get_dbnomics_tools());
+
+    // gov-data — 10 government providers (US Treasury/Congress, France, HK, UK, Australia, ...)
+    provider.register_tools(tools::get_gov_data_tools());
+
+    // equity-research — symbol search, load, financials, technicals, peers, news, talipp, sentiment
+    provider.register_tools(tools::get_equity_research_tools());
+
+    // workspace — monitors, windows, panels, layouts, snapshots, symbol groups, actions, command-bar
+    provider.register_tools(tools::get_workspace_tools());
+
+    // dashboard — widget catalog, layout CRUD, per-widget config, ticker bar
+    provider.register_tools(tools::get_dashboard_tools());
+
+    // geopolitics — events, HDX, trade analysis, geolocations
+    provider.register_tools(tools::get_geopolitics_tools());
+
+    // excel — sheets, cells, data, rows/cols, CSV export
+    provider.register_tools(tools::get_excel_tools());
+
+    // surface-analytics — 35-surface capability catalog + Databento fetches
+    provider.register_tools(tools::get_surface_analytics_tools());
 
     // Phase 6: meta tools — tool.list, tool.describe, mcp.health.
     // Always exposed so the LLM can lazy-discover specialised tools.

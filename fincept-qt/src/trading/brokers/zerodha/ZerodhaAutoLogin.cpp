@@ -3,8 +3,10 @@
 #include "core/logging/Logger.h"
 #include "trading/brokers/zerodha/Totp.h"
 
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDateTime>
+#include <QEvent>
 #include <QEventLoop>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -75,7 +77,20 @@ AutoLoginResult run_auto_login(const QString& user_id, const QString& password,
         return out;
     }
 
-    QNetworkAccessManager nam;
+    // Heap-allocate so we can deleteLater() + drain DeferredDelete before
+    // returning. A stack QNAM here lets socket-notifier teardown work leak
+    // into the main runloop and crash the GUI hours later inside
+    // qt_mac_socket_callback. RAII guard handles every early-return path.
+    struct NamGuard {
+        QNetworkAccessManager* p;
+        ~NamGuard() {
+            p->deleteLater();
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        }
+    };
+    auto* nam_holder = new QNetworkAccessManager;
+    NamGuard nam_guard{nam_holder};
+    QNetworkAccessManager& nam = *nam_holder;
     nam.setCookieJar(new QNetworkCookieJar(&nam));
 
     QString request_id;

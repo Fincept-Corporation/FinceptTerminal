@@ -1,5 +1,6 @@
 #pragma once
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 namespace fincept::trading {
@@ -66,8 +67,7 @@ class DhanBroker : public IBroker {
 
   private:
     static QString dhan_exchange(const QString& exchange);
-    static QString dhan_product(ProductType p);
-    static QString dhan_order_type(OrderType t);
+    static const BrokerEnumMap<QString>& dhan_enum_map();
     static QString lookup_security_id(const QString& symbol, const QString& exchange, const QString& broker_id);
 };
 

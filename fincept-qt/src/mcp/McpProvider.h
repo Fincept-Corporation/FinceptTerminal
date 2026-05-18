@@ -10,6 +10,7 @@
 #include <QMutex>
 #include <QSet>
 
+#include <optional>
 #include <vector>
 
 namespace fincept::mcp {
@@ -39,6 +40,12 @@ class McpProvider {
 
     std::size_t tool_count() const;
     bool has_tool(const QString& name) const;
+
+    /// O(1) lookup of a single tool's UnifiedTool snapshot by canonical name.
+    /// Returns `std::nullopt` if the name is unknown or disabled. Used by
+    /// tool.describe so the hot tool-pick path doesn't pay the O(N) cost of
+    /// list_tools()+linear-scan (was ~3 ms p95 across the 583-tool catalog).
+    std::optional<UnifiedTool> find_tool(const QString& name) const;
 
     // ── Tool Execution ─────────────────────────────────────────────────────
 
@@ -135,6 +142,10 @@ class McpProvider {
 
     mutable QMutex mutex_;
     QHash<QString, ToolDef> tools_;
+    // Pre-serialised view of each tool, kept in lockstep with `tools_`. Built
+    // once at registration so list_tools()/find_tool() never re-serialise the
+    // input_schema. `disabled_tools_` is still consulted at read time.
+    QHash<QString, UnifiedTool> snapshots_;
     QSet<QString> disabled_tools_;
     quint64 generation_ = 0;
 

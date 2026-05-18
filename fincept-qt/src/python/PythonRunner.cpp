@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonSetupManager.h"
+#include "python/PythonWorker.h"
 #include "storage/secure/SecureStorage.h"
 
 #include <QCoreApplication>
@@ -10,6 +11,9 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLatin1String>
 #include <QProcessEnvironment>
 #include <QStandardPaths>
@@ -17,6 +21,98 @@
 #include <QUuid>
 
 namespace fincept::python {
+
+// ── yfinance_data.py CLI → daemon dispatch translation ───────────────────────
+// Returns true if the CLI args were recognised and routed to the persistent
+// PythonWorker daemon, avoiding the ~3s subprocess + yfinance/pandas import
+// cost. Unrecognised actions return false so the caller falls through to the
+// subprocess path (preserves correctness for future actions added to the CLI
+// but not yet wired into the daemon dispatch table).
+//
+// Action names match scripts/yfinance_data.py::_daemon_dispatch.
+static bool route_yfinance_to_daemon(const QStringList& args,
+                                     std::function<void(PythonResult)> cb) {
+    if (args.isEmpty())
+        return false;
+    const QString action = args[0];
+    QJsonObject payload;
+
+    auto sym = [&](int i) -> QString { return i < args.size() ? args[i] : QString(); };
+    auto split_csv = [](const QString& s) {
+        QJsonArray a;
+        for (const QString& x : s.split(',', Qt::SkipEmptyParts))
+            a.append(x.trimmed());
+        return a;
+    };
+
+    if (action == "quote" || action == "info" || action == "financials" ||
+        action == "company_profile" || action == "financial_ratios") {
+        if (args.size() < 2)
+            return false;
+        payload["symbol"] = sym(1);
+    } else if (action == "news") {
+        if (args.size() < 2)
+            return false;
+        payload["symbol"] = sym(1);
+        payload["count"] = args.size() > 2 ? args[2].toInt() : 20;
+    } else if (action == "search") {
+        if (args.size() < 2)
+            return false;
+        payload["query"] = sym(1);
+        payload["limit"] = args.size() > 2 ? args[2].toInt() : 50;
+    } else if (action == "historical_period") {
+        if (args.size() < 2)
+            return false;
+        payload["symbol"] = sym(1);
+        payload["period"] = args.size() > 2 ? args[2] : QStringLiteral("6mo");
+        payload["interval"] = args.size() > 3 ? args[3] : QStringLiteral("1d");
+    } else if (action == "historical") {
+        if (args.size() < 4)
+            return false;
+        payload["symbol"] = sym(1);
+        payload["start_date"] = sym(2);
+        payload["end_date"] = sym(3);
+        payload["interval"] = args.size() > 4 ? args[4] : QStringLiteral("1d");
+    } else if (action == "multiple_ratios" || action == "multiple_profiles") {
+        if (args.size() < 2)
+            return false;
+        payload["symbols"] = split_csv(args[1]);
+    } else if (action == "batch_quotes" || action == "batch_sparklines") {
+        if (args.size() < 2)
+            return false;
+        QJsonArray syms;
+        for (int i = 1; i < args.size(); ++i)
+            syms.append(args[i]);
+        payload["symbols"] = syms;
+    } else if (action == "batch_all") {
+        // batch_all carries a JSON blob (or @file spill). Skip routing for @file
+        // — daemon would need separate file-read support. Parse inline JSON.
+        if (args.size() < 2 || args[1].startsWith('@'))
+            return false;
+        auto doc = QJsonDocument::fromJson(args[1].toUtf8());
+        if (!doc.isObject())
+            return false;
+        payload = doc.object();
+    } else {
+        return false; // unknown action — let subprocess path handle it
+    }
+
+    PythonWorker::instance().submit(action, payload,
+        [cb = std::move(cb), action](bool ok, QJsonObject result, QString error) {
+            // Daemon may legitimately not know an action; fail cleanly so caller
+            // sees a structured error instead of a silent hang.
+            if (!ok) {
+                cb({false, {}, error.isEmpty() ? ("daemon error for " + action) : error, -1});
+                return;
+            }
+            PythonResult r;
+            r.success = true;
+            r.output = QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact));
+            r.exit_code = 0;
+            cb(r);
+        });
+    return true;
+}
 
 // ── Credential catalogue ─────────────────────────────────────────────────────
 // Env-var names that SettingsScreen lets the user configure and store in
@@ -309,6 +405,17 @@ void PythonRunner::run(const QString& script, const QStringList& args, Callback 
     if (!QFileInfo::exists(script_path)) {
         cb({false, {}, "Script not found: " + script_path, -1});
         return;
+    }
+
+    // Daemon fast-path: yfinance_data.py runs as a long-lived worker
+    // (PythonWorker). Routing single-shot calls through the daemon avoids the
+    // ~3s subprocess + import cost and bypasses the max_concurrent_=3 queue
+    // bottleneck. Only used when no stream callback is requested — the daemon
+    // doesn't surface intermediate stdout lines. Falls through to subprocess
+    // if the action isn't supported by the daemon dispatcher.
+    if (!on_line && script == QLatin1String("yfinance_data.py")) {
+        if (route_yfinance_to_daemon(args, cb))
+            return;
     }
 
     // Queue the request and start if under concurrency limit

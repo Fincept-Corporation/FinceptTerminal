@@ -332,10 +332,13 @@ void ExcelScreen::on_export_csv() {
         return;
 
     QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, "Export failed", "Could not open file for writing:\n" + path);
         return;
+    }
 
     QTextStream out(&file);
+    out.setEncoding(QStringConverter::Utf8);
     auto cells = sheet->get_data();
 
     // Find the last row/col with data to avoid huge trailing empty rows

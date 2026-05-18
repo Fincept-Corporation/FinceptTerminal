@@ -1,7 +1,7 @@
 // src/screens/agent_config/TeamsViewPanel.cpp
 #include "screens/agent_config/TeamsViewPanel.h"
 
-#include "ai_chat/LlmService.h"
+#include "services/llm/LlmService.h"
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
 #include "storage/repositories/AgentConfigRepository.h"

@@ -614,14 +614,35 @@ class BtProvider(BacktestingProviderBase):
             data = (best_result or {}).get('data') or {}
             data.setdefault('id', self._generate_id())
             data.setdefault('status', 'completed')
+
+            best_objective_value = float(best_score) if best_score != -np.inf else 0.0
+            best_performance = data.get('performance', {})
+
+            # Legacy `optimization` block kept for any callers still parsing it.
             data['optimization'] = {
                 'objective': objective,
                 'method': method,
-                'objective_value': float(best_score) if best_score != -np.inf else 0.0,
+                'objective_value': best_objective_value,
                 'best_params': best_params,
                 'iterations': len(combos),
-                'all_results': all_results[:100],  # cap to keep payload small
+                'all_results': all_results[:100],
             }
+            # Top-level vectorbt-compatible fields so the frontend's "optimize"
+            # renderer (which expects bestParameters/bestObjectiveValue/etc.)
+            # displays this result correctly.
+            data['bestParameters'] = best_params
+            data['bestObjectiveValue'] = best_objective_value
+            data['bestPerformance'] = best_performance
+            data['iterations'] = len(combos)
+            data['totalCombinations'] = len(combos)
+            data['method'] = method
+            data['objective'] = objective
+            data['allResults'] = [
+                {'parameters': r.get('parameters', {}),
+                 'objective_value': float(r.get('score', 0) or 0),
+                 'performance': {}}
+                for r in all_results[:100]
+            ]
             return {'success': True, 'message': 'Optimization completed', 'data': data}
 
         except Exception as e:
@@ -717,13 +738,32 @@ class BtProvider(BacktestingProviderBase):
             data_out = (last_result or {}).get('data') or {}
             data_out.setdefault('id', self._generate_id())
             data_out.setdefault('status', 'completed')
+            avg_oos_return = float(np.mean([f['testReturn'] for f in folds]))
+            avg_oos_sharpe = float(np.mean([f['testSharpe'] for f in folds]))
             data_out['walk_forward'] = {
                 'n_splits': n_splits,
                 'train_ratio': train_ratio,
                 'folds': folds,
-                'mean_test_return': float(np.mean([f['testReturn'] for f in folds])),
-                'mean_test_sharpe': float(np.mean([f['testSharpe'] for f in folds])),
+                'mean_test_return': avg_oos_return,
+                'mean_test_sharpe': avg_oos_sharpe,
             }
+            # Top-level vectorbt-compatible shape for the frontend renderer.
+            data_out['nWindows'] = len(folds)
+            data_out['avgOosReturn'] = avg_oos_return
+            data_out['avgOosSharpe'] = avg_oos_sharpe
+            data_out['oosReturnStd'] = float(np.std([f['testReturn'] for f in folds])) if folds else 0.0
+            data_out['robustnessScore'] = float(np.mean([1.0 if f['testReturn'] > 0 else 0.0 for f in folds])) if folds else 0.0
+            data_out['windows'] = [
+                {
+                    'window': f['fold'] + 1,
+                    'trainStart': f['trainStart'], 'trainEnd': f['trainEnd'],
+                    'testStart': f['testStart'], 'testEnd': f['testEnd'],
+                    'inSampleReturn': 0.0, 'inSampleSharpe': 0.0,
+                    'outOfSampleReturn': f['testReturn'],
+                    'outOfSampleSharpe': f['testSharpe'],
+                }
+                for f in folds
+            ]
             return {'success': True, 'message': 'Walk-forward completed', 'data': data_out}
 
         except Exception as e:

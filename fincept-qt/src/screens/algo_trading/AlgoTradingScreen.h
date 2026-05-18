@@ -1,6 +1,6 @@
 // src/screens/algo_trading/AlgoTradingScreen.h
 #pragma once
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/algo_trading/AlgoTradingTypes.h"
 
 #include <QHideEvent>

@@ -1,4 +1,11 @@
-// Crypto Trading Screen — coordinator
+// Crypto Trading Screen — coordinator.
+//
+// Core: ctor/dtor, show/hide events, setup_ui, setup_timers, update_clock,
+// hub subscribe/unsubscribe, init_exchange, load_portfolio, save_state/restore_state,
+// current_symbol / on_group_symbol_changed. Other concerns:
+//   - CryptoTradingScreen_Handlers.cpp   — UI action handlers
+//   - CryptoTradingScreen_Refresh.cpp    — per-panel refresh + WS feed-mode
+//   - CryptoTradingScreen_AsyncFetch.cpp — REST fetch helpers
 #include "screens/crypto_trading/CryptoTradingScreen.h"
 
 #include "core/logging/Logger.h"
@@ -30,16 +37,13 @@
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 
+
 namespace fincept::screens {
 
 using namespace fincept::trading;
 using namespace fincept::screens::crypto;
 
 static const QString TAG = "CryptoTrading";
-
-// ============================================================================
-// Constructor / Destructor
-// ============================================================================
 
 CryptoTradingScreen::CryptoTradingScreen(QWidget* parent) : QWidget(parent) {
     LOG_INFO(TAG, "Constructing CryptoTradingScreen");
@@ -852,8 +856,7 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
                     OrderMatcher::instance().set_sl_tp(portfolio_id_, selected_symbol_, order.id, sl, tp);
             }
             refresh_portfolio();
-        }}
-         else {
+       } else {
             QPointer<CryptoTradingScreen> self = this;
             QPointer<CryptoOrderEntry> oe = order_entry_;
             order_entry_->set_submit_busy(true);
