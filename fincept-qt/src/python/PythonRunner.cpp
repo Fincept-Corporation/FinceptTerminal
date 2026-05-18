@@ -239,6 +239,9 @@ void PythonRunner::find_python_async() {
                     LOG_WARN("Python", "No Python interpreter found");
                 }
                 python_init_done_ = true;
+                if (!python_path_.isEmpty()) {
+                    emit python_ready();
+                }
 
                 // Drain any requests that were queued while we were detecting
                 start_next();
@@ -299,10 +302,53 @@ QString PythonRunner::find_scripts_dir() const {
 
 // ── Run Script ───────────────────────────────────────────────────────────────
 
+bool PythonRunner::route_yfinance_to_daemon(const QStringList& args, Callback cb) {
+    if (!is_available()) return false;
+
+    if (args.isEmpty()) return false;
+    const QString action = args[0];
+    QJsonObject payload;
+
+    if (action == "quote" || action == "info" || action == "news" || action == "financials" || action == "company_profile") {
+        if (args.size() > 1) payload["symbol"] = args[1];
+        if (action == "news" && args.size() > 2) payload["count"] = args[2].toInt();
+    } else if (action == "batch_quotes" || action == "batch_sparklines" || action == "multiple_profiles" || action == "multiple_ratios") {
+        QJsonArray syms;
+        for (int i = 1; i < args.size(); ++i) syms.append(args[i]);
+        payload["symbols"] = syms;
+    } else if (action == "historical_period") {
+        if (args.size() > 1) payload["symbol"] = args[1];
+        if (args.size() > 2) payload["period"] = args[2];
+        if (args.size() > 3) payload["interval"] = args[3];
+    } else if (action == "search") {
+        if (args.size() > 1) payload["query"] = args[1];
+    } else {
+        return false; // Action not supported or requires subprocess
+    }
+
+    PythonWorker::instance().submit(action, payload, [cb](bool ok, QJsonObject result, QString error) {
+        PythonResult r;
+        r.success = ok;
+        r.error = error;
+        if (ok) {
+            r.output = QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact));
+        }
+        cb(r);
+    });
+
+    return true;
+}
+
 void PythonRunner::run(const QString& script, const QStringList& args, Callback cb, StreamCallback on_line) {
     if (python_init_done_ && python_path_.isEmpty()) {
         cb({false, {}, "Python not available — run first-time setup from the app", -1});
         return;
+    }
+
+    if (script == QLatin1String("yfinance_data.py")) {
+        if (route_yfinance_to_daemon(args, cb))
+            return;
+        // falls through to normal subprocess queue below
     }
 
     QString script_path = scripts_dir_ + "/" + script;

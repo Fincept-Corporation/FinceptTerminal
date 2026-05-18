@@ -46,6 +46,10 @@ PythonWorker::PythonWorker() {
             proc_->kill();
         }
     });
+
+    connect(&PythonRunner::instance(), &PythonRunner::python_ready, this, [this]() {
+        ensure_started();
+    });
 }
 
 PythonWorker::~PythonWorker() {
@@ -116,6 +120,7 @@ void PythonWorker::launch_process() {
         python_exe = runner.python_path();
     if (python_exe.isEmpty()) {
         LOG_WARN("PythonWorker", "No Python interpreter resolved — worker disabled");
+        QTimer::singleShot(500, this, [this]() { ensure_started(); });
         return;
     }
 
