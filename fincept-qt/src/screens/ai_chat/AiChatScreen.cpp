@@ -134,8 +134,11 @@ void AiChatScreen::refresh_theme() {
 
 void AiChatScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
-    connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::finished_streaming, this,
-            &AiChatScreen::on_streaming_done, Qt::UniqueConnection);
+    // Connect LlmService finished_streaming to handle streaming responses using request‑time context
+    connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::finished_streaming,
+            this, &AiChatScreen::on_streaming_done, Qt::UniqueConnection);
+    // No additional code needed here.
+    
     connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::config_changed, this,
             &AiChatScreen::on_provider_changed, Qt::UniqueConnection);
     // Phase 7: rehydrate the linked symbol from SymbolContext on every

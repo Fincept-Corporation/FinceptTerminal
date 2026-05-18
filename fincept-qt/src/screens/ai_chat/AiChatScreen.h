@@ -64,11 +64,6 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     void on_rename_session();
     void on_stream_chunk(const QString& chunk, bool done);
     void on_streaming_done(ai_chat::LlmResponse response);
-    // New helper that receives the LLM response together with the request snapshot
-    void handle_response(const ai_chat::LlmResponse &response,
-                         const QString &req_session,
-                         const QString &req_provider,
-                         const QString &req_model);
     void on_provider_changed();
     void on_search_changed(const QString& text);
     void on_typing_indicator_tick();
