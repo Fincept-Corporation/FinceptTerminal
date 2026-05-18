@@ -96,14 +96,22 @@ void AuthManager::load_session() {
             session_ = SessionData::from_json(doc.object());
     }
 
-    // Try to recover api_key from SecureStorage (DPAPI / Keychain) — this is the
-    // most reliable source since it survives SQLite corruption and DB migrations.
+    // Restore api_key from SecureStorage — most reliable source,
+    // survives SQLite corruption and DB migrations.
     auto secure_key = fincept::SecureStorage::instance().retrieve("api_key");
     if (secure_key.is_ok() && !secure_key.value().isEmpty()) {
         if (session_.api_key.isEmpty() || session_.api_key != secure_key.value()) {
             LOG_INFO("Auth", "Restored api_key from SecureStorage");
             session_.api_key = secure_key.value();
         }
+    }
+
+    // Restore session_token from SecureStorage — stripped from SQLite JSON
+    // by save_session() as part of CR-08 plaintext credential removal.
+    auto secure_token = fincept::SecureStorage::instance().retrieve("session_token");
+    if (secure_token.is_ok() && !secure_token.value().isEmpty()) {
+        LOG_INFO("Auth", "Restored session_token from SecureStorage");
+        session_.session_token = secure_token.value();
     }
 
     // Never trust saved authenticated flag — must be re-validated

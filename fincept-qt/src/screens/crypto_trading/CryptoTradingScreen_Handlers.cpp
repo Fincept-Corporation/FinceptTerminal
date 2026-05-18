@@ -196,7 +196,8 @@ void CryptoTradingScreen::on_mode_toggled() {
         refresh_live_data();
     } else {
         live_data_timer_->stop();
-        refresh_portfolio();
+        order_entry_->set_submit_busy(false);
+            refresh_portfolio();
     }
 }
 
@@ -245,16 +246,23 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
             refresh_portfolio();
         } else {
             QPointer<CryptoTradingScreen> self = this;
-            (void)QtConcurrent::run([self, side, order_type, qty, price]() {
-                if (!self)
-                    return;
-                ExchangeService::instance().place_exchange_order(self->selected_symbol_, side, order_type, qty, price);
+            QPointer<CryptoOrderEntry> oe = order_entry_;
+            order_entry_->set_submit_busy(true);
+            (void)QtConcurrent::run([self, oe, side, order_type, qty, price]() {
+                try {
+                    if (!self)
+                        return;
+                    // stop_price, sl, tp are exchange-managed for live orders
+                    ExchangeService::instance().place_exchange_order(
+                        self->selected_symbol_, side, order_type, qty, price);
+                } catch (...) {
+                    LOG_WARN("CryptoTrading", "place_exchange_order threw — resetting busy state");
+                }
                 QMetaObject::invokeMethod(
                     self,
-                    [self]() {
-                        if (!self)
-                            return;
-                        self->refresh_live_data();
+                    [self, oe]() {
+                        if (oe) oe->set_submit_busy(false);
+                        if (self) self->refresh_live_data();
                     },
                     Qt::QueuedConnection);
             });
@@ -267,7 +275,7 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
 void CryptoTradingScreen::on_cancel_order(const QString& order_id) {
     LOG_INFO(TAG, QString("Cancel order: %1 (%2)").arg(order_id, trading_mode_ == TradingMode::Paper ? "paper" : "live"));
     if (trading_mode_ == TradingMode::Paper) {
-        try {
+            order_entry_->set_submit_busy(true);  try {
             pt_cancel_order(order_id);
             OrderMatcher::instance().remove_order(order_id);
             refresh_portfolio();

@@ -13,6 +13,7 @@
 #include "mcp/McpService.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/SettingsRepository.h"
+#include "storage/secure/SecureStorage.h"
 
 #    include "datahub/DataHub.h"
 #    include "datahub/TopicPolicy.h"
@@ -66,7 +67,7 @@ void LlmService::ensure_config() const {
             if (!sess.api_key.isEmpty()) {
                 api_key_ = sess.api_key;
             } else {
-                auto stored = SettingsRepository::instance().get("fincept_api_key");
+                auto stored = fincept::SecureStorage::instance().retrieve("api_key");
                 if (stored.is_ok() && !stored.value().isEmpty())
                     api_key_ = stored.value();
             }
@@ -112,12 +113,12 @@ void LlmService::ensure_config() const {
     }
 
     // Fincept key always comes from the live AuthManager session; SettingsRepository fallback is the legacy path.
-    if (provider_ == "fincept") {
+   if (provider_ == "fincept") {
         const auto& sess = fincept::auth::AuthManager::instance().session();
         if (!sess.api_key.isEmpty()) {
             api_key_ = sess.api_key;
         } else {
-            auto stored_key = SettingsRepository::instance().get("fincept_api_key");
+            auto stored_key = fincept::SecureStorage::instance().retrieve("api_key");
             if (stored_key.is_ok() && !stored_key.value().isEmpty())
                 api_key_ = stored_key.value();
         }
