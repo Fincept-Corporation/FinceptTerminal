@@ -921,6 +921,10 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
     loop.exec();
     timeout.stop();
 
+    if (!in_think && !think_pending.isEmpty())
+        on_chunk(think_pending, false);
+    think_pending.clear();
+
     auto drain_nam = [&]() {
         reply->deleteLater();
         nam->deleteLater();
