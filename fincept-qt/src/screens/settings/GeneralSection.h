@@ -1,7 +1,8 @@
 #pragma once
 // GeneralSection.h — application-wide behaviour toggles that don't fit
-// any of the more specific sections. Currently houses the "on last window
-// close" preference (Phase L1 of the workspace/launchpad refactor).
+// any of the more specific sections. Houses:
+//   * "On last window close" preference (workspace/launchpad refactor)
+//   * "Language" preference (i18n)
 
 #include <QComboBox>
 #include <QWidget>
@@ -23,6 +24,7 @@ class GeneralSection : public QWidget {
     void build_ui();
 
     QComboBox* on_close_combo_ = nullptr;
+    QComboBox* language_combo_ = nullptr;
 };
 
 } // namespace fincept::screens

@@ -3,6 +3,8 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QEvent>
+
 namespace fincept::ui {
 
 TabBar::TabBar(QWidget* parent) : QWidget(parent) {
@@ -17,31 +19,50 @@ TabBar::TabBar(QWidget* parent) : QWidget(parent) {
     tab_layout_->setContentsMargins(4, 0, 4, 0);
     tab_layout_->setSpacing(2);
 
-    QVector<TabDef> tabs = {
+    tab_defs_ = {
         {"dashboard", "DASHBOARD"}, {"markets", "MARKETS"},   {"crypto_trading", "CRYPTO"},  {"portfolio", "PORTFOLIO"},
         {"news", "NEWS"},           {"ai_chat", "AI CHAT"},   {"backtesting", "BACKTEST"},   {"algo_trading", "ALGO"},
         {"node_editor", "NODES"},   {"code_editor", "CODE"},  {"ai_quant_lab", "QUANT LAB"}, {"quantlib", "QUANTLIB"},
         {"forum", "FORUM"},         {"settings", "SETTINGS"}, {"profile", "PROFILE"},
     };
-    for (const auto& def : tabs)
+    for (const auto& def : tab_defs_)
         add_tab(def);
     scroll_area->setWidget(container);
     auto* root = new QHBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->addWidget(scroll_area);
 
+    retranslateUi();
+
     connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
             [this](const ThemeTokens&) { refresh_theme(); });
     refresh_theme();
 }
 
+void TabBar::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(e);
+}
+
+void TabBar::retranslateUi() {
+    // Tab definitions and button order are stable — walk in parallel and
+    // reapply translated text + tooltip via the source label as the tr() key.
+    for (int i = 0; i < tab_defs_.size() && i < tab_buttons_.size(); ++i) {
+        const QString text = tr(tab_defs_[i].source_label.toUtf8().constData());
+        tab_buttons_[i]->setText(text);
+        tab_buttons_[i]->setToolTip(text);
+    }
+}
+
 void TabBar::add_tab(const TabDef& def) {
-    auto* btn = new QPushButton(def.label);
+    auto* btn = new QPushButton(def.source_label);
     btn->setFixedHeight(32);
     btn->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     btn->setCursor(Qt::PointingHandCursor);
     btn->setProperty("tab_id", def.id);
-    btn->setToolTip(def.label);
+    btn->setToolTip(def.source_label);
     connect(btn, &QPushButton::clicked, this, [this, id = def.id]() {
         set_active(id);
         emit tab_changed(id);

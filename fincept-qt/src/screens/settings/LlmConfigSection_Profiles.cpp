@@ -60,11 +60,11 @@ QWidget* LlmConfigSection::build_profile_list_panel() {
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
 
-    auto* lbl = new QLabel("PROFILES");
+    auto* lbl = new QLabel(tr("PROFILES"));
     lbl->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";font-weight:700;letter-spacing:1px;");
     vl->addWidget(lbl);
 
-    auto* hint = new QLabel("A profile = named LLM config you can assign to any agent or team.");
+    auto* hint = new QLabel(tr("A profile = named LLM config you can assign to any agent or team."));
     hint->setWordWrap(true);
     hint->setStyleSheet("color:" + QString(ui::colors::TEXT_TERTIARY()) + ";padding-bottom:4px;");
     vl->addWidget(hint);

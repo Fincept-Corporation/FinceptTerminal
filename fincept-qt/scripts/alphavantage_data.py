@@ -11,7 +11,7 @@ import requests
 from typing import Dict, Any
 
 # API Configuration
-API_KEY = os.environ.get('', '')
+API_KEY = os.environ.get('ALPHA_VANTAGE_API_KEY', '')
 BASE_URL = "https://www.alphavantage.co/query"
 
 
@@ -59,11 +59,11 @@ def get_quote(symbol: str) -> Dict[str, Any]:
 
 
 def main(args=None):
-    
+    """Main CLI entry point"""
     if args is None:
         args = sys.argv[1:]
-    """Main CLI entry point"""
-    if len(args) + 1 < 3:
+
+    if len(args) < 2:
         print(json.dumps({
             "error": "Usage: python alphavantage_data.py quote <symbol>"
         }))

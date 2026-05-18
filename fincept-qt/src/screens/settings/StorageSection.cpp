@@ -199,13 +199,13 @@ void StorageSection::build_ui() {
     vl->setContentsMargins(14, 14, 14, 14);
     vl->setSpacing(10);
 
-    auto* t = new QLabel("STORAGE & DATA MANAGEMENT");
+    auto* t = new QLabel(tr("STORAGE & DATA MANAGEMENT"));
     t->setStyleSheet(section_title_ss());
     vl->addWidget(t);
     vl->addSpacing(4);
 
-    auto* info = new QLabel("Manage all persistent data, databases, and files. "
-                            "Execute SQL queries directly against terminal databases.");
+    auto* info = new QLabel(tr("Manage all persistent data, databases, and files. "
+                               "Execute SQL queries directly against terminal databases."));
     info->setWordWrap(true);
     info->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(info);

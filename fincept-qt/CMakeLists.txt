@@ -331,7 +331,7 @@ else()
 endif()
 
 find_package(Qt6 ${_FINCEPT_QT_VER_ARGS} REQUIRED COMPONENTS
-    Widgets Charts PrintSupport Network Sql Concurrent Multimedia)
+    Widgets Charts PrintSupport Network Sql Concurrent Multimedia LinguistTools)
 
 # Optional: WebSockets (not always installed)
 find_package(Qt6 ${_FINCEPT_QT_VER_ARGS} QUIET COMPONENTS WebSockets)
@@ -639,6 +639,7 @@ set(CORE_SOURCES
     src/core/debug/StressLoad.cpp
     src/core/session/SessionManager.cpp
     src/core/session/ScreenStateManager.cpp
+    src/core/i18n/LanguageManager.cpp
     src/core/keys/KeyConfigManager.cpp
     src/core/keys/WindowCycler.cpp
     src/core/net/NetSpeedMeter.cpp
@@ -1082,7 +1083,7 @@ set(SERVICE_SOURCES
     # for Qt6::TextToSpeech when the Qt Speech module isn't installed).
     src/services/tts/TtsService.cpp
 
-    # Clap-to-start trigger — lightweight pyaudio loop that fires a signal
+    # Clap-to-start trigger — lightweight sounddevice loop that fires a signal
     # when it hears a (double-)clap. Wakes up the AiChatBubble mic.
     src/services/voice_trigger/ClapDetectorService.cpp
 
@@ -1124,6 +1125,7 @@ set(UI_SOURCES
     src/ui/widgets/LoadingOverlay.cpp
     src/ui/widgets/ConfettiOverlay.cpp
     src/ui/widgets/SpeedSparkline.cpp
+    src/ui/widgets/LanguageSwitcher.cpp
     src/ui/tables/DataTable.cpp
     src/ui/charts/ChartFactory.cpp
     src/ui/navigation/NavigationBar.cpp
@@ -2309,6 +2311,36 @@ add_executable(FinceptTerminal ${_FINCEPT_EXE_FLAGS}
 
 target_include_directories(FinceptTerminal PRIVATE
     src
+)
+
+# ── Translations (.ts → .qm → resources) ──────────────────────────────────────
+# Hand-authored .ts files under translations/ are compiled to .qm at build time
+# (lrelease) and embedded in the Qt resource system at :/i18n/fincept_<locale>.qm.
+# LanguageManager loads them by that path at runtime. We deliberately use
+# qt6_add_lrelease (not qt6_add_translations) so lupdate never runs against the
+# source tree — the .ts files are the source of truth and must not be auto-
+# rewritten by scanning the C++. English is the source language; no .qm exists
+# for it and LanguageManager falls back to the in-source tr() literals.
+set(FINCEPT_TS_FILES
+    translations/fincept_zh_CN.ts
+    translations/fincept_zh_HK.ts
+    translations/fincept_id_ID.ts
+    translations/fincept_vi_VN.ts
+    translations/fincept_tr_TR.ts
+    translations/fincept_de_DE.ts
+    translations/fincept_pt_BR.ts
+    translations/fincept_es_ES.ts
+    translations/fincept_fr_FR.ts
+    translations/fincept_it_IT.ts
+)
+qt6_add_lrelease(FinceptTerminal
+    TS_FILES ${FINCEPT_TS_FILES}
+    QM_FILES_OUTPUT_VARIABLE FINCEPT_QM_FILES
+)
+qt6_add_resources(FinceptTerminal "fincept_i18n"
+    PREFIX "/i18n"
+    BASE "${CMAKE_CURRENT_BINARY_DIR}"
+    FILES ${FINCEPT_QM_FILES}
 )
 
 # ── macOS bundle properties ───────────────────────────────────────────────────

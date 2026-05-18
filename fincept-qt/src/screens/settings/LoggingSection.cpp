@@ -56,17 +56,17 @@ void LoggingSection::build_ui() {
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(16);
 
-    auto* t = new QLabel("LOGGING");
+    auto* t = new QLabel(tr("LOGGING"));
     t->setStyleSheet(section_title_ss());
     vl->addWidget(t);
     vl->addWidget(make_sep());
 
     // ── Global level ────────────────────────────────────────────────────────
-    auto* global_lbl = new QLabel("Global Log Level");
+    auto* global_lbl = new QLabel(tr("Global Log Level"));
     global_lbl->setStyleSheet(sub_title_ss());
     vl->addWidget(global_lbl);
 
-    auto* global_desc = new QLabel("Minimum level for all tags unless overridden.");
+    auto* global_desc = new QLabel(tr("Minimum level for all tags unless overridden."));
     global_desc->setStyleSheet(label_ss());
     global_desc->setWordWrap(true);
     vl->addWidget(global_desc);
@@ -83,23 +83,23 @@ void LoggingSection::build_ui() {
     vl->addWidget(make_sep());
 
     // ── Output format ───────────────────────────────────────────────────────
-    auto* fmt_title = new QLabel("Output Format");
+    auto* fmt_title = new QLabel(tr("Output Format"));
     fmt_title->setStyleSheet(sub_title_ss());
     vl->addWidget(fmt_title);
 
     auto* fmt_desc = new QLabel(
-        "Plain text is human-readable; JSON emits one structured object per line (easier to parse with tooling).");
+        tr("Plain text is human-readable; JSON emits one structured object per line (easier to parse with tooling)."));
     fmt_desc->setStyleSheet(label_ss());
     fmt_desc->setWordWrap(true);
     vl->addWidget(fmt_desc);
 
-    log_json_mode_ = new QCheckBox("Emit structured JSON lines");
+    log_json_mode_ = new QCheckBox(tr("Emit structured JSON lines"));
     log_json_mode_->setChecked(AppConfig::instance().get("log/json_mode", false).toBool());
     vl->addWidget(log_json_mode_);
     vl->addWidget(make_sep());
 
     // ── Log file location ───────────────────────────────────────────────────
-    auto* path_title = new QLabel("Log File");
+    auto* path_title = new QLabel(tr("Log File"));
     path_title->setStyleSheet(sub_title_ss());
     vl->addWidget(path_title);
 
@@ -115,14 +115,14 @@ void LoggingSection::build_ui() {
     path_rl->setContentsMargins(0, 0, 0, 0);
     path_rl->setSpacing(8);
 
-    auto* open_folder_btn = new QPushButton("Open Log Folder");
+    auto* open_folder_btn = new QPushButton(tr("Open Log Folder"));
     open_folder_btn->setStyleSheet(btn_secondary_ss());
     open_folder_btn->setFixedHeight(30);
     open_folder_btn->setFixedWidth(160);
     connect(open_folder_btn, &QPushButton::clicked, this,
             []() { QDesktopServices::openUrl(QUrl::fromLocalFile(AppPaths::logs())); });
 
-    auto* copy_path_btn = new QPushButton("Copy Path");
+    auto* copy_path_btn = new QPushButton(tr("Copy Path"));
     copy_path_btn->setStyleSheet(btn_secondary_ss());
     copy_path_btn->setFixedHeight(30);
     copy_path_btn->setFixedWidth(120);
@@ -138,11 +138,11 @@ void LoggingSection::build_ui() {
     vl->addWidget(make_sep());
 
     // ── Per-tag overrides ───────────────────────────────────────────────────
-    auto* tag_title = new QLabel("Per-Tag Overrides");
+    auto* tag_title = new QLabel(tr("Per-Tag Overrides"));
     tag_title->setStyleSheet(sub_title_ss());
     vl->addWidget(tag_title);
 
-    auto* tag_desc = new QLabel("Override the log level for a specific tag (e.g. ExchangeService, AgentService).");
+    auto* tag_desc = new QLabel(tr("Override the log level for a specific tag (e.g. ExchangeService, AgentService)."));
     tag_desc->setStyleSheet(label_ss());
     tag_desc->setWordWrap(true);
     vl->addWidget(tag_desc);
@@ -162,7 +162,7 @@ void LoggingSection::build_ui() {
         rl->setSpacing(8);
 
         auto* tag_edit = new QLineEdit(tag);
-        tag_edit->setPlaceholderText("Tag name");
+        tag_edit->setPlaceholderText(tr("Tag name"));
         tag_edit->setFixedWidth(220);
         tag_edit->setStyleSheet(input_ss());
 
@@ -172,7 +172,7 @@ void LoggingSection::build_ui() {
         lvl_combo->setFixedWidth(120);
         lvl_combo->setCurrentIndex(level_to_idx(level));
 
-        auto* del_btn = new QPushButton("Remove");
+        auto* del_btn = new QPushButton(tr("Remove"));
         del_btn->setStyleSheet(btn_danger_ss());
         del_btn->setFixedHeight(28);
         connect(del_btn, &QPushButton::clicked, this, [row]() { row->deleteLater(); });
@@ -192,7 +192,7 @@ void LoggingSection::build_ui() {
 
     vl->addWidget(log_tag_list_);
 
-    auto* add_btn = new QPushButton("+ Add Tag Override");
+    auto* add_btn = new QPushButton(tr("+ Add Tag Override"));
     add_btn->setStyleSheet(btn_secondary_ss());
     add_btn->setFixedHeight(30);
     add_btn->setFixedWidth(180);
@@ -201,7 +201,7 @@ void LoggingSection::build_ui() {
     vl->addWidget(make_sep());
 
     // ── Save ────────────────────────────────────────────────────────────────
-    auto* save_btn = new QPushButton("Apply & Save");
+    auto* save_btn = new QPushButton(tr("Apply & Save"));
     save_btn->setStyleSheet(btn_primary_ss());
     save_btn->setFixedHeight(34);
     save_btn->setFixedWidth(140);

@@ -1,13 +1,16 @@
 #pragma once
 // SettingsScreen.h — top-level settings shell. Hosts a left-nav + QStackedWidget
 // of sub-section widgets. All section state and UI lives in *Section.h/.cpp
-// files in this directory; this class only owns the navigation and the MCP
-// event subscription that triggers a cross-section reload.
+// files in this directory; this class only owns the navigation, the MCP
+// event subscription that triggers a cross-section reload, and the centralised
+// language-change handler that rebuilds every section so their newly
+// constructed widgets pick up the active QTranslator.
 
 #include "core/events/EventBus.h"
 #include "screens/common/IStatefulScreen.h"
 
 #include <QHideEvent>
+#include <QLabel>
 #include <QList>
 #include <QPushButton>
 #include <QShowEvent>
@@ -15,12 +18,10 @@
 #include <QVariantMap>
 #include <QWidget>
 
+#include <functional>
+
 namespace fincept::screens {
 
-/// Full-featured settings screen.
-/// Sections: Credentials | Appearance | Notifications | Storage & Cache |
-///           Data Sources | LLM Config | MCP Servers | Logging | Security |
-///           Profiles | Keybindings | Python Env | Developer | Voice
 class SettingsScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
@@ -33,17 +34,38 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* e) override;
 
   private:
     QStackedWidget* sections_ = nullptr;
     QWidget*        nav_      = nullptr;
+    QLabel*         nav_title_ = nullptr;
 
     void refresh_theme();
+    void retranslateUi();
+
+    /// Re-wire signals from section instances to external services. Called
+    /// after every section rebuild (language change) so the wiring survives
+    /// the destruction of the old section widgets.
+    void wire_section_signals();
+
+    /// Rebuild every section widget by constructing fresh instances via the
+    /// stored factories. Preserves the current section index. Each rebuilt
+    /// section picks up the active QTranslator at construction time.
+    void rebuild_sections_for_language_change();
+
+    /// Nav button → source key map used to retranslate button labels and
+    /// scope headers without rebuilding the nav.
+    struct NavButton { QPushButton* btn; QString source_key; };
+    QList<NavButton> nav_buttons_;
+    QList<QLabel*>   scope_headers_;  // entries align with scope_header_keys_
+    QList<QString>   scope_header_keys_;
+
+    /// Factories for each section index. Used by the language-change rebuild
+    /// path so we can recreate widgets without hardcoding the type list twice.
+    QList<std::function<QWidget*()>> section_factories_;
 
     // ── MCP-driven UI sync ────────────────────────────────────────────────────
-    // MCP settings tools publish settings.changed / llm.provider_changed when
-    // the LLM mutates settings via Finagent or AI Chat. Subscribers are active
-    // only while the screen is visible (P3 lifecycle).
     QList<EventBus::HandlerId> mcp_event_subs_;
     void subscribe_mcp_events();
     void unsubscribe_mcp_events();

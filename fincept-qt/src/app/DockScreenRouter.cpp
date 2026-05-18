@@ -28,6 +28,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QContextMenuEvent>
+#include <QCoreApplication>
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QInputDialog>
@@ -45,58 +46,65 @@
 namespace fincept {
 
 QString DockScreenRouter::title_for_id(const QString& id) {
-    static const QHash<QString, QString> titles = {
-        {"dashboard", "Dashboard"},
-        {"markets", "Markets"},
-        {"crypto_trading", "Crypto Trading"},
-        {"equity_trading", "Equity Trading"},
-        {"algo_trading", "Algo Trading"},
-        {"backtesting", "Backtesting"},
-        {"portfolio", "Portfolio"},
-        {"watchlist", "Watchlist"},
-        {"news", "News"},
-        {"ai_chat", "AI Chat"},
-        {"equity_research", "Equity Research"},
-        {"economics", "Economics"},
-        {"dbnomics", "DBnomics"},
-        {"akshare", "AkShare Data"},
-        {"asia_markets", "Asia Markets"},
-        {"geopolitics", "Geopolitics"},
-        {"gov_data", "Gov Data"},
-        {"maritime", "Maritime"},
-        {"polymarket", "Prediction Markets"},
-        {"relationship_map", "Relationship Map"},
-        {"derivatives", "Derivatives"},
-        {"alt_investments", "Alt Investments"},
-        {"ma_analytics", "M&A Analytics"},
-        {"surface_analytics", "Surface Analytics"},
-        {"quantlib", "QuantLib"},
-        {"ai_quant_lab", "AI Quant Lab"},
-        {"alpha_arena", "Alpha Arena"},
-        {"agent_config", "Agent Config"},
-        {"mcp_servers", "MCP Servers"},
-        {"node_editor", "Node Editor"},
-        {"code_editor", "Code Editor"},
-        {"excel", "Excel"},
-        {"report_builder", "Report Builder"},
-        {"trade_viz", "Trade Viz"},
-        {"data_sources", "Data Sources"},
-        {"data_mapping", "Data Mapping"},
-        {"file_manager", "File Manager"},
-        {"notes", "Notes"},
-        {"forum", "Forum"},
-        {"docs", "Docs"},
-        {"support", "Support"},
-        {"about", "About"},
-        {"profile", "Profile"},
-        {"settings", "Settings"},
-        {"contact", "Contact"},
-        {"terms", "Terms"},
-        {"privacy", "Privacy"},
-        {"trademarks", "Trademarks"},
-        {"help", "Help"},
+    // Map stays in English source so it remains the canonical lookup key.
+    // The returned value is wrapped in tr() at call time so the live
+    // QTranslator picks up the user's language without us having to
+    // rebuild the static map on every language switch.
+    static const QHash<QString, const char*> titles = {
+        {"dashboard", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Dashboard")},
+        {"markets", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Markets")},
+        {"crypto_trading", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Crypto Trading")},
+        {"equity_trading", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Equity Trading")},
+        {"algo_trading", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Algo Trading")},
+        {"backtesting", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Backtesting")},
+        {"portfolio", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Portfolio")},
+        {"watchlist", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Watchlist")},
+        {"news", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "News")},
+        {"ai_chat", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "AI Chat")},
+        {"equity_research", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Equity Research")},
+        {"economics", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Economics")},
+        {"dbnomics", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "DBnomics")},
+        {"akshare", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "AkShare Data")},
+        {"asia_markets", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Asia Markets")},
+        {"geopolitics", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Geopolitics")},
+        {"gov_data", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Gov Data")},
+        {"maritime", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Maritime")},
+        {"polymarket", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Prediction Markets")},
+        {"relationship_map", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Relationship Map")},
+        {"derivatives", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Derivatives")},
+        {"alt_investments", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Alt Investments")},
+        {"ma_analytics", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "M&A Analytics")},
+        {"surface_analytics", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Surface Analytics")},
+        {"quantlib", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "QuantLib")},
+        {"ai_quant_lab", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "AI Quant Lab")},
+        {"alpha_arena", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Alpha Arena")},
+        {"agent_config", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Agent Config")},
+        {"mcp_servers", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "MCP Servers")},
+        {"node_editor", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Node Editor")},
+        {"code_editor", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Code Editor")},
+        {"excel", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Excel")},
+        {"report_builder", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Report Builder")},
+        {"trade_viz", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Trade Viz")},
+        {"data_sources", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Data Sources")},
+        {"data_mapping", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Data Mapping")},
+        {"file_manager", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "File Manager")},
+        {"notes", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Notes")},
+        {"forum", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Forum")},
+        {"docs", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Docs")},
+        {"support", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Support")},
+        {"about", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "About")},
+        {"profile", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Profile")},
+        {"settings", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Settings")},
+        {"contact", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Contact")},
+        {"terms", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Terms")},
+        {"privacy", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Privacy")},
+        {"trademarks", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Trademarks")},
+        {"help", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Help")},
     };
-    return titles.value(id, id);
+    auto it = titles.find(id);
+    if (it == titles.end())
+        return id;
+    return QCoreApplication::translate("fincept::DockScreenRouter", it.value());
 }
 
 DockScreenRouter::DockScreenRouter(ads::CDockManager* manager, QObject* parent) : QObject(parent), manager_(manager) {

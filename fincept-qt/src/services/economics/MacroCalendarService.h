@@ -39,6 +39,7 @@ class MacroCalendarService : public QObject
     Q_DISABLE_COPY(MacroCalendarService)
 
     bool hub_registered_ = false;
+    class QNetworkAccessManager* nam_ = nullptr;  ///< Dedicated NAM so we can attach the per-endpoint API key without polluting the shared HttpClient auth header.
 };
 
 } // namespace fincept::services

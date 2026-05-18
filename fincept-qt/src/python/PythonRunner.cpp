@@ -11,9 +11,11 @@
 #include <QFileInfo>
 #include <QHash>
 #include <QLatin1String>
+#include <QMetaObject>
 #include <QProcessEnvironment>
 #include <QStandardPaths>
 #include <QStringList>
+#include <QThread>
 #include <QUuid>
 
 namespace fincept::python {
@@ -300,6 +302,28 @@ QString PythonRunner::find_scripts_dir() const {
 // ── Run Script ───────────────────────────────────────────────────────────────
 
 void PythonRunner::run(const QString& script, const QStringList& args, Callback cb, StreamCallback on_line) {
+    // Thread-affinity guard. PythonRunner is a QObject singleton living on
+    // whatever thread first called instance() — in practice the main thread,
+    // because main.cpp warms it at startup. But run() is invoked from
+    // anywhere: UI code, services, and (critically) MCP tool handlers that
+    // execute on worker threads. If a worker calls into start_next() it ends
+    // up doing `new QProcess(this)` from a thread that's NOT this->thread(),
+    // which Qt warns about and which leaves the QProcess with bad thread
+    // affinity. Destruction of that QProcess later corrupts the heap and the
+    // app crashes silently (no WER, no Qt fatal). Marshal back to our own
+    // thread so the queue + QProcess creation always happens here.
+    if (QThread::currentThread() != this->thread()) {
+        Callback cb_copy = std::move(cb);
+        StreamCallback on_line_copy = std::move(on_line);
+        QMetaObject::invokeMethod(
+            this,
+            [this, script, args, cb_copy = std::move(cb_copy), on_line_copy = std::move(on_line_copy)]() mutable {
+                run(script, args, std::move(cb_copy), std::move(on_line_copy));
+            },
+            Qt::QueuedConnection);
+        return;
+    }
+
     if (python_init_done_ && python_path_.isEmpty()) {
         cb({false, {}, "Python not available — run first-time setup from the app", -1});
         return;
@@ -319,6 +343,18 @@ void PythonRunner::run(const QString& script, const QStringList& args, Callback 
 /// Run arbitrary Python code (for notebook/colab cells).
 /// Creates a temp file, executes it, returns output.
 void PythonRunner::run_code(const QString& code, Callback cb) {
+    // Same thread-affinity guard as run(). See the comment there.
+    if (QThread::currentThread() != this->thread()) {
+        Callback cb_copy = std::move(cb);
+        QMetaObject::invokeMethod(
+            this,
+            [this, code, cb_copy = std::move(cb_copy)]() mutable {
+                run_code(code, std::move(cb_copy));
+            },
+            Qt::QueuedConnection);
+        return;
+    }
+
     if (python_init_done_ && python_path_.isEmpty()) {
         cb({false, {}, "Python not available — run first-time setup from the app", -1});
         return;

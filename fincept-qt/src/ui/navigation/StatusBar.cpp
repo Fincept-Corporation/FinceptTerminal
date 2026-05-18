@@ -7,6 +7,8 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QEvent>
+
 namespace fincept::ui {
 
 StatusBar::StatusBar(QWidget* parent) : QWidget(parent) {
@@ -40,14 +42,28 @@ StatusBar::StatusBar(QWidget* parent) : QWidget(parent) {
     hl->addWidget(link_label_);
     hl->addWidget(mk("  |  ", "sbSep2"));
 
-    ready_label_ = mk("READY", "sbReady");
+    ready_label_ = mk({}, "sbReady");
     hl->addWidget(ready_label_);
+
+    retranslateUi();
 
     connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
             [this](const ThemeTokens&) { refresh_theme(); });
     refresh_theme();
 
     wire_link_indicator();
+}
+
+void StatusBar::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(e);
+}
+
+void StatusBar::retranslateUi() {
+    if (ready_label_)
+        ready_label_->setText(ready_state_ ? tr("READY") : tr("BUSY"));
 }
 
 void StatusBar::wire_link_indicator() {
@@ -133,7 +149,8 @@ void StatusBar::refresh_theme() {
 }
 
 void StatusBar::set_ready(bool ready) {
-    ready_label_->setText(ready ? "READY" : "BUSY");
+    ready_state_ = ready;
+    ready_label_->setText(ready ? tr("READY") : tr("BUSY"));
     ready_label_->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;")
                                     .arg(ready ? colors::POSITIVE() : colors::TEXT_TERTIARY()));
 }

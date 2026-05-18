@@ -557,7 +557,10 @@ void ProfileScreen::fetch_usage_data() {
     const auto& s = auth::AuthManager::instance().session();
     usg_credits_->setText(QString::number(s.user_info.credit_balance, 'f', 0));
     usg_plan_->setText(s.account_type().toUpper());
-    usg_rate_->setText("—");
+    // /user/profile now returns the rate-limit window directly — show it
+    // immediately instead of "—" while /user/usage is in flight.
+    const int rl_limit = s.user_info.rate_limit.limit;
+    usg_rate_->setText(rl_limit > 0 ? QString::number(rl_limit) : QStringLiteral("—"));
 
     QPointer<ProfileScreen> self = this;
     auth::UserApi::instance().get_user_usage(30, [self](auth::ApiResponse r) {

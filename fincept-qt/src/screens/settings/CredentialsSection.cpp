@@ -77,13 +77,13 @@ void CredentialsSection::build_ui() {
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(0);
 
-    auto* t = new QLabel("API CREDENTIALS");
+    auto* t = new QLabel(tr("API CREDENTIALS"));
     t->setStyleSheet(section_title_ss());
     vl->addWidget(t);
     vl->addSpacing(4);
 
     auto* info = new QLabel(
-        "Store API keys securely in the OS keychain. Keys are never written to disk in plain text.");
+        tr("Store API keys securely in the OS keychain. Keys are never written to disk in plain text."));
     info->setWordWrap(true);
     info->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(info);
@@ -114,7 +114,7 @@ void CredentialsSection::build_ui() {
         hhl->addWidget(name_lbl);
         hhl->addStretch();
 
-        auto* status_lbl = new QLabel("Not set");
+        auto* status_lbl = new QLabel(tr("Not set"));
         status_lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
         hhl->addWidget(status_lbl);
         cred_status_[key] = status_lbl;
@@ -129,23 +129,23 @@ void CredentialsSection::build_ui() {
 
         auto* field = new QLineEdit;
         field->setEchoMode(QLineEdit::Password);
-        field->setPlaceholderText("Not configured");
+        field->setPlaceholderText(tr("Not configured"));
         field->setStyleSheet(input_ss());
         cred_fields_[key] = field;
         bhl->addWidget(field, 1);
 
-        auto* save_btn = new QPushButton("Save");
+        auto* save_btn = new QPushButton(tr("Save"));
         save_btn->setFixedHeight(30);
         save_btn->setFixedWidth(70);
         save_btn->setStyleSheet(btn_primary_ss());
         bhl->addWidget(save_btn);
 
-        connect(save_btn, &QPushButton::clicked, this, [key, field, status_lbl]() {
+        connect(save_btn, &QPushButton::clicked, this, [this, key, field, status_lbl]() {
             QString val = field->text().trimmed();
             if (val.isEmpty()) {
                 SecureStorage::instance().remove(key);
-                field->setPlaceholderText("Not configured");
-                status_lbl->setText("Cleared");
+                field->setPlaceholderText(tr("Not configured"));
+                status_lbl->setText(tr("Cleared"));
                 status_lbl->setStyleSheet(
                     QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
                 LOG_INFO("Credentials", "Cleared key: " + key);
@@ -153,13 +153,13 @@ void CredentialsSection::build_ui() {
                 auto r = SecureStorage::instance().store(key, val);
                 if (r.is_ok()) {
                     field->clear();
-                    field->setPlaceholderText("•••••••• (saved)");
-                    status_lbl->setText("Saved ✓");
+                    field->setPlaceholderText(tr("•••••••• (saved)"));
+                    status_lbl->setText(tr("Saved ✓"));
                     status_lbl->setStyleSheet(
                         QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
                     LOG_INFO("Credentials", "Stored key: " + key);
                 } else {
-                    status_lbl->setText("Save failed");
+                    status_lbl->setText(tr("Save failed"));
                     status_lbl->setStyleSheet(
                         QString("color:%1;background:transparent;").arg(ui::colors::NEGATIVE()));
                     LOG_ERROR("Credentials", "Failed to store " + key);
@@ -187,13 +187,13 @@ void CredentialsSection::reload() {
         auto r = SecureStorage::instance().retrieve(key);
         if (r.is_ok() && !r.value().isEmpty()) {
             field->clear();
-            field->setPlaceholderText("•••••••• (saved)");
-            status->setText("Saved ✓");
+            field->setPlaceholderText(tr("•••••••• (saved)"));
+            status->setText(tr("Saved ✓"));
             status->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
         } else {
             field->clear();
-            field->setPlaceholderText("Not configured");
-            status->setText("Not set");
+            field->setPlaceholderText(tr("Not configured"));
+            status->setText(tr("Not set"));
             status->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
         }
     }

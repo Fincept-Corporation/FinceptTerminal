@@ -25,21 +25,21 @@ DeveloperSection::DeveloperSection(QWidget* parent) : QWidget(parent) {
     vl->setSpacing(12);
 
     // ── Agentic Mode toggle ──────────────────────────────────────────────────
-    auto* agentic_title = new QLabel("Agentic Mode (Experimental)");
+    auto* agentic_title = new QLabel(tr("Agentic Mode (Experimental)"));
     agentic_title->setStyleSheet(section_title_ss());
     vl->addWidget(agentic_title);
 
     auto* agentic_desc = new QLabel(
-        "Enable durable, long-running autonomous tasks. When on, AGENT STUDIO shows "
-        "an extra AGENTIC tab listing in-flight tasks (plan, step log, pause/resume/"
-        "cancel) and the chat panel offers a \"Run as background task\" checkbox. "
-        "All state is checkpointed to SQLite so tasks survive process restarts. "
-        "Leave off for standard chatbot behavior.");
+        tr("Enable durable, long-running autonomous tasks. When on, AGENT STUDIO shows "
+           "an extra AGENTIC tab listing in-flight tasks (plan, step log, pause/resume/"
+           "cancel) and the chat panel offers a \"Run as background task\" checkbox. "
+           "All state is checkpointed to SQLite so tasks survive process restarts. "
+           "Leave off for standard chatbot behavior."));
     agentic_desc->setWordWrap(true);
     agentic_desc->setStyleSheet(QString("color:%1;font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(agentic_desc);
 
-    auto* agentic_toggle = new QCheckBox("Enable Agentic Mode");
+    auto* agentic_toggle = new QCheckBox(tr("Enable Agentic Mode"));
     agentic_toggle->setStyleSheet(QString("color:%1;font-size:12px;padding:4px 0;")
                                       .arg(ui::colors::TEXT_PRIMARY()));
     {
@@ -64,14 +64,14 @@ DeveloperSection::DeveloperSection(QWidget* parent) : QWidget(parent) {
     vl->addWidget(sep);
 
     // ── DataHub Inspector ────────────────────────────────────────────────────
-    auto* title = new QLabel("DataHub Inspector");
+    auto* title = new QLabel(tr("DataHub Inspector"));
     title->setStyleSheet(section_title_ss());
     vl->addWidget(title);
 
     auto* desc = new QLabel(
-        "Live view over the in-process pub/sub layer. Shows every active topic, its "
-        "subscriber count, total publishes, and time since last publish. Refreshes "
-        "once per second while this tab is visible.");
+        tr("Live view over the in-process pub/sub layer. Shows every active topic, its "
+           "subscriber count, total publishes, and time since last publish. Refreshes "
+           "once per second while this tab is visible."));
     desc->setWordWrap(true);
     desc->setStyleSheet(QString("color:%1;font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(desc);

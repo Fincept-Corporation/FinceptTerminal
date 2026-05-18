@@ -318,11 +318,22 @@ QString LlmService::get_endpoint_url() const {
     // Custom base_url wins over hard-coded defaults.
     if (!base_url_.isEmpty()) {
         QString base = base_url_;
-        if (base.endsWith('/'))
+        while (base.endsWith('/'))
             base.chop(1);
-        if (p == "anthropic")
-            return base + "/v1/messages";
-        return base + "/v1/chat/completions";
+
+        const QString suffix = (p == "anthropic") ? QStringLiteral("/messages")
+                                                  : QStringLiteral("/chat/completions");
+
+        // Already a full endpoint — use verbatim.
+        if (base.endsWith(suffix))
+            return base;
+
+        // Base already includes a version segment (e.g. ".../v1", ".../v1beta") —
+        // append only the suffix. Otherwise inject the default "/v1".
+        static const QRegularExpression re(QStringLiteral("/v\\d+[a-zA-Z]*$"));
+        if (re.match(base).hasMatch())
+            return base + suffix;
+        return base + QStringLiteral("/v1") + suffix;
     }
 
     if (p == "openai")

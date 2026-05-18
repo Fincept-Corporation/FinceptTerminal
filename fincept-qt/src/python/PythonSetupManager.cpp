@@ -778,7 +778,7 @@ bool PythonSetupManager::install_packages(const QString& venv_name, const QStrin
     // marker ensures check_status() returns needs_setup=true on the next
     // launch so the failed packages are retried automatically.
     emit_progress(step_key, 100,
-                  QString("Done — %1 package(s) failed (will retry on next launch)").arg(failed.size()),
+                  QString("Failed: %1").arg(failed.join(", ").left(200)),
                   /*is_error=*/true);
     // Returning false here prevents run_setup() from writing the .setup_complete
     // sentinel. Without this, the sentinel would be written even though one or

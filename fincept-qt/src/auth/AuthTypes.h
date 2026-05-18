@@ -90,12 +90,31 @@ struct ApiResponse {
     int status_code = 0;
 };
 
+struct RateLimitInfo {
+    int limit = 0;
+    int remaining = 0;
+    qint64 reset_at = 0;       // unix timestamp (seconds)
+    int window_seconds = 0;
+    int concurrent_limit = 0;
+
+    static RateLimitInfo from_json(const QJsonObject& obj) {
+        RateLimitInfo r;
+        r.limit = obj["limit"].toInt();
+        r.remaining = obj["remaining"].toInt();
+        r.reset_at = static_cast<qint64>(obj["reset_at"].toDouble());
+        r.window_seconds = obj["window_seconds"].toInt();
+        r.concurrent_limit = obj["concurrent_limit"].toInt();
+        return r;
+    }
+};
+
 struct UserProfile {
     int id = 0;
     QString username;
     QString email;
     QString account_type = "free";
     double credit_balance = 0;
+    QString credits_expire_at;
     bool is_verified = false;
     bool is_admin = false;
     bool mfa_enabled = false;
@@ -104,6 +123,7 @@ struct UserProfile {
     QString country_code;
     QString created_at;
     QString last_login_at;
+    RateLimitInfo rate_limit;
 
     static UserProfile from_json(const QJsonObject& obj) {
         UserProfile p;
@@ -112,6 +132,7 @@ struct UserProfile {
         p.email = obj["email"].toString();
         p.account_type = obj["account_type"].toString("free");
         p.credit_balance = obj["credit_balance"].toDouble();
+        p.credits_expire_at = obj["credits_expire_at"].toString();
         p.is_verified = obj["is_verified"].toBool();
         p.is_admin = obj["is_admin"].toBool();
         p.mfa_enabled = obj["mfa_enabled"].toBool();
@@ -120,6 +141,8 @@ struct UserProfile {
         p.country_code = obj["country_code"].toString();
         p.created_at = obj["created_at"].toString();
         p.last_login_at = obj["last_login_at"].toString();
+        if (obj.contains("rate_limit") && obj["rate_limit"].isObject())
+            p.rate_limit = RateLimitInfo::from_json(obj["rate_limit"].toObject());
         return p;
     }
 };

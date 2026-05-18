@@ -12,6 +12,7 @@
 #include "core/config/ProfileManager.h"
 #include "core/components/ComponentCatalog.h"
 #include "core/crash/CrashHandler.h"
+#include "core/i18n/LanguageManager.h"
 #include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
@@ -663,6 +664,11 @@ int main(int argc, char* argv[]) {
             tm.apply_theme("Obsidian");
             LOG_INFO("App", "Theme: Obsidian, font: " + family + " " + size_s);
         }
+
+        // Load persisted language and install the matching QTranslator before
+        // any windows are shown — eliminates an English-flash on first paint
+        // when the user has previously chosen another language.
+        fincept::i18n::LanguageManager::instance().initialize();
     }
 
     // Open cache database (non-fatal if fails)

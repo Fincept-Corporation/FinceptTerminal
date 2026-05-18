@@ -160,9 +160,14 @@ mlflow>=2.0.0
 faiss-cpu>=1.7.0
 mplfinance>=0.12.0
 
-# Voice recognition (speech-to-text via Google API)
+# Voice recognition (speech-to-text via Google API).
+# sounddevice ships PortAudio inside its wheel for every platform we support
+# (Windows x64, macOS x86_64 + arm64, Linux x86_64 + aarch64), removing the
+# old PyAudio install failure on Apple Silicon machines without Homebrew
+# portaudio. scripts/voice/* implements a thin SpeechRecognition AudioSource
+# shim on top of sd.RawInputStream so the SR API stays unchanged.
 SpeechRecognition>=3.10.0
-PyAudio>=0.2.14
+sounddevice>=0.4.6
 
 # Deepgram live STT (alternative provider) — pinned to v3 SDK; v4+ removed
 # DeepgramClientOptions and rearranged the live websocket API.

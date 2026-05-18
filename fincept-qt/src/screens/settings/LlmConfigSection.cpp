@@ -141,7 +141,7 @@ void LlmConfigSection::build_ui() {
                              QString(ui::colors::BORDER_DIM()) + ";");
     auto* tbl = new QHBoxLayout(title_bar);
     tbl->setContentsMargins(16, 0, 16, 0);
-    auto* title_lbl = new QLabel("LLM CONFIGURATION");
+    auto* title_lbl = new QLabel(tr("LLM CONFIGURATION"));
     title_lbl->setStyleSheet("color:" + QString(ui::colors::AMBER()) + ";font-weight:700;letter-spacing:1px;");
     tbl->addWidget(title_lbl);
     tbl->addStretch();

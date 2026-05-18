@@ -13,6 +13,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QRegularExpression>
 #include <QString>
 #include <QStringList>
 #include <QTimer>
@@ -38,11 +39,22 @@ QString LlmService::get_models_url(const QString& provider, const QString& api_k
     // Custom base_url (except fincept) — assume OpenAI-compatible /v1/models.
     if (!base_url.isEmpty() && p != "fincept") {
         QString base = base_url;
-        if (base.endsWith('/'))
+        while (base.endsWith('/'))
             base.chop(1);
-        if (p == "anthropic")
-            return base + "/v1/models?limit=1000";
-        return base + "/v1/models";
+
+        const QString suffix = (p == "anthropic") ? QStringLiteral("/models?limit=1000")
+                                                  : QStringLiteral("/models");
+
+        // Already a full endpoint — use verbatim.
+        if (base.contains(QStringLiteral("/models")))
+            return base;
+
+        // Base already includes a version segment (e.g. ".../v1", ".../v1beta") —
+        // append only the suffix. Otherwise inject the default "/v1".
+        static const QRegularExpression re(QStringLiteral("/v\\d+[a-zA-Z]*$"));
+        if (re.match(base).hasMatch())
+            return base + suffix;
+        return base + QStringLiteral("/v1") + suffix;
     }
 
     if (p == "openai")     return "https://api.openai.com/v1/models";

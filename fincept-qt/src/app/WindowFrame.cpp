@@ -167,9 +167,12 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
         }
     }, Qt::QueuedConnection);
 
-    // Show active profile in title bar when using a non-default profile
+    // Show active profile in title bar when using a non-default profile.
+    // "Fincept Terminal" is the product brand and is intentionally not
+    // translated — the bracketed profile name is the only variable part.
     const QString profile = ProfileManager::instance().active();
-    setWindowTitle(profile == "default" ? "Fincept Terminal" : QString("Fincept Terminal [%1]").arg(profile));
+    setWindowTitle(profile == "default" ? QStringLiteral("Fincept Terminal")
+                                        : QStringLiteral("Fincept Terminal [%1]").arg(profile));
     // Load icon from the embedded Windows resource (IDI_ICON1 in app.rc).
     // Falls back to the .ico beside the executable on other platforms.
     QIcon app_icon;
@@ -537,7 +540,7 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
             if (dock_manager_) {
                 bool ok = false;
                 const QString name =
-                    QInputDialog::getText(this, "Save Layout", "Layout name:", QLineEdit::Normal, QString(), &ok);
+                    QInputDialog::getText(this, tr("Save Layout"), tr("Layout name:"), QLineEdit::Normal, QString(), &ok);
                 if (ok && !name.trimmed().isEmpty()) {
                     dock_manager_->addPerspective(name.trimmed());
                     LOG_INFO("WindowFrame", QString("Saved perspective: %1").arg(name.trimmed()));
@@ -656,28 +659,28 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
                                             .arg(QString::fromStdString(r.error())));
         } else if (action == "import_data") {
             QString path = QFileDialog::getOpenFileName(
-                this, "Import Layout", QDir::homePath(),
-                "Fincept Layout (*.flayout *.fwsp);;All Files (*)");
+                this, tr("Import Layout"), QDir::homePath(),
+                tr("Fincept Layout (*.flayout *.fwsp);;All Files (*)"));
             if (!path.isEmpty()) {
                 auto r = LayoutCatalog::instance().import_from(path);
                 if (r.is_err())
-                    QMessageBox::warning(this, "Import Failed",
+                    QMessageBox::warning(this, tr("Import Failed"),
                                          QString::fromStdString(r.error()));
             }
         } else if (action == "export_data") {
             const LayoutId cur_id = layout::WorkspaceShell::current_id();
             if (cur_id.is_null()) {
                 QMessageBox::information(
-                    this, "Export Layout",
-                    "Open or save a layout first, then export it.");
+                    this, tr("Export Layout"),
+                    tr("Open or save a layout first, then export it."));
             } else {
                 QString path = QFileDialog::getSaveFileName(
-                    this, "Export Layout", QDir::homePath(),
-                    "Fincept Layout (*.flayout)");
+                    this, tr("Export Layout"), QDir::homePath(),
+                    tr("Fincept Layout (*.flayout)"));
                 if (!path.isEmpty()) {
                     auto r = LayoutCatalog::instance().export_to(cur_id, path);
                     if (r.is_err())
-                        QMessageBox::warning(this, "Export Failed",
+                        QMessageBox::warning(this, tr("Export Failed"),
                                              QString::fromStdString(r.error()));
                 }
             }
@@ -687,9 +690,9 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
                 scr = QApplication::primaryScreen();
             QPixmap px = scr->grabWindow(winId());
             QString path = QFileDialog::getSaveFileName(
-                this, "Save Screenshot",
+                this, tr("Save Screenshot"),
                 QDir::homePath() + "/fincept_" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") + ".png",
-                "PNG Images (*.png)");
+                tr("PNG Images (*.png)"));
             if (!path.isEmpty()) {
                 px.save(path, "PNG");
                 LOG_INFO("WindowFrame", QString("Screenshot saved: %1").arg(path));
@@ -869,17 +872,19 @@ void WindowFrame::set_shell_visible(bool visible) {
     if (!visible) {
         // Reset title to plain app name — no screen suffix while on auth screens
         const QString profile = ProfileManager::instance().active();
-        setWindowTitle(profile == "default" ? "Fincept Terminal"
-                                            : QString("Fincept Terminal [%1]").arg(profile));
+        setWindowTitle(profile == "default" ? QStringLiteral("Fincept Terminal")
+                                            : QStringLiteral("Fincept Terminal [%1]").arg(profile));
     }
 }
 
 void WindowFrame::update_window_title() {
-    QString title = "Fincept Terminal";
+    // Brand stays in English; only the workspace/screen suffix (translated
+    // via DockScreenRouter::title_for_id) responds to language changes.
+    QString title = QStringLiteral("Fincept Terminal");
 
     const QString profile = ProfileManager::instance().active();
     if (profile != "default")
-        title += QString(" [%1]").arg(profile);
+        title += QStringLiteral(" [%1]").arg(profile);
 
     // Workspace / screen name must never appear in the title while the user
     // is on the auth or lock stack — that would leak the last-visited screen
@@ -975,18 +980,21 @@ void WindowFrame::adopt_frame_uuid(const WindowId& id) {
 // ── Phase 6 final: capture / apply layout ───────────────────────────────────
 
 bool WindowFrame::is_active_for_work() const {
-    // Best-effort per decision 9.1. Two cheap checks cover the obvious cases:
-    //   - isMinimized(): user clicked the minimise button or pressed Win+M.
-    //   - isVisible(): the widget tree is hidden (rare for top-level frames
-    //     in this app, but cheap to check).
+    // Only isMinimized() drives the active/inactive flag. The previous
+    // isVisible() check fired false-positives during window construction:
+    // Qt sends a WindowStateChange BEFORE show() returns, at which point
+    // isVisible() is still false. changeEvent() then flips
+    // fincept.active_for_work to false, and any DataHub topic with
+    // pause_when_inactive=true (market:quote:*, market:sparkline:*)
+    // silently drops slot fan-out for newly-subscribed dashboard widgets.
+    // The watchdog then renders "No data yet" even though publishes are
+    // arriving. Navigating away and back works around it because by then
+    // the window is visible and the property is true again.
+    //
     // Everything else (virtual-desktop occupancy, occlusion by other apps,
     // alt-tab status) is intentionally NOT detected — platform-specific and
     // unreliable.
-    if (isMinimized())
-        return false;
-    if (!isVisible())
-        return false;
-    return true;
+    return !isMinimized();
 }
 
 namespace {
@@ -1059,6 +1067,12 @@ void WindowFrame::resizeEvent(QResizeEvent* event) {
 
 void WindowFrame::changeEvent(QEvent* event) {
     QMainWindow::changeEvent(event);
+    // Refresh the title bar when the active translator changes, so the
+    // workspace/screen suffix picks up the new locale immediately.
+    if (event->type() == QEvent::LanguageChange) {
+        update_window_title();
+        return;
+    }
     if (event->type() != QEvent::WindowStateChange)
         return;
 

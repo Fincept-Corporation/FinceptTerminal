@@ -31,12 +31,62 @@ def main() -> None:
         emit({"fatal": "speech_recognition not installed — run: pip install SpeechRecognition"})
         sys.exit(1)
 
-    # Fail fast if PyAudio is not available (needed for microphone access)
+    # sounddevice replaces PyAudio. We bridge it to SpeechRecognition by
+    # subclassing sr.AudioSource — recognizer.listen() only touches
+    # source.stream.read(CHUNK), so a minimal wrapper is enough.
     try:
-        import pyaudio  # noqa: F401
+        import sounddevice as sd
     except ImportError:
-        emit({"fatal": "PyAudio not installed — run: pip install PyAudio"})
+        emit({"fatal": "sounddevice not installed — run: pip install sounddevice"})
         sys.exit(1)
+
+    SAMPLE_RATE  = 16000
+    CHANNELS     = 1
+    SAMPLE_WIDTH = 2     # int16 = 2 bytes per sample
+    CHUNK_FRAMES = 1024  # matches SpeechRecognition's default chunk size
+
+    class _SoundDeviceStream:
+        """Implements the .read(size) and .close() API that
+        sr.Recognizer.listen() expects on AudioSource.stream."""
+
+        def __init__(self):
+            self._stream = sd.RawInputStream(
+                samplerate=SAMPLE_RATE,
+                channels=CHANNELS,
+                dtype="int16",
+                blocksize=CHUNK_FRAMES,
+            )
+            self._stream.start()
+
+        def read(self, size: int) -> bytes:
+            # SpeechRecognition asks for `size` BYTES; sounddevice reads frames.
+            frames = max(1, size // (SAMPLE_WIDTH * CHANNELS))
+            data, _overflowed = self._stream.read(frames)
+            return bytes(data)
+
+        def close(self):
+            try:
+                self._stream.stop()
+                self._stream.close()
+            except Exception:
+                pass
+
+    class SoundDeviceAudioSource(sr.AudioSource):
+        def __init__(self):
+            self.SAMPLE_RATE  = SAMPLE_RATE
+            self.SAMPLE_WIDTH = SAMPLE_WIDTH
+            self.CHUNK        = CHUNK_FRAMES * SAMPLE_WIDTH * CHANNELS
+            self.stream = None
+
+        def __enter__(self):
+            self.stream = _SoundDeviceStream()
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            if self.stream is not None:
+                self.stream.close()
+                self.stream = None
+            return False
 
     # Graceful shutdown on SIGTERM (Windows doesn't have SIGTERM via signal,
     # but QProcess::kill sends taskkill which terminates the process anyway).
@@ -55,7 +105,7 @@ def main() -> None:
     recognizer.pause_threshold = 0.8
 
     try:
-        mic = sr.Microphone()
+        mic = SoundDeviceAudioSource()
     except (OSError, AttributeError) as e:
         emit({"fatal": f"No microphone available: {e}"})
         sys.exit(1)

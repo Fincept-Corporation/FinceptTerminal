@@ -51,19 +51,20 @@ SAMPLE_WIDTH  = 2
 CHUNK_SAMPLES = 1600   # 100 ms at 16 kHz — short enough to localise transients
 
 
-def list_input_devices(pa) -> List[dict]:
+def list_input_devices(sd) -> List[dict]:
     out = []
     try:
-        host = pa.get_default_host_api_info()
-        default_input_index = host.get("defaultInputDevice", -1)
+        default_input_index = sd.default.device[0]
+        if default_input_index is None or default_input_index < 0:
+            default_input_index = -1
     except Exception:
         default_input_index = -1
-    for i in range(pa.get_device_count()):
-        try:
-            info = pa.get_device_info_by_index(i)
-        except Exception:
-            continue
-        if int(info.get("maxInputChannels", 0)) <= 0:
+    try:
+        devices = sd.query_devices()
+    except Exception:
+        return out
+    for i, info in enumerate(devices):
+        if int(info.get("max_input_channels", 0)) <= 0:
             continue
         out.append({
             "index": i,
@@ -73,8 +74,8 @@ def list_input_devices(pa) -> List[dict]:
     return out
 
 
-def pick_device(pa, pref: str) -> Optional[int]:
-    inputs = list_input_devices(pa)
+def pick_device(sd, pref: str) -> Optional[int]:
+    inputs = list_input_devices(sd)
     if not inputs:
         return None
     if pref:
@@ -133,11 +134,11 @@ def main() -> None:
          f"max_gap_ms={max_gap_ms} debounce_ms={debounce_ms} device='{device_pref}'")
 
     try:
-        import pyaudio
+        import sounddevice as sd
     except ImportError as e:
-        diag(f"pyaudio import failed: {e}")
+        diag(f"sounddevice import failed: {e}")
         emit({"fatal": (
-            "PyAudio not available in venv-numpy2. "
+            "sounddevice not available in venv-numpy2. "
             "Open Settings -> Python Env -> Reinstall packages."
         )})
         sys.exit(1)
@@ -152,25 +153,22 @@ def main() -> None:
         except (ValueError, OSError):
             pass
 
-    pa = pyaudio.PyAudio()
-    device_index = pick_device(pa, device_pref)
+    device_index = pick_device(sd, device_pref)
     if device_index is None:
         emit({"fatal": "No input audio device available"})
-        pa.terminate()
         sys.exit(1)
 
     try:
-        stream = pa.open(
-            format=pyaudio.paInt16,
+        stream = sd.RawInputStream(
+            samplerate=SAMPLE_RATE,
             channels=CHANNELS,
-            rate=SAMPLE_RATE,
-            input=True,
-            input_device_index=device_index,
-            frames_per_buffer=CHUNK_SAMPLES,
+            dtype="int16",
+            blocksize=CHUNK_SAMPLES,
+            device=device_index,
         )
+        stream.start()
     except Exception as ex:
-        diag(f"pa.open failed: {ex}")
-        pa.terminate()
+        diag(f"sd.RawInputStream open failed: {ex}")
         emit({"fatal": f"Could not open microphone stream: {ex}"})
         sys.exit(1)
 
@@ -186,7 +184,10 @@ def main() -> None:
     try:
         while not stop_flag.is_set():
             try:
-                buf = stream.read(CHUNK_SAMPLES, exception_on_overflow=False)
+                # sounddevice returns (cffi_buffer, overflowed); we ignore the
+                # overflow flag — matches PyAudio's exception_on_overflow=False.
+                data, _overflowed = stream.read(CHUNK_SAMPLES)
+                buf = bytes(data)
             except Exception as ex:
                 diag(f"stream.read failed: {ex}")
                 emit({"error": f"Audio read failed: {ex}"})
@@ -232,12 +233,8 @@ def main() -> None:
     finally:
         diag(f"shutting down — chunks={chunks_seen} candidates={candidates_seen}")
         try:
-            stream.stop_stream()
+            stream.stop()
             stream.close()
-        except Exception:
-            pass
-        try:
-            pa.terminate()
         except Exception:
             pass
 

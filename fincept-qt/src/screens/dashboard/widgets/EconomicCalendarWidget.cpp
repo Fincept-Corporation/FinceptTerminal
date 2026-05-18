@@ -9,6 +9,20 @@
 
 namespace {
 constexpr const char* kTopic = "econ:fincept:upcoming_events";
+
+// Fixed column widths so header + rows line up regardless of event-name
+// length. QHBoxLayout's stretch factors alone don't align columns when
+// each row has different text widths — long event names push their
+// neighbours rightward, breaking the table look. EVENT is the only
+// variable column; it takes whatever leftover space the layout has.
+constexpr int kColWidthCty   = 32;
+constexpr int kColWidthDate  = 86;
+constexpr int kColWidthRef   = 40;
+constexpr int kColWidthAct   = 56;
+constexpr int kColWidthFcst  = 48;
+constexpr int kColWidthCons  = 48;
+constexpr int kColWidthPrev  = 48;
+constexpr int kColWidthImp   = 40;
 } // namespace
 
 namespace fincept::screens::widgets {
@@ -24,18 +38,25 @@ EconomicCalendarWidget::EconomicCalendarWidget(QWidget* parent)
     auto* hl = new QHBoxLayout(header_widget_);
     hl->setContentsMargins(8, 4, 8, 4);
 
-    auto make_hdr = [&](const QString& text, int stretch, Qt::Alignment align = Qt::AlignLeft) {
+    auto make_hdr = [&](const QString& text, int fixed_w, int stretch, Qt::Alignment align = Qt::AlignLeft) {
         auto* lbl = new QLabel(text);
         lbl->setAlignment(align);
+        if (fixed_w > 0)
+            lbl->setFixedWidth(fixed_w);
+        else
+            lbl->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         header_labels_.append(lbl);
         hl->addWidget(lbl, stretch);
     };
-    make_hdr("EVENT", 4);
-    make_hdr("CTY", 1);
-    make_hdr("DATE", 2);
-    make_hdr("ACT", 1, Qt::AlignRight);
-    make_hdr("FCST", 1, Qt::AlignRight);
-    make_hdr("IMP", 1, Qt::AlignRight);
+    make_hdr("EVENT", /*fixed_w=*/0, /*stretch=*/1);
+    make_hdr("CTY", kColWidthCty, 0);
+    make_hdr("DATE", kColWidthDate, 0);
+    make_hdr("REF", kColWidthRef, 0);
+    make_hdr("ACT", kColWidthAct, 0, Qt::AlignRight);
+    make_hdr("FCST", kColWidthFcst, 0, Qt::AlignRight);
+    make_hdr("CONS", kColWidthCons, 0, Qt::AlignRight);
+    make_hdr("PREV", kColWidthPrev, 0, Qt::AlignRight);
+    make_hdr("IMP", kColWidthImp, 0, Qt::AlignRight);
     vl->addWidget(header_widget_);
 
     header_sep_ = new QFrame;
@@ -63,7 +84,15 @@ EconomicCalendarWidget::EconomicCalendarWidget(QWidget* parent)
     // User-driven refresh button on the BaseWidget title bar — force the
     // hub to refresh the topic. Per-producer rate limit (2/sec) still
     // applies, so rage-clicking can't hammer api.fincept.in.
-    connect(this, &BaseWidget::refresh_requested, this, []() {
+    //
+    // We must show the loading overlay BEFORE the request — otherwise the
+    // click feels dead when the producer returns the same cached payload
+    // (TTL=5min: the API genuinely has nothing new most of the time) or
+    // when the producer is currently in_flight and the hub silently drops
+    // the duplicate request. Capturing `this` keeps the slot bound to the
+    // widget lifetime so set_loading is safe across re-shows.
+    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+        set_loading(true);
         datahub::DataHub::instance().request(QString::fromLatin1(kTopic), /*force=*/true);
     });
 
@@ -181,16 +210,28 @@ void EconomicCalendarWidget::populate(const QJsonArray& events) {
             break;
         auto e = v.toObject();
 
-        // Real fields: event, country, date, time, importance, actual, forecast, previous
+        // Fincept upcoming-events schema (May 2026 endpoint update): each row
+        // carries event, category, country, date/time, reference_period,
+        // actual, forecast, consensus, previous, revised_from, sentiment,
+        // symbol, importance, url, chart_url. Tile shows the most important
+        // columns inline; the rest is packed into the tooltip so power users
+        // get the full data without sacrificing the table layout.
         QString event_name = e["event"].toString().trimmed();
         if (event_name.isEmpty())
             continue;
 
+        QString category = e["category"].toString().trimmed();
         QString country = e["country"].toString().toUpper();
         QString date = e["date"].toString();
         QString time_str = e["time"].toString().trimmed();
+        QString reference_period = e["reference_period"].toString().trimmed();
         QString actual = e["actual"].toString().trimmed();
         QString forecast = e["forecast"].toString().trimmed();
+        QString consensus = e["consensus"].toString().trimmed();
+        QString previous = e["previous"].toString().trimmed();
+        QString revised_from = e["revised_from"].toString().trimmed();
+        QString sentiment = e["sentiment"].toString().trimmed();
+        QString symbol = e["symbol"].toString().trimmed();
         int imp_int = e["importance"].toInt(0);
 
         // Date: show as MMM-DD
@@ -219,42 +260,100 @@ void EconomicCalendarWidget::populate(const QJsonArray& events) {
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
 
-        // Event name
+        // Sentiment colours the event-name label so the user can scan
+        // positive/negative releases at a glance. Falls back to the standard
+        // primary text colour when sentiment is missing or "neutral".
+        QString event_color = ui::colors::TEXT_PRIMARY();
+        if (sentiment == QLatin1String("positive"))
+            event_color = ui::colors::POSITIVE();
+        else if (sentiment == QLatin1String("negative"))
+            event_color = ui::colors::NEGATIVE();
+
+        // Build a rich tooltip with every field that doesn't fit inline:
+        // category, sentiment, symbol, revised_from. Tooltip plain-text only
+        // (no HTML) to keep rendering cheap.
+        QStringList tip_lines;
+        tip_lines << event_name;
+        if (!category.isEmpty())
+            tip_lines << QStringLiteral("Category: %1").arg(category);
+        if (!symbol.isEmpty())
+            tip_lines << QStringLiteral("Symbol: %1").arg(symbol);
+        if (!reference_period.isEmpty())
+            tip_lines << QStringLiteral("Period: %1").arg(reference_period);
+        if (!sentiment.isEmpty())
+            tip_lines << QStringLiteral("Sentiment: %1").arg(sentiment);
+        if (!revised_from.isEmpty())
+            tip_lines << QStringLiteral("Revised from: %1").arg(revised_from);
+        const QString tooltip = tip_lines.join('\n');
+
+        // Event name — Ignored size policy so it doesn't claim its sizeHint
+        // (which varies per row and was pushing the other columns sideways).
+        // The stretch=1 below + fixed-width neighbours mean it gets exactly
+        // the leftover space.
         QString display_name = event_name;
         if (display_name.length() > 28)
             display_name = display_name.left(26) + "…";
         auto* ev_lbl = new QLabel(display_name);
-        ev_lbl->setToolTip(event_name); // full name on hover
+        ev_lbl->setToolTip(tooltip);
+        ev_lbl->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         ev_lbl->setStyleSheet(
-            QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::TEXT_PRIMARY()));
-        rl->addWidget(ev_lbl, 4);
+            QString("color: %1; font-size: 10px; background: transparent;").arg(event_color));
+        rl->addWidget(ev_lbl, 1);
 
         auto* cty_lbl = new QLabel(country);
+        cty_lbl->setFixedWidth(kColWidthCty);
         cty_lbl->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::CYAN()));
-        rl->addWidget(cty_lbl, 1);
+        rl->addWidget(cty_lbl, 0);
 
         auto* date_lbl = new QLabel(date_display);
+        date_lbl->setFixedWidth(kColWidthDate);
         date_lbl->setStyleSheet(
             QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
-        rl->addWidget(date_lbl, 2);
+        rl->addWidget(date_lbl, 0);
+
+        auto* ref_lbl = new QLabel(reference_period.isEmpty() ? "--" : reference_period);
+        ref_lbl->setFixedWidth(kColWidthRef);
+        ref_lbl->setStyleSheet(
+            QString("color: %1; font-size: 9px; background: transparent;")
+                .arg(reference_period.isEmpty() ? ui::colors::TEXT_TERTIARY() : ui::colors::TEXT_SECONDARY()));
+        rl->addWidget(ref_lbl, 0);
 
         auto* act_lbl = new QLabel(actual.isEmpty() ? "--" : actual);
+        act_lbl->setFixedWidth(kColWidthAct);
         act_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         act_lbl->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
                                    .arg(actual.isEmpty() ? ui::colors::TEXT_TERTIARY() : ui::colors::TEXT_PRIMARY()));
-        rl->addWidget(act_lbl, 1);
+        rl->addWidget(act_lbl, 0);
 
         auto* fcst_lbl = new QLabel(forecast.isEmpty() ? "--" : forecast);
+        fcst_lbl->setFixedWidth(kColWidthFcst);
         fcst_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         fcst_lbl->setStyleSheet(
             QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
-        rl->addWidget(fcst_lbl, 1);
+        rl->addWidget(fcst_lbl, 0);
+
+        auto* cons_lbl = new QLabel(consensus.isEmpty() ? "--" : consensus);
+        cons_lbl->setFixedWidth(kColWidthCons);
+        cons_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        cons_lbl->setStyleSheet(
+            QString("color: %1; font-size: 9px; background: transparent;")
+                .arg(consensus.isEmpty() ? ui::colors::TEXT_TERTIARY() : ui::colors::TEXT_SECONDARY()));
+        rl->addWidget(cons_lbl, 0);
+
+        auto* prev_lbl = new QLabel(previous.isEmpty() ? "--" : previous);
+        prev_lbl->setFixedWidth(kColWidthPrev);
+        prev_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        prev_lbl->setStyleSheet(
+            QString("color: %1; font-size: 9px; background: transparent;")
+                .arg(previous.isEmpty() ? ui::colors::TEXT_TERTIARY() : ui::colors::TEXT_SECONDARY()));
+        rl->addWidget(prev_lbl, 0);
 
         auto* imp_lbl = new QLabel(imp_text);
+        imp_lbl->setFixedWidth(kColWidthImp);
         imp_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         imp_lbl->setStyleSheet(
             QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;").arg(imp_color));
-        rl->addWidget(imp_lbl, 1);
+        rl->addWidget(imp_lbl, 0);
 
         list_layout_->addWidget(row);
         alt = !alt;

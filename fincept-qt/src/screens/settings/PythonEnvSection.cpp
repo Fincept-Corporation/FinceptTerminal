@@ -119,15 +119,15 @@ void PythonEnvSection::build_ui() {
     root->setSpacing(0);
 
     // Title
-    auto* title = new QLabel("PYTHON ENVIRONMENTS");
+    auto* title = new QLabel(tr("PYTHON ENVIRONMENTS"));
     title->setStyleSheet(section_title_ss());
     root->addWidget(title);
     root->addSpacing(4);
 
     auto* info = new QLabel(
-        "Inspect and manage packages installed in both Python environments. "
-        "Trading (venv-numpy1) contains NumPy 1.x-dependent libraries. "
-        "Analytics (venv-numpy2) contains NumPy 2.x / ML / AI libraries.");
+        tr("Inspect and manage packages installed in both Python environments. "
+           "Trading (venv-numpy1) contains NumPy 1.x-dependent libraries. "
+           "Analytics (venv-numpy2) contains NumPy 2.x / ML / AI libraries."));
     info->setWordWrap(true);
     info->setStyleSheet(label_ss());
     root->addWidget(info);
