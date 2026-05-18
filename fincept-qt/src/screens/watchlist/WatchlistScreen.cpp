@@ -296,6 +296,7 @@ QWidget* WatchlistScreen::build_main_panel() {
     table_ = new ui::DataTable;
     table_->set_headers({"SYMBOL", "NAME", "PRICE", "CHANGE", "CHG %", "HIGH", "LOW", "VOLUME"});
     table_->set_column_widths({100, 160, 100, 90, 80, 90, 90, 110});
+    table_->setSortingEnabled(true); // opt-in: WatchlistScreen stamps numeric EditRole values
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
 
@@ -500,10 +501,12 @@ void WatchlistScreen::rebuild_from_cache() {
     }
     if (quotes.isEmpty()) {
         // No data yet — show placeholder rows.
+        table_->setSortingEnabled(false);
         table_->clear_data();
         for (const auto& s : stocks_) {
             table_->add_row({s.symbol, s.name, "--", "--", "--", "--", "--", "--"});
         }
+        table_->setSortingEnabled(true);
         return;
     }
     populate_table(quotes);
@@ -553,6 +556,9 @@ void WatchlistScreen::hub_unsubscribe_all() {
 
 
 void WatchlistScreen::populate_table(const QVector<services::QuoteData>& quotes) {
+    // Disable sorting during population to prevent per-row re-sorting
+    // (avoids both visual flickering and O(n log n) overhead per insert).
+    table_->setSortingEnabled(false);
     table_->clear_data();
 
     // Build a map for quick lookup
@@ -565,13 +571,25 @@ void WatchlistScreen::populate_table(const QVector<services::QuoteData>& quotes)
         auto it = quote_map.find(s.symbol);
         if (it != quote_map.end()) {
             const auto& q = it.value();
-            table_->add_row({q.symbol, q.name.isEmpty() ? s.name : q.name, QString("$%1").arg(q.price, 0, 'f', 2),
+            table_->add_row({q.symbol, q.name.isEmpty() ? s.name : q.name,
+                             QString("$%1").arg(q.price, 0, 'f', 2),
                              QString("%1%2").arg(q.change >= 0 ? "+" : "").arg(q.change, 0, 'f', 2),
                              QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2),
-                             QString("$%1").arg(q.high, 0, 'f', 2), QString("$%1").arg(q.low, 0, 'f', 2),
+                             QString("$%1").arg(q.high, 0, 'f', 2),
+                             QString("$%1").arg(q.low, 0, 'f', 2),
                              fincept::ui::formatting::format_compact_volume(static_cast<qint64>(q.volume))});
 
             int row = table_->rowCount() - 1;
+
+            // Stamp numeric EditRole values so Qt sorts by magnitude,
+            // not by the display string ("$2.5M" vs "$999K" etc.).
+            table_->set_cell_numeric(row, 2, q.price);       // PRICE
+            table_->set_cell_numeric(row, 3, q.change);      // CHANGE
+            table_->set_cell_numeric(row, 4, q.change_pct);  // CHG %
+            table_->set_cell_numeric(row, 5, q.high);        // HIGH
+            table_->set_cell_numeric(row, 6, q.low);         // LOW
+            table_->set_cell_numeric(row, 7, q.volume);      // VOLUME
+
             // Green = good, Red = bad
             QString chg_color = q.change_pct >= 0 ? colors::POSITIVE : colors::NEGATIVE;
             table_->set_cell_color(row, 3, chg_color);
@@ -580,6 +598,9 @@ void WatchlistScreen::populate_table(const QVector<services::QuoteData>& quotes)
             table_->add_row({s.symbol, s.name, "--", "--", "--", "--", "--", "--"});
         }
     }
+
+    // Re-enable sorting — Qt will apply the current sort column/order once.
+    table_->setSortingEnabled(true);
 }
 
 // ── Slots ────────────────────────────────────────────────────────────────────
