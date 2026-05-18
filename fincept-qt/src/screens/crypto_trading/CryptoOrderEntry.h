@@ -20,6 +20,7 @@ class CryptoOrderEntry : public QWidget {
     void set_mode(bool is_paper);
     void set_symbol(const QString& symbol);
     void set_futures_mode(bool is_futures); // show/hide leverage + margin controls
+    void set_submit_busy(bool busy);
 
   signals:
     void order_submitted(const QString& side, const QString& order_type, double quantity, double price,

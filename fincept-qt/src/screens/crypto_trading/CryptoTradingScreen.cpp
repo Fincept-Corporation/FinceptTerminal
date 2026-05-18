@@ -852,17 +852,21 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
                     OrderMatcher::instance().set_sl_tp(portfolio_id_, selected_symbol_, order.id, sl, tp);
             }
             refresh_portfolio();
-        } else {
+        }}
+         else {
             QPointer<CryptoTradingScreen> self = this;
-            (void)QtConcurrent::run([self, side, order_type, qty, price]() {
+            QPointer<CryptoOrderEntry> oe = order_entry_;
+            order_entry_->set_submit_busy(true);
+            (void)QtConcurrent::run([self, oe, side, order_type, qty, price]() {
                 if (!self)
                     return;
                 ExchangeService::instance().place_exchange_order(self->selected_symbol_, side, order_type, qty, price);
                 QMetaObject::invokeMethod(
                     self,
-                    [self]() {
+                    [self, oe]() {
                         if (!self)
                             return;
+                        if (oe) oe->set_submit_busy(false);
                         self->refresh_live_data();
                     },
                     Qt::QueuedConnection);

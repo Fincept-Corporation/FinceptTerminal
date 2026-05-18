@@ -643,5 +643,11 @@ void CryptoOrderEntry::update_cost_preview() {
         submit_subtitle_->setText(QStringLiteral("Enter a quantity to preview"));
     }
 }
+void CryptoOrderEntry::set_submit_busy(bool busy) {
+    if (!submit_btn_) return;
+    submit_btn_->setEnabled(!busy);
+    submit_btn_->setText(busy ? QStringLiteral("SENDING…")
+        : (QString::fromLatin1(is_buy_side_ ? "BUY  " : "SELL  ") + current_symbol_));
+}
 
 } // namespace fincept::screens::crypto

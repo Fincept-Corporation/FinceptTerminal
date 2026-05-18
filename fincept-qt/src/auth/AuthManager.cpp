@@ -67,22 +67,27 @@ static void clear_tokens() {
 // ── Session persistence (SQLite via SettingsRepository) ──────────────────────
 
 void AuthManager::save_session() {
-    QJsonDocument doc(session_.to_json());
+    QJsonObject obj = session_.to_json();
+    obj.remove("api_key");
+    obj.remove("session_token");
+    QJsonDocument doc(obj);
     QString json = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
     auto r = fincept::SettingsRepository::instance().set("fincept_session", json, "auth");
     if (r.is_err()) {
         LOG_ERROR("Auth", "Failed to save session: " + QString::fromStdString(r.error()));
     }
 
-    // Persist api_key to OS-native encrypted storage (DPAPI / Keychain) as the
-    // durable credential. SQLite session JSON is the fallback.
     if (!session_.api_key.isEmpty()) {
         auto sr = fincept::SecureStorage::instance().store("api_key", session_.api_key);
         if (sr.is_err())
             LOG_WARN("Auth", "SecureStorage: failed to persist api_key — using SQLite fallback");
     }
+    if (!session_.session_token.isEmpty()) {
+        fincept::SecureStorage::instance().store("session_token", session_.session_token);
+    } else {
+        fincept::SecureStorage::instance().remove("session_token");
+    }
 }
-
 void AuthManager::load_session() {
     auto r = fincept::SettingsRepository::instance().get("fincept_session");
     if (r.is_ok() && !r.value().isEmpty()) {
@@ -502,7 +507,7 @@ void AuthManager::auto_configure_fincept_llm() {
         return;
 
     // Always store API key in settings — LlmService resolves it at runtime
-    fincept::SettingsRepository::instance().set("fincept_api_key", session_.api_key, "auth");
+    
 
     // Only create the fincept provider row if it doesn't already exist.
     // This prevents overwriting the user's model/settings choice on every
