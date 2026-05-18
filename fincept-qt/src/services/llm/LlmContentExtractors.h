@@ -18,6 +18,13 @@ namespace fincept::ai_chat {
 /// can rely on `isEmpty()` meaning "no reply".
 QString extract_openai_message_text(const QJsonObject& msg);
 
+/// Remove any <think>…</think> chain-of-thought blocks from a non-streamed
+/// response. Used by tool-loop final synthesis and Gemini/Fincept fallbacks
+/// where the entire reply arrives as one body — the streaming path has its
+/// own incremental filter (do_streaming_request::filter_think) because tags
+/// can straddle SSE chunk boundaries.
+QString strip_think_blocks(QString content);
+
 /// Extract user-visible text from an Anthropic /v1/messages content-blocks
 /// array. Concatenates multiple `text` blocks (Claude can emit several when a
 /// tool_use block sits between them) and falls back to `thinking` blocks only

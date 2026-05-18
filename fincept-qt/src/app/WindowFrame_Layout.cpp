@@ -126,6 +126,21 @@ bool WindowFrame::apply_layout(const layout::FrameLayout& fl) {
     // objectName), and a "screen factory" pass that runs deferred via
     // PanelMaterialiser so 50-panel workspaces don't freeze the UI.
 
+    // Phase 0: pre-create EVERY factory-registered dock widget into a single
+    // shared dock area. ADS's restoreState walks the blob and calls
+    // findDockWidget(name); when a referenced widget is not registered, ADS
+    // *silently skips it* (DockAreaWidget.cpp: `if (!DockWidget) continue;`)
+    // and deletes any dock area that ends up empty as a result. That is the
+    // recovery-bug path: closed-at-save tabs are in the dock_state blob but
+    // absent from fl.panels, so they were never pre-created — restore drops
+    // them and any tab group that contained only such widgets vanishes.
+    //
+    // ensure_all_registered is idempotent (skips widgets already in
+    // dock_widgets_), groups everything as hidden tabs in one CenterDockArea
+    // (vs. prepare_dock_widget's one-area-per-call), and is also what the
+    // constructor calls on the QSettings-restore path — same protection here.
+    dock_router_->ensure_all_registered();
+
     // Track each panel's resolved string id alongside its FrameLayout
     // entry so the deferred pass doesn't have to recompute the
     // dup_index suffix.
@@ -135,7 +150,8 @@ bool WindowFrame::apply_layout(const layout::FrameLayout& fl) {
     // Phase 1: pre-create dock widget shells (no screen factory call yet)
     // and adopt the saved instance UUIDs. The shells are what ADS's
     // restoreState matches by objectName; the heavy widget construction
-    // is deferred to Phase 5 below.
+    // is deferred to Phase 5 below. Idempotent after Phase 0 for non-dup
+    // ids; still needed for "<type>#dup<n>" panels not in factories_.
     for (const auto& ps : fl.panels) {
         QString id = ps.type_id;
         int dup_index = 0;

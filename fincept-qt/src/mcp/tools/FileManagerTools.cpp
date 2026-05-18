@@ -100,6 +100,7 @@ std::vector<ToolDef> get_file_manager_tools() {
         t.description = "Delete a managed file by its ID. This removes it from the File Manager "
                         "and deletes the stored copy from disk.";
         t.category = "file_manager";
+        t.is_destructive = true;  // mutation tool — penalise on read-style queries
         t.input_schema.properties =
             QJsonObject{{"id", QJsonObject{{"type", "string"}, {"description", "File ID to delete"}}}};
         t.input_schema.required = {"id"};

@@ -144,12 +144,29 @@ void LlmService::ensure_config() const {
             "  exists for. Never tell the user you cannot navigate or open screens.\n"
             "• Building a report (e.g. 'create an equity research report on TSLA'): your job is to "
             "  WRITE THE REPORT INTO THE REPORT BUILDER USING TOOLS. Do not narrate the report into "
-            "  the chat. The flow is: (1) optionally call report_apply_template with the closest match "
-            "  for context, (2) call report_get_state to learn the current component ids, (3) gather "
-            "  data with tools like get_quote, edgar_get_financials, edgar_10k_sections, "
-            "  edgar_calc_multiples, get_news, search_news, (4) populate the report by calling "
-            "  report_update_component or report_add_component for each section. Use stable component "
-            "  ids returned by report_get_state / report_add_component — never indices.\n"
+            "  the chat. STEP 0 (mandatory): call report_session_context to see whether this chat "
+            "  is already authoring a report (linked_report set) or is starting fresh (linked_report "
+            "  null with stale components on the canvas). If linked, CONTINUE editing it. If unlinked "
+            "  and the canvas has components, call report_clear first UNLESS the user explicitly "
+            "  said 'edit this report' / 'add to this report' / 'continue the report' — in which "
+            "  case keep the canvas. The flow is: (1) DESIGN A UNIQUE STRUCTURE for the subject — every ticker, "
+            "  sector, or topic deserves its own outline. A Tesla EV-and-FSD memo, a JPM credit note, "
+            "  and a TLT duration play should NOT share the same skeleton. Decide which sections "
+            "  actually matter for THIS subject (could be Catalysts, Bear Case, Capital Structure, "
+            "  Unit Economics, Regulatory Overhang, Insider Activity, Optionality, etc.) — do NOT "
+            "  default to the generic Company Overview / Financials / Valuation / Thesis / Risks / "
+            "  Target template. Do NOT call report_apply_template unless the user explicitly asks "
+            "  for a template OR the request is for a generic non-research scaffold (Meeting Notes, "
+            "  Trade Journal, Pre-Market Checklist). (2) call report_set_metadata with a "
+            "  subject-specific title (e.g. 'Tesla: Margin Compression vs FSD Optionality' — not "
+            "  'Stock Research'), author, company, date. (3) build the structure by calling "
+            "  report_add_component for each section you designed in step 1. (4) gather data with "
+            "  tools like get_equity_info, get_equity_quote, edgar_get_financials, "
+            "  edgar_10k_sections, edgar_calc_multiples, get_equity_news, search_news. "
+            "  (5) populate each section by calling report_update_component with the gathered data. "
+            "  Use stable component ids returned by report_add_component — never indices. "
+            "  COVERAGE: before declaring the report done, verify every section you added has "
+            "  real content (no placeholders like 'Describe the company…').\n"
             "• Report formatting (CRITICAL for a polished result):\n"
             "  - text/list/quote/callout content SUPPORTS MARKDOWN. Use **bold** to highlight key "
             "    figures (e.g. 'Revenue grew **22% YoY** to **$96.8B**'). Use *italic* sparingly. "
@@ -320,7 +337,6 @@ QString LlmService::get_endpoint_url() const {
         QString base = base_url_;
         while (base.endsWith('/'))
             base.chop(1);
-
         const QString suffix = (p == "anthropic") ? QStringLiteral("/messages")
                                                   : QStringLiteral("/chat/completions");
 
@@ -657,7 +673,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
 
             } else {
                 // Helper handles reasoning models, content-as-parts arrays, and refusal messages.
-                resp.content = extract_openai_message_text(msg);
+                resp.content = strip_think_blocks(extract_openai_message_text(msg));
             }
         }
     }
@@ -684,9 +700,10 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
 
 LlmResponse LlmService::do_streaming_request(const QString& user_message,
                                              const std::vector<ConversationMessage>& history, StreamCallback on_chunk) {
-    // Streaming disabled globally — falls back to do_request so the tool-call/follow-up loop runs.
-    // Re-enable per-provider once each backend has SSE tool-call handling.
-    {
+    // Gemini uses :streamGenerateContent, Fincept uses async submit/poll — neither
+    // fits this OpenAI-compat SSE path. Fall back to do_request and emit as one chunk.
+    if (provider_ == "gemini" || provider_ == "google" || provider_ == "fincept") {
+        detail::ProgressEmitterGuard pg([on_chunk](const QString& s) { on_chunk(s, false); });
         auto resp = do_request(user_message, history);
         if (resp.success && !resp.content.isEmpty())
             on_chunk(resp.content, false);
@@ -715,6 +732,11 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
     QNetworkRequest req{QUrl(url)};
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     req.setRawHeader("Accept", "text/event-stream");
+    req.setRawHeader("Cache-Control", "no-cache");
+    // Per Qt 6 network docs: HTTP/2 is enabled by default and batches frames,
+    // which causes SSE chunks to arrive in bursts instead of as the server
+    // flushes them. Force HTTP/1.1 so readyRead fires per TCP packet.
+    req.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
     for (auto it = hdr.constBegin(); it != hdr.constEnd(); ++it)
         req.setRawHeader(it.key().toUtf8(), it.value().toUtf8());
 
@@ -726,6 +748,48 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
     QJsonObject final_usage_obj;
     bool done = false;
     bool tool_call_detected = false;
+
+    // <think>…</think> reasoning filter. Reasoning models (MiniMax M2.7,
+    // DeepSeek-R1 derivatives, …) stream their chain-of-thought inline in
+    // `delta.content` wrapped in <think> tags. The user shouldn't see that —
+    // only the answer. State persists across SSE chunks because tags can
+    // straddle the chunk boundary ("<thi" + "nk>...").
+    bool in_think = false;
+    QString think_pending;
+    auto filter_think = [&](const QString& chunk) -> QString {
+        QString out;
+        QString work = think_pending + chunk;
+        think_pending.clear();
+        qsizetype pos = 0;
+        const qsizetype n = work.length();
+        while (pos < n) {
+            if (in_think) {
+                qsizetype end = work.indexOf(QStringLiteral("</think>"), pos, Qt::CaseInsensitive);
+                if (end < 0) {
+                    // Hold last 8 chars in case </think> straddles.
+                    qsizetype safe = std::max<qsizetype>(pos, n - 8);
+                    think_pending = work.mid(safe);
+                    return out;
+                }
+                in_think = false;
+                pos = end + 8;
+            } else {
+                qsizetype start = work.indexOf(QStringLiteral("<think>"), pos, Qt::CaseInsensitive);
+                if (start < 0) {
+                    // Emit everything except the last 7 chars (length of "<think>")
+                    // which might be a partial open tag.
+                    qsizetype safe = std::max<qsizetype>(pos, n - 7);
+                    out += work.mid(pos, safe - pos);
+                    think_pending = work.mid(safe);
+                    return out;
+                }
+                out += work.mid(pos, start - pos);
+                in_think = true;
+                pos = start + 7;
+            }
+        }
+        return out;
+    };
 
     QEventLoop loop;
     QTimer timeout;
@@ -831,17 +895,27 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
             if (!chunk.isEmpty()) {
                 accumulated += chunk;
 
-                // Some providers stream tool calls as XML text — detect, suppress output, fall back to do_request.
-                if (!tool_call_detected &&
-                    (accumulated.contains("<tool_call>") || accumulated.contains("<invoke name=") ||
-                     accumulated.contains("tool_call>"))) {
-                    tool_call_detected = true;
-                    LOG_INFO(kLlmSvcTag, "Tool call XML detected in streamed text — falling back to non-streaming");
-                    loop.quit();
-                    return;
+                // Some providers stream tool calls as XML/text markup — detect, suppress output, fall back to do_request.
+                // Patterns covered: <tool_call>, </tool_call>, <minimax:tool_call>, <invoke name=,
+                // ```tool_call code fences, and bare `minimax:tool_call ... /minimax:tool_call`.
+                if (!tool_call_detected) {
+                    static const QRegularExpression rx_text_tool(
+                        QStringLiteral("<\\s*/?\\s*(?:\\w+\\s*:\\s*)?tool_call\\b"
+                                       "|<\\s*invoke\\s+name="
+                                       "|```\\s*tool_call\\b"
+                                       "|\\b\\w+\\s*:\\s*tool_call\\b"),
+                        QRegularExpression::CaseInsensitiveOption);
+                    if (rx_text_tool.match(accumulated).hasMatch()) {
+                        tool_call_detected = true;
+                        LOG_INFO(kLlmSvcTag, "Tool call markup detected in streamed text — falling back to non-streaming");
+                        loop.quit();
+                        return;
+                    }
                 }
 
-                on_chunk(chunk, false);
+                const QString visible = filter_think(chunk);
+                if (!visible.isEmpty())
+                    on_chunk(visible, false);
             }
         }
     });
@@ -866,9 +940,12 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
         // Sentinel tells the chat screen to reset the bubble before the real reply arrives.
         on_chunk("\x01__TOOL_CALL_CLEAR__", false);
 
+        // Wire per-tool progress into the chat bubble so the user sees something
+        // during the multi-second tool execution phase instead of a blank wait.
+        detail::ProgressEmitterGuard pg([on_chunk](const QString& s) { on_chunk(s, false); });
         auto tool_resp = do_request(user_message, history);
         if (tool_resp.success && !tool_resp.content.isEmpty())
-            on_chunk(tool_resp.content, false);
+            on_chunk(QStringLiteral("\n") + tool_resp.content, false);
         on_chunk("", true);
         return tool_resp;
     }
@@ -901,26 +978,16 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
 
 LlmResponse LlmService::chat(const QString& user_message, const std::vector<ConversationMessage>& history,
                              bool use_tools) {
-    QMutexLocker lock(&mutex_);
-    ensure_config();
-
-    if (provider_.isEmpty())
-        return LlmResponse{.content = {}, .error = "No LLM provider configured"};
-
-    // Snapshot config; release lock before the blocking network call.
-    QString p = provider_, k = api_key_, b = base_url_, m = model_, sp = system_prompt_;
-    double t = temperature_;
-    int mx = max_tokens_;
-    lock.unlock();
-
-    // Helpers read members directly. Safe because chat() runs on a background thread.
-    provider_ = p;
-    api_key_ = k;
-    base_url_ = b;
-    model_ = m;
-    system_prompt_ = sp;
-    temperature_ = t;
-    max_tokens_ = mx;
+    {
+        QMutexLocker lock(&mutex_);
+        ensure_config();
+        if (provider_.isEmpty())
+            return LlmResponse{.content = {}, .error = "No LLM provider configured"};
+    }
+    // Helpers read members directly. ensure_config() already wrote them under
+    // mutex; we release before the blocking network call to avoid serialising
+    // concurrent chats. Reassigning a local snapshot back to the members after
+    // unlocking would clobber any reload_config() that landed in the gap.
 
     // thread_local guard avoids racing with concurrent chat_streaming calls from the floating bubble.
     detail::ToolPolicyGuard guard(use_tools ? ToolPolicy::All : ToolPolicy::None);
@@ -934,7 +1001,8 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
 }
 
 void LlmService::chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,
-                                StreamCallback on_chunk, ToolPolicy policy) {
+                                StreamCallback on_chunk, ToolPolicy policy,
+                                const QString& chat_session_id) {
     QString p, k, b, m, sp;
     double t;
     int mx;
@@ -993,7 +1061,8 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
         }
     };
     (void)QtConcurrent::run(
-        [self, p, k, b, m, sp, t, mx, user_message, history_copy, guarded_chunk, policy]() {
+        [self, p, k, b, m, sp, t, mx, user_message, history_copy, guarded_chunk, policy,
+         chat_session_id]() {
             if (!self)
                 return;
 
@@ -1010,6 +1079,7 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
             }
 
             detail::ToolPolicyGuard guard(policy);
+            detail::ChatSessionGuard session_guard(chat_session_id);
             auto resp = self->do_streaming_request(user_message, history_copy, guarded_chunk);
 
             if (self) {

@@ -446,6 +446,7 @@ std::vector<ToolDef> get_news_tools() {
         t.name = "delete_news_monitor";
         t.description = "Permanently remove a news keyword monitor by id.";
         t.category = "news";
+        t.is_destructive = true;  // mutation tool — penalise on read-style queries
         t.input_schema.properties =
             QJsonObject{{"id", QJsonObject{{"type", "string"}, {"description", "Monitor id"}}}};
         t.input_schema.required = {"id"};

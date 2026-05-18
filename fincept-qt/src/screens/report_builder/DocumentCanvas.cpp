@@ -474,19 +474,27 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
 
         } else if (comp.type == "table") {
             // Cell data sources, in priority order:
-            //   1. config["csv"] — pipe-separated rows, comma-separated cells:
-            //      "Metric,FY22,FY23|Revenue,81462,96773|Net Income,12556,14997"
-            //      This is the LLM-friendly format the MCP tool description
-            //      recommends.
+            //   1. config["csv"] — rows separated by `|` OR newline (LLMs
+            //      instinctively use newlines for CSV rows, so we accept
+            //      both). Cells separated by comma. The MCP tool description
+            //      recommends pipe; the parser is lenient.
             //   2. config["data"] — JSON map {"r_c":"value"} (legacy).
             //   3. fallback to "Header N" placeholders so the table at least
             //      shows where data should go rather than empty cells.
             QVector<QStringList> rows_data;
             QString csv = comp.config.value("csv");
             if (!csv.isEmpty()) {
-                for (const QString& row_str : csv.split('|', Qt::SkipEmptyParts)) {
+                // Normalise row separators: \r\n / \r / \n / | all mean "new row".
+                QString normalised = csv;
+                normalised.replace(QLatin1String("\r\n"), QLatin1String("|"));
+                normalised.replace('\r', '|');
+                normalised.replace('\n', '|');
+                for (const QString& row_str : normalised.split('|', Qt::SkipEmptyParts)) {
+                    const QString trimmed_row = row_str.trimmed();
+                    if (trimmed_row.isEmpty())
+                        continue;
                     QStringList row;
-                    for (const QString& cell : row_str.split(',')) // keep empty cells
+                    for (const QString& cell : trimmed_row.split(',')) // keep empty cells
                         row << cell.trimmed();
                     rows_data.append(row);
                 }

@@ -50,7 +50,17 @@ namespace fincept::screens {
 namespace rep = ::fincept::report;
 using Service = ::fincept::services::ReportBuilderService;
 
+// Tracks the most recently constructed Report Builder screen so MCP tools
+// can find a live instance without walking the widget tree. Cleared in the
+// destructor. QPointer auto-nulls if Qt deletes the widget another way.
+static QPointer<ReportBuilderScreen> s_current_screen;
+
+ReportBuilderScreen* ReportBuilderScreen::current() {
+    return s_current_screen.data();
+}
+
 ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
+    s_current_screen = this;
     setStyleSheet(QString("background: %1;").arg(ui::colors::DARK()));
 
     auto* vl = new QVBoxLayout(this);
@@ -366,7 +376,10 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
     rebind_from_service();
 }
 
-ReportBuilderScreen::~ReportBuilderScreen() = default;
+ReportBuilderScreen::~ReportBuilderScreen() {
+    if (s_current_screen == this)
+        s_current_screen.clear();
+}
 
 // ── Top toolbar ──────────────────────────────────────────────────────────────
 

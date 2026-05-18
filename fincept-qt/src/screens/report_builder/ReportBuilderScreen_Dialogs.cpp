@@ -445,6 +445,14 @@ void ReportBuilderScreen::on_export_pdf() {
     QString path = QFileDialog::getSaveFileName(this, "Export PDF", m.title, "PDF (*.pdf)");
     if (path.isEmpty())
         return;
+    export_pdf_to(path);
+    QMessageBox::information(this, "Export PDF", "Report exported successfully to:\n" + path);
+}
+
+void ReportBuilderScreen::export_pdf_to(const QString& path) {
+    if (path.isEmpty())
+        return;
+    auto m = Service::instance().metadata();
 
     QPrinter printer(QPrinter::HighResolution);
     printer.setOutputFormat(QPrinter::PdfFormat);
@@ -531,7 +539,6 @@ void ReportBuilderScreen::on_export_pdf() {
         doc->deleteLater();
     }
 
-    QMessageBox::information(this, "Export PDF", "Report exported successfully to:\n" + path);
     services::FileManagerService::instance().import_file(path, "report_builder");
 }
 

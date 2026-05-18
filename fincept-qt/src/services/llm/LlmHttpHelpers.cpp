@@ -119,6 +119,25 @@ LlmService::HttpResult LlmService::eventloop_request(const QString& method, cons
     return result;
 }
 
+// ── <think> reasoning stripping ────────────────────────────────────────────
+// Reasoning models (MiniMax M2.7, DeepSeek-R1, …) embed chain-of-thought in
+// <think>…</think> blocks inside the visible content. Strip those so the chat
+// bubble only shows the answer. Streaming uses a stateful filter inline in
+// do_streaming_request; this helper is for non-streamed bodies (tool-loop
+// final synthesis, Gemini/Fincept fallback).
+QString strip_think_blocks(QString content) {
+    static const QRegularExpression rx(
+        QStringLiteral("<\\s*think\\s*>[\\s\\S]*?<\\s*/\\s*think\\s*>"),
+        QRegularExpression::CaseInsensitiveOption);
+    content.remove(rx);
+    // Drop a dangling unmatched <think>…(no closing) — emit nothing past it.
+    static const QRegularExpression rx_open(
+        QStringLiteral("<\\s*think\\s*>[\\s\\S]*$"),
+        QRegularExpression::CaseInsensitiveOption);
+    content.remove(rx_open);
+    return content.trimmed();
+}
+
 // ── SSE chunk → text ───────────────────────────────────────────────────────
 QString LlmService::parse_sse_chunk(const QString& data, const QString& provider) {
     auto doc = QJsonDocument::fromJson(data.toUtf8());

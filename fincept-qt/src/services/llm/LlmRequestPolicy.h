@@ -20,10 +20,49 @@
 #include "mcp/McpTypes.h"
 
 #include <QString>
+#include <functional>
 
 namespace fincept::ai_chat::detail {
 
 inline thread_local LlmService::ToolPolicy t_request_policy = LlmService::ToolPolicy::All;
+
+// Optional progress emitter — when set, the tool loop pushes per-round status
+// ("Using tool X...") through this so the chat bubble paints in real-time
+// during the otherwise-silent multi-second tool execution phase. Set by
+// do_streaming_request before falling back into the tool loop, cleared on exit.
+using ProgressEmitter = std::function<void(const QString&)>;
+inline thread_local ProgressEmitter t_progress_emitter;
+
+struct ProgressEmitterGuard {
+    ProgressEmitter prev;
+    explicit ProgressEmitterGuard(ProgressEmitter p) : prev(std::move(t_progress_emitter)) {
+        t_progress_emitter = std::move(p);
+    }
+    ~ProgressEmitterGuard() { t_progress_emitter = std::move(prev); }
+    ProgressEmitterGuard(const ProgressEmitterGuard&) = delete;
+    ProgressEmitterGuard& operator=(const ProgressEmitterGuard&) = delete;
+};
+
+inline void emit_progress(const QString& text) {
+    if (t_progress_emitter)
+        t_progress_emitter(text);
+}
+
+// Active chat session id for the in-flight LLM request. Set by the chat screen
+// before calling chat_streaming(), read by MCP tools (e.g. report_session_context)
+// to scope per-chat state — for example, "did this chat session already start a
+// report?" so the model knows whether to continue or start fresh.
+inline thread_local QString t_chat_session_id;
+
+struct ChatSessionGuard {
+    QString prev;
+    explicit ChatSessionGuard(QString id) : prev(std::move(t_chat_session_id)) {
+        t_chat_session_id = std::move(id);
+    }
+    ~ChatSessionGuard() { t_chat_session_id = std::move(prev); }
+    ChatSessionGuard(const ChatSessionGuard&) = delete;
+    ChatSessionGuard& operator=(const ChatSessionGuard&) = delete;
+};
 
 struct ToolPolicyGuard {
     LlmService::ToolPolicy prev;

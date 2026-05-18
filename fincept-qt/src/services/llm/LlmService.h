@@ -60,8 +60,11 @@ class LlmService : public QObject {
     enum class ToolPolicy { All, NoNavigation, None };
 
     /// Spawns a background thread. on_chunk runs on that thread; finished_streaming() lands on UI thread.
+    /// `chat_session_id` lets per-chat MCP tools (e.g. report_session_context) scope state to
+    /// the originating conversation — omit for non-chat callers.
     void chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,
-                        StreamCallback on_chunk, ToolPolicy policy = ToolPolicy::All);
+                        StreamCallback on_chunk, ToolPolicy policy = ToolPolicy::All,
+                        const QString& chat_session_id = {});
 
     /// Back-compat: false→None, true→All. Prefer the enum overload.
     void chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,

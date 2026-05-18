@@ -118,6 +118,7 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     mutable QMutex history_mutex_;
     std::vector<ai_chat::ConversationMessage> history_;
     bool streaming_ = false;
+    bool scroll_pending_ = false;
     QPointer<QLabel> streaming_bubble_;
     int total_tokens_ = 0;
     int total_messages_ = 0;

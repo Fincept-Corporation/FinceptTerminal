@@ -177,6 +177,7 @@ std::vector<ToolDef> get_paper_trading_tools() {
         t.name = "pt_cancel_order";
         t.description = "Cancel a pending paper trading order.";
         t.category = "paper-trading";
+        t.is_destructive = true;  // mutation tool — penalise on read-style queries
         t.input_schema.properties =
             QJsonObject{{"order_id", QJsonObject{{"type", "string"}, {"description", "Order ID to cancel"}}}};
         t.input_schema.required = {"order_id"};
