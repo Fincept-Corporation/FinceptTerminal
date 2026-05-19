@@ -413,15 +413,17 @@ std::vector<ToolDef> get_report_builder_tools() {
         t.is_destructive = true;  // mutation tool — penalise on read-style queries
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
-            // Drop the current chat's link before clearing — clear represents
-            // "user wants a fresh report from this chat", so the next mutation
-            // re-claims a blank canvas.
+            run_on_service_thread([]() { Service::instance().clear_document(); });
+
+            // After clearing, force the link to the fresh-canvas placeholder so the
+            // next mutation in this chat treats the blank canvas as its own.
             const QString chat_id = fincept::ai_chat::detail::t_chat_session_id;
             if (!chat_id.isEmpty())
-                set_linked_report_for(chat_id, QString{});
+                set_linked_report_for(chat_id, QStringLiteral("<unsaved>"));
 
+            // Notify mutation pipeline (navigation, undo bookkeeping) — link is
+            // already correct, so the auto-claim inside is a no-op.
             on_llm_mutation_start();
-            run_on_service_thread([]() { Service::instance().clear_document(); });
             return ToolResult::ok("Report cleared");
         };
         tools.push_back(std::move(t));
