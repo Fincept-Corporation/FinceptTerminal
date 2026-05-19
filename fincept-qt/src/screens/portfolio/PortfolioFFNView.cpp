@@ -9,6 +9,7 @@
 #include <QChart>
 #include <QChartView>
 #include <QDateTimeAxis>
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonObject>
@@ -77,7 +78,7 @@ void PortfolioFFNView::build_ui() {
     h_layout->setContentsMargins(8, 0, 8, 0);
     h_layout->setSpacing(8);
 
-    back_btn_ = new QPushButton("\u2190 BACK");
+    back_btn_ = new QPushButton(tr("\u2190 BACK"));
     back_btn_->setFixedHeight(24);
     back_btn_->setCursor(Qt::PointingHandCursor);
     back_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
@@ -92,10 +93,10 @@ void PortfolioFFNView::build_ui() {
     sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_MED()));
     h_layout->addWidget(sep);
 
-    auto* title = new QLabel("FFN ANALYTICS");
-    title->setStyleSheet(
+    title_label_ = new QLabel(tr("FFN ANALYTICS"));
+    title_label_->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    h_layout->addWidget(title);
+    h_layout->addWidget(title_label_);
 
     h_layout->addStretch();
 
@@ -103,7 +104,7 @@ void PortfolioFFNView::build_ui() {
     status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
     h_layout->addWidget(status_label_);
 
-    run_btn_ = new QPushButton("RUN FFN ANALYSIS");
+    run_btn_ = new QPushButton(tr("RUN FFN ANALYSIS"));
     run_btn_->setFixedHeight(24);
     run_btn_->setCursor(Qt::PointingHandCursor);
     run_btn_->setStyleSheet(
@@ -166,17 +167,17 @@ void PortfolioFFNView::build_ui() {
         auto* vl = new QVBoxLayout(w);
         vl->setContentsMargins(12, 8, 12, 8);
 
-        auto* lbl = new QLabel("PORTFOLIO METRICS OVERVIEW");
-        lbl->setStyleSheet(
+        overview_hdr_ = new QLabel(tr("PORTFOLIO METRICS OVERVIEW"));
+        overview_hdr_->setStyleSheet(
             QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-        vl->addWidget(lbl);
+        vl->addWidget(overview_hdr_);
 
-        overview_table_ = make_table(3, {"METRIC", "PORTFOLIO", "BENCHMARK (SPY)"});
+        overview_table_ = make_table(3, {tr("METRIC"), tr("PORTFOLIO"), tr("BENCHMARK (SPY)")});
         overview_table_->setColumnWidth(0, 220);
         overview_table_->setColumnWidth(1, 140);
         vl->addWidget(overview_table_, 1);
 
-        tabs_->addTab(w, "OVERVIEW");
+        tabs_->addTab(w, tr("OVERVIEW"));
     }
 
     // ── BENCHMARK tab ────────────────────────────────────────────────────────
@@ -187,25 +188,25 @@ void PortfolioFFNView::build_ui() {
         vl->setContentsMargins(16, 12, 16, 12);
         vl->setSpacing(10);
 
-        auto* hdr = new QLabel("BENCHMARK COMPARISON");
-        hdr->setStyleSheet(
+        benchmark_hdr_ = new QLabel(tr("BENCHMARK COMPARISON"));
+        benchmark_hdr_->setStyleSheet(
             QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-        vl->addWidget(hdr);
+        vl->addWidget(benchmark_hdr_);
 
-        benchmark_table_ = make_table(3, {"METRIC", "PORTFOLIO", "BENCHMARK"});
+        benchmark_table_ = make_table(3, {tr("METRIC"), tr("PORTFOLIO"), tr("BENCHMARK")});
         benchmark_table_->setColumnWidth(0, 200);
         benchmark_table_->setColumnWidth(1, 150);
         vl->addWidget(benchmark_table_);
 
-        benchmark_info_label_ = new QLabel("Portfolio metrics computed from 1-year price history via yfinance.\n"
-                                           "Connect a live benchmark feed to populate the Benchmark column.");
+        benchmark_info_label_ = new QLabel(tr("Portfolio metrics computed from 1-year price history via yfinance.\n"
+                                              "Connect a live benchmark feed to populate the Benchmark column."));
         benchmark_info_label_->setWordWrap(true);
         benchmark_info_label_->setStyleSheet(
             QString("color:%1; font-size:10px; padding:6px 0;").arg(ui::colors::TEXT_TERTIARY()));
         vl->addWidget(benchmark_info_label_);
 
         vl->addStretch();
-        tabs_->addTab(benchmark_panel_, "BENCHMARK");
+        tabs_->addTab(benchmark_panel_, tr("BENCHMARK"));
     }
 
     // ── OPTIMISATION tab ─────────────────────────────────────────────────────
@@ -216,10 +217,10 @@ void PortfolioFFNView::build_ui() {
         vl->setContentsMargins(12, 8, 12, 8);
         vl->setSpacing(10);
 
-        auto* hdr = new QLabel("PORTFOLIO OPTIMISATION — WEIGHT COMPARISON");
-        hdr->setStyleSheet(
+        optimization_hdr_ = new QLabel(tr("PORTFOLIO OPTIMISATION — WEIGHT COMPARISON"));
+        optimization_hdr_->setStyleSheet(
             QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-        vl->addWidget(hdr);
+        vl->addWidget(optimization_hdr_);
 
         opt_stack_ = new QStackedWidget;
 
@@ -227,8 +228,9 @@ void PortfolioFFNView::build_ui() {
         auto* placeholder_w = new QWidget(this);
         auto* pl_vl = new QVBoxLayout(placeholder_w);
         pl_vl->setAlignment(Qt::AlignCenter);
-        pl_vl->addWidget(make_placeholder_label("EFFICIENT FRONTIER\n\nRun FFN Analysis to compute optimal weights\n"
-                                                "(ERC, Inverse-Vol, Equal, Current)."));
+        opt_placeholder_ = make_placeholder_label(tr("EFFICIENT FRONTIER\n\nRun FFN Analysis to compute optimal weights\n"
+                                                     "(ERC, Inverse-Vol, Equal, Current)."));
+        pl_vl->addWidget(opt_placeholder_);
         opt_stack_->addWidget(placeholder_w);
 
         // index 1 — tables
@@ -237,27 +239,27 @@ void PortfolioFFNView::build_ui() {
         tvl->setContentsMargins(0, 0, 0, 0);
         tvl->setSpacing(12);
 
-        auto* weights_hdr = new QLabel("ALLOCATION WEIGHTS BY STRATEGY");
-        weights_hdr->setStyleSheet(
+        weights_hdr_ = new QLabel(tr("ALLOCATION WEIGHTS BY STRATEGY"));
+        weights_hdr_->setStyleSheet(
             QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
-        tvl->addWidget(weights_hdr);
+        tvl->addWidget(weights_hdr_);
 
-        opt_weights_table_ = make_table(5, {"SYMBOL", "CURRENT", "ERC", "INV-VOL", "EQUAL"});
+        opt_weights_table_ = make_table(5, {tr("SYMBOL"), tr("CURRENT"), tr("ERC"), tr("INV-VOL"), tr("EQUAL")});
         opt_weights_table_->setColumnWidth(0, 100);
         tvl->addWidget(opt_weights_table_);
 
-        auto* stats_hdr = new QLabel("STRATEGY PERFORMANCE STATS");
-        stats_hdr->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
-        tvl->addWidget(stats_hdr);
+        stats_hdr_ = new QLabel(tr("STRATEGY PERFORMANCE STATS"));
+        stats_hdr_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
+        tvl->addWidget(stats_hdr_);
 
-        opt_stats_table_ = make_table(5, {"STRATEGY", "TOTAL RETURN", "VOLATILITY", "SHARPE", "MAX DRAWDOWN"});
+        opt_stats_table_ = make_table(5, {tr("STRATEGY"), tr("TOTAL RETURN"), tr("VOLATILITY"), tr("SHARPE"), tr("MAX DRAWDOWN")});
         opt_stats_table_->setColumnWidth(0, 120);
         tvl->addWidget(opt_stats_table_);
 
         opt_stack_->addWidget(tables_w);
         vl->addWidget(opt_stack_, 1);
 
-        tabs_->addTab(optimization_panel_, "OPTIMISATION");
+        tabs_->addTab(optimization_panel_, tr("OPTIMISATION"));
     }
 
     // ── REBASED tab ───────────────────────────────────────────────────────────
@@ -273,16 +275,17 @@ void PortfolioFFNView::build_ui() {
         auto* ph = new QWidget(this);
         auto* phl = new QVBoxLayout(ph);
         phl->setAlignment(Qt::AlignCenter);
-        phl->addWidget(make_placeholder_label("REBASED PRICE CHARTS\n\nRun FFN Analysis to compare holdings\n"
-                                              "on a common base of 100."));
+        rebased_placeholder_ = make_placeholder_label(tr("REBASED PRICE CHARTS\n\nRun FFN Analysis to compare holdings\n"
+                                                         "on a common base of 100."));
+        phl->addWidget(rebased_placeholder_);
         rebased_stack_->addWidget(ph);
 
         // index 1 — chart (allocated lazily in update_rebased)
-        rebased_chart_view_ = make_chart_view("Rebased Performance (Base = 100)");
+        rebased_chart_view_ = make_chart_view(tr("Rebased Performance (Base = 100)"));
         rebased_stack_->addWidget(rebased_chart_view_);
 
         vl->addWidget(rebased_stack_, 1);
-        tabs_->addTab(rebased_panel_, "REBASED");
+        tabs_->addTab(rebased_panel_, tr("REBASED"));
     }
 
     // ── DRAWDOWNS tab ─────────────────────────────────────────────────────────
@@ -297,15 +300,16 @@ void PortfolioFFNView::build_ui() {
         auto* ph = new QWidget(this);
         auto* phl = new QVBoxLayout(ph);
         phl->setAlignment(Qt::AlignCenter);
-        phl->addWidget(make_placeholder_label("DRAWDOWN ANALYSIS\n\nRun FFN Analysis to visualise historical\n"
-                                              "drawdowns for each holding."));
+        drawdowns_placeholder_ = make_placeholder_label(tr("DRAWDOWN ANALYSIS\n\nRun FFN Analysis to visualise historical\n"
+                                                           "drawdowns for each holding."));
+        phl->addWidget(drawdowns_placeholder_);
         drawdowns_stack_->addWidget(ph);
 
-        drawdowns_chart_view_ = make_chart_view("Drawdown Analysis");
+        drawdowns_chart_view_ = make_chart_view(tr("Drawdown Analysis"));
         drawdowns_stack_->addWidget(drawdowns_chart_view_);
 
         vl->addWidget(drawdowns_stack_, 1);
-        tabs_->addTab(drawdowns_panel_, "DRAWDOWNS");
+        tabs_->addTab(drawdowns_panel_, tr("DRAWDOWNS"));
     }
 
     // ── ROLLING CORRELATIONS tab ──────────────────────────────────────────────
@@ -320,15 +324,16 @@ void PortfolioFFNView::build_ui() {
         auto* ph = new QWidget(this);
         auto* phl = new QVBoxLayout(ph);
         phl->setAlignment(Qt::AlignCenter);
-        phl->addWidget(make_placeholder_label("ROLLING CORRELATIONS\n\nAdd more holdings and run FFN Analysis\n"
-                                              "to track 60-day rolling correlations."));
+        rolling_placeholder_ = make_placeholder_label(tr("ROLLING CORRELATIONS\n\nAdd more holdings and run FFN Analysis\n"
+                                                         "to track 60-day rolling correlations."));
+        phl->addWidget(rolling_placeholder_);
         rolling_stack_->addWidget(ph);
 
-        rolling_chart_view_ = make_chart_view("Rolling 60-Day Correlations");
+        rolling_chart_view_ = make_chart_view(tr("Rolling 60-Day Correlations"));
         rolling_stack_->addWidget(rolling_chart_view_);
 
         vl->addWidget(rolling_stack_, 1);
-        tabs_->addTab(rolling_panel_, "ROLLING");
+        tabs_->addTab(rolling_panel_, tr("ROLLING"));
     }
 
     layout->addWidget(tabs_);
@@ -413,25 +418,25 @@ void PortfolioFFNView::update_overview() {
 
     if (has_ffn) {
         rows = {
-            {"Annualized Return", pct_str(total_ann_ret), "--",
+            {tr("Annualized Return"), pct_str(total_ann_ret), "--",
              total_ann_ret >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
-            {"Annualized Volatility", pct_str(total_ann_vol), "--", ui::colors::CYAN},
-            {"Sharpe Ratio", fmt(total_sharpe), "--", total_sharpe >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
-            {"Max Drawdown", pct_str(total_max_dd), "--", ui::colors::NEGATIVE},
-            {"Best Day (any)", pct_str(total_best_day), "--", ui::colors::POSITIVE},
-            {"Worst Day (any)", pct_str(total_worst_day), "--", ui::colors::NEGATIVE},
-            {"Positive Days", QString::number(pos_days), "--", ui::colors::POSITIVE},
-            {"Negative Days", QString::number(neg_days), "--", ui::colors::NEGATIVE},
-            {"Best Holding", best_sym.isEmpty() ? "--" : best_sym + " (" + pct_str(best_ret) + ")", "--",
+            {tr("Annualized Volatility"), pct_str(total_ann_vol), "--", ui::colors::CYAN},
+            {tr("Sharpe Ratio"), fmt(total_sharpe), "--", total_sharpe >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
+            {tr("Max Drawdown"), pct_str(total_max_dd), "--", ui::colors::NEGATIVE},
+            {tr("Best Day (any)"), pct_str(total_best_day), "--", ui::colors::POSITIVE},
+            {tr("Worst Day (any)"), pct_str(total_worst_day), "--", ui::colors::NEGATIVE},
+            {tr("Positive Days"), QString::number(pos_days), "--", ui::colors::POSITIVE},
+            {tr("Negative Days"), QString::number(neg_days), "--", ui::colors::NEGATIVE},
+            {tr("Best Holding"), best_sym.isEmpty() ? "--" : best_sym + " (" + pct_str(best_ret) + ")", "--",
              ui::colors::POSITIVE},
-            {"Worst Holding", worst_sym.isEmpty() ? "--" : worst_sym + " (" + pct_str(worst_ret) + ")", "--",
+            {tr("Worst Holding"), worst_sym.isEmpty() ? "--" : worst_sym + " (" + pct_str(worst_ret) + ")", "--",
              ui::colors::NEGATIVE},
-            {"Total Return (cost)", pct_str(pnl_pct / 100.0), "--",
+            {tr("Total Return (cost)"), pct_str(pnl_pct / 100.0), "--",
              pnl_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
-            {"Win Rate", fmt(win_rate) + "%", "--", ui::colors::CYAN},
-            {"Positions", QString::number(summary_.total_positions), "--", ui::colors::CYAN},
-            {"Total Value", currency_ + " " + fmt(summary_.total_market_value), "--", ui::colors::WARNING},
-            {"Cost Basis", currency_ + " " + fmt(summary_.total_cost_basis), "--", ui::colors::TEXT_SECONDARY},
+            {tr("Win Rate"), fmt(win_rate) + "%", "--", ui::colors::CYAN},
+            {tr("Positions"), QString::number(summary_.total_positions), "--", ui::colors::CYAN},
+            {tr("Total Value"), currency_ + " " + fmt(summary_.total_market_value), "--", ui::colors::WARNING},
+            {tr("Cost Basis"), currency_ + " " + fmt(summary_.total_cost_basis), "--", ui::colors::TEXT_SECONDARY},
         };
     } else {
         // Pre-run: show live data and prompt user
@@ -447,15 +452,15 @@ void PortfolioFFNView::update_overview() {
         double sharpe = ann_vol > 0.01 ? (pnl_pct - 4.0) / ann_vol : 0.0;
 
         rows = {
-            {"Total Return (unrealized)", pct_str(pnl_pct / 100.0), "--",
+            {tr("Total Return (unrealized)"), pct_str(pnl_pct / 100.0), "--",
              pnl_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
-            {"Annualized Volatility (est.)", pct_str(ann_vol / 100.0), "--", ui::colors::CYAN},
-            {"Sharpe Ratio (est.)", fmt(sharpe), "--", sharpe >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
-            {"Win Rate", fmt(win_rate) + "%", "--", ui::colors::CYAN},
-            {"Positions", QString::number(summary_.total_positions), "--", ui::colors::CYAN},
-            {"Total Value", currency_ + " " + fmt(summary_.total_market_value), "--", ui::colors::WARNING},
-            {"Cost Basis", currency_ + " " + fmt(summary_.total_cost_basis), "--", ui::colors::TEXT_SECONDARY},
-            {"FFN Deep Metrics", "Click RUN FFN ANALYSIS for full stats", "--", ui::colors::AMBER},
+            {tr("Annualized Volatility (est.)"), pct_str(ann_vol / 100.0), "--", ui::colors::CYAN},
+            {tr("Sharpe Ratio (est.)"), fmt(sharpe), "--", sharpe >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
+            {tr("Win Rate"), fmt(win_rate) + "%", "--", ui::colors::CYAN},
+            {tr("Positions"), QString::number(summary_.total_positions), "--", ui::colors::CYAN},
+            {tr("Total Value"), currency_ + " " + fmt(summary_.total_market_value), "--", ui::colors::WARNING},
+            {tr("Cost Basis"), currency_ + " " + fmt(summary_.total_cost_basis), "--", ui::colors::TEXT_SECONDARY},
+            {tr("FFN Deep Metrics"), tr("Click RUN FFN ANALYSIS for full stats"), "--", ui::colors::AMBER},
         };
     }
 
@@ -494,13 +499,13 @@ void PortfolioFFNView::update_benchmark() {
         double max_dd = cur_stats["max_drawdown"].toDouble();
 
         rows = {
-            {"Total Return", pct_str(total_ret)}, {"CAGR", pct_str(cagr)},           {"Volatility", pct_str(vol)},
-            {"Sharpe Ratio", fmt(sharpe)},        {"Max Drawdown", pct_str(max_dd)},
+            {tr("Total Return"), pct_str(total_ret)}, {tr("CAGR"), pct_str(cagr)},           {tr("Volatility"), pct_str(vol)},
+            {tr("Sharpe Ratio"), fmt(sharpe)},        {tr("Max Drawdown"), pct_str(max_dd)},
         };
     } else {
         rows = {
-            {"Total Return", "--"}, {"CAGR", "--"},         {"Volatility", "--"},
-            {"Sharpe Ratio", "--"}, {"Max Drawdown", "--"},
+            {tr("Total Return"), "--"}, {tr("CAGR"), "--"},         {tr("Volatility"), "--"},
+            {tr("Sharpe Ratio"), "--"}, {tr("Max Drawdown"), "--"},
         };
     }
 
@@ -851,7 +856,7 @@ void PortfolioFFNView::run_ffn() {
         return;
 
     run_btn_->setEnabled(false);
-    status_label_->setText("Running FFN analysis...");
+    status_label_->setText(tr("Running FFN analysis..."));
     status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::AMBER()));
 
     QStringList symbols;
@@ -875,7 +880,7 @@ void PortfolioFFNView::run_ffn() {
                 self->run_btn_->setEnabled(true);
 
                 if (!r.success) {
-                    self->status_label_->setText("FFN failed — check Python/yfinance");
+                    self->status_label_->setText(tr("FFN failed — check Python/yfinance"));
                     self->status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
                     LOG_ERROR("FFNView", "FFN script failed: " + r.error.left(300));
                     return;
@@ -892,7 +897,7 @@ void PortfolioFFNView::run_ffn() {
                         ++sym_count;
 
                 self->status_label_->setText(
-                    QString("FFN complete — %1 symbol%2").arg(sym_count).arg(sym_count != 1 ? "s" : ""));
+                    tr("FFN complete — %n symbol(s)", "", sym_count));
                 self->status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE()));
 
                 LOG_INFO("FFNView", QString("FFN analysis complete for %1 symbol(s)").arg(sym_count));
@@ -906,6 +911,81 @@ void PortfolioFFNView::run_ffn() {
             },
             Qt::QueuedConnection);
     });
+}
+
+void PortfolioFFNView::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PortfolioFFNView::retranslateUi() {
+    if (back_btn_)     back_btn_->setText(tr("← BACK"));
+    if (title_label_)  title_label_->setText(tr("FFN ANALYTICS"));
+    if (run_btn_)      run_btn_->setText(tr("RUN FFN ANALYSIS"));
+    if (status_label_) status_label_->clear(); // transient — clear stale state
+
+    if (overview_hdr_)     overview_hdr_->setText(tr("PORTFOLIO METRICS OVERVIEW"));
+    if (benchmark_hdr_)    benchmark_hdr_->setText(tr("BENCHMARK COMPARISON"));
+    if (optimization_hdr_) optimization_hdr_->setText(tr("PORTFOLIO OPTIMISATION — WEIGHT COMPARISON"));
+    if (weights_hdr_)      weights_hdr_->setText(tr("ALLOCATION WEIGHTS BY STRATEGY"));
+    if (stats_hdr_)        stats_hdr_->setText(tr("STRATEGY PERFORMANCE STATS"));
+
+    if (benchmark_info_label_)
+        benchmark_info_label_->setText(tr("Portfolio metrics computed from 1-year price history via yfinance.\n"
+                                          "Connect a live benchmark feed to populate the Benchmark column."));
+
+    if (opt_placeholder_)
+        opt_placeholder_->setText(tr("EFFICIENT FRONTIER\n\nRun FFN Analysis to compute optimal weights\n"
+                                     "(ERC, Inverse-Vol, Equal, Current)."));
+    if (rebased_placeholder_)
+        rebased_placeholder_->setText(tr("REBASED PRICE CHARTS\n\nRun FFN Analysis to compare holdings\n"
+                                         "on a common base of 100."));
+    if (drawdowns_placeholder_)
+        drawdowns_placeholder_->setText(tr("DRAWDOWN ANALYSIS\n\nRun FFN Analysis to visualise historical\n"
+                                           "drawdowns for each holding."));
+    if (rolling_placeholder_)
+        rolling_placeholder_->setText(tr("ROLLING CORRELATIONS\n\nAdd more holdings and run FFN Analysis\n"
+                                         "to track 60-day rolling correlations."));
+
+    // Tabs were added in known order in build_ui(): OVERVIEW, BENCHMARK,
+    // OPTIMISATION, REBASED, DRAWDOWNS, ROLLING.
+    if (tabs_) {
+        if (tabs_->count() > 0) tabs_->setTabText(0, tr("OVERVIEW"));
+        if (tabs_->count() > 1) tabs_->setTabText(1, tr("BENCHMARK"));
+        if (tabs_->count() > 2) tabs_->setTabText(2, tr("OPTIMISATION"));
+        if (tabs_->count() > 3) tabs_->setTabText(3, tr("REBASED"));
+        if (tabs_->count() > 4) tabs_->setTabText(4, tr("DRAWDOWNS"));
+        if (tabs_->count() > 5) tabs_->setTabText(5, tr("ROLLING"));
+    }
+
+    // Re-set table column headers.
+    if (overview_table_)
+        overview_table_->setHorizontalHeaderLabels({tr("METRIC"), tr("PORTFOLIO"), tr("BENCHMARK (SPY)")});
+    if (benchmark_table_)
+        benchmark_table_->setHorizontalHeaderLabels({tr("METRIC"), tr("PORTFOLIO"), tr("BENCHMARK")});
+    if (opt_weights_table_)
+        opt_weights_table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("CURRENT"), tr("ERC"), tr("INV-VOL"), tr("EQUAL")});
+    if (opt_stats_table_)
+        opt_stats_table_->setHorizontalHeaderLabels({tr("STRATEGY"), tr("TOTAL RETURN"), tr("VOLATILITY"), tr("SHARPE"),
+                                                     tr("MAX DRAWDOWN")});
+
+    // Chart titles (each chart sets its own setTitle inside make_chart_view).
+    if (rebased_chart_view_ && rebased_chart_view_->chart())
+        rebased_chart_view_->chart()->setTitle(tr("Rebased Performance (Base = 100)"));
+    if (drawdowns_chart_view_ && drawdowns_chart_view_->chart())
+        drawdowns_chart_view_->chart()->setTitle(tr("Drawdown Analysis"));
+    if (rolling_chart_view_ && rolling_chart_view_->chart())
+        rolling_chart_view_->chart()->setTitle(tr("Rolling 60-Day Correlations"));
+
+    // Re-populate dynamic table rows (row.name is a tr() literal) when there's
+    // data to show. Each update_* is a no-op when its source object is empty.
+    if (!summary_.holdings.isEmpty())
+        update_overview();
+    if (!ffn_data_.isEmpty()) {
+        update_benchmark();
+        update_optimization();
+    }
 }
 
 } // namespace fincept::screens

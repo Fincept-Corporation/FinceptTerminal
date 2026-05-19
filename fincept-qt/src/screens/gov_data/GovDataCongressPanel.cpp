@@ -6,6 +6,7 @@
 #include "services/gov_data/GovDataService.h"
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
@@ -45,10 +46,18 @@ static QString congress_extra_qss() {
 GovDataCongressPanel::GovDataCongressPanel(QWidget* parent) : QWidget(parent) {
     setStyleSheet(make_gov_panel_style(kGovDataCongressColor, congress_extra_qss()));
     build_ui();
+    retranslateUi();
     connect(&services::GovDataService::instance(), &services::GovDataService::result_ready, this,
             &GovDataCongressPanel::on_result);
     connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
             [this]() { setStyleSheet(make_gov_panel_style(kGovDataCongressColor, congress_extra_qss())); });
+}
+
+void GovDataCongressPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
 }
 
 // ── Build UI ─────────────────────────────────────────────────────────────────
@@ -62,10 +71,9 @@ void GovDataCongressPanel::build_ui() {
 
     content_stack_ = new QStackedWidget;
 
-    // ── Page 0: Bills table ──
+    // ── Page 0: Bills table (headers set in retranslateUi) ──
     bills_table_ = new QTableWidget;
     bills_table_->setColumnCount(6);
-    bills_table_->setHorizontalHeaderLabels({"CONGRESS", "TYPE", "NUMBER", "TITLE", "LATEST ACTION", "DATE"});
     bills_table_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
     bills_table_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
     for (int c : {0, 1, 2, 5})
@@ -83,10 +91,9 @@ void GovDataCongressPanel::build_ui() {
     detail_browser_->setOpenExternalLinks(true);
     content_stack_->addWidget(detail_browser_);
 
-    // ── Page 2: Summary table ──
+    // ── Page 2: Summary table (headers set in retranslateUi) ──
     summary_table_ = new QTableWidget;
     summary_table_->setColumnCount(2);
-    summary_table_->setHorizontalHeaderLabels({"BILL TYPE", "COUNT"});
     summary_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     summary_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     summary_table_->verticalHeader()->setVisible(false);
@@ -118,8 +125,8 @@ QWidget* GovDataCongressPanel::build_toolbar() {
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(5);
 
-    // Back button
-    back_btn_ = new QPushButton("← BACK");
+    // Back button (text set in retranslateUi)
+    back_btn_ = new QPushButton;
     back_btn_->setObjectName("govBackBtn");
     back_btn_->setVisible(false);
     back_btn_->setCursor(Qt::PointingHandCursor);
@@ -128,15 +135,15 @@ QWidget* GovDataCongressPanel::build_toolbar() {
 
     hl->addSpacing(4);
 
-    // View tabs
-    bills_btn_ = new QPushButton("BILLS");
+    // View tabs (text set in retranslateUi)
+    bills_btn_ = new QPushButton;
     bills_btn_->setObjectName("govTabBtn");
     bills_btn_->setCheckable(true);
     bills_btn_->setChecked(true);
     bills_btn_->setCursor(Qt::PointingHandCursor);
     connect(bills_btn_, &QPushButton::clicked, this, [this]() { on_view_changed(Bills); });
 
-    summary_btn_ = new QPushButton("SUMMARY");
+    summary_btn_ = new QPushButton;
     summary_btn_->setObjectName("govTabBtn");
     summary_btn_->setCheckable(true);
     summary_btn_->setCursor(Qt::PointingHandCursor);
@@ -146,12 +153,12 @@ QWidget* GovDataCongressPanel::build_toolbar() {
     hl->addWidget(summary_btn_);
     hl->addSpacing(14);
 
-    // Congress number
+    // Filter labels (text set in retranslateUi)
     auto lbl_style =
         QString("color:%1; font-size:9px; font-weight:700; background:transparent;").arg(colors::TEXT_TERTIARY());
-    auto* cong_lbl = new QLabel("CONGRESS");
-    cong_lbl->setStyleSheet(lbl_style);
-    hl->addWidget(cong_lbl);
+    congress_lbl_ = new QLabel;
+    congress_lbl_->setStyleSheet(lbl_style);
+    hl->addWidget(congress_lbl_);
 
     congress_num_ = new QSpinBox;
     congress_num_->setRange(1, 200);
@@ -161,33 +168,33 @@ QWidget* GovDataCongressPanel::build_toolbar() {
 
     hl->addSpacing(10);
 
-    // Bill type
-    auto* type_lbl = new QLabel("TYPE");
-    type_lbl->setStyleSheet(lbl_style);
-    hl->addWidget(type_lbl);
+    type_lbl_ = new QLabel;
+    type_lbl_->setStyleSheet(lbl_style);
+    hl->addWidget(type_lbl_);
 
+    // Bill type — display text set in retranslateUi, user data is the API key.
     bill_type_combo_ = new QComboBox;
-    bill_type_combo_->addItem("All Types", "");
-    bill_type_combo_->addItem("House Bill", "hr");
-    bill_type_combo_->addItem("Senate Bill", "s");
-    bill_type_combo_->addItem("H. Joint Res.", "hjres");
-    bill_type_combo_->addItem("S. Joint Res.", "sjres");
-    bill_type_combo_->addItem("H. Con. Res.", "hconres");
-    bill_type_combo_->addItem("S. Con. Res.", "sconres");
-    bill_type_combo_->addItem("H. Simple Res.", "hres");
-    bill_type_combo_->addItem("S. Simple Res.", "sres");
+    bill_type_combo_->addItem(QString(), "");
+    bill_type_combo_->addItem(QString(), "hr");
+    bill_type_combo_->addItem(QString(), "s");
+    bill_type_combo_->addItem(QString(), "hjres");
+    bill_type_combo_->addItem(QString(), "sjres");
+    bill_type_combo_->addItem(QString(), "hconres");
+    bill_type_combo_->addItem(QString(), "sconres");
+    bill_type_combo_->addItem(QString(), "hres");
+    bill_type_combo_->addItem(QString(), "sres");
     bill_type_combo_->setFixedHeight(26);
     hl->addWidget(bill_type_combo_);
 
     hl->addStretch(1);
 
-    fetch_btn_ = new QPushButton("FETCH");
+    fetch_btn_ = new QPushButton;
     fetch_btn_->setObjectName("govFetchBtn");
     fetch_btn_->setCursor(Qt::PointingHandCursor);
     connect(fetch_btn_, &QPushButton::clicked, this, &GovDataCongressPanel::on_fetch_bills);
     hl->addWidget(fetch_btn_);
 
-    export_btn_ = new QPushButton("CSV");
+    export_btn_ = new QPushButton;
     export_btn_->setObjectName("govCsvBtn");
     export_btn_->setCursor(Qt::PointingHandCursor);
     connect(export_btn_, &QPushButton::clicked, this, &GovDataCongressPanel::on_export_csv);
@@ -196,10 +203,44 @@ QWidget* GovDataCongressPanel::build_toolbar() {
     return bar;
 }
 
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void GovDataCongressPanel::retranslateUi() {
+    if (back_btn_)    back_btn_->setText(tr("← BACK"));
+    if (bills_btn_)   bills_btn_->setText(tr("BILLS"));
+    if (summary_btn_) summary_btn_->setText(tr("SUMMARY"));
+    if (fetch_btn_)   fetch_btn_->setText(tr("FETCH"));
+    if (export_btn_)  export_btn_->setText(tr("CSV"));
+    if (congress_lbl_) congress_lbl_->setText(tr("CONGRESS"));
+    if (type_lbl_)     type_lbl_->setText(tr("TYPE"));
+
+    if (bill_type_combo_) {
+        const QString cur = bill_type_combo_->currentData().toString();
+        bill_type_combo_->setItemText(0, tr("All Types"));
+        bill_type_combo_->setItemText(1, tr("House Bill"));
+        bill_type_combo_->setItemText(2, tr("Senate Bill"));
+        bill_type_combo_->setItemText(3, tr("H. Joint Res."));
+        bill_type_combo_->setItemText(4, tr("S. Joint Res."));
+        bill_type_combo_->setItemText(5, tr("H. Con. Res."));
+        bill_type_combo_->setItemText(6, tr("S. Con. Res."));
+        bill_type_combo_->setItemText(7, tr("H. Simple Res."));
+        bill_type_combo_->setItemText(8, tr("S. Simple Res."));
+        const int idx = bill_type_combo_->findData(cur);
+        if (idx >= 0) bill_type_combo_->setCurrentIndex(idx);
+    }
+
+    if (bills_table_)
+        bills_table_->setHorizontalHeaderLabels(
+            {tr("CONGRESS"), tr("TYPE"), tr("NUMBER"), tr("TITLE"),
+             tr("LATEST ACTION"), tr("DATE")});
+    if (summary_table_)
+        summary_table_->setHorizontalHeaderLabels({tr("BILL TYPE"), tr("COUNT")});
+}
+
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 void GovDataCongressPanel::load_initial_data() {
-    show_loading("Select BILLS or SUMMARY and click FETCH");
+    show_loading(tr("Select BILLS or SUMMARY and click FETCH"));
 }
 
 void GovDataCongressPanel::on_view_changed(int index) {
@@ -215,11 +256,11 @@ void GovDataCongressPanel::on_fetch_bills() {
     QString bill_type = bill_type_combo_->currentData().toString();
 
     if (current_view_ == SummaryView) {
-        show_loading("Loading Congress summary…");
+        show_loading(tr("Loading Congress summary…"));
         services::GovDataService::instance().execute(kGovDataCongressScript, "summary", {QString::number(congress)},
                                                      "gov_congress_summary");
     } else {
-        show_loading("Loading bills…");
+        show_loading(tr("Loading bills…"));
         QStringList args;
         args << QString::number(congress);
         if (!bill_type.isEmpty())
@@ -240,7 +281,7 @@ void GovDataCongressPanel::on_bill_clicked(int row) {
     QString bill_num = num_item->text();
     int congress = cong_item->text().toInt();
 
-    show_loading("Loading bill detail…");
+    show_loading(tr("Loading bill detail…"));
     back_btn_->setVisible(true);
     services::GovDataService::instance().execute(kGovDataCongressScript, "bill_info",
                                                  {QString::number(congress), bill_type.toLower(), bill_num},
@@ -297,8 +338,8 @@ void GovDataCongressPanel::populate_bills(const QJsonObject& json) {
             title = title.left(120) + "…";
         bills_table_->setItem(i, 3, new QTableWidgetItem(title));
 
-        QString action = b["latest_action"].toString();
-        bills_table_->setItem(i, 4, new QTableWidgetItem(action.isEmpty() ? "—" : action));
+        const QString action = b["latest_action"].toString();
+        bills_table_->setItem(i, 4, new QTableWidgetItem(action.isEmpty() ? QStringLiteral("—") : action));
 
         QString date = b["latest_action_date"].toString();
         if (date.isEmpty())
@@ -315,9 +356,9 @@ void GovDataCongressPanel::populate_bill_detail(const QJsonObject& json) {
     if (md.isEmpty()) {
         auto bill = json["bill_data"].toObject();
         md = "# " + bill["title"].toString() + "\n\n";
-        md += "**Type:** " + bill["type"].toString() + "\n\n";
-        md += "**Congress:** " + QString::number(bill["congress"].toInt()) + "\n\n";
-        md += "**Status:** " + bill["latestAction"].toObject()["text"].toString() + "\n\n";
+        md += "**" + tr("Type:") + "** " + bill["type"].toString() + "\n\n";
+        md += "**" + tr("Congress:") + "** " + QString::number(bill["congress"].toInt()) + "\n\n";
+        md += "**" + tr("Status:") + "** " + bill["latestAction"].toObject()["text"].toString() + "\n\n";
     }
 
     QString html = md;
@@ -363,7 +404,7 @@ void GovDataCongressPanel::show_loading(const QString& message) {
 
 void GovDataCongressPanel::show_error(const QString& message) {
     status_label_->setStyleSheet(QString("color:%1; font-size:12px; background:transparent;").arg(colors::NEGATIVE()));
-    status_label_->setText("Error: " + message);
+    status_label_->setText(tr("Error: %1").arg(message));
     content_stack_->setCurrentIndex(3);
 }
 

@@ -6,7 +6,9 @@
 #include "ui/theme/Theme.h"
 
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDesktopServices>
+#include <QEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QFrame>
@@ -110,6 +112,7 @@ GovDataProviderPanel::GovDataProviderPanel(const QString& script, const QString&
     : QWidget(parent), script_(script), color_(provider_color), org_label_(org_label), options_(options) {
     setStyleSheet(make_gov_panel_style(color_));
     build_ui();
+    retranslateUi();
 
     // Animated loading dots timer (500ms tick)
     loading_timer_ = new QTimer(this);
@@ -151,10 +154,10 @@ void GovDataProviderPanel::build_ui() {
         auto* phl = new QHBoxLayout(portal_bar);
         phl->setContentsMargins(14, 0, 14, 0);
         phl->setSpacing(8);
-        auto* plbl = new QLabel("CKAN PORTAL:");
-        plbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700;"
-                                    " letter-spacing:0.5px; background:transparent;").arg(text_sec));
-        phl->addWidget(plbl);
+        portal_label_ = new QLabel;
+        portal_label_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700;"
+                                             " letter-spacing:0.5px; background:transparent;").arg(text_sec));
+        phl->addWidget(portal_label_);
         auto* combo = new QComboBox;
         combo->setObjectName("govPortalCombo");
         combo->addItems(options_.portal_combo_items);
@@ -195,10 +198,9 @@ void GovDataProviderPanel::build_ui() {
     // Content stack
     content_stack_ = new QStackedWidget;
 
-    // Page 0 — Orgs table
+    // Page 0 — Orgs table (headers set in retranslateUi)
     orgs_table_ = new QTableWidget;
     orgs_table_->setColumnCount(2);
-    orgs_table_->setHorizontalHeaderLabels({org_label_.toUpper(), "DATASETS"});
     orgs_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     orgs_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     orgs_table_->setColumnWidth(1, 80);
@@ -206,10 +208,9 @@ void GovDataProviderPanel::build_ui() {
     connect(orgs_table_, &QTableWidget::cellDoubleClicked, this, &GovDataProviderPanel::on_org_clicked);
     content_stack_->addWidget(orgs_table_);
 
-    // Page 1 — Datasets table
+    // Page 1 — Datasets table (headers set in retranslateUi)
     datasets_table_ = new QTableWidget;
     datasets_table_->setColumnCount(4);
-    datasets_table_->setHorizontalHeaderLabels({"TITLE", "FILES", "MODIFIED", "TAGS"});
     datasets_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     datasets_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     datasets_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
@@ -221,10 +222,9 @@ void GovDataProviderPanel::build_ui() {
     connect(datasets_table_, &QTableWidget::cellDoubleClicked, this, &GovDataProviderPanel::on_dataset_clicked);
     content_stack_->addWidget(datasets_table_);
 
-    // Page 2 — Resources table
+    // Page 2 — Resources table (headers set in retranslateUi)
     resources_table_ = new QTableWidget;
     resources_table_->setColumnCount(5);
-    resources_table_->setHorizontalHeaderLabels({"NAME", "FORMAT", "SIZE", "MODIFIED", "OPEN"});
     resources_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     resources_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     resources_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
@@ -283,8 +283,8 @@ QWidget* GovDataProviderPanel::build_toolbar() {
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(5);
 
-    // Back button
-    back_btn_ = new QPushButton("← BACK");
+    // Back button (text set in retranslateUi)
+    back_btn_ = new QPushButton;
     back_btn_->setObjectName("govBackBtn");
     back_btn_->setVisible(false);
     back_btn_->setCursor(Qt::PointingHandCursor);
@@ -294,7 +294,7 @@ QWidget* GovDataProviderPanel::build_toolbar() {
     hl->addSpacing(4);
 
     // View tabs (no SEARCH tab — search is always available via the input)
-    orgs_btn_ = new QPushButton(org_label_.toUpper());
+    orgs_btn_ = new QPushButton;
     orgs_btn_->setObjectName("govTabBtn");
     orgs_btn_->setCheckable(true);
     orgs_btn_->setChecked(true);
@@ -302,7 +302,7 @@ QWidget* GovDataProviderPanel::build_toolbar() {
     connect(orgs_btn_, &QPushButton::clicked, this, [this]() { on_view_changed(Orgs); });
     hl->addWidget(orgs_btn_);
 
-    datasets_btn_ = new QPushButton("DATASETS");
+    datasets_btn_ = new QPushButton;
     datasets_btn_->setObjectName("govTabBtn");
     datasets_btn_->setCheckable(true);
     datasets_btn_->setCursor(Qt::PointingHandCursor);
@@ -322,13 +322,12 @@ QWidget* GovDataProviderPanel::build_toolbar() {
     // Search input — always visible and active, press Enter to search
     search_input_ = new QLineEdit;
     search_input_->setObjectName("govSearch");
-    search_input_->setPlaceholderText("Search datasets…  ↵");
     search_input_->setFixedWidth(210);
     search_input_->setFixedHeight(24);
     connect(search_input_, &QLineEdit::returnPressed, this, &GovDataProviderPanel::on_search);
     hl->addWidget(search_input_);
 
-    fetch_btn_ = new QPushButton("FETCH");
+    fetch_btn_ = new QPushButton;
     fetch_btn_->setObjectName("govFetchBtn");
     fetch_btn_->setCursor(Qt::PointingHandCursor);
     connect(fetch_btn_, &QPushButton::clicked, this, [this]() {
@@ -341,7 +340,7 @@ QWidget* GovDataProviderPanel::build_toolbar() {
 
     hl->addStretch(1);
 
-    export_btn_ = new QPushButton("CSV");
+    export_btn_ = new QPushButton;
     export_btn_->setObjectName("govCsvBtn");
     export_btn_->setCursor(Qt::PointingHandCursor);
     connect(export_btn_, &QPushButton::clicked, this, &GovDataProviderPanel::on_export_csv);
@@ -350,10 +349,65 @@ QWidget* GovDataProviderPanel::build_toolbar() {
     return bar;
 }
 
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+QString GovDataProviderPanel::org_label_translated() const {
+    if (org_label_ == "Organizations") return tr("Organizations");
+    return tr("Publishers");
+}
+
+QString GovDataProviderPanel::org_label_translated_upper() const {
+    if (org_label_ == "Organizations") return tr("ORGANIZATIONS");
+    return tr("PUBLISHERS");
+}
+
+QString GovDataProviderPanel::org_label_translated_lower() const {
+    if (org_label_ == "Organizations") return tr("organizations");
+    return tr("publishers");
+}
+
+QString GovDataProviderPanel::all_orgs_breadcrumb() const {
+    if (org_label_ == "Organizations") return tr("All Organizations");
+    return tr("All Publishers");
+}
+
+void GovDataProviderPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
+}
+
+void GovDataProviderPanel::retranslateUi() {
+    if (portal_label_)
+        portal_label_->setText(tr("CKAN PORTAL:"));
+
+    if (back_btn_)     back_btn_->setText(tr("← BACK"));
+    if (orgs_btn_)     orgs_btn_->setText(org_label_translated_upper());
+    if (datasets_btn_) datasets_btn_->setText(tr("DATASETS"));
+    if (search_input_) search_input_->setPlaceholderText(tr("Search datasets…  ↵"));
+    if (fetch_btn_)    fetch_btn_->setText(tr("FETCH"));
+    if (export_btn_)   export_btn_->setText(tr("CSV"));
+
+    if (orgs_table_) {
+        orgs_table_->setHorizontalHeaderLabels({org_label_translated_upper(), tr("DATASETS")});
+    }
+    if (datasets_table_) {
+        datasets_table_->setHorizontalHeaderLabels({tr("TITLE"), tr("FILES"), tr("MODIFIED"), tr("TAGS")});
+    }
+    if (resources_table_) {
+        resources_table_->setHorizontalHeaderLabels({tr("NAME"), tr("FORMAT"), tr("SIZE"), tr("MODIFIED"), tr("OPEN")});
+    }
+
+    // Rebuild breadcrumb so segment text picks up the new language.
+    if (breadcrumb_layout_)
+        update_breadcrumb();
+}
+
 // ── Data loading ─────────────────────────────────────────────────────────────
 
 void GovDataProviderPanel::load_initial_data() {
-    show_loading("Loading " + org_label_.toLower() + "…");
+    show_loading(tr("Loading %1…").arg(org_label_translated_lower()));
     services::GovDataService::instance().execute(script_, "publishers", {}, "gov_orgs_" + script_);
 }
 
@@ -442,7 +496,12 @@ void GovDataProviderPanel::populate_orgs(const QJsonArray& json) {
         orgs_table_->setItem(i, 1, cnt);
     }
 
-    row_count_label_->setText(QString::number(json.size()) + " " + org_label_.toLower() + "s");
+    // org_label_ resolves to either "Publishers" or "Organizations" — separate
+    // tr() calls let translators provide proper plural forms per language.
+    if (org_label_ == "Organizations")
+        row_count_label_->setText(tr("%1 organizations").arg(json.size()));
+    else
+        row_count_label_->setText(tr("%1 publishers").arg(json.size()));
 }
 
 void GovDataProviderPanel::populate_datasets(const QJsonArray& json, int total_count) {
@@ -487,7 +546,7 @@ void GovDataProviderPanel::populate_datasets(const QJsonArray& json, int total_c
         datasets_table_->setItem(i, 3, tag_item);
     }
 
-    row_count_label_->setText(QString("Showing %1 of %2").arg(json.size()).arg(total_count));
+    row_count_label_->setText(tr("Showing %1 of %2").arg(json.size()).arg(total_count));
 }
 
 void GovDataProviderPanel::populate_resources(const QJsonArray& json) {
@@ -511,11 +570,11 @@ void GovDataProviderPanel::populate_resources(const QJsonArray& json) {
         QString size_str = "—";
         if (size_bytes > 0) {
             if (size_bytes < 1024)
-                size_str = QString::number(size_bytes, 'f', 0) + " B";
+                size_str = tr("%1 B").arg(QString::number(size_bytes, 'f', 0));
             else if (size_bytes < 1024 * 1024)
-                size_str = QString::number(size_bytes / 1024, 'f', 1) + " KB";
+                size_str = tr("%1 KB").arg(QString::number(size_bytes / 1024, 'f', 1));
             else
-                size_str = QString::number(size_bytes / (1024.0 * 1024.0), 'f', 1) + " MB";
+                size_str = tr("%1 MB").arg(QString::number(size_bytes / (1024.0 * 1024.0), 'f', 1));
         }
         auto* sz = new QTableWidgetItem(size_str);
         sz->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -532,7 +591,7 @@ void GovDataProviderPanel::populate_resources(const QJsonArray& json) {
             no_url->setTextAlignment(Qt::AlignCenter);
             resources_table_->setItem(i, 4, no_url);
         } else {
-            auto* open_btn = new QPushButton("↗ OPEN");
+            auto* open_btn = new QPushButton(tr("↗ OPEN"));
             open_btn->setCursor(Qt::PointingHandCursor);
             open_btn->setFlat(true);
             open_btn->setStyleSheet(
@@ -547,7 +606,7 @@ void GovDataProviderPanel::populate_resources(const QJsonArray& json) {
         }
     }
 
-    row_count_label_->setText(QString::number(json.size()) + " files");
+    row_count_label_->setText(tr("%1 files").arg(json.size()));
 }
 
 // ── View navigation ──────────────────────────────────────────────────────────
@@ -574,7 +633,7 @@ void GovDataProviderPanel::on_org_clicked(int row) {
         return;
     selected_org_ = item->data(Qt::UserRole).toString();
     selected_org_name_ = item->text();
-    show_loading("Loading datasets for " + item->text() + "…");
+    show_loading(tr("Loading datasets for %1…").arg(item->text()));
     services::GovDataService::instance().execute(script_, "datasets", {selected_org_, "100"},
                                                  "gov_datasets_" + script_);
 }
@@ -584,7 +643,7 @@ void GovDataProviderPanel::on_dataset_clicked(int row) {
     if (!item)
         return;
     selected_dataset_ = item->data(Qt::UserRole).toString();
-    show_loading("Loading resources…");
+    show_loading(tr("Loading resources…"));
     services::GovDataService::instance().execute(script_, "resources", {selected_dataset_}, "gov_resources_" + script_);
 }
 
@@ -596,7 +655,7 @@ void GovDataProviderPanel::on_search() {
     current_view_ = Search;
     orgs_btn_->setChecked(false);
     datasets_btn_->setChecked(false);
-    show_loading("Searching for "" + query + ""…");
+    show_loading(tr("Searching for \"%1\"…").arg(query));
     services::GovDataService::instance().execute(script_, "search", {query, "50"}, "gov_search_" + script_);
 }
 
@@ -664,10 +723,10 @@ void GovDataProviderPanel::update_breadcrumb() {
 
     switch (current_view_) {
         case Orgs:
-            insert(make_seg("All " + org_label_, /*active=*/true, [](){}));
+            insert(make_seg(all_orgs_breadcrumb(), /*active=*/true, [](){}));
             break;
         case Datasets:
-            insert(make_seg("All " + org_label_, false, [this]() {
+            insert(make_seg(all_orgs_breadcrumb(), false, [this]() {
                 current_view_ = Orgs;
                 selected_org_.clear();
                 selected_org_name_.clear();
@@ -679,7 +738,7 @@ void GovDataProviderPanel::update_breadcrumb() {
             insert(make_seg(selected_org_name_, /*active=*/true, [](){}));
             break;
         case Resources:
-            insert(make_seg("All " + org_label_, false, [this]() {
+            insert(make_seg(all_orgs_breadcrumb(), false, [this]() {
                 current_view_ = Orgs;
                 selected_org_.clear();
                 selected_org_name_.clear();
@@ -697,10 +756,10 @@ void GovDataProviderPanel::update_breadcrumb() {
                 update_breadcrumb();
             }));
             insert(make_sep());
-            insert(make_seg("Resources", /*active=*/true, [](){}));
+            insert(make_seg(tr("Resources"), /*active=*/true, [](){}));
             break;
         case Search:
-            insert(make_seg("Search Results", /*active=*/true, [](){}));
+            insert(make_seg(tr("Search Results"), /*active=*/true, [](){}));
             break;
     }
 }
@@ -733,7 +792,7 @@ void GovDataProviderPanel::show_error(const QString& message) {
         loading_timer_->stop();
     status_label_->setStyleSheet(
         QString("color:%1; font-size:12px; background:transparent;").arg(colors::NEGATIVE()));
-    status_label_->setText("Error: " + message);
+    status_label_->setText(tr("Error: %1").arg(message));
     content_stack_->setCurrentIndex(3);
 }
 
@@ -745,6 +804,8 @@ void GovDataProviderPanel::on_export_csv() {
 
     if (current_view_ == Orgs && orgs_table_->rowCount() > 0) {
         table = orgs_table_;
+        // Filename stays ASCII / English-keyed so files sort consistently in the
+        // user's filesystem regardless of UI language.
         def_name = "gov_" + org_label_.toLower() + ".csv";
     } else if ((current_view_ == Datasets || current_view_ == Search) && datasets_table_->rowCount() > 0) {
         table = datasets_table_;
@@ -756,14 +817,14 @@ void GovDataProviderPanel::on_export_csv() {
     if (!table)
         return;
 
-    QString path = QFileDialog::getSaveFileName(this, "Export CSV", def_name, "CSV Files (*.csv)");
+    QString path = QFileDialog::getSaveFileName(this, tr("Export CSV"), def_name, tr("CSV Files (*.csv)"));
     if (path.isEmpty())
         return;
 
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        export_btn_->setText("✗ FAILED");
-        QTimer::singleShot(2000, this, [this]() { export_btn_->setText("CSV"); });
+        export_btn_->setText(tr("✗ FAILED"));
+        QTimer::singleShot(2000, this, [this]() { export_btn_->setText(tr("CSV")); });
         return;
     }
     QTextStream out(&file);
@@ -787,8 +848,8 @@ void GovDataProviderPanel::on_export_csv() {
         out << row.join(",") << "\n";
     }
 
-    export_btn_->setText("✓ SAVED");
-    QTimer::singleShot(1500, this, [this]() { export_btn_->setText("CSV"); });
+    export_btn_->setText(tr("✓ SAVED"));
+    QTimer::singleShot(1500, this, [this]() { export_btn_->setText(tr("CSV")); });
 }
 
 // ── Shared CSV export utility (used by all gov_data panels) ─────────────────
@@ -797,13 +858,20 @@ void export_table_to_csv(QTableWidget* table, const QString& default_name, QWidg
     if (!table || table->rowCount() == 0)
         return;
 
-    const QString path = QFileDialog::getSaveFileName(parent, "Export CSV", default_name, "CSV Files (*.csv)");
+    const QString path = QFileDialog::getSaveFileName(
+        parent,
+        QCoreApplication::translate("GovDataProviderPanel", "Export CSV"),
+        default_name,
+        QCoreApplication::translate("GovDataProviderPanel", "CSV Files (*.csv)"));
     if (path.isEmpty())
         return;
 
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::warning(parent, "Export failed", "Unable to open file for writing.");
+        QMessageBox::warning(
+            parent,
+            QCoreApplication::translate("GovDataProviderPanel", "Export failed"),
+            QCoreApplication::translate("GovDataProviderPanel", "Unable to open file for writing."));
         return;
     }
     QTextStream out(&file);

@@ -23,7 +23,7 @@ constexpr const char* kConfigKeyPortfolioId = "portfolio_id";
 } // namespace
 
 PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
-    : BaseWidget("PORTFOLIO SUMMARY", parent, ui::colors::POSITIVE) {
+    : BaseWidget(tr("PORTFOLIO SUMMARY"), parent, ui::colors::POSITIVE) {
     auto* vl = content_layout();
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
@@ -53,10 +53,10 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
         sl->addWidget(value_out, row * 2 + 1, col);
     };
 
-    make_metric("TOTAL VALUE", total_value_lbl_, 0, 0);
-    make_metric("DAY P&L", day_pnl_lbl_, 0, 1);
-    make_metric("TOTAL P&L", total_pnl_lbl_, 1, 0);
-    make_metric("HOLDINGS", num_holdings_lbl_, 1, 1);
+    make_metric(tr("TOTAL VALUE"), total_value_lbl_, 0, 0);
+    make_metric(tr("DAY P&L"), day_pnl_lbl_, 0, 1);
+    make_metric(tr("TOTAL P&L"), total_pnl_lbl_, 1, 0);
+    make_metric(tr("HOLDINGS"), num_holdings_lbl_, 1, 1);
 
     vl->addWidget(summary_card_);
 
@@ -71,11 +71,11 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
         header_labels_.append(l);
         hl->addWidget(l, s);
     };
-    make_hdr_lbl("SYM", 1);
-    make_hdr_lbl("SHARES", 1, Qt::AlignRight);
-    make_hdr_lbl("PRICE", 1, Qt::AlignRight);
-    make_hdr_lbl("VALUE", 1, Qt::AlignRight);
-    make_hdr_lbl("P&L", 1, Qt::AlignRight);
+    make_hdr_lbl(tr("SYM"), 1);
+    make_hdr_lbl(tr("SHARES"), 1, Qt::AlignRight);
+    make_hdr_lbl(tr("PRICE"), 1, Qt::AlignRight);
+    make_hdr_lbl(tr("VALUE"), 1, Qt::AlignRight);
+    make_hdr_lbl(tr("P&L"), 1, Qt::AlignRight);
     vl->addWidget(header_row_);
 
     // Scrollable holdings list
@@ -207,7 +207,7 @@ void PortfolioSummaryWidget::load_holdings() {
     refresh_portfolio_cache();
 
     if (portfolio_cache_.isEmpty()) {
-        render_empty("No portfolios yet.\nCreate one from the Portfolio tab.");
+        render_empty(tr("No portfolios yet.\nCreate one from the Portfolio tab."));
         return;
     }
 
@@ -246,7 +246,7 @@ void PortfolioSummaryWidget::load_holdings() {
     }
 
     if (holdings.isEmpty()) {
-        render_empty(QStringLiteral("'%1' has no holdings.\nAdd positions from the Portfolio tab.")
+        render_empty(tr("'%1' has no holdings.\nAdd positions from the Portfolio tab.")
                          .arg(picked->name));
         return;
     }

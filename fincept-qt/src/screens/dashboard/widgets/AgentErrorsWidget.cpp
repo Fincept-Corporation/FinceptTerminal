@@ -14,13 +14,13 @@
 namespace fincept::screens::widgets {
 
 AgentErrorsWidget::AgentErrorsWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget("AGENT ERRORS", parent) {
+    : BaseWidget(tr("AGENT ERRORS"), parent) {
     auto* vl = content_layout();
     vl->setContentsMargins(8, 6, 8, 6);
     vl->setSpacing(4);
 
     table_ = new QTableWidget(0, 3, this);
-    table_->setHorizontalHeaderLabels({"Time", "Context", "Message"});
+    table_->setHorizontalHeaderLabels({tr("Time"), tr("Context"), tr("Message")});
     table_->verticalHeader()->setVisible(false);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionMode(QAbstractItemView::NoSelection);
@@ -106,13 +106,13 @@ void AgentErrorsWidget::render() {
 
 QDialog* AgentErrorsWidget::make_config_dialog(QWidget* parent) {
     auto* dlg = new QDialog(parent);
-    dlg->setWindowTitle("Configure — Agent Errors");
+    dlg->setWindowTitle(tr("Configure — Agent Errors"));
     auto* form = new QFormLayout(dlg);
 
     auto* spin = new QSpinBox(dlg);
     spin->setRange(3, 100);
     spin->setValue(max_rows_);
-    form->addRow("Max rows", spin);
+    form->addRow(tr("Max rows"), spin);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
     form->addRow(buttons);

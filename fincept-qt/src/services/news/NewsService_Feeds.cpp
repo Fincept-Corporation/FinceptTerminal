@@ -10,9 +10,12 @@
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
 #include "storage/cache/CacheManager.h"
+#include "storage/repositories/RssFeedRepository.h"
 
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+
+#include <QHash>
 
 #include <QAtomicInt>
 #include <QDateTime>
@@ -317,5 +320,233 @@ Impact impact_from_string(const QString& s) {
 }
 
 // ── DataHub producer wiring ─────────────────────────────────────────────────
+
+// ── Feed catalog overlay (built-ins + user edits) ───────────────────────────
+//
+// `default_feeds()` is the immutable in-code catalog. The `rss_feeds` table
+// (v031 migration) stores user overrides:
+//   - is_builtin=1 + id matches a default → overlay (changed url/name/...) or
+//     disabled state.
+//   - is_builtin=0 → fully user-added feed.
+
+namespace {
+
+fincept::RssFeedRow to_row(const fincept::services::RSSFeed& f, bool is_builtin, bool enabled) {
+    fincept::RssFeedRow r;
+    r.id = f.id;
+    r.name = f.name;
+    r.url = f.url;
+    r.category = f.category;
+    r.region = f.region;
+    r.source = f.source;
+    r.tier = f.tier;
+    r.is_builtin = is_builtin;
+    r.enabled = enabled;
+    return r;
+}
+
+fincept::services::RSSFeed apply_overlay(const fincept::services::RSSFeed& base,
+                                          const fincept::RssFeedRow& patch) {
+    fincept::services::RSSFeed merged = base;
+    merged.name = patch.name;
+    merged.url = patch.url;
+    merged.category = patch.category;
+    merged.region = patch.region;
+    merged.source = patch.source;
+    merged.tier = patch.tier;
+    return merged;
+}
+
+} // anonymous namespace
+
+QVector<RSSFeed> NewsService::list_effective_feeds() const {
+    const auto defaults = default_feeds();
+    auto repo_res = fincept::RssFeedRepository::instance().list_all();
+    if (repo_res.is_err()) {
+        LOG_WARN("NewsService", QString("rss_feeds query failed; using built-ins only: %1")
+                                    .arg(QString::fromStdString(repo_res.error())));
+        return defaults;
+    }
+
+    QHash<QString, fincept::RssFeedRow> by_id;
+    by_id.reserve(repo_res.value().size());
+    for (const auto& r : repo_res.value())
+        by_id.insert(r.id, r);
+
+    QVector<RSSFeed> out;
+    out.reserve(defaults.size() + by_id.size());
+
+    for (const auto& d : defaults) {
+        auto it = by_id.find(d.id);
+        if (it == by_id.end()) {
+            out.append(d);
+            continue;
+        }
+        if (!it->enabled)
+            continue;
+        out.append(apply_overlay(d, *it));
+    }
+
+    QSet<QString> default_ids;
+    for (const auto& d : defaults)
+        default_ids.insert(d.id);
+    for (const auto& r : repo_res.value()) {
+        if (r.is_builtin || default_ids.contains(r.id) || !r.enabled)
+            continue;
+        RSSFeed f;
+        f.id = r.id;
+        f.name = r.name;
+        f.url = r.url;
+        f.category = r.category;
+        f.region = r.region;
+        f.source = r.source;
+        f.tier = r.tier;
+        out.append(f);
+    }
+    return out;
+}
+
+QVector<NewsService::EditorFeed> NewsService::list_all_feeds_for_editor() const {
+    const auto defaults = default_feeds();
+    auto repo_res = fincept::RssFeedRepository::instance().list_all();
+
+    QHash<QString, fincept::RssFeedRow> by_id;
+    if (!repo_res.is_err()) {
+        for (const auto& r : repo_res.value())
+            by_id.insert(r.id, r);
+    }
+
+    QVector<EditorFeed> out;
+    out.reserve(defaults.size() + by_id.size());
+
+    for (const auto& d : defaults) {
+        EditorFeed ef;
+        ef.is_builtin = true;
+        auto it = by_id.find(d.id);
+        if (it == by_id.end()) {
+            ef.feed = d;
+            ef.is_customized = false;
+            ef.enabled = true;
+        } else {
+            ef.feed = apply_overlay(d, *it);
+            ef.is_customized = true;
+            ef.enabled = it->enabled;
+        }
+        out.append(ef);
+    }
+
+    QSet<QString> default_ids;
+    for (const auto& d : defaults)
+        default_ids.insert(d.id);
+    if (!repo_res.is_err()) {
+        for (const auto& r : repo_res.value()) {
+            if (r.is_builtin || default_ids.contains(r.id))
+                continue;
+            EditorFeed ef;
+            ef.feed.id = r.id;
+            ef.feed.name = r.name;
+            ef.feed.url = r.url;
+            ef.feed.category = r.category;
+            ef.feed.region = r.region;
+            ef.feed.source = r.source;
+            ef.feed.tier = r.tier;
+            ef.is_builtin = false;
+            ef.is_customized = false;
+            ef.enabled = r.enabled;
+            out.append(ef);
+        }
+    }
+    return out;
+}
+
+bool NewsService::add_user_feed(const RSSFeed& f) {
+    auto row = to_row(f, /*is_builtin=*/false, /*enabled=*/true);
+    auto r = fincept::RssFeedRepository::instance().upsert(row);
+    if (r.is_err()) {
+        LOG_ERROR("NewsService", QString("add_user_feed failed: %1").arg(QString::fromStdString(r.error())));
+        return false;
+    }
+    reload_feeds();
+    return true;
+}
+
+bool NewsService::update_feed(const RSSFeed& f, bool enabled) {
+    const auto defaults = default_feeds();
+    bool is_builtin = false;
+    for (const auto& d : defaults) {
+        if (d.id == f.id) {
+            is_builtin = true;
+            break;
+        }
+    }
+    auto row = to_row(f, is_builtin, enabled);
+    auto r = fincept::RssFeedRepository::instance().upsert(row);
+    if (r.is_err()) {
+        LOG_ERROR("NewsService", QString("update_feed failed: %1").arg(QString::fromStdString(r.error())));
+        return false;
+    }
+    reload_feeds();
+    return true;
+}
+
+bool NewsService::remove_or_reset_feed(const QString& id) {
+    auto r = fincept::RssFeedRepository::instance().remove(id);
+    if (r.is_err()) {
+        LOG_ERROR("NewsService", QString("remove_or_reset_feed failed: %1").arg(QString::fromStdString(r.error())));
+        return false;
+    }
+    reload_feeds();
+    return true;
+}
+
+bool NewsService::set_feed_enabled(const QString& id, bool enabled) {
+    const auto defaults = default_feeds();
+    const RSSFeed* default_ptr = nullptr;
+    for (const auto& d : defaults) {
+        if (d.id == id) {
+            default_ptr = &d;
+            break;
+        }
+    }
+
+    auto& repo = fincept::RssFeedRepository::instance();
+    auto rows = repo.list_all();
+    bool exists = false;
+    if (!rows.is_err()) {
+        for (const auto& r : rows.value()) {
+            if (r.id == id) {
+                exists = true;
+                break;
+            }
+        }
+    }
+
+    if (exists) {
+        auto r = repo.set_enabled(id, enabled);
+        if (r.is_err()) {
+            LOG_ERROR("NewsService",
+                      QString("set_feed_enabled failed: %1").arg(QString::fromStdString(r.error())));
+            return false;
+        }
+    } else if (default_ptr) {
+        auto row = to_row(*default_ptr, /*is_builtin=*/true, enabled);
+        auto r = repo.upsert(row);
+        if (r.is_err()) {
+            LOG_ERROR("NewsService",
+                      QString("set_feed_enabled (insert overlay) failed: %1").arg(QString::fromStdString(r.error())));
+            return false;
+        }
+    } else {
+        LOG_WARN("NewsService", QString("set_feed_enabled: unknown feed id %1").arg(id));
+        return false;
+    }
+    reload_feeds();
+    return true;
+}
+
+void NewsService::reload_feeds() {
+    fincept::CacheManager::instance().clear_category("news");
+    emit feeds_changed();
+}
 
 } // namespace fincept::services

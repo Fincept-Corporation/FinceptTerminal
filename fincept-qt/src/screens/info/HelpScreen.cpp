@@ -3,6 +3,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QDesktopServices>
+#include <QEvent>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -99,11 +100,34 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
 
-    auto* scroll = new QScrollArea;
-    scroll->setWidgetResizable(true);
-    scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }");
+    scroll_ = new QScrollArea;
+    scroll_->setWidgetResizable(true);
+    scroll_->setStyleSheet("QScrollArea { border: none; background: transparent; }");
+    scroll_->setWidget(build_page());
+    root->addWidget(scroll_, 1);
 
-    auto* page = new QWidget(this);
+    // ── Theme wiring ──────────────────────────────────────────────────────────
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        setStyleSheet(QString("QWidget#HelpRoot { background: %1; }").arg(colors::BG_BASE()));
+    });
+}
+
+// ── Re-translation ────────────────────────────────────────────────────────────
+// Static-content screen with no live state — on language change we rebuild
+// the page from scratch rather than caching every label/button as a member.
+// QScrollArea::setWidget() takes ownership and deletes the previous content.
+
+void HelpScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange && scroll_) {
+        scroll_->setWidget(build_page());
+    }
+    QWidget::changeEvent(event);
+}
+
+// ── Page builder ──────────────────────────────────────────────────────────────
+
+QWidget* HelpScreen::build_page() {
+    auto* page = new QWidget;
     page->setStyleSheet(QString("background: %1;").arg(colors::BG_BASE()));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(28, 24, 28, 32);
@@ -111,7 +135,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
 
     // ── Hero banner ───────────────────────────────────────────────────────────
     {
-        auto* hero = new QWidget(this);
+        auto* hero = new QWidget(page);
         hero->setStyleSheet(QString("background: %1; border: 1px solid %2; border-left: 4px solid %3;")
                                 .arg(colors::BG_SURFACE(), colors::BORDER_DIM(), colors::AMBER()));
         auto* hl = new QHBoxLayout(hero);
@@ -121,13 +145,13 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
         auto* text_vl = new QVBoxLayout;
         text_vl->setSpacing(5);
 
-        auto* title = new QLabel("HELP CENTER");
+        auto* title = new QLabel(tr("HELP CENTER"));
         title->setStyleSheet(QString("color: %1; font-size: 22px; font-weight: 700; letter-spacing: 2px;"
                                      " background: transparent; %2")
                                  .arg(colors::AMBER(), MF));
         text_vl->addWidget(title);
 
-        auto* sub = new QLabel("Find answers, get support, and connect with the Fincept community.");
+        auto* sub = new QLabel(tr("Find answers, get support, and connect with the Fincept community."));
         sub->setStyleSheet(
             QString("color: %1; font-size: 12px; background: transparent; %2").arg(colors::TEXT_SECONDARY(), MF));
         text_vl->addWidget(sub);
@@ -158,10 +182,12 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
             QObject::connect(chip, &QPushButton::clicked, chip, [url]() { QDesktopServices::openUrl(QUrl(url)); });
             return chip;
         };
+        // Email + Discord chip text is shown verbatim (URL/handle) — not translated.
+        // Business-hours label IS translated.
         chips_vl->addWidget(make_chip("✉", "support@fincept.in", colors::CYAN, "mailto:support@fincept.in"));
         chips_vl->addWidget(
             make_chip("💬", "discord.gg/ae87a8ygbN", colors::POSITIVE, "https://discord.gg/ae87a8ygbN"));
-        chips_vl->addWidget(make_chip("🕐", "Mon-Fri  9AM–6PM EST", colors::TEXT_TERTIARY));
+        chips_vl->addWidget(make_chip("🕐", tr("Mon-Fri  9AM–6PM EST"), colors::TEXT_TERTIARY));
         hl->addLayout(chips_vl);
 
         vl->addWidget(hero);
@@ -171,24 +197,27 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
 
     // ── Quick Actions ─────────────────────────────────────────────────────────
     {
-        vl->addWidget(section_header("QUICK ACTIONS", "Common tasks you can do right now"));
+        vl->addWidget(section_header(tr("QUICK ACTIONS"), tr("Common tasks you can do right now")));
         vl->addSpacing(8);
 
         auto* grid = new QGridLayout;
         grid->setSpacing(8);
 
+        // Each Action carries a stable English `key` (used to wire signals)
+        // separate from the translated label/desc strings.
         struct Action {
             const char* icon;
-            const char* label;
-            const char* desc;
+            const char* key;
+            QString label;
+            QString desc;
         };
         const Action actions[] = {
-            {"👤", "Create Account", "Register for full access"},
-            {"🔑", "Reset Password", "Recover your account"},
-            {"📖", "Documentation", "Guides, tutorials & API ref"},
-            {"🐛", "Report a Bug", "Open a bug report ticket"},
-            {"💬", "Join Discord", "Community & live support"},
-            {"🎟", "Support Tickets", "View or open a support ticket"},
+            {"👤", "create_account",  tr("Create Account"),    tr("Register for full access")},
+            {"🔑", "reset_password",  tr("Reset Password"),    tr("Recover your account")},
+            {"📖", "documentation",   tr("Documentation"),     tr("Guides, tutorials & API ref")},
+            {"🐛", "report_bug",      tr("Report a Bug"),      tr("Open a bug report ticket")},
+            {"💬", "join_discord",    tr("Join Discord"),      tr("Community & live support")},
+            {"🎟", "support_tickets", tr("Support Tickets"),   tr("View or open a support ticket")},
         };
 
         int col = 0, row = 0;
@@ -230,10 +259,11 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
             }
             grid->addWidget(btn, row, col++);
 
-            // Wire known actions
-            if (QString(a.label) == "Create Account")
+            // Wire known actions by stable English key (label is localized).
+            const QString key = QString::fromLatin1(a.key);
+            if (key == "create_account")
                 connect(btn, &QPushButton::clicked, this, &HelpScreen::navigate_register);
-            if (QString(a.label) == "Reset Password")
+            if (key == "reset_password")
                 connect(btn, &QPushButton::clicked, this, &HelpScreen::navigate_forgot_password);
         }
 
@@ -244,53 +274,54 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
 
     // ── FAQ ───────────────────────────────────────────────────────────────────
     {
-        vl->addWidget(section_header("FREQUENTLY ASKED QUESTIONS", "Click a question to expand the answer"));
+        vl->addWidget(section_header(tr("FREQUENTLY ASKED QUESTIONS"),
+                                     tr("Click a question to expand the answer")));
         vl->addSpacing(8);
 
         struct FAQ {
             const char* icon;
-            const char* q;
-            const char* a;
+            QString q;
+            QString a;
         };
         const FAQ faqs[] = {
-            {"🔑", "How do I reset my password?",
-             "Click \"Forgot Password\" on the login screen. Enter your email address and we'll "
-             "send you a reset link. The link expires in 24 hours."},
+            {"🔑", tr("How do I reset my password?"),
+             tr("Click \"Forgot Password\" on the login screen. Enter your email address and we'll "
+                "send you a reset link. The link expires in 24 hours.")},
 
-            {"👤", "What is Guest Access?",
-             "Guest access lets you explore the terminal without creating an account. "
-             "Features like trading, portfolio management, and AI analytics require a "
-             "registered account."},
+            {"👤", tr("What is Guest Access?"),
+             tr("Guest access lets you explore the terminal without creating an account. "
+                "Features like trading, portfolio management, and AI analytics require a "
+                "registered account.")},
 
-            {"💳", "What is a Credit?",
-             "Credits are the in-app currency used for premium features such as AI analysis, "
-             "advanced data feeds, and quantitative analytics. Free accounts receive a limited "
-             "number of credits on signup. Additional credits can be purchased in Settings → Billing."},
+            {"💳", tr("What is a Credit?"),
+             tr("Credits are the in-app currency used for premium features such as AI analysis, "
+                "advanced data feeds, and quantitative analytics. Free accounts receive a limited "
+                "number of credits on signup. Additional credits can be purchased in Settings → Billing.")},
 
-            {"📊", "How do I connect a broker?",
-             "Navigate to Settings → Brokers, select your broker from the list, and enter your "
-             "API key and secret. Fincept supports 18+ brokers including Zerodha, Angel One, "
-             "Upstox, Interactive Brokers, and more."},
+            {"📊", tr("How do I connect a broker?"),
+             tr("Navigate to Settings → Brokers, select your broker from the list, and enter your "
+                "API key and secret. Fincept supports 18+ brokers including Zerodha, Angel One, "
+                "Upstox, Interactive Brokers, and more.")},
 
-            {"🐍", "Why does Python install at first launch?",
-             "Fincept embeds Python for 1300+ analytics scripts covering equity, "
-             "portfolio, derivatives, and quant analysis. The one-time install is ~150 MB and "
-             "happens automatically in the background."},
+            {"🐍", tr("Why does Python install at first launch?"),
+             tr("Fincept embeds Python for 1300+ analytics scripts covering equity, "
+                "portfolio, derivatives, and quant analysis. The one-time install is ~150 MB and "
+                "happens automatically in the background.")},
 
-            {"💻", "What are the system requirements?",
-             "Windows 10+ (x64), macOS 12+, or Linux (glibc 2.31+). 8 GB RAM recommended. "
-             "Active internet required for data feeds. Python 3.11 is installed automatically "
-             "during first-time setup."},
+            {"💻", tr("What are the system requirements?"),
+             tr("Windows 10+ (x64), macOS 12+, or Linux (glibc 2.31+). 8 GB RAM recommended. "
+                "Active internet required for data feeds. Python 3.11 is installed automatically "
+                "during first-time setup.")},
 
-            {"🔒", "Is my data secure?",
-             "Credentials are stored encrypted via SecureStorage (OS keychain on each platform). "
-             "API keys are never logged or sent to Fincept servers — they are used only for "
-             "direct broker connections from your machine."},
+            {"🔒", tr("Is my data secure?"),
+             tr("Credentials are stored encrypted via SecureStorage (OS keychain on each platform). "
+                "API keys are never logged or sent to Fincept servers — they are used only for "
+                "direct broker connections from your machine.")},
 
-            {"🐛", "How do I report a bug?",
-             "Open a support ticket with category \"bug report\" (Help → Support Tickets → "
-             "+ New Ticket). Include your OS, version, steps to reproduce, and any error "
-             "messages you see. Screenshots are helpful."},
+            {"🐛", tr("How do I report a bug?"),
+             tr("Open a support ticket with category \"bug report\" (Help → Support Tickets → "
+                "+ New Ticket). Include your OS, version, steps to reproduce, and any error "
+                "messages you see. Screenshots are helpful.")},
         };
 
         for (const auto& f : faqs)
@@ -301,22 +332,22 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
 
     // ── Getting Started ────────────────────────────────────────────────────────
     {
-        vl->addWidget(section_header("GETTING STARTED", "New to Fincept? Start here"));
+        vl->addWidget(section_header(tr("GETTING STARTED"), tr("New to Fincept? Start here")));
         vl->addSpacing(8);
 
         struct Step {
             const char* num;
-            const char* title;
-            const char* detail;
+            QString title;
+            QString detail;
         };
         const Step steps[] = {
-            {"1", "Create an account", "Register at fincept.in or use the in-app sign-up."},
-            {"2", "Complete setup", "The setup wizard installs Python and configures your paths."},
-            {"3", "Connect a data source", "Add a broker or enable free data feeds in Data Sources."},
-            {"4", "Explore the terminal", "Browse Markets, Research, AI Chat, and QuantLib tabs."},
+            {"1", tr("Create an account"),       tr("Register at fincept.in or use the in-app sign-up.")},
+            {"2", tr("Complete setup"),          tr("The setup wizard installs Python and configures your paths.")},
+            {"3", tr("Connect a data source"),   tr("Add a broker or enable free data feeds in Data Sources.")},
+            {"4", tr("Explore the terminal"),    tr("Browse Markets, Research, AI Chat, and QuantLib tabs.")},
         };
 
-        auto* steps_widget = new QWidget(this);
+        auto* steps_widget = new QWidget(page);
         steps_widget->setStyleSheet(
             QString("background: %1; border: 1px solid %2;").arg(colors::BG_SURFACE(), colors::BORDER_DIM()));
         auto* swl = new QVBoxLayout(steps_widget);
@@ -325,7 +356,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
 
         for (int i = 0; i < 4; ++i) {
             const auto& s = steps[i];
-            auto* row = new QWidget(this);
+            auto* row = new QWidget(steps_widget);
             bool last = (i == 3);
             row->setStyleSheet(QString("background: transparent; border-bottom: %1;")
                                    .arg(last ? "none" : QString("1px solid %1;").arg(colors::BORDER_DIM())));
@@ -364,7 +395,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
 
     // ── Contact & Resources ───────────────────────────────────────────────────
     {
-        vl->addWidget(section_header("CONTACT & RESOURCES"));
+        vl->addWidget(section_header(tr("CONTACT & RESOURCES")));
         vl->addSpacing(8);
 
         auto* grid2 = new QGridLayout;
@@ -372,21 +403,21 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
 
         struct Contact {
             const char* icon;
-            const char* label;
-            const char* value;
+            QString label;
+            const char* value; // brand string — URL / handle, not translated
             const char* url;
         };
         const Contact contacts[] = {
-            {"✉", "Email Support", "support@fincept.in", "mailto:support@fincept.in"},
-            {"💬", "Discord Server", "discord.gg/ae87a8ygbN", "https://discord.gg/ae87a8ygbN"},
-            {"🌐", "Website", "fincept.in", "https://fincept.in"},
-            {"📦", "GitHub", "github.com/Fincept-Corporation/FinceptTerminal",
+            {"✉",  tr("Email Support"),   "support@fincept.in",                       "mailto:support@fincept.in"},
+            {"💬", tr("Discord Server"),  "discord.gg/ae87a8ygbN",                    "https://discord.gg/ae87a8ygbN"},
+            {"🌐", tr("Website"),         "fincept.in",                               "https://fincept.in"},
+            {"📦", tr("GitHub"),          "github.com/Fincept-Corporation/FinceptTerminal",
              "https://github.com/Fincept-Corporation/FinceptTerminal"},
         };
 
         int ci = 0;
         for (const auto& c : contacts) {
-            auto* card = new QWidget(this);
+            auto* card = new QWidget(page);
             card->setStyleSheet(
                 QString("background: %1; border: 1px solid %2;").arg(colors::BG_SURFACE(), colors::BORDER_DIM()));
             auto* cl = new QHBoxLayout(card);
@@ -425,13 +456,7 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
     }
 
     vl->addStretch();
-    scroll->setWidget(page);
-    root->addWidget(scroll, 1);
-
-    // ── Theme wiring ──────────────────────────────────────────────────────────
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
-        setStyleSheet(QString("QWidget#HelpRoot { background: %1; }").arg(colors::BG_BASE()));
-    });
+    return page;
 }
 
 } // namespace fincept::screens

@@ -1,4 +1,4 @@
-#include "screens/dashboard/canvas/DashboardTemplates.h"
+﻿#include "screens/dashboard/canvas/DashboardTemplates.h"
 
 namespace fincept::screens {
 
@@ -15,8 +15,8 @@ QVector<DashboardTemplate> all_dashboard_templates() {
 
         // ── Portfolio Manager ────────────────────────────────────────────────
         {"portfolio_manager",
-         "Portfolio Manager",
-         "Holdings, performance, risk and watchlist",
+         QT_TRANSLATE_NOOP("fincept::screens::DashboardTemplates", "Portfolio Manager"),
+         QT_TRANSLATE_NOOP("fincept::screens::DashboardTemplates", "Holdings, performance, risk and watchlist"),
          {
              gi("indices", 0, 0, 4, 5, 3, 4),
              gi("performance", 4, 0, 4, 5, 3, 4),
@@ -29,8 +29,8 @@ QVector<DashboardTemplate> all_dashboard_templates() {
 
         // ── Hedge Fund ────────────────────────────────────────────────────────
         {"hedge_fund",
-         "Hedge Fund",
-         "Sector heatmap, screener, risk and macro",
+         QT_TRANSLATE_NOOP("fincept::screens::DashboardTemplates", "Hedge Fund"),
+         QT_TRANSLATE_NOOP("fincept::screens::DashboardTemplates", "Sector heatmap, screener, risk and macro"),
          {
              gi("sector_heatmap", 0, 0, 6, 5, 3, 4),
              gi("screener", 6, 0, 6, 5, 3, 4),
@@ -42,8 +42,8 @@ QVector<DashboardTemplate> all_dashboard_templates() {
 
         // ── Crypto Trader ─────────────────────────────────────────────────────
         {"crypto_trader",
-         "Crypto Trader",
-         "Crypto prices, quick trade, sentiment and movers",
+         QT_TRANSLATE_NOOP("fincept::screens::DashboardTemplates", "Crypto Trader"),
+         QT_TRANSLATE_NOOP("fincept::screens::DashboardTemplates", "Crypto prices, quick trade, sentiment and movers"),
          {
              gi("crypto", 0, 0, 6, 4),
              gi("top_movers", 6, 0, 6, 5, 3, 4),
@@ -55,8 +55,8 @@ QVector<DashboardTemplate> all_dashboard_templates() {
 
         // ── Equity Trader ─────────────────────────────────────────────────────
         {"equity_trader",
-         "Equity Trader",
-         "Indices, forex, commodities, screener and movers",
+         QT_TRANSLATE_NOOP("fincept::screens::DashboardTemplates", "Equity Trader"),
+         QT_TRANSLATE_NOOP("fincept::screens::DashboardTemplates", "Indices, forex, commodities, screener and movers"),
          {
              gi("indices", 0, 0, 4, 5, 3, 4),
              gi("forex", 4, 0, 4, 4),
@@ -69,8 +69,8 @@ QVector<DashboardTemplate> all_dashboard_templates() {
 
         // ── Macro Economist ───────────────────────────────────────────────────
         {"macro_economist",
-         "Macro Economist",
-         "Economic calendar, indices, commodities and news",
+         QT_TRANSLATE_NOOP("fincept::screens::DashboardTemplates", "Macro Economist"),
+         QT_TRANSLATE_NOOP("fincept::screens::DashboardTemplates", "Economic calendar, indices, commodities and news"),
          {
              gi("econ_calendar", 0, 0, 6, 5, 3, 4),
              gi("indices", 6, 0, 6, 4),
@@ -82,8 +82,8 @@ QVector<DashboardTemplate> all_dashboard_templates() {
 
         // ── Geopolitics Analyst ───────────────────────────────────────────────
         {"geopolitics",
-         "Geopolitics Analyst",
-         "News, sentiment, economic calendar and screener",
+         QT_TRANSLATE_NOOP("fincept::screens::DashboardTemplates", "Geopolitics Analyst"),
+         QT_TRANSLATE_NOOP("fincept::screens::DashboardTemplates", "News, sentiment, economic calendar and screener"),
          {
              gi("news", 0, 0, 8, 5),
              gi("sentiment", 8, 0, 4, 4),
@@ -92,6 +92,16 @@ QVector<DashboardTemplate> all_dashboard_templates() {
              gi("indices", 6, 5, 6, 4),
          }},
     };
+}
+
+QString template_display_name_tr(const DashboardTemplate& t) {
+    return QCoreApplication::translate("fincept::screens::DashboardTemplates",
+                                       t.display_name.toUtf8().constData());
+}
+
+QString template_description_tr(const DashboardTemplate& t) {
+    return QCoreApplication::translate("fincept::screens::DashboardTemplates",
+                                       t.description.toUtf8().constData());
 }
 
 } // namespace fincept::screens

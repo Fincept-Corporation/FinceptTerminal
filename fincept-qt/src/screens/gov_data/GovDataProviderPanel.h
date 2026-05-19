@@ -35,6 +35,9 @@ class GovDataProviderPanel : public QWidget {
   public slots:
     void load_initial_data();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_result(const QString& request_id, const services::GovDataResult& result);
     void on_org_clicked(int row);
@@ -47,6 +50,7 @@ class GovDataProviderPanel : public QWidget {
   private:
     void build_ui();
     QWidget* build_toolbar();
+    void retranslateUi();
     void show_loading(const QString& message);
     void show_empty(const QString& message);
     void show_error(const QString& message);
@@ -55,6 +59,14 @@ class GovDataProviderPanel : public QWidget {
     void populate_resources(const QJsonArray& data);
     void update_toolbar_state();
     void update_breadcrumb();
+
+    /// org_label_ is a CKAN-style key passed in by the parent ("Publishers" or
+    /// "Organizations"). These helpers return the user-visible, translated form
+    /// in the casing the call site needs.
+    QString org_label_translated() const;        // "Publishers"
+    QString org_label_translated_upper() const;  // "PUBLISHERS"
+    QString org_label_translated_lower() const;  // "publishers"
+    QString all_orgs_breadcrumb() const;         // "All Publishers"
 
     QString script_;
     QString color_;
@@ -71,6 +83,9 @@ class GovDataProviderPanel : public QWidget {
     QLineEdit* search_input_ = nullptr;
     QPushButton* fetch_btn_ = nullptr;
     QPushButton* export_btn_ = nullptr;
+
+    // Optional portal selector bar (CKAN universal panel only)
+    QLabel* portal_label_ = nullptr;
 
     // Breadcrumb
     QWidget* breadcrumb_ = nullptr;

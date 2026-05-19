@@ -382,6 +382,28 @@ QWidget* LlmConfigSection::build_global_panel() {
     tok_grp->addWidget(tokens_spin_);
     row->addLayout(tok_grp);
 
+    // Max tool rounds — ceiling on the LlmService tool-call loop. Higher
+    // values let long workflows (multi-section report fills) finish; lower
+    // values cap the blast radius of a runaway model.
+    auto* rounds_grp = new QVBoxLayout;
+    auto* rounds_lbl = new QLabel("Max Tool Rounds");
+    rounds_lbl->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";");
+    rounds_lbl->setToolTip("Ceiling on tool-call rounds per chat turn. Default 40.\n"
+                           "Range 1-200. Raise for long workflows (e.g. populating multi-section reports).");
+    tool_rounds_spin_ = new QSpinBox;
+    tool_rounds_spin_->setRange(1, 200);
+    tool_rounds_spin_->setSingleStep(5);
+    tool_rounds_spin_->setValue(40);
+    tool_rounds_spin_->setFixedWidth(100);
+    tool_rounds_spin_->setStyleSheet("QSpinBox{background:" + QString(ui::colors::BG_RAISED()) +
+                                     ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " +
+                                     QString(ui::colors::BORDER_MED()) +
+                                     ";"
+                                     "border-radius:3px;padding:4px;}");
+    rounds_grp->addWidget(rounds_lbl);
+    rounds_grp->addWidget(tool_rounds_spin_);
+    row->addLayout(rounds_grp);
+
     // System prompt
     auto* sp_grp = new QVBoxLayout;
     auto* sp_lbl = new QLabel("System Prompt");
@@ -464,6 +486,8 @@ void LlmConfigSection::load_providers() {
         temp_spin_->setValue(gs.value().temperature);
         tokens_spin_->setValue(gs.value().max_tokens);
         system_prompt_->setPlainText(gs.value().system_prompt);
+        if (tool_rounds_spin_)
+            tool_rounds_spin_->setValue(gs.value().max_tool_rounds);
     }
 
     delete_btn_->setEnabled(false);
@@ -713,6 +737,8 @@ void LlmConfigSection::on_save_global() {
     gs.temperature = temp_spin_->value();
     gs.max_tokens = tokens_spin_->value();
     gs.system_prompt = system_prompt_->toPlainText().trimmed();
+    if (tool_rounds_spin_)
+        gs.max_tool_rounds = tool_rounds_spin_->value();
 
     auto r = LlmConfigRepository::instance().save_global_settings(gs);
     if (r.is_err()) {

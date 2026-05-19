@@ -326,13 +326,13 @@ void LoadingOverlay::paintEvent(QPaintEvent* /*e*/) {
         // sees motion even before any item count is known.
         const int dots = static_cast<int>(shimmer_phase_ * 4) % 4;
         QString trail(dots, QChar('.'));
-        status_text = QStringLiteral("LOADING%1").arg(trail);
+        status_text = tr("LOADING%1").arg(trail);
     } else {
         // Display the *animated* count rather than the raw one — this is
         // why displayed_progress_ exists: a watchlist filling 8 of 8
         // symbols animates 0→1→2→…→8 instead of jumping.
         const int shown = static_cast<int>(std::round(displayed_progress_ * expected_));
-        status_text = QStringLiteral("LOADING %1 / %2 ITEMS").arg(shown).arg(expected_);
+        status_text = tr("LOADING %1 / %2 ITEMS").arg(shown).arg(expected_);
     }
 
     p.setPen(QColor(ui::colors::TEXT_SECONDARY()));

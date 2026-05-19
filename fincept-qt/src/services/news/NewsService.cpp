@@ -96,7 +96,7 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
         }
     }
 
-    auto feeds = default_feeds();
+    auto feeds = list_effective_feeds();
     feed_count_ = feeds.size();
 
     // Shared state for collecting results from parallel requests
@@ -247,7 +247,7 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
         }
     }
 
-    auto feeds = default_feeds();
+    auto feeds = list_effective_feeds();
     feed_count_ = feeds.size();
     const int total = feeds.size();
 
@@ -420,7 +420,6 @@ void NewsService::analyze_article(const QString& url, AnalysisCallback cb) {
         analysis.market = {mkt["level"].toString(), mkt["details"].toString()};
 
         cb(true, analysis);
-        emit this->analysis_ready(analysis);
     }, this);
 }
 

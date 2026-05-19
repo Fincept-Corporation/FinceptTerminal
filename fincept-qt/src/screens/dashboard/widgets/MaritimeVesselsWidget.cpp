@@ -28,7 +28,7 @@ QStringList default_imos() {
 } // namespace
 
 MaritimeVesselsWidget::MaritimeVesselsWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget("MARITIME VESSELS", parent, ui::colors::CYAN()) {
+    : BaseWidget(tr("MARITIME VESSELS"), parent, ui::colors::CYAN()) {
     auto* vl = content_layout();
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
@@ -44,10 +44,10 @@ MaritimeVesselsWidget::MaritimeVesselsWidget(const QJsonObject& cfg, QWidget* pa
         header_labels_.append(lbl);
         hl->addWidget(lbl, stretch);
     };
-    make_hdr("VESSEL", 3);
-    make_hdr("ROUTE", 4);
-    make_hdr("KN", 1, Qt::AlignRight);
-    make_hdr("PROG", 1, Qt::AlignRight);
+    make_hdr(tr("VESSEL"), 3);
+    make_hdr(tr("ROUTE"), 4);
+    make_hdr(tr("KN"), 1, Qt::AlignRight);
+    make_hdr(tr("PROG"), 1, Qt::AlignRight);
     vl->addWidget(header_widget_);
 
     header_sep_ = new QFrame;
@@ -64,7 +64,7 @@ MaritimeVesselsWidget::MaritimeVesselsWidget(const QJsonObject& cfg, QWidget* pa
     list_layout_->setContentsMargins(0, 0, 0, 0);
     list_layout_->setSpacing(0);
 
-    status_label_ = new QLabel("Loading…");
+    status_label_ = new QLabel(tr("Loading…"));
     status_label_->setAlignment(Qt::AlignCenter);
     list_layout_->addWidget(status_label_);
     list_layout_->addStretch();
@@ -128,7 +128,7 @@ void MaritimeVesselsWidget::build_rows() {
     clear_rows();
 
     if (imos_.isEmpty()) {
-        status_label_ = new QLabel("No vessels configured — click gear to add IMOs");
+        status_label_ = new QLabel(tr("No vessels configured — click gear to add IMOs"));
         status_label_->setAlignment(Qt::AlignCenter);
         status_label_->setStyleSheet(QString("color:%1;font-size:10px;padding:16px;background:transparent;")
                                          .arg(ui::colors::TEXT_TERTIARY()));
@@ -252,14 +252,14 @@ void MaritimeVesselsWidget::on_vessel(const QString& imo, const QVariant& v) {
 
 QDialog* MaritimeVesselsWidget::make_config_dialog(QWidget* parent) {
     auto* dlg = new QDialog(parent);
-    dlg->setWindowTitle("Configure — Maritime Vessels");
+    dlg->setWindowTitle(tr("Configure — Maritime Vessels"));
     auto* form = new QFormLayout(dlg);
 
     auto* edit = new QPlainTextEdit(dlg);
-    edit->setPlaceholderText("One IMO per line (e.g. 9811000)");
+    edit->setPlaceholderText(tr("One IMO per line (e.g. 9811000)"));
     edit->setPlainText(imos_.join('\n'));
     edit->setFixedHeight(140);
-    form->addRow("IMO numbers", edit);
+    form->addRow(tr("IMO numbers"), edit);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
     form->addRow(buttons);

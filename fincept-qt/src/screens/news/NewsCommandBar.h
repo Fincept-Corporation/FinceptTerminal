@@ -35,6 +35,11 @@ class NewsCommandBar : public QWidget {
     void update_sentiment(int bullish, int bearish, int neutral);
     void update_deviations(const QVector<QPair<QString, double>>& deviations);
     void update_monitor_summary(int total_monitors, int active_alerts);
+    /// Drive the LIVE/OFFLINE badge in the intel strip.
+    void set_live_state(bool connected);
+    /// Select the refresh-interval combo to match `minutes` (0 = manual).
+    /// Used to restore persisted state without emitting refresh_interval_changed.
+    void set_refresh_interval_minutes(int minutes);
 
   signals:
     void category_changed(const QString& category);
@@ -48,6 +53,12 @@ class NewsCommandBar : public QWidget {
     void variant_changed(const QString& variant);
     void language_filter_changed(const QString& lang);
     void drawer_toggle_requested();
+    void manage_sources_clicked();
+    /// Emitted when the user clicks the LIVE/OFFLINE badge to toggle
+    /// the WebSocket live feed.
+    void live_toggle_clicked();
+    /// Emitted when the user picks a new auto-refresh cadence (minutes).
+    void refresh_interval_changed(int minutes);
 
   private:
     QPushButton* make_pill(const QString& text, const QString& value, QHBoxLayout* layout);
@@ -66,6 +77,7 @@ class NewsCommandBar : public QWidget {
     QPushButton* refresh_btn_ = nullptr;
     QPushButton* summarize_btn_ = nullptr;
     QPushButton* drawer_btn_ = nullptr;
+    QPushButton* sources_btn_ = nullptr;
     QLabel* summary_label_ = nullptr;
     QLabel* count_label_ = nullptr;
     QLabel* alert_label_ = nullptr;
@@ -74,6 +86,7 @@ class NewsCommandBar : public QWidget {
 
     QComboBox* variant_combo_ = nullptr;
     QComboBox* lang_filter_combo_ = nullptr;
+    QComboBox* refresh_combo_ = nullptr;
 
     // Row 2 — intel strip
     QLabel* intel_feeds_ = nullptr;
@@ -86,6 +99,7 @@ class NewsCommandBar : public QWidget {
     QLabel* sentiment_score_ = nullptr;
     QLabel* intel_monitors_ = nullptr;
     QLabel* intel_deviations_ = nullptr;
+    QPushButton* live_badge_ = nullptr;
 
     QString active_category_ = "ALL";
     QString active_time_ = "24H";

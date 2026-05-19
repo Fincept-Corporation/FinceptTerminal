@@ -19,7 +19,7 @@
 namespace fincept::screens::widgets {
 
 NewsCategoryWidget::NewsCategoryWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget("NEWS — CATEGORY", parent) {
+    : BaseWidget(tr("NEWS — CATEGORY"), parent) {
     auto* vl = content_layout();
     vl->setContentsMargins(8, 6, 8, 6);
     vl->setSpacing(4);
@@ -112,18 +112,18 @@ void NewsCategoryWidget::on_articles(const QVariant& v) {
 
 QDialog* NewsCategoryWidget::make_config_dialog(QWidget* parent) {
     auto* dlg = new QDialog(parent);
-    dlg->setWindowTitle("Configure — News Category");
+    dlg->setWindowTitle(tr("Configure — News Category"));
     auto* form = new QFormLayout(dlg);
 
     auto* edit = new QLineEdit(dlg);
     edit->setText(category_);
-    edit->setPlaceholderText("markets | geopolitics | crypto | …");
-    form->addRow("Category", edit);
+    edit->setPlaceholderText(tr("markets | geopolitics | crypto | …"));
+    form->addRow(tr("Category"), edit);
 
     auto* spin = new QSpinBox(dlg);
     spin->setRange(3, 50);
     spin->setValue(max_rows_);
-    form->addRow("Max rows", spin);
+    form->addRow(tr("Max rows"), spin);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
     form->addRow(buttons);

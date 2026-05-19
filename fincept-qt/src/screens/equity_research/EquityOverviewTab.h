@@ -3,10 +3,13 @@
 #include "services/equity/EquityResearchModels.h"
 #include "ui/widgets/LoadingOverlay.h"
 
+#include <QHash>
 #include <QLabel>
 #include <QPixmap>
 #include <QPushButton>
 #include <QWidget>
+
+class QFrame;
 
 namespace fincept::screens {
 
@@ -21,6 +24,7 @@ class ResearchCandleCanvas : public QWidget {
   protected:
     void paintEvent(QPaintEvent*) override;
     void resizeEvent(QResizeEvent*) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void rebuild_cache();
@@ -45,6 +49,9 @@ class EquityOverviewTab : public QWidget {
 
     static QString currency_symbol(const QString& currency_code);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_info_loaded(services::equity::StockInfo info);
     void on_historical_loaded(QString symbol, QVector<services::equity::Candle> candles);
@@ -52,6 +59,21 @@ class EquityOverviewTab : public QWidget {
 
   private:
     void build_ui();
+    void retranslateUi();
+
+    /// Apply cached `info` to the value labels — extracted from on_info_loaded
+    /// so retranslateUi can re-render currency / "N/A" fallbacks / recommendation
+    /// badge in the new locale without going back to the service.
+    void render_info(const services::equity::StockInfo& info);
+
+    /// make_panel / add_row register the title and key labels with the
+    /// translation map so retranslateUi can re-set them in bulk. The map
+    /// keys are stable English source strings (declared via QT_TR_NOOP at
+    /// every call site) so lupdate sees every entry.
+    QFrame* make_panel_(const char* title_key, const char* title_color);
+    QLabel* add_row_(QFrame* panel, const char* key, const char* val_color);
+
+    QHash<QLabel*, const char*> i18n_labels_;  ///< label → English source key for tr()
 
     QWidget* build_col1();
     QWidget* build_chart_panel();

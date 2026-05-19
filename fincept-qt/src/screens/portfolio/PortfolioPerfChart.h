@@ -50,6 +50,9 @@ class PortfolioPerfChart : public QWidget {
     void set_spy_history(const QStringList& dates, const QVector<double>& closes);
     void refresh_theme();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   signals:
     /// Emitted when the user clicks a period button that requires backfilling
     /// (e.g. 5Y when only 1Y is cached). Owner can call
@@ -61,6 +64,8 @@ class PortfolioPerfChart : public QWidget {
     void update_chart();
     void set_period(const QString& period);
     void update_period_buttons_enabled();
+    void retranslateUi();
+    QLabel* title_label_ = nullptr;
     QColor chart_color() const;
     /// Convert a UTC ISO date string to ms since epoch (UTC midnight).
     /// Centralised so portfolio and benchmark series share the same time axis.

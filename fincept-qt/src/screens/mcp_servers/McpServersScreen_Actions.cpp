@@ -183,7 +183,7 @@ void McpServersScreen::on_view_changed(int view) {
         view_btns_[i]->style()->unpolish(view_btns_[i]);
         view_btns_[i]->style()->polish(view_btns_[i]);
     }
-    const QStringList names = {"MARKETPLACE", "INSTALLED", "TOOLS"};
+    const QStringList names = {tr("MARKETPLACE"), tr("INSTALLED"), tr("TOOLS")};
     status_view_->setText(names[view]);
     if (view == 0)
         populate_marketplace();
@@ -200,28 +200,28 @@ void McpServersScreen::on_install_server(int index) {
 
     // Pre-fill the add-server dialog with catalog data
     auto* dlg = new QDialog(this);
-    dlg->setWindowTitle("Add  " + e.name);
+    dlg->setWindowTitle(tr("Add  %1").arg(e.name));
     dlg->setMinimumWidth(460);
     auto* form = new QFormLayout(dlg);
     form->setContentsMargins(16, 16, 16, 8);
     form->setSpacing(10);
 
     auto* name_edit = new QLineEdit(e.name);
-    form->addRow("Name", name_edit);
+    form->addRow(tr("Name"), name_edit);
 
     auto* desc_edit = new QLineEdit(e.description);
-    form->addRow("Description", desc_edit);
+    form->addRow(tr("Description"), desc_edit);
 
     auto* cmd_edit = new QLineEdit(e.command);
-    form->addRow("Command", cmd_edit);
+    form->addRow(tr("Command"), cmd_edit);
 
     auto* args_edit = new QLineEdit(e.args.join(' '));
-    form->addRow("Arguments", args_edit);
+    form->addRow(tr("Arguments"), args_edit);
 
     // Env vars — one field per required key with sample placeholder
     QList<QPair<QString, QLineEdit*>> env_fields;
     if (!e.env_keys.isEmpty()) {
-        auto* env_header = new QLabel("Environment Variables");
+        auto* env_header = new QLabel(tr("Environment Variables"));
         env_header->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(colors::TEXT_SECONDARY()));
         form->addRow(env_header);
         for (int ki = 0; ki < e.env_keys.size(); ++ki) {
@@ -232,19 +232,21 @@ void McpServersScreen::on_install_server(int index) {
                 field->setText(e.env_placeholders[ki]);
                 field->selectAll(); // highlight so first keystroke replaces it
             } else {
-                field->setPlaceholderText("Enter " + key);
+                field->setPlaceholderText(tr("Enter %1").arg(key));
             }
+            // env-var key (e.g. "OPENAI_API_KEY") is the API contract — pass through verbatim.
             form->addRow(key, field);
             env_fields.append({key, field});
         }
     }
 
+    // Combo items stay as API keys (saved to McpServerConfig.category).
     auto* cat_combo = new QComboBox;
     cat_combo->addItems({"utilities", "developer", "database"});
     cat_combo->setCurrentText(e.category);
-    form->addRow("Category", cat_combo);
+    form->addRow(tr("Category"), cat_combo);
 
-    auto* autostart_check = new QCheckBox("Auto-start on launch");
+    auto* autostart_check = new QCheckBox(tr("Auto-start on launch"));
     form->addRow("", autostart_check);
 
     auto* btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
@@ -340,7 +342,8 @@ void McpServersScreen::on_remove_server() {
             break;
         }
 
-    QMessageBox mb(QMessageBox::Question, "Remove Server", "Remove \"" + name + "\"?\nThis cannot be undone.",
+    QMessageBox mb(QMessageBox::Question, tr("Remove Server"),
+                   tr("Remove \"%1\"?\nThis cannot be undone.").arg(name),
                    QMessageBox::Yes | QMessageBox::Cancel, this);
     if (mb.exec() != QMessageBox::Yes)
         return;
@@ -404,36 +407,38 @@ void McpServersScreen::on_view_logs() {
 
 void McpServersScreen::on_add_server() {
     auto* dlg = new QDialog(this);
-    dlg->setWindowTitle("Add Custom MCP Server");
+    dlg->setWindowTitle(tr("Add Custom MCP Server"));
     dlg->setMinimumWidth(460);
     auto* form = new QFormLayout(dlg);
     form->setContentsMargins(16, 16, 16, 8);
     form->setSpacing(10);
 
     auto* name_edit = new QLineEdit;
-    name_edit->setPlaceholderText("e.g. My Custom Server");
-    form->addRow("Name", name_edit);
+    name_edit->setPlaceholderText(tr("e.g. My Custom Server"));
+    form->addRow(tr("Name"), name_edit);
 
     auto* desc_edit = new QLineEdit;
-    desc_edit->setPlaceholderText("Short description");
-    form->addRow("Description", desc_edit);
+    desc_edit->setPlaceholderText(tr("Short description"));
+    form->addRow(tr("Description"), desc_edit);
 
+    // "uvx" is the binary name on PATH — not user-facing copy.
     auto* cmd_edit = new QLineEdit("uvx");
-    form->addRow("Command", cmd_edit);
+    form->addRow(tr("Command"), cmd_edit);
 
     auto* args_edit = new QLineEdit;
-    args_edit->setPlaceholderText("e.g. my-mcp-package --flag value");
-    form->addRow("Arguments", args_edit);
+    args_edit->setPlaceholderText(tr("e.g. my-mcp-package --flag value"));
+    form->addRow(tr("Arguments"), args_edit);
 
     auto* env_edit = new QLineEdit;
-    env_edit->setPlaceholderText("KEY=value KEY2=value2");
-    form->addRow("Env Vars", env_edit);
+    // "KEY=value" is shell-syntax sample — keep ASCII so user knows the literal format.
+    env_edit->setPlaceholderText(tr("KEY=value KEY2=value2"));
+    form->addRow(tr("Env Vars"), env_edit);
 
     auto* cat_combo = new QComboBox;
     cat_combo->addItems({"utilities", "developer", "database"});
-    form->addRow("Category", cat_combo);
+    form->addRow(tr("Category"), cat_combo);
 
-    auto* autostart_check = new QCheckBox("Auto-start on launch");
+    auto* autostart_check = new QCheckBox(tr("Auto-start on launch"));
     form->addRow("", autostart_check);
 
     auto* btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
@@ -523,8 +528,8 @@ void McpServersScreen::refresh_installed() {
     if (shown == 0) {
         auto* empty = new QLabel(
             servers.empty()
-                ? "No servers installed yet.\nUse MARKETPLACE to add one, or click ADD CUSTOM MCP SERVER below."
-                : "No servers match the search.");
+                ? tr("No servers installed yet.\nUse MARKETPLACE to add one, or click ADD CUSTOM MCP SERVER below.")
+                : tr("No servers match the search."));
         empty->setObjectName("srvCardDesc");
         empty->setAlignment(Qt::AlignCenter);
         empty->setWordWrap(true);
@@ -551,11 +556,12 @@ void McpServersScreen::refresh_tools() {
         chk->setFlags(Qt::ItemIsUserCheckable | Qt::ItemIsEnabled);
         tools_table_->setItem(row, 0, chk);
         tools_table_->setItem(row, 1, new QTableWidgetItem(t.name));
-        auto* si = new QTableWidgetItem("Fincept Terminal");
+        // "Fincept Terminal" is the product name — kept in English for brand consistency.
+        auto* si = new QTableWidgetItem(QStringLiteral("Fincept Terminal"));
         si->setData(Qt::UserRole, QString(INTERNAL_SERVER_ID));
         si->setForeground(QColor(colors::AMBER()));
         tools_table_->setItem(row, 2, si);
-        tools_table_->setItem(row, 3, new QTableWidgetItem("internal"));
+        tools_table_->setItem(row, 3, new QTableWidgetItem(tr("internal")));
         tools_table_->setItem(row, 4, new QTableWidgetItem(t.description));
         tools_table_->setRowHeight(row, 26);
         ++row;
@@ -570,7 +576,7 @@ void McpServersScreen::refresh_tools() {
         si->setData(Qt::UserRole, t.server_id);
         si->setForeground(QColor(colors::CYAN()));
         tools_table_->setItem(row, 2, si);
-        tools_table_->setItem(row, 3, new QTableWidgetItem("external"));
+        tools_table_->setItem(row, 3, new QTableWidgetItem(tr("external")));
         tools_table_->setItem(row, 4, new QTableWidgetItem(t.description));
         tools_table_->setRowHeight(row, 26);
         ++row;
@@ -580,7 +586,7 @@ void McpServersScreen::refresh_tools() {
     tools_table_->resizeColumnToContents(2);
     tools_table_->resizeColumnToContents(3);
     tools_table_->setSortingEnabled(true);
-    tools_count_->setText(QString("%1 tools  (%2 internal · %3 external)")
+    tools_count_->setText(tr("%1 tools  (%2 internal · %3 external)")
                               .arg(total)
                               .arg(internal_tools.size())
                               .arg(external_tools.size()));
@@ -594,8 +600,8 @@ void McpServersScreen::update_status_bar() {
     for (const auto& s : servers)
         if (s.status == ServerStatus::Running)
             ++running;
-    status_count_->setText(QString::number(servers.size()) + " servers");
-    status_running_->setText(QString::number(running) + " running");
+    status_count_->setText(tr("%1 servers").arg(servers.size()));
+    status_running_->setText(tr("%1 running").arg(running));
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────

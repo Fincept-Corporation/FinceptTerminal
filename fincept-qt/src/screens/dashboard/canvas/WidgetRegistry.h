@@ -1,4 +1,5 @@
 #pragma once
+#include <QCoreApplication>
 #include <QJsonObject>
 #include <QMap>
 #include <QString>
@@ -29,6 +30,7 @@ struct WidgetMeta {
 };
 
 class WidgetRegistry {
+    Q_DECLARE_TR_FUNCTIONS(WidgetRegistry)
   public:
     static WidgetRegistry& instance();
 
@@ -36,6 +38,13 @@ class WidgetRegistry {
     const WidgetMeta* find(const QString& type_id) const;
     QVector<WidgetMeta> all() const;
     QVector<WidgetMeta> by_category(const QString& category) const;
+
+    /// Translated display strings. Storage stays English so equality checks
+    /// (accent_for_category, category filter) keep working. Display sites
+    /// must call these instead of reading meta.display_name etc. directly.
+    static QString display_name_tr(const WidgetMeta& m);
+    static QString description_tr(const WidgetMeta& m);
+    static QString category_tr(const QString& category);
 
   private:
     WidgetRegistry();

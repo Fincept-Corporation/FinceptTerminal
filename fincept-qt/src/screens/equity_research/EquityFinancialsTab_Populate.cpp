@@ -105,16 +105,16 @@ void EquityFinancialsTab::populate_income_view(const services::equity::Financial
             l->setText(t);
     };
 
-    set(inc_revenue_val_, fmt_large(revenue));
-    set(inc_revenue_sub_, rev_growth != 0.0 ? fmt_pct(rev_growth) + " YoY" : "");
-    set(inc_gross_val_, fmt_large(gross));
-    set(inc_gross_sub_, fmt_pct(gross_margin) + " margin");
-    set(inc_opincome_val_, fmt_large(op_income));
-    set(inc_opincome_sub_, fmt_pct(op_margin) + " margin");
+    set(inc_revenue_val_,   fmt_large(revenue));
+    set(inc_revenue_sub_,   rev_growth != 0.0 ? tr("%1 YoY").arg(fmt_pct(rev_growth)) : QString());
+    set(inc_gross_val_,     fmt_large(gross));
+    set(inc_gross_sub_,     tr("%1 margin").arg(fmt_pct(gross_margin)));
+    set(inc_opincome_val_,  fmt_large(op_income));
+    set(inc_opincome_sub_,  tr("%1 margin").arg(fmt_pct(op_margin)));
     set(inc_netincome_val_, fmt_large(net_income));
-    set(inc_netincome_sub_, net_growth != 0.0 ? fmt_pct(net_growth) + " YoY" : "");
-    set(inc_ebitda_val_, fmt_large(ebitda));
-    set(inc_ebitda_sub_, fmt_pct(ebitda_margin) + " margin");
+    set(inc_netincome_sub_, net_growth != 0.0 ? tr("%1 YoY").arg(fmt_pct(net_growth)) : QString());
+    set(inc_ebitda_val_,    fmt_large(ebitda));
+    set(inc_ebitda_sub_,    tr("%1 margin").arg(fmt_pct(ebitda_margin)));
     set(inc_gross_margin_, fmt_pct(gross_margin));
     set(inc_op_margin_, fmt_pct(op_margin));
     set(inc_net_margin_, fmt_pct(net_margin));
@@ -196,7 +196,7 @@ void EquityFinancialsTab::populate_balance_view(const services::equity::Financia
     set(bal_working_cap_, fmt_large(work_cap));
     set(bal_debt_equity_, fmt_ratio(d_e));
     set(bal_debt_assets_, fmt_pct(d_a));
-    set(bal_int_coverage_, int_cov > 0 ? fmt_ratio(int_cov) + "x" : "N/A");
+    set(bal_int_coverage_, int_cov > 0 ? fmt_ratio(int_cov) + QStringLiteral("x") : tr("N/A"));
 }
 
 void EquityFinancialsTab::populate_cashflow_view(const services::equity::FinancialsData& d) {
@@ -234,7 +234,7 @@ void EquityFinancialsTab::populate_cashflow_view(const services::equity::Financi
     set(cf_investing_val_, fmt_large(inv_cf));
     set(cf_financing_val_, fmt_large(fin_cf));
     set(cf_fcf_val_, fmt_large(fcf));
-    set(cf_fcf_sub_, fcf_margin != 0.0 ? fmt_pct(fcf_margin) + " margin" : "");
+    set(cf_fcf_sub_, fcf_margin != 0.0 ? tr("%1 margin").arg(fmt_pct(fcf_margin)) : QString());
     set(cf_capex_val_, fmt_large(qAbs(capex)));
     set(cf_dividends_val_, fmt_large(qAbs(dividends)));
     set(cf_buybacks_val_, fmt_large(qAbs(buybacks)));
@@ -287,9 +287,9 @@ void EquityFinancialsTab::rebuild_revenue_chart(const services::equity::Financia
         net_v << get_val(d.income_statement[i].second, {"Net Income", "Net Income Common Stockholders"}) / 1e9;
     }
 
-    auto* rev_set = new QBarSet("Revenue");
+    auto* rev_set = new QBarSet(tr("Revenue"));
     rev_set->setColor(QColor(kBlue));
-    auto* gross_set = new QBarSet("Gross Profit");
+    auto* gross_set = new QBarSet(tr("Gross Profit"));
     gross_set->setColor(QColor(kCyan));
     for (int i = 0; i < cats.size(); ++i) {
         *rev_set << revenue_v[i];
@@ -301,7 +301,7 @@ void EquityFinancialsTab::rebuild_revenue_chart(const services::equity::Financia
     bar_series->append(gross_set);
 
     auto* net_series = new QLineSeries;
-    net_series->setName("Net Income");
+    net_series->setName(tr("Net Income"));
     net_series->setColor(QColor(kGreen));
     net_series->setPen(QPen(QColor(kGreen), 2));
     for (int i = 0; i < cats.size(); ++i)
@@ -357,10 +357,10 @@ void EquityFinancialsTab::rebuild_margin_chart(const services::equity::Financial
 
     auto* chart = new QChart;
     style_chart(chart);
-    auto* s1 = make_line("Gross", kGreen, gross_v);
-    auto* s2 = make_line("Operating", kCyan, op_v);
-    auto* s3 = make_line("Net", kOrange, net_v);
-    auto* s4 = make_line("EBITDA", kPurple, ebitda_v);
+    auto* s1 = make_line(tr("Gross"),     kGreen,  gross_v);
+    auto* s2 = make_line(tr("Operating"), kCyan,   op_v);
+    auto* s3 = make_line(tr("Net"),       kOrange, net_v);
+    auto* s4 = make_line(tr("EBITDA"),    kPurple, ebitda_v);
     chart->addSeries(s1);
     chart->addSeries(s2);
     chart->addSeries(s3);
@@ -386,11 +386,11 @@ void EquityFinancialsTab::rebuild_balance_chart(const services::equity::Financia
     int n = qMin(5, d.balance_sheet.size());
     QStringList cats;
 
-    auto* assets_set = new QBarSet("Assets");
+    auto* assets_set = new QBarSet(tr("Assets"));
     assets_set->setColor(QColor(kBlue));
-    auto* liab_set = new QBarSet("Liabilities");
+    auto* liab_set = new QBarSet(tr("Liabilities"));
     liab_set->setColor(QColor(kRed));
-    auto* equity_set = new QBarSet("Equity");
+    auto* equity_set = new QBarSet(tr("Equity"));
     equity_set->setColor(QColor(kGreen));
 
     for (int i = n - 1; i >= 0; --i) {
@@ -428,15 +428,15 @@ void EquityFinancialsTab::rebuild_cashflow_chart(const services::equity::Financi
     int n = qMin(5, d.cash_flow.size());
     QStringList cats;
 
-    auto* op_set = new QBarSet("Operating");
+    auto* op_set = new QBarSet(tr("Operating"));
     op_set->setColor(QColor(kGreen));
-    auto* inv_set = new QBarSet("Investing");
+    auto* inv_set = new QBarSet(tr("Investing"));
     inv_set->setColor(QColor(kOrange));
-    auto* fin_set = new QBarSet("Financing");
+    auto* fin_set = new QBarSet(tr("Financing"));
     fin_set->setColor(QColor(kPurple));
 
     auto* fcf_series = new QLineSeries;
-    fcf_series->setName("Free CF");
+    fcf_series->setName(tr("Free CF"));
     fcf_series->setColor(QColor(kCyan));
     fcf_series->setPen(QPen(QColor(kCyan), 2));
 
@@ -486,12 +486,12 @@ void EquityFinancialsTab::rebuild_return_chart(const services::equity::Financial
     QStringList cats;
 
     auto* roe_series = new QLineSeries;
-    roe_series->setName("ROE %");
+    roe_series->setName(tr("ROE %"));
     roe_series->setColor(QColor(kCyan));
     roe_series->setPen(QPen(QColor(kCyan), 2));
 
     auto* roa_series = new QLineSeries;
-    roa_series->setName("ROA %");
+    roa_series->setName(tr("ROA %"));
     roa_series->setColor(QColor(kGreen));
     roa_series->setPen(QPen(QColor(kGreen), 2));
 

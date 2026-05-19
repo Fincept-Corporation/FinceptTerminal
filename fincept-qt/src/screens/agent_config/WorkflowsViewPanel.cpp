@@ -101,7 +101,7 @@ QWidget* WorkflowsViewPanel::build_catalog_panel() {
         QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(10, 0, 10, 0);
-    auto* t = new QLabel("WORKFLOWS");
+    auto* t = new QLabel(tr("WORKFLOWS"));
     t->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
     hl->addWidget(t);
     hl->addStretch();
@@ -170,7 +170,7 @@ QWidget* WorkflowsViewPanel::build_params_panel() {
         QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(10, 0, 10, 0);
-    params_title_ = new QLabel("PARAMETERS");
+    params_title_ = new QLabel(tr("PARAMETERS"));
     params_title_->setStyleSheet(
         QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
     hl->addWidget(params_title_);
@@ -183,7 +183,7 @@ QWidget* WorkflowsViewPanel::build_params_panel() {
     bl->setSpacing(8);
 
     // LLM Profile
-    auto* lbl_llm = new QLabel("LLM PROFILE");
+    auto* lbl_llm = new QLabel(tr("LLM PROFILE"));
     lbl_llm->setStyleSheet(
         QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     bl->addWidget(lbl_llm);
@@ -212,7 +212,7 @@ QWidget* WorkflowsViewPanel::build_params_panel() {
         auto* sl = new QHBoxLayout(symbol_row_);
         sl->setContentsMargins(0, 0, 0, 0);
         sl->setSpacing(6);
-        auto* lbl = new QLabel("SYMBOL");
+        auto* lbl = new QLabel(tr("SYMBOL"));
         lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;min-width:55px;")
                                .arg(ui::colors::TEXT_SECONDARY()));
         sl->addWidget(lbl);
@@ -234,7 +234,7 @@ QWidget* WorkflowsViewPanel::build_params_panel() {
         auto* ql = new QVBoxLayout(query_row_);
         ql->setContentsMargins(0, 0, 0, 0);
         ql->setSpacing(4);
-        auto* lbl = new QLabel("QUERY");
+        auto* lbl = new QLabel(tr("QUERY"));
         lbl->setStyleSheet(
             QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
         ql->addWidget(lbl);
@@ -288,7 +288,7 @@ QWidget* WorkflowsViewPanel::build_output_panel() {
         QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(10, 0, 10, 0);
-    output_title_ = new QLabel("OUTPUT");
+    output_title_ = new QLabel(tr("OUTPUT"));
     output_title_->setStyleSheet(
         QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(output_title_);
@@ -304,7 +304,7 @@ QWidget* WorkflowsViewPanel::build_output_panel() {
     bl->setContentsMargins(10, 8, 10, 10);
     bl->setSpacing(6);
 
-    auto* log_lbl = new QLabel("EXECUTION LOG");
+    auto* log_lbl = new QLabel(tr("EXECUTION LOG"));
     log_lbl->setStyleSheet(
         QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     bl->addWidget(log_lbl);
@@ -320,7 +320,7 @@ QWidget* WorkflowsViewPanel::build_output_panel() {
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::BORDER_BRIGHT()));
     bl->addWidget(log_display_);
 
-    auto* res_lbl = new QLabel("RESULT");
+    auto* res_lbl = new QLabel(tr("RESULT"));
     res_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;")
                                .arg(ui::colors::TEXT_SECONDARY()));
     bl->addWidget(res_lbl);
@@ -362,7 +362,7 @@ void WorkflowsViewPanel::setup_connections() {
         executing_ = false;
         pending_request_id_.clear();
         run_btn_->setEnabled(true);
-        run_btn_->setText("RUN WORKFLOW");
+        run_btn_->setText(tr("RUN WORKFLOW"));
         if (r.success) {
             result_display_->setMarkdown(r.response);
             const QString msg = QString("Done in %1ms").arg(r.execution_time_ms);
@@ -371,7 +371,7 @@ void WorkflowsViewPanel::setup_connections() {
             log_display_->append(QString("[DONE] %1").arg(msg));
         } else {
             result_display_->setPlainText("Error: " + r.error);
-            output_status_->setText("FAILED");
+            output_status_->setText(tr("FAILED"));
             output_status_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE()));
             log_display_->append("[ERROR] " + r.error);
         }
@@ -401,7 +401,7 @@ void WorkflowsViewPanel::setup_connections() {
         executing_ = false;
         pending_request_id_.clear();
         run_btn_->setEnabled(true);
-        run_btn_->setText("RUN WORKFLOW");
+        run_btn_->setText(tr("RUN WORKFLOW"));
         if (r.success) {
             result_display_->setMarkdown(r.response);
             const QString msg = QString("Done in %1ms").arg(r.execution_time_ms);
@@ -410,7 +410,7 @@ void WorkflowsViewPanel::setup_connections() {
             log_display_->append(QString("[DONE] %1").arg(msg));
         } else {
             result_display_->setPlainText("Error: " + r.error);
-            output_status_->setText("FAILED");
+            output_status_->setText(tr("FAILED"));
             output_status_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE()));
             log_display_->append("[ERROR] " + r.error);
         }
@@ -422,9 +422,9 @@ void WorkflowsViewPanel::setup_connections() {
         executing_ = false;
         pending_request_id_.clear();
         run_btn_->setEnabled(true);
-        run_btn_->setText("RUN WORKFLOW");
-        result_display_->setPlainText("Error: " + msg);
-        output_status_->setText("ERROR");
+        run_btn_->setText(tr("RUN WORKFLOW"));
+        result_display_->setPlainText(tr("Error: %1").arg(msg));
+        output_status_->setText(tr("ERROR"));
         output_status_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE()));
         log_display_->append("[ERROR] " + msg);
     });
@@ -510,7 +510,7 @@ void WorkflowsViewPanel::run_current_workflow() {
         if (sym.isEmpty()) {
             executing_ = false;
             run_btn_->setEnabled(true);
-            run_btn_->setText("RUN WORKFLOW");
+            run_btn_->setText(tr("RUN WORKFLOW"));
             params_status_->setText("Symbol is required");
             params_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
             return;
@@ -523,7 +523,7 @@ void WorkflowsViewPanel::run_current_workflow() {
         if (q.isEmpty()) {
             executing_ = false;
             run_btn_->setEnabled(true);
-            run_btn_->setText("RUN WORKFLOW");
+            run_btn_->setText(tr("RUN WORKFLOW"));
             params_status_->setText("Query is required");
             params_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
             return;

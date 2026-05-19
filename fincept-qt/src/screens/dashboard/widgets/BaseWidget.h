@@ -84,6 +84,12 @@ class BaseWidget : public QFrame {
     /// dispatched. Without this override the 20 s budget would burn while
     /// the widget is still off-screen.
     void showEvent(QShowEvent* event) override;
+    void changeEvent(QEvent* event) override;
+
+    /// Re-apply tr() to the title bar buttons and loading text. Subclasses
+    /// SHOULD override and call BaseWidget::retranslateUi() first, then
+    /// retranslate their own widgets.
+    virtual void retranslateUi();
 
   private:
     void refresh_base_theme();

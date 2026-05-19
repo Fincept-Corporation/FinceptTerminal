@@ -32,8 +32,16 @@ class LanguageManager : public QObject {
 
     /// Read the persisted choice from SettingsRepository and install the
     /// corresponding translator. Safe to call once on startup before any
-    /// windows are shown.
+    /// windows are shown. When no preference has been saved yet (first
+    /// launch), falls back to detect_system_language() so users see the UI
+    /// in their OS locale immediately.
     void initialize();
+
+    /// Walk QLocale::system().uiLanguages() (the user's preferred locales,
+    /// in order) and return the first one we ship a .qm for. Falls back to
+    /// the closest language match (e.g. system "fr_CA" → our "fr_FR") and
+    /// returns an empty string if nothing matches.
+    static QString detect_system_language();
 
     /// Switch language. Persists the choice, swaps the QTranslator, and emits
     /// language_changed. Qt itself posts QEvent::LanguageChange to every

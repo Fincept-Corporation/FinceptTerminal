@@ -22,6 +22,7 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QEvent>
 #include <QFormLayout>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -176,6 +177,7 @@ McpServersScreen::McpServersScreen(QWidget* parent) : QWidget(parent) {
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this](const ui::ThemeTokens&) { setStyleSheet(kStyle()); });
     setup_ui();
+    retranslateUi();
 
     connect(&McpManager::instance(), &McpManager::servers_changed, this, [this]() {
         if (!isVisible())
@@ -204,6 +206,77 @@ void McpServersScreen::showEvent(QShowEvent* e) {
 
 void McpServersScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+}
+
+void McpServersScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+// retranslateUi() handles static chrome (header title, view-tab buttons,
+// sidebar header, search placeholder, refresh button, tools-view toolbar,
+// status bar). Dynamic content — marketplace cards, installed server cards,
+// tools rows — is rebuilt by populate_marketplace / refresh_installed /
+// refresh_tools using current tr() values, so we just trigger the helper
+// matching the active view.
+
+void McpServersScreen::retranslateUi() {
+    if (header_title_) header_title_->setText(tr("MCP SERVERS"));
+
+    // View tabs: index order matches enum (Marketplace, Installed, Tools)
+    const QStringList view_labels = {tr("MARKETPLACE"), tr("INSTALLED"), tr("TOOLS")};
+    for (int i = 0; i < view_btns_.size() && i < view_labels.size(); ++i) {
+        view_btns_[i]->setText(view_labels[i]);
+    }
+
+    if (search_input_) search_input_->setPlaceholderText(tr("Search..."));
+    if (refresh_btn_)  refresh_btn_->setText(tr("↺  REFRESH"));
+
+    if (cat_header_lbl_) cat_header_lbl_->setText(tr("  CATEGORY"));
+
+    // Category list — user data holds the lowercase API key; display text is
+    // re-set per row from its key. "all" maps to the localized "All" label.
+    if (mkt_cat_list_) {
+        for (int i = 0; i < mkt_cat_list_->count(); ++i) {
+            auto* item = mkt_cat_list_->item(i);
+            const QString key = item->data(Qt::UserRole).toString();
+            if (key == "all")             item->setText(tr("ALL"));
+            else if (key == "utilities")  item->setText(tr("UTILITIES"));
+            else if (key == "developer")  item->setText(tr("DEVELOPER"));
+            else if (key == "database")   item->setText(tr("DATABASE"));
+            else                          item->setText(key.toUpper());
+        }
+    }
+
+    if (add_server_btn_) add_server_btn_->setText(tr("＋  ADD CUSTOM MCP SERVER"));
+
+    if (tools_toolbar_lbl_)
+        tools_toolbar_lbl_->setText(
+            tr("ALL TOOLS — internal + external  (check/uncheck to enable/disable internal tools)"));
+
+    if (tools_table_)
+        tools_table_->setHorizontalHeaderLabels(
+            {tr("ON"), tr("TOOL NAME"), tr("SERVER"), tr("CATEGORY"), tr("DESCRIPTION")});
+
+    if (status_screen_lbl_) status_screen_lbl_->setText(tr("MCP SERVERS"));
+
+    if (status_view_) {
+        // Re-derive from active_view_ rather than reading the (now-stale) text.
+        const QStringList names = {tr("MARKETPLACE"), tr("INSTALLED"), tr("TOOLS")};
+        if (active_view_ >= 0 && active_view_ < names.size())
+            status_view_->setText(names[active_view_]);
+    }
+
+    // Re-render whichever view is active so cards/rows pick up new strings.
+    if (loaded_) {
+        if (active_view_ == 0) populate_marketplace();
+        else if (active_view_ == 1) refresh_installed();
+        else if (active_view_ == 2) refresh_tools();
+        update_status_bar();
+    }
 }
 
 // ── UI skeleton ───────────────────────────────────────────────────────────────

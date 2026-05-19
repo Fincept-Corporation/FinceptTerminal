@@ -18,8 +18,12 @@ class PerformanceRiskView : public QWidget {
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
     void set_snapshots(const QVector<portfolio::PortfolioSnapshot>& snapshots);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
+    void retranslateUi();
     void update_chart();
     void update_metrics();
     void set_period(const QString& period);
@@ -27,6 +31,10 @@ class PerformanceRiskView : public QWidget {
     // Period selector
     QVector<QPushButton*> period_btns_;
     QString current_period_ = "1Y";
+
+    // Header labels
+    QLabel* chart_title_ = nullptr;
+    QLabel* metrics_header_ = nullptr;
 
     // Chart
     QChartView* chart_view_ = nullptr;
@@ -52,6 +60,7 @@ class PerformanceRiskView : public QWidget {
     portfolio::PortfolioSummary summary_;
     QVector<portfolio::PortfolioSnapshot> snapshots_;
     QString currency_;
+    bool has_data_ = false;
 };
 
 } // namespace fincept::screens

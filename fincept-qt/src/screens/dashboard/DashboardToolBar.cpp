@@ -58,7 +58,7 @@ DashboardToolBar::DashboardToolBar(QWidget* parent) : QWidget(parent) {
 
     make_sep(ll);
 
-    status_text_ = new QLabel("LIVE");
+    status_text_ = new QLabel(tr("LIVE"));
     status_text_->setObjectName("dtStatus");
     ll->addWidget(status_text_);
 
@@ -68,7 +68,7 @@ DashboardToolBar::DashboardToolBar(QWidget* parent) : QWidget(parent) {
     clock_btn_->setObjectName("dtBtn");
     clock_btn_->setFlat(true);
     clock_btn_->setCursor(Qt::PointingHandCursor);
-    clock_btn_->setToolTip("Click to toggle UTC / local time");
+    clock_btn_->setToolTip(tr("Click to toggle UTC / local time"));
     connect(clock_btn_, &QPushButton::clicked, this, [this]() {
         clock_is_utc_ = !clock_is_utc_;
         update_clock();
@@ -78,7 +78,7 @@ DashboardToolBar::DashboardToolBar(QWidget* parent) : QWidget(parent) {
 
     make_sep(ll);
 
-    widget_count_ = new QLabel("0 WIDGETS");
+    widget_count_ = new QLabel(tr("%1 WIDGETS").arg(0));
     widget_count_->setObjectName("dtWidgetCount");
     ll->addWidget(widget_count_);
 
@@ -93,13 +93,13 @@ DashboardToolBar::DashboardToolBar(QWidget* parent) : QWidget(parent) {
     rl->setContentsMargins(0, 0, 0, 0);
     rl->setSpacing(4);
 
-    compact_btn_ = new QPushButton("COMPACT");
+    compact_btn_ = new QPushButton(tr("COMPACT"));
     compact_btn_->setFixedHeight(20);
     compact_btn_->setObjectName("dtBtn");
     connect(compact_btn_, &QPushButton::clicked, this, &DashboardToolBar::toggle_compact_clicked);
     rl->addWidget(compact_btn_);
 
-    pulse_btn_ = new QPushButton("PULSE");
+    pulse_btn_ = new QPushButton(tr("PULSE"));
     pulse_btn_->setFixedHeight(20);
     pulse_btn_->setObjectName("dtBtn");
     connect(pulse_btn_, &QPushButton::clicked, this, &DashboardToolBar::toggle_pulse_clicked);
@@ -107,30 +107,30 @@ DashboardToolBar::DashboardToolBar(QWidget* parent) : QWidget(parent) {
 
     make_sep(rl);
 
-    auto* refresh_btn = new QPushButton("REFRESH");
-    refresh_btn->setFixedHeight(20);
-    refresh_btn->setObjectName("dtBtn");
-    refresh_btn->setToolTip(QStringLiteral("Force-refresh all live data on the dashboard"));
-    connect(refresh_btn, &QPushButton::clicked, this, &DashboardToolBar::refresh_clicked);
-    rl->addWidget(refresh_btn);
+    refresh_btn_ = new QPushButton(tr("REFRESH"));
+    refresh_btn_->setFixedHeight(20);
+    refresh_btn_->setObjectName("dtBtn");
+    refresh_btn_->setToolTip(tr("Force-refresh all live data on the dashboard"));
+    connect(refresh_btn_, &QPushButton::clicked, this, &DashboardToolBar::refresh_clicked);
+    rl->addWidget(refresh_btn_);
 
-    auto* add_btn = new QPushButton("+ ADD");
-    add_btn->setFixedHeight(20);
-    add_btn->setObjectName("dtAddBtn");
-    connect(add_btn, &QPushButton::clicked, this, &DashboardToolBar::add_widget_clicked);
-    rl->addWidget(add_btn);
+    add_btn_ = new QPushButton(tr("+ ADD"));
+    add_btn_->setFixedHeight(20);
+    add_btn_->setObjectName("dtAddBtn");
+    connect(add_btn_, &QPushButton::clicked, this, &DashboardToolBar::add_widget_clicked);
+    rl->addWidget(add_btn_);
 
-    auto* save_btn = new QPushButton("SAVE");
-    save_btn->setFixedHeight(20);
-    save_btn->setObjectName("dtBtn");
-    connect(save_btn, &QPushButton::clicked, this, &DashboardToolBar::save_layout_clicked);
-    rl->addWidget(save_btn);
+    save_btn_ = new QPushButton(tr("SAVE"));
+    save_btn_->setFixedHeight(20);
+    save_btn_->setObjectName("dtBtn");
+    connect(save_btn_, &QPushButton::clicked, this, &DashboardToolBar::save_layout_clicked);
+    rl->addWidget(save_btn_);
 
-    auto* reset_btn = new QPushButton("RESET");
-    reset_btn->setFixedHeight(20);
-    reset_btn->setObjectName("dtResetBtn");
-    connect(reset_btn, &QPushButton::clicked, this, &DashboardToolBar::reset_layout_clicked);
-    rl->addWidget(reset_btn);
+    reset_btn_ = new QPushButton(tr("RESET"));
+    reset_btn_->setFixedHeight(20);
+    reset_btn_->setObjectName("dtResetBtn");
+    connect(reset_btn_, &QPushButton::clicked, this, &DashboardToolBar::reset_layout_clicked);
+    rl->addWidget(reset_btn_);
 
     hl->addWidget(right);
 
@@ -209,20 +209,44 @@ void DashboardToolBar::showEvent(QShowEvent* event) {
 }
 
 void DashboardToolBar::update_clock() {
-    const QString suffix = clock_is_utc_ ? " UTC" : " LOC";
+    const QString suffix = clock_is_utc_ ? tr(" UTC") : tr(" LOC");
     const QDateTime now = clock_is_utc_ ? QDateTime::currentDateTimeUtc() : QDateTime::currentDateTime();
     clock_btn_->setText(now.toString("yyyy-MM-dd HH:mm:ss") + suffix);
 }
 
 void DashboardToolBar::set_widget_count(int count) {
-    widget_count_->setText(QString("%1 WIDGETS").arg(count));
+    widget_count_value_ = count;
+    widget_count_->setText(tr("%1 WIDGETS").arg(count));
 }
 
 void DashboardToolBar::set_connected(bool connected) {
-    status_text_->setText(connected ? "LIVE" : "OFFLINE");
+    connected_ = connected;
+    status_text_->setText(connected ? tr("LIVE") : tr("OFFLINE"));
     // refresh_theme handles the base color; override just this label dynamically
     status_text_->setStyleSheet(QString("color:%1;font-weight:bold;background:transparent;")
                                     .arg(connected ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+}
+
+void DashboardToolBar::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void DashboardToolBar::retranslateUi() {
+    if (status_text_)   status_text_->setText(connected_ ? tr("LIVE") : tr("OFFLINE"));
+    if (clock_btn_)     clock_btn_->setToolTip(tr("Click to toggle UTC / local time"));
+    if (widget_count_)  widget_count_->setText(tr("%1 WIDGETS").arg(widget_count_value_));
+    if (compact_btn_)   compact_btn_->setText(tr("COMPACT"));
+    if (pulse_btn_)     pulse_btn_->setText(tr("PULSE"));
+    if (refresh_btn_) {
+        refresh_btn_->setText(tr("REFRESH"));
+        refresh_btn_->setToolTip(tr("Force-refresh all live data on the dashboard"));
+    }
+    if (add_btn_)       add_btn_->setText(tr("+ ADD"));
+    if (save_btn_)      save_btn_->setText(tr("SAVE"));
+    if (reset_btn_)     reset_btn_->setText(tr("RESET"));
+    update_clock();
 }
 
 } // namespace fincept::screens

@@ -15,6 +15,7 @@
 #include <QBarSet>
 #include <QChart>
 #include <QDateTime>
+#include <QEvent>
 #include <QFile>
 #include <QFileInfo>
 #include <QFrame>
@@ -27,6 +28,7 @@
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QSizePolicy>
+#include <QStackedWidget>
 #include <QTextStream>
 #include <QVBoxLayout>
 #include <QValueAxis>
@@ -174,8 +176,66 @@ void EquityFinancialsTab::set_symbol(const QString& symbol) {
         return;
     current_symbol_ = symbol;
     loaded_ = false;
-    loading_overlay_->show_loading("LOADING FINANCIALS…");
+    loading_overlay_->show_loading(tr("LOADING FINANCIALS…"));
     services::equity::EquityResearchService::instance().fetch_financials(symbol);
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+//
+// Strategy: rebuild the three stacked view pages on language change. Every
+// metric card, ratio row, section title, and chart axis label is created
+// inside build_*_view() with localized strings, so a fresh build_*_view()
+// call after the language change produces a fully-translated subtree. The
+// statement selector buttons + EXPORT CSV button sit above the stack and
+// are retranslated explicitly via cached members.
+//
+// Member pointers (inc_revenue_val_ et al.) get re-pointed by the new
+// build_*_view() calls; on_financials_loaded(cached_data_) then re-renders
+// every value into them, so no live data is lost.
+
+void EquityFinancialsTab::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
+}
+
+void EquityFinancialsTab::retranslateUi() {
+    if (btn_income_)     btn_income_->setText(tr("Income Statement"));
+    if (btn_balance_)    btn_balance_->setText(tr("Balance Sheet"));
+    if (btn_cashflow_)   btn_cashflow_->setText(tr("Cash Flow"));
+    if (btn_export_csv_) btn_export_csv_->setText(tr("EXPORT CSV"));
+
+    rebuild_views();
+}
+
+void EquityFinancialsTab::rebuild_views() {
+    if (!stack_)
+        return;
+
+    const int saved_idx = stack_->currentIndex();
+
+    // Remove + delete existing pages. Member pointers held by the pages
+    // (inc_revenue_val_, bal_table_, cf_chart_, ...) all reference children
+    // of those pages, so they're invalidated by the deleteLater chain.
+    while (stack_->count() > 0) {
+        auto* w = stack_->widget(0);
+        stack_->removeWidget(w);
+        w->deleteLater();
+    }
+
+    // Rebuild — each build_*_view() re-assigns the relevant member pointers.
+    stack_->addWidget(build_income_view());
+    stack_->addWidget(build_balance_view());
+    stack_->addWidget(build_cashflow_view());
+    stack_->setCurrentIndex(saved_idx);
+
+    // Replay cached data so the freshly-built value labels and tables show
+    // the right numbers in the new locale. on_financials_loaded is the only
+    // entry point that knows how to populate all three views from a single
+    // FinancialsData payload.
+    if (loaded_)
+        on_financials_loaded(cached_data_);
 }
 
 // ── Build UI ──────────────────────────────────────────────────────────────────
@@ -201,7 +261,7 @@ void EquityFinancialsTab::populate_table(QTableWidget* table, const QVector<QPai
     table->setRowCount(metrics.size());
 
     QStringList headers;
-    headers << "Metric";
+    headers << tr("Metric");
     headers.append(periods);
     table->setHorizontalHeaderLabels(headers);
     table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);

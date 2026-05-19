@@ -12,17 +12,32 @@
 namespace fincept::screens {
 
 /// Support — two-panel layout: ticket sidebar + detail/create content area.
+///
+/// Internationalised: static chrome (top bar, sidebar header, filter combo,
+/// stat captions) flows through tr() with member pointers re-set in
+/// retranslateUi(). The content pages (empty / create / detail) are
+/// rebuilt from build_*() on QEvent::LanguageChange, and load_tickets()
+/// re-runs to refresh sidebar rows. In-progress form input is preserved
+/// across language switches by snapshotting + restoring text fields.
 class SupportScreen : public QWidget {
     Q_OBJECT
   public:
     explicit SupportScreen(QWidget* parent = nullptr);
+
+  protected:
+    void changeEvent(QEvent* event) override;
 
   private:
     // ── Layout ────────────────────────────────────────────────────────────────
     QSplitter* splitter_ = nullptr;
     QStackedWidget* content_stack_ = nullptr; // 0=empty, 1=create, 2=detail
 
+    // ── Top bar ───────────────────────────────────────────────────────────────
+    QLabel* title_lbl_ = nullptr;
+    QLabel* breadcrumb_lbl_ = nullptr;
+
     // ── Sidebar ───────────────────────────────────────────────────────────────
+    QPushButton* new_ticket_btn_ = nullptr;
     QLineEdit* search_input_ = nullptr;
     QComboBox* filter_combo_ = nullptr;
     QWidget* ticket_container_ = nullptr;
@@ -30,6 +45,10 @@ class SupportScreen : public QWidget {
     QLabel* stat_total_ = nullptr;
     QLabel* stat_open_ = nullptr;
     QLabel* stat_resolved_ = nullptr;
+    // Stat captions ("Total" / "Open" / "Done") — separate from the counts.
+    QLabel* stat_total_caption_ = nullptr;
+    QLabel* stat_open_caption_ = nullptr;
+    QLabel* stat_resolved_caption_ = nullptr;
 
     // ── Status bar ────────────────────────────────────────────────────────────
     QLabel* status_dot_ = nullptr;
@@ -76,6 +95,7 @@ class SupportScreen : public QWidget {
     void set_busy(bool busy);
     void select_ticket_row(QPushButton* btn);
     void apply_styles();
+    void retranslateUi();
     static QString status_color(const QString& s);
     static QString priority_color(const QString& p);
     static QString status_label(const QString& s);

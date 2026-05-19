@@ -34,6 +34,7 @@ class MarketPulsePanel : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   public slots:
     /// Public so the Dashboard REFRESH button can drive it directly. The
@@ -76,7 +77,11 @@ class MarketPulsePanel : public QWidget {
         QWidget* container = nullptr;
         QLabel* icon = nullptr;
         QLabel* title = nullptr;
+        QString source_key; // English source string for retranslateUi()
     };
+
+    /// Re-apply tr() to every kept-handle label/header.
+    void retranslateUi();
     SectionHeader sh_breadth_;
     SectionHeader sh_gainers_;
     SectionHeader sh_losers_;
@@ -90,6 +95,7 @@ class MarketPulsePanel : public QWidget {
     QLabel* fg_score_max_ = nullptr;
     QLabel* fg_sentiment_ = nullptr;
     QFrame* fg_gradient_bar_ = nullptr;
+    QString fg_sentiment_key_; // English source key, fed through tr() on retranslate
 
     // ── Market Breadth ──
     // per-exchange: {name_label, adv_label, slash_label, dec_label, green_bar, red_bar}
@@ -130,6 +136,7 @@ class MarketPulsePanel : public QWidget {
         QLabel* dot = nullptr;
         QLabel* status = nullptr;
         QString region;
+        QString name_source_key; // English label, fed through tr() on language change
     };
     QVector<HoursRow> hours_rows_;
 

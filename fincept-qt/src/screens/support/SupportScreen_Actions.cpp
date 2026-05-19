@@ -68,10 +68,12 @@ void SupportScreen::load_tickets() {
             }
         }
 
-        // Demo ticket
+        // Demo ticket — subject is user-visible, the other fields are status/
+        // category API keys that flow through priority_color / status_label so
+        // they get translated downstream.
         QJsonObject demo;
         demo["id"] = "DEMO-001";
-        demo["subject"] = "Welcome to Fincept Support";
+        demo["subject"] = tr("Welcome to Fincept Support");
         demo["status"] = "resolved";
         demo["priority"] = "low";
         demo["category"] = "general";
@@ -96,7 +98,7 @@ void SupportScreen::load_tickets() {
         stat_resolved_->setText(QString::number(done_c));
 
         if (all.isEmpty()) {
-            auto* empty = lbl("No tickets yet", ui::colors::TEXT_TERTIARY(), 12);
+            auto* empty = lbl(tr("No tickets yet"), ui::colors::TEXT_TERTIARY(), 12);
             empty->setAlignment(Qt::AlignCenter);
             empty->setContentsMargins(0, 40, 0, 0);
             lay->insertWidget(0, empty);
@@ -140,7 +142,7 @@ void SupportScreen::load_tickets() {
             top->addWidget(subj, 1);
 
             if (is_demo) {
-                auto* demo_tag = status_badge("DEMO", ui::colors::INFO(), ui::colors::BG_BASE());
+                auto* demo_tag = status_badge(tr("DEMO"), ui::colors::INFO(), ui::colors::BG_BASE());
                 top->addWidget(demo_tag);
             }
             rl->addLayout(top);
@@ -186,7 +188,7 @@ void SupportScreen::load_tickets() {
                 selected_is_closed_ = (st_c.toLower() == "closed" || st_c.toLower() == "resolved");
 
                 // Populate header
-                detail_id_lbl_->setText(QString("Ticket #%1").arg(demo_c ? "DEMO" : QString::number(id_int)));
+                detail_id_lbl_->setText(tr("Ticket #%1").arg(demo_c ? tr("DEMO") : QString::number(id_int)));
                 detail_subject_lbl_->setText(sub_c);
 
                 detail_status_lbl_->setText(" " + status_label(st_c) + " ");
@@ -195,9 +197,9 @@ void SupportScreen::load_tickets() {
                                                       .arg(status_color(st_c), ui::colors::BG_BASE(), MF));
 
                 detail_meta_lbl_->setText(
-                    QString("%1  ·  %2  ·  Opened %3").arg(cat_c.toLower(), pr_c.toLower(), cr_c));
+                    tr("%1  ·  %2  ·  Opened %3").arg(cat_c.toLower(), pr_c.toLower(), cr_c));
 
-                detail_body_lbl_->setText(body_c.isEmpty() ? "No description provided." : body_c);
+                detail_body_lbl_->setText(body_c.isEmpty() ? tr("No description provided.") : body_c);
 
                 // Show/hide bottom widgets
                 demo_box_->setVisible(demo_c);
@@ -220,12 +222,14 @@ void SupportScreen::load_tickets() {
                     ml->setContentsMargins(14, 10, 14, 12);
                     ml->setSpacing(6);
                     auto* mh = new QHBoxLayout;
-                    mh->addWidget(lbl("Support Team", "#9333ea", 11, true));
+                    mh->addWidget(lbl(tr("Support Team"), "#9333ea", 11, true));
                     mh->addStretch();
-                    mh->addWidget(lbl("1 Jan 2026", ui::colors::TEXT_TERTIARY(), 10));
+                    // Demo timestamp is intentionally fixed at the launch date —
+                    // not a live date. Translated for the localized month name.
+                    mh->addWidget(lbl(tr("1 Jan 2026"), ui::colors::TEXT_TERTIARY(), 10));
                     ml->addLayout(mh);
-                    auto* mb = lbl("Welcome to Fincept! This demo ticket shows how the support system works.\n"
-                                   "Create a real ticket and our team will respond within 24 hours.",
+                    auto* mb = lbl(tr("Welcome to Fincept! This demo ticket shows how the support system works.\n"
+                                      "Create a real ticket and our team will respond within 24 hours."),
                                    ui::colors::TEXT_PRIMARY(), 12, false, true);
                     ml->addWidget(mb);
                     mcl2->insertWidget(mcl2->count() - 1, m);
@@ -263,7 +267,7 @@ void SupportScreen::load_tickets() {
                             if (sender_type.isEmpty())
                                 sender_type = mo["sender"].toString();
                             bool is_user = (sender_type == "user" || sender_type == "customer");
-                            QString sender = is_user ? "You" : "Support Team";
+                            QString sender = is_user ? tr("You") : tr("Support Team");
                             QString bubble_color = is_user ? ui::colors::CYAN() : "#9333ea";
 
                             QString ts;
@@ -291,7 +295,8 @@ void SupportScreen::load_tickets() {
 
                         if (msgs.isEmpty()) {
                             mcl3->insertWidget(
-                                0, lbl("No messages yet — be the first to reply.", ui::colors::TEXT_TERTIARY(), 11));
+                                0, lbl(tr("No messages yet — be the first to reply."),
+                                       ui::colors::TEXT_TERTIARY(), 11));
                         }
 
                         // Scroll to bottom
@@ -319,12 +324,17 @@ void SupportScreen::on_create_ticket() {
         return;
 
     set_busy(true);
-    create_btn_->setText("Submitting…");
+    create_btn_->setText(tr("Submitting…"));
 
-    auth::UserApi::instance().create_ticket(subject, desc, category_combo_->currentText().toLower().replace(' ', '_'),
-                                            priority_combo_->currentText().toLower(), [this](auth::ApiResponse r) {
+    // currentData() carries the stable English API key (e.g. "feature_request",
+    // "medium") regardless of which language the user sees in the combo.
+    const QString cat_key = category_combo_->currentData().toString();
+    const QString pri_key = priority_combo_->currentData().toString();
+
+    auth::UserApi::instance().create_ticket(subject, desc, cat_key, pri_key,
+                                            [this](auth::ApiResponse r) {
                                                 set_busy(false);
-                                                create_btn_->setText("Submit Ticket →");
+                                                create_btn_->setText(tr("Submit Ticket →"));
                                                 if (r.success) {
                                                     subject_input_->clear();
                                                     desc_input_->clear();
@@ -344,11 +354,11 @@ void SupportScreen::on_send_message() {
         return;
 
     set_busy(true);
-    send_btn_->setText("Sending…");
+    send_btn_->setText(tr("Sending…"));
 
     auth::UserApi::instance().add_ticket_message(selected_ticket_id_, msg, [this, msg](auth::ApiResponse r) {
         set_busy(false);
-        send_btn_->setText("Send Reply →");
+        send_btn_->setText(tr("Send Reply →"));
         if (!r.success)
             return;
 
@@ -364,7 +374,7 @@ void SupportScreen::on_send_message() {
         ml->setContentsMargins(14, 10, 14, 12);
         ml->setSpacing(6);
         auto* mh = new QHBoxLayout;
-        mh->addWidget(lbl("You", ui::colors::CYAN(), 11, true));
+        mh->addWidget(lbl(tr("You"), ui::colors::CYAN(), 11, true));
         mh->addStretch();
         mh->addWidget(lbl(QDateTime::currentDateTime().toString("d MMM yyyy  hh:mm"), ui::colors::TEXT_TERTIARY(), 10));
         ml->addLayout(mh);

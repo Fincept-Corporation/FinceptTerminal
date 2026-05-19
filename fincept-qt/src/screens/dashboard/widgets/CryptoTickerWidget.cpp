@@ -23,7 +23,7 @@ constexpr const char* kDefaultExchange = "kraken";
 } // namespace
 
 CryptoTickerWidget::CryptoTickerWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget("CRYPTO TICKER", parent) {
+    : BaseWidget(tr("CRYPTO TICKER"), parent) {
     auto* vl = content_layout();
     vl->setContentsMargins(10, 8, 10, 8);
     vl->setSpacing(4);
@@ -161,18 +161,18 @@ void CryptoTickerWidget::on_ticker(const QString& pair, const fincept::trading::
 
 QDialog* CryptoTickerWidget::make_config_dialog(QWidget* parent) {
     auto* dlg = new QDialog(parent);
-    dlg->setWindowTitle("Configure — Crypto Ticker");
+    dlg->setWindowTitle(tr("Configure — Crypto Ticker"));
     auto* form = new QFormLayout(dlg);
 
     auto* combo = new QComboBox(dlg);
     combo->addItems({"kraken", "hyperliquid"});
     combo->setCurrentText(exchange_);
-    form->addRow("Exchange", combo);
+    form->addRow(tr("Exchange"), combo);
 
     auto* edit = new QLineEdit(dlg);
     edit->setText(pairs_.join(", "));
-    edit->setPlaceholderText("e.g. BTC/USD, ETH/USD, SOL/USD");
-    form->addRow("Pairs", edit);
+    edit->setPlaceholderText(tr("e.g. BTC/USD, ETH/USD, SOL/USD"));
+    form->addRow(tr("Pairs"), edit);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
     form->addRow(buttons);

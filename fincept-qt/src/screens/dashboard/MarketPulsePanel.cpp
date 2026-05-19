@@ -321,7 +321,7 @@ QWidget* MarketPulsePanel::build_header() {
     header_icon_ = new QLabel(QChar(0x25C8));
     hl->addWidget(header_icon_);
 
-    header_title_ = new QLabel("MARKET PULSE");
+    header_title_ = new QLabel(tr("MARKET PULSE"));
     hl->addWidget(header_title_);
     hl->addStretch();
 
@@ -344,12 +344,12 @@ QWidget* MarketPulsePanel::build_section_header(const QString& title, const QStr
     auto* icn = new QLabel(icon_char);
     hl->addWidget(icn);
 
-    auto* lbl = new QLabel(title);
+    auto* lbl = new QLabel(tr(title.toUtf8().constData()));
     hl->addWidget(lbl);
     hl->addStretch();
 
-    // Store pointers into the corresponding SectionHeader member
-    // so refresh_theme() can re-apply styles later.
+    // Title is the English source key — keep it intact for retranslateUi().
+    // Comparison must match the *source* string, not the translated one.
     SectionHeader* sh = nullptr;
     if (title == "MARKET BREADTH")
         sh = &sh_breadth_;
@@ -366,6 +366,7 @@ QWidget* MarketPulsePanel::build_section_header(const QString& title, const QStr
         sh->container = w;
         sh->icon = icn;
         sh->title = lbl;
+        sh->source_key = title;
     }
 
     return w;
@@ -384,7 +385,7 @@ QWidget* MarketPulsePanel::build_fear_greed_section() {
     auto* hrl = new QHBoxLayout(header_row);
     hrl->setContentsMargins(0, 0, 0, 0);
 
-    fg_header_label_ = new QLabel("FEAR & GREED INDEX");
+    fg_header_label_ = new QLabel(tr("FEAR & GREED INDEX"));
     hrl->addWidget(fg_header_label_);
     hrl->addStretch();
 
@@ -411,7 +412,8 @@ QWidget* MarketPulsePanel::build_fear_greed_section() {
 
     srl->addStretch();
 
-    fg_sentiment_ = new QLabel("LOADING...");
+    fg_sentiment_key_ = QStringLiteral("LOADING...");
+    fg_sentiment_ = new QLabel(tr("LOADING..."));
     srl->addWidget(fg_sentiment_);
     // All styling applied by refresh_theme()
 
@@ -515,7 +517,7 @@ QWidget* MarketPulsePanel::build_mover_row(const QString& symbol, double change,
     hl->addWidget(chg);
 
     if (!volume.isEmpty()) {
-        auto* vol = new QLabel(QString("VOL: %1").arg(volume));
+        auto* vol = new QLabel(tr("VOL: %1").arg(volume));
         vol->setStyleSheet(
             QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
         hl->addWidget(vol);
@@ -680,7 +682,7 @@ QWidget* MarketPulsePanel::build_market_hours_section() {
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(0, 3, 0, 3);
 
-        auto* name = new QLabel(ex.name);
+        auto* name = new QLabel(tr(ex.name));
         rl->addWidget(name);
         rl->addStretch();
 
@@ -688,6 +690,7 @@ QWidget* MarketPulsePanel::build_market_hours_section() {
         hr.container = row;
         hr.name_lbl = name;
         hr.region = ex.region;
+        hr.name_source_key = QString::fromUtf8(ex.name);
 
         hr.dot = new QLabel;
         hr.dot->setFixedSize(5, 5);
@@ -708,46 +711,55 @@ QWidget* MarketPulsePanel::build_market_hours_section() {
 // ── Market status helper ─────────────────────────────────────────────────────
 
 QString MarketPulsePanel::market_status(const QString& region) {
+    // Returns an English source key. Display-time translation happens in
+    // refresh_market_hours() so the key is stable for retranslateUi().
     auto now = QDateTime::currentDateTimeUtc();
     int hour = now.time().hour();
     int day = now.date().dayOfWeek(); // 1=Mon, 7=Sun
 
     if (day >= 6)
-        return "CLOSED";
+        return QStringLiteral("CLOSED");
 
     if (region == "US") {
         if (hour >= 13 && hour < 14)
-            return "PRE";
+            return QStringLiteral("PRE");
         if (hour >= 14 && hour < 21)
-            return "OPEN";
+            return QStringLiteral("OPEN");
     } else if (region == "UK") {
         if (hour >= 7 && hour < 8)
-            return "PRE";
+            return QStringLiteral("PRE");
         if (hour >= 8 && hour < 17)
-            return "OPEN";
+            return QStringLiteral("OPEN");
     } else if (region == "JP") {
         if (hour >= 0 && hour < 6)
-            return "OPEN";
+            return QStringLiteral("OPEN");
     } else if (region == "CN") {
         if (hour >= 1 && hour < 7)
-            return "OPEN";
+            return QStringLiteral("OPEN");
     } else if (region == "IN") {
         if (hour >= 3 && hour < 10)
-            return "OPEN";
+            return QStringLiteral("OPEN");
     }
-    return "CLOSED";
+    return QStringLiteral("CLOSED");
 }
 
 // ── Refresh ───────────────────────────────────────────────────────────────────
 
 void MarketPulsePanel::refresh_market_hours() {
     for (auto& hr : hours_rows_) {
-        QString status = market_status(hr.region);
-        QString color = (status == "OPEN")  ? ui::colors::POSITIVE()
-                        : (status == "PRE") ? ui::colors::WARNING()
-                                            : ui::colors::NEGATIVE();
+        const QString status_key = market_status(hr.region);
+        const QString color = (status_key == QLatin1String("OPEN"))  ? ui::colors::POSITIVE()
+                              : (status_key == QLatin1String("PRE")) ? ui::colors::WARNING()
+                                                                     : ui::colors::NEGATIVE();
         hr.dot->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(color));
-        hr.status->setText(status);
+        // Translate at display time. retranslateUi() also calls back into this
+        // function so a language switch picks up the new locale.
+        if (status_key == QLatin1String("OPEN"))
+            hr.status->setText(tr("OPEN"));
+        else if (status_key == QLatin1String("PRE"))
+            hr.status->setText(tr("PRE"));
+        else
+            hr.status->setText(tr("CLOSED"));
         hr.status->setStyleSheet(
             QString("color: %1; font-size: 8px; font-weight: bold; background: transparent;").arg(color));
     }
@@ -836,23 +848,29 @@ void MarketPulsePanel::rebuild_breadth_from_cache() {
     }
     score = qBound(0, score, 100);
 
-    QString sentiment_text, sentiment_color;
+    QString sentiment_text, sentiment_color, sentiment_key;
     if (score <= 20) {
-        sentiment_text = "EXTREME FEAR";
+        sentiment_key = QStringLiteral("EXTREME FEAR");
+        sentiment_text = tr("EXTREME FEAR");
         sentiment_color = ui::colors::NEGATIVE();
     } else if (score <= 40) {
-        sentiment_text = "FEAR";
+        sentiment_key = QStringLiteral("FEAR");
+        sentiment_text = tr("FEAR");
         sentiment_color = ui::colors::WARNING();
     } else if (score <= 60) {
-        sentiment_text = "NEUTRAL";
+        sentiment_key = QStringLiteral("NEUTRAL");
+        sentiment_text = tr("NEUTRAL");
         sentiment_color = ui::colors::WARNING();
     } else if (score <= 80) {
-        sentiment_text = "GREED";
+        sentiment_key = QStringLiteral("GREED");
+        sentiment_text = tr("GREED");
         sentiment_color = ui::colors::POSITIVE();
     } else {
-        sentiment_text = "EXTREME GREED";
+        sentiment_key = QStringLiteral("EXTREME GREED");
+        sentiment_text = tr("EXTREME GREED");
         sentiment_color = ui::colors::POSITIVE();
     }
+    fg_sentiment_key_ = sentiment_key;
 
     if (fg_score_val_) {
         fg_score_val_->setText(QString::number(score));
@@ -1021,6 +1039,55 @@ void MarketPulsePanel::refresh_data() {
     push(kMoverSymbols);
     push(kSnapshotSymbols);
     hub.request(topics, /*force=*/true);  // user-triggered refresh
+}
+
+void MarketPulsePanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void MarketPulsePanel::retranslateUi() {
+    if (header_title_)    header_title_->setText(tr("MARKET PULSE"));
+    if (fg_header_label_) fg_header_label_->setText(tr("FEAR & GREED INDEX"));
+
+    auto set_sh = [](SectionHeader& sh) {
+        if (!sh.title) return;
+        const QString& k = sh.source_key;
+        if      (k == QLatin1String("MARKET BREADTH"))  sh.title->setText(tr("MARKET BREADTH"));
+        else if (k == QLatin1String("TOP GAINERS"))     sh.title->setText(tr("TOP GAINERS"));
+        else if (k == QLatin1String("TOP LOSERS"))      sh.title->setText(tr("TOP LOSERS"));
+        else if (k == QLatin1String("GLOBAL SNAPSHOT")) sh.title->setText(tr("GLOBAL SNAPSHOT"));
+        else if (k == QLatin1String("MARKET HOURS"))    sh.title->setText(tr("MARKET HOURS"));
+    };
+    set_sh(sh_breadth_);
+    set_sh(sh_gainers_);
+    set_sh(sh_losers_);
+    set_sh(sh_snapshot_);
+    set_sh(sh_hours_);
+
+    if (fg_sentiment_ && !fg_sentiment_key_.isEmpty()) {
+        const QString& k = fg_sentiment_key_;
+        if      (k == QLatin1String("EXTREME FEAR"))  fg_sentiment_->setText(tr("EXTREME FEAR"));
+        else if (k == QLatin1String("FEAR"))          fg_sentiment_->setText(tr("FEAR"));
+        else if (k == QLatin1String("NEUTRAL"))       fg_sentiment_->setText(tr("NEUTRAL"));
+        else if (k == QLatin1String("GREED"))         fg_sentiment_->setText(tr("GREED"));
+        else if (k == QLatin1String("EXTREME GREED")) fg_sentiment_->setText(tr("EXTREME GREED"));
+        else if (k == QLatin1String("LOADING..."))    fg_sentiment_->setText(tr("LOADING..."));
+    }
+
+    for (auto& hr : hours_rows_) {
+        if (!hr.name_lbl) continue;
+        const QString& k = hr.name_source_key;
+        if      (k == QLatin1String("NYSE/NASDAQ"))      hr.name_lbl->setText(tr("NYSE/NASDAQ"));
+        else if (k == QLatin1String("LSE"))              hr.name_lbl->setText(tr("LSE"));
+        else if (k == QLatin1String("TSE (TOKYO)"))      hr.name_lbl->setText(tr("TSE (TOKYO)"));
+        else if (k == QLatin1String("SSE (SHANGHAI)"))   hr.name_lbl->setText(tr("SSE (SHANGHAI)"));
+        else if (k == QLatin1String("NSE (INDIA)"))      hr.name_lbl->setText(tr("NSE (INDIA)"));
+    }
+    refresh_market_hours();
+    if (isVisible())
+        rebuild_movers_from_cache(); // mover rows have "VOL: %1" labels rebuilt here
 }
 
 } // namespace fincept::screens

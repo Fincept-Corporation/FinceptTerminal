@@ -38,6 +38,7 @@ class PortfolioInsightsPanel : public QWidget {
   protected:
     void keyPressEvent(QKeyEvent* e) override;
     void showEvent(QShowEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
@@ -51,12 +52,18 @@ class PortfolioInsightsPanel : public QWidget {
     void render_error(QTextBrowser* target, const QString& message);
     void render_empty(QTextBrowser* target, const QString& hint);
     QString build_portfolio_context() const;
+    void retranslateUi();
+    void retranslate_ai_run_label();   // re-applies "RUN/RE-RUN <type> ANALYSIS" from cache state
 
     // Layout
+    QLabel* header_title_ = nullptr;
+    QPushButton* header_close_btn_ = nullptr;
     QPushButton* tab_ai_btn_ = nullptr;
     QPushButton* tab_agent_btn_ = nullptr;
     QStackedWidget* pages_ = nullptr;
     QLabel* header_status_ = nullptr;
+    QLabel* ai_type_label_ = nullptr;
+    QLabel* agent_select_label_ = nullptr;
 
     // AI page
     QPushButton* ai_full_ = nullptr;

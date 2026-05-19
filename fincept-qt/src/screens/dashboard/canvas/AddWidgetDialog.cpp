@@ -63,7 +63,7 @@ QString AddWidgetDialog::icon_for_widget(const QString& type_id) {
 // ── Constructor ─────────────────────────────────────────────────────────────
 
 AddWidgetDialog::AddWidgetDialog(QWidget* parent) : QDialog(parent) {
-    setWindowTitle("Add Widget");
+    setWindowTitle(tr("Add Widget"));
     setFixedSize(620, 520);
     setStyleSheet(QString("QDialog { background: %1; }").arg(ui::colors::BG_BASE()));
 
@@ -73,20 +73,20 @@ AddWidgetDialog::AddWidgetDialog(QWidget* parent) : QDialog(parent) {
 
     // ── Title row ──
     auto* title_row = new QHBoxLayout;
-    auto* title = new QLabel("ADD WIDGET");
-    title->setStyleSheet(
+    title_label_ = new QLabel(tr("ADD WIDGET"));
+    title_label_->setStyleSheet(
         QString("color: %1; font-size: 12px; font-weight: bold; letter-spacing: 1px;").arg(ui::colors::AMBER()));
-    title_row->addWidget(title);
+    title_row->addWidget(title_label_);
     title_row->addStretch();
 
-    auto* subtitle = new QLabel(QString("%1 AVAILABLE").arg(WidgetRegistry::instance().all().size()));
-    subtitle->setStyleSheet(QString("color: %1; font-size: 10px;").arg(ui::colors::TEXT_TERTIARY()));
-    title_row->addWidget(subtitle);
+    subtitle_label_ = new QLabel(tr("%1 AVAILABLE").arg(WidgetRegistry::instance().all().size()));
+    subtitle_label_->setStyleSheet(QString("color: %1; font-size: 10px;").arg(ui::colors::TEXT_TERTIARY()));
+    title_row->addWidget(subtitle_label_);
     root->addLayout(title_row);
 
     // ── Search ──
     search_bar_ = new QLineEdit;
-    search_bar_->setPlaceholderText("Search widgets...");
+    search_bar_->setPlaceholderText(tr("Search widgets..."));
     search_bar_->setFixedHeight(30);
     search_bar_->setStyleSheet(
         QString("QLineEdit { background: %1; border: 1px solid %2; color: %3; "
@@ -123,18 +123,18 @@ AddWidgetDialog::AddWidgetDialog(QWidget* parent) : QDialog(parent) {
     bot->setSpacing(8);
     bot->addStretch();
 
-    auto* cancel_btn = new QPushButton("CANCEL");
-    cancel_btn->setFixedSize(90, 30);
-    cancel_btn->setCursor(Qt::PointingHandCursor);
-    cancel_btn->setStyleSheet(
+    cancel_btn_ = new QPushButton(tr("CANCEL"));
+    cancel_btn_->setFixedSize(90, 30);
+    cancel_btn_->setCursor(Qt::PointingHandCursor);
+    cancel_btn_->setStyleSheet(
         QString("QPushButton { background: %1; border: 1px solid %2; color: %3; "
                 "font-size: 10px; font-weight: bold; border-radius: 2px; }"
                 "QPushButton:hover { border-color: %4; color: %4; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER()));
-    connect(cancel_btn, &QPushButton::clicked, this, &QDialog::reject);
-    bot->addWidget(cancel_btn);
+    connect(cancel_btn_, &QPushButton::clicked, this, &QDialog::reject);
+    bot->addWidget(cancel_btn_);
 
-    add_btn_ = new QPushButton("ADD WIDGET");
+    add_btn_ = new QPushButton(tr("ADD WIDGET"));
     add_btn_->setFixedSize(110, 30);
     add_btn_->setCursor(Qt::PointingHandCursor);
     add_btn_->setEnabled(false);
@@ -161,9 +161,9 @@ void AddWidgetDialog::build_category_bar(QVBoxLayout* root) {
     cat_group_ = new QButtonGroup(this);
     cat_group_->setExclusive(true);
 
-    // Gather unique categories from registry
+    // Gather unique categories from registry (English keys retained).
     QStringList categories;
-    categories << "All";
+    categories << QStringLiteral("All");
     QSet<QString> seen;
     for (const auto& meta : WidgetRegistry::instance().all()) {
         if (!seen.contains(meta.category)) {
@@ -173,12 +173,13 @@ void AddWidgetDialog::build_category_bar(QVBoxLayout* root) {
     }
 
     for (const auto& cat : categories) {
-        auto* btn = new QPushButton(cat.toUpper());
+        const QString label = (cat == QLatin1String("All")) ? tr("All") : WidgetRegistry::category_tr(cat);
+        auto* btn = new QPushButton(label.toUpper());
         btn->setCheckable(true);
         btn->setFixedHeight(24);
         btn->setCursor(Qt::PointingHandCursor);
 
-        QString accent = (cat == "All") ? ui::colors::AMBER() : accent_for_category(cat);
+        QString accent = (cat == QLatin1String("All")) ? ui::colors::AMBER() : accent_for_category(cat);
         btn->setStyleSheet(QString("QPushButton { background: %1; border: 1px solid %2; color: %3; "
                                    "padding: 2px 12px; font-size: 10px; font-weight: bold; "
                                    "letter-spacing: 0.5px; border-radius: 2px; }"
@@ -187,13 +188,15 @@ void AddWidgetDialog::build_category_bar(QVBoxLayout* root) {
                                .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED(), ui::colors::TEXT_PRIMARY(),
                                     accent, ui::colors::BG_BASE()));
 
-        if (cat == "All")
+        if (cat == QLatin1String("All"))
             btn->setChecked(true);
 
         cat_group_->addButton(btn);
         cat_buttons_.append(btn);
+        cat_source_keys_.append(cat);
 
-        connect(btn, &QPushButton::clicked, this, [this, c = cat]() { category_clicked(c == "All" ? QString{} : c); });
+        connect(btn, &QPushButton::clicked, this,
+                [this, c = cat]() { category_clicked(c == QLatin1String("All") ? QString{} : c); });
 
         cat_row->addWidget(btn);
     }
@@ -248,6 +251,29 @@ void AddWidgetDialog::confirm() {
     accept();
 }
 
+void AddWidgetDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void AddWidgetDialog::retranslateUi() {
+    setWindowTitle(tr("Add Widget"));
+    if (title_label_)    title_label_->setText(tr("ADD WIDGET"));
+    if (subtitle_label_) subtitle_label_->setText(tr("%1 AVAILABLE").arg(WidgetRegistry::instance().all().size()));
+    if (search_bar_)     search_bar_->setPlaceholderText(tr("Search widgets..."));
+    if (cancel_btn_)     cancel_btn_->setText(tr("CANCEL"));
+    if (add_btn_)        add_btn_->setText(tr("ADD WIDGET"));
+    for (int i = 0; i < cat_buttons_.size() && i < cat_source_keys_.size(); ++i) {
+        const QString& key = cat_source_keys_[i];
+        const QString label = (key == QLatin1String("All")) ? tr("All") : WidgetRegistry::category_tr(key);
+        cat_buttons_[i]->setText(label.toUpper());
+    }
+    // Cards carry translated display_name/description/category labels —
+    // re-render them so a language switch updates the grid immediately.
+    populate_cards(search_bar_ ? search_bar_->text() : QString(), active_category_);
+}
+
 // ── Card grid population ────────────────────────────────────────────────────
 
 void AddWidgetDialog::populate_cards(const QString& filter, const QString& category) {
@@ -269,10 +295,18 @@ void AddWidgetDialog::populate_cards(const QString& filter, const QString& categ
     int row = 0;
 
     for (const auto& meta : metas) {
-        // Filter by search text
-        if (!filter.isEmpty() && !meta.display_name.contains(filter, Qt::CaseInsensitive) &&
+        // Filter by search text — match against both English (storage) and the
+        // translated display values so the search box works in any language.
+        const QString name_tr = WidgetRegistry::display_name_tr(meta);
+        const QString desc_tr = WidgetRegistry::description_tr(meta);
+        const QString cat_tr  = WidgetRegistry::category_tr(meta.category);
+        if (!filter.isEmpty() &&
+            !meta.display_name.contains(filter, Qt::CaseInsensitive) &&
             !meta.description.contains(filter, Qt::CaseInsensitive) &&
-            !meta.category.contains(filter, Qt::CaseInsensitive))
+            !meta.category.contains(filter, Qt::CaseInsensitive) &&
+            !name_tr.contains(filter, Qt::CaseInsensitive) &&
+            !desc_tr.contains(filter, Qt::CaseInsensitive) &&
+            !cat_tr.contains(filter, Qt::CaseInsensitive))
             continue;
 
         QString accent = accent_for_category(meta.category);
@@ -312,12 +346,12 @@ void AddWidgetDialog::populate_cards(const QString& filter, const QString& categ
         text_col->setContentsMargins(0, 0, 0, 0);
         text_col->setSpacing(2);
 
-        auto* name_lbl = new QLabel(meta.display_name);
+        auto* name_lbl = new QLabel(name_tr);
         name_lbl->setStyleSheet(
             QString("color: %1; font-size: 11px; font-weight: bold; background: transparent; border: none;")
                 .arg(ui::colors::TEXT_PRIMARY()));
 
-        auto* desc_lbl = new QLabel(meta.description);
+        auto* desc_lbl = new QLabel(desc_tr);
         desc_lbl->setWordWrap(true);
         desc_lbl->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent; border: none;")
                                     .arg(ui::colors::TEXT_SECONDARY()));
@@ -329,7 +363,7 @@ void AddWidgetDialog::populate_cards(const QString& filter, const QString& categ
         cl->addLayout(text_col, 1);
 
         // ── Right: category badge ──
-        auto* badge = new QLabel(meta.category.toUpper());
+        auto* badge = new QLabel(cat_tr.toUpper());
         badge->setAlignment(Qt::AlignCenter);
         badge->setFixedHeight(16);
         badge->setStyleSheet(QString("color: %1; font-size: 8px; font-weight: bold; letter-spacing: 0.5px; "

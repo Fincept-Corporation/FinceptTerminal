@@ -42,7 +42,7 @@ static bool is_youtube_url(const QString& url) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-VideoPlayerWidget::VideoPlayerWidget(QWidget* parent) : BaseWidget("LIVE TV / STREAMS", parent, ui::colors::AMBER()) {
+VideoPlayerWidget::VideoPlayerWidget(QWidget* parent) : BaseWidget(tr("LIVE TV / STREAMS"), parent, ui::colors::AMBER()) {
 
     stack_ = new QStackedWidget;
     stack_->setStyleSheet("background: transparent;");
@@ -69,7 +69,7 @@ void VideoPlayerWidget::build_channel_list() {
     vl->setContentsMargins(6, 6, 6, 6);
     vl->setSpacing(3);
 
-    channel_header_ = new QLabel("FINANCIAL TV");
+    channel_header_ = new QLabel(tr("FINANCIAL TV"));
     vl->addWidget(channel_header_);
 
     for (int i = 0; i < kPresetCount; ++i) {
@@ -113,7 +113,7 @@ void VideoPlayerWidget::build_channel_list() {
     vl->addSpacing(4);
 
     // Custom URL
-    custom_header_ = new QLabel("CUSTOM STREAM");
+    custom_header_ = new QLabel(tr("CUSTOM STREAM"));
     vl->addWidget(custom_header_);
 
     auto* input_row = new QWidget(this);
@@ -123,11 +123,11 @@ void VideoPlayerWidget::build_channel_list() {
     irl->setSpacing(4);
 
     url_input_ = new QLineEdit;
-    url_input_->setPlaceholderText("YouTube URL, HLS (.m3u8), MP4, or direct stream...");
+    url_input_->setPlaceholderText(tr("YouTube URL, HLS (.m3u8), MP4, or direct stream..."));
     connect(url_input_, &QLineEdit::returnPressed, this, &VideoPlayerWidget::play_custom_url);
     irl->addWidget(url_input_, 1);
 
-    play_btn_ = new QPushButton("PLAY");
+    play_btn_ = new QPushButton(tr("PLAY"));
     play_btn_->setFixedWidth(50);
     play_btn_->setCursor(Qt::PointingHandCursor);
     connect(play_btn_, &QPushButton::clicked, this, &VideoPlayerWidget::play_custom_url);
@@ -135,7 +135,7 @@ void VideoPlayerWidget::build_channel_list() {
 
     vl->addWidget(input_row);
 
-    helper_label_ = new QLabel("YouTube streams resolved via yt-dlp and played inline.");
+    helper_label_ = new QLabel(tr("YouTube streams resolved via yt-dlp and played inline."));
     vl->addWidget(helper_label_);
 
     vl->addStretch();
@@ -167,7 +167,7 @@ void VideoPlayerWidget::build_player_view() {
     player_->setVideoOutput(video_widget_);
 #else
     status_label_placeholder_ =
-        new QLabel("Qt Multimedia not available.\nBuild with Qt6 Multimedia for inline playback.");
+        new QLabel(tr("Qt Multimedia not available.\nBuild with Qt6 Multimedia for inline playback."));
     status_label_placeholder_->setAlignment(Qt::AlignCenter);
     vl->addWidget(status_label_placeholder_, 1);
 #endif
@@ -190,7 +190,7 @@ void VideoPlayerWidget::build_player_view() {
     now_playing_ = new QLabel("—");
     cl->addWidget(now_playing_, 1);
 
-    stop_btn_ = new QPushButton(QString(QChar(0x25A0)) + " STOP");
+    stop_btn_ = new QPushButton(QString(QChar(0x25A0)) + " " + tr("STOP"));
     stop_btn_->setCursor(Qt::PointingHandCursor);
     stop_btn_->setFixedHeight(20);
     connect(stop_btn_, &QPushButton::clicked, this, &VideoPlayerWidget::stop_playback);
@@ -216,7 +216,7 @@ void VideoPlayerWidget::play_custom_url() {
         return;
     if (!url.startsWith("http://") && !url.startsWith("https://"))
         url.prepend("https://");
-    play_url(url, "Custom Stream");
+    play_url(url, tr("Custom Stream"));
 }
 
 void VideoPlayerWidget::play_url(const QString& url, const QString& title) {
@@ -224,7 +224,7 @@ void VideoPlayerWidget::play_url(const QString& url, const QString& title) {
     current_title_ = title;
     pending_title_ = title;
     now_playing_->setText(QString(QChar(0x25B6)) + " " + title);
-    set_title("LIVE TV — " + title.toUpper());
+    set_title(tr("LIVE TV — %1").arg(title.toUpper()));
 
 #ifdef HAS_QT_MULTIMEDIA
     if (is_youtube_url(url)) {
@@ -241,7 +241,7 @@ void VideoPlayerWidget::refresh_data() {
     if (current_url_.isEmpty())
         return;
 
-    play_url(current_url_, current_title_.isEmpty() ? "Custom Stream" : current_title_);
+    play_url(current_url_, current_title_.isEmpty() ? tr("Custom Stream") : current_title_);
 }
 
 QString VideoPlayerWidget::resolve_ytdlp_program() const {
@@ -284,7 +284,7 @@ void VideoPlayerWidget::resolve_youtube_and_play(const QString& youtube_url, con
     const QString ytdlp_program = resolve_ytdlp_program();
     if (ytdlp_program.isEmpty()) {
         set_loading(false);
-        status_label_->setText("yt-dlp not found. Bundle yt-dlp.exe next to FinceptTerminal.exe.");
+        status_label_->setText(tr("yt-dlp not found. Bundle yt-dlp.exe next to FinceptTerminal.exe."));
         status_label_->show();
         LOG_ERROR("VideoPlayer", "yt-dlp not found in app directory or PATH");
         return;
@@ -311,7 +311,7 @@ void VideoPlayerWidget::on_ytdlp_finished(int exit_code, QProcess::ExitStatus /*
     if (exit_code != 0) {
         const QString err = proc->readAllStandardError().trimmed();
         set_loading(false);
-        status_label_->setText("yt-dlp error: " + (err.isEmpty() ? QString("Unknown error") : err.left(120)));
+        status_label_->setText(tr("yt-dlp error: %1").arg(err.isEmpty() ? tr("Unknown error") : err.left(120)));
         status_label_->show();
         LOG_ERROR("VideoPlayer", "yt-dlp failed: " + err.left(250));
         return;
@@ -324,7 +324,7 @@ void VideoPlayerWidget::on_ytdlp_finished(int exit_code, QProcess::ExitStatus /*
 
     if (stream_url.isEmpty()) {
         set_loading(false);
-        status_label_->setText("Could not extract stream URL.");
+        status_label_->setText(tr("Could not extract stream URL."));
         status_label_->show();
         return;
     }
@@ -339,7 +339,7 @@ void VideoPlayerWidget::on_ytdlp_error(QProcess::ProcessError /*error*/) {
 
     const QString err = proc->errorString();
     set_loading(false);
-    status_label_->setText("Failed to start yt-dlp: " + (err.isEmpty() ? QString("Unknown error") : err.left(90)));
+    status_label_->setText(tr("Failed to start yt-dlp: %1").arg(err.isEmpty() ? tr("Unknown error") : err.left(90)));
     status_label_->show();
     LOG_ERROR("VideoPlayer", "yt-dlp process error: " + err);
     proc->deleteLater();
@@ -366,13 +366,13 @@ void VideoPlayerWidget::stop_playback() {
     current_title_.clear();
     set_loading(false);
     status_label_->hide();
-    set_title("LIVE TV / STREAMS");
+    set_title(tr("LIVE TV / STREAMS"));
     stack_->setCurrentIndex(0);
 }
 
 void VideoPlayerWidget::set_loading(bool loading) {
     if (loading) {
-        status_label_->setText("Resolving stream via yt-dlp...");
+        status_label_->setText(tr("Resolving stream via yt-dlp..."));
         status_label_->show();
     } else {
         status_label_->hide();

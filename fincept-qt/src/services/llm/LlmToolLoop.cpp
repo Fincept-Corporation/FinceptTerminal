@@ -29,11 +29,10 @@ namespace { constexpr const char* kLlmToolLoopTag = "LlmService"; }
 LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& url,
                                      const QMap<QString, QString>& headers) {
     LlmResponse resp;
-    // 40 rounds. MiniMax-style models spend 3 rounds per action
-    // (tool.list → tool.describe → actual call) so 15 rounds left almost
-    // nothing for actual report mutations. 40 gives ~13 actions, enough
-    // for a full template fill. Bump higher only if real workflows hit it.
-    static constexpr int MAX_ROUNDS = 40;
+    // MiniMax-style models spend 3 rounds per action (tool.list → tool.describe
+    // → actual call), so the default 40 gives ~13 real actions — enough for a
+    // full report template fill. Below ~12 silently cripples report-builder flows.
+    const int MAX_ROUNDS = active_max_tool_rounds();
     LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: starting (max %1 rounds, model=%2)").arg(MAX_ROUNDS).arg(model_));
 
     for (int round = 0; round < MAX_ROUNDS; ++round) {

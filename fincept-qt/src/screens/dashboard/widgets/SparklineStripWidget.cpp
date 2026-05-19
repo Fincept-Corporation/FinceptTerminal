@@ -67,7 +67,7 @@ const QStringList kDefaultSymbols = {"AAPL", "MSFT", "GOOGL", "NVDA"};
 } // namespace
 
 SparklineStripWidget::SparklineStripWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget("SPARKLINES", parent) {
+    : BaseWidget(tr("SPARKLINES"), parent) {
     auto* vl = content_layout();
     vl->setContentsMargins(10, 8, 10, 8);
     vl->setSpacing(4);
@@ -190,13 +190,13 @@ void SparklineStripWidget::on_points(const QString& symbol, const QVector<double
 
 QDialog* SparklineStripWidget::make_config_dialog(QWidget* parent) {
     auto* dlg = new QDialog(parent);
-    dlg->setWindowTitle("Configure — Sparklines");
+    dlg->setWindowTitle(tr("Configure — Sparklines"));
     auto* form = new QFormLayout(dlg);
 
     auto* edit = new QLineEdit(dlg);
     edit->setText(symbols_.join(", "));
-    edit->setPlaceholderText("e.g. AAPL, MSFT, NVDA");
-    form->addRow("Symbols", edit);
+    edit->setPlaceholderText(tr("e.g. AAPL, MSFT, NVDA"));
+    form->addRow(tr("Symbols"), edit);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
     form->addRow(buttons);

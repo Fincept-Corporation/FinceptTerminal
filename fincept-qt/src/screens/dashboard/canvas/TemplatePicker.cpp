@@ -60,7 +60,7 @@ class TemplatePreview : public QWidget {
 };
 
 TemplatePicker::TemplatePicker(QWidget* parent) : QDialog(parent) {
-    setWindowTitle("Choose Dashboard Template");
+    setWindowTitle(tr("Choose Dashboard Template"));
     setFixedSize(640, 400);
     setStyleSheet(QString("QDialog { background: %1; }"
                           "QPushButton { background: %2; border: 1px solid %3; color: %4; "
@@ -73,15 +73,15 @@ TemplatePicker::TemplatePicker(QWidget* parent) : QDialog(parent) {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-    auto* title = new QLabel("CHOOSE TEMPLATE");
-    title->setStyleSheet(
+    title_lbl_ = new QLabel(tr("CHOOSE TEMPLATE"));
+    title_lbl_->setStyleSheet(
         QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 1px;").arg(ui::colors::AMBER()));
-    vl->addWidget(title);
+    vl->addWidget(title_lbl_);
 
-    auto* sub = new QLabel("Select a template to reset your dashboard. Current layout will be replaced.");
-    sub->setStyleSheet(QString("color: %1; font-size: 9px;").arg(ui::colors::TEXT_TERTIARY()));
-    sub->setWordWrap(true);
-    vl->addWidget(sub);
+    sub_lbl_ = new QLabel(tr("Select a template to reset your dashboard. Current layout will be replaced."));
+    sub_lbl_->setStyleSheet(QString("color: %1; font-size: 9px;").arg(ui::colors::TEXT_TERTIARY()));
+    sub_lbl_->setWordWrap(true);
+    vl->addWidget(sub_lbl_);
 
     auto* grid_w = new QWidget(this);
     auto* grid = new QGridLayout(grid_w);
@@ -103,18 +103,18 @@ TemplatePicker::TemplatePicker(QWidget* parent) : QDialog(parent) {
         auto* preview = new TemplatePreview(tmpl.items);
         cl->addWidget(preview, 0, Qt::AlignHCenter);
 
-        auto* name_lbl = new QLabel(tmpl.display_name);
+        auto* name_lbl = new QLabel(template_display_name_tr(tmpl));
         name_lbl->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
                                     .arg(ui::colors::TEXT_PRIMARY()));
         cl->addWidget(name_lbl);
 
-        auto* desc_lbl = new QLabel(tmpl.description);
+        auto* desc_lbl = new QLabel(template_description_tr(tmpl));
         desc_lbl->setStyleSheet(
             QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
         desc_lbl->setWordWrap(true);
         cl->addWidget(desc_lbl);
 
-        auto* apply_btn = new QPushButton("APPLY");
+        auto* apply_btn = new QPushButton(tr("APPLY"));
         apply_btn->setFixedHeight(24);
         const QString tid = tmpl.id;
         connect(apply_btn, &QPushButton::clicked, this, [this, tid]() {
@@ -122,6 +122,8 @@ TemplatePicker::TemplatePicker(QWidget* parent) : QDialog(parent) {
             accept();
         });
         cl->addWidget(apply_btn);
+
+        cards_.append({name_lbl, desc_lbl, apply_btn, tmpl.id});
 
         grid->addWidget(card, row, col);
         if (++col >= 3) {
@@ -133,11 +135,35 @@ TemplatePicker::TemplatePicker(QWidget* parent) : QDialog(parent) {
 
     auto* bot = new QHBoxLayout;
     bot->addStretch();
-    auto* cancel = new QPushButton("CANCEL");
-    cancel->setFixedHeight(28);
-    connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
-    bot->addWidget(cancel);
+    cancel_btn_ = new QPushButton(tr("CANCEL"));
+    cancel_btn_->setFixedHeight(28);
+    connect(cancel_btn_, &QPushButton::clicked, this, &QDialog::reject);
+    bot->addWidget(cancel_btn_);
     vl->addLayout(bot);
+}
+
+void TemplatePicker::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void TemplatePicker::retranslateUi() {
+    setWindowTitle(tr("Choose Dashboard Template"));
+    if (title_lbl_)  title_lbl_->setText(tr("CHOOSE TEMPLATE"));
+    if (sub_lbl_)    sub_lbl_->setText(tr("Select a template to reset your dashboard. Current layout will be replaced."));
+    if (cancel_btn_) cancel_btn_->setText(tr("CANCEL"));
+    const auto templates = all_dashboard_templates();
+    for (auto& c : cards_) {
+        if (c.apply) c.apply->setText(tr("APPLY"));
+        for (const auto& t : templates) {
+            if (t.id == c.id) {
+                if (c.name) c.name->setText(template_display_name_tr(t));
+                if (c.desc) c.desc->setText(template_description_tr(t));
+                break;
+            }
+        }
+    }
 }
 
 } // namespace fincept::screens

@@ -181,15 +181,17 @@ QWidget* McpServersScreen::create_header() {
     hl->setContentsMargins(16, 0, 16, 0);
     hl->setSpacing(8);
 
-    auto* title = new QLabel("MCP SERVERS");
-    title->setObjectName("mcpHeaderTitle");
-    hl->addWidget(title);
+    // Title (text set in retranslateUi)
+    header_title_ = new QLabel;
+    header_title_->setObjectName("mcpHeaderTitle");
+    hl->addWidget(header_title_);
 
     hl->addSpacing(16);
 
-    const QStringList views = {"MARKETPLACE", "INSTALLED", "TOOLS"};
-    for (int i = 0; i < views.size(); ++i) {
-        auto* btn = new QPushButton(views[i]);
+    // View-tab buttons (text set in retranslateUi). Order of construction
+    // matches enum: Marketplace (0), Installed (1), Tools (2).
+    for (int i = 0; i < 3; ++i) {
+        auto* btn = new QPushButton;
         btn->setObjectName("mcpViewBtn");
         btn->setCursor(Qt::PointingHandCursor);
         btn->setProperty("active", i == 0);
@@ -202,13 +204,12 @@ QWidget* McpServersScreen::create_header() {
 
     search_input_ = new QLineEdit;
     search_input_->setObjectName("mcpSearchInput");
-    search_input_->setPlaceholderText("Search...");
     connect(search_input_, &QLineEdit::textChanged, this, &McpServersScreen::on_search_changed);
     hl->addWidget(search_input_);
 
     hl->addSpacing(6);
 
-    refresh_btn_ = new QPushButton("↺  REFRESH");
+    refresh_btn_ = new QPushButton;
     refresh_btn_->setObjectName("mcpRefreshBtn");
     refresh_btn_->setCursor(Qt::PointingHandCursor);
     connect(refresh_btn_, &QPushButton::clicked, this, &McpServersScreen::on_refresh);
@@ -233,22 +234,28 @@ QWidget* McpServersScreen::create_marketplace_view() {
     svl->setContentsMargins(0, 0, 0, 0);
     svl->setSpacing(0);
 
-    auto* cat_header = new QLabel("  CATEGORY");
-    cat_header->setObjectName("mcpStatusText");
-    cat_header->setFixedHeight(32);
-    cat_header->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
-    svl->addWidget(cat_header);
+    // Category sidebar header (text set in retranslateUi)
+    cat_header_lbl_ = new QLabel;
+    cat_header_lbl_->setObjectName("mcpStatusText");
+    cat_header_lbl_->setFixedHeight(32);
+    cat_header_lbl_->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+    svl->addWidget(cat_header_lbl_);
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
     sep->setStyleSheet(QString("color:%1;").arg(colors::BORDER_DIM()));
     svl->addWidget(sep);
 
+    // Category list — display text set in retranslateUi(); the lowercase API
+    // key lives in Qt::UserRole so populate_marketplace() can read it without
+    // depending on the visible (localized) text.
     mkt_cat_list_ = new QListWidget;
     mkt_cat_list_->setObjectName("catList");
-    const QStringList cats = {"All", "utilities", "developer", "database"};
-    for (const auto& c : cats)
-        mkt_cat_list_->addItem(c.toUpper());
+    const QStringList cat_keys = {"all", "utilities", "developer", "database"};
+    for (const auto& key : cat_keys) {
+        auto* item = new QListWidgetItem(mkt_cat_list_);
+        item->setData(Qt::UserRole, key);
+    }
     mkt_cat_list_->setCurrentRow(0);
     connect(mkt_cat_list_, &QListWidget::currentRowChanged, this, [this](int) { populate_marketplace(); });
     svl->addWidget(mkt_cat_list_, 1);
@@ -298,8 +305,8 @@ QWidget* McpServersScreen::create_installed_view() {
     scroll->setWidget(inst_cards_widget_);
     vl->addWidget(scroll, 1);
 
-    // Sticky "Add server" button at the bottom
-    add_server_btn_ = new QPushButton("＋  ADD CUSTOM MCP SERVER");
+    // Sticky "Add server" button at the bottom (text set in retranslateUi)
+    add_server_btn_ = new QPushButton;
     add_server_btn_->setObjectName("addSrvBtn");
     add_server_btn_->setCursor(Qt::PointingHandCursor);
     add_server_btn_->setFixedHeight(38);
@@ -321,18 +328,19 @@ QWidget* McpServersScreen::create_tools_view() {
     toolbar->setFixedHeight(32);
     auto* tbl = new QHBoxLayout(toolbar);
     tbl->setContentsMargins(12, 0, 12, 0);
-    auto* tt = new QLabel("ALL TOOLS — internal + external  (check/uncheck to enable/disable internal tools)");
-    tt->setObjectName("mcpStatusText");
-    tbl->addWidget(tt);
+    // Toolbar label (text set in retranslateUi)
+    tools_toolbar_lbl_ = new QLabel;
+    tools_toolbar_lbl_->setObjectName("mcpStatusText");
+    tbl->addWidget(tools_toolbar_lbl_);
     tbl->addStretch(1);
     tools_count_ = new QLabel;
     tools_count_->setObjectName("mcpStatusText");
     tbl->addWidget(tools_count_);
     vl->addWidget(toolbar);
 
+    // Tools table (headers set in retranslateUi)
     tools_table_ = new QTableWidget;
     tools_table_->setColumnCount(5);
-    tools_table_->setHorizontalHeaderLabels({"ON", "TOOL NAME", "SERVER", "CATEGORY", "DESCRIPTION"});
     tools_table_->horizontalHeader()->setStretchLastSection(true);
     tools_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
     tools_table_->setColumnWidth(0, 42);
@@ -351,11 +359,12 @@ QWidget* McpServersScreen::create_status_bar() {
     bar->setFixedHeight(26);
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(16, 0, 16, 0);
-    auto* lbl = new QLabel("MCP SERVERS");
-    lbl->setObjectName("mcpStatusText");
-    hl->addWidget(lbl);
+    // Screen label + active-view label (text set in retranslateUi)
+    status_screen_lbl_ = new QLabel;
+    status_screen_lbl_->setObjectName("mcpStatusText");
+    hl->addWidget(status_screen_lbl_);
     hl->addStretch(1);
-    status_view_ = new QLabel("MARKETPLACE");
+    status_view_ = new QLabel;
     status_view_->setObjectName("mcpStatusText");
     hl->addWidget(status_view_);
     hl->addSpacing(12);
@@ -373,9 +382,12 @@ QWidget* McpServersScreen::create_status_bar() {
 
 
 void McpServersScreen::populate_marketplace() {
-    // Determine active category filter
+    // Determine active category filter (read API key from UserRole — the
+    // visible text is localized and would break the catalog lookup).
     const QString filter_raw =
-        mkt_cat_list_ ? mkt_cat_list_->currentItem() ? mkt_cat_list_->currentItem()->text().toLower() : "all" : "all";
+        mkt_cat_list_ ? mkt_cat_list_->currentItem() ? mkt_cat_list_->currentItem()->data(Qt::UserRole).toString()
+                                                     : QStringLiteral("all")
+                      : QStringLiteral("all");
     const QString filter = (filter_raw == "all") ? "" : filter_raw;
 
     const QString search = search_input_ ? search_input_->text().trimmed() : "";
@@ -406,7 +418,7 @@ void McpServersScreen::populate_marketplace() {
     }
 
     if (matched.isEmpty()) {
-        auto* empty = new QLabel("No servers match the current filter.");
+        auto* empty = new QLabel(tr("No servers match the current filter."));
         empty->setObjectName("mktCardDesc");
         empty->setAlignment(Qt::AlignCenter);
         mkt_cards_layout_->insertWidget(0, empty);
@@ -467,12 +479,20 @@ void McpServersScreen::populate_marketplace() {
             bottom->setSpacing(6);
             bottom->setContentsMargins(0, 4, 0, 0);
 
-            auto* cat_badge = new QLabel(e.category.toUpper());
+            // Category badge — translate the known API keys, fall back to
+            // toUpper() for unknown values (forward-compatible if the
+            // marketplace adds new categories).
+            QString cat_text;
+            if (e.category == "utilities")      cat_text = tr("UTILITIES");
+            else if (e.category == "developer") cat_text = tr("DEVELOPER");
+            else if (e.category == "database")  cat_text = tr("DATABASE");
+            else                                cat_text = e.category.toUpper();
+            auto* cat_badge = new QLabel(cat_text);
             cat_badge->setObjectName("mktCatBadge");
             bottom->addWidget(cat_badge);
 
             if (!e.env_keys.isEmpty()) {
-                auto* env_lbl = new QLabel("Needs: " + e.env_keys.join(", "));
+                auto* env_lbl = new QLabel(tr("Needs: %1").arg(e.env_keys.join(", ")));
                 env_lbl->setObjectName("mktCardEnv");
                 bottom->addWidget(env_lbl);
             }
@@ -480,11 +500,11 @@ void McpServersScreen::populate_marketplace() {
             bottom->addStretch(1);
 
             if (installed) {
-                auto* badge = new QLabel("✓ ADDED");
+                auto* badge = new QLabel(tr("✓ ADDED"));
                 badge->setObjectName("mktInstalledBadge");
                 bottom->addWidget(badge);
             } else {
-                auto* add_btn = new QPushButton("ADD");
+                auto* add_btn = new QPushButton(tr("ADD"));
                 add_btn->setObjectName("mktAddBtn");
                 add_btn->setCursor(Qt::PointingHandCursor);
                 add_btn->setFixedWidth(56);
@@ -525,7 +545,8 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
     top->addWidget(name_lbl);
 
     auto* status_pill =
-        new QLabel(running ? "● RUNNING" : (starting ? "⟳ STARTING" : (error ? "● ERROR" : "○ STOPPED")));
+        new QLabel(running ? tr("● RUNNING")
+                           : (starting ? tr("⟳ STARTING") : (error ? tr("● ERROR") : tr("○ STOPPED"))));
     status_pill->setObjectName(running ? "pillRunning"
                                        : (starting ? "pillRunning" : (error ? "pillError" : "pillStopped")));
     top->addWidget(status_pill);
@@ -536,7 +557,8 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
     const QString sid = s.id;
     QPointer<McpServersScreen> self = this;
 
-    auto* toggle_btn = new QPushButton(running ? "● ENABLED" : (starting ? "⟳ STARTING..." : "○ DISABLED"));
+    auto* toggle_btn = new QPushButton(running ? tr("● ENABLED")
+                                                : (starting ? tr("⟳ STARTING...") : tr("○ DISABLED")));
     toggle_btn->setObjectName(running ? "cardToggleOn" : "cardToggleOff");
     toggle_btn->setCursor(Qt::PointingHandCursor);
     toggle_btn->setFixedWidth(110);
@@ -553,7 +575,7 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
         } else {
             // Enable — start on background thread to avoid freezing the UI.
             // start_server() blocks for process launch + handshake (can take 60s+).
-            toggle_btn->setText("⟳ STARTING...");
+            toggle_btn->setText(tr("⟳ STARTING..."));
             toggle_btn->setEnabled(false);
             (void)QtConcurrent::run([sid, self]() {
                 const auto r = McpManager::instance().start_server(sid);
@@ -567,7 +589,7 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
                         if (r.is_err()) {
                             const QString msg = QString::fromStdString(r.error());
                             LOG_ERROR("McpServers", "Start failed: " + msg);
-                            QMessageBox::warning(self, "Server Failed to Start", msg);
+                            QMessageBox::warning(self, tr("Server Failed to Start"), msg);
                         }
                         self->refresh_installed();
                         self->update_status_bar();
@@ -593,7 +615,14 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
     auto* cmd_lbl = new QLabel(s.command + " " + s.args.join(' '));
     cmd_lbl->setObjectName("srvCardCmd");
     meta->addWidget(cmd_lbl);
-    auto* cat_lbl = new QLabel(s.category.toUpper());
+    // Category — translate the known API keys, fall back to toUpper() for
+    // user-added custom categories.
+    QString cat_text;
+    if (s.category == "utilities")      cat_text = tr("UTILITIES");
+    else if (s.category == "developer") cat_text = tr("DEVELOPER");
+    else if (s.category == "database")  cat_text = tr("DATABASE");
+    else                                cat_text = s.category.toUpper();
+    auto* cat_lbl = new QLabel(cat_text);
     cat_lbl->setObjectName("srvCardCat");
     meta->addWidget(cat_lbl);
     meta->addStretch(1);
@@ -609,9 +638,12 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
     log_view->setFixedHeight(140);
     log_view->hide();
 
-    auto* logs_btn = new QPushButton("LOGS");
+    auto* logs_btn = new QPushButton(tr("LOGS"));
     logs_btn->setObjectName("cardLogsBtn");
     logs_btn->setCursor(Qt::PointingHandCursor);
+    // Capture the "no output" message at click time via QPointer<this> so we
+    // can resolve it through this->tr() — log_view is a plain QTextEdit and
+    // doesn't carry McpServersScreen's translation context.
     connect(logs_btn, &QPushButton::clicked, this, [sid, log_view, self]() {
         if (!self)
             return;
@@ -619,17 +651,17 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
         log_view->setVisible(showing);
         if (!showing)
             return;
+        const QString empty_msg = self->tr("No output yet. Start the server to see logs here.");
         // Fetch logs off-thread so mutex never stalls UI
         QPointer<QTextEdit> lv = log_view;
-        (void)QtConcurrent::run([sid, lv]() {
+        (void)QtConcurrent::run([sid, lv, empty_msg]() {
             const QStringList lines = McpManager::instance().get_logs(sid);
             QMetaObject::invokeMethod(
                 lv,
-                [lv, lines]() {
+                [lv, lines, empty_msg]() {
                     if (!lv)
                         return;
-                    lv->setPlainText(lines.isEmpty() ? "No output yet. Start the server to see logs here."
-                                                     : lines.join('\n'));
+                    lv->setPlainText(lines.isEmpty() ? empty_msg : lines.join('\n'));
                     QScrollBar* sb = lv->verticalScrollBar();
                     if (sb)
                         sb->setValue(sb->maximum());
@@ -642,7 +674,7 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
     btns->addStretch(1);
 
     // REMOVE
-    auto* remove_btn = new QPushButton("REMOVE");
+    auto* remove_btn = new QPushButton(tr("REMOVE"));
     remove_btn->setObjectName("cardRemoveBtn");
     remove_btn->setCursor(Qt::PointingHandCursor);
     connect(remove_btn, &QPushButton::clicked, this, [sid, self]() {
@@ -654,7 +686,8 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
                 name = srv.name;
                 break;
             }
-        QMessageBox mb(QMessageBox::Question, "Remove Server", "Remove \"" + name + "\"?\nThis cannot be undone.",
+        QMessageBox mb(QMessageBox::Question, self->tr("Remove Server"),
+                       self->tr("Remove \"%1\"?\nThis cannot be undone.").arg(name),
                        QMessageBox::Yes | QMessageBox::Cancel, self);
         if (mb.exec() != QMessageBox::Yes)
             return;

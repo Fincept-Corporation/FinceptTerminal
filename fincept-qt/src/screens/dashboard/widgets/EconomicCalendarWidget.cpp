@@ -28,7 +28,7 @@ constexpr int kColWidthImp   = 40;
 namespace fincept::screens::widgets {
 
 EconomicCalendarWidget::EconomicCalendarWidget(QWidget* parent)
-    : BaseWidget("ECONOMIC CALENDAR", parent, ui::colors::CYAN()) {
+    : BaseWidget(tr("ECONOMIC CALENDAR"), parent, ui::colors::CYAN()) {
     auto* vl = content_layout();
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
@@ -48,15 +48,15 @@ EconomicCalendarWidget::EconomicCalendarWidget(QWidget* parent)
         header_labels_.append(lbl);
         hl->addWidget(lbl, stretch);
     };
-    make_hdr("EVENT", /*fixed_w=*/0, /*stretch=*/1);
-    make_hdr("CTY", kColWidthCty, 0);
-    make_hdr("DATE", kColWidthDate, 0);
-    make_hdr("REF", kColWidthRef, 0);
-    make_hdr("ACT", kColWidthAct, 0, Qt::AlignRight);
-    make_hdr("FCST", kColWidthFcst, 0, Qt::AlignRight);
-    make_hdr("CONS", kColWidthCons, 0, Qt::AlignRight);
-    make_hdr("PREV", kColWidthPrev, 0, Qt::AlignRight);
-    make_hdr("IMP", kColWidthImp, 0, Qt::AlignRight);
+    make_hdr(tr("EVENT"), /*fixed_w=*/0, /*stretch=*/1);
+    make_hdr(tr("CTY"), kColWidthCty, 0);
+    make_hdr(tr("DATE"), kColWidthDate, 0);
+    make_hdr(tr("REF"), kColWidthRef, 0);
+    make_hdr(tr("ACT"), kColWidthAct, 0, Qt::AlignRight);
+    make_hdr(tr("FCST"), kColWidthFcst, 0, Qt::AlignRight);
+    make_hdr(tr("CONS"), kColWidthCons, 0, Qt::AlignRight);
+    make_hdr(tr("PREV"), kColWidthPrev, 0, Qt::AlignRight);
+    make_hdr(tr("IMP"), kColWidthImp, 0, Qt::AlignRight);
     vl->addWidget(header_widget_);
 
     header_sep_ = new QFrame;
@@ -73,7 +73,7 @@ EconomicCalendarWidget::EconomicCalendarWidget(QWidget* parent)
     list_layout_->setContentsMargins(0, 0, 0, 0);
     list_layout_->setSpacing(0);
 
-    status_label_ = new QLabel("Loading...");
+    status_label_ = new QLabel(tr("Loading..."));
     status_label_->setAlignment(Qt::AlignCenter);
     list_layout_->addWidget(status_label_);
     list_layout_->addStretch();
@@ -164,7 +164,7 @@ void EconomicCalendarWidget::hub_subscribe() {
         if (v.canConvert<QJsonArray>())
             events = v.value<QJsonArray>();
         if (events.isEmpty()) {
-            show_status(QStringLiteral("No events available"));
+            show_status(tr("No events available"));
             return;
         }
         populate(events);
@@ -175,7 +175,7 @@ void EconomicCalendarWidget::hub_subscribe() {
     hub.subscribe_errors(this, QString::fromLatin1(kTopic),
         [this](const QString& /*error*/) {
             set_loading(false);
-            show_status(QStringLiteral("Failed to load calendar"));
+            show_status(tr("Failed to load calendar"));
         });
     hub_active_ = true;
     // Cold-cache fallback: if the producer warmed the topic earlier, paint
@@ -253,7 +253,7 @@ void EconomicCalendarWidget::populate(const QJsonArray& events) {
         QString imp_color = imp_int >= 3   ? ui::colors::NEGATIVE()
                             : imp_int == 2 ? ui::colors::WARNING()
                                            : ui::colors::TEXT_TERTIARY();
-        QString imp_text = imp_int >= 3 ? "HIGH" : imp_int == 2 ? "MED" : imp_int == 1 ? "LOW" : "--";
+        QString imp_text = imp_int >= 3 ? tr("HIGH") : imp_int == 2 ? tr("MED") : imp_int == 1 ? tr("LOW") : "--";
 
         auto* row = new QWidget(this);
         row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED() : "transparent"));
@@ -361,7 +361,7 @@ void EconomicCalendarWidget::populate(const QJsonArray& events) {
     }
 
     if (count == 0) {
-        show_status(QStringLiteral("No events available"));
+        show_status(tr("No events available"));
         return;
     }
 

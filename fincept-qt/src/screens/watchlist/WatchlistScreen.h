@@ -42,6 +42,7 @@ class WatchlistScreen : public QWidget, public IStatefulScreen, public IGroupLin
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_watchlist_selected(int row);
@@ -58,6 +59,10 @@ class WatchlistScreen : public QWidget, public IStatefulScreen, public IGroupLin
     void build_ui();
     QWidget* build_sidebar();
     QWidget* build_main_panel();
+
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
     void load_watchlists();
     void load_stocks();
     void fetch_quotes();

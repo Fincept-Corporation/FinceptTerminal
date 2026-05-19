@@ -23,12 +23,13 @@ void EquityNewsTab::set_symbol(const QString& symbol) {
     if (symbol == current_symbol_)
         return;
     current_symbol_ = symbol;
+    news_loaded_ = false;
     clear_cards();
     count_label_->setText("");
     company_label_->setText(symbol);
-    status_label_->setText("Loading news…");
+    status_label_->setText(tr("Loading news…"));
     status_label_->show();
-    loading_overlay_->show_loading("LOADING NEWS…");
+    loading_overlay_->show_loading(tr("LOADING NEWS…"));
     services::equity::EquityResearchService::instance().fetch_news(symbol, 20);
 }
 
@@ -47,11 +48,11 @@ void EquityNewsTab::build_ui() {
     hl->setContentsMargins(14, 8, 14, 8);
     hl->setSpacing(12);
 
-    auto* title = new QLabel("LATEST NEWS");
-    title->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; letter-spacing:2px; "
-                                 "background:transparent; border:0;")
-                             .arg(ui::colors::AMBER()));
-    hl->addWidget(title);
+    title_lbl_ = new QLabel(tr("LATEST NEWS"));
+    title_lbl_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; letter-spacing:2px; "
+                                       "background:transparent; border:0;")
+                                  .arg(ui::colors::AMBER()));
+    hl->addWidget(title_lbl_);
 
     count_label_ = new QLabel("");
     count_label_->setStyleSheet(
@@ -65,24 +66,24 @@ void EquityNewsTab::build_ui() {
 
     hl->addStretch();
 
-    auto* refresh_btn = new QPushButton("REFRESH");
-    refresh_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2; "
-                                       "border-radius:3px; padding:4px 12px; font-size:10px; font-weight:700; }"
-                                       "QPushButton:hover { border-color:%3; color:%3; }")
-                                   .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
-    connect(refresh_btn, &QPushButton::clicked, this, [this]() {
+    refresh_btn_ = new QPushButton(tr("REFRESH"));
+    refresh_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2; "
+                                        "border-radius:3px; padding:4px 12px; font-size:10px; font-weight:700; }"
+                                        "QPushButton:hover { border-color:%3; color:%3; }")
+                                    .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+    connect(refresh_btn_, &QPushButton::clicked, this, [this]() {
         if (!current_symbol_.isEmpty()) {
             clear_cards();
             status_label_->show();
-            loading_overlay_->show_loading("LOADING NEWS…");
+            loading_overlay_->show_loading(tr("LOADING NEWS…"));
             services::equity::EquityResearchService::instance().fetch_news(current_symbol_, 20);
         }
     });
-    hl->addWidget(refresh_btn);
+    hl->addWidget(refresh_btn_);
     vl->addWidget(hdr);
 
     // ── Status label ──────────────────────────────────────────────────────────
-    status_label_ = new QLabel("Search for a symbol to load news.");
+    status_label_ = new QLabel(tr("Search for a symbol to load news."));
     status_label_->setAlignment(Qt::AlignCenter);
     status_label_->setStyleSheet(
         QString("color:%1; font-size:12px; padding:20px; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
@@ -116,10 +117,10 @@ void EquityNewsTab::clear_cards() {
 void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& articles) {
     clear_cards();
     status_label_->hide();
-    count_label_->setText(QString("%1 articles").arg(articles.size()));
+    count_label_->setText(tr("%1 articles").arg(articles.size()));
 
     if (articles.isEmpty()) {
-        status_label_->setText("No news found for " + current_symbol_);
+        status_label_->setText(tr("No news found for %1").arg(current_symbol_));
         status_label_->show();
         return;
     }
@@ -153,7 +154,7 @@ void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& artic
         // Publisher + date
         auto* meta_hl = new QHBoxLayout;
         meta_hl->setSpacing(10);
-        auto* pub_lbl = new QLabel(art.publisher.isEmpty() ? "Unknown Source" : art.publisher);
+        auto* pub_lbl = new QLabel(art.publisher.isEmpty() ? tr("Unknown Source") : art.publisher);
         pub_lbl->setStyleSheet(
             QString("color:%1; font-size:10px; font-weight:700; background:transparent; border:0;").arg("#22d3ee"));
         auto* date_lbl = new QLabel(art.published_date.isEmpty() ? "" : art.published_date.left(10));
@@ -179,7 +180,7 @@ void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& artic
 
         // ── Read full article ──────────────────────────────────────────────────
         if (!art.url.isEmpty()) {
-            auto* read_lbl = new QLabel("READ FULL ARTICLE →");
+            auto* read_lbl = new QLabel(tr("READ FULL ARTICLE →"));
             read_lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px; "
                                             "background:transparent; border:0;")
                                         .arg(ui::colors::AMBER()));
@@ -227,7 +228,38 @@ void EquityNewsTab::on_news_loaded(QString symbol, QVector<services::equity::New
     if (symbol != current_symbol_)
         return;
     loading_overlay_->hide_loading();
+    cached_articles_ = articles;
+    news_loaded_ = true;
     populate(articles);
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+// Static chrome (title, refresh button, idle status text) re-set explicitly.
+// Card content is rebuilt by populate() from cached articles so each card's
+// "Unknown Source" fallback and "READ FULL ARTICLE →" link pick up new locale.
+
+void EquityNewsTab::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
+}
+
+void EquityNewsTab::retranslateUi() {
+    if (title_lbl_)   title_lbl_->setText(tr("LATEST NEWS"));
+    if (refresh_btn_) refresh_btn_->setText(tr("REFRESH"));
+
+    if (status_label_) {
+        // Pick the appropriate idle text — never overwrite a live "Loading…"
+        // string mid-fetch (the next populate() call will replace it).
+        if (current_symbol_.isEmpty())
+            status_label_->setText(tr("Search for a symbol to load news."));
+        else if (!news_loaded_)
+            status_label_->setText(tr("Loading news…"));
+    }
+
+    if (news_loaded_)
+        populate(cached_articles_);
 }
 
 } // namespace fincept::screens

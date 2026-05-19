@@ -57,13 +57,13 @@ TickerBar::TickerBar(QWidget* parent) : QWidget(parent) {
     hl->setContentsMargins(6, 2, 6, 2);
     hl->setSpacing(4);
 
-    auto* lbl = new QLabel("SYMBOLS:", edit_bar_);
-    lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:bold; background:transparent;")
+    edit_label_ = new QLabel(tr("SYMBOLS:"), edit_bar_);
+    edit_label_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:bold; background:transparent;")
                            .arg(ui::colors::TEXT_TERTIARY()));
-    hl->addWidget(lbl);
+    hl->addWidget(edit_label_);
 
     edit_input_ = new QLineEdit(edit_bar_);
-    edit_input_->setPlaceholderText("AAPL, MSFT, ^GSPC, BTC-USD ...");
+    edit_input_->setPlaceholderText(tr("AAPL, MSFT, ^GSPC, BTC-USD ..."));
     edit_input_->setStyleSheet(
         QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
                 " font-size:10px; padding:1px 6px; font-family:Consolas; }"
@@ -73,7 +73,7 @@ TickerBar::TickerBar(QWidget* parent) : QWidget(parent) {
     connect(edit_input_, &QLineEdit::returnPressed, this, &TickerBar::commit_edit);
     hl->addWidget(edit_input_, 1);
 
-    edit_ok_ = new QPushButton("OK", edit_bar_);
+    edit_ok_ = new QPushButton(tr("OK"), edit_bar_);
     edit_ok_->setFixedWidth(32);
     edit_ok_->setStyleSheet(
         QString("QPushButton { background:%1; color:%2; border:none;"
@@ -197,10 +197,22 @@ void TickerBar::contextMenuEvent(QContextMenuEvent* event) {
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
                  ui::colors::BORDER_DIM(), ui::colors::AMBER(), ui::colors::BG_BASE()));
 
-    auto* edit_action = menu.addAction("Edit Symbols...");
+    auto* edit_action = menu.addAction(tr("Edit Symbols..."));
     connect(edit_action, &QAction::triggered, this, &TickerBar::show_edit_bar);
 
     menu.exec(event->globalPos());
+}
+
+void TickerBar::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void TickerBar::retranslateUi() {
+    if (edit_label_) edit_label_->setText(tr("SYMBOLS:"));
+    if (edit_input_) edit_input_->setPlaceholderText(tr("AAPL, MSFT, ^GSPC, BTC-USD ..."));
+    if (edit_ok_)    edit_ok_->setText(tr("OK"));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

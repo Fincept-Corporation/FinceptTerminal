@@ -3,10 +3,13 @@
 #include "services/equity/EquityResearchModels.h"
 #include "ui/widgets/LoadingOverlay.h"
 
+#include <QHash>
 #include <QLabel>
 #include <QWidget>
 
 #include <cmath>
+
+class QFrame;
 
 namespace fincept::screens {
 
@@ -16,14 +19,24 @@ class EquityAnalysisTab : public QWidget {
     explicit EquityAnalysisTab(QWidget* parent = nullptr);
     void set_symbol(const QString& symbol);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_info_loaded(services::equity::StockInfo info);
 
   private:
     void build_ui();
-    static QString fmt(double v, int decimals = 2);
+    void retranslateUi();
+    QFrame* make_panel_(const char* title_key, const QString& accent_color);
+    QWidget* make_card_(const char* label_key, QLabel*& val_out, const QString& val_color);
+    QString fmt(double v, int decimals = 2) const;
     static QString fmt_large(double v);
-    static QString fmt_pct(double v);
+    QString fmt_pct(double v) const;
+
+    QHash<QLabel*, const char*> i18n_labels_;  ///< label → English source key for tr()
+    services::equity::StockInfo cached_info_;
+    bool info_loaded_ = false;
 
     QString current_symbol_;
 

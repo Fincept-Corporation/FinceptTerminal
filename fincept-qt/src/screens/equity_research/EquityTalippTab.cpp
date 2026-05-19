@@ -191,8 +191,9 @@ void EquityTalippTab::set_symbol(const QString& symbol) {
     if (symbol == current_symbol_)
         return;
     current_symbol_ = symbol;
-    data_points_lbl_->setText("—  data points  |  TALIpp Engine");
-    status_label_->setText("Select an indicator and click CALCULATE.");
+    cached_indicator_.clear();
+    data_points_lbl_->setText(tr("—  data points  |  TALIpp Engine"));
+    status_label_->setText(tr("Select an indicator and click CALCULATE."));
     empty_widget_->show();
     results_widget_->hide();
     loading_overlay_->hide_loading(); // reset overlay on symbol change
@@ -259,12 +260,12 @@ void EquityTalippTab::build_ui() {
     cl->addWidget(param_widget_);
     cl->addStretch();
 
-    data_points_lbl_ = new QLabel("—  data points  |  TALIpp Engine");
+    data_points_lbl_ = new QLabel(tr("—  data points  |  TALIpp Engine"));
     data_points_lbl_->setStyleSheet(
         QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
     cl->addWidget(data_points_lbl_);
 
-    compute_btn_ = new QPushButton("▶  CALCULATE");
+    compute_btn_ = new QPushButton(tr("▶  CALCULATE"));
     compute_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:0; padding:6px 18px; "
                                         "font-size:10px; font-weight:700; }"
                                         "QPushButton:hover { background:%3; }"
@@ -287,17 +288,17 @@ void EquityTalippTab::build_ui() {
     ew_icon->setAlignment(Qt::AlignCenter);
     ew_icon->setStyleSheet(
         QString("color:%1; font-size:32px; background:transparent; border:0;").arg(ui::colors::TEXT_DIM()));
-    status_label_ = new QLabel("Select an indicator and click CALCULATE");
+    status_label_ = new QLabel(tr("Select an indicator and click CALCULATE"));
     status_label_->setAlignment(Qt::AlignCenter);
     status_label_->setStyleSheet(
         QString("color:%1; font-size:13px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
-    auto* ew_sub = new QLabel("50+ indicators across 6 categories — powered by TALIpp incremental engine");
-    ew_sub->setAlignment(Qt::AlignCenter);
-    ew_sub->setStyleSheet(
+    empty_sub_lbl_ = new QLabel(tr("50+ indicators across 6 categories — powered by TALIpp incremental engine"));
+    empty_sub_lbl_->setAlignment(Qt::AlignCenter);
+    empty_sub_lbl_->setStyleSheet(
         QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_DIM()));
     ew_vl->addWidget(ew_icon);
     ew_vl->addWidget(status_label_);
-    ew_vl->addWidget(ew_sub);
+    ew_vl->addWidget(empty_sub_lbl_);
     vl->addWidget(empty_widget_, 1);
 
     // ── Results area (hidden until first compute) ─────────────────────────────
@@ -404,7 +405,7 @@ QVariantMap EquityTalippTab::collect_params() const {
 // ── on_compute_clicked ────────────────────────────────────────────────────────
 void EquityTalippTab::on_compute_clicked() {
     if (current_symbol_.isEmpty()) {
-        status_label_->setText("No symbol loaded. Search for a symbol first.");
+        status_label_->setText(tr("No symbol loaded. Search for a symbol first."));
         return;
     }
     QString id = indicator_combo_->currentData().toString();
@@ -413,9 +414,9 @@ void EquityTalippTab::on_compute_clicked() {
         return;
 
     compute_btn_->setEnabled(false);
-    compute_btn_->setText("COMPUTING…");
-    status_label_->setText("Computing " + label + "…");
-    loading_overlay_->show_loading("COMPUTING " + label.toUpper() + "…");
+    compute_btn_->setText(tr("COMPUTING…"));
+    status_label_->setText(tr("Computing %1…").arg(label));
+    loading_overlay_->show_loading(tr("COMPUTING %1…").arg(label.toUpper()));
     empty_widget_->show();
     results_widget_->hide();
 
@@ -456,7 +457,7 @@ void EquityTalippTab::rebuild_last_values(const QString& /*indicator_id*/, const
 
     if (!values.isEmpty()) {
         double last = values.last();
-        make_lv("LAST", !qIsNaN(last) ? QString::number(last, 'f', 4) : "N/A", ui::colors::AMBER);
+        make_lv(tr("LAST"), !qIsNaN(last) ? QString::number(last, 'f', 4) : tr("N/A"), ui::colors::AMBER);
     }
 
     for (auto* spin : param_widget_->findChildren<QDoubleSpinBox*>())
@@ -516,21 +517,50 @@ void EquityTalippTab::rebuild_chart(const QString& /*indicator_id*/, const QVect
 // ── on_talipp_result ──────────────────────────────────────────────────────────
 void EquityTalippTab::on_talipp_result(QString indicator, QVector<double> values, QVector<qint64> timestamps) {
     compute_btn_->setEnabled(true);
-    compute_btn_->setText("▶  CALCULATE");
+    compute_btn_->setText(tr("▶  CALCULATE"));
     loading_overlay_->hide_loading();
 
     if (values.isEmpty()) {
-        status_label_->setText("No data returned for " + indicator);
+        status_label_->setText(tr("No data returned for %1").arg(indicator));
         empty_widget_->show();
         results_widget_->hide();
         return;
     }
 
+    cached_indicator_ = indicator;
     rebuild_last_values(indicator, values);
     rebuild_chart(indicator, values, timestamps);
 
     empty_widget_->hide();
     results_widget_->show();
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+// Static chrome (button text, idle status text, data-points caption, empty-
+// state copy). Category tab labels and indicator names stay as the
+// originally-loaded strings — these are technical-analysis terms (SMA,
+// MACD, etc.) that conventionally remain English across locales.
+
+void EquityTalippTab::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
+}
+
+void EquityTalippTab::retranslateUi() {
+    if (compute_btn_)    compute_btn_->setText(tr("▶  CALCULATE"));
+    if (data_points_lbl_)data_points_lbl_->setText(tr("—  data points  |  TALIpp Engine"));
+    if (empty_sub_lbl_)  empty_sub_lbl_->setText(tr("50+ indicators across 6 categories — powered by TALIpp incremental engine"));
+
+    if (status_label_) {
+        // Pick the right idle line for the current state — never overwrite a
+        // live "Computing…" message mid-fetch.
+        if (current_symbol_.isEmpty())
+            status_label_->setText(tr("Select an indicator and click CALCULATE."));
+        else if (cached_indicator_.isEmpty())
+            status_label_->setText(tr("Select an indicator and click CALCULATE"));
+    }
 }
 
 } // namespace fincept::screens

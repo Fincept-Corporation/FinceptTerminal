@@ -4,6 +4,7 @@
 #include "storage/repositories/PortfolioRepository.h"
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -36,21 +37,21 @@ void ReportsView::build_ui() {
     // ── Portfolio Summary Report ─────────────────────────────────────────────
     summary_panel_ = new QWidget(this);
     summary_panel_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
-    tabs_->addTab(summary_panel_, "SUMMARY");
+    summary_tab_index_ = tabs_->addTab(summary_panel_, tr("SUMMARY"));
 
     // ── Transaction History ──────────────────────────────────────────────────
     auto* txn_w = new QWidget(this);
     auto* txn_layout = new QVBoxLayout(txn_w);
     txn_layout->setContentsMargins(12, 8, 12, 8);
 
-    auto* txn_title = new QLabel("TRANSACTION HISTORY");
-    txn_title->setStyleSheet(
+    txn_title_ = new QLabel(tr("TRANSACTION HISTORY"));
+    txn_title_->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    txn_layout->addWidget(txn_title);
+    txn_layout->addWidget(txn_title_);
 
     txn_table_ = new QTableWidget;
     txn_table_->setColumnCount(7);
-    txn_table_->setHorizontalHeaderLabels({"DATE", "SYMBOL", "TYPE", "QTY", "PRICE", "TOTAL", "NOTES"});
+    txn_table_->setHorizontalHeaderLabels({tr("DATE"), tr("SYMBOL"), tr("TYPE"), tr("QTY"), tr("PRICE"), tr("TOTAL"), tr("NOTES")});
     txn_table_->setSelectionMode(QAbstractItemView::NoSelection);
     txn_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     txn_table_->setShowGrid(false);
@@ -70,21 +71,21 @@ void ReportsView::build_ui() {
                                   .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
                                        ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
     txn_layout->addWidget(txn_table_, 1);
-    tabs_->addTab(txn_w, "TRANSACTIONS");
+    txn_tab_index_ = tabs_->addTab(txn_w, tr("TRANSACTIONS"));
 
     // ── Performance Attribution ──────────────────────────────────────────────
     auto* attr_w = new QWidget(this);
     auto* attr_layout = new QVBoxLayout(attr_w);
     attr_layout->setContentsMargins(12, 8, 12, 8);
 
-    auto* attr_title = new QLabel("PERFORMANCE ATTRIBUTION");
-    attr_title->setStyleSheet(
+    attr_title_ = new QLabel(tr("PERFORMANCE ATTRIBUTION"));
+    attr_title_->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    attr_layout->addWidget(attr_title);
+    attr_layout->addWidget(attr_title_);
 
     attr_table_ = new QTableWidget;
     attr_table_->setColumnCount(6);
-    attr_table_->setHorizontalHeaderLabels({"SYMBOL", "WEIGHT", "RETURN", "CONTRIBUTION", "P&L", "STATUS"});
+    attr_table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("WEIGHT"), tr("RETURN"), tr("CONTRIBUTION"), tr("P&L"), tr("STATUS")});
     attr_table_->setSelectionMode(QAbstractItemView::NoSelection);
     attr_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     attr_table_->setShowGrid(false);
@@ -98,7 +99,7 @@ void ReportsView::build_ui() {
                                    .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
                                         ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
     attr_layout->addWidget(attr_table_, 1);
-    tabs_->addTab(attr_w, "ATTRIBUTION");
+    attr_tab_index_ = tabs_->addTab(attr_w, tr("ATTRIBUTION"));
 
     layout->addWidget(tabs_);
 }
@@ -106,9 +107,40 @@ void ReportsView::build_ui() {
 void ReportsView::set_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
     summary_ = summary;
     currency_ = currency;
+    has_data_ = true;
     update_summary();
     update_transactions();
     update_attribution();
+}
+
+void ReportsView::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ReportsView::retranslateUi() {
+    if (tabs_) {
+        if (summary_tab_index_ >= 0) tabs_->setTabText(summary_tab_index_, tr("SUMMARY"));
+        if (txn_tab_index_ >= 0)     tabs_->setTabText(txn_tab_index_, tr("TRANSACTIONS"));
+        if (attr_tab_index_ >= 0)    tabs_->setTabText(attr_tab_index_, tr("ATTRIBUTION"));
+    }
+    if (txn_title_)  txn_title_->setText(tr("TRANSACTION HISTORY"));
+    if (attr_title_) attr_title_->setText(tr("PERFORMANCE ATTRIBUTION"));
+
+    if (txn_table_)
+        txn_table_->setHorizontalHeaderLabels(
+            {tr("DATE"), tr("SYMBOL"), tr("TYPE"), tr("QTY"), tr("PRICE"), tr("TOTAL"), tr("NOTES")});
+    if (attr_table_)
+        attr_table_->setHorizontalHeaderLabels(
+            {tr("SYMBOL"), tr("WEIGHT"), tr("RETURN"), tr("CONTRIBUTION"), tr("P&L"), tr("STATUS")});
+
+    // re-render dynamic content so tr() row labels and card titles pick up new locale
+    if (has_data_) {
+        update_summary();
+        update_transactions();
+        update_attribution();
+    }
 }
 
 void ReportsView::update_summary() {
@@ -119,7 +151,7 @@ void ReportsView::update_summary() {
     layout->setContentsMargins(16, 12, 16, 12);
     layout->setSpacing(12);
 
-    auto* title = new QLabel("PORTFOLIO SUMMARY REPORT");
+    auto* title = new QLabel(tr("PORTFOLIO SUMMARY REPORT"));
     title->setStyleSheet(
         QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     layout->addWidget(title);
@@ -149,18 +181,18 @@ void ReportsView::update_summary() {
 
     auto fmt = [](double v, int dp = 2) { return QString::number(v, 'f', dp); };
 
-    add_card(0, 0, "PORTFOLIO", summary_.portfolio.name.toUpper(), ui::colors::AMBER);
-    add_card(0, 1, "TOTAL VALUE", QString("%1 %2").arg(currency_, fmt(summary_.total_market_value)),
+    add_card(0, 0, tr("PORTFOLIO"), summary_.portfolio.name.toUpper(), ui::colors::AMBER);
+    add_card(0, 1, tr("TOTAL VALUE"), QString("%1 %2").arg(currency_, fmt(summary_.total_market_value)),
              ui::colors::WARNING);
-    add_card(0, 2, "COST BASIS", QString("%1 %2").arg(currency_, fmt(summary_.total_cost_basis)), ui::colors::CYAN);
-    add_card(0, 3, "UNREALIZED P&L",
+    add_card(0, 2, tr("COST BASIS"), QString("%1 %2").arg(currency_, fmt(summary_.total_cost_basis)), ui::colors::CYAN);
+    add_card(0, 3, tr("UNREALIZED P&L"),
              QString("%1%2").arg(summary_.total_unrealized_pnl >= 0 ? "+" : "").arg(fmt(summary_.total_unrealized_pnl)),
              summary_.total_unrealized_pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
 
-    add_card(1, 0, "POSITIONS", QString::number(summary_.total_positions), ui::colors::TEXT_PRIMARY);
-    add_card(1, 1, "GAINERS", QString::number(summary_.gainers), ui::colors::POSITIVE);
-    add_card(1, 2, "LOSERS", QString::number(summary_.losers), ui::colors::NEGATIVE);
-    add_card(1, 3, "RETURN",
+    add_card(1, 0, tr("POSITIONS"), QString::number(summary_.total_positions), ui::colors::TEXT_PRIMARY);
+    add_card(1, 1, tr("GAINERS"), QString::number(summary_.gainers), ui::colors::POSITIVE);
+    add_card(1, 2, tr("LOSERS"), QString::number(summary_.losers), ui::colors::NEGATIVE);
+    add_card(1, 3, tr("RETURN"),
              QString("%1%2%")
                  .arg(summary_.total_unrealized_pnl_percent >= 0 ? "+" : "")
                  .arg(fmt(summary_.total_unrealized_pnl_percent)),
@@ -169,14 +201,14 @@ void ReportsView::update_summary() {
     layout->addLayout(grid);
 
     // Holdings breakdown
-    auto* breakdown_title = new QLabel("HOLDINGS BREAKDOWN");
+    auto* breakdown_title = new QLabel(tr("HOLDINGS BREAKDOWN"));
     breakdown_title->setStyleSheet(
         QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     layout->addWidget(breakdown_title);
 
     auto* breakdown = new QTableWidget;
     breakdown->setColumnCount(6);
-    breakdown->setHorizontalHeaderLabels({"SYMBOL", "QTY", "AVG COST", "CURRENT", "P&L", "WEIGHT"});
+    breakdown->setHorizontalHeaderLabels({tr("SYMBOL"), tr("QTY"), tr("AVG COST"), tr("CURRENT"), tr("P&L"), tr("WEIGHT")});
     breakdown->setSelectionMode(QAbstractItemView::NoSelection);
     breakdown->setEditTriggers(QAbstractItemView::NoEditTriggers);
     breakdown->setShowGrid(false);
@@ -281,12 +313,12 @@ void ReportsView::update_attribution() {
 
         const char* ret_color = h.unrealized_pnl_percent >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
         const char* contrib_color = contribution >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-        QString status = h.unrealized_pnl_percent > 5    ? "OUTPERFORM"
-                         : h.unrealized_pnl_percent < -5 ? "UNDERPERFORM"
-                                                         : "NEUTRAL";
-        const char* status_color = status == "OUTPERFORM"     ? ui::colors::POSITIVE
-                                   : status == "UNDERPERFORM" ? ui::colors::NEGATIVE
-                                                              : ui::colors::TEXT_TERTIARY;
+        QString status = h.unrealized_pnl_percent > 5    ? tr("OUTPERFORM")
+                         : h.unrealized_pnl_percent < -5 ? tr("UNDERPERFORM")
+                                                         : tr("NEUTRAL");
+        const char* status_color = h.unrealized_pnl_percent > 5    ? ui::colors::POSITIVE
+                                   : h.unrealized_pnl_percent < -5 ? ui::colors::NEGATIVE
+                                                                   : ui::colors::TEXT_TERTIARY;
 
         set(0, h.symbol, ui::colors::CYAN);
         set(1, QString("%1%").arg(QString::number(h.weight, 'f', 1)));

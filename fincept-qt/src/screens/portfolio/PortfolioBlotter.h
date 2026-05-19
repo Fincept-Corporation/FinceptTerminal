@@ -27,6 +27,9 @@ class PortfolioBlotter : public QWidget {
     void set_sector_filter(const QStringList& symbols);
     void refresh_theme();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   signals:
     void symbol_selected(QString symbol);
     void sort_changed(portfolio::SortColumn col, portfolio::SortDirection dir);
@@ -37,6 +40,7 @@ class PortfolioBlotter : public QWidget {
     void build_ui();
     void build_pagination_footer();
     void populate_table();
+    void retranslateUi();
     void apply_filter();
     void on_header_clicked(int section);
     void on_row_clicked(int row, int col);
@@ -67,6 +71,7 @@ class PortfolioBlotter : public QWidget {
     QPushButton* btn_next_ = nullptr;
     QPushButton* btn_last_ = nullptr;
     QComboBox* page_size_combo_ = nullptr;
+    QLabel* footer_rows_label_ = nullptr;
 
     void fetch_sparklines();
 

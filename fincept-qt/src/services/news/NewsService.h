@@ -148,6 +148,41 @@ class NewsService : public QObject
     int feed_count() const { return feed_count_; }
     QStringList active_sources() const { return active_sources_; }
 
+    // ── Feed catalog (built-ins + user overlay from RssFeedRepository) ────
+    //
+    // `list_effective_feeds` returns the merged, ordered list used by the
+    // fetcher: built-ins with any user patches applied + user-added feeds,
+    // with disabled rows filtered out.
+    //
+    // `list_all_feeds_for_editor` returns the same merged list but INCLUDES
+    // disabled rows (so the manager UI can show & toggle them), and tags
+    // each row with whether it is a built-in default and whether the user
+    // has customized it.
+    struct EditorFeed {
+        RSSFeed feed;
+        bool is_builtin = false;     // came from default_feeds()
+        bool is_customized = false;  // has an overlay row (built-ins only)
+        bool enabled = true;
+    };
+    QVector<RSSFeed> list_effective_feeds() const;
+    QVector<EditorFeed> list_all_feeds_for_editor() const;
+
+    /// Insert/update a user-added feed. Pass is_builtin=false; new IDs
+    /// should be prefixed "usr-" by the caller.
+    bool add_user_feed(const RSSFeed& f);
+    /// Update fields on an existing feed. For built-ins this writes/updates
+    /// an overlay row with is_builtin=true.
+    bool update_feed(const RSSFeed& f, bool enabled);
+    /// Delete a user feed entirely. For a built-in id this is treated as
+    /// "reset to default" (overlay row is deleted; default reappears).
+    bool remove_or_reset_feed(const QString& id);
+    /// Set the enabled flag. For built-ins, creates an overlay row if none.
+    bool set_feed_enabled(const QString& id, bool enabled);
+
+    /// Drop the cached articles list and notify subscribers that the feed
+    /// set has changed. Callers should typically trigger a refresh after.
+    void reload_feeds();
+
     void set_refresh_interval(int minutes);
     void start_auto_refresh();
     void stop_auto_refresh();
@@ -171,8 +206,13 @@ class NewsService : public QObject
 
   signals:
     void articles_updated(QVector<NewsArticle> articles);
-    void analysis_ready(NewsAnalysis analysis);
     void articles_partial(QVector<NewsArticle> articles, int feeds_done, int feeds_total);
+    /// Emitted after add/update/remove/set_enabled mutations so the news
+    /// screen (or any other consumer) can refresh.
+    void feeds_changed();
+    /// Emitted when the WebSocket live feed connects or disconnects. UI
+    /// consumes this to drive a status badge.
+    void live_state_changed(bool connected);
 
   private:
     NewsService();

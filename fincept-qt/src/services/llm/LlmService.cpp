@@ -35,6 +35,8 @@
 #include <QVariant>
 #include <QtConcurrent/QtConcurrent>
 
+#include <algorithm>
+
 namespace fincept::ai_chat {
 
 static constexpr const char* kLlmSvcTag = "LlmService";
@@ -128,6 +130,8 @@ void LlmService::ensure_config() const {
         temperature_ = gs.value().temperature;
         max_tokens_ = gs.value().max_tokens;
         system_prompt_ = gs.value().system_prompt;
+        // Clamp [1, 200] so a corrupt DB row can't lock the loop at 0 or run forever.
+        max_tool_rounds_ = std::clamp(gs.value().max_tool_rounds, 1, 200);
     }
 
     // Default system prompt — primes the model to actually use tools instead of declining tool-feasible requests.
@@ -268,6 +272,12 @@ int LlmService::active_max_tokens() const {
     QMutexLocker lock(&mutex_);
     ensure_config();
     return max_tokens_;
+}
+
+int LlmService::active_max_tool_rounds() const {
+    QMutexLocker lock(&mutex_);
+    ensure_config();
+    return max_tool_rounds_;
 }
 
 bool LlmService::tools_enabled() const {

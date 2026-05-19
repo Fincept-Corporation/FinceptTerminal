@@ -102,7 +102,7 @@ QWidget* CreateAgentPanel::build_saved_panel() {
         QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(10, 0, 10, 0);
-    auto* t = new QLabel("SAVED AGENTS");
+    auto* t = new QLabel(tr("SAVED AGENTS"));
     t->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
     hl->addWidget(t);
     hl->addStretch();
@@ -584,7 +584,7 @@ QWidget* CreateAgentPanel::build_test_panel() {
         QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(10, 0, 10, 0);
-    auto* t = new QLabel("LIVE TEST");
+    auto* t = new QLabel(tr("LIVE TEST"));
     t->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::CYAN()));
     hl->addWidget(t);
     vl->addWidget(hdr);
@@ -595,20 +595,20 @@ QWidget* CreateAgentPanel::build_test_panel() {
     bl->setContentsMargins(10, 10, 10, 10);
     bl->setSpacing(6);
 
-    auto* qlbl = new QLabel("QUERY");
+    auto* qlbl = new QLabel(tr("QUERY"));
     qlbl->setStyleSheet(
         QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     bl->addWidget(qlbl);
 
     test_query_edit_ = new QPlainTextEdit;
-    test_query_edit_->setPlaceholderText("Enter test query...");
+    test_query_edit_->setPlaceholderText(tr("Enter test query..."));
     test_query_edit_->setFixedHeight(72);
     test_query_edit_->setStyleSheet(
         QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;padding:6px;font-size:12px;}")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED()));
     bl->addWidget(test_query_edit_);
 
-    test_btn_ = new QPushButton("RUN TEST");
+    test_btn_ = new QPushButton(tr("RUN TEST"));
     test_btn_->setCursor(Qt::PointingHandCursor);
     test_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %1;"
                                      "padding:7px;font-size:10px;font-weight:700;letter-spacing:1px;}"
@@ -622,7 +622,7 @@ QWidget* CreateAgentPanel::build_test_panel() {
     test_status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
     bl->addWidget(test_status_lbl_);
 
-    auto* rlbl = new QLabel("OUTPUT");
+    auto* rlbl = new QLabel(tr("OUTPUT"));
     rlbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;")
                             .arg(ui::colors::TEXT_SECONDARY()));
     bl->addWidget(rlbl);

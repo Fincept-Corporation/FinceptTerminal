@@ -723,6 +723,7 @@ set(STORAGE_SOURCES
     src/storage/repositories/PaperTradingRepository.cpp
     src/storage/repositories/NewsMonitorRepository.cpp
     src/storage/repositories/NewsArticleRepository.cpp
+    src/storage/repositories/RssFeedRepository.cpp
     src/storage/repositories/PortfolioHoldingsRepository.cpp
     src/storage/repositories/ChatRepository.cpp
     src/storage/repositories/DashboardLayoutRepository.cpp
@@ -777,6 +778,8 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v027_fii_dii.cpp
     src/storage/sqlite/migrations/v028_iv_history.cpp
     src/storage/sqlite/migrations/v029_secure_credentials.cpp
+    src/storage/sqlite/migrations/v030_max_tool_rounds.cpp
+    src/storage/sqlite/migrations/v031_rss_feeds.cpp
 )
 
 # Python runner
@@ -822,11 +825,6 @@ set(MCP_SOURCES
     src/mcp/SchemaValidator.cpp
     src/mcp/ToolRetriever.cpp
     src/mcp/TerminalMcpBridge.cpp
-
-    # Phase 5 — provider-neutral tool-call dispatcher + adapters.
-    src/mcp/dispatch/ToolDispatcher.cpp
-    src/mcp/dispatch/OpenAiAdapter.cpp
-    src/mcp/dispatch/AdapterFactory.cpp
 
     # Tool modules
     src/mcp/tools/NavigationTools.cpp
@@ -1279,6 +1277,8 @@ set(SCREEN_SOURCES
     src/screens/news/NewsFeedDelegate.cpp
     src/screens/news/NewsDetailPanel.cpp
     src/screens/news/NewsTickerStrip.cpp
+    src/screens/news/dialogs/RssFeedManagerDialog.cpp
+    src/screens/news/dialogs/RssFeedEditDialog.cpp
     src/screens/forum/ForumScreen.cpp
     src/screens/forum/ForumFeedPanel.cpp
     src/screens/forum/ForumSidebarPanel.cpp
@@ -1947,6 +1947,8 @@ set_source_files_properties(
     src/screens/news/NewsScreen.cpp
     src/screens/news/NewsSidePanel.cpp
     src/screens/news/NewsTickerStrip.cpp
+    src/screens/news/dialogs/RssFeedManagerDialog.cpp
+    src/screens/news/dialogs/RssFeedEditDialog.cpp
     src/screens/node_editor/NodeEditorScreen.cpp
     src/screens/node_editor/canvas/EdgeItem.cpp
     src/screens/node_editor/canvas/MiniMap.cpp
@@ -2043,6 +2045,7 @@ set_source_files_properties(
     src/storage/repositories/McpServerRepository.cpp
     src/storage/repositories/NewsMonitorRepository.cpp
     src/storage/repositories/NewsArticleRepository.cpp
+    src/storage/repositories/RssFeedRepository.cpp
     src/storage/repositories/NotesRepository.cpp
     src/storage/repositories/PaperTradingRepository.cpp
     src/storage/repositories/PortfolioHoldingsRepository.cpp
@@ -2162,9 +2165,6 @@ set_source_files_properties(
     src/mcp/SchemaValidator.cpp
     src/mcp/ToolRetriever.cpp
     src/mcp/TerminalMcpBridge.cpp
-    src/mcp/dispatch/ToolDispatcher.cpp
-    src/mcp/dispatch/OpenAiAdapter.cpp
-    src/mcp/dispatch/AdapterFactory.cpp
     src/mcp/tools/NavigationTools.cpp
     src/mcp/tools/MarketsTools.cpp
     src/mcp/tools/WatchlistTools.cpp
@@ -2247,6 +2247,7 @@ set_source_files_properties(
     src/storage/repositories/McpServerRepository.cpp
     src/storage/repositories/NewsMonitorRepository.cpp
     src/storage/repositories/NewsArticleRepository.cpp
+    src/storage/repositories/RssFeedRepository.cpp
     src/storage/repositories/NotesRepository.cpp
     src/storage/repositories/PaperTradingRepository.cpp
     src/storage/repositories/PortfolioHoldingsRepository.cpp
@@ -2341,6 +2342,23 @@ qt6_add_resources(FinceptTerminal "fincept_i18n"
     PREFIX "/i18n"
     BASE "${CMAKE_CURRENT_BINARY_DIR}"
     FILES ${FINCEPT_QM_FILES}
+)
+
+# ── Optional translator-refresh target (manual) ───────────────────────────────
+# Run with:
+#   cmake --build build/win-release --target update_translations
+# Scans the C++ source for tr() / QT_TRANSLATE_NOOP() calls and merges any
+# new strings into the .ts files as <translation type="unfinished"/>. Hand-
+# authored translations are preserved; only new source entries are appended.
+#
+# This target is intentionally NOT part of the default build — running it on
+# every compile would race with manual edits and clutter diffs. Contributors
+# invoke it on demand when they add new tr() calls.
+qt6_add_lupdate(FinceptTerminal
+    TS_FILES ${FINCEPT_TS_FILES}
+    LUPDATE_TARGET update_translations
+    NO_GLOBAL_TARGET
+    OPTIONS -no-obsolete -locations none
 )
 
 # ── macOS bundle properties ───────────────────────────────────────────────────

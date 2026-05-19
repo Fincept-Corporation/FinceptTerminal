@@ -114,7 +114,7 @@ void AgenticTasksPanel::build_ui() {
         QString("color:%1;font-size:10px;letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY()));
     dv->addWidget(detail_meta_);
 
-    auto* plan_label = new QLabel("PLAN");
+    auto* plan_label = new QLabel(tr("PLAN"));
     plan_label->setStyleSheet(
         QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1px;margin-top:6px;")
             .arg(ui::colors::TEXT_TERTIARY()));
@@ -130,7 +130,7 @@ void AgenticTasksPanel::build_ui() {
     dv->addWidget(plan_view_);
 
     // Budget meter — 4 bars (tokens / cost / wall / steps) in a tight grid.
-    budget_label_ = new QLabel("BUDGET");
+    budget_label_ = new QLabel(tr("BUDGET"));
     budget_label_->setStyleSheet(
         QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1px;margin-top:6px;")
             .arg(ui::colors::TEXT_TERTIARY()));
@@ -174,7 +174,7 @@ void AgenticTasksPanel::build_ui() {
     auto* qbl = new QVBoxLayout(question_banner_);
     qbl->setContentsMargins(8, 8, 8, 8);
     qbl->setSpacing(6);
-    auto* qtitle = new QLabel("AGENT NEEDS INPUT");
+    auto* qtitle = new QLabel(tr("AGENT NEEDS INPUT"));
     qtitle->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1px;")
                               .arg(ui::colors::AMBER()));
     qbl->addWidget(qtitle);
@@ -184,11 +184,11 @@ void AgenticTasksPanel::build_ui() {
     qbl->addWidget(question_label_);
     auto* reply_row = new QHBoxLayout;
     reply_edit_ = new QLineEdit;
-    reply_edit_->setPlaceholderText("Type your reply…");
+    reply_edit_->setPlaceholderText(tr("Type your reply…"));
     reply_edit_->setStyleSheet(
         QString("QLineEdit { background:%1; color:%2; border:1px solid %3; padding:4px 8px; font-size:11px; }")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM()));
-    reply_btn_ = new QPushButton("REPLY");
+    reply_btn_ = new QPushButton(tr("REPLY"));
     reply_btn_->setCursor(Qt::PointingHandCursor);
     reply_btn_->setStyleSheet(
         QString("QPushButton { background:%1; color:%2; border:1px solid %2; padding:4px 14px; "
@@ -201,7 +201,7 @@ void AgenticTasksPanel::build_ui() {
     question_banner_->setVisible(false);
     dv->addWidget(question_banner_);
 
-    auto* log_label = new QLabel("STEP LOG");
+    auto* log_label = new QLabel(tr("STEP LOG"));
     log_label->setStyleSheet(
         QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1px;margin-top:6px;")
             .arg(ui::colors::TEXT_TERTIARY()));

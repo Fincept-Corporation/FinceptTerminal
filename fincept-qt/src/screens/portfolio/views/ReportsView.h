@@ -17,22 +17,33 @@ class ReportsView : public QWidget {
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
+    void retranslateUi();
     void update_summary();
     void update_transactions();
     void update_attribution();
 
     QTabWidget* tabs_ = nullptr;
+    int summary_tab_index_ = -1;
+    int txn_tab_index_ = -1;
+    int attr_tab_index_ = -1;
 
     // Summary tab
     QWidget* summary_panel_ = nullptr;
 
     // Transactions tab
     QTableWidget* txn_table_ = nullptr;
+    QLabel* txn_title_ = nullptr;
 
     // Attribution tab
     QTableWidget* attr_table_ = nullptr;
+    QLabel* attr_title_ = nullptr;
+
+    bool has_data_ = false;
 
     portfolio::PortfolioSummary summary_;
     QString currency_;

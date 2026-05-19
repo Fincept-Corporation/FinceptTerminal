@@ -106,7 +106,7 @@ void CreateAgentPanel::setup_connections() {
             return;
         pending_request_id_.clear();
         test_btn_->setEnabled(true);
-        test_btn_->setText("RUN TEST");
+        test_btn_->setText(tr("RUN TEST"));
         if (r.success) {
             test_result_->setPlainText(r.response);
             test_status_lbl_->setText(QString("Done in %1ms").arg(r.execution_time_ms));
@@ -124,7 +124,7 @@ void CreateAgentPanel::setup_connections() {
             return;
         pending_request_id_.clear();
         test_btn_->setEnabled(true);
-        test_btn_->setText("RUN TEST");
+        test_btn_->setText(tr("RUN TEST"));
         if (r.success) {
             test_result_->setPlainText(r.response);
             test_status_lbl_->setText(QString("Done in %1ms").arg(r.execution_time_ms));

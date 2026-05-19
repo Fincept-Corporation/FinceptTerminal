@@ -49,12 +49,56 @@ QString LanguageManager::native_name(const QString& code) {
 }
 
 void LanguageManager::initialize() {
+    // Read the persisted preference. If it's set (even to "en"), respect it
+    // — the user has made an explicit choice we should not override.
     const auto r = SettingsRepository::instance().get(
-        QString::fromLatin1(kSettingsKey), QString::fromLatin1(kDefaultCode));
-    const QString code = r.is_ok() && !r.value().isEmpty()
-                             ? r.value()
-                             : QString::fromLatin1(kDefaultCode);
+        QString::fromLatin1(kSettingsKey), QString());
+    QString code = r.is_ok() ? r.value() : QString();
+
+    if (code.isEmpty()) {
+        // No saved preference — try the OS locale. The Settings save in
+        // set_language() will record whatever we picked, so subsequent runs
+        // skip this detection and honour the explicit value.
+        code = detect_system_language();
+        if (!code.isEmpty())
+            LOG_INFO("i18n", QStringLiteral("First launch — detected system language: %1").arg(code));
+    }
+    if (code.isEmpty())
+        code = QString::fromLatin1(kDefaultCode);
+
     set_language(code);
+}
+
+QString LanguageManager::detect_system_language() {
+    const auto supported = supported_languages();
+
+    // QLocale returns a preference-ordered list. Use the underscore separator
+    // so the strings match our .qm naming convention (e.g. "zh_CN" not "zh-CN").
+    const QStringList preferred =
+        QLocale::system().uiLanguages(QLocale::TagSeparator::Underscore);
+
+    for (const QString& ui : preferred) {
+        // Strip script/region tags from longest to shortest (e.g.
+        // "zh_Hans_CN" → "zh_Hans" → "zh") and try each form against our
+        // supported set. This catches both exact matches ("zh_CN") and
+        // language-only matches ("en").
+        QString candidate = ui;
+        while (!candidate.isEmpty()) {
+            if (supported.contains(candidate))
+                return candidate;
+            const int last = candidate.lastIndexOf(QLatin1Char('_'));
+            if (last < 0) break;
+            candidate = candidate.left(last);
+        }
+        // No exact or shorter match — fall back to any supported locale that
+        // shares the same language tag (e.g. system "fr_CA" → our "fr_FR").
+        const QString lang_prefix = ui.section(QLatin1Char('_'), 0, 0);
+        for (const QString& s : supported) {
+            if (s.section(QLatin1Char('_'), 0, 0) == lang_prefix)
+                return s;
+        }
+    }
+    return QString();
 }
 
 void LanguageManager::set_language(const QString& code) {

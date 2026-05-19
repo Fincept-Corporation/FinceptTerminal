@@ -107,12 +107,12 @@ void SystemViewPanel::build_ui() {
 
     // Header
     auto* header_row = new QHBoxLayout;
-    auto* title = new QLabel("SYSTEM CAPABILITIES");
+    auto* title = new QLabel(tr("SYSTEM CAPABILITIES"));
     title->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;").arg(ui::colors::AMBER()));
     header_row->addWidget(title);
     header_row->addStretch();
 
-    auto* refresh_btn = new QPushButton("REFRESH");
+    auto* refresh_btn = new QPushButton(tr("REFRESH"));
     refresh_btn->setCursor(Qt::PointingHandCursor);
     refresh_btn->setStyleSheet(QString("QPushButton { background:transparent;color:%1;border:1px solid %2;"
                                        "padding:4px 12px;font-size:10px;font-weight:600;letter-spacing:1px; }"
@@ -211,12 +211,12 @@ QWidget* SystemViewPanel::build_tools_section() {
 }
 
 QWidget* SystemViewPanel::build_sysinfo_section() {
-    auto* card = make_section_card("SYSTEM INFO", &features_layout_);
+    auto* card = make_section_card(tr("SYSTEM INFO"), &features_layout_);
 
     auto* info_grid = new QGridLayout;
     info_grid->setSpacing(4);
 
-    auto* ver_title = new QLabel("VERSION");
+    auto* ver_title = new QLabel(tr("VERSION"));
     ver_title->setStyleSheet(
         QString("color:%1;font-size:9px;font-weight:600;letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
     version_label_ = new QLabel("--");
@@ -224,7 +224,7 @@ QWidget* SystemViewPanel::build_sysinfo_section() {
     info_grid->addWidget(ver_title, 0, 0);
     info_grid->addWidget(version_label_, 0, 1);
 
-    auto* fw_title = new QLabel("FRAMEWORK");
+    auto* fw_title = new QLabel(tr("FRAMEWORK"));
     fw_title->setStyleSheet(
         QString("color:%1;font-size:9px;font-weight:600;letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
     framework_label_ = new QLabel("--");
@@ -280,7 +280,7 @@ void SystemViewPanel::populate_llm_list() {
         hl->setSpacing(8);
 
         if (p.is_active) {
-            auto* badge = new QLabel("ACTIVE");
+            auto* badge = new QLabel(tr("ACTIVE"));
             badge->setStyleSheet(QString("color:%1;font-size:8px;font-weight:700;background:%2;padding:1px 5px;")
                                      .arg(ui::colors::POSITIVE(), ui::colors::BG_RAISED()));
             hl->addWidget(badge);
@@ -371,7 +371,7 @@ void SystemViewPanel::setup_connections() {
         }
 
         if (!info.features.isEmpty()) {
-            auto* feat_header = new QLabel("FEATURES");
+            auto* feat_header = new QLabel(tr("FEATURES"));
             feat_header->setStyleSheet(QString("color:%1;font-size:9px;font-weight:600;"
                                                "letter-spacing:1px;padding-top:8px;")
                                            .arg(ui::colors::TEXT_TERTIARY()));

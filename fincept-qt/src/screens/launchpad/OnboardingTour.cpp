@@ -198,7 +198,7 @@ void OnboardingTour::update_buttons() {
     const bool last = (current_step_ + 1 >= step_count_);
     btn_next_->setText(last ? tr("Got it!") : tr("Next"));
     if (progress_)
-        progress_->setText(QString("Step %1 of %2").arg(current_step_ + 1).arg(step_count_));
+        progress_->setText(tr("Step %1 of %2").arg(current_step_ + 1).arg(step_count_));
 }
 
 void OnboardingTour::closeEvent(QCloseEvent* e) {

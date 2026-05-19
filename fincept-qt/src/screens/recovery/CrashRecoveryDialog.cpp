@@ -44,7 +44,7 @@ CrashRecoveryDialog::CrashRecoveryDialog(fincept::CrashRecovery* recovery,
                                          fincept::WorkspaceSnapshotRing* ring,
                                          QWidget* parent)
     : QDialog(parent), recovery_(recovery), ring_(ring) {
-    setWindowTitle(QStringLiteral("Fincept Terminal — Recover Previous Session"));
+    setWindowTitle(tr("Fincept Terminal — Recover Previous Session"));
     setObjectName(QStringLiteral("CrashRecoveryDialog"));
     setModal(true);
     resize(640, 480);
@@ -68,10 +68,10 @@ void CrashRecoveryDialog::build_ui() {
     tbl->setContentsMargins(20, 0, 20, 0);
     tbl->setSpacing(12);
 
-    heading_ = new QLabel(QStringLiteral("RECOVER PREVIOUS SESSION"), title_bar);
+    heading_ = new QLabel(tr("RECOVER PREVIOUS SESSION"), title_bar);
     heading_->setObjectName(QStringLiteral("recoveryHeading"));
 
-    auto* badge = new QLabel(QStringLiteral("UNCLEAN SHUTDOWN DETECTED"), title_bar);
+    auto* badge = new QLabel(tr("UNCLEAN SHUTDOWN DETECTED"), title_bar);
     badge->setObjectName(QStringLiteral("recoveryBadge"));
 
     tbl->addWidget(heading_);
@@ -89,7 +89,7 @@ void CrashRecoveryDialog::build_ui() {
     explainer_ = new QLabel(body);
     explainer_->setObjectName(QStringLiteral("recoveryExplainer"));
     explainer_->setWordWrap(true);
-    explainer_->setText(QStringLiteral(
+    explainer_->setText(tr(
         "Pick a snapshot to restore your workspace, or skip to start fresh. "
         "Skipping does not delete the snapshots."));
     bl->addWidget(explainer_);
@@ -100,8 +100,8 @@ void CrashRecoveryDialog::build_ui() {
     col_header->setFixedHeight(24);
     auto* chl = new QHBoxLayout(col_header);
     chl->setContentsMargins(10, 0, 10, 0);
-    auto* col_name = new QLabel(QStringLiteral("SESSION"), col_header);
-    auto* col_meta = new QLabel(QStringLiteral("WHEN"), col_header);
+    auto* col_name = new QLabel(tr("SESSION"), col_header);
+    auto* col_meta = new QLabel(tr("WHEN"), col_header);
     col_name->setObjectName(QStringLiteral("recoveryColLabel"));
     col_meta->setObjectName(QStringLiteral("recoveryColLabel"));
     chl->addWidget(col_name);
@@ -121,7 +121,7 @@ void CrashRecoveryDialog::build_ui() {
             [this](QListWidgetItem*) { on_restore_clicked(); });
 
     empty_label_ = new QLabel(
-        QStringLiteral("NO SNAPSHOTS AVAILABLE — START FRESH"), body);
+        tr("NO SNAPSHOTS AVAILABLE — START FRESH"), body);
     empty_label_->setObjectName(QStringLiteral("recoveryEmptyLabel"));
     empty_label_->setAlignment(Qt::AlignCenter);
     empty_label_->hide();
@@ -139,24 +139,24 @@ void CrashRecoveryDialog::build_ui() {
     abl->setContentsMargins(20, 12, 20, 12);
     abl->setSpacing(8);
 
-    rename_button_ = new QPushButton(QStringLiteral("RENAME"), action_bar);
+    rename_button_ = new QPushButton(tr("RENAME"), action_bar);
     rename_button_->setObjectName(QStringLiteral("recoverySecondaryButton"));
     rename_button_->setAutoDefault(false);
     rename_button_->setEnabled(false);
     connect(rename_button_, &QPushButton::clicked, this, &CrashRecoveryDialog::on_rename_clicked);
 
-    delete_button_ = new QPushButton(QStringLiteral("DELETE"), action_bar);
+    delete_button_ = new QPushButton(tr("DELETE"), action_bar);
     delete_button_->setObjectName(QStringLiteral("recoveryDangerButton"));
     delete_button_->setAutoDefault(false);
     delete_button_->setEnabled(false);
     connect(delete_button_, &QPushButton::clicked, this, &CrashRecoveryDialog::on_delete_clicked);
 
-    skip_button_ = new QPushButton(QStringLiteral("SKIP"), action_bar);
+    skip_button_ = new QPushButton(tr("SKIP"), action_bar);
     skip_button_->setObjectName(QStringLiteral("recoverySecondaryButton"));
     skip_button_->setAutoDefault(false);
     connect(skip_button_, &QPushButton::clicked, this, &CrashRecoveryDialog::on_skip_clicked);
 
-    restore_button_ = new QPushButton(QStringLiteral("RESTORE"), action_bar);
+    restore_button_ = new QPushButton(tr("RESTORE"), action_bar);
     restore_button_->setObjectName(QStringLiteral("recoveryPrimaryButton"));
     restore_button_->setDefault(true);
     restore_button_->setEnabled(false);
@@ -439,35 +439,37 @@ void CrashRecoveryDialog::populate_snapshots() {
 }
 
 QString CrashRecoveryDialog::format_timestamp(qint64 unix_ms) const {
-    if (unix_ms <= 0) return QStringLiteral("(unknown time)");
+    if (unix_ms <= 0) return tr("(unknown time)");
     const auto dt = QDateTime::fromMSecsSinceEpoch(unix_ms);
+    // Date format string stays English-keyed — Qt picks up the locale's month
+    // abbreviations from QLocale::system() when rendering.
     return dt.toLocalTime().toString(QStringLiteral("MMM d, yyyy  h:mm AP"));
 }
 
 QString CrashRecoveryDialog::format_relative(qint64 unix_ms) const {
-    if (unix_ms <= 0) return QStringLiteral("(unknown)");
+    if (unix_ms <= 0) return tr("(unknown)");
     const qint64 now_ms = QDateTime::currentMSecsSinceEpoch();
     qint64 diff = now_ms - unix_ms;
     if (diff < 0) diff = 0;
     const qint64 sec = diff / 1000;
-    if (sec < 60) return QStringLiteral("just now");
+    if (sec < 60) return tr("just now");
     const qint64 min = sec / 60;
-    if (min < 60) return min == 1 ? QStringLiteral("1 minute ago")
-                                  : QString("%1 minutes ago").arg(min);
+    if (min < 60) return min == 1 ? tr("1 minute ago") : tr("%1 minutes ago").arg(min);
     const qint64 hr = min / 60;
-    if (hr < 24) return hr == 1 ? QStringLiteral("1 hour ago")
-                                : QString("%1 hours ago").arg(hr);
+    if (hr < 24) return hr == 1 ? tr("1 hour ago") : tr("%1 hours ago").arg(hr);
     const qint64 day = hr / 24;
-    if (day == 1) return QStringLiteral("yesterday");
-    if (day < 7)  return QString("%1 days ago").arg(day);
+    if (day == 1) return tr("yesterday");
+    if (day < 7)  return tr("%1 days ago").arg(day);
     // Older than a week — let the absolute timestamp carry the weight.
     return format_timestamp(unix_ms);
 }
 
 QString CrashRecoveryDialog::format_kind(const QString& kind) const {
-    if (kind == QLatin1String("auto"))           return QStringLiteral("[autosave]");
-    if (kind == QLatin1String("crash_recovery")) return QStringLiteral("[crash]");
-    if (kind == QLatin1String("named_save"))     return QStringLiteral("[saved]");
+    // Wrapped in [brackets] for the badge look. Translate the human label
+    // but keep the API key as the lookup discriminator.
+    if (kind == QLatin1String("auto"))           return tr("[autosave]");
+    if (kind == QLatin1String("crash_recovery")) return tr("[crash]");
+    if (kind == QLatin1String("named_save"))     return tr("[saved]");
     return QString("[%1]").arg(kind);
 }
 
@@ -478,9 +480,9 @@ QString CrashRecoveryDialog::display_name(
     // Auto-generate a unique, human-readable name from the timestamp so each
     // snapshot has a recognisable identifier. Users can override via Rename.
     if (e.created_at_ms <= 0)
-        return QString("Session #%1").arg(e.snapshot_id);
+        return tr("Session #%1").arg(e.snapshot_id);
     const auto dt = QDateTime::fromMSecsSinceEpoch(e.created_at_ms);
-    return QString("Session — %1").arg(
+    return tr("Session — %1").arg(
         dt.toLocalTime().toString(QStringLiteral("MMM d, h:mm AP")));
 }
 
@@ -572,8 +574,8 @@ void CrashRecoveryDialog::on_rename_clicked() {
 
     bool ok = false;
     const QString new_name = QInputDialog::getText(
-        this, QStringLiteral("Rename Session"),
-        QStringLiteral("Session name:"),
+        this, tr("Rename Session"),
+        tr("Session name:"),
         QLineEdit::Normal, current_name, &ok);
     if (!ok)
         return;
@@ -583,7 +585,7 @@ void CrashRecoveryDialog::on_rename_clicked() {
         LOG_ERROR(kRecoveryTag,
                   QString("rename(%1) failed: %2")
                       .arg(id).arg(QString::fromStdString(r.error())));
-        QMessageBox::warning(this, QStringLiteral("Rename failed"),
+        QMessageBox::warning(this, tr("Rename failed"),
                              QString::fromStdString(r.error()));
         return;
     }
@@ -615,8 +617,8 @@ void CrashRecoveryDialog::on_delete_clicked() {
     }
 
     const auto reply = QMessageBox::question(
-        this, QStringLiteral("Delete snapshot"),
-        QString("Delete \"%1\"?\n\nThis cannot be undone.").arg(name),
+        this, tr("Delete snapshot"),
+        tr("Delete \"%1\"?\n\nThis cannot be undone.").arg(name),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (reply != QMessageBox::Yes)
         return;
@@ -626,7 +628,7 @@ void CrashRecoveryDialog::on_delete_clicked() {
         LOG_ERROR(kRecoveryTag,
                   QString("erase(%1) failed: %2")
                       .arg(id).arg(QString::fromStdString(r.error())));
-        QMessageBox::warning(this, QStringLiteral("Delete failed"),
+        QMessageBox::warning(this, tr("Delete failed"),
                              QString::fromStdString(r.error()));
         return;
     }

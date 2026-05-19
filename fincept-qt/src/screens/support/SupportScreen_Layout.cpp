@@ -48,23 +48,21 @@ QWidget* SupportScreen::build_sidebar() {
         hl->setContentsMargins(14, 10, 14, 10);
         hl->setSpacing(8);
 
-        // New ticket button — full width
-        auto* new_btn = new QPushButton("＋  New Ticket");
-        new_btn->setFixedHeight(34);
-        new_btn->setStyleSheet(SS_BTN_PRIMARY());
-        connect(new_btn, &QPushButton::clicked, this, [this]() { content_stack_->setCurrentIndex(1); });
-        hl->addWidget(new_btn);
+        // New ticket button — text set in retranslateUi
+        new_ticket_btn_ = new QPushButton;
+        new_ticket_btn_->setFixedHeight(34);
+        new_ticket_btn_->setStyleSheet(SS_BTN_PRIMARY());
+        connect(new_ticket_btn_, &QPushButton::clicked, this, [this]() { content_stack_->setCurrentIndex(1); });
+        hl->addWidget(new_ticket_btn_);
 
-        // Search
+        // Search — placeholder set in retranslateUi
         search_input_ = new QLineEdit;
-        search_input_->setPlaceholderText("🔍  Search tickets…");
         search_input_->setFixedHeight(30);
         search_input_->setStyleSheet(SS_INPUT());
         hl->addWidget(search_input_);
 
-        // Filter
+        // Filter — items populated in retranslateUi
         filter_combo_ = new QComboBox;
-        filter_combo_->addItems({"All Tickets", "Open", "In Progress", "Pending", "Resolved", "Closed"});
         filter_combo_->setFixedHeight(28);
         filter_combo_->setStyleSheet(SS_INPUT());
         hl->addWidget(filter_combo_);
@@ -82,23 +80,26 @@ QWidget* SupportScreen::build_sidebar() {
         sl->setContentsMargins(14, 0, 14, 0);
         sl->setSpacing(0);
 
-        auto add_stat = [&](const QString& label, QLabel*& ref, const QString& color) {
+        // Captions are stored as members and re-set in retranslateUi;
+        // counts (stat_*_) are updated by load_tickets().
+        auto add_stat = [&](QLabel*& caption_out, QLabel*& count_out, const QString& color) {
             auto* w = new QWidget(this);
             w->setStyleSheet("background:transparent;");
             auto* wl = new QHBoxLayout(w);
             wl->setContentsMargins(0, 0, 0, 0);
             wl->setSpacing(4);
-            wl->addWidget(lbl(label, ui::colors::TEXT_TERTIARY(), 10));
-            ref = lbl("0", color, 10, true);
-            wl->addWidget(ref);
+            caption_out = lbl(QString(), ui::colors::TEXT_TERTIARY(), 10);
+            wl->addWidget(caption_out);
+            count_out = lbl("0", color, 10, true);
+            wl->addWidget(count_out);
             return w;
         };
 
-        sl->addWidget(add_stat("Total", stat_total_, ui::colors::TEXT_SECONDARY()));
+        sl->addWidget(add_stat(stat_total_caption_, stat_total_, ui::colors::TEXT_SECONDARY()));
         sl->addStretch();
-        sl->addWidget(add_stat("Open", stat_open_, ui::colors::CYAN()));
+        sl->addWidget(add_stat(stat_open_caption_, stat_open_, ui::colors::CYAN()));
         sl->addStretch();
-        sl->addWidget(add_stat("Done", stat_resolved_, ui::colors::POSITIVE()));
+        sl->addWidget(add_stat(stat_resolved_caption_, stat_resolved_, ui::colors::POSITIVE()));
 
         vl->addWidget(stats);
     }
@@ -138,17 +139,17 @@ QWidget* SupportScreen::build_empty_state() {
     icon->setAlignment(Qt::AlignCenter);
     vl->addWidget(icon);
 
-    auto* t = lbl("Select a ticket to view details", ui::colors::TEXT_SECONDARY(), 13, true);
+    auto* t = lbl(tr("Select a ticket to view details"), ui::colors::TEXT_SECONDARY(), 13, true);
     t->setAlignment(Qt::AlignCenter);
     vl->addWidget(t);
 
-    auto* s = lbl("or create a new support request", ui::colors::TEXT_TERTIARY(), 11, false, true);
+    auto* s = lbl(tr("or create a new support request"), ui::colors::TEXT_TERTIARY(), 11, false, true);
     s->setAlignment(Qt::AlignCenter);
     vl->addWidget(s);
 
     vl->addSpacing(16);
 
-    auto* btn = new QPushButton("＋  Create New Ticket");
+    auto* btn = new QPushButton(tr("＋  Create New Ticket"));
     btn->setFixedSize(200, 36);
     btn->setStyleSheet(SS_BTN_PRIMARY());
     connect(btn, &QPushButton::clicked, this, [this]() { content_stack_->setCurrentIndex(1); });
@@ -175,7 +176,7 @@ QWidget* SupportScreen::build_create_page() {
 
     // Page header
     {
-        auto* cancel_btn = new QPushButton("← Back");
+        auto* cancel_btn = new QPushButton(tr("← Back"));
         cancel_btn->setFlat(true);
         cancel_btn->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:none;"
                                           "font-size:11px;padding:0;%2}"
@@ -185,9 +186,9 @@ QWidget* SupportScreen::build_create_page() {
         vl->addWidget(cancel_btn, 0, Qt::AlignLeft);
         vl->addSpacing(16);
 
-        vl->addWidget(lbl("Create Support Ticket", ui::colors::TEXT_PRIMARY(), 18, true));
+        vl->addWidget(lbl(tr("Create Support Ticket"), ui::colors::TEXT_PRIMARY(), 18, true));
         vl->addSpacing(4);
-        vl->addWidget(lbl("Describe your issue in detail. We typically respond within 24 hours.",
+        vl->addWidget(lbl(tr("Describe your issue in detail. We typically respond within 24 hours."),
                           ui::colors::TEXT_TERTIARY(), 12, false, true));
         vl->addSpacing(24);
     }
@@ -221,10 +222,10 @@ QWidget* SupportScreen::build_create_page() {
     };
 
     subject_input_ = new QLineEdit;
-    subject_input_->setPlaceholderText("Brief summary of your issue");
+    subject_input_->setPlaceholderText(tr("Brief summary of your issue"));
     subject_input_->setFixedHeight(38);
     subject_input_->setStyleSheet(SS_INPUT());
-    add_field("Subject", subject_input_, true);
+    add_field(tr("Subject"), subject_input_, true);
 
     // Category + Priority side by side
     {
@@ -234,7 +235,11 @@ QWidget* SupportScreen::build_create_page() {
         rl->setContentsMargins(0, 0, 0, 0);
         rl->setSpacing(16);
 
-        auto make_combo_field = [&](const QString& label_text, QComboBox*& ref, const QStringList& items, int def = 0) {
+        // Items are stored as (display_text, api_key) pairs so the API receives
+        // a stable English key (e.g. "feature_request") regardless of UI locale.
+        // on_create_ticket() reads currentData() instead of currentText().
+        auto make_combo_field = [&](const QString& label_text, QComboBox*& ref,
+                                    const QList<QPair<QString, QString>>& items, int def = 0) {
             auto* fw = new QWidget(this);
             fw->setStyleSheet("background:transparent;");
             auto* fvl = new QVBoxLayout(fw);
@@ -242,7 +247,8 @@ QWidget* SupportScreen::build_create_page() {
             fvl->setSpacing(6);
             fvl->addWidget(lbl(label_text, ui::colors::TEXT_SECONDARY(), 11, true));
             ref = new QComboBox;
-            ref->addItems(items);
+            for (const auto& [disp, key] : items)
+                ref->addItem(disp, key);
             ref->setCurrentIndex(def);
             ref->setFixedHeight(38);
             ref->setStyleSheet(SS_INPUT());
@@ -250,9 +256,18 @@ QWidget* SupportScreen::build_create_page() {
             rl->addLayout(fvl);
         };
 
-        make_combo_field("Category", category_combo_,
-                         {"Technical", "Billing", "Feature Request", "Bug Report", "Account", "Other"});
-        make_combo_field("Priority", priority_combo_, {"Low", "Medium", "High"}, 1);
+        make_combo_field(tr("Category"), category_combo_,
+                         {{tr("Technical"),       "technical"},
+                          {tr("Billing"),         "billing"},
+                          {tr("Feature Request"), "feature_request"},
+                          {tr("Bug Report"),      "bug_report"},
+                          {tr("Account"),         "account"},
+                          {tr("Other"),           "other"}});
+        make_combo_field(tr("Priority"), priority_combo_,
+                         {{tr("Low"),    "low"},
+                          {tr("Medium"), "medium"},
+                          {tr("High"),   "high"}},
+                         /*def=*/1);
 
         cl->addWidget(row_w);
     }
@@ -260,20 +275,20 @@ QWidget* SupportScreen::build_create_page() {
     // Description with char counter
     {
         auto* hdr = new QHBoxLayout;
-        hdr->addWidget(lbl("Description", ui::colors::TEXT_SECONDARY(), 11, true));
+        hdr->addWidget(lbl(tr("Description"), ui::colors::TEXT_SECONDARY(), 11, true));
         auto* req = lbl("*", ui::colors::AMBER(), 11, true);
         hdr->addWidget(req);
         hdr->addStretch();
-        char_count_lbl_ = lbl("0 / 2000", ui::colors::TEXT_TERTIARY(), 10);
+        char_count_lbl_ = lbl(tr("%1 / 2000").arg(0), ui::colors::TEXT_TERTIARY(), 10);
         hdr->addWidget(char_count_lbl_);
         cl->addLayout(hdr);
 
         desc_input_ = new QTextEdit;
-        desc_input_->setPlaceholderText("Please describe:\n"
-                                        "• What were you doing?\n"
-                                        "• What did you expect to happen?\n"
-                                        "• What actually happened?\n"
-                                        "• Steps to reproduce (if applicable)");
+        desc_input_->setPlaceholderText(tr("Please describe:\n"
+                                           "• What were you doing?\n"
+                                           "• What did you expect to happen?\n"
+                                           "• What actually happened?\n"
+                                           "• Steps to reproduce (if applicable)"));
         desc_input_->setMinimumHeight(160);
         desc_input_->setMaximumHeight(280);
         desc_input_->setStyleSheet(SS_INPUT());
@@ -281,7 +296,7 @@ QWidget* SupportScreen::build_create_page() {
 
         connect(desc_input_, &QTextEdit::textChanged, this, [this]() {
             int n = desc_input_->toPlainText().length();
-            char_count_lbl_->setText(QString("%1 / 2000").arg(n));
+            char_count_lbl_->setText(tr("%1 / 2000").arg(n));
             char_count_lbl_->setStyleSheet(
                 QString("color:%1;font-size:10px;background:transparent;%2")
                     .arg(n > 2000 ? ui::colors::NEGATIVE() : ui::colors::TEXT_TERTIARY(), MF));
@@ -295,14 +310,14 @@ QWidget* SupportScreen::build_create_page() {
     {
         auto* ar = new QHBoxLayout;
 
-        auto* cancel2 = new QPushButton("Cancel");
+        auto* cancel2 = new QPushButton(tr("Cancel"));
         cancel2->setFixedHeight(38);
         cancel2->setStyleSheet(SS_BTN_GHOST());
         connect(cancel2, &QPushButton::clicked, this, [this]() { content_stack_->setCurrentIndex(0); });
         ar->addWidget(cancel2);
         ar->addStretch();
 
-        create_btn_ = new QPushButton("Submit Ticket →");
+        create_btn_ = new QPushButton(tr("Submit Ticket →"));
         create_btn_->setFixedHeight(38);
         create_btn_->setMinimumWidth(160);
         create_btn_->setStyleSheet(SS_BTN_SUCCESS());
@@ -322,16 +337,16 @@ QWidget* SupportScreen::build_create_page() {
         tvl->setContentsMargins(16, 12, 16, 14);
         tvl->setSpacing(8);
 
-        tvl->addWidget(lbl("Tips for a faster response", ui::colors::AMBER(), 11, true));
+        tvl->addWidget(lbl(tr("Tips for a faster response"), ui::colors::AMBER(), 11, true));
         tvl->addWidget(hsep());
 
-        const char* tip_items[] = {
-            "✓  One issue per ticket — easier to track and resolve",
-            "✓  Include your OS, version, and any error messages",
-            "✓  Describe steps to reproduce if it's a bug",
-            "✓  Billing questions resolved within 4 hours",
+        const QString tip_items[] = {
+            tr("✓  One issue per ticket — easier to track and resolve"),
+            tr("✓  Include your OS, version, and any error messages"),
+            tr("✓  Describe steps to reproduce if it's a bug"),
+            tr("✓  Billing questions resolved within 4 hours"),
         };
-        for (const auto* t : tip_items) {
+        for (const auto& t : tip_items) {
             auto* tl = lbl(t, ui::colors::TEXT_SECONDARY(), 11, false, true);
             tvl->addWidget(tl);
         }
@@ -378,14 +393,14 @@ QWidget* SupportScreen::build_detail_page() {
                                               .arg(ui::colors::CYAN(), ui::colors::BG_BASE(), MF));
         hl->addWidget(detail_status_lbl_);
 
-        close_btn_ = new QPushButton("Close Ticket");
+        close_btn_ = new QPushButton(tr("Close Ticket"));
         close_btn_->setFixedHeight(28);
         close_btn_->setStyleSheet(SS_BTN_DANGER());
         close_btn_->hide();
         connect(close_btn_, &QPushButton::clicked, this, &SupportScreen::on_close_ticket);
         hl->addWidget(close_btn_);
 
-        reopen_btn_ = new QPushButton("Reopen");
+        reopen_btn_ = new QPushButton(tr("Reopen"));
         reopen_btn_->setFixedHeight(28);
         reopen_btn_->setStyleSheet(SS_BTN_OUTLINE());
         reopen_btn_->hide();
@@ -446,10 +461,10 @@ QWidget* SupportScreen::build_detail_page() {
         dbl->setContentsMargins(20, 12, 20, 12);
         auto* di = lbl("ℹ", ui::colors::INFO(), 14);
         dbl->addWidget(di);
-        auto* dt = lbl("This is a demo ticket. Open a real ticket to get support from our team.",
+        auto* dt = lbl(tr("This is a demo ticket. Open a real ticket to get support from our team."),
                        ui::colors::TEXT_SECONDARY(), 11, false, true);
         dbl->addWidget(dt, 1);
-        auto* db = new QPushButton("New Ticket");
+        auto* db = new QPushButton(tr("New Ticket"));
         db->setFixedHeight(28);
         db->setStyleSheet(SS_BTN_PRIMARY());
         connect(db, &QPushButton::clicked, this, [this]() { content_stack_->setCurrentIndex(1); });
@@ -463,7 +478,7 @@ QWidget* SupportScreen::build_detail_page() {
             QString("background:%1;border-top:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         auto* cbl = new QHBoxLayout(closed_box_);
         cbl->setContentsMargins(20, 12, 20, 12);
-        cbl->addWidget(lbl("✓  This ticket is closed.", ui::colors::POSITIVE(), 11));
+        cbl->addWidget(lbl(tr("✓  This ticket is closed."), ui::colors::POSITIVE(), 11));
         cbl->addStretch();
         closed_box_->hide();
         root_vl->addWidget(closed_box_);
@@ -477,20 +492,20 @@ QWidget* SupportScreen::build_detail_page() {
         rbl->setSpacing(10);
 
         auto* reply_hdr = new QHBoxLayout;
-        reply_hdr->addWidget(lbl("Reply", ui::colors::TEXT_PRIMARY(), 12, true));
+        reply_hdr->addWidget(lbl(tr("Reply"), ui::colors::TEXT_PRIMARY(), 12, true));
         reply_hdr->addStretch();
-        reply_hdr->addWidget(lbl("Ctrl+Enter to send", ui::colors::TEXT_TERTIARY(), 10));
+        reply_hdr->addWidget(lbl(tr("Ctrl+Enter to send"), ui::colors::TEXT_TERTIARY(), 10));
         rbl->addLayout(reply_hdr);
 
         msg_input_ = new QTextEdit;
-        msg_input_->setPlaceholderText("Type your reply…");
+        msg_input_->setPlaceholderText(tr("Type your reply…"));
         msg_input_->setFixedHeight(80);
         msg_input_->setStyleSheet(SS_INPUT());
         rbl->addWidget(msg_input_);
 
         auto* send_row = new QHBoxLayout;
         send_row->addStretch();
-        send_btn_ = new QPushButton("Send Reply →");
+        send_btn_ = new QPushButton(tr("Send Reply →"));
         send_btn_->setFixedHeight(34);
         send_btn_->setMinimumWidth(140);
         send_btn_->setStyleSheet(SS_BTN_SUCCESS());
@@ -527,7 +542,7 @@ void SupportScreen::set_busy(bool busy) {
     status_dot_->setStyleSheet(QString("color:%1;font-size:10px;background:transparent;").arg(col));
     status_lbl_->setStyleSheet(
         QString("color:%1;font-size:11px;font-weight:600;background:transparent;%2").arg(col, MF));
-    status_lbl_->setText(busy ? "Updating…" : "Ready");
+    status_lbl_->setText(busy ? tr("Updating…") : tr("Ready"));
     refresh_btn_->setEnabled(!busy);
     if (create_btn_)
         create_btn_->setEnabled(!busy);

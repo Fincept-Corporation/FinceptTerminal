@@ -10,6 +10,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QDesktopServices>
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
@@ -31,10 +32,18 @@ using namespace fincept::ui;
 GovDataHKPanel::GovDataHKPanel(QWidget* parent) : QWidget(parent) {
     setStyleSheet(make_gov_panel_style(kGovDataHKColor));
     build_ui();
+    retranslateUi();
     connect(&services::GovDataService::instance(), &services::GovDataService::result_ready, this,
             &GovDataHKPanel::on_result);
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this]() { setStyleSheet(make_gov_panel_style(kGovDataHKColor)); });
+}
+
+void GovDataHKPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
 }
 
 // ── Build UI ──────────────────────────────────────────────────────────────────
@@ -53,7 +62,7 @@ void GovDataHKPanel::build_ui() {
     auto* bcl = new QHBoxLayout(breadcrumb_);
     bcl->setContentsMargins(14, 0, 14, 0);
     bcl->setSpacing(4);
-    breadcrumb_label_ = new QLabel("Categories");
+    breadcrumb_label_ = new QLabel;
     breadcrumb_label_->setObjectName("govBreadcrumbText");
     bcl->addWidget(breadcrumb_label_);
     bcl->addStretch(1);
@@ -65,19 +74,17 @@ void GovDataHKPanel::build_ui() {
     // Content stack
     content_stack_ = new QStackedWidget;
 
-    // Page 0 — Categories table (1 col, no dataset count — always -1 from HK API)
+    // Page 0 — Categories table (1 col, no dataset count — always -1 from HK API; header set in retranslateUi)
     categories_table_ = new QTableWidget;
     categories_table_->setColumnCount(1);
-    categories_table_->setHorizontalHeaderLabels({"CATEGORY"});
     categories_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     configure_table(categories_table_);
     connect(categories_table_, &QTableWidget::cellDoubleClicked, this, &GovDataHKPanel::on_category_clicked);
     content_stack_->addWidget(categories_table_); // index 0
 
-    // Page 1 — Datasets table
+    // Page 1 — Datasets table (headers set in retranslateUi)
     datasets_table_ = new QTableWidget;
     datasets_table_->setColumnCount(3);
-    datasets_table_->setHorizontalHeaderLabels({"TITLE", "RESOURCES", "MODIFIED"});
     datasets_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     datasets_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     datasets_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
@@ -87,10 +94,9 @@ void GovDataHKPanel::build_ui() {
     connect(datasets_table_, &QTableWidget::cellDoubleClicked, this, &GovDataHKPanel::on_dataset_clicked);
     content_stack_->addWidget(datasets_table_); // index 1
 
-    // Page 2 — Resources table
+    // Page 2 — Resources table (headers set in retranslateUi)
     resources_table_ = new QTableWidget;
     resources_table_->setColumnCount(3);
-    resources_table_->setHorizontalHeaderLabels({"NAME", "FORMAT", "MODIFIED"});
     resources_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     resources_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     resources_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
@@ -139,7 +145,7 @@ QWidget* GovDataHKPanel::build_toolbar() {
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(5);
 
-    back_btn_ = new QPushButton("← BACK");
+    back_btn_ = new QPushButton;
     back_btn_->setObjectName("govBackBtn");
     back_btn_->setVisible(false);
     back_btn_->setCursor(Qt::PointingHandCursor);
@@ -148,7 +154,7 @@ QWidget* GovDataHKPanel::build_toolbar() {
 
     hl->addSpacing(4);
 
-    categories_btn_ = new QPushButton("CATEGORIES");
+    categories_btn_ = new QPushButton;
     categories_btn_->setObjectName("govTabBtn");
     categories_btn_->setCheckable(true);
     categories_btn_->setChecked(true);
@@ -156,7 +162,7 @@ QWidget* GovDataHKPanel::build_toolbar() {
     connect(categories_btn_, &QPushButton::clicked, this, [this]() { on_tab_changed(Categories); });
     hl->addWidget(categories_btn_);
 
-    datasets_btn_ = new QPushButton("DATASETS");
+    datasets_btn_ = new QPushButton;
     datasets_btn_->setObjectName("govTabBtn");
     datasets_btn_->setCheckable(true);
     datasets_btn_->setCursor(Qt::PointingHandCursor);
@@ -167,13 +173,12 @@ QWidget* GovDataHKPanel::build_toolbar() {
 
     search_input_ = new QLineEdit;
     search_input_->setObjectName("govSearch");
-    search_input_->setPlaceholderText("Filter datasets…");
     search_input_->setFixedWidth(210);
     search_input_->setFixedHeight(26);
     connect(search_input_, &QLineEdit::returnPressed, this, &GovDataHKPanel::on_fetch);
     hl->addWidget(search_input_);
 
-    fetch_btn_ = new QPushButton("FETCH");
+    fetch_btn_ = new QPushButton;
     fetch_btn_->setObjectName("govFetchBtn");
     fetch_btn_->setCursor(Qt::PointingHandCursor);
     connect(fetch_btn_, &QPushButton::clicked, this, &GovDataHKPanel::on_fetch);
@@ -181,7 +186,7 @@ QWidget* GovDataHKPanel::build_toolbar() {
 
     hl->addStretch(1);
 
-    export_btn_ = new QPushButton("CSV");
+    export_btn_ = new QPushButton;
     export_btn_->setObjectName("govCsvBtn");
     export_btn_->setCursor(Qt::PointingHandCursor);
     connect(export_btn_, &QPushButton::clicked, this, &GovDataHKPanel::on_export_csv);
@@ -190,10 +195,27 @@ QWidget* GovDataHKPanel::build_toolbar() {
     return bar;
 }
 
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void GovDataHKPanel::retranslateUi() {
+    if (back_btn_)       back_btn_->setText(tr("← BACK"));
+    if (categories_btn_) categories_btn_->setText(tr("CATEGORIES"));
+    if (datasets_btn_)   datasets_btn_->setText(tr("DATASETS"));
+    if (fetch_btn_)      fetch_btn_->setText(tr("FETCH"));
+    if (export_btn_)     export_btn_->setText(tr("CSV"));
+    if (search_input_)   search_input_->setPlaceholderText(tr("Filter datasets…"));
+
+    if (categories_table_) categories_table_->setHorizontalHeaderLabels({tr("CATEGORY")});
+    if (datasets_table_)
+        datasets_table_->setHorizontalHeaderLabels({tr("TITLE"), tr("RESOURCES"), tr("MODIFIED")});
+    if (resources_table_)
+        resources_table_->setHorizontalHeaderLabels({tr("NAME"), tr("FORMAT"), tr("MODIFIED")});
+}
+
 // ── Public slot ───────────────────────────────────────────────────────────────
 
 void GovDataHKPanel::load_initial_data() {
-    show_loading("Loading categories from data.gov.hk…");
+    show_loading(tr("Loading categories from data.gov.hk…"));
     services::GovDataService::instance().execute(kGovDataHKScript, "publishers", {}, "hk_categories");
 }
 
@@ -211,18 +233,18 @@ void GovDataHKPanel::on_tab_changed(int tab_index) {
             load_initial_data();
         else {
             content_stack_->setCurrentIndex(Categories);
-            row_count_label_->setText(QString::number(current_categories_.size()) + " categories");
+            row_count_label_->setText(tr("%1 categories").arg(current_categories_.size()));
         }
-        update_breadcrumb("Categories");
+        update_breadcrumb(tr("Categories"));
     } else if (view == Datasets) {
         if (current_datasets_.isEmpty())
-            show_status("Double-click a category to load datasets, "
-                        "or type a filter term above and click FETCH.");
+            show_status(tr("Double-click a category to load datasets, "
+                           "or type a filter term above and click FETCH."));
         else {
             content_stack_->setCurrentIndex(Datasets);
-            row_count_label_->setText(QString::number(current_datasets_.size()) + " datasets");
+            row_count_label_->setText(tr("%1 datasets").arg(current_datasets_.size()));
         }
-        update_breadcrumb("Datasets");
+        update_breadcrumb(tr("Datasets"));
     }
 
     update_toolbar_state();
@@ -235,7 +257,7 @@ void GovDataHKPanel::on_fetch() {
     // (HK has no text search endpoint)
     if (!query.isEmpty()) {
         if (all_dataset_names_.isEmpty()) {
-            show_loading("Loading full dataset list for filtering…");
+            show_loading(tr("Loading full dataset list for filtering…"));
             // Store query so we can filter after datasets_list returns
             services::GovDataService::instance().execute(kGovDataHKScript, "datasets_list", {}, "hk_datasets_list");
         } else {
@@ -252,8 +274,8 @@ void GovDataHKPanel::on_fetch() {
         categories_btn_->setChecked(true);
         datasets_btn_->setChecked(false);
         content_stack_->setCurrentIndex(Categories);
-        update_breadcrumb("Categories");
-        row_count_label_->setText(QString::number(current_categories_.size()) + " categories");
+        update_breadcrumb(tr("Categories"));
+        row_count_label_->setText(tr("%1 categories").arg(current_categories_.size()));
         update_toolbar_state();
     }
 }
@@ -275,10 +297,8 @@ void GovDataHKPanel::filter_datasets_list(const QString& query) {
     }
 
     if (filtered.isEmpty()) {
-        show_status("No datasets matched "
-                    " + query + "
-                    " in the HK catalogue.\n"
-                    "HK DATA — Categories may have limited datasets");
+        show_status(tr("No datasets matched \"%1\" in the HK catalogue.\n"
+                       "HK DATA — Categories may have limited datasets").arg(query));
         return;
     }
 
@@ -288,10 +308,8 @@ void GovDataHKPanel::filter_datasets_list(const QString& query) {
     categories_btn_->setChecked(false);
     datasets_btn_->setChecked(true);
     content_stack_->setCurrentIndex(Datasets);
-    update_breadcrumb("Datasets  ›  Filter: "
-                      " + query + "
-                      "");
-    row_count_label_->setText(QString::number(filtered.size()) + " matched");
+    update_breadcrumb(tr("Datasets  ›  Filter: \"%1\"").arg(query));
+    row_count_label_->setText(tr("%1 matched").arg(filtered.size()));
     update_toolbar_state();
 }
 
@@ -302,9 +320,7 @@ void GovDataHKPanel::on_category_clicked(int row) {
     selected_category_id_ = item->data(Qt::UserRole).toString();
     selected_category_name_ = item->text();
 
-    show_loading("Loading datasets for "
-                 " + selected_category_name_ + "
-                 "…");
+    show_loading(tr("Loading datasets for \"%1\"…").arg(selected_category_name_));
     services::GovDataService::instance().execute(kGovDataHKScript, "datasets", {selected_category_id_, "100"},
                                                  "hk_datasets");
 }
@@ -317,7 +333,7 @@ void GovDataHKPanel::on_dataset_clicked(int row) {
     if (selected_dataset_id_.isEmpty())
         return;
 
-    show_loading("Loading resources…");
+    show_loading(tr("Loading resources…"));
     services::GovDataService::instance().execute(kGovDataHKScript, "resources", {selected_dataset_id_}, "hk_resources");
 }
 
@@ -325,8 +341,8 @@ void GovDataHKPanel::on_back() {
     if (current_view_ == Resources) {
         content_stack_->setCurrentIndex(Datasets);
         current_view_ = Datasets;
-        row_count_label_->setText(QString::number(current_datasets_.size()) + " datasets");
-        update_breadcrumb("Datasets  ›  " + selected_category_name_);
+        row_count_label_->setText(tr("%1 datasets").arg(current_datasets_.size()));
+        update_breadcrumb(tr("Datasets  ›  %1").arg(selected_category_name_));
     } else if (current_view_ == Datasets) {
         content_stack_->setCurrentIndex(Categories);
         current_view_ = Categories;
@@ -334,8 +350,8 @@ void GovDataHKPanel::on_back() {
         datasets_btn_->setChecked(false);
         selected_category_id_.clear();
         selected_category_name_.clear();
-        row_count_label_->setText(QString::number(current_categories_.size()) + " categories");
-        update_breadcrumb("Categories");
+        row_count_label_->setText(tr("%1 categories").arg(current_categories_.size()));
+        update_breadcrumb(tr("Categories"));
     }
     update_toolbar_state();
 }
@@ -368,20 +384,16 @@ void GovDataHKPanel::on_result(const QString& request_id, const services::GovDat
         categories_btn_->setChecked(true);
         datasets_btn_->setChecked(false);
         content_stack_->setCurrentIndex(Categories);
-        update_breadcrumb("Categories");
-        row_count_label_->setText(QString::number(payload.size()) + " categories");
+        update_breadcrumb(tr("Categories"));
+        row_count_label_->setText(tr("%1 categories").arg(payload.size()));
 
     } else if (request_id == "hk_datasets") {
         if (payload.isEmpty()) {
             // HK category_datasets frequently returns empty — show note
-            show_status("HK DATA — Categories may have limited datasets\n\n"
-                        "No datasets found for "
-                        " + selected_category_name_ + "
-                        ".\n"
-                        "Try searching by name using the search box above.");
-            LOG_WARN("GovHK", "Category "
-                              " + selected_category_id_ + "
-                              " returned 0 datasets");
+            show_status(tr("HK DATA — Categories may have limited datasets\n\n"
+                           "No datasets found for \"%1\".\n"
+                           "Try searching by name using the search box above.").arg(selected_category_name_));
+            LOG_WARN("GovHK", "Category " + selected_category_id_ + " returned 0 datasets");
             return;
         }
         current_datasets_ = payload;
@@ -394,8 +406,8 @@ void GovDataHKPanel::on_result(const QString& request_id, const services::GovDat
         int total = result.data["metadata"].toObject()["total_count"].toInt(0);
         if (total == 0)
             total = payload.size();
-        update_breadcrumb("Datasets  ›  " + selected_category_name_);
-        row_count_label_->setText(QString("Showing %1 of %2").arg(payload.size()).arg(total));
+        update_breadcrumb(tr("Datasets  ›  %1").arg(selected_category_name_));
+        row_count_label_->setText(tr("Showing %1 of %2").arg(payload.size()).arg(total));
 
     } else if (request_id == "hk_datasets_list") {
         // Full dataset name list for client-side search
@@ -404,15 +416,15 @@ void GovDataHKPanel::on_result(const QString& request_id, const services::GovDat
         if (!query.isEmpty())
             filter_datasets_list(query);
         else
-            show_status("Dataset list loaded. Type a search term and click FETCH.");
+            show_status(tr("Dataset list loaded. Type a search term and click FETCH."));
 
     } else if (request_id == "hk_resources") {
         current_resources_ = payload;
         populate_resources(payload);
         current_view_ = Resources;
         content_stack_->setCurrentIndex(Resources);
-        update_breadcrumb("Datasets  ›  Resources");
-        row_count_label_->setText(QString::number(payload.size()) + " files");
+        update_breadcrumb(tr("Datasets  ›  Resources"));
+        row_count_label_->setText(tr("%1 files").arg(payload.size()));
     }
 
     update_toolbar_state();
@@ -502,7 +514,7 @@ void GovDataHKPanel::populate_resources(const QJsonArray& json) {
         auto* mod_item = new QTableWidgetItem(modified.isEmpty() ? "—" : modified);
         mod_item->setData(Qt::UserRole, url);
         if (!url.isEmpty()) {
-            mod_item->setText("↗ OPEN");
+            mod_item->setText(tr("↗ OPEN"));
             mod_item->setForeground(QColor(kGovDataHKColor));
             mod_item->setTextAlignment(Qt::AlignCenter);
         }
@@ -522,7 +534,7 @@ void GovDataHKPanel::show_loading(const QString& message) {
 
 void GovDataHKPanel::show_error(const QString& message) {
     status_label_->setStyleSheet(QString("color:%1; font-size:12px; background:transparent;").arg(colors::NEGATIVE()));
-    status_label_->setText("Error: " + message);
+    status_label_->setText(tr("Error: %1").arg(message));
     content_stack_->setCurrentIndex(Status);
     LOG_ERROR("GovHK", message);
 }

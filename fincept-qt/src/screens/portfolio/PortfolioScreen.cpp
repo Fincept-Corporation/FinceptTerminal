@@ -29,6 +29,7 @@
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QFileDialog>
 #include <QFrame>
 #include <QGraphicsOpacityEffect>
@@ -146,6 +147,47 @@ void PortfolioScreen::hideEvent(QHideEvent* event) {
 
 // ── Slots ────────────────────────────────────────────────────────────────────
 
+
+void PortfolioScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PortfolioScreen::retranslateUi() {
+    // PortfolioScreen owns the empty/loading state labels and the POSITIONS
+    // header. Child widgets (command bar, stats ribbon, etc.) handle their
+    // own retranslate via QEvent::LanguageChange delivered to each top-level
+    // widget by Qt.
+
+    if (empty_title_label_)
+        empty_title_label_->setText(tr("PORTFOLIO WORKSPACE"));
+    if (empty_sub_label_)
+        empty_sub_label_->setText(tr("Create, import, or explore a sample portfolio to get started."));
+
+    if (empty_create_card_.title)
+        empty_create_card_.title->setText(tr("CREATE NEW"));
+    if (empty_create_card_.subtitle)
+        empty_create_card_.subtitle->setText(tr("Start a fresh portfolio. Name it, pick a currency, "
+                                                "and add holdings one at a time."));
+    if (empty_import_card_.title)
+        empty_import_card_.title->setText(tr("IMPORT JSON"));
+    if (empty_import_card_.subtitle)
+        empty_import_card_.subtitle->setText(tr("Load an existing portfolio from an exported JSON file. "
+                                                "Merge into an existing portfolio or create a new one."));
+    if (empty_demo_card_.title)
+        empty_demo_card_.title->setText(tr("LOAD DEMO"));
+    if (empty_demo_card_.subtitle)
+        empty_demo_card_.subtitle->setText(tr("Preview the workspace with a sample diversified portfolio "
+                                              "of 12 major equities."));
+
+    if (loading_label_)
+        loading_label_->setText(tr("Loading portfolio data…"));
+    if (positions_title_label_)
+        positions_title_label_->setText(tr("POSITIONS"));
+    if (positions_filter_edit_)
+        positions_filter_edit_->setPlaceholderText(tr("Filter positions…"));
+}
 
 void PortfolioScreen::refresh_theme() {
     setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));

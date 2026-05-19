@@ -17,6 +17,7 @@
 
 #include <QApplication>
 #include <QCloseEvent>
+#include <QEvent>
 #include <QFileInfo>
 #include <QFrame>
 #include <QGridLayout>
@@ -51,7 +52,7 @@ LaunchpadScreen* LaunchpadScreen::instance() {
 }
 
 LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
-    setWindowTitle("Fincept Launchpad");
+    setWindowTitle(tr("Fincept Launchpad"));
     setMinimumSize(480, 320);
     resize(480, 320);
 
@@ -60,24 +61,22 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(16);
 
-    const QString profile = ProfileManager::instance().active();
-    greeting_ = new QLabel(QString("Profile: %1").arg(profile));
+    // Greeting text is set by retranslateUi() — it interpolates the active
+    // profile name, which can also change at runtime via surface().
+    greeting_ = new QLabel;
     greeting_->setStyleSheet("font-size: 14px; color: #d97706; font-weight: 600;");
     vl->addWidget(greeting_);
 
-    auto* sub = new QLabel(
-        "All windows closed. Open a new window or pick a layout below.");
-    sub->setStyleSheet("font-size: 11px; color: #9ca3af;");
-    sub->setWordWrap(true);
-    vl->addWidget(sub);
+    sub_label_ = new QLabel;
+    sub_label_->setStyleSheet("font-size: 11px; color: #9ca3af;");
+    sub_label_->setWordWrap(true);
+    vl->addWidget(sub_label_);
 
     // L8: crash recovery banner. Shown only when TerminalShell latched
     // started_after_crash at boot. Encourages the user to use Continue (which
     // restores the most recent auto-snapshot from the moments before the
     // crash). Auto-hides on the first navigation away from the Launchpad.
-    crash_banner_ = new QLabel(
-        "Last session ended unexpectedly — your work was auto-saved. "
-        "Click \"Continue from last session\" to restore.");
+    crash_banner_ = new QLabel;
     crash_banner_->setVisible(false);
     crash_banner_->setWordWrap(true);
     crash_banner_->setObjectName("launchpadCrashBanner");
@@ -92,7 +91,7 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     // "Continue from last session" — the most-common user intent on relaunch.
     // One click restores the most-recent saved or auto-snapshot layout.
     // Hidden when nothing restorable exists (first run / fresh profile).
-    btn_continue_ = new QPushButton("Continue from last session");
+    btn_continue_ = new QPushButton;
     btn_continue_->setMinimumHeight(48);
     btn_continue_->setObjectName("launchpadContinueBtn");
     btn_continue_->setStyleSheet(
@@ -105,12 +104,12 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     connect(btn_continue_, &QPushButton::clicked, this, &LaunchpadScreen::on_continue);
     vl->addWidget(btn_continue_);
 
-    btn_new_window_ = new QPushButton("New Window");
+    btn_new_window_ = new QPushButton;
     btn_new_window_->setMinimumHeight(36);
     connect(btn_new_window_, &QPushButton::clicked, this, &LaunchpadScreen::on_new_window);
     vl->addWidget(btn_new_window_);
 
-    btn_open_layout_ = new QPushButton("Open Saved Layout…");
+    btn_open_layout_ = new QPushButton;
     btn_open_layout_->setMinimumHeight(36);
     // Enabled state is driven by refresh_recent_layouts() based on whether
     // any saved layouts exist.
@@ -118,12 +117,12 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     connect(btn_open_layout_, &QPushButton::clicked, this, &LaunchpadScreen::on_open_layout);
     vl->addWidget(btn_open_layout_);
 
-    btn_switch_profile_ = new QPushButton("Switch Profile…");
+    btn_switch_profile_ = new QPushButton;
     btn_switch_profile_->setMinimumHeight(36);
     connect(btn_switch_profile_, &QPushButton::clicked, this, &LaunchpadScreen::on_switch_profile);
     vl->addWidget(btn_switch_profile_);
 
-    recent_label_ = new QLabel("Recent Layouts");
+    recent_label_ = new QLabel;
     recent_label_->setStyleSheet("font-size: 11px; color: #9ca3af; margin-top: 8px;");
     vl->addWidget(recent_label_);
 
@@ -131,7 +130,7 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     // by eventFilter() and forwarded to recent_layouts_ / on_open_layout /
     // close so the user can keep their hands on the keyboard.
     filter_edit_ = new QLineEdit;
-    filter_edit_->setPlaceholderText("Type to filter layouts…");
+    filter_edit_->setPlaceholderText(tr("Type to filter layouts…"));
     filter_edit_->setClearButtonEnabled(true);
     filter_edit_->setStyleSheet(
         "QLineEdit { background: #111827; border: 1px solid #374151;"
@@ -174,9 +173,9 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     picker_root->setContentsMargins(0, 0, 0, 0);
     picker_root->setSpacing(8);
 
-    auto* picker_label = new QLabel("Pick a starting template:");
-    picker_label->setStyleSheet("font-size: 11px; color: #9ca3af; margin-top: 8px;");
-    picker_root->addWidget(picker_label);
+    template_picker_label_ = new QLabel;
+    template_picker_label_->setStyleSheet("font-size: 11px; color: #9ca3af; margin-top: 8px;");
+    picker_root->addWidget(template_picker_label_);
 
     auto* grid = new QGridLayout;
     grid->setHorizontalSpacing(8);
@@ -205,6 +204,8 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
 
     setCentralWidget(central);
 
+    retranslateUi();
+
     // Centre on the primary screen at construction so the user always
     // sees the launchpad in the middle of their main display.
     if (auto* primary = QGuiApplication::primaryScreen()) {
@@ -213,12 +214,53 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     }
 }
 
+// ── Re-translation ────────────────────────────────────────────────────────────
+// The Launchpad is a singleton that persists for the whole session, so it can
+// outlive a language change made from inside a WindowFrame. retranslateUi()
+// sets every cached static string; surface() invokes refresh_recent_layouts()
+// which rebuilds the list rows, so dynamic content picks up new text too.
+
+void LaunchpadScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+        // Rebuild the recent-layouts list so its "no saved layouts yet"
+        // placeholder (and any future translated parts) re-render.
+        refresh_recent_layouts();
+    }
+    QMainWindow::changeEvent(event);
+}
+
+void LaunchpadScreen::retranslateUi() {
+    setWindowTitle(tr("Fincept Launchpad"));
+
+    if (greeting_) {
+        const QString profile = ProfileManager::instance().active();
+        greeting_->setText(tr("Profile: %1").arg(profile));
+    }
+    if (sub_label_)
+        sub_label_->setText(tr("All windows closed. Open a new window or pick a layout below."));
+    if (crash_banner_)
+        crash_banner_->setText(
+            tr("Last session ended unexpectedly — your work was auto-saved. "
+               "Click \"Continue from last session\" to restore."));
+
+    if (btn_continue_)       btn_continue_->setText(tr("Continue from last session"));
+    if (btn_new_window_)     btn_new_window_->setText(tr("New Window"));
+    if (btn_open_layout_)    btn_open_layout_->setText(tr("Open Saved Layout…"));
+    if (btn_switch_profile_) btn_switch_profile_->setText(tr("Switch Profile…"));
+
+    if (recent_label_) recent_label_->setText(tr("Recent Layouts"));
+    if (filter_edit_)  filter_edit_->setPlaceholderText(tr("Type to filter layouts…"));
+    if (template_picker_label_)
+        template_picker_label_->setText(tr("Pick a starting template:"));
+}
+
 void LaunchpadScreen::surface() {
     // Profile may have changed since construction (Switch Profile relaunches
     // a new process today, but this keeps the label honest if that ever
     // becomes in-process). Cheap to refresh on every surface.
     if (greeting_)
-        greeting_->setText(QString("Profile: %1").arg(ProfileManager::instance().active()));
+        greeting_->setText(tr("Profile: %1").arg(ProfileManager::instance().active()));
 
     if (isVisible() && !isMinimized()) {
         raise();
@@ -308,10 +350,12 @@ void LaunchpadScreen::on_switch_profile() {
     // falls through to a text prompt.
     LOG_INFO(kLaunchpadTag, "Switch Profile button clicked");
 
-    static const QString kCreateNew = QStringLiteral("+ Create new profile…");
+    // "Create new" entry is identified by data role rather than string
+    // comparison so the sentinel works regardless of UI language.
+    const QString create_new_label = tr("+ Create new profile…");
     QStringList items = ProfileManager::instance().list_profiles();
     items.removeDuplicates();
-    items.append(kCreateNew);
+    items.append(create_new_label);
 
     const QString current = ProfileManager::instance().active();
     int current_idx = items.indexOf(current);
@@ -319,16 +363,16 @@ void LaunchpadScreen::on_switch_profile() {
 
     bool ok = false;
     const QString picked = QInputDialog::getItem(
-        this, "Switch Profile", "Pick a profile or create one:",
+        this, tr("Switch Profile"), tr("Pick a profile or create one:"),
         items, current_idx, /*editable=*/false, &ok);
     if (!ok)
         return;
 
     QString target = picked;
-    if (picked == kCreateNew) {
+    if (picked == create_new_label) {
         bool name_ok = false;
         target = QInputDialog::getText(
-            this, "Create Profile", "New profile name:",
+            this, tr("Create Profile"), tr("New profile name:"),
             QLineEdit::Normal, QString(), &name_ok).trimmed();
         if (!name_ok || target.isEmpty())
             return;
@@ -392,7 +436,8 @@ void LaunchpadScreen::refresh_recent_layouts() {
     // user wants to see saved/named layouts here, not the snapshot.
     auto r = LayoutCatalog::instance().recent_layouts(/*limit=*/8, /*include_auto=*/false);
     if (r.is_err() || r.value().isEmpty()) {
-        auto* item = new QListWidgetItem("(No saved layouts yet — use 'layout save \"<name>\"' to save the current state)");
+        auto* item = new QListWidgetItem(
+            tr("(No saved layouts yet — use 'layout save \"<name>\"' to save the current state)"));
         item->setFlags(Qt::NoItemFlags);
         recent_layouts_->addItem(item);
         // Enable the "Open Saved Layout" button if there are any layouts

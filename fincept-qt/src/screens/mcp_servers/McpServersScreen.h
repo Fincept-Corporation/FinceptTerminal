@@ -27,6 +27,7 @@ class McpServersScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_view_changed(int view);
@@ -55,6 +56,12 @@ class McpServersScreen : public QWidget, public IStatefulScreen {
     void refresh_tools();
     void update_status_bar();
 
+    /// Re-apply translated text to cached static-chrome widgets, then trigger
+    /// the active view's refresh helper so dynamically-built cards/rows pick
+    /// up the new language too. Called from the constructor and on every
+    /// QEvent::LanguageChange.
+    void retranslateUi();
+
     /// Builds a self-contained server card for the Installed view.
     QWidget* build_server_card(const fincept::mcp::McpServerConfig& s);
 
@@ -64,6 +71,7 @@ class McpServersScreen : public QWidget, public IStatefulScreen {
     QString selected_server_id_;
 
     // Header
+    QLabel* header_title_ = nullptr;
     QList<QPushButton*> view_btns_;
     QLineEdit* search_input_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;
@@ -72,7 +80,8 @@ class McpServersScreen : public QWidget, public IStatefulScreen {
     QStackedWidget* view_stack_ = nullptr;
 
     // Marketplace
-    QListWidget* mkt_cat_list_ = nullptr; // category sidebar
+    QLabel* cat_header_lbl_ = nullptr;    // "CATEGORY" sidebar header
+    QListWidget* mkt_cat_list_ = nullptr; // category sidebar (display text re-set in retranslateUi, API key in UserRole)
     QWidget* mkt_cards_widget_ = nullptr;
     QVBoxLayout* mkt_cards_layout_ = nullptr;
 
@@ -82,10 +91,12 @@ class McpServersScreen : public QWidget, public IStatefulScreen {
     QPushButton* add_server_btn_ = nullptr;
 
     // Tools
+    QLabel* tools_toolbar_lbl_ = nullptr;
     QTableWidget* tools_table_ = nullptr;
     QLabel* tools_count_ = nullptr;
 
     // Status bar
+    QLabel* status_screen_lbl_ = nullptr;
     QLabel* status_view_ = nullptr;
     QLabel* status_count_ = nullptr;
     QLabel* status_running_ = nullptr;

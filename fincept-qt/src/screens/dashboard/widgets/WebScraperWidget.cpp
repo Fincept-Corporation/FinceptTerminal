@@ -176,7 +176,7 @@ QJsonValue walk_json_path(const QJsonValue& root, const QString& dotted) {
 // ─── ctor / dtor ──────────────────────────────────────────────────────────
 
 WebScraperWidget::WebScraperWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget("WEB SCRAPER", parent) {
+    : BaseWidget(tr("WEB SCRAPER"), parent) {
     net_ = new QNetworkAccessManager(this);
     connect(net_, &QNetworkAccessManager::finished, this, &WebScraperWidget::handle_reply);
 
@@ -223,7 +223,7 @@ void WebScraperWidget::build_ui() {
             &WebScraperWidget::on_table_selected);
     header_row->addWidget(table_combo_, 1);
 
-    status_label_ = new QLabel("Configure a URL via the gear icon");
+    status_label_ = new QLabel(tr("Configure a URL via the gear icon"));
     status_label_->setObjectName("scraperStatus");
     status_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     header_row->addWidget(status_label_, 2);
@@ -297,7 +297,7 @@ void WebScraperWidget::apply_config(const QJsonObject& cfg) {
     if (!url_.isEmpty() && isVisible())
         start_fetch();
     else if (url_.isEmpty())
-        set_status("Configure a URL via the gear icon");
+        set_status(tr("Configure a URL via the gear icon"));
 }
 
 void WebScraperWidget::apply_timer_state() {
@@ -341,7 +341,7 @@ void WebScraperWidget::on_auto_refresh_tick() {
 void WebScraperWidget::start_fetch() {
     const QUrl url(url_);
     if (!url.isValid() || url.scheme().isEmpty()) {
-        set_status("Invalid URL", true);
+        set_status(tr("Invalid URL"), true);
         return;
     }
     if (pending_reply_) {
@@ -351,7 +351,7 @@ void WebScraperWidget::start_fetch() {
     }
 
     set_loading(true);
-    set_status("Fetching…");
+    set_status(tr("Fetching…"));
 
     QNetworkRequest req(url);
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
@@ -374,14 +374,14 @@ void WebScraperWidget::handle_reply(QNetworkReply* reply) {
     set_loading(false);
 
     if (reply->error() != QNetworkReply::NoError) {
-        set_status(QString("Fetch failed: %1").arg(reply->errorString()), true);
+        set_status(tr("Fetch failed: %1").arg(reply->errorString()), true);
         LOG_WARN("WebScraper", QString("Fetch %1 failed: %2").arg(url_, reply->errorString()));
         return;
     }
 
     const QByteArray body = reply->readAll();
     if (body.isEmpty()) {
-        set_status("Empty response", true);
+        set_status(tr("Empty response"), true);
         return;
     }
     const QString ct = reply->header(QNetworkRequest::ContentTypeHeader).toString();
@@ -475,15 +475,15 @@ void WebScraperWidget::parse_payload(const QByteArray& body, const QString& cont
     QSignalBlocker block(table_combo_);
     table_combo_->clear();
     for (int i = 0; i < tables_.size(); ++i)
-        table_combo_->addItem(QString("%1 (%2 rows)")
-                                  .arg(tables_[i].label.isEmpty() ? QString("Table %1").arg(i + 1)
+        table_combo_->addItem(tr("%1 (%2 rows)")
+                                  .arg(tables_[i].label.isEmpty() ? tr("Table %1").arg(i + 1)
                                                                    : tables_[i].label)
                                   .arg(tables_[i].rows.size()));
     if (tables_.isEmpty()) {
         table_combo_->setEnabled(false);
         table_->clear_data();
         table_->set_headers({});
-        set_status("No tabular data found — site may require JavaScript. Try its JSON API URL instead.",
+        set_status(tr("No tabular data found — site may require JavaScript. Try its JSON API URL instead."),
                    true);
         return;
     }
@@ -492,7 +492,7 @@ void WebScraperWidget::parse_payload(const QByteArray& body, const QString& cont
     table_index_ = idx;
     table_combo_->setCurrentIndex(idx);
     render_selected_table();
-    set_status(QString("Loaded %1 table%2").arg(tables_.size()).arg(tables_.size() == 1 ? "" : "s"));
+    set_status(tr("Loaded %n table(s)", "", tables_.size()));
 }
 
 void WebScraperWidget::on_table_selected(int index) {
@@ -516,7 +516,7 @@ void WebScraperWidget::render_selected_table() {
     table_->set_data(display);
     table_->setSortingEnabled(true);
     if (t.rows.size() > kMaxRowsRendered) {
-        set_status(QString("Showing first %1 of %2 rows").arg(n).arg(t.rows.size()));
+        set_status(tr("Showing first %1 of %2 rows").arg(n).arg(t.rows.size()));
     }
 }
 
@@ -902,56 +902,56 @@ QVector<ScrapedTable> WebScraperWidget::parse_xml_tables(const QByteArray& body)
 
 QDialog* WebScraperWidget::make_config_dialog(QWidget* parent) {
     auto* dlg = new QDialog(parent);
-    dlg->setWindowTitle("Configure — Web Scraper");
+    dlg->setWindowTitle(tr("Configure — Web Scraper"));
     dlg->resize(520, 420);
     auto* form = new QFormLayout(dlg);
 
     auto* url_edit = new QLineEdit(dlg);
     url_edit->setText(url_);
-    url_edit->setPlaceholderText("https://example.com/table-page or API endpoint");
-    form->addRow("URL", url_edit);
+    url_edit->setPlaceholderText(tr("https://example.com/table-page or API endpoint"));
+    form->addRow(tr("URL"), url_edit);
 
     auto* refresh_spin = new QSpinBox(dlg);
     refresh_spin->setRange(0, 86400);
-    refresh_spin->setSuffix(" sec");
-    refresh_spin->setSpecialValueText("manual only");
+    refresh_spin->setSuffix(tr(" sec"));
+    refresh_spin->setSpecialValueText(tr("manual only"));
     refresh_spin->setValue(refresh_sec_);
-    form->addRow("Auto-refresh", refresh_spin);
+    form->addRow(tr("Auto-refresh"), refresh_spin);
 
     auto* ua_edit = new QLineEdit(dlg);
     ua_edit->setText(user_agent_);
     ua_edit->setPlaceholderText(QString::fromLatin1(kDefaultUA));
-    form->addRow("User-Agent", ua_edit);
+    form->addRow(tr("User-Agent"), ua_edit);
 
     auto* fmt_combo = new QComboBox(dlg);
-    fmt_combo->addItems({"Auto-detect", "HTML", "JSON", "CSV", "TSV", "XML"});
+    fmt_combo->addItems({tr("Auto-detect"), "HTML", "JSON", "CSV", "TSV", "XML"});
     const QMap<QString, int> fmt_idx = {{"", 0},    {"html", 1}, {"json", 2},
                                          {"csv", 3}, {"tsv", 4},  {"xml", 5}};
     fmt_combo->setCurrentIndex(fmt_idx.value(force_format_.toLower(), 0));
-    form->addRow("Format", fmt_combo);
+    form->addRow(tr("Format"), fmt_combo);
 
     auto* enc_edit = new QLineEdit(dlg);
     enc_edit->setText(encoding_);
-    enc_edit->setPlaceholderText("auto (from Content-Type / <meta>)");
-    form->addRow("Encoding", enc_edit);
+    enc_edit->setPlaceholderText(tr("auto (from Content-Type / <meta>)"));
+    form->addRow(tr("Encoding"), enc_edit);
 
     auto* json_path_edit = new QLineEdit(dlg);
     json_path_edit->setText(json_path_);
-    json_path_edit->setPlaceholderText("e.g. data.items  (JSON only)");
-    form->addRow("JSON path", json_path_edit);
+    json_path_edit->setPlaceholderText(tr("e.g. data.items  (JSON only)"));
+    form->addRow(tr("JSON path"), json_path_edit);
 
     auto* headers_edit = new QPlainTextEdit(dlg);
     QString hdr_text;
     for (auto it = headers_.cbegin(); it != headers_.cend(); ++it)
         hdr_text.append(QString("%1: %2\n").arg(it.key(), it.value()));
     headers_edit->setPlainText(hdr_text);
-    headers_edit->setPlaceholderText("One per line:\nAuthorization: Bearer abc\nX-API-Key: xyz");
+    headers_edit->setPlaceholderText(tr("One per line:\nAuthorization: Bearer abc\nX-API-Key: xyz"));
     headers_edit->setMaximumHeight(100);
-    form->addRow("Extra headers", headers_edit);
+    form->addRow(tr("Extra headers"), headers_edit);
 
     auto* help = new QLabel(
-        "Auto-detects HTML tables, JSON arrays/objects, CSV/TSV, XML/RSS/Atom. "
-        "If the page renders tables via JavaScript, use its underlying API URL instead.");
+        tr("Auto-detects HTML tables, JSON arrays/objects, CSV/TSV, XML/RSS/Atom. "
+           "If the page renders tables via JavaScript, use its underlying API URL instead."));
     help->setWordWrap(true);
     help->setStyleSheet(QString("color:%1;font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
     form->addRow(help);

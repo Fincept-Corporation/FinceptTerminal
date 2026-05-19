@@ -9,6 +9,7 @@
 #include <QBarSet>
 #include <QChart>
 #include <QChartView>
+#include <QEvent>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -63,8 +64,9 @@ static void style_table(QTableWidget* t) {
                               ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
 }
 
-// Build a centred placeholder label inside a parent widget.
-static QWidget* make_placeholder(const QString& msg, QWidget* parent = nullptr) {
+// Build a centred placeholder label inside a parent widget. Returns the wrapper
+// widget; @p out_label receives the inner QLabel so callers can retranslate it.
+static QWidget* make_placeholder(const QString& msg, QLabel** out_label = nullptr, QWidget* parent = nullptr) {
     auto* w = new QWidget(parent);
     auto* lay = new QVBoxLayout(w);
     lay->setContentsMargins(24, 32, 24, 32);
@@ -75,6 +77,8 @@ static QWidget* make_placeholder(const QString& msg, QWidget* parent = nullptr) 
     lay->addStretch();
     lay->addWidget(lbl);
     lay->addStretch();
+    if (out_label)
+        *out_label = lbl;
     return w;
 }
 
@@ -101,17 +105,17 @@ void QuantStatsView::build_ui() {
     h_lay->setContentsMargins(12, 0, 12, 0);
     h_lay->setSpacing(8);
 
-    auto* title_lbl = new QLabel("QUANTSTATS ANALYSIS");
-    title_lbl->setStyleSheet(
+    title_lbl_ = new QLabel(tr("QUANTSTATS ANALYSIS"));
+    title_lbl_->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    h_lay->addWidget(title_lbl);
+    h_lay->addWidget(title_lbl_);
     h_lay->addStretch();
 
     qs_status_ = new QLabel;
     qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
     h_lay->addWidget(qs_status_);
 
-    qs_run_btn_ = new QPushButton("\u25B6 RUN QUANTSTATS");
+    qs_run_btn_ = new QPushButton(tr("\u25B6 RUN QUANTSTATS"));
     qs_run_btn_->setFixedHeight(22);
     qs_run_btn_->setCursor(Qt::PointingHandCursor);
     qs_run_btn_->setStyleSheet(
@@ -144,20 +148,20 @@ void QuantStatsView::build_ui() {
         ml->setContentsMargins(12, 8, 12, 8);
         ml->setSpacing(4);
 
-        auto* section_lbl = new QLabel("KEY PERFORMANCE INDICATORS");
-        section_lbl->setStyleSheet(
+        metrics_section_lbl_ = new QLabel(tr("KEY PERFORMANCE INDICATORS"));
+        metrics_section_lbl_->setStyleSheet(
             QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-        ml->addWidget(section_lbl);
+        ml->addWidget(metrics_section_lbl_);
 
         metrics_table_ = new QTableWidget;
         metrics_table_->setColumnCount(3);
-        metrics_table_->setHorizontalHeaderLabels({"METRIC", "VALUE", "BENCHMARK"});
+        metrics_table_->setHorizontalHeaderLabels({tr("METRIC"), tr("VALUE"), tr("BENCHMARK")});
         metrics_table_->setColumnWidth(0, 220);
         metrics_table_->setColumnWidth(1, 130);
         style_table(metrics_table_);
         ml->addWidget(metrics_table_, 1);
 
-        tabs_->addTab(metrics_w, "METRICS");
+        metrics_tab_index_ = tabs_->addTab(metrics_w, tr("METRICS"));
     }
 
     // ── RETURNS tab ───────────────────────────────────────────────────────────
@@ -169,11 +173,12 @@ void QuantStatsView::build_ui() {
         rl->setSpacing(0);
 
         returns_stack_ = new QStackedWidget;
-        returns_stack_->addWidget(make_placeholder("Run QuantStats Analysis for return distribution"));
+        returns_stack_->addWidget(
+            make_placeholder(tr("Run QuantStats Analysis for return distribution"), &returns_placeholder_));
         // Index 1 is added lazily in update_returns()
         rl->addWidget(returns_stack_);
 
-        tabs_->addTab(returns_w, "RETURNS");
+        returns_tab_index_ = tabs_->addTab(returns_w, tr("RETURNS"));
     }
 
     // ── DRAWDOWN tab ──────────────────────────────────────────────────────────
@@ -185,10 +190,11 @@ void QuantStatsView::build_ui() {
         dl->setSpacing(0);
 
         drawdown_stack_ = new QStackedWidget;
-        drawdown_stack_->addWidget(make_placeholder("Run QuantStats Analysis for drawdown metrics"));
+        drawdown_stack_->addWidget(
+            make_placeholder(tr("Run QuantStats Analysis for drawdown metrics"), &drawdown_placeholder_));
         dl->addWidget(drawdown_stack_);
 
-        tabs_->addTab(dd_w, "DRAWDOWN");
+        drawdown_tab_index_ = tabs_->addTab(dd_w, tr("DRAWDOWN"));
     }
 
     // ── ROLLING tab ───────────────────────────────────────────────────────────
@@ -200,10 +206,11 @@ void QuantStatsView::build_ui() {
         rll->setSpacing(0);
 
         rolling_stack_ = new QStackedWidget;
-        rolling_stack_->addWidget(make_placeholder("Run QuantStats Analysis for rolling metrics"));
+        rolling_stack_->addWidget(
+            make_placeholder(tr("Run QuantStats Analysis for rolling metrics"), &rolling_placeholder_));
         rll->addWidget(rolling_stack_);
 
-        tabs_->addTab(roll_w, "ROLLING");
+        rolling_tab_index_ = tabs_->addTab(roll_w, tr("ROLLING"));
     }
 
     // ── MONTE CARLO tab ───────────────────────────────────────────────────────
@@ -214,22 +221,22 @@ void QuantStatsView::build_ui() {
         mcl->setContentsMargins(16, 12, 16, 12);
         mcl->setSpacing(8);
 
-        auto* mc_title = new QLabel("MONTE CARLO SIMULATION");
-        mc_title->setStyleSheet(
+        mc_title_ = new QLabel(tr("MONTE CARLO SIMULATION"));
+        mc_title_->setStyleSheet(
             QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-        mcl->addWidget(mc_title);
+        mcl->addWidget(mc_title_);
 
-        auto* mc_desc = new QLabel("Simulate 1,000 portfolio return paths using GBM to estimate probability\n"
-                                   "distributions of future returns, drawdowns, and terminal wealth.");
-        mc_desc->setWordWrap(true);
-        mc_desc->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
-        mcl->addWidget(mc_desc);
+        mc_desc_ = new QLabel(tr("Simulate 1,000 portfolio return paths using GBM to estimate probability\n"
+                                 "distributions of future returns, drawdowns, and terminal wealth."));
+        mc_desc_->setWordWrap(true);
+        mc_desc_->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
+        mcl->addWidget(mc_desc_);
 
         // Button row
         auto* mc_btn_row = new QHBoxLayout;
         mc_btn_row->setSpacing(8);
 
-        mc_run_btn_ = new QPushButton("\u25B6 RUN MONTE CARLO (1000 paths)");
+        mc_run_btn_ = new QPushButton(tr("\u25B6 RUN MONTE CARLO (1000 paths)"));
         mc_run_btn_->setFixedHeight(28);
         mc_run_btn_->setCursor(Qt::PointingHandCursor);
         mc_run_btn_->setStyleSheet(
@@ -249,7 +256,8 @@ void QuantStatsView::build_ui() {
 
         // Stacked area: placeholder vs live content
         mc_stack_ = new QStackedWidget;
-        mc_stack_->addWidget(make_placeholder("Press RUN MONTE CARLO to simulate 1,000 return paths"));
+        mc_stack_->addWidget(
+            make_placeholder(tr("Press RUN MONTE CARLO to simulate 1,000 return paths"), &mc_placeholder_));
         // Index 1 is built lazily in update_monte_carlo_chart()
         mcl->addWidget(mc_stack_, 1);
 
@@ -257,7 +265,7 @@ void QuantStatsView::build_ui() {
         mc_results_ = new QWidget(this);
         mc_results_->setVisible(false);
 
-        tabs_->addTab(mc_w, "MONTE CARLO");
+        mc_tab_index_ = tabs_->addTab(mc_w, tr("MONTE CARLO"));
     }
 
     root->addWidget(tabs_, 1);
@@ -315,7 +323,7 @@ void QuantStatsView::update_metrics() {
     };
 
     // ── PERFORMANCE ──────────────────────────────────────────────────────────
-    add_section("PERFORMANCE");
+    add_section(tr("PERFORMANCE"));
 
     if (have_qs) {
         double total_ret = qs_pct("performance", "total_return");
@@ -325,25 +333,25 @@ void QuantStatsView::update_metrics() {
         double worst_day = qs_pct("performance", "worst_day");
         double avg_daily = qs_pct("performance", "avg_daily_return");
 
-        rows.push_back({"", "Total Return", pct_str(total_ret), "--", total_ret >= 0});
-        rows.push_back({"", "Annualized Return", pct_str(ann_ret), "--", ann_ret >= 0});
-        rows.push_back({"", "Trading Days", QString::number(t_days), "--", true});
-        rows.push_back({"", "Best Day", pct_str(best_day), "--", true});
-        rows.push_back({"", "Worst Day", pct_str(worst_day), "--", worst_day >= 0});
-        rows.push_back({"", "Avg Daily Return", pct_str(avg_daily, 4), "--", avg_daily >= 0});
+        rows.push_back({"", tr("Total Return"), pct_str(total_ret), "--", total_ret >= 0});
+        rows.push_back({"", tr("Annualized Return"), pct_str(ann_ret), "--", ann_ret >= 0});
+        rows.push_back({"", tr("Trading Days"), QString::number(t_days), "--", true});
+        rows.push_back({"", tr("Best Day"), pct_str(best_day), "--", true});
+        rows.push_back({"", tr("Worst Day"), pct_str(worst_day), "--", worst_day >= 0});
+        rows.push_back({"", tr("Avg Daily Return"), pct_str(avg_daily, 4), "--", avg_daily >= 0});
     } else {
         // Pre-run: show live summary values
         double pnl_pct = summary_.total_unrealized_pnl_percent;
         double day_pct = summary_.total_day_change_percent;
-        rows.push_back({"", "Unrealized P&L %", pct_str(pnl_pct), "--", pnl_pct >= 0});
-        rows.push_back({"", "Day Change %", pct_str(day_pct), "--", day_pct >= 0});
-        rows.push_back({"", "Total Positions", QString::number(summary_.total_positions), "--", true});
-        rows.push_back({"", "Gainers", QString::number(summary_.gainers), "--", true});
-        rows.push_back({"", "Losers", QString::number(summary_.losers), "--", summary_.losers == 0});
+        rows.push_back({"", tr("Unrealized P&L %"), pct_str(pnl_pct), "--", pnl_pct >= 0});
+        rows.push_back({"", tr("Day Change %"), pct_str(day_pct), "--", day_pct >= 0});
+        rows.push_back({"", tr("Total Positions"), QString::number(summary_.total_positions), "--", true});
+        rows.push_back({"", tr("Gainers"), QString::number(summary_.gainers), "--", true});
+        rows.push_back({"", tr("Losers"), QString::number(summary_.losers), "--", summary_.losers == 0});
     }
 
     // ── RISK ─────────────────────────────────────────────────────────────────
-    add_section("RISK");
+    add_section(tr("RISK"));
 
     if (have_qs) {
         double ann_vol = qs_pct("risk", "annualized_volatility");
@@ -352,21 +360,21 @@ void QuantStatsView::update_metrics() {
         double cvar95 = qs_pct("risk", "cvar_95_daily");
         double down_dev = qs_pct("risk", "downside_deviation");
 
-        rows.push_back({"", "Annualized Volatility", pct_str(ann_vol), "--", ann_vol < 20.0});
-        rows.push_back({"", "Max Drawdown", pct_str(max_dd), "--", max_dd >= 0});
-        rows.push_back({"", "VaR 95% (Daily)", pct_str(var95), "--", var95 >= 0});
-        rows.push_back({"", "CVaR 95% (Daily)", pct_str(cvar95), "--", cvar95 >= 0});
-        rows.push_back({"", "Downside Deviation", pct_str(down_dev), "--", down_dev < 15.0});
+        rows.push_back({"", tr("Annualized Volatility"), pct_str(ann_vol), "--", ann_vol < 20.0});
+        rows.push_back({"", tr("Max Drawdown"), pct_str(max_dd), "--", max_dd >= 0});
+        rows.push_back({"", tr("VaR 95% (Daily)"), pct_str(var95), "--", var95 >= 0});
+        rows.push_back({"", tr("CVaR 95% (Daily)"), pct_str(cvar95), "--", cvar95 >= 0});
+        rows.push_back({"", tr("Downside Deviation"), pct_str(down_dev), "--", down_dev < 15.0});
     } else {
-        rows.push_back({"", "Annualized Volatility", "--", "--", true});
-        rows.push_back({"", "Max Drawdown", "--", "--", true});
-        rows.push_back({"", "VaR 95% (Daily)", "--", "--", true});
-        rows.push_back({"", "CVaR 95% (Daily)", "--", "--", true});
-        rows.push_back({"", "Downside Deviation", "--", "--", true});
+        rows.push_back({"", tr("Annualized Volatility"), "--", "--", true});
+        rows.push_back({"", tr("Max Drawdown"), "--", "--", true});
+        rows.push_back({"", tr("VaR 95% (Daily)"), "--", "--", true});
+        rows.push_back({"", tr("CVaR 95% (Daily)"), "--", "--", true});
+        rows.push_back({"", tr("Downside Deviation"), "--", "--", true});
     }
 
     // ── RATIOS ────────────────────────────────────────────────────────────────
-    add_section("RATIOS");
+    add_section(tr("RATIOS"));
 
     if (have_qs) {
         double sharpe = qs_val("ratios", "sharpe_ratio");
@@ -374,19 +382,19 @@ void QuantStatsView::update_metrics() {
         double calmar = qs_val("ratios", "calmar_ratio");
         double pf = qs_val("ratios", "profit_factor");
 
-        rows.push_back({"", "Sharpe Ratio", ratio_str(sharpe), "--", sharpe >= 0});
-        rows.push_back({"", "Sortino Ratio", ratio_str(sortino), "--", sortino >= 0});
-        rows.push_back({"", "Calmar Ratio", ratio_str(calmar), "--", calmar >= 0});
-        rows.push_back({"", "Profit Factor", ratio_str(pf), "--", pf >= 1.0});
+        rows.push_back({"", tr("Sharpe Ratio"), ratio_str(sharpe), "--", sharpe >= 0});
+        rows.push_back({"", tr("Sortino Ratio"), ratio_str(sortino), "--", sortino >= 0});
+        rows.push_back({"", tr("Calmar Ratio"), ratio_str(calmar), "--", calmar >= 0});
+        rows.push_back({"", tr("Profit Factor"), ratio_str(pf), "--", pf >= 1.0});
     } else {
-        rows.push_back({"", "Sharpe Ratio", "--", "--", true});
-        rows.push_back({"", "Sortino Ratio", "--", "--", true});
-        rows.push_back({"", "Calmar Ratio", "--", "--", true});
-        rows.push_back({"", "Profit Factor", "--", "--", true});
+        rows.push_back({"", tr("Sharpe Ratio"), "--", "--", true});
+        rows.push_back({"", tr("Sortino Ratio"), "--", "--", true});
+        rows.push_back({"", tr("Calmar Ratio"), "--", "--", true});
+        rows.push_back({"", tr("Profit Factor"), "--", "--", true});
     }
 
     // ── DISTRIBUTION ─────────────────────────────────────────────────────────
-    add_section("DISTRIBUTION");
+    add_section(tr("DISTRIBUTION"));
 
     if (have_qs) {
         double skew = qs_val("distribution", "skewness");
@@ -397,24 +405,24 @@ void QuantStatsView::update_metrics() {
         double avg_win = qs_pct("distribution", "avg_win");
         double avg_loss = qs_pct("distribution", "avg_loss");
 
-        rows.push_back({"", "Skewness", ratio_str(skew, 3), "--", skew >= 0});
-        rows.push_back({"", "Kurtosis", ratio_str(kurt, 3), "--", kurt <= 3.5});
-        rows.push_back({"", "Win Rate", pct_str(win_rate), "--", win_rate >= 50.0});
-        rows.push_back({"", "Win Days", QString::number(win_days), "--", true});
-        rows.push_back({"", "Loss Days", QString::number(los_days), "--", los_days == 0});
-        rows.push_back({"", "Avg Win", pct_str(avg_win), "--", true});
-        rows.push_back({"", "Avg Loss", pct_str(avg_loss), "--", avg_loss >= 0});
+        rows.push_back({"", tr("Skewness"), ratio_str(skew, 3), "--", skew >= 0});
+        rows.push_back({"", tr("Kurtosis"), ratio_str(kurt, 3), "--", kurt <= 3.5});
+        rows.push_back({"", tr("Win Rate"), pct_str(win_rate), "--", win_rate >= 50.0});
+        rows.push_back({"", tr("Win Days"), QString::number(win_days), "--", true});
+        rows.push_back({"", tr("Loss Days"), QString::number(los_days), "--", los_days == 0});
+        rows.push_back({"", tr("Avg Win"), pct_str(avg_win), "--", true});
+        rows.push_back({"", tr("Avg Loss"), pct_str(avg_loss), "--", avg_loss >= 0});
     } else {
-        rows.push_back({"", "Skewness", "--", "--", true});
-        rows.push_back({"", "Kurtosis", "--", "--", true});
-        rows.push_back({"", "Win Rate", "--", "--", true});
-        rows.push_back({"", "Win Days", "--", "--", true});
-        rows.push_back({"", "Loss Days", "--", "--", true});
-        rows.push_back({"", "Avg Win", "--", "--", true});
-        rows.push_back({"", "Avg Loss", "--", "--", true});
+        rows.push_back({"", tr("Skewness"), "--", "--", true});
+        rows.push_back({"", tr("Kurtosis"), "--", "--", true});
+        rows.push_back({"", tr("Win Rate"), "--", "--", true});
+        rows.push_back({"", tr("Win Days"), "--", "--", true});
+        rows.push_back({"", tr("Loss Days"), "--", "--", true});
+        rows.push_back({"", tr("Avg Win"), "--", "--", true});
+        rows.push_back({"", tr("Avg Loss"), "--", "--", true});
 
         // Prompt row when pre-run
-        rows.push_back({"", "Run QuantStats for full metrics \u2192", "", "--", true});
+        rows.push_back({"", tr("Run QuantStats for full metrics \u2192"), "", "--", true});
     }
 
     // ── Populate table ────────────────────────────────────────────────────────
@@ -479,7 +487,7 @@ void QuantStatsView::update_returns() {
     cl->setContentsMargins(16, 12, 16, 12);
     cl->setSpacing(12);
 
-    auto* title = new QLabel("RETURN DISTRIBUTION");
+    auto* title = new QLabel(tr("RETURN DISTRIBUTION"));
     title->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     cl->addWidget(title);
@@ -500,14 +508,14 @@ void QuantStatsView::update_returns() {
         const char* color;
     };
     QVector<Card> cards = {
-        {"WIN RATE", pct_str(win_rate), ui::colors::POSITIVE()},
-        {"LOSS RATE", pct_str(100.0 - win_rate), ui::colors::NEGATIVE()},
-        {"WIN DAYS", QString::number(win_days), ui::colors::POSITIVE()},
-        {"LOSS DAYS", QString::number(loss_days), ui::colors::NEGATIVE()},
-        {"AVG WIN", pct_str(avg_win), ui::colors::POSITIVE()},
-        {"AVG LOSS", pct_str(avg_loss), ui::colors::NEGATIVE()},
-        {"SKEWNESS", ratio_str(skew, 3), ui::colors::TEXT_PRIMARY()},
-        {"KURTOSIS", ratio_str(kurt, 3), ui::colors::TEXT_PRIMARY()},
+        {tr("WIN RATE"), pct_str(win_rate), ui::colors::POSITIVE()},
+        {tr("LOSS RATE"), pct_str(100.0 - win_rate), ui::colors::NEGATIVE()},
+        {tr("WIN DAYS"), QString::number(win_days), ui::colors::POSITIVE()},
+        {tr("LOSS DAYS"), QString::number(loss_days), ui::colors::NEGATIVE()},
+        {tr("AVG WIN"), pct_str(avg_win), ui::colors::POSITIVE()},
+        {tr("AVG LOSS"), pct_str(avg_loss), ui::colors::NEGATIVE()},
+        {tr("SKEWNESS"), ratio_str(skew, 3), ui::colors::TEXT_PRIMARY()},
+        {tr("KURTOSIS"), ratio_str(kurt, 3), ui::colors::TEXT_PRIMARY()},
     };
 
     auto* grid_w = new QWidget(this);
@@ -544,7 +552,7 @@ void QuantStatsView::update_returns() {
     // Win/Loss bar chart (simple table-based visual)
     auto* dist_table = new QTableWidget;
     dist_table->setColumnCount(2);
-    dist_table->setHorizontalHeaderLabels({"METRIC", "VALUE"});
+    dist_table->setHorizontalHeaderLabels({tr("METRIC"), tr("VALUE")});
     dist_table->setColumnWidth(0, 200);
     style_table(dist_table);
 
@@ -559,10 +567,10 @@ void QuantStatsView::update_returns() {
         bool positive;
     };
     QVector<TableRow> trows = {
-        {"Best Day", pct_str(best_day), true},
-        {"Worst Day", pct_str(worst_day), worst_day >= 0},
-        {"Avg Daily Return", pct_str(avg_daily, 4), avg_daily >= 0},
-        {"Profit Factor", ratio_str(qs_data_["ratios"].toObject()["profit_factor"].toDouble()),
+        {tr("Best Day"), pct_str(best_day), true},
+        {tr("Worst Day"), pct_str(worst_day), worst_day >= 0},
+        {tr("Avg Daily Return"), pct_str(avg_daily, 4), avg_daily >= 0},
+        {tr("Profit Factor"), ratio_str(qs_data_["ratios"].toObject()["profit_factor"].toDouble()),
          qs_data_["ratios"].toObject()["profit_factor"].toDouble() >= 1.0},
     };
     dist_table->setRowCount(trows.size());
@@ -599,7 +607,7 @@ void QuantStatsView::update_drawdown() {
     cl->setContentsMargins(16, 12, 16, 12);
     cl->setSpacing(12);
 
-    auto* title = new QLabel("DRAWDOWN & RISK METRICS");
+    auto* title = new QLabel(tr("DRAWDOWN & RISK METRICS"));
     title->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     cl->addWidget(title);
@@ -615,7 +623,7 @@ void QuantStatsView::update_drawdown() {
     hero_l->setContentsMargins(16, 12, 16, 12);
     hero_l->setSpacing(2);
 
-    auto* hero_label = new QLabel("MAX DRAWDOWN");
+    auto* hero_label = new QLabel(tr("MAX DRAWDOWN"));
     hero_label->setStyleSheet(
         QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
     hero_l->addWidget(hero_label);
@@ -629,7 +637,7 @@ void QuantStatsView::update_drawdown() {
     // Drawdown metrics table
     auto* dd_table = new QTableWidget;
     dd_table->setColumnCount(2);
-    dd_table->setHorizontalHeaderLabels({"RISK METRIC", "VALUE"});
+    dd_table->setHorizontalHeaderLabels({tr("RISK METRIC"), tr("VALUE")});
     dd_table->setColumnWidth(0, 220);
     style_table(dd_table);
 
@@ -644,11 +652,11 @@ void QuantStatsView::update_drawdown() {
     double down_dev = risk["downside_deviation"].toDouble() * 100.0;
 
     QVector<DdRow> drows = {
-        {"Max Drawdown", pct_str(max_dd), max_dd >= 0},
-        {"Annualized Volatility", pct_str(ann_vol), ann_vol < 20.0},
-        {"VaR 95% (Daily)", pct_str(var95), var95 >= 0},
-        {"CVaR 95% (Daily)", pct_str(cvar95), cvar95 >= 0},
-        {"Downside Deviation", pct_str(down_dev), down_dev < 15.0},
+        {tr("Max Drawdown"), pct_str(max_dd), max_dd >= 0},
+        {tr("Annualized Volatility"), pct_str(ann_vol), ann_vol < 20.0},
+        {tr("VaR 95% (Daily)"), pct_str(var95), var95 >= 0},
+        {tr("CVaR 95% (Daily)"), pct_str(cvar95), cvar95 >= 0},
+        {tr("Downside Deviation"), pct_str(down_dev), down_dev < 15.0},
     };
     dd_table->setRowCount(drows.size());
     for (int i = 0; i < drows.size(); ++i) {
@@ -684,7 +692,7 @@ void QuantStatsView::update_rolling() {
     cl->setContentsMargins(16, 12, 16, 12);
     cl->setSpacing(12);
 
-    auto* title = new QLabel("RISK-ADJUSTED RATIOS & WIN/LOSS BREAKDOWN");
+    auto* title = new QLabel(tr("RISK-ADJUSTED RATIOS & WIN/LOSS BREAKDOWN"));
     title->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     cl->addWidget(title);
@@ -692,7 +700,7 @@ void QuantStatsView::update_rolling() {
     // Ratios table
     auto* ratios_table = new QTableWidget;
     ratios_table->setColumnCount(2);
-    ratios_table->setHorizontalHeaderLabels({"RATIO", "VALUE"});
+    ratios_table->setHorizontalHeaderLabels({tr("RATIO"), tr("VALUE")});
     ratios_table->setColumnWidth(0, 220);
     style_table(ratios_table);
 
@@ -708,10 +716,10 @@ void QuantStatsView::update_rolling() {
         bool positive;
     };
     QVector<RatioRow> rrows = {
-        {"Sharpe Ratio", ratio_str(sharpe), sharpe >= 0},
-        {"Sortino Ratio", ratio_str(sortino), sortino >= 0},
-        {"Calmar Ratio", ratio_str(calmar), calmar >= 0},
-        {"Profit Factor", ratio_str(pf), pf >= 1.0},
+        {tr("Sharpe Ratio"), ratio_str(sharpe), sharpe >= 0},
+        {tr("Sortino Ratio"), ratio_str(sortino), sortino >= 0},
+        {tr("Calmar Ratio"), ratio_str(calmar), calmar >= 0},
+        {tr("Profit Factor"), ratio_str(pf), pf >= 1.0},
     };
     ratios_table->setRowCount(rrows.size());
     for (int i = 0; i < rrows.size(); ++i) {
@@ -725,7 +733,7 @@ void QuantStatsView::update_rolling() {
     cl->addWidget(ratios_table);
 
     // Win/Loss breakdown
-    auto* wl_title = new QLabel("WIN / LOSS BREAKDOWN");
+    auto* wl_title = new QLabel(tr("WIN / LOSS BREAKDOWN"));
     wl_title->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px;"
                                     " margin-top:8px;")
                                 .arg(ui::colors::TEXT_SECONDARY()));
@@ -740,14 +748,16 @@ void QuantStatsView::update_rolling() {
 
     auto* wl_table = new QTableWidget;
     wl_table->setColumnCount(2);
-    wl_table->setHorizontalHeaderLabels({"METRIC", "VALUE"});
+    wl_table->setHorizontalHeaderLabels({tr("METRIC"), tr("VALUE")});
     wl_table->setColumnWidth(0, 220);
     style_table(wl_table);
 
     QVector<RatioRow> wrows = {
-        {"Win Rate", pct_str(win_rate), win_rate >= 50.0},         {"Win Days", QString::number(win_days), true},
-        {"Loss Days", QString::number(loss_days), loss_days == 0}, {"Avg Win/Day", pct_str(avg_win), true},
-        {"Avg Loss/Day", pct_str(avg_loss), avg_loss >= 0},
+        {tr("Win Rate"), pct_str(win_rate), win_rate >= 50.0},
+        {tr("Win Days"), QString::number(win_days), true},
+        {tr("Loss Days"), QString::number(loss_days), loss_days == 0},
+        {tr("Avg Win/Day"), pct_str(avg_win), true},
+        {tr("Avg Loss/Day"), pct_str(avg_loss), avg_loss >= 0},
     };
     wl_table->setRowCount(wrows.size());
     for (int i = 0; i < wrows.size(); ++i) {
@@ -807,11 +817,11 @@ void QuantStatsView::update_monte_carlo_chart() {
         const char* color;
     };
     QVector<StatItem> stats = {
-        {"MEDIAN RETURN", pct_str(median_ret), median_ret >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()},
-        {"5TH PERCENTILE", pct_str(pct5), pct5 >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()},
-        {"95TH PERCENTILE", pct_str(pct95), ui::colors::POSITIVE()},
-        {"PROB OF LOSS", pct_str(prob_loss), ui::colors::WARNING()},
-        {"EXP MAX DRAWDOWN", pct_str(exp_max_dd), ui::colors::NEGATIVE()},
+        {tr("MEDIAN RETURN"), pct_str(median_ret), median_ret >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()},
+        {tr("5TH PERCENTILE"), pct_str(pct5), pct5 >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()},
+        {tr("95TH PERCENTILE"), pct_str(pct95), ui::colors::POSITIVE()},
+        {tr("PROB OF LOSS"), pct_str(prob_loss), ui::colors::WARNING()},
+        {tr("EXP MAX DRAWDOWN"), pct_str(exp_max_dd), ui::colors::NEGATIVE()},
     };
 
     for (const auto& s : stats) {
@@ -900,7 +910,7 @@ void QuantStatsView::update_monte_carlo_chart() {
     // Axes
     auto* x_axis = new QValueAxis;
     x_axis->setRange(1, n_steps > 0 ? n_steps : 252);
-    x_axis->setTitleText("Trading Days");
+    x_axis->setTitleText(tr("Trading Days"));
     x_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_SECONDARY())));
     x_axis->setLabelsBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
     x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
@@ -908,7 +918,7 @@ void QuantStatsView::update_monte_carlo_chart() {
     x_axis->setLabelsFont(QFont("Consolas", 8));
 
     auto* y_axis = new QValueAxis;
-    y_axis->setTitleText("Cumulative Return (%)");
+    y_axis->setTitleText(tr("Cumulative Return (%)"));
     y_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_SECONDARY())));
     y_axis->setLabelsBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
     y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
@@ -933,8 +943,8 @@ void QuantStatsView::update_monte_carlo_chart() {
 
     // Caption
     int n_shown = mc_data_["num_paths_shown"].toInt();
-    auto* caption = new QLabel(QString("Showing %1 of 1000 simulated paths over 252 trading days (GBM)."
-                                       " Bright line = median path.")
+    auto* caption = new QLabel(tr("Showing %1 of 1000 simulated paths over 252 trading days (GBM)."
+                                  " Bright line = median path.")
                                    .arg(n_shown));
     caption->setStyleSheet(QString("color:%1; font-size:9px; padding:4px 16px;").arg(ui::colors::TEXT_TERTIARY()));
     cl->addWidget(caption);
@@ -968,7 +978,7 @@ void QuantStatsView::run_quantstats() {
         return;
     qs_running_ = true;
     qs_run_btn_->setEnabled(false);
-    qs_status_->setText("Fetching 1-year price history...");
+    qs_status_->setText(tr("Fetching 1-year price history..."));
     qs_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::AMBER()));
 
     QStringList symbols;
@@ -992,14 +1002,14 @@ void QuantStatsView::run_quantstats() {
                     self->qs_run_btn_->setEnabled(true);
 
                     if (!r.success) {
-                        self->qs_status_->setText(QString("QuantStats: %1").arg(r.error));
+                        self->qs_status_->setText(tr("QuantStats: %1").arg(r.error));
                         self->qs_status_->setStyleSheet(
                             QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
                         return;
                     }
 
                     self->qs_data_ = r.data;
-                    self->qs_status_->setText("Complete");
+                    self->qs_status_->setText(tr("Complete"));
                     self->qs_status_->setStyleSheet(
                         QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE()));
                     self->update_metrics();
@@ -1018,7 +1028,7 @@ void QuantStatsView::run_monte_carlo() {
         return;
     mc_running_ = true;
     mc_run_btn_->setEnabled(false);
-    mc_status_->setText("Running 1000 simulation paths...");
+    mc_status_->setText(tr("Running 1000 simulation paths..."));
     mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::AMBER()));
 
     QStringList symbols;
@@ -1042,7 +1052,7 @@ void QuantStatsView::run_monte_carlo() {
                     self->mc_run_btn_->setEnabled(true);
 
                     if (!r.success) {
-                        self->mc_status_->setText(QString("Monte Carlo: %1").arg(r.error));
+                        self->mc_status_->setText(tr("Monte Carlo: %1").arg(r.error));
                         self->mc_status_->setStyleSheet(
                             QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE()));
                         return;
@@ -1050,7 +1060,7 @@ void QuantStatsView::run_monte_carlo() {
 
                     self->mc_data_ = r.data;
                     self->mc_status_->setText(
-                        QString("Complete — %1 paths simulated")
+                        tr("Complete — %1 paths simulated")
                             .arg(r.data["num_paths_shown"].toInt() > 0 ? "1000" : "0"));
                     self->mc_status_->setStyleSheet(
                         QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE()));
@@ -1058,6 +1068,50 @@ void QuantStatsView::run_monte_carlo() {
                 },
                 Qt::QueuedConnection);
         });
+}
+
+void QuantStatsView::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void QuantStatsView::retranslateUi() {
+    if (tabs_) {
+        if (metrics_tab_index_ >= 0)  tabs_->setTabText(metrics_tab_index_, tr("METRICS"));
+        if (returns_tab_index_ >= 0)  tabs_->setTabText(returns_tab_index_, tr("RETURNS"));
+        if (drawdown_tab_index_ >= 0) tabs_->setTabText(drawdown_tab_index_, tr("DRAWDOWN"));
+        if (rolling_tab_index_ >= 0)  tabs_->setTabText(rolling_tab_index_, tr("ROLLING"));
+        if (mc_tab_index_ >= 0)       tabs_->setTabText(mc_tab_index_, tr("MONTE CARLO"));
+    }
+    if (title_lbl_)           title_lbl_->setText(tr("QUANTSTATS ANALYSIS"));
+    if (qs_run_btn_)          qs_run_btn_->setText(tr("▶ RUN QUANTSTATS"));
+    if (metrics_section_lbl_) metrics_section_lbl_->setText(tr("KEY PERFORMANCE INDICATORS"));
+    if (mc_title_)            mc_title_->setText(tr("MONTE CARLO SIMULATION"));
+    if (mc_desc_)             mc_desc_->setText(tr("Simulate 1,000 portfolio return paths using GBM to estimate probability\n"
+                                                   "distributions of future returns, drawdowns, and terminal wealth."));
+    if (mc_run_btn_)          mc_run_btn_->setText(tr("▶ RUN MONTE CARLO (1000 paths)"));
+
+    if (returns_placeholder_)  returns_placeholder_->setText(tr("Run QuantStats Analysis for return distribution"));
+    if (drawdown_placeholder_) drawdown_placeholder_->setText(tr("Run QuantStats Analysis for drawdown metrics"));
+    if (rolling_placeholder_)  rolling_placeholder_->setText(tr("Run QuantStats Analysis for rolling metrics"));
+    if (mc_placeholder_)       mc_placeholder_->setText(tr("Press RUN MONTE CARLO to simulate 1,000 return paths"));
+
+    if (metrics_table_)
+        metrics_table_->setHorizontalHeaderLabels({tr("METRIC"), tr("VALUE"), tr("BENCHMARK")});
+
+    // re-render tabs whose stacks already hold live content. The update_* methods
+    // pluck source-key tr() strings on each call, so re-running them picks up the
+    // new locale for section labels, row names, and embedded sub-table headers.
+    update_metrics();
+    if (returns_stack_ && returns_stack_->count() > 1)
+        update_returns();
+    if (drawdown_stack_ && drawdown_stack_->count() > 1)
+        update_drawdown();
+    if (rolling_stack_ && rolling_stack_->count() > 1)
+        update_rolling();
+    if (mc_stack_ && mc_stack_->count() > 1)
+        update_monte_carlo_chart();
 }
 
 } // namespace fincept::screens

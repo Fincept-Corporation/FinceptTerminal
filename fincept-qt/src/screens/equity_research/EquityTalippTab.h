@@ -20,6 +20,9 @@ class EquityTalippTab : public QWidget {
     explicit EquityTalippTab(QWidget* parent = nullptr);
     void set_symbol(const QString& symbol);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_category_clicked(const QString& cat_id);
     void on_indicator_changed(const QString& indicator);
@@ -28,6 +31,7 @@ class EquityTalippTab : public QWidget {
 
   private:
     void build_ui();
+    void retranslateUi();
     void rebuild_indicator_combo(const QString& cat_id);
     void rebuild_param_form(const QString& indicator);
     void rebuild_last_values(const QString& indicator, const QVector<double>& values);
@@ -36,6 +40,8 @@ class EquityTalippTab : public QWidget {
 
     QString current_symbol_;
     QString active_category_ = "trend";
+    QLabel* empty_sub_lbl_ = nullptr;  ///< "50+ indicators across…" caption
+    QString cached_indicator_;          ///< last computed indicator for retranslate
 
     // Category tab buttons
     QMap<QString, QPushButton*> cat_buttons_;

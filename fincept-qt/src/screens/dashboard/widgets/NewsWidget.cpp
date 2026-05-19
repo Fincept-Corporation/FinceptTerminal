@@ -14,7 +14,7 @@ constexpr const char* kTopic = "news:general";
 constexpr int kMaxArticles = 30; // headline cap; NewsService publishes the full feed
 } // namespace
 
-NewsWidget::NewsWidget(QWidget* parent) : BaseWidget("MARKET NEWS", parent, ui::colors::CYAN) {
+NewsWidget::NewsWidget(QWidget* parent) : BaseWidget(tr("MARKET NEWS"), parent, ui::colors::CYAN) {
     scroll_area_ = new QScrollArea;
     scroll_area_->setWidgetResizable(true);
 
@@ -101,7 +101,7 @@ void NewsWidget::populate(const QVector<services::NewsArticle>& articles) {
     }
 
     if (articles.isEmpty()) {
-        auto* empty = new QLabel(QStringLiteral("No news available."));
+        auto* empty = new QLabel(tr("No news available."));
         empty->setAlignment(Qt::AlignCenter);
         empty->setStyleSheet(QString("color: %1; font-size: 11px; padding: 12px; background: transparent;")
                                  .arg(ui::colors::TEXT_TERTIARY()));

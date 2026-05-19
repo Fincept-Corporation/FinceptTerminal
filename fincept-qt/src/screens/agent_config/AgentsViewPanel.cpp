@@ -63,7 +63,7 @@ QWidget* AgentsViewPanel::build_agent_list_panel() {
     vl->setSpacing(6);
 
     auto* hdr = new QHBoxLayout;
-    auto* title = new QLabel("AGENTS");
+    auto* title = new QLabel(tr("AGENTS"));
     title->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
     hdr->addWidget(title);
     list_count_label_ = new QLabel("0");
@@ -346,7 +346,7 @@ QWidget* AgentsViewPanel::build_query_panel() {
     result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
     vl->addWidget(result_status_);
 
-    auto* rh = new QLabel("RESULT");
+    auto* rh = new QLabel(tr("RESULT"));
     rh->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;")
                           .arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(rh);
@@ -433,14 +433,14 @@ void AgentsViewPanel::setup_connections() {
         executing_ = false;
         pending_request_id_.clear();
         run_btn_->setEnabled(true);
-        run_btn_->setText("RUN AGENT");
+        run_btn_->setText(tr("RUN AGENT"));
         if (r.success) {
             result_display_->setMarkdown(r.response);
             result_status_->setText(QString("Completed in %1ms").arg(r.execution_time_ms));
             result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
         } else {
             result_display_->setPlainText("Error: " + r.error);
-            result_status_->setText("FAILED");
+            result_status_->setText(tr("FAILED"));
             result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
         }
     });
@@ -469,14 +469,14 @@ void AgentsViewPanel::setup_connections() {
         executing_ = false;
         pending_request_id_.clear();
         run_btn_->setEnabled(true);
-        run_btn_->setText("RUN AGENT");
+        run_btn_->setText(tr("RUN AGENT"));
         if (r.success) {
             result_display_->setMarkdown(r.response);
             result_status_->setText(QString("Completed in %1ms").arg(r.execution_time_ms));
             result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
         } else {
             result_display_->setPlainText("Error: " + r.error);
-            result_status_->setText("FAILED");
+            result_status_->setText(tr("FAILED"));
             result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
         }
     });

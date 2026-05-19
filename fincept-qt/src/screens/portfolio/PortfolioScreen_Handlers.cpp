@@ -380,7 +380,7 @@ void PortfolioScreen::load_demo_portfolio() {
     });
 
     // Create the demo portfolio (emits portfolio_created synchronously)
-    svc.create_portfolio("Demo Portfolio", "Fincept User", "USD", "Sample portfolio for demonstration");
+    svc.create_portfolio(tr("Demo Portfolio"), tr("Fincept User"), "USD", tr("Sample portfolio for demonstration"));
 }
 
 } // namespace fincept::screens

@@ -40,6 +40,7 @@ class AgentConfigScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
@@ -57,6 +58,15 @@ class AgentConfigScreen : public QWidget, public IStatefulScreen {
     QVector<QPushButton*> nav_buttons_;
     QLabel* status_label_ = nullptr;
     QLabel* agent_count_label_ = nullptr;
+    QLabel* title_label_ = nullptr;
+    QLabel* view_label_ = nullptr;
+
+    /// Tracks the last agent count reported by AgentService so retranslateUi()
+    /// can rebuild the "%1 agents" badge in the new locale without waiting
+    /// for the next discovery cycle.
+    int last_agent_count_ = 0;
+
+    void retranslateUi();
 
     // Lazily constructed panels (nullptr until first navigation)
     AgentsViewPanel* agents_panel_ = nullptr;

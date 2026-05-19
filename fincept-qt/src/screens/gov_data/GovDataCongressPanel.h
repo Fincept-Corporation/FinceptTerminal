@@ -24,6 +24,9 @@ class GovDataCongressPanel : public QWidget {
   public slots:
     void load_initial_data();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_result(const QString& request_id, const services::GovDataResult& result);
     void on_view_changed(int index);
@@ -35,6 +38,7 @@ class GovDataCongressPanel : public QWidget {
   private:
     void build_ui();
     QWidget* build_toolbar();
+    void retranslateUi();
     void show_loading(const QString& message);
     void show_error(const QString& message);
     void populate_bills(const QJsonObject& data);
@@ -52,6 +56,8 @@ class GovDataCongressPanel : public QWidget {
     QSpinBox* congress_num_ = nullptr;
     QPushButton* fetch_btn_ = nullptr;
     QPushButton* export_btn_ = nullptr;
+    QLabel* congress_lbl_ = nullptr;
+    QLabel* type_lbl_ = nullptr;
 
     // Content
     QStackedWidget* content_stack_ = nullptr;

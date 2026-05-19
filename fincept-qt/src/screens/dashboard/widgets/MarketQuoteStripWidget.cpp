@@ -21,7 +21,7 @@ const QStringList kDefaultSymbols = {"AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"};
 } // namespace
 
 MarketQuoteStripWidget::MarketQuoteStripWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget("QUOTE STRIP", parent) {
+    : BaseWidget(tr("QUOTE STRIP"), parent) {
     auto* vl = content_layout();
     vl->setContentsMargins(10, 8, 10, 8);
     vl->setSpacing(4);
@@ -156,13 +156,13 @@ void MarketQuoteStripWidget::on_quote(const fincept::services::QuoteData& q) {
 
 QDialog* MarketQuoteStripWidget::make_config_dialog(QWidget* parent) {
     auto* dlg = new QDialog(parent);
-    dlg->setWindowTitle("Configure — Quote Strip");
+    dlg->setWindowTitle(tr("Configure — Quote Strip"));
     auto* form = new QFormLayout(dlg);
 
     auto* edit = new QLineEdit(dlg);
     edit->setText(symbols_.join(", "));
-    edit->setPlaceholderText("e.g. AAPL, MSFT, GOOGL");
-    form->addRow("Symbols", edit);
+    edit->setPlaceholderText(tr("e.g. AAPL, MSFT, GOOGL"));
+    form->addRow(tr("Symbols"), edit);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
     form->addRow(buttons);

@@ -31,8 +31,12 @@ class PortfolioFFNView : public QWidget {
   signals:
     void back_requested();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
+    void retranslateUi();
 
     // Per-tab update methods
     void update_overview();
@@ -51,9 +55,24 @@ class PortfolioFFNView : public QWidget {
     QPushButton* back_btn_ = nullptr;
     QPushButton* run_btn_ = nullptr;
     QLabel* status_label_ = nullptr;
+    QLabel* title_label_ = nullptr;
 
     // ── Tab container ─────────────────────────────────────────────────────────
     QTabWidget* tabs_ = nullptr;
+
+    // Section headers — kept so retranslateUi can refresh them after a language
+    // switch without rebuilding the entire view.
+    QLabel* overview_hdr_ = nullptr;
+    QLabel* benchmark_hdr_ = nullptr;
+    QLabel* optimization_hdr_ = nullptr;
+    QLabel* weights_hdr_ = nullptr;
+    QLabel* stats_hdr_ = nullptr;
+
+    // Placeholder labels shown until run_ffn() has produced data.
+    QLabel* opt_placeholder_ = nullptr;
+    QLabel* rebased_placeholder_ = nullptr;
+    QLabel* drawdowns_placeholder_ = nullptr;
+    QLabel* rolling_placeholder_ = nullptr;
 
     // ── Overview tab ──────────────────────────────────────────────────────────
     QTableWidget* overview_table_ = nullptr;

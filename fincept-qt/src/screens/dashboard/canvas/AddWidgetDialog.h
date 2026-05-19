@@ -4,6 +4,7 @@
 #include <QButtonGroup>
 #include <QDialog>
 #include <QGridLayout>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QScrollArea>
@@ -22,6 +23,9 @@ class AddWidgetDialog : public QDialog {
   signals:
     void widget_selected(const QString& type_id);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void filter_changed(const QString& text);
     void category_clicked(const QString& category);
@@ -33,13 +37,18 @@ class AddWidgetDialog : public QDialog {
     void populate_cards(const QString& filter = {}, const QString& category = {});
     static QString accent_for_category(const QString& category);
     static QString icon_for_widget(const QString& type_id);
+    void retranslateUi();
 
+    QLabel* title_label_ = nullptr;
+    QLabel* subtitle_label_ = nullptr;
     QLineEdit* search_bar_ = nullptr;
     QWidget* card_container_ = nullptr;
     QGridLayout* card_grid_ = nullptr;
     QPushButton* add_btn_ = nullptr;
+    QPushButton* cancel_btn_ = nullptr;
     QButtonGroup* cat_group_ = nullptr;
     QVector<QPushButton*> cat_buttons_;
+    QVector<QString>      cat_source_keys_;
     QString selected_id_;
     QString active_category_;
 };

@@ -19,7 +19,7 @@
 namespace fincept::screens::widgets {
 
 OpenPositionsWidget::OpenPositionsWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget("OPEN POSITIONS", parent) {
+    : BaseWidget(tr("OPEN POSITIONS"), parent) {
     auto* vl = content_layout();
     vl->setContentsMargins(8, 6, 8, 6);
     vl->setSpacing(4);
@@ -28,7 +28,7 @@ OpenPositionsWidget::OpenPositionsWidget(const QJsonObject& cfg, QWidget* parent
     vl->addWidget(header_hint_);
 
     table_ = new QTableWidget(0, 5, this);
-    table_->setHorizontalHeaderLabels({"Symbol", "Qty", "Avg", "LTP", "P&L"});
+    table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Qty"), tr("Avg"), tr("LTP"), tr("P&L")});
     table_->verticalHeader()->setVisible(false);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionMode(QAbstractItemView::NoSelection);
@@ -64,7 +64,7 @@ void OpenPositionsWidget::apply_config(const QJsonObject& cfg) {
         broker_id_ = acct.broker_id;
         header_hint_->setText(acct.display_name.isEmpty() ? account_id_ : acct.display_name);
     } else {
-        header_hint_->setText("No active account — click gear to configure");
+        header_hint_->setText(tr("No active account — click gear to configure"));
     }
 
     if (isVisible() && !broker_id_.isEmpty() && !account_id_.isEmpty()) {
@@ -145,7 +145,7 @@ void OpenPositionsWidget::populate(const QVector<trading::BrokerPosition>& rows)
 
 QDialog* OpenPositionsWidget::make_config_dialog(QWidget* parent) {
     auto* dlg = new QDialog(parent);
-    dlg->setWindowTitle("Configure — Open Positions");
+    dlg->setWindowTitle(tr("Configure — Open Positions"));
     auto* form = new QFormLayout(dlg);
 
     auto* combo = new QComboBox(dlg);
@@ -156,7 +156,7 @@ QDialog* OpenPositionsWidget::make_config_dialog(QWidget* parent) {
         if (a.account_id == account_id_)
             combo->setCurrentIndex(combo->count() - 1);
     }
-    form->addRow("Broker account", combo);
+    form->addRow(tr("Broker account"), combo);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
     form->addRow(buttons);

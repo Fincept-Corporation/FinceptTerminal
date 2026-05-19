@@ -47,19 +47,29 @@ Result<void> LlmConfigRepository::delete_provider(const QString& provider) {
 }
 
 Result<LlmGlobalSettings> LlmConfigRepository::get_global_settings() {
-    auto r = db().execute("SELECT temperature, max_tokens, system_prompt FROM llm_global_settings WHERE id = 1");
+    auto r = db().execute("SELECT temperature, max_tokens, system_prompt, max_tool_rounds "
+                          "FROM llm_global_settings WHERE id = 1");
     if (r.is_err())
         return Result<LlmGlobalSettings>::err(r.error());
     auto& q = r.value();
     if (!q.next())
         return Result<LlmGlobalSettings>::ok(LlmGlobalSettings{});
-    return Result<LlmGlobalSettings>::ok({q.value(0).toDouble(), q.value(1).toInt(), q.value(2).toString()});
+    LlmGlobalSettings gs;
+    gs.temperature = q.value(0).toDouble();
+    gs.max_tokens = q.value(1).toInt();
+    gs.system_prompt = q.value(2).toString();
+    // NULL on rows written before v030 — keep struct default (40).
+    const QVariant v = q.value(3);
+    if (!v.isNull())
+        gs.max_tool_rounds = v.toInt();
+    return Result<LlmGlobalSettings>::ok(gs);
 }
 
 Result<void> LlmConfigRepository::save_global_settings(const LlmGlobalSettings& s) {
-    return exec_write("INSERT OR REPLACE INTO llm_global_settings (id, temperature, max_tokens, system_prompt) "
-                      "VALUES (1, ?, ?, ?)",
-                      {s.temperature, s.max_tokens, s.system_prompt});
+    return exec_write("INSERT OR REPLACE INTO llm_global_settings "
+                      "(id, temperature, max_tokens, system_prompt, max_tool_rounds) "
+                      "VALUES (1, ?, ?, ?, ?)",
+                      {s.temperature, s.max_tokens, s.system_prompt, s.max_tool_rounds});
 }
 
 Result<QVector<LlmModelConfig>> LlmConfigRepository::list_models(const QString& provider) {

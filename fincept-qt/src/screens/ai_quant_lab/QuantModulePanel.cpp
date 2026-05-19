@@ -103,7 +103,7 @@ QWidget* QuantModulePanel::build_llm_picker(QWidget* parent, QComboBox** out_com
         }
     }
     if (combo->count() == 0)
-        combo->addItem("No LLM profiles — configure in Settings → LLM Config", QVariant());
+        combo->addItem(tr("No LLM profiles — configure in Settings → LLM Config"), QVariant());
 
     // Pre-select the global default if present
     auto resolved = LlmProfileRepository::instance().resolve_for_context("ai_quant_lab");
@@ -115,7 +115,7 @@ QWidget* QuantModulePanel::build_llm_picker(QWidget* parent, QComboBox** out_com
 
     if (out_combo)
         *out_combo = combo;
-    return build_input_row("LLM Profile", combo, parent);
+    return build_input_row(tr("LLM Profile"), combo, parent);
 }
 
 QJsonObject QuantModulePanel::llm_config_from_combo(QComboBox* combo) const {
@@ -305,7 +305,7 @@ QWidget* QuantModulePanel::build_generic_panel() {
                             .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(desc);
 
-    auto* script_lbl = new QLabel(QString("Python script: %1").arg(module_.script), w);
+    auto* script_lbl = new QLabel(tr("Python script: %1").arg(module_.script), w);
     script_lbl->setStyleSheet(QString("color:%1; font-family:%2;"
                                       "padding:6px; background:%3; border:1px solid %4; border-radius:2px;")
                                   .arg(ui::colors::TEXT_TERTIARY())
@@ -316,18 +316,18 @@ QWidget* QuantModulePanel::build_generic_panel() {
 
     // Command input
     auto* cmd = new QLineEdit(w);
-    cmd->setPlaceholderText("Command (e.g. analyze, train, list_models)");
+    cmd->setPlaceholderText(tr("Command (e.g. analyze, train, list_models)"));
     cmd->setStyleSheet(QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
                                "font-family:%4; font-size:%5px; padding:6px 8px; }")
                            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                            .arg(ui::fonts::DATA_FAMILY)
                            .arg(ui::fonts::SMALL));
     text_inputs_["gen_command"] = cmd;
-    vl->addWidget(build_input_row("Command", cmd, w));
+    vl->addWidget(build_input_row(tr("Command"), cmd, w));
 
     // JSON params
     auto* params_edit = new QTextEdit(w);
-    params_edit->setPlaceholderText("JSON parameters (optional)\ne.g. {\"ticker\":\"AAPL\"}");
+    params_edit->setPlaceholderText(tr("JSON parameters (optional)\ne.g. {\"ticker\":\"AAPL\"}"));
     params_edit->setMaximumHeight(100);
     params_edit->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
                                        "font-family:%4; font-size:%5px; padding:6px; }")
@@ -336,9 +336,9 @@ QWidget* QuantModulePanel::build_generic_panel() {
                                    .arg(ui::fonts::SMALL));
     vl->addWidget(params_edit);
 
-    auto* run = make_run_button("EXECUTE", w);
+    auto* run = make_run_button(tr("EXECUTE"), w);
     connect(run, &QPushButton::clicked, this, [this, params_edit]() {
-        status_label_->setText("Running...");
+        status_label_->setText(tr("Running..."));
         auto cmd_text = text_inputs_["gen_command"]->text().trimmed();
         if (cmd_text.isEmpty())
             cmd_text = "analyze";
@@ -389,7 +389,7 @@ void QuantModulePanel::display_error(const QString& msg) {
                            .arg(ui::fonts::SMALL)
                            .arg(ui::fonts::DATA_FAMILY));
     results_layout_->addWidget(err);
-    status_label_->setText("Error");
+    status_label_->setText(tr("Error"));
 }
 
 
@@ -434,8 +434,8 @@ void QuantModulePanel::show_loading(const QString& message) {
     msg->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; background:transparent;")
                            .arg(ui::colors::TEXT_PRIMARY()));
 
-    auto* hint = new QLabel(QString::fromUtf8("Running on the embedded Python runtime — "
-                                              "first invocation per session takes longer (cold start)."),
+    auto* hint = new QLabel(tr("Running on the embedded Python runtime — "
+                               "first invocation per session takes longer (cold start)."),
                             box);
     hint->setWordWrap(true);
     hint->setStyleSheet(QString("color:%1; font-size:9px; background:transparent;")

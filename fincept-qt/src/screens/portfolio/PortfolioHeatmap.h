@@ -21,6 +21,9 @@ class PortfolioHeatmap : public QWidget {
     void set_currency(const QString& currency);
     void refresh_theme();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   signals:
     void symbol_selected(QString symbol);
     void mode_changed(portfolio::HeatmapMode mode);
@@ -30,6 +33,11 @@ class PortfolioHeatmap : public QWidget {
     void rebuild_blocks();
     QColor block_color(const portfolio::HoldingWithQuote& h) const;
     void update_top_movers();
+    void retranslateUi();
+
+    // Header
+    QLabel* title_label_ = nullptr;
+    QLabel* movers_header_ = nullptr;
 
     // Mode buttons
     QPushButton* pnl_btn_ = nullptr;

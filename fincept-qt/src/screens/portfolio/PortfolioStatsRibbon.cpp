@@ -3,6 +3,7 @@
 
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -36,15 +37,15 @@ PortfolioStatsRibbon::PortfolioStatsRibbon(QWidget* parent) : QWidget(parent) {
     row->setSpacing(0);
 
     // ── Cell 1: PORTFOLIO VALUE — biggest number on the row (24px hero) ──────
-    row->addWidget(build_hero(value_cell_, "PORTFOLIO VALUE", 24), 28);
+    row->addWidget(build_hero(value_cell_, tr("PORTFOLIO VALUE"), 24), 28);
     row->addWidget(make_v_separator(this));
 
     // ── Cell 2: UNREALIZED P&L — 20px, signed color ──────────────────────────
-    row->addWidget(build_hero(pnl_cell_, "UNREALIZED P&L", 20), 20);
+    row->addWidget(build_hero(pnl_cell_, tr("UNREALIZED P&L"), 20), 20);
     row->addWidget(make_v_separator(this));
 
     // ── Cell 3: TODAY — 20px, signed color ───────────────────────────────────
-    row->addWidget(build_hero(day_cell_, "TODAY", 20), 16);
+    row->addWidget(build_hero(day_cell_, tr("TODAY"), 20), 16);
     row->addWidget(make_v_separator(this));
 
     // ── Cell 4: RISK & POSITIONING — 2×3 chip grid ───────────────────────────
@@ -95,11 +96,11 @@ QWidget* PortfolioStatsRibbon::build_risk_grid() {
     outer->setContentsMargins(14, 8, 14, 8);
     outer->setSpacing(2);
 
-    auto* header = new QLabel("RISK & POSITIONING");
-    header->setStyleSheet(
+    risk_header_ = new QLabel(tr("RISK & POSITIONING"));
+    risk_header_->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1.2px; background:transparent;")
             .arg(ui::colors::TEXT_TERTIARY()));
-    outer->addWidget(header);
+    outer->addWidget(risk_header_);
 
     auto* g = new QGridLayout;
     g->setContentsMargins(0, 0, 0, 0);
@@ -108,12 +109,12 @@ QWidget* PortfolioStatsRibbon::build_risk_grid() {
 
     // Layout: label TEXT_TERTIARY 10px on left, value 13px / 700 on right.
     // 2 columns × 3 rows. Left column: SHARPE / BETA / MDD. Right: CONC / VOL30 / RISK.
-    sharpe_ = add_grid_chip(g, 0, 0, "SHARPE");
-    conc_   = add_grid_chip(g, 0, 1, "CONC");
-    beta_   = add_grid_chip(g, 1, 0, "BETA");
-    vol_    = add_grid_chip(g, 1, 1, "VOL 30D");
-    mdd_    = add_grid_chip(g, 2, 0, "MDD");
-    risk_   = add_grid_chip(g, 2, 1, "RISK");
+    sharpe_ = add_grid_chip(g, 0, 0, tr("SHARPE"));
+    conc_   = add_grid_chip(g, 0, 1, tr("CONC"));
+    beta_   = add_grid_chip(g, 1, 0, tr("BETA"));
+    vol_    = add_grid_chip(g, 1, 1, tr("VOL 30D"));
+    mdd_    = add_grid_chip(g, 2, 0, tr("MDD"));
+    risk_   = add_grid_chip(g, 2, 1, tr("RISK"));
 
     outer->addLayout(g, 1);
 
@@ -154,6 +155,7 @@ PortfolioStatsRibbon::GridChip PortfolioStatsRibbon::add_grid_chip(QGridLayout* 
 // ── Data setters ─────────────────────────────────────────────────────────────
 
 void PortfolioStatsRibbon::set_summary(const portfolio::PortfolioSummary& s) {
+    last_summary_ = s;
     auto fmt = [](double v, int dp = 2) {
         // Add thousands separator for readability on large NAVs.
         return QLocale().toString(v, 'f', dp);
@@ -164,7 +166,7 @@ void PortfolioStatsRibbon::set_summary(const portfolio::PortfolioSummary& s) {
     // Value: amber (brand value, neutral semantics). Sub: position count.
     value_cell_.value->setText(QString("%1  %2").arg(fmt(s.total_market_value), s.portfolio.currency));
     apply_hero_value_color(value_cell_, ui::colors::AMBER(), 24);
-    value_cell_.sub->setText(QString("▲ %1 positions").arg(s.total_positions));
+    value_cell_.sub->setText(tr("▲ %1 positions").arg(s.total_positions));
 
     // ── Cell 2: UNREALIZED P&L ───────────────────────────────────────────────
     pnl_cell_.value->setText(
@@ -237,6 +239,32 @@ void PortfolioStatsRibbon::set_metrics(const portfolio::ComputedMetrics& m) {
         risk_.value->setText("--");
         risk_.value->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700; background:transparent;")
                                        .arg(ui::colors::TEXT_PRIMARY()));
+    }
+}
+
+void PortfolioStatsRibbon::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PortfolioStatsRibbon::retranslateUi() {
+    if (value_cell_.label) value_cell_.label->setText(tr("PORTFOLIO VALUE"));
+    if (pnl_cell_.label)   pnl_cell_.label->setText(tr("UNREALIZED P&L"));
+    if (day_cell_.label)   day_cell_.label->setText(tr("TODAY"));
+    if (risk_header_)      risk_header_->setText(tr("RISK & POSITIONING"));
+
+    if (sharpe_.label) sharpe_.label->setText(tr("SHARPE"));
+    if (conc_.label)   conc_.label->setText(tr("CONC"));
+    if (beta_.label)   beta_.label->setText(tr("BETA"));
+    if (vol_.label)    vol_.label->setText(tr("VOL 30D"));
+    if (mdd_.label)    mdd_.label->setText(tr("MDD"));
+    if (risk_.label)   risk_.label->setText(tr("RISK"));
+
+    if (last_summary_.has_value()) {
+        // Re-render the "▲ %1 positions" sub-line under PORTFOLIO VALUE.
+        if (value_cell_.sub)
+            value_cell_.sub->setText(tr("▲ %1 positions").arg(last_summary_->total_positions));
     }
 }
 

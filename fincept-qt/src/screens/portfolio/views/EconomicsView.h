@@ -16,10 +16,20 @@ class EconomicsView : public QWidget {
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
+    void retranslateUi();
     void update_indicators();
     void update_sensitivity();
+
+    // Section titles/notes
+    QLabel* ind_title_ = nullptr;
+    QLabel* ind_note_ = nullptr;
+    QLabel* sens_title_ = nullptr;
+    QLabel* sens_note_ = nullptr;
 
     // Macro indicators table
     QTableWidget* indicators_table_ = nullptr;
@@ -29,6 +39,7 @@ class EconomicsView : public QWidget {
 
     portfolio::PortfolioSummary summary_;
     QString currency_;
+    bool has_data_ = false;
 };
 
 } // namespace fincept::screens

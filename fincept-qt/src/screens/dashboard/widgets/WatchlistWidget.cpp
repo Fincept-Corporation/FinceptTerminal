@@ -10,7 +10,7 @@
 namespace fincept::screens::widgets {
 
 WatchlistWidget::WatchlistWidget(QWidget* parent)
-    : BaseWidget("WATCHLIST", parent, ui::colors::INFO),
+    : BaseWidget(tr("WATCHLIST"), parent, ui::colors::INFO),
       symbols_({"AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "JPM"}) {
 
     auto* vl = content_layout();
@@ -21,13 +21,13 @@ WatchlistWidget::WatchlistWidget(QWidget* parent)
     irl->setContentsMargins(4, 4, 4, 4);
     irl->setSpacing(4);
 
-    symbols_label_ = new QLabel("SYMBOLS:");
+    symbols_label_ = new QLabel(tr("SYMBOLS:"));
     irl->addWidget(symbols_label_);
 
     symbols_input_ = new QLineEdit(symbols_.join(", "));
     irl->addWidget(symbols_input_, 1);
 
-    go_btn_ = new QPushButton("GO");
+    go_btn_ = new QPushButton(tr("GO"));
     go_btn_->setFixedWidth(32);
     connect(go_btn_, &QPushButton::clicked, this, [this]() {
         QString text = symbols_input_->text().trimmed().toUpper();
@@ -48,7 +48,7 @@ WatchlistWidget::WatchlistWidget(QWidget* parent)
 
     // Table
     table_ = new ui::DataTable;
-    table_->set_headers({"SYMBOL", "PRICE", "CHG", "CHG%"});
+    table_->set_headers({tr("SYMBOL"), tr("PRICE"), tr("CHG"), tr("CHG%")});
     table_->set_column_widths({100, 90, 80, 70});
     vl->addWidget(table_);
 

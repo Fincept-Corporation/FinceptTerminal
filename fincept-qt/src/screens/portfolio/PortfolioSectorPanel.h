@@ -23,6 +23,9 @@ class PortfolioSectorPanel : public QWidget {
     // Sector utilities — public so callers can map indices to colors
     static QColor sector_color(int index);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   signals:
     /// Emitted when the user clicks a pie slice. Empty string = clear filter.
     void sector_selected(QString sector);
@@ -35,6 +38,12 @@ class PortfolioSectorPanel : public QWidget {
     void update_donut();
     void update_correlation();
     void on_sector_legend_clicked(const QString& sector);
+    void retranslateUi();
+
+    // Header labels
+    QLabel* title_label_ = nullptr;
+    QLabel* corr_title_ = nullptr;
+    QLabel* corr_note_ = nullptr;
 
     // Donut chart
     QChartView* donut_view_ = nullptr;

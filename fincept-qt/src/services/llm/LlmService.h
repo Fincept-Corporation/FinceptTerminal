@@ -79,6 +79,8 @@ class LlmService : public QObject {
     QString active_base_url() const;
     double active_temperature() const;
     int active_max_tokens() const;
+    /// Tool-call rounds ceiling used by do_tool_loop. Clamped to [1, 200].
+    int active_max_tool_rounds() const;
     bool tools_enabled() const;
     bool is_configured() const;
 
@@ -112,6 +114,7 @@ class LlmService : public QObject {
     mutable QString model_;
     mutable double temperature_ = 0.7;
     mutable int max_tokens_ = 4096;
+    mutable int max_tool_rounds_ = 40;
     mutable QString system_prompt_;
     mutable bool tools_enabled_ = true;
     mutable bool config_loaded_ = false;

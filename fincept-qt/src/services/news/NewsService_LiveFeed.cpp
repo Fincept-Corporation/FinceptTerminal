@@ -46,11 +46,13 @@ void NewsService::connect_live_feed(const QString& ws_url) {
     connect(live_ws_, &QWebSocket::connected, this, [this]() {
         live_connected_ = true;
         LOG_INFO("NewsService", "WebSocket live feed connected");
+        emit live_state_changed(true);
     });
 
     connect(live_ws_, &QWebSocket::disconnected, this, [this]() {
         live_connected_ = false;
         LOG_WARN("NewsService", "WebSocket live feed disconnected");
+        emit live_state_changed(false);
         // Auto-reconnect after delay
         QTimer::singleShot(kWsReconnectDelayMs, this, [this]() {
             if (live_ws_ && !live_connected_)
@@ -139,6 +141,7 @@ void NewsService::disconnect_live_feed() {
     live_ws_->deleteLater();
     live_ws_ = nullptr;
     live_connected_ = false;
+    emit live_state_changed(false);
 }
 
 bool NewsService::is_live_connected() const {

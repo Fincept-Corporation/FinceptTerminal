@@ -117,7 +117,7 @@ void AgentChatPanel::build_ui() {
     hl->setContentsMargins(14, 0, 12, 0);
     hl->setSpacing(10);
 
-    auto* title = new QLabel("AGENT CHAT");
+    auto* title = new QLabel(tr("AGENT CHAT"));
     title->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;letter-spacing:1.5px;").arg(col::AMBER()));
     hl->addWidget(title);
 

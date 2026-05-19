@@ -59,7 +59,7 @@ QString sentiment_color(const QString& s) {
 } // namespace
 
 NotesWidget::NotesWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget("NOTES", parent, ui::colors::AMBER()) {
+    : BaseWidget(tr("NOTES"), parent, ui::colors::AMBER()) {
     auto* vl = content_layout();
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
@@ -96,8 +96,8 @@ void NotesWidget::apply_config(const QJsonObject& cfg) {
     filter_ = (f == QStringLiteral("favorites")) ? QStringLiteral("favorites") : QStringLiteral("recent");
     max_rows_ = qBound(3, cfg.value("max_rows").toInt(8), 50);
 
-    set_title(filter_ == QStringLiteral("favorites") ? QStringLiteral("NOTES — FAVORITES")
-                                                     : QStringLiteral("NOTES — RECENT"));
+    set_title(filter_ == QStringLiteral("favorites") ? tr("NOTES — FAVORITES")
+                                                     : tr("NOTES — RECENT"));
     refresh_data();
 }
 
@@ -154,7 +154,7 @@ void NotesWidget::refresh_data() {
     auto& repo = fincept::NotesRepository::instance();
     auto result = repo.list_all(/*include_archived=*/false);
     if (!result.is_ok()) {
-        auto* err = new QLabel(QString("Failed to load notes: %1").arg(QString::fromStdString(result.error())));
+        auto* err = new QLabel(tr("Failed to load notes: %1").arg(QString::fromStdString(result.error())));
         err->setAlignment(Qt::AlignCenter);
         err->setStyleSheet(QString("color:%1;font-size:10px;background:transparent;padding:16px;")
                                .arg(ui::colors::NEGATIVE()));
@@ -186,8 +186,8 @@ void NotesWidget::refresh_data() {
 
     if (notes.isEmpty()) {
         const QString msg = (filter_ == QStringLiteral("favorites"))
-                                ? QStringLiteral("No favorite notes")
-                                : QStringLiteral("No notes yet — open Notes screen to add one");
+                                ? tr("No favorite notes")
+                                : tr("No notes yet — open Notes screen to add one");
         auto* empty = new QLabel(msg);
         empty->setAlignment(Qt::AlignCenter);
         empty->setStyleSheet(QString("color:%1;font-size:10px;background:transparent;padding:16px;")
@@ -222,7 +222,7 @@ void NotesWidget::refresh_data() {
 
         QString title_text = note.title.trimmed();
         if (title_text.isEmpty())
-            title_text = QStringLiteral("(untitled)");
+            title_text = tr("(untitled)");
         if (title_text.length() > 50)
             title_text = title_text.left(48) + QStringLiteral("…");
         auto* title_lbl = new QLabel(title_text);
@@ -316,21 +316,21 @@ bool NotesWidget::eventFilter(QObject* obj, QEvent* event) {
 
 QDialog* NotesWidget::make_config_dialog(QWidget* parent) {
     auto* dlg = new QDialog(parent);
-    dlg->setWindowTitle("Configure — Notes");
+    dlg->setWindowTitle(tr("Configure — Notes"));
     auto* form = new QFormLayout(dlg);
 
     auto* filter_box = new QComboBox(dlg);
-    filter_box->addItem("Recent", "recent");
-    filter_box->addItem("Favorites only", "favorites");
+    filter_box->addItem(tr("Recent"), "recent");
+    filter_box->addItem(tr("Favorites only"), "favorites");
     const int idx = filter_box->findData(filter_);
     if (idx >= 0)
         filter_box->setCurrentIndex(idx);
-    form->addRow("Filter", filter_box);
+    form->addRow(tr("Filter"), filter_box);
 
     auto* spin = new QSpinBox(dlg);
     spin->setRange(3, 50);
     spin->setValue(max_rows_);
-    form->addRow("Max rows", spin);
+    form->addRow(tr("Max rows"), spin);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
     form->addRow(buttons);

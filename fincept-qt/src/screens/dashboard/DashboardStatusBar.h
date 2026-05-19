@@ -29,6 +29,7 @@ class DashboardStatusBar : public QWidget {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void refresh_theme();
@@ -37,6 +38,7 @@ class DashboardStatusBar : public QWidget {
     void ping_api();
     void set_latency(int ms); // -1 = timeout/error
     void toggle_notif_panel();
+    void retranslateUi();
 
     QLabel* version_label_ = nullptr;
     QLabel* uptime_label_ = nullptr;
@@ -44,6 +46,13 @@ class DashboardStatusBar : public QWidget {
     QLabel* feeds_label_ = nullptr;
     QLabel* latency_label_ = nullptr;
     QLabel* mem_label_ = nullptr;
+    QLabel* session_lbl_ = nullptr;
+    QLabel* layout_caption_lbl_ = nullptr;
+    QLabel* feeds_caption_lbl_ = nullptr;
+    QLabel* ready_lbl_ = nullptr;
+    int     layout_count_ = 0;
+    bool    feeds_connected_ = true;
+    int     last_latency_ms_ = -2; // -2 = uninitialised, -1 = error
 
     fincept::ui::NotifBell* notif_bell_ = nullptr;
     fincept::ui::NotifPanel* notif_panel_ = nullptr;

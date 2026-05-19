@@ -43,6 +43,7 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGro
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_quote_loaded(services::equity::QuoteData quote);
@@ -55,9 +56,12 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGro
     QWidget* build_quote_bar();
     void update_quote_bar(const services::equity::QuoteData& q);
     void load_symbol(const QString& symbol);
+    void retranslateUi();
 
     // Title bar
+    QLabel* title_label_ = nullptr;
     QLabel* symbol_label_ = nullptr;
+    QLabel* hint_label_ = nullptr;
 
     // Quote bar
     QLabel* sym_label_ = nullptr;

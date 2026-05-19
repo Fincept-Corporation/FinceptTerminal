@@ -7,6 +7,7 @@
 #include "services/gov_data/GovDataService.h"
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
@@ -27,10 +28,18 @@ using namespace fincept::ui;
 GovDataFrancePanel::GovDataFrancePanel(QWidget* parent) : QWidget(parent) {
     setStyleSheet(make_gov_panel_style(kGovDataFranceColor));
     build_ui();
+    retranslateUi();
     connect(&services::GovDataService::instance(), &services::GovDataService::result_ready, this,
             &GovDataFrancePanel::on_result);
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this]() { setStyleSheet(make_gov_panel_style(kGovDataFranceColor)); });
+}
+
+void GovDataFrancePanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
 }
 
 // ── Build UI ──────────────────────────────────────────────────────────────────
@@ -49,7 +58,7 @@ void GovDataFrancePanel::build_ui() {
     auto* bcl = new QHBoxLayout(breadcrumb_);
     bcl->setContentsMargins(14, 0, 14, 0);
     bcl->setSpacing(4);
-    breadcrumb_label_ = new QLabel("Data Services");
+    breadcrumb_label_ = new QLabel;
     breadcrumb_label_->setObjectName("govBreadcrumbText");
     bcl->addWidget(breadcrumb_label_);
     bcl->addStretch(1);
@@ -61,10 +70,9 @@ void GovDataFrancePanel::build_ui() {
     // Content stack
     content_stack_ = new QStackedWidget;
 
-    // Page 0 — Data Services table
+    // Page 0 — Data Services table (headers set in retranslateUi)
     services_table_ = new QTableWidget;
     services_table_->setColumnCount(4);
-    services_table_->setHorizontalHeaderLabels({"NAME", "VIEWS", "FOLLOWERS", "CREATED"});
     services_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     services_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     services_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
@@ -75,10 +83,9 @@ void GovDataFrancePanel::build_ui() {
     configure_table(services_table_);
     content_stack_->addWidget(services_table_); // index 0
 
-    // Page 1 — Datasets table (search results)
+    // Page 1 — Datasets table (headers set in retranslateUi)
     datasets_table_ = new QTableWidget;
     datasets_table_->setColumnCount(5);
-    datasets_table_->setHorizontalHeaderLabels({"TITLE", "ORG", "LICENSE", "FILES", "MODIFIED"});
     datasets_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     datasets_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     datasets_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
@@ -93,10 +100,9 @@ void GovDataFrancePanel::build_ui() {
             &GovDataFrancePanel::on_dataset_row_double_clicked);
     content_stack_->addWidget(datasets_table_); // index 1
 
-    // Page 2 — Geo / Municipalities table
+    // Page 2 — Geo / Municipalities table (headers set in retranslateUi)
     geo_table_ = new QTableWidget;
     geo_table_->setColumnCount(6);
-    geo_table_->setHorizontalHeaderLabels({"NAME", "CODE", "POSTAL", "DEPT", "REGION", "POPULATION"});
     geo_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     geo_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     geo_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
@@ -111,10 +117,9 @@ void GovDataFrancePanel::build_ui() {
     configure_table(geo_table_);
     content_stack_->addWidget(geo_table_); // index 2
 
-    // Page 3 — Resources / Column schema table
+    // Page 3 — Resources / Column schema table (headers set in retranslateUi)
     resources_table_ = new QTableWidget;
     resources_table_->setColumnCount(2);
-    resources_table_->setHorizontalHeaderLabels({"NAME", "TYPE"});
     resources_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     resources_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     resources_table_->setColumnWidth(1, 120);
@@ -145,7 +150,7 @@ QWidget* GovDataFrancePanel::build_toolbar() {
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(5);
 
-    back_btn_ = new QPushButton("← BACK");
+    back_btn_ = new QPushButton;
     back_btn_->setObjectName("govBackBtn");
     back_btn_->setVisible(false);
     back_btn_->setCursor(Qt::PointingHandCursor);
@@ -154,7 +159,7 @@ QWidget* GovDataFrancePanel::build_toolbar() {
 
     hl->addSpacing(4);
 
-    services_btn_ = new QPushButton("DATA SERVICES");
+    services_btn_ = new QPushButton;
     services_btn_->setObjectName("govTabBtn");
     services_btn_->setCheckable(true);
     services_btn_->setChecked(true);
@@ -162,14 +167,14 @@ QWidget* GovDataFrancePanel::build_toolbar() {
     connect(services_btn_, &QPushButton::clicked, this, [this]() { on_tab_changed(Services); });
     hl->addWidget(services_btn_);
 
-    datasets_btn_ = new QPushButton("DATASETS");
+    datasets_btn_ = new QPushButton;
     datasets_btn_->setObjectName("govTabBtn");
     datasets_btn_->setCheckable(true);
     datasets_btn_->setCursor(Qt::PointingHandCursor);
     connect(datasets_btn_, &QPushButton::clicked, this, [this]() { on_tab_changed(Datasets); });
     hl->addWidget(datasets_btn_);
 
-    geo_btn_ = new QPushButton("GEO SEARCH");
+    geo_btn_ = new QPushButton;
     geo_btn_->setObjectName("govTabBtn");
     geo_btn_->setCheckable(true);
     geo_btn_->setCursor(Qt::PointingHandCursor);
@@ -178,15 +183,15 @@ QWidget* GovDataFrancePanel::build_toolbar() {
 
     hl->addSpacing(10);
 
+    // Search input — placeholder set in retranslateUi/on_tab_changed.
     search_input_ = new QLineEdit;
     search_input_->setObjectName("govSearch");
-    search_input_->setPlaceholderText("Search…");
     search_input_->setFixedWidth(210);
     search_input_->setFixedHeight(26);
     connect(search_input_, &QLineEdit::returnPressed, this, &GovDataFrancePanel::on_fetch);
     hl->addWidget(search_input_);
 
-    fetch_btn_ = new QPushButton("FETCH");
+    fetch_btn_ = new QPushButton;
     fetch_btn_->setObjectName("govFetchBtn");
     fetch_btn_->setCursor(Qt::PointingHandCursor);
     connect(fetch_btn_, &QPushButton::clicked, this, &GovDataFrancePanel::on_fetch);
@@ -194,7 +199,7 @@ QWidget* GovDataFrancePanel::build_toolbar() {
 
     hl->addStretch(1);
 
-    export_btn_ = new QPushButton("CSV");
+    export_btn_ = new QPushButton;
     export_btn_->setObjectName("govCsvBtn");
     export_btn_->setCursor(Qt::PointingHandCursor);
     connect(export_btn_, &QPushButton::clicked, this, &GovDataFrancePanel::on_export_csv);
@@ -203,10 +208,44 @@ QWidget* GovDataFrancePanel::build_toolbar() {
     return bar;
 }
 
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void GovDataFrancePanel::retranslateUi() {
+    if (back_btn_)     back_btn_->setText(tr("← BACK"));
+    if (services_btn_) services_btn_->setText(tr("DATA SERVICES"));
+    if (datasets_btn_) datasets_btn_->setText(tr("DATASETS"));
+    if (geo_btn_)      geo_btn_->setText(tr("GEO SEARCH"));
+    if (fetch_btn_)    fetch_btn_->setText(tr("FETCH"));
+    if (export_btn_)   export_btn_->setText(tr("CSV"));
+
+    if (search_input_) {
+        // Per-view placeholders: pick the one that matches the active tab so
+        // the hint stays meaningful after a language change.
+        if (current_view_ == Datasets)
+            search_input_->setPlaceholderText(tr("Search datasets…"));
+        else if (current_view_ == Geo)
+            search_input_->setPlaceholderText(tr("Municipality name…"));
+        else
+            search_input_->setPlaceholderText(tr("Search…"));
+    }
+
+    if (services_table_)
+        services_table_->setHorizontalHeaderLabels(
+            {tr("NAME"), tr("VIEWS"), tr("FOLLOWERS"), tr("CREATED")});
+    if (datasets_table_)
+        datasets_table_->setHorizontalHeaderLabels(
+            {tr("TITLE"), tr("ORG"), tr("LICENSE"), tr("FILES"), tr("MODIFIED")});
+    if (geo_table_)
+        geo_table_->setHorizontalHeaderLabels(
+            {tr("NAME"), tr("CODE"), tr("POSTAL"), tr("DEPT"), tr("REGION"), tr("POPULATION")});
+    if (resources_table_)
+        resources_table_->setHorizontalHeaderLabels({tr("NAME"), tr("TYPE")});
+}
+
 // ── Public slot ───────────────────────────────────────────────────────────────
 
 void GovDataFrancePanel::load_initial_data() {
-    show_loading("Loading data services from data.gouv.fr…");
+    show_loading(tr("Loading data services from data.gouv.fr…"));
     services::GovDataService::instance().execute(kGovDataFranceScript, "publishers", {}, "fr_services");
 }
 
@@ -225,28 +264,28 @@ void GovDataFrancePanel::on_tab_changed(int tab_index) {
             load_initial_data();
         else {
             content_stack_->setCurrentIndex(Services);
-            row_count_label_->setText(QString::number(current_services_.size()) + " services");
+            row_count_label_->setText(tr("%1 services").arg(current_services_.size()));
         }
-        update_breadcrumb("Data Services");
+        update_breadcrumb(tr("Data Services"));
     } else if (view == Datasets) {
         if (current_datasets_.isEmpty()) {
-            show_status("Enter a search term above and click FETCH to find datasets.");
+            show_status(tr("Enter a search term above and click FETCH to find datasets."));
         } else {
             content_stack_->setCurrentIndex(Datasets);
-            row_count_label_->setText(QString::number(current_datasets_.size()) + " datasets");
+            row_count_label_->setText(tr("%1 datasets").arg(current_datasets_.size()));
         }
-        update_breadcrumb("Datasets");
-        search_input_->setPlaceholderText("Search datasets…");
+        update_breadcrumb(tr("Datasets"));
+        search_input_->setPlaceholderText(tr("Search datasets…"));
         search_input_->setFocus();
     } else if (view == Geo) {
         if (current_geo_.isEmpty()) {
-            show_status("Enter a municipality name above and click FETCH to search.");
+            show_status(tr("Enter a municipality name above and click FETCH to search."));
         } else {
             content_stack_->setCurrentIndex(Geo);
-            row_count_label_->setText(QString::number(current_geo_.size()) + " municipalities");
+            row_count_label_->setText(tr("%1 municipalities").arg(current_geo_.size()));
         }
-        update_breadcrumb("Geo Search — Municipalities");
-        search_input_->setPlaceholderText("Municipality name…");
+        update_breadcrumb(tr("Geo Search — Municipalities"));
+        search_input_->setPlaceholderText(tr("Municipality name…"));
         search_input_->setFocus();
     }
 
@@ -258,7 +297,7 @@ void GovDataFrancePanel::on_fetch() {
 
     if (current_view_ == Services || current_view_ == Resources) {
         // Re-load services
-        show_loading("Loading data services…");
+        show_loading(tr("Loading data services…"));
         services::GovDataService::instance().execute(kGovDataFranceScript, "publishers", {}, "fr_services");
         return;
     }
@@ -268,14 +307,10 @@ void GovDataFrancePanel::on_fetch() {
     search_query_ = query;
 
     if (current_view_ == Datasets) {
-        show_loading("Searching datasets for "
-                     " + query + "
-                     "…");
+        show_loading(tr("Searching datasets for \"%1\"…").arg(query));
         services::GovDataService::instance().execute(kGovDataFranceScript, "datasets", {query, "50"}, "fr_datasets");
     } else if (current_view_ == Geo) {
-        show_loading("Searching municipalities for "
-                     " + query + "
-                     "…");
+        show_loading(tr("Searching municipalities for \"%1\"…").arg(query));
         services::GovDataService::instance().execute(kGovDataFranceScript, "municipalities", {query}, "fr_geo");
     }
 }
@@ -288,9 +323,7 @@ void GovDataFrancePanel::on_dataset_row_double_clicked(int row) {
     if (selected_dataset_id_.isEmpty())
         return;
 
-    show_loading("Loading column schema for "
-                 " + item->text() + "
-                 "…");
+    show_loading(tr("Loading column schema for \"%1\"…").arg(item->text()));
     services::GovDataService::instance().execute(kGovDataFranceScript, "resources", {selected_dataset_id_},
                                                  "fr_resources");
 }
@@ -302,8 +335,8 @@ void GovDataFrancePanel::on_back() {
         services_btn_->setChecked(false);
         datasets_btn_->setChecked(true);
         geo_btn_->setChecked(false);
-        row_count_label_->setText(QString::number(current_datasets_.size()) + " datasets");
-        update_breadcrumb("Datasets");
+        row_count_label_->setText(tr("%1 datasets").arg(current_datasets_.size()));
+        update_breadcrumb(tr("Datasets"));
     }
     update_toolbar_state();
 }
@@ -337,8 +370,8 @@ void GovDataFrancePanel::on_result(const QString& request_id, const services::Go
         datasets_btn_->setChecked(false);
         geo_btn_->setChecked(false);
         content_stack_->setCurrentIndex(Services);
-        update_breadcrumb("Data Services");
-        row_count_label_->setText(QString::number(payload.size()) + " services");
+        update_breadcrumb(tr("Data Services"));
+        row_count_label_->setText(tr("%1 services").arg(payload.size()));
     } else if (request_id == "fr_datasets") {
         current_datasets_ = payload;
         populate_datasets(payload);
@@ -347,10 +380,8 @@ void GovDataFrancePanel::on_result(const QString& request_id, const services::Go
         services_btn_->setChecked(false);
         geo_btn_->setChecked(false);
         content_stack_->setCurrentIndex(Datasets);
-        update_breadcrumb("Datasets  ›  "
-                          " + search_query_ + "
-                          "");
-        row_count_label_->setText(QString::number(payload.size()) + " datasets");
+        update_breadcrumb(tr("Datasets  ›  \"%1\"").arg(search_query_));
+        row_count_label_->setText(tr("%1 datasets").arg(payload.size()));
     } else if (request_id == "fr_geo") {
         current_geo_ = payload;
         populate_geo(payload);
@@ -359,17 +390,15 @@ void GovDataFrancePanel::on_result(const QString& request_id, const services::Go
         services_btn_->setChecked(false);
         datasets_btn_->setChecked(false);
         content_stack_->setCurrentIndex(Geo);
-        update_breadcrumb("Municipalities  ›  "
-                          " + search_query_ + "
-                          "");
-        row_count_label_->setText(QString::number(payload.size()) + " results");
+        update_breadcrumb(tr("Municipalities  ›  \"%1\"").arg(search_query_));
+        row_count_label_->setText(tr("%1 results").arg(payload.size()));
     } else if (request_id == "fr_resources") {
         current_resources_ = payload;
         populate_resources(payload);
         current_view_ = Resources;
         content_stack_->setCurrentIndex(Resources);
-        update_breadcrumb("Datasets  ›  Column Schema");
-        row_count_label_->setText(QString::number(payload.size()) + " columns");
+        update_breadcrumb(tr("Datasets  ›  Column Schema"));
+        row_count_label_->setText(tr("%1 columns").arg(payload.size()));
     }
 
     update_toolbar_state();
@@ -534,7 +563,7 @@ void GovDataFrancePanel::show_loading(const QString& message) {
 void GovDataFrancePanel::show_error(const QString& message) {
     status_label_->setStyleSheet(
         QString("color:%1; font-size:12px; background:transparent;").arg(ui::colors::NEGATIVE()));
-    status_label_->setText("Error: " + message);
+    status_label_->setText(tr("Error: %1").arg(message));
     content_stack_->setCurrentIndex(Status);
     LOG_ERROR("GovFrance", message);
 }

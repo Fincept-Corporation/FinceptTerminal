@@ -197,6 +197,32 @@ void NewsCommandBar::build_command_row(QVBoxLayout* root) {
     hl->addWidget(summarize_btn_);
     connect(summarize_btn_, &QPushButton::clicked, this, &NewsCommandBar::summarize_clicked);
 
+    // Refresh-cadence selector — drives NewsService::set_refresh_interval.
+    // 0 = manual (auto-refresh paused); other values are minutes.
+    refresh_combo_ = new QComboBox(row);
+    refresh_combo_->setObjectName("newsCommandBarCombo");
+    refresh_combo_->setFixedHeight(18);
+    refresh_combo_->setFixedWidth(70);
+    refresh_combo_->setToolTip(tr("Auto-refresh interval"));
+    refresh_combo_->addItem(tr("MANUAL"), 0);
+    refresh_combo_->addItem(tr("1 MIN"), 1);
+    refresh_combo_->addItem(tr("5 MIN"), 5);
+    refresh_combo_->addItem(tr("10 MIN"), 10);
+    refresh_combo_->addItem(tr("30 MIN"), 30);
+    refresh_combo_->setCurrentIndex(3); // default 10 min — matches existing behavior
+    hl->addWidget(refresh_combo_);
+    connect(refresh_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int idx) { emit refresh_interval_changed(refresh_combo_->itemData(idx).toInt()); });
+
+    // Sources button — opens the RSS feed manager dialog
+    sources_btn_ = new QPushButton("SRC", row);
+    sources_btn_->setObjectName("newsCommandBarSources");
+    sources_btn_->setFixedHeight(20);
+    sources_btn_->setCursor(Qt::PointingHandCursor);
+    sources_btn_->setToolTip(tr("Manage RSS feed sources"));
+    hl->addWidget(sources_btn_);
+    connect(sources_btn_, &QPushButton::clicked, this, &NewsCommandBar::manage_sources_clicked);
+
     // Refresh button
     refresh_btn_ = new QPushButton("REFRESH", row);
     refresh_btn_->setObjectName("newsCommandBarRefresh");
@@ -295,6 +321,19 @@ void NewsCommandBar::build_intel_row(QVBoxLayout* root) {
     hl->addWidget(intel_deviations_);
 
     hl->addStretch();
+
+    // Live-feed badge (right side of intel strip). Reflects the
+    // NewsService WebSocket state and toggles connect/disconnect on click.
+    live_badge_ = new QPushButton("OFFLINE", row);
+    live_badge_->setObjectName("newsLiveBadge");
+    live_badge_->setFixedHeight(20);
+    live_badge_->setCursor(Qt::PointingHandCursor);
+    live_badge_->setToolTip(tr("Live feed status — click to toggle WebSocket connection"));
+    live_badge_->setStyleSheet(
+        "color:#94a3b8; background:transparent; border:1px solid #94a3b8;"
+        " padding:0 6px; font-weight:700; font-size:10px;");
+    hl->addWidget(live_badge_);
+    connect(live_badge_, &QPushButton::clicked, this, &NewsCommandBar::live_toggle_clicked);
 
     root->addWidget(row);
 }
@@ -414,6 +453,34 @@ void NewsCommandBar::update_deviations(const QVector<QPair<QString, double>>& de
         parts << QString("%1 %2x").arg(deviations[i].first.left(4)).arg(deviations[i].second, 0, 'f', 1);
     intel_deviations_->setText(parts.join("  "));
     intel_deviations_->show();
+}
+
+void NewsCommandBar::set_refresh_interval_minutes(int minutes) {
+    if (!refresh_combo_)
+        return;
+    for (int i = 0; i < refresh_combo_->count(); ++i) {
+        if (refresh_combo_->itemData(i).toInt() == minutes) {
+            QSignalBlocker block(refresh_combo_);
+            refresh_combo_->setCurrentIndex(i);
+            return;
+        }
+    }
+}
+
+void NewsCommandBar::set_live_state(bool connected) {
+    if (!live_badge_)
+        return;
+    if (connected) {
+        live_badge_->setText("● LIVE");
+        live_badge_->setStyleSheet(
+            "color:#16a34a; background:transparent; border:1px solid #16a34a;"
+            " padding:0 6px; font-weight:700; font-size:10px;");
+    } else {
+        live_badge_->setText("OFFLINE");
+        live_badge_->setStyleSheet(
+            "color:#94a3b8; background:transparent; border:1px solid #94a3b8;"
+            " padding:0 6px; font-weight:700; font-size:10px;");
+    }
 }
 
 void NewsCommandBar::update_monitor_summary(int total_monitors, int active_alerts) {

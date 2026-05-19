@@ -28,8 +28,12 @@ class QuantStatsView : public QWidget {
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
+    void retranslateUi();
 
     // Per-tab update methods — called after qs_data_ is populated
     void update_metrics();
@@ -48,10 +52,25 @@ class QuantStatsView : public QWidget {
 
     // ── Tab container ─────────────────────────────────────────────────────────
     QTabWidget* tabs_ = nullptr;
+    int metrics_tab_index_ = -1;
+    int returns_tab_index_ = -1;
+    int drawdown_tab_index_ = -1;
+    int rolling_tab_index_ = -1;
+    int mc_tab_index_ = -1;
 
     // ── Header controls ───────────────────────────────────────────────────────
+    QLabel* title_lbl_ = nullptr;
     QPushButton* qs_run_btn_ = nullptr;
     QLabel* qs_status_ = nullptr;
+    QLabel* metrics_section_lbl_ = nullptr;
+    QLabel* mc_title_ = nullptr;
+    QLabel* mc_desc_ = nullptr;
+
+    // Placeholder labels inside each tab's stack (index 0)
+    QLabel* returns_placeholder_ = nullptr;
+    QLabel* drawdown_placeholder_ = nullptr;
+    QLabel* rolling_placeholder_ = nullptr;
+    QLabel* mc_placeholder_ = nullptr;
 
     // ── METRICS tab ───────────────────────────────────────────────────────────
     QTableWidget* metrics_table_ = nullptr;

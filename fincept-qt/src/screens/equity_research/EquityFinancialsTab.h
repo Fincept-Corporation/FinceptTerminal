@@ -18,11 +18,16 @@ class EquityFinancialsTab : public QWidget {
     explicit EquityFinancialsTab(QWidget* parent = nullptr);
     void set_symbol(const QString& symbol);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_financials_loaded(services::equity::FinancialsData data);
 
   private:
     void build_ui();
+    void retranslateUi();
+    void rebuild_views();  ///< Tear down + rebuild stack_ pages so new locale text flows through.
 
     // Statement view builders
     QWidget* build_income_view();
@@ -74,6 +79,7 @@ class EquityFinancialsTab : public QWidget {
     QPushButton* btn_income_ = nullptr;
     QPushButton* btn_balance_ = nullptr;
     QPushButton* btn_cashflow_ = nullptr;
+    QPushButton* btn_export_csv_ = nullptr;
 
     QStackedWidget* stack_ = nullptr;
 
