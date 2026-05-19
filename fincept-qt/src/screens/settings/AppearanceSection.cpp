@@ -118,10 +118,8 @@ void AppearanceSection::build_ui() {
     });
 
     auto restart_debounce = [this]() { appearance_debounce_->start(); };
-    connect(app_font_size_,   &QComboBox::currentTextChanged, this, restart_debounce,
-            Qt::UniqueConnection);
-    connect(app_font_family_, &QComboBox::currentTextChanged, this, restart_debounce,
-            Qt::UniqueConnection);
+    connect(app_font_size_,   &QComboBox::currentTextChanged, this, restart_debounce);
+    connect(app_font_family_, &QComboBox::currentTextChanged, this, restart_debounce);
 
     vl->addSpacing(8);
     vl->addWidget(make_sep());
@@ -139,8 +137,7 @@ void AppearanceSection::build_ui() {
     app_density_->setStyleSheet(combo_ss());
     vl->addWidget(make_row(tr("Content Density"), app_density_, tr("Controls padding and spacing throughout the UI.")));
 
-    connect(app_density_, &QComboBox::currentTextChanged, this, restart_debounce,
-            Qt::UniqueConnection);
+    connect(app_density_, &QComboBox::currentTextChanged, this, restart_debounce);
 
     vl->addSpacing(8);
     vl->addWidget(make_sep());
