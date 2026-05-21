@@ -15,7 +15,7 @@ if not exist "%EXE_PATH%" (
     echo [1/2] App not built yet. Starting build...
 
     cd /d "%APP_DIR%"
-    python -m cmake --build --preset win-release
+    python -m cmake --build . --preset win-release
     if %ERRORLEVEL% neq 0 (
         echo Error: Build failed.
         pause

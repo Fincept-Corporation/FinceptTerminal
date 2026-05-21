@@ -92,7 +92,8 @@ def main():
 
     # Use the absolute path to the freshly installed Qt
     # Call cmake via python -m cmake to ensure it's found even if not in PATH
-    if not run_command([sys.executable, "-m", "cmake", "--preset", "win-release", f"-DCMAKE_PREFIX_PATH={qt_path}"]):
+    # Explicitly point to the source directory -S fincept-qt
+    if not run_command([sys.executable, "-m", "cmake", "-S", ".", "--preset", "win-release", f"-DCMAKE_PREFIX_PATH={qt_path}"]):
         print("\nError: CMake configuration failed.")
         print("Common fix: Ensure you have Visual Studio 2022 installed with C++ support.")
         sys.exit(1)
