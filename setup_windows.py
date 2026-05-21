@@ -93,9 +93,13 @@ def main():
     # Use the absolute path to the freshly installed Qt
     # Call cmake via python -m cmake to ensure it's found even if not in PATH
     # Explicitly point to the source directory -S fincept-qt
+    # We attempt to run within the vcvarsall environment if possible, but
+    # since we're already in Python, the easiest way for the user is to
+    # run run_local.bat which handles the environment setup.
     if not run_command([sys.executable, "-m", "cmake", "-S", ".", "--preset", "win-release", f"-DCMAKE_PREFIX_PATH={qt_path}"]):
         print("\nError: CMake configuration failed.")
         print("Common fix: Ensure you have Visual Studio 2022 installed with C++ support.")
+        print("Tip: If detection fails, try running this script from the 'Developer Command Prompt for VS 2022'.")
         sys.exit(1)
 
     print("\n================================================")
