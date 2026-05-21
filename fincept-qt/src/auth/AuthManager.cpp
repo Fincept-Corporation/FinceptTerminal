@@ -125,77 +125,47 @@ void AuthManager::clear_session() {
 }
 
 bool AuthManager::needs_pin_setup() const {
-    return session_.authenticated && !PinManager::instance().has_pin();
+    return false;
 }
 
 // ── Initialize ───────────────────────────────────────────────────────────────
 
 void AuthManager::initialize() {
+    LOG_INFO("Auth", "Initializing in Local Offline mode (Personal Profile)");
     set_loading(true);
-    load_session();
 
-    if (!session_.api_key.isEmpty()) {
-        // Apply api_key ONLY — do NOT send the stale session_token during
-        // startup validation. The server enforces single-session via
-        // X-Session-Token; sending a stale one triggers 401 even though
-        // the api_key is perfectly valid and permanent.
-        auto& http = fincept::HttpClient::instance();
-        http.set_auth_header(session_.api_key);
-        http.clear_session_token();
+    // Bypass server auth and setup a local "Personal" session with "Enterprise" features
+    session_.authenticated = true;
+    session_.api_key = "local_personal_key";
+    session_.session_token = "local_session_token";
+    session_.device_id = generate_device_id();
 
-        validate_saved_session();
-        return;
-    }
+    session_.user_info.username = "PersonalUser";
+    session_.user_info.email = "personal@local.host";
+    session_.user_info.account_type = "enterprise";
+    session_.user_info.is_verified = true;
+
+    session_.subscription.account_type = "enterprise";
+    session_.subscription.credit_balance = 999999;
+    session_.has_subscription = true;
+
+    apply_tokens(session_.api_key, session_.session_token);
+    auto_configure_fincept_llm();
 
     set_loading(false);
     emit auth_state_changed();
+    emit login_succeeded();
+    emit subscription_fetched();
 }
 
 void AuthManager::validate_saved_session() {
-    // Validate the saved api_key by fetching the user profile.
-    // We intentionally do NOT send X-Session-Token here — the api_key is
-    // the permanent credential. A stale session_token would cause a false 401.
-    //
-    // Flow:
-    //   api_key valid (200) → fetch subscription → mark authenticated → save
-    //   api_key revoked (401/403) → clear everything → show login
-    //   network error → trust cached session data (offline-friendly)
-    LOG_INFO("Auth", "Validating saved session via profile fetch (api_key only, no session_token)");
-    fetch_user_profile([this] { emit subscription_fetched(); });
+    // No-op in local mode
+    emit subscription_fetched();
 }
 
 void AuthManager::fetch_user_profile(std::function<void()> on_done) {
-    AuthApi::instance().get_user_profile([this, on_done = std::move(on_done)](ApiResponse r) mutable {
-        if (!r.success && (r.status_code == 401 || r.status_code == 403)) {
-            // API key is revoked or invalid — force re-login
-            LOG_WARN("Auth", "Profile fetch returned 401/403 — API key invalid, clearing session");
-            clear_session();
-            set_loading(false);
-            emit auth_state_changed();
-            return;
-        }
-        if (r.success) {
-            const auto data = unwrap_data(r.data);
-            session_.user_info = UserProfile::from_json(data);
-
-            // api_key confirmed valid — now restore session_token on HttpClient
-            // so subsequent authenticated requests include it. If the old
-            // session_token turns out to be stale during usage, SessionGuard
-            // will handle recovery without clearing the api_key.
-            if (!session_.session_token.isEmpty()) {
-                fincept::HttpClient::instance().set_session_token(session_.session_token);
-            }
-        } else {
-            // Network/server error — keep going with cached session data
-            LOG_WARN("Auth", "Profile fetch failed (non-auth error) — using cached data");
-            session_.authenticated = !session_.api_key.isEmpty();
-            // Restore session_token for subsequent requests even in offline mode
-            if (!session_.session_token.isEmpty()) {
-                fincept::HttpClient::instance().set_session_token(session_.session_token);
-            }
-        }
-        fetch_user_subscription(std::move(on_done));
-    });
+    // No-op in local mode
+    if (on_done) on_done();
 }
 
 // ── Shared post-auth completion ───────────────────────────────────────────────
@@ -203,37 +173,13 @@ void AuthManager::fetch_user_profile(std::function<void()> on_done) {
 // Used by login / verify_otp / verify_mfa / session restore.
 
 void AuthManager::complete_auth_flow(std::function<void()> on_done) {
-    UserApi::instance().get_user_subscription([this, on_done = std::move(on_done)](ApiResponse r) {
-        if (r.success) {
-            const auto sub_data = unwrap_data(r.data);
-            session_.subscription = UserSubscription::from_json(sub_data);
-            session_.has_subscription = !session_.subscription.account_type.isEmpty();
-        }
-        // Fallback: promote profile account_type into subscription so account_type() is consistent
-        if (session_.subscription.account_type.isEmpty() && !session_.user_info.account_type.isEmpty()) {
-            session_.subscription.account_type = session_.user_info.account_type;
-            session_.subscription.credit_balance = session_.user_info.credit_balance;
-            session_.has_subscription = true;
-        }
-        // Sync user_info from subscription so legacy readers stay consistent
-        if (!session_.subscription.account_type.isEmpty())
-            session_.user_info.account_type = session_.subscription.account_type;
-        if (session_.subscription.credit_balance > 0)
-            session_.user_info.credit_balance = session_.subscription.credit_balance;
-
-        if (!session_.api_key.isEmpty())
-            session_.authenticated = true;
-        save_session();
-        auto_configure_fincept_llm();
-        set_loading(false);
-        if (on_done)
-            on_done();
-        emit auth_state_changed();
-    });
+    // No-op in local mode
+    if (on_done) on_done();
 }
 
 void AuthManager::fetch_user_subscription(std::function<void()> on_done) {
-    complete_auth_flow(std::move(on_done));
+    // No-op in local mode
+    if (on_done) on_done();
 }
 
 // ── Login ────────────────────────────────────────────────────────────────────
@@ -489,10 +435,7 @@ void AuthManager::attempt_session_recovery(std::function<void(bool)> cb) {
 // ── Refresh user data ────────────────────────────────────────────────────────
 
 void AuthManager::refresh_user_data() {
-    if (!session_.authenticated || session_.api_key.isEmpty())
-        return;
-    // fetch_user_profile chains into fetch_user_subscription automatically
-    fetch_user_profile([this] { emit subscription_fetched(); });
+    // No-op in local mode
 }
 
 // ── Auto-configure Fincept LLM provider ──────────────────────────────────────
