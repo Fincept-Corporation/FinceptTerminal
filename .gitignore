@@ -173,3 +173,6 @@ fincept-qt/docs/CRYPTO_WALLET_CONNECT.md
 !AGENTS.md
 !README.md
 !**/README.md
+!docs/fork/
+!docs/fork/**/
+!docs/fork/**/*.md
