@@ -168,7 +168,8 @@ fincept-qt/docs/CRYPTO_CENTER_PHASE_4.md
 fincept-qt/docs/CRYPTO_CENTER_PHASE_5.md
 fincept-qt/docs/CRYPTO_WALLET_CONNECT.md
 
-# ── Markdown files — only README.md is tracked ────────────────
+# ── Markdown files — only README.md and AGENTS.md are tracked ──
 *.md
+!AGENTS.md
 !README.md
 !**/README.md
