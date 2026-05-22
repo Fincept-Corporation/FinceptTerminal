@@ -233,6 +233,7 @@ We're building the future of financial analysis — together.
 - [Contributing Guide](docs/CONTRIBUTING.md)
 - [C++ Contributing Guide](fincept-qt/CONTRIBUTING.md)
 - [Python Contributor Guide](docs/PYTHON_CONTRIBUTOR_GUIDE.md)
+- [Fork Workspace Guide](docs/fork/README.md) - fork-specific strategy, customization, engineering, and upstream sync notes
 - [Report Bug](https://github.com/Fincept-Corporation/FinceptTerminal/issues)
 - [Request Feature](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
