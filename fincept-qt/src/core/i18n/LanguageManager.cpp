@@ -23,6 +23,7 @@ QStringList LanguageManager::supported_languages() {
     return {QStringLiteral("en"),
             QStringLiteral("zh_CN"),
             QStringLiteral("zh_HK"),
+            QStringLiteral("zh_TW"),
             QStringLiteral("id_ID"),
             QStringLiteral("vi_VN"),
             QStringLiteral("tr_TR"),
@@ -37,6 +38,7 @@ QString LanguageManager::native_name(const QString& code) {
     if (code == QLatin1String("en"))    return QStringLiteral("English");
     if (code == QLatin1String("zh_CN")) return QString::fromUtf8("\xe7\xae\x80\xe4\xbd\x93\xe4\xb8\xad\xe6\x96\x87"); // 简体中文
     if (code == QLatin1String("zh_HK")) return QString::fromUtf8("\xe7\xb9\x81\xe9\xab\x94\xe4\xb8\xad\xe6\x96\x87 (\xe9\xa6\x99\xe6\xb8\xaf)"); // 繁體中文 (香港)
+    if (code == QLatin1String("zh_TW")) return QString::fromUtf8("\xe7\xb9\x81\xe9\xab\x94\xe4\xb8\xad\xe6\x96\x87 (\xe5\x8f\xb0\xe7\x81\xa3)"); // 繁體中文 (台灣)
     if (code == QLatin1String("id_ID")) return QStringLiteral("Bahasa Indonesia");
     if (code == QLatin1String("vi_VN")) return QString::fromUtf8("Ti\xe1\xba\xbfng Vi\xe1\xbb\x87t"); // Tiếng Việt
     if (code == QLatin1String("tr_TR")) return QString::fromUtf8("T\xc3\xbcrk\xc3\xa7""e"); // Türkçe
