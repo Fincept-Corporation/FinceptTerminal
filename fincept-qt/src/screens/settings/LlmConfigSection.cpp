@@ -34,7 +34,8 @@ static constexpr const char* TAG = "LlmConfigSection";
 
 
 const QStringList LlmConfigSection::KNOWN_PROVIDERS = {"openai",  "anthropic", "gemini",   "groq",  "deepseek",
-                                                       "openrouter", "minimax", "kimi", "ollama", "xai",   "fincept"};
+                                                       "openrouter", "minimax", "kimi", "ollama", "xai",   "fincept",
+                                                       "astraflow", "astraflow_cn"};
 
 QString LlmConfigSection::default_base_url(const QString& provider) {
     const QString p = provider.toLower();
@@ -60,6 +61,10 @@ QString LlmConfigSection::default_base_url(const QString& provider) {
         return {};
     if (p == "fincept")
         return {}; // endpoints are hardcoded in LlmService, no base_url needed
+    if (p == "astraflow")
+        return "https://api-us-ca.umodelverse.ai/v1"; // Astraflow global endpoint (UCloud)
+    if (p == "astraflow_cn")
+        return "https://api.modelverse.cn/v1"; // Astraflow China endpoint (UCloud)
     return {};
 }
 
@@ -102,6 +107,14 @@ QStringList LlmConfigSection::fallback_models(const QString& provider) {
         return {"grok-4-latest", "grok-4", "grok-3", "grok-3-mini"};
     if (p == "fincept")
         return {"MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed"};
+    if (p == "astraflow" || p == "astraflow_cn")
+        // Astraflow by UCloud — OpenAI-compatible aggregator supporting 200+ models.
+        // A non-exhaustive starter list; full list fetchable via Fetch button.
+        return {"gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o3-mini",
+                "claude-sonnet-4-5-20250514", "claude-3-5-sonnet-20241022",
+                "gemini-2.5-flash", "gemini-2.5-pro",
+                "deepseek-chat", "deepseek-reasoner",
+                "llama-3.3-70b-versatile", "qwen-turbo", "qwen-plus"};
     return {};
 }
 
