@@ -295,4 +295,10 @@ void MarketSentimentWidget::populate(const QVector<services::QuoteData>& quotes)
                                       .arg(bullish > bearish ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
 }
 
+void MarketSentimentWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("MARKET SENTIMENT"));
+    rebuild_from_cache(); // re-derives all derived text labels from cached quotes
+}
+
 } // namespace fincept::screens::widgets

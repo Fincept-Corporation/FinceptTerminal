@@ -817,4 +817,23 @@ void AgentsViewPanel::apply_tools_selection(const QStringList& /*tools*/) {
         tools_list_->addItem(new QListWidgetItem(t.toString()));
 }
 
+// ── Draft persistence ────────────────────────────────────────────────────────
+
+QVariantMap AgentsViewPanel::save_draft() const {
+    QVariantMap d;
+    if (query_input_ && !query_input_->toPlainText().isEmpty())
+        d["query"] = query_input_->toPlainText();
+    if (result_display_ && !result_display_->toPlainText().isEmpty())
+        d["result"] = result_display_->toPlainText();
+    return d;
+}
+
+void AgentsViewPanel::restore_draft(const QVariantMap& d) {
+    if (d.isEmpty()) return;
+    if (query_input_ && d.contains("query"))
+        query_input_->setPlainText(d["query"].toString());
+    if (result_display_ && d.contains("result"))
+        result_display_->setPlainText(d["result"].toString());
+}
+
 } // namespace fincept::screens

@@ -248,6 +248,10 @@ void PortfolioCommandBar::build_overflow_menu() {
     connect(import_action_,      &QAction::triggered, this, &PortfolioCommandBar::import_requested);
     connect(ffn_action_,         &QAction::triggered, this, &PortfolioCommandBar::ffn_toggled);
 
+    overflow_menu_->addSeparator();
+    backtest_action_ = overflow_menu_->addAction(tr("Backtest Portfolio"));
+    connect(backtest_action_, &QAction::triggered, this, &PortfolioCommandBar::backtest_requested);
+
     overflow_btn_->setMenu(overflow_menu_);
 }
 

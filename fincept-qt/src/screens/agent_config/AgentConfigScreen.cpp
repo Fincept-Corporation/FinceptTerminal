@@ -429,7 +429,14 @@ void AgentConfigScreen::hideEvent(QHideEvent* event) {
 // ── IStatefulScreen ──────────────────────────────────────────────────────────
 
 QVariantMap AgentConfigScreen::save_state() const {
-    return {{"view", static_cast<int>(current_view_)}};
+    QVariantMap state{{"view", static_cast<int>(current_view_)}};
+    if (create_panel_)
+        state["create_draft"] = create_panel_->save_draft();
+    if (agents_panel_)
+        state["agents_draft"] = agents_panel_->save_draft();
+    if (workflows_panel_)
+        state["workflows_draft"] = workflows_panel_->save_draft();
+    return state;
 }
 
 void AgentConfigScreen::restore_state(const QVariantMap& state) {
@@ -437,6 +444,12 @@ void AgentConfigScreen::restore_state(const QVariantMap& state) {
     if (v < 0)
         return;
     set_view(static_cast<services::AgentViewMode>(v));
+    if (create_panel_ && state.contains("create_draft"))
+        create_panel_->restore_draft(state.value("create_draft").toMap());
+    if (agents_panel_ && state.contains("agents_draft"))
+        agents_panel_->restore_draft(state.value("agents_draft").toMap());
+    if (workflows_panel_ && state.contains("workflows_draft"))
+        workflows_panel_->restore_draft(state.value("workflows_draft").toMap());
 }
 
 } // namespace fincept::screens

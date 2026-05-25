@@ -32,6 +32,13 @@ class DBnomicsSelectionPanel : public QWidget {
     QString selected_dataset() const { return selected_dataset_; }
     QString selected_series() const { return selected_series_; }
 
+    QString global_search_text() const;
+    QString provider_filter_text() const;
+    QString series_search_text() const;
+    void set_global_search_text(const QString& t);
+    void set_provider_filter_text(const QString& t);
+    void set_series_search_text(const QString& t);
+
   signals:
     void provider_selected(const QString& code);
     void dataset_selected(const QString& code);

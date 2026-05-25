@@ -160,4 +160,12 @@ void WatchlistWidget::populate(const QVector<services::QuoteData>& quotes) {
     }
 }
 
+void WatchlistWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("WATCHLIST"));
+    if (symbols_label_) symbols_label_->setText(tr("SYMBOLS:"));
+    if (go_btn_)        go_btn_->setText(tr("GO"));
+    if (table_)         table_->set_headers({tr("SYMBOL"), tr("PRICE"), tr("CHG"), tr("CHG%")});
+}
+
 } // namespace fincept::screens::widgets

@@ -13,6 +13,7 @@
 #include "trading/brokers/fyers/FyersBroker.h"
 #include "trading/brokers/groww/GrowwBroker.h"
 #include "trading/brokers/ibkr/IBKRBroker.h"
+#include "trading/brokers/metaapi/MetaApiBroker.h"
 #include "trading/brokers/iifl/IIFLBroker.h"
 #include "trading/brokers/kotak/KotakBroker.h"
 #include "trading/brokers/motilal/MotilalBroker.h"
@@ -129,6 +130,9 @@ void BrokerRegistry::register_all() {
 
     // EU brokers
     brokers_["saxobank"] = std::make_unique<SaxoBankBroker>();
+
+    // MetaAPI-bridged
+    brokers_["metatrader4"] = std::make_unique<MetaApiBroker>();
 
     LOG_INFO("BrokerRegistry", QString("Registered %1 brokers").arg(brokers_.size()));
 }

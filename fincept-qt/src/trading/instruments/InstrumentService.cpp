@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "storage/sqlite/Database.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/instruments/FyersInstrumentParser.h"
 #include "trading/instruments/GrowwInstrumentParser.h"
 #include "trading/instruments/InstrumentRepository.h"
 #include "trading/instruments/SymbolResolver.h"
@@ -208,6 +209,9 @@ void ensure_builtin_sources_registered() {
         r.register_source({QStringLiteral("groww"),
                            [](const BrokerCredentials&) { return InstrumentService::download_groww_csv(); },
                            [](const QByteArray& p) { return GrowwInstrumentParser::parse(p); }});
+        r.register_source({QStringLiteral("fyers"),
+                           [](const BrokerCredentials&) { return InstrumentService::download_fyers_json(); },
+                           [](const QByteArray& p) { return FyersInstrumentParser::parse(p); }});
         return true;
     }();
     Q_UNUSED(registered);
@@ -465,21 +469,50 @@ QStringList InstrumentService::list_expiries(const QString& broker_id, const QSt
     // string ("DD-MMM-YY") sorts lexically wrong (e.g. "01-DEC-25" lex-before
     // "01-NOV-25"). The map's value collapses duplicates automatically.
     QMap<QDate, QString> by_date;
+    int match_count = 0, empty_expiry = 0;
     for (const auto& inst : it->by_token) {
         if (inst.exchange != exchange || inst.name != underlying)
             continue;
         if (inst.instrument_type != InstrumentType::CE && inst.instrument_type != InstrumentType::PE
             && inst.instrument_type != InstrumentType::FUT)
             continue;
-        if (inst.expiry.isEmpty())
+        ++match_count;
+        if (inst.expiry.isEmpty()) {
+            ++empty_expiry;
             continue;
-        QDate d = QDate::fromString(inst.expiry, "dd-MMM-yy");
+        }
+        // Parse "DD-MMM-YY" (case-insensitive month) or "YYYY-MM-DD".
+        QDate d;
+        if (inst.expiry.length() >= 9 && inst.expiry[2] == QLatin1Char('-') && inst.expiry[6] == QLatin1Char('-')) {
+            const int day = QStringView(inst.expiry).left(2).toInt();
+            const QStringView mon = QStringView(inst.expiry).mid(3, 3);
+            const int yr = 2000 + QStringView(inst.expiry).mid(7, 2).toInt();
+            int month = 0;
+            if      (mon.compare(QLatin1String("JAN"), Qt::CaseInsensitive) == 0) month = 1;
+            else if (mon.compare(QLatin1String("FEB"), Qt::CaseInsensitive) == 0) month = 2;
+            else if (mon.compare(QLatin1String("MAR"), Qt::CaseInsensitive) == 0) month = 3;
+            else if (mon.compare(QLatin1String("APR"), Qt::CaseInsensitive) == 0) month = 4;
+            else if (mon.compare(QLatin1String("MAY"), Qt::CaseInsensitive) == 0) month = 5;
+            else if (mon.compare(QLatin1String("JUN"), Qt::CaseInsensitive) == 0) month = 6;
+            else if (mon.compare(QLatin1String("JUL"), Qt::CaseInsensitive) == 0) month = 7;
+            else if (mon.compare(QLatin1String("AUG"), Qt::CaseInsensitive) == 0) month = 8;
+            else if (mon.compare(QLatin1String("SEP"), Qt::CaseInsensitive) == 0) month = 9;
+            else if (mon.compare(QLatin1String("OCT"), Qt::CaseInsensitive) == 0) month = 10;
+            else if (mon.compare(QLatin1String("NOV"), Qt::CaseInsensitive) == 0) month = 11;
+            else if (mon.compare(QLatin1String("DEC"), Qt::CaseInsensitive) == 0) month = 12;
+            if (month > 0 && day > 0 && day <= 31)
+                d = QDate(yr, month, day);
+        }
         if (!d.isValid())
             d = QDate::fromString(inst.expiry, "yyyy-MM-dd");
         if (d.isValid())
             by_date.insert(d, inst.expiry);
     }
-    return QStringList(by_date.values().begin(), by_date.values().end());
+    LOG_INFO("InstrumentService",
+             QString("list_expiries('%1','%2','%3'): matched=%4 empty_expiry=%5 parsed=%6")
+                 .arg(broker_id, underlying, exchange).arg(match_count).arg(empty_expiry).arg(by_date.size()));
+    const auto vals = by_date.values();
+    return QStringList(vals.begin(), vals.end());
 }
 
 QVector<Instrument> InstrumentService::find_options_for_underlying(const QString& broker_id,
@@ -729,6 +762,76 @@ QByteArray InstrumentService::download_groww_csv() {
     drain();
     LOG_INFO("InstrumentService", QString("Downloaded Groww instrument CSV: %1 bytes").arg(data.size()));
     return data;
+}
+
+QByteArray InstrumentService::download_fyers_json() {
+    static const QStringList urls = {
+        "https://public.fyers.in/sym_details/NSE_CM_sym_master.json",
+        "https://public.fyers.in/sym_details/NSE_FO_sym_master.json",
+        "https://public.fyers.in/sym_details/BSE_CM_sym_master.json",
+        "https://public.fyers.in/sym_details/MCX_COM_sym_master.json",
+    };
+
+    QJsonObject merged;
+    auto* nam = new QNetworkAccessManager;
+
+    for (const auto& url : urls) {
+        QNetworkRequest req{QUrl(url)};
+        req.setRawHeader("Accept", "application/json");
+        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+
+        QNetworkReply* reply = nam->get(req);
+        QEventLoop loop;
+        QTimer timer;
+        timer.setSingleShot(true);
+        QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+        QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+        timer.start(90000);
+        loop.exec();
+
+        if (!timer.isActive()) {
+            reply->abort();
+            LOG_WARN("InstrumentService", QString("Fyers download timed out: %1").arg(url));
+            reply->deleteLater();
+            continue;
+        }
+        timer.stop();
+
+        if (reply->error() != QNetworkReply::NoError) {
+            LOG_WARN("InstrumentService", QString("Fyers download failed: %1 — %2").arg(url, reply->errorString()));
+            reply->deleteLater();
+            continue;
+        }
+
+        QByteArray data = reply->readAll();
+        reply->deleteLater();
+
+        auto doc = QJsonDocument::fromJson(data);
+        if (!doc.isObject()) {
+            LOG_WARN("InstrumentService", QString("Fyers JSON parse failed for %1").arg(url));
+            continue;
+        }
+
+        QJsonObject obj = doc.object();
+        for (auto it = obj.begin(); it != obj.end(); ++it)
+            merged.insert(it.key(), it.value());
+
+        LOG_INFO("InstrumentService",
+                 QString("Fyers: fetched %1 symbols from %2").arg(obj.size()).arg(url));
+    }
+
+    nam->deleteLater();
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+
+    if (merged.isEmpty()) {
+        LOG_ERROR("InstrumentService", "Fyers: no instruments downloaded from any endpoint");
+        return {};
+    }
+
+    QByteArray result = QJsonDocument(merged).toJson(QJsonDocument::Compact);
+    LOG_INFO("InstrumentService",
+             QString("Fyers: merged %1 total instruments (%2 bytes)").arg(merged.size()).arg(result.size()));
+    return result;
 }
 
 } // namespace fincept::trading

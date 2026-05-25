@@ -1,5 +1,7 @@
 #include "screens/markets/MarketPanel.h"
 #include <cmath>
+#include "core/events/EventBus.h"
+#include "services/backtesting/BacktestingService.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/formatting/NumberFormat.h"
@@ -489,9 +491,19 @@ void MarketPanel::show_row_context_menu(const QPoint& pos) {
     QAction* copy_act = menu.addAction("Copy Symbol");
     connect(copy_act, &QAction::triggered, this, [this, it]() {
         auto* sym_item = table_->item(it->row(), 0);
-        if (sym_item) {
+        if (sym_item)
             QApplication::clipboard()->setText(sym_item->text());
-        }
+    });
+    QAction* backtest_act = menu.addAction("Backtest This Symbol");
+    connect(backtest_act, &QAction::triggered, this, [this, it]() {
+        auto* sym_item = table_->item(it->row(), 0);
+        if (!sym_item) return;
+        QJsonObject config;
+        QJsonArray symbols;
+        symbols.append(sym_item->text());
+        config["symbols"] = symbols;
+        fincept::services::backtest::BacktestingService::instance().set_pending_portfolio_config(config);
+        fincept::EventBus::instance().publish("nav.switch_screen", {{"screen_id", QString("backtesting")}});
     });
     menu.exec(table_->viewport()->mapToGlobal(pos));
 }

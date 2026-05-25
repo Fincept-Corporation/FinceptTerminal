@@ -220,4 +220,10 @@ void CryptoTickerWidget::apply_styles() {
     }
 }
 
+void CryptoTickerWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("CRYPTO TICKER"));
+    build_rows(); // re-renders any "no data" / placeholder text in the new language
+}
+
 } // namespace fincept::screens::widgets

@@ -13,6 +13,9 @@ QString data_value();
 QString accent_button();
 QString muted_button();
 
+/// FNO sub-tab Bloomberg-density styles.
+QString fno_dense_table();
+
 /// News screen global styles (applied once at NewsScreen level, cascades to children).
 QString news_screen_styles();
 

@@ -60,7 +60,8 @@ static constexpr int kUserColMaxWidth = 560;
 static constexpr int kAiColMaxWidth = 680;
 
 void AiChatScreen::on_typing_indicator_tick() {
-    static const QStringList states = {"AI is thinking", "AI is thinking·", "AI is thinking··", "AI is thinking···"};
+    const QStringList states = {tr("AI is thinking"), tr("AI is thinking·"),
+                                tr("AI is thinking··"), tr("AI is thinking···")};
     typing_step_ = (typing_step_ + 1) % states.size();
     typing_dots_lbl_->setText(states[typing_step_]);
 }
@@ -68,7 +69,7 @@ void AiChatScreen::on_typing_indicator_tick() {
 void AiChatScreen::show_typing(bool show) {
     if (show) {
         typing_step_ = 0;
-        typing_dots_lbl_->setText("AI is thinking");
+        typing_dots_lbl_->setText(tr("AI is thinking"));
         typing_indicator_->show();
         typing_timer_->start();
     } else {
@@ -89,12 +90,12 @@ void AiChatScreen::on_send() {
     if (active_session_id_.isEmpty())
         create_new_session();
     if (active_session_id_.isEmpty()) {
-        add_message_bubble("system", "Failed to create chat session. Please try again.");
+        add_message_bubble("system", tr("Failed to create chat session. Please try again."));
         return;
     }
     if (!ai_chat::LlmService::instance().is_configured()) {
         add_message_bubble("system",
-                           "No LLM provider configured. Go to Settings > LLM Configuration to set up a provider.");
+                           tr("No LLM provider configured. Go to Settings > LLM Configuration to set up a provider."));
         return;
     }
 
@@ -137,7 +138,7 @@ void AiChatScreen::on_send() {
     streaming_ = true;
     show_welcome(false);
     // Display only raw_text in bubble (not full file dump)
-    add_message_bubble("user", raw_text.isEmpty() ? "[File attached — see context]" : raw_text);
+    add_message_bubble("user", raw_text.isEmpty() ? tr("[File attached — see context]") : raw_text);
     total_messages_++;
     ChatRepository::instance().add_message(active_session_id_, "user", text,
                                            ai_chat::LlmService::instance().active_provider(),
@@ -196,7 +197,7 @@ void AiChatScreen::on_stream_chunk(const QString& chunk, bool done) {
 
     // Tool-call clear sentinel: reset bubble content (removes partial XML)
     if (chunk.startsWith("\x01__TOOL_CALL_CLEAR__")) {
-        fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(bubble, "Calling tool...");
+        fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(bubble, tr("Calling tool..."));
         scroll_to_bottom();
         return;
     }
@@ -229,8 +230,8 @@ void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
 
     if (!response.success) {
         if (streaming_bubble_) {
-            const QString err = response.error.isEmpty() ? QStringLiteral("Error: request failed")
-                                                         : (QStringLiteral("Error: ") + response.error);
+            const QString err = response.error.isEmpty() ? tr("Error: request failed")
+                                                         : tr("Error: %1").arg(response.error);
             fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(streaming_bubble_, err);
         }
         LOG_WARN("AiChat", QString("LLM request failed: %1").arg(response.error));
@@ -241,7 +242,7 @@ void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
     // Success but empty body — surface a hint instead of silently doing nothing.
     if (response.content.isEmpty()) {
         if (streaming_bubble_) {
-            const QString hint = QStringLiteral("(empty response — model returned no content)");
+            const QString hint = tr("(empty response — model returned no content)");
             fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(streaming_bubble_, hint);
         }
         LOG_WARN("AiChat", "LLM returned success with empty content");
@@ -335,12 +336,12 @@ void AiChatScreen::set_input_enabled(bool enabled) {
     session_list_->setEnabled(enabled);
     delete_btn_->setEnabled(enabled && !active_session_id_.isEmpty());
     rename_btn_->setEnabled(enabled && !active_session_id_.isEmpty());
-    send_btn_->setText(enabled ? "Send" : "···");
+    send_btn_->setText(enabled ? tr("Send") : "···");
 
     // Status dot + label
     const QString status_color = enabled ? col::POSITIVE() : col::AMBER();
     hdr_status_dot_->setStyleSheet(QString("background:%1;border-radius:0px;").arg(status_color));
-    hdr_status_lbl_->setText(enabled ? "Ready" : "Streaming");
+    hdr_status_lbl_->setText(enabled ? tr("Ready") : tr("Streaming"));
     hdr_status_lbl_->setStyleSheet(
         QString("color:%1;font-size:%2px;font-weight:600;").arg(status_color).arg(fnt::SMALL));
 }
@@ -352,12 +353,12 @@ void AiChatScreen::update_stats() {
     else if (!active_session_id_.isEmpty())
         hdr_session_lbl_->setText(active_session_id_.left(8));
     else
-        hdr_session_lbl_->setText("New Conversation");
+        hdr_session_lbl_->setText(tr("New Conversation"));
 
     // Token count in header
     if (total_tokens_ > 0) {
-        hdr_tokens_lbl_->setText(total_tokens_ < 1000 ? QString("%1 tokens").arg(total_tokens_)
-                                                      : QString("%1k tokens").arg(total_tokens_ / 1000.0, 0, 'f', 1));
+        hdr_tokens_lbl_->setText(total_tokens_ < 1000 ? tr("%1 tokens").arg(total_tokens_)
+                                                      : tr("%1k tokens").arg(total_tokens_ / 1000.0, 0, 'f', 1));
     } else {
         hdr_tokens_lbl_->clear();
     }
@@ -368,10 +369,10 @@ void AiChatScreen::update_stats() {
         const bool is_fincept = (provider_raw.toLower() == "fincept");
 
         // Display names
-        const QString prov_display = is_fincept ? "Fincept LLM" : provider_raw.toUpper();
+        const QString prov_display = is_fincept ? tr("Fincept LLM") : provider_raw.toUpper();
         const QString model_raw = llm.active_model();
         // For fincept, don't expose internal model name
-        const QString model_display = is_fincept ? "Fincept LLM" : model_raw;
+        const QString model_display = is_fincept ? tr("Fincept LLM") : model_raw;
         QString model_short = model_display;
         if (model_short.length() > 24)
             model_short = model_short.left(22) + "..";
@@ -380,26 +381,26 @@ void AiChatScreen::update_stats() {
         provider_lbl_->setText(prov_display);
         provider_lbl_->setStyleSheet(
             QString("color:%1;font-size:%2px;font-weight:600;").arg(col::AMBER()).arg(fnt::SMALL));
-        model_lbl_->setText(is_fincept ? "Managed by Fincept" : model_short);
-        model_lbl_->setToolTip(is_fincept ? "Fincept LLM — managed AI service" : model_raw);
+        model_lbl_->setText(is_fincept ? tr("Managed by Fincept") : model_short);
+        model_lbl_->setToolTip(is_fincept ? tr("Fincept LLM — managed AI service") : model_raw);
         model_lbl_->setStyleSheet(QString("color:%1;font-size:%2px;").arg(col::TEXT_SECONDARY()).arg(fnt::TINY));
 
         // Header model pill — show "Provider / Model" for clarity
         if (is_fincept) {
-            hdr_model_lbl_->setText("Fincept LLM");
-            hdr_model_lbl_->setToolTip("Fincept managed AI service\n\nChange in Settings > LLM Configuration");
+            hdr_model_lbl_->setText(tr("Fincept LLM"));
+            hdr_model_lbl_->setToolTip(tr("Fincept managed AI service\n\nChange in Settings > LLM Configuration"));
         } else {
             hdr_model_lbl_->setText(provider_raw.left(1).toUpper() + provider_raw.mid(1) + " / " + model_short);
-            hdr_model_lbl_->setToolTip("Provider: " + prov_display + "\nModel: " + model_raw +
-                                       "\n\nChange in Settings > LLM Configuration");
+            hdr_model_lbl_->setToolTip(tr("Provider: %1\nModel: %2\n\nChange in Settings > LLM Configuration")
+                                           .arg(prov_display, model_raw));
         }
     } else {
-        provider_lbl_->setText("No provider");
+        provider_lbl_->setText(tr("No provider"));
         provider_lbl_->setStyleSheet(
             QString("color:%1;font-size:%2px;font-weight:600;").arg(col::NEGATIVE()).arg(fnt::SMALL));
-        model_lbl_->setText("Configure in Settings");
+        model_lbl_->setText(tr("Configure in Settings"));
         model_lbl_->setStyleSheet(QString("color:%1;font-size:%2px;").arg(col::TEXT_DIM()).arg(fnt::TINY));
-        hdr_model_lbl_->setText("No model");
+        hdr_model_lbl_->setText(tr("No model"));
     }
 }
 

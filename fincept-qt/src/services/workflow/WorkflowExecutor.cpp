@@ -10,6 +10,8 @@
 #include <QMetaObject>
 #include <QSet>
 
+#include <stdexcept>
+
 namespace fincept::workflow {
 
 WorkflowExecutor::WorkflowExecutor(QObject* parent) : QObject(parent) {}
@@ -404,6 +406,7 @@ void WorkflowExecutor::launch_single_node(const QString& node_id) {
 
     // Execute asynchronously with QPointer guard (P8)
     QPointer<WorkflowExecutor> self = this;
+    try {
     type_def->execute(
         nd.parameters, inputs, [self, node_id, node_start](bool success, QJsonValue output, QString error) {
             if (!self)
@@ -418,6 +421,13 @@ void WorkflowExecutor::launch_single_node(const QString& node_id) {
                 },
                 Qt::QueuedConnection);
         });
+    } catch (const std::exception& ex) {
+        LOG_ERROR("Executor", QString("Node %1 threw exception: %2").arg(node_id, ex.what()));
+        on_node_done(node_id, false, {}, QString("Exception: %1").arg(ex.what()));
+    } catch (...) {
+        LOG_ERROR("Executor", QString("Node %1 threw unknown exception").arg(node_id));
+        on_node_done(node_id, false, {}, "Unknown exception in node executor");
+    }
 }
 
 void WorkflowExecutor::on_node_done(const QString& node_id, bool success, const QJsonValue& output,

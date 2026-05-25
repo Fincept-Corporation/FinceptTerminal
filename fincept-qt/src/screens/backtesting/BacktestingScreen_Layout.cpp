@@ -298,7 +298,6 @@ QWidget* BacktestingScreen::build_center_panel() {
     summary_layout_->setContentsMargins(16, 16, 16, 16);
     summary_layout_->setSpacing(12);
 
-    // Initial hint
     auto* hint = new QLabel("Select a provider, command, and strategy, then click RUN to execute.\n\n"
                             "Supported providers: VectorBT, Backtesting.py, FastTrade, Zipline, BT, Fincept\n"
                             "Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Returns");
@@ -314,6 +313,20 @@ QWidget* BacktestingScreen::build_center_panel() {
     summary_layout_->addStretch();
     summary_scroll->setWidget(summary_container_);
     result_tabs_->addTab(summary_scroll, "SUMMARY");
+
+    // EQUITY CURVE tab
+    equity_chart_tab_ = new QWidget(this);
+    equity_chart_tab_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
+    auto* eq_layout = new QVBoxLayout(equity_chart_tab_);
+    eq_layout->setContentsMargins(0, 0, 0, 0);
+    auto* eq_hint = new QLabel("Run a backtest to see the equity curve.", equity_chart_tab_);
+    eq_hint->setAlignment(Qt::AlignCenter);
+    eq_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
+                               .arg(ui::colors::TEXT_TERTIARY())
+                               .arg(ui::fonts::SMALL)
+                               .arg(ui::fonts::DATA_FAMILY));
+    eq_layout->addWidget(eq_hint);
+    result_tabs_->addTab(equity_chart_tab_, "EQUITY CURVE");
 
     // METRICS tab
     metrics_table_ = new QTableWidget(0, 2);
@@ -458,6 +471,15 @@ QWidget* BacktestingScreen::build_right_panel() {
     dates->addWidget(end_date_, 1, 1);
     mkt_layout->addLayout(dates);
 
+    auto* intv_lbl = new QLabel("INTERVAL", market_data_section_);
+    intv_lbl->setStyleSheet(label_style);
+    mkt_layout->addWidget(intv_lbl);
+    interval_combo_ = new QComboBox(market_data_section_);
+    interval_combo_->setStyleSheet(combo_style);
+    for (const auto& i : {"1d", "1wk", "1h", "4h", "15m", "5m", "1m"})
+        interval_combo_->addItem(i);
+    mkt_layout->addWidget(interval_combo_);
+
     vl->addWidget(market_data_section_);
 
     // ── EXECUTION (backtest-family only) ──
@@ -502,6 +524,18 @@ QWidget* BacktestingScreen::build_right_panel() {
     slippage_spin_->setSuffix("%");
     slippage_spin_->setStyleSheet(input_style);
     exec_layout->addWidget(slippage_spin_);
+
+    auto* rf_lbl = new QLabel("RISK-FREE RATE (%)", execution_section_);
+    rf_lbl->setStyleSheet(label_style);
+    exec_layout->addWidget(rf_lbl);
+    risk_free_spin_ = new QDoubleSpinBox(execution_section_);
+    risk_free_spin_->setRange(0, 20);
+    risk_free_spin_->setValue(4.0);
+    risk_free_spin_->setDecimals(2);
+    risk_free_spin_->setSingleStep(0.25);
+    risk_free_spin_->setSuffix("%");
+    risk_free_spin_->setStyleSheet(input_style);
+    exec_layout->addWidget(risk_free_spin_);
 
     vl->addWidget(execution_section_);
 
@@ -558,6 +592,40 @@ QWidget* BacktestingScreen::build_right_panel() {
     for (const auto& m : position_sizing_methods())
         pos_sizing_combo_->addItem(m);
     adv_layout->addWidget(pos_sizing_combo_);
+
+    pos_sizing_value_label_ = new QLabel("SIZE (%)", advanced_section_);
+    pos_sizing_value_label_->setStyleSheet(label_style);
+    adv_layout->addWidget(pos_sizing_value_label_);
+    pos_sizing_value_spin_ = new QDoubleSpinBox(advanced_section_);
+    pos_sizing_value_spin_->setRange(1, 100);
+    pos_sizing_value_spin_->setValue(100);
+    pos_sizing_value_spin_->setDecimals(2);
+    pos_sizing_value_spin_->setSuffix("%");
+    pos_sizing_value_spin_->setStyleSheet(input_style);
+    adv_layout->addWidget(pos_sizing_value_spin_);
+    connect(pos_sizing_combo_, &QComboBox::currentTextChanged, this, [this](const QString& text) {
+        if (text == "percent") {
+            pos_sizing_value_label_->setText("SIZE (%)");
+            pos_sizing_value_spin_->setSuffix("%");
+            pos_sizing_value_spin_->setRange(1, 100);
+            pos_sizing_value_spin_->setValue(100);
+        } else if (text == "fixed") {
+            pos_sizing_value_label_->setText("SIZE ($)");
+            pos_sizing_value_spin_->setSuffix("");
+            pos_sizing_value_spin_->setRange(1, 1e9);
+            pos_sizing_value_spin_->setValue(10000);
+        } else if (text == "risk") {
+            pos_sizing_value_label_->setText("RISK PER TRADE (%)");
+            pos_sizing_value_spin_->setSuffix("%");
+            pos_sizing_value_spin_->setRange(0.1, 100);
+            pos_sizing_value_spin_->setValue(1);
+        } else {
+            pos_sizing_value_label_->setText("TARGET (%)");
+            pos_sizing_value_spin_->setSuffix("%");
+            pos_sizing_value_spin_->setRange(1, 100);
+            pos_sizing_value_spin_->setValue(15);
+        }
+    });
 
     allow_short_check_ = new QCheckBox("Allow Short Selling", advanced_section_);
     allow_short_check_->setStyleSheet(

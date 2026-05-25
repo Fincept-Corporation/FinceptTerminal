@@ -297,4 +297,11 @@ void GeopoliticsEventsWidget::apply_styles() {
                                          .arg(ui::colors::TEXT_TERTIARY()));
 }
 
+void GeopoliticsEventsWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("GEOPOLITICS EVENTS"));
+    if (last_payload_.isValid())
+        populate(last_payload_); // re-renders header + row labels in the new language
+}
+
 } // namespace fincept::screens::widgets

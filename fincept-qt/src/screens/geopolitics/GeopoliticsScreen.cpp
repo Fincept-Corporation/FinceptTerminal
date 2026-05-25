@@ -573,13 +573,20 @@ void GeopoliticsScreen::on_error(const QString& context, const QString& message)
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap GeopoliticsScreen::save_state() const {
-    return {{"tab_index", active_tab_}};
+    QVariantMap state{{"tab_index", active_tab_}};
+    if (country_edit_) state["country"] = country_edit_->text();
+    if (city_edit_) state["city"] = city_edit_->text();
+    return state;
 }
 
 void GeopoliticsScreen::restore_state(const QVariantMap& state) {
     const int idx = state.value("tab_index", 0).toInt();
     if (idx >= 0 && idx < tab_buttons_.size())
         on_tab_changed(idx);
+    if (country_edit_ && state.contains("country"))
+        country_edit_->setText(state.value("country").toString());
+    if (city_edit_ && state.contains("city"))
+        city_edit_->setText(state.value("city").toString());
 }
 
 } // namespace fincept::screens

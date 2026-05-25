@@ -362,4 +362,10 @@ void NotesWidget::apply_styles() {
             .arg(ui::colors::BORDER_MED()));
 }
 
+void NotesWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("NOTES"));
+    refresh_data(); // re-renders rows in the new language
+}
+
 } // namespace fincept::screens::widgets

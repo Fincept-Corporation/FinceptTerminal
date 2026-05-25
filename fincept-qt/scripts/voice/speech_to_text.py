@@ -31,9 +31,9 @@ def main() -> None:
         emit({"fatal": "speech_recognition not installed — run: pip install SpeechRecognition"})
         sys.exit(1)
 
-    # sounddevice replaces PyAudio. We bridge it to SpeechRecognition by
-    # subclassing sr.AudioSource — recognizer.listen() only touches
-    # source.stream.read(CHUNK), so a minimal wrapper is enough.
+    # We bridge sounddevice to SpeechRecognition by subclassing sr.AudioSource —
+    # recognizer.listen() only touches source.stream.read(CHUNK), so a minimal
+    # wrapper is enough.
     try:
         import sounddevice as sd
     except ImportError:

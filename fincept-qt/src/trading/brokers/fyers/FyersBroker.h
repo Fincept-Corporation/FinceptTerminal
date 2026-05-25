@@ -15,6 +15,8 @@ class FyersBroker : public IBroker {
     const char* base_url() const override { return "https://api-t1.fyers.in"; }
     const char* ws_adapter_name() const override { return "fyers"; }
 
+    static QString fyers_login_url(const QString& client_id, const QString& redirect_uri);
+
     BrokerProfile profile() const override {
         return BrokerProfile{
             .id = "fyers",
@@ -42,7 +44,7 @@ class FyersBroker : public IBroker {
             .has_native_paper = false,
             .default_paper_balance = 1000000.0,
             .default_watchlist = {"HDFCBANK", "ICICIBANK", "SBIN", "KOTAKBANK", "AXISBANK", "TCS", "INFY", "RELIANCE",
-                                  "TATAMOTORS", "BAJFINANCE"},
+                                  "BAJFINANCE"},
             .default_symbol = "RELIANCE",
             .default_exchange = "NSE",
             .brokerage_info = "\u20B920/order or 0.03% (whichever lower)",
@@ -65,6 +67,11 @@ class FyersBroker : public IBroker {
     ApiResponse<QVector<BrokerCandle>> get_history(const BrokerCredentials& creds, const QString& symbol,
                                                    const QString& resolution, const QString& from_date,
                                                    const QString& to_date) override;
+
+    // Market depth — GET /data/depth (5-level bid/ask)
+    ApiResponse<QVector<BrokerQuote>> get_historical_quotes_single(const BrokerCredentials& creds,
+                                                                    const QString& symbol, const QString& start,
+                                                                    const QString& end, int limit = 1000) override;
 
     // Market clock — GET /api/v3/marketStatus.
     ApiResponse<MarketClock> get_clock(const BrokerCredentials& creds) override;

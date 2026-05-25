@@ -35,39 +35,52 @@ Fincept Terminal is an **open-source financial analysis platform** — a free, o
 
 ## Quick Setup
 
-### Prerequisites (pinned versions — required)
+### Prerequisites
 
-> **Use exactly these versions.** Fincept Terminal's CMake build enforces them with `FATAL_ERROR` checks. Newer/older versions will refuse to configure.
+| Tool | Required Version | Notes |
+|------|-----------------|-------|
+| **C++ compiler** | MSVC 19.40+ / GCC 12.3+ / Apple Clang 15.0+ | See platform-specific instructions below |
+| **CMake** | 3.27+ | Build system |
+| **Qt** | 6.8.x (6.8.3 recommended) | UI framework |
+| **Python** | 3.11.x | Embedded analytics runtime |
 
-| Tool | Pinned Version |
-|------|----------------|
-| **C++ compiler** | MSVC 19.38 (VS 2022 17.8) / GCC 12.3 / Apple Clang 15.0 (Xcode 15.2) |
-| **CMake** | 3.27.7 |
-| **Ninja** | 1.11.1 |
-| **Qt** | 6.8.3 |
-| **Python** | 3.11.9 |
-| **Platform SDK** | Win10 SDK 10.0.22621.0 / macOS SDK 14.0 (deploy target 11.0) / glibc 2.31+ |
+Optional (faster builds):
+- **Ninja** — parallel build system (auto-detected if installed)
+- **ccache** — compiler cache (auto-detected if installed)
 
-#### 1. Install a C++20 compiler
+### Step 1 — Install a C++20 Compiler
 
-- **Windows**: [Visual Studio 2022 17.8+](https://visualstudio.microsoft.com/) with "Desktop development with C++"
-- **Linux (Ubuntu 22.04+)**: `sudo apt install -y g++-12`
-- **macOS**: Xcode 15.2 — `xcode-select --install`
+#### Windows
+Install [Visual Studio 2022 17.10+](https://visualstudio.microsoft.com/) (Community edition is free).
+Select the **"Desktop development with C++"** workload during installation.
 
-#### 2. Install CMake 3.27.7 + Ninja 1.11.1
+#### Linux (Ubuntu 22.04+ / Debian 12+)
+```bash
+sudo apt install -y build-essential g++-12
+```
 
-- **Windows**: `winget install Kitware.CMake Ninja-build.Ninja`
-- **Linux**: `sudo apt install -y cmake ninja-build` (verify `cmake --version` ≥ 3.27.7; if not, download from [cmake.org](https://cmake.org/download/))
-- **macOS**: `brew install cmake ninja`
+#### macOS
+```bash
+xcode-select --install
+```
+Requires Xcode 15.2+ (Apple Clang 15.0).
 
-#### 3. Install Qt 6.8.3
+### Step 2 — Install CMake
 
-**Windows / Linux / macOS** — Qt online installer (recommended):
-- Download from https://www.qt.io/download-qt-installer
-- Select exactly **Qt 6.8.3** → platform-appropriate kit (MSVC 2022 64-bit / Desktop gcc 64-bit / macOS)
-- Default install paths: `C:/Qt/6.8.3/msvc2022_64`, `~/Qt/6.8.3/gcc_64`, `~/Qt/6.8.3/macos`
+- **Windows**: `winget install Kitware.CMake`
+- **Linux**: `sudo apt install -y cmake` (verify `cmake --version` >= 3.27; if older, download from [cmake.org](https://cmake.org/download/))
+- **macOS**: `brew install cmake`
 
-**Linux system packages (alternative — may not be exactly 6.8.3):**
+### Step 3 — Install Qt 6.8.3
+
+Download the **Qt Online Installer** from https://www.qt.io/download-qt-installer
+
+Select **Qt 6.8.3** and your platform kit:
+- **Windows**: MSVC 2022 64-bit (default install: `C:\Qt\6.8.3\msvc2022_64`)
+- **Linux**: Desktop gcc 64-bit (default install: `~/Qt/6.8.3/gcc_64`)
+- **macOS**: macOS (default install: `~/Qt/6.8.3/macos`)
+
+**Linux system packages (alternative):**
 ```bash
 sudo apt install -y \
   qt6-base-dev qt6-charts-dev qt6-tools-dev qt6-base-private-dev \
@@ -75,42 +88,71 @@ sudo apt install -y \
   libgl1-mesa-dev libglu1-mesa-dev
 ```
 
-#### 4. Install Python 3.11.9
+### Step 4 — Install Python 3.11
 
 - **Windows**: [python.org 3.11.9](https://www.python.org/downloads/release/python-3119/) (check "Add to PATH")
-- **Linux**: `sudo apt install python3.11` (or build from source if your distro ships 3.10)
+- **Linux**: `sudo apt install python3.11`
 - **macOS**: `brew install python@3.11`
 
-### Setup in 3 Steps (using CMake presets)
+### Step 5 — Clone and Configure
 
 ```bash
-# 1. Clone
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-qt
-
-# 2. Configure + Build (pick your platform)
-cmake --preset win-release     && cmake --build --preset win-release     # Windows (Dev Cmd for VS 2022)
-cmake --preset linux-release   && cmake --build --preset linux-release   # Linux
-cmake --preset macos-release   && cmake --build --preset macos-release   # macOS
-
-# Older or RAM-constrained machines: cap concurrent compile jobs to avoid
-# saturating every core (the default behaviour). Example:
-#   cmake --build --preset macos-release --parallel 4
-
-# 3. Run
-./build/linux-release/FinceptTerminal              # Linux
-./build/macos-release/FinceptTerminal.app/Contents/MacOS/FinceptTerminal   # macOS
-.\build\win-release\FinceptTerminal.exe            # Windows
 ```
 
-**If CMake presets can't resolve your Qt path**, use the manual configure:
+**Tell CMake where Qt is** (pick one method):
+
+**Option A — Environment variable (recommended, set once):**
 ```bash
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_PREFIX_PATH="<path/to/Qt/6.8.3/<kit>>"
-cmake --build build
+# Windows (PowerShell)
+$env:QT_DIR = "C:\Qt\6.8.3\msvc2022_64"
+
+# Linux
+export QT_DIR=~/Qt/6.8.3/gcc_64
+
+# macOS
+export QT_DIR=~/Qt/6.8.3/macos
 ```
 
-**Expected Result:** Fincept Terminal window should open, showing the login screen.
+**Option B — CMakeUserPresets.json (persistent per-clone):**
+```bash
+cp CMakeUserPresets.json.example CMakeUserPresets.json
+# Edit CMakeUserPresets.json — set CMAKE_PREFIX_PATH to your Qt install path
+```
+
+**Option C — Command line (one-off):**
+```bash
+cmake -B build/win-release -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="/path/to/Qt/6.8.3/kit"
+```
+
+> **Note:** If you installed Qt to the default location, CMake will auto-detect it — no configuration needed.
+
+### Step 6 — Build and Run
+
+**Windows** (run from **Developer Command Prompt for VS 2022** or **Developer PowerShell**):
+```powershell
+cmake --preset win-release
+cmake --build --preset win-release
+.\build\win-release\FinceptTerminal.exe
+```
+
+**Linux:**
+```bash
+cmake --preset linux-release
+cmake --build --preset linux-release
+./build/linux-release/FinceptTerminal
+```
+
+**macOS:**
+```bash
+cmake --preset macos-release
+cmake --build --preset macos-release
+./build/macos-release/FinceptTerminal.app/Contents/MacOS/FinceptTerminal
+```
+
+> **Windows users:** You must run from a Developer Command Prompt (or run `vcvars64.bat` first) so that MSVC, Windows SDK headers, and Ninja are on PATH. A regular PowerShell/CMD will fail with "cannot find stddef.h" errors.
 
 ### Verify Everything Works
 
@@ -148,24 +190,14 @@ FinceptTerminal/
 │   │   ├── storage/                ← SQLite databases + repositories
 │   │   ├── auth/                   ← Authentication (JWT, guest mode)
 │   │   ├── python/                 ← Python runtime bridge
-│   │   ├── trading/                ← Trading engine + 20+ brokers
+│   │   ├── trading/                ← Trading engine + broker integrations
 │   │   ├── services/               ← Market data, news services
-│   │   └── screens/                ← Terminal screens
-│   │       ├── dashboard/
-│   │       ├── markets/
-│   │       ├── crypto_trading/
-│   │       ├── news/
-│   │       ├── watchlist/
-│   │       ├── report_builder/
-│   │       └── ...
+│   │   └── screens/                ← Terminal screens (50+)
 │   │
 │   ├── scripts/                    ← Python analytics scripts
-│   │   ├── Analytics/              ← Analytics modules
-│   │   ├── agents/                 ← AI agent frameworks
-│   │   └── *.py                    ← 100+ data fetchers
-│   │
 │   ├── CMakeLists.txt              ← Build configuration
-│   └── DESIGN_SYSTEM.md           ← Obsidian UI/UX spec
+│   ├── CMakePresets.json           ← Build presets (portable, no local paths)
+│   └── CMakeUserPresets.json.example  ← Template for local Qt path config
 │
 └── docs/                           ← Documentation
 ```
@@ -284,26 +316,26 @@ git push origin fix/issue-123-description
 ## Troubleshooting
 
 ### CMake can't find Qt6
-```bash
-# Set CMAKE_PREFIX_PATH to your Qt install
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="/path/to/Qt/6.x.x/platform"
 
-# Linux: verify Qt6 dev packages are installed
-dpkg -l | grep qt6
+Set the `QT_DIR` environment variable or pass `-DCMAKE_PREFIX_PATH`:
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="/path/to/Qt/6.8.3/platform"
 ```
+
+### Windows: "Cannot open include file: 'stddef.h'"
+
+You're not running from a VS Developer Command Prompt. Either:
+- Open **"Developer Command Prompt for VS 2022"** from the Start menu
+- Or run `"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"` in your current shell
 
 ### Python script not found
 ```bash
-# Verify Python is in PATH
-python --version
-
-# Test script directly
-python scripts/yfinance_data.py quote AAPL
+python --version         # Verify Python is in PATH
+python scripts/yfinance_data.py quote AAPL   # Test directly
 ```
 
 ### OpenGL errors on Linux
 ```bash
-# Install OpenGL dev packages (required by Qt6 rendering)
 sudo apt install libgl1-mesa-dev libglu1-mesa-dev
 ```
 

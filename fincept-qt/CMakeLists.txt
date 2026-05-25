@@ -167,9 +167,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Unity build for infrastructure layers (safe — no local symbol conflicts)
 # Screens are excluded below via SKIP_UNITY_BUILD_INCLUSION (too many local statics/functions)
 set(CMAKE_UNITY_BUILD ON)
-# Batch size 14: sweet spot for MSVC — keeps each unity TU under ~30s to compile.
-# 32 was too large: one TU change forced a 32-file recompile; 14 limits blast radius.
-set(CMAKE_UNITY_BUILD_BATCH_SIZE 14)
+set(CMAKE_UNITY_BUILD_BATCH_SIZE 20)
 
 # FetchContent: default to skipping the update step after first download to cut
 # configure time by 5-15s on incremental configures. Not FORCEd so developers
@@ -321,6 +319,46 @@ if(APPLE AND NOT TARGET WrapOpenGL::WrapOpenGL)
     endif()
 endif()
 
+# ── Qt path discovery ───────────────────────────────────────────────────────
+# If CMAKE_PREFIX_PATH is not already set (by a preset, user preset, or -D
+# flag), try to find Qt automatically:
+#   1. QT_DIR env var (recommended — set once in your shell profile)
+#   2. Common default install locations per platform
+# If nothing is found, we let find_package fail with a clear error below.
+if(NOT CMAKE_PREFIX_PATH)
+    if(DEFINED ENV{QT_DIR} AND IS_DIRECTORY "$ENV{QT_DIR}")
+        set(CMAKE_PREFIX_PATH "$ENV{QT_DIR}")
+        message(STATUS "Qt path from QT_DIR env var: ${CMAKE_PREFIX_PATH}")
+    else()
+        # Probe common Qt Online Installer default locations.
+        if(WIN32)
+            file(GLOB _fincept_qt_candidates
+                "C:/Qt/6.8.*/msvc*_64"
+                "C:/Qt/6.8.*/mingw*_64"
+                "$ENV{USERPROFILE}/Qt/6.8.*/msvc*_64")
+        elseif(APPLE)
+            file(GLOB _fincept_qt_candidates
+                "$ENV{HOME}/Qt/6.8.*/macos"
+                "/opt/Qt/6.8.*/macos"
+                "/usr/local/Qt/6.8.*/macos")
+        else()
+            file(GLOB _fincept_qt_candidates
+                "$ENV{HOME}/Qt/6.8.*/gcc_64"
+                "/opt/Qt/6.8.*/gcc_64"
+                "/usr/local/Qt/6.8.*/gcc_64")
+        endif()
+        list(SORT _fincept_qt_candidates ORDER DESCENDING)
+        list(LENGTH _fincept_qt_candidates _fincept_qt_count)
+        if(_fincept_qt_count GREATER 0)
+            list(GET _fincept_qt_candidates 0 _fincept_qt_best)
+            set(CMAKE_PREFIX_PATH "${_fincept_qt_best}")
+            message(STATUS "Qt auto-detected at: ${CMAKE_PREFIX_PATH}")
+        endif()
+        unset(_fincept_qt_candidates)
+        unset(_fincept_qt_count)
+    endif()
+endif()
+
 # Build the version arg list once based on pin mode, then reuse it.
 if(FINCEPT_QT_PIN_MODE STREQUAL "EXACT")
     set(_FINCEPT_QT_VER_ARGS ${FINCEPT_QT_VERSION} EXACT)
@@ -328,6 +366,22 @@ elseif(FINCEPT_QT_PIN_MODE STREQUAL "MINOR")
     set(_FINCEPT_QT_VER_ARGS ${FINCEPT_QT_VERSION_MINOR})  # any 6.8.x
 else()
     set(_FINCEPT_QT_VER_ARGS "")  # ANY: no version constraint
+endif()
+
+find_package(Qt6 ${_FINCEPT_QT_VER_ARGS} QUIET COMPONENTS Widgets)
+if(NOT Qt6_FOUND)
+    message(FATAL_ERROR
+        "Qt6 not found. Fincept Terminal requires Qt 6.8.x.\n\n"
+        "Fix (pick one):\n"
+        "  1. Set the QT_DIR environment variable:\n"
+        "       Windows:  set QT_DIR=C:\\Qt\\6.8.3\\msvc2022_64\n"
+        "       Linux:    export QT_DIR=~/Qt/6.8.3/gcc_64\n"
+        "       macOS:    export QT_DIR=~/Qt/6.8.3/macos\n\n"
+        "  2. Copy CMakeUserPresets.json.example to CMakeUserPresets.json\n"
+        "     and set CMAKE_PREFIX_PATH to your Qt install path.\n\n"
+        "  3. Pass it on the command line:\n"
+        "       cmake -DCMAKE_PREFIX_PATH=/path/to/Qt/6.8.3/kit ...\n\n"
+        "Install Qt 6.8.3 from: https://www.qt.io/download-qt-installer")
 endif()
 
 find_package(Qt6 ${_FINCEPT_QT_VER_ARGS} REQUIRED COMPONENTS
@@ -898,6 +952,7 @@ set(TRADING_SOURCES
     # Trading WebSocket
     src/trading/websocket/ZerodhaWebSocket.cpp
     src/trading/websocket/AngelOneWebSocket.cpp
+    src/trading/websocket/FyersWebSocket.cpp
     # Indian brokers
     src/trading/brokers/zerodha/ZerodhaBroker.cpp
     src/trading/brokers/zerodha/Totp.cpp
@@ -919,10 +974,12 @@ set(TRADING_SOURCES
     src/trading/brokers/ibkr/IBKRBroker.cpp
     src/trading/brokers/tradier/TradierBroker.cpp
     src/trading/brokers/saxo/SaxoBankBroker.cpp
+    src/trading/brokers/metaapi/MetaApiBroker.cpp
 
     # Instrument system (Phase 1)
     src/trading/instruments/InstrumentRepository.cpp
     src/trading/instruments/ZerodhaInstrumentParser.cpp
+    src/trading/instruments/FyersInstrumentParser.cpp
     src/trading/instruments/GrowwInstrumentParser.cpp
     src/trading/instruments/InstrumentService.cpp
     src/trading/instruments/SymbolResolver.cpp
@@ -1118,6 +1175,7 @@ set(UI_SOURCES
     src/ui/components/ComponentCard.cpp
     src/ui/components/ComponentBrowserDialog.cpp
     src/ui/widgets/SearchBar.cpp
+    src/ui/widgets/PaginationBar.cpp
     src/ui/widgets/GeometricBackground.cpp
     src/ui/widgets/WorldMapWidget.cpp
     src/ui/widgets/LoadingOverlay.cpp
@@ -1386,6 +1444,8 @@ set(SCREEN_SOURCES
     src/screens/fno/TemplatePickerPanel.cpp
     src/screens/fno/LegEditorTable.cpp
     src/screens/fno/PayoffChartWidget.cpp
+    src/screens/fno/PayoffStripWidget.cpp
+    src/screens/fno/TemplateToolbar.cpp
     src/screens/fno/OrderConfirmDialog.cpp
     src/screens/fno/OISubTab.cpp
     src/screens/fno/MultiStrikeOIChart.cpp
@@ -1651,7 +1711,6 @@ set(APP_SOURCES
     src/app/WindowFrame_Auth.cpp
     src/app/WindowFrame_Layout.cpp
     src/app/WindowFrame_Actions.cpp
-    src/app/ScreenRouter.cpp
     # DockScreenRouter split; see DockScreenRouter.cpp header.
     src/app/DockScreenRouter.cpp
     src/app/DockScreenRouter_Navigation.cpp
@@ -1871,6 +1930,8 @@ set_source_files_properties(
     src/screens/fno/TemplatePickerPanel.cpp
     src/screens/fno/LegEditorTable.cpp
     src/screens/fno/PayoffChartWidget.cpp
+    src/screens/fno/PayoffStripWidget.cpp
+    src/screens/fno/TemplateToolbar.cpp
     src/screens/fno/OrderConfirmDialog.cpp
     src/screens/fno/OISubTab.cpp
     src/screens/fno/MultiStrikeOIChart.cpp
@@ -2078,6 +2139,17 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v018_widget_config.cpp
     src/storage/sqlite/migrations/v019_sector_cache.cpp
     src/storage/sqlite/migrations/v020_security_audit_log.cpp
+    src/storage/sqlite/migrations/v021_max_tokens_default.cpp
+    src/storage/sqlite/migrations/v022_portfolio_broker_link.cpp
+    src/storage/sqlite/migrations/v023_algo_trading_deploy.cpp
+    src/storage/sqlite/migrations/v024_alpha_arena.cpp
+    src/storage/sqlite/migrations/v025_oi_snapshots.cpp
+    src/storage/sqlite/migrations/v026_strategies.cpp
+    src/storage/sqlite/migrations/v027_fii_dii.cpp
+    src/storage/sqlite/migrations/v028_iv_history.cpp
+    src/storage/sqlite/migrations/v029_secure_credentials.cpp
+    src/storage/sqlite/migrations/v030_max_tool_rounds.cpp
+    src/storage/sqlite/migrations/v031_rss_feeds.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
@@ -2090,6 +2162,14 @@ set_source_files_properties(
     src/screens/polymarket/PolymarketActivityFeed.cpp
     src/screens/polymarket/PolymarketStatusBar.cpp
     src/screens/polymarket/PredictionAccountDialog.cpp
+    src/screens/polymarket/PolymarketOrderBlotter.cpp
+    src/screens/chat_mode/ChatAgentPanel.cpp
+    src/screens/chat_mode/ChatModeScreen.cpp
+    src/screens/chat_mode/ChatModeService.cpp
+    src/screens/chat_mode/TerminalToolBridge.cpp
+    src/screens/quantlib/QuantLibScreen.cpp
+    src/screens/quantlib/QuantLibScreen_Data.cpp
+    src/trading/brokers/BrokerHttp.cpp
     src/trading/websocket/ZerodhaWebSocket.cpp
     src/trading/websocket/AngelOneWebSocket.cpp
     # Trading broker files — each defines static now_ts() in same namespace
@@ -2112,6 +2192,7 @@ set_source_files_properties(
     src/trading/brokers/ibkr/IBKRBroker.cpp
     src/trading/brokers/tradier/TradierBroker.cpp
     src/trading/brokers/saxo/SaxoBankBroker.cpp
+    src/trading/brokers/metaapi/MetaApiBroker.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
@@ -2233,6 +2314,7 @@ set_source_files_properties(
     src/trading/brokers/saxo/SaxoBankBroker.cpp
     src/trading/websocket/ZerodhaWebSocket.cpp
     src/trading/websocket/AngelOneWebSocket.cpp
+    src/trading/websocket/FyersWebSocket.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
@@ -2313,6 +2395,8 @@ add_executable(FinceptTerminal ${_FINCEPT_EXE_FLAGS}
 target_include_directories(FinceptTerminal PRIVATE
     src
 )
+
+
 
 # ── Translations (.ts → .qm → resources) ──────────────────────────────────────
 # Hand-authored .ts files under translations/ are compiled to .qm at build time
@@ -3348,6 +3432,42 @@ endif()
 message(STATUS "  Tests             : ${FINCEPT_BUILD_TESTS}")
 message(STATUS "============================================================")
 message(STATUS "")
+
+# ── Linux install rules (Flatpak, system packages) ────────────────────────────
+if(UNIX AND NOT APPLE)
+    include(GNUInstallDirs)
+    install(TARGETS FinceptTerminal RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+    install(DIRECTORY scripts/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/fincept-terminal/scripts
+        PATTERN "__pycache__" EXCLUDE
+        PATTERN "*.pyc"       EXCLUDE
+        PATTERN ".git"        EXCLUDE)
+
+    install(FILES
+        resources/requirements-numpy2.txt
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/fincept-terminal)
+
+    # Flatpak packaging files (app ID: in.fincept.FinceptTerminal)
+    install(FILES packaging/flatpak/in.fincept.FinceptTerminal.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+    install(FILES packaging/flatpak/in.fincept.FinceptTerminal.metainfo.xml
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)
+
+    # Icon — install PNG if present, otherwise skip gracefully.
+    # TODO: Add a 256x256+ PNG at resources/in.fincept.FinceptTerminal.png
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resources/in.fincept.FinceptTerminal.png")
+        install(FILES resources/in.fincept.FinceptTerminal.png
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps)
+    endif()
+
+    # Translations (.qm files generated during build)
+    file(GLOB _QM_FILES "${CMAKE_BINARY_DIR}/*.qm")
+    if(_QM_FILES)
+        install(FILES ${_QM_FILES}
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/fincept-terminal/translations)
+    endif()
+endif()
 
 # ── Test suite (opt-in; see fincept-qt/tests/CMakeLists.txt) ─────────────────
 if(FINCEPT_BUILD_TESTS)

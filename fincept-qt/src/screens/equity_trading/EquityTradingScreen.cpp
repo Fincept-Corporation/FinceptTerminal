@@ -544,4 +544,23 @@ SymbolRef EquityTradingScreen::current_symbol() const {
     return SymbolRef::equity(selected_symbol_, selected_exchange_);
 }
 
+// ── IStatefulScreen ──────────────────────────────────────────────────────────
+
+QVariantMap EquityTradingScreen::save_state() const {
+    return {
+        {"symbol", selected_symbol_},
+        {"exchange", selected_exchange_},
+        {"account_id", focused_account_id_},
+    };
+}
+
+void EquityTradingScreen::restore_state(const QVariantMap& state) {
+    const QString sym = state.value("symbol", "RELIANCE").toString();
+    if (!sym.isEmpty() && sym != selected_symbol_)
+        on_symbol_selected(sym);
+    const QString acct = state.value("account_id").toString();
+    if (!acct.isEmpty() && acct != focused_account_id_)
+        on_account_changed(acct);
+}
+
 } // namespace fincept::screens

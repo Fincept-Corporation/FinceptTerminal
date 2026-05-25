@@ -1001,4 +1001,10 @@ QDialog* WebScraperWidget::make_config_dialog(QWidget* parent) {
     return dlg;
 }
 
+void WebScraperWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("WEB SCRAPER"));
+    render_selected_table(); // re-renders status / format badge / "no data" labels
+}
+
 } // namespace fincept::screens::widgets

@@ -6,6 +6,7 @@
 
 #include <QColor>
 #include <QFile>
+#include <algorithm>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -234,13 +235,24 @@ void EconPanelBase::build_base_ui(QWidget* container) {
     evl->addWidget(empty_lbl_);
     stack_->addWidget(empty_pg); // index 0
 
+    auto* table_page = new QWidget(this);
+    auto* tpl = new QVBoxLayout(table_page);
+    tpl->setContentsMargins(0, 0, 0, 0);
+    tpl->setSpacing(0);
+
     table_ = new QTableWidget;
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->verticalHeader()->setVisible(false);
     table_->setAlternatingRowColors(true);
     table_->setShowGrid(true);
-    stack_->addWidget(table_); // index 1
+    tpl->addWidget(table_, 1);
+
+    pager_ = new ui::PaginationBar(this);
+    connect(pager_, &ui::PaginationBar::page_changed, this, [this]() { render_page(); });
+    tpl->addWidget(pager_);
+
+    stack_->addWidget(table_page); // index 1
 
     root->addWidget(stack_, 1);
 
@@ -307,39 +319,56 @@ void EconPanelBase::display(const QJsonArray& rows, const QString& title) {
         return;
     }
 
-    // Collect all keys, prioritise date then value
-    QStringList cols;
+    all_rows_ = rows;
+
+    columns_.clear();
     for (const auto& v : rows) {
         for (const auto& k : v.toObject().keys())
-            if (!cols.contains(k))
-                cols << k;
+            if (!columns_.contains(k))
+                columns_ << k;
     }
     static const QStringList kDateKeys = {"date",   "period",      "year",        "time",    "Date",
                                           "Period", "TIME_PERIOD", "record_date", "ref_date"};
     for (const auto& dk : kDateKeys) {
-        int idx = cols.indexOf(dk);
+        int idx = columns_.indexOf(dk);
         if (idx > 0) {
-            cols.move(idx, 0);
+            columns_.move(idx, 0);
             break;
         }
     }
     static const QStringList kValKeys = {"value", "Value", "val", "OBS_VALUE", "obs_value", "amount", "rate"};
     for (const auto& vk : kValKeys) {
-        int idx = cols.indexOf(vk);
+        int idx = columns_.indexOf(vk);
         if (idx > 1) {
-            cols.move(idx, 1);
+            columns_.move(idx, 1);
             break;
         }
     }
 
-    table_->setColumnCount(cols.size());
-    table_->setHorizontalHeaderLabels(cols);
-    table_->setRowCount(rows.size());
+    pager_->set_total(rows.size());
+    render_page();
 
-    for (int r = 0; r < rows.size(); ++r) {
-        const auto obj = rows[r].toObject();
-        for (int c = 0; c < cols.size(); ++c) {
-            const auto jv = obj[cols[c]];
+    if (title_lbl_)
+        title_lbl_->setText(title);
+    if (row_count_)
+        row_count_->setText(QString::number(rows.size()) + " records");
+
+    update_stats(rows);
+    show_table();
+}
+
+void EconPanelBase::render_page() {
+    const int start = pager_->offset();
+    const int count = std::min<int>(pager_->page_size(), all_rows_.size() - start);
+
+    table_->setColumnCount(columns_.size());
+    table_->setHorizontalHeaderLabels(columns_);
+    table_->setRowCount(count);
+
+    for (int r = 0; r < count; ++r) {
+        const auto obj = all_rows_[start + r].toObject();
+        for (int c = 0; c < columns_.size(); ++c) {
+            const auto jv = obj[columns_[c]];
             QString text;
             if (jv.isDouble())
                 text = QString::number(jv.toDouble(), 'g', 8);
@@ -353,16 +382,8 @@ void EconPanelBase::display(const QJsonArray& rows, const QString& title) {
     }
 
     table_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-    if (cols.size() > 1)
-        table_->horizontalHeader()->setSectionResizeMode(cols.size() - 1, QHeaderView::Stretch);
-
-    if (title_lbl_)
-        title_lbl_->setText(title);
-    if (row_count_)
-        row_count_->setText(QString::number(rows.size()) + " records");
-
-    update_stats(rows);
-    show_table();
+    if (columns_.size() > 1)
+        table_->horizontalHeader()->setSectionResizeMode(columns_.size() - 1, QHeaderView::Stretch);
 }
 
 void EconPanelBase::update_stats(const QJsonArray& rows) {

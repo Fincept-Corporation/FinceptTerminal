@@ -56,10 +56,10 @@ static QString role_color(const QString& role) {
 
 static QString role_label_text(const QString& role) {
     if (role == "user")
-        return "You";
+        return QObject::tr("You");
     if (role == "system")
-        return "System";
-    return "AI";
+        return QObject::tr("System");
+    return QObject::tr("AI");
 }
 
 static QString format_timestamp(const QString& timestamp) {
@@ -72,7 +72,7 @@ static QString format_timestamp(const QString& timestamp) {
 }
 
 static QPushButton* make_copy_button(const QString& initial_text) {
-    auto* btn = new QPushButton("Copy");
+    auto* btn = new QPushButton(QObject::tr("Copy"));
     btn->setFixedHeight(20);
     btn->setCursor(Qt::PointingHandCursor);
     btn->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
@@ -85,8 +85,8 @@ static QPushButton* make_copy_button(const QString& initial_text) {
         // initial_text is captured for the static-content variant; the streaming
         // variant overrides this connection at finalize_streaming() time.
         QApplication::clipboard()->setText(initial_text);
-        btn->setText("Copied!");
-        QTimer::singleShot(1500, btn, [btn]() { btn->setText("Copy"); });
+        btn->setText(QObject::tr("Copied!"));
+        QTimer::singleShot(1500, btn, [btn]() { btn->setText(QObject::tr("Copy")); });
     });
     return btn;
 }
@@ -300,8 +300,8 @@ void ChatBubbleFactory::finalize_streaming(QLabel* body, const QString& final_te
         QObject::disconnect(copy_btn, &QPushButton::clicked, nullptr, nullptr);
         QObject::connect(copy_btn, &QPushButton::clicked, copy_btn, [copy_btn, text]() {
             QApplication::clipboard()->setText(text);
-            copy_btn->setText("Copied!");
-            QTimer::singleShot(1500, copy_btn, [copy_btn]() { copy_btn->setText("Copy"); });
+            copy_btn->setText(QObject::tr("Copied!"));
+            QTimer::singleShot(1500, copy_btn, [copy_btn]() { copy_btn->setText(QObject::tr("Copy")); });
         });
         copy_btn->show();
     }

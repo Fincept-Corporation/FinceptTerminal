@@ -98,7 +98,7 @@ void AiChatScreen::build_sidebar() {
     new_btn_ = new QPushButton("＋");
     new_btn_->setFixedSize(34, 34);
     new_btn_->setCursor(Qt::PointingHandCursor);
-    new_btn_->setToolTip("New Chat  (Ctrl+N)");
+    new_btn_->setToolTip(tr("New Chat  (Ctrl+N)"));
     new_btn_->setStyleSheet(
         QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                 "border-radius:0px;font-size:20px;font-weight:700;}"
@@ -116,7 +116,7 @@ void AiChatScreen::build_sidebar() {
     swl->setContentsMargins(10, 8, 10, 8);
 
     search_edit_ = new QLineEdit;
-    search_edit_->setPlaceholderText("Search sessions...");
+    search_edit_->setPlaceholderText(tr("Search sessions..."));
     search_edit_->setFixedHeight(30);
     search_edit_->setStyleSheet(QString("QLineEdit{background:%1;color:%2;border:1px solid %3;"
                                         "border-radius:0px;padding:2px 10px;font-size:%4px;}"
@@ -155,7 +155,7 @@ void AiChatScreen::build_sidebar() {
     al->setContentsMargins(10, 0, 10, 0);
     al->setSpacing(6);
 
-    rename_btn_ = new QPushButton("Rename");
+    rename_btn_ = new QPushButton(tr("Rename"));
     rename_btn_->setEnabled(false);
     rename_btn_->setFixedHeight(26);
     rename_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
@@ -170,7 +170,7 @@ void AiChatScreen::build_sidebar() {
 
     al->addStretch();
 
-    delete_btn_ = new QPushButton("Delete");
+    delete_btn_ = new QPushButton(tr("Delete"));
     delete_btn_->setEnabled(false);
     delete_btn_->setFixedHeight(26);
     delete_btn_->setStyleSheet(
@@ -193,13 +193,13 @@ void AiChatScreen::build_sidebar() {
     fl->setContentsMargins(14, 7, 14, 7);
     fl->setSpacing(2);
 
-    provider_lbl_ = new QLabel("No provider");
+    provider_lbl_ = new QLabel(tr("No provider"));
     provider_lbl_->setStyleSheet(QString("color:%1;font-size:%2px;font-weight:600;").arg(col::AMBER()).arg(fnt::SMALL));
-    provider_lbl_->setToolTip("Active LLM Provider");
+    provider_lbl_->setToolTip(tr("Active LLM Provider"));
 
-    model_lbl_ = new QLabel("No model");
+    model_lbl_ = new QLabel(tr("No model"));
     model_lbl_->setStyleSheet(QString("color:%1;font-size:%2px;").arg(col::TEXT_SECONDARY()).arg(fnt::TINY));
-    model_lbl_->setToolTip("Active Model — change in Settings > LLM Configuration");
+    model_lbl_->setToolTip(tr("Active Model — change in Settings > LLM Configuration"));
 
     fl->addWidget(provider_lbl_);
     fl->addWidget(model_lbl_);
@@ -260,7 +260,7 @@ QWidget* AiChatScreen::build_header_bar() {
     sidebar_toggle_btn_ = new QPushButton("‹");
     sidebar_toggle_btn_->setFixedSize(28, 28);
     sidebar_toggle_btn_->setCursor(Qt::PointingHandCursor);
-    sidebar_toggle_btn_->setToolTip("Collapse sidebar  (Ctrl+B)");
+    sidebar_toggle_btn_->setToolTip(tr("Collapse sidebar  (Ctrl+B)"));
     sidebar_toggle_btn_->setShortcut(QKeySequence("Ctrl+B"));
     sidebar_toggle_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                                                "border-radius:0px;font-size:18px;font-weight:700;padding:0;}"
@@ -276,7 +276,7 @@ QWidget* AiChatScreen::build_header_bar() {
     hl->addWidget(hdr_status_dot_);
 
     // Session name
-    hdr_session_lbl_ = new QLabel("New Conversation");
+    hdr_session_lbl_ = new QLabel(tr("New Conversation"));
     hdr_session_lbl_->setStyleSheet(
         QString("color:%1;font-size:%2px;font-weight:600;").arg(col::TEXT_PRIMARY()).arg(fnt::BODY));
     hl->addWidget(hdr_session_lbl_);
@@ -296,17 +296,17 @@ QWidget* AiChatScreen::build_header_bar() {
     hl->addWidget(div);
 
     // Active model pill
-    hdr_model_lbl_ = new QLabel("No model");
+    hdr_model_lbl_ = new QLabel(tr("No model"));
     hdr_model_lbl_->setStyleSheet(QString("color:%1;font-size:%2px;background:%3;border:1px solid %4;"
                                           "border-radius:0px;padding:2px 8px;")
                                       .arg(col::TEXT_SECONDARY())
                                       .arg(fnt::TINY)
                                       .arg(col::BG_BASE(), col::BORDER_MED()));
-    hdr_model_lbl_->setToolTip("Active model — change in Settings > LLM Configuration");
+    hdr_model_lbl_->setToolTip(tr("Active model — change in Settings > LLM Configuration"));
     hl->addWidget(hdr_model_lbl_);
 
     // Status text
-    hdr_status_lbl_ = new QLabel("Ready");
+    hdr_status_lbl_ = new QLabel(tr("Ready"));
     hdr_status_lbl_->setFixedWidth(64);
     hdr_status_lbl_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     hdr_status_lbl_->setStyleSheet(
@@ -325,7 +325,7 @@ QWidget* AiChatScreen::build_typing_indicator() {
     auto* hl = new QHBoxLayout(typing_indicator_);
     hl->setContentsMargins(36, 0, 0, 0);
 
-    typing_dots_lbl_ = new QLabel("AI is thinking");
+    typing_dots_lbl_ = new QLabel(tr("AI is thinking"));
     typing_dots_lbl_->setStyleSheet(
         QString("color:%1;font-size:%2px;font-style:italic;").arg(col::TEXT_SECONDARY()).arg(fnt::SMALL));
     hl->addWidget(typing_dots_lbl_);
@@ -344,14 +344,14 @@ QWidget* AiChatScreen::build_welcome() {
     vl->setContentsMargins(48, 36, 48, 28);
     vl->setSpacing(20);
 
-    auto* heading = new QLabel("How can I help you?");
+    auto* heading = new QLabel(tr("How can I help you?"));
     heading->setAlignment(Qt::AlignCenter);
     heading->setStyleSheet(
         QString("color:%1;font-size:%2px;font-weight:700;").arg(col::TEXT_PRIMARY()).arg(fnt::TITLE));
     vl->addWidget(heading);
 
-    auto* sub = new QLabel("Ask about markets, portfolios, macro data, or any financial topic.\n"
-                           "Conversations are saved automatically.");
+    auto* sub = new QLabel(tr("Ask about markets, portfolios, macro data, or any financial topic.\n"
+                              "Conversations are saved automatically."));
     sub->setAlignment(Qt::AlignCenter);
     sub->setWordWrap(true);
     sub->setStyleSheet(QString("color:%1;font-size:%2px;").arg(col::TEXT_SECONDARY()).arg(fnt::SMALL));
@@ -362,17 +362,17 @@ QWidget* AiChatScreen::build_welcome() {
     grid->setVerticalSpacing(10);
 
     struct Sug {
-        const char* cat;
+        QString cat;
         const char* cat_color;
-        const char* text;
+        QString text;
     };
     const Sug suggestions[] = {
-        {"Markets", col::CYAN(), "Show me today's top market movers"},
-        {"News", col::AMBER(), "Summarize the latest financial news"},
-        {"Portfolio", col::POSITIVE(), "Analyze my portfolio performance"},
-        {"Analytics", col::AMBER(), "Calculate valuation for AAPL"},
-        {"Economics", col::CYAN(), "Current GDP and inflation data"},
-        {"Research", col::POSITIVE(), "Tech sector market trends"},
+        {tr("Markets"),   col::CYAN(),     tr("Show me today's top market movers")},
+        {tr("News"),      col::AMBER(),    tr("Summarize the latest financial news")},
+        {tr("Portfolio"), col::POSITIVE(), tr("Analyze my portfolio performance")},
+        {tr("Analytics"), col::AMBER(),    tr("Calculate valuation for AAPL")},
+        {tr("Economics"), col::CYAN(),     tr("Current GDP and inflation data")},
+        {tr("Research"),  col::POSITIVE(), tr("Tech sector market trends")},
     };
 
     for (int i = 0; i < 6; ++i) {
@@ -422,7 +422,7 @@ QWidget* AiChatScreen::build_input_area() {
     hl->setSpacing(10);
 
     input_box_ = new QPlainTextEdit;
-    input_box_->setPlaceholderText("Message Fincept AI...");
+    input_box_->setPlaceholderText(tr("Message Fincept AI..."));
     input_box_->setFixedHeight(44);
     input_box_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     input_box_->setStyleSheet(QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;"
@@ -443,7 +443,7 @@ QWidget* AiChatScreen::build_input_area() {
     attach_btn_ = new QPushButton("⊕");
     attach_btn_->setFixedSize(44, 44);
     attach_btn_->setCursor(Qt::PointingHandCursor);
-    attach_btn_->setToolTip("Attach a file to this message");
+    attach_btn_->setToolTip(tr("Attach a file to this message"));
     attach_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                                        "border-radius:0px;font-size:20px;font-weight:700;}"
                                        "QPushButton:hover{background:rgba(217,119,6,0.15);border-color:%1;}"
@@ -462,7 +462,7 @@ QWidget* AiChatScreen::build_input_area() {
                                      .arg(col::AMBER(), "font-family:'Consolas',monospace;"));
     hl->addWidget(attach_badge_);
 
-    send_btn_ = new QPushButton("Send  ↑");
+    send_btn_ = new QPushButton(tr("Send  ↑"));
     send_btn_->setFixedSize(82, 44);
     send_btn_->setCursor(Qt::PointingHandCursor);
     send_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:none;border-radius:0px;"

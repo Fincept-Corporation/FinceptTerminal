@@ -158,6 +158,7 @@ void WindowFrame::on_auth_state_changed() {
             fincept::trading::InstrumentService::instance().load_from_db_async("zerodha");
             fincept::trading::InstrumentService::instance().load_from_db_async("angelone");
             fincept::trading::InstrumentService::instance().load_from_db_async("groww");
+            fincept::trading::InstrumentService::instance().load_from_db_async("fyers");
         } else {
             // Free/no plan → show pricing gate
             set_shell_visible(false);

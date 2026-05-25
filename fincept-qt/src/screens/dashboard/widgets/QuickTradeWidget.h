@@ -25,6 +25,7 @@ class QuickTradeWidget : public BaseWidget {
     void on_theme_changed() override;
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void retranslateUi() override;
 
   private:
     void apply_styles();

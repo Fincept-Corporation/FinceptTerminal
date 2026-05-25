@@ -54,6 +54,7 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     void hideEvent(QHideEvent* e) override;
     bool eventFilter(QObject* obj, QEvent* event) override;
     void resizeEvent(QResizeEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_send();
@@ -125,6 +126,7 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
 
     // ── Build ────────────────────────────────────────────────────────────
     void build_ui();
+    void retranslateUi();
     void build_sidebar();
     void build_chat_area();
     QWidget* build_header_bar();

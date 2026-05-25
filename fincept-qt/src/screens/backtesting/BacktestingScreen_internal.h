@@ -12,17 +12,58 @@
 
 #include "services/backtesting/BacktestingTypes.h"
 
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QEvent>
 #include <QJsonValue>
 #include <QLayout>
 #include <QLayoutItem>
 #include <QRegularExpression>
 #include <QSizePolicy>
+#include <QSpinBox>
 #include <QString>
 #include <QWidget>
 
 #include <cmath>
 
 namespace fincept::screens::backtesting_internal {
+
+// Event filter that blocks mouse-wheel changes on unfocused combo boxes and
+// spin boxes. Without this, scrolling through the config panel accidentally
+// changes every widget the cursor passes over.
+class WheelGuard : public QObject {
+  public:
+    using QObject::QObject;
+
+  protected:
+    bool eventFilter(QObject* obj, QEvent* event) override {
+        if (event->type() == QEvent::Wheel) {
+            auto* w = qobject_cast<QWidget*>(obj);
+            if (w && !w->hasFocus()) {
+                event->ignore();
+                return true;
+            }
+        }
+        return QObject::eventFilter(obj, event);
+    }
+};
+
+// Apply the wheel guard to a widget: StrongFocus so it only gains focus on
+// click, plus the event filter to swallow wheel events when unfocused.
+inline void guard_wheel(QWidget* w, QObject* filter) {
+    w->setFocusPolicy(Qt::StrongFocus);
+    w->installEventFilter(filter);
+}
+
+// Walk a widget tree and guard every QComboBox / QSpinBox / QDoubleSpinBox.
+inline void guard_all_inputs(QWidget* root, QObject* filter) {
+    for (auto* combo : root->findChildren<QComboBox*>())
+        guard_wheel(combo, filter);
+    for (auto* spin : root->findChildren<QSpinBox*>())
+        guard_wheel(spin, filter);
+    for (auto* dspin : root->findChildren<QDoubleSpinBox*>())
+        guard_wheel(dspin, filter);
+}
 
 // Shared pill geometry used by every chip on the top bar (brand, provider
 // tabs, RUN, status) and by update_provider_buttons() when re-skinning the

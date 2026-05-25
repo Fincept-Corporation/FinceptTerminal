@@ -451,4 +451,10 @@ QDialog* PortfolioSummaryWidget::make_config_dialog(QWidget* parent) {
     return dlg;
 }
 
+void PortfolioSummaryWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("PORTFOLIO SUMMARY"));
+    rebuild_from_cache(); // re-renders header/metric labels in the new language
+}
+
 } // namespace fincept::screens::widgets

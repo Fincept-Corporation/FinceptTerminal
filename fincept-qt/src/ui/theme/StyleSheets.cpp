@@ -48,6 +48,29 @@ QString muted_button() {
         .arg(colors::PANEL(), colors::MUTED(), colors::BORDER(), colors::BG_RAISED(), colors::GRAY());
 }
 
+QString fno_dense_table() {
+    return QString(
+        "QTableView { background:%1; color:%2; border:none; gridline-color:transparent; "
+        "  alternate-background-color:%3; font-size:11px; "
+        "  selection-background-color:%4; selection-color:%2; }"
+        "QTableView::item { padding:0 6px; border:none; }"
+        "QTableView::item:hover { background:%4; }"
+        "QHeaderView::section { background:%5; color:%6; border:none; "
+        "  border-bottom:1px solid %7; padding:2px 6px; "
+        "  font-size:9px; font-weight:700; letter-spacing:0.4px; }"
+        "QScrollBar:vertical { background:%1; width:6px; margin:0; }"
+        "QScrollBar::handle:vertical { background:%7; min-height:20px; border-radius:3px; }"
+        "QScrollBar::handle:vertical:hover { background:%6; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
+        .arg(colors::BG_BASE(),        // %1
+             colors::TEXT_PRIMARY(),   // %2
+             colors::ROW_ALT(),        // %3
+             colors::BG_HOVER(),       // %4
+             colors::BG_RAISED(),      // %5
+             colors::TEXT_SECONDARY(), // %6
+             colors::BORDER_DIM());    // %7
+}
+
 QString news_screen_styles() {
     return QString(
                /* ── NewsScreen root ── */
@@ -634,6 +657,7 @@ QString equity_trading_styles() {
                "#eqObHeader { background: %8; border-bottom: 1px solid %3; }"
                "#eqObTitle { color: %12; font-weight: 700; font-size: 11px; "
                "  letter-spacing: 0.5px; background: transparent; border: none; }"
+               "#eqObCanvas { background: transparent; }"
                "#eqObSpread { background: %8; color: %7; font-size: 11px; font-weight: 700; "
                "  border-top: 1px solid %3; border-bottom: 1px solid %3; }"
 

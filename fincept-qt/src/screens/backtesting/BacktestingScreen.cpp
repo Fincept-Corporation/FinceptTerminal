@@ -16,6 +16,7 @@
 // Shared helpers live in BacktestingScreen_internal.h.
 
 #include "screens/backtesting/BacktestingScreen.h"
+#include "screens/backtesting/BacktestingScreen_internal.h"
 
 #include "core/logging/Logger.h"
 #include "core/symbol/SymbolContext.h"
@@ -38,6 +39,11 @@ BacktestingScreen::BacktestingScreen(QWidget* parent) : QWidget(parent) {
     // strategies_ starts empty — populated dynamically per provider via load_strategies()
     build_ui();
     connect_service();
+
+    auto* wheel_guard = new backtesting_internal::WheelGuard(this);
+    setProperty("_wheel_guard", QVariant::fromValue(static_cast<QObject*>(wheel_guard)));
+    backtesting_internal::guard_all_inputs(this, wheel_guard);
+
     LOG_INFO("Backtesting", "Screen constructed");
 }
 
@@ -48,6 +54,24 @@ void BacktestingScreen::showEvent(QShowEvent* e) {
         on_provider_changed(0);
         on_command_changed(0);
     }
+    auto config = BacktestingService::instance().take_pending_portfolio_config();
+    if (!config.isEmpty())
+        apply_portfolio_config(config);
+}
+
+void BacktestingScreen::apply_portfolio_config(const QJsonObject& config) {
+    auto symbols = config["symbols"].toArray();
+    QStringList sym_list;
+    for (const auto& s : symbols)
+        sym_list.append(s.toString());
+    if (symbols_edit_ && !sym_list.isEmpty())
+        symbols_edit_->setText(sym_list.join(", "));
+    if (capital_spin_ && config.contains("initialCapital"))
+        capital_spin_->setValue(config["initialCapital"].toDouble());
+    pending_weights_ = config["weights"].toArray();
+    LOG_INFO("Backtesting", QString("Portfolio config applied: %1 symbols, $%2")
+                                .arg(sym_list.size())
+                                .arg(config["initialCapital"].toDouble(), 0, 'f', 0));
 }
 
 void BacktestingScreen::hideEvent(QHideEvent* e) {
@@ -108,10 +132,18 @@ void BacktestingScreen::build_ui() {
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap BacktestingScreen::save_state() const {
-    return {
+    QVariantMap state{
         {"provider", active_provider_},
         {"command", active_command_},
     };
+    if (symbols_edit_) state["symbols"] = symbols_edit_->text();
+    if (benchmark_edit_) state["benchmark"] = benchmark_edit_->text();
+    if (raw_json_edit_ && !raw_json_edit_->toPlainText().isEmpty()) {
+        const QString json_text = raw_json_edit_->toPlainText();
+        if (json_text.size() < 500000)
+            state["last_result"] = json_text;
+    }
+    return state;
 }
 
 void BacktestingScreen::restore_state(const QVariantMap& state) {
@@ -121,6 +153,12 @@ void BacktestingScreen::restore_state(const QVariantMap& state) {
         on_provider_changed(prov);
     if (cmd != active_command_)
         on_command_changed(cmd);
+    if (symbols_edit_ && state.contains("symbols"))
+        symbols_edit_->setText(state.value("symbols").toString());
+    if (benchmark_edit_ && state.contains("benchmark"))
+        benchmark_edit_->setText(state.value("benchmark").toString());
+    if (raw_json_edit_ && state.contains("last_result"))
+        raw_json_edit_->setPlainText(state.value("last_result").toString());
 }
 
 // ── IGroupLinked ─────────────────────────────────────────────────────────────

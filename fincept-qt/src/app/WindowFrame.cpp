@@ -110,6 +110,7 @@
 #include <QMessageBox>
 #include <QPalette>
 #include <QScreen>
+#include <QSet>
 #include <QShortcut>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -239,12 +240,21 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
         if (target) {
             QRect geom = target->availableGeometry();
             resize(geom.width() * 9 / 10, geom.height() * 9 / 10);
-            // Only centre-place for the primary window; secondary windows
-            // are positioned by the "new window" action after construction.
-            if (window_id_ == 0)
-                move(geom.center() - rect().center());
-            else
-                move(geom.center() - rect().center());
+            QPoint center = geom.center() - rect().center();
+            if (window_id_ == 0) {
+                move(center);
+            } else {
+                // Cascade secondary windows so they don't stack exactly
+                // on top of the primary when multiple windows fall back
+                // to the same screen (e.g. external monitors disconnected).
+                int offset = window_id_ * 30;
+                QPoint pos = center + QPoint(offset, offset);
+                pos.setX(std::max(pos.x(), geom.x()));
+                pos.setY(std::max(pos.y(), geom.y()));
+                pos.setX(std::min(pos.x(), geom.right() - width()));
+                pos.setY(std::min(pos.y(), geom.bottom() - height()));
+                move(pos);
+            }
         }
     }
 
@@ -744,12 +754,25 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
         SessionManager::instance().load_perspectives(persp_settings);
         dock_manager_->loadPerspectives(persp_settings);
 
+        // Suppress the debounced dock-layout save during bulk registration
+        // and restoreState. These operations fire dockWidgetAdded and
+        // viewToggled dozens of times — each restarts the 500ms timer, and
+        // the eventual save would just re-write the state we're loading.
+        suppress_layout_save_ = true;
+
         const int saved_version = SessionManager::instance().dock_layout_version(window_id_);
         if (saved_version == kDockLayoutVersion) {
             const QByteArray saved_dock = SessionManager::instance().load_dock_layout(window_id_);
             if (!saved_dock.isEmpty()) {
                 dock_router_->ensure_all_registered();
+                // Also suppress screen construction during restoreState —
+                // ADS toggles each restored widget visible, which fires
+                // visibilityChanged→materialize_screen. Constructing all
+                // visible screens inline blocks the first paint for seconds.
+                // Screens are materialized progressively after show().
+                dock_router_->set_suppress_materialize(true);
                 dock_restored = dock_manager_->restoreState(saved_dock);
+                dock_router_->set_suppress_materialize(false);
 
                 // Sanity check: if restoreState produced an unreasonable number
                 // of visible dock areas (>6), the layout is likely corrupt.
@@ -770,6 +793,8 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
             for (auto* dw : dock_manager_->dockWidgetsMap())
                 dw->toggleView(false);
         }
+
+        suppress_layout_save_ = false;
 
         // Save the current version so next startup knows the format.
         SessionManager::instance().set_dock_layout_version(window_id_, kDockLayoutVersion);
@@ -816,24 +841,48 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
         // If apply_layout subsequently fails, the caller is responsible for
         // falling back to a default screen.
         if (!dock_restored && adopted_uuid.is_null()) {
-            dock_router_->navigate("dashboard");
-            LOG_INFO("WindowFrame", "Applied clean default dock layout");
+            // Defer navigation so the window can paint its chrome (toolbar,
+            // tab bar, status bar) before the first screen factory runs.
+            // DashboardScreen construction can take 200-500ms; without this
+            // the user sees a blank frame for that entire duration.
+            QTimer::singleShot(0, this, [this]() {
+                dock_router_->navigate("dashboard");
+            });
+            LOG_INFO("WindowFrame", "Deferred default dashboard navigate to after first paint");
         } else if (!dock_restored) {
             LOG_INFO("WindowFrame",
                      QString("Deferring default navigate — frame spawned with adopted uuid %1 "
                              "(apply_layout will populate)").arg(adopted_uuid.to_string()));
         } else {
-            // Restore last-active screen as the focused tab and sync tab bar.
-            // Per-window key so multi-window users don't override each other.
+            // Dock layout restored — tabs are positioned but screens are
+            // still placeholders (materialize was suppressed above). Defer
+            // construction: materialize the active panel first so the user
+            // sees content quickly, then fill in remaining visible panels.
             const QString last = SessionManager::instance().last_screen(window_id_);
-            if (!last.isEmpty()) {
-                auto* dw = dock_router_->find_dock_widget(last);
-                if (dw && !dw->isClosed()) {
-                    dw->raise();
-                    dw->setAsCurrentTab();
+            QTimer::singleShot(0, this, [this, last]() {
+                if (!dock_router_ || !dock_manager_) return;
+                // Active panel first — user sees populated content immediately
+                if (!last.isEmpty()) {
+                    dock_router_->materialize_now(last);
+                    if (auto* dw = dock_router_->find_dock_widget(last)) {
+                        if (!dw->isClosed()) {
+                            dw->raise();
+                            dw->setAsCurrentTab();
+                        }
+                    }
+                    tab_bar_->set_active(last);
                 }
-                tab_bar_->set_active(last);
-            }
+                // Remaining visible panels on the next tick so the active
+                // panel's paint completes before we block again.
+                QTimer::singleShot(0, this, [this, last]() {
+                    if (!dock_router_ || !dock_manager_) return;
+                    for (const auto& entry : dock_manager_->dockWidgetsMap().toStdMap()) {
+                        if (entry.first == last) continue;
+                        if (entry.second && !entry.second->isClosed())
+                            dock_router_->materialize_now(entry.first);
+                    }
+                });
+            });
         }
     } else {
         on_auth_state_changed();
@@ -1037,28 +1086,50 @@ void WindowFrame::closeEvent(QCloseEvent* event) {
         SessionManager::instance().save_perspectives(tmp);
     }
 
-    // Persist the set of still-open windows (this one minus itself, since
-    // we're about to be destroyed). On next launch, main.cpp will iterate
-    // this list and restore each secondary window. We also save the count
-    // for legacy callers.
+    // ── Persist the window set for next launch ─────────────────────────────
     //
-    // WindowRegistry is the source of truth for live frames as of Phase 1
-    // (decision 1.7); the previous QApplication::topLevelWidgets() walk
-    // worked but pulled in non-WindowFrame toplevels (dialogs, ADS floats)
-    // that needed to be cast away. Registry is cleaner and faster.
-    QList<int> open_ids;
-    for (int id : WindowRegistry::instance().frame_ids()) {
-        if (id != window_id_)
-            open_ids.append(id);
+    // During app quit, multiple closeEvents fire before any window is
+    // destroyed (WA_DeleteOnClose uses deleteLater). If each saves "all
+    // except self", the last writer wins with an arbitrary subset — e.g.
+    // window 0 saves [1,2], then window 2 saves [0,1], and on restart
+    // main.cpp creates window 0 (unconditional) + 0,1 from the list =
+    // phantom window. Fix: accumulate closing window IDs in a process-
+    // level batch; a deferred handler runs after all closeEvents in the
+    // current event-loop iteration and saves the correct surviving set.
+    //
+    // Synchronous fallback: save all IDs (including self) immediately so
+    // that if the deferred timer doesn't fire during shutdown, we still
+    // have a complete session snapshot. The deferred handler overwrites
+    // with the precise surviving set if it does fire.
+    {
+        static QSet<int> s_closing_batch;
+        static bool s_drain_queued = false;
+        s_closing_batch.insert(window_id_);
+
+        QList<int> all_ids = WindowRegistry::instance().frame_ids();
+        std::sort(all_ids.begin(), all_ids.end());
+        SessionManager::instance().save_window_ids(all_ids);
+
+        if (!s_drain_queued) {
+            s_drain_queued = true;
+            QTimer::singleShot(0, qApp, []() {
+                s_drain_queued = false;
+                QList<int> all = WindowRegistry::instance().frame_ids();
+                QList<int> surviving;
+                for (int id : all) {
+                    if (!s_closing_batch.contains(id))
+                        surviving.append(id);
+                }
+                // All windows closing (app quit) → save the full set so
+                // next launch can restore the complete session.
+                if (surviving.isEmpty())
+                    surviving = all;
+                std::sort(surviving.begin(), surviving.end());
+                SessionManager::instance().save_window_ids(surviving);
+                s_closing_batch.clear();
+            });
+        }
     }
-    // Ensure this window is still saved for next run if it's the last one
-    // being closed — user would expect to land back in their last layout,
-    // including the primary window's dock state.
-    if (open_ids.isEmpty())
-        open_ids.append(window_id_);
-    std::sort(open_ids.begin(), open_ids.end());
-    SessionManager::instance().save_window_ids(open_ids);
-    SessionManager::instance().save_window_count(static_cast<int>(open_ids.size()));
 
     // Phase 2: force a workspace snapshot at close. The save_* calls above
     // each request a snapshot but the ring rate-limits to 60s — closing a

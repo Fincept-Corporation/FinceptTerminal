@@ -12,7 +12,7 @@ namespace fincept::trading::auth {
 namespace {
 constexpr const char* kResponseHtml =
     "<!doctype html><html><head><meta charset='utf-8'>"
-    "<title>Fincept - Zerodha login</title>"
+    "<title>Fincept - Broker login</title>"
     "<style>body{font-family:system-ui;background:#0f172a;color:#e2e8f0;"
     "display:flex;align-items:center;justify-content:center;height:100vh;margin:0}"
     "div{text-align:center}h1{color:#d97706;font-size:20px}p{color:#94a3b8}</style>"
@@ -73,9 +73,11 @@ void RedirectServer::handle_new_connection() {
             const QUrl url(QStringLiteral("http://localhost") + QString::fromLatin1(parts.at(1)));
             const QUrlQuery q(url);
             token = q.queryItemValue("request_token");
+            if (token.isEmpty())
+                token = q.queryItemValue("auth_code");
             if (token.isEmpty()) {
                 const QString err = q.queryItemValue("error");
-                error_msg = err.isEmpty() ? QStringLiteral("request_token missing in redirect") : err;
+                error_msg = err.isEmpty() ? QStringLiteral("Token missing in redirect") : err;
             }
         } else {
             error_msg = QStringLiteral("Malformed request");
@@ -94,7 +96,7 @@ void RedirectServer::handle_new_connection() {
 
         timeout_timer_->stop();
         if (!token.isEmpty()) {
-            LOG_INFO("RedirectServer", "Captured request_token");
+            LOG_INFO("RedirectServer", "Captured auth token");
             server_->close();
             emit request_token_received(token);
         } else {

@@ -155,4 +155,10 @@ void NewsCategoryWidget::apply_styles() {
             .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM()));
 }
 
+void NewsCategoryWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("NEWS — CATEGORY"));
+    hub_resubscribe(); // re-renders badge + list with current category label
+}
+
 } // namespace fincept::screens::widgets

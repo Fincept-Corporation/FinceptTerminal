@@ -83,6 +83,11 @@ class PortfolioOptimizationView : public QWidget {
     QLabel* compare_placeholder_ = nullptr;
     QLabel* backtest_title_ = nullptr;
     QLabel* backtest_body_ = nullptr;
+    QPushButton* backtest_current_btn_ = nullptr;
+    QPushButton* backtest_optimal_btn_ = nullptr;
+    QStackedWidget* backtest_stack_ = nullptr; // 0=buttons, 1=results
+    QTableWidget* backtest_metrics_table_ = nullptr;
+    QLabel* backtest_status_label_ = nullptr;
     QLabel* risk_title_ = nullptr;
     QLabel* risk_body_ = nullptr;
     QLabel* stress_title_ = nullptr;

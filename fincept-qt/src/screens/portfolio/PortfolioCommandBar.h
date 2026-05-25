@@ -48,6 +48,7 @@ class PortfolioCommandBar : public QWidget {
     void detail_view_selected(portfolio::DetailView view);
     void ai_analyze_requested();
     void agent_run_requested();
+    void backtest_requested();
 
   private:
     void build_ui();
@@ -84,6 +85,7 @@ class PortfolioCommandBar : public QWidget {
     QAction* export_json_action_ = nullptr;
     QAction* import_action_ = nullptr;
     QAction* ffn_action_ = nullptr;
+    QAction* backtest_action_ = nullptr;
     QPushButton* ai_btn_ = nullptr;
     QPushButton* agent_btn_ = nullptr;
 

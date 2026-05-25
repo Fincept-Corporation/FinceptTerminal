@@ -457,4 +457,10 @@ void VideoPlayerWidget::on_theme_changed() {
     apply_styles();
 }
 
+void VideoPlayerWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("LIVE TV / STREAMS"));
+    build_channel_list(); // re-renders channel names + descriptions + custom-URL helper text
+}
+
 } // namespace fincept::screens::widgets

@@ -302,4 +302,14 @@ void QuickTradeWidget::submit_order() {
         tr("%1 %2 %3 @ %4\nOrder sent to trading engine.").arg(side).arg(qty, 0, 'f', 0).arg(sym).arg(price_str));
 }
 
+void QuickTradeWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("QUICK TRADE"));
+    if (lookup_btn_)  lookup_btn_->setText(tr("LOOKUP"));
+    if (qty_lbl_)     qty_lbl_->setText(tr("QTY"));
+    if (price_lbl_)   price_lbl_->setText(tr("PRICE"));
+    // submit_btn_ text is side-aware ("PLACE BUY ORDER" etc.) — let on_side_changed re-derive it.
+    if (side_combo_) on_side_changed(side_combo_->currentIndex());
+}
+
 } // namespace fincept::screens::widgets

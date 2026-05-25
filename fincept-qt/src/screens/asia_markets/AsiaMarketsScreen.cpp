@@ -755,11 +755,19 @@ void AsiaMarketsScreen::set_loading(bool loading) {
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap AsiaMarketsScreen::save_state() const {
-    return {
+    QVariantMap state{
         {"category", active_category_},
         {"region", active_region_},
         {"endpoint", active_endpoint_},
     };
+    if (search_input_) state["search"] = search_input_->text();
+    if (symbol_input_) state["symbol"] = symbol_input_->text();
+    if (json_view_ && !json_view_->toPlainText().isEmpty()) {
+        const QString jt = json_view_->toPlainText();
+        if (jt.size() < 300000)
+            state["json_result"] = jt;
+    }
+    return state;
 }
 
 void AsiaMarketsScreen::restore_state(const QVariantMap& state) {
@@ -770,8 +778,13 @@ void AsiaMarketsScreen::restore_state(const QVariantMap& state) {
     const int cat = state.value("category", 0).toInt();
     if (cat != active_category_)
         on_category_changed(cat);
-    // active_endpoint_ is restored via on_category_changed populating the list;
-    // exact endpoint row selection would need list rebuilding — skip for simplicity.
+
+    if (search_input_ && state.contains("search"))
+        search_input_->setText(state.value("search").toString());
+    if (symbol_input_ && state.contains("symbol"))
+        symbol_input_->setText(state.value("symbol").toString());
+    if (json_view_ && state.contains("json_result"))
+        json_view_->setPlainText(state.value("json_result").toString());
 }
 
 } // namespace fincept::screens

@@ -209,4 +209,10 @@ void MarketQuoteStripWidget::apply_styles() {
     }
 }
 
+void MarketQuoteStripWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("QUOTE STRIP"));
+    build_rows(); // re-renders any placeholder text in the new language
+}
+
 } // namespace fincept::screens::widgets

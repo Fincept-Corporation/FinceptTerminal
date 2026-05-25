@@ -61,8 +61,10 @@ EquityOrderBook::EquityOrderBook(QWidget* parent) : QWidget(parent) {
     spread_label_->setFixedHeight(SPREAD_H);
     spread_label_->setAlignment(Qt::AlignCenter);
 
-    // Canvas — the actual painted area
+    // Canvas — transparent overlay for layout spacing; painting happens on `this`
     canvas_ = new QWidget(this);
+    canvas_->setObjectName("eqObCanvas");
+    canvas_->setAttribute(Qt::WA_TransparentForMouseEvents);
     canvas_->setMinimumHeight(100);
     layout->addWidget(canvas_, 1);
     layout->addWidget(spread_label_);
@@ -76,9 +78,17 @@ EquityOrderBook::EquityOrderBook(QWidget* parent) : QWidget(parent) {
 
 void EquityOrderBook::set_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks,
                                double spread, double spread_pct) {
+    set_data(bids, asks, spread, spread_pct, {}, {});
+}
+
+void EquityOrderBook::set_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks,
+                               double spread, double spread_pct,
+                               const QVector<int>& bid_orders, const QVector<int>& ask_orders) {
     QMutexLocker lock(&mutex_);
     bids_ = bids.mid(0, MAX_LEVELS);
     asks_ = asks.mid(0, MAX_LEVELS);
+    bid_orders_ = bid_orders.mid(0, MAX_LEVELS);
+    ask_orders_ = ask_orders.mid(0, MAX_LEVELS);
     spread_ = spread;
     spread_pct_ = spread_pct;
     cache_dirty_ = true;
@@ -95,20 +105,18 @@ void EquityOrderBook::resizeEvent(QResizeEvent* event) {
 }
 
 void EquityOrderBook::mousePressEvent(QMouseEvent* event) {
-    // Determine which price level was clicked
     QMutexLocker lock(&mutex_);
     const int canvas_y = event->pos().y() - HEADER_H;
     if (canvas_y < 0)
         return;
 
-    const int half = (canvas_->height()) / 2;
+    const int canvas_h = height() - HEADER_H - SPREAD_H;
+    const int half = canvas_h / 2;
     if (canvas_y < half) {
-        // Asks area (top, reversed)
         const int row = (half - canvas_y) / ROW_H;
         if (row >= 0 && row < asks_.size())
             emit price_clicked(asks_[row].first);
     } else {
-        // Bids area (bottom)
         const int row = (canvas_y - half) / ROW_H;
         if (row >= 0 && row < bids_.size())
             emit price_clicked(bids_[row].first);
@@ -136,24 +144,46 @@ void EquityOrderBook::rebuild_cache() {
     p.setFont(QFont("Consolas", 10));
 
     const int half = h / 2;
-    const int col_price = 4;
-    const int col_qty = w / 2;
 
-    // Find max quantity for bar scaling
+    if (bids_.isEmpty() && asks_.isEmpty()) {
+        p.setPen(text_secondary());
+        p.drawText(QRect(0, 0, w, h), Qt::AlignCenter, "No depth data");
+        cache_dirty_ = false;
+        return;
+    }
+
+    const bool has_orders = !bid_orders_.isEmpty() || !ask_orders_.isEmpty();
+    const int col_price = 4;
+    const int col_qty = has_orders ? w * 2 / 5 : w / 2;
+    const int col_ord = w * 7 / 10;
+    const int qty_w = (has_orders ? w * 3 / 10 - col_qty : w / 2 - 4);
+    const int ord_w = w - col_ord - 4;
+
     double max_qty = 1.0;
     for (const auto& [price, qty] : bids_)
         max_qty = std::max(max_qty, qty);
     for (const auto& [price, qty] : asks_)
         max_qty = std::max(max_qty, qty);
 
+    p.setPen(text_secondary());
+    QFont hdr_font("Consolas", 9);
+    hdr_font.setBold(true);
+    p.setFont(hdr_font);
+    p.drawText(col_price, 0, col_qty - col_price - 4, ROW_H, Qt::AlignLeft | Qt::AlignVCenter, "PRICE");
+    p.drawText(col_qty, 0, qty_w, ROW_H, Qt::AlignRight | Qt::AlignVCenter, "QTY");
+    if (has_orders)
+        p.drawText(col_ord, 0, ord_w, ROW_H, Qt::AlignRight | Qt::AlignVCenter, "ORDERS");
+    p.setFont(QFont("Consolas", 10));
+
+    const int data_top = ROW_H;
+
     // Draw asks (top half, bottom-up so best ask is near spread)
     for (int i = 0; i < asks_.size() && i < MAX_LEVELS; ++i) {
         const auto& [price, qty] = asks_[i];
         const int y = half - (i + 1) * ROW_H;
-        if (y < 0)
+        if (y < data_top)
             break;
 
-        // Depth bar
         const double ratio = qty / max_qty;
         const int bar_w = static_cast<int>(w * ratio * 0.4);
         QColor sell_bar(color_sell());
@@ -161,9 +191,14 @@ void EquityOrderBook::rebuild_cache() {
         p.fillRect(w - bar_w, y, bar_w, ROW_H, sell_bar);
 
         p.setPen(color_sell());
-        p.drawText(col_price, y, w / 2 - 8, ROW_H, Qt::AlignLeft | Qt::AlignVCenter, QString::number(price, 'f', 2));
+        p.drawText(col_price, y, col_qty - col_price - 4, ROW_H, Qt::AlignLeft | Qt::AlignVCenter,
+                   QString::number(price, 'f', 2));
         p.setPen(text_secondary());
-        p.drawText(col_qty, y, w / 4 - 4, ROW_H, Qt::AlignRight | Qt::AlignVCenter, QString::number(qty, 'f', 0));
+        p.drawText(col_qty, y, qty_w, ROW_H, Qt::AlignRight | Qt::AlignVCenter, QString::number(qty, 'f', 0));
+        if (has_orders && i < ask_orders_.size() && ask_orders_[i] > 0) {
+            p.drawText(col_ord, y, ord_w, ROW_H, Qt::AlignRight | Qt::AlignVCenter,
+                       QString::number(ask_orders_[i]));
+        }
     }
 
     // Draw bids (bottom half, top-down so best bid is near spread)
@@ -180,9 +215,14 @@ void EquityOrderBook::rebuild_cache() {
         p.fillRect(w - bar_w, y, bar_w, ROW_H, buy_bar);
 
         p.setPen(color_buy());
-        p.drawText(col_price, y, w / 2 - 8, ROW_H, Qt::AlignLeft | Qt::AlignVCenter, QString::number(price, 'f', 2));
+        p.drawText(col_price, y, col_qty - col_price - 4, ROW_H, Qt::AlignLeft | Qt::AlignVCenter,
+                   QString::number(price, 'f', 2));
         p.setPen(text_secondary());
-        p.drawText(col_qty, y, w / 4 - 4, ROW_H, Qt::AlignRight | Qt::AlignVCenter, QString::number(qty, 'f', 0));
+        p.drawText(col_qty, y, qty_w, ROW_H, Qt::AlignRight | Qt::AlignVCenter, QString::number(qty, 'f', 0));
+        if (has_orders && i < bid_orders_.size() && bid_orders_[i] > 0) {
+            p.drawText(col_ord, y, ord_w, ROW_H, Qt::AlignRight | Qt::AlignVCenter,
+                       QString::number(bid_orders_[i]));
+        }
     }
 
     // Center line

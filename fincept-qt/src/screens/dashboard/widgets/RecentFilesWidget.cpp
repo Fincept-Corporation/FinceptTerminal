@@ -136,4 +136,10 @@ void RecentFilesWidget::on_theme_changed() {
     apply_styles();
 }
 
+void RecentFilesWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("Recent Files"));
+    refresh_data(); // re-renders any "no files" / row labels in the new language
+}
+
 } // namespace fincept::screens::widgets

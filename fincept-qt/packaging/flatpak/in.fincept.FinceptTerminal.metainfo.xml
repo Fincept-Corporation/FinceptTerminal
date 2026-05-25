@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>in.fincept.FinceptTerminal</id>
+
+  <name>Fincept Terminal</name>
+  <summary>Professional financial intelligence terminal with AI analytics and multi-broker trading</summary>
+
+  <developer id="in.fincept">
+    <name>Fincept Corporation</name>
+  </developer>
+
+  <metadata_license>FSFAP</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+
+  <description>
+    <p>
+      Fincept Terminal is a native C++ desktop financial intelligence terminal
+      featuring real-time market data, AI-powered analytics, multi-broker trading,
+      portfolio management, and 4000+ Python analytics scripts.
+    </p>
+    <p>Key features:</p>
+    <ul>
+      <li>Real-time crypto and equity trading with 16+ broker integrations (Zerodha, Angel One, IBKR, Alpaca, and more)</li>
+      <li>AI chat with multiple LLM providers (OpenAI, Anthropic, Groq, Ollama) and specialized agent frameworks</li>
+      <li>Comprehensive Python analytics across equity, derivatives, fixed income, quant, and corporate finance</li>
+      <li>18-tab QuantLib suite for quantitative analysis</li>
+      <li>Visual workflow node editor with risk management and audit logging</li>
+      <li>Geopolitics analysis, prediction markets (Polymarket), and maritime tracking</li>
+      <li>Portfolio management with 20+ components and 8 views</li>
+      <li>Voice commands via offline speech recognition</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">in.fincept.FinceptTerminal.desktop</launchable>
+
+  <url type="homepage">https://fincept.in</url>
+  <url type="bugtracker">https://github.com/Fincept-Corporation/FinceptTerminal/issues</url>
+  <url type="help">https://discord.gg/ae87a8ygbN</url>
+  <url type="vcs-browser">https://github.com/Fincept-Corporation/FinceptTerminal</url>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#f59e0b</color>
+    <color type="primary" scheme_preference="dark">#1a1a2e</color>
+  </branding>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Dashboard with customizable widget grid</caption>
+      <image>https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Equity research with comprehensive analysis</caption>
+      <image>https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/EquityResearch.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Portfolio management and analytics</caption>
+      <image>https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Portfolio.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>News aggregation from multiple sources</caption>
+      <image>https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/News.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Visual node editor for workflows</caption>
+      <image>https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/NodeEditor.png</image>
+    </screenshot>
+  </screenshots>
+
+  <provides>
+    <binary>FinceptTerminal</binary>
+  </provides>
+
+  <releases>
+    <release version="4.0.3" date="2026-05-25">
+      <description>
+        <p>Patch release with bug fixes, new provider integrations, and i18n improvements.</p>
+      </description>
+    </release>
+    <release version="4.0.2" date="2026-04-14">
+      <description>
+        <p>Patch release with stability improvements.</p>
+      </description>
+    </release>
+    <release version="4.0.0" date="2025-01-01">
+      <description>
+        <p>Complete rewrite in native C++20 with Qt6.</p>
+      </description>
+    </release>
+  </releases>
+
+  <content_rating type="oars-1.1">
+    <content_attribute id="money-purchasing">intense</content_attribute>
+    <content_attribute id="social-chat">moderate</content_attribute>
+    <content_attribute id="social-info">moderate</content_attribute>
+  </content_rating>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+
+  <requires>
+    <display_length compare="ge">768</display_length>
+    <internet>always</internet>
+  </requires>
+</component>

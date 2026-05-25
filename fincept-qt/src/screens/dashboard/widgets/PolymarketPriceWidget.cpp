@@ -211,4 +211,10 @@ void PolymarketPriceWidget::apply_styles() {
     }
 }
 
+void PolymarketPriceWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("POLYMARKET"));
+    build_rows(); // re-renders row labels in the new language
+}
+
 } // namespace fincept::screens::widgets

@@ -192,4 +192,10 @@ void OpenPositionsWidget::apply_styles() {
              ui::colors::TEXT_TERTIARY()));
 }
 
+void OpenPositionsWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("OPEN POSITIONS"));
+    hub_resubscribe(); // re-renders header hint + table in the new language
+}
+
 } // namespace fincept::screens::widgets

@@ -21,6 +21,8 @@ class EquityOrderBook : public QWidget {
 
     void set_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks, double spread,
                   double spread_pct);
+    void set_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks, double spread,
+                  double spread_pct, const QVector<int>& bid_orders, const QVector<int>& ask_orders);
 
   signals:
     void price_clicked(double price);
@@ -38,6 +40,8 @@ class EquityOrderBook : public QWidget {
 
     QVector<QPair<double, double>> bids_;
     QVector<QPair<double, double>> asks_;
+    QVector<int> bid_orders_;
+    QVector<int> ask_orders_;
     double spread_ = 0;
     double spread_pct_ = 0;
 

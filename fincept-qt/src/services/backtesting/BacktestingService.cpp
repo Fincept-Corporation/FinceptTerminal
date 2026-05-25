@@ -181,4 +181,14 @@ void BacktestingService::list_strategies() {
         });
 }
 
+void BacktestingService::set_pending_portfolio_config(const QJsonObject& config) {
+    pending_portfolio_config_ = config;
+}
+
+QJsonObject BacktestingService::take_pending_portfolio_config() {
+    QJsonObject result;
+    std::swap(result, pending_portfolio_config_);
+    return result;
+}
+
 } // namespace fincept::services::backtest

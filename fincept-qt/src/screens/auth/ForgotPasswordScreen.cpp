@@ -114,7 +114,15 @@ ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
         error_label_->setText(err);
         error_label_->show();
     });
-    connect(&auth, &auth::AuthManager::password_reset_succeeded, this, [this]() { pages_->setCurrentIndex(3); });
+    connect(&auth, &auth::AuthManager::password_reset_succeeded, this, [this]() {
+        for (QLineEdit* w : {email_input_, otp_input_, new_password_, confirm_password_}) {
+            if (w) w->clear();
+        }
+        if (new_password_) new_password_->setEchoMode(QLineEdit::Password);
+        if (confirm_password_) confirm_password_->setEchoMode(QLineEdit::Password);
+        if (error_label_) error_label_->hide();
+        pages_->setCurrentIndex(3);
+    });
     connect(&auth, &auth::AuthManager::password_reset_failed, this, [this](const QString& err) {
         error_label_->setText(err);
         error_label_->show();
@@ -124,15 +132,6 @@ ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
 // ── Background ───────────────────────────────────────────────────────────────
 
 void ForgotPasswordScreen::hideEvent(QHideEvent* event) {
-    // Wipe email/OTP/new-password inputs and return to step 1 whenever the
-    // screen leaves the stack — reset state must not linger.
-    for (QLineEdit* w : {email_input_, otp_input_, new_password_, confirm_password_}) {
-        if (w) w->clear();
-    }
-    if (new_password_) new_password_->setEchoMode(QLineEdit::Password);
-    if (confirm_password_) confirm_password_->setEchoMode(QLineEdit::Password);
-    if (error_label_) error_label_->hide();
-    if (pages_) pages_->setCurrentIndex(0);
     QWidget::hideEvent(event);
 }
 
@@ -393,7 +392,10 @@ void ForgotPasswordScreen::build_success_page() {
     success_continue_btn_ = new QPushButton;
     success_continue_btn_->setFixedHeight(32);
     success_continue_btn_->setStyleSheet(btn_primary());
-    connect(success_continue_btn_, &QPushButton::clicked, this, &ForgotPasswordScreen::navigate_login);
+    connect(success_continue_btn_, &QPushButton::clicked, this, [this]() {
+        pages_->setCurrentIndex(0);
+        emit navigate_login();
+    });
     vl->addWidget(success_continue_btn_);
 
     pages_->addWidget(page);

@@ -30,6 +30,8 @@
 #include <QStringList>
 #include <QVector>
 
+#include <functional>
+
 namespace fincept::services::options {
 
 class OptionChainService : public QObject, public fincept::datahub::Producer {
@@ -54,9 +56,17 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
     /// Streaming consumers should subscribe to the topic instead.
     QString chain_topic(const QString& broker_id, const QString& underlying, const QString& expiry) const;
 
+    /// Last published chain snapshot — available immediately for sub-tabs
+    /// that are lazily constructed after the initial chain publish.
+    const fincept::services::options::OptionChain& last_chain() const { return last_chain_; }
+
     /// List underlyings + expiries from InstrumentService for picker UIs.
+    /// For broker_id == "databento", returns hardcoded US equity list / cached expiries.
     QStringList list_underlyings(const QString& broker_id) const;
     QStringList list_expiries(const QString& broker_id, const QString& underlying) const;
+
+    /// Async expiry fetch for Databento — calls Python script, caches result.
+    void list_databento_expiries(const QString& underlying, std::function<void(QStringList)> callback);
 
   signals:
     /// Emitted alongside the hub publish so callers can connect via Qt
@@ -77,6 +87,16 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
     /// thread, assembles rows, computes derived stats (PCR, max pain, ATM),
     /// then publishes the result on the hub from the UI thread.
     void refresh_chain(const QString& broker_id, const QString& underlying, const QString& expiry);
+
+    /// Databento-specific chain refresh via databento_fno_chain.py.
+    void refresh_chain_databento(const QString& underlying, const QString& expiry);
+
+    /// Fyers-specific chain refresh via /data/options-chain-v3 endpoint.
+    /// Returns OI, Greeks, IV, volume in a single REST call — no Python needed.
+    void refresh_chain_fyers(const QString& broker_id, const QString& underlying, const QString& expiry);
+
+    /// Hardcoded list of popular US equity option underlyings.
+    static QStringList databento_underlyings();
 
     /// Compute max pain strike from a fully-populated chain.
     static double compute_max_pain(const QVector<OptionChainRow>& rows);
@@ -115,6 +135,7 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
     /// expiry-day options don't blow up the BSM model.
     static double compute_t_years(const QString& expiry);
 
+    fincept::services::options::OptionChain last_chain_;
     bool hub_registered_ = false;
     /// In-flight guard per topic to avoid duplicate refresh fan-out when the
     /// hub scheduler races with a manual request.
@@ -131,6 +152,8 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
     /// Cached risk-free rate; populated on first refresh.
     double risk_free_rate_ = 0.0;
     bool risk_free_rate_loaded_ = false;
+    /// Cached Databento expiries per underlying (session-scoped).
+    QHash<QString, QStringList> databento_expiry_cache_;
 };
 
 } // namespace fincept::services::options

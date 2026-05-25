@@ -544,4 +544,31 @@ void WorkflowsViewPanel::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
 }
 
+// ── Draft persistence ────────────────────────────────────────────────────────
+
+QVariantMap WorkflowsViewPanel::save_draft() const {
+    QVariantMap d;
+    if (symbol_input_ && !symbol_input_->text().isEmpty())
+        d["symbol"] = symbol_input_->text();
+    if (query_input_ && !query_input_->toPlainText().isEmpty())
+        d["query"] = query_input_->toPlainText();
+    if (result_display_ && !result_display_->toPlainText().isEmpty())
+        d["result"] = result_display_->toPlainText();
+    if (log_display_ && !log_display_->toPlainText().isEmpty())
+        d["log"] = log_display_->toPlainText();
+    return d;
+}
+
+void WorkflowsViewPanel::restore_draft(const QVariantMap& d) {
+    if (d.isEmpty()) return;
+    if (symbol_input_ && d.contains("symbol"))
+        symbol_input_->setText(d["symbol"].toString());
+    if (query_input_ && d.contains("query"))
+        query_input_->setPlainText(d["query"].toString());
+    if (result_display_ && d.contains("result"))
+        result_display_->setPlainText(d["result"].toString());
+    if (log_display_ && d.contains("log"))
+        log_display_->setPlainText(d["log"].toString());
+}
+
 } // namespace fincept::screens

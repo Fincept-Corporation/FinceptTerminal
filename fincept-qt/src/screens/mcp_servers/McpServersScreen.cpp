@@ -296,13 +296,17 @@ void McpServersScreen::setup_ui() {
 }
 
 QVariantMap McpServersScreen::save_state() const {
-    return {{"active_view", active_view_}};
+    QVariantMap state{{"active_view", active_view_}};
+    if (search_input_) state["search"] = search_input_->text();
+    return state;
 }
 
 void McpServersScreen::restore_state(const QVariantMap& state) {
     const int view = state.value("active_view", 0).toInt();
     if (view != active_view_)
         on_view_changed(view);
+    if (search_input_ && state.contains("search"))
+        search_input_->setText(state.value("search").toString());
 }
 
 } // namespace fincept::screens

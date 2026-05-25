@@ -240,4 +240,10 @@ void SparklineStripWidget::apply_styles() {
     }
 }
 
+void SparklineStripWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("SPARKLINES"));
+    build_rows(); // re-renders row labels in the new language
+}
+
 } // namespace fincept::screens::widgets

@@ -297,9 +297,19 @@ void DataMappingScreen::showEvent(QShowEvent* e) {
 }
 
 QVariantMap DataMappingScreen::save_state() const {
-    return {
-        {"view", current_view_},
-    };
+    QVariantMap state{{"view", current_view_}};
+    if (api_name_) state["api_name"] = api_name_->text();
+    if (api_base_url_) state["api_base_url"] = api_base_url_->text();
+    if (api_endpoint_) state["api_endpoint"] = api_endpoint_->text();
+    if (api_auth_value_) state["api_auth_value"] = api_auth_value_->text();
+    if (api_headers_) state["api_headers"] = api_headers_->toPlainText();
+    if (api_body_) state["api_body"] = api_body_->toPlainText();
+    if (test_output_ && !test_output_->toPlainText().isEmpty()) {
+        const QString out = test_output_->toPlainText();
+        if (out.size() < 200000)
+            state["test_output"] = out;
+    }
+    return state;
 }
 
 void DataMappingScreen::restore_state(const QVariantMap& state) {
@@ -307,6 +317,20 @@ void DataMappingScreen::restore_state(const QVariantMap& state) {
     // Restore list/templates view only — never resume a partial wizard.
     if (view == 0 || view == 1)
         on_view_changed(view);
+    if (api_name_ && state.contains("api_name"))
+        api_name_->setText(state.value("api_name").toString());
+    if (api_base_url_ && state.contains("api_base_url"))
+        api_base_url_->setText(state.value("api_base_url").toString());
+    if (api_endpoint_ && state.contains("api_endpoint"))
+        api_endpoint_->setText(state.value("api_endpoint").toString());
+    if (api_auth_value_ && state.contains("api_auth_value"))
+        api_auth_value_->setText(state.value("api_auth_value").toString());
+    if (api_headers_ && state.contains("api_headers"))
+        api_headers_->setPlainText(state.value("api_headers").toString());
+    if (api_body_ && state.contains("api_body"))
+        api_body_->setPlainText(state.value("api_body").toString());
+    if (test_output_ && state.contains("test_output"))
+        test_output_->setPlainText(state.value("test_output").toString());
 }
 
 } // namespace fincept::screens

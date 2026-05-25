@@ -194,4 +194,10 @@ void StockQuoteWidget::populate(const services::QuoteData& q) {
         volume_val_->setText(QString::number(static_cast<int>(q.volume)));
 }
 
+void StockQuoteWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("QUOTE: %1").arg(symbol_));
+    refresh_data(); // re-renders stat cell labels in the new language
+}
+
 } // namespace fincept::screens::widgets

@@ -213,7 +213,17 @@ void WindowFrame::setup_docking_mode() {
     connect(dock_manager_, &ads::CDockManager::dockAreaCreated, this,
             [this](ads::CDockAreaWidget*) { schedule_dock_layout_save(); });
     connect(dock_manager_, &ads::CDockManager::dockWidgetAdded, this,
-            [this](ads::CDockWidget*) { schedule_dock_layout_save(); });
+            [this](ads::CDockWidget* dw) {
+                schedule_dock_layout_save();
+                // Per-widget close persistence: when a tab is closed via
+                // the X button, ADS calls toggleView(false) which emits
+                // viewToggled but no manager-level signal (dockWidgetRemoved
+                // only fires on full removal, not hide). Without this
+                // connection, closing a tab doesn't persist — the tab
+                // reappears on next launch.
+                connect(dw, &ads::CDockWidget::viewToggled, this,
+                        [this](bool) { schedule_dock_layout_save(); });
+            });
     connect(dock_manager_, &ads::CDockManager::dockWidgetRemoved, this,
             [this](ads::CDockWidget*) { schedule_dock_layout_save(); });
     connect(dock_manager_, &ads::CDockManager::floatingWidgetCreated, this,
@@ -283,8 +293,5 @@ void WindowFrame::setup_dock_screens() {
     dock_router_->register_screen("trademarks", new screens::TrademarksScreen);
     dock_router_->register_screen("help", new screens::HelpScreen);
 }
-
-void WindowFrame::setup_app_screens() {}
-void WindowFrame::setup_navigation() {}
 
 } // namespace fincept

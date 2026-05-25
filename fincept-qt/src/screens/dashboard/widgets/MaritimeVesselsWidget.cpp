@@ -303,4 +303,10 @@ void MaritimeVesselsWidget::apply_styles() {
                                          .arg(ui::colors::TEXT_TERTIARY()));
 }
 
+void MaritimeVesselsWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("MARITIME VESSELS"));
+    build_rows(); // re-renders header + row labels in the new language
+}
+
 } // namespace fincept::screens::widgets

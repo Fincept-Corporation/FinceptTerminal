@@ -1,8 +1,10 @@
 // src/screens/algo_trading/StrategyBuilderPanel.cpp
 #include "screens/algo_trading/StrategyBuilderPanel.h"
 
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "services/algo_trading/AlgoTradingService.h"
+#include "services/backtesting/BacktestingService.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
@@ -493,6 +495,31 @@ QWidget* StrategyBuilderPanel::build_right_pane() {
     connect(bt_btn, &QPushButton::clicked, this, &StrategyBuilderPanel::on_backtest);
     vl->addWidget(bt_btn);
 
+    auto* open_terminal_btn = new QPushButton("OPEN IN BACKTESTING TERMINAL", content);
+    open_terminal_btn->setCursor(Qt::PointingHandCursor);
+    open_terminal_btn->setFixedHeight(30);
+    open_terminal_btn->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                "font-size:%3px; font-family:%4; font-weight:700; letter-spacing:0.5px; }"
+                "QPushButton:hover { background:%1; color:%5; }")
+            .arg(fincept::ui::colors::AMBER(), fincept::ui::colors::AMBER_DIM())
+            .arg(fincept::ui::fonts::TINY)
+            .arg(kMonoFont())
+            .arg(fincept::ui::colors::BG_BASE()));
+    connect(open_terminal_btn, &QPushButton::clicked, this, [this]() {
+        QString symbol = bt_symbol_->text().trimmed();
+        if (symbol.isEmpty()) return;
+        QJsonObject config;
+        QJsonArray symbols;
+        symbols.append(symbol);
+        config["symbols"] = symbols;
+        if (bt_capital_)
+            config["initialCapital"] = bt_capital_->value();
+        fincept::services::backtest::BacktestingService::instance().set_pending_portfolio_config(config);
+        fincept::EventBus::instance().publish("nav.switch_screen", {{"screen_id", QString("backtesting")}});
+    });
+    vl->addWidget(open_terminal_btn);
+
     // Status label
     status_label_ = new QLabel("", content);
     status_label_->setWordWrap(true);
@@ -811,6 +838,43 @@ void StrategyBuilderPanel::on_error(const QString& context, const QString& msg) 
                 .arg(fincept::ui::colors::NEGATIVE())
                 .arg(fincept::ui::fonts::SMALL)
                 .arg(kMonoFont()));
+    }
+}
+
+// ── Draft persistence ────────────────────────────────────────────────────────
+
+QVariantMap StrategyBuilderPanel::save_draft() const {
+    QVariantMap d;
+    if (name_edit_) d["name"] = name_edit_->text();
+    if (desc_edit_) d["desc"] = desc_edit_->text();
+    if (bt_symbol_) d["bt_symbol"] = bt_symbol_->text();
+    if (bt_start_date_) d["bt_start"] = bt_start_date_->text();
+    if (bt_end_date_) d["bt_end"] = bt_end_date_->text();
+    if (kpi_total_return_val_ && !kpi_total_return_val_->text().isEmpty()) {
+        d["kpi_return"] = kpi_total_return_val_->text();
+        d["kpi_sharpe"] = kpi_sharpe_val_ ? kpi_sharpe_val_->text() : QString();
+        d["kpi_dd"] = kpi_max_dd_val_ ? kpi_max_dd_val_->text() : QString();
+        d["kpi_win"] = kpi_win_rate_val_ ? kpi_win_rate_val_->text() : QString();
+        d["kpi_trades"] = kpi_trades_val_ ? kpi_trades_val_->text() : QString();
+        d["kpi_pf"] = kpi_profit_factor_val_ ? kpi_profit_factor_val_->text() : QString();
+    }
+    return d;
+}
+
+void StrategyBuilderPanel::restore_draft(const QVariantMap& d) {
+    if (d.isEmpty()) return;
+    if (name_edit_ && d.contains("name")) name_edit_->setText(d["name"].toString());
+    if (desc_edit_ && d.contains("desc")) desc_edit_->setText(d["desc"].toString());
+    if (bt_symbol_ && d.contains("bt_symbol")) bt_symbol_->setText(d["bt_symbol"].toString());
+    if (bt_start_date_ && d.contains("bt_start")) bt_start_date_->setText(d["bt_start"].toString());
+    if (bt_end_date_ && d.contains("bt_end")) bt_end_date_->setText(d["bt_end"].toString());
+    if (kpi_total_return_val_ && d.contains("kpi_return")) {
+        kpi_total_return_val_->setText(d["kpi_return"].toString());
+        if (kpi_sharpe_val_) kpi_sharpe_val_->setText(d["kpi_sharpe"].toString());
+        if (kpi_max_dd_val_) kpi_max_dd_val_->setText(d["kpi_dd"].toString());
+        if (kpi_win_rate_val_) kpi_win_rate_val_->setText(d["kpi_win"].toString());
+        if (kpi_trades_val_) kpi_trades_val_->setText(d["kpi_trades"].toString());
+        if (kpi_profit_factor_val_) kpi_profit_factor_val_->setText(d["kpi_pf"].toString());
     }
 }
 

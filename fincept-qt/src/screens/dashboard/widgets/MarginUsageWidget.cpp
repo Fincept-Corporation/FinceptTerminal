@@ -249,4 +249,10 @@ void MarginUsageWidget::apply_styles() {
                 .arg(ui::colors::BG_RAISED(), ui::colors::POSITIVE()));
 }
 
+void MarginUsageWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("MARGIN USAGE"));
+    hub_resubscribe(); // re-renders header hint + cached funds row in the new language
+}
+
 } // namespace fincept::screens::widgets

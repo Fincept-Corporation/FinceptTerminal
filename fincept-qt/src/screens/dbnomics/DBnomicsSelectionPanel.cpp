@@ -740,4 +740,25 @@ void DBnomicsSelectionPanel::update_slot_series(int slot_index, const QVector<se
     }
 }
 
+// ── Search text accessors (for state persistence) ────────────────────────────
+
+QString DBnomicsSelectionPanel::global_search_text() const {
+    return global_search_input_ ? global_search_input_->text() : QString();
+}
+QString DBnomicsSelectionPanel::provider_filter_text() const {
+    return provider_filter_input_ ? provider_filter_input_->text() : QString();
+}
+QString DBnomicsSelectionPanel::series_search_text() const {
+    return series_search_input_ ? series_search_input_->text() : QString();
+}
+void DBnomicsSelectionPanel::set_global_search_text(const QString& t) {
+    if (global_search_input_) global_search_input_->setText(t);
+}
+void DBnomicsSelectionPanel::set_provider_filter_text(const QString& t) {
+    if (provider_filter_input_) provider_filter_input_->setText(t);
+}
+void DBnomicsSelectionPanel::set_series_search_text(const QString& t) {
+    if (series_search_input_) series_search_input_->setText(t);
+}
+
 } // namespace fincept::screens

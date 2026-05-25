@@ -211,10 +211,11 @@ void ScreenStateManager::restore_by_uuid(screens::IStatefulScreen* screen,
     if (by_uuid.is_err()) {
         LOG_WARN("ScreenState", QString("UUID load failed for %1: %2")
                                     .arg(instance_uuid, QString::fromStdString(by_uuid.error())));
-        return;
+        // Fall through to legacy path — a transient DB error (SQLITE_BUSY,
+        // corrupt WAL) should not prevent fallback when a legacy row exists.
     }
 
-    QJsonObject obj = by_uuid.value();
+    QJsonObject obj = by_uuid.is_ok() ? by_uuid.value() : QJsonObject{};
     if (obj.isEmpty() && fallback_to_screen_key) {
         // No UUID-keyed row yet. Fall back to the legacy screen_key path
         // so users upgrading from a pre-Phase-4b build keep their state.

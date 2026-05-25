@@ -700,10 +700,21 @@ void NotesScreen::enter_view_mode() {
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap NotesScreen::save_state() const {
-    return {
+    QVariantMap state{
         {"category", current_category_},
         {"note_id", selected_note_id_},
+        {"editing", is_editing_},
     };
+    if (is_editing_) {
+        if (edit_title_) state["draft_title"] = edit_title_->text();
+        if (edit_content_) state["draft_content"] = edit_content_->toPlainText();
+        if (edit_tags_) state["draft_tags"] = edit_tags_->text();
+        if (edit_tickers_) state["draft_tickers"] = edit_tickers_->text();
+        if (edit_category_) state["draft_category"] = edit_category_->currentIndex();
+        if (edit_priority_) state["draft_priority"] = edit_priority_->currentText();
+        if (edit_sentiment_) state["draft_sentiment"] = edit_sentiment_->currentText();
+    }
+    return state;
 }
 
 void NotesScreen::restore_state(const QVariantMap& state) {
@@ -726,6 +737,26 @@ void NotesScreen::restore_state(const QVariantMap& state) {
                 break;
             }
         }
+    }
+
+    // Restore draft editor state
+    if (state.value("editing", false).toBool()) {
+        if (note_id >= 0)
+            enter_edit_mode();
+        else if (right_stack_)
+            right_stack_->setCurrentIndex(2);
+
+        if (edit_title_) edit_title_->setText(state.value("draft_title").toString());
+        if (edit_content_) edit_content_->setPlainText(state.value("draft_content").toString());
+        if (edit_tags_) edit_tags_->setText(state.value("draft_tags").toString());
+        if (edit_tickers_) edit_tickers_->setText(state.value("draft_tickers").toString());
+        if (edit_category_ && state.contains("draft_category"))
+            edit_category_->setCurrentIndex(state.value("draft_category").toInt());
+        if (edit_priority_ && state.contains("draft_priority"))
+            edit_priority_->setCurrentText(state.value("draft_priority").toString());
+        if (edit_sentiment_ && state.contains("draft_sentiment"))
+            edit_sentiment_->setCurrentText(state.value("draft_sentiment").toString());
+        is_editing_ = true;
     }
 }
 

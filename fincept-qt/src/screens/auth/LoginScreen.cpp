@@ -142,22 +142,22 @@ LoginScreen::LoginScreen(QWidget* parent) : QWidget(parent) {
     connect(&auth, &auth::AuthManager::login_active_session, this, &LoginScreen::on_active_session);
     connect(&auth, &auth::AuthManager::mfa_verified, this, &LoginScreen::on_mfa_verified);
     connect(&auth, &auth::AuthManager::mfa_failed, this, &LoginScreen::on_mfa_failed);
+    connect(&auth, &auth::AuthManager::logged_out, this, [this]() {
+        if (email_input_) email_input_->clear();
+        if (password_input_) {
+            password_input_->clear();
+            password_input_->setEchoMode(QLineEdit::Password);
+        }
+        if (mfa_input_) mfa_input_->clear();
+        clear_error();
+        if (mfa_error_) mfa_error_->hide();
+        if (pages_) pages_->setCurrentIndex(0);
+    });
 }
 
 // ── Background Paint ─────────────────────────────────────────────────────────
 
 void LoginScreen::hideEvent(QHideEvent* event) {
-    // Wipe credential + MFA inputs whenever this screen leaves the stack so
-    // they can't be recovered or pre-filled after a logout/navigation.
-    if (email_input_) email_input_->clear();
-    if (password_input_) {
-        password_input_->clear();
-        password_input_->setEchoMode(QLineEdit::Password);
-    }
-    if (mfa_input_) mfa_input_->clear();
-    clear_error();
-    if (mfa_error_) mfa_error_->hide();
-    if (pages_) pages_->setCurrentIndex(0);
     QWidget::hideEvent(event);
 }
 
@@ -541,6 +541,14 @@ void LoginScreen::on_force_login() {
 
 void LoginScreen::on_login_succeeded() {
     set_loading(false);
+    if (email_input_) email_input_->clear();
+    if (password_input_) {
+        password_input_->clear();
+        password_input_->setEchoMode(QLineEdit::Password);
+    }
+    if (mfa_input_) mfa_input_->clear();
+    clear_error();
+    if (mfa_error_) mfa_error_->hide();
     pages_->setCurrentIndex(0);
     for (auto* b : conflict_page_->findChildren<QPushButton*>())
         b->setEnabled(true);

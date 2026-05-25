@@ -142,4 +142,10 @@ void AgentErrorsWidget::apply_styles() {
              ui::colors::TEXT_TERTIARY()));
 }
 
+void AgentErrorsWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("AGENT ERRORS"));
+    render(); // re-renders cached error rows in the new language
+}
+
 } // namespace fincept::screens::widgets

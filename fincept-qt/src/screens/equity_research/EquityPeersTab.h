@@ -18,6 +18,8 @@ class EquityPeersTab : public QWidget {
   public:
     explicit EquityPeersTab(QWidget* parent = nullptr);
     void set_symbol(const QString& symbol);
+    QString peers_text() const;
+    void set_peers_text(const QString& text);
 
   protected:
     void changeEvent(QEvent* event) override;

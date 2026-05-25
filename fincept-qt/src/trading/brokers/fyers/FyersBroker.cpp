@@ -8,6 +8,8 @@
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QJsonArray>
+#include <QUrl>
+#include <QUrlQuery>
 
 namespace fincept::trading {
 
@@ -15,9 +17,63 @@ static int64_t now_ts() {
     return QDateTime::currentSecsSinceEpoch();
 }
 
+// Fyers requires symbols in EXCHANGE:SYMBOL-SEGMENT format (e.g. NSE:RELIANCE-EQ).
+// Plain symbols from the UI (e.g. "RELIANCE") are normalized to NSE equity by default.
+static QString to_fyers_sym(const QString& sym) {
+    if (sym.contains(':'))
+        return sym;
+    return QStringLiteral("NSE:") + sym + QStringLiteral("-EQ");
+}
+
+// Strip Fyers format back to plain symbol: NSE:RELIANCE-EQ → RELIANCE
+static QString from_fyers_sym(const QString& fyers_sym) {
+    QString s = fyers_sym;
+    const int colon = s.indexOf(':');
+    if (colon >= 0)
+        s = s.mid(colon + 1);
+    if (s.endsWith(QLatin1String("-EQ")))
+        s.chop(3);
+    return s;
+}
+
+// Extract exchange string from Fyers symbol or int code
+static QString exchange_of(const QString& fyers_sym, int code = -1) {
+    const int colon = fyers_sym.indexOf(':');
+    if (colon >= 0)
+        return fyers_sym.left(colon);
+    switch (code) {
+        case 10: case 11: case 12: return QStringLiteral("NSE");
+        case 20: case 21: case 22: return QStringLiteral("BSE");
+        case 30: return QStringLiteral("MCX");
+        default: return {};
+    }
+}
+
+// Tag Fyers auth errors so AccountDataStream can detect token expiry.
+// Fyers returns HTTP 401/403 or JSON code -16 for invalid/expired tokens.
+static QString fyers_check_auth(const BrokerHttpResponse& resp, const QString& msg) {
+    if (resp.status_code == 401 || resp.status_code == 403)
+        return QStringLiteral("[TOKEN_EXPIRED] ") + msg;
+    const int code = resp.json.value("code").toInt(0);
+    if (code == -16 || code == -17)
+        return QStringLiteral("[TOKEN_EXPIRED] ") + msg;
+    return msg;
+}
+
 // ============================================================================
 // Auth
 // ============================================================================
+
+QString FyersBroker::fyers_login_url(const QString& client_id, const QString& redirect_uri) {
+    QUrl url(QStringLiteral("https://api-t1.fyers.in/api/v3/generate-authcode"));
+    QUrlQuery q;
+    q.addQueryItem("client_id", client_id);
+    q.addQueryItem("redirect_uri", redirect_uri);
+    q.addQueryItem("response_type", "code");
+    q.addQueryItem("state", QString::number(QDateTime::currentMSecsSinceEpoch()));
+    url.setQuery(q);
+    return url.toString();
+}
 
 QMap<QString, QString> FyersBroker::auth_headers(const BrokerCredentials& creds) const {
     return {{"Authorization", creds.api_key + ":" + creds.access_token},
@@ -89,7 +145,7 @@ const BrokerEnumMap<QString>& FyersBroker::fyers_str_map() {
 // ============================================================================
 
 OrderPlaceResponse FyersBroker::place_order(const BrokerCredentials& creds, const UnifiedOrder& order) {
-    QJsonObject payload{{"symbol", order.symbol},
+    QJsonObject payload{{"symbol", to_fyers_sym(order.symbol)},
                         {"qty", static_cast<int>(order.quantity)},
                         {"type", fyers_int_map().order_type_or(order.order_type, 2)},
                         {"side", fyers_int_map().side_or(order.side, 1)},
@@ -161,9 +217,9 @@ ApiResponse<QVector<BrokerOrderInfo>> FyersBroker::get_orders(const BrokerCreden
     auto resp = BrokerHttp::instance().get(QString(base_url()) + "/api/v3/orders", auth_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, fyers_check_auth(resp, resp.error), ts};
     if (resp.json.value("s").toString() != "ok")
-        return {false, std::nullopt, resp.json.value("message").toString("Failed"), ts};
+        return {false, std::nullopt, fyers_check_auth(resp, resp.json.value("message").toString("Failed")), ts};
 
     QVector<BrokerOrderInfo> orders;
     auto arr = resp.json.value("orderBook").toArray();
@@ -171,8 +227,9 @@ ApiResponse<QVector<BrokerOrderInfo>> FyersBroker::get_orders(const BrokerCreden
         auto o = v.toObject();
         BrokerOrderInfo info;
         info.order_id = o.value("id").toString();
-        info.symbol = o.value("symbol").toString();
-        info.exchange = o.value("exchange").toString();
+        const QString raw_order_sym = o.value("symbol").toString();
+        info.symbol = from_fyers_sym(raw_order_sym);
+        info.exchange = exchange_of(raw_order_sym, o.value("exchange").toInt(-1));
         info.side = o.value("side").toInt() == 1 ? "buy" : "sell";
         // Fyers v3 order type enum: 1=Limit, 2=Market, 3=StopMarket, 4=StopLimit
         static const QMap<int, QString> type_map = {
@@ -210,17 +267,18 @@ ApiResponse<QVector<BrokerPosition>> FyersBroker::get_positions(const BrokerCred
     auto resp = BrokerHttp::instance().get(QString(base_url()) + "/api/v3/positions", auth_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, fyers_check_auth(resp, resp.error), ts};
     if (resp.json.value("s").toString() != "ok")
-        return {false, std::nullopt, resp.json.value("message").toString("Failed"), ts};
+        return {false, std::nullopt, fyers_check_auth(resp, resp.json.value("message").toString("Failed")), ts};
 
     QVector<BrokerPosition> positions;
     auto arr = resp.json.value("netPositions").toArray();
     for (const auto& v : arr) {
         auto p = v.toObject();
         BrokerPosition pos;
-        pos.symbol = p.value("symbol").toString();
-        pos.exchange = p.value("exchange").toString();
+        const QString raw_pos_sym = p.value("symbol").toString();
+        pos.symbol = from_fyers_sym(raw_pos_sym);
+        pos.exchange = exchange_of(raw_pos_sym, p.value("exchange").toInt(-1));
         pos.product_type = p.value("productType").toString();
         pos.quantity = p.value("netQty").toDouble();
         pos.avg_price = p.value("netAvg").toDouble();
@@ -236,17 +294,18 @@ ApiResponse<QVector<BrokerHolding>> FyersBroker::get_holdings(const BrokerCreden
     auto resp = BrokerHttp::instance().get(QString(base_url()) + "/api/v3/holdings", auth_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, fyers_check_auth(resp, resp.error), ts};
     if (resp.json.value("s").toString() != "ok")
-        return {false, std::nullopt, resp.json.value("message").toString("Failed"), ts};
+        return {false, std::nullopt, fyers_check_auth(resp, resp.json.value("message").toString("Failed")), ts};
 
     QVector<BrokerHolding> holdings;
     auto arr = resp.json.value("holdings").toArray();
     for (const auto& v : arr) {
         auto h = v.toObject();
         BrokerHolding hold;
-        hold.symbol = h.value("symbol").toString();
-        hold.exchange = h.value("exchange").toString();
+        const QString raw_hold_sym = h.value("symbol").toString();
+        hold.symbol = from_fyers_sym(raw_hold_sym);
+        hold.exchange = exchange_of(raw_hold_sym, h.value("exchange").toInt(-1));
         hold.quantity = h.value("quantity").toDouble();
         hold.avg_price = h.value("costPrice").toDouble();
         hold.ltp = h.value("ltp").toDouble();
@@ -263,9 +322,9 @@ ApiResponse<BrokerFunds> FyersBroker::get_funds(const BrokerCredentials& creds) 
     auto resp = BrokerHttp::instance().get(QString(base_url()) + "/api/v3/funds", auth_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, fyers_check_auth(resp, resp.error), ts};
     if (resp.json.value("s").toString() != "ok")
-        return {false, std::nullopt, resp.json.value("message").toString("Failed"), ts};
+        return {false, std::nullopt, fyers_check_auth(resp, resp.json.value("message").toString("Failed")), ts};
 
     BrokerFunds funds;
     auto fl = resp.json.value("fund_limit").toArray();
@@ -298,56 +357,91 @@ ApiResponse<BrokerFunds> FyersBroker::get_funds(const BrokerCredentials& creds) 
 
 ApiResponse<QVector<BrokerQuote>> FyersBroker::get_quotes(const BrokerCredentials& creds,
                                                           const QVector<QString>& symbols) {
-    QString syms;
-    for (int i = 0; i < symbols.size(); ++i) {
-        if (i > 0)
-            syms += ",";
-        syms += symbols[i];
-    }
-    auto resp = BrokerHttp::instance().get(QString(base_url()) + "/data/quotes?symbols=" + syms, auth_headers(creds));
+    // Fyers limits quote requests — batch in chunks of 50 to avoid URL length issues
+    static constexpr int kBatchSize = 50;
     int64_t ts = now_ts();
-    if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
-    if (resp.json.value("s").toString() != "ok")
-        return {false, std::nullopt, resp.json.value("message").toString("Failed"), ts};
+    LOG_INFO("FyersBroker", QString("get_quotes: %1 symbols requested").arg(symbols.size()));
 
-    QVector<BrokerQuote> quotes;
-    auto d_arr = resp.json.value("d").toArray();
-    for (const auto& val : d_arr) {
-        auto item = val.toObject();
-        if (item.value("s").toString() != "ok")
-            continue;
-        auto v = item.value("v").toObject();
-        BrokerQuote q;
-        q.symbol = v.value("symbol").toString();
-        q.ltp = v.value("lp").toDouble();
-        q.open = v.value("open_price").toDouble();
-        q.high = v.value("high_price").toDouble();
-        q.low = v.value("low_price").toDouble();
-        q.close = v.value("prev_close_price").toDouble();
-        q.volume = v.value("volume").toDouble();
-        q.change = v.value("ch").toDouble();
-        q.change_pct = v.value("chp").toDouble();
-        q.bid = v.value("bid").toDouble();
-        q.ask = v.value("ask").toDouble();
-        q.timestamp = v.value("tt").toVariant().toLongLong();
-        quotes.append(q);
-    }
-    return {true, quotes, "", ts};
+    QVector<BrokerQuote> all_quotes;
+    for (int batch_start = 0; batch_start < symbols.size(); batch_start += kBatchSize) {
+        int batch_end = qMin(batch_start + kBatchSize, symbols.size());
+        // Reverse map: Fyers wire symbol → original caller symbol. Callers
+        // (OptionChainService, equity screens) pass symbols in their own format
+        // (e.g. "NSE:BANKNIFTY..." for F&O, "RELIANCE" for equity). We must
+        // return q.symbol in the same format so lookups match.
+        QHash<QString, QString> fyers_to_orig;
+        QString syms;
+        for (int i = batch_start; i < batch_end; ++i) {
+            if (i > batch_start)
+                syms += ",";
+            const QString fyers_sym = to_fyers_sym(symbols[i]);
+            syms += fyers_sym;
+            fyers_to_orig.insert(fyers_sym, symbols[i]);
+        }
+        auto resp = BrokerHttp::instance().get(
+            QString(base_url()) + "/data/quotes?symbols=" + syms, auth_headers(creds));
+        if (!resp.success)
+            return {false, std::nullopt, fyers_check_auth(resp, resp.error), ts};
+        if (resp.json.value("s").toString() != "ok")
+            return {false, std::nullopt, fyers_check_auth(resp, resp.json.value("message").toString("Failed")), ts};
+
+        auto d_arr = resp.json.value("d").toArray();
+        for (const auto& val : d_arr) {
+            auto item = val.toObject();
+            if (item.value("s").toString() != "ok") {
+                auto v = item.value("v").toObject();
+                LOG_WARN("FyersBroker", QString("get_quotes: symbol '%1' error: %2")
+                                            .arg(item.value("n").toString(), v.value("errmsg").toString()));
+                continue;
+            }
+            auto v = item.value("v").toObject();
+            BrokerQuote q;
+            const QString raw_sym = v.value("symbol").toString();
+            q.symbol = fyers_to_orig.value(raw_sym, from_fyers_sym(raw_sym));
+            q.ltp = v.value("lp").toDouble();
+            q.open = v.value("open_price").toDouble();
+            q.high = v.value("high_price").toDouble();
+            q.low = v.value("low_price").toDouble();
+            q.close = v.value("prev_close_price").toDouble();
+            q.volume = v.value("volume").toDouble();
+            q.change = v.value("ch").toDouble();
+            q.change_pct = v.value("chp").toDouble();
+            q.bid = v.value("bid").toDouble();
+            q.ask = v.value("ask").toDouble();
+            q.timestamp = v.value("tt").toVariant().toLongLong();
+            q.oi = v.value("oi").toVariant().toLongLong();
+            q.oi_change_pct = v.value("oichp").toDouble();
+            all_quotes.append(q);
+        }
+    } // end batch loop
+    LOG_INFO("FyersBroker", QString("get_quotes: returning %1 quotes (requested %2)")
+                                .arg(all_quotes.size()).arg(symbols.size()));
+    return {true, all_quotes, "", ts};
 }
 
 ApiResponse<QVector<BrokerCandle>> FyersBroker::get_history(const BrokerCredentials& creds, const QString& symbol,
                                                             const QString& resolution, const QString& from_date,
                                                             const QString& to_date) {
+    // Map chart timeframes to Fyers resolution codes
+    static const QHash<QString, QString> tf_map = {
+        {"1m", "1"}, {"5m", "5"}, {"15m", "15"}, {"30m", "30"},
+        {"1h", "60"}, {"1d", "D"}, {"1w", "W"},
+    };
+    const QString fyers_res = tf_map.value(resolution, resolution);
+
+    // Fyers date_format=1 expects dates without time: "yyyy-MM-dd"
+    const QString from = from_date.left(10);
+    const QString to = to_date.left(10);
+
     QString url = QString("%1/data/history?symbol=%2&resolution=%3&date_format=1&range_from=%4&range_to=%5&cont_flag=1")
-                      .arg(base_url(), symbol, resolution, from_date, to_date);
+                      .arg(base_url(), to_fyers_sym(symbol), fyers_res, from, to);
 
     auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, fyers_check_auth(resp, resp.error), ts};
     if (resp.json.value("s").toString() != "ok")
-        return {false, std::nullopt, resp.json.value("message").toString("Failed"), ts};
+        return {false, std::nullopt, fyers_check_auth(resp, resp.json.value("message").toString("Failed")), ts};
 
     QVector<BrokerCandle> candles;
     auto arr = resp.json.value("candles").toArray();
@@ -365,6 +459,61 @@ ApiResponse<QVector<BrokerCandle>> FyersBroker::get_history(const BrokerCredenti
         candles.append(candle);
     }
     return {true, candles, "", ts};
+}
+
+// ============================================================================
+// Market Depth — GET /data/depth?symbol=...&ohlcv_flag=1
+// Returns 5-level bid/ask depth. Mapped into BrokerQuote objects so
+// AccountDataStream::fetch_orderbook() can aggregate them via its L2 path.
+// Note: Fyers uses "bids" (plural) for buy side, "ask" (singular) for sell side.
+// ============================================================================
+
+ApiResponse<QVector<BrokerQuote>> FyersBroker::get_historical_quotes_single(
+    const BrokerCredentials& creds, const QString& symbol,
+    const QString& /*start*/, const QString& /*end*/, int /*limit*/) {
+
+    const QString url = QString("%1/data/depth?symbol=%2&ohlcv_flag=1")
+                            .arg(base_url(), to_fyers_sym(symbol));
+    auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
+    int64_t ts = now_ts();
+    if (!resp.success)
+        return {false, std::nullopt, fyers_check_auth(resp, resp.error), ts};
+    if (resp.json.value("s").toString() != "ok")
+        return {false, std::nullopt, fyers_check_auth(resp, resp.json.value("message").toString("Failed")), ts};
+
+    // d is a map keyed by symbol: { "NSE:SBIN-EQ": { bids: [...], ask: [...], ... } }
+    const auto d = resp.json.value("d").toObject();
+    if (d.isEmpty())
+        return {false, std::nullopt, "Empty depth response", ts};
+
+    const auto sym_data = d.begin()->toObject();
+    const auto bids_arr = sym_data.value("bids").toArray();
+    const auto asks_arr = sym_data.value("ask").toArray();
+
+    const QString norm_sym = from_fyers_sym(d.begin().key());
+    LOG_INFO("FyersBroker", QString("depth: %1 bids, %2 asks for %3")
+                                .arg(bids_arr.size()).arg(asks_arr.size()).arg(norm_sym));
+
+    QVector<BrokerQuote> quotes;
+    for (const auto& v : bids_arr) {
+        auto lvl = v.toObject();
+        BrokerQuote q;
+        q.symbol = norm_sym;
+        q.bid = lvl.value("price").toDouble();
+        q.bid_size = lvl.value("volume").toDouble();
+        q.oi = lvl.value("ord").toInt();
+        quotes.append(q);
+    }
+    for (const auto& v : asks_arr) {
+        auto lvl = v.toObject();
+        BrokerQuote q;
+        q.symbol = norm_sym;
+        q.ask = lvl.value("price").toDouble();
+        q.ask_size = lvl.value("volume").toDouble();
+        q.oi = lvl.value("ord").toInt();
+        quotes.append(q);
+    }
+    return {true, quotes, "", ts};
 }
 
 // ============================================================================
@@ -420,7 +569,7 @@ static QString fyers_product_str(ProductType p) {
 
 QJsonObject fyers_gtt_body(const GttOrder& g) {
     QJsonObject body;
-    body["symbol"] = g.symbol;
+    body["symbol"] = to_fyers_sym(g.symbol);
     body["productType"] = fyers_product_str(
         g.triggers.isEmpty() ? ProductType::Delivery : g.triggers.first().product);
     body["side"] = (g.triggers.isEmpty() || g.triggers.first().side == OrderSide::Buy) ? 1 : -1;
@@ -450,8 +599,9 @@ GttOrder fyers_parse_gtt(const QJsonObject& o) {
     g.gtt_id = o.value("id").toString();
     if (g.gtt_id.isEmpty())
         g.gtt_id = QString::number(o.value("id").toInt());
-    g.symbol = o.value("symbol").toString();
-    g.exchange = g.symbol.section(':', 0, 0);
+    const QString raw_gtt_sym = o.value("symbol").toString();
+    g.symbol = from_fyers_sym(raw_gtt_sym);
+    g.exchange = exchange_of(raw_gtt_sym);
     g.status = o.value("status").toString().toLower();
     g.created_at = o.value("createdAt").toString();
     g.updated_at = o.value("updatedAt").toString();
@@ -577,7 +727,7 @@ ApiResponse<QJsonObject> FyersBroker::place_multi_order(const BrokerCredentials&
 
     QJsonArray payload;
     for (const auto& order : orders) {
-        QJsonObject leg{{"symbol", order.symbol},
+        QJsonObject leg{{"symbol", to_fyers_sym(order.symbol)},
                         {"qty", static_cast<int>(order.quantity)},
                         {"type", fyers_int_map().order_type_or(order.order_type, 2)},
                         {"side", fyers_int_map().side_or(order.side, 1)},

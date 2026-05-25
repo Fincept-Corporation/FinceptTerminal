@@ -267,4 +267,11 @@ void ScreenerWidget::render_rows(const QVector<services::QuoteData>& rows) {
     list_layout_->addStretch();
 }
 
+void ScreenerWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("STOCK SCREENER"));
+    if (filter_lbl_) filter_lbl_->setText(tr("FILTER:"));
+    rebuild_all_quotes(); // re-renders headers + count label in the new language
+}
+
 } // namespace fincept::screens::widgets

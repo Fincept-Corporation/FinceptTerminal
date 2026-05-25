@@ -190,4 +190,10 @@ void BrokerHoldingsWidget::apply_styles() {
              ui::colors::TEXT_TERTIARY()));
 }
 
+void BrokerHoldingsWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("HOLDINGS"));
+    hub_resubscribe(); // re-renders header hint + table from cached subscription
+}
+
 } // namespace fincept::screens::widgets

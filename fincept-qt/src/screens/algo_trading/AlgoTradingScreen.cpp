@@ -204,13 +204,18 @@ void AlgoTradingScreen::update_tab_buttons() {
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap AlgoTradingScreen::save_state() const {
-    return {{"tab_index", active_tab_}};
+    QVariantMap state{{"tab_index", active_tab_}};
+    if (builder_)
+        state["builder_draft"] = builder_->save_draft();
+    return state;
 }
 
 void AlgoTradingScreen::restore_state(const QVariantMap& state) {
     const int idx = state.value("tab_index", 0).toInt();
     if (idx >= 0 && idx < tab_buttons_.size())
         on_tab_changed(idx);
+    if (builder_ && state.contains("builder_draft"))
+        builder_->restore_draft(state.value("builder_draft").toMap());
 }
 
 } // namespace fincept::screens

@@ -139,6 +139,12 @@ bool WindowFrame::apply_layout(const layout::FrameLayout& fl) {
     // dock_widgets_), groups everything as hidden tabs in one CenterDockArea
     // (vs. prepare_dock_widget's one-area-per-call), and is also what the
     // constructor calls on the QSettings-restore path — same protection here.
+    // Suppress the debounced layout save during the bulk pre-create +
+    // restoreState pass. These operations fire dockWidgetAdded and
+    // viewToggled dozens of times; saving mid-restore would persist an
+    // incomplete intermediate state.
+    suppress_layout_save_ = true;
+
     dock_router_->ensure_all_registered();
 
     // Track each panel's resolved string id alongside its FrameLayout
@@ -178,8 +184,12 @@ bool WindowFrame::apply_layout(const layout::FrameLayout& fl) {
         ok = dock_manager_->restoreState(fl.dock_state);
         if (!ok) {
             LOG_WARN("WindowFrame", "apply_layout: CDockManager::restoreState rejected dock blob");
+            suppress_layout_save_ = false;
+            return false;
         }
     }
+
+    suppress_layout_save_ = false;
 
     // Phase 3: chrome flags.
     if (focus_mode_ != fl.focus_mode)

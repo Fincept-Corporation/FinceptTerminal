@@ -20,6 +20,11 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QtCharts/QChart>
+#include <QtCharts/QChartView>
+#include <QtCharts/QDateTimeAxis>
+#include <QtCharts/QLineSeries>
+#include <QtCharts/QValueAxis>
 
 namespace fincept::screens {
 
@@ -35,6 +40,14 @@ void BacktestingScreen::clear_results() {
     trades_table_->setRowCount(0);
     trades_table_->setColumnCount(0);
     raw_json_edit_->clear();
+    if (equity_chart_tab_ && equity_chart_tab_->layout()) {
+        auto* layout = equity_chart_tab_->layout();
+        while (layout->count() > 0) {
+            auto* item = layout->takeAt(0);
+            if (item->widget()) item->widget()->deleteLater();
+            delete item;
+        }
+    }
 }
 
 void BacktestingScreen::display_result(const QString& command, const QJsonObject& payload) {
@@ -198,7 +211,9 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         }
         fill_kv_table(perf);
         auto trades = payload.value("trades").toArray();
-        fill_details_table(trades);
+        fill_details_table(trades, {"symbol", "entryDate", "exitDate", "side",
+                                    "entryPrice", "exitPrice", "quantity",
+                                    "pnl", "pnlPercent", "holdingPeriod", "exitReason", "commission"});
     }
     else if (command == "optimize") {
         QJsonObject summary{
@@ -480,6 +495,82 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
     }
 
     summary_layout_->addStretch();
+
+    // ── Equity Curve chart ──
+    auto equity_arr = payload.value("equity").toArray();
+    if (!equity_arr.isEmpty() && equity_chart_tab_ && equity_chart_tab_->layout()) {
+        auto* eq_series = new QLineSeries;
+        eq_series->setPen(QPen(QColor(accent), 1.5));
+        auto* dd_series = new QLineSeries;
+        dd_series->setPen(QPen(QColor(ui::colors::NEGATIVE()), 1.0));
+
+        double y_min = 1e18, y_max = -1e18;
+        double dd_min = 0;
+
+        for (const auto& pt : equity_arr) {
+            auto obj = pt.toObject();
+            auto date_str = obj.value("date").toString();
+            auto equity_val = obj.value("equity").toDouble();
+            auto dd_val = obj.value("drawdown").toDouble();
+            auto dt = QDateTime::fromString(date_str, "yyyy-MM-dd");
+            if (!dt.isValid()) dt = QDateTime::fromString(date_str, Qt::ISODate);
+            if (!dt.isValid()) continue;
+            qint64 ms = dt.toMSecsSinceEpoch();
+            eq_series->append(ms, equity_val);
+            dd_series->append(ms, dd_val * 100.0);
+            y_min = qMin(y_min, equity_val);
+            y_max = qMax(y_max, equity_val);
+            dd_min = qMin(dd_min, dd_val * 100.0);
+        }
+
+        if (eq_series->count() > 1) {
+            auto* chart = new QChart;
+            chart->addSeries(eq_series);
+            chart->legend()->setVisible(false);
+            chart->setMargins(QMargins(0, 0, 0, 0));
+            chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
+            chart->setPlotAreaBackgroundBrush(QBrush(QColor(ui::colors::BG_SURFACE())));
+            chart->setPlotAreaBackgroundVisible(true);
+
+            auto* x_axis = new QDateTimeAxis;
+            x_axis->setFormat("MMM yyyy");
+            x_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
+            x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+            chart->addAxis(x_axis, Qt::AlignBottom);
+            eq_series->attachAxis(x_axis);
+
+            auto* y_axis = new QValueAxis;
+            double margin = (y_max - y_min) * 0.05;
+            y_axis->setRange(y_min - margin, y_max + margin);
+            y_axis->setLabelFormat("$%.0f");
+            y_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
+            y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+            chart->addAxis(y_axis, Qt::AlignLeft);
+            eq_series->attachAxis(y_axis);
+
+            // Drawdown on right axis
+            if (dd_min < -0.01) {
+                chart->addSeries(dd_series);
+                auto* dd_axis = new QValueAxis;
+                dd_axis->setRange(dd_min * 1.2, 0);
+                dd_axis->setLabelFormat("%.1f%%");
+                dd_axis->setLabelsColor(QColor(ui::colors::NEGATIVE()));
+                dd_axis->setGridLineVisible(false);
+                chart->addAxis(dd_axis, Qt::AlignRight);
+                dd_series->attachAxis(x_axis);
+                dd_series->attachAxis(dd_axis);
+            } else {
+                delete dd_series;
+            }
+
+            auto* view = new QChartView(chart, equity_chart_tab_);
+            view->setRenderHint(QPainter::Antialiasing);
+            equity_chart_tab_->layout()->addWidget(view);
+        } else {
+            delete eq_series;
+            delete dd_series;
+        }
+    }
 
     // ── RAW JSON tab (always populated) ──
     raw_json_edit_->setPlainText(QJsonDocument(payload).toJson(QJsonDocument::Indented));

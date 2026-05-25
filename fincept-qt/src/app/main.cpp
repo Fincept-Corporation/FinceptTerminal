@@ -76,6 +76,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QGuiApplication>
 #include <QLibrary>
 #include <QPointer>
 #include <QSqlDatabase>
@@ -85,6 +86,7 @@
 #include <QTimer>
 #include <QUuid>
 
+#include <algorithm>
 #include <memory>
 
 #include "app/InstanceLock.h"
@@ -804,29 +806,30 @@ int main(int argc, char* argv[]) {
             }
 
             if (!recovered) {
-                auto* window = new fincept::WindowFrame(0); // primary window
-                window->setAttribute(Qt::WA_DeleteOnClose);
-                window->show();
-            }
-
-            // Restore any secondary windows that were open at last shutdown so
-            // multi-monitor layouts survive across relaunches. Each window
-            // restores its own geometry + dock layout from SessionManager.
-            // Skip when recovered — WorkspaceShell::apply has already built
-            // the right frame set.
-            if (!recovered)
-            {
                 const QList<int> saved_ids =
                     fincept::SessionManager::instance().load_window_ids();
-                for (int id : saved_ids) {
-                    if (id <= 0) continue; // 0 = primary, already created
-                    auto* w = new fincept::WindowFrame(id);
-                    w->setAttribute(Qt::WA_DeleteOnClose);
-                    w->show();
+                const int max_windows = static_cast<int>(QGuiApplication::screens().size());
+
+                if (saved_ids.isEmpty()) {
+                    auto* window = new fincept::WindowFrame(0);
+                    window->setAttribute(Qt::WA_DeleteOnClose);
+                    window->show();
+                } else {
+                    const int count = std::min(static_cast<int>(saved_ids.size()), max_windows);
+                    for (int i = 0; i < count; ++i) {
+                        auto* w = new fincept::WindowFrame(saved_ids[i]);
+                        w->setAttribute(Qt::WA_DeleteOnClose);
+                        w->show();
+                    }
+                    if (count < saved_ids.size()) {
+                        QList<int> trimmed = saved_ids.mid(0, count);
+                        fincept::SessionManager::instance().save_window_ids(trimmed);
+                                                LOG_INFO("App", QString("Clamped %1 saved windows to %2 (available screens)")
+                                            .arg(saved_ids.size()).arg(count));
+                    }
+                    if (count > 1)
+                        LOG_INFO("App", QString("Restored %1 window(s) from last session").arg(count));
                 }
-                if (!saved_ids.isEmpty())
-                    LOG_INFO("App", QString("Restored %1 secondary window(s) from last session")
-                                        .arg(saved_ids.size() > 0 ? saved_ids.size() - 1 : 0));
             }
 
             // Wire new-window handler + Launchpad surface now that the
@@ -866,32 +869,36 @@ int main(int argc, char* argv[]) {
         recovered = dlg.was_restored();
     }
 
-    // Heap-allocate the primary window so we can skip it on a successful
-    // recovery without leaving a dead stack object behind. WA_DeleteOnClose
-    // matches the secondary-window lifecycle below.
-    if (!recovered) {
-        auto* primary = new fincept::WindowFrame(0);
-        primary->setAttribute(Qt::WA_DeleteOnClose);
-        primary->show();
-    }
-
-    // Restore any secondary windows that were open at last shutdown. The
-    // primary window owns its own lifetime via WA_DeleteOnClose; restored
-    // secondaries use WA_DeleteOnClose and self-remove from
-    // QApplication::topLevelWidgets. Skip when recovered — WorkspaceShell
-    // has already built the right frame set.
+    // Restore the set of windows from last session. saved_ids is the complete
+    // set written by closeEvent (including the primary). If empty (first run),
+    // create a single primary window. Clamp to the number of available screens
+    // so a 3-monitor layout doesn't stack 3 windows on 1 screen after the user
+    // disconnects external displays.
     if (!recovered) {
         const QList<int> saved_ids =
             fincept::SessionManager::instance().load_window_ids();
-        for (int id : saved_ids) {
-            if (id <= 0) continue; // 0 = primary, already created
-            auto* w = new fincept::WindowFrame(id);
-            w->setAttribute(Qt::WA_DeleteOnClose);
-            w->show();
+        const int max_windows = static_cast<int>(QGuiApplication::screens().size());
+
+        if (saved_ids.isEmpty()) {
+            auto* primary = new fincept::WindowFrame(0);
+            primary->setAttribute(Qt::WA_DeleteOnClose);
+            primary->show();
+        } else {
+            const int count = std::min(static_cast<int>(saved_ids.size()), max_windows);
+            for (int i = 0; i < count; ++i) {
+                auto* w = new fincept::WindowFrame(saved_ids[i]);
+                w->setAttribute(Qt::WA_DeleteOnClose);
+                w->show();
+            }
+            if (count < saved_ids.size()) {
+                QList<int> trimmed = saved_ids.mid(0, count);
+                fincept::SessionManager::instance().save_window_ids(trimmed);
+                                LOG_INFO("App", QString("Clamped %1 saved windows to %2 (available screens)")
+                                    .arg(saved_ids.size()).arg(count));
+            }
+            if (count > 1)
+                LOG_INFO("App", QString("Restored %1 window(s) from last session").arg(count));
         }
-        if (saved_ids.size() > 1)
-            LOG_INFO("App", QString("Restored %1 secondary window(s) from last session")
-                                .arg(saved_ids.size() - 1));
     }
 
     // Wire new-window handler + Launchpad surface — see wire_app_lifecycle()

@@ -19,6 +19,8 @@ class WorkflowsViewPanel : public QWidget {
     Q_OBJECT
   public:
     explicit WorkflowsViewPanel(QWidget* parent = nullptr);
+    QVariantMap save_draft() const;
+    void restore_draft(const QVariantMap& draft);
 
   protected:
     void showEvent(QShowEvent* event) override;

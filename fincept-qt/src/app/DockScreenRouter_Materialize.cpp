@@ -22,6 +22,7 @@
 #include "core/symbol/SymbolRef.h"
 #include "core/window/WindowRegistry.h"
 #include "screens/common/IStatefulScreen.h"
+#include "ui/theme/Theme.h"
 #include "ui/widgets/GroupBadge.h"
 
 #include <QApplication>
@@ -107,9 +108,18 @@ ads::CDockWidget* DockScreenRouter::create_dock_widget(const QString& id) {
         dw->setWidget(wrap_with_group_badge(id, screens_[id]));
     } else {
         auto* placeholder = new QWidget;
+        // Match the app's dark background so placeholders don't flash
+        // white/system-gray during the brief window between show() and
+        // deferred screen materialization.
+        QPalette pal = placeholder->palette();
+        pal.setColor(QPalette::Window, QColor(ui::colors::BG_BASE()));
+        placeholder->setPalette(pal);
+        placeholder->setAutoFillBackground(true);
         auto* lbl = new QLabel(title_for_id(id));
         lbl->setAlignment(Qt::AlignCenter);
-        lbl->setStyleSheet("color:#555;font-size:16px;");
+        lbl->setStyleSheet(
+            QString("color:%1;font-size:14px;font-weight:500;")
+                .arg(QString(ui::colors::TEXT_DIM())));
         auto* vl = new QVBoxLayout(placeholder);
         vl->addWidget(lbl);
         dw->setWidget(placeholder);

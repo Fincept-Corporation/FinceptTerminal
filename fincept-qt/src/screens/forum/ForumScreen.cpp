@@ -632,12 +632,14 @@ void ForumScreen::show_edit_profile_dialog(const services::ForumProfile& profile
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap ForumScreen::save_state() const {
-    return {
+    QVariantMap state{
         {"category_id", active_category_id_},
         {"category_name", active_category_name_},
         {"category_color", active_category_color_},
         {"detail_uuid", current_detail_uuid_},
     };
+    if (thread_) state["reply_draft"] = thread_->reply_draft();
+    return state;
 }
 
 void ForumScreen::restore_state(const QVariantMap& state) {
@@ -653,6 +655,8 @@ void ForumScreen::restore_state(const QVariantMap& state) {
     // Individual post detail can't be re-fetched without a full ForumPost object;
     // we record uuid for reference but leave the feed view active on restore.
     current_detail_uuid_ = uuid;
+    if (thread_ && state.contains("reply_draft"))
+        thread_->set_reply_draft(state.value("reply_draft").toString());
 }
 
 } // namespace fincept::screens

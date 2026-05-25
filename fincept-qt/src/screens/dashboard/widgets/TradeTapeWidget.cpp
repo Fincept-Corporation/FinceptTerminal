@@ -176,4 +176,10 @@ void TradeTapeWidget::apply_styles() {
                  ui::colors::TEXT_TERTIARY()));
 }
 
+void TradeTapeWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("TRADES"));
+    render(); // re-renders header + side labels in the new language
+}
+
 } // namespace fincept::screens::widgets

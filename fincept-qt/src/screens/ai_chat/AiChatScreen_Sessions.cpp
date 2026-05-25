@@ -73,7 +73,7 @@ static QString generate_session_title() {
 static QString display_session_title(const ChatSession& s) {
     if (!s.title.trimmed().isEmpty() && s.title.trimmed().toLower() != "chat")
         return s.title;
-    return QString("Session %1").arg(s.id.left(4).toUpper());
+    return QObject::tr("Session %1").arg(s.id.left(4).toUpper());
 }
 
 static QString display_session_meta(const ChatSession& s) {
@@ -82,7 +82,8 @@ static QString display_session_meta(const ChatSession& s) {
         dt = QDateTime::fromString(s.updated_at, "yyyy-MM-dd HH:mm:ss");
     const QString stamp = dt.isValid() ? dt.toString("MMM d · hh:mm") : "";
     return s.message_count > 0
-               ? QString("%1 msg%2%3").arg(s.message_count).arg(stamp.isEmpty() ? "" : "  ·  ").arg(stamp)
+               ? QObject::tr("%n msg", "", s.message_count) +
+                     (stamp.isEmpty() ? QString() : QStringLiteral("  ·  ") + stamp)
                : stamp;
 }
 
@@ -117,7 +118,8 @@ void AiChatScreen::apply_sidebar_collapsed(bool collapsed, bool animate) {
 
     if (sidebar_toggle_btn_) {
         sidebar_toggle_btn_->setText(collapsed ? "›" : "‹");
-        sidebar_toggle_btn_->setToolTip(collapsed ? "Expand sidebar  (Ctrl+B)" : "Collapse sidebar  (Ctrl+B)");
+        sidebar_toggle_btn_->setToolTip(collapsed ? tr("Expand sidebar  (Ctrl+B)")
+                                                  : tr("Collapse sidebar  (Ctrl+B)"));
     }
 }
 
@@ -233,7 +235,8 @@ void AiChatScreen::on_rename_session() {
         return;
     bool ok = false;
     const QString name =
-        QInputDialog::getText(this, "Rename Session", "Session name:", QLineEdit::Normal, active_session_title_, &ok);
+        QInputDialog::getText(this, tr("Rename Session"), tr("Session name:"), QLineEdit::Normal,
+                              active_session_title_, &ok);
     if (!ok || name.trimmed().isEmpty())
         return;
     ChatRepository::instance().update_session_title(active_session_id_, name.trimmed());
@@ -258,8 +261,8 @@ void AiChatScreen::on_delete_session() {
 void AiChatScreen::on_attach_file() {
     // Let user pick from File Manager index or browse disk
     QStringList paths = QFileDialog::getOpenFileNames(
-        this, "Attach File to Message", QString(),
-        "All Files (*);;Text Files (*.txt *.md *.csv *.json);;Notebooks (*.ipynb);;PDF (*.pdf)");
+        this, tr("Attach File to Message"), QString(),
+        tr("All Files (*);;Text Files (*.txt *.md *.csv *.json);;Notebooks (*.ipynb);;PDF (*.pdf)"));
     if (paths.isEmpty())
         return;
 

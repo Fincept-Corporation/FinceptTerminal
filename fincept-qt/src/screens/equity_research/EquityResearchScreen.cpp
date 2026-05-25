@@ -13,6 +13,7 @@
 #include "screens/equity_research/EquitySentimentTab.h"
 #include "screens/equity_research/EquityTalippTab.h"
 #include "screens/equity_research/EquityTechnicalsTab.h"
+#include "services/backtesting/BacktestingService.h"
 #include "services/equity/EquityResearchService.h"
 #include "ui/theme/Theme.h"
 
@@ -147,6 +148,28 @@ QWidget* EquityResearchScreen::build_title_bar() {
         [this]() { return current_symbol(); },
         link_group_);
     hl->addWidget(symbol_label_);
+
+    auto* backtest_btn = new QPushButton(tr("BACKTEST"), container);
+    backtest_btn->setCursor(Qt::PointingHandCursor);
+    backtest_btn->setFixedHeight(24);
+    backtest_btn->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                "padding:0 10px; font-size:%3px; font-family:%4; font-weight:700; letter-spacing:0.5px; }"
+                "QPushButton:hover { background:%5; color:%6; }")
+            .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM())
+            .arg(ui::fonts::TINY)
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::colors::AMBER(), ui::colors::BG_BASE()));
+    connect(backtest_btn, &QPushButton::clicked, this, [this]() {
+        if (current_symbol_.isEmpty()) return;
+        QJsonObject config;
+        QJsonArray symbols;
+        symbols.append(current_symbol_);
+        config["symbols"] = symbols;
+        services::backtest::BacktestingService::instance().set_pending_portfolio_config(config);
+        EventBus::instance().publish("nav.switch_screen", {{"screen_id", QString("backtesting")}});
+    });
+    hl->addWidget(backtest_btn);
 
     hl->addStretch();
 
@@ -353,7 +376,9 @@ void EquityResearchScreen::retranslateUi() {
 }
 
 QVariantMap EquityResearchScreen::save_state() const {
-    return {{"symbol", current_symbol_}, {"tab_index", tab_widget_ ? tab_widget_->currentIndex() : 0}};
+    QVariantMap state{{"symbol", current_symbol_}, {"tab_index", tab_widget_ ? tab_widget_->currentIndex() : 0}};
+    if (peers_tab_) state["peers"] = peers_tab_->peers_text();
+    return state;
 }
 
 void EquityResearchScreen::restore_state(const QVariantMap& state) {
@@ -367,6 +392,8 @@ void EquityResearchScreen::restore_state(const QVariantMap& state) {
         if (idx >= 0 && idx < tab_widget_->count())
             tab_widget_->setCurrentIndex(idx);
     }
+    if (peers_tab_ && state.contains("peers"))
+        peers_tab_->set_peers_text(state.value("peers").toString());
 }
 
 } // namespace fincept::screens

@@ -1,6 +1,10 @@
 # .gitignore — Fincept Terminal (Qt6 / C++20)
 # ============================================================
 
+# ── CMake user presets (local paths — never commit) ─────────
+CMakeUserPresets.json
+fincept-qt/CMakeUserPresets.json
+
 # ── CMake build output ───────────────────────────────────────
 fincept-qt/build/
 fincept-qt/build-*/

@@ -242,4 +242,10 @@ void OrderBookMiniWidget::apply_styles() {
              ui::colors::TEXT_TERTIARY()));
 }
 
+void OrderBookMiniWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("WORKING ORDERS"));
+    hub_resubscribe(); // re-renders header hint + table in the new language
+}
+
 } // namespace fincept::screens::widgets

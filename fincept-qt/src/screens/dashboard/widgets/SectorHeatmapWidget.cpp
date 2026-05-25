@@ -152,4 +152,10 @@ void SectorHeatmapWidget::populate(const QVector<services::QuoteData>& quotes) {
     }
 }
 
+void SectorHeatmapWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("SECTOR HEATMAP"));
+    rebuild_from_cache(); // re-renders sector cell labels in the new language
+}
+
 } // namespace fincept::screens::widgets

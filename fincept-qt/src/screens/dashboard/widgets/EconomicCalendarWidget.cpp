@@ -368,4 +368,11 @@ void EconomicCalendarWidget::populate(const QJsonArray& events) {
     list_layout_->addStretch();
 }
 
+void EconomicCalendarWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("ECONOMIC CALENDAR"));
+    if (!last_events_.isEmpty())
+        populate(last_events_); // re-renders header + row labels in the new language
+}
+
 } // namespace fincept::screens::widgets

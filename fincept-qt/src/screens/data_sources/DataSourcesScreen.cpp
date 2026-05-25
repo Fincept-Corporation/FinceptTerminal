@@ -135,16 +135,23 @@ void DataSourcesScreen::update_clock() {
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap DataSourcesScreen::save_state() const {
-    return {
+    QVariantMap state{
         {"connector_id", selected_connector_id_},
         {"category", static_cast<int>(active_category_)},
     };
+    if (search_edit_) state["search"] = search_edit_->text();
+    if (conn_search_edit_) state["conn_search"] = conn_search_edit_->text();
+    return state;
 }
 
 void DataSourcesScreen::restore_state(const QVariantMap& state) {
     const QString id = state.value("connector_id").toString();
     if (!id.isEmpty())
         select_connector_by_id(id);
+    if (search_edit_ && state.contains("search"))
+        search_edit_->setText(state.value("search").toString());
+    if (conn_search_edit_ && state.contains("conn_search"))
+        conn_search_edit_->setText(state.value("conn_search").toString());
 }
 
 } // namespace fincept::screens::datasources

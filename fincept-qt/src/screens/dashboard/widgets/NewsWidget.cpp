@@ -156,4 +156,11 @@ void NewsWidget::populate(const QVector<services::NewsArticle>& articles) {
     }
 }
 
+void NewsWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("MARKET NEWS"));
+    if (!last_articles_.isEmpty())
+        populate(last_articles_); // re-render "No news available." / time strings if any
+}
+
 } // namespace fincept::screens::widgets

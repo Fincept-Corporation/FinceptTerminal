@@ -122,15 +122,19 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
 
     // Right panel - config
     QLineEdit* symbols_edit_ = nullptr;
+    QComboBox* interval_combo_ = nullptr;
     QDoubleSpinBox* capital_spin_ = nullptr;
     QDateEdit* start_date_ = nullptr;
     QDateEdit* end_date_ = nullptr;
     QDoubleSpinBox* commission_spin_ = nullptr;
     QDoubleSpinBox* slippage_spin_ = nullptr;
+    QDoubleSpinBox* risk_free_spin_ = nullptr;
     QDoubleSpinBox* leverage_spin_ = nullptr;
     QDoubleSpinBox* stop_loss_spin_ = nullptr;
     QDoubleSpinBox* take_profit_spin_ = nullptr;
     QComboBox* pos_sizing_combo_ = nullptr;
+    QDoubleSpinBox* pos_sizing_value_spin_ = nullptr;
+    QLabel* pos_sizing_value_label_ = nullptr;
     QCheckBox* allow_short_check_ = nullptr;
     QLineEdit* benchmark_edit_ = nullptr;
 
@@ -263,6 +267,7 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
 
     // Center - results
     QTabWidget* result_tabs_ = nullptr;
+    QWidget* equity_chart_tab_ = nullptr;
     QVBoxLayout* summary_layout_ = nullptr;
     QWidget* summary_container_ = nullptr;
     QTableWidget* metrics_table_ = nullptr;
@@ -270,6 +275,20 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
     QTextEdit* raw_json_edit_ = nullptr;
     QLabel* status_label_ = nullptr;
 
+    // Custom combo strategy builder (up to 3 indicators)
+    struct ComboIndicatorRow {
+        QComboBox* type = nullptr;
+        QComboBox* cond = nullptr;
+        QDoubleSpinBox* val = nullptr;
+        QSpinBox* period = nullptr;
+    };
+    ComboIndicatorRow combo_rows_[3] = {};
+    QComboBox* combo_logic_ = nullptr;
+    QCheckBox* combo_ind3_enabled_ = nullptr;
+
+    void apply_portfolio_config(const QJsonObject& config);
+
+    QJsonArray pending_weights_;
     bool first_show_ = true;
     bool is_running_ = false;
 

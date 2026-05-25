@@ -236,7 +236,9 @@ const portfolio::HoldingWithQuote* PortfolioScreen::find_holding(const QString& 
 
 
 QVariantMap PortfolioScreen::save_state() const {
-    return {{"portfolio_id", selected_id_}, {"symbol", selected_symbol_}};
+    QVariantMap state{{"portfolio_id", selected_id_}, {"symbol", selected_symbol_}};
+    if (positions_filter_edit_) state["filter"] = positions_filter_edit_->text();
+    return state;
 }
 
 void PortfolioScreen::restore_state(const QVariantMap& state) {
@@ -246,6 +248,8 @@ void PortfolioScreen::restore_state(const QVariantMap& state) {
         on_portfolio_selected(id);
     if (!sym.isEmpty())
         selected_symbol_ = sym;
+    if (positions_filter_edit_ && state.contains("filter"))
+        positions_filter_edit_->setText(state.value("filter").toString());
 }
 
 // ── IGroupLinked ─────────────────────────────────────────────────────────────

@@ -143,4 +143,12 @@ void TopMoversWidget::show_tab(bool gainers) {
     }
 }
 
+void TopMoversWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("TOP MOVERS"));
+    if (gainers_btn_) gainers_btn_->setText(tr("GAINERS"));
+    if (losers_btn_)  losers_btn_->setText(tr("LOSERS"));
+    rebuild_from_cache(); // re-renders table headers in the new language
+}
+
 } // namespace fincept::screens::widgets

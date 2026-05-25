@@ -129,4 +129,18 @@ void FredPanel::on_result(const QString& request_id, const services::EconomicsRe
     }
 }
 
+QVariantMap FredPanel::save_panel_state() const {
+    QVariantMap s;
+    if (series_input_) s["series"] = series_input_->text();
+    if (preset_combo_) s["preset"] = preset_combo_->currentIndex();
+    return s;
+}
+
+void FredPanel::restore_panel_state(const QVariantMap& s) {
+    if (series_input_ && s.contains("series"))
+        series_input_->setText(s["series"].toString());
+    if (preset_combo_ && s.contains("preset"))
+        preset_combo_->setCurrentIndex(s["preset"].toInt());
+}
+
 } // namespace fincept::screens

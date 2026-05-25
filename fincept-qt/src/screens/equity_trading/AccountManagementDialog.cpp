@@ -6,6 +6,8 @@
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/auth/RedirectServer.h"
+#include "trading/brokers/fyers/FyersBroker.h"
+#include "trading/brokers/metaapi/MetaApiBroker.h"
 #include "trading/brokers/zerodha/ZerodhaBroker.h"
 #include "ui/theme/Theme.h"
 
@@ -182,6 +184,14 @@ void AccountManagementDialog::setup_ui() {
     zerodha_page_ = new QWidget(this);
     right_stack_->addWidget(zerodha_page_);
 
+    // Fyers-specific page (populated on-demand by build_fyers_form())
+    fyers_page_ = new QWidget(this);
+    right_stack_->addWidget(fyers_page_);
+
+    // MT4 (MetaAPI)-specific page (populated on-demand by build_mt4_form())
+    mt4_page_ = new QWidget(this);
+    right_stack_->addWidget(mt4_page_);
+
     right_stack_->setCurrentWidget(empty_page_);
 
     root->addWidget(right_stack_, 2);
@@ -251,6 +261,44 @@ void AccountManagementDialog::on_account_selected(int row) {
         return;
     }
 
+    if (account.broker_id == QStringLiteral("fyers")) {
+        build_fyers_form();
+        const QString state_str = connection_state_str(account.state);
+        if (f_title_)
+            f_title_->setText(QString("%1 — %2 | %3").arg(account.display_name, prof.region, prof.currency));
+        if (f_status_) {
+            f_status_->setText(QString("Status: %1").arg(state_str));
+            if (account.state == ConnectionState::Connected)
+                f_status_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
+            else if (account.state == ConnectionState::Error || account.state == ConnectionState::TokenExpired)
+                f_status_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
+            else
+                f_status_->setStyleSheet(QString("color: %1;").arg(colors::TEXT_SECONDARY()));
+        }
+        load_saved_credentials(selected_account_id_);
+        right_stack_->setCurrentWidget(fyers_page_);
+        return;
+    }
+
+    if (account.broker_id == QStringLiteral("metatrader4")) {
+        build_mt4_form();
+        const QString state_str = connection_state_str(account.state);
+        if (mt4_title_)
+            mt4_title_->setText(QString("%1 — %2 | %3").arg(account.display_name, prof.region, prof.currency));
+        if (mt4_status_) {
+            mt4_status_->setText(QString("Status: %1").arg(state_str));
+            if (account.state == ConnectionState::Connected)
+                mt4_status_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
+            else if (account.state == ConnectionState::Error || account.state == ConnectionState::TokenExpired)
+                mt4_status_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
+            else
+                mt4_status_->setStyleSheet(QString("color: %1;").arg(colors::TEXT_SECONDARY()));
+        }
+        load_saved_credentials(selected_account_id_);
+        right_stack_->setCurrentWidget(mt4_page_);
+        return;
+    }
+
     form_title_->setText(QString("%1 — %2 | %3").arg(account.display_name, prof.region, prof.currency));
 
     // Update status
@@ -308,6 +356,34 @@ void AccountManagementDialog::load_saved_credentials(const QString& account_id) 
         const auto extra = QJsonDocument::fromJson(creds.additional_data.toUtf8()).object();
         z_password_->setText(extra.value("password").toString());
         z_totp_secret_->setText(extra.value("totp_secret").toString());
+        return;
+    }
+
+    // Fyers branch — populate the dedicated form.
+    if (creds.broker_id == QStringLiteral("fyers") && f_client_id_) {
+        f_client_id_->setText(creds.api_key);
+        f_api_secret_->setText(creds.api_secret);
+        return;
+    }
+
+    // MT4 (MetaAPI) branch — populate the dedicated form.
+    if (creds.broker_id == QStringLiteral("metatrader4") && mt4_meta_token_) {
+        mt4_meta_token_->setText(creds.api_key);
+        mt4_login_->setText(creds.user_id);
+        const auto extra = QJsonDocument::fromJson(creds.additional_data.toUtf8()).object();
+        mt4_server_->setText(extra.value("server").toString());
+        const QString region = extra.value("region").toString();
+        if (mt4_region_) {
+            for (int i = 0; i < mt4_region_->count(); ++i) {
+                if (mt4_region_->itemData(i).toString() == region) {
+                    mt4_region_->setCurrentIndex(i);
+                    break;
+                }
+            }
+        }
+        const QString acct_type = extra.value("account_type").toString();
+        if (mt4_account_type_)
+            mt4_account_type_->setCurrentIndex(acct_type == "live" ? 1 : 0);
         return;
     }
 
@@ -921,6 +997,485 @@ void AccountManagementDialog::exchange_and_store_token_async(const QString& api_
             self->z_connect_btn_->setEnabled(true);
             self->z_browser_btn_->setEnabled(true);
             self->z_manual_connect_btn_->setEnabled(true);
+            self->refresh_account_list();
+        }, Qt::QueuedConnection);
+    });
+}
+
+// ── Fyers-specific form ─────────────────────────────────────────────────────
+
+void AccountManagementDialog::build_fyers_form() {
+    if (f_client_id_ != nullptr)
+        return;
+
+    auto* outer = new QVBoxLayout(fyers_page_);
+    outer->setContentsMargins(0, 0, 0, 0);
+
+    auto* scroll = new QScrollArea(fyers_page_);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    outer->addWidget(scroll);
+
+    auto* container = new QWidget;
+    scroll->setWidget(container);
+    auto* v = new QVBoxLayout(container);
+    v->setContentsMargins(8, 8, 8, 8);
+    v->setSpacing(10);
+
+    f_title_ = new QLabel("Fyers");
+    f_title_->setObjectName("titleLabel");
+    v->addWidget(f_title_);
+    f_status_ = new QLabel(" ");
+    f_status_->setObjectName("statusLabel");
+    v->addWidget(f_status_);
+
+    // Collapsible "First-time setup" panel
+    f_setup_toggle_ = new QPushButton(QString::fromUtf8("\xe2\x96\xb8") + QStringLiteral(" First-time setup (3 steps)"));
+    f_setup_toggle_->setStyleSheet(QString("text-align:left;background:transparent;color:%1;"
+                                           "border:none;padding:4px 0;font-weight:700;")
+                                       .arg(colors::AMBER()));
+    v->addWidget(f_setup_toggle_);
+
+    f_setup_panel_ = new QWidget;
+    auto* setup = new QVBoxLayout(f_setup_panel_);
+    setup->setContentsMargins(12, 4, 12, 12);
+    setup->setSpacing(4);
+    auto add_step = [&](const QString& text) {
+        auto* l = new QLabel(text);
+        l->setWordWrap(true);
+        l->setTextFormat(Qt::RichText);
+        l->setOpenExternalLinks(true);
+        l->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY()));
+        setup->addWidget(l);
+    };
+    add_step("1. Create an API app at <a href='https://myapi.fyers.in/dashboard/'>myapi.fyers.in/dashboard</a>.");
+    add_step("2. Set <b>Redirect URL</b> to <b>http://127.0.0.1:5011/</b> in app settings.");
+    add_step("3. Note your <b>Client ID</b> (e.g. ABCXYZ-100) and <b>Secret Key</b>.");
+    f_setup_panel_->setVisible(false);
+    v->addWidget(f_setup_panel_);
+
+    QPointer<AccountManagementDialog> self = this;
+    connect(f_setup_toggle_, &QPushButton::clicked, this, [self]() {
+        if (!self) return;
+        const bool vis = !self->f_setup_panel_->isVisible();
+        self->f_setup_panel_->setVisible(vis);
+        self->f_setup_toggle_->setText((vis ? QString::fromUtf8("\xe2\x96\xbe") : QString::fromUtf8("\xe2\x96\xb8"))
+                                       + QStringLiteral(" First-time setup (3 steps)"));
+    });
+
+    auto add_labeled_field = [&](QBoxLayout* lay, const QString& label, QLineEdit*& out,
+                                 const QString& placeholder, const QString& hint, bool password) {
+        auto* hdr = make_field_label(label);
+        lay->addWidget(hdr);
+        out = make_field(placeholder, password);
+        lay->addWidget(out);
+        if (!hint.isEmpty()) {
+            auto* h = new QLabel(hint);
+            h->setStyleSheet(QString("color:%1;font-size:10px;margin-bottom:4px;")
+                                 .arg(colors::TEXT_SECONDARY()));
+            lay->addWidget(h);
+        }
+    };
+
+    add_labeled_field(v, "CLIENT ID", f_client_id_, "e.g. ABCXYZ-100",
+                      "from myapi.fyers.in -> My Apps", false);
+    add_labeled_field(v, "SECRET KEY", f_api_secret_, "Enter Secret Key...",
+                      "shown once during app creation - regenerate if lost", true);
+
+    // Browser login
+    f_browser_btn_ = new QPushButton("Open Fyers login in browser");
+    f_browser_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; padding: 10px; font-weight: 700; }")
+                                       .arg(colors::AMBER(), colors::BG_BASE()));
+    v->addWidget(f_browser_btn_);
+
+    // Manual paste fallback
+    f_manual_toggle_ = new QPushButton("Redirect didn't work? Paste auth_code manually");
+    f_manual_toggle_->setStyleSheet(QString("text-align:left;background:transparent;color:%1;"
+                                            "border:none;padding:4px 0;font-size:11px;")
+                                        .arg(colors::TEXT_SECONDARY()));
+    v->addWidget(f_manual_toggle_);
+
+    f_manual_panel_ = new QWidget;
+    auto* mv = new QVBoxLayout(f_manual_panel_);
+    mv->setContentsMargins(0, 0, 0, 0);
+    mv->setSpacing(4);
+    f_manual_token_ = make_field("Paste auth_code or full redirect URL here", false);
+    mv->addWidget(f_manual_token_);
+    f_manual_connect_btn_ = new QPushButton("Connect with pasted auth code");
+    f_manual_connect_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
+                                              .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
+    mv->addWidget(f_manual_connect_btn_);
+    f_manual_panel_->setVisible(false);
+    v->addWidget(f_manual_panel_);
+
+    connect(f_manual_toggle_, &QPushButton::clicked, this, [self]() {
+        if (!self) return;
+        self->f_manual_panel_->setVisible(!self->f_manual_panel_->isVisible());
+    });
+
+    v->addStretch();
+
+    // Bottom action row
+    auto* btn_row = new QHBoxLayout;
+    f_rename_btn_ = new QPushButton("RENAME");
+    f_rename_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
+                                      .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
+    btn_row->addWidget(f_rename_btn_);
+    btn_row->addStretch();
+    v->addLayout(btn_row);
+
+    // Wire signals
+    connect(f_browser_btn_, &QPushButton::clicked, this, &AccountManagementDialog::on_connect_fyers_browser);
+    connect(f_manual_connect_btn_, &QPushButton::clicked, this, &AccountManagementDialog::on_connect_fyers_manual_paste);
+    connect(f_rename_btn_, &QPushButton::clicked, this, &AccountManagementDialog::on_rename_account);
+}
+
+void AccountManagementDialog::on_connect_fyers_browser() {
+    if (selected_account_id_.isEmpty())
+        return;
+
+    const QString client_id = f_client_id_->text().trimmed();
+    const QString api_secret = f_api_secret_->text();
+    if (client_id.isEmpty() || api_secret.isEmpty()) {
+        f_status_->setText("Enter Client ID and Secret Key first");
+        f_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
+        return;
+    }
+
+    // Persist credentials before auth so they survive dialog close.
+    BrokerCredentials creds;
+    creds.broker_id = "fyers";
+    creds.api_key = client_id;
+    creds.api_secret = api_secret;
+    AccountManager::instance().save_credentials(selected_account_id_, creds);
+
+    // Tear down any prior server
+    if (f_redirect_server_) {
+        f_redirect_server_->deleteLater();
+        f_redirect_server_ = nullptr;
+    }
+    f_redirect_server_ = new trading::auth::RedirectServer(this);
+
+    constexpr quint16 kFyersPort = 5011;
+    if (!f_redirect_server_->start(kFyersPort, 120) || f_redirect_server_->port() != kFyersPort) {
+        f_status_->setText("Port 5011 busy — use manual paste fallback below");
+        f_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
+        f_redirect_server_->stop();
+        f_redirect_server_->deleteLater();
+        f_redirect_server_ = nullptr;
+        f_manual_panel_->setVisible(true);
+        return;
+    }
+
+    QPointer<AccountManagementDialog> self = this;
+    connect(f_redirect_server_, &trading::auth::RedirectServer::request_token_received, this,
+            [self, client_id, api_secret](const QString& auth_code) {
+                if (!self) return;
+                self->f_status_->setText("Exchanging auth code...");
+                self->fyers_exchange_and_store_token_async(client_id, api_secret, auth_code);
+                if (self->f_redirect_server_) {
+                    self->f_redirect_server_->deleteLater();
+                    self->f_redirect_server_ = nullptr;
+                }
+            });
+    connect(f_redirect_server_, &trading::auth::RedirectServer::timeout, this, [self]() {
+        if (!self) return;
+        self->f_status_->setText("Browser login timed out — try again or paste manually");
+        self->f_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
+        if (self->f_redirect_server_) {
+            self->f_redirect_server_->deleteLater();
+            self->f_redirect_server_ = nullptr;
+        }
+    });
+
+    const QString redirect_uri = QStringLiteral("http://127.0.0.1:%1/").arg(kFyersPort);
+    f_status_->setText(QString("Waiting for browser login on port %1 (120s)...").arg(kFyersPort));
+    f_status_->setStyleSheet(QString("color:%1;").arg(colors::AMBER()));
+    QDesktopServices::openUrl(QUrl(trading::FyersBroker::fyers_login_url(client_id, redirect_uri)));
+}
+
+void AccountManagementDialog::on_connect_fyers_manual_paste() {
+    if (selected_account_id_.isEmpty())
+        return;
+    const QString client_id = f_client_id_->text().trimmed();
+    const QString api_secret = f_api_secret_->text();
+    QString token = f_manual_token_->text().trimmed();
+    if (client_id.isEmpty() || api_secret.isEmpty() || token.isEmpty()) {
+        f_status_->setText("Enter Client ID, Secret Key, and paste auth code");
+        f_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
+        return;
+    }
+    LOG_INFO("Fyers", QString("manual paste input (%1 chars): %2").arg(token.length()).arg(token));
+    if (token.contains(QStringLiteral("auth_code"), Qt::CaseInsensitive)) {
+        const QUrl url = token.startsWith(QStringLiteral("http"), Qt::CaseInsensitive)
+                             ? QUrl(token)
+                             : QUrl(QStringLiteral("http://x/?") + token);
+        const QString extracted = QUrlQuery(url).queryItemValue(QStringLiteral("auth_code"));
+        if (!extracted.isEmpty())
+            token = extracted;
+    }
+    LOG_INFO("Fyers", QString("manual paste extracted token: %1").arg(token.left(40) + "..."));
+
+    BrokerCredentials creds;
+    creds.broker_id = "fyers";
+    creds.api_key = client_id;
+    creds.api_secret = api_secret;
+    AccountManager::instance().save_credentials(selected_account_id_, creds);
+
+    f_status_->setText("Exchanging auth code...");
+    f_status_->setStyleSheet(QString("color:%1;").arg(colors::AMBER()));
+    fyers_exchange_and_store_token_async(client_id, api_secret, token);
+}
+
+void AccountManagementDialog::fyers_exchange_and_store_token_async(const QString& client_id,
+                                                                    const QString& api_secret,
+                                                                    const QString& auth_code) {
+    f_browser_btn_->setEnabled(false);
+    f_manual_connect_btn_->setEnabled(false);
+
+    const QString acct = selected_account_id_;
+    QPointer<AccountManagementDialog> self = this;
+
+    (void)QtConcurrent::run([self, acct, client_id, api_secret, auth_code]() {
+        trading::FyersBroker broker;
+        auto result = broker.exchange_token(client_id, api_secret, auth_code);
+
+        QMetaObject::invokeMethod(qApp, [self, acct, client_id, api_secret, result]() {
+            if (!self) return;
+            auto& am = AccountManager::instance();
+
+            if (result.success) {
+                auto creds = am.load_credentials(acct);
+                creds.access_token = result.access_token;
+                creds.refresh_token = result.refresh_token;
+                if (!result.user_id.isEmpty())
+                    creds.user_id = result.user_id;
+                am.save_credentials(acct, creds);
+                am.set_connection_state(acct, ConnectionState::Connected, {});
+                self->f_status_->setText(QString("Connected as %1").arg(
+                    result.user_id.isEmpty() ? client_id.left(8) + "..." : result.user_id));
+                self->f_status_->setStyleSheet(QString("color:%1;").arg(colors::POSITIVE()));
+                emit self->credentials_saved(acct);
+            } else {
+                am.set_connection_state(acct, ConnectionState::Error, result.error);
+                self->f_status_->setText(result.error);
+                self->f_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
+            }
+            self->f_browser_btn_->setEnabled(true);
+            self->f_manual_connect_btn_->setEnabled(true);
+            self->refresh_account_list();
+        }, Qt::QueuedConnection);
+    });
+}
+
+// ── MT4 (MetaAPI)-specific form ──────────────────────────────────────────────
+
+void AccountManagementDialog::build_mt4_form() {
+    if (mt4_meta_token_ != nullptr)
+        return;
+
+    auto* outer = new QVBoxLayout(mt4_page_);
+    outer->setContentsMargins(0, 0, 0, 0);
+
+    auto* scroll = new QScrollArea(mt4_page_);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    outer->addWidget(scroll);
+
+    auto* container = new QWidget;
+    scroll->setWidget(container);
+    auto* v = new QVBoxLayout(container);
+    v->setContentsMargins(8, 8, 8, 8);
+    v->setSpacing(10);
+
+    mt4_title_ = new QLabel("MetaTrader 4");
+    mt4_title_->setObjectName("titleLabel");
+    v->addWidget(mt4_title_);
+    mt4_status_ = new QLabel(" ");
+    mt4_status_->setObjectName("statusLabel");
+    v->addWidget(mt4_status_);
+
+    // Collapsible setup instructions
+    mt4_setup_toggle_ = new QPushButton(
+        QString::fromUtf8("\xe2\x96\xb8") + QStringLiteral(" First-time setup (3 steps)"));
+    mt4_setup_toggle_->setStyleSheet(QString("text-align:left;background:transparent;color:%1;"
+                                             "border:none;padding:4px 0;font-weight:700;")
+                                         .arg(colors::AMBER()));
+    v->addWidget(mt4_setup_toggle_);
+
+    mt4_setup_panel_ = new QWidget;
+    auto* setup = new QVBoxLayout(mt4_setup_panel_);
+    setup->setContentsMargins(12, 4, 12, 12);
+    setup->setSpacing(4);
+    auto add_step = [&](const QString& text) {
+        auto* l = new QLabel(text);
+        l->setWordWrap(true);
+        l->setTextFormat(Qt::RichText);
+        l->setOpenExternalLinks(true);
+        l->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY()));
+        setup->addWidget(l);
+    };
+    add_step("1. Create a free account at <a href='https://app.metaapi.cloud'>app.metaapi.cloud</a>.");
+    add_step("2. Generate an auth token from the API Access section.");
+    add_step("3. Enter your MT4 broker account credentials (login, password, server name).");
+    mt4_setup_panel_->setVisible(false);
+    v->addWidget(mt4_setup_panel_);
+
+    QPointer<AccountManagementDialog> self = this;
+    connect(mt4_setup_toggle_, &QPushButton::clicked, this, [self]() {
+        if (!self) return;
+        const bool vis = !self->mt4_setup_panel_->isVisible();
+        self->mt4_setup_panel_->setVisible(vis);
+        self->mt4_setup_toggle_->setText(
+            (vis ? QString::fromUtf8("\xe2\x96\xbe") : QString::fromUtf8("\xe2\x96\xb8")) +
+            QStringLiteral(" First-time setup (3 steps)"));
+    });
+
+    auto add_labeled_field = [&](QBoxLayout* lay, const QString& label, QLineEdit*& out,
+                                 const QString& placeholder, const QString& hint, bool password) {
+        auto* hdr = make_field_label(label);
+        lay->addWidget(hdr);
+        out = make_field(placeholder, password);
+        lay->addWidget(out);
+        if (!hint.isEmpty()) {
+            auto* h = new QLabel(hint);
+            h->setStyleSheet(QString("color:%1;font-size:10px;margin-bottom:4px;")
+                                 .arg(colors::TEXT_SECONDARY()));
+            lay->addWidget(h);
+        }
+    };
+
+    // MetaAPI Token + "Get Token" link
+    add_labeled_field(v, "METAAPI TOKEN", mt4_meta_token_, "Enter MetaAPI auth token...", "", true);
+    auto* token_link = new QLabel(
+        QStringLiteral("<a href='https://app.metaapi.cloud/api-access/generate-token' "
+                       "style='color:%1;font-size:10px;'>Get Token \xe2\x86\x92</a>")
+            .arg(colors::AMBER()));
+    token_link->setTextFormat(Qt::RichText);
+    token_link->setOpenExternalLinks(true);
+    v->addWidget(token_link);
+
+    // MT4 credentials
+    add_labeled_field(v, "MT4 LOGIN", mt4_login_, "Account number e.g. 12345678",
+                      "your MT4 broker account number", false);
+    add_labeled_field(v, "MT4 PASSWORD", mt4_password_, "Trading password",
+                      "trading password (not investor password)", true);
+    add_labeled_field(v, "SERVER NAME", mt4_server_, "e.g. ICMarkets-Demo03",
+                      "exact server name from your MT4 broker", false);
+
+    // Region combo
+    v->addWidget(make_field_label("REGION"));
+    mt4_region_ = new QComboBox;
+    mt4_region_->addItem("New York", "new-york-server");
+    mt4_region_->addItem("London", "london-server");
+    mt4_region_->addItem("Singapore", "singapore-server");
+    v->addWidget(mt4_region_);
+
+    // Account type combo
+    v->addWidget(make_field_label("ACCOUNT TYPE"));
+    mt4_account_type_ = new QComboBox;
+    mt4_account_type_->addItem("Demo", "demo");
+    mt4_account_type_->addItem("Live", "live");
+    v->addWidget(mt4_account_type_);
+
+    // Connect button
+    mt4_connect_btn_ = new QPushButton("CONNECT MT4 ACCOUNT");
+    mt4_connect_btn_->setStyleSheet(
+        QString("QPushButton { background: %1; color: %2; padding: 10px; font-weight: 700; }")
+            .arg(colors::AMBER(), colors::BG_BASE()));
+    v->addWidget(mt4_connect_btn_);
+
+    v->addStretch();
+
+    // Bottom action row
+    auto* btn_row = new QHBoxLayout;
+    mt4_rename_btn_ = new QPushButton("RENAME");
+    mt4_rename_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
+                                       .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
+    btn_row->addWidget(mt4_rename_btn_);
+    btn_row->addStretch();
+    v->addLayout(btn_row);
+
+    // Wire signals
+    connect(mt4_connect_btn_, &QPushButton::clicked, this, &AccountManagementDialog::on_connect_mt4);
+    connect(mt4_rename_btn_, &QPushButton::clicked, this, &AccountManagementDialog::on_rename_account);
+}
+
+void AccountManagementDialog::on_connect_mt4() {
+    if (selected_account_id_.isEmpty())
+        return;
+
+    const QString meta_token = mt4_meta_token_->text().trimmed();
+    const QString mt4_login = mt4_login_->text().trimmed();
+    const QString mt4_password = mt4_password_->text();
+    const QString mt4_server = mt4_server_->text().trimmed();
+    const QString region = mt4_region_->currentData().toString();
+    const QString account_type = mt4_account_type_->currentData().toString();
+
+    if (meta_token.isEmpty() || mt4_login.isEmpty() || mt4_password.isEmpty() || mt4_server.isEmpty()) {
+        mt4_status_->setText("All fields are required.");
+        mt4_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
+        return;
+    }
+
+    // Persist credentials before provisioning so they survive dialog close
+    BrokerCredentials creds;
+    creds.broker_id = "metatrader4";
+    creds.api_key = meta_token;
+    creds.user_id = mt4_login;
+    creds.additional_data = QString::fromUtf8(QJsonDocument(QJsonObject{
+        {"region", region},
+        {"server", mt4_server},
+        {"platform", "mt4"},
+        {"account_type", account_type},
+    }).toJson(QJsonDocument::Compact));
+    AccountManager::instance().save_credentials(selected_account_id_, creds);
+
+    mt4_provision_async(meta_token, mt4_login, mt4_password, mt4_server, region);
+}
+
+void AccountManagementDialog::mt4_provision_async(const QString& meta_token, const QString& mt4_login,
+                                                   const QString& mt4_password, const QString& mt4_server,
+                                                   const QString& region) {
+    mt4_connect_btn_->setEnabled(false);
+    mt4_status_->setText("Creating MT4 bridge...");
+    mt4_status_->setStyleSheet(QString("color:%1;").arg(colors::AMBER()));
+
+    const QString acct = selected_account_id_;
+    QPointer<AccountManagementDialog> self = this;
+
+    const QString auth_code_json = QString::fromUtf8(QJsonDocument(QJsonObject{
+        {"login", mt4_login},
+        {"password", mt4_password},
+        {"server", mt4_server},
+        {"region", region},
+    }).toJson(QJsonDocument::Compact));
+
+    (void)QtConcurrent::run([self, acct, meta_token, auth_code_json, region]() {
+        trading::MetaApiBroker broker;
+        auto result = broker.exchange_token(meta_token, QString(), auth_code_json);
+
+        QMetaObject::invokeMethod(qApp, [self, acct, meta_token, result, region]() {
+            if (!self) return;
+            auto& am = AccountManager::instance();
+
+            if (result.success) {
+                auto creds = am.load_credentials(acct);
+                creds.access_token = result.access_token;
+                creds.user_id = result.user_id;
+                if (!result.additional_data.isEmpty())
+                    creds.additional_data = result.additional_data;
+                am.save_credentials(acct, creds);
+                am.set_connection_state(acct, ConnectionState::Connected);
+                self->mt4_status_->setText("Connected");
+                self->mt4_status_->setStyleSheet(QString("color:%1;").arg(colors::POSITIVE()));
+                emit self->credentials_saved(acct);
+            } else {
+                am.set_connection_state(acct, ConnectionState::Error, result.error);
+                self->mt4_status_->setText(result.error);
+                self->mt4_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
+            }
+            self->mt4_connect_btn_->setEnabled(true);
             self->refresh_account_list();
         }, Qt::QueuedConnection);
     });

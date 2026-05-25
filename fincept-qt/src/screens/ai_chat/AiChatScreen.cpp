@@ -201,6 +201,38 @@ void AiChatScreen::resizeEvent(QResizeEvent* e) {
     QWidget::resizeEvent(e);
 }
 
+void AiChatScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void AiChatScreen::retranslateUi() {
+    // Sidebar
+    if (new_btn_)            new_btn_->setToolTip(tr("New Chat  (Ctrl+N)"));
+    if (search_edit_)        search_edit_->setPlaceholderText(tr("Search sessions..."));
+    if (rename_btn_)         rename_btn_->setText(tr("Rename"));
+    if (delete_btn_)         delete_btn_->setText(tr("Delete"));
+    if (provider_lbl_)       provider_lbl_->setToolTip(tr("Active LLM Provider"));
+    if (model_lbl_)          model_lbl_->setToolTip(tr("Active Model — change in Settings > LLM Configuration"));
+    // Sidebar toggle tooltip depends on the collapse state — re-derive.
+    if (sidebar_toggle_btn_)
+        sidebar_toggle_btn_->setToolTip(sidebar_collapsed_ ? tr("Expand sidebar  (Ctrl+B)")
+                                                            : tr("Collapse sidebar  (Ctrl+B)"));
+    // Header
+    if (hdr_model_lbl_)      hdr_model_lbl_->setToolTip(tr("Active model — change in Settings > LLM Configuration"));
+    // Input area
+    if (input_box_)          input_box_->setPlaceholderText(tr("Message Fincept AI..."));
+    if (attach_btn_)         attach_btn_->setToolTip(tr("Attach a file to this message"));
+    // Typing label — only refresh while visible (timer will overwrite shortly anyway)
+    if (typing_dots_lbl_ && typing_indicator_ && typing_indicator_->isVisible())
+        typing_dots_lbl_->setText(tr("AI is thinking"));
+    // Re-run the helpers that compose live state strings so their tr() calls
+    // pick up the new language for the current state.
+    set_input_enabled(send_btn_ ? send_btn_->isEnabled() : true);
+    update_stats();
+}
+
 // ── Build UI ──────────────────────────────────────────────────────────────────
 
 bool AiChatScreen::eventFilter(QObject* obj, QEvent* event) {

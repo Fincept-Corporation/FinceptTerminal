@@ -235,4 +235,10 @@ void TodayPnLWidget::apply_styles() {
                 .arg(ui::colors::TEXT_PRIMARY()));
 }
 
+void TodayPnLWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("TODAY P&L"));
+    hub_resubscribe(); // re-renders header hint + breakdown labels in the new language
+}
+
 } // namespace fincept::screens::widgets

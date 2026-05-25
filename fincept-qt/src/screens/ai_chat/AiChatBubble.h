@@ -42,6 +42,7 @@ class AiChatBubble : public QWidget {
 
   protected:
     bool eventFilter(QObject* obj, QEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_send();
@@ -68,6 +69,10 @@ class AiChatBubble : public QWidget {
     QWidget*        msg_container_    = nullptr;
     QVBoxLayout*    msg_layout_       = nullptr;
     QWidget*        welcome_widget_   = nullptr;   // shown when chat is empty
+    QLabel*         welcome_heading_  = nullptr;   // cached for retranslateUi
+    QLabel*         welcome_sub_      = nullptr;
+    QLabel*         hdr_title_lbl_    = nullptr;   // "Quick Chat"
+    QLabel*         hdr_subtitle_lbl_ = nullptr;   // "Not saved · separate from AI Chat tab"
     QPlainTextEdit* input_box_        = nullptr;
     QPushButton*    send_btn_         = nullptr;
     QPushButton*    mic_btn_          = nullptr;
@@ -106,6 +111,7 @@ class AiChatBubble : public QWidget {
 
     // ── Behaviour helpers ────────────────────────────────────────────────────
     void refresh_theme();
+    void retranslateUi();
     void open_panel();
     void close_panel();
     void show_welcome_if_empty();

@@ -1,7 +1,9 @@
 // src/screens/portfolio/views/PortfolioOptimizationView.cpp
 #include "screens/portfolio/views/PortfolioOptimizationView.h"
 
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
+#include "services/backtesting/BacktestingService.h"
 #include "services/portfolio/PortfolioAnalyticsService.h"
 #include "storage/cache/CacheManager.h"
 #include "ui/theme/Theme.h"
@@ -11,6 +13,7 @@ using fincept::services::PortfolioAnalyticsService;
 
 #define QT_CHARTS_USE_NAMESPACE
 #include <QChart>
+#include <QDate>
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -275,19 +278,208 @@ QWidget* PortfolioOptimizationView::build_compare_tab() {
 
 QWidget* PortfolioOptimizationView::build_backtest_tab() {
     auto* w = new QWidget(this);
-    auto* layout = new QVBoxLayout(w);
-    layout->setContentsMargins(16, 12, 16, 12);
-    layout->setAlignment(Qt::AlignCenter);
+    auto* outer = new QVBoxLayout(w);
+    outer->setContentsMargins(0, 0, 0, 0);
 
-    backtest_title_ = new QLabel(tr("BACKTEST RESULTS"));
+    backtest_stack_ = new QStackedWidget(w);
+
+    // ── Page 0: Buttons ──
+    auto* buttons_page = new QWidget(backtest_stack_);
+    auto* bl = new QVBoxLayout(buttons_page);
+    bl->setContentsMargins(16, 12, 16, 12);
+    bl->setSpacing(12);
+
+    backtest_title_ = new QLabel(tr("BACKTEST PORTFOLIO"));
     backtest_title_->setStyleSheet(
         QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     backtest_title_->setAlignment(Qt::AlignCenter);
-    layout->addWidget(backtest_title_);
+    bl->addWidget(backtest_title_);
 
-    backtest_body_ = make_placeholder(tr("Run an optimization first, then backtest the optimal weights\n"
-                                         "against historical data to evaluate out-of-sample performance."));
-    layout->addWidget(backtest_body_);
+    backtest_body_ = new QLabel(tr("Run a buy-and-hold backtest on your portfolio to see\n"
+                                   "historical performance, or open the full Backtesting terminal."));
+    backtest_body_->setAlignment(Qt::AlignCenter);
+    backtest_body_->setWordWrap(true);
+    backtest_body_->setStyleSheet(QString("color:%1; font-size:11px; padding:8px 20px;").arg(ui::colors::TEXT_TERTIARY()));
+    bl->addWidget(backtest_body_);
+
+    auto btn_style = QString("QPushButton { background:%1; color:%2; border:1px solid %3; padding:8px 20px;"
+                             "font-size:11px; font-weight:700; font-family:%4; letter-spacing:0.5px; }"
+                             "QPushButton:hover { background:%5; color:%6; }"
+                             "QPushButton:disabled { background:%7; color:%8; border-color:%7; }")
+                         .arg(ui::colors::BG_RAISED(), ui::colors::AMBER(), ui::colors::AMBER_DIM())
+                         .arg(ui::fonts::DATA_FAMILY)
+                         .arg(ui::colors::AMBER(), ui::colors::BG_BASE())
+                         .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_DIM());
+
+    auto run_inline_backtest = [this](const QJsonArray& symbols, const QJsonArray& weights) {
+        if (symbols.isEmpty()) return;
+        backtest_status_label_->setText("RUNNING...");
+        backtest_status_label_->setStyleSheet(
+            QString("color:%1; font-size:11px; font-weight:700; padding:4px;").arg(ui::colors::WARNING()));
+        backtest_metrics_table_->setRowCount(0);
+        backtest_stack_->setCurrentIndex(1);
+
+        QJsonObject args;
+        args["symbols"] = symbols;
+        args["weights"] = weights;
+        args["startDate"] = QDate::currentDate().addYears(-1).toString("yyyy-MM-dd");
+        args["endDate"] = QDate::currentDate().addDays(-1).toString("yyyy-MM-dd");
+        args["initialCapital"] = summary_.total_market_value > 0 ? summary_.total_market_value : 100000.0;
+        QJsonObject strategy;
+        strategy["type"] = "buy_and_hold";
+        strategy["params"] = QJsonObject{};
+        args["strategy"] = strategy;
+
+        auto& svc = fincept::services::backtest::BacktestingService::instance();
+        svc.execute("vectorbt", "backtest", args);
+    };
+
+    backtest_current_btn_ = new QPushButton(tr("BACKTEST CURRENT WEIGHTS"), buttons_page);
+    backtest_current_btn_->setCursor(Qt::PointingHandCursor);
+    backtest_current_btn_->setStyleSheet(btn_style);
+    bl->addWidget(backtest_current_btn_, 0, Qt::AlignCenter);
+
+    connect(backtest_current_btn_, &QPushButton::clicked, this, [this, run_inline_backtest]() {
+        if (summary_.holdings.isEmpty()) return;
+        QJsonArray symbols, weights;
+        for (const auto& h : summary_.holdings) {
+            symbols.append(h.symbol);
+            weights.append(h.weight / 100.0);
+        }
+        run_inline_backtest(symbols, weights);
+    });
+
+    backtest_optimal_btn_ = new QPushButton(tr("BACKTEST OPTIMAL WEIGHTS"), buttons_page);
+    backtest_optimal_btn_->setCursor(Qt::PointingHandCursor);
+    backtest_optimal_btn_->setStyleSheet(btn_style);
+    backtest_optimal_btn_->setEnabled(false);
+    backtest_optimal_btn_->setToolTip(tr("Run optimization first to enable"));
+    bl->addWidget(backtest_optimal_btn_, 0, Qt::AlignCenter);
+
+    connect(backtest_optimal_btn_, &QPushButton::clicked, this, [this, run_inline_backtest]() {
+        if (!result_table_ || result_table_->rowCount() == 0) return;
+        QJsonArray symbols, weights;
+        for (int r = 0; r < result_table_->rowCount(); ++r) {
+            auto* sym_item = result_table_->item(r, 0);
+            auto* wt_item = result_table_->item(r, 2);
+            if (!sym_item || !wt_item) continue;
+            symbols.append(sym_item->text());
+            QString wt_str = wt_item->text();
+            wt_str.remove('%').remove(' ');
+            weights.append(wt_str.toDouble() / 100.0);
+        }
+        run_inline_backtest(symbols, weights);
+    });
+
+    auto* open_terminal_btn = new QPushButton(tr("OPEN FULL BACKTESTING TERMINAL"), buttons_page);
+    open_terminal_btn->setCursor(Qt::PointingHandCursor);
+    open_terminal_btn->setStyleSheet(btn_style);
+    bl->addWidget(open_terminal_btn, 0, Qt::AlignCenter);
+    connect(open_terminal_btn, &QPushButton::clicked, this, [this]() {
+        if (summary_.holdings.isEmpty()) return;
+        QJsonArray symbols, weights;
+        for (const auto& h : summary_.holdings) {
+            symbols.append(h.symbol);
+            weights.append(h.weight / 100.0);
+        }
+        QJsonObject config;
+        config["symbols"] = symbols;
+        config["weights"] = weights;
+        config["initialCapital"] = summary_.total_market_value;
+        fincept::services::backtest::BacktestingService::instance().set_pending_portfolio_config(config);
+        fincept::EventBus::instance().publish("nav.switch_screen", {{"screen_id", QString("backtesting")}});
+    });
+
+    bl->addStretch();
+    backtest_stack_->addWidget(buttons_page);
+
+    // ── Page 1: Inline results ──
+    auto* results_page = new QWidget(backtest_stack_);
+    auto* rl = new QVBoxLayout(results_page);
+    rl->setContentsMargins(16, 12, 16, 12);
+    rl->setSpacing(8);
+
+    backtest_status_label_ = new QLabel(tr("READY"), results_page);
+    backtest_status_label_->setAlignment(Qt::AlignCenter);
+    backtest_status_label_->setStyleSheet(
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+    rl->addWidget(backtest_status_label_);
+
+    backtest_metrics_table_ = new QTableWidget(0, 2, results_page);
+    backtest_metrics_table_->setHorizontalHeaderLabels({"Metric", "Value"});
+    backtest_metrics_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    backtest_metrics_table_->setAlternatingRowColors(true);
+    backtest_metrics_table_->horizontalHeader()->setStretchLastSection(true);
+    backtest_metrics_table_->verticalHeader()->setVisible(false);
+    backtest_metrics_table_->setStyleSheet(
+        QString("QTableWidget { background:%1; color:%2; gridline-color:%3; font-family:%4; font-size:%5px; border:none; }"
+                "QTableWidget::item { padding:3px 8px; }"
+                "QHeaderView::section { background:%6; color:%7; font-weight:700; padding:4px 8px;"
+                "  border:1px solid %3; font-family:%4; font-size:%5px; }"
+                "QTableWidget::item:alternate { background:%8; }")
+            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::fonts::SMALL)
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::ROW_ALT()));
+    rl->addWidget(backtest_metrics_table_, 1);
+
+    auto* back_btn = new QPushButton(tr("BACK"), results_page);
+    back_btn->setCursor(Qt::PointingHandCursor);
+    back_btn->setStyleSheet(btn_style);
+    rl->addWidget(back_btn, 0, Qt::AlignCenter);
+    connect(back_btn, &QPushButton::clicked, this, [this]() {
+        backtest_stack_->setCurrentIndex(0);
+    });
+
+    backtest_stack_->addWidget(results_page);
+    backtest_stack_->setCurrentIndex(0);
+
+    // Connect BacktestingService results for inline display
+    auto& svc = fincept::services::backtest::BacktestingService::instance();
+    connect(&svc, &fincept::services::backtest::BacktestingService::result_ready, this,
+            [this](const QString& /*provider*/, const QString& command, const QJsonObject& data) {
+                if (command != "backtest" || backtest_stack_->currentIndex() != 1)
+                    return;
+                backtest_status_label_->setText("BUY & HOLD BACKTEST RESULTS");
+                backtest_status_label_->setStyleSheet(
+                    QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::POSITIVE()));
+
+                auto perf = data.value("performance").toObject();
+                QStringList keys = {"totalReturn", "annualizedReturn", "sharpeRatio", "sortinoRatio",
+                                    "maxDrawdown", "winRate", "profitFactor", "calmarRatio",
+                                    "volatility", "totalTrades"};
+                backtest_metrics_table_->setRowCount(keys.size());
+                for (int r = 0; r < keys.size(); ++r) {
+                    auto key = keys[r];
+                    auto* name_item = new QTableWidgetItem(key.toUpper());
+                    backtest_metrics_table_->setItem(r, 0, name_item);
+                    auto val = perf.value(key);
+                    QString display;
+                    if (val.isDouble()) {
+                        double v = val.toDouble();
+                        if (key.contains("Return") || key.contains("Drawdown") || key.contains("Rate") || key.contains("Volatility"))
+                            display = QString("%1%").arg(v * 100.0, 0, 'f', 2);
+                        else
+                            display = QString::number(v, 'f', 4);
+                    } else {
+                        display = val.toVariant().toString();
+                    }
+                    auto* val_item = new QTableWidgetItem(display);
+                    val_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                    backtest_metrics_table_->setItem(r, 1, val_item);
+                }
+                backtest_metrics_table_->resizeColumnsToContents();
+            });
+
+    connect(&svc, &fincept::services::backtest::BacktestingService::error_occurred, this,
+            [this](const QString& /*ctx*/, const QString& message) {
+                if (backtest_stack_->currentIndex() != 1) return;
+                backtest_status_label_->setText("ERROR: " + message);
+                backtest_status_label_->setStyleSheet(
+                    QString("color:%1; font-size:11px; font-weight:700; padding:4px;").arg(ui::colors::NEGATIVE()));
+            });
+
+    outer->addWidget(backtest_stack_);
     return w;
 }
 
@@ -500,6 +692,8 @@ void PortfolioOptimizationView::run_optimization() {
                     self->update_frontier(root["frontier"].toArray());
                     self->update_strategies(root["comparison"].toObject());
                     self->update_compare(root["comparison"].toObject());
+                    if (self->backtest_optimal_btn_)
+                        self->backtest_optimal_btn_->setEnabled(true);
                 },
                 Qt::QueuedConnection);
             return;
@@ -584,6 +778,8 @@ void PortfolioOptimizationView::run_optimization() {
                     self->update_frontier(root["frontier"].toArray());
                     self->update_strategies(root["comparison"].toObject());
                     self->update_compare(root["comparison"].toObject());
+                    if (self->backtest_optimal_btn_)
+                        self->backtest_optimal_btn_->setEnabled(true);
 
                     fincept::CacheManager::instance().put(
                         cache_key,

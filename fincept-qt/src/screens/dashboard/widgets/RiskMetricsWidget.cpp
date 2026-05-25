@@ -334,4 +334,10 @@ void RiskMetricsWidget::populate(const QVector<services::QuoteData>& quotes) {
     }
 }
 
+void RiskMetricsWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("RISK METRICS"));
+    rebuild_from_cache(); // re-renders header/regime/section labels in the new language
+}
+
 } // namespace fincept::screens::widgets

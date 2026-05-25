@@ -25,6 +25,8 @@
 #include "screens/portfolio/PortfolioStatsRibbon.h"
 #include "screens/portfolio/PortfolioStatusBar.h"
 #include "screens/portfolio/PortfolioTxnPanel.h"
+#include "core/events/EventBus.h"
+#include "services/backtesting/BacktestingService.h"
 #include "services/file_manager/FileManagerService.h"
 #include "services/portfolio/PortfolioService.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -97,6 +99,21 @@ void PortfolioScreen::build_ui() {
             ffn_view_->set_data(current_summary_, current_summary_.portfolio.currency);
         }
         update_content_state();
+    });
+    connect(command_bar_, &PortfolioCommandBar::backtest_requested, this, [this]() {
+        if (current_summary_.holdings.isEmpty())
+            return;
+        QJsonArray symbols, weights;
+        for (const auto& h : current_summary_.holdings) {
+            symbols.append(h.symbol);
+            weights.append(h.weight / 100.0);
+        }
+        QJsonObject config;
+        config["symbols"] = symbols;
+        config["weights"] = weights;
+        config["initialCapital"] = current_summary_.total_market_value;
+        services::backtest::BacktestingService::instance().set_pending_portfolio_config(config);
+        fincept::EventBus::instance().publish("nav.switch_screen", {{"screen_id", QString("backtesting")}});
     });
 
     // Stats ribbon

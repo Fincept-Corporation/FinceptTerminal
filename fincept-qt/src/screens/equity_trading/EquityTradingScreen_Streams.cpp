@@ -147,9 +147,11 @@ void EquityTradingScreen::on_stream_candles_fetched(const QString& account_id,
 void EquityTradingScreen::on_stream_orderbook_fetched(const QString& account_id,
                                                        const QVector<QPair<double, double>>& bids,
                                                        const QVector<QPair<double, double>>& asks,
-                                                       double spread, double spread_pct) {
+                                                       double spread, double spread_pct,
+                                                       const QVector<int>& bid_orders,
+                                                       const QVector<int>& ask_orders) {
     if (account_id == focused_account_id_)
-        orderbook_->set_data(bids, asks, spread, spread_pct);
+        orderbook_->set_data(bids, asks, spread, spread_pct, bid_orders, ask_orders);
 }
 
 void EquityTradingScreen::on_stream_time_sales_fetched(const QString& account_id,

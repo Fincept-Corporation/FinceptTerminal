@@ -162,10 +162,9 @@ mplfinance>=0.12.0
 
 # Voice recognition (speech-to-text via Google API).
 # sounddevice ships PortAudio inside its wheel for every platform we support
-# (Windows x64, macOS x86_64 + arm64, Linux x86_64 + aarch64), removing the
-# old PyAudio install failure on Apple Silicon machines without Homebrew
-# portaudio. scripts/voice/* implements a thin SpeechRecognition AudioSource
-# shim on top of sd.RawInputStream so the SR API stays unchanged.
+# (Windows x64, macOS x86_64 + arm64, Linux x86_64 + aarch64).
+# scripts/voice/* implements a thin SpeechRecognition AudioSource shim on top
+# of sd.RawInputStream so the SR API stays unchanged.
 SpeechRecognition>=3.10.0
 sounddevice>=0.4.6
 

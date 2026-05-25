@@ -179,4 +179,10 @@ void PerformanceWidget::populate(const QVector<services::QuoteData>& quotes) {
         set_row(7, map["GC=F"]->change_pct);
 }
 
+void PerformanceWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("PERFORMANCE TRACKER"));
+    rebuild_from_cache(); // re-derives metric labels from cached quotes
+}
+
 } // namespace fincept::screens::widgets

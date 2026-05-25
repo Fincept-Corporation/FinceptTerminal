@@ -148,8 +148,9 @@ void WindowFrame::open_command_palette() {
 }
 
 void WindowFrame::schedule_dock_layout_save() {
-    if (dock_layout_save_timer_)
-        dock_layout_save_timer_->start();
+    if (suppress_layout_save_ || !dock_layout_save_timer_)
+        return;
+    dock_layout_save_timer_->start();
 }
 
 } // namespace fincept

@@ -621,4 +621,12 @@ void ForumThreadPanel::rebuild_comments() {
     }
 }
 
+QString ForumThreadPanel::reply_draft() const {
+    return t_reply_input_ ? t_reply_input_->text() : QString();
+}
+
+void ForumThreadPanel::set_reply_draft(const QString& text) {
+    if (t_reply_input_) t_reply_input_->setText(text);
+}
+
 } // namespace fincept::screens

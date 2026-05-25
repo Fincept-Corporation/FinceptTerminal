@@ -34,6 +34,7 @@ class VideoPlayerWidget : public BaseWidget {
 
   protected:
     void on_theme_changed() override;
+    void retranslateUi() override;
 
   private:
     void apply_styles();

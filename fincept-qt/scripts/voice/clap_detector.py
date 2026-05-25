@@ -185,7 +185,7 @@ def main() -> None:
         while not stop_flag.is_set():
             try:
                 # sounddevice returns (cffi_buffer, overflowed); we ignore the
-                # overflow flag — matches PyAudio's exception_on_overflow=False.
+                # overflow flag.
                 data, _overflowed = stream.read(CHUNK_SAMPLES)
                 buf = bytes(data)
             except Exception as ex:

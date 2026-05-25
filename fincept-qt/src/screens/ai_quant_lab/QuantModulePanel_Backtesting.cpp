@@ -8,8 +8,10 @@
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
 
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "services/ai_quant_lab/AIQuantLabService.h"
+#include "services/backtesting/BacktestingService.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
@@ -130,6 +132,27 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
         AIQuantLabService::instance().run_backtest(params);
     });
     vl->addWidget(run);
+
+    auto* open_terminal = make_run_button(tr("OPEN IN BACKTESTING TERMINAL"), w);
+    open_terminal->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                "padding:8px 16px; font-size:11px; font-weight:700; }"
+                "QPushButton:hover { background:%1; color:%3; }")
+            .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
+    connect(open_terminal, &QPushButton::clicked, this, [this]() {
+        auto* instruments_edit = text_inputs_.value("bt_instruments");
+        if (!instruments_edit || instruments_edit->text().trimmed().isEmpty()) return;
+        QJsonArray symbols;
+        for (const auto& s : instruments_edit->text().split(',', Qt::SkipEmptyParts))
+            symbols.append(s.trimmed());
+        QJsonObject config;
+        config["symbols"] = symbols;
+        auto* capital_spin = double_inputs_.value("bt_capital");
+        if (capital_spin) config["initialCapital"] = capital_spin->value();
+        fincept::services::backtest::BacktestingService::instance().set_pending_portfolio_config(config);
+        fincept::EventBus::instance().publish("nav.switch_screen", {{"screen_id", QString("backtesting")}});
+    });
+    vl->addWidget(open_terminal);
 
     auto* rc = new QWidget(w);
     results_layout_ = new QVBoxLayout(rc);

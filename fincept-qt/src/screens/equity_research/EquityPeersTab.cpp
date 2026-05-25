@@ -267,4 +267,12 @@ void EquityPeersTab::retranslateUi() {
         populate_table(cached_peers_);
 }
 
+QString EquityPeersTab::peers_text() const {
+    return peers_edit_ ? peers_edit_->text() : QString();
+}
+
+void EquityPeersTab::set_peers_text(const QString& text) {
+    if (peers_edit_) peers_edit_->setText(text);
+}
+
 } // namespace fincept::screens

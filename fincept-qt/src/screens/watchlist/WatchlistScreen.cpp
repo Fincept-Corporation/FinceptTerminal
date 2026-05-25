@@ -2,6 +2,7 @@
 
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
+#include "services/backtesting/BacktestingService.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
 #include "core/symbol/SymbolDragSource.h"
@@ -307,6 +308,19 @@ QWidget* WatchlistScreen::build_main_panel() {
     connect(export_csv_btn_, &QPushButton::clicked, this, &WatchlistScreen::on_export_csv);
     export_csv_btn_->setEnabled(false);
     tl->addWidget(export_csv_btn_);
+
+    auto* backtest_btn = new QPushButton(tr("BACKTEST"));
+    connect(backtest_btn, &QPushButton::clicked, this, [this]() {
+        if (stocks_.isEmpty()) return;
+        QJsonArray symbols;
+        for (const auto& s : stocks_)
+            symbols.append(s.symbol);
+        QJsonObject config;
+        config["symbols"] = symbols;
+        services::backtest::BacktestingService::instance().set_pending_portfolio_config(config);
+        EventBus::instance().publish("nav.switch_screen", {{"screen_id", QString("backtesting")}});
+    });
+    tl->addWidget(backtest_btn);
 
     lay->addWidget(top_bar_);
 

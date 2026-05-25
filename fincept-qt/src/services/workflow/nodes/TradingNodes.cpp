@@ -12,19 +12,23 @@ void register_trading_nodes(NodeRegistry& registry) {
         .description = "Submit a buy or sell order",
         .icon_text = "T",
         .accent_color = "#16a34a",
-        .version = 1,
+        .version = 2,
         .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
+                {"mode", "Mode", "select", "paper", {"paper", "live"}, "Paper = simulated, Live = real broker"},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, "Broker (live mode only)"},
                 {"symbol", "Symbol", "string", "", {}, "Ticker symbol", true},
+                {"exchange", "Exchange", "select", "NSE", {"NSE", "BSE", "NFO", "MCX", "CDS", "NASDAQ", "NYSE"}, ""},
                 {"side", "Side", "select", "buy", {"buy", "sell"}, "", true},
+                {"product_type", "Product Type", "select", "delivery", {"delivery", "intraday", "margin", "mtf"}, "Delivery = CNC/Holdings, Intraday = MIS"},
                 {"order_type", "Order Type", "select", "market", {"market", "limit", "stop", "stop_limit"}, ""},
                 {"quantity", "Quantity", "number", 1, {}, "Number of shares/contracts", true},
                 {"price", "Limit Price", "number", 0, {}, "Price for limit orders"},
-                {"broker", "Broker", "select", "paper", {"paper", "alpaca", "zerodha", "fyers", "ib"}, ""},
+                {"validity", "Validity", "select", "DAY", {"DAY", "IOC"}, ""},
             },
-        .execute = nullptr, // Wired via UnifiedTrading
+        .execute = nullptr,
     });
 
     registry.register_type({
@@ -34,13 +38,14 @@ void register_trading_nodes(NodeRegistry& registry) {
         .description = "Cancel an existing order",
         .icon_text = "T",
         .accent_color = "#16a34a",
-        .version = 1,
+        .version = 2,
         .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
+                {"mode", "Mode", "select", "paper", {"paper", "live"}, ""},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, ""},
                 {"order_id", "Order ID", "string", "", {}, "Order ID to cancel", true},
-                {"broker", "Broker", "select", "paper", {"paper", "alpaca", "zerodha", "fyers", "ib"}, ""},
             },
         .execute = nullptr,
     });
@@ -52,11 +57,13 @@ void register_trading_nodes(NodeRegistry& registry) {
         .description = "Modify an existing order",
         .icon_text = "T",
         .accent_color = "#16a34a",
-        .version = 1,
+        .version = 2,
         .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
+                {"mode", "Mode", "select", "paper", {"paper", "live"}, ""},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, ""},
                 {"order_id", "Order ID", "string", "", {}, "Order ID to modify", true},
                 {"quantity", "New Quantity", "number", 0, {}, ""},
                 {"price", "New Price", "number", 0, {}, ""},
@@ -71,13 +78,14 @@ void register_trading_nodes(NodeRegistry& registry) {
         .description = "Retrieve current orders",
         .icon_text = "T",
         .accent_color = "#16a34a",
-        .version = 1,
+        .version = 2,
         .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
+                {"mode", "Mode", "select", "paper", {"paper", "live"}, ""},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, ""},
                 {"status", "Status", "select", "all", {"all", "open", "filled", "cancelled"}, ""},
-                {"broker", "Broker", "select", "paper", {"paper", "alpaca", "zerodha", "fyers", "ib"}, ""},
             },
         .execute = nullptr,
     });
@@ -89,12 +97,13 @@ void register_trading_nodes(NodeRegistry& registry) {
         .description = "Retrieve open positions",
         .icon_text = "T",
         .accent_color = "#16a34a",
-        .version = 1,
+        .version = 2,
         .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::PortfolioData}},
         .parameters =
             {
-                {"broker", "Broker", "select", "paper", {"paper", "alpaca", "zerodha", "fyers", "ib"}, ""},
+                {"mode", "Mode", "select", "paper", {"paper", "live"}, ""},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, ""},
             },
         .execute = nullptr,
     });
@@ -103,15 +112,16 @@ void register_trading_nodes(NodeRegistry& registry) {
         .type_id = "trading.get_holdings",
         .display_name = "Get Holdings",
         .category = "Trading",
-        .description = "Retrieve portfolio holdings",
+        .description = "Retrieve portfolio holdings (live mode only)",
         .icon_text = "T",
         .accent_color = "#16a34a",
-        .version = 1,
+        .version = 2,
         .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::PortfolioData}},
         .parameters =
             {
-                {"broker", "Broker", "select", "paper", {"paper", "alpaca", "zerodha", "fyers", "ib"}, ""},
+                {"mode", "Mode", "select", "live", {"paper", "live"}, ""},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, ""},
             },
         .execute = nullptr,
     });
@@ -123,12 +133,13 @@ void register_trading_nodes(NodeRegistry& registry) {
         .description = "Retrieve account balance and buying power",
         .icon_text = "T",
         .accent_color = "#16a34a",
-        .version = 1,
+        .version = 2,
         .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
-                {"broker", "Broker", "select", "paper", {"paper", "alpaca", "zerodha", "fyers", "ib"}, ""},
+                {"mode", "Mode", "select", "paper", {"paper", "live"}, ""},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, ""},
             },
         .execute = nullptr,
     });
@@ -140,14 +151,17 @@ void register_trading_nodes(NodeRegistry& registry) {
         .description = "Close an open position",
         .icon_text = "T",
         .accent_color = "#16a34a",
-        .version = 1,
+        .version = 2,
         .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
+                {"mode", "Mode", "select", "paper", {"paper", "live"}, ""},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, ""},
                 {"symbol", "Symbol", "string", "", {}, "Ticker symbol", true},
+                {"exchange", "Exchange", "select", "NSE", {"NSE", "BSE", "NFO", "MCX", "CDS", "NASDAQ", "NYSE"}, ""},
+                {"product_type", "Product Type", "select", "delivery", {"delivery", "intraday", "margin", "mtf"}, ""},
                 {"quantity", "Quantity", "number", 0, {}, "0 = close all"},
-                {"broker", "Broker", "select", "paper", {"paper", "alpaca", "zerodha", "fyers", "ib"}, ""},
             },
         .execute = nullptr,
     });
@@ -161,18 +175,20 @@ void register_trading_nodes(NodeRegistry& registry) {
         .description = "OCO bracket: entry + stop loss + take profit",
         .icon_text = "T",
         .accent_color = "#16a34a",
-        .version = 1,
+        .version = 2,
         .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
+                {"mode", "Mode", "select", "paper", {"paper", "live"}, ""},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, ""},
                 {"symbol", "Symbol", "string", "", {}, "", true},
+                {"exchange", "Exchange", "select", "NSE", {"NSE", "BSE", "NFO", "MCX", "CDS", "NASDAQ", "NYSE"}, ""},
                 {"side", "Side", "select", "buy", {"buy", "sell"}, "", true},
                 {"quantity", "Quantity", "number", 1, {}, "", true},
                 {"entry_price", "Entry Price", "number", 0, {}, "Limit price"},
                 {"stop_loss", "Stop Loss", "number", 0, {}, "Stop price", true},
                 {"take_profit", "Take Profit", "number", 0, {}, "Target price", true},
-                {"broker", "Broker", "select", "paper", {"paper", "alpaca", "zerodha", "fyers", "ib"}, ""},
             },
         .execute = nullptr,
     });
@@ -184,16 +200,19 @@ void register_trading_nodes(NodeRegistry& registry) {
         .description = "Trailing stop loss order",
         .icon_text = "T",
         .accent_color = "#16a34a",
-        .version = 1,
+        .version = 2,
         .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
+                {"mode", "Mode", "select", "paper", {"paper", "live"}, ""},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, ""},
                 {"symbol", "Symbol", "string", "", {}, "", true},
+                {"exchange", "Exchange", "select", "NSE", {"NSE", "BSE", "NFO", "MCX", "CDS", "NASDAQ", "NYSE"}, ""},
+                {"product_type", "Product Type", "select", "intraday", {"delivery", "intraday", "margin", "mtf"}, ""},
                 {"trail_type", "Trail Type", "select", "percent", {"percent", "fixed"}, ""},
                 {"trail_value", "Trail Value", "number", 5.0, {}, "% or $ amount"},
                 {"quantity", "Quantity", "number", 0, {}, "0 = all shares"},
-                {"broker", "Broker", "select", "paper", {"paper", "alpaca", "zerodha", "fyers", "ib"}, ""},
             },
         .execute = nullptr,
     });
@@ -205,17 +224,20 @@ void register_trading_nodes(NodeRegistry& registry) {
         .description = "Gradually build position in tranches",
         .icon_text = "T",
         .accent_color = "#16a34a",
-        .version = 1,
+        .version = 2,
         .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters =
             {
+                {"mode", "Mode", "select", "paper", {"paper", "live"}, ""},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, ""},
                 {"symbol", "Symbol", "string", "", {}, "", true},
+                {"exchange", "Exchange", "select", "NSE", {"NSE", "BSE", "NFO", "MCX", "CDS", "NASDAQ", "NYSE"}, ""},
+                {"product_type", "Product Type", "select", "delivery", {"delivery", "intraday", "margin", "mtf"}, ""},
                 {"side", "Side", "select", "buy", {"buy", "sell"}, ""},
                 {"total_quantity", "Total Qty", "number", 100, {}, "", true},
                 {"tranches", "Tranches", "number", 4, {}, "Number of orders"},
                 {"interval_sec", "Interval (sec)", "number", 60, {}, "Seconds between orders"},
-                {"broker", "Broker", "select", "paper", {"paper", "alpaca", "zerodha", "fyers", "ib"}, ""},
             },
         .execute = nullptr,
     });
