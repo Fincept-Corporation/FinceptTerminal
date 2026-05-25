@@ -56,6 +56,7 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
     // Connect to PortfolioService signals
     auto& svc = services::PortfolioService::instance();
     connect(&svc, &services::PortfolioService::portfolios_loaded, this, &PortfolioScreen::on_portfolios_loaded);
+    connect(&svc, &services::PortfolioService::portfolios_failed, this, &PortfolioScreen::on_portfolios_failed);
     connect(&svc, &services::PortfolioService::summary_loaded, this, &PortfolioScreen::on_summary_loaded);
     connect(&svc, &services::PortfolioService::summary_error, this, &PortfolioScreen::on_summary_error);
     connect(&svc, &services::PortfolioService::metrics_computed, this, &PortfolioScreen::on_metrics_computed);
@@ -63,6 +64,8 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
     connect(&svc, &services::PortfolioService::portfolio_deleted, this, &PortfolioScreen::on_portfolio_deleted);
     connect(&svc, &services::PortfolioService::asset_added, this, &PortfolioScreen::on_asset_changed);
     connect(&svc, &services::PortfolioService::asset_sold, this, &PortfolioScreen::on_asset_changed);
+    connect(&svc, &services::PortfolioService::portfolio_mutation_failed, this,
+            &PortfolioScreen::on_portfolio_mutation_failed);
     connect(&svc, &services::PortfolioService::snapshots_loaded, this, &PortfolioScreen::on_snapshots_loaded);
     connect(&svc, &services::PortfolioService::transactions_loaded, this, [this](QVector<portfolio::Transaction> txns) {
         if (txn_panel_)

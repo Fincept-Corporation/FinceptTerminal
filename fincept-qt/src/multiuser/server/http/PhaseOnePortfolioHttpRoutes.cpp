@@ -188,13 +188,16 @@ void register_phase_one_portfolio_routes(PhaseOneHttpServer& http_server, PhaseO
                                    PhaseOneHttpResponse denied;
                                    if (!require_authenticated(context, auth_server, &denied).has_value())
                                        return denied;
-                                   const auto result =
-                                       portfolio_server.list_holdings(query_value(context.path(), QStringLiteral("portfolio_id")));
-                                   if (result.is_err()) {
-                                       return portfolio_json_response(500, {{"error_code", QStringLiteral("holdings_list_failed")},
-                                                                            {"message", QString::fromStdString(result.error())}});
-                                   }
-                                   return portfolio_json_response(200, to_json(result.value()));
+                                    const auto result =
+                                        portfolio_server.list_holdings(query_value(context.path(), QStringLiteral("portfolio_id")));
+                                    if (result.is_err()) {
+                                        const int status = result.error() == std::string("portfolio_not_found")
+                                                               ? 404
+                                                               : (result.error() == std::string("portfolio_id_required") ? 400 : 500);
+                                        return portfolio_json_response(status, {{"error_code", QStringLiteral("holdings_list_failed")},
+                                                                             {"message", QString::fromStdString(result.error())}});
+                                    }
+                                    return portfolio_json_response(200, to_json(result.value()));
                                });
 
     http_server.register_route("POST", QStringLiteral("/phase1/holdings/create"),
@@ -218,12 +221,13 @@ void register_phase_one_portfolio_routes(PhaseOneHttpServer& http_server, PhaseO
                                    request.sector = body.value("sector").toString();
                                    request.broker_symbol = body.value("broker_symbol").toString();
                                    request.exchange = body.value("exchange").toString();
-                                   const auto result = portfolio_server.create_holding(*actor, request);
-                                   if (result.is_err()) {
-                                       return portfolio_json_response(400, {{"error_code", QStringLiteral("holding_create_failed")},
-                                                                            {"message", QString::fromStdString(result.error())}});
-                                   }
-                                   return portfolio_json_response(200, {{"holding", to_json(result.value())}});
+                                    const auto result = portfolio_server.create_holding(*actor, request);
+                                    if (result.is_err()) {
+                                        const int status = result.error() == std::string("portfolio_not_found") ? 404 : 400;
+                                        return portfolio_json_response(status, {{"error_code", QStringLiteral("holding_create_failed")},
+                                                                             {"message", QString::fromStdString(result.error())}});
+                                    }
+                                    return portfolio_json_response(200, {{"holding", to_json(result.value())}});
                                });
 
     http_server.register_route("POST", QStringLiteral("/phase1/holdings/update"),
@@ -243,12 +247,13 @@ void register_phase_one_portfolio_routes(PhaseOneHttpServer& http_server, PhaseO
                                    request.shares = body.value("shares").toDouble();
                                    request.avg_cost = body.value("avg_cost").toDouble();
                                    request.sector = body.value("sector").toString();
-                                   const auto result = portfolio_server.update_holding(*actor, request);
-                                   if (result.is_err()) {
-                                       return portfolio_json_response(404, {{"error_code", QStringLiteral("holding_update_failed")},
-                                                                            {"message", QString::fromStdString(result.error())}});
-                                   }
-                                   return portfolio_json_response(200, {{"holding", to_json(result.value())}});
+                                    const auto result = portfolio_server.update_holding(*actor, request);
+                                    if (result.is_err()) {
+                                        const int status = result.error() == std::string("portfolio_id_required") ? 400 : 404;
+                                        return portfolio_json_response(status, {{"error_code", QStringLiteral("holding_update_failed")},
+                                                                             {"message", QString::fromStdString(result.error())}});
+                                    }
+                                    return portfolio_json_response(200, {{"holding", to_json(result.value())}});
                                });
 
     http_server.register_route("POST", QStringLiteral("/phase1/holdings/remove"),
@@ -265,12 +270,13 @@ void register_phase_one_portfolio_routes(PhaseOneHttpServer& http_server, PhaseO
                                    PhaseOneRemoveHoldingRequest request;
                                    request.id = body.value("id").toInt();
                                    request.portfolio_id = body.value("portfolio_id").toString();
-                                   const auto result = portfolio_server.remove_holding(*actor, request);
-                                   if (result.is_err()) {
-                                       return portfolio_json_response(404, {{"error_code", QStringLiteral("holding_delete_failed")},
-                                                                            {"message", QString::fromStdString(result.error())}});
-                                   }
-                                   return portfolio_json_response(200, {});
+                                    const auto result = portfolio_server.remove_holding(*actor, request);
+                                    if (result.is_err()) {
+                                        const int status = result.error() == std::string("portfolio_id_required") ? 400 : 404;
+                                        return portfolio_json_response(status, {{"error_code", QStringLiteral("holding_delete_failed")},
+                                                                             {"message", QString::fromStdString(result.error())}});
+                                    }
+                                    return portfolio_json_response(200, {});
                                });
 }
 

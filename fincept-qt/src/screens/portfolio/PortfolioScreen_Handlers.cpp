@@ -14,6 +14,7 @@
 #include "core/symbol/SymbolContext.h"
 #include "core/symbol/SymbolRef.h"
 #include "multiuser/client/PhaseOneClientTransport.h"
+#include "multiuser/client/PhaseOneEndpointProvider.h"
 #include "screens/portfolio/PortfolioBlotter.h"
 #include "screens/portfolio/PortfolioCommandBar.h"
 #include "screens/portfolio/PortfolioDetailWrapper.h"
@@ -63,7 +64,7 @@ bool is_session_error_text(const QString& error) {
 } // namespace
 
 bool PortfolioScreen::is_connected_mode() const {
-    return !fincept::multiuser::PhaseOneClientTransport::instance().session_id().isEmpty();
+    return fincept::multiuser::PhaseOneEndpointProvider::instance().resolve().ok;
 }
 
 void PortfolioScreen::show_portfolio_message(const QString& title, const QString& message) {
@@ -76,6 +77,9 @@ void PortfolioScreen::load_portfolios_for_current_session(bool reload_selected_s
     reload_selected_summary_after_portfolios_ = reload_selected_summary && !selected_id_.isEmpty();
 
     services::PortfolioService::instance().load_portfolios();
+    if (is_connected_mode())
+        return;
+
     if (portfolios_load_completed_)
         return;
 
@@ -121,6 +125,9 @@ void PortfolioScreen::run_portfolio_mutation(PendingMutation mutation, const std
     command_bar_->set_refreshing(true);
 
     action();
+    if (is_connected_mode())
+        return;
+
     if (pending_mutation_succeeded_) {
         pending_mutation_ = PendingMutation::None;
         return;
@@ -130,6 +137,59 @@ void PortfolioScreen::run_portfolio_mutation(PendingMutation mutation, const std
     command_bar_->set_refreshing(false);
 
     if (!session_id_before.isEmpty() && fincept::multiuser::PhaseOneClientTransport::instance().session_id().isEmpty()) {
+        show_portfolio_message(tr("Session Expired"),
+                               tr("Your connected portfolio session is no longer valid. Sign in again before retrying this change."));
+        return;
+    }
+
+    QString title;
+    QString message;
+    switch (mutation) {
+    case PendingMutation::CreatePortfolio:
+        title = tr("Create Portfolio Rejected");
+        message = tr("The server did not accept the new portfolio. No changes were applied.");
+        break;
+    case PendingMutation::DeletePortfolio:
+        title = tr("Delete Portfolio Rejected");
+        message = tr("The server did not accept the delete request. The portfolio remains unchanged.");
+        break;
+    case PendingMutation::AddAsset:
+        title = tr("Buy Rejected");
+        message = tr("The server did not accept the buy request. Holdings were not changed.");
+        break;
+    case PendingMutation::SellAsset:
+        title = tr("Sell Rejected");
+        message = tr("The server did not accept the sell request. Holdings were not changed.");
+        break;
+    case PendingMutation::None:
+        return;
+    }
+
+    show_portfolio_message(title, message);
+}
+
+void PortfolioScreen::on_portfolios_failed(QString error) {
+    Q_UNUSED(error)
+    command_bar_->set_refreshing(false);
+    reload_selected_summary_after_portfolios_ = false;
+
+    if (!last_seen_session_id_.isEmpty() && fincept::multiuser::PhaseOneClientTransport::instance().session_id().isEmpty()) {
+        show_portfolio_message(tr("Session Expired"),
+                               tr("Your connected portfolio session is no longer valid. Sign in again to reload shared portfolios."));
+    } else if (!last_seen_session_id_.isEmpty()) {
+        show_portfolio_message(tr("Portfolio Load Failed"),
+                               tr("The connected portfolio workspace could not be loaded. The current screen stays available so you can retry after restoring the session."));
+    }
+}
+
+void PortfolioScreen::on_portfolio_mutation_failed(QString error) {
+    Q_UNUSED(error)
+    pending_mutation_succeeded_ = false;
+    const PendingMutation mutation = pending_mutation_;
+    pending_mutation_ = PendingMutation::None;
+    command_bar_->set_refreshing(false);
+
+    if (!last_seen_session_id_.isEmpty() && fincept::multiuser::PhaseOneClientTransport::instance().session_id().isEmpty()) {
         show_portfolio_message(tr("Session Expired"),
                                tr("Your connected portfolio session is no longer valid. Sign in again before retrying this change."));
         return;
@@ -339,8 +399,10 @@ void PortfolioScreen::on_snapshots_loaded(QString portfolio_id, QVector<portfoli
 }
 
 void PortfolioScreen::on_portfolio_created(portfolio::Portfolio portfolio) {
-    if (pending_mutation_ == PendingMutation::CreatePortfolio)
+    if (pending_mutation_ == PendingMutation::CreatePortfolio) {
         pending_mutation_succeeded_ = true;
+        pending_mutation_ = PendingMutation::None;
+    }
 
     // portfolios_loaded fires asynchronously after creation, so the new portfolio
     // may not be in portfolios_ yet when on_portfolio_selected looks it up.
@@ -360,8 +422,10 @@ void PortfolioScreen::on_portfolio_created(portfolio::Portfolio portfolio) {
 }
 
 void PortfolioScreen::on_portfolio_deleted(QString id) {
-    if (pending_mutation_ == PendingMutation::DeletePortfolio)
+    if (pending_mutation_ == PendingMutation::DeletePortfolio) {
         pending_mutation_succeeded_ = true;
+        pending_mutation_ = PendingMutation::None;
+    }
 
     if (id == selected_id_) {
         selected_id_.clear();
@@ -373,8 +437,10 @@ void PortfolioScreen::on_portfolio_deleted(QString id) {
 
 void PortfolioScreen::on_asset_changed(QString portfolio_id) {
     if (portfolio_id == selected_id_) {
-        if (pending_mutation_ == PendingMutation::AddAsset || pending_mutation_ == PendingMutation::SellAsset)
+        if (pending_mutation_ == PendingMutation::AddAsset || pending_mutation_ == PendingMutation::SellAsset) {
             pending_mutation_succeeded_ = true;
+            pending_mutation_ = PendingMutation::None;
+        }
         load_selected_summary(true);
     }
 }

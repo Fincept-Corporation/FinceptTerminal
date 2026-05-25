@@ -35,9 +35,11 @@ AuthManager::AuthManager() {
 
 QString AuthManager::fincept_provider_api_key() const {
     auto stored = fincept::SettingsRepository::instance().get("fincept_api_key");
+    auto owner = fincept::SettingsRepository::instance().get("fincept_api_key_owner");
     auto secure_key = fincept::SecureStorage::instance().retrieve("api_key");
     return PhaseOneSessionAuthBridge::resolve_fincept_provider_api_key(
-        session_, stored.is_ok() ? stored.value() : QString{}, secure_key.is_ok() ? secure_key.value() : QString{});
+        session_, stored.is_ok() ? stored.value() : QString{}, secure_key.is_ok() ? secure_key.value() : QString{},
+        owner.is_ok() ? owner.value() : QString{});
 }
 
 void AuthManager::set_loading(bool v) {
@@ -101,13 +103,25 @@ void AuthManager::save_session() {
         auto sr = fincept::SecureStorage::instance().store("api_key", session_.api_key);
         if (sr.is_err())
             LOG_WARN("Auth", "SecureStorage: failed to persist api_key — using SQLite fallback");
+        fincept::SettingsRepository::instance().set("fincept_api_key_owner", session_.username, "auth");
     }
 }
 
 void AuthManager::load_session() {
     const auto saved_session = fincept::SettingsRepository::instance().get("fincept_session");
     const auto saved_api_key = fincept::SettingsRepository::instance().get("fincept_api_key");
+    const auto saved_api_key_owner = fincept::SettingsRepository::instance().get("fincept_api_key_owner");
     const auto secure_api_key = fincept::SecureStorage::instance().retrieve("api_key");
+
+    if ((!saved_api_key_owner.is_ok() || saved_api_key_owner.value().trimmed().isEmpty()) &&
+        (saved_api_key.is_ok() || secure_api_key.is_ok()) && saved_session.is_ok() && !saved_session.value().trimmed().isEmpty()) {
+        const QJsonDocument document = QJsonDocument::fromJson(saved_session.value().toUtf8());
+        if (document.isObject()) {
+            const SessionData restored = SessionData::from_json(document.object());
+            if (restored.has_hosted_api_key() && !restored.username.trimmed().isEmpty())
+                fincept::SettingsRepository::instance().set("fincept_api_key_owner", restored.username, "auth");
+        }
+    }
 
     if (!PhaseOneAuthRecoveryBridge::should_restore_startup_auth(
             saved_session.is_ok() ? saved_session.value() : QString{},
@@ -121,13 +135,16 @@ void AuthManager::load_session() {
     session_ = SessionData{};
 }
 
-void AuthManager::clear_session() {
+void AuthManager::clear_session(bool clear_provider_credentials) {
     session_ = SessionData{};
     multiuser::PhaseOneClientTransport::instance().set_session_id({});
     clear_tokens();
     fincept::SettingsRepository::instance().remove("fincept_session");
-    fincept::SettingsRepository::instance().remove("fincept_api_key");
-    fincept::SecureStorage::instance().remove("api_key");
+    if (clear_provider_credentials) {
+        fincept::SettingsRepository::instance().remove("fincept_api_key");
+        fincept::SettingsRepository::instance().remove("fincept_api_key_owner");
+        fincept::SecureStorage::instance().remove("api_key");
+    }
 
     // PIN intentionally NOT cleared here. The PIN is a local-device credential,
     // independent of the backend session. Wiping it on every logout means a
@@ -458,6 +475,28 @@ void AuthManager::logout() {
         return;
     is_logging_out_ = true;
 
+    if (session_.is_phase_one_session() || !session_.session_id.isEmpty()) {
+        AuthApi::instance().phase_one_logout([this](ApiResponse response) {
+            const bool server_already_invalid = !response.success &&
+                (response.error_code == QStringLiteral("session_invalid") ||
+                 response.error_code == QStringLiteral("session_revoked") ||
+                 response.error_code == QStringLiteral("session_expired") ||
+                 response.error_code == QStringLiteral("user_disabled"));
+
+            if (!response.success && !server_already_invalid) {
+                LOG_ERROR("Auth", "Phase one logout failed: " +
+                                      (response.error.isEmpty() ? QStringLiteral("server session still active")
+                                                                : response.error));
+            }
+
+            clear_session(false);
+            emit logged_out();
+            emit auth_state_changed();
+            is_logging_out_ = false;
+        });
+        return;
+    }
+
     if (!session_.api_key.isEmpty()) {
         AuthApi::instance().logout([](ApiResponse) {});
     }
@@ -474,10 +513,29 @@ void AuthManager::phase_one_logout() {
         return;
     is_logging_out_ = true;
 
-    if (!session_.session_id.isEmpty())
-        AuthApi::instance().phase_one_logout([](ApiResponse) {});
+    if (!session_.session_id.isEmpty()) {
+        AuthApi::instance().phase_one_logout([this](ApiResponse response) {
+            const bool server_already_invalid = !response.success &&
+                (response.error_code == QStringLiteral("session_invalid") ||
+                 response.error_code == QStringLiteral("session_revoked") ||
+                 response.error_code == QStringLiteral("session_expired") ||
+                 response.error_code == QStringLiteral("user_disabled"));
 
-    clear_session();
+            if (!response.success && !server_already_invalid) {
+                LOG_ERROR("Auth", "Phase one logout failed: " +
+                                      (response.error.isEmpty() ? QStringLiteral("server session still active")
+                                                                : response.error));
+            }
+
+            clear_session(false);
+            emit logged_out();
+            emit auth_state_changed();
+            is_logging_out_ = false;
+        });
+        return;
+    }
+
+    clear_session(false);
     is_logging_out_ = false;
 
     emit logged_out();
@@ -504,7 +562,7 @@ void AuthManager::handle_phase_one_session_invalidation() {
     if (!session_.is_phase_one_session() && session_.session_id.isEmpty())
         return;
 
-    clear_session();
+    clear_session(false);
     emit session_expired();
     emit logged_out();
     emit auth_state_changed();
@@ -586,6 +644,7 @@ void AuthManager::auto_configure_fincept_llm() {
 
     // Always store API key in settings — LlmService resolves it at runtime
     fincept::SettingsRepository::instance().set("fincept_api_key", session_.api_key, "auth");
+    fincept::SettingsRepository::instance().set("fincept_api_key_owner", session_.username, "auth");
 
     // Only create the fincept provider row if it doesn't already exist.
     // This prevents overwriting the user's model/settings choice on every

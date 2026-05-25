@@ -18,10 +18,10 @@ class PhaseOneUserAdminServer {
     fincept::Result<PhaseOneBootstrapStatus> bootstrap_status() const;
     fincept::Result<void> bootstrap(const QString& username, const QString& password);
     fincept::Result<PhaseOneUserListResponse> list_users() const;
-    fincept::Result<void> create_user(const QString& username);
-    fincept::Result<void> set_initial_password(int user_id, const QString& password);
-    fincept::Result<void> disable_user(int user_id);
-    fincept::Result<void> transfer_admin(int target_user_id);
+    fincept::Result<void> create_user(const QString& username, const QString& actor = {});
+    fincept::Result<void> set_initial_password(int user_id, const QString& password, const QString& actor = {});
+    fincept::Result<void> disable_user(int user_id, const QString& actor = {});
+    fincept::Result<void> transfer_admin(int target_user_id, const QString& actor = {});
 
   private:
     PhaseOneUserRepository owned_user_repository_;

@@ -24,6 +24,8 @@ class PhaseOneHttpServer {
   private:
     QByteArray serialize_response(const PhaseOneHttpResponse& response) const;
     void handle_new_connection();
+    void handle_socket_ready_read(QTcpSocket* socket);
+    bool request_is_complete(const QByteArray& raw_request) const;
 
     QString route_key(const QByteArray& method, const QString& path) const;
 

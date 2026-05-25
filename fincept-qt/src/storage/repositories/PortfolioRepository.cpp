@@ -2,74 +2,13 @@
 #include "storage/repositories/PortfolioRepository.h"
 
 #include "core/logging/Logger.h"
-#include "multiuser/client/PhaseOneClientTransport.h"
-#include "multiuser/client/PhaseOnePortfolioApi.h"
-#include "multiuser/contracts/PhaseOnePortfolioTypes.h"
 
 #include <QDateTime>
-#include <QEventLoop>
 #include <QUuid>
 
 namespace fincept {
 
 namespace {
-
-using fincept::auth::ApiResponse;
-using fincept::multiuser::PhaseOneCreateHoldingRequest;
-using fincept::multiuser::PhaseOneCreatePortfolioRequest;
-using fincept::multiuser::PhaseOneHoldingRecord;
-using fincept::multiuser::PhaseOneHoldingsListResponse;
-using fincept::multiuser::PhaseOnePortfolioApi;
-using fincept::multiuser::PhaseOnePortfolioListResponse;
-using fincept::multiuser::PhaseOnePortfolioRecord;
-using fincept::multiuser::PhaseOneRemoveHoldingRequest;
-using fincept::multiuser::PhaseOneUpdateHoldingRequest;
-using fincept::multiuser::PhaseOneUpdatePortfolioRequest;
-
-bool use_phase_one_server() {
-    return !fincept::multiuser::PhaseOneClientTransport::instance().session_id().isEmpty();
-}
-
-template <typename T>
-Result<T> run_phase_one_request(const std::function<void(std::function<void(ApiResponse)>)>& start,
-                                const std::function<Result<T>(const ApiResponse&)>& convert) {
-    QEventLoop loop;
-    bool completed = false;
-    Result<T> result = Result<T>::err("phase_one_request_not_started");
-
-    start([&](ApiResponse response) {
-        result = convert(response);
-        completed = true;
-        loop.quit();
-    });
-
-    if (!completed)
-        loop.exec();
-    return result;
-}
-
-std::string response_error(const ApiResponse& response) {
-    const QString message = !response.error.isEmpty() ? response.error : response.data.value("message").toString();
-    return (message.isEmpty() ? QStringLiteral("Phase one portfolio request failed.") : message).toStdString();
-}
-
-portfolio::Portfolio from_record(const PhaseOnePortfolioRecord& record) {
-    return {record.id, record.name, record.owner, record.currency, record.description,
-            record.created_at, record.updated_at, record.broker_account_id};
-}
-
-portfolio::PortfolioAsset from_record(const PhaseOneHoldingRecord& record) {
-    return {record.id,
-            record.portfolio_id,
-            record.symbol,
-            record.shares,
-            record.avg_cost,
-            record.added_at,
-            record.updated_at,
-            record.sector,
-            record.broker_symbol,
-            record.exchange};
-}
 
 } // namespace
 
@@ -138,22 +77,6 @@ portfolio::PortfolioSnapshot PortfolioRepository::map_snapshot(QSqlQuery& q) {
 // ── Portfolios CRUD ──────────────────────────────────────────────────────────
 
 Result<QVector<portfolio::Portfolio>> PortfolioRepository::list_portfolios() {
-    if (use_phase_one_server()) {
-        return run_phase_one_request<QVector<portfolio::Portfolio>>(
-            [](auto cb) { PhaseOnePortfolioApi::instance().list_portfolios(std::move(cb)); },
-            [](const ApiResponse& response) {
-                if (!response.success)
-                    return Result<QVector<portfolio::Portfolio>>::err(response_error(response));
-
-                const auto parsed = PhaseOnePortfolioListResponse::from_json(response.data);
-                QVector<portfolio::Portfolio> portfolios;
-                portfolios.reserve(parsed.portfolios.size());
-                for (const auto& record : parsed.portfolios)
-                    portfolios.append(from_record(record));
-                return Result<QVector<portfolio::Portfolio>>::ok(portfolios);
-            });
-    }
-
     return query_list("SELECT id, name, owner, currency, description, created_at, updated_at, "
                       "COALESCE(broker_account_id, '') "
                       "FROM portfolios ORDER BY name",
@@ -161,17 +84,6 @@ Result<QVector<portfolio::Portfolio>> PortfolioRepository::list_portfolios() {
 }
 
 Result<portfolio::Portfolio> PortfolioRepository::get_portfolio(const QString& id) {
-    if (use_phase_one_server()) {
-        return run_phase_one_request<portfolio::Portfolio>(
-            [id](auto cb) { PhaseOnePortfolioApi::instance().fetch_portfolio(id, std::move(cb)); },
-            [](const ApiResponse& response) {
-                if (!response.success)
-                    return Result<portfolio::Portfolio>::err(response_error(response));
-                return Result<portfolio::Portfolio>::ok(
-                    from_record(PhaseOnePortfolioRecord::from_json(response.data.value("portfolio").toObject())));
-            });
-    }
-
     return query_one("SELECT id, name, owner, currency, description, created_at, updated_at, "
                      "COALESCE(broker_account_id, '') "
                      "FROM portfolios WHERE id = ?",
@@ -181,25 +93,6 @@ Result<portfolio::Portfolio> PortfolioRepository::get_portfolio(const QString& i
 Result<QString> PortfolioRepository::create_portfolio(const QString& name, const QString& owner,
                                                       const QString& currency, const QString& description,
                                                       const QString& broker_account_id) {
-    if (use_phase_one_server()) {
-        return run_phase_one_request<QString>(
-            [name, owner, currency, description, broker_account_id](auto cb) {
-                PhaseOneCreatePortfolioRequest request;
-                request.name = name;
-                request.owner = owner;
-                request.currency = currency;
-                request.description = description;
-                request.broker_account_id = broker_account_id;
-                PhaseOnePortfolioApi::instance().create_portfolio(request, std::move(cb));
-            },
-            [](const ApiResponse& response) {
-                if (!response.success)
-                    return Result<QString>::err(response_error(response));
-                return Result<QString>::ok(
-                    PhaseOnePortfolioRecord::from_json(response.data.value("portfolio").toObject()).id);
-            });
-    }
-
     QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     auto r = exec_write(
         "INSERT INTO portfolios (id, name, owner, currency, description, broker_account_id) "
@@ -216,40 +109,12 @@ Result<QString> PortfolioRepository::create_portfolio(const QString& name, const
 
 Result<void> PortfolioRepository::update_portfolio(const QString& id, const QString& name, const QString& owner,
                                                    const QString& currency, const QString& description) {
-    if (use_phase_one_server()) {
-        return run_phase_one_request<void>(
-            [id, name, owner, currency, description](auto cb) {
-                PhaseOneUpdatePortfolioRequest request;
-                request.id = id;
-                request.name = name;
-                request.owner = owner;
-                request.currency = currency;
-                request.description = description;
-                PhaseOnePortfolioApi::instance().update_portfolio(request, std::move(cb));
-            },
-            [](const ApiResponse& response) {
-                if (!response.success)
-                    return Result<void>::err(response_error(response));
-                return Result<void>::ok();
-            });
-    }
-
     return exec_write("UPDATE portfolios SET name = ?, owner = ?, currency = ?, description = ?, "
                       "updated_at = datetime('now') WHERE id = ?",
                       {name, owner, currency, description, id});
 }
 
 Result<void> PortfolioRepository::delete_portfolio(const QString& id) {
-    if (use_phase_one_server()) {
-        return run_phase_one_request<void>(
-            [id](auto cb) { PhaseOnePortfolioApi::instance().delete_portfolio(id, std::move(cb)); },
-            [](const ApiResponse& response) {
-                if (!response.success)
-                    return Result<void>::err(response_error(response));
-                return Result<void>::ok();
-            });
-    }
-
     LOG_INFO("PortfolioRepo", QString("Deleting portfolio %1").arg(id));
     return exec_write("DELETE FROM portfolios WHERE id = ?", {id});
 }
@@ -257,22 +122,6 @@ Result<void> PortfolioRepository::delete_portfolio(const QString& id) {
 // ── Assets CRUD ──────────────────────────────────────────────────────────────
 
 Result<QVector<portfolio::PortfolioAsset>> PortfolioRepository::get_assets(const QString& portfolio_id) {
-    if (use_phase_one_server()) {
-        return run_phase_one_request<QVector<portfolio::PortfolioAsset>>(
-            [portfolio_id](auto cb) { PhaseOnePortfolioApi::instance().list_holdings(portfolio_id, std::move(cb)); },
-            [](const ApiResponse& response) {
-                if (!response.success)
-                    return Result<QVector<portfolio::PortfolioAsset>>::err(response_error(response));
-
-                const auto parsed = PhaseOneHoldingsListResponse::from_json(response.data);
-                QVector<portfolio::PortfolioAsset> assets;
-                assets.reserve(parsed.holdings.size());
-                for (const auto& record : parsed.holdings)
-                    assets.append(from_record(record));
-                return Result<QVector<portfolio::PortfolioAsset>>::ok(assets);
-            });
-    }
-
     return query_list_as<portfolio::PortfolioAsset>(
         "SELECT id, portfolio_id, symbol, quantity, avg_buy_price, first_purchase_date, last_updated, "
         "COALESCE(sector, ''), COALESCE(broker_symbol, ''), COALESCE(exchange, '') "
@@ -296,29 +145,6 @@ Result<portfolio::PortfolioAsset> PortfolioRepository::get_asset_by_id(int id) {
 Result<qint64> PortfolioRepository::add_asset(const QString& portfolio_id, const QString& symbol, double qty,
                                                double price, const QString& date, const QString& sector,
                                                const QString& broker_symbol, const QString& exchange) {
-    if (use_phase_one_server()) {
-        return run_phase_one_request<qint64>(
-            [portfolio_id, symbol, qty, price, date, sector, broker_symbol, exchange](auto cb) {
-                PhaseOneCreateHoldingRequest request;
-                request.portfolio_id = portfolio_id;
-                request.symbol = symbol;
-                request.name = symbol;
-                request.shares = qty;
-                request.avg_cost = price;
-                request.acquired_at = date;
-                request.sector = sector;
-                request.broker_symbol = broker_symbol;
-                request.exchange = exchange;
-                PhaseOnePortfolioApi::instance().create_holding(request, std::move(cb));
-            },
-            [](const ApiResponse& response) {
-                if (!response.success)
-                    return Result<qint64>::err(response_error(response));
-                return Result<qint64>::ok(
-                    PhaseOneHoldingRecord::from_json(response.data.value("holding").toObject()).id);
-            });
-    }
-
     QString purchase_date = date.isEmpty() ? QDateTime::currentDateTimeUtc().toString(Qt::ISODate) : date;
 
     // Upsert: if symbol already exists in portfolio, update quantity and avg price.
@@ -354,34 +180,6 @@ Result<qint64> PortfolioRepository::add_asset(const QString& portfolio_id, const
 
 Result<void> PortfolioRepository::set_asset_sector(const QString& portfolio_id, const QString& symbol,
                                                    const QString& sector) {
-    if (use_phase_one_server()) {
-        const auto assets = get_assets(portfolio_id);
-        if (assets.is_err())
-            return Result<void>::err(assets.error());
-
-        for (const auto& asset : assets.value()) {
-            if (asset.symbol.compare(symbol, Qt::CaseInsensitive) != 0)
-                continue;
-            return run_phase_one_request<void>(
-                [asset, portfolio_id, sector](auto cb) {
-                    PhaseOneUpdateHoldingRequest request;
-                    request.id = asset.id;
-                    request.portfolio_id = portfolio_id;
-                    request.shares = asset.quantity;
-                    request.avg_cost = asset.avg_buy_price;
-                    request.sector = sector;
-                    PhaseOnePortfolioApi::instance().update_holding(request, std::move(cb));
-                },
-                [](const ApiResponse& response) {
-                    if (!response.success)
-                        return Result<void>::err(response_error(response));
-                    return Result<void>::ok();
-                });
-        }
-
-        return Result<void>::err("Asset not found");
-    }
-
     return exec_write("UPDATE portfolio_assets SET sector = ? "
                       "WHERE portfolio_id = ? AND symbol = ?",
                       {sector, portfolio_id, symbol.toUpper()});
@@ -389,34 +187,6 @@ Result<void> PortfolioRepository::set_asset_sector(const QString& portfolio_id, 
 
 Result<void> PortfolioRepository::update_asset(const QString& portfolio_id, const QString& symbol, double qty,
                                                double avg_price) {
-    if (use_phase_one_server()) {
-        const auto assets = get_assets(portfolio_id);
-        if (assets.is_err())
-            return Result<void>::err(assets.error());
-
-        for (const auto& asset : assets.value()) {
-            if (asset.symbol.compare(symbol, Qt::CaseInsensitive) != 0)
-                continue;
-            return run_phase_one_request<void>(
-                [asset, portfolio_id, qty, avg_price](auto cb) {
-                    PhaseOneUpdateHoldingRequest request;
-                    request.id = asset.id;
-                    request.portfolio_id = portfolio_id;
-                    request.shares = qty;
-                    request.avg_cost = avg_price;
-                    request.sector = asset.sector;
-                    PhaseOnePortfolioApi::instance().update_holding(request, std::move(cb));
-                },
-                [](const ApiResponse& response) {
-                    if (!response.success)
-                        return Result<void>::err(response_error(response));
-                    return Result<void>::ok();
-                });
-        }
-
-        return Result<void>::err("Asset not found");
-    }
-
     return exec_write("UPDATE portfolio_assets SET quantity = ?, avg_buy_price = ?, "
                       "last_updated = datetime('now') WHERE portfolio_id = ? AND symbol = ?",
                       {qty, avg_price, portfolio_id, symbol.toUpper()});
@@ -434,31 +204,6 @@ Result<void> PortfolioRepository::update_asset_by_id(int id, double qty, double 
 }
 
 Result<void> PortfolioRepository::remove_asset(const QString& portfolio_id, const QString& symbol) {
-    if (use_phase_one_server()) {
-        const auto assets = get_assets(portfolio_id);
-        if (assets.is_err())
-            return Result<void>::err(assets.error());
-
-        for (const auto& asset : assets.value()) {
-            if (asset.symbol.compare(symbol, Qt::CaseInsensitive) != 0)
-                continue;
-            return run_phase_one_request<void>(
-                [asset](auto cb) {
-                    PhaseOneRemoveHoldingRequest request;
-                    request.id = asset.id;
-                    request.portfolio_id = asset.portfolio_id;
-                    PhaseOnePortfolioApi::instance().remove_holding(request, std::move(cb));
-                },
-                [](const ApiResponse& response) {
-                    if (!response.success)
-                        return Result<void>::err(response_error(response));
-                    return Result<void>::ok();
-                });
-        }
-
-        return Result<void>::err("Asset not found");
-    }
-
     return exec_write("DELETE FROM portfolio_assets WHERE portfolio_id = ? AND symbol = ?",
                       {portfolio_id, symbol.toUpper()});
 }

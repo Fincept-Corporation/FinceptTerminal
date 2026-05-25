@@ -154,123 +154,107 @@ fincept::Result<void> PhaseOnePortfolioServer::delete_portfolio(const PhaseOneSe
 
 fincept::Result<PhaseOneHoldingsListResponse> PhaseOnePortfolioServer::list_holdings(const QString& portfolio_id) const {
     PhaseOneHoldingsListResponse response;
-    if (!portfolio_id.isEmpty()) {
-        const auto result = portfolio_repository_->get_assets(portfolio_id);
-        if (result.is_err())
-            return fincept::Result<PhaseOneHoldingsListResponse>::err(result.error());
-        response.holdings.reserve(result.value().size());
-        for (const auto& asset : result.value())
-            response.holdings.append(to_record(asset));
-        return fincept::Result<PhaseOneHoldingsListResponse>::ok(response);
-    }
+    if (portfolio_id.isEmpty())
+        return fincept::Result<PhaseOneHoldingsListResponse>::err("portfolio_id_required");
 
-    const auto result = holdings_repository_->list_all();
+    const auto portfolio = portfolio_repository_->get_portfolio(portfolio_id);
+    if (portfolio.is_err())
+        return fincept::Result<PhaseOneHoldingsListResponse>::err("portfolio_not_found");
+
+    const auto result = portfolio_repository_->get_assets(portfolio_id);
     if (result.is_err())
         return fincept::Result<PhaseOneHoldingsListResponse>::err(result.error());
     response.holdings.reserve(result.value().size());
-    for (const auto& holding : result.value())
-        response.holdings.append(to_record(holding));
+    for (const auto& asset : result.value())
+        response.holdings.append(to_record(asset));
     return fincept::Result<PhaseOneHoldingsListResponse>::ok(response);
 }
 
 fincept::Result<PhaseOneHoldingRecord> PhaseOnePortfolioServer::create_holding(
     const PhaseOneSessionInfo& actor, const PhaseOneCreateHoldingRequest& request) const {
-    if (!request.portfolio_id.isEmpty()) {
-        const auto create = portfolio_repository_->add_asset(request.portfolio_id, request.symbol, request.shares,
-                                                             request.avg_cost, request.acquired_at, request.sector,
-                                                             request.broker_symbol, request.exchange);
-        if (create.is_err()) {
-            write_audit_event(actor.username, QStringLiteral("holding_create"),
-                              holding_target(-1, request.portfolio_id), QStringLiteral("failure"));
-            return fincept::Result<PhaseOneHoldingRecord>::err(create.error());
-        }
-        const auto holding = fetch_portfolio_holding(static_cast<int>(create.value()));
-        write_audit_event(actor.username, QStringLiteral("holding_create"),
-                          holding_target(static_cast<int>(create.value()), request.portfolio_id),
-                          holding.is_ok() ? QStringLiteral("success") : QStringLiteral("failure"));
-        return holding;
+    if (request.portfolio_id.isEmpty()) {
+        write_audit_event(actor.username, QStringLiteral("holding_create"), holding_target(-1, {}), QStringLiteral("failure"));
+        return fincept::Result<PhaseOneHoldingRecord>::err("portfolio_id_required");
     }
 
-    const auto create = holdings_repository_->add(request.symbol, request.shares, request.avg_cost, request.name);
+    const auto portfolio = portfolio_repository_->get_portfolio(request.portfolio_id);
+    if (portfolio.is_err()) {
+        write_audit_event(actor.username, QStringLiteral("holding_create"), holding_target(-1, request.portfolio_id),
+                          QStringLiteral("failure"));
+        return fincept::Result<PhaseOneHoldingRecord>::err("portfolio_not_found");
+    }
+
+    const auto create = portfolio_repository_->add_asset(request.portfolio_id, request.symbol, request.shares,
+                                                         request.avg_cost, request.acquired_at, request.sector,
+                                                         request.broker_symbol, request.exchange);
     if (create.is_err()) {
-        write_audit_event(actor.username, QStringLiteral("holding_create"), holding_target(-1, {}), QStringLiteral("failure"));
+        write_audit_event(actor.username, QStringLiteral("holding_create"),
+                          holding_target(-1, request.portfolio_id), QStringLiteral("failure"));
         return fincept::Result<PhaseOneHoldingRecord>::err(create.error());
     }
-    const auto holding = fetch_flat_holding(static_cast<int>(create.value()));
-    write_audit_event(actor.username, QStringLiteral("holding_create"), holding_target(static_cast<int>(create.value()), {}),
+    const auto holding = fetch_portfolio_holding(static_cast<int>(create.value()));
+    write_audit_event(actor.username, QStringLiteral("holding_create"),
+                      holding_target(static_cast<int>(create.value()), request.portfolio_id),
                       holding.is_ok() ? QStringLiteral("success") : QStringLiteral("failure"));
     return holding;
 }
 
 fincept::Result<PhaseOneHoldingRecord> PhaseOnePortfolioServer::update_holding(
     const PhaseOneSessionInfo& actor, const PhaseOneUpdateHoldingRequest& request) const {
-    if (!request.portfolio_id.isEmpty()) {
-        const auto existing = portfolio_repository_->get_asset_by_id(request.id);
-        if (existing.is_err()) {
-            write_audit_event(actor.username, QStringLiteral("holding_update"),
-                              holding_target(request.id, request.portfolio_id), QStringLiteral("failure"));
-            return fincept::Result<PhaseOneHoldingRecord>::err(existing.error());
-        }
-
-        const auto update = portfolio_repository_->update_asset_by_id(request.id, request.shares, request.avg_cost,
-                                                                      request.sector);
-        if (update.is_err()) {
-            write_audit_event(actor.username, QStringLiteral("holding_update"),
-                              holding_target(request.id, request.portfolio_id), QStringLiteral("failure"));
-            return fincept::Result<PhaseOneHoldingRecord>::err(update.error());
-        }
-
-        const auto holding = fetch_portfolio_holding(request.id);
-        write_audit_event(actor.username, QStringLiteral("holding_update"), holding_target(request.id, request.portfolio_id),
-                          holding.is_ok() ? QStringLiteral("success") : QStringLiteral("failure"));
-        return holding;
+    if (request.portfolio_id.isEmpty()) {
+        write_audit_event(actor.username, QStringLiteral("holding_update"), holding_target(request.id, {}),
+                          QStringLiteral("failure"));
+        return fincept::Result<PhaseOneHoldingRecord>::err("portfolio_id_required");
     }
 
-    const auto existing = holdings_repository_->get_by_id(request.id);
+    const auto existing = portfolio_repository_->get_asset_by_id(request.id);
     if (existing.is_err()) {
-        write_audit_event(actor.username, QStringLiteral("holding_update"), holding_target(request.id, {}),
+        write_audit_event(actor.username, QStringLiteral("holding_update"), holding_target(request.id, request.portfolio_id),
                           QStringLiteral("failure"));
         return fincept::Result<PhaseOneHoldingRecord>::err(existing.error());
     }
+    if (existing.value().portfolio_id != request.portfolio_id) {
+        write_audit_event(actor.username, QStringLiteral("holding_update"), holding_target(request.id, request.portfolio_id),
+                          QStringLiteral("failure"));
+        return fincept::Result<PhaseOneHoldingRecord>::err("Not found");
+    }
 
-    const auto update = holdings_repository_->update(request.id, request.shares, request.avg_cost);
+    const auto update = portfolio_repository_->update_asset_by_id(request.id, request.shares, request.avg_cost,
+                                                                  request.sector);
     if (update.is_err()) {
-        write_audit_event(actor.username, QStringLiteral("holding_update"), holding_target(request.id, {}),
+        write_audit_event(actor.username, QStringLiteral("holding_update"), holding_target(request.id, request.portfolio_id),
                           QStringLiteral("failure"));
         return fincept::Result<PhaseOneHoldingRecord>::err(update.error());
     }
 
-    const auto holding = fetch_flat_holding(request.id);
-    write_audit_event(actor.username, QStringLiteral("holding_update"), holding_target(request.id, {}),
+    const auto holding = fetch_portfolio_holding(request.id);
+    write_audit_event(actor.username, QStringLiteral("holding_update"), holding_target(request.id, request.portfolio_id),
                       holding.is_ok() ? QStringLiteral("success") : QStringLiteral("failure"));
     return holding;
 }
 
 fincept::Result<void> PhaseOnePortfolioServer::remove_holding(const PhaseOneSessionInfo& actor,
                                                               const PhaseOneRemoveHoldingRequest& request) const {
-    if (!request.portfolio_id.isEmpty()) {
-        const auto existing = portfolio_repository_->get_asset_by_id(request.id);
-        if (existing.is_err()) {
-            write_audit_event(actor.username, QStringLiteral("holding_delete"),
-                              holding_target(request.id, request.portfolio_id), QStringLiteral("failure"));
-            return fincept::Result<void>::err(existing.error());
-        }
-
-        const auto remove = portfolio_repository_->remove_asset_by_id(request.id);
-        write_audit_event(actor.username, QStringLiteral("holding_delete"), holding_target(request.id, request.portfolio_id),
-                          remove.is_ok() ? QStringLiteral("success") : QStringLiteral("failure"));
-        return remove;
+    if (request.portfolio_id.isEmpty()) {
+        write_audit_event(actor.username, QStringLiteral("holding_delete"), holding_target(request.id, {}),
+                          QStringLiteral("failure"));
+        return fincept::Result<void>::err("portfolio_id_required");
     }
 
-    const auto existing = holdings_repository_->get_by_id(request.id);
+    const auto existing = portfolio_repository_->get_asset_by_id(request.id);
     if (existing.is_err()) {
-        write_audit_event(actor.username, QStringLiteral("holding_delete"), holding_target(request.id, {}),
+        write_audit_event(actor.username, QStringLiteral("holding_delete"), holding_target(request.id, request.portfolio_id),
                           QStringLiteral("failure"));
         return fincept::Result<void>::err(existing.error());
     }
+    if (existing.value().portfolio_id != request.portfolio_id) {
+        write_audit_event(actor.username, QStringLiteral("holding_delete"), holding_target(request.id, request.portfolio_id),
+                          QStringLiteral("failure"));
+        return fincept::Result<void>::err("Not found");
+    }
 
-    const auto remove = holdings_repository_->remove(request.id);
-    write_audit_event(actor.username, QStringLiteral("holding_delete"), holding_target(request.id, {}),
+    const auto remove = portfolio_repository_->remove_asset_by_id(request.id);
+    write_audit_event(actor.username, QStringLiteral("holding_delete"), holding_target(request.id, request.portfolio_id),
                       remove.is_ok() ? QStringLiteral("success") : QStringLiteral("failure"));
     return remove;
 }

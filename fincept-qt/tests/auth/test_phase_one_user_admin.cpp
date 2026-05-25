@@ -83,9 +83,14 @@ class PhaseOneUserAdminTest : public QObject {
   private slots:
     void init();
     void bootstrap_is_open_only_until_first_admin_is_created();
+    void bootstrap_returns_structured_error_when_user_count_lookup_fails();
+    void bootstrap_status_fails_closed_when_user_count_lookup_fails();
     void set_initial_password_stores_secure_hash_and_not_plaintext();
+    void set_initial_password_is_one_time_only();
     void create_user_enforces_active_user_cap_and_disabled_users_do_not_count();
+    void blank_usernames_are_rejected();
     void sole_admin_cannot_be_disabled_and_transfer_preserves_exactly_one_active_admin();
+    void transfer_admin_reports_missing_target_as_user_not_found();
 };
 
 void PhaseOneUserAdminTest::init() {
@@ -117,6 +122,23 @@ void PhaseOneUserAdminTest::bootstrap_is_open_only_until_first_admin_is_created(
     QVERIFY(second_bootstrap.is_err());
 }
 
+void PhaseOneUserAdminTest::bootstrap_returns_structured_error_when_user_count_lookup_fails() {
+    fincept::Database::instance().close();
+
+    const auto bootstrap = harness().user_admin_server.bootstrap(QStringLiteral("admin"), QStringLiteral("secret"));
+
+    QVERIFY(bootstrap.is_err());
+}
+
+void PhaseOneUserAdminTest::bootstrap_status_fails_closed_when_user_count_lookup_fails() {
+    fincept::Database::instance().close();
+
+    const auto status = harness().user_admin_server.bootstrap_status();
+
+    QVERIFY(status.is_ok());
+    QVERIFY(!status.value().bootstrap_open);
+}
+
 void PhaseOneUserAdminTest::set_initial_password_stores_secure_hash_and_not_plaintext() {
     QVERIFY(harness().user_admin_server.bootstrap(QStringLiteral("admin"), QStringLiteral("secret")).is_ok());
     const auto create = harness().user_admin_server.create_user(QStringLiteral("analyst"));
@@ -136,6 +158,19 @@ void PhaseOneUserAdminTest::set_initial_password_stores_secure_hash_and_not_plai
     QVERIFY(updated->password_hash.startsWith(QStringLiteral("pbkdf2_sha256$200000$")));
 }
 
+void PhaseOneUserAdminTest::set_initial_password_is_one_time_only() {
+    QVERIFY(harness().user_admin_server.bootstrap(QStringLiteral("admin"), QStringLiteral("secret")).is_ok());
+    QVERIFY(harness().user_admin_server.create_user(QStringLiteral("analyst")).is_ok());
+
+    const auto analyst = harness().user_repository.find_by_username(QStringLiteral("analyst"));
+    QVERIFY(analyst.has_value());
+    QVERIFY(harness().user_admin_server.set_initial_password(analyst->user_id, QStringLiteral("launch-123")).is_ok());
+
+    const auto second_set = harness().user_admin_server.set_initial_password(analyst->user_id, QStringLiteral("reset-456"));
+    QVERIFY(second_set.is_err());
+    QCOMPARE(QString::fromStdString(second_set.error()), QStringLiteral("password_already_initialized"));
+}
+
 void PhaseOneUserAdminTest::create_user_enforces_active_user_cap_and_disabled_users_do_not_count() {
     QVERIFY(harness().user_admin_server.bootstrap(QStringLiteral("admin"), QStringLiteral("secret")).is_ok());
     QVERIFY(harness().user_admin_server.create_user(QStringLiteral("user-one")).is_ok());
@@ -152,6 +187,17 @@ void PhaseOneUserAdminTest::create_user_enforces_active_user_cap_and_disabled_us
     const auto listed = harness().user_admin_server.list_users();
     QVERIFY(listed.is_ok());
     QCOMPARE(listed.value().users.size(), 4);
+}
+
+void PhaseOneUserAdminTest::blank_usernames_are_rejected() {
+    const auto bootstrap = harness().user_admin_server.bootstrap(QStringLiteral("   "), QStringLiteral("secret"));
+    QVERIFY(bootstrap.is_err());
+    QCOMPARE(QString::fromStdString(bootstrap.error()), QStringLiteral("invalid_username"));
+
+    QVERIFY(harness().user_admin_server.bootstrap(QStringLiteral("admin"), QStringLiteral("secret")).is_ok());
+    const auto create = harness().user_admin_server.create_user(QStringLiteral("   "));
+    QVERIFY(create.is_err());
+    QCOMPARE(QString::fromStdString(create.error()), QStringLiteral("invalid_username"));
 }
 
 void PhaseOneUserAdminTest::sole_admin_cannot_be_disabled_and_transfer_preserves_exactly_one_active_admin() {
@@ -182,6 +228,15 @@ void PhaseOneUserAdminTest::sole_admin_cannot_be_disabled_and_transfer_preserves
 
     const auto audit = all_audit_events();
     QVERIFY(audit.size() >= 3);
+}
+
+void PhaseOneUserAdminTest::transfer_admin_reports_missing_target_as_user_not_found() {
+    QVERIFY(harness().user_admin_server.bootstrap(QStringLiteral("admin"), QStringLiteral("secret")).is_ok());
+
+    const auto transfer = harness().user_admin_server.transfer_admin(9999);
+
+    QVERIFY(transfer.is_err());
+    QCOMPARE(QString::fromStdString(transfer.error()), QStringLiteral("user_not_found"));
 }
 
 } // namespace

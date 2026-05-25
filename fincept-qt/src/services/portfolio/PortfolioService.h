@@ -102,6 +102,7 @@ class PortfolioService : public QObject {
 
   signals:
     void portfolios_loaded(QVector<portfolio::Portfolio> portfolios);
+    void portfolios_failed(QString error);
     void portfolio_created(portfolio::Portfolio portfolio);
     void portfolio_deleted(QString id);
 
@@ -115,6 +116,7 @@ class PortfolioService : public QObject {
 
     void asset_added(QString portfolio_id);
     void asset_sold(QString portfolio_id);
+    void portfolio_mutation_failed(QString error);
 
     void export_complete(QString file_path);
     void import_complete(portfolio::ImportResult result);

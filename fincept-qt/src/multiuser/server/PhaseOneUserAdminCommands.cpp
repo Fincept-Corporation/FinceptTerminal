@@ -9,6 +9,10 @@ namespace {
 
 constexpr int kMaxActiveUsers = 3;
 
+bool is_blank_username(const QString& username) {
+    return username.trimmed().isEmpty();
+}
+
 } // namespace
 
 PhaseOneUserAdminCommands::PhaseOneUserAdminCommands(PhaseOneUserRepository* user_repository,
@@ -16,7 +20,20 @@ PhaseOneUserAdminCommands::PhaseOneUserAdminCommands(PhaseOneUserRepository* use
     : user_repository_(user_repository), audit_repository_(audit_repository) {}
 
 fincept::Result<void> PhaseOneUserAdminCommands::bootstrap(const QString& username, const QString& password) const {
-    if (user_repository_->count_users().value() > 0) {
+    if (is_blank_username(username)) {
+        write_audit(canonicalize_actor(username), QStringLiteral("bootstrap_admin"), QStringLiteral("system:bootstrap"),
+                    QStringLiteral("failure"));
+        return fincept::Result<void>::err("invalid_username");
+    }
+
+    const auto user_count = user_repository_->count_users();
+    if (user_count.is_err()) {
+        write_audit(canonicalize_actor(username), QStringLiteral("bootstrap_admin"), QStringLiteral("system:bootstrap"),
+                    QStringLiteral("failure"));
+        return fincept::Result<void>::err(user_count.error());
+    }
+
+    if (user_count.value() > 0) {
         write_audit(canonicalize_actor(username), QStringLiteral("bootstrap_admin"), QStringLiteral("system:bootstrap"),
                     QStringLiteral("failure"));
         return fincept::Result<void>::err("bootstrap_closed");
@@ -35,6 +52,11 @@ fincept::Result<void> PhaseOneUserAdminCommands::bootstrap(const QString& userna
 }
 
 fincept::Result<void> PhaseOneUserAdminCommands::create_user(const QString& username, const QString& actor) const {
+    if (is_blank_username(username)) {
+        write_audit(actor, QStringLiteral("create_user"), QStringLiteral("user:invalid"), QStringLiteral("failure"));
+        return fincept::Result<void>::err("invalid_username");
+    }
+
     const auto active_users = user_repository_->count_active_users();
     if (active_users.is_err())
         return fincept::Result<void>::err(active_users.error());
@@ -48,6 +70,8 @@ fincept::Result<void> PhaseOneUserAdminCommands::create_user(const QString& user
     if (created.is_err()) {
         write_audit(actor, QStringLiteral("create_user"), QStringLiteral("user:%1").arg(username.trimmed().toLower()),
                     QStringLiteral("failure"));
+        if (created.error().find("UNIQUE constraint failed") != std::string::npos)
+            return fincept::Result<void>::err("user_conflict");
         return fincept::Result<void>::err(created.error());
     }
 
@@ -60,6 +84,8 @@ fincept::Result<void> PhaseOneUserAdminCommands::set_initial_password(int user_i
     const auto user = user_repository_->find_by_id(user_id);
     if (!user.has_value())
         return fincept::Result<void>::err("user_not_found");
+    if (!user->password_hash.isEmpty())
+        return fincept::Result<void>::err("password_already_initialized");
 
     const auto result = user_repository_->set_initial_password(user_id, PhaseOnePasswordHasher::hash_password(password));
     if (result.is_err())
@@ -95,7 +121,13 @@ fincept::Result<void> PhaseOneUserAdminCommands::disable_user(int user_id, const
 
 fincept::Result<void> PhaseOneUserAdminCommands::transfer_admin(int target_user_id, const QString& actor) const {
     const auto target = user_repository_->find_by_id(target_user_id);
-    if (!target.has_value() || target->status != QStringLiteral("active")) {
+    if (!target.has_value()) {
+        write_audit(actor, QStringLiteral("transfer_admin"), QStringLiteral("user:%1").arg(target_user_id),
+                    QStringLiteral("failure"));
+        return fincept::Result<void>::err("user_not_found");
+    }
+
+    if (target->status != QStringLiteral("active")) {
         write_audit(actor, QStringLiteral("transfer_admin"), QStringLiteral("user:%1").arg(target_user_id),
                     QStringLiteral("failure"));
         return fincept::Result<void>::err("invalid_admin_transfer");

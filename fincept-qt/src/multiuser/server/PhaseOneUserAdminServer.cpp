@@ -22,9 +22,9 @@ fincept::Result<PhaseOneBootstrapStatus> PhaseOneUserAdminServer::bootstrap_stat
     const auto result = user_repository_->count_users();
     if (result.is_err()) {
         LOG_WARN(kUserAdminServerTag,
-                 QStringLiteral("Falling back to open bootstrap scaffold status: %1")
+                 QStringLiteral("Failed to resolve bootstrap status: %1")
                      .arg(QString::fromStdString(result.error())));
-        return fincept::Result<PhaseOneBootstrapStatus>::ok({true});
+        return fincept::Result<PhaseOneBootstrapStatus>::ok({false});
     }
 
     return fincept::Result<PhaseOneBootstrapStatus>::ok({result.value() == 0});
@@ -46,20 +46,21 @@ fincept::Result<PhaseOneUserListResponse> PhaseOneUserAdminServer::list_users() 
     return fincept::Result<PhaseOneUserListResponse>::ok(response);
 }
 
-fincept::Result<void> PhaseOneUserAdminServer::create_user(const QString& username) {
-    return commands_->create_user(username);
+fincept::Result<void> PhaseOneUserAdminServer::create_user(const QString& username, const QString& actor) {
+    return commands_->create_user(username, actor);
 }
 
-fincept::Result<void> PhaseOneUserAdminServer::set_initial_password(int user_id, const QString& password) {
-    return commands_->set_initial_password(user_id, password);
+fincept::Result<void> PhaseOneUserAdminServer::set_initial_password(int user_id, const QString& password,
+                                                                    const QString& actor) {
+    return commands_->set_initial_password(user_id, password, actor);
 }
 
-fincept::Result<void> PhaseOneUserAdminServer::disable_user(int user_id) {
-    return commands_->disable_user(user_id);
+fincept::Result<void> PhaseOneUserAdminServer::disable_user(int user_id, const QString& actor) {
+    return commands_->disable_user(user_id, actor);
 }
 
-fincept::Result<void> PhaseOneUserAdminServer::transfer_admin(int target_user_id) {
-    return commands_->transfer_admin(target_user_id);
+fincept::Result<void> PhaseOneUserAdminServer::transfer_admin(int target_user_id, const QString& actor) {
+    return commands_->transfer_admin(target_user_id, actor);
 }
 
 } // namespace fincept::multiuser

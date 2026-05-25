@@ -168,6 +168,10 @@ class PhaseOnePortfolioContractsTest : public QObject {
     void init();
     void portfolio_routes_reject_unauthenticated_access();
     void standard_users_can_list_mutate_and_fetch_portfolios_and_holdings();
+    void holdings_routes_require_portfolio_scope();
+    void holdings_routes_reject_mismatched_portfolio_scope();
+    void create_holding_reports_missing_portfolio_as_not_found();
+    void list_holdings_reports_missing_portfolio_as_not_found();
     void revoked_portfolio_requests_clear_client_auth_state();
 };
 
@@ -224,13 +228,17 @@ void PhaseOnePortfolioContractsTest::standard_users_can_list_mutate_and_fetch_po
     QCOMPARE(harness().parse_object(updated_portfolio).value("portfolio").toObject().value("currency").toString(),
              QString("EUR"));
 
-    const auto empty_holdings = harness().dispatch("GET", QStringLiteral("/phase1/holdings"), session_id);
+    QUrlQuery empty_holdings_query;
+    empty_holdings_query.addQueryItem(QStringLiteral("portfolio_id"), portfolio_id);
+    const auto empty_holdings = harness().dispatch(
+        "GET", QStringLiteral("/phase1/holdings?") + empty_holdings_query.toString(QUrl::FullyEncoded), session_id);
     QCOMPARE(empty_holdings.status_code, 200);
     QCOMPARE(harness().parse_object(empty_holdings).value("holdings").toArray().size(), 0);
 
     const auto created_holding = harness().dispatch(
         "POST", QStringLiteral("/phase1/holdings/create"), session_id,
-        QJsonObject{{"symbol", QStringLiteral("AAPL")},
+        QJsonObject{{"portfolio_id", portfolio_id},
+                    {"symbol", QStringLiteral("AAPL")},
                     {"name", QStringLiteral("Apple Inc.")},
                     {"shares", 12.0},
                     {"avg_cost", 182.5}});
@@ -240,12 +248,13 @@ void PhaseOnePortfolioContractsTest::standard_users_can_list_mutate_and_fetch_po
 
     const auto updated_holding = harness().dispatch(
         "POST", QStringLiteral("/phase1/holdings/update"), session_id,
-        QJsonObject{{"id", holding_id}, {"shares", 15.0}, {"avg_cost", 190.0}});
+        QJsonObject{{"id", holding_id}, {"portfolio_id", portfolio_id}, {"shares", 15.0}, {"avg_cost", 190.0}});
     QCOMPARE(updated_holding.status_code, 200);
     QCOMPARE(harness().parse_object(updated_holding).value("holding").toObject().value("shares").toDouble(), 15.0);
 
     const auto removed_holding = harness().dispatch(
-        "POST", QStringLiteral("/phase1/holdings/remove"), session_id, QJsonObject{{"id", holding_id}});
+        "POST", QStringLiteral("/phase1/holdings/remove"), session_id,
+        QJsonObject{{"id", holding_id}, {"portfolio_id", portfolio_id}});
     QCOMPARE(removed_holding.status_code, 200);
 
     const auto events = harness().audit_events();
@@ -262,6 +271,78 @@ void PhaseOnePortfolioContractsTest::standard_users_can_list_mutate_and_fetch_po
     QVERIFY(actions.contains(QStringLiteral("holding_create")));
     QVERIFY(actions.contains(QStringLiteral("holding_update")));
     QVERIFY(actions.contains(QStringLiteral("holding_delete")));
+}
+
+void PhaseOnePortfolioContractsTest::holdings_routes_require_portfolio_scope() {
+    const QString session_id = harness().create_standard_session();
+
+    const auto list_without_scope = harness().dispatch("GET", QStringLiteral("/phase1/holdings"), session_id);
+    QCOMPARE(list_without_scope.status_code, 400);
+
+    const auto create_without_scope = harness().dispatch(
+        "POST", QStringLiteral("/phase1/holdings/create"), session_id,
+        QJsonObject{{"symbol", QStringLiteral("AAPL")}, {"name", QStringLiteral("Apple Inc.")}, {"shares", 2.0}, {"avg_cost", 100.0}});
+    QCOMPARE(create_without_scope.status_code, 400);
+
+    const auto update_without_scope = harness().dispatch(
+        "POST", QStringLiteral("/phase1/holdings/update"), session_id,
+        QJsonObject{{"id", 1}, {"shares", 3.0}, {"avg_cost", 101.0}});
+    QCOMPARE(update_without_scope.status_code, 400);
+
+    const auto remove_without_scope = harness().dispatch(
+        "POST", QStringLiteral("/phase1/holdings/remove"), session_id, QJsonObject{{"id", 1}});
+    QCOMPARE(remove_without_scope.status_code, 400);
+}
+
+void PhaseOnePortfolioContractsTest::holdings_routes_reject_mismatched_portfolio_scope() {
+    const QString session_id = harness().create_standard_session();
+
+    const auto created_portfolio = harness().dispatch(
+        "POST", QStringLiteral("/phase1/portfolios/create"), session_id,
+        QJsonObject{{"name", QStringLiteral("Scoped Book")},
+                    {"owner", QStringLiteral("Family Office")},
+                    {"currency", QStringLiteral("USD")},
+                    {"description", QStringLiteral("Scope test")}});
+    QCOMPARE(created_portfolio.status_code, 200);
+    const QString portfolio_id = harness().parse_object(created_portfolio).value("portfolio").toObject().value("id").toString();
+
+    const auto created_holding = harness().dispatch(
+        "POST", QStringLiteral("/phase1/holdings/create"), session_id,
+        QJsonObject{{"portfolio_id", portfolio_id}, {"symbol", QStringLiteral("AAPL")}, {"name", QStringLiteral("Apple Inc.")},
+                    {"shares", 4.0}, {"avg_cost", 150.0}});
+    QCOMPARE(created_holding.status_code, 200);
+    const int holding_id = harness().parse_object(created_holding).value("holding").toObject().value("id").toInt();
+
+    const auto update_wrong_scope = harness().dispatch(
+        "POST", QStringLiteral("/phase1/holdings/update"), session_id,
+        QJsonObject{{"id", holding_id}, {"portfolio_id", QStringLiteral("wrong-portfolio")}, {"shares", 5.0}, {"avg_cost", 155.0}});
+    QCOMPARE(update_wrong_scope.status_code, 404);
+
+    const auto remove_wrong_scope = harness().dispatch(
+        "POST", QStringLiteral("/phase1/holdings/remove"), session_id,
+        QJsonObject{{"id", holding_id}, {"portfolio_id", QStringLiteral("wrong-portfolio")}});
+    QCOMPARE(remove_wrong_scope.status_code, 404);
+}
+
+void PhaseOnePortfolioContractsTest::create_holding_reports_missing_portfolio_as_not_found() {
+    const QString session_id = harness().create_standard_session();
+
+    const auto create_missing_portfolio = harness().dispatch(
+        "POST", QStringLiteral("/phase1/holdings/create"), session_id,
+        QJsonObject{{"portfolio_id", QStringLiteral("missing-portfolio")},
+                    {"symbol", QStringLiteral("AAPL")},
+                    {"name", QStringLiteral("Apple Inc.")},
+                    {"shares", 2.0},
+                    {"avg_cost", 100.0}});
+    QCOMPARE(create_missing_portfolio.status_code, 404);
+}
+
+void PhaseOnePortfolioContractsTest::list_holdings_reports_missing_portfolio_as_not_found() {
+    const QString session_id = harness().create_standard_session();
+
+    const auto response = harness().dispatch(
+        "GET", QStringLiteral("/phase1/holdings?portfolio_id=missing-portfolio"), session_id);
+    QCOMPARE(response.status_code, 404);
 }
 
 void PhaseOnePortfolioContractsTest::revoked_portfolio_requests_clear_client_auth_state() {

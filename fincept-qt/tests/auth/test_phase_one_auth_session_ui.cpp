@@ -55,12 +55,18 @@ void PhaseOneAuthSessionUiSmokeTest::startup_auth_restore_is_disabled_for_all_pe
 void PhaseOneAuthSessionUiSmokeTest::provider_credentials_stay_separate_from_phase_one_app_sessions() {
     fincept::auth::SessionData session;
     session.authenticated = true;
+    session.username = QStringLiteral("alice");
     session.session_id = QStringLiteral("phase-one-session");
     session.session_token = QStringLiteral("phase-one-session");
 
     QCOMPARE(fincept::auth::PhaseOneSessionAuthBridge::resolve_fincept_provider_api_key(
-                 session, QStringLiteral("provider-key"), QStringLiteral("secure-provider-key")),
+                  session, QStringLiteral("provider-key"), QStringLiteral("secure-provider-key"), QStringLiteral("alice")),
              QStringLiteral("provider-key"));
+
+    session.username = QStringLiteral("bob");
+    QCOMPARE(fincept::auth::PhaseOneSessionAuthBridge::resolve_fincept_provider_api_key(
+                  session, QStringLiteral("provider-key"), QStringLiteral("secure-provider-key"), QStringLiteral("alice")),
+             QString());
 }
 
 void PhaseOneAuthSessionUiSmokeTest::invalid_session_handler_only_clears_auth_for_revoked_sessions() {

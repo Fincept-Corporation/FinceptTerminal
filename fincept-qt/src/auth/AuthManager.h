@@ -82,7 +82,7 @@ class AuthManager : public QObject {
     void set_loading(bool v);
     void save_session();
     void load_session();
-    void clear_session();
+    void clear_session(bool clear_provider_credentials = true);
     void validate_saved_session();
     void fetch_user_profile(std::function<void()> on_done = {});
     void fetch_user_subscription(std::function<void()> on_done = {});

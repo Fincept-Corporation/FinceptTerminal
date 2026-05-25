@@ -63,7 +63,7 @@ fincept::Result<PhaseOneSessionInfo> PhaseOneAuthServer::login(const QString& us
     }
 
     if (user->password_hash.isEmpty()) {
-        write_audit_event(actor, QStringLiteral("login"), target, QStringLiteral("setup_required"));
+        write_audit_event(actor, QStringLiteral("login"), target, QStringLiteral("failure"));
         return fincept::Result<PhaseOneSessionInfo>::err("setup_required");
     }
 
@@ -187,17 +187,19 @@ fincept::Result<PhaseOneSessionInfo> PhaseOneAuthServer::replace_session_for_use
 
     for (const PhaseOneStoredSession& session : existing_sessions.value()) {
         write_session_event(user.username, QStringLiteral("forced_invalidation"), session.session_id,
-                            QStringLiteral("replaced_by_new_login"));
+                            QStringLiteral("success"));
     }
 
     return fincept::Result<PhaseOneSessionInfo>::ok(created.value().to_session_info());
 }
 
 fincept::Result<void> PhaseOneAuthServer::invalidate_session_with_audit(const PhaseOneStoredSession& session,
-                                                                        const QString& actor,
-                                                                        const QString& reason) const {
+                                                                         const QString& actor,
+                                                                         const QString& reason) const {
     const auto result = session_repository_->invalidate_session(session.session_id);
-    write_session_event(actor, QStringLiteral("forced_invalidation"), session.session_id, reason);
+    Q_UNUSED(reason)
+    write_session_event(actor, QStringLiteral("forced_invalidation"), session.session_id,
+                        result.is_ok() ? QStringLiteral("success") : QStringLiteral("failure"));
     return result;
 }
 

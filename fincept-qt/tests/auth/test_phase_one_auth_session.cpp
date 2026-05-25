@@ -84,6 +84,7 @@ class PhaseOneAuthSessionTest : public QObject {
     void old_persisted_session_payload_parses_safely();
     void phase_one_session_exposes_compatibility_credentials();
     void legacy_startup_auth_state_is_never_restored();
+    void hosted_startup_auth_state_is_also_disabled();
     void user_without_initial_password_receives_setup_required();
     void second_login_replaces_prior_session();
     void login_populates_expiry_and_current_session_refreshes_activity();
@@ -91,6 +92,7 @@ class PhaseOneAuthSessionTest : public QObject {
     void disabled_user_login_is_denied_and_active_session_is_invalidated();
     void logout_invalidates_current_session();
     void auth_events_record_login_failed_login_and_logout();
+    void forced_invalidation_audit_events_use_schema_valid_result_status();
 };
 
 void PhaseOneAuthSessionTest::init() {
@@ -159,15 +161,28 @@ void PhaseOneAuthSessionTest::phase_one_session_exposes_compatibility_credential
 }
 
 void PhaseOneAuthSessionTest::legacy_startup_auth_state_is_never_restored() {
-    const QString legacy_session = QString::fromUtf8(
+    const QString phase_one_session = QString::fromUtf8(
         QJsonDocument(QJsonObject{{"authenticated", true},
-                                  {"api_key", "legacy-key"},
-                                  {"session_token", "legacy-session"},
+                                  {"session_id", "phase-one-session"},
+                                  {"session_token", "phase-one-session"},
                                   {"user_info", QJsonObject{{"username", "legacy-user"}}}})
             .toJson(QJsonDocument::Compact));
 
     QVERIFY(!PhaseOneSessionAuthBridge::should_restore_startup_auth(
-        legacy_session, QStringLiteral("legacy-settings-key"), QStringLiteral("legacy-secure-key")));
+        phase_one_session, QStringLiteral("legacy-settings-key"), QStringLiteral("legacy-secure-key")));
+}
+
+void PhaseOneAuthSessionTest::hosted_startup_auth_state_is_also_disabled() {
+    const QString hosted_session = QString::fromUtf8(
+        QJsonDocument(QJsonObject{{"authenticated", true},
+                                  {"api_key", "hosted-key"},
+                                  {"session_token", "hosted-session"},
+                                  {"user_info", QJsonObject{{"username", "hosted-user"}}}})
+            .toJson(QJsonDocument::Compact));
+
+    QVERIFY(!PhaseOneSessionAuthBridge::should_restore_startup_auth(hosted_session, QString(), QString()));
+    QVERIFY(!PhaseOneSessionAuthBridge::should_restore_startup_auth(QString(), QStringLiteral("persisted-hosted-key"),
+                                                                    QString()));
 }
 
 void PhaseOneAuthSessionTest::user_without_initial_password_receives_setup_required() {
@@ -283,6 +298,33 @@ void PhaseOneAuthSessionTest::auth_events_record_login_failed_login_and_logout()
     const auto events = harness().audit_repository.list_events({});
     QVERIFY(events.is_ok());
     QVERIFY(events.value().size() >= 3);
+
+    for (const auto& event : events.value())
+        QVERIFY(event.result_status == QStringLiteral("success") || event.result_status == QStringLiteral("failure"));
+}
+
+void PhaseOneAuthSessionTest::forced_invalidation_audit_events_use_schema_valid_result_status() {
+    QVERIFY(harness().user_admin_server.bootstrap(QStringLiteral("admin"), QStringLiteral("secret")).is_ok());
+
+    const auto first_login = harness().auth_server.login(QStringLiteral("admin"), QStringLiteral("secret"));
+    QVERIFY(first_login.is_ok());
+    const auto second_login = harness().auth_server.login(QStringLiteral("admin"), QStringLiteral("secret"));
+    QVERIFY(second_login.is_ok());
+
+    const auto events = harness().audit_repository.list_events({});
+    QVERIFY(events.is_ok());
+
+    bool found_forced_invalidation = false;
+    for (const auto& event : events.value()) {
+        QVERIFY(event.result_status == QStringLiteral("success") || event.result_status == QStringLiteral("failure"));
+        if (event.action_type == QStringLiteral("forced_invalidation") &&
+            event.target == QStringLiteral("session:%1").arg(first_login.value().session_id)) {
+            found_forced_invalidation = true;
+            QCOMPARE(event.result_status, QStringLiteral("success"));
+        }
+    }
+
+    QVERIFY(found_forced_invalidation);
 }
 
 } // namespace

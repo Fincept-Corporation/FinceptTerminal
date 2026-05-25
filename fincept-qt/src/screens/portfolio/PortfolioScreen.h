@@ -60,6 +60,7 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
 
   private slots:
     void on_portfolios_loaded(QVector<portfolio::Portfolio> portfolios);
+    void on_portfolios_failed(QString error);
     void on_portfolio_selected(const QString& id);
     void on_summary_loaded(portfolio::PortfolioSummary summary);
     void on_summary_error(QString portfolio_id, QString error);
@@ -68,6 +69,7 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
     void on_portfolio_created(portfolio::Portfolio portfolio);
     void on_portfolio_deleted(QString id);
     void on_asset_changed(QString portfolio_id);
+    void on_portfolio_mutation_failed(QString error);
     void on_create_requested();
     void on_delete_requested(const QString& id);
     void on_detail_view_selected(portfolio::DetailView view);

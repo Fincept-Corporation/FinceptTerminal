@@ -9,6 +9,8 @@
 #include "services/portfolio/PortfolioService.h"
 
 #include "core/logging/Logger.h"
+#include "multiuser/client/PhaseOnePortfolioApi.h"
+#include "multiuser/contracts/PhaseOnePortfolioTypes.h"
 #include "python/PythonRunner.h"
 #include "services/sectors/SectorResolver.h"
 #include "storage/repositories/PortfolioRepository.h"
@@ -45,6 +47,56 @@ void PortfolioService::load_summary(const QString& portfolio_id) {
                 return;
             }
         }
+    }
+
+    if (uses_phase_one_server_authority()) {
+        QPointer<PortfolioService> self = this;
+        fincept::multiuser::PhaseOnePortfolioApi::instance().fetch_portfolio(
+            portfolio_id, [self, portfolio_id](fincept::auth::ApiResponse portfolio_response) {
+                if (!self)
+                    return;
+                if (!portfolio_response.success) {
+                    emit self->summary_error(portfolio_id, portfolio_response.error);
+                    return;
+                }
+
+                const auto portfolio_record = fincept::multiuser::PhaseOnePortfolioRecord::from_json(
+                    portfolio_response.data.value(QStringLiteral("portfolio")).toObject());
+                const portfolio::Portfolio portfolio{portfolio_record.id, portfolio_record.name, portfolio_record.owner,
+                                                     portfolio_record.currency, portfolio_record.description,
+                                                     portfolio_record.created_at, portfolio_record.updated_at,
+                                                     portfolio_record.broker_account_id};
+
+                fincept::multiuser::PhaseOnePortfolioApi::instance().list_holdings(
+                    portfolio_id, [self, portfolio_id, portfolio](fincept::auth::ApiResponse holdings_response) {
+                        if (!self)
+                            return;
+                        if (!holdings_response.success) {
+                            emit self->summary_error(portfolio_id, holdings_response.error);
+                            return;
+                        }
+
+                        const auto parsed = fincept::multiuser::PhaseOneHoldingsListResponse::from_json(holdings_response.data);
+                        QVector<portfolio::PortfolioAsset> assets;
+                        assets.reserve(parsed.holdings.size());
+                        for (const auto& record : parsed.holdings) {
+                            assets.append({record.id, record.portfolio_id, record.symbol, record.shares, record.avg_cost,
+                                           record.added_at, record.updated_at, record.sector, record.broker_symbol,
+                                           record.exchange});
+                        }
+
+                        if (assets.isEmpty()) {
+                            portfolio::PortfolioSummary empty;
+                            empty.portfolio = portfolio;
+                            empty.last_updated = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+                            emit self->summary_loaded(empty);
+                            return;
+                        }
+
+                        self->build_summary(portfolio_id, assets, portfolio);
+                    });
+            });
+        return;
     }
 
     auto portfolio_r = PortfolioRepository::instance().get_portfolio(portfolio_id);

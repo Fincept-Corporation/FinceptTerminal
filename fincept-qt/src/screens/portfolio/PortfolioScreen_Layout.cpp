@@ -71,6 +71,11 @@ void PortfolioScreen::build_ui() {
     connect(command_bar_, &PortfolioCommandBar::buy_requested, this, &PortfolioScreen::on_buy_requested);
     connect(command_bar_, &PortfolioCommandBar::sell_requested, this, &PortfolioScreen::on_sell_requested);
     connect(command_bar_, &PortfolioCommandBar::dividend_requested, this, [this]() {
+        if (is_connected_mode()) {
+            show_portfolio_message(tr("Unavailable In Connected Mode"),
+                                   tr("Dividend entry is not available while this portfolio is server-authoritative."));
+            return;
+        }
         if (selected_id_.isEmpty() || current_summary_.holdings.isEmpty())
             return;
         QStringList syms;
@@ -192,6 +197,11 @@ void PortfolioScreen::build_ui() {
         }
     });
     connect(command_bar_, &PortfolioCommandBar::import_requested, this, [this]() {
+        if (is_connected_mode()) {
+            show_portfolio_message(tr("Unavailable In Connected Mode"),
+                                   tr("JSON import is not available while this portfolio workspace is server-authoritative."));
+            return;
+        }
         ImportPortfolioDialog dlg(portfolios_, this);
         if (dlg.exec() == QDialog::Accepted) {
             services::PortfolioService::instance().import_json(dlg.file_path(), dlg.mode(), dlg.merge_target_id());
@@ -638,6 +648,11 @@ QWidget* PortfolioScreen::build_main_view() {
                 }
                 if (!match)
                     return;
+                if (is_connected_mode()) {
+                    show_portfolio_message(tr("Unavailable In Connected Mode"),
+                                           tr("Transaction edits are not available while this portfolio workspace is server-authoritative."));
+                    return;
+                }
                 EditTransactionDialog dlg(*match, this);
                 if (dlg.exec() == QDialog::Accepted) {
                     services::PortfolioService::instance().update_transaction(match->id, dlg.quantity(), dlg.price(),

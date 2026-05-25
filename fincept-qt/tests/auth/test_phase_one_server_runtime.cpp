@@ -18,6 +18,22 @@ using namespace fincept;
 
 namespace {
 
+QByteArray read_socket_response(QTcpSocket& socket, int timeout_ms = 3000) {
+    QByteArray response;
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < timeout_ms) {
+        QCoreApplication::processEvents();
+        socket.waitForReadyRead(50);
+        response += socket.readAll();
+        if (socket.state() == QAbstractSocket::UnconnectedState)
+            break;
+    }
+
+    response += socket.readAll();
+    return response;
+}
+
 class PhaseOneServerRuntimeTest : public QObject {
     Q_OBJECT
 
@@ -27,8 +43,10 @@ class PhaseOneServerRuntimeTest : public QObject {
     void cli_requires_explicit_server_host();
     void server_paths_ignore_profile_for_authoritative_db_path();
     void runtime_rejects_missing_host();
+    void runtime_rejects_wildcard_host();
     void runtime_starts_server_and_runs_migrations();
     void runtime_accepts_post_json_bodies_over_tcp();
+    void runtime_accepts_fragmented_post_json_bodies_over_tcp();
 };
 
 void PhaseOneServerRuntimeTest::fincept_binary_path_is_injected() {
@@ -93,6 +111,21 @@ void PhaseOneServerRuntimeTest::runtime_rejects_missing_host() {
     QVERIFY(result.error_context.message.contains("host", Qt::CaseInsensitive));
 }
 
+void PhaseOneServerRuntimeTest::runtime_rejects_wildcard_host() {
+    PhaseOneServerRuntime runtime;
+
+    PhaseOneResolvedServerOptions options;
+    options.host = QStringLiteral("0.0.0.0");
+    options.port = 45450;
+    options.db_path = QStringLiteral("/tmp/phase1.db");
+
+    const PhaseOneServerStartResult result = runtime.start(options);
+
+    QVERIFY(!result.ok);
+    QCOMPARE(result.error_context.code, QString("invalid_server_host"));
+    QVERIFY(result.error_context.message.contains("0.0.0.0"));
+}
+
 void PhaseOneServerRuntimeTest::runtime_starts_server_and_runs_migrations() {
     AppPaths::clear_overrides();
 
@@ -130,14 +163,7 @@ void PhaseOneServerRuntimeTest::runtime_starts_server_and_runs_migrations() {
     socket.write("GET /phase1/health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
     QVERIFY(socket.waitForBytesWritten(3000));
 
-    QByteArray response;
-    QElapsedTimer timer;
-    timer.start();
-    while (response.isEmpty() && timer.elapsed() < 3000) {
-        QCoreApplication::processEvents();
-        socket.waitForReadyRead(50);
-        response += socket.readAll();
-    }
+    const QByteArray response = read_socket_response(socket);
 
     QVERIFY(!response.isEmpty());
     QVERIFY(response.contains("200"));
@@ -181,14 +207,50 @@ void PhaseOneServerRuntimeTest::runtime_accepts_post_json_bodies_over_tcp() {
     socket.write(request);
     QVERIFY(socket.waitForBytesWritten(3000));
 
-    QByteArray response;
-    QElapsedTimer timer;
-    timer.start();
-    while (response.isEmpty() && timer.elapsed() < 3000) {
-        QCoreApplication::processEvents();
-        socket.waitForReadyRead(50);
-        response += socket.readAll();
-    }
+    const QByteArray response = read_socket_response(socket);
+
+    QVERIFY(!response.isEmpty());
+    QVERIFY(response.contains("200"));
+    QVERIFY(!response.contains("invalid_json"));
+}
+
+void PhaseOneServerRuntimeTest::runtime_accepts_fragmented_post_json_bodies_over_tcp() {
+    AppPaths::clear_overrides();
+
+    QTemporaryDir temp_dir;
+    QVERIFY2(temp_dir.isValid(), "temporary directory must be created");
+
+    QTcpServer probe;
+    QVERIFY2(probe.listen(QHostAddress::LocalHost, 0), "port probe must listen");
+    const quint16 port = probe.serverPort();
+    probe.close();
+
+    PhaseOneResolvedServerOptions options;
+    options.host = QStringLiteral("127.0.0.1");
+    options.port = port;
+    options.db_path = temp_dir.filePath(QStringLiteral("phase1-server.db"));
+
+    PhaseOneServerRuntime runtime;
+    const PhaseOneServerStartResult start = runtime.start(options);
+    QVERIFY2(start.ok, qPrintable(start.error_context.message));
+
+    const QByteArray body = R"({"username":"admin1","password":"Passw0rd!"})";
+    const QByteArray headers = QByteArray("POST /phase1/admin/bootstrap HTTP/1.1\r\n")
+        + "Host: 127.0.0.1\r\n"
+        + "Content-Type: application/json\r\n"
+        + "Content-Length: " + QByteArray::number(body.size()) + "\r\n"
+        + "Connection: close\r\n\r\n";
+
+    QTcpSocket socket;
+    socket.connectToHost(QHostAddress::LocalHost, port);
+    QVERIFY2(socket.waitForConnected(3000), qPrintable(socket.errorString()));
+    socket.write(headers);
+    QVERIFY(socket.waitForBytesWritten(3000));
+    QTest::qWait(50);
+    socket.write(body);
+    QVERIFY(socket.waitForBytesWritten(3000));
+
+    const QByteArray response = read_socket_response(socket);
 
     QVERIFY(!response.isEmpty());
     QVERIFY(response.contains("200"));

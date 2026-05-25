@@ -134,13 +134,20 @@ void register_phase_one_user_admin_routes(PhaseOneHttpServer& http_server, Phase
                                        return PhaseOneHttpJsonResponse::error(400, QStringLiteral("invalid_json"),
                                                                              QStringLiteral("Expected JSON object body."));
 
-                                    const auto result = user_admin_server.create_user(body.value("username").toString());
-                                    if (result.is_err()) {
-                                        const QString code = QString::fromStdString(result.error());
-                                        const int status = code == QStringLiteral("active_user_cap_reached") ? 409 : 400;
-                                        return json_response(status, {{"error_code", code}, {"message", code}});
-                                    }
-                                    return json_response(200, {});
+                                     const auto admin = require_admin(context, auth_server, &denied);
+                                     if (!admin.has_value())
+                                         return denied;
+                                     const auto result = user_admin_server.create_user(body.value("username").toString(),
+                                                                                       admin->username);
+                                     if (result.is_err()) {
+                                         const QString code = QString::fromStdString(result.error());
+                                         const int status = (code == QStringLiteral("active_user_cap_reached") ||
+                                                             code == QStringLiteral("user_conflict"))
+                                                                ? 409
+                                                                : 400;
+                                         return json_response(status, {{"error_code", code}, {"message", code}});
+                                     }
+                                     return json_response(200, {});
                                 });
 
     http_server.register_route("POST", QStringLiteral("/phase1/admin/users/set-initial-password"),
@@ -154,13 +161,17 @@ void register_phase_one_user_admin_routes(PhaseOneHttpServer& http_server, Phase
                                        return PhaseOneHttpJsonResponse::error(400, QStringLiteral("invalid_json"),
                                                                              QStringLiteral("Expected JSON object body."));
 
-                                    const auto result = user_admin_server.set_initial_password(body.value("user_id").toInt(),
-                                                                                               body.value("password").toString());
-                                    if (result.is_err()) {
-                                        const QString code = QString::fromStdString(result.error());
-                                        const int status = code == QStringLiteral("user_not_found") ? 404 : 400;
-                                        return json_response(status, {{"error_code", code}, {"message", code}});
-                                    }
+                                     const auto admin = require_admin(context, auth_server, &denied);
+                                     if (!admin.has_value())
+                                         return denied;
+                                     const auto result = user_admin_server.set_initial_password(body.value("user_id").toInt(),
+                                                                                                body.value("password").toString(),
+                                                                                                admin->username);
+                                     if (result.is_err()) {
+                                         const QString code = QString::fromStdString(result.error());
+                                         const int status = code == QStringLiteral("user_not_found") ? 404 : 400;
+                                         return json_response(status, {{"error_code", code}, {"message", code}});
+                                     }
                                     return json_response(200, {});
                                 });
 
@@ -175,7 +186,11 @@ void register_phase_one_user_admin_routes(PhaseOneHttpServer& http_server, Phase
                                        return PhaseOneHttpJsonResponse::error(400, QStringLiteral("invalid_json"),
                                                                              QStringLiteral("Expected JSON object body."));
 
-                                    const auto result = user_admin_server.disable_user(body.value("user_id").toInt());
+                                     const auto admin = require_admin(context, auth_server, &denied);
+                                     if (!admin.has_value())
+                                         return denied;
+                                     const auto result = user_admin_server.disable_user(body.value("user_id").toInt(),
+                                                                                         admin->username);
                                     if (result.is_err()) {
                                         const QString code = QString::fromStdString(result.error());
                                         const int status = code == QStringLiteral("user_not_found") ? 404 : 409;
@@ -195,7 +210,11 @@ void register_phase_one_user_admin_routes(PhaseOneHttpServer& http_server, Phase
                                        return PhaseOneHttpJsonResponse::error(400, QStringLiteral("invalid_json"),
                                                                              QStringLiteral("Expected JSON object body."));
 
-                                    const auto result = user_admin_server.transfer_admin(body.value("target_user_id").toInt());
+                                     const auto admin = require_admin(context, auth_server, &denied);
+                                     if (!admin.has_value())
+                                         return denied;
+                                     const auto result = user_admin_server.transfer_admin(body.value("target_user_id").toInt(),
+                                                                                            admin->username);
                                     if (result.is_err()) {
                                         const QString code = QString::fromStdString(result.error());
                                         const int status = code == QStringLiteral("user_not_found") ? 404 : 409;

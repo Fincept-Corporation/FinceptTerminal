@@ -50,5 +50,5 @@ PASS   : PhaseOneAuthSessionUiSmokeTest::provider_credentials_stay_separate_from
 
 Interpretation:
 
-- A phase-one authenticated session with only `session_id`/`session_token` does not override a persisted provider credential.
-- `PhaseOneSessionAuthBridge::resolve_fincept_provider_api_key()` returns the stored provider key instead of promoting the phase-one app session into provider auth.
+- A phase-one authenticated session only reuses a persisted provider credential when the stored owner matches the authenticated username.
+- `PhaseOneSessionAuthBridge::resolve_fincept_provider_api_key()` now blocks cross-user leakage on a shared desktop profile while preserving same-user provider compatibility for the callers listed above.

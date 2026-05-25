@@ -311,7 +311,7 @@ fincept_add_phase_one_test(fincept_auth_login_tests
     EXTRA_SOURCES
         ${PHASE1_CLIENT_TEST_SUPPORT_SOURCES}
         ${PHASE1_SERVER_TEST_SUPPORT_SOURCES}
-    LINK_LIBS Qt6::Network Qt6::Sql
+    LINK_LIBS Qt6::Network Qt6::Sql Qt6::Concurrent
 )
 
 fincept_add_phase_one_test(fincept_auth_session_tests
@@ -319,7 +319,7 @@ fincept_add_phase_one_test(fincept_auth_session_tests
     EXTRA_SOURCES
         ${PHASE1_SERVER_TEST_SUPPORT_SOURCES}
         "${PROJECT_SOURCE_DIR}/src/auth/PhaseOneSessionAuthBridge.cpp"
-    LINK_LIBS Qt6::Network Qt6::Sql
+    LINK_LIBS Qt6::Network Qt6::Sql Qt6::Concurrent
 )
 
 fincept_add_phase_one_test(fincept_auth_session_ui_tests

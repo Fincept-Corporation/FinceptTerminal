@@ -26,6 +26,12 @@ PhaseOneServerStartResult PhaseOneServerRuntime::start(const fincept::PhaseOneRe
         return {false, {QStringLiteral("invalid_server_host"), QStringLiteral("Phase one server host is required.")}};
     }
 
+    if (options.host.trimmed() == QStringLiteral("0.0.0.0")) {
+        return {false,
+                {QStringLiteral("invalid_server_host"),
+                 QStringLiteral("Phase one server host must not use 0.0.0.0 for live server runs.")}};
+    }
+
     if (options.db_path.trimmed().isEmpty()) {
         return {false, {QStringLiteral("invalid_server_db_path"), QStringLiteral("Phase one server database path is required.")}};
     }
