@@ -371,7 +371,7 @@ void EquityBottomPanel::set_holdings(const QVector<trading::BrokerHolding>& hold
 
     auto set_num = [](QTableWidgetItem* it, double v, int precision) {
         it->setData(Qt::DisplayRole, QString::number(v, 'f', precision));
-        it->setData(Qt::UserRole, v); // for potential custom sort; Display still orders alphabetically
+        it->setData(Qt::EditRole, v);
     };
 
     for (int i = 0; i < holdings.size(); ++i) {
@@ -384,11 +384,13 @@ void EquityBottomPanel::set_holdings(const QVector<trading::BrokerHolding>& hold
         set_num(ensure_item(holdings_table_, i, 5), h.current_value, 2);
 
         auto* pnl_item = ensure_item(holdings_table_, i, 6);
-        pnl_item->setText(QString::number(h.pnl, 'f', 2));
+        pnl_item->setData(Qt::DisplayRole, QString::number(h.pnl, 'f', 2));
+        pnl_item->setData(Qt::EditRole, h.pnl);
         pnl_item->setForeground(h.pnl >= 0 ? pos_color : neg_color);
 
         auto* pct_item = ensure_item(holdings_table_, i, 7);
-        pct_item->setText(QString("%1%").arg(h.pnl_pct, 0, 'f', 2));
+        pct_item->setData(Qt::DisplayRole, QString("%1%").arg(h.pnl_pct, 0, 'f', 2));
+        pct_item->setData(Qt::EditRole, h.pnl_pct);
         pct_item->setForeground(h.pnl_pct >= 0 ? pos_color : neg_color);
 
         total_invested += h.invested_value;
