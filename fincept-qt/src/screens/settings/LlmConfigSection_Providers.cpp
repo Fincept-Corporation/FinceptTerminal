@@ -8,11 +8,11 @@
 
 #include "screens/settings/LlmConfigSection.h"
 
+#include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
 #include "services/llm/LlmService.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
-#include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -548,9 +548,9 @@ void LlmConfigSection::populate_form(const QString& provider) {
 
             if (is_fincept) {
                 api_key_edit_->clear();
-                auto stored = SettingsRepository::instance().get("fincept_api_key");
-                if (stored.is_ok() && !stored.value().isEmpty()) {
-                    QString masked = stored.value().left(8) + "...";
+                const QString linked_key = auth::AuthManager::instance().fincept_provider_api_key();
+                if (!linked_key.isEmpty()) {
+                    QString masked = linked_key.left(8) + "...";
                     api_key_edit_->setPlaceholderText("Linked to your Fincept account: " + masked);
                 } else {
                     api_key_edit_->setPlaceholderText("Login to your Fincept account to enable");
@@ -594,9 +594,9 @@ void LlmConfigSection::populate_form(const QString& provider) {
     api_key_edit_->clear();
     api_key_edit_->setEnabled(!is_fincept && !is_ollama);
     if (is_fincept) {
-        auto stored = SettingsRepository::instance().get("fincept_api_key");
-        if (stored.is_ok() && !stored.value().isEmpty())
-            api_key_edit_->setPlaceholderText("Linked to your Fincept account: " + stored.value().left(8) + "...");
+        const QString linked_key = auth::AuthManager::instance().fincept_provider_api_key();
+        if (!linked_key.isEmpty())
+            api_key_edit_->setPlaceholderText("Linked to your Fincept account: " + linked_key.left(8) + "...");
         else
             api_key_edit_->setPlaceholderText("Login to your Fincept account to enable");
         model_combo_->setVisible(false);
@@ -759,8 +759,7 @@ void LlmConfigSection::on_test_connection() {
 
     if (provider == "fincept") {
         // Fincept is a managed service — verify API key exists
-        auto stored = SettingsRepository::instance().get("fincept_api_key");
-        if (stored.is_ok() && !stored.value().isEmpty())
+        if (!auth::AuthManager::instance().fincept_provider_api_key().isEmpty())
             show_status("Fincept connected — API key active", false);
         else
             show_status("Not connected — login to your Fincept account first", true);

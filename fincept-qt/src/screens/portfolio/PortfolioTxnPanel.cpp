@@ -102,7 +102,7 @@ void PortfolioTxnPanel::set_transactions(const QVector<portfolio::Transaction>& 
 void PortfolioTxnPanel::clear() {
     txns_.clear();
     table_->setRowCount(0);
-    count_label_->clear();
+    count_label_->setText(tr("0 transactions"));
 }
 
 void PortfolioTxnPanel::apply_collapsed_state() {

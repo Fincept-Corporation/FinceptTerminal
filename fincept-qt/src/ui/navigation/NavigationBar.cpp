@@ -100,12 +100,20 @@ void NavigationBar::refresh_user_display() {
         plan_label_->setText("---");
         return;
     }
-    user_label_->setText(s.user_info.username.isEmpty() ? s.user_info.email : s.user_info.username);
+    QString name = s.user_info.username.isEmpty() ? s.user_info.email : s.user_info.username;
+    if (name.isEmpty())
+        name = s.username;
+    user_label_->setText(name);
     credits_label_->setText(QString("%1 CR").arg(s.user_info.credit_balance, 0, 'f', 2));
+    const QString credits_color = s.is_phase_one_session() && s.user_info.credit_balance <= 0
+                                      ? colors::TEXT_SECONDARY.get()
+                                      : (s.user_info.credit_balance > 0 ? colors::POSITIVE.get() : colors::NEGATIVE.get());
     credits_label_->setStyleSheet(
-        QString("color:%1;background:transparent;")
-            .arg(s.user_info.credit_balance > 0 ? colors::POSITIVE.get() : colors::NEGATIVE.get()));
-    plan_label_->setText(s.account_type().toUpper());
+        QString("color:%1;background:transparent;").arg(credits_color));
+    QString plan_text = s.account_type().toUpper();
+    if (plan_text.isEmpty() && s.is_phase_one_session())
+        plan_text = tr("PHASE 1");
+    plan_label_->setText(plan_text);
 }
 
 } // namespace fincept::ui

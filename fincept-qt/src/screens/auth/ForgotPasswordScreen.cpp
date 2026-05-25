@@ -432,28 +432,18 @@ void ForgotPasswordScreen::retranslateUi() {
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 void ForgotPasswordScreen::on_send_code() {
-    error_label_->hide();
-    QString email = email_input_->text().trimmed();
-    auto v = auth::validate_email(email);
-    if (!v.valid) {
-        error_label_->setText(v.error);
-        error_label_->show();
-        return;
-    }
-    auth::AuthManager::instance().forgot_password(email);
+    error_label_->setText(tr("Password recovery is unavailable in phase one."));
+    error_label_->show();
 }
 
 void ForgotPasswordScreen::on_reset_password() {
-    QString otp = otp_input_->text().trimmed();
-    QString pw = new_password_->text();
-    QString cpw = confirm_password_->text();
-    if (otp.isEmpty() || pw.length() < 8 || pw != cpw)
-        return;
-    auth::AuthManager::instance().reset_password(email_input_->text().trimmed(), otp, pw);
+    error_label_->setText(tr("Password recovery is unavailable in phase one."));
+    error_label_->show();
 }
 
 void ForgotPasswordScreen::on_resend() {
-    auth::AuthManager::instance().forgot_password(email_input_->text().trimmed());
+    error_label_->setText(tr("Password recovery is unavailable in phase one."));
+    error_label_->show();
 }
 
 } // namespace fincept::screens

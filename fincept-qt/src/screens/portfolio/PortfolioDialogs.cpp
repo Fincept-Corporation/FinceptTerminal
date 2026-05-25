@@ -54,6 +54,11 @@ CreatePortfolioDialog::CreatePortfolioDialog(QWidget* parent) : QDialog(parent) 
         QString("color:%1; font-size:13px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     layout->addWidget(title);
 
+    auto* hint = new QLabel(tr("Connected changes stay visible here after the server accepts them."));
+    hint->setWordWrap(true);
+    hint->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
+    layout->addWidget(hint);
+
     // Form
     auto* form = new QFormLayout;
     form->setSpacing(8);
@@ -199,8 +204,9 @@ AddAssetDialog::AddAssetDialog(QWidget* parent) : QDialog(parent) {
     layout->addWidget(title);
 
     // Hint label under title
-    auto* hint = new QLabel(tr("Type a ticker or company name to search"));
+    auto* hint = new QLabel(tr("Type a ticker or company name to search. Accepted orders refresh the connected portfolio view."));
     hint->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
+    hint->setWordWrap(true);
     layout->addWidget(hint);
 
     auto* form = new QFormLayout;
@@ -497,6 +503,11 @@ SellAssetDialog::SellAssetDialog(const QString& symbol, double held_qty, QWidget
     auto* held_label = new QLabel(tr("Currently holding: %1 shares").arg(held_qty));
     held_label->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(held_label);
+
+    auto* hint = new QLabel(tr("Accepted orders refresh the connected portfolio view."));
+    hint->setWordWrap(true);
+    hint->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
+    layout->addWidget(hint);
 
     auto* form = new QFormLayout;
     form->setSpacing(8);

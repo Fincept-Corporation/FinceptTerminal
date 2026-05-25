@@ -263,6 +263,9 @@ add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
 # -DFINCEPT_BUILD_TESTS=ON to compile the Qt Test executables under
 # fincept-qt/tests/. Run via `ctest` in the build directory.
 option(FINCEPT_BUILD_TESTS "Build the Fincept Terminal test suite" OFF)
+if(FINCEPT_BUILD_TESTS)
+    include(CTest)
+endif()
 
 # ── Alpha Arena live-mode geofencing ─────────────────────────────────────────
 # Live mode is gated by best-effort locale detection in AlphaArenaScreen.
@@ -1660,6 +1663,8 @@ set(APP_SOURCES
     src/app/TerminalShell.cpp
     src/app/MonitorPickerDialog.cpp
 )
+
+include(cmake/phase_one_multiuser.cmake)
 
 # All screen files compiled individually — they have local statics/functions that
 # collide when batched, and many use QLineEdit/etc without explicit includes.

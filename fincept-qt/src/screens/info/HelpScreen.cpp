@@ -93,7 +93,7 @@ static QWidget* section_header(const QString& title, const QString& subtitle = {
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
-HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
+HelpScreen::HelpScreen(bool auth_entry_mode, QWidget* parent) : QWidget(parent), auth_entry_mode_(auth_entry_mode) {
     setStyleSheet(QString("QWidget#HelpRoot { background: %1; }").arg(colors::BG_BASE()));
     setObjectName("HelpRoot");
 
@@ -132,6 +132,17 @@ QWidget* HelpScreen::build_page() {
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(28, 24, 28, 32);
     vl->setSpacing(0);
+
+    if (auth_entry_mode_) {
+        auto* back_btn = new QPushButton(tr("BACK TO SIGN IN"), page);
+        back_btn->setCursor(Qt::PointingHandCursor);
+        back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none;"
+                                        " text-align: left; padding: 0 0 12px 0; font-size: 12px; %2 }"
+                                        "QPushButton:hover { color: %3; }")
+                                    .arg(colors::TEXT_SECONDARY(), MF, colors::AMBER()));
+        connect(back_btn, &QPushButton::clicked, this, &HelpScreen::navigate_back);
+        vl->addWidget(back_btn, 0, Qt::AlignLeft);
+    }
 
     // ── Hero banner ───────────────────────────────────────────────────────────
     {
@@ -211,14 +222,20 @@ QWidget* HelpScreen::build_page() {
             QString label;
             QString desc;
         };
-        const Action actions[] = {
-            {"👤", "create_account",  tr("Create Account"),    tr("Register for full access")},
-            {"🔑", "reset_password",  tr("Reset Password"),    tr("Recover your account")},
-            {"📖", "documentation",   tr("Documentation"),     tr("Guides, tutorials & API ref")},
-            {"🐛", "report_bug",      tr("Report a Bug"),      tr("Open a bug report ticket")},
-            {"💬", "join_discord",    tr("Join Discord"),      tr("Community & live support")},
-            {"🎟", "support_tickets", tr("Support Tickets"),   tr("View or open a support ticket")},
-        };
+        QList<Action> actions;
+        if (auth_entry_mode_) {
+            actions << Action{"📖", "documentation", tr("Documentation"), tr("Guides and onboarding help")}
+                    << Action{"🐛", "report_bug", tr("Report a Bug"), tr("Open a bug report ticket")}
+                    << Action{"💬", "join_discord", tr("Join Discord"), tr("Community and live support")}
+                    << Action{"🎟", "support_tickets", tr("Support Tickets"), tr("View or open a support ticket")};
+        } else {
+            actions << Action{"👤", "create_account", tr("Create Account"), tr("Register for full access")}
+                    << Action{"🔑", "reset_password", tr("Reset Password"), tr("Recover your account")}
+                    << Action{"📖", "documentation", tr("Documentation"), tr("Guides, tutorials & API ref")}
+                    << Action{"🐛", "report_bug", tr("Report a Bug"), tr("Open a bug report ticket")}
+                    << Action{"💬", "join_discord", tr("Join Discord"), tr("Community & live support")}
+                    << Action{"🎟", "support_tickets", tr("Support Tickets"), tr("View or open a support ticket")};
+        }
 
         int col = 0, row = 0;
         for (const auto& a : actions) {
@@ -261,10 +278,6 @@ QWidget* HelpScreen::build_page() {
 
             // Wire known actions by stable English key (label is localized).
             const QString key = QString::fromLatin1(a.key);
-            if (key == "create_account")
-                connect(btn, &QPushButton::clicked, this, &HelpScreen::navigate_register);
-            if (key == "reset_password")
-                connect(btn, &QPushButton::clicked, this, &HelpScreen::navigate_forgot_password);
         }
 
         vl->addLayout(grid);

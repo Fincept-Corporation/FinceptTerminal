@@ -88,6 +88,7 @@ struct ApiResponse {
     QJsonObject data;
     QString error;
     int status_code = 0;
+    QString error_code;
 };
 
 struct RateLimitInfo {
@@ -210,6 +211,11 @@ struct SessionData {
     bool authenticated = false;
     QString api_key;
     QString session_token;
+    int user_id = 0;
+    QString username;
+    QString role;
+    QString session_id;
+    QString expires_at;
     QString device_id;
     UserProfile user_info;
     UserSubscription subscription;
@@ -227,11 +233,38 @@ struct SessionData {
         return at == "basic" || at == "standard" || at == "pro" || at == "enterprise";
     }
 
+    bool has_hosted_api_key() const {
+        return !api_key.trimmed().isEmpty();
+    }
+
+    bool is_phase_one_session() const {
+        return authenticated && !has_hosted_api_key() && !session_id.trimmed().isEmpty();
+    }
+
+    QString compatibility_api_key() const {
+        if (!api_key.isEmpty())
+            return api_key;
+        if (!session_id.isEmpty())
+            return session_id;
+        return session_token;
+    }
+
+    QString compatibility_session_token() const {
+        if (!session_token.isEmpty())
+            return session_token;
+        return session_id;
+    }
+
     QJsonObject to_json() const {
         QJsonObject obj;
         obj["authenticated"] = authenticated;
         obj["api_key"] = api_key;
-        obj["session_token"] = session_token;
+        obj["session_token"] = session_token.isEmpty() ? session_id : session_token;
+        obj["user_id"] = user_id;
+        obj["username"] = username;
+        obj["role"] = role;
+        obj["session_id"] = session_id;
+        obj["expires_at"] = expires_at;
         obj["device_id"] = device_id;
         obj["has_subscription"] = has_subscription;
 
@@ -258,6 +291,11 @@ struct SessionData {
         s.authenticated = obj["authenticated"].toBool();
         s.api_key = obj["api_key"].toString();
         s.session_token = obj["session_token"].toString();
+        s.user_id = obj["user_id"].toInt();
+        s.username = obj["username"].toString();
+        s.role = obj["role"].toString();
+        s.session_id = obj["session_id"].toString();
+        s.expires_at = obj["expires_at"].toString();
         s.device_id = obj["device_id"].toString();
         s.has_subscription = obj["has_subscription"].toBool();
 
@@ -280,6 +318,10 @@ struct SessionData {
             if (s.subscription.credit_balance > 0)
                 s.user_info.credit_balance = s.subscription.credit_balance;
         }
+        if (s.username.isEmpty())
+            s.username = s.user_info.username;
+        if (s.session_id.isEmpty())
+            s.session_id = s.session_token;
         return s;
     }
 };

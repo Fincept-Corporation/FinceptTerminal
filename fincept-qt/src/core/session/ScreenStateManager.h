@@ -2,6 +2,7 @@
 #include <QHash>
 #include <QObject>
 #include <QPointer>
+#include <QTimer>
 
 // Forward declare to avoid including the full screen header here.
 namespace fincept::screens {

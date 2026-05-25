@@ -7,6 +7,9 @@
 
 namespace fincept::auth {
 
+class PhaseOneAuthFlowBridge;
+class PhaseOneAuthRecoveryBridge;
+
 /// Central auth state machine.
 /// Manages login/signup/MFA flows, session persistence, and validation.
 class AuthManager : public QObject {
@@ -17,9 +20,13 @@ class AuthManager : public QObject {
     const SessionData& session() const { return session_; }
     bool is_authenticated() const { return session_.authenticated; }
     bool is_loading() const { return is_loading_; }
+    bool has_hosted_api_key() const { return session_.has_hosted_api_key(); }
+    bool is_phase_one_session() const { return session_.is_phase_one_session(); }
+    QString fincept_provider_api_key() const;
 
     // Auth flows
     void login(const QString& email, const QString& password, bool force_login = false);
+    void phase_one_login(const QString& username, const QString& password);
     void signup(const QString& username, const QString& email, const QString& password, const QString& phone,
                 const QString& country = {}, const QString& country_code = {});
     void verify_otp(const QString& email, const QString& otp);
@@ -27,6 +34,9 @@ class AuthManager : public QObject {
     void forgot_password(const QString& email);
     void reset_password(const QString& email, const QString& otp, const QString& new_password);
     void logout();
+    void phase_one_logout();
+    void phase_one_current_session(std::function<void(bool)> cb = {});
+    void handle_phase_one_session_invalidation();
 
     // Session management
     void initialize();
@@ -64,6 +74,9 @@ class AuthManager : public QObject {
     void terminal_unlocked();
 
   private:
+    friend class PhaseOneAuthFlowBridge;
+    friend class PhaseOneAuthRecoveryBridge;
+
     AuthManager();
 
     void set_loading(bool v);
@@ -77,6 +90,7 @@ class AuthManager : public QObject {
     void auto_configure_fincept_llm();
     QString generate_device_id() const;
     QJsonObject unwrap_data(const QJsonObject& raw) const;
+    void apply_phase_one_session(const QJsonObject& raw);
 
     SessionData session_;
     bool is_loading_ = true;

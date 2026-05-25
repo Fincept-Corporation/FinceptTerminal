@@ -15,12 +15,10 @@ namespace fincept::screens {
 class HelpScreen : public QWidget {
     Q_OBJECT
   public:
-    explicit HelpScreen(QWidget* parent = nullptr);
+    explicit HelpScreen(bool auth_entry_mode = false, QWidget* parent = nullptr);
 
   signals:
     void navigate_back();
-    void navigate_register();
-    void navigate_forgot_password();
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -28,6 +26,7 @@ class HelpScreen : public QWidget {
   private:
     QWidget* build_page();
     QScrollArea* scroll_ = nullptr;
+    bool auth_entry_mode_ = false;
 };
 
 } // namespace fincept::screens

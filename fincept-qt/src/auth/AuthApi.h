@@ -18,6 +18,7 @@ class AuthApi : public QObject {
 
     // Auth (unauthenticated — no API key needed)
     void login(const LoginRequest& req, Callback cb);
+    void phase_one_login(const QString& username, const QString& password, Callback cb);
     void register_user(const RegisterRequest& req, Callback cb);
     void verify_otp(const VerifyOtpRequest& req, Callback cb);
     void forgot_password(const ForgotPasswordRequest& req, Callback cb);
@@ -26,7 +27,9 @@ class AuthApi : public QObject {
 
     // Authenticated (uses api_key stored on HttpClient)
     void logout(Callback cb);
+    void phase_one_logout(Callback cb);
     void session_pulse(Callback cb);
+    void phase_one_current_session(Callback cb);
     void get_user_profile(Callback cb);
 
     // Subscription / payment

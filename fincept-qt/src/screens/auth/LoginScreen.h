@@ -20,9 +20,6 @@ class LoginScreen : public QWidget {
     explicit LoginScreen(QWidget* parent = nullptr);
 
   signals:
-    void navigate_register();
-    void navigate_forgot_password();
-
   private:
     // ── Login page widgets that need re-translating ─────────────────────────
     QLabel* login_title_ = nullptr;
@@ -50,18 +47,10 @@ class LoginScreen : public QWidget {
     QLabel* mfa_error_ = nullptr;
 
     // ── Conflict page widgets ───────────────────────────────────────────────
-    QWidget* conflict_page_ = nullptr;
-    QLabel* conflict_title_ = nullptr;
-    QLabel* conflict_warning_lbl_ = nullptr;
-    QLabel* conflict_msg_ = nullptr;
-    QPushButton* force_login_btn_ = nullptr;
-    QPushButton* cancel_btn_ = nullptr;
-
     QStackedWidget* pages_ = nullptr;
 
     void build_login_page();
     void build_mfa_page();
-    void build_conflict_page();
 
     /// Reapply translated text to every widget cached as a member pointer.
     /// Called from the constructor and from changeEvent(LanguageChange).
@@ -81,11 +70,9 @@ class LoginScreen : public QWidget {
   private slots:
     void on_login();
     void on_mfa_verify();
-    void on_force_login();
     void on_login_succeeded();
     void on_login_failed(const QString& error);
     void on_mfa_required();
-    void on_active_session(const QString& msg);
     void on_mfa_verified();
     void on_mfa_failed(const QString& error);
 };

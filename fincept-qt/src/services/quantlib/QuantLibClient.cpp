@@ -70,7 +70,7 @@ static QNetworkRequest build_request(const QString& endpoint, const QJsonObject&
 
     auto& auth_mgr = auth::AuthManager::instance();
     if (auth_mgr.is_authenticated())
-        req.setRawHeader("X-API-Key", auth_mgr.session().api_key.toUtf8());
+        req.setRawHeader("X-API-Key", auth_mgr.session().compatibility_api_key().toUtf8());
 
     return req;
 }

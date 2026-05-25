@@ -10,6 +10,19 @@
 
 namespace fincept {
 
+namespace {
+
+AppPaths::Overrides& path_overrides() {
+    static AppPaths::Overrides overrides;
+    return overrides;
+}
+
+QString override_or_default(const QString& override_value, const QString& default_value) {
+    return override_value.isEmpty() ? default_value : override_value;
+}
+
+} // namespace
+
 QString AppPaths::root() {
 #ifdef _WIN32
     // Use GenericDataLocation which returns %LOCALAPPDATA% directly on Windows,
@@ -26,35 +39,35 @@ QString AppPaths::root() {
 }
 
 QString AppPaths::data() {
-    return ProfileManager::instance().profile_root() + "/data";
+    return override_or_default(path_overrides().data, ProfileManager::instance().profile_root() + "/data");
 }
 
 QString AppPaths::logs() {
-    return ProfileManager::instance().profile_root() + "/logs";
+    return override_or_default(path_overrides().logs, ProfileManager::instance().profile_root() + "/logs");
 }
 
 QString AppPaths::files() {
-    return ProfileManager::instance().profile_root() + "/files";
+    return override_or_default(path_overrides().files, ProfileManager::instance().profile_root() + "/files");
 }
 
 QString AppPaths::cache() {
-    return ProfileManager::instance().profile_root() + "/cache";
+    return override_or_default(path_overrides().cache, ProfileManager::instance().profile_root() + "/cache");
 }
 
 QString AppPaths::models() {
-    return root() + "/models";
+    return override_or_default(path_overrides().models, root() + "/models");
 }
 
 QString AppPaths::runtime() {
-    return root() + "/runtime";
+    return override_or_default(path_overrides().runtime, root() + "/runtime");
 }
 
 QString AppPaths::workspaces() {
-    return ProfileManager::instance().profile_root() + "/workspaces";
+    return override_or_default(path_overrides().workspaces, ProfileManager::instance().profile_root() + "/workspaces");
 }
 
 QString AppPaths::crashdumps() {
-    return ProfileManager::instance().profile_root() + "/crashdumps";
+    return override_or_default(path_overrides().crashdumps, ProfileManager::instance().profile_root() + "/crashdumps");
 }
 
 void AppPaths::ensure_all() {
@@ -82,6 +95,14 @@ void AppPaths::ensure_all() {
     try_mkpath(runtime());
     try_mkpath(workspaces());
     try_mkpath(crashdumps());
+}
+
+void AppPaths::set_overrides(const Overrides& overrides) {
+    path_overrides() = overrides;
+}
+
+void AppPaths::clear_overrides() {
+    path_overrides() = {};
 }
 
 } // namespace fincept

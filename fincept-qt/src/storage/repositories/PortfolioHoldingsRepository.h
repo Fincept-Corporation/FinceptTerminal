@@ -20,6 +20,7 @@ class PortfolioHoldingsRepository : public BaseRepository<PortfolioHolding> {
 
     Result<QVector<PortfolioHolding>> get_active();
     Result<QVector<PortfolioHolding>> list_all();
+    Result<PortfolioHolding> get_by_id(int id);
     Result<qint64> add(const QString& symbol, double shares, double avg_cost, const QString& name = {});
     Result<void> update(int id, double shares, double avg_cost);
     Result<void> deactivate(int id);

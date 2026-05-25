@@ -273,6 +273,8 @@ class WindowFrame : public QMainWindow {
     void on_auth_state_changed();
     void toggle_chat_mode();
     void show_lock_screen();
+    bool ensure_phase_one_server_address_configured();
+    void configure_phase_one_server_address();
     /// Apply the lock UI state to THIS window. Idempotent. Wired to
     /// InactivityGuard::terminal_locked_changed so every window in the
     /// process locks in lockstep with the window that initiated the lock.
@@ -290,6 +292,7 @@ class WindowFrame : public QMainWindow {
 
   private slots:
     void show_login();
+    void show_bootstrap();
     void show_register();
     void show_forgot_password();
     void show_pricing();

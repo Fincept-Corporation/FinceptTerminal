@@ -12,6 +12,7 @@
 #include <QTimer>
 #include <QWidget>
 
+#include <functional>
 #include <optional>
 
 class QLabel;
@@ -77,6 +78,14 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
     void on_order_panel_close();
 
   private:
+    enum class PendingMutation {
+        None,
+        CreatePortfolio,
+        DeletePortfolio,
+        AddAsset,
+        SellAsset,
+    };
+
     void build_ui();
     void refresh_theme();
     void retranslateUi();
@@ -85,11 +94,16 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
     QWidget* build_main_view();
     void update_content_state();
     void update_main_view_data();
+    void load_portfolios_for_current_session(bool reload_selected_summary = false);
+    void load_selected_summary(bool preserve_current_view);
+    void run_portfolio_mutation(PendingMutation mutation, const std::function<void()>& action);
+    void show_portfolio_message(const QString& title, const QString& message);
     void request_refresh();
     void load_demo_portfolio();
     void reposition_order_panel();
     void animate_order_panel_in();
     const portfolio::HoldingWithQuote* find_holding(const QString& symbol) const;
+    bool is_connected_mode() const;
 
     // Sub-widgets
     PortfolioCommandBar* command_bar_ = nullptr;
@@ -121,9 +135,15 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
     portfolio::PortfolioSummary current_summary_;
     portfolio::ComputedMetrics current_metrics_;
     bool summary_loaded_ = false;
+    bool summary_loading_ = false;
     bool order_panel_visible_ = false;
     bool show_ffn_ = false;
     std::optional<portfolio::DetailView> active_detail_;
+    bool portfolios_load_completed_ = false;
+    bool reload_selected_summary_after_portfolios_ = false;
+    PendingMutation pending_mutation_ = PendingMutation::None;
+    bool pending_mutation_succeeded_ = false;
+    QString last_seen_session_id_;
 
     // Refresh timer (P3)
     QTimer* refresh_timer_ = nullptr;

@@ -21,6 +21,17 @@ namespace fincept {
 /// Call AppPaths::ensure_all() once at startup to create every sub-directory.
 class AppPaths {
   public:
+    struct Overrides {
+        QString data;
+        QString logs;
+        QString files;
+        QString cache;
+        QString models;
+        QString runtime;
+        QString workspaces;
+        QString crashdumps;
+    };
+
     /// Root: %LOCALAPPDATA%\com.fincept.terminal  (Windows)
     static QString root();
 
@@ -51,6 +62,9 @@ class AppPaths {
     /// Create all sub-directories if they don't exist.
     /// Call once before any path is used.
     static void ensure_all();
+
+    static void set_overrides(const Overrides& overrides);
+    static void clear_overrides();
 };
 
 } // namespace fincept

@@ -9,6 +9,7 @@
 #include "app/WindowFrame.h"
 
 #include "auth/AuthManager.h"
+#include "auth/PhaseOneAuthFlowBridge.h"
 #include "auth/InactivityGuard.h"
 #include "auth/PinManager.h"
 #include "core/layout/WorkspaceShell.h"
@@ -91,7 +92,7 @@ void WindowFrame::on_auth_state_changed() {
                                         .arg(pin_gate_cleared_));
             return;
         }
-        if (stack_->currentIndex() == 0 && auth_stack_->currentIndex() == 3)
+        if (stack_->currentIndex() == 0 && auth_stack_->currentIndex() == 3 && auth.has_hosted_api_key())
             return; // user is on pricing screen — let PricingScreen handle it
 
         // ── PIN gate: require PIN setup or PIN unlock before proceeding ──
@@ -119,7 +120,9 @@ void WindowFrame::on_auth_state_changed() {
             }
         }
 
-        if (auth.session().has_paid_plan()) {
+        if (auth::PhaseOneAuthFlowBridge::allows_terminal_entry(auth.session())) {
+            if (auth.session().is_phase_one_session())
+                LOG_INFO("WindowFrame", "Phase-one session bypasses legacy pricing gate");
             // Defensive: at this point the PIN gate above must have either
             // routed us to the lock screen (and returned) or confirmed
             // pin_gate_cleared_. If we are about to show the shell while
@@ -172,7 +175,7 @@ void WindowFrame::on_auth_state_changed() {
         pin_gate_cleared_ = false;
         set_shell_visible(false);
         stack_->setCurrentIndex(0);
-        auth_stack_->setCurrentIndex(0);
+        show_login();
     }
 }
 
@@ -188,13 +191,28 @@ void WindowFrame::enter_auth_stack(int auth_index) {
 }
 
 void WindowFrame::show_login() {
-    enter_auth_stack(0);
+    if (!ensure_phase_one_server_address_configured())
+        return;
+
+    QPointer<WindowFrame> self(this);
+    auth::PhaseOneAuthFlowBridge::resolve_auth_entry_route([self](int auth_index) {
+        if (!self)
+            return;
+        self->enter_auth_stack(auth_index);
+    });
+}
+
+void WindowFrame::show_bootstrap() {
+    if (!ensure_phase_one_server_address_configured())
+        return;
+
+    enter_auth_stack(auth::PhaseOneAuthFlowBridge::kBootstrapAuthStackIndex);
 }
 void WindowFrame::show_register() {
-    enter_auth_stack(1);
+    enter_auth_stack(auth::PhaseOneAuthFlowBridge::normalize_auth_stack_index(1));
 }
 void WindowFrame::show_forgot_password() {
-    enter_auth_stack(2);
+    enter_auth_stack(auth::PhaseOneAuthFlowBridge::normalize_auth_stack_index(2));
 }
 void WindowFrame::show_pricing() {
     enter_auth_stack(3);
@@ -323,7 +341,7 @@ void WindowFrame::on_terminal_unlocked() {
     // Reset PIN lockout on successful unlock
     auth::PinManager::instance().reset_lockout();
 
-    if (auth.session().has_paid_plan()) {
+    if (auth::PhaseOneAuthFlowBridge::allows_terminal_entry(auth.session())) {
         set_shell_visible(true);
         stack_->setCurrentIndex(1);
         // Restore chat bubble based on setting

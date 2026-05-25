@@ -10,6 +10,7 @@
 
 #include "app/DockScreenRouter.h"
 #include "app/TerminalShell.h"
+#include "auth/PhaseOneAuthFlowBridge.h"
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
 #include "auth/lock/LockOverlayController.h"
@@ -19,6 +20,8 @@
 #include "core/layout/LayoutCatalog.h"
 #include "core/logging/Logger.h"
 #include "core/session/SessionManager.h"
+#include "core/config/AppConfig.h"
+#include "multiuser/client/PhaseOneEndpointProvider.h"
 #include "screens/common/ComingSoonScreen.h"
 #include "screens/about/AboutScreen.h"
 #include "screens/agent_config/AgentConfigScreen.h"
@@ -32,6 +35,7 @@
 #include "screens/auth/ForgotPasswordScreen.h"
 #include "screens/auth/LockScreen.h"
 #include "screens/auth/LoginScreen.h"
+#include "screens/auth/PhaseOneBootstrapScreen.h"
 #include "screens/auth/PricingScreen.h"
 #include "screens/auth/RegisterScreen.h"
 #include "screens/backtesting/BacktestingScreen.h"
@@ -83,6 +87,10 @@
 #include "ui/pushpins/PushpinBar.h"
 #include "ui/theme/Theme.h"
 
+#include <QAction>
+#include <QInputDialog>
+#include <QLineEdit>
+#include <QMessageBox>
 #include <QStackedWidget>
 #include <QVBoxLayout>
 
@@ -92,10 +100,43 @@
 
 namespace fincept {
 
+namespace {
+
+QString phase_one_server_address_prompt(QWidget* parent, const QString& current_value) {
+    bool accepted = false;
+    const QString value = QInputDialog::getText(
+        parent, QObject::tr("Phase-One Server Address"),
+        QObject::tr("Enter the phase-one server host or http/https host:port"), QLineEdit::Normal, current_value,
+        &accepted);
+    if (!accepted)
+        return {};
+    return value;
+}
+
+} // namespace
+
 void WindowFrame::setup_auth_screens() {
+    auto* configure_server_action = new QAction(tr("Configure Server Address"), this);
+    configure_server_action->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_S));
+    configure_server_action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    connect(configure_server_action, &QAction::triggered, this, &WindowFrame::configure_phase_one_server_address);
+    addAction(configure_server_action);
+
+    auto* fullscreen_action = new QAction(tr("Toggle Full Screen"), this);
+    fullscreen_action->setShortcuts({QKeySequence(Qt::Key_F11), QKeySequence::FullScreen});
+    fullscreen_action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    connect(fullscreen_action, &QAction::triggered, this, [this]() {
+        if (isFullScreen())
+            showNormal();
+        else
+            showFullScreen();
+    });
+    addAction(fullscreen_action);
+
     auto* login = new screens::LoginScreen;
     auto* reg = new screens::RegisterScreen;
     auto* forgot = new screens::ForgotPasswordScreen;
+    auto* bootstrap = new screens::PhaseOneBootstrapScreen;
     auto* pricing = new screens::PricingScreen;
 
     // Info screens stack (shared between auth and app via master stack index 2)
@@ -104,7 +145,7 @@ void WindowFrame::setup_auth_screens() {
     auto* terms = new screens::TermsScreen;
     auto* privacy = new screens::PrivacyScreen;
     auto* trademarks = new screens::TrademarksScreen;
-    auto* help = new screens::HelpScreen;
+    auto* help = new screens::HelpScreen(true);
 
     info_stack_->addWidget(contact);    // index 0
     info_stack_->addWidget(terms);      // index 1
@@ -117,12 +158,12 @@ void WindowFrame::setup_auth_screens() {
     auth_stack_->addWidget(forgot);      // index 2
     auth_stack_->addWidget(pricing);     // index 3
     auth_stack_->addWidget(info_stack_); // index 4
+    auth_stack_->addWidget(bootstrap);   // index 5
 
     // ── Auth navigation ──────────────────────────────────────────────────────
-    connect(login, &screens::LoginScreen::navigate_register, this, &WindowFrame::show_register);
-    connect(login, &screens::LoginScreen::navigate_forgot_password, this, &WindowFrame::show_forgot_password);
     connect(reg, &screens::RegisterScreen::navigate_login, this, &WindowFrame::show_login);
     connect(forgot, &screens::ForgotPasswordScreen::navigate_login, this, &WindowFrame::show_login);
+    connect(bootstrap, &screens::PhaseOneBootstrapScreen::navigate_login, this, &WindowFrame::show_login);
     connect(pricing, &screens::PricingScreen::navigate_dashboard, this, [this]() {
         set_shell_visible(true);
         stack_->setCurrentIndex(1);
@@ -140,8 +181,52 @@ void WindowFrame::setup_auth_screens() {
     connect(privacy, &screens::PrivacyScreen::navigate_contact, this, &WindowFrame::show_info_contact);
     connect(trademarks, &screens::TrademarksScreen::navigate_back, this, &WindowFrame::show_login);
     connect(help, &screens::HelpScreen::navigate_back, this, &WindowFrame::show_login);
-    connect(help, &screens::HelpScreen::navigate_register, this, &WindowFrame::show_register);
-    connect(help, &screens::HelpScreen::navigate_forgot_password, this, &WindowFrame::show_forgot_password);
+}
+
+bool WindowFrame::ensure_phase_one_server_address_configured() {
+    const QString env_value = QString::fromUtf8(qgetenv("FINCEPT_PHASE1_SERVER_URL")).trimmed();
+    const auto initial = multiuser::PhaseOneEndpointProvider::instance().resolve();
+    if (initial.ok)
+        return true;
+
+    if (!env_value.isEmpty()) {
+        QMessageBox::warning(this, tr("Invalid Phase-One Server Address"), initial.message);
+        return false;
+    }
+
+    const QString previous_value = AppConfig::instance().get_phase_one_server_url();
+    QString current_value = previous_value;
+    while (true) {
+        const QString entered_value = phase_one_server_address_prompt(this, current_value);
+        if (entered_value.isNull()) {
+            if (previous_value.isEmpty())
+                AppConfig::instance().remove_phase_one_server_url();
+            else
+                AppConfig::instance().set_phase_one_server_url(previous_value);
+            return false;
+        }
+
+        AppConfig::instance().set_phase_one_server_url(entered_value);
+        const auto resolved = multiuser::PhaseOneEndpointProvider::instance().resolve();
+        if (resolved.ok)
+            return true;
+
+        current_value = entered_value.trimmed();
+        QMessageBox::warning(this, tr("Invalid Phase-One Server Address"), resolved.message);
+    }
+}
+
+void WindowFrame::configure_phase_one_server_address() {
+    const QString env_value = QString::fromUtf8(qgetenv("FINCEPT_PHASE1_SERVER_URL")).trimmed();
+    if (!env_value.isEmpty()) {
+        QMessageBox::information(this, tr("Environment Override Active"),
+                                 tr("`FINCEPT_PHASE1_SERVER_URL` is currently overriding the saved server address."));
+    }
+
+    if (ensure_phase_one_server_address_configured()) {
+        const auto resolved = multiuser::PhaseOneEndpointProvider::instance().resolve();
+        QMessageBox::information(this, tr("Phase-One Server Saved"), resolved.base_url);
+    }
 }
 
 void WindowFrame::setup_docking_mode() {
@@ -281,7 +366,7 @@ void WindowFrame::setup_dock_screens() {
     dock_router_->register_screen("terms", new screens::TermsScreen);
     dock_router_->register_screen("privacy", new screens::PrivacyScreen);
     dock_router_->register_screen("trademarks", new screens::TrademarksScreen);
-    dock_router_->register_screen("help", new screens::HelpScreen);
+    dock_router_->register_screen("help", new screens::HelpScreen(false));
 }
 
 void WindowFrame::setup_app_screens() {}

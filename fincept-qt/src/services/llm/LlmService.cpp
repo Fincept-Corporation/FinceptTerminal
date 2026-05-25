@@ -64,14 +64,7 @@ void LlmService::ensure_config() const {
     // those re-resolve every call so a login that happens after first ensure_config() doesn't 401 forever.
     if (config_loaded_) {
         if (provider_ == "fincept") {
-            const auto& sess = fincept::auth::AuthManager::instance().session();
-            if (!sess.api_key.isEmpty()) {
-                api_key_ = sess.api_key;
-            } else {
-                auto stored = SettingsRepository::instance().get("fincept_api_key");
-                if (stored.is_ok() && !stored.value().isEmpty())
-                    api_key_ = stored.value();
-            }
+            api_key_ = fincept::auth::AuthManager::instance().fincept_provider_api_key();
         }
         return;
     }
@@ -115,14 +108,7 @@ void LlmService::ensure_config() const {
 
     // Fincept key always comes from the live AuthManager session; SettingsRepository fallback is the legacy path.
     if (provider_ == "fincept") {
-        const auto& sess = fincept::auth::AuthManager::instance().session();
-        if (!sess.api_key.isEmpty()) {
-            api_key_ = sess.api_key;
-        } else {
-            auto stored_key = SettingsRepository::instance().get("fincept_api_key");
-            if (stored_key.is_ok() && !stored_key.value().isEmpty())
-                api_key_ = stored_key.value();
-        }
+        api_key_ = fincept::auth::AuthManager::instance().fincept_provider_api_key();
     }
 
     auto gs = LlmConfigRepository::instance().get_global_settings();

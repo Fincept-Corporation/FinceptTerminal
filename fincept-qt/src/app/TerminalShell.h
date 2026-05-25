@@ -61,10 +61,10 @@ class TerminalShell : public QObject {
     void shutdown();
 
     /// Phase 1 final lift (decision 1.5): bootstrap auth/lock services so
-    /// they live above any WindowFrame. Initialises AuthManager (loads
-    /// saved session, validates with server), warms PinManager from
-    /// SecureStorage, and configures InactivityGuard's lock timeout from
-    /// SettingsRepository.
+    /// they live above any WindowFrame. Initialises AuthManager in explicit
+    /// phase-one login mode (startup ignores legacy saved app-auth state),
+    /// warms PinManager from SecureStorage, and configures InactivityGuard's
+    /// lock timeout from SettingsRepository.
     ///
     /// Called from main.cpp once `initialise()` has run and Qt's event
     /// loop is alive — auth needs HTTP, which means QNetworkAccessManager

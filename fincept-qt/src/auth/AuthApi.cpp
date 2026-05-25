@@ -1,11 +1,18 @@
 #include "auth/AuthApi.h"
 
 #include "core/logging/Logger.h"
+#include "multiuser/client/PhaseOneClientTransport.h"
+#include "multiuser/client/PhaseOneSessionStateGuard.h"
+#include "multiuser/contracts/PhaseOneAuthTypes.h"
 #include "network/http/HttpClient.h"
 
 #include <QJsonDocument>
 
 namespace fincept::auth {
+
+namespace {
+
+} // namespace
 
 AuthApi& AuthApi::instance() {
     static AuthApi s;
@@ -109,7 +116,7 @@ void AuthApi::request(const QString& method, const QString& endpoint, const QJso
                     msg = status > 0 ? QString("Request failed (HTTP %1). Please try again.").arg(status)
                                      : "Network error. Check your connection.";
             }
-            cb({false, {}, msg, status});
+            cb({false, {}, msg, status, {}});
             return;
         }
 
@@ -124,7 +131,7 @@ void AuthApi::request(const QString& method, const QString& endpoint, const QJso
         if (obj.contains("detail") && obj["detail"].isArray()) {
             QString detail_msg = parse_422_detail(doc);
             if (!detail_msg.isEmpty()) {
-                cb({false, obj, detail_msg, 422});
+                cb({false, obj, detail_msg, 422, {}});
                 return;
             }
         }
@@ -146,7 +153,7 @@ void AuthApi::request(const QString& method, const QString& endpoint, const QJso
                 msg = obj.value("detail").toString();
             if (msg.isEmpty())
                 msg = "Request failed. Please try again.";
-            cb({false, obj, msg, 200});
+            cb({false, obj, msg, 200, {}});
             return;
         }
 
@@ -154,12 +161,12 @@ void AuthApi::request(const QString& method, const QString& endpoint, const QJso
         if (obj.contains("detail") && obj["detail"].isString()) {
             QString msg = obj["detail"].toString();
             if (!msg.isEmpty()) {
-                cb({false, obj, msg, 0});
+                cb({false, obj, msg, 0, {}});
                 return;
             }
         }
 
-        cb({true, obj, {}, 200});
+        cb({true, obj, {}, 200, {}});
     };
 
     if (method == "GET")
@@ -176,6 +183,15 @@ void AuthApi::request(const QString& method, const QString& endpoint, const QJso
 
 void AuthApi::login(const LoginRequest& req, Callback cb) {
     request("POST", "/user/login", req.to_json(), cb);
+}
+
+void AuthApi::phase_one_login(const QString& username, const QString& password, Callback cb) {
+    const multiuser::PhaseOneLoginRequest request_data{username, password};
+    multiuser::PhaseOneClientTransport::instance().post(
+        "/phase1/auth/login", request_data.to_json(), {},
+        [cb = std::move(cb)](const multiuser::PhaseOneTransportResponse& response) mutable {
+            cb(multiuser::PhaseOneSessionStateGuard::map_public_response(response));
+        });
 }
 
 void AuthApi::register_user(const RegisterRequest& req, Callback cb) {
@@ -207,8 +223,24 @@ void AuthApi::logout(Callback cb) {
     request("POST", "/user/logout", {}, cb);
 }
 
+void AuthApi::phase_one_logout(Callback cb) {
+    multiuser::PhaseOneClientTransport::instance().post(
+        "/phase1/auth/logout", {}, multiuser::PhaseOneClientTransport::instance().session_id(),
+        [cb = std::move(cb)](const multiuser::PhaseOneTransportResponse& response) mutable {
+            cb(multiuser::PhaseOneSessionStateGuard::map_authenticated_response(response));
+        });
+}
+
 void AuthApi::session_pulse(Callback cb) {
     request("GET", "/user/session-pulse", {}, cb);
+}
+
+void AuthApi::phase_one_current_session(Callback cb) {
+    multiuser::PhaseOneClientTransport::instance().get(
+        "/phase1/auth/session", multiuser::PhaseOneClientTransport::instance().session_id(),
+        [cb = std::move(cb)](const multiuser::PhaseOneTransportResponse& response) mutable {
+            cb(multiuser::PhaseOneSessionStateGuard::map_authenticated_response(response));
+        });
 }
 
 void AuthApi::get_user_profile(Callback cb) {

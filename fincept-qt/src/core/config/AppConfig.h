@@ -14,6 +14,10 @@ class AppConfig {
     void set(const QString& key, const QVariant& value);
     void remove(const QString& key);
 
+    QString get_phase_one_server_url() const;
+    void set_phase_one_server_url(const QString& value);
+    void remove_phase_one_server_url();
+
     // Typed accessors for common settings
     QString api_base_url() const;
     bool dark_mode() const;
@@ -21,6 +25,7 @@ class AppConfig {
 
   private:
     AppConfig();
+    QString phase_one_server_url_key() const;
     QSettings settings_;
 };
 

@@ -457,12 +457,18 @@ void PortfolioScreen::update_content_state() {
         if (has_portfolios) {
             command_bar_->set_has_selection(false);
         }
-    } else if (!summary_loaded_) {
+    } else if (!summary_loaded_ && summary_loading_) {
         content_stack_->setCurrentIndex(1); // loading
         stats_ribbon_->setVisible(false);
         status_bar_->setVisible(true);
         command_bar_->setVisible(true);
         command_bar_->set_has_selection(false);
+    } else if (!summary_loaded_) {
+        content_stack_->setCurrentIndex(0); // empty / failed load fallback
+        stats_ribbon_->setVisible(false);
+        status_bar_->setVisible(true);
+        command_bar_->setVisible(true);
+        command_bar_->set_has_selection(true);
     } else if (show_ffn_) {
         content_stack_->setCurrentIndex(4); // FFN view
         stats_ribbon_->setVisible(false);
@@ -646,7 +652,9 @@ QWidget* PortfolioScreen::build_main_view() {
             return;
         ConfirmDeleteDialog dlg(QString("%1 (%2 shares)").arg(symbol).arg(h->quantity, 0, 'f', 2), this);
         if (dlg.exec() == QDialog::Accepted) {
-            services::PortfolioService::instance().sell_asset(selected_id_, symbol, h->quantity, h->current_price);
+            run_portfolio_mutation(PendingMutation::SellAsset, [this, symbol, h]() {
+                services::PortfolioService::instance().sell_asset(selected_id_, symbol, h->quantity, h->current_price);
+            });
         }
     });
     connect(positions_filter_edit_, &QLineEdit::textChanged, blotter_, &PortfolioBlotter::set_filter);
@@ -676,7 +684,9 @@ QWidget* PortfolioScreen::build_main_view() {
     connect(order_panel_, &PortfolioOrderPanel::buy_submitted, this, [this]() {
         AddAssetDialog dlg(this);
         if (dlg.exec() == QDialog::Accepted) {
-            services::PortfolioService::instance().add_asset(selected_id_, dlg.symbol(), dlg.quantity(), dlg.price());
+            run_portfolio_mutation(PendingMutation::AddAsset, [this, &dlg]() {
+                services::PortfolioService::instance().add_asset(selected_id_, dlg.symbol(), dlg.quantity(), dlg.price());
+            });
         }
     });
     connect(order_panel_, &PortfolioOrderPanel::sell_submitted, this, [this]() {
@@ -685,7 +695,9 @@ QWidget* PortfolioScreen::build_main_view() {
             return;
         SellAssetDialog dlg(h->symbol, h->quantity, this);
         if (dlg.exec() == QDialog::Accepted) {
-            services::PortfolioService::instance().sell_asset(selected_id_, h->symbol, dlg.quantity(), dlg.price());
+            run_portfolio_mutation(PendingMutation::SellAsset, [this, h, &dlg]() {
+                services::PortfolioService::instance().sell_asset(selected_id_, h->symbol, dlg.quantity(), dlg.price());
+            });
         }
     });
 

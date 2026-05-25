@@ -2,8 +2,8 @@
 
 #include "services/llm/LlmService.h"
 
+#include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
-#include "storage/repositories/SettingsRepository.h"
 
 #include <QByteArray>
 #include <QJsonArray>
@@ -88,11 +88,8 @@ QMap<QString, QString> LlmService::get_models_headers(const QString& provider, c
     } else if (p == "fincept") {
         // Same fallback as ensure_config.
         QString resolved_key = api_key;
-        if (resolved_key.isEmpty()) {
-            auto stored = SettingsRepository::instance().get("fincept_api_key");
-            if (stored.is_ok() && !stored.value().isEmpty())
-                resolved_key = stored.value();
-        }
+        if (resolved_key.isEmpty())
+            resolved_key = auth::AuthManager::instance().fincept_provider_api_key();
         if (!resolved_key.isEmpty())
             h["X-API-Key"] = resolved_key;
     } else {

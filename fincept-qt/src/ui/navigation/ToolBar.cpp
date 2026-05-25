@@ -283,17 +283,24 @@ void ToolBar::refresh_user_display() {
     }
 
     QString name = s.user_info.username.isEmpty() ? s.user_info.email : s.user_info.username;
+    if (name.isEmpty())
+        name = s.username;
     QFontMetrics fm(user_label_->font());
     user_label_->setText(fm.elidedText(name, Qt::ElideRight, user_label_->maximumWidth() - 4));
     user_label_->setToolTip(name);
 
     int credits = static_cast<int>(s.user_info.credit_balance);
     credits_label_->setText(tr("%1 CR").arg(credits));
+    const QString credits_color = s.is_phase_one_session() && s.user_info.credit_balance <= 0
+                                      ? colors::TEXT_SECONDARY.get()
+                                      : (s.user_info.credit_balance > 0 ? colors::POSITIVE.get() : colors::NEGATIVE.get());
     credits_label_->setStyleSheet(
         QString("color:%1;background:transparent;")
-            .arg(s.user_info.credit_balance > 0 ? colors::POSITIVE.get() : colors::NEGATIVE.get()));
+            .arg(credits_color));
 
     QString plan_text = s.account_type().toUpper();
+    if (plan_text.isEmpty() && s.is_phase_one_session())
+        plan_text = tr("PHASE 1");
     plan_btn_->setText(plan_text.isEmpty() ? tr("FREE") : plan_text);
 }
 

@@ -412,6 +412,12 @@ QWidget* ProfileScreen::build_security() {
                 "font-size:10px;font-weight:700;font-family:'Consolas',monospace;}QPushButton:hover{color:%4;}")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY()));
     connect(sb, &QPushButton::clicked, this, [this, sb]() {
+        if (!auth::AuthManager::instance().has_hosted_api_key()) {
+            sec_api_key_->setText(tr("Hosted API key unavailable in this session"));
+            sb->setText(tr("SHOW"));
+            api_key_visible_ = false;
+            return;
+        }
         api_key_visible_ = !api_key_visible_;
         sb->setText(api_key_visible_ ? tr("HIDE") : tr("SHOW"));
         sec_api_key_->setText(api_key_visible_ ? auth::AuthManager::instance().session().api_key
@@ -425,6 +431,10 @@ QWidget* ProfileScreen::build_security() {
                 "font-size:10px;font-weight:700;font-family:'Consolas',monospace;}QPushButton:hover{color:%4;}")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY()));
     connect(cb, &QPushButton::clicked, this, [this, cb]() {
+        if (!auth::AuthManager::instance().has_hosted_api_key()) {
+            sec_api_key_->setText(tr("Hosted API key unavailable in this session"));
+            return;
+        }
         auto key = auth::AuthManager::instance().session().api_key;
         if (!key.isEmpty()) {
             QApplication::clipboard()->setText(key);
@@ -598,6 +608,10 @@ void ProfileScreen::refresh_all() {
     sec_mfa_->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;background:transparent;%2")
                                 .arg(s.user_info.mfa_enabled ? ui::colors::POSITIVE() : ui::colors::TEXT_SECONDARY())
                                 .arg(MF));
+    if (s.has_hosted_api_key())
+        sec_api_key_->setText(api_key_visible_ ? s.api_key : QString(20, QChar(0x2022)));
+    else
+        sec_api_key_->setText(tr("Hosted API key unavailable in this session"));
     bill_plan_->setText(s.account_type().toUpper());
     bill_credits_->setText(QString::number(s.user_info.credit_balance, 'f', 2));
     // bill_support_ is populated by fetch_billing_data() from the API; leave it as-is here
@@ -612,6 +626,12 @@ void ProfileScreen::fetch_usage_data() {
     // immediately instead of "—" while /user/usage is in flight.
     const int rl_limit = s.user_info.rate_limit.limit;
     usg_rate_->setText(rl_limit > 0 ? QString::number(rl_limit) : QStringLiteral("—"));
+
+    if (!auth::AuthManager::instance().has_hosted_api_key()) {
+        usg_daily_table_->setRowCount(0);
+        usg_endpoint_table_->setRowCount(0);
+        return;
+    }
 
     QPointer<ProfileScreen> self = this;
     auth::UserApi::instance().get_user_usage(30, [self](auth::ApiResponse r) {
@@ -670,6 +690,12 @@ void ProfileScreen::fetch_usage_data() {
 
 void ProfileScreen::fetch_billing_data() {
     LOG_INFO("Profile", "Fetching billing data...");
+    if (!auth::AuthManager::instance().has_hosted_api_key()) {
+        bill_support_->setText(tr("UNAVAILABLE"));
+        bill_history_->setRowCount(0);
+        return;
+    }
+
     QPointer<ProfileScreen> self = this;
     auth::UserApi::instance().get_user_subscription([self](auth::ApiResponse r) {
         if (!self)
@@ -713,6 +739,11 @@ void ProfileScreen::fetch_billing_data() {
 
 void ProfileScreen::fetch_login_history() {
     LOG_INFO("Profile", "Fetching login history...");
+    if (!auth::AuthManager::instance().has_hosted_api_key()) {
+        sec_login_hist_->setRowCount(0);
+        return;
+    }
+
     QPointer<ProfileScreen> self = this;
     auth::UserApi::instance().get_login_history(20, 0, [self](auth::ApiResponse r) {
         if (!self)
@@ -813,6 +844,11 @@ void ProfileScreen::show_logout_confirm() {
 }
 
 void ProfileScreen::show_regen_confirm() {
+    if (!auth::AuthManager::instance().has_hosted_api_key()) {
+        QMessageBox::information(this, tr("Hosted API Key"), tr("Hosted API keys are unavailable in this session."));
+        return;
+    }
+
     if (QMessageBox::warning(this, tr("Regenerate API Key"), tr("Your current API key will be invalidated. Continue?"),
                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes) {
         auth::UserApi::instance().regenerate_api_key([this](auth::ApiResponse r) {

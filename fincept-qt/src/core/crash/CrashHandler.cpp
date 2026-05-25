@@ -114,7 +114,7 @@ void install() {
     // Resolve and create the dump directory once. AppPaths uses QString so we
     // snapshot it into a static wchar_t buffer for the filter to use without
     // touching the heap during a crash.
-    const QString dir = fincept::AppPaths::crashdumps();
+    const QString dir = QDir::cleanPath(fincept::AppPaths::crashdumps());
     QDir().mkpath(dir);
 
     // Normalise to native Windows separators — MiniDumpWriteDump's CreateFileW

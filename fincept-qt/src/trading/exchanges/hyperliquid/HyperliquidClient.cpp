@@ -4,11 +4,15 @@
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QAbstractSocket>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPointer>
-#include <QWebSocket>
+
+#ifdef HAS_QT_WEBSOCKETS
+#    include <QtWebSockets/QWebSocket>
+#endif
 
 namespace fincept::trading::hyperliquid {
 
@@ -22,6 +26,7 @@ const QString kTestnetWs   = QStringLiteral("wss://api.hyperliquid-testnet.xyz/w
 class HyperliquidClient::WsHolder : public QObject {
   public:
     explicit WsHolder(HyperliquidClient* parent) : QObject(parent), owner_(parent) {
+#ifdef HAS_QT_WEBSOCKETS
         connect(&socket_, &QWebSocket::connected, this, [this]() {
             owner_->emit ws_state_changed(static_cast<int>(QAbstractSocket::ConnectedState));
             for (const auto& s : pending_subs_) socket_.sendTextMessage(s);
@@ -35,20 +40,51 @@ class HyperliquidClient::WsHolder : public QObject {
                     auto doc = QJsonDocument::fromJson(s.toUtf8());
                     if (doc.isObject()) emit owner_->ws_message(doc.object());
                 });
+#else
+        LOG_WARN("Hyperliquid", "Qt WebSockets not available - Hyperliquid streaming disabled");
+#endif
     }
 
-    void open(const QString& url) { socket_.open(QUrl(url)); }
-    void close() { socket_.close(); }
-    bool is_open() const { return socket_.state() == QAbstractSocket::ConnectedState; }
+    void open(const QString& url) {
+#ifdef HAS_QT_WEBSOCKETS
+        socket_.open(QUrl(url));
+#else
+        Q_UNUSED(url);
+#endif
+    }
+
+    void close() {
+#ifdef HAS_QT_WEBSOCKETS
+        socket_.close();
+#endif
+    }
+
+    bool is_open() const {
+#ifdef HAS_QT_WEBSOCKETS
+        return socket_.state() == QAbstractSocket::ConnectedState;
+#else
+        return false;
+#endif
+    }
+
     void send_or_queue(const QString& text) {
-        if (is_open()) socket_.sendTextMessage(text);
-        else pending_subs_.append(text);
+#ifdef HAS_QT_WEBSOCKETS
+        if (is_open())
+            socket_.sendTextMessage(text);
+        else
+            pending_subs_.append(text);
+#else
+        Q_UNUSED(text);
+#endif
     }
 
   private:
     HyperliquidClient* owner_;
+
+#ifdef HAS_QT_WEBSOCKETS
     QWebSocket socket_;
     QStringList pending_subs_;
+#endif
 };
 
 HyperliquidClient::HyperliquidClient(QObject* parent) : QObject(parent) {}

@@ -10,6 +10,7 @@
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
 #include "core/symbol/SymbolRef.h"
+#include "multiuser/client/PhaseOneClientTransport.h"
 #include "screens/portfolio/PortfolioInsightsPanel.h"
 #include "screens/portfolio/PortfolioBlotter.h"
 #include "screens/portfolio/PortfolioCommandBar.h"
@@ -124,8 +125,8 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
     connect(refresh_timer_, &QTimer::timeout, this, &PortfolioScreen::request_refresh);
     command_bar_->set_refresh_interval(refresh_interval_ms_);
 
-    // Load portfolios
-    svc.load_portfolios();
+    // Load portfolios for the current local or connected session.
+    load_portfolios_for_current_session();
 
     // Theme change: refresh all child component styles
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
@@ -137,6 +138,10 @@ void PortfolioScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     refresh_timer_->start();
     status_bar_->start_clock();
+
+    const QString current_session_id = fincept::multiuser::PhaseOneClientTransport::instance().session_id();
+    if (current_session_id != last_seen_session_id_)
+        load_portfolios_for_current_session(summary_loaded_);
 }
 
 void PortfolioScreen::hideEvent(QHideEvent* event) {

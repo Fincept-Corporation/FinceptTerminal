@@ -134,7 +134,7 @@ void PortfolioOrderPanel::build_ui() {
     layout->addStretch();
 
     // Footer note
-    note_label_ = new QLabel(tr("Orders are recorded\nin your portfolio"));
+    note_label_ = new QLabel(tr("Accepted orders refresh\nyour portfolio view"));
     note_label_->setWordWrap(true);
     note_label_->setAlignment(Qt::AlignCenter);
     note_label_->setStyleSheet(QString("color:%1; font-size:8px;").arg(ui::colors::TEXT_TERTIARY()));
@@ -200,7 +200,7 @@ void PortfolioOrderPanel::retranslateUi() {
     if (price_prefix_) price_prefix_->setText(tr("PRICE"));
     if (qty_prefix_)   qty_prefix_->setText(tr("QTY HELD"));
     if (mv_prefix_)    mv_prefix_->setText(tr("MKT VAL"));
-    if (note_label_)   note_label_->setText(tr("Orders are recorded\nin your portfolio"));
+    if (note_label_)   note_label_->setText(tr("Accepted orders refresh\nyour portfolio view"));
     if (submit_btn_)
         submit_btn_->setText(side_ == "BUY" ? tr("OPEN BUY ORDER") : tr("OPEN SELL ORDER"));
     // Re-render the formatted value cells (currency-prefixed MKT VAL etc.).

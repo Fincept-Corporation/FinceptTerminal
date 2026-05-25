@@ -166,6 +166,24 @@ void PricingScreen::showEvent(QShowEvent* event) {
 
     auto& auth = auth::AuthManager::instance();
     if (auth.is_authenticated()) {
+        if (!auth.has_hosted_api_key()) {
+            auto& s = auth.session();
+            QString info = s.user_info.email.isEmpty() ? s.user_info.username : s.user_info.email;
+            if (info.isEmpty())
+                info = s.username;
+            if (!info.isEmpty()) {
+                user_info_label_->setText(info);
+                user_info_label_->show();
+            } else {
+                user_info_label_->hide();
+            }
+            loading_label_->hide();
+            fetched_ = false;
+            fetch_plans();
+            update_footer();
+            return;
+        }
+
         // Show loading while we fetch fresh data
         loading_is_refresh_ = true;
         loading_label_->setText(tr("Updating plan status..."));
@@ -477,6 +495,12 @@ QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int
 // ── Payment ──────────────────────────────────────────────────────────────────
 
 void PricingScreen::on_select_plan(const QString& plan_id) {
+    if (auth::AuthManager::instance().is_authenticated() && !auth::AuthManager::instance().has_hosted_api_key()) {
+        error_label_->setText(tr("Hosted billing checkout is unavailable in this session."));
+        error_label_->show();
+        return;
+    }
+
     const QString select_text = tr("SELECT PLAN");
     const QString processing_text = tr("PROCESSING...");
     for (auto* btn : cards_container_->findChildren<QPushButton*>()) {

@@ -290,7 +290,8 @@ void TerminalShell::bootstrap_auth() {
 
     LOG_INFO(kShellTag, "Bootstrapping auth");
 
-    // 1. AuthManager — loads saved session, validates with server. The
+    // 1. AuthManager — phase-one bootstrap intentionally ignores legacy
+    //    saved app-auth/session state, so restart returns to login. The
     //    HTTP-bearing call here means we MUST be on the UI thread post
     //    QApplication construction; main.cpp calls bootstrap_auth() in
     //    that window.

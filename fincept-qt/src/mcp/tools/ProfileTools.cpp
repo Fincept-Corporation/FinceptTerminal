@@ -23,6 +23,9 @@ static constexpr int kTimeoutMs = 15000;
 // ── Sync helper for UserApi callbacks ────────────────────────────────────────
 
 static ToolResult run_user_api(std::function<void(UserApi::Callback)> trigger) {
+    if (!AuthManager::instance().has_hosted_api_key())
+        return ToolResult::fail("Hosted profile APIs are unavailable for this session");
+
     bool ok = false;
     QString err;
     QJsonObject data;
@@ -135,8 +138,8 @@ std::vector<ToolDef> get_profile_tools() {
             const auto& sess = AuthManager::instance().session();
             if (!sess.authenticated)
                 return ToolResult::fail("Not authenticated");
-            if (sess.api_key.isEmpty())
-                return ToolResult::fail("No API key in session");
+            if (!sess.has_hosted_api_key())
+                return ToolResult::fail("Hosted API key is unavailable for this session");
             return ToolResult::ok_data(QJsonObject{{"api_key", sess.api_key}});
         };
         tools.push_back(std::move(t));

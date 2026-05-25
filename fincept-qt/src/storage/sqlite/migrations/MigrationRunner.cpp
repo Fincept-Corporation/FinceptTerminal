@@ -15,6 +15,11 @@ static QVector<Migration>& migration_registry() {
 
 void MigrationRunner::register_migration(Migration m) {
     auto& reg = migration_registry();
+    const auto it = std::find_if(reg.begin(), reg.end(), [version = m.version](const Migration& existing) {
+        return existing.version == version;
+    });
+    if (it != reg.end())
+        return;
     reg.append(std::move(m));
     // Keep sorted by version
     std::sort(reg.begin(), reg.end(), [](const Migration& a, const Migration& b) { return a.version < b.version; });

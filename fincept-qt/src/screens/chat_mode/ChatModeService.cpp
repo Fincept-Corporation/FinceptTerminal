@@ -34,11 +34,11 @@ QString ChatModeService::base_url() const {
 }
 
 QString ChatModeService::api_key() const {
-    return auth::AuthManager::instance().session().api_key;
+    return auth::AuthManager::instance().session().compatibility_api_key();
 }
 
 QString ChatModeService::session_token() const {
-    return auth::AuthManager::instance().session().session_token;
+    return auth::AuthManager::instance().session().compatibility_session_token();
 }
 
 QNetworkRequest ChatModeService::build_request(const QString& path) const {

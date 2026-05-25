@@ -8,6 +8,7 @@
 #include "services/portfolio/PortfolioService.h"
 
 #include "core/logging/Logger.h"
+#include "multiuser/client/PhaseOneClientTransport.h"
 #include "python/PythonRunner.h"
 #include "services/sectors/SectorResolver.h"
 #include "storage/repositories/PortfolioRepository.h"
@@ -124,8 +125,10 @@ void PortfolioService::add_asset(const QString& portfolio_id, const QString& sym
     }
 
     // Record transaction
-    QString txn_date = date.isEmpty() ? QDateTime::currentDateTimeUtc().toString(Qt::ISODate) : date;
-    repo.add_transaction(portfolio_id, symbol, "BUY", qty, price, txn_date);
+    if (!uses_phase_one_server_authority()) {
+        QString txn_date = date.isEmpty() ? QDateTime::currentDateTimeUtc().toString(Qt::ISODate) : date;
+        repo.add_transaction(portfolio_id, symbol, "BUY", qty, price, txn_date);
+    }
 
     invalidate_cache(portfolio_id);
     emit asset_added(portfolio_id);
@@ -166,8 +169,10 @@ void PortfolioService::sell_asset(const QString& portfolio_id, const QString& sy
     }
 
     // Record transaction
-    QString txn_date = date.isEmpty() ? QDateTime::currentDateTimeUtc().toString(Qt::ISODate) : date;
-    repo.add_transaction(portfolio_id, symbol, "SELL", qty, price, txn_date);
+    if (!uses_phase_one_server_authority()) {
+        QString txn_date = date.isEmpty() ? QDateTime::currentDateTimeUtc().toString(Qt::ISODate) : date;
+        repo.add_transaction(portfolio_id, symbol, "SELL", qty, price, txn_date);
+    }
 
     invalidate_cache(portfolio_id);
     emit asset_sold(portfolio_id);
@@ -218,6 +223,10 @@ void PortfolioService::record_dividend(const QString& portfolio_id, const QStrin
 void PortfolioService::invalidate_cache(const QString& portfolio_id) {
     QMutexLocker lock(&cache_mutex_);
     summary_cache_.remove(portfolio_id);
+}
+
+bool PortfolioService::uses_phase_one_server_authority() const {
+    return !fincept::multiuser::PhaseOneClientTransport::instance().session_id().isEmpty();
 }
 
 } // namespace fincept::services

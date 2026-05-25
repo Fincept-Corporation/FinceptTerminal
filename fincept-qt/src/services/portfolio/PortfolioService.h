@@ -141,6 +141,7 @@ class PortfolioService : public QObject {
 
   private:
     PortfolioService();
+    bool uses_phase_one_server_authority() const;
 
     void build_summary(const QString& portfolio_id, const QVector<portfolio::PortfolioAsset>& assets,
                        const portfolio::Portfolio& portfolio);

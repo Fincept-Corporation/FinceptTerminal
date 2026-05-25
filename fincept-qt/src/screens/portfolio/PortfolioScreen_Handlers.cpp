@@ -13,6 +13,7 @@
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
 #include "core/symbol/SymbolRef.h"
+#include "multiuser/client/PhaseOneClientTransport.h"
 #include "screens/portfolio/PortfolioBlotter.h"
 #include "screens/portfolio/PortfolioCommandBar.h"
 #include "screens/portfolio/PortfolioDetailWrapper.h"
@@ -51,37 +52,162 @@
 
 namespace fincept::screens {
 
+namespace {
+
+bool is_session_error_text(const QString& error) {
+    const QString folded = error.trimmed().toLower();
+    return folded.contains(QStringLiteral("session")) || folded.contains(QStringLiteral("unauthorized")) ||
+           folded.contains(QStringLiteral("forbidden")) || folded.contains(QStringLiteral("login"));
+}
+
+} // namespace
+
+bool PortfolioScreen::is_connected_mode() const {
+    return !fincept::multiuser::PhaseOneClientTransport::instance().session_id().isEmpty();
+}
+
+void PortfolioScreen::show_portfolio_message(const QString& title, const QString& message) {
+    QMessageBox::warning(this, title, message);
+}
+
+void PortfolioScreen::load_portfolios_for_current_session(bool reload_selected_summary) {
+    last_seen_session_id_ = fincept::multiuser::PhaseOneClientTransport::instance().session_id();
+    portfolios_load_completed_ = false;
+    reload_selected_summary_after_portfolios_ = reload_selected_summary && !selected_id_.isEmpty();
+
+    services::PortfolioService::instance().load_portfolios();
+    if (portfolios_load_completed_)
+        return;
+
+    command_bar_->set_refreshing(false);
+    reload_selected_summary_after_portfolios_ = false;
+
+    if (!last_seen_session_id_.isEmpty() &&
+        fincept::multiuser::PhaseOneClientTransport::instance().session_id().isEmpty()) {
+        show_portfolio_message(tr("Session Expired"),
+                               tr("Your connected portfolio session is no longer valid. Sign in again to reload shared portfolios."));
+    } else if (!last_seen_session_id_.isEmpty()) {
+        show_portfolio_message(tr("Portfolio Load Failed"),
+                               tr("The connected portfolio workspace could not be loaded. The current screen stays available so you can retry after restoring the session."));
+    }
+}
+
+void PortfolioScreen::load_selected_summary(bool preserve_current_view) {
+    if (selected_id_.isEmpty()) {
+        command_bar_->set_refreshing(false);
+        return;
+    }
+
+    summary_loading_ = true;
+    if (!preserve_current_view) {
+        summary_loaded_ = false;
+        active_detail_ = std::nullopt;
+        command_bar_->set_detail_view(std::nullopt);
+        if (txn_panel_)
+            txn_panel_->clear();
+        if (blotter_)
+            blotter_->set_sector_filter({});
+    }
+
+    command_bar_->set_refreshing(true);
+    update_content_state();
+    services::PortfolioService::instance().load_summary(selected_id_);
+}
+
+void PortfolioScreen::run_portfolio_mutation(PendingMutation mutation, const std::function<void()>& action) {
+    const QString session_id_before = fincept::multiuser::PhaseOneClientTransport::instance().session_id();
+    pending_mutation_ = mutation;
+    pending_mutation_succeeded_ = false;
+    command_bar_->set_refreshing(true);
+
+    action();
+    if (pending_mutation_succeeded_) {
+        pending_mutation_ = PendingMutation::None;
+        return;
+    }
+
+    pending_mutation_ = PendingMutation::None;
+    command_bar_->set_refreshing(false);
+
+    if (!session_id_before.isEmpty() && fincept::multiuser::PhaseOneClientTransport::instance().session_id().isEmpty()) {
+        show_portfolio_message(tr("Session Expired"),
+                               tr("Your connected portfolio session is no longer valid. Sign in again before retrying this change."));
+        return;
+    }
+
+    QString title;
+    QString message;
+    switch (mutation) {
+    case PendingMutation::CreatePortfolio:
+        title = tr("Create Portfolio Rejected");
+        message = tr("The server did not accept the new portfolio. No changes were applied.");
+        break;
+    case PendingMutation::DeletePortfolio:
+        title = tr("Delete Portfolio Rejected");
+        message = tr("The server did not accept the delete request. The portfolio remains unchanged.");
+        break;
+    case PendingMutation::AddAsset:
+        title = tr("Buy Rejected");
+        message = tr("The server did not accept the buy request. Holdings were not changed.");
+        break;
+    case PendingMutation::SellAsset:
+        title = tr("Sell Rejected");
+        message = tr("The server did not accept the sell request. Holdings were not changed.");
+        break;
+    case PendingMutation::None:
+        return;
+    }
+
+    show_portfolio_message(title, message);
+}
+
 void PortfolioScreen::on_portfolios_loaded(QVector<portfolio::Portfolio> portfolios) {
+    portfolios_load_completed_ = true;
+    command_bar_->set_refreshing(false);
     portfolios_ = portfolios;
     command_bar_->set_portfolios(portfolios);
+
+    const QString previous_selected_id = selected_id_;
+    bool selected_still_exists = false;
 
     if (portfolios.isEmpty()) {
         command_bar_->set_has_portfolios(false);
         selected_id_.clear();
         summary_loaded_ = false;
+        summary_loading_ = false;
     } else {
         command_bar_->set_has_portfolios(true);
-        // Auto-select first portfolio if none selected
-        if (selected_id_.isEmpty()) {
+
+        for (const auto& p : portfolios_) {
+            if (p.id == previous_selected_id) {
+                selected_still_exists = true;
+                command_bar_->set_selected_portfolio(p);
+                status_bar_->set_portfolio_name(p.name);
+                break;
+            }
+        }
+
+        if (!selected_still_exists) {
             on_portfolio_selected(portfolios.first().id);
+            reload_selected_summary_after_portfolios_ = false;
+            return;
         }
     }
+
     update_content_state();
+
+    if (reload_selected_summary_after_portfolios_ && selected_still_exists && !selected_id_.isEmpty())
+        load_selected_summary(true);
+    reload_selected_summary_after_portfolios_ = false;
 }
 
 void PortfolioScreen::on_portfolio_selected(const QString& id) {
-    if (id == selected_id_ && summary_loaded_)
+    const bool preserve_current_view = (id == selected_id_ && summary_loaded_);
+    if (preserve_current_view && !summary_loading_)
         return;
 
     selected_id_ = id;
     ScreenStateManager::instance().notify_changed(this);
-    summary_loaded_ = false;
-    active_detail_ = std::nullopt;
-    command_bar_->set_detail_view(std::nullopt);
-    if (txn_panel_)
-        txn_panel_->clear();
-    if (blotter_)
-        blotter_->set_sector_filter({});
 
     // Find portfolio and update UI
     for (const auto& p : portfolios_) {
@@ -92,14 +218,14 @@ void PortfolioScreen::on_portfolio_selected(const QString& id) {
         }
     }
 
-    update_content_state();
-    services::PortfolioService::instance().load_summary(id);
+    load_selected_summary(preserve_current_view);
 }
 
 void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
     if (summary.portfolio.id != selected_id_)
         return; // Stale response
 
+    summary_loading_ = false;
     current_summary_ = summary;
     summary_loaded_ = true;
 
@@ -111,7 +237,10 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
     update_main_view_data();
     update_content_state();
 
-    // Auto-select highest weighted holding if none selected
+    if (!selected_symbol_.isEmpty() && !find_holding(selected_symbol_))
+        selected_symbol_.clear();
+
+    // Auto-select highest weighted holding if none selected or the previous one disappeared.
     if (selected_symbol_.isEmpty() && !summary.holdings.isEmpty()) {
         double max_w = -1;
         QString top;
@@ -122,6 +251,15 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
             }
         }
         on_symbol_selected(top);
+    } else if (selected_symbol_.isEmpty()) {
+        if (heatmap_)
+            heatmap_->set_selected_symbol(QString());
+        if (blotter_)
+            blotter_->set_selected_symbol(QString());
+        if (order_panel_)
+            order_panel_->set_holding(nullptr);
+    } else if (order_panel_) {
+        order_panel_->set_holding(find_holding(selected_symbol_));
     }
 
     // Trigger metrics computation
@@ -159,12 +297,27 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
     services::PortfolioService::instance().fetch_risk_free_rate();
 }
 
-void PortfolioScreen::on_summary_error(QString portfolio_id, QString /*error*/) {
+void PortfolioScreen::on_summary_error(QString portfolio_id, QString error) {
     if (portfolio_id != selected_id_)
         return;
-    // Show empty state with error — for now just revert to empty
-    summary_loaded_ = false;
+
+    summary_loading_ = false;
+    command_bar_->set_refreshing(false);
+
+    const bool had_summary = summary_loaded_;
+    if (!had_summary)
+        summary_loaded_ = false;
     update_content_state();
+
+    if (is_session_error_text(error)) {
+        show_portfolio_message(tr("Session Expired"),
+                               tr("Your connected portfolio session is no longer valid. Sign in again to keep using shared portfolios."));
+        return;
+    }
+
+    show_portfolio_message(tr("Portfolio Refresh Failed"),
+                           had_summary ? tr("The portfolio could not be refreshed, so the last loaded data is still shown.\n\n%1").arg(error)
+                                       : tr("The portfolio could not be loaded.\n\n%1").arg(error));
 }
 
 void PortfolioScreen::on_metrics_computed(portfolio::ComputedMetrics metrics) {
@@ -186,6 +339,9 @@ void PortfolioScreen::on_snapshots_loaded(QString portfolio_id, QVector<portfoli
 }
 
 void PortfolioScreen::on_portfolio_created(portfolio::Portfolio portfolio) {
+    if (pending_mutation_ == PendingMutation::CreatePortfolio)
+        pending_mutation_succeeded_ = true;
+
     // portfolios_loaded fires asynchronously after creation, so the new portfolio
     // may not be in portfolios_ yet when on_portfolio_selected looks it up.
     // Append it immediately so the selector label and status bar show the correct
@@ -204,23 +360,31 @@ void PortfolioScreen::on_portfolio_created(portfolio::Portfolio portfolio) {
 }
 
 void PortfolioScreen::on_portfolio_deleted(QString id) {
+    if (pending_mutation_ == PendingMutation::DeletePortfolio)
+        pending_mutation_succeeded_ = true;
+
     if (id == selected_id_) {
         selected_id_.clear();
         summary_loaded_ = false;
+        summary_loading_ = false;
         update_content_state();
     }
 }
 
 void PortfolioScreen::on_asset_changed(QString portfolio_id) {
     if (portfolio_id == selected_id_) {
-        services::PortfolioService::instance().refresh_summary(portfolio_id);
+        if (pending_mutation_ == PendingMutation::AddAsset || pending_mutation_ == PendingMutation::SellAsset)
+            pending_mutation_succeeded_ = true;
+        load_selected_summary(true);
     }
 }
 
 void PortfolioScreen::on_create_requested() {
     CreatePortfolioDialog dlg(this);
     if (dlg.exec() == QDialog::Accepted) {
-        services::PortfolioService::instance().create_portfolio(dlg.name(), dlg.owner(), dlg.currency());
+        run_portfolio_mutation(PendingMutation::CreatePortfolio, [this, &dlg]() {
+            services::PortfolioService::instance().create_portfolio(dlg.name(), dlg.owner(), dlg.currency());
+        });
     }
 }
 
@@ -235,7 +399,8 @@ void PortfolioScreen::on_delete_requested(const QString& id) {
 
     ConfirmDeleteDialog dlg(name, this);
     if (dlg.exec() == QDialog::Accepted) {
-        services::PortfolioService::instance().delete_portfolio(id);
+        run_portfolio_mutation(PendingMutation::DeletePortfolio,
+                               [id]() { services::PortfolioService::instance().delete_portfolio(id); });
     }
 }
 
@@ -259,10 +424,16 @@ void PortfolioScreen::on_refresh_interval_changed(int ms) {
 }
 
 void PortfolioScreen::request_refresh() {
-    if (!selected_id_.isEmpty()) {
-        command_bar_->set_refreshing(true);
-        services::PortfolioService::instance().refresh_summary(selected_id_);
+    if (selected_id_.isEmpty())
+        return;
+
+    command_bar_->set_refreshing(true);
+    if (is_connected_mode()) {
+        load_portfolios_for_current_session(true);
+        return;
     }
+
+    load_selected_summary(true);
 }
 
 // ── Phase 3: Main view construction ──────────────────────────────────────────

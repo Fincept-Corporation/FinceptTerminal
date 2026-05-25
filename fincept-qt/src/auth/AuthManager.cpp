@@ -1,9 +1,15 @@
 #include "auth/AuthManager.h"
 
 #include "auth/AuthApi.h"
+#include "auth/PhaseOneAuthFlowBridge.h"
+#include "auth/PhaseOneAuthRecoveryBridge.h"
+#include "auth/PhaseOneSessionAuthBridge.h"
 #include "auth/PinManager.h"
 #include "auth/UserApi.h"
 #include "core/logging/Logger.h"
+#include "multiuser/client/PhaseOneClientTransport.h"
+#include "multiuser/client/PhaseOneSessionStateGuard.h"
+#include "multiuser/contracts/PhaseOneAuthTypes.h"
 #include "network/http/HttpClient.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -22,7 +28,17 @@ AuthManager& AuthManager::instance() {
     return s;
 }
 
-AuthManager::AuthManager() {}
+AuthManager::AuthManager() {
+    multiuser::PhaseOneSessionStateGuard::set_invalid_session_handler(
+        [this]() { handle_phase_one_session_invalidation(); });
+}
+
+QString AuthManager::fincept_provider_api_key() const {
+    auto stored = fincept::SettingsRepository::instance().get("fincept_api_key");
+    auto secure_key = fincept::SecureStorage::instance().retrieve("api_key");
+    return PhaseOneSessionAuthBridge::resolve_fincept_provider_api_key(
+        session_, stored.is_ok() ? stored.value() : QString{}, secure_key.is_ok() ? secure_key.value() : QString{});
+}
 
 void AuthManager::set_loading(bool v) {
     if (is_loading_ != v) {
@@ -67,6 +83,11 @@ static void clear_tokens() {
 // ── Session persistence (SQLite via SettingsRepository) ──────────────────────
 
 void AuthManager::save_session() {
+    if (session_.is_phase_one_session()) {
+        PhaseOneAuthRecoveryBridge::persist_phase_one_session(session_);
+        return;
+    }
+
     QJsonDocument doc(session_.to_json());
     QString json = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
     auto r = fincept::SettingsRepository::instance().set("fincept_session", json, "auth");
@@ -84,29 +105,25 @@ void AuthManager::save_session() {
 }
 
 void AuthManager::load_session() {
-    auto r = fincept::SettingsRepository::instance().get("fincept_session");
-    if (r.is_ok() && !r.value().isEmpty()) {
-        auto doc = QJsonDocument::fromJson(r.value().toUtf8());
-        if (!doc.isNull())
-            session_ = SessionData::from_json(doc.object());
+    const auto saved_session = fincept::SettingsRepository::instance().get("fincept_session");
+    const auto saved_api_key = fincept::SettingsRepository::instance().get("fincept_api_key");
+    const auto secure_api_key = fincept::SecureStorage::instance().retrieve("api_key");
+
+    if (!PhaseOneAuthRecoveryBridge::should_restore_startup_auth(
+            saved_session.is_ok() ? saved_session.value() : QString{},
+            saved_api_key.is_ok() ? saved_api_key.value() : QString{},
+            secure_api_key.is_ok() ? secure_api_key.value() : QString{})) {
+        PhaseOneAuthRecoveryBridge::clear_startup_auth_state();
+        session_ = SessionData{};
+        return;
     }
 
-    // Try to recover api_key from SecureStorage (DPAPI / Keychain) — this is the
-    // most reliable source since it survives SQLite corruption and DB migrations.
-    auto secure_key = fincept::SecureStorage::instance().retrieve("api_key");
-    if (secure_key.is_ok() && !secure_key.value().isEmpty()) {
-        if (session_.api_key.isEmpty() || session_.api_key != secure_key.value()) {
-            LOG_INFO("Auth", "Restored api_key from SecureStorage");
-            session_.api_key = secure_key.value();
-        }
-    }
-
-    // Never trust saved authenticated flag — must be re-validated
-    session_.authenticated = false;
+    session_ = SessionData{};
 }
 
 void AuthManager::clear_session() {
     session_ = SessionData{};
+    multiuser::PhaseOneClientTransport::instance().set_session_id({});
     clear_tokens();
     fincept::SettingsRepository::instance().remove("fincept_session");
     fincept::SettingsRepository::instance().remove("fincept_api_key");
@@ -134,18 +151,7 @@ void AuthManager::initialize() {
     set_loading(true);
     load_session();
 
-    if (!session_.api_key.isEmpty()) {
-        // Apply api_key ONLY — do NOT send the stale session_token during
-        // startup validation. The server enforces single-session via
-        // X-Session-Token; sending a stale one triggers 401 even though
-        // the api_key is perfectly valid and permanent.
-        auto& http = fincept::HttpClient::instance();
-        http.set_auth_header(session_.api_key);
-        http.clear_session_token();
-
-        validate_saved_session();
-        return;
-    }
+    clear_tokens();
 
     set_loading(false);
     emit auth_state_changed();
@@ -255,12 +261,6 @@ void AuthManager::login(const QString& email, const QString& password, bool forc
 
         const auto data = unwrap_data(r.data);
 
-        if (data["active_session"].toBool()) {
-            set_loading(false);
-            emit login_active_session(data["message"].toString("You are already logged in on another device."));
-            return;
-        }
-
         if (data["mfa_required"].toBool()) {
             set_loading(false);
             emit login_mfa_required();
@@ -289,10 +289,33 @@ void AuthManager::login(const QString& email, const QString& password, bool forc
     });
 }
 
+void AuthManager::phase_one_login(const QString& username, const QString& password) {
+    set_loading(true);
+
+    PhaseOneAuthFlowBridge::submit_login(sanitize_input(username).toLower(), password, [this](ApiResponse r) {
+        if (!r.success) {
+            set_loading(false);
+            emit login_failed(r.error.isEmpty() ? "Login failed" : r.error);
+            return;
+        }
+
+        apply_phase_one_session(r.data);
+        save_session();
+        set_loading(false);
+        emit login_succeeded();
+        emit auth_state_changed();
+    });
+}
+
 // ── Signup ───────────────────────────────────────────────────────────────────
 
 void AuthManager::signup(const QString& username, const QString& email, const QString& password, const QString& phone,
                          const QString& country, const QString& country_code) {
+    if (!PhaseOneAuthFlowBridge::supports_self_registration()) {
+        emit signup_failed("Self-registration is unavailable in phase one.");
+        return;
+    }
+
     set_loading(true);
 
     RegisterRequest req;
@@ -385,6 +408,11 @@ void AuthManager::verify_mfa(const QString& email, const QString& otp) {
 // ── Forgot password ──────────────────────────────────────────────────────────
 
 void AuthManager::forgot_password(const QString& email) {
+    if (!PhaseOneAuthFlowBridge::supports_password_recovery()) {
+        emit forgot_password_failed("Password recovery is unavailable in phase one.");
+        return;
+    }
+
     set_loading(true);
 
     ForgotPasswordRequest req;
@@ -402,6 +430,11 @@ void AuthManager::forgot_password(const QString& email) {
 // ── Reset password ───────────────────────────────────────────────────────────
 
 void AuthManager::reset_password(const QString& email, const QString& otp, const QString& new_password) {
+    if (!PhaseOneAuthFlowBridge::supports_password_recovery()) {
+        emit password_reset_failed("Password recovery is unavailable in phase one.");
+        return;
+    }
+
     set_loading(true);
 
     ResetPasswordRequest req;
@@ -436,6 +469,47 @@ void AuthManager::logout() {
     emit auth_state_changed();
 }
 
+void AuthManager::phase_one_logout() {
+    if (is_logging_out_)
+        return;
+    is_logging_out_ = true;
+
+    if (!session_.session_id.isEmpty())
+        AuthApi::instance().phase_one_logout([](ApiResponse) {});
+
+    clear_session();
+    is_logging_out_ = false;
+
+    emit logged_out();
+    emit auth_state_changed();
+}
+
+void AuthManager::phase_one_current_session(std::function<void(bool)> cb) {
+    AuthApi::instance().phase_one_current_session([this, cb = std::move(cb)](ApiResponse r) mutable {
+        if (!r.success) {
+            if (cb)
+                cb(false);
+            return;
+        }
+
+        apply_phase_one_session(r.data);
+        save_session();
+        emit auth_state_changed();
+        if (cb)
+            cb(true);
+    });
+}
+
+void AuthManager::handle_phase_one_session_invalidation() {
+    if (!session_.is_phase_one_session() && session_.session_id.isEmpty())
+        return;
+
+    clear_session();
+    emit session_expired();
+    emit logged_out();
+    emit auth_state_changed();
+}
+
 // ── Session recovery ─────────────────────────────────────────────────────────
 // Called by SessionGuard when it gets 401. Instead of immediately logging out,
 // we strip the stale session_token and re-validate with api_key only.
@@ -443,6 +517,12 @@ void AuthManager::logout() {
 // If api_key is also invalid → truly expired, must re-login.
 
 void AuthManager::attempt_session_recovery(std::function<void(bool)> cb) {
+    if (session_.is_phase_one_session()) {
+        if (cb)
+            cb(false);
+        return;
+    }
+
     if (session_.api_key.isEmpty()) {
         if (cb)
             cb(false);
@@ -489,6 +569,9 @@ void AuthManager::attempt_session_recovery(std::function<void(bool)> cb) {
 // ── Refresh user data ────────────────────────────────────────────────────────
 
 void AuthManager::refresh_user_data() {
+    if (session_.is_phase_one_session())
+        return;
+
     if (!session_.authenticated || session_.api_key.isEmpty())
         return;
     // fetch_user_profile chains into fetch_user_subscription automatically
@@ -532,6 +615,25 @@ void AuthManager::auto_configure_fincept_llm() {
     bool has_active = active.is_ok() && !active.value().provider.isEmpty();
     if (!has_active)
         LlmConfigRepository::instance().set_active("fincept");
+}
+
+void AuthManager::apply_phase_one_session(const QJsonObject& raw) {
+    const auto data = unwrap_data(raw);
+    const auto info = multiuser::PhaseOneSessionInfo::from_json(data);
+
+    session_.authenticated = true;
+    session_.api_key.clear();
+    session_.session_token = info.session_id;
+    session_.user_id = info.user_id;
+    session_.username = info.username;
+    session_.role = info.role;
+    session_.session_id = info.session_id;
+    session_.expires_at = info.expires_at;
+    session_.device_id = generate_device_id();
+    session_.user_info.username = info.username;
+    session_.user_info.is_admin = info.role.compare("admin", Qt::CaseInsensitive) == 0;
+
+    multiuser::PhaseOneClientTransport::instance().set_session_id(info.session_id);
 }
 
 } // namespace fincept::auth

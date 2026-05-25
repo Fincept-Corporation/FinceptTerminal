@@ -468,82 +468,18 @@ void RegisterScreen::update_password_strength() {
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 void RegisterScreen::on_register() {
-    error_label_->hide();
-
-    QString fn = first_name_->text().trimmed();
-    QString ln = last_name_->text().trimmed();
-    QString em = email_->text().trimmed();
-    QString ph = phone_->text().trimmed();
-    QString cc = country_code_->text().trimmed();
-    QString pw = password_->text();
-    QString cpw = confirm_pw_->text();
-
-    if (fn.isEmpty() || ln.isEmpty() || em.isEmpty() || ph.isEmpty() || pw.isEmpty() || cpw.isEmpty()) {
-        error_label_->setText(tr("All fields are required"));
-        error_label_->show();
-        return;
-    }
-    if (cc.isEmpty()) {
-        error_label_->setText(tr("Country code is required (e.g. +1, +91)"));
-        error_label_->show();
-        return;
-    }
-    // Ensure country code starts with +
-    if (!cc.startsWith('+')) {
-        cc = '+' + cc;
-        country_code_->setText(cc);
-    }
-    auto ev = auth::validate_email(em);
-    if (!ev.valid) {
-        error_label_->setText(ev.error);
-        error_label_->show();
-        return;
-    }
-    if (pw != cpw) {
-        error_label_->setText(tr("Passwords do not match"));
-        error_label_->show();
-        return;
-    }
-    if (pw.length() < 8) {
-        error_label_->setText(tr("Password must be at least 8 characters"));
-        error_label_->show();
-        return;
-    }
-
-    QString username = auth::sanitize_input(fn + ln).toLower();
-    if (username.length() < 3 || username.length() > 50) {
-        error_label_->setText(tr("Username must be 3-50 characters"));
-        error_label_->show();
-        return;
-    }
-
-    register_btn_->setEnabled(false);
-    register_btn_->setText(tr("  CREATING...  "));
-    auth::AuthManager::instance().signup(username, em, pw, ph, {}, cc);
+    error_label_->setText(tr("Self-registration is unavailable in phase one."));
+    error_label_->show();
 }
 
 void RegisterScreen::on_verify_otp() {
-    otp_error_->hide();
-    QString code = otp_input_->text().trimmed();
-    if (code.isEmpty()) {
-        otp_error_->setText(tr("Enter the verification code"));
-        otp_error_->show();
-        return;
-    }
-    verify_btn_->setEnabled(false);
-    verify_btn_->setText(tr("  VERIFYING...  "));
-    auth::AuthManager::instance().verify_otp(email_->text().trimmed(), code);
+    otp_error_->setText(tr("Self-registration is unavailable in phase one."));
+    otp_error_->show();
 }
 
 void RegisterScreen::on_resend_otp() {
-    QString fn = first_name_->text().trimmed();
-    QString ln = last_name_->text().trimmed();
-    QString username = auth::sanitize_input(fn + ln).toLower();
-    QString cc = country_code_->text().trimmed();
-    if (!cc.isEmpty() && !cc.startsWith('+'))
-        cc = '+' + cc;
-    auth::AuthManager::instance().signup(username, email_->text().trimmed(), password_->text(),
-                                         phone_->text().trimmed(), {}, cc);
+    otp_error_->setText(tr("Self-registration is unavailable in phase one."));
+    otp_error_->show();
 }
 
 } // namespace fincept::screens
