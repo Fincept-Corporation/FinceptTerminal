@@ -1,5 +1,5 @@
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
@@ -15,6 +15,7 @@ def test_sanitize_replaces_unsafe_chars():
     assert resources.sanitize("user@host") == "user_host"
     assert resources.sanitize("a/b\\c") == "a_b_c"
     assert resources.sanitize("spaces here") == "spaces_here"
+    assert resources.sanitize("  user id  ") == "user_id"
 
 
 def test_sanitize_rejects_empty_or_none():
@@ -38,6 +39,27 @@ def test_base_dir_expands_tilde(monkeypatch):
     base = resources.base_dir()
     assert "~" not in base
     assert base.endswith("finagent-test-xyz")
+
+
+def test_base_dir_uses_xdg_data_home_when_env_absent(monkeypatch, tmp_path):
+    monkeypatch.delenv("FINAGENT_DATA_DIR", raising=False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setattr(resources.os, "name", "posix")
+
+    assert Path(resources.base_dir()) == (
+        tmp_path / "xdg" / "com.fincept.terminal" / "finagent"
+    )
+
+
+def test_base_dir_uses_windows_localappdata(monkeypatch):
+    monkeypatch.delenv("FINAGENT_DATA_DIR", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", "C:/Users/alice/AppData/Local")
+    monkeypatch.setattr(resources.os, "name", "nt")
+    monkeypatch.setattr(resources, "Path", PureWindowsPath)
+
+    assert resources.base_dir() == (
+        "C:\\Users\\alice\\AppData\\Local\\com.fincept.terminal\\finagent"
+    )
 
 
 def test_persona_dir_structure(monkeypatch, tmp_path):

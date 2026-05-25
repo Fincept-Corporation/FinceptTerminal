@@ -34,14 +34,20 @@ from pathlib import Path
 
 
 # ── Gating ──────────────────────────────────────────────────────────────────
-if os.environ.get("AGENTIC_INTEGRATION") != "1":
-    print("AGENTIC_INTEGRATION!=1 — skipping (set =1 to opt in).")
+def _skip_or_exit(message: str) -> None:
+    if "pytest" in sys.modules:
+        import pytest
+        pytest.skip(message, allow_module_level=True)
+    print(message)
     sys.exit(0)
+
+
+if os.environ.get("AGENTIC_INTEGRATION") != "1":
+    _skip_or_exit("AGENTIC_INTEGRATION!=1 — skipping (set =1 to opt in).")
 
 _TOKEN = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("AGENTIC_TEST_API_KEY")
 if not _TOKEN:
-    print("ANTHROPIC_AUTH_TOKEN unset — skipping.")
-    sys.exit(0)
+    _skip_or_exit("ANTHROPIC_AUTH_TOKEN unset — skipping.")
 
 # ── Routing — defaults to MiniMax-as-Anthropic but fully overridable ────────
 MODEL = os.environ.get("AGENTIC_TEST_MODEL", "MiniMax-M2.7")
