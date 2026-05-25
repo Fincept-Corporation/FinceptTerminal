@@ -146,6 +146,13 @@ const CatalogEntry kCatalog[] = {
     // typical local setup.
     {"ollama", "*", 4096},
 
+    // ── Astraflow (UCloud — OpenAI-compatible aggregator) ───────────────────
+    // https://astraflow.ucloud-global.com  /  https://astraflow.ucloud.cn
+    // Supports 200+ models; output cap varies by underlying model. Use a
+    // generous default; user can override via max_tokens.
+    {"astraflow",    "*", kNoPublishedCap},
+    {"astraflow_cn", "*", kNoPublishedCap},
+
     // ── Fincept (proxies upstream) ──────────────────────────────────────
     // Fincept's /research/llm/async wraps various upstream models. We
     // don't know which one is selected server-side, so go with a generous
