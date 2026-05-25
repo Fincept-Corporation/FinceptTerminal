@@ -2325,6 +2325,7 @@ target_include_directories(FinceptTerminal PRIVATE
 set(FINCEPT_TS_FILES
     translations/fincept_zh_CN.ts
     translations/fincept_zh_HK.ts
+    translations/fincept_zh_TW.ts
     translations/fincept_id_ID.ts
     translations/fincept_vi_VN.ts
     translations/fincept_tr_TR.ts
