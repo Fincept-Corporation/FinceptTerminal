@@ -67,7 +67,6 @@ class PythonRunner : public QObject {
     void python_ready();
 
   private:
-    bool route_yfinance_to_daemon(const QStringList& args, Callback cb);
     PythonRunner();
     QString find_python_sync() const;
     void find_python_async();

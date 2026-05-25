@@ -139,6 +139,7 @@ void AiChatScreen::on_send() {
     pending_req_session_ = req_session;
     pending_req_provider_ = req_provider;
     pending_req_model_ = req_model;
+    input_box_->clear();
     input_box_->setFixedHeight(44);
     set_input_enabled(false);
     streaming_ = true;
@@ -215,18 +216,8 @@ void AiChatScreen::on_stream_chunk(const QString& chunk, bool done) {
 
 void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
     streaming_ = false;
-    // Clear pending request context early to avoid stale data on error paths
-    pending_req_session_.clear();
-    pending_req_provider_.clear();
-    pending_req_model_.clear();
     show_typing(false);
-    
-    // Ensure a bubble exists for any terminal state (success + content,
-    // failure with an error message, or success-but-empty). Without this,
-    // a kimi/openai response that arrives via the non-streaming fallback
-    // with no per-chunk emission, or fails before any chunk lands, would
-    // be silently dropped — the typing indicator hides and the input is
-    // re-enabled but nothing is shown.
+
     // Ensure a bubble exists for any terminal state (success + content,
     // failure with an error message, or success-but-empty). Without this,
     // a kimi/openai response that arrives via the non-streaming fallback
